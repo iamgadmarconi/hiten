@@ -23,6 +23,7 @@ class orbitConfig:
     def __post_init__(self):
         # Validate that distance is positive.
         self.orbit_family = self.orbit_family.lower() # Normalize to lowercase
+
         if self.orbit_family not in ["halo", "lissajous", "lyapunov"]:
             raise NotImplementedError(f"Orbit family {self.orbit_family} not implemented.")
 
@@ -34,27 +35,28 @@ class orbitConfig:
             if 'Zenith' not in self.extra_params:
                 raise ValueError("Halo orbits require a 'Zenith' parameter ('northern' or 'southern').")
             zenith = self.extra_params['Zenith'].lower()
+
             if zenith not in ['northern', 'southern']:
                 raise ValueError(f"Invalid Zenith '{self.extra_params['Zenith']}'. Must be 'northern' or 'southern'.")
-            self.extra_params['Zenith'] = zenith # Store normalized value
+
+            self.extra_params['Zenith'] = zenith
+
             if 'Az' not in self.extra_params:
                 raise ValueError("Halo orbits require an 'Az' (z-amplitude) parameter.")
-            # Add type/value validation for Az if needed, e.g.:
-            # if not isinstance(self.extra_params['Az'], (int, float)) or self.extra_params['Az'] <= 0:
-            #     raise ValueError("'Az' must be a positive number.")
+
+            if not isinstance(self.extra_params['Az'], (int, float)) or self.extra_params['Az'] <= 0:
+                raise ValueError("'Az' must be a positive number.")
 
         elif self.orbit_family == "lyapunov":
             if 'Ax' not in self.extra_params:
                 raise ValueError("Lyapunov orbits require an 'Ax' (x-amplitude) parameter.")
-            # Add type/value validation for Ax if needed
 
         elif self.orbit_family == "lissajous":
-            # Assuming Lissajous requires Ax and Az, adjust as necessary
             if 'Ax' not in self.extra_params:
                 raise ValueError("Lissajous orbits require an 'Ax' (x-amplitude) parameter.")
+
             if 'Az' not in self.extra_params:
                 raise ValueError("Lissajous orbits require an 'Az' (z-amplitude) parameter.")
-            # Add type/value validation if needed
 
         if self.extra_params:
             logger.info(f"Extra parameters: {self.extra_params}")
