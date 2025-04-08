@@ -16,7 +16,7 @@ def main():
     system = System(config)
 
     # Get the libration points
-    libration_point = system.get_libration_point(4)
+    libration_point = system.get_libration_point(2)
 
 
     # Print the libration points
