@@ -60,6 +60,12 @@ class LibrationPoint(ABC):
         # Log initialization - using type(self).__name__ to get the specific subclass name
         logger.info(f"Initialized {type(self).__name__} with mu = {self.mu}")
     
+    def __str__(self) -> str:
+        return f"{type(self).__name__}(mu={self.mu})"
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(mu={self.mu})"
+
     @property
     def position(self) -> np.ndarray:
         """
@@ -75,6 +81,23 @@ class LibrationPoint(ABC):
             self._position = self._calculate_position()
         return self._position
     
+    @property
+    def is_stable(self) -> bool:
+        """
+        Check if the Libration point is stable.
+        """
+        indices = self._stability_info[0]  # nu values from stability_indices
+        
+        # An orbit is stable if all stability indices have magnitude <= 1
+        return np.all(np.abs(indices) <= 1.0)
+
+    @property
+    def is_unstable(self) -> bool:
+        """
+        Check if the Libration point is unstable.
+        """
+        return not self.is_stable
+
     def analyze_stability(self, discrete: int = CONTINUOUS_SYSTEM, delta: float = 1e-4) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
         Analyze the stability properties of the Libration point.
