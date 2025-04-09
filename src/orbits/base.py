@@ -229,9 +229,9 @@ class PeriodicOrbit(ABC):
             (t, trajectory) containing the time and state arrays
         """
         if self.period is None:
-            error_msg = "Period must be set before propagation"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            msg = "Period must be set before propagation"
+            logger.error(msg)
+            raise ValueError(msg)
         
         logger.info(f"Propagating orbit for period {self.period} with {steps} steps")
         tspan = np.linspace(0, self.period, steps)
@@ -262,9 +262,9 @@ class PeriodicOrbit(ABC):
             (stability_indices, eigenvalues, eigenvectors) from the monodromy matrix
         """
         if self.period is None:
-            error_msg = "Period must be set before stability analysis"
-            logger.error(error_msg)
-            raise ValueError(error_msg)
+            msg = "Period must be set before stability analysis"
+            logger.error(msg)
+            raise ValueError(msg)
         
         logger.info(f"Computing stability for orbit with period {self.period}")
         # Compute STM over one period
@@ -308,16 +308,18 @@ class PeriodicOrbit(ABC):
         plot_inertial_frame based on the 'frame' parameter.
         """
         if self._trajectory is None:
-            logger.warning("No trajectory to plot. Call propagate() first.")
-            return None, None
+            msg = "No trajectory to plot. Call propagate() first."
+            logger.error(msg)
+            raise RuntimeError(msg)
             
         if frame.lower() == "rotating":
             return self.plot_rotating_frame(show=show, figsize=figsize, **kwargs)
         elif frame.lower() == "inertial":
             return self.plot_inertial_frame(show=show, figsize=figsize, **kwargs)
         else:
-            logger.error(f"Invalid frame '{frame}'. Must be 'rotating' or 'inertial'.")
-            raise ValueError(f"Invalid frame '{frame}'. Must be 'rotating' or 'inertial'.")
+            msg = f"Invalid frame '{frame}'. Must be 'rotating' or 'inertial'."
+            logger.error(msg)
+            raise ValueError(msg)
 
     def plot_rotating_frame(self, show=True, figsize=(10, 8), **kwargs):
         """
@@ -502,7 +504,7 @@ class PeriodicOrbit(ABC):
         pass
 
     @abstractmethod
-    def initial_guess(self, **kwargs):
+    def _initial_guess(self, **kwargs):
         pass
 
     @abstractmethod
