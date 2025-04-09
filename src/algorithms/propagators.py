@@ -65,12 +65,11 @@ def propagate_orbit(
     atol=1e-12) with the DOP853 method, which is generally well-suited for
     astrodynamics problems requiring high accuracy.
     """
-    # Ensure initial_state is a numpy array for consistency and validation
-    initial_state_np = np.asarray(initial_state, dtype=np.float64)
-    if initial_state_np.shape != (6,):
-        msg = f"Initial state vector must have 6 elements, but got shape {initial_state_np.shape}"
-        logger.error(msg)
-        raise ValueError(msg)
+    # Type check and convert initial_state if needed
+    initial_state_np = _validate_initial_state(initial_state)
+
+    logger.debug(f"Initial state: {np.array2string(initial_state_np, precision=8, suppress_small=True)}")
+    logger.debug(f"Time span: {tspan}")
     
     # Ensure tspan is properly formatted
     tspan_np = np.asarray(tspan, dtype=np.float64)
@@ -79,8 +78,7 @@ def propagate_orbit(
         logger.error(msg)
         raise ValueError(msg)
     
-    logger.info(f"Starting CR3BP orbit propagation.")
-    logger.debug(f"Initial state: {initial_state_np}")
+    logger.debug(f"Starting CR3BP orbit propagation.")
     logger.debug(f"Time span: [{tspan_np[0]}, {tspan_np[-1]}], mu={mu}")
     logger.debug(f"Integration method: {method}, rtol={rtol}, atol={atol}")
     if events is not None:
@@ -92,7 +90,7 @@ def propagate_orbit(
     
     # Perform the integration with error handling
     try:
-        logger.info("Calling scipy.integrate.solve_ivp...")
+        logger.debug("Calling scipy.integrate.solve_ivp...")
         sol = solve_ivp(
             f, 
             [tspan_np[0], tspan_np[-1]], 
@@ -106,7 +104,7 @@ def propagate_orbit(
             max_step=max_step
         )
         
-        logger.info(f"Integration finished. Status: {sol.status} ('{sol.message}'), nfev: {sol.nfev}, njev: {getattr(sol, 'njev', 'N/A')}, nlu: {getattr(sol, 'nlu', 'N/A')}")
+        logger.debug(f"Integration finished. Status: {sol.status} ('{sol.message}'), nfev: {sol.nfev}, njev: {getattr(sol, 'njev', 'N/A')}, nlu: {getattr(sol, 'nlu', 'N/A')}")
         
         if not sol.success:
             logger.warning(f"Integration did not complete successfully: {sol.message}")
@@ -169,15 +167,14 @@ def propagate_crtbp(
     Default integration tolerances are set to high precision (rtol=3e-14, 
     atol=1e-14) but can be overridden through solve_kwargs.
     """
-    # Ensure state0 is a numpy array for consistency
-    state0_np = np.asarray(state0)
-    if state0_np.shape != (6,):
-        raise ValueError(f"Initial state vector `state0` must have 6 elements, but got shape {state0_np.shape}")
+    # Type check and convert initial_state if needed
+    state0_np = _validate_initial_state(state0)
+
+    logger.debug(f"Initial state: {np.array2string(state0_np, precision=8, suppress_small=True)}")
+    logger.debug(f"Time span: [{t0}, {tf}] (raw), mu={mu}, steps={steps}")
 
     direction = "forward" if forward == 1 else "backward"
-    logger.info(f"Starting CR3BP {direction} propagation.")
-    logger.debug(f" Initial state: {state0_np}")
-    logger.debug(f" Time span: [{t0}, {tf}] (raw), mu={mu}, steps={steps}")
+    logger.debug(f"Starting CR3BP {direction} propagation.")
 
     # 1) Always make the integration span positive, even if tf is negative
     t0_abs = abs(t0)
@@ -197,7 +194,7 @@ def propagate_crtbp(
     logger.debug(f" Additional solve_ivp args: { {k: v for k, v in solve_kwargs.items() if k not in ['rtol', 'atol']} }")
 
     # 5) Integrate
-    logger.info("Calling scipy.integrate.solve_ivp...")
+    logger.debug("Calling scipy.integrate.solve_ivp...")
     sol = solve_ivp(
         ode_func,
         t_span,
@@ -205,7 +202,7 @@ def propagate_crtbp(
         t_eval=t_eval,
         **solve_kwargs
     )
-    logger.info(f"Integration finished. Status: {sol.status} ('{sol.message}'), nfev: {sol.nfev}, njev: {sol.njev}, nlu: {sol.nlu}")
+    logger.debug(f"Integration finished. Status: {sol.status} ('{sol.message}'), nfev: {sol.nfev}, njev: {sol.njev}, nlu: {sol.nlu}")
 
     if not sol.success:
         logger.error(f"Integration failed: {sol.message}")
@@ -218,3 +215,11 @@ def propagate_crtbp(
     logger.debug(f"Final time array adjusted for direction: [{sol.t[0]:.4f}, ..., {sol.t[-1]:.4f}] ({len(sol.t)} points)")
 
     return sol
+
+def _validate_initial_state(state):
+    state_np = np.asarray(state, dtype=np.float64)
+    if state_np.shape != (6,):
+        msg = f"Initial state vector must have 6 elements, but got shape {state_np.shape}"
+        logger.error(msg)
+        raise ValueError(msg)
+    return state_np

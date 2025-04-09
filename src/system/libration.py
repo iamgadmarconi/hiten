@@ -58,7 +58,7 @@ class LibrationPoint(ABC):
         self._stability_info = None
         
         # Log initialization - using type(self).__name__ to get the specific subclass name
-        logger.info(f"Initialized {type(self).__name__} with mu = {self.mu}")
+        logger.debug(f"Initialized {type(self).__name__} with mu = {self.mu}")
     
     def __str__(self) -> str:
         return f"{type(self).__name__}(mu={self.mu})"
@@ -77,7 +77,7 @@ class LibrationPoint(ABC):
             3D vector [x, y, z] representing the position
         """
         if self._position is None:
-            logger.info(f"Calculating position for {type(self).__name__} (mu={self.mu}).")
+            logger.debug(f"Calculating position for {type(self).__name__} (mu={self.mu}).")
             self._position = self._calculate_position()
         return self._position
     
