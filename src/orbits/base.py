@@ -1,5 +1,10 @@
 import warnings
 import numpy as np
+import json
+import os
+import pickle
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -10,6 +15,7 @@ from system import System
 from algorithms.energy import crtbp_energy, energy_to_jacobi
 from algorithms.propagators import propagate_orbit
 from algorithms.dynamics import stability_indices, compute_stm
+from plots.plots import plot_orbit_rotating_frame, plot_orbit_inertial_frame
 from log_config import logger
 
 
@@ -65,9 +71,10 @@ class orbitConfig:
 class PeriodicOrbit(ABC):
 
     def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):
-        self.mu = config.system.mu
+        self._system = config.system
+        self.mu = self._system.mu
         self.family = config.orbit_family
-        self.libration_point = config.system.get_libration_point(config.libration_point_idx)
+        self.libration_point = self._system.get_libration_point(config.libration_point_idx)
 
         self._initial_state = initial_state if initial_state else self._initial_guess()
         self.period = None
@@ -274,14 +281,220 @@ class PeriodicOrbit(ABC):
         
         return stability
 
-    def plot(self, **kwargs):
-        pass
+    def plot(self, frame="rotating", show=True, figsize=(10, 8), **kwargs):
+        """
+        Plot the orbit trajectory in the specified reference frame.
+        
+        Parameters
+        ----------
+        frame : str, optional
+            Reference frame to use for plotting. Options are "rotating" or "inertial".
+            Default is "rotating".
+        show : bool, optional
+            Whether to call plt.show() after creating the plot. Default is True.
+        figsize : tuple, optional
+            Figure size in inches (width, height). Default is (10, 8).
+        **kwargs
+            Additional keyword arguments passed to the specific plotting function.
+            
+        Returns
+        -------
+        tuple
+            (fig, ax) containing the figure and axis objects for further customization
+            
+        Notes
+        -----
+        This is a convenience method that calls either plot_rotating_frame or
+        plot_inertial_frame based on the 'frame' parameter.
+        """
+        if self._trajectory is None:
+            logger.warning("No trajectory to plot. Call propagate() first.")
+            return None, None
+            
+        if frame.lower() == "rotating":
+            return self.plot_rotating_frame(show=show, figsize=figsize, **kwargs)
+        elif frame.lower() == "inertial":
+            return self.plot_inertial_frame(show=show, figsize=figsize, **kwargs)
+        else:
+            logger.error(f"Invalid frame '{frame}'. Must be 'rotating' or 'inertial'.")
+            raise ValueError(f"Invalid frame '{frame}'. Must be 'rotating' or 'inertial'.")
+
+    def plot_rotating_frame(self, show=True, figsize=(10, 8), **kwargs):
+        """
+        Plot the orbit trajectory in the rotating reference frame.
+        
+        Parameters
+        ----------
+        show : bool, optional
+            Whether to call plt.show() after creating the plot. Default is True.
+        figsize : tuple, optional
+            Figure size in inches (width, height). Default is (10, 8).
+        **kwargs
+            Additional keyword arguments for plot customization.
+            
+        Returns
+        -------
+        tuple
+            (fig, ax) containing the figure and axis objects for further customization
+        """
+        if self._trajectory is None:
+            logger.warning("No trajectory to plot. Call propagate() first.")
+            return None, None
+        
+        return plot_orbit_rotating_frame(
+            trajectory=self._trajectory,
+            mu=self.mu,
+            system=self._system,
+            libration_point=self.libration_point,
+            family=self.family,
+            show=show,
+            figsize=figsize,
+            **kwargs
+        )
+        
+    def plot_inertial_frame(self, show=True, figsize=(10, 8), **kwargs):
+        """
+        Plot the orbit trajectory in the primary-centered inertial reference frame.
+        
+        Parameters
+        ----------
+        show : bool, optional
+            Whether to call plt.show() after creating the plot. Default is True.
+        figsize : tuple, optional
+            Figure size in inches (width, height). Default is (10, 8).
+        **kwargs
+            Additional keyword arguments for plot customization.
+            
+        Returns
+        -------
+        tuple
+            (fig, ax) containing the figure and axis objects for further customization
+        """
+        if self._trajectory is None or self._times is None:
+            logger.warning("No trajectory to plot. Call propagate() first.")
+            return None, None
+        
+        return plot_orbit_inertial_frame(
+            trajectory=self._trajectory,
+            times=self._times,
+            mu=self.mu,
+            system=self._system,
+            family=self.family,
+            show=show,
+            figsize=figsize,
+            **kwargs
+        )
     
-    def save(self, **kwargs):
-        pass
+    def save(self, filepath: str, **kwargs) -> None:
+        """
+        Save the orbit data to a file.
+        
+        Parameters
+        ----------
+        filepath : str
+            Path to save the orbit data
+        **kwargs
+            Additional options for saving
+            
+        Notes
+        -----
+        This saves the essential orbit information including initial state, 
+        period, and trajectory (if computed).
+        """
+        # Create data dictionary with all essential information
+        data = {
+            'orbit_type': self.__class__.__name__,
+            'family': self.family,
+            'mu': self.mu,
+            'initial_state': self._initial_state.tolist() if self._initial_state is not None else None,
+            'period': self.period,
+        }
+        
+        # Add trajectory data if available
+        if self._trajectory is not None:
+            data['trajectory'] = self._trajectory.tolist()
+            data['times'] = self._times.tolist()
+        
+        # Add stability information if available
+        if self._stability_info is not None:
+            # Convert numpy arrays to lists for serialization
+            stability_data = []
+            for item in self._stability_info:
+                if isinstance(item, np.ndarray):
+                    stability_data.append(item.tolist())
+                else:
+                    stability_data.append(item)
+            data['stability_info'] = stability_data
+            
+        # Ensure directory exists
+        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
+        
+        # Save data
+        with open(filepath, 'wb') as f:
+            pickle.dump(data, f)
+            
+        logger.info(f"Orbit saved to {filepath}")
     
-    def load(self, **kwargs):
-        pass
+    def load(self, filepath: str, **kwargs) -> None:
+        """
+        Load orbit data from a file.
+        
+        Parameters
+        ----------
+        filepath : str
+            Path to the saved orbit data
+        **kwargs
+            Additional options for loading
+            
+        Returns
+        -------
+        None
+            Updates the current instance with loaded data
+            
+        Raises
+        ------
+        FileNotFoundError
+            If the specified file doesn't exist
+        ValueError
+            If the file contains incompatible data
+        """
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"Orbit file not found: {filepath}")
+        
+        # Load data
+        with open(filepath, 'rb') as f:
+            data = pickle.load(f)
+        
+        # Verify orbit type
+        if data['orbit_type'] != self.__class__.__name__:
+            logger.warning(f"Loading {data['orbit_type']} data into {self.__class__.__name__} instance")
+            
+        # Update orbit properties
+        self.mu = data['mu']
+        self.family = data['family']
+        
+        if data['initial_state'] is not None:
+            self._initial_state = np.array(data['initial_state'])
+        
+        self.period = data['period']
+        
+        # Load trajectory if available
+        if 'trajectory' in data:
+            self._trajectory = np.array(data['trajectory'])
+            self._times = np.array(data['times'])
+        
+        # Load stability information if available
+        if 'stability_info' in data:
+            # Convert lists back to numpy arrays
+            stability_data = []
+            for item in data['stability_info']:
+                if isinstance(item, list):
+                    stability_data.append(np.array(item))
+                else:
+                    stability_data.append(item)
+            self._stability_info = tuple(stability_data)
+            
+        logger.info(f"Orbit loaded from {filepath}")
 
     @property
     @abstractmethod
