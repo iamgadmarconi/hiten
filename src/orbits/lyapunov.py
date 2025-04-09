@@ -2,16 +2,15 @@ import numpy as np
 from typing import Optional, Sequence
 
 from system.libration import CollinearPoint
-from base import PeriodicOrbit, orbitConfig
+from orbits.base import PeriodicOrbit, orbitConfig
 
 from log_config import logger
 
 
 class LyapunovOrbit(PeriodicOrbit):
     def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):
-        super().__init__(config, initial_state)
-
         self.Ax = config.extra_params['Ax']
+        super().__init__(config, initial_state)
 
         if not isinstance(self.libration_point, CollinearPoint):
             msg = f"Expected CollinearPoint, got {type(self.libration_point)}."
@@ -49,3 +48,6 @@ class LyapunovOrbit(PeriodicOrbit):
 
     def differential_correction(self, **kwargs):
         pass
+
+    def eccentricity(self) -> float:
+        return NotImplementedError("Eccentricity is not implemented for Lyapunov orbits.")

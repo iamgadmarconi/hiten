@@ -1,6 +1,6 @@
 import numpy as np
 
-from src.algorithms.linalg import eigenvalue_decomposition, stability_indices
+from algorithms.linalg import eigenvalue_decomposition, stability_indices
 
 
 def test_eig_decomp():

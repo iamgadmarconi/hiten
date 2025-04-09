@@ -5,8 +5,7 @@ from system.body import Body
 
 from algorithms.propagators import propagate_crtbp
 
-from src.orbits._tests.test_lyapunov import test_lyapunov_orbit_ic
-
+from orbits._tests.test_lyapunov import test_lyapunov_orbit_ic
 
 
 def main():
