@@ -3,7 +3,7 @@ from numpy.typing import NDArray
 from typing import Optional, Sequence, Tuple, Any
 from scipy.integrate import solve_ivp
 
-from system.libration import CollinearPoint
+from system.libration import CollinearPoint, L3Point
 from algorithms.geometry import _find_y_zero_crossing
 from algorithms.dynamics import variational_equations
 from orbits.base import PeriodicOrbit, orbitConfig
@@ -22,6 +22,11 @@ class LyapunovOrbit(PeriodicOrbit):
             msg = f"Expected CollinearPoint, got {type(self.libration_point)}."
             logger.error(msg)
             raise TypeError(msg)
+
+        if isinstance(self.libration_point, L3Point):
+            msg = "L3 libration points are not supported for Lyapunov orbits."
+            logger.error(msg)
+            raise NotImplementedError(msg)
 
     def _initial_guess(self) -> NDArray[np.float64]:
         L_i = self.libration_point.position

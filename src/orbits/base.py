@@ -243,7 +243,7 @@ class PeriodicOrbit(ABC):
         
         self._trajectory = sol.y.T  # Shape (steps, 6)
         self._times = sol.t
-        logger.debug(f"Propagation complete. Trajectory shape: {self._trajectory.shape}")
+        logger.info(f"Propagation complete. Trajectory shape: {self._trajectory.shape}")
         
         return self._times, self._trajectory
 

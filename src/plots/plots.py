@@ -71,7 +71,7 @@ def plot_orbit_rotating_frame(trajectory: np.ndarray,
     
     # Plot libration point
     ax.scatter(*libration_point.position, color='green', marker='x', 
-              s=100, label=f'L{libration_point.index}')
+              s=100, label=f'{libration_point}')
     
     ax.set_xlabel('X [canonical]')
     ax.set_ylabel('Y [canonical]')

@@ -61,10 +61,10 @@ class LibrationPoint(ABC):
         logger.debug(f"Initialized {type(self).__name__} with mu = {self.mu}")
     
     def __str__(self) -> str:
-        return f"{type(self).__name__}(mu={self.mu})"
+        return f"{type(self).__name__}(mu={self.mu:.6e})"
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(mu={self.mu})"
+        return f"{type(self).__name__}(mu={self.mu:.6e})"
 
     @property
     def position(self) -> np.ndarray:
