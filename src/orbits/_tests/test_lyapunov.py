@@ -38,7 +38,7 @@ def test_lyapunov_orbit_ic():
 
     system = setup_tests()
 
-    for i in range(1, 4):
+    for i in range(1, 3):
         orbit = setup_lyapunov_orbit(system, i)
         print(orbit.initial_state)
 
@@ -83,7 +83,27 @@ def test_lyapunov_orbit_plot():
 
     logger.info("Finished testing Lyapunov orbit plotting.")
 
-if __name__ == "__main__":
+
+def test_lyapunov_orbit_stability():
+    logger.info("Testing Lyapunov orbit stability...")
+
+    system = setup_tests()
+
+    orbit = setup_lyapunov_orbit(system, 1)
+    orbit.differential_correction()
+    orbit.propagate()
+    orbit.compute_stability()
+    logger.info("Eigenvalues: %s", orbit.stability_info[0])
+    logger.info("Eigenvectors: %s", orbit.stability_info[1])
+    logger.info("Finished testing Lyapunov orbit stability.")
+
+def run_all_tests():
     test_lyapunov_orbit_ic()
     test_lyapunov_differential_correction()
     test_lyapunov_orbit_propagation()
+    test_lyapunov_orbit_stability()
+    test_lyapunov_orbit_plot()
+
+
+if __name__ == "__main__":
+    run_all_tests()

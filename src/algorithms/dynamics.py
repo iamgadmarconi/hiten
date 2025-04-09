@@ -16,6 +16,7 @@ numerical simulations.
 
 import numba
 import numpy as np
+from scipy.integrate import solve_ivp
 
 
 @numba.njit(fastmath=True, cache=True)

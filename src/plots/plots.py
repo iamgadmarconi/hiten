@@ -2,6 +2,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from typing import Tuple, Optional, Any, Dict, Sequence
+import matplotlib.patheffects as patheffects
 
 from log_config import logger
 
@@ -15,6 +16,7 @@ def plot_orbit_rotating_frame(trajectory: np.ndarray,
                               family: str,
                               show: bool = True, 
                               figsize: Tuple[float, float] = (10, 8),
+                              dark_mode: bool = True,
                               **kwargs) -> Tuple[plt.Figure, plt.Axes]:
     """
     Plot the orbit trajectory in the rotating reference frame.
@@ -35,6 +37,8 @@ def plot_orbit_rotating_frame(trajectory: np.ndarray,
         Whether to call plt.show() after creating the plot. Default is True.
     figsize : tuple, optional
         Figure size in inches (width, height). Default is (10, 8).
+    dark_mode : bool, optional
+        Whether to use dark mode theme to resemble space. Default is True.
     **kwargs
         Additional keyword arguments for plot customization.
         
@@ -56,7 +60,7 @@ def plot_orbit_rotating_frame(trajectory: np.ndarray,
     z = trajectory[:, 2]
     
     # Plot orbit trajectory
-    orbit_color = kwargs.get('orbit_color', 'red')
+    orbit_color = kwargs.get('orbit_color', 'cyan')
     ax.plot(x, y, z, label=f'{family.capitalize()} Orbit', color=orbit_color)
     
     # Plot primary body (canonical position: -mu, 0, 0)
@@ -70,15 +74,22 @@ def plot_orbit_rotating_frame(trajectory: np.ndarray,
     plot_body(ax, secondary_pos, secondary_radius, system.secondary.color, system.secondary.name)
     
     # Plot libration point
-    ax.scatter(*libration_point.position, color='green', marker='x', 
-              s=100, label=f'{libration_point}')
+    ax.scatter(*libration_point.position, color='#FF00FF', marker='o', 
+              s=5, label=f'{libration_point}')
     
     ax.set_xlabel('X [canonical]')
     ax.set_ylabel('Y [canonical]')
     ax.set_zlabel('Z [canonical]')
-    ax.set_title(f'{family.capitalize()} Orbit in Rotating Frame')
-    set_axes_equal(ax)
+    
+    # Create legend and apply styling
     ax.legend()
+    set_axes_equal(ax)
+    
+    # Apply dark mode if requested
+    if dark_mode:
+        set_dark_mode(fig, ax, title=f'{family.capitalize()} Orbit in Rotating Frame')
+    else:
+        ax.set_title(f'{family.capitalize()} Orbit in Rotating Frame')
     
     if show:
         plt.show()
@@ -93,6 +104,7 @@ def plot_orbit_inertial_frame(trajectory: np.ndarray,
                              family: str,
                              show: bool = True,
                              figsize: Tuple[float, float] = (10, 8),
+                             dark_mode: bool = True,
                              **kwargs) -> Tuple[plt.Figure, plt.Axes]:
     """
     Plot the orbit trajectory in the primary-centered inertial reference frame.
@@ -113,6 +125,8 @@ def plot_orbit_inertial_frame(trajectory: np.ndarray,
         Whether to call plt.show() after creating the plot. Default is True.
     figsize : tuple, optional
         Figure size in inches (width, height). Default is (10, 8).
+    dark_mode : bool, optional
+        Whether to use dark mode theme to resemble space. Default is True.
     **kwargs
         Additional keyword arguments for plot customization.
         
@@ -166,9 +180,16 @@ def plot_orbit_inertial_frame(trajectory: np.ndarray,
     ax.set_xlabel('X [canonical]')
     ax.set_ylabel('Y [canonical]')
     ax.set_zlabel('Z [canonical]')
-    ax.set_title(f'{family.capitalize()} Orbit in Inertial Frame')
-    set_axes_equal(ax)
+    
+    # Create legend and apply styling
     ax.legend()
+    set_axes_equal(ax)
+    
+    # Apply dark mode if requested
+    if dark_mode:
+        set_dark_mode(fig, ax, title=f'{family.capitalize()} Orbit in Inertial Frame')
+    else:
+        ax.set_title(f'{family.capitalize()} Orbit in Inertial Frame')
     
     if show:
         plt.show()
@@ -176,7 +197,7 @@ def plot_orbit_inertial_frame(trajectory: np.ndarray,
     return fig, ax
 
 
-def plot_body(ax, center, radius, color, name):
+def plot_body(ax, center, radius, color, name, u_res=40, v_res=15):
     """
     Helper method to plot a celestial body as a sphere.
     
@@ -192,18 +213,31 @@ def plot_body(ax, center, radius, color, name):
         The color to use for the body.
     name : str
         The name of the body to use in the label.
+    u_res : int, optional
+        Resolution around the circumference (longitude). Default is 40.
+    v_res : int, optional
+        Resolution from pole to pole (latitude). Default is 30.
     """
-    u, v = np.mgrid[0:2*np.pi:20j, 0:np.pi:10j]
+    u, v = np.mgrid[0:2*np.pi:u_res*1j, 0:np.pi:v_res*1j]
     x = center[0] + radius * np.cos(u) * np.sin(v)
     y = center[1] + radius * np.sin(u) * np.sin(v)
     z = center[2] + radius * np.cos(v)
-    ax.plot_surface(x, y, z, color=color, alpha=0.7)
+    ax.plot_surface(x, y, z, color=color, alpha=0.9)
     
     # Add a small marker for the center of the body
     ax.scatter(center[0], center[1], center[2], color=color, s=20)
     
-    # Add text label
-    ax.text(center[0], center[1], center[2] + 1.5*radius, name)
+    # Add high contrast text label
+    text_obj = ax.text(center[0], center[1], center[2] + 1.5*radius, name, 
+                       color='white',
+                       fontweight='bold',
+                       fontsize=12,
+                       ha='center')
+    
+    # Add a subtle outline for even better contrast
+    text_obj.set_path_effects([
+        patheffects.withStroke(linewidth=1.5, foreground='black')
+    ])
 
 
 def set_axes_equal(ax):
@@ -227,5 +261,61 @@ def set_axes_equal(ax):
     ax.set_xlim3d([origin[0] - radius, origin[0] + radius])
     ax.set_ylim3d([origin[1] - radius, origin[1] + radius])
     ax.set_zlim3d([origin[2] - radius, origin[2] + radius])
+
+
+def set_dark_mode(fig, ax, title=None):
+    """
+    Apply dark mode styling to the figure and axes to resemble space.
+    
+    Parameters
+    ----------
+    fig : matplotlib.figure.Figure
+        The figure to apply dark mode styling to.
+    ax : matplotlib.axes.Axes
+        The 3D axes to apply dark mode styling to.
+    title : str, optional
+        The title to set with appropriate dark mode styling.
+    """
+    # Set dark background
+    fig.patch.set_facecolor('black')
+    ax.set_facecolor('black')
+    ax.grid(False)
+    
+    # Make sure all panes are black (remove gray background)
+    ax.xaxis.pane.fill = False
+    ax.yaxis.pane.fill = False
+    ax.zaxis.pane.fill = False
+    
+    # Make pane edges black or invisible
+    ax.xaxis.pane.set_edgecolor('black')
+    ax.yaxis.pane.set_edgecolor('black')
+    ax.zaxis.pane.set_edgecolor('black')
+    
+    # Remove grid lines
+    ax.grid(True)
+    
+    # Set text and axis colors to light
+    text_color = 'white'
+    ax.xaxis.label.set_color(text_color)
+    ax.yaxis.label.set_color(text_color)
+    ax.zaxis.label.set_color(text_color)
+    ax.tick_params(axis='x', colors=text_color)
+    ax.tick_params(axis='y', colors=text_color)
+    ax.tick_params(axis='z', colors=text_color)
+    
+    # Set title if provided
+    if title:
+        ax.set_title(title, color=text_color)
+    
+    # Style legend if it exists
+    if ax.get_legend():
+        legend = ax.get_legend()
+        frame = legend.get_frame()
+        frame.set_facecolor('black')
+        frame.set_edgecolor('white')
+        
+        # Set legend text color
+        for text in legend.get_texts():
+            text.set_color('white')
 
 
