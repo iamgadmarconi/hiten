@@ -93,6 +93,21 @@ def test_halo_orbit_stability():
     logger.info("Eigenvalues: %s", orbit.stability_info[0])
     logger.info("Eigenvectors: %s", orbit.stability_info[1])
     logger.info("Finished testing Halo orbit stability.")
+    logger.info("Is stable: %s", orbit.is_stable)
+    logger.info("Is unstable: %s", orbit.is_unstable)
+
+def test_halo_base_class():
+    logger.info("Testing Halo base class...")
+
+    system = setup_tests()
+
+    orbit = setup_halo_orbit(system, 1)
+    orbit.differential_correction()
+    orbit.propagate()
+    orbit.compute_stability()
+    logger.info("Jacobi constant: %s", orbit.jacobi_constant)
+    logger.info("Energy: %s", orbit.energy)
+    logger.info("Finished testing Halo base class.")
 
 def run_all_tests():
     test_halo_orbit_ic()
@@ -100,6 +115,7 @@ def run_all_tests():
     test_halo_orbit_propagation()
     test_halo_orbit_plot()
     test_halo_orbit_stability()
+    test_halo_base_class()
 
 
 if __name__ == "__main__":

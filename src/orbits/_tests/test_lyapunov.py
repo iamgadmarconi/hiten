@@ -93,6 +93,21 @@ def test_lyapunov_orbit_stability():
     logger.info("Eigenvalues: %s", orbit.stability_info[0])
     logger.info("Eigenvectors: %s", orbit.stability_info[1])
     logger.info("Finished testing Lyapunov orbit stability.")
+    logger.info("Is stable: %s", orbit.is_stable)
+    logger.info("Is unstable: %s", orbit.is_unstable)
+
+def test_lyapunov_base_class():
+    logger.info("Testing Lyapunov base class...")
+
+    system = setup_tests()
+
+    orbit = setup_lyapunov_orbit(system, 1)
+    orbit.differential_correction()
+    orbit.propagate()
+    orbit.compute_stability()
+    logger.info("Jacobi constant: %s", orbit.jacobi_constant)
+    logger.info("Energy: %s", orbit.energy)
+    logger.info("Finished testing Lyapunov base class.")
 
 def run_all_tests():
     test_lyapunov_orbit_ic()
@@ -100,6 +115,7 @@ def run_all_tests():
     test_lyapunov_orbit_propagation()
     test_lyapunov_orbit_stability()
     test_lyapunov_orbit_plot()
+    test_lyapunov_base_class()
 
 
 if __name__ == "__main__":
