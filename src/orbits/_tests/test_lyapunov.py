@@ -23,7 +23,6 @@ def setup_tests():
     logger.info("Test system setup complete.")
     return system
 
-
 def setup_lyapunov_orbit(system, libration_point_idx):
     config = orbitConfig(
         system=system,
@@ -69,7 +68,6 @@ def test_lyapunov_orbit_propagation():
     logger.info("Finished testing Lyapunov orbit propagation.")
     logger.info("Trajectory: %s", np.array2string(orbit.trajectory, precision=12, suppress_small=True))
 
-
 def test_lyapunov_orbit_plot():
     logger.info("Testing Lyapunov orbit plotting...")
 
@@ -82,7 +80,6 @@ def test_lyapunov_orbit_plot():
         orbit.plot()
 
     logger.info("Finished testing Lyapunov orbit plotting.")
-
 
 def test_lyapunov_orbit_stability():
     logger.info("Testing Lyapunov orbit stability...")

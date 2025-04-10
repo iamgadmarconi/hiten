@@ -5,7 +5,7 @@ from scipy.integrate import solve_ivp
 
 from system.libration import CollinearPoint, L3Point
 from algorithms.geometry import _find_y_zero_crossing
-from algorithms.dynamics import variational_equations
+from algorithms.dynamics import variational_equations, compute_stm
 from orbits.base import PeriodicOrbit, orbitConfig
 
 from log_config import logger
@@ -121,13 +121,13 @@ class LyapunovOrbit(PeriodicOrbit):
         RuntimeError
             If convergence is not achieved within max_attempts.
         """
-        x0: NDArray[np.float64] = np.copy(self.initial_state)
+        X0: NDArray[np.float64] = np.copy(self.initial_state)
         logger.info(f"Starting differential correction for Lyapunov orbit around {self.libration_point} with Ax={self.Ax}.")
-        logger.debug(f"Initial guess: {x0}")
+        logger.debug(f"Initial guess: {X0}")
         logger.debug(f"Correction params: tol={tol}, max_attempts={max_attempts}, forward={forward}, crossing_method='{crossing_method}', stm_method='{stm_method}'")
 
         attempt = 0
-        t_cross, X_cross = _find_y_zero_crossing(x0, 
+        t_cross, X_cross = _find_y_zero_crossing(X0, 
                                                 self.mu, 
                                                 forward=forward, 
                                                 steps=crossing_steps, # Hint for initial propagation
@@ -140,7 +140,7 @@ class LyapunovOrbit(PeriodicOrbit):
         if abs(vx_cross) < tol:
             half_period = t_cross
             self._reset()
-            self._initial_state = x0
+            self._initial_state = X0
             self.period = 2 * half_period
             logger.info(f"Converged successfully after {attempt} attempts.")
             logger.info(f"Converged Initial State: {np.array2string(self.initial_state, precision=12, suppress_small=True)}")
@@ -151,13 +151,13 @@ class LyapunovOrbit(PeriodicOrbit):
             attempt += 1
             logger.debug(f"Correction attempt {attempt}")
             if attempt > max_attempts:
-                msg = f"Failed to converge Lyapunov orbit after {max_attempts} attempts. Last state: {x0}"
+                msg = f"Failed to converge Lyapunov orbit after {max_attempts} attempts. Last state: {X0}"
                 logger.error(msg)
                 raise RuntimeError(msg)
             
             # 1. Find the time and state of the next x-z plane crossing (y=0)
             try:
-                t_cross, X_cross = _find_y_zero_crossing(x0, 
+                t_cross, X_cross = _find_y_zero_crossing(X0, 
                                                         self.mu, 
                                                         forward=forward, 
                                                         steps=crossing_steps, # Hint for initial propagation
@@ -167,7 +167,7 @@ class LyapunovOrbit(PeriodicOrbit):
                                                         method=crossing_method)
                 logger.debug(f"Found y=0 crossing at t={t_cross:.6f}, state={X_cross}")
             except Exception as e:
-                 msg = f"Error in _find_y_zero_crossing during attempt {attempt}: {e}. Last state: {x0}"
+                 msg = f"Error in _find_y_zero_crossing during attempt {attempt}: {e}. Last state: {X0}"
                  logger.error(msg)
                  raise RuntimeError(msg) from e
 
@@ -179,7 +179,7 @@ class LyapunovOrbit(PeriodicOrbit):
             if abs(vx_cross) < tol:
                 half_period = t_cross
                 self._reset() # Clear any intermediate data if needed
-                self._initial_state = x0
+                self._initial_state = X0
                 self.period = 2 * half_period
                 logger.info(f"Converged successfully after {attempt} attempts.")
                 logger.info(f"Converged Initial State: {np.array2string(self.initial_state, precision=12, suppress_small=True)}")
@@ -189,35 +189,25 @@ class LyapunovOrbit(PeriodicOrbit):
             logger.debug(f"Attempt {attempt}: vx_cross={vx_cross:.3e} (target=0), tolerance={tol}. Applying correction.")
 
             # 3. Integrate variational equations (state + STM) from t=0 to t_cross
-            PHI0 = np.zeros(42) # 6x6 STM (flattened) + 6 state vars
-            PHI0[:36] = np.eye(6).flatten()
-            PHI0[36:] = x0
-
-            # Define the ODE function for use with solve_ivp
-            def ode_fun(t: float, y: NDArray[np.float64]) -> NDArray[np.float64]:
-                return variational_equations(t, y, self.mu, forward=forward)
-
             try:
-                sol = solve_ivp(ode_fun, [0, t_cross], PHI0, 
-                                method=stm_method, 
-                                rtol=stm_rtol, 
-                                atol=stm_atol, 
-                                dense_output=True) # Dense output likely not needed here
-                
-                if not sol.success:
-                    msg = f"STM integration failed during attempt {attempt}: {sol.message}. Last state: {x0}"
-                    logger.error(msg)
-                    raise RuntimeError(msg)
-
-                PHI_vec_final = sol.sol(t_cross) # Get the final column (state at t_cross)
+                # Call compute_stm with solver parameters similar to _find_y_zero_crossing
+                _, _, phi_final, _ = compute_stm(X0, 
+                                                self.mu, 
+                                                t_cross, 
+                                                forward=forward,
+                                                # Pass solver kwargs
+                                                method=stm_method,
+                                                rtol=stm_rtol,
+                                                atol=stm_atol,
+                                                dense_output=True)
+                logger.debug(f"Computed STM at t={t_cross:.6f}")
             except Exception as e:
-                msg = f"Error during STM integration (solve_ivp) attempt {attempt}: {e}. Last state: {x0}"
+                msg = f"Error during STM integration (compute_stm) attempt {attempt}: {e}. Last state: {X0}"
                 logger.error(msg)
                 raise RuntimeError(msg) from e
 
             # Extract final STM and state (though state isn't used for correction itself)
-            phi_final: NDArray[np.float64] = PHI_vec_final[:36].reshape((6, 6))
-            # state_final: NDArray[np.float64] = PHI_vec_final[36:] # Not directly used in this correction scheme
+            # phi_final is already the 6x6 matrix from compute_stm
 
             # 4. Calculate the required correction in initial vy (dvy0)
             # We need the partial derivative d(vx_cross) / d(vy0)
@@ -227,7 +217,7 @@ class LyapunovOrbit(PeriodicOrbit):
             logger.debug(f"STM element phi[3,4] (dvx_cross/dvy0) = {dvx_dvy0:.4e}")
             
             if abs(dvx_dvy0) < 1e-12: # Avoid division by zero/very small number
-                msg = f"STM element dvx/dvy0 ({dvx_dvy0:.3e}) is too small; correction unstable. Attempt {attempt}. Last state: {x0}"
+                msg = f"STM element dvx/dvy0 ({dvx_dvy0:.3e}) is too small; correction unstable. Attempt {attempt}. Last state: {X0}"
                 logger.error(msg)
                 raise RuntimeError(msg)
 
@@ -237,8 +227,8 @@ class LyapunovOrbit(PeriodicOrbit):
             logger.debug(f"Calculated correction dvy0 = {dvy0:.3e}")
 
             # 5. Apply the correction to the initial state guess
-            x0[4] += dvy0 # Update initial vy
-            logger.debug(f"Updated initial state guess for next attempt: {x0}")
+            X0[4] += dvy0 # Update initial vy
+            logger.debug(f"Updated initial state guess for next attempt: {X0}")
 
 
     def eccentricity(self) -> float:
