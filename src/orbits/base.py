@@ -30,7 +30,7 @@ class orbitConfig:
         # Validate that distance is positive.
         self.orbit_family = self.orbit_family.lower() # Normalize to lowercase
 
-        if self.orbit_family not in ["halo", "lissajous", "lyapunov"]:
+        if self.orbit_family not in ["halo", "lyapunov", "vertical_lyapunov"]:
             raise NotImplementedError(f"Orbit family {self.orbit_family} not implemented.")
 
         if self.libration_point_idx not in [1, 2, 3, 4, 5]:
