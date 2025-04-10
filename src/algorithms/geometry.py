@@ -221,3 +221,86 @@ def _y_component(t1: float, t0_z: float, x0_z: NDArray[np.float64], mu: float, f
         logger.debug(f"Propagation finished. Final state x1_zgl = {x1_zgl}. Returning y-component: {x1_zgl[1]}")
 
     return float(x1_zgl[1]) # Explicitly cast to float
+
+
+def _gamma_L(mu, Lpt):
+    """
+    Calculate the ratio of libration point distance from the closest primary to the distance
+    between the two primaries in the CR3BP.
+    
+    This function computes the normalized distance (gamma) between a collinear libration point 
+    (L1, L2, or L3) and its nearest primary body in the Circular Restricted Three-Body Problem.
+    The value is expressed as a ratio of the distance between the two primary bodies.
+    
+    Parameters
+    ----------
+    mu : float
+        Mass parameter of the CR3BP system, defined as the ratio of the smaller primary's 
+        mass to the total system mass (0 < mu < 1). For example, in the Sun-Earth system, 
+        mu ≈ 3.0034e-6.
+    Lpt : int
+        Integer (1, 2, or 3) indicating which collinear libration point to calculate:
+        * 1: L1 (between the two primaries)
+        * 2: L2 (beyond the smaller primary)
+        * 3: L3 (beyond the larger primary)
+    
+    Returns
+    -------
+    float
+        The gamma ratio for the specified libration point. This represents the normalized
+        distance between the libration point and its nearest primary body.
+    
+    Notes
+    -----
+    The function solves the quintic polynomials that determine the positions of the
+    collinear libration points L1, L2, and L3. These are derived from the equations
+    of motion in the CR3BP.
+    
+    The gamma values have the following interpretations:
+    - For L1: gamma is the distance from the smaller primary to L1, toward the larger primary
+    - For L2: gamma is the distance from the smaller primary to L2, away from the larger primary
+    - For L3: gamma is the distance from the larger primary to L3, away from the smaller primary
+    
+    All distances are normalized by the distance between the two primaries.
+    
+    The polynomials solved are:
+    - L1: x^5 - (3-μ)x^4 + (3-2μ)x^3 - μx^2 + 2μx - μ = 0
+    - L2: x^5 + (3-μ)x^4 + (3-2μ)x^3 - μx^2 - 2μx - μ = 0
+    - L3: x^5 + (2+μ)x^4 + (1+2μ)x^3 - (1-μ)x^2 - 2(1-μ)x - (1-μ) = 0
+    
+    Raises
+    ------
+    ValueError
+        If Lpt is not 1, 2, or 3, or if no real root is found for the polynomial.
+    
+    Examples
+    --------
+    >>> # Calculate gamma for L1 in the Earth-Moon system (mu ≈ 0.01215)
+    >>> gamma_l1 = _gamma_L(0.01215, 1)
+    >>> print(f"L1 is approximately {gamma_l1:.6f} of the Earth-Moon distance from the Moon")
+    """
+    mu2 = 1 - mu
+
+    # Define polynomial coefficients as in the MATLAB code:
+    poly1 = [1, -1*(3-mu), (3-2*mu), -mu, 2*mu, -mu]
+    poly2 = [1, (3-mu), (3-2*mu), -mu, -2*mu, -mu]
+    poly3 = [1, (2+mu), (1+2*mu), -mu2, -2*mu2, -mu2]
+
+    # Compute roots
+    rt1 = np.roots(poly1)
+    rt2 = np.roots(poly2)
+    rt3 = np.roots(poly3)
+
+    # Find the last real root for each polynomial
+    GAMMAS = [None, None, None]
+    for r in rt1:
+        if np.isreal(r):
+            GAMMAS[0] = r.real
+    for r in rt2:
+        if np.isreal(r):
+            GAMMAS[1] = r.real
+    for r in rt3:
+        if np.isreal(r):
+            GAMMAS[2] = r.real
+
+    return GAMMAS[Lpt-1]
