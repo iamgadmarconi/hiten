@@ -1,8 +1,10 @@
 import numpy as np
+import mpmath as mp
 from numpy.typing import NDArray
 from scipy.optimize import root_scalar
 from typing import Callable, Any, Tuple
 
+from system.libration import LibrationPoint, CollinearPoint, L1Point, L2Point, L3Point
 from algorithms.propagators import propagate_crtbp
 from log_config import logger
 
@@ -223,84 +225,119 @@ def _y_component(t1: float, t0_z: float, x0_z: NDArray[np.float64], mu: float, f
     return float(x1_zgl[1]) # Explicitly cast to float
 
 
-def _gamma_L(mu, Lpt):
+def _gamma_l1(mu: float, x: float):
     """
-    Calculate the ratio of libration point distance from the closest primary to the distance
-    between the two primaries in the CR3BP.
-    
-    This function computes the normalized distance (gamma) between a collinear libration point 
-    (L1, L2, or L3) and its nearest primary body in the Circular Restricted Three-Body Problem.
-    The value is expressed as a ratio of the distance between the two primary bodies.
+    Compute the gamma function for L1 libration point.
+    """
+    term1 = x**5
+    term2 = -(3-mu) * x**4
+    term3 = (3-2*mu) * x**3
+    term4 = -mu*x**2
+    term5 = 2*mu*x
+    term6 = -mu
+
+    return term1 + term2 + term3 + term4 + term5 + term6
+
+def _gamma_l2(mu: float, x: float):
+    """
+    Compute the gamma function for L2 libration point.
+    """
+    term1 = x**5
+    term2 = (3-mu) * x**4
+    term3 = (3-2*mu) * x**3
+    term4 = -mu*x**2
+    term5 = -2*mu*x
+    term6 = -mu
+
+    return term1 + term2 + term3 + term4 + term5 + term6
+
+def _gamma_l3(mu: float, x: float):
+    """
+    Compute the gamma function for L3 libration point.
+    """
+    term1 = x**5
+    term2 = (2+mu) * x**4
+    term3 = (1+2*mu) * x**3
+    term4 = -(1-mu) * x**2
+    term5 = -2*(1-mu)*x
+    term6 = -(1-mu)
+
+    return term1 + term2 + term3 + term4 + term5 + term6
+
+def _gamma_L(mu: float, libration_point: LibrationPoint, precision: int = 50):
+    """
+    Calculate the ratio of libration point distance from the closest primary 
+    with high precision using a hybrid approach.
     
     Parameters
     ----------
     mu : float
-        Mass parameter of the CR3BP system, defined as the ratio of the smaller primary's 
-        mass to the total system mass (0 < mu < 1). For example, in the Sun-Earth system, 
-        mu ≈ 3.0034e-6.
-    Lpt : int
-        Integer (1, 2, or 3) indicating which collinear libration point to calculate:
-        * 1: L1 (between the two primaries)
-        * 2: L2 (beyond the smaller primary)
-        * 3: L3 (beyond the larger primary)
-    
+        Mass parameter of the CR3BP system
+    libration_point : LibrationPoint
+        The libration point to calculate (L1, L2, or L3)
+    precision : int, optional
+        Number of decimal places for high precision calculation. Default is 50.
+        
     Returns
     -------
     float
-        The gamma ratio for the specified libration point. This represents the normalized
-        distance between the libration point and its nearest primary body.
-    
-    Notes
-    -----
-    The function solves the quintic polynomials that determine the positions of the
-    collinear libration points L1, L2, and L3. These are derived from the equations
-    of motion in the CR3BP.
-    
-    The gamma values have the following interpretations:
-    - For L1: gamma is the distance from the smaller primary to L1, toward the larger primary
-    - For L2: gamma is the distance from the smaller primary to L2, away from the larger primary
-    - For L3: gamma is the distance from the larger primary to L3, away from the smaller primary
-    
-    All distances are normalized by the distance between the two primaries.
-    
-    The polynomials solved are:
-    - L1: x^5 - (3-μ)x^4 + (3-2μ)x^3 - μx^2 + 2μx - μ = 0
-    - L2: x^5 + (3-μ)x^4 + (3-2μ)x^3 - μx^2 - 2μx - μ = 0
-    - L3: x^5 + (2+μ)x^4 + (1+2μ)x^3 - (1-μ)x^2 - 2(1-μ)x - (1-μ) = 0
-    
-    Raises
-    ------
-    ValueError
-        If Lpt is not 1, 2, or 3, or if no real root is found for the polynomial.
-    
-    Examples
-    --------
-    >>> # Calculate gamma for L1 in the Earth-Moon system (mu ≈ 0.01215)
-    >>> gamma_l1 = _gamma_L(0.01215, 1)
-    >>> print(f"L1 is approximately {gamma_l1:.6f} of the Earth-Moon distance from the Moon")
+        The gamma ratio for the specified libration point with high precision.
     """
+    if not isinstance(libration_point, CollinearPoint):
+        msg = f"Expected CollinearPoint, got {type(libration_point)}."
+        logger.error(msg)
+        raise TypeError(msg)
+    
+    # Step 1: Get initial approximation using np.roots()
     mu2 = 1 - mu
-
-    # Define polynomial coefficients as in the MATLAB code:
-    poly1 = [1, -1*(3-mu), (3-2*mu), -mu, 2*mu, -mu]
-    poly2 = [1, (3-mu), (3-2*mu), -mu, -2*mu, -mu]
-    poly3 = [1, (2+mu), (1+2*mu), -mu2, -2*mu2, -mu2]
-
-    # Compute roots
-    rt1 = np.roots(poly1)
-    rt2 = np.roots(poly2)
-    rt3 = np.roots(poly3)
-
-    # Find the last real root for each polynomial
-    GAMMAS = [None, None, None]
-    for r in rt1:
+    
+    if isinstance(libration_point, L1Point):
+        # Define polynomial coefficients for L1
+        poly = [1, -1*(3-mu), (3-2*mu), -mu, 2*mu, -mu]
+        logger.debug(f"Finding initial estimate for L1 using np.roots()")
+    elif isinstance(libration_point, L2Point):
+        # Define polynomial coefficients for L2
+        poly = [1, (3-mu), (3-2*mu), -mu, -2*mu, -mu]
+        logger.debug(f"Finding initial estimate for L2 using np.roots()")
+    elif isinstance(libration_point, L3Point):
+        # Define polynomial coefficients for L3
+        poly = [1, (2+mu), (1+2*mu), -mu2, -2*mu2, -mu2]
+        logger.debug(f"Finding initial estimate for L3 using np.roots()")
+    else:
+        msg = f"Expected L1Point, L2Point, or L3Point, got {type(libration_point)}."
+        logger.error(msg)
+        raise TypeError(msg)
+    
+    # Find all roots
+    roots = np.roots(poly)
+    
+    # Find the real root (there should be only one)
+    x0 = None
+    for r in roots:
         if np.isreal(r):
-            GAMMAS[0] = r.real
-    for r in rt2:
-        if np.isreal(r):
-            GAMMAS[1] = r.real
-    for r in rt3:
-        if np.isreal(r):
-            GAMMAS[2] = r.real
-
-    return GAMMAS[Lpt-1]
+            x0 = float(r.real)
+            break
+    
+    if x0 is None:
+        # Fallback to traditional initial approximations if np.roots() fails
+        if isinstance(libration_point, L1Point) or isinstance(libration_point, L2Point):
+            x0 = (mu / 3)**(1/3)
+        else:  # L3Point
+            x0 = 1 - 7 / 12 * mu
+    
+    logger.debug(f"Initial estimate for {type(libration_point).__name__}: x0 = {x0}")
+    
+    # Step 2: Refine using high precision mp.findroot()
+    with mp.workdps(precision):
+        if isinstance(libration_point, L1Point):
+            func = lambda x_val: _gamma_l1(mu, x_val)
+        elif isinstance(libration_point, L2Point):
+            func = lambda x_val: _gamma_l2(mu, x_val)
+        else:  # L3Point
+            func = lambda x_val: _gamma_l3(mu, x_val)
+        
+        x = mp.findroot(func, x0)
+        x = float(x)
+    
+    logger.info(f"{type(libration_point).__name__} position calculated: x = {x}")
+    return x

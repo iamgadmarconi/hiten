@@ -39,17 +39,16 @@ class HaloOrbit(PeriodicOrbit):
         """
         # Determine sign (won) and which "primary" to use
         mu = self.mu
-        L_i = self.config.libration_point_idx
         Az = self.Az
-        gamma = _gamma_L(mu, L_i)
+        gamma = _gamma_L(mu, self.libration_point)
         
-        if L_i == 1:
+        if isinstance(self.libration_point, L1Point):
             won = +1
             primary = 1 - mu
-        elif L_i == 2:
+        elif isinstance(self.libration_point, L2Point):
             won = -1
             primary = 1 - mu 
-        elif L_i == 3:
+        elif isinstance(self.libration_point, L3Point):
             won = +1
             primary = -mu
         else:
@@ -61,7 +60,7 @@ class HaloOrbit(PeriodicOrbit):
         # Coefficients c(2), c(3), c(4)
         c = [0.0, 0.0, 0.0, 0.0, 0.0]  # just to keep 5 slots: c[2], c[3], c[4]
         
-        if L_i == 3:
+        if isinstance(self.libration_point, L3Point):
             for N in [2, 3, 4]:
                 c[N] = (1 / gamma**3) * (
                     (1 - mu) + (-primary * gamma**(N + 1)) / ((1 + gamma)**(N + 1))
@@ -85,7 +84,7 @@ class HaloOrbit(PeriodicOrbit):
         lambda_roots = np.roots(polylambda)
 
         # Pick the appropriate root based on L_i
-        if L_i == 3:
+        if isinstance(self.libration_point, L3Point):
             lam = abs(lambda_roots[2])  # third element in 0-based indexing
         else:
             lam = abs(lambda_roots[0])  # first element in 0-based indexing
