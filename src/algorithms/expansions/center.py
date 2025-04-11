@@ -8,7 +8,7 @@ from log_config import logger
 from system.libration import CollinearPoint, L1Point, L2Point, L3Point
 
 
-def legendre_coefficient(n: int, mu: float, libration_point: CollinearPoint) -> float:
+def _legendre_coefficient(n: int, mu: float, libration_point: CollinearPoint) -> float:
     """
     Calculate the Legendre coefficient of degree n for a given value of x.
 
@@ -52,7 +52,7 @@ def legendre_coefficient(n: int, mu: float, libration_point: CollinearPoint) -> 
     else:
         raise ValueError(f"Invalid libration point: {libration_point}")
 
-def evaluate_poly(n, x, rho):
+def _evaluate_poly(n, x, rho):
     """
     Evaluate the Legendre polynomial of degree n at x/rho, and multiply by rho^n.
     
@@ -91,6 +91,6 @@ def legendre_series(state: np.ndarray, n: int, mu: float, libration_point: Colli
     rho = np.sqrt(x**2 + y**2 + z**2)
 
     for i in range(2, n):
-        series += legendre_coefficient(i, mu, libration_point) * evaluate_poly(i, x, rho)
+        series += _legendre_coefficient(i, mu, libration_point) * _evaluate_poly(i, x, rho)
 
     return series
