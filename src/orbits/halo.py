@@ -6,7 +6,7 @@ from scipy.integrate import solve_ivp
 
 from orbits.base import PeriodicOrbit, orbitConfig
 from system.libration import CollinearPoint, L1Point, L2Point, L3Point
-from algorithms.geometry import _gamma_L, _find_y_zero_crossing
+from algorithms.geometry import _find_y_zero_crossing
 from algorithms.dynamics import compute_stm
 from log_config import logger
 
@@ -40,7 +40,8 @@ class HaloOrbit(PeriodicOrbit):
         # Determine sign (won) and which "primary" to use
         mu = self.mu
         Az = self.Az
-        gamma = _gamma_L(mu, self.libration_point)
+        # Get gamma from the libration point instance property
+        gamma = self.libration_point.gamma
         
         if isinstance(self.libration_point, L1Point):
             won = +1
