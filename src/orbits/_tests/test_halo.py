@@ -4,11 +4,13 @@ from orbits.base import orbitConfig
 from orbits.halo import HaloOrbit
 from utils.constants import Constants
 import numpy as np
+import pytest
 
 from log_config import logger
 
-
-def setup_tests():
+@pytest.fixture
+def system():
+    """Fixture that sets up the Earth-Moon system."""
     logger.info("Setting up test system...")
     earth_mass = Constants.get_mass("earth")
     earth_radius = Constants.get_radius("earth")
@@ -19,104 +21,106 @@ def setup_tests():
     earth = Body("Earth", earth_mass, earth_radius, color="blue")
     moon = Body("Moon", moon_mass, moon_radius, color="gray", parent=earth)
 
-    system = System(systemConfig(primary=earth, secondary=moon, distance=distance))
-    logger.info("Test system setup complete.")
-    return system
+    return System(systemConfig(primary=earth, secondary=moon, distance=distance))
 
-def setup_halo_orbit(system, libration_point_idx):
+@pytest.fixture
+def l1_orbit(system):
+    """Fixture that creates a L1 halo orbit."""
     config = orbitConfig(
         system=system,
         orbit_family="halo",
-        libration_point_idx=libration_point_idx,
+        libration_point_idx=1,
         extra_params={"Az": 0.2, "Zenith": "Southern"}
     )
     return HaloOrbit(config)
 
-def test_halo_orbit_ic():
-    logger.info("Testing Halo orbit initial condition generation...")
+@pytest.fixture
+def l2_orbit(system):
+    """Fixture that creates a L2 halo orbit."""
+    config = orbitConfig(
+        system=system,
+        orbit_family="halo",
+        libration_point_idx=2,
+        extra_params={"Az": 0.2, "Zenith": "Southern"}
+    )
+    return HaloOrbit(config)
 
-    system = setup_tests()
+def test_halo_orbit_ic(l1_orbit, l2_orbit):
+    """Test initial condition generation for halo orbits."""
+    # Check that initial conditions have the right shape
+    assert l1_orbit.initial_state.shape == (6,), "Initial state should be a 6-element vector"
+    assert l2_orbit.initial_state.shape == (6,), "Initial state should be a 6-element vector"
+    
+    # For L1 orbit, x should be less than the L1 point (between primary and L1)
+    assert l1_orbit.initial_state[0] < l1_orbit.system.libration_points[0][0]
+    
+    # For L2 orbit, x should be greater than the L2 point (beyond L2)
+    assert l2_orbit.initial_state[0] > l2_orbit.system.libration_points[1][0]
 
-    for i in range(1, 3):
-        orbit = setup_halo_orbit(system, i)
-        print(orbit.initial_state)
+def test_halo_differential_correction(l1_orbit):
+    """Test differential correction for halo orbits."""
+    # Store initial state before correction
+    initial_state_before = l1_orbit.initial_state.copy()
+    
+    # Perform differential correction
+    l1_orbit.differential_correction()
+    
+    # Check that the state has been updated
+    assert not np.array_equal(l1_orbit.initial_state, initial_state_before), "Initial state should change after correction"
+    
+    # Check that period is positive
+    assert l1_orbit.period > 0, "Period should be positive after correction"
 
-    logger.info("Finished testing Halo orbit initial condition generation.")
+def test_halo_orbit_propagation(l1_orbit):
+    """Test propagation of halo orbits."""
+    l1_orbit.differential_correction()
+    l1_orbit.propagate()
+    
+    # Check that trajectory has been generated
+    assert l1_orbit.trajectory is not None, "Trajectory should be generated after propagation"
+    assert len(l1_orbit.trajectory) > 0, "Trajectory should not be empty"
+    
+    # Verify that the trajectory starts with the initial condition
+    assert np.allclose(l1_orbit.trajectory[0, :6], l1_orbit.initial_state), "Trajectory should start at initial state"
+    
+    # Verify that the trajectory returns to near the initial point after one period
+    final_state = l1_orbit.trajectory[-1, :6]
+    initial_state = l1_orbit.initial_state
+    # We mainly care about position similarity, not velocity
+    position_close = np.allclose(final_state[:3], initial_state[:3], rtol=1e-2, atol=1e-2)
+    assert position_close, "Trajectory should approximately return to initial position after one period"
 
-def test_halo_differential_correction():
-    logger.info("Testing Halo orbit differential correction...")
+def test_halo_orbit_stability(l1_orbit):
+    """Test stability calculation for halo orbits."""
+    l1_orbit.differential_correction()
+    l1_orbit.propagate()
+    l1_orbit.compute_stability()
+    
+    # Check that stability info is computed
+    assert l1_orbit.stability_info is not None, "Stability info should be computed"
+    assert len(l1_orbit.stability_info) == 2, "Stability info should contain eigenvalues and eigenvectors"
+    
+    eigenvalues, eigenvectors = l1_orbit.stability_info
+    
+    # Check eigenvalue and eigenvector dimensions
+    assert len(eigenvalues) == 6, "Should have 6 eigenvalues"
+    assert eigenvectors.shape == (6, 6), "Should have 6 eigenvectors of dimension 6"
+    
+    # Check stability properties
+    assert isinstance(l1_orbit.is_stable, bool), "is_stable should be a boolean"
+    assert isinstance(l1_orbit.is_unstable, bool), "is_unstable should be a boolean"
 
-    system = setup_tests()
-
-    orbit = setup_halo_orbit(system, 1)
-    print(orbit.initial_state)
-    logger.info("Initial state: %s", np.array2string(orbit.initial_state, precision=12, suppress_small=True))
-
-    orbit.differential_correction()
-    logger.info("Final state: %s", np.array2string(orbit.initial_state, precision=12, suppress_small=True))
-    logger.info("Period: %s", orbit.period)
-
-def test_halo_orbit_propagation():
-    logger.info("Testing Halo orbit propagation...")
-
-    system = setup_tests()
-
-    orbit = setup_halo_orbit(system, 1)
-    orbit.differential_correction()
-    orbit.propagate()
-
-    logger.info("Finished testing Halo orbit propagation.")
-    logger.info("Trajectory: %s", np.array2string(orbit.trajectory, precision=12, suppress_small=True))
-
-def test_halo_orbit_plot():
-    logger.info("Testing Halo orbit plotting...")
-
-    system = setup_tests()
-
-    for i in range(1, 3):
-        orbit = setup_halo_orbit(system, i)
-        orbit.differential_correction()
-        orbit.propagate()
-        orbit.plot()
-
-    logger.info("Finished testing Halo orbit plotting.")
-
-def test_halo_orbit_stability():
-    logger.info("Testing Halo orbit stability...")
-
-    system = setup_tests()
-
-    orbit = setup_halo_orbit(system, 1)
-    orbit.differential_correction()
-    orbit.propagate()
-    orbit.compute_stability()
-    logger.info("Eigenvalues: %s", orbit.stability_info[0])
-    logger.info("Eigenvectors: %s", orbit.stability_info[1])
-    logger.info("Finished testing Halo orbit stability.")
-    logger.info("Is stable: %s", orbit.is_stable)
-    logger.info("Is unstable: %s", orbit.is_unstable)
-
-def test_halo_base_class():
-    logger.info("Testing Halo base class...")
-
-    system = setup_tests()
-
-    orbit = setup_halo_orbit(system, 1)
-    orbit.differential_correction()
-    orbit.propagate()
-    orbit.compute_stability()
-    logger.info("Jacobi constant: %s", orbit.jacobi_constant)
-    logger.info("Energy: %s", orbit.energy)
-    logger.info("Finished testing Halo base class.")
-
-def run_all_tests():
-    test_halo_orbit_ic()
-    test_halo_differential_correction()
-    test_halo_orbit_propagation()
-    test_halo_orbit_plot()
-    test_halo_orbit_stability()
-    test_halo_base_class()
-
-
-if __name__ == "__main__":
-    run_all_tests()
+def test_halo_base_class(l1_orbit):
+    """Test base class properties for halo orbits."""
+    l1_orbit.differential_correction()
+    l1_orbit.propagate()
+    l1_orbit.compute_stability()
+    
+    # Check that Jacobi constant is computed
+    assert isinstance(l1_orbit.jacobi_constant, float), "Jacobi constant should be a float"
+    
+    # Check that energy is computed
+    assert isinstance(l1_orbit.energy, float), "Energy should be a float"
+    
+    # Energy should be negative for a bound orbit
+    assert l1_orbit.energy < 0, "Energy should be negative for a bound orbit"

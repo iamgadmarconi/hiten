@@ -1,4 +1,5 @@
 import numpy as np
+import pytest
 
 from algorithms.linalg import eigenvalue_decomposition, stability_indices
 
@@ -6,49 +7,49 @@ from algorithms.linalg import eigenvalue_decomposition, stability_indices
 
 
 def test_eig_decomp():
-    # 1) Build a sample matrix A, same as the MATLAB example
-    # We'll use a diagonal for clarity: [0.9, 1.1, 1.0, 1.0]
+    # Build a sample matrix A, same as the MATLAB example
     A = np.array([[ 5,  3,  5],
                 [ -3,  5,  5],
                 [ 2,   -3,  2]])
-    # 2) Call the eig_decomp function
+    # Call the eig_decomp function
     discrete = 1
     sn, un, cn, Ws, Wu, Wc = eigenvalue_decomposition(A, discrete)
 
-    # 3) Print the results
-    print("Stable eigenvalues:", sn)
-    print("Unstable eigenvalues:", un)
-    print("Center eigenvalues:", cn)
+    # Test dimensions
+    assert Ws.shape[1] == len(sn), "Stable eigenvector count should match eigenvalue count"
+    assert Wu.shape[1] == len(un), "Unstable eigenvector count should match eigenvalue count"
+    assert Wc.shape[1] == len(cn), "Center eigenvector count should match eigenvalue count"
 
-    print("Stable eigenvectors:", Ws)
-    print("Unstable eigenvectors:", Wu)
-    print("Center eigenvectors:", Wc)
-
-    print("Stable subspace dimension:", Ws.shape[1])
-    print("Unstable subspace dimension:", Wu.shape[1])
-    print("Center subspace dimension:", Wc.shape[1])
-
-    # 4) Optional: verify that A * w_s ~ sn(i) * w_s, etc.
-    # For stable eigenvectors:
+    # Verify that A * w_s ~ sn(i) * w_s
     for i in range(Ws.shape[1]):
         test_vec = Ws[:,i]
-        check_resid = A @ test_vec - sn[i]*test_vec
-        print(f"Ws vector {i} residue norm:", np.linalg.norm(check_resid))
+        resid = A @ test_vec - sn[i]*test_vec
+        assert np.linalg.norm(resid) < 1e-10, f"Stable eigenvector {i} should satisfy eigenvalue equation"
 
-    print("test_eig_decomp completed successfully.")
+    # Repeat for unstable eigenvectors if any exist
+    for i in range(Wu.shape[1]):
+        test_vec = Wu[:,i]
+        resid = A @ test_vec - un[i]*test_vec
+        assert np.linalg.norm(resid) < 1e-10, f"Unstable eigenvector {i} should satisfy eigenvalue equation"
+
+    # Repeat for center eigenvectors if any exist
+    for i in range(Wc.shape[1]):
+        test_vec = Wc[:,i]
+        resid = A @ test_vec - cn[i]*test_vec
+        assert np.linalg.norm(resid) < 1e-10, f"Center eigenvector {i} should satisfy eigenvalue equation"
 
 
 def test_stability_indices():
     M = np.eye(6)
     nu, eigvals, eigvecs = stability_indices(M)
 
-    print("Stability indices:", nu)
-    print("Eigenvalues:", eigvals)
-    print("Eigenvectors:", eigvecs)
-
-    print("test_stability_indices completed successfully.")
-
-
-if __name__ == "__main__":
-    test_eig_decomp()
-    test_stability_indices()
+    # For identity matrix, all eigenvalues should be 1
+    assert np.allclose(eigvals, np.ones(6)), "Eigenvalues of identity matrix should all be 1"
+    
+    # Stability indices should be all zeros for identity matrix
+    assert np.allclose(nu, np.zeros(6)), "Stability indices for identity matrix should be zeros"
+    
+    # Eigenvectors should be orthogonal
+    for i in range(6):
+        for j in range(i+1, 6):
+            assert abs(np.dot(eigvecs[:,i], eigvecs[:,j])) < 1e-10, "Eigenvectors should be orthogonal"

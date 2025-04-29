@@ -1,20 +1,69 @@
 import numpy as np
+import pytest
+import sys
+import os
+import glob
+from pathlib import Path
 
 from system.base import System, systemConfig
 from system.body import Body
 
 from algorithms.propagators import propagate_crtbp
 
-# from orbits._tests.test_halo import run_all_tests
-from algorithms.center._tests.test_polynomials import run_all_tests
+def find_test_files():
+    """Find all test_*.py files in the project."""
+    src_dir = Path(os.path.dirname(os.path.abspath(__file__)))
+    test_files = []
+    
+    # Walk the directory structure to find all test_*.py files
+    for root, _, _ in os.walk(src_dir):
+        root_path = Path(root)
+        # Find all files matching test_*.py pattern
+        matches = list(root_path.glob("test_*.py"))
+        for match in matches:
+            # Convert to string and make path relative to current directory
+            rel_path = str(match.relative_to(os.getcwd()))
+            test_files.append(rel_path)
+    
+    return test_files
 
 def main():
-    run_all_tests()
+    """Run the tests using pytest.
+    
+    Usage:
+        python main.py               # Run all tests
+        python main.py polynomials   # Run only tests containing 'polynomials' in path
+        python main.py linalg        # Run only tests containing 'linalg' in path
+    """
+    args = sys.argv[1:]
+    
+    # Find all test files
+    all_test_files = find_test_files()
+    test_paths = []
+    
+    if not args:
+        # Run all tests
+        test_paths = all_test_files
+    else:
+        # Filter tests based on arguments
+        for arg in args:
+            matching_files = [f for f in all_test_files if arg.lower() in f.lower()]
+            test_paths.extend(matching_files)
+    
+    if not test_paths:
+        print("No test files found matching the criteria")
+        return
+    
+    # Print test files being run
+    print(f"Running {len(test_paths)} test files:")
+    for path in test_paths:
+        print(f"  - {path}")
+    
+    # Add pytest options
+    pytest_args = ["-xvs"] + test_paths
+    
+    # Run the tests
+    pytest.main(pytest_args)
 
 if __name__ == "__main__":
     main()
-
-
-
-
-
