@@ -6,7 +6,7 @@ from system.body import Body
 from algorithms.propagators import propagate_crtbp
 
 # from orbits._tests.test_halo import run_all_tests
-from algorithms.expansions._tests.test_center import run_all_tests
+from algorithms.center._tests.test_expansions import run_all_tests
 
 def main():
     run_all_tests()
