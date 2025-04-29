@@ -12,7 +12,9 @@ from algorithms.propagators import propagate_crtbp
 
 def find_test_files():
     """Find all test_*.py files in the project."""
+    # Get the directory of the main.py file
     src_dir = Path(os.path.dirname(os.path.abspath(__file__)))
+    project_root = src_dir.parent
     test_files = []
     
     # Walk the directory structure to find all test_*.py files
@@ -22,8 +24,7 @@ def find_test_files():
         matches = list(root_path.glob("test_*.py"))
         for match in matches:
             # Convert to string and make path relative to current directory
-            rel_path = str(match.relative_to(os.getcwd()))
-            test_files.append(rel_path)
+            test_files.append(str(match.resolve()))
     
     return test_files
 
@@ -57,7 +58,7 @@ def main():
     # Print test files being run
     print(f"Running {len(test_paths)} test files:")
     for path in test_paths:
-        print(f"  - {path}")
+        print(f"  - {os.path.relpath(path)}")
     
     # Add pytest options
     pytest_args = ["-xvs"] + test_paths

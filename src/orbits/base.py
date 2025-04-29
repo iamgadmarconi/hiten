@@ -146,6 +146,10 @@ class PeriodicOrbit(ABC):
             logger.warning("Stability information not computed. Call compute_stability() first.")
         return self._stability_info
 
+    @property
+    def system(self) -> System:
+        return self._system
+
     def _reset(self) -> None:
         """
         Reset all computed properties when the initial state is changed.
