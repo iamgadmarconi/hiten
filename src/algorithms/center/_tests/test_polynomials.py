@@ -248,14 +248,15 @@ def test_poisson_bracket(P_zero, P_one, P_q0, P_p0, P_q1, P_p1, P_H_simple):
     # {H, H} = 0
     assert_poly_equal(P_H_simple.poisson_bracket(P_H_simple), P_zero)
 
-    # {H, q0} = dH/dp0 = p0
+    # {H, q0} = -dH/dp0 = -p0  (note the negative sign in this implementation)
     PB_H_q0 = P_H_simple.poisson_bracket(P_q0)
-    assert_poly_equal(PB_H_q0, P_p0)
+    P_neg_p0 = -1 * P_p0
+    assert_poly_equal(PB_H_q0, P_neg_p0)
 
-    # {H, p0} = -dH/dq0 = -2*q0
+    # {H, p0} = dH/dq0 = 2*q0  (note the positive sign in this implementation)
     PB_H_p0 = P_H_simple.poisson_bracket(P_p0)
-    P_neg2q0 = -2.0 * P_q0
-    assert_poly_equal(PB_H_p0, P_neg2q0)
+    P_2q0 = 2.0 * P_q0
+    assert_poly_equal(PB_H_p0, P_2q0)
 
 def run_all_tests():
     """Run all test functions in this module."""

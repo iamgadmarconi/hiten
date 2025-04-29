@@ -180,6 +180,9 @@ class Polynomial:
         Computes the Poisson bracket {self, other}.
         Assumes canonical variables ordered [q1, p1, q2, p2, ...].
         Requires n_vars to be even.
+
+        The Poisson bracket is defined as:
+        {f,g} = ∑ (∂f/∂q_i)*(∂g/∂p_i) - (∂f/∂p_i)*(∂g/∂q_i)
         """
         if not isinstance(other, Polynomial):
             raise TypeError("Poisson bracket requires another Polynomial.")
@@ -191,25 +194,23 @@ class Polynomial:
         result = Polynomial({}, self.n_vars) # Start with zero polynomial
 
         # Loop over canonical pairs (q_i, p_i)
-        # This loop itself is small, but the operations inside are polynomial ops
         num_dof = self.n_vars // 2
         for i in range(num_dof):
             qi_index = 2 * i
             pi_index = 2 * i + 1
 
-            # Compute partial derivatives
+            # ∂f/∂q_i * ∂g/∂p_i
             d_self_dqi = self.differentiate(qi_index)
             d_other_dpi = other.differentiate(pi_index)
-            term1 = d_self_dqi * d_other_dpi # Uses __mul__
+            term1 = d_self_dqi * d_other_dpi
 
+            # ∂f/∂p_i * ∂g/∂q_i
             d_self_dpi = self.differentiate(pi_index)
             d_other_dqi = other.differentiate(qi_index)
-            term2 = d_self_dpi * d_other_dqi # Uses __mul__
+            term2 = d_self_dpi * d_other_dqi
 
-            # Accumulate result: result += term1 - term2
-            # These use the __add__ and __sub__ methods defined above
-            result = result + term1
-            result = result - term2
+            # Add term1 - term2 to result
+            result = result + (term1 - term2)
 
         return result
 
