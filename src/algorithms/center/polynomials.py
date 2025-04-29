@@ -1,8 +1,8 @@
 import symengine as se
 import numpy as np # For isclose later if needed, though less critical with symbolic
 import math      # Add math import for factorial and isclose
-from abc import ABC, abstractmethod
 from collections import defaultdict # For efficient term collection in equality check
+
 
 class Polynomial():
     """
