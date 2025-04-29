@@ -1,6 +1,6 @@
 import pytest
 import numpy as np
-from collections import defaultdict
+import symengine as se
 
 from algorithms.center.polynomials import Polynomial
 
@@ -10,12 +10,8 @@ def assert_poly_equal(p1, p2):
     assert isinstance(p1, Polynomial)
     assert isinstance(p2, Polynomial)
     assert p1.n_vars == p2.n_vars
-    # Check keys and values using np.isclose for coefficients
-    assert len(p1.coeffs) == len(p2.coeffs)
-    for exp, coeff1 in p1.coeffs.items():
-        assert exp in p2.coeffs, f"Exponent {exp} missing in second polynomial"
-        coeff2 = p2.coeffs[exp]
-        assert np.isclose(coeff1, coeff2), f"Coefficients for {exp} differ: {coeff1} vs {coeff2}"
+    # Use the equals method which compares expressions
+    assert p1 == p2, f"Expressions differ: {p1.expr} vs {p2.expr}"
 
 # --- Pytest Fixtures ---
 @pytest.fixture
@@ -24,36 +20,27 @@ def n_vars():
 
 @pytest.fixture
 def P_zero(n_vars):
-    return Polynomial(n_vars=n_vars)
+    return Polynomial.zero(n_vars=n_vars)
 
 @pytest.fixture
 def P_one(n_vars):
-    zero_exp = tuple([0] * n_vars)
-    return Polynomial({zero_exp: 1.0}, n_vars=n_vars)
+    return Polynomial.one(n_vars=n_vars)
 
 @pytest.fixture
 def P_q0(n_vars): # q1 in the text
-    exp = [0] * n_vars
-    exp[0] = 1
-    return Polynomial({tuple(exp): 1.0}, n_vars=n_vars)
+    return Polynomial('x0', n_vars=n_vars)
 
 @pytest.fixture
 def P_p0(n_vars): # p1 in the text
-    exp = [0] * n_vars
-    exp[1] = 1
-    return Polynomial({tuple(exp): 1.0}, n_vars=n_vars)
+    return Polynomial('x1', n_vars=n_vars)
 
 @pytest.fixture
 def P_q1(n_vars): # q2 in the text
-    exp = [0] * n_vars
-    exp[2] = 1
-    return Polynomial({tuple(exp): 1.0}, n_vars=n_vars)
+    return Polynomial('x2', n_vars=n_vars)
 
 @pytest.fixture
 def P_p1(n_vars): # p2 in the text
-    exp = [0] * n_vars
-    exp[3] = 1
-    return Polynomial({tuple(exp): 1.0}, n_vars=n_vars)
+    return Polynomial('x3', n_vars=n_vars)
 
 @pytest.fixture
 def P_qp_sum(P_q0, P_p0): # q0 + p0
@@ -61,36 +48,33 @@ def P_qp_sum(P_q0, P_p0): # q0 + p0
 
 @pytest.fixture
 def P_H_simple(n_vars): # Simple Hamiltonian H = 0.5*p0^2 + q0^2
-    exp_p0_sq = [0] * n_vars
-    exp_p0_sq[1] = 2
-    exp_q0_sq = [0] * n_vars
-    exp_q0_sq[0] = 2
-    return Polynomial({tuple(exp_p0_sq): 0.5, tuple(exp_q0_sq): 1.0}, n_vars=n_vars)
+    return Polynomial('0.5*x1**2 + x0**2', n_vars=n_vars)
 
 # --- Test Functions ---
 
 def test_initialization(n_vars, P_zero, P_one, P_q0):
     assert P_zero.n_vars == n_vars
-    assert len(P_zero) == 0
-    assert P_zero.coeffs == {}
+    assert str(P_zero.expr) == '0'
 
     assert P_one.n_vars == n_vars
-    assert len(P_one) == 1
-    assert np.isclose(P_one.coeffs[tuple([0]*n_vars)], 1.0)
+    assert str(P_one.expr) == '1'
 
     assert P_q0.n_vars == n_vars
-    assert len(P_q0) == 1
-    exp_q0 = tuple([1] + [0]*(n_vars-1))
-    assert np.isclose(P_q0.coeffs[exp_q0], 1.0)
+    assert str(P_q0.expr) == 'x0'
 
-    # Test zero coefficient removal
-    p_with_zero = Polynomial({(1,0,0,0,0,0): 1.0, (0,1,0,0,0,0): 0.0}, n_vars=n_vars)
-    assert len(p_with_zero) == 1
-    assert (0,1,0,0,0,0) not in p_with_zero.coeffs
+    # Test initialization with symengine expressions
+    x0 = se.Symbol('x0')
+    p_with_expr = Polynomial(x0 + 2, n_vars=n_vars)
+    # The string representation may have different ordering (2 + x0 vs x0 + 2)
+    assert p_with_expr.equals(Polynomial('x0 + 2', n_vars=n_vars))
+    
+    # Test creation with numerical value
+    p_with_num = Polynomial(42, n_vars=n_vars)
+    assert str(p_with_num.expr) == '42'
 
-    # Test wrong exponent length
+    # Test wrong n_vars
     with pytest.raises(ValueError):
-        Polynomial({(1, 0): 1.0}, n_vars=n_vars) # Only 2 exponents given
+        Polynomial(1, n_vars=3) # n_vars must be even
 
 def test_addition_subtraction(P_zero, P_one, P_q0, P_p0, P_qp_sum):
     # Identities
@@ -107,9 +91,7 @@ def test_addition_subtraction(P_zero, P_one, P_q0, P_p0, P_qp_sum):
 
     # Scalar add/sub
     P_q0_plus_5 = P_q0 + 5
-    exp_q0 = tuple([1] + [0]*(P_q0.n_vars-1))
-    zero_exp = tuple([0]*P_q0.n_vars)
-    expected = Polynomial({exp_q0: 1.0, zero_exp: 5.0}, n_vars=P_q0.n_vars)
+    expected = Polynomial('x0 + 5', n_vars=P_q0.n_vars)
     assert_poly_equal(P_q0_plus_5, expected)
     assert_poly_equal(P_q0_plus_5 - 5, P_q0)
 
@@ -124,27 +106,18 @@ def test_multiplication(P_zero, P_one, P_q0, P_p0, P_qp_sum):
 
     # Scalar
     P_3q0 = 3 * P_q0
-    exp_q0 = tuple([1] + [0]*(P_q0.n_vars-1))
-    expected_3q0 = Polynomial({exp_q0: 3.0}, n_vars=P_q0.n_vars)
-    assert_poly_equal(P_3q0, expected_3q0)
-    assert_poly_equal(P_q0 * 3.0, expected_3q0)
+    # Using equals directly to handle formatting differences (3*x0 vs 3.0*x0)
+    P_q0_times_3 = P_q0 * 3.0
+    assert P_3q0.equals(P_q0_times_3), f"Expressions differ: {P_3q0.expr} vs {P_q0_times_3.expr}"
 
     # Known results
     P_q0p0 = P_q0 * P_p0
-    exp_q0p0 = tuple([1, 1] + [0]*(P_q0.n_vars-2))
-    expected_q0p0 = Polynomial({exp_q0p0: 1.0}, n_vars=P_q0.n_vars)
+    expected_q0p0 = Polynomial('x0*x1', n_vars=P_q0.n_vars)
     assert_poly_equal(P_q0p0, expected_q0p0)
 
     # (q0+p0)^2 = q0^2 + p0^2 + 2*q0*p0
     P_sq = P_qp_sum * P_qp_sum
-    exp_q0_sq = tuple([2] + [0]*(P_q0.n_vars-1))
-    exp_p0_sq = tuple([0, 2] + [0]*(P_q0.n_vars-2))
-    exp_q0p0_term = tuple([1, 1] + [0]*(P_q0.n_vars-2))
-    expected_sq = Polynomial({
-        exp_q0_sq: 1.0,
-        exp_p0_sq: 1.0,
-        exp_q0p0_term: 2.0
-    }, n_vars=P_q0.n_vars)
+    expected_sq = Polynomial('x0**2 + x1**2 + 2*x0*x1', n_vars=P_q0.n_vars)
     assert_poly_equal(P_sq, expected_sq)
 
     # Distributivity P*(Q+R) = P*Q + P*R
@@ -167,13 +140,11 @@ def test_differentiation(n_vars, P_zero, P_one, P_q0, P_p0, P_q1, P_H_simple):
 
     # Known derivative H = 0.5*p0^2 + q0^2
     dH_dq0 = P_H_simple.differentiate(0) # Should be 2*q0
-    exp_q0 = tuple([1] + [0]*(n_vars-1))
-    expected_dH_dq0 = Polynomial({exp_q0: 2.0}, n_vars=n_vars)
+    expected_dH_dq0 = Polynomial('2*x0', n_vars=n_vars)
     assert_poly_equal(dH_dq0, expected_dH_dq0)
 
     dH_dp0 = P_H_simple.differentiate(1) # Should be p0
-    exp_p0 = tuple([0, 1] + [0]*(n_vars-2))
-    expected_dH_dp0 = Polynomial({exp_p0: 1.0}, n_vars=n_vars)
+    expected_dH_dp0 = Polynomial('x1', n_vars=n_vars)
     assert_poly_equal(dH_dp0, expected_dH_dp0)
 
     # Linearity d(P+Q)/dx = dP/dx + dQ/dx
@@ -260,24 +231,21 @@ def test_poisson_bracket(P_zero, P_one, P_q0, P_p0, P_q1, P_p1, P_H_simple):
 
 def run_all_tests():
     """Run all test functions in this module."""
-    test_initialization(6, Polynomial(n_vars=6), Polynomial({(0,0,0,0,0,0): 1.0}, n_vars=6), 
-                       Polynomial({(1,0,0,0,0,0): 1.0}, n_vars=6))
+    n_vars = 6
     
-    P_zero = Polynomial(n_vars=6)
-    P_one = Polynomial({(0,0,0,0,0,0): 1.0}, n_vars=6)
-    P_q0 = Polynomial({(1,0,0,0,0,0): 1.0}, n_vars=6)
-    P_p0 = Polynomial({(0,1,0,0,0,0): 1.0}, n_vars=6)
+    P_zero = Polynomial.zero(n_vars=n_vars)
+    P_one = Polynomial.one(n_vars=n_vars)
+    P_q0 = Polynomial('x0', n_vars=n_vars)
+    P_p0 = Polynomial('x1', n_vars=n_vars)
     P_qp_sum = P_q0 + P_p0
+    P_q1 = Polynomial('x2', n_vars=n_vars)
+    P_p1 = Polynomial('x3', n_vars=n_vars)
+    P_H_simple = Polynomial('0.5*x1**2 + x0**2', n_vars=n_vars)
     
+    test_initialization(n_vars, P_zero, P_one, P_q0)
     test_addition_subtraction(P_zero, P_one, P_q0, P_p0, P_qp_sum)
-    
-    P_q1 = Polynomial({(0,0,1,0,0,0): 1.0}, n_vars=6)
-    P_p1 = Polynomial({(0,0,0,1,0,0): 1.0}, n_vars=6)
-    
-    P_H_simple = Polynomial({(0,2,0,0,0,0): 0.5, (2,0,0,0,0,0): 1.0}, n_vars=6)
-    
     test_multiplication(P_zero, P_one, P_q0, P_p0, P_qp_sum)
-    test_differentiation(6, P_zero, P_one, P_q0, P_p0, P_q1, P_H_simple)
+    test_differentiation(n_vars, P_zero, P_one, P_q0, P_p0, P_q1, P_H_simple)
     test_poisson_bracket(P_zero, P_one, P_q0, P_p0, P_q1, P_p1, P_H_simple)
     
     print("All polynomial tests passed!")

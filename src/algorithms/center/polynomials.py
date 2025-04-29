@@ -1,272 +1,276 @@
-import numba
-import numpy as np
-from collections import defaultdict
-import itertools # For polynomial multiplication iteration
-from log_config import logger
+import symengine as se
+import numpy as np # For isclose later if needed, though less critical with symbolic
+from abc import ABC, abstractmethod
 
 
-class Polynomial:
+class Polynomial():
     """
-    Represents a multivariate polynomial optimized for Hamiltonian mechanics.
-
-    Uses a dictionary `coeffs` mapping exponent tuples to coefficients.
-    Assumes variables are ordered [q1, p1, q2, p2, q3, p3, ...]
+    A Polynomial class using symengine as the backend for symbolic manipulation.
     """
-    def __init__(self, data=None, n_vars=6):
+    _symbol_cache = {} # Cache symbols for efficiency
+
+    def __init__(self, expression, n_vars=6, variables=None):
         """
-        Initializes the Polynomial.
+        Initializes the Polynomial using a symengine expression.
 
         Args:
-            data (dict, optional): A dictionary {exponent_tuple: coeff}. Defaults to None (empty polynomial).
-                                   Exponent tuples must have length n_vars.
-            n_vars (int, optional): Number of variables (dimensionality of phase space). Defaults to 6.
+            expression (symengine.Expr or str or number):
+                The symengine expression, a string to parse, or a number.
+            n_vars (int): Number of variables (must be even for PB).
+            variables (list[symengine.Symbol], optional):
+                A list of symengine symbols in canonical order [q1, p1, q2, p2,...].
+                If None, they will be generated automatically as x0, x1, ...
         """
+        if n_vars <= 0 or n_vars % 2 != 0:
+             raise ValueError("n_vars must be a positive even integer.")
         self.n_vars = n_vars
-        # Use complex coefficients as intermediate steps in CMR often involve them
-        self.coeffs = defaultdict(complex)
-        if data:
-            logger.debug(f"Initializing polynomial with {len(data)} terms and {n_vars} variables")
-            for exp, coeff in data.items():
-                if len(exp) != self.n_vars:
-                    logger.error(f"Exponent tuple {exp} length mismatch. Expected {self.n_vars}.")
-                    raise ValueError(f"Exponent tuple {exp} length mismatch. Expected {self.n_vars}.")
-                # Only store non-zero coefficients
-                if not np.isclose(coeff, 0.0):
-                    # Ensure exponents are integers
-                    self.coeffs[tuple(map(int, exp))] = complex(coeff)
+
+        # Generate or use provided variables
+        if variables:
+            if len(variables) != n_vars:
+                 raise ValueError(f"Provided variables list length ({len(variables)}) != n_vars ({n_vars})")
+            self.variables = variables
         else:
-            logger.debug(f"Initializing empty polynomial with {n_vars} variables")
+            # Generate standard variable names if not provided
+            var_key = n_vars
+            if var_key not in Polynomial._symbol_cache:
+                 # Standard names: x0, x1, x2,... corresponding to q1, p1, q2,...
+                 Polynomial._symbol_cache[var_key] = se.symbols([f'x{i}' for i in range(n_vars)])
+            self.variables = Polynomial._symbol_cache[var_key]
+
+        # Store the internal symengine expression
+        if isinstance(expression, se.Expr):
+            self.expr = expression
+        elif isinstance(expression, (int, float, complex)):
+            # Directly convert numeric values
+            self.expr = se.sympify(expression)
+        elif isinstance(expression, str):
+            # For strings, we need to handle the variables manually
+            # Parse the string expression with variable substitution
+            expr_str = expression
+            self.expr = se.sympify(expr_str)
+            
+            # Replace any symbolic variables with our actual variables
+            # This is needed because symengine.sympify doesn't accept locals parameter
+            substitutions = {}
+            for i, var in enumerate(self.variables):
+                var_name = f'x{i}'
+                symbol_in_expr = se.Symbol(var_name)
+                if symbol_in_expr != var and symbol_in_expr in self.expr.free_symbols:
+                    substitutions[symbol_in_expr] = var
+            
+            if substitutions:
+                self.expr = self.expr.subs(substitutions)
+        else:
+            raise TypeError(f"Unsupported expression type for initialization: {type(expression)}")
+
+    @classmethod
+    def zero(cls, n_vars=6, variables=None):
+        """Creates a zero polynomial."""
+        return cls(0, n_vars=n_vars, variables=variables)
+
+    @classmethod
+    def one(cls, n_vars=6, variables=None):
+        """Creates a one polynomial."""
+        return cls(1, n_vars=n_vars, variables=variables)
+
 
     def __repr__(self):
-        return f"Polynomial({dict(self.coeffs)}, n_vars={self.n_vars})"
+        return f"Polynomial('{str(self.expr)}', n_vars={self.n_vars})"
 
     def __str__(self):
-        if not self.coeffs:
-            return "0"
-        terms = []
-        # Sort terms for consistent output (e.g., by total degree, then lexicographically)
-        sorted_exponents = sorted(self.coeffs.keys(), key=lambda exp: (sum(exp), exp))
-        for exp in sorted_exponents:
-            coeff = self.coeffs[exp]
-            term_str = f"{coeff:.4e}" # Format coefficient
-            var_parts = []
-            for i, e in enumerate(exp):
-                if e == 1:
-                    var_parts.append(f"x{i}") # Placeholder variable name
-                elif e > 1:
-                    var_parts.append(f"x{i}^{e}")
-            if var_parts:
-                term_str += "*" + "*".join(var_parts)
-            terms.append(term_str)
-        return " + ".join(terms).replace(" + -", " - ")
-
-    def __len__(self):
-        """Number of non-zero terms."""
-        return len(self.coeffs)
+        return str(self.expr)
 
     def __add__(self, other):
-        """Polynomial addition."""
-        if isinstance(other, (int, float, complex)): # Adding a constant
-             new_coeffs = self.coeffs.copy()
-             zero_exp = tuple([0] * self.n_vars)
-             new_coeffs[zero_exp] = new_coeffs.get(zero_exp, 0.0) + other
-             # Remove if zero
-             if np.isclose(new_coeffs[zero_exp], 0.0):
-                 del new_coeffs[zero_exp]
-             logger.debug(f"Added scalar {other} to polynomial")
-             return Polynomial(new_coeffs, self.n_vars)
-        elif isinstance(other, Polynomial):
+        """Addition: Handles Polynomial + Polynomial or Polynomial + scalar"""
+        if isinstance(other, Polynomial):
             if self.n_vars != other.n_vars:
-                logger.error(f"Polynomial addition failed: dimension mismatch ({self.n_vars} != {other.n_vars})")
-                raise ValueError("Polynomials must have the same number of variables.")
-            logger.debug(f"Adding polynomials with {len(self.coeffs)} and {len(other.coeffs)} terms")
-            new_coeffs = self.coeffs.copy()
-            # Numba *could* potentially accelerate this loop if coefficients
-            # were extracted into arrays, but dict ops might be fast enough.
-            for exp, coeff in other.coeffs.items():
-                new_val = new_coeffs.get(exp, 0.0) + coeff
-                if np.isclose(new_val, 0.0):
-                    if exp in new_coeffs: # Remove if it became zero
-                       del new_coeffs[exp]
-                else:
-                    new_coeffs[exp] = new_val
-            result = Polynomial(new_coeffs, self.n_vars)
-            logger.debug(f"Addition result has {len(result.coeffs)} terms")
-            return result
+                 raise ValueError("Polynomials must have the same number of variables.")
+            # Use symengine's '+' operator
+            return Polynomial(self.expr + other.expr, self.n_vars, self.variables)
+        elif isinstance(other, (int, float, complex, str)):
+            # Add scalar (sympify handles conversion)
+            other_expr = se.sympify(other)
+            return Polynomial(self.expr + other_expr, self.n_vars, self.variables)
         else:
             return NotImplemented
 
     def __radd__(self, other):
+        # Handles scalar + Polynomial
         return self.__add__(other)
 
     def __sub__(self, other):
-        """Polynomial subtraction."""
-        # Similar logic to __add__, negating other's coeffs
-        if isinstance(other, (int, float, complex)):
-            logger.debug(f"Subtracting scalar {other} from polynomial")
-            return self.__add__(-other) # Reuse add
-        elif isinstance(other, Polynomial):
-             if self.n_vars != other.n_vars:
-                logger.error(f"Polynomial subtraction failed: dimension mismatch ({self.n_vars} != {other.n_vars})")
-                raise ValueError("Polynomials must have the same number of variables.")
-             logger.debug(f"Subtracting polynomials with {len(self.coeffs)} and {len(other.coeffs)} terms")
-             new_coeffs = self.coeffs.copy()
-             for exp, coeff in other.coeffs.items():
-                new_val = new_coeffs.get(exp, 0.0) - coeff
-                if np.isclose(new_val, 0.0):
-                    if exp in new_coeffs:
-                        del new_coeffs[exp]
-                else:
-                    new_coeffs[exp] = new_val
-             result = Polynomial(new_coeffs, self.n_vars)
-             logger.debug(f"Subtraction result has {len(result.coeffs)} terms")
-             return result
+        """Subtraction: Handles Polynomial - Polynomial or Polynomial - scalar"""
+        if isinstance(other, Polynomial):
+            if self.n_vars != other.n_vars:
+                 raise ValueError("Polynomials must have the same number of variables.")
+            # Use symengine's '-' operator
+            return Polynomial(self.expr - other.expr, self.n_vars, self.variables)
+        elif isinstance(other, (int, float, complex, str)):
+            other_expr = se.sympify(other)
+            return Polynomial(self.expr - other_expr, self.n_vars, self.variables)
         else:
             return NotImplemented
 
     def __rsub__(self, other):
-        # other - self = -(self - other)
-        neg_self = self * -1
-        logger.debug(f"Computing right subtraction (scalar - polynomial)")
-        return neg_self.__add__(other)
-
+         # Handles scalar - Polynomial
+        if isinstance(other, (int, float, complex, str)):
+            other_expr = se.sympify(other)
+            return Polynomial(other_expr - self.expr, self.n_vars, self.variables)
+        else:
+            return NotImplemented
 
     def __mul__(self, other):
-        """Polynomial multiplication (Polynomial * Polynomial or Scalar * Polynomial)."""
-        if isinstance(other, (int, float, complex)): # Scalar multiplication
-            logger.debug(f"Multiplying polynomial by scalar {other}")
-            new_coeffs = defaultdict(complex)
-            # Numba *could* accelerate this loop over values
-            for exp, coeff in self.coeffs.items():
-                new_coeffs[exp] = coeff * other
-                # No need to check for zero, scalar * non-zero = non-zero (unless scalar is 0)
-            if np.isclose(other, 0.0):
-                 logger.debug("Multiplying by zero: returning empty polynomial")
-                 return Polynomial({}, self.n_vars) # Return empty polynomial
-            result = Polynomial(new_coeffs, self.n_vars)
-            logger.debug(f"Scalar multiplication result has {len(result.coeffs)} terms")
-            return result
-        elif isinstance(other, Polynomial): # Polynomial * Polynomial
+        """Multiplication: Handles Polynomial * Polynomial or Polynomial * scalar"""
+        if isinstance(other, Polynomial):
             if self.n_vars != other.n_vars:
-                logger.error(f"Polynomial multiplication failed: dimension mismatch ({self.n_vars} != {other.n_vars})")
-                raise ValueError("Polynomials must have the same number of variables.")
-            logger.debug(f"Multiplying polynomials with {len(self.coeffs)} and {len(other.coeffs)} terms")
-            new_coeffs = defaultdict(complex)
-            # This nested loop is the core of polynomial multiplication
-            # Numba is hard to apply directly here due to dict key generation (tuples)
-            # but *could* accelerate coefficient math if refactored.
-            for exp1, coeff1 in self.coeffs.items():
-                for exp2, coeff2 in other.coeffs.items():
-                    new_coeff = coeff1 * coeff2
-                    if not np.isclose(new_coeff, 0.0):
-                        new_exp = tuple(e1 + e2 for e1, e2 in zip(exp1, exp2))
-                        current_coeff = new_coeffs.get(new_exp, 0.0)
-                        new_val = current_coeff + new_coeff
-                        if np.isclose(new_val, 0.0):
-                            # If term becomes zero, remove if exists (it might not if current_coeff was 0)
-                            if new_exp in new_coeffs:
-                                del new_coeffs[new_exp]
-                        else:
-                            new_coeffs[new_exp] = new_val
-            result = Polynomial(new_coeffs, self.n_vars)
-            logger.debug(f"Polynomial multiplication result has {len(result.coeffs)} terms")
-            return result
+                 raise ValueError("Polynomials must have the same number of variables.")
+            # Use symengine's '*' operator
+            return Polynomial(self.expr * other.expr, self.n_vars, self.variables)
+        elif isinstance(other, (int, float, complex, str)):
+            other_expr = se.sympify(other)
+            return Polynomial(self.expr * other_expr, self.n_vars, self.variables)
         else:
             return NotImplemented
 
     def __rmul__(self, other):
-        # Handles Scalar * Polynomial
+        # Handles scalar * Polynomial
         return self.__mul__(other)
+
+    def __neg__(self):
+        """Negation: -Polynomial"""
+        return Polynomial(-self.expr, self.n_vars, self.variables)
+
+    # Optional: Implement division if needed, e.g., for coefficient extraction
+    # def __truediv__(self, other): ...
 
     def differentiate(self, var_index):
         """
         Differentiates the polynomial with respect to a given variable index.
-        Assumes variables are 0-indexed (e.g., 0 for q1, 1 for p1, etc.).
+        Assumes variables are 0-indexed [q1, p1, q2, p2, ...].
         """
         if not (0 <= var_index < self.n_vars):
-            logger.error(f"Invalid var_index {var_index}, must be between 0 and {self.n_vars-1}")
             raise ValueError(f"var_index must be between 0 and {self.n_vars-1}")
-
-        logger.debug(f"Differentiating polynomial with respect to variable index {var_index}")
-        new_coeffs = defaultdict(complex)
-        # Numba unlikely to help much here due to tuple manipulation
-        for exp, coeff in self.coeffs.items():
-            original_exponent = exp[var_index]
-            if original_exponent > 0:
-                new_coeff = coeff * original_exponent
-                # Check for zero coefficient *after* multiplication
-                if not np.isclose(new_coeff, 0.0):
-                    new_exp_list = list(exp)
-                    new_exp_list[var_index] -= 1
-                    new_coeffs[tuple(new_exp_list)] = new_coeff
-        result = Polynomial(new_coeffs, self.n_vars)
-        logger.debug(f"Differentiation result has {len(result.coeffs)} terms")
-        return result
+        target_var = self.variables[var_index]
+        # Use symengine's diff method
+        derivative_expr = se.diff(self.expr, target_var)
+        return Polynomial(derivative_expr, self.n_vars, self.variables)
 
     def poisson_bracket(self, other):
         """
         Computes the Poisson bracket {self, other}.
         Assumes canonical variables ordered [q1, p1, q2, p2, ...].
-        Requires n_vars to be even.
-
-        The Poisson bracket is defined as:
-        {f,g} = ∑ (∂f/∂q_i)*(∂g/∂p_i) - (∂f/∂p_i)*(∂g/∂q_i)
         """
         if not isinstance(other, Polynomial):
-            logger.error("Poisson bracket requires another Polynomial")
-            raise TypeError("Poisson bracket requires another Polynomial.")
+            # Allow bracket with scalar (which is always 0)
+            if isinstance(other, (int, float, complex, str)):
+                 if se.sympify(other).is_Number:
+                     return Polynomial(0, self.n_vars, self.variables)
+            raise TypeError("Poisson bracket requires another Polynomial or a numeric scalar.")
+
         if self.n_vars != other.n_vars:
-            logger.error(f"Poisson bracket failed: dimension mismatch ({self.n_vars} != {other.n_vars})")
             raise ValueError("Polynomials must have the same number of variables.")
-        if self.n_vars % 2 != 0:
-            logger.error(f"Poisson bracket failed: n_vars={self.n_vars} is not even")
-            raise ValueError("Number of variables must be even for Poisson bracket.")
+        # n_vars check already done in __init__
 
-        logger.debug(f"Computing Poisson bracket between polynomials with {len(self.coeffs)} and {len(other.coeffs)} terms")
-        result = Polynomial({}, self.n_vars) # Start with zero polynomial
-
-        # Loop over canonical pairs (q_i, p_i)
         num_dof = self.n_vars // 2
+        result_expr = se.sympify(0) # Start with zero expression
+
         for i in range(num_dof):
             qi_index = 2 * i
             pi_index = 2 * i + 1
+            qi = self.variables[qi_index]
+            pi = self.variables[pi_index]
 
-            # ∂f/∂q_i * ∂g/∂p_i
-            d_self_dqi = self.differentiate(qi_index)
-            d_other_dpi = other.differentiate(pi_index)
-            term1 = d_self_dqi * d_other_dpi
+            # Compute partial derivatives using symengine.diff
+            d_self_dqi = se.diff(self.expr, qi)
+            d_other_dpi = se.diff(other.expr, pi)
+            term1 = d_self_dqi * d_other_dpi # Use symengine multiplication
 
-            # ∂f/∂p_i * ∂g/∂q_i
-            d_self_dpi = self.differentiate(pi_index)
-            d_other_dqi = other.differentiate(qi_index)
-            term2 = d_self_dpi * d_other_dqi
+            d_self_dpi = se.diff(self.expr, pi)
+            d_other_dqi = se.diff(other.expr, qi)
+            term2 = d_self_dpi * d_other_dqi # Use symengine multiplication
 
-            # Add term1 - term2 to result
-            result = result + (term1 - term2)
+            # Accumulate result: result += term1 - term2
+            result_expr = result_expr + term1 - term2 # Use symengine arithmetic
 
-        logger.debug(f"Poisson bracket result has {len(result.coeffs)} terms")
-        return result
+        return Polynomial(result_expr, self.n_vars, self.variables)
 
-    def get_terms_of_degree(self, degree):
-        """Returns a new Polynomial containing only terms of a specific total degree."""
-        logger.debug(f"Extracting terms of degree {degree} from polynomial with {len(self.coeffs)} terms")
-        terms = {exp: coeff for exp, coeff in self.coeffs.items() if sum(exp) == degree}
-        result = Polynomial(terms, self.n_vars)
-        logger.debug(f"Extracted {len(result.coeffs)} terms of degree {degree}")
-        return result
+    def substitute(self, var_map):
+        """
+        Substitutes variables in the expression.
 
-    def evaluate(self, values):
-        """Evaluates the polynomial given a list/tuple of variable values."""
-        if len(values) != self.n_vars:
-            logger.error(f"Polynomial evaluation failed: dimension mismatch ({len(values)} != {self.n_vars})")
-            raise ValueError("Number of values must match n_vars.")
+        Args:
+            var_map (dict): A dictionary mapping symengine symbols or variable
+                            indices to their substitution values (numbers or
+                            other symengine expressions/Polynomials).
+        """
+        sub_dict = {}
+        for k, v in var_map.items():
+            key_symbol = None
+            if isinstance(k, int): # Allow substitution by index
+                if 0 <= k < self.n_vars:
+                    key_symbol = self.variables[k]
+                else:
+                    raise ValueError(f"Invalid variable index {k} for substitution.")
+            elif isinstance(k, se.Symbol):
+                key_symbol = k
+            elif isinstance(k, str):
+                # Find symbol by name
+                found = False
+                for sym in self.variables:
+                    if str(sym) == k:
+                        key_symbol = sym
+                        found = True
+                        break
+                if not found:
+                    raise ValueError(f"Symbol string '{k}' not found in polynomial variables.")
+            else:
+                raise TypeError(f"Invalid key type in var_map: {type(k)}")
+
+            # Process value
+            if isinstance(v, Polynomial):
+                sub_dict[key_symbol] = v.expr
+            elif isinstance(v, (int, float, complex, str, se.Expr)):
+                sub_dict[key_symbol] = se.sympify(v) # Ensure value is a symengine expression
+            else:
+                raise TypeError(f"Invalid value type in var_map: {type(v)}")
+
+        substituted_expr = self.expr.subs(sub_dict)
+        return Polynomial(substituted_expr, self.n_vars, self.variables)
+
+    def equals(self, other):
+        """Checks for symbolic equality (can be computationally expensive)."""
+        if not isinstance(other, Polynomial):
+            return False
+        if self.n_vars != other.n_vars:
+             return False
         
-        logger.debug(f"Evaluating polynomial with {len(self.coeffs)} terms at point {values}")
-        total = 0.0
-        for exp, coeff in self.coeffs.items():
-            term_val = coeff
-            for i, e in enumerate(exp):
-                term_val *= values[i]**e
-            total += term_val
-        logger.debug(f"Polynomial evaluation result: {total}")
-        return total
+        # Use symengine's expand and then compare
+        expr1 = se.expand(self.expr)
+        expr2 = se.expand(other.expr)
+        
+        # If the expressions are identical, return True
+        if expr1 == expr2:
+            return True
+        
+        # If they differ only in numeric formatting (3.0 vs 3), try to normalize
+        # by converting to a standard form
+        try:
+            # Subtract one from the other and check if the result is zero or very close to zero
+            diff = expr1 - expr2
+            # If it's a constant, it should be zero (or very close to zero)
+            if diff.is_Number:
+                return abs(float(diff)) < 1e-10
+                
+            # If we have coefficients that might be float vs int formats, 
+            # we need to check term by term
+            # This is more complex and would require parsing the expression structure
+            # For now, we'll just return False if the direct comparison fails
+            return False
+        except Exception:
+            # If any conversion or computation errors, default to False
+            return False
+            
+    def __eq__(self, other):
+        """Checks for symbolic equality."""
+        return self.equals(other)
