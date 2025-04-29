@@ -6,9 +6,10 @@ from collections import defaultdict # For efficient term collection in equality 
 
 class Polynomial():
     """
-    An improved Polynomial class using symengine as the backend for symbolic
-    manipulation. Provides methods needed for Hamiltonian mechanics algorithms,
-    optimized to avoid unnecessary expansions where possible.
+    An improved Polynomial class using symengine as the backend for symbolic manipulation.
+    
+    Provides methods needed for Hamiltonian mechanics algorithms, optimized to avoid 
+    unnecessary expansions where possible.
     """
     _symbol_cache = {} # Cache symbols for efficiency
 
@@ -16,14 +17,23 @@ class Polynomial():
         """
         Initializes the Polynomial using a symengine expression.
 
-        Args:
-            expression (symengine.Expr or str or number):
-                The symengine expression, a string to parse, or a number.
-            n_vars (int): Number of variables (must be even for PB).
-            variables (list, optional):
-                A list of symengine symbols in canonical order [q1, p1, q2, p2,...].
-                If None, they will be generated automatically as x0, x1,...
-                *** Note: Methods like poisson_bracket assume this canonical ordering. ***
+        Parameters
+        ----------
+        expression : symengine.Expr or str or number
+            The symengine expression, a string to parse, or a number.
+        n_vars : int
+            Number of variables (must be even for PB).
+        variables : list, optional
+            A list of symengine symbols in canonical order [q1, p1, q2, p2,...].
+            If None, they will be generated automatically as x0, x1,...
+            Note that methods like poisson_bracket assume this canonical ordering.
+        
+        Raises
+        ------
+        ValueError
+            If n_vars is not a positive even integer or if variables length doesn't match n_vars.
+        TypeError
+            If expression is of unsupported type.
         """
         if n_vars <= 0 or n_vars % 2!= 0:
             raise ValueError("n_vars must be a positive even integer.")
@@ -79,12 +89,40 @@ class Polynomial():
 
     @classmethod
     def zero(cls, n_vars=6, variables=None):
-        """Creates a zero polynomial."""
+        """
+        Creates a zero polynomial.
+        
+        Parameters
+        ----------
+        n_vars : int, optional
+            Number of variables. Default is 6.
+        variables : list, optional
+            A list of symengine symbols in canonical order. Default is None.
+            
+        Returns
+        -------
+        Polynomial
+            A polynomial with value 0.
+        """
         return cls(0, n_vars=n_vars, variables=variables)
 
     @classmethod
     def one(cls, n_vars=6, variables=None):
-        """Creates a one polynomial."""
+        """
+        Creates a one polynomial.
+        
+        Parameters
+        ----------
+        n_vars : int, optional
+            Number of variables. Default is 6.
+        variables : list, optional
+            A list of symengine symbols in canonical order. Default is None.
+            
+        Returns
+        -------
+        Polynomial
+            A polynomial with value 1.
+        """
         return cls(1, n_vars=n_vars, variables=variables)
 
 
@@ -160,9 +198,21 @@ class Polynomial():
         """
         Differentiates the polynomial with respect to a given variable index.
 
-        Args:
-            var_index (int): The 0-based index of the variable in self.variables.
-                             *** Assumes canonical ordering [q1, p1,...] if using indices. ***
+        Parameters
+        ----------
+        var_index : int
+            The 0-based index of the variable in self.variables.
+            Assumes canonical ordering [q1, p1,...] if using indices.
+        
+        Returns
+        -------
+        Polynomial
+            The derivative of the polynomial with respect to the specified variable.
+            
+        Raises
+        ------
+        ValueError
+            If var_index is out of range.
         """
         if not (0 <= var_index < self.n_vars):
             raise ValueError(f"var_index must be between 0 and {self.n_vars-1}")
@@ -173,7 +223,29 @@ class Polynomial():
     def poisson_bracket(self, other):
         """
         Computes the Poisson bracket {self, other}.
-        *** Assumes canonical variables ordered [q1, p1, q2, p2,...] in self.variables. ***
+        
+        Parameters
+        ----------
+        other : Polynomial or scalar
+            The second argument of the Poisson bracket.
+            
+        Returns
+        -------
+        Polynomial
+            The result of the Poisson bracket operation.
+            
+        Raises
+        ------
+        TypeError
+            If other is not a Polynomial or numeric scalar.
+        ValueError
+            If polynomials have different number of variables.
+        IndexError
+            If there's a variable indexing error during calculation.
+            
+        Notes
+        -----
+        Assumes canonical variables ordered [q1, p1, q2, p2,...] in self.variables.
         """
         if not isinstance(other, Polynomial):
             if isinstance(other, (int, float, complex, str)):
@@ -194,7 +266,7 @@ class Polynomial():
             pi_index = 2 * i + 1
             # Check if indices are valid (safety, though n_vars check should cover this)
             if pi_index >= self.n_vars:
-                 raise IndexError("Variable indexing error in Poisson bracket calculation.")
+                raise IndexError("Variable indexing error in Poisson bracket calculation.")
             qi = self.variables[qi_index]
             pi = self.variables[pi_index]
 
@@ -215,11 +287,24 @@ class Polynomial():
         """
         Substitutes variables in the expression.
 
-        Args:
-            var_map (dict): A dictionary mapping symengine symbols, variable
-                            indices, or variable names (str) to their substitution
-                            values (numbers, strings, symengine expressions,
-                            or other Polynomials).
+        Parameters
+        ----------
+        var_map : dict
+            A dictionary mapping symengine symbols, variable indices, or variable 
+            names (str) to their substitution values (numbers, strings, symengine 
+            expressions, or other Polynomials).
+            
+        Returns
+        -------
+        Polynomial
+            A new polynomial with the substitutions applied.
+            
+        Raises
+        ------
+        ValueError
+            If a symbol or index is not found in the polynomial variables.
+        TypeError
+            If key or value types in var_map are invalid.
         """
         sub_dict = {}
         for k, v in var_map.items():
@@ -232,7 +317,7 @@ class Polynomial():
             elif isinstance(k, se.Symbol):
                 # Ensure the symbol is one of the polynomial's variables
                 if k not in self.variables:
-                     raise ValueError(f"Symbol {k} not found in polynomial variables {self.variables}")
+                    raise ValueError(f"Symbol {k} not found in polynomial variables {self.variables}")
                 key_symbol = k
             elif isinstance(k, str):
                 # Find symbol by name
@@ -250,12 +335,12 @@ class Polynomial():
             # Process value
             value_expr = None
             if isinstance(v, Polynomial):
-                 if v.n_vars!= self.n_vars:
-                     # We could potentially allow substitution with polynomials of different n_vars,
-                     # but it might lead to unexpected variable sets in the result.
-                     # Forcing same n_vars seems safer for now.
-                     print(f"Warning: Substituting with Polynomial of different n_vars ({v.n_vars}). Result retains original n_vars ({self.n_vars}).")
-                 value_expr = v.expr
+                if v.n_vars!= self.n_vars:
+                    # We could potentially allow substitution with polynomials of different n_vars,
+                    # but it might lead to unexpected variable sets in the result.
+                    # Forcing same n_vars seems safer for now.
+                    print(f"Warning: Substituting with Polynomial of different n_vars ({v.n_vars}). Result retains original n_vars ({self.n_vars}).")
+                value_expr = v.expr
             elif isinstance(v, (int, float, complex, str, se.Expr)):
                 value_expr = se.sympify(v) # Ensure value is a symengine expression
             else:
@@ -275,19 +360,24 @@ class Polynomial():
         Checks for mathematical equality between two polynomials by comparing
         their terms and coefficients without explicit expansion.
 
-        Args:
-            other (Polynomial): The polynomial to compare against.
-            tolerance (float): The absolute and relative tolerance for comparing
-                               floating-point coefficients.
-
-        Returns:
-            bool: True if the polynomials are mathematically equal within the
-                  given tolerance, False otherwise.
+        Parameters
+        ----------
+        other : Polynomial
+            The polynomial to compare against.
+        tolerance : float, optional
+            The absolute and relative tolerance for comparing floating-point coefficients.
+            Default is 1e-12.
+            
+        Returns
+        -------
+        bool
+            True if the polynomials are mathematically equal within the given tolerance, 
+            False otherwise.
         """
         if not isinstance(other, Polynomial):
             return False
         if self.n_vars!= other.n_vars:
-             return False
+            return False
 
         # Special case for zero polynomial
         if self.expr == se.sympify(0) and other.expr == se.sympify(0):
@@ -295,7 +385,7 @@ class Polynomial():
 
         # Optimization: Check if underlying expressions are identical first
         if self.expr == other.expr:
-             return True
+            return True
 
         # Try a quick check for common numeric coefficient differences (like 3 vs 3.0)
         # by checking their numerical difference
@@ -347,12 +437,12 @@ class Polynomial():
                 c1 = complex(coeff1)
                 c2 = complex(coeff2)
             except (TypeError, ValueError):
-                 # If coefficients aren't numeric, they can't be compared with isclose
-                 # We might compare them symbolically if needed, but for numeric
-                 # equality check, non-numeric coefficients mean inequality.
-                 # However, get_terms should yield numeric complex. If not, it's an issue there.
-                 print(f"Warning: Non-numeric coefficient encountered during equality check: {coeff1} or {coeff2}")
-                 return False # Or compare symbolically: if coeff1!= coeff2: return False
+                # If coefficients aren't numeric, they can't be compared with isclose
+                # We might compare them symbolically if needed, but for numeric
+                # equality check, non-numeric coefficients mean inequality.
+                # However, get_terms should yield numeric complex. If not, it's an issue there.
+                print(f"Warning: Non-numeric coefficient encountered during equality check: {coeff1} or {coeff2}")
+                return False # Or compare symbolically: if coeff1!= coeff2: return False
 
             if not (math.isclose(c1.real, c2.real, rel_tol=tolerance, abs_tol=tolerance) and
                     math.isclose(c1.imag, c2.imag, rel_tol=tolerance, abs_tol=tolerance)):
@@ -371,18 +461,29 @@ class Polynomial():
     def get_terms(self):
         """
         Yields (exponent_tuple, coefficient) pairs for the polynomial without
-        explicitly calling expand(). Relies on symengine's internal representation
-        via as_coefficients_dict().
+        explicitly calling expand().
+        
+        Relies on symengine's internal representation via as_coefficients_dict().
 
-        Yields:
-            tuple: (exponent_tuple, coefficient), where exponent_tuple is a tuple
-                   of integers representing the powers of the variables, and
-                   coefficient is the corresponding complex numerical coefficient.
+        Yields
+        ------
+        tuple
+            (exponent_tuple, coefficient), where exponent_tuple is a tuple
+            of integers representing the powers of the variables, and
+            coefficient is the corresponding complex numerical coefficient.
 
-        Raises:
-            AttributeError: If as_coefficients_dict() is not available for the expression.
-            NotImplementedError: If parsing a specific term structure is not implemented.
-            TypeError/ValueError: If a coefficient cannot be converted to complex.
+        Raises
+        ------
+        AttributeError
+            If as_coefficients_dict() is not available for the expression.
+        NotImplementedError
+            If parsing a specific term structure is not implemented.
+        TypeError
+            If a coefficient cannot be converted to complex.
+        ValueError
+            If a coefficient cannot be converted to complex.
+        RuntimeError
+            If term extraction fails even with expansion fallback.
         """
         term_dict = None
         try:
@@ -406,7 +507,7 @@ class Polynomial():
                     # Symbol not in self.variables - treat as a constant? Or error?
                     # Yielding as constant term might be unexpected. Let's yield nothing or raise.
                     # For now, yield nothing, assuming only terms with self.variables matter.
-                     pass
+                    pass
                 return
             else:
                 # If it's not Number/Symbol and as_coefficients_dict failed,
@@ -419,22 +520,22 @@ class Polynomial():
                     expanded_expr = se.expand(self.expr)
                     # Check if expansion resulted in something with as_coefficients_dict
                     if hasattr(expanded_expr, 'as_coefficients_dict'):
-                         term_dict = expanded_expr.as_coefficients_dict()
+                        term_dict = expanded_expr.as_coefficients_dict()
                     elif expanded_expr.is_Number: # Handle case where expansion simplifies to number
-                         yield (tuple([0] * self.n_vars), complex(float(expanded_expr)))
-                         return
-                     # Add checks for Symbol, Mul, Pow if expansion results in single term
-                     #... (similar logic as above for Symbol, and below for Mul/Pow parsing)
+                        yield (tuple([0] * self.n_vars), complex(float(expanded_expr)))
+                        return
+                    # Add checks for Symbol, Mul, Pow if expansion results in single term
+                    #... (similar logic as above for Symbol, and below for Mul/Pow parsing)
                     else:
-                         # If expansion didn't help, we can't proceed easily
-                         raise NotImplementedError(f"Cannot extract terms for expression type {type(self.expr)} even after expansion.")
+                        # If expansion didn't help, we can't proceed easily
+                        raise NotImplementedError(f"Cannot extract terms for expression type {type(self.expr)} even after expansion.")
 
                 except Exception as e:
-                     raise RuntimeError(f"Failed to get terms even with expansion fallback: {e}") from e
+                    raise RuntimeError(f"Failed to get terms even with expansion fallback: {e}") from e
 
         if term_dict is None:
-             # This should ideally not be reached if the logic above is sound.
-             raise RuntimeError("Term dictionary could not be obtained.")
+            # This should ideally not be reached if the logic above is sound.
+            raise RuntimeError("Term dictionary could not be obtained.")
 
 
         # --- Parsing logic remains largely the same, but operates on term_dict ---
@@ -451,15 +552,15 @@ class Polynomial():
                 # Skip zero terms or yield with zero coefficient
                 continue  # Skip zero terms entirely
             elif isinstance(term_expr, se.Symbol):
-                 try:
-                     idx = variable_map[term_expr]
-                     exponent[idx] = 1
-                     term_processed = True
-                 except KeyError:
-                     # Symbol not in self.variables, skip this term
-                     # (Could be a symbolic coefficient part, but as_coefficients_dict should handle that)
-                      print(f"Warning: Skipping term with unknown symbol {term_expr} in get_terms().")
-                      continue
+                try:
+                    idx = variable_map[term_expr]
+                    exponent[idx] = 1
+                    term_processed = True
+                except KeyError:
+                    # Symbol not in self.variables, skip this term
+                    # (Could be a symbolic coefficient part, but as_coefficients_dict should handle that)
+                    print(f"Warning: Skipping term with unknown symbol {term_expr} in get_terms().")
+                    continue
             elif isinstance(term_expr, se.Pow):
                 base, exp_val = term_expr.args
                 if isinstance(base, se.Symbol) and exp_val.is_Integer:
@@ -468,13 +569,13 @@ class Polynomial():
                         exponent[idx] = int(exp_val)
                         term_processed = True
                     except KeyError:
-                         print(f"Warning: Skipping term with unknown symbol base {base} in get_terms().")
-                         continue
+                        print(f"Warning: Skipping term with unknown symbol base {base} in get_terms().")
+                        continue
                 else:
-                     # Handle non-symbol base or non-integer exponent if necessary,
-                     # but typically polynomial terms have symbol bases and integer exponents.
-                     print(f"Warning: Skipping non-standard Pow term {term_expr} in get_terms().")
-                     continue
+                    # Handle non-symbol base or non-integer exponent if necessary,
+                    # but typically polynomial terms have symbol bases and integer exponents.
+                    print(f"Warning: Skipping non-standard Pow term {term_expr} in get_terms().")
+                    continue
             elif isinstance(term_expr, se.Mul):
                 valid_term = True
                 temp_exponent = [0] * self.n_vars # Use temp to handle errors during factor processing
@@ -505,8 +606,8 @@ class Polynomial():
             # else: # Handle other potential term_expr types if necessary
 
             if not term_processed:
-                 print(f"Warning: Skipping unrecognized term structure {term_expr} (type: {type(term_expr)}) in get_terms().")
-                 continue
+                print(f"Warning: Skipping unrecognized term structure {term_expr} (type: {type(term_expr)}) in get_terms().")
+                continue
 
             # Yield the result
             try:
@@ -525,22 +626,33 @@ class Polynomial():
 
     def get_coefficient(self, exponent_tuple):
         """
-        Extracts the numerical coefficient of the monomial corresponding to
-        exponent_tuple, using the potentially optimized get_terms() method.
+        Extracts the numerical coefficient of the monomial corresponding to exponent_tuple.
+        
+        Uses the potentially optimized get_terms() method.
 
-        Args:
-            exponent_tuple (tuple): A tuple of non-negative integers representing
-                                    the powers of the variables [x0, x1,...].
-                                    Length must match self.n_vars.
+        Parameters
+        ----------
+        exponent_tuple : tuple
+            A tuple of non-negative integers representing the powers of the 
+            variables [x0, x1,...]. Length must match self.n_vars.
 
-        Returns:
-            complex: The numerical coefficient of the specified monomial,
-                     or 0.0 if the term does not exist.
+        Returns
+        -------
+        complex
+            The numerical coefficient of the specified monomial, or 0.0 if the term 
+            does not exist.
+            
+        Raises
+        ------
+        ValueError
+            If exponent tuple length doesn't match n_vars or if exponents are negative.
+        RuntimeError
+            If coefficient extraction fails due to error in get_terms.
         """
         if len(exponent_tuple)!= self.n_vars:
             raise ValueError("Exponent tuple length must match n_vars.")
         if not all(isinstance(p, int) and p >= 0 for p in exponent_tuple):
-             raise ValueError("Exponents must be non-negative integers.")
+            raise ValueError("Exponents must be non-negative integers.")
 
         try:
             # Iterate through terms provided by the (hopefully) efficient get_terms
@@ -549,10 +661,10 @@ class Polynomial():
                     # get_terms should already yield complex coefficients
                     return coeff
         except Exception as e:
-             # Handle potential errors during term iteration
-             print(f"Error during get_coefficient -> get_terms iteration: {e}")
-             # Depending on desired behavior, could re-raise or return 0
-             raise RuntimeError(f"Failed to extract coefficient due to error in get_terms: {e}") from e
+            # Handle potential errors during term iteration
+            print(f"Error during get_coefficient -> get_terms iteration: {e}")
+            # Depending on desired behavior, could re-raise or return 0
+            raise RuntimeError(f"Failed to extract coefficient due to error in get_terms: {e}") from e
 
 
         # If the loop completes without finding the term
@@ -561,50 +673,58 @@ class Polynomial():
     # --- Optional Helper Methods ---
 
     def degree(self, var_index=None):
-         """
-         Calculates the degree of the polynomial.
+        """
+        Calculates the degree of the polynomial.
 
-         Args:
-             var_index (int, optional): If specified, calculates the degree
-                 with respect to the variable at this index. Otherwise, calculates
-                 the total degree (maximum sum of exponents in any term).
-                 *** Assumes canonical ordering [q1, p1,...] if using indices. ***
+        Parameters
+        ----------
+        var_index : int, optional
+            If specified, calculates the degree with respect to the variable at this index.
+            Otherwise, calculates the total degree (maximum sum of exponents in any term).
+            Assumes canonical ordering [q1, p1,...] if using indices.
 
-         Returns:
-             int: The degree, or -1 if the polynomial is zero (consistent with
-                  some conventions, though SymPy uses -oo). Returns 0 for a non-zero constant.
-         """
-         max_degree = -1 # Using -1 for zero polynomial degree convention
+        Returns
+        -------
+        int
+            The degree, or -1 if the polynomial is zero (consistent with some conventions,
+            though SymPy uses -oo). Returns 0 for a non-zero constant.
+            
+        Raises
+        ------
+        ValueError
+            If var_index is out of range.
+        """
+        max_degree = -1 # Using -1 for zero polynomial degree convention
 
-         try:
-             is_zero = True
-             for exp_tuple, coeff in self.get_terms():
-                 # Check if any non-zero coefficient exists
-                 if not math.isclose(coeff.real, 0.0, abs_tol=1e-12) or \
+        try:
+            is_zero = True
+            for exp_tuple, coeff in self.get_terms():
+                # Check if any non-zero coefficient exists
+                if not math.isclose(coeff.real, 0.0, abs_tol=1e-12) or \
                     not math.isclose(coeff.imag, 0.0, abs_tol=1e-12):
-                     is_zero = False
-                     current_degree = 0
-                     if var_index is not None:
-                         if not (0 <= var_index < self.n_vars):
-                             raise ValueError(f"var_index must be between 0 and {self.n_vars-1}")
-                         current_degree = exp_tuple[var_index]
-                     else:
-                         # Total degree
-                         current_degree = sum(exp_tuple)
+                    is_zero = False
+                    current_degree = 0
+                    if var_index is not None:
+                        if not (0 <= var_index < self.n_vars):
+                            raise ValueError(f"var_index must be between 0 and {self.n_vars-1}")
+                        current_degree = exp_tuple[var_index]
+                    else:
+                        # Total degree
+                        current_degree = sum(exp_tuple)
 
-                     if current_degree > max_degree:
-                         max_degree = current_degree
+                    if current_degree > max_degree:
+                        max_degree = current_degree
 
-             if is_zero:
-                 return -1 # Degree of zero polynomial
-             else:
-                 # Handle constant case (max_degree could still be 0 if only constant term exists)
-                 return max(0, max_degree) # Ensure non-zero constant has degree 0
+            if is_zero:
+                return -1 # Degree of zero polynomial
+            else:
+                # Handle constant case (max_degree could still be 0 if only constant term exists)
+                return max(0, max_degree) # Ensure non-zero constant has degree 0
 
-         except Exception as e:
-              print(f"Error calculating degree via get_terms: {e}")
-              # Fallback or re-raise? Returning None indicates failure.
-              return None
+        except Exception as e:
+            print(f"Error calculating degree via get_terms: {e}")
+            # Fallback or re-raise? Returning None indicates failure.
+            return None
 
 
     def truncate(self, max_degree):
@@ -612,12 +732,23 @@ class Polynomial():
         Truncates the polynomial, keeping only terms with total degree less than
         or equal to max_degree.
 
-        Args:
-            max_degree (int): The maximum total degree to keep. Must be non-negative.
+        Parameters
+        ----------
+        max_degree : int
+            The maximum total degree to keep. Must be non-negative.
 
-        Returns:
-            Polynomial: A new Polynomial instance containing only the terms
-                        up to the specified maximum degree.
+        Returns
+        -------
+        Polynomial
+            A new Polynomial instance containing only the terms up to the specified 
+            maximum degree.
+            
+        Raises
+        ------
+        ValueError
+            If max_degree is not a non-negative integer.
+        RuntimeError
+            If truncation fails due to error in get_terms.
         """
         if not isinstance(max_degree, int) or max_degree < 0:
             raise ValueError("max_degree must be a non-negative integer.")
