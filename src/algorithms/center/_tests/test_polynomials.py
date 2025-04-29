@@ -50,6 +50,10 @@ def P_qp_sum(P_q0, P_p0): # q0 + p0
 def P_H_simple(n_vars): # Simple Hamiltonian H = 0.5*p0^2 + q0^2
     return Polynomial('0.5*x1**2 + x0**2', n_vars=n_vars)
 
+@pytest.fixture
+def P_mixed(n_vars): # A more complex polynomial with mixed terms
+    return Polynomial('2*x0**2 + 3*x1 + 4*x0*x2 - 5*x3**3 + 7', n_vars=n_vars)
+
 # --- Test Functions ---
 
 def test_initialization(n_vars, P_zero, P_one, P_q0):
@@ -177,7 +181,6 @@ def test_differentiation(n_vars, P_zero, P_one, P_q0, P_p0, P_q1, P_H_simple):
 
     assert_poly_equal(d2Pdq0dp0, d2Pdp0dq0)
 
-
 def test_poisson_bracket(P_zero, P_one, P_q0, P_p0, P_q1, P_p1, P_H_simple):
     # Fundamental Brackets
     assert_poly_equal(P_q0.poisson_bracket(P_q1), P_zero) # {q0, q1} = 0
@@ -229,6 +232,115 @@ def test_poisson_bracket(P_zero, P_one, P_q0, P_p0, P_q1, P_p1, P_H_simple):
     P_2q0 = 2.0 * P_q0
     assert_poly_equal(PB_H_p0, P_2q0)
 
+def test_get_coefficient(n_vars, P_zero, P_one, P_q0, P_p0, P_mixed, P_H_simple):
+    """Test the new get_coefficient method."""
+    # Test constants
+    assert P_zero.get_coefficient(tuple([0] * n_vars)) == 0.0
+    assert P_one.get_coefficient(tuple([0] * n_vars)) == 1.0
+    
+    # Test simple monomials
+    x0_exp = tuple([1] + [0] * (n_vars - 1))
+    assert P_q0.get_coefficient(x0_exp) == 1.0
+    assert P_q0.get_coefficient(tuple([0] * n_vars)) == 0.0  # Constant term is zero
+    
+    x1_exp = tuple([0, 1] + [0] * (n_vars - 2))
+    assert P_p0.get_coefficient(x1_exp) == 1.0
+    
+    # Test terms in complex polynomial
+    assert P_mixed.get_coefficient(tuple([0] * n_vars)) == 7.0  # Constant term
+    assert P_mixed.get_coefficient(tuple([2] + [0] * (n_vars - 1))) == 2.0  # x0^2 term
+    assert P_mixed.get_coefficient(tuple([0, 1] + [0] * (n_vars - 2))) == 3.0  # x1 term
+    assert P_mixed.get_coefficient(tuple([1, 0, 1] + [0] * (n_vars - 3))) == 4.0  # x0*x2 term
+    assert P_mixed.get_coefficient(tuple([0, 0, 0, 3] + [0] * (n_vars - 4))) == -5.0  # x3^3 term
+    
+    # Test non-existent terms
+    assert P_mixed.get_coefficient(tuple([3] + [0] * (n_vars - 1))) == 0.0  # x0^3 term (not in polynomial)
+    
+    # Test Hamiltonian polynomial
+    assert P_H_simple.get_coefficient(tuple([2] + [0] * (n_vars - 1))) == 1.0  # x0^2 term
+    assert P_H_simple.get_coefficient(tuple([0, 2] + [0] * (n_vars - 2))) == 0.5  # x1^2 term
+
+    # Test error for wrong exponent length
+    with pytest.raises(ValueError):
+        P_q0.get_coefficient(tuple([1]))  # Too short
+        
+    # Test error for negative exponents
+    with pytest.raises(ValueError):
+        P_q0.get_coefficient(tuple([-1] + [0] * (n_vars - 1)))  # Negative exponent
+
+def test_get_terms(n_vars, P_zero, P_one, P_q0, P_mixed, P_H_simple):
+    """Test the new get_terms method."""
+    # Test constant polynomial
+    terms = list(P_zero.get_terms())
+    # A zero polynomial might return no terms or a zero coefficient term
+    # depending on implementation, so we allow either
+    if terms:
+        assert len(terms) == 1
+        assert terms[0][0] == tuple([0] * n_vars)
+        assert abs(terms[0][1]) < 1e-10  # Coefficient should be zero or very close to it
+    else:
+        # If no terms, that's valid too for zero polynomial
+        pass
+    
+    terms = list(P_one.get_terms())
+    assert len(terms) == 1
+    assert terms[0] == (tuple([0] * n_vars), 1.0)
+    
+    # Test simple monomial
+    terms = list(P_q0.get_terms())
+    assert len(terms) == 1
+    assert terms[0] == (tuple([1] + [0] * (n_vars - 1)), 1.0)
+    
+    # Test Hamiltonian polynomial
+    terms = list(P_H_simple.get_terms())
+    # Convert to a dictionary for easier comparison (order may vary)
+    terms_dict = dict(terms)
+    
+    # Hamiltonian polynomial may include zero constant term or not
+    # Filter out terms with zero or very small coefficients
+    filtered_terms = {k: v for k, v in terms_dict.items() if abs(v) > 1e-10}
+    assert len(filtered_terms) == 2  # Two non-zero terms
+    
+    # Check the expected terms
+    assert abs(filtered_terms[tuple([2] + [0] * (n_vars - 1))] - 1.0) < 1e-10  # x0^2 term
+    assert abs(filtered_terms[tuple([0, 2] + [0] * (n_vars - 2))] - 0.5) < 1e-10  # 0.5*x1^2 term
+    
+    # Test complex polynomial
+    terms = list(P_mixed.get_terms())
+    terms_dict = dict(terms)
+    
+    # Filter out terms with zero coefficients (if any)
+    filtered_terms = {k: v for k, v in terms_dict.items() if abs(v) > 1e-10}
+    assert len(filtered_terms) == 5  # Five non-zero terms
+    
+    # Check the expected terms
+    assert abs(filtered_terms[tuple([0] * n_vars)] - 7.0) < 1e-10  # Constant term
+    assert abs(filtered_terms[tuple([2] + [0] * (n_vars - 1))] - 2.0) < 1e-10  # x0^2 term
+    assert abs(filtered_terms[tuple([0, 1] + [0] * (n_vars - 2))] - 3.0) < 1e-10  # x1 term
+    assert abs(filtered_terms[tuple([1, 0, 1] + [0] * (n_vars - 3))] - 4.0) < 1e-10  # x0*x2 term
+    assert abs(filtered_terms[tuple([0, 0, 0, 3] + [0] * (n_vars - 4))] + 5.0) < 1e-10  # x3^3 term (-5.0)
+    
+    # Verify integrity of terms returned from get_terms
+    # by reconstructing the polynomial
+    reconstructed = Polynomial.zero(n_vars=n_vars)
+    for exp, coeff in P_mixed.get_terms():
+        # Skip terms with zero coefficients
+        if abs(coeff) < 1e-10:
+            continue
+            
+        term_str = str(coeff)
+        for i, power in enumerate(exp):
+            if power > 0:
+                if power == 1:
+                    term_str += f"*x{i}"
+                else:
+                    term_str += f"*x{i}**{power}"
+        term_poly = Polynomial(term_str, n_vars=n_vars)
+        reconstructed = reconstructed + term_poly
+    
+    # Check that the reconstructed polynomial equals the original
+    assert_poly_equal(reconstructed, P_mixed)
+
 def run_all_tests():
     """Run all test functions in this module."""
     n_vars = 6
@@ -241,12 +353,15 @@ def run_all_tests():
     P_q1 = Polynomial('x2', n_vars=n_vars)
     P_p1 = Polynomial('x3', n_vars=n_vars)
     P_H_simple = Polynomial('0.5*x1**2 + x0**2', n_vars=n_vars)
+    P_mixed = Polynomial('2*x0**2 + 3*x1 + 4*x0*x2 - 5*x3**3 + 7', n_vars=n_vars)
     
     test_initialization(n_vars, P_zero, P_one, P_q0)
     test_addition_subtraction(P_zero, P_one, P_q0, P_p0, P_qp_sum)
     test_multiplication(P_zero, P_one, P_q0, P_p0, P_qp_sum)
     test_differentiation(n_vars, P_zero, P_one, P_q0, P_p0, P_q1, P_H_simple)
     test_poisson_bracket(P_zero, P_one, P_q0, P_p0, P_q1, P_p1, P_H_simple)
+    test_get_coefficient(n_vars, P_zero, P_one, P_q0, P_p0, P_mixed, P_H_simple)
+    test_get_terms(n_vars, P_zero, P_one, P_q0, P_mixed, P_H_simple)
     
     print("All polynomial tests passed!")
 
