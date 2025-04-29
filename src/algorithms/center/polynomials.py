@@ -1,13 +1,14 @@
 import symengine as se
 import numpy as np # For isclose later if needed, though less critical with symbolic
-import math  # Add math import for factorial function
+import math      # Add math import for factorial and isclose
 from abc import ABC, abstractmethod
-
+from collections import defaultdict # For efficient term collection in equality check
 
 class Polynomial():
     """
-    A Polynomial class using symengine as the backend for symbolic manipulation.
-    Provides methods needed for Hamiltonian mechanics algorithms.
+    An improved Polynomial class using symengine as the backend for symbolic
+    manipulation. Provides methods needed for Hamiltonian mechanics algorithms,
+    optimized to avoid unnecessary expansions where possible.
     """
     _symbol_cache = {} # Cache symbols for efficiency
 
@@ -19,18 +20,19 @@ class Polynomial():
             expression (symengine.Expr or str or number):
                 The symengine expression, a string to parse, or a number.
             n_vars (int): Number of variables (must be even for PB).
-            variables (list[symengine.Symbol], optional):
+            variables (list, optional):
                 A list of symengine symbols in canonical order [q1, p1, q2, p2,...].
-                If None, they will be generated automatically as x0, x1, ...
+                If None, they will be generated automatically as x0, x1,...
+                *** Note: Methods like poisson_bracket assume this canonical ordering. ***
         """
-        if n_vars <= 0 or n_vars % 2 != 0:
+        if n_vars <= 0 or n_vars % 2!= 0:
             raise ValueError("n_vars must be a positive even integer.")
         self.n_vars = n_vars
 
         # Generate or use provided variables
         if variables:
-            if len(variables) != n_vars:
-                raise ValueError(f"Provided variables list length ({len(variables)}) != n_vars ({n_vars})")
+            if len(variables)!= n_vars:
+                raise ValueError(f"Provided variables list length ({len(variables)})!= n_vars ({n_vars})")
             self.variables = variables
             # Ensure cache consistency if custom variables are provided
             var_key = tuple(str(v) for v in variables)
@@ -38,7 +40,6 @@ class Polynomial():
                 Polynomial._symbol_cache[var_key] = variables
         else:
             # Generate standard variable names and use them as the cache key
-            # Fix 4: Use tuple of names as key for robustness
             standard_names = tuple(f'x{i}' for i in range(n_vars))
             var_key = standard_names
             if var_key not in Polynomial._symbol_cache:
@@ -51,11 +52,9 @@ class Polynomial():
         elif isinstance(expression, (int, float, complex)):
             self.expr = se.sympify(expression)
         elif isinstance(expression, str):
-            # Fix 1: String initialization using substitution.
-            # NOTE: This assumes variable names in the string are 'x0', 'x1', etc.
-            # It might be less efficient/robust than initializing with expressions
-            # or pre-defined symbols if symengine.sympify had a 'locals' arg.
-            # Consider creating expressions programmatically where possible.
+            # String initialization using substitution.
+            # NOTE: Assumes variable names in the string are 'x0', 'x1', etc.
+            # Consider creating expressions programmatically for better robustness/efficiency.
             try:
                 parsed_expr = se.sympify(expression)
             except (SyntaxError, TypeError, RuntimeError) as e:
@@ -68,7 +67,7 @@ class Polynomial():
 
             for i, canonical_var in enumerate(self.variables):
                 var_name = f'x{i}'
-                if var_name in string_symbols and string_symbols[var_name] != canonical_var:
+                if var_name in string_symbols and string_symbols[var_name]!= canonical_var:
                     substitutions[string_symbols[var_name]] = canonical_var
 
             if substitutions:
@@ -91,39 +90,37 @@ class Polynomial():
 
     def __repr__(self):
         # Use standard variable names in repr for consistency if possible
-        std_vars = Polynomial._symbol_cache.get(tuple(f'x{i}' for i in range(self.n_vars)), self.variables)
+        std_vars_key = tuple(f'x{i}' for i in range(self.n_vars))
+        std_vars = Polynomial._symbol_cache.get(std_vars_key, self.variables)
         # Temporarily substitute canonical vars with standard names for repr if different
-        sub_dict_repr = {can_var: std_var for can_var, std_var in zip(self.variables, std_vars) if can_var != std_var}
+        sub_dict_repr = {can_var: std_var for can_var, std_var in zip(self.variables, std_vars) if can_var!= std_var}
         repr_expr = self.expr.subs(sub_dict_repr) if sub_dict_repr else self.expr
         return f"Polynomial('{str(repr_expr)}', n_vars={self.n_vars})"
 
     def __str__(self):
         return str(self.expr)
 
+    # --- Arithmetic Operations (unchanged, rely on symengine) ---
     def __add__(self, other):
         """Addition: Handles Polynomial + Polynomial or Polynomial + scalar"""
         if isinstance(other, Polynomial):
-            if self.n_vars != other.n_vars:
+            if self.n_vars!= other.n_vars:
                 raise ValueError("Polynomials must have the same number of variables.")
-            # Use symengine's '+' operator
             return Polynomial(self.expr + other.expr, self.n_vars, self.variables)
         elif isinstance(other, (int, float, complex, str)):
-            # Add scalar (sympify handles conversion)
             other_expr = se.sympify(other)
             return Polynomial(self.expr + other_expr, self.n_vars, self.variables)
         else:
             return NotImplemented
 
     def __radd__(self, other):
-        # Handles scalar + Polynomial
         return self.__add__(other)
 
     def __sub__(self, other):
         """Subtraction: Handles Polynomial - Polynomial or Polynomial - scalar"""
         if isinstance(other, Polynomial):
-            if self.n_vars != other.n_vars:
+            if self.n_vars!= other.n_vars:
                 raise ValueError("Polynomials must have the same number of variables.")
-            # Use symengine's '-' operator
             return Polynomial(self.expr - other.expr, self.n_vars, self.variables)
         elif isinstance(other, (int, float, complex, str)):
             other_expr = se.sympify(other)
@@ -132,7 +129,6 @@ class Polynomial():
             return NotImplemented
 
     def __rsub__(self, other):
-        # Handles scalar - Polynomial
         if isinstance(other, (int, float, complex, str)):
             other_expr = se.sympify(other)
             return Polynomial(other_expr - self.expr, self.n_vars, self.variables)
@@ -142,9 +138,8 @@ class Polynomial():
     def __mul__(self, other):
         """Multiplication: Handles Polynomial * Polynomial or Polynomial * scalar"""
         if isinstance(other, Polynomial):
-            if self.n_vars != other.n_vars:
+            if self.n_vars!= other.n_vars:
                 raise ValueError("Polynomials must have the same number of variables.")
-            # Use symengine's '*' operator
             return Polynomial(self.expr * other.expr, self.n_vars, self.variables)
         elif isinstance(other, (int, float, complex, str)):
             other_expr = se.sympify(other)
@@ -153,43 +148,43 @@ class Polynomial():
             return NotImplemented
 
     def __rmul__(self, other):
-        # Handles scalar * Polynomial
         return self.__mul__(other)
 
     def __neg__(self):
         """Negation: -Polynomial"""
         return Polynomial(-self.expr, self.n_vars, self.variables)
 
-    # Optional: Implement division if needed, e.g., for coefficient extraction
-    # def __truediv__(self, other): ...
+    # --- Core Symbolic Operations ---
 
     def differentiate(self, var_index):
         """
         Differentiates the polynomial with respect to a given variable index.
-        Assumes variables are 0-indexed [q1, p1, q2, p2, ...].
+
+        Args:
+            var_index (int): The 0-based index of the variable in self.variables.
+                             *** Assumes canonical ordering [q1, p1,...] if using indices. ***
         """
         if not (0 <= var_index < self.n_vars):
             raise ValueError(f"var_index must be between 0 and {self.n_vars-1}")
         target_var = self.variables[var_index]
-        # Use symengine's diff method
         derivative_expr = se.diff(self.expr, target_var)
         return Polynomial(derivative_expr, self.n_vars, self.variables)
 
     def poisson_bracket(self, other):
         """
         Computes the Poisson bracket {self, other}.
-        Assumes canonical variables ordered [q1, p1, q2, p2, ...].
+        *** Assumes canonical variables ordered [q1, p1, q2, p2,...] in self.variables. ***
         """
         if not isinstance(other, Polynomial):
-            # Allow bracket with scalar (which is always 0)
             if isinstance(other, (int, float, complex, str)):
-                if se.sympify(other).is_Number:
-                    return Polynomial(0, self.n_vars, self.variables)
+                other_expr = se.sympify(other)
+                if other_expr.is_Number:
+                    return Polynomial.zero(self.n_vars, self.variables) # Bracket with constant is 0
             raise TypeError("Poisson bracket requires another Polynomial or a numeric scalar.")
 
-        if self.n_vars != other.n_vars:
-            raise ValueError("Polynomials must have the same number of variables.")
-        # n_vars check already done in __init__
+        if self.n_vars!= other.n_vars:
+            raise ValueError("Polynomials must have the same number of variables for Poisson bracket.")
+        # n_vars must be even check done in __init__
 
         num_dof = self.n_vars // 2
         result_expr = se.sympify(0) # Start with zero expression
@@ -197,20 +192,22 @@ class Polynomial():
         for i in range(num_dof):
             qi_index = 2 * i
             pi_index = 2 * i + 1
+            # Check if indices are valid (safety, though n_vars check should cover this)
+            if pi_index >= self.n_vars:
+                 raise IndexError("Variable indexing error in Poisson bracket calculation.")
             qi = self.variables[qi_index]
             pi = self.variables[pi_index]
 
             # Compute partial derivatives using symengine.diff
             d_self_dqi = se.diff(self.expr, qi)
             d_other_dpi = se.diff(other.expr, pi)
-            term1 = d_self_dqi * d_other_dpi # Use symengine multiplication
+            term1 = d_self_dqi * d_other_dpi
 
             d_self_dpi = se.diff(self.expr, pi)
             d_other_dqi = se.diff(other.expr, qi)
-            term2 = d_self_dpi * d_other_dqi # Use symengine multiplication
+            term2 = d_self_dpi * d_other_dqi
 
-            # Accumulate result: result += term1 - term2
-            result_expr = result_expr + term1 - term2 # Use symengine arithmetic
+            result_expr = result_expr + term1 - term2
 
         return Polynomial(result_expr, self.n_vars, self.variables)
 
@@ -219,9 +216,10 @@ class Polynomial():
         Substitutes variables in the expression.
 
         Args:
-            var_map (dict): A dictionary mapping symengine symbols or variable
-                            indices to their substitution values (numbers or
-                            other symengine expressions/Polynomials).
+            var_map (dict): A dictionary mapping symengine symbols, variable
+                            indices, or variable names (str) to their substitution
+                            values (numbers, strings, symengine expressions,
+                            or other Polynomials).
         """
         sub_dict = {}
         for k, v in var_map.items():
@@ -232,6 +230,9 @@ class Polynomial():
                 else:
                     raise ValueError(f"Invalid variable index {k} for substitution.")
             elif isinstance(k, se.Symbol):
+                # Ensure the symbol is one of the polynomial's variables
+                if k not in self.variables:
+                     raise ValueError(f"Symbol {k} not found in polynomial variables {self.variables}")
                 key_symbol = k
             elif isinstance(k, str):
                 # Find symbol by name
@@ -247,208 +248,395 @@ class Polynomial():
                 raise TypeError(f"Invalid key type in var_map: {type(k)}")
 
             # Process value
+            value_expr = None
             if isinstance(v, Polynomial):
-                sub_dict[key_symbol] = v.expr
+                 if v.n_vars!= self.n_vars:
+                     # We could potentially allow substitution with polynomials of different n_vars,
+                     # but it might lead to unexpected variable sets in the result.
+                     # Forcing same n_vars seems safer for now.
+                     print(f"Warning: Substituting with Polynomial of different n_vars ({v.n_vars}). Result retains original n_vars ({self.n_vars}).")
+                 value_expr = v.expr
             elif isinstance(v, (int, float, complex, str, se.Expr)):
-                sub_dict[key_symbol] = se.sympify(v) # Ensure value is a symengine expression
+                value_expr = se.sympify(v) # Ensure value is a symengine expression
             else:
                 raise TypeError(f"Invalid value type in var_map: {type(v)}")
 
+            sub_dict[key_symbol] = value_expr
+
         substituted_expr = self.expr.subs(sub_dict)
+        # Return a new Polynomial, maintaining the original n_vars and variables
+        # This assumes the substitution doesn't fundamentally change the variable space context.
         return Polynomial(substituted_expr, self.n_vars, self.variables)
 
-    def equals(self, other):
-        """Checks for symbolic equality (can be computationally expensive)."""
+    # --- Equality Check (Improved) ---
+
+    def equals(self, other, tolerance=1e-12):
+        """
+        Checks for mathematical equality between two polynomials by comparing
+        their terms and coefficients without explicit expansion.
+
+        Args:
+            other (Polynomial): The polynomial to compare against.
+            tolerance (float): The absolute and relative tolerance for comparing
+                               floating-point coefficients.
+
+        Returns:
+            bool: True if the polynomials are mathematically equal within the
+                  given tolerance, False otherwise.
+        """
         if not isinstance(other, Polynomial):
             return False
-        if self.n_vars != other.n_vars:
+        if self.n_vars!= other.n_vars:
              return False
-        
-        # Use symengine's expand and then compare
-        expr1 = se.expand(self.expr)
-        expr2 = se.expand(other.expr)
-        
-        # If the expressions are identical, return True
-        if expr1 == expr2:
+
+        # Special case for zero polynomial
+        if self.expr == se.sympify(0) and other.expr == se.sympify(0):
             return True
-        
-        # If they differ only in numeric formatting (3.0 vs 3), try to normalize
-        # by converting to a standard form
+
+        # Optimization: Check if underlying expressions are identical first
+        if self.expr == other.expr:
+             return True
+
+        # Try a quick check for common numeric coefficient differences (like 3 vs 3.0)
+        # by checking their numerical difference
         try:
-            # Subtract one from the other and check if the result is zero or very close to zero
-            diff = expr1 - expr2
-            # If it's a constant, it should be zero (or very close to zero)
-            if diff.is_Number:
-                return abs(float(diff)) < 1e-10
-                
-            # If we have coefficients that might be float vs int formats, 
-            # we need to check term by term
-            # This is more complex and would require parsing the expression structure
-            # For now, we'll just return False if the direct comparison fails
-            return False
+            # If the expressions only differ in numeric formatting, their difference should be zero
+            diff = self.expr - other.expr
+            if diff == se.sympify(0):
+                return True
         except Exception:
-            # If any conversion or computation errors, default to False
+            # If this comparison fails, continue with other methods
+            pass
+
+        # Try an initial check with expansion if direct equality failed
+        try:
+            # If expressions are equivalent when expanded, they are equal
+            # This handles cases like (x0 + x1)^2 vs x0^2 + x1^2 + 2*x0*x1
+            expanded_self = se.expand(self.expr)
+            expanded_other = se.expand(other.expr)
+            if expanded_self == expanded_other:
+                return True
+        except Exception as e:
+            # If expansion fails, continue with term-by-term comparison
+            print(f"Warning: Error during expansion in equals method: {e}. Continuing with term comparison.")
+
+        try:
+            # Use get_terms (which avoids expand) to get coefficients
+            terms1 = dict(self.get_terms())
+            terms2 = dict(other.get_terms())
+        except Exception as e:
+            # If term extraction fails, we cannot reliably compare term-by-term.
+            # Fallback to structural comparison might be too strict.
+            # Returning False is a safer default.
+            print(f"Warning: Could not extract terms for equality check: {e}. Falling back to False.")
+            # Optional: Could attempt self.expr == other.expr here as a last resort,
+            # but it's likely already failed if we reached this point.
             return False
-            
+
+        # Check if the set of monomials (keys) is the same
+        if terms1.keys()!= terms2.keys():
+            return False
+
+        # Compare coefficients for each monomial within tolerance
+        for exp_tuple, coeff1 in terms1.items():
+            coeff2 = terms2[exp_tuple]
+
+            # Robust comparison for complex numbers using math.isclose
+            # Ensure coefficients are complex numbers before comparison
+            try:
+                c1 = complex(coeff1)
+                c2 = complex(coeff2)
+            except (TypeError, ValueError):
+                 # If coefficients aren't numeric, they can't be compared with isclose
+                 # We might compare them symbolically if needed, but for numeric
+                 # equality check, non-numeric coefficients mean inequality.
+                 # However, get_terms should yield numeric complex. If not, it's an issue there.
+                 print(f"Warning: Non-numeric coefficient encountered during equality check: {coeff1} or {coeff2}")
+                 return False # Or compare symbolically: if coeff1!= coeff2: return False
+
+            if not (math.isclose(c1.real, c2.real, rel_tol=tolerance, abs_tol=tolerance) and
+                    math.isclose(c1.imag, c2.imag, rel_tol=tolerance, abs_tol=tolerance)):
+                return False
+
+        return True
+
     def __eq__(self, other):
-        """Checks for symbolic equality."""
+        """Checks for mathematical equality using the improved equals method."""
+        # Note: Default tolerance of 1e-12 is used here.
+        # Pass explicit tolerance if needed: self.equals(other, tolerance=1e-9)
         return self.equals(other)
 
-    def get_coefficient(self, exponent_tuple):
-        """
-        Extracts the coefficient of the monomial corresponding to exponent_tuple.
-
-        Example: get_coefficient((2, 0, 1, 0, 0, 0)) gets coeff of x0^2 * x2^1
-
-        NOTE: This can be computationally expensive as it may rely on expand()
-              and repeated calls to coeff(). Consider performance implications.
-              Assumes exponent_tuple length matches self.n_vars.
-        """
-        if len(exponent_tuple) != self.n_vars:
-            raise ValueError("Exponent tuple length must match n_vars.")
-
-        # Ensure the expression is expanded to make coefficient extraction reliable
-        # WARNING: This is the potentially expensive step!
-        expanded_expr = se.expand(self.expr)
-
-        # Start with the fully expanded expression
-        coeff_expr = expanded_expr
-
-        # Iteratively extract coefficient for each variable^power
-        factorial_prod = 1
-        for i in range(self.n_vars):
-            var = self.variables[i]
-            power = exponent_tuple[i]
-            if power < 0:
-                 raise ValueError("Exponents cannot be negative.")
-            if power > 0:
-                 # Get the coefficient of var**power in the current expression
-                 coeff_expr = coeff_expr.coeff(var, power)
-                 factorial_prod *= math.factorial(power)
-            else:
-                 # If power is 0, we need the term independent of this var.
-                 # Substitute var=0 to eliminate terms containing it.
-                 # This assumes no denominators involving the variable.
-                 coeff_expr = coeff_expr.subs({var: 0})
-
-            # If at any point the coefficient becomes zero, the final coeff is zero
-            if coeff_expr == se.sympify(0):
-                return complex(0.0)
-
-        # At the end, coeff_expr should be the numerical coefficient.
-        # Note: The `.coeff(var, power)` method might include factors like
-        # binomial coefficients, which we need to account for.
-        # The differentiation method C = (1/k!...) * d^k P / dx^k |_{x=0}
-        # is more direct but potentially slower.
-        # Let's assume `.coeff` gives the direct coefficient here,
-        # but this might need verification/adjustment based on symengine behavior.
-        # If `.coeff` behaves like SymPy's `expr.coeff`, it should be correct.
-
-        # Convert the final symbolic coefficient (should be a number) to complex
-        if isinstance(coeff_expr, se.Expr) and coeff_expr.is_Number:
-             # Attempt conversion, handle potential errors if it's not purely numeric
-             try:
-                 # Use complex for consistency, even if it's real
-                 return complex(float(coeff_expr))
-             except (TypeError, RuntimeError):
-                 # If conversion fails, something unexpected happened
-                 print(f"Warning: Could not convert final coefficient '{coeff_expr}' to numeric.")
-                 return complex(0.0) # Or raise error? Or return the expression?
-        elif coeff_expr == se.sympify(0):
-             return complex(0.0)
-        else:
-             # This shouldn't happen if the logic is correct and input is a polynomial
-             print(f"Warning: Coefficient extraction resulted in non-numeric expression: {coeff_expr}")
-             return complex(0.0) # Or raise error
+    # --- Term and Coefficient Extraction (Improved) ---
 
     def get_terms(self):
         """
-        Yields (exponent_tuple, coefficient) pairs for the polynomial.
+        Yields (exponent_tuple, coefficient) pairs for the polynomial without
+        explicitly calling expand(). Relies on symengine's internal representation
+        via as_coefficients_dict().
 
-        NOTE: This relies on symengine's as_dict() method after expansion,
-              which might be expensive. The keys from as_dict() need
-              careful interpretation to map back to exponent tuples.
+        Yields:
+            tuple: (exponent_tuple, coefficient), where exponent_tuple is a tuple
+                   of integers representing the powers of the variables, and
+                   coefficient is the corresponding complex numerical coefficient.
+
+        Raises:
+            AttributeError: If as_coefficients_dict() is not available for the expression.
+            NotImplementedError: If parsing a specific term structure is not implemented.
+            TypeError/ValueError: If a coefficient cannot be converted to complex.
         """
-        # WARNING: expand() can be computationally expensive!
-        expanded_expr = se.expand(self.expr)
-
-        # as_dict() breaks the expression into Add terms, keys are terms, values are coefficients
-        # e.g., {x0**2: 2.0, x1: 3.0, 1: 4.0}
+        term_dict = None
         try:
-            term_dict = expanded_expr.as_coefficients_dict()
+            # Attempt to get the dictionary directly, assuming it doesn't need prior expansion.
+            # This is the key optimization.
+            term_dict = self.expr.as_coefficients_dict()
         except AttributeError:
-            # Handle case where expression is just a number or single symbol/term
-            if expanded_expr.is_Number:
-                yield (tuple([0] * self.n_vars), complex(float(expanded_expr)))
+            # Handle cases where the expression might be simple (number, symbol)
+            # and doesn't have as_coefficients_dict, or if the method truly requires expansion
+            # (which would contradict our optimization assumption).
+            if self.expr.is_Number:
+                yield (tuple([0] * self.n_vars), complex(float(self.expr)))
                 return
-            elif expanded_expr.is_Symbol:
+            elif self.expr.is_Symbol:
                 exp = [0] * self.n_vars
                 try:
-                    idx = self.variables.index(expanded_expr)
+                    idx = self.variables.index(self.expr)
                     exp[idx] = 1
                     yield(tuple(exp), complex(1.0))
                 except ValueError:
-                    # Symbol not in our list, maybe an external constant? Treat as constant term?
-                    # This case needs careful definition based on expected use.
-                    # For now, assume it shouldn't happen with canonical variables.
-                    pass
+                    # Symbol not in self.variables - treat as a constant? Or error?
+                    # Yielding as constant term might be unexpected. Let's yield nothing or raise.
+                    # For now, yield nothing, assuming only terms with self.variables matter.
+                     pass
                 return
             else:
-                # Could be a single Mul/Pow term, need to parse structure
-                # Let's defer complex parsing, try get_coefficient for specific terms instead
-                # or check if symengine offers better tools for this.
-                raise NotImplementedError("get_terms() for single complex terms (Mul/Pow) not fully implemented without as_coefficients_dict().")
+                # If it's not Number/Symbol and as_coefficients_dict failed,
+                # it might be a single Mul/Pow term or require expansion.
+                # Re-raising or raising NotImplementedError is appropriate.
+                # Let's try expanding as a fallback ONLY if as_coefficients_dict fails.
+                # This makes the optimization attempt explicit.
+                print("Warning: as_coefficients_dict() failed or not available directly. Attempting expansion as fallback for get_terms().")
+                try:
+                    expanded_expr = se.expand(self.expr)
+                    # Check if expansion resulted in something with as_coefficients_dict
+                    if hasattr(expanded_expr, 'as_coefficients_dict'):
+                         term_dict = expanded_expr.as_coefficients_dict()
+                    elif expanded_expr.is_Number: # Handle case where expansion simplifies to number
+                         yield (tuple([0] * self.n_vars), complex(float(expanded_expr)))
+                         return
+                     # Add checks for Symbol, Mul, Pow if expansion results in single term
+                     #... (similar logic as above for Symbol, and below for Mul/Pow parsing)
+                    else:
+                         # If expansion didn't help, we can't proceed easily
+                         raise NotImplementedError(f"Cannot extract terms for expression type {type(self.expr)} even after expansion.")
+
+                except Exception as e:
+                     raise RuntimeError(f"Failed to get terms even with expansion fallback: {e}") from e
+
+        if term_dict is None:
+             # This should ideally not be reached if the logic above is sound.
+             raise RuntimeError("Term dictionary could not be obtained.")
 
 
-        # Convert the dictionary keys (terms) into exponent tuples
+        # --- Parsing logic remains largely the same, but operates on term_dict ---
         variable_map = {v: i for i, v in enumerate(self.variables)} # Map symbol to index
 
         for term_expr, coeff_num in term_dict.items():
             exponent = [0] * self.n_vars
-            if term_expr.is_Number: # Constant term
-                if term_expr == se.sympify(1): # The key for the constant term is 1
-                     exponent = tuple([0] * self.n_vars) # Exponent is all zeros
-                else:
-                    # This shouldn't happen if as_coefficients_dict works as expected
-                    continue
-            elif term_expr.is_Symbol:
-                try:
-                    idx = variable_map[term_expr]
-                    exponent[idx] = 1
-                except KeyError:
-                    continue # Skip terms with symbols not in self.variables
-            elif term_expr.is_Pow:
+            term_processed = False
+
+            if term_expr == se.sympify(1): # Constant term key is 1
+                exponent = tuple([0] * self.n_vars)
+                term_processed = True
+            elif term_expr == se.sympify(0): # Zero term 
+                # Skip zero terms or yield with zero coefficient
+                continue  # Skip zero terms entirely
+            elif isinstance(term_expr, se.Symbol):
+                 try:
+                     idx = variable_map[term_expr]
+                     exponent[idx] = 1
+                     term_processed = True
+                 except KeyError:
+                     # Symbol not in self.variables, skip this term
+                     # (Could be a symbolic coefficient part, but as_coefficients_dict should handle that)
+                      print(f"Warning: Skipping term with unknown symbol {term_expr} in get_terms().")
+                      continue
+            elif isinstance(term_expr, se.Pow):
                 base, exp_val = term_expr.args
-                if base.is_Symbol and exp_val.is_Integer:
+                if isinstance(base, se.Symbol) and exp_val.is_Integer:
                     try:
                         idx = variable_map[base]
                         exponent[idx] = int(exp_val)
+                        term_processed = True
                     except KeyError:
-                        continue
-                else: continue # Skip complex Pow terms for now
-            elif term_expr.is_Mul:
+                         print(f"Warning: Skipping term with unknown symbol base {base} in get_terms().")
+                         continue
+                else:
+                     # Handle non-symbol base or non-integer exponent if necessary,
+                     # but typically polynomial terms have symbol bases and integer exponents.
+                     print(f"Warning: Skipping non-standard Pow term {term_expr} in get_terms().")
+                     continue
+            elif isinstance(term_expr, se.Mul):
+                valid_term = True
+                temp_exponent = [0] * self.n_vars # Use temp to handle errors during factor processing
                 for factor in term_expr.args:
-                    if factor.is_Symbol:
+                    if isinstance(factor, se.Symbol):
                         try:
                             idx = variable_map[factor]
-                            exponent[idx] += 1
-                        except KeyError: exponent = None; break # Contains unknown symbol
-                    elif factor.is_Pow:
+                            temp_exponent[idx] += 1
+                        except KeyError: valid_term = False; break
+                    elif isinstance(factor, se.Pow):
                         base, exp_val = factor.args
-                        if base.is_Symbol and exp_val.is_Integer:
+                        if isinstance(base, se.Symbol) and exp_val.is_Integer:
                             try:
                                 idx = variable_map[base]
-                                exponent[idx] += int(exp_val)
-                            except KeyError: exponent = None; break # Contains unknown symbol
-                        else: exponent = None; break # Complex factor
-                    else: exponent = None; break # Non-symbol/Pow factor
-                if exponent is None: continue # Skip this term
-            else:
-                continue # Skip other complex expression types
+                                temp_exponent[idx] += int(exp_val)
+                            except KeyError: valid_term = False; break
+                        else: valid_term = False; break # Non-standard Pow factor
+                    else:
+                        # Factor is not Symbol or Pow (e.g., a numeric factor in the term key?)
+                        # This shouldn't happen if as_coefficients_dict separates numeric coefficients.
+                        valid_term = False; break
+                if valid_term:
+                    exponent = temp_exponent
+                    term_processed = True
+                else:
+                    print(f"Warning: Skipping term with unexpected factor structure {term_expr} in get_terms().")
+                    continue
+            # else: # Handle other potential term_expr types if necessary
 
+            if not term_processed:
+                 print(f"Warning: Skipping unrecognized term structure {term_expr} (type: {type(term_expr)}) in get_terms().")
+                 continue
+
+            # Yield the result
             try:
-                coeff = complex(float(coeff_num)) # Ensure coeff is numeric complex
+                # Ensure coefficient is numeric complex
+                coeff = complex(float(coeff_num))
                 yield tuple(exponent), coeff
-            except (TypeError, ValueError):
-                # Handle cases where coefficient isn't purely numeric? Unlikely from as_coefficients_dict
-                pass
+            except (TypeError, ValueError) as e:
+                # This might happen if coeff_num is symbolic (e.g., 'a' in a*x).
+                # The current class assumes numeric coefficients for get_terms/get_coefficient.
+                # If symbolic coefficients are needed, the return type and subsequent methods
+                # (like equals) would need adjustment.
+                print(f"Warning: Could not convert coefficient '{coeff_num}' to numeric complex in get_terms(): {e}. Skipping term.")
+                # Alternatively, could yield the symbolic coefficient: yield tuple(exponent), coeff_num
+                continue
+
+
+    def get_coefficient(self, exponent_tuple):
+        """
+        Extracts the numerical coefficient of the monomial corresponding to
+        exponent_tuple, using the potentially optimized get_terms() method.
+
+        Args:
+            exponent_tuple (tuple): A tuple of non-negative integers representing
+                                    the powers of the variables [x0, x1,...].
+                                    Length must match self.n_vars.
+
+        Returns:
+            complex: The numerical coefficient of the specified monomial,
+                     or 0.0 if the term does not exist.
+        """
+        if len(exponent_tuple)!= self.n_vars:
+            raise ValueError("Exponent tuple length must match n_vars.")
+        if not all(isinstance(p, int) and p >= 0 for p in exponent_tuple):
+             raise ValueError("Exponents must be non-negative integers.")
+
+        try:
+            # Iterate through terms provided by the (hopefully) efficient get_terms
+            for exp_t, coeff in self.get_terms():
+                if exp_t == exponent_tuple:
+                    # get_terms should already yield complex coefficients
+                    return coeff
+        except Exception as e:
+             # Handle potential errors during term iteration
+             print(f"Error during get_coefficient -> get_terms iteration: {e}")
+             # Depending on desired behavior, could re-raise or return 0
+             raise RuntimeError(f"Failed to extract coefficient due to error in get_terms: {e}") from e
+
+
+        # If the loop completes without finding the term
+        return complex(0.0)
+
+    # --- Optional Helper Methods ---
+
+    def degree(self, var_index=None):
+         """
+         Calculates the degree of the polynomial.
+
+         Args:
+             var_index (int, optional): If specified, calculates the degree
+                 with respect to the variable at this index. Otherwise, calculates
+                 the total degree (maximum sum of exponents in any term).
+                 *** Assumes canonical ordering [q1, p1,...] if using indices. ***
+
+         Returns:
+             int: The degree, or -1 if the polynomial is zero (consistent with
+                  some conventions, though SymPy uses -oo). Returns 0 for a non-zero constant.
+         """
+         max_degree = -1 # Using -1 for zero polynomial degree convention
+
+         try:
+             is_zero = True
+             for exp_tuple, coeff in self.get_terms():
+                 # Check if any non-zero coefficient exists
+                 if not math.isclose(coeff.real, 0.0, abs_tol=1e-12) or \
+                    not math.isclose(coeff.imag, 0.0, abs_tol=1e-12):
+                     is_zero = False
+                     current_degree = 0
+                     if var_index is not None:
+                         if not (0 <= var_index < self.n_vars):
+                             raise ValueError(f"var_index must be between 0 and {self.n_vars-1}")
+                         current_degree = exp_tuple[var_index]
+                     else:
+                         # Total degree
+                         current_degree = sum(exp_tuple)
+
+                     if current_degree > max_degree:
+                         max_degree = current_degree
+
+             if is_zero:
+                 return -1 # Degree of zero polynomial
+             else:
+                 # Handle constant case (max_degree could still be 0 if only constant term exists)
+                 return max(0, max_degree) # Ensure non-zero constant has degree 0
+
+         except Exception as e:
+              print(f"Error calculating degree via get_terms: {e}")
+              # Fallback or re-raise? Returning None indicates failure.
+              return None
+
+
+    def truncate(self, max_degree):
+        """
+        Truncates the polynomial, keeping only terms with total degree less than
+        or equal to max_degree.
+
+        Args:
+            max_degree (int): The maximum total degree to keep. Must be non-negative.
+
+        Returns:
+            Polynomial: A new Polynomial instance containing only the terms
+                        up to the specified maximum degree.
+        """
+        if not isinstance(max_degree, int) or max_degree < 0:
+            raise ValueError("max_degree must be a non-negative integer.")
+
+        new_expr = se.sympify(0)
+        try:
+            variable_map = {i: v for i, v in enumerate(self.variables)}
+            for exp_tuple, coeff in self.get_terms():
+                term_degree = sum(exp_tuple)
+                if term_degree <= max_degree:
+                    # Reconstruct the term symbolically
+                    term = se.sympify(coeff) # Start with coefficient
+                    for i, power in enumerate(exp_tuple):
+                        if power > 0:
+                            term *= variable_map[i]**power
+                    new_expr += term
+
+            return Polynomial(new_expr, self.n_vars, self.variables)
+
+        except Exception as e:
+            print(f"Error during truncate -> get_terms iteration: {e}")
+            raise RuntimeError(f"Failed to truncate polynomial due to error in get_terms: {e}") from e
