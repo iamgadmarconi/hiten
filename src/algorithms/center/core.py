@@ -8,7 +8,6 @@ import math
 from math import factorial
 import symengine as se
 import numpy as np
-import pickle
 
 
 class Polynomial:
@@ -1120,7 +1119,7 @@ class Hamiltonian:
     # ---------------------------------------------------------------------
     # I/O helpers ----------------------------------------------------------
     def to_hdf(self, path: str):
-        import h5py
+        import h5py, pickle
         with h5py.File(path, "w") as f:
             f.attrs["mu"] = self.mu
             f.attrs["coords"] = self.coords
@@ -1132,7 +1131,7 @@ class Hamiltonian:
 
     @staticmethod
     def from_hdf(path: str) -> "Hamiltonian":
-        import h5py
+        import h5py, pickle
 
         with h5py.File(path, "r") as f:
             mu = float(f.attrs["mu"])

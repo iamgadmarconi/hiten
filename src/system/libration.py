@@ -68,6 +68,7 @@ class LibrationPoint(ABC):
         self.mu = mu
         self._position = None
         self._stability_info = None
+        self._linear_data = None
         
         # Log initialization - using type(self).__name__ to get the specific subclass name
         logger.debug(f"Initialized {type(self).__name__} with mu = {self.mu}")
@@ -115,6 +116,15 @@ class LibrationPoint(ABC):
         Check if the Libration point is unstable.
         """
         return not self.is_stable
+
+    @property
+    def linear_data(self) -> LinearData:
+        """
+        Get the linear data for the Libration point.
+        """
+        if self._linear_data is None:
+            self._linear_data = self._get_linear_data()
+        return self._linear_data
 
     def analyze_stability(self, discrete: int = CONTINUOUS_SYSTEM, delta: float = 1e-4) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -201,6 +211,20 @@ class LibrationPoint(ABC):
         -------
         ndarray
             3D vector [x, y, z] representing the position
+        """
+        pass
+
+    @abstractmethod
+    def _get_linear_data(self) -> LinearData:
+        """
+        Get the linear data for the Libration point.
+        """
+        pass
+
+    @abstractmethod
+    def normal_form_transform(self):
+        """
+        Get the normal form transform for the Libration point.
         """
         pass
 
@@ -353,7 +377,7 @@ class CollinearPoint(LibrationPoint):
         omega2  = np.sqrt(c2)
         return lambda1, omega1, omega2
 
-    def normal_form_transform(self) -> LinearData:
+    def normal_form_transform(self):
         """
         Build the 6x6 symplectic matrix C of eq. (10) that sends H_2 to
         lambda_1 x px + (omega_1/2)(y²+p_y²) + (omega_2/2)(z²+p_z²).
@@ -431,10 +455,16 @@ class CollinearPoint(LibrationPoint):
         Cinv = np.linalg.inv(C)
         logger.info(f"Normal form transformation matrix computed for {type(self).__name__}")
 
-        return LinearData(mu=self.mu,
-                        point=type(self).__name__[:2],  # 'L1', 'L2', 'L3'
-                        lambda1=lambda1, omega1=omega1, omega2=omega2,
-                        C=C, Cinv=Cinv)
+        return C, Cinv
+
+    def _get_linear_data(self):
+        C, Cinv = self.normal_form_transform()
+        lambda1, omega1, omega2 = self.linear_modes()
+        self._linear_data = LinearData(mu=self.mu,
+                                        point=type(self).__name__[:2],  # 'L1', 'L2', 'L3'
+                                        lambda1=lambda1, omega1=omega1, omega2=omega2,
+                                        C=C, Cinv=Cinv)
+        return self._linear_data
 
 
 class L1Point(CollinearPoint):
@@ -743,6 +773,12 @@ class TriangularPoint(LibrationPoint):
         # Log stability warning based on mu
         if mu > self.ROUTH_CRITICAL_MU:
              logger.warning(f"Triangular points are potentially unstable for mu > {self.ROUTH_CRITICAL_MU:.6f} (current mu = {mu})")
+
+    def _get_linear_data(self):
+        raise NotImplementedError("Not implemented for triangular points.")
+
+    def normal_form_transform(self):
+        raise NotImplementedError("Not implemented for triangular points.")
 
 
 class L4Point(TriangularPoint):

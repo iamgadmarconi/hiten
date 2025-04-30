@@ -175,9 +175,9 @@ def test_linear_modes(l1_earth_moon, l2_earth_moon, l3_earth_moon):
 def test_normal_form_transform(l1_earth_moon, l2_earth_moon, l3_earth_moon):
     """Test the normal form transformation matrix computation."""
     # Get transformation data for each point
-    transform_l1 = l1_earth_moon.normal_form_transform()
-    transform_l2 = l2_earth_moon.normal_form_transform()
-    transform_l3 = l3_earth_moon.normal_form_transform()
+    transform_l1 = l1_earth_moon.linear_data
+    transform_l2 = l2_earth_moon.linear_data
+    transform_l3 = l3_earth_moon.linear_data
     
     # Check that data objects contain expected fields
     for transform in [transform_l1, transform_l2, transform_l3]:
