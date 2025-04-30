@@ -222,7 +222,7 @@ class LibrationPoint(ABC):
         pass
 
     @abstractmethod
-    def normal_form_transform(self):
+    def normal_form_transform(self) -> Tuple[np.ndarray, np.ndarray]:
         """
         Get the normal form transform for the Libration point.
         """

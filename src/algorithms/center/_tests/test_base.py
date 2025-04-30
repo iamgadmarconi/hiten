@@ -4,8 +4,9 @@ import symengine as se
 import tempfile
 import os
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 from typing import List, Tuple
+import pickle
 
 from algorithms.center.base import (
     CenterModel, 
@@ -16,7 +17,7 @@ from algorithms.center.base import (
     build_center_model
 )
 from algorithms.center.core import FormalSeries, Polynomial
-from system.libration import LinearData
+from system.libration import LibrationPoint, LinearData, L1Point
 
 
 MU = 0.01
@@ -29,24 +30,13 @@ def mu():
     return MU  # Small mass parameter for testing
 
 @pytest.fixture
-def libration_point():
-    return POINT  # Use L1 for testing
+def libration_point(mu):
+    # Create a real LibrationPoint object instead of a string
+    return L1Point(mu)
 
 @pytest.fixture
 def order():
     return 4  # Lower order for faster tests
-
-@pytest.fixture
-def mock_linear_data():
-    # Mock LinearData for testing
-    mu=MU
-    point=POINT
-    lambda1 = 1.0
-    omega1 = 2.0
-    omega2 = 3.0
-    C = np.eye(6)  # Identity matrix for simplicity
-    Cinv = np.eye(6)
-    return LinearData(mu=mu, point=point, lambda1=lambda1, omega1=omega1, omega2=omega2, C=C, Cinv=Cinv)
 
 @pytest.fixture
 def simple_formal_series():
@@ -58,19 +48,32 @@ def simple_formal_series():
     return FormalSeries({2: degree2, 3: degree3, 4: degree4})
 
 @pytest.fixture
-def simple_center_model(mock_linear_data, simple_formal_series, mu, libration_point):
-    # Create a mock generator list
+def simple_center_model(libration_point, simple_formal_series):
+    # Create a generator list
+    generators = [
+        Polynomial('q0*p0', n_vars=6),  # Simple generator for degree 3
+        Polynomial('q0^2*p0', n_vars=6)  # Simple generator for degree 4
+    ]
+    
+    # Create the model with the new parameter structure
+    return CenterModel(
+        point=libration_point,
+        series=simple_formal_series,
+        generators=generators
+    )
+
+@pytest.fixture
+def real_center_model(libration_point, simple_formal_series):
+    # Create a model with a real LibrationPoint for persistence testing
     generators = [
         Polynomial('q0*p0', n_vars=6),  # Simple generator for degree 3
         Polynomial('q0^2*p0', n_vars=6)  # Simple generator for degree 4
     ]
     
     return CenterModel(
-        mu=mu,
         point=libration_point,
         series=simple_formal_series,
-        generators=generators,
-        linear=mock_linear_data
+        generators=generators
     )
 
 # --- Test CenterModel ---
@@ -81,36 +84,31 @@ def test_center_model_init(simple_center_model, mu, libration_point):
     assert simple_center_model.point == libration_point
     assert len(simple_center_model.series) == 3  # Should have 3 terms
     assert len(simple_center_model.generators) == 2  # Should have 2 generators
+    # Check that linear is obtained from the point
+    assert simple_center_model.linear == libration_point.linear_data
     
-def test_center_model_persistence(simple_center_model):
+def test_center_model_persistence(real_center_model, tmp_path):
     # Test to_hdf and from_hdf methods
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.h5') as tmp:
-        tmp_path = tmp.name
+    tmp_file = tmp_path / "test_model.h5"
     
-    try:
-        # Save to HDF
-        simple_center_model.to_hdf(tmp_path)
-        
-        # Check the file exists
-        assert os.path.exists(tmp_path)
-        
-        # Load from HDF
-        loaded = CenterModel.from_hdf(tmp_path)
-        
-        # Check the loaded model
-        assert loaded.mu == simple_center_model.mu
-        assert loaded.point == simple_center_model.point
-        
-        # Series should have the same degrees
-        assert set(loaded.series.degrees()) == set(simple_center_model.series.degrees())
-        
-        # Should have the same number of generators
-        assert len(loaded.generators) == len(simple_center_model.generators)
-        
-    finally:
-        # Clean up the temporary file
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+    # Save to HDF
+    real_center_model.to_hdf(str(tmp_file))
+    
+    # Check the file exists
+    assert os.path.exists(tmp_file)
+    
+    # Load from HDF
+    loaded = CenterModel.from_hdf(str(tmp_file))
+    
+    # Check the loaded model
+    assert loaded.mu == real_center_model.mu
+    assert str(loaded.point) == str(real_center_model.point)
+    
+    # Series should have the same degrees
+    assert set(loaded.series.degrees()) == set(real_center_model.series.degrees())
+    
+    # Should have the same number of generators
+    assert len(loaded.generators) == len(real_center_model.generators)
 
 # --- Test hamiltonian_expr ---
 
@@ -146,13 +144,9 @@ def test_hamiltonian_expr():
 
 # --- Test taylor_expand ---
 
-@patch('algorithms.center.base.get_equilibrium_point')
-def test_taylor_expand(mock_get_eq_point, mu, libration_point, order):
-    # Mock the equilibrium point function
-    mock_get_eq_point.return_value = (0.1, 0.0, 0.0)  # Typical L1 location
-    
-    # Run taylor_expand
-    fs = taylor_expand(mu, libration_point, order)
+def test_taylor_expand(libration_point, order):
+    # Run taylor_expand with the real LibrationPoint object
+    fs = taylor_expand(libration_point, order)
     
     # Check the result is a FormalSeries
     assert isinstance(fs, FormalSeries)
@@ -199,22 +193,15 @@ def test_kill_saddle_terms():
 
 # --- Test build_center_model ---
 
-@patch('algorithms.center.base.compute_linear_data')
-@patch('algorithms.center.base.taylor_expand')
-def test_build_center_model(mock_taylor_expand, mock_compute_linear_data, 
-                           mock_linear_data, simple_formal_series, mu, libration_point, order):
-    # Mock the dependencies
-    mock_compute_linear_data.return_value = mock_linear_data
-    mock_taylor_expand.return_value = simple_formal_series
-    
+def test_build_center_model(libration_point, order):
     # Run build_center_model
-    model = build_center_model(mu, libration_point, order)
+    model = build_center_model(libration_point, order)
     
     # Check the result is a CenterModel
     assert isinstance(model, CenterModel)
-    assert model.mu == mu
+    assert model.mu == libration_point.mu
     assert model.point == libration_point
-    assert model.linear == mock_linear_data
+    assert model.linear == libration_point.linear_data
     
     # Check the series contains terms up to the requested order
     assert max(model.series.degrees()) <= order

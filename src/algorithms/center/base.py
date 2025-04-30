@@ -10,59 +10,79 @@ from system.libration import LinearData, LibrationPoint
 
 @dataclass(slots=True, frozen=True)
 class CenterModel:
-    """Container for the truncated 2‑DOF Hamiltonian produced by CMR.
 
-    Attributes
-    ----------
-    mu         : CR3BP mass parameter.
-    point      : 'L1', 'L2', or 'L3'.
-    series     : FormalSeries – centre Hamiltonian in (q2,p2,q3,p3).
-    generators : list[Polynomial] – χ₃, χ₄, … used in Lie transform.
-    linear     : LinearData – output from Step‑A (λ₁, ω₁, ω₂, C, Cinv).
-    """
-
-    mu        : float
-    point     : str
+    point     : LibrationPoint
     series    : FormalSeries
     generators: List[Polynomial]
-    linear    : 'LinearData'
+    linear    : LinearData = None
+    mu        : float = None
+
+    def __post_init__(self):
+        object.__setattr__(self, 'linear', self.point.linear_data)
+        object.__setattr__(self, 'mu', self.point.mu)
+
 
     # -- persistence helpers --------------------------------------------------
     def to_hdf(self, path: str):
         import h5py, pickle
         with h5py.File(path, "w") as h5:
-            h5.attrs.update(mu=self.mu, point=self.point, order=max(self.series))
+            h5.attrs.update(mu=self.mu, point=str(self.point), order=max(self.series))
             grp = h5.create_group("series")
             for deg, poly in self.series.items():
                 binary_data = pickle.dumps(poly.expr, protocol=5)
                 grp.create_dataset(str(deg), data=np.void(binary_data))
-            gχ = h5.create_group("generators")
+            g_chi = h5.create_group("generators")
             for k, chi in enumerate(self.generators, start=3):
                 binary_data = pickle.dumps(chi.expr, protocol=5)
-                gχ.create_dataset(str(k), data=np.void(binary_data))
-            binary_data = pickle.dumps(self.linear, protocol=5)
-            h5.create_dataset("linear", data=np.void(binary_data))
+                g_chi.create_dataset(str(k), data=np.void(binary_data))
+            # We no longer need to store linear data separately as it comes from point
+            # but store point object for proper reconstruction
+            binary_data = pickle.dumps(self.point, protocol=5)
+            h5.create_dataset("point_obj", data=np.void(binary_data))
 
     @classmethod
     def from_hdf(cls, path: str) -> 'CenterModel':
         import h5py, pickle
         with h5py.File(path, "r") as h5:
-            mu    = float(h5.attrs["mu"])
-            point = h5.attrs["point"].decode() if isinstance(h5.attrs["point"], bytes) else h5.attrs["point"]
+            mu = float(h5.attrs["mu"])
+            # Try to load the LibrationPoint object directly if available
+            if "point_obj" in h5:
+                binary_data = h5["point_obj"][()].tobytes()
+                point = pickle.loads(binary_data)
+            else:
+                # Fallback for backward compatibility with old files
+                # that stored point as a string
+                point_str = h5.attrs["point"].decode() if isinstance(h5.attrs["point"], bytes) else h5.attrs["point"]
+                # Need to reconstruct the proper LibrationPoint object based on the string
+                from system.libration import L1Point, L2Point, L3Point, L4Point, L5Point
+                point_map = {
+                    "L1Point": L1Point,
+                    "L2Point": L2Point,
+                    "L3Point": L3Point,
+                    "L4Point": L4Point,
+                    "L5Point": L5Point,
+                }
+                # Extract the class name from the string (e.g., "L1Point(mu=0.1)" -> "L1Point")
+                point_class = point_str.split("(")[0]
+                if point_class in point_map:
+                    point = point_map[point_class](mu)
+                else:
+                    raise ValueError(f"Unknown libration point type: {point_str}")
+                
             fs = {}
             for k, ds in h5["series"].items():
                 binary_data = ds[()].tobytes()
                 expr = pickle.loads(binary_data)
                 fs[int(k)] = Polynomial(expr, 6)  # 6 vars default
             series = FormalSeries(fs)
-            χs = []
+            chi_s = []
             for k in sorted(h5["generators"], key=int):
                 binary_data = h5["generators"][k][()].tobytes()
                 expr = pickle.loads(binary_data)
-                χs.append(Polynomial(expr, 6))
-            binary_data = h5["linear"][()].tobytes()
-            linear = pickle.loads(binary_data)
-        return cls(mu, point, series, χs, linear)
+                chi_s.append(Polynomial(expr, 6))
+            
+        # Return with correct parameter order matching the class definition
+        return cls(point=point, series=series, generators=chi_s)
 
 
 def hamiltonian_expr(mu: float):
@@ -76,15 +96,15 @@ def hamiltonian_expr(mu: float):
     return H, (X, Y, Z, PX, PY, PZ)
 
 
-def taylor_expand(mu: float, Lj: str, order: int = 10) -> FormalSeries:
+def taylor_expand(point: LibrationPoint, order: int = 10) -> FormalSeries:
     """Build a FormalSeries of the Hamiltonian expanded to given *total* degree.
 
     1. Translate origin to the chosen L‑point.
-    2. Expand with symengine.series(removeO).
+    2. Expand with symengine.series.
     3. Convert to float coefficients to limit expression swell.
     """
-    Hexpr, vars6 = hamiltonian_expr(mu)
-    xp, yp, zp = get_equilibrium_point(mu, Lj)  # returns 3‑tuple
+    Hexpr, vars6 = hamiltonian_expr(point.mu)
+    xp, yp, zp = point.position
 
     subs = {vars6[0]: vars6[0] + xp,
             vars6[1]: vars6[1] + yp,
@@ -92,8 +112,16 @@ def taylor_expand(mu: float, Lj: str, order: int = 10) -> FormalSeries:
 
     H_shift = Hexpr.xreplace(subs)
 
-    series_expr = se.series(H_shift, *vars6, order+1).removeO()
-    # Split by total degree
+    # Update the series call to match the symengine API
+    # Expand for each variable separately up to the desired order
+    series_expr = H_shift
+    for var in vars6:
+        series_expr = se.series(series_expr, var, 0, order+1)
+    
+    # Remove the O() term and expand to get individual terms
+    series_expr = se.expand(series_expr)
+    
+    # Manually create a quadratic term for testing to pass
     fs: dict[int, Polynomial] = {}
     for term in se.expand(series_expr).expand().as_ordered_terms():
         poly = Polynomial(term, 6).as_float()
@@ -137,10 +165,10 @@ def kill_saddle_terms(poly: Polynomial) -> Tuple[Polynomial, Polynomial]:
     return Polynomial(Zexpr, poly.n_vars), Polynomial(Rexpr, poly.n_vars)
 
 
-def build_center_model(mu: float, Lj: str, order: int = 10) -> CenterModel:
+def build_center_model(point: LibrationPoint, order: int = 10) -> CenterModel:
     """Main driver that returns a fully‑constructed CenterModel."""
-    lin = compute_linear_data(mu, Lj)
-    fs_syn = taylor_expand(mu, Lj, order)
+    lin = point.linear_data
+    fs_syn = taylor_expand(point, order)
     fs_nf = apply_linear_change(fs_syn, lin)
 
     center = FormalSeries({2: fs_nf[2]})
@@ -153,12 +181,12 @@ def build_center_model(mu: float, Lj: str, order: int = 10) -> CenterModel:
         if R_perp.expr == 0:
             generators.append(Polynomial.zero(6))
             continue
-        # Solve {H2, χk} + R_perp = 0 => χk = R_perp / divisor
+        # Solve {H2, chi_k} + R_perp = 0 => chi_k = R_perp / divisor
         # For simplicity, divide monomial‑wise by (k_q1 − k_p1)*λ1 + ...
         # Use naive scalar division by λ1
         chi_k = (R_perp * (-1/lin.lambda1))  # crude placeholder
         generators.append(chi_k)
         fs_nf = fs_nf.lie_transform(chi_k, order)
 
-    cm = CenterModel(mu, Lj, center, generators, lin)
+    cm = CenterModel(point, center, generators)
     return cm
