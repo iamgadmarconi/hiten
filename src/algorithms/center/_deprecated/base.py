@@ -96,38 +96,94 @@ def hamiltonian_expr(mu: float):
     return H, (X, Y, Z, PX, PY, PZ)
 
 
-def taylor_expand(point: LibrationPoint, order: int = 10) -> FormalSeries:
-    """Build a FormalSeries of the Hamiltonian expanded to given *total* degree.
-
-    1. Translate origin to the chosen L‑point.
-    2. Expand with symengine.series.
-    3. Convert to float coefficients to limit expression swell.
+def _build_poly(term, n_vars=6):
     """
-    Hexpr, vars6 = hamiltonian_expr(point.mu)
-    xp, yp, zp = point.position
+    Return (deg, poly)   or   None if the term is exactly zero.
+    * Constants → degree 0
+    * Non-constant expressions → degree = Polynomial.total_degree()
+    """
+    if term.is_zero:                       # skip zero terms
+        return None
 
-    subs = {vars6[0]: vars6[0] + xp,
-            vars6[1]: vars6[1] + yp,
-            vars6[2]: vars6[2] + zp}
+    poly = Polynomial(term, n_vars).as_float()
 
+    # Constant term … degree 0
+    if term.is_Number:                     # covers integers + floats
+        return 0, poly
+
+    # For non-constant terms total_degree() is safe
+    return poly.total_degree(), poly
+
+
+def _expr_to_terms(expr: se.Basic):
+    """
+    Yield individual monomial expressions that add up to *expr*.
+
+    SymEngine does not have SymPy's .as_ordered_terms(); instead every
+    Add/ Mul node exposes its operands through the `.args` attribute.
+    """
+    expr = se.expand(expr)
+    if isinstance(expr, se.Add):
+        return expr.args          # tuple of summands
+    else:                         # single monomial or constant
+        return (expr,)
+
+
+# ---------------------------------------------------------------------------
+# main routine
+# ---------------------------------------------------------------------------
+def taylor_expand(point, order: int = 10) -> FormalSeries:
+    """
+    Build a FormalSeries of the Hamiltonian expanded to given *total* degree
+    around `point` (an instance of LibrationPoint).
+
+    The function keeps everything in SymEngine and converts each monomial
+    into a `Polynomial` with float coefficients to avoid rational-swelling.
+    """
+    # ----------------------------------------------------------------------
+    # 1) Symbolic Hamiltonian in synodic coordinates
+    # ----------------------------------------------------------------------
+    Hexpr, vars6 = hamiltonian_expr(point.mu)        # your helper
+    X, Y, Z, PX, PY, PZ = vars6
+
+    # ----------------------------------------------------------------------
+    # 2) Translate origin to the equilibrium point
+    # ----------------------------------------------------------------------
+    xp, yp, zp = point.position     # synodic coordinates
+    subs = {X: X + xp, Y: Y + yp, Z: Z + zp}
     H_shift = Hexpr.xreplace(subs)
 
-    # Update the series call to match the symengine API
-    # Expand for each variable separately up to the desired order
-    series_expr = H_shift
+    # ----------------------------------------------------------------------
+    # 3) Multivariate Taylor expansion up to *total* degree = `order`
+    #    SymEngine   series(expr, sym, 0, n)   is univariate.
+    #    We expand successively in each variable and re-expand.
+    # ----------------------------------------------------------------------
     for var in vars6:
-        series_expr = se.series(series_expr, var, 0, order+1)
-    
-    # Remove the O() term and expand to get individual terms
-    series_expr = se.expand(series_expr)
-    
-    # Manually create a quadratic term for testing to pass
-    fs: dict[int, Polynomial] = {}
-    for term in se.expand(series_expr).expand().as_ordered_terms():
-        poly = Polynomial(term, 6).as_float()
-        deg  = poly.total_degree()
+        H_shift = se.series(H_shift, var, 0, order + 1).expand()
+
+    # Remove the big-O — SymEngine’s .series already returns a plain Basic
+    # when used with .expand(), so nothing extra to do.
+
+    # ----------------------------------------------------------------------
+    # 4) Convert to FormalSeries
+    # ----------------------------------------------------------------------
+    fs: Dict[int, Polynomial] = {}
+    for term in _expr_to_terms(H_shift):
+        maybe = _build_poly(term, n_vars=6)
+        if maybe is None:
+            continue                       # skip zeros
+
+        deg, poly = maybe
+        if deg > order:
+            continue                       # ignore terms beyond requested total degree
+
         fs.setdefault(deg, Polynomial.zero(6))
         fs[deg] = fs[deg] + poly
+
+    # Safety guard: we expect at least constant + quadratic terms
+    if not fs:
+        raise RuntimeError("Taylor expansion produced no terms — check shift/series logic")
+
     return FormalSeries(fs)
 
 
