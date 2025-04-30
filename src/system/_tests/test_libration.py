@@ -268,29 +268,3 @@ def test_critical_stability():
     # Check that the critical value is close to the expected theoretical value
     expected_critical = (1.0 - np.sqrt(1.0 - (1.0/27.0))) / 2.0  # approx 0.03852
     assert abs(critical_mu - expected_critical) < 1e-10
-
-def run_all_tests():
-    """Run all test functions manually."""
-    # Create test instances
-    l1_earth_moon = L1Point(TEST_MU_EARTH_MOON)
-    l2_earth_moon = L2Point(TEST_MU_EARTH_MOON)
-    l3_earth_moon = L3Point(TEST_MU_EARTH_MOON)
-    l4_earth_moon = L4Point(TEST_MU_EARTH_MOON)
-    l5_earth_moon = L5Point(TEST_MU_EARTH_MOON)
-    l4_unstable = L4Point(TEST_MU_UNSTABLE)
-    
-    # Run tests
-    test_libration_point_initialization()
-    test_positions(l1_earth_moon, l2_earth_moon, l3_earth_moon, l4_earth_moon, l5_earth_moon)
-    test_gamma_values(l1_earth_moon, l2_earth_moon, l3_earth_moon)
-    test_cn_coefficients(l1_earth_moon, l2_earth_moon, l3_earth_moon)
-    test_linear_modes(l1_earth_moon, l2_earth_moon, l3_earth_moon)
-    test_normal_form_transform(l1_earth_moon, l2_earth_moon, l3_earth_moon)
-    test_stability_analysis(l1_earth_moon, l2_earth_moon, l4_earth_moon, l4_unstable)
-    test_critical_stability()
-    
-    print("All libration point tests passed!")
-
-# Allow running directly
-if __name__ == "__main__":
-    run_all_tests()

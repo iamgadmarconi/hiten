@@ -588,33 +588,3 @@ def test_gradient(n_vars, P_zero, P_one, P_q0, P_p0, P_mixed, P_H_simple):
     # Test error with wrong point length
     with pytest.raises(ValueError):
         P_H_simple.gradient([1, 2, 3])  # Too short
-
-def run_all_tests():
-    """Run all test functions in this module."""
-    n_vars = 6
-    
-    P_zero = Polynomial.zero(n_vars=n_vars)
-    P_one = Polynomial.one(n_vars=n_vars)
-    P_q0 = Polynomial('x0', n_vars=n_vars)
-    P_p0 = Polynomial('x1', n_vars=n_vars)
-    P_qp_sum = P_q0 + P_p0
-    P_q1 = Polynomial('x2', n_vars=n_vars)
-    P_p1 = Polynomial('x3', n_vars=n_vars)
-    P_H_simple = Polynomial('0.5*x1**2 + x0**2', n_vars=n_vars)
-    P_mixed = Polynomial('2*x0**2 + 3*x1 + 4*x0*x2 - 5*x3**3 + 7', n_vars=n_vars)
-    
-    test_initialization(n_vars, P_zero, P_one, P_q0)
-    test_addition_subtraction(P_zero, P_one, P_q0, P_p0, P_qp_sum)
-    test_multiplication(P_zero, P_one, P_q0, P_p0, P_qp_sum)
-    test_differentiation(n_vars, P_zero, P_one, P_q0, P_p0, P_q1, P_H_simple)
-    test_poisson_bracket(P_zero, P_one, P_q0, P_p0, P_q1, P_p1, P_H_simple)
-    test_get_coefficient(n_vars, P_zero, P_one, P_q0, P_p0, P_mixed, P_H_simple)
-    test_get_terms(n_vars, P_zero, P_one, P_q0, P_mixed, P_H_simple)
-    test_total_degree(n_vars, P_zero, P_one, P_q0, P_mixed, P_H_simple)
-    test_degree_by_var(n_vars, P_zero, P_one, P_q0, P_mixed, P_H_simple)
-    test_truncate(n_vars, P_zero, P_one, P_mixed, P_H_simple)
-    test_evaluate(n_vars, P_zero, P_one, P_q0, P_mixed, P_H_simple)
-    test_as_float(n_vars)
-    test_gradient(n_vars, P_zero, P_one, P_q0, P_p0, P_mixed, P_H_simple)
-    
-    print("All polynomial tests passed!")
