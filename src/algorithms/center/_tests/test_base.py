@@ -151,8 +151,9 @@ def test_formal_series_poisson_pair(formal_series, n_vars):
     # {H_2, G_2} where H_2 = 0.5*p0^2 + q0^2, G_2 = q1^2 + 0.5*p1^2
     # This should be zero because there's no interaction between variables
     result_deg3 = FormalSeries.poisson_pair(formal_series, other_series, 3)
-    # Polynomial equality can be tricky, we could check if it's zero or very small
-    assert result_deg3.total_degree() <= 3
+    # The result could be None (meaning zero) or a polynomial with degree <= 3
+    if result_deg3 is not None:
+        assert result_deg3.total_degree() <= 3
     
     # Create a more interesting case with coupled variables
     coupled_series = FormalSeries({
@@ -272,10 +273,10 @@ def test_hamiltonian_change_variables(hamiltonian, n_vars):
     # Define a simple transform function
     def transform(poly):
         # Add 1 to all q coordinates (shift origin)
-        shifted = Polynomial('1', n_vars=n_vars)
+        result = poly
         for i in range(0, n_vars, 2):  # Only q coordinates (even indices)
-            shifted = poly.substitute({i: Polynomial(f'x{i} + 1', n_vars=n_vars)})
-        return shifted
+            result = result.substitute({i: Polynomial(f'x{i} + 1', n_vars=n_vars)})
+        return result
     
     # Apply the transform
     transformed = hamiltonian.change_variables(transform)

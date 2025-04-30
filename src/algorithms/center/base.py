@@ -5,6 +5,7 @@ from functools import lru_cache
 from typing import Dict, Iterable, List, MutableMapping, Tuple
 
 import numpy as np
+import symengine as se
 
 
 def symplectic_dot(grad: np.ndarray) -> np.ndarray:
@@ -69,7 +70,8 @@ class FormalSeries(MutableMapping[int, "Polynomial"]):
             if j in series2._data:
                 term = pk.poisson_bracket(series2[j])
                 res = term if res is None else res + term
-        return res
+        # Return None if res is None or if it's a zero polynomial
+        return None if res is None or res.expr == se.sympify(0) else res
 
     # ---------------------------------------------------------------------
     def lie_transform(self, chi: "Polynomial", k_max: int) -> "FormalSeries":
@@ -81,10 +83,11 @@ class FormalSeries(MutableMapping[int, "Polynomial"]):
         # Baker–Campbell–Hausdorff truncated form:
         #   H ← H + {χ, H} + 1/2{{χ,χ},H}+ ...
         # but we exploit the graded structure and use recursive update
-        for d in range(3, k_max + 1):
+        for d in range(2, k_max + 1):
             if (d in out._data):
                 bracket = chi.poisson_bracket(out[d])
-                out[d] = out[d] + bracket
+                if bracket and bracket.expr != se.sympify(0):
+                    out[d] = out[d] + bracket
         return out
 
     # ---------------------------------------------------------------------
@@ -144,8 +147,8 @@ class Hamiltonian:
         """Return a new Hamiltonian H∘T where `transform` is a callable that
         maps a Polynomial to another Polynomial (e.g. linear C⁻¹ map, Lie
         transform, centre-manifold injection…)."""
-        return Hamiltonian(FormalSeries({k: transform(p) for k, p in self.series.items()}),
-                           self.mu, self.coords)
+        new_series = FormalSeries({k: transform(p) for k, p in self.series.items()})
+        return Hamiltonian(new_series, self.mu, self.coords)
 
     # ---------------------------------------------------------------------
     # I/O helpers ----------------------------------------------------------
@@ -162,7 +165,7 @@ class Hamiltonian:
     def from_hdf(path: str) -> "Hamiltonian":
         import symengine as se
         import h5py
-        from polynomials import Polynomial  # local import to avoid circularity
+        from algorithms.center.polynomials import Polynomial  # correct import
 
         with h5py.File(path, "r") as f:
             mu = float(f.attrs["mu"])

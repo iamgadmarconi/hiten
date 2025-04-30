@@ -196,6 +196,12 @@ class Polynomial:
     def _d(expr, var):
         return se.diff(expr, var)
 
+    def is_zero(self):
+        return self.expr == se.sympify(0)
+
+    def is_one(self):
+        return self.expr == se.sympify(1)
+    
     # --- Core Symbolic Operations ---
 
     def differentiate(self, var_index):
@@ -224,6 +230,7 @@ class Polynomial:
         derivative_expr = se.diff(self.expr, target_var)
         return Polynomial(derivative_expr, self.n_vars, self.variables)
 
+    @lru_cache(maxsize=None)
     def poisson_bracket(self, other):
         """
         Computes the Poisson bracket {self, other}.
