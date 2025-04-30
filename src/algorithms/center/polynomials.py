@@ -230,7 +230,50 @@ class Polynomial:
         derivative_expr = se.diff(self.expr, target_var)
         return Polynomial(derivative_expr, self.n_vars, self.variables)
 
+    @staticmethod
     @lru_cache(maxsize=None)
+    def _calculate_pb_expr(expr1, expr2, variables):
+        """
+        Static helper method to calculate the Poisson bracket expression.
+        This method is cached for performance.
+        
+        Parameters
+        ----------
+        expr1 : symengine.Expr
+            First expression for Poisson bracket.
+        expr2 : symengine.Expr
+            Second expression for Poisson bracket.
+        variables : tuple
+            Tuple of symengine symbols in canonical order [q1, p1, q2, p2,...].
+            
+        Returns
+        -------
+        symengine.Expr
+            The expression resulting from Poisson bracket calculation.
+        """
+        n_vars = len(variables)
+        num_dof = n_vars // 2
+        result_expr = se.sympify(0)  # Start with zero expression
+
+        for i in range(num_dof):
+            qi_index = 2 * i
+            pi_index = 2 * i + 1
+            qi = variables[qi_index]
+            pi = variables[pi_index]
+
+            # Compute partial derivatives
+            d_expr1_dqi = se.diff(expr1, qi)
+            d_expr2_dpi = se.diff(expr2, pi)
+            term1 = d_expr1_dqi * d_expr2_dpi
+
+            d_expr1_dpi = se.diff(expr1, pi)
+            d_expr2_dqi = se.diff(expr2, qi)
+            term2 = d_expr1_dpi * d_expr2_dqi
+
+            result_expr = result_expr + term1 - term2
+
+        return result_expr
+
     def poisson_bracket(self, other):
         """
         Computes the Poisson bracket {self, other}.
@@ -269,29 +312,10 @@ class Polynomial:
             raise ValueError("Polynomials must have the same number of variables for Poisson bracket.")
         # n_vars must be even check done in __init__
 
-        num_dof = self.n_vars // 2
-        result_expr = se.sympify(0) # Start with zero expression
-
-        for i in range(num_dof):
-            qi_index = 2 * i
-            pi_index = 2 * i + 1
-            # Check if indices are valid (safety, though n_vars check should cover this)
-            if pi_index >= self.n_vars:
-                raise IndexError("Variable indexing error in Poisson bracket calculation.")
-            qi = self.variables[qi_index]
-            pi = self.variables[pi_index]
-
-            # Compute partial derivatives using symengine.diff
-            d_self_dqi = se.diff(self.expr, qi)
-            d_other_dpi = se.diff(other.expr, pi)
-            term1 = d_self_dqi * d_other_dpi
-
-            d_self_dpi = se.diff(self.expr, pi)
-            d_other_dqi = se.diff(other.expr, qi)
-            term2 = d_self_dpi * d_other_dqi
-
-            result_expr = result_expr + term1 - term2
-
+        # Use the cached calculation method
+        variables_tuple = tuple(self.variables)
+        result_expr = Polynomial._calculate_pb_expr(self.expr, other.expr, variables_tuple)
+        
         return Polynomial(result_expr, self.n_vars, self.variables)
 
     def substitute(self, var_map):

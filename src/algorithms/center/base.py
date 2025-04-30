@@ -50,16 +50,13 @@ class FormalSeries(MutableMapping[int, "Polynomial"]):
     def __len__(self):
         return len(self._data)
 
-    # ---------------------------------------------------------------------
     def degrees(self) -> List[int]:
         return sorted(self._data.keys())
 
-    # ---------------------------------------------------------------------
     def truncate(self, max_degree: int) -> "FormalSeries":
         """Return a shallow copy containing only terms ≤ max_degree."""
         return FormalSeries({k: v for k, v in self._data.items() if k <= max_degree})
 
-    # ---------------------------------------------------------------------
     @staticmethod
     def poisson_pair(series1: "FormalSeries", series2: "FormalSeries", degree: int):
         """Return the homogeneous degree-`degree` part of {S1, S2}."""
@@ -73,24 +70,19 @@ class FormalSeries(MutableMapping[int, "Polynomial"]):
         # Return None if res is None or if it's a zero polynomial
         return None if res is None or res.expr == se.sympify(0) else res
 
-    # ---------------------------------------------------------------------
-    def lie_transform(self, chi: "Polynomial", k_max: int) -> "FormalSeries":
-        """Apply exp(L_χ) truncated to degree *k_max*.
-
-        Assumes χ is homogeneous of degree ≥ 3.
-        """
+    def lie_transform(self, chi: Polynomial, k_max: int):
         out = FormalSeries(self._data.copy())
-        # Baker–Campbell–Hausdorff truncated form:
-        #   H ← H + {χ, H} + 1/2{{χ,χ},H}+ ...
-        # but we exploit the graded structure and use recursive update
-        for d in range(2, k_max + 1):
-            if (d in out._data):
-                bracket = chi.poisson_bracket(out[d])
-                if bracket and bracket.expr != se.sympify(0):
-                    out[d] = out[d] + bracket
+        ad = {d: chi.poisson_bracket(out[d]) for d in out.degrees()}
+        for r in range(1, k_max-1):
+            coef = 1/ math.factorial(r)
+            for d in out.degrees():
+                src_deg = d - (r*(chi_deg-2))
+                if src_deg in out._data:
+                    term = ad[src_deg]  # reuse previous ad_power
+                    out[d] = out[d] + coef*term
+            # update ad for next r (ad_power = {χ,ad_power})
         return out
 
-    # ---------------------------------------------------------------------
     def __str__(self):
         terms = ", ".join(f"deg{d}" for d in self.degrees())
         return f"FormalSeries({terms})"
