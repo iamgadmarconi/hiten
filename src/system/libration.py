@@ -20,6 +20,7 @@ eigenvalue decomposition appropriate to the specific dynamics of that point type
 import numpy as np
 import mpmath as mp
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Tuple, Union
 
 # Import existing dynamics functionality
@@ -35,6 +36,17 @@ from log_config import logger
 # Constants for stability analysis mode
 CONTINUOUS_SYSTEM = 0
 DISCRETE_SYSTEM = 1
+
+
+@dataclass(slots=True)
+class LinearData:
+    mu: float
+    point: str        # 'L1', 'L2', 'L3'
+    lambda1: float
+    omega1: float
+    omega2: float
+    C: np.ndarray     # 6×6 symplectic transform
+    Cinv: np.ndarray  # inverse
 
 
 class LibrationPoint(ABC):
@@ -310,6 +322,120 @@ class CollinearPoint(LibrationPoint):
         
         return term1 + term2 + term3
 
+    @abstractmethod
+    def _cn(self, n: int) -> float:
+        """Compute cn(mu) as in Jorba & Masdemont (1999), eq. (3) using self.gamma."""
+        pass
+
+    def _planar_matrix(self) -> np.ndarray:
+        """
+        Return the 4x4 matrix M of eq. (9) restricted to (x,y,px,py) coordinates.
+        We are not using the full 6x6 matrix since the z direction is decoupled.
+        """
+        c2 = self._cn(2)
+        return np.array([[0, 1, 1, 0],
+                        [-1, 0, 0, 1],
+                        [2*c2, 0, 0, 1],
+                        [0, -c2, -1, 0]], dtype=np.float64)
+
+    def linear_modes(self):
+        """
+        Solve η² + (2-c2)η + (1+c2-2c2²)=0  (η = λ²) to extract
+        λ1 > 0  (real) and ω1 > 0  (imag)  together with ω2=√c2.
+        """
+        c2 = self._cn(2)
+        a = 1.0
+        b = 2.0 - c2
+        c = 1.0 + c2 - 2.0*c2**2
+        eta1, eta2 = np.roots([a, b, c])
+        lambda1 = np.sqrt(max(eta2, eta1))     # positive real root
+        omega1  = np.sqrt(-min(eta2, eta1))    # positive imaginary root
+        omega2  = np.sqrt(c2)
+        return lambda1, omega1, omega2
+
+    def normal_form_transform(self) -> LinearData:
+        """
+        Build the 6x6 symplectic matrix C of eq. (10) that sends H_2 to
+        lambda_1 x px + (omega_1/2)(y²+p_y²) + (omega_2/2)(z²+p_z²).
+
+        Returns
+        -------
+        LinearData
+        """
+        logger.debug(f"Computing normal form transform for {type(self).__name__} with mu={self.mu}")
+        
+        lambda1, omega1, omega2 = self.linear_modes()
+        logger.debug(f"Linear modes calculated: lambda1={lambda1}, omega1={omega1}, omega2={omega2}")
+        
+        c2 = self._cn(2)
+        logger.debug(f"c2 coefficient calculated: c2={c2}")
+
+        # factors s1, s2 from paper
+        s1 = np.sqrt( 2*lambda1*((4+3*c2)*lambda1**2 + 4 + 5*c2 - 6*c2**2) )
+        s2 = np.sqrt( omega1*((4+3*c2)*omega1**2 - 4 - 5*c2 + 6*c2**2) )
+        logger.debug(f"Normalization factors calculated: s1={s1}, s2={s2}")
+
+        C = np.zeros((6,6))
+        
+        # Populate the matrix C based on the mathematical expression
+        # First row
+        C[0,0] = 2*lambda1/s1
+        C[0,1] = 0
+        C[0,2] = 0
+        C[0,3] = -2*lambda1/s1
+        C[0,4] = 2*omega1/s2
+        C[0,5] = 0
+        
+        # Second row
+        C[1,0] = (lambda1**2 - 2*c2 - 1)/s1
+        C[1,1] = (-omega1**2 - 2*c2 - 1)/s2
+        C[1,2] = 0
+        C[1,3] = (lambda1**2 - 2*c2 - 1)/s1
+        C[1,4] = 0
+        C[1,5] = 0
+        
+        # Third row
+        C[2,0] = 0
+        C[2,1] = 0
+        C[2,2] = 1/np.sqrt(omega2)
+        C[2,3] = 0
+        C[2,4] = 0
+        C[2,5] = 0
+        
+        # Fourth row
+        C[3,0] = (lambda1**2 + 2*c2 + 1)/s1
+        C[3,1] = (-omega1**2 + 2*c2 + 1)/s2
+        C[3,2] = 0
+        C[3,3] = (lambda1**2 + 2*c2 + 1)/s1
+        C[3,4] = 0
+        C[3,5] = 0
+        
+        # Fifth row
+        C[4,0] = (lambda1**3 + (1 - 2*c2)*lambda1)/s1
+        C[4,1] = 0
+        C[4,2] = 0
+        C[4,3] = (-lambda1**3 - (1 - 2*c2)*lambda1)/s1
+        C[4,4] = (-omega1**3 + (1 - 2*c2)*omega1)/s2
+        C[4,5] = 0
+        
+        # Sixth row
+        C[5,0] = 0
+        C[5,1] = 0
+        C[5,2] = 0
+        C[5,3] = 0
+        C[5,4] = 0
+        C[5,5] = np.sqrt(omega2)
+        
+        logger.debug(f"Symplectic matrix C constructed with shape {C.shape}")
+
+        Cinv = np.linalg.inv(C)
+        logger.info(f"Normal form transformation matrix computed for {type(self).__name__}")
+
+        return LinearData(mu=self.mu,
+                        point=type(self).__name__[:2],  # 'L1', 'L2', 'L3'
+                        lambda1=lambda1, omega1=omega1, omega2=omega2,
+                        C=C, Cinv=Cinv)
+
 
 class L1Point(CollinearPoint):
     """
@@ -389,6 +515,16 @@ class L1Point(CollinearPoint):
     def _get_fallback_gamma_estimate(self) -> float:
         # Rough estimate for gamma_L1 (distance from m2)
         return (self.mu / 3)**(1/3)
+
+    def _cn(self, n: int) -> float:
+        """Compute cn(mu) as in Jorba & Masdemont (1999), eq. (3) using self.gamma."""
+        term1 = 1 / self.gamma ** 3
+        term2 = (1) ** n * self.mu
+        term3 = (-1) ** n * ( (1-self.mu) * self.gamma ** (n+1) / (1 - self.gamma) ** (n+1) )
+
+        c_n = term1 * (term2 + term3)
+
+        return c_n
 
 
 class L2Point(CollinearPoint):
@@ -473,6 +609,16 @@ class L2Point(CollinearPoint):
     def _get_fallback_gamma_estimate(self) -> float:
         # Rough estimate for gamma_L2 (distance from m2)
         return (self.mu / 3)**(1/3)
+
+    def _cn(self, n: int) -> float:
+        """Compute cn(mu) as in Jorba & Masdemont (1999), eq. (3) using self.gamma."""
+        term1 = 1 / self.gamma ** 3
+        term2 = (-1) ** n * self.mu
+        term3 = (-1) ** n * ( (1-self.mu) * self.gamma ** (n+1) / (1 + self.gamma) ** (n+1) )
+
+        c_n = term1 * (term2 + term3)
+
+        return c_n
 
 
 class L3Point(CollinearPoint):
@@ -564,6 +710,15 @@ class L3Point(CollinearPoint):
         # A simpler estimate is often just 1.
         # Or using the relation from Szebehely, gamma_L3 approx 1 - (7/12)mu
         return 1.0 - (7.0 / 12.0) * self.mu
+
+    def _cn(self, n: int) -> float:
+        term1 = (-1) ** n / self.gamma ** 3
+        term2 = 1-self.mu
+        term3 = self.mu * self.gamma ** (n+1) / (1 + self.gamma) ** (n+1)
+
+        c_n = term1 * (term2 + term3)
+
+        return c_n
 
 
 class TriangularPoint(LibrationPoint):
