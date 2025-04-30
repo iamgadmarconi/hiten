@@ -5,8 +5,7 @@ from pathlib import Path
 import tempfile
 import os
 
-from algorithms.center.base import symplectic_dot, FormalSeries, Hamiltonian
-from algorithms.center.polynomials import Polynomial
+from algorithms.center.core import Polynomial, symplectic_dot, FormalSeries, Hamiltonian
 
 # --- Test Fixtures ---
 

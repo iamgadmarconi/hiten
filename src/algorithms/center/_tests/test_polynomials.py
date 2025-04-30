@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 import symengine as se
 
-from algorithms.center.polynomials import Polynomial
+from algorithms.center.core import Polynomial
 
 # --- Helper for comparing polynomials ---
 def assert_poly_equal(p1, p2):
