@@ -376,85 +376,114 @@ class Polynomial():
         """
         if not isinstance(other, Polynomial):
             return False
-        if self.n_vars!= other.n_vars:
+        if self.n_vars != other.n_vars:
             return False
 
         # Special case for zero polynomial
         if self.expr == se.sympify(0) and other.expr == se.sympify(0):
             return True
 
-        # Optimization: Check if underlying expressions are identical first
-        if self.expr == other.expr:
-            return True
+        # Special handling for simple cases: numbers or single variables
+        if self.expr.is_Number and other.expr.is_Number:
+            try:
+                return math.isclose(float(self.expr), float(other.expr), 
+                                  rel_tol=tolerance, abs_tol=tolerance)
+            except (TypeError, ValueError):
+                return self.expr == other.expr
 
-        # Try a quick check for common numeric coefficient differences (like 3 vs 3.0)
-        # by checking their numerical difference
+        # Use symbolic expansion to handle cases like (x+y)^2
         try:
-            # If the expressions only differ in numeric formatting, their difference should be zero
-            diff = self.expr - other.expr
-            if diff == se.sympify(0):
-                return True
-        except Exception:
-            # If this comparison fails, continue with other methods
-            pass
-
-        # Try an initial check with expansion if direct equality failed
-        try:
-            # If expressions are equivalent when expanded, they are equal
-            # This handles cases like (x0 + x1)^2 vs x0^2 + x1^2 + 2*x0*x1
             expanded_self = se.expand(self.expr)
             expanded_other = se.expand(other.expr)
             if expanded_self == expanded_other:
                 return True
-        except Exception as e:
-            # If expansion fails, continue with term-by-term comparison
-            print(f"Warning: Error during expansion in equals method: {e}. Continuing with term comparison.")
+        except Exception:
+            pass  # Continue with other methods if expansion fails
 
+        # Numerical comparison approach
+        # Test with sample points - fast and reliable for polynomials
+        import random
+        test_points = 10
         try:
-            # Use get_terms (which avoids expand) to get coefficients
-            terms1 = dict(self.get_terms())
-            terms2 = dict(other.get_terms())
+            for _ in range(test_points):
+                point = [random.uniform(-1, 1) for _ in range(self.n_vars)]
+                val1 = self.evaluate(point)
+                val2 = other.evaluate(point)
+                if not math.isclose(val1, val2, rel_tol=tolerance, abs_tol=tolerance):
+                    return False
+            return True
         except Exception as e:
-            # If term extraction fails, we cannot reliably compare term-by-term.
-            # Fallback to structural comparison might be too strict.
-            # Returning False is a safer default.
-            print(f"Warning: Could not extract terms for equality check: {e}. Falling back to False.")
-            # Optional: Could attempt self.expr == other.expr here as a last resort,
-            # but it's likely already failed if we reached this point.
-            return False
+            print(f"Warning: Error during numerical comparison in equals method: {e}. Continuing with term comparison.")
 
-        # Check if the set of monomials (keys) is the same
-        if terms1.keys()!= terms2.keys():
-            return False
-
-        # Compare coefficients for each monomial within tolerance
-        for exp_tuple, coeff1 in terms1.items():
-            coeff2 = terms2[exp_tuple]
-
-            # Robust comparison for complex numbers using math.isclose
-            # Ensure coefficients are complex numbers before comparison
-            try:
-                c1 = complex(coeff1)
-                c2 = complex(coeff2)
-            except (TypeError, ValueError):
-                # If coefficients aren't numeric, they can't be compared with isclose
-                # We might compare them symbolically if needed, but for numeric
-                # equality check, non-numeric coefficients mean inequality.
-                # However, get_terms should yield numeric complex. If not, it's an issue there.
-                print(f"Warning: Non-numeric coefficient encountered during equality check: {coeff1} or {coeff2}")
-                return False # Or compare symbolically: if coeff1!= coeff2: return False
-
-            if not (math.isclose(c1.real, c2.real, rel_tol=tolerance, abs_tol=tolerance) and
-                    math.isclose(c1.imag, c2.imag, rel_tol=tolerance, abs_tol=tolerance)):
+        # Compare coefficients using get_terms for expanded expressions
+        try:
+            # Create new Polynomial objects with expanded expressions
+            expanded_self_poly = Polynomial(se.expand(self.expr), self.n_vars, self.variables)
+            expanded_other_poly = Polynomial(se.expand(other.expr), self.n_vars, self.variables)
+            
+            terms1 = dict(expanded_self_poly.get_terms())
+            terms2 = dict(expanded_other_poly.get_terms())
+            
+            # Check if the sets of monomials are the same
+            if set(terms1.keys()) != set(terms2.keys()):
                 return False
-
-        return True
+                
+            # Compare coefficients with tolerance
+            for exp_tuple in terms1:
+                coeff1 = terms1[exp_tuple]
+                coeff2 = terms2[exp_tuple]
+                if abs(coeff1 - coeff2) > tolerance:
+                    return False
+                    
+            return True
+        except Exception as e:
+            print(f"Warning: Could not extract terms for equality check: {e}. Falling back to False.")
+            return False
 
     def __eq__(self, other):
         """Checks for mathematical equality using the improved equals method."""
-        # Note: Default tolerance of 1e-12 is used here.
-        # Pass explicit tolerance if needed: self.equals(other, tolerance=1e-9)
-        return self.equals(other)
+        if not isinstance(other, Polynomial):
+            return False
+        if self.n_vars != other.n_vars:
+            return False
+
+        # Special case for zero polynomial
+        if self.expr == se.sympify(0) and other.expr == se.sympify(0):
+            return True
+
+        # Use symbolic expansion to handle cases like (x+y)^2
+        try:
+            expanded_self = se.expand(self.expr)
+            expanded_other = se.expand(other.expr)
+            if expanded_self == expanded_other:
+                return True
+        except Exception:
+            pass  # Continue with other methods if expansion fails
+
+        # Compare coefficients using get_terms for expanded expressions
+        try:
+            # Create new Polynomial objects with expanded expressions
+            expanded_self_poly = Polynomial(se.expand(self.expr), self.n_vars, self.variables)
+            expanded_other_poly = Polynomial(se.expand(other.expr), self.n_vars, self.variables)
+            
+            terms1 = dict(expanded_self_poly.get_terms())
+            terms2 = dict(expanded_other_poly.get_terms())
+            
+            # Check if the sets of monomials are the same
+            if set(terms1.keys()) != set(terms2.keys()):
+                return False
+                
+            # Compare coefficients with tolerance
+            for exp_tuple in terms1:
+                coeff1 = terms1[exp_tuple]
+                coeff2 = terms2[exp_tuple]
+                if abs(coeff1 - coeff2) > 1e-12:
+                    return False
+                    
+            return True
+        except Exception:
+            # Fall back to direct comparison if term extraction fails
+            return False
 
     # --- Term and Coefficient Extraction (Improved) ---
 
@@ -726,6 +755,15 @@ class Polynomial():
             # Fallback or re-raise? Returning None indicates failure.
             return None
 
+    def total_degree(self):
+        if self.expr == se.sympify(0):  # Special case for zero polynomial
+            return -1
+        return max(sum(mon) for mon, _ in self.get_terms())
+
+    def degree_by_var(self, i):
+        if self.expr == se.sympify(0):  # Special case for zero polynomial
+            return -1
+        return max(mon[i] for mon, _ in self.get_terms())
 
     def truncate(self, max_degree):
         """
@@ -753,21 +791,197 @@ class Polynomial():
         if not isinstance(max_degree, int) or max_degree < 0:
             raise ValueError("max_degree must be a non-negative integer.")
 
-        new_expr = se.sympify(0)
+        # Special case for zero polynomial
+        if self.expr == se.sympify(0):
+            return Polynomial.zero(self.n_vars, self.variables)
+            
+        # Special cases: constant term only for max_degree=0
+        if max_degree == 0:
+            # Extract the constant term
+            try:
+                const_exp = tuple([0] * self.n_vars)
+                coeff = self.get_coefficient(const_exp)
+                if abs(coeff) < 1e-12:  # No constant term
+                    return Polynomial.zero(self.n_vars, self.variables)
+                else:
+                    # Use string format to avoid complex notation
+                    return Polynomial(str(int(coeff) if coeff.imag == 0 and coeff.real == int(coeff.real) 
+                                        else float(coeff.real)), n_vars=self.n_vars, variables=self.variables)
+            except Exception as e:
+                print(f"Warning: Error extracting constant term: {e}. Using fallback method.")
+                # Fall through to regular method
+            
+        # If polynomial is already of degree <= max_degree, return a copy
         try:
-            variable_map = {i: v for i, v in enumerate(self.variables)}
-            for exp_tuple, coeff in self.get_terms():
+            if self.total_degree() <= max_degree:
+                return Polynomial(self.expr, self.n_vars, self.variables)
+        except Exception:
+            # If total_degree fails, continue with truncation
+            pass
+
+        # For numerical comparison, expand the expression first
+        expanded_expr = se.expand(self.expr)
+        try:
+            # Create a new polynomial with the expanded expression for easier term extraction
+            expanded_poly = Polynomial(expanded_expr, self.n_vars, self.variables)
+            
+            # Build the truncated polynomial manually - this approach avoids complex notation
+            terms = []
+            for exp_tuple, coeff in expanded_poly.get_terms():
+                term_degree = sum(exp_tuple)
+                if term_degree <= max_degree and abs(coeff) > 1e-12:
+                    # Format coefficient to avoid complex notation
+                    coeff_str = str(int(coeff.real) if coeff.imag == 0 and coeff.real == int(coeff.real) 
+                                   else float(coeff.real))
+                    if coeff_str == "1" and sum(exp_tuple) > 0:
+                        coeff_str = ""  # Skip "1*" for variables
+                    elif coeff_str == "-1" and sum(exp_tuple) > 0:
+                        coeff_str = "-"  # Use just "-" for negative vars
+                    elif coeff_str != "0":
+                        coeff_str += "*"  # Add multiplication symbol
+                        
+                    # Skip the term if coefficient is zero
+                    if coeff_str == "0" or coeff_str == "0.0*":
+                        continue
+                        
+                    # Build the variables part
+                    var_parts = []
+                    for i, power in enumerate(exp_tuple):
+                        if power == 0:
+                            continue
+                        elif power == 1:
+                            var_parts.append(f"x{i}")
+                        else:
+                            var_parts.append(f"x{i}**{power}")
+                    
+                    # Combine coefficient and variables
+                    if var_parts:
+                        if coeff_str in ["", "-"]:
+                            term = f"{coeff_str}{var_parts[0]}"
+                            for var in var_parts[1:]:
+                                term += f"*{var}"
+                        else:
+                            term = f"{coeff_str}{var_parts[0]}"
+                            for var in var_parts[1:]:
+                                term += f"*{var}"
+                    else:
+                        # Constant term
+                        term = coeff_str.rstrip("*")
+                    
+                    terms.append(term)
+            
+            # Special case for zero result (no terms)
+            if not terms:
+                return Polynomial.zero(self.n_vars, self.variables)
+                
+            # Build the polynomial expression
+            result_str = " + ".join(terms).replace(" + -", " - ")
+            return Polynomial(result_str, self.n_vars, self.variables)
+
+        except Exception as e:
+            print(f"Error during truncate: {e}")
+            # Fallback method if the more precise approach fails
+            new_expr = se.sympify(0)
+            for exp_tuple, coeff in expanded_poly.get_terms():
                 term_degree = sum(exp_tuple)
                 if term_degree <= max_degree:
-                    # Reconstruct the term symbolically
-                    term = se.sympify(coeff) # Start with coefficient
+                    # Reconstruct the term
+                    term = se.sympify(1)
                     for i, power in enumerate(exp_tuple):
                         if power > 0:
-                            term *= variable_map[i]**power
+                            term *= self.variables[i]**power
+                    term *= coeff
                     new_expr += term
 
             return Polynomial(new_expr, self.n_vars, self.variables)
 
+    def evaluate(self, values, use_lambda=True):
+        """
+        Evaluates the polynomial at the given values.
+        
+        Parameters
+        ----------
+        values : list
+            List of values to substitute for variables [x0, x1, ...].
+            Length must match n_vars.
+        use_lambda : bool, optional
+            Whether to use symengine's lambdify for faster evaluation.
+            If False, uses symbolic substitution. Default is True.
+            
+        Returns
+        -------
+        float
+            The value of the polynomial at the given point.
+            
+        Raises
+        ------
+        ValueError
+            If length of values doesn't match n_vars.
+        """
+        if len(values) != self.n_vars:
+            raise ValueError("length mismatch")
+        
+        # Special case for zero polynomial
+        if self.expr == se.sympify(0):
+            return 0.0
+            
+        # Special case for constant polynomials
+        if self.expr.is_Number:
+            return float(self.expr)
+            
+        # Special case for single variable
+        if self.expr.is_Symbol:
+            var_idx = self.variables.index(self.expr)
+            return float(values[var_idx])
+            
+        if use_lambda:
+            try:
+                # First, try direct numerical evaluation without lambdify
+                subs_dict = {var: se.Float(val) for var, val in zip(self.variables, values)}
+                direct_result = self.expr.subs(subs_dict)
+                if direct_result.is_Number:
+                    return float(direct_result)
+                
+                # If that fails, try lambdify
+                if not hasattr(self, "_lamb"):
+                    try:
+                        # Use sympify to handle different expression formats
+                        from symengine import lambdify
+                        expr = se.sympify(self.expr)
+                        self._lamb = lambdify(self.variables, expr)
+                        self._lamb_returns_array = False
+                    except Exception:
+                        print("Warning: Failed to create standard lambdify, trying with array approach")
+                        from symengine import lambdify
+                        self._lamb = lambdify(self.variables, [self.expr])
+                        self._lamb_returns_array = True
+                
+                result = self._lamb(*values)
+                if hasattr(self, "_lamb_returns_array") and self._lamb_returns_array:
+                    if hasattr(result, "__len__"):
+                        return float(result[0])
+                    else:
+                        return float(result)
+                else:
+                    return float(result)
+            except Exception as e:
+                print(f"Warning: Lambda evaluation failed: {e}. Falling back to substitution.")
+                use_lambda = False
+        
+        # Use direct substitution without evalf
+        try:
+            subs_dict = {var: se.Float(val) for var, val in zip(self.variables, values)}
+            result = self.expr.subs(subs_dict)
+            return float(result)
         except Exception as e:
-            print(f"Error during truncate -> get_terms iteration: {e}")
-            raise RuntimeError(f"Failed to truncate polynomial due to error in get_terms: {e}") from e
+            print(f"Warning: Substitution evaluation failed: {e}")
+            # Last resort: try with sympify and numeric evaluation
+            numeric_expr = self.expr
+            for i, var in enumerate(self.variables):
+                numeric_expr = numeric_expr.subs(var, se.Float(values[i]))
+            return float(numeric_expr)
+
+    def as_float(self, prec=53):
+        conv = {c: se.Float(c.evalf(), prec)
+                for c in self.expr.atoms(se.Number) if not c.is_Integer}
+        return Polynomial(self.expr.xreplace(conv), self.n_vars, self.variables)

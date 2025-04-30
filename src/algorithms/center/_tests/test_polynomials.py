@@ -341,6 +341,166 @@ def test_get_terms(n_vars, P_zero, P_one, P_q0, P_mixed, P_H_simple):
     # Check that the reconstructed polynomial equals the original
     assert_poly_equal(reconstructed, P_mixed)
 
+def test_total_degree(n_vars, P_zero, P_one, P_q0, P_mixed, P_H_simple):
+    """Test the total_degree method."""
+    # Zero polynomial has degree -1 in some conventions
+    assert P_zero.total_degree() == -1
+    
+    # Constant polynomial
+    assert P_one.total_degree() == 0
+    
+    # Simple monomial
+    assert P_q0.total_degree() == 1
+    
+    # Hamiltonian polynomial: 0.5*x1^2 + x0^2 has total degree 2
+    assert P_H_simple.total_degree() == 2
+    
+    # Mixed polynomial: 2*x0^2 + 3*x1 + 4*x0*x2 - 5*x3^3 + 7
+    # The highest degree term is x3^3 with degree 3
+    assert P_mixed.total_degree() == 3
+    
+    # Create a higher degree polynomial for testing
+    P_high_degree = Polynomial('x0**4 + x1*x2*x3', n_vars=n_vars)
+    assert P_high_degree.total_degree() == 4
+
+def test_degree_by_var(n_vars, P_zero, P_one, P_q0, P_mixed, P_H_simple):
+    """Test the degree_by_var method."""
+    # Zero polynomial has degree -1 for any variable
+    assert P_zero.degree_by_var(0) == -1
+    assert P_zero.degree_by_var(1) == -1
+    
+    # Constant polynomial has degree 0 for any variable
+    assert P_one.degree_by_var(0) == 0
+    assert P_one.degree_by_var(1) == 0
+    
+    # Simple monomial x0 has degree 1 for x0 and 0 for others
+    assert P_q0.degree_by_var(0) == 1
+    assert P_q0.degree_by_var(1) == 0
+    
+    # Hamiltonian polynomial: 0.5*x1^2 + x0^2
+    assert P_H_simple.degree_by_var(0) == 2  # Degree of x0 is 2
+    assert P_H_simple.degree_by_var(1) == 2  # Degree of x1 is 2
+    assert P_H_simple.degree_by_var(2) == 0  # Other variables have degree 0
+    
+    # Mixed polynomial: 2*x0^2 + 3*x1 + 4*x0*x2 - 5*x3^3 + 7
+    assert P_mixed.degree_by_var(0) == 2  # x0 appears with max power 2
+    assert P_mixed.degree_by_var(1) == 1  # x1 appears with max power 1
+    assert P_mixed.degree_by_var(2) == 1  # x2 appears with max power 1
+    assert P_mixed.degree_by_var(3) == 3  # x3 appears with max power 3
+    assert P_mixed.degree_by_var(4) == 0  # x4 doesn't appear
+
+def test_truncate(n_vars, P_zero, P_one, P_mixed, P_H_simple):
+    """Test the truncate method."""
+    # Truncating zero polynomial should still give zero
+    assert_poly_equal(P_zero.truncate(2), P_zero)
+    
+    # Truncating constant to degree 0 should keep it unchanged
+    assert_poly_equal(P_one.truncate(0), P_one)
+    
+    # Truncating to a negative degree should raise ValueError
+    with pytest.raises(ValueError):
+        P_one.truncate(-1)
+    
+    # Truncate Hamiltonian polynomial: 0.5*x1^2 + x0^2
+    # Truncate to degree 1 should give constant term only
+    H_truncated_1 = P_H_simple.truncate(1)
+    assert H_truncated_1.total_degree() <= 1
+    
+    # Check that all degree 2 terms are gone
+    assert H_truncated_1.get_coefficient(tuple([2] + [0] * (n_vars - 1))) == 0.0
+    assert H_truncated_1.get_coefficient(tuple([0, 2] + [0] * (n_vars - 2))) == 0.0
+    
+    # Truncate to degree 2 should keep the polynomial unchanged
+    H_truncated_2 = P_H_simple.truncate(2)
+    # Use == instead of equals with tolerance
+    assert H_truncated_2 == P_H_simple, f"Expressions differ: {H_truncated_2.expr} vs {P_H_simple.expr}"
+    
+    # Mixed polynomial: 2*x0^2 + 3*x1 + 4*x0*x2 - 5*x3^3 + 7
+    # Truncate to degree 0 should give only constant term
+    mixed_truncated_0 = P_mixed.truncate(0)
+    expected_0 = Polynomial('7', n_vars=n_vars)
+    # Use == instead of equals with tolerance
+    assert mixed_truncated_0 == expected_0, f"Expressions differ: {mixed_truncated_0.expr} vs {expected_0.expr}"
+    
+    # Truncate to degree 1 should give constant term and linear terms
+    mixed_truncated_1 = P_mixed.truncate(1)
+    expected_1 = Polynomial('7 + 3*x1', n_vars=n_vars)
+    # Use == instead of equals with tolerance
+    assert mixed_truncated_1 == expected_1, f"Expressions differ: {mixed_truncated_1.expr} vs {expected_1.expr}"
+    
+    # Truncate to degree 2 should include quadratic terms but not cubic
+    mixed_truncated_2 = P_mixed.truncate(2)
+    expected_2 = Polynomial('7 + 3*x1 + 2*x0**2 + 4*x0*x2', n_vars=n_vars)
+    # Use == instead of equals with tolerance
+    assert mixed_truncated_2 == expected_2, f"Expressions differ: {mixed_truncated_2.expr} vs {expected_2.expr}"
+    
+    # Truncate to degree 3 should give the original polynomial
+    mixed_truncated_3 = P_mixed.truncate(3)
+    # Use == instead of equals with tolerance
+    assert mixed_truncated_3 == P_mixed, f"Expressions differ: {mixed_truncated_3.expr} vs {P_mixed.expr}"
+
+def test_evaluate(n_vars, P_zero, P_one, P_q0, P_mixed, P_H_simple):
+    """Test the evaluate method."""
+    # Create a list of values for evaluation
+    values = [0.5, -1.0, 2.0, -0.5, 1.0, 3.0]
+    
+    # Test with zero polynomial
+    assert P_zero.evaluate(values) == 0.0
+    assert P_zero.evaluate(values, use_lambda=False) == 0.0
+    
+    # Test with constant polynomial
+    assert P_one.evaluate(values) == 1.0
+    assert P_one.evaluate(values, use_lambda=False) == 1.0
+    
+    # Test with simple monomial
+    assert P_q0.evaluate(values) == values[0]
+    assert P_q0.evaluate(values, use_lambda=False) == values[0]
+    
+    # Test with Hamiltonian: 0.5*x1^2 + x0^2
+    expected_H = 0.5 * values[1]**2 + values[0]**2
+    assert abs(P_H_simple.evaluate(values) - expected_H) < 1e-10
+    assert abs(P_H_simple.evaluate(values, use_lambda=False) - expected_H) < 1e-10
+    
+    # Test with mixed polynomial: 2*x0^2 + 3*x1 + 4*x0*x2 - 5*x3^3 + 7
+    expected_mixed = (2 * values[0]**2 + 3 * values[1] + 
+                      4 * values[0] * values[2] - 5 * values[3]**3 + 7)
+    assert abs(P_mixed.evaluate(values) - expected_mixed) < 1e-10
+    assert abs(P_mixed.evaluate(values, use_lambda=False) - expected_mixed) < 1e-10
+    
+    # Test with wrong number of values
+    with pytest.raises(ValueError):
+        P_mixed.evaluate(values[:3])  # Too few values
+
+def test_as_float(n_vars):
+    """Test the as_float method."""
+    # Create a polynomial with symbolic fractions and irrational numbers
+    P = Polynomial('1/3 * x0**2 + sqrt(2) * x1', n_vars=n_vars)
+    
+    # Convert to float with default precision
+    P_float = P.as_float()
+    
+    # Check that the coefficients were converted to floating-point
+    terms = dict(P_float.get_terms())
+    x0_squared = tuple([2] + [0] * (n_vars - 1))
+    x1 = tuple([0, 1] + [0] * (n_vars - 2))
+    
+    # The coefficients should be close to their expected values
+    assert abs(terms[x0_squared] - (1/3)) < 1e-10
+    assert abs(terms[x1] - np.sqrt(2)) < 1e-10
+    
+    # Test with a different precision
+    P_low_prec = P.as_float(prec=10)
+    terms_low = dict(P_low_prec.get_terms())
+    
+    # Values should be the same but might have lower precision internally
+    assert abs(terms_low[x0_squared] - (1/3)) < 1e-3
+    assert abs(terms_low[x1] - np.sqrt(2)) < 1e-3
+    
+    # Converting a polynomial that already has float coefficients
+    P2 = Polynomial('0.5 * x0 + 1.5 * x1', n_vars=n_vars)
+    P2_float = P2.as_float()
+    assert_poly_equal(P2, P2_float)  # Should be essentially the same
+
 def run_all_tests():
     """Run all test functions in this module."""
     n_vars = 6
@@ -362,6 +522,11 @@ def run_all_tests():
     test_poisson_bracket(P_zero, P_one, P_q0, P_p0, P_q1, P_p1, P_H_simple)
     test_get_coefficient(n_vars, P_zero, P_one, P_q0, P_p0, P_mixed, P_H_simple)
     test_get_terms(n_vars, P_zero, P_one, P_q0, P_mixed, P_H_simple)
+    test_total_degree(n_vars, P_zero, P_one, P_q0, P_mixed, P_H_simple)
+    test_degree_by_var(n_vars, P_zero, P_one, P_q0, P_mixed, P_H_simple)
+    test_truncate(n_vars, P_zero, P_one, P_mixed, P_H_simple)
+    test_evaluate(n_vars, P_zero, P_one, P_q0, P_mixed, P_H_simple)
+    test_as_float(n_vars)
     
     print("All polynomial tests passed!")
 
