@@ -192,10 +192,6 @@ class Polynomial:
         """Negation: -Polynomial"""
         return Polynomial(-self.expr, self.n_vars, self.variables)
 
-    @lru_cache(maxsize=None)
-    def _d(expr, var):
-        return se.diff(expr, var)
-
     def is_zero(self):
         return self.expr == se.sympify(0)
 
@@ -310,12 +306,13 @@ class Polynomial:
 
         if self.n_vars!= other.n_vars:
             raise ValueError("Polynomials must have the same number of variables for Poisson bracket.")
-        # n_vars must be even check done in __init__
 
-        # Use the cached calculation method
-        variables_tuple = tuple(self.variables)
-        result_expr = Polynomial._calculate_pb_expr(self.expr, other.expr, variables_tuple)
-        
+        if self.expr.is_Number or other.expr.is_Number:
+            return Polynomial.zero(self.n_vars, self.variables)
+
+        result_expr = Polynomial._calculate_pb_expr(self.expr, other.expr,
+                                                    tuple(self.variables))
+
         return Polynomial(result_expr, self.n_vars, self.variables)
 
     def substitute(self, var_map):

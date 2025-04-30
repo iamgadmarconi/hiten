@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import lru_cache
-from typing import Dict, Iterable, List, MutableMapping, Tuple
+from typing import Dict, Iterable, List, MutableMapping, Tuple, TYPE_CHECKING
 
 import numpy as np
 import symengine as se
+import math
+
+if TYPE_CHECKING:
+    from algorithms.center.polynomials import Polynomial
 
 
 def symplectic_dot(grad: np.ndarray) -> np.ndarray:
@@ -17,17 +21,29 @@ def symplectic_dot(grad: np.ndarray) -> np.ndarray:
     dp = -grad[:3]
     return np.concatenate((dq, dp))
 
+@lru_cache(maxsize=None)
+def _pb(a: se.Expr, b: se.Expr, q_syms: tuple[se.Symbol, ...], p_syms: tuple[se.Symbol, ...]) -> se.Expr:
+    """Cached raw Poisson bracket between two SymEngine Expr’s."""
+    dq = [se.diff(a, q) for q in q_syms]
+    dp = [se.diff(a, p) for p in p_syms]
+    dqb = [se.diff(b, q) for q in q_syms]
+    dpb = [se.diff(b, p) for p in p_syms]
+    return sum(dq_i * dpb_i - dp_i * dqb_i for dq_i, dp_i, dqb_i, dpb_i in zip(dq, dp, dqb, dpb))
+
+def poisson_bracket(poly_a: Polynomial, poly_b: Polynomial) -> Polynomial:
+    """Front‑end that preserves Polynomial wrapper and caches expr bracket."""
+    q_syms, p_syms = poly_a.variables[::2], poly_a.variables[1::2]  # assumes canonical ordering
+    expr = _pb(poly_a.expr, poly_b.expr, tuple(q_syms), tuple(p_syms))
+    return Polynomial(expr, n_vars=poly_a.n_vars, variables=poly_a.variables)
+
 
 class FormalSeries(MutableMapping[int, "Polynomial"]):
-    """Sparse homogeneous power series.
-
-    Keys are *total* degree (>= 2).  Value type is assumed to behave like
-    `Polynomial` (symengine expression wrapper) but *not* imported here to
-    keep this module independent.
+    """
+    Sparse homogeneous power series.
     """
 
     def __init__(self, mapping: Dict[int, "Polynomial"] | None = None):
-        self._data: Dict[int, "Polynomial"] = {}
+        self._data: Dict[int, Polynomial] = dict(data or {})
         if mapping:
             for k, v in mapping.items():
                 self[k] = v  # uses __setitem__ validation
@@ -151,13 +167,15 @@ class Hamiltonian:
             f.attrs["coords"] = self.coords
             grp = f.create_group("series")
             for d, poly in self.series._data.items():
-                grp.create_dataset(str(d), data=str(poly.expr))  # naive store
+                # Use symengine's binary serialization for better efficiency
+                grp.create_dataset(str(d), data=se.serialize(poly.expr), dtype='S')
 
     @staticmethod
     def from_hdf(path: str) -> "Hamiltonian":
-        import symengine as se
         import h5py
-        from algorithms.center.polynomials import Polynomial  # correct import
+        
+        # Postpone heavy imports until actually needed
+        from algorithms.center.polynomials import Polynomial
 
         with h5py.File(path, "r") as f:
             mu = float(f.attrs["mu"])
@@ -165,7 +183,7 @@ class Hamiltonian:
             data: Dict[int, Polynomial] = {}
             for name, ds in f["series"].items():
                 deg = int(name)
-                expr = se.sympify(ds[()].decode())
+                expr = se.deserialize(ds[()])
                 data[deg] = Polynomial(expr)
         return Hamiltonian(FormalSeries(data), mu, coords)
 
