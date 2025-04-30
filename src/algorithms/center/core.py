@@ -952,17 +952,6 @@ class Polynomial:
             return np.array([derivative.evaluate(point) for derivative in derivatives])
 
 
-def symplectic_dot(grad: np.ndarray) -> np.ndarray:
-    """Convert \nabla H = (∂H/∂q, ∂H/∂p) into the Hamiltonian vector field.
-    Works with any even-dimensional gradient vector."""
-    if grad.size % 2 != 0:
-        raise ValueError("symplectic_dot expects an even-length gradient vector.")
-    n = grad.size // 2
-    dq = grad[n:]
-    dp = -grad[:n]
-    return np.concatenate((dq, dp))
-
-
 class FormalSeries(MutableMapping[int, "Polynomial"]):
     """
     Sparse homogeneous power series.
@@ -1096,9 +1085,19 @@ class Hamiltonian:
     def gradient(self, x: np.ndarray) -> np.ndarray:
         return np.add.reduce([p.gradient(x) for p in self.series.values()])
 
+    def symplectic_dot(self, grad: np.ndarray) -> np.ndarray:
+        """Convert \nabla H = (∂H/∂q, ∂H/∂p) into the Hamiltonian vector field.
+        Works with any even-dimensional gradient vector."""
+        if grad.size % 2 != 0:
+            raise ValueError("symplectic_dot expects an even-length gradient vector.")
+        n = grad.size // 2
+        dq = grad[n:]
+        dp = -grad[:n]
+        return np.concatenate((dq, dp))
+
     # ---------------------------------------------------------------------
     def vector_field(self, x: np.ndarray) -> np.ndarray:
-        return symplectic_dot(self.gradient(x))
+        return self.symplectic_dot(self.gradient(x))
 
     # ---------------------------------------------------------------------
     def poisson(self, other: "Hamiltonian") -> "Hamiltonian":

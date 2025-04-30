@@ -5,7 +5,7 @@ from pathlib import Path
 import tempfile
 import os
 
-from algorithms.center.core import Polynomial, symplectic_dot, FormalSeries, Hamiltonian
+from algorithms.center.core import Polynomial, FormalSeries, Hamiltonian
 
 # --- Test Fixtures ---
 
@@ -72,14 +72,18 @@ def test_symplectic_dot_valid():
     # Test symplectic_dot with valid input
     gradient = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
     expected = np.array([4.0, 5.0, 6.0, -1.0, -2.0, -3.0])
-    result = symplectic_dot(gradient)
+    # Create a Hamiltonian instance to use its symplectic_dot method
+    h = Hamiltonian(FormalSeries(), mu=0.01)
+    result = h.symplectic_dot(gradient)
     np.testing.assert_array_equal(result, expected)
 
 def test_symplectic_dot_invalid():
     # Test symplectic_dot with invalid input size
     invalid_gradient = np.array([1.0, 2.0, 3.0])
+    # Create a Hamiltonian instance to use its symplectic_dot method
+    h = Hamiltonian(FormalSeries(), mu=0.01)
     with pytest.raises(ValueError):
-        symplectic_dot(invalid_gradient)
+        h.symplectic_dot(invalid_gradient)
 
 # --- Test FormalSeries ---
 
@@ -246,7 +250,7 @@ def test_hamiltonian_vector_field(hamiltonian):
     
     # The vector field should be related to the gradient via symplectic_dot
     grad = hamiltonian.gradient(x)
-    expected_vf = symplectic_dot(grad)
+    expected_vf = hamiltonian.symplectic_dot(grad)
     np.testing.assert_array_almost_equal(vf, expected_vf)
 
 def test_hamiltonian_poisson(hamiltonian, n_vars):
