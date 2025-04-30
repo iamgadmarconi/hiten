@@ -501,6 +501,94 @@ def test_as_float(n_vars):
     P2_float = P2.as_float()
     assert_poly_equal(P2, P2_float)  # Should be essentially the same
 
+def test_gradient(n_vars, P_zero, P_one, P_q0, P_p0, P_mixed, P_H_simple):
+    """Test the gradient method."""
+    # Test symbolic gradient (without evaluation)
+    
+    # Zero polynomial should have zero gradient
+    zero_grad = P_zero.gradient()
+    assert len(zero_grad) == n_vars
+    for derivative in zero_grad:
+        assert derivative == Polynomial('0', n_vars=n_vars)
+    
+    # Constant polynomial should have zero gradient
+    one_grad = P_one.gradient()
+    assert len(one_grad) == n_vars
+    for derivative in one_grad:
+        assert derivative == Polynomial('0', n_vars=n_vars)
+    
+    # Simple variable x0: gradient should be [1, 0, 0, 0, 0, 0]
+    q0_grad = P_q0.gradient()
+    assert len(q0_grad) == n_vars
+    assert q0_grad[0] == Polynomial('1', n_vars=n_vars)
+    for i in range(1, n_vars):
+        assert q0_grad[i] == Polynomial('0', n_vars=n_vars)
+    
+    # Test gradient of H = 0.5*p0^2 + q0^2
+    h_grad = P_H_simple.gradient()
+    assert len(h_grad) == n_vars
+    assert h_grad[0] == Polynomial('2*x0', n_vars=n_vars)  # ∂H/∂q0 = 2*q0
+    assert h_grad[1] == Polynomial('x1', n_vars=n_vars)    # ∂H/∂p0 = p0
+    for i in range(2, n_vars):
+        assert h_grad[i] == Polynomial('0', n_vars=n_vars)
+    
+    # Test mixed polynomial: 2*x0^2 + 3*x1 + 4*x0*x2 - 5*x3^3 + 7
+    mixed_grad = P_mixed.gradient()
+    assert len(mixed_grad) == n_vars
+    assert mixed_grad[0] == Polynomial('4*x0 + 4*x2', n_vars=n_vars)  # ∂f/∂x0 = 4*x0 + 4*x2
+    assert mixed_grad[1] == Polynomial('3', n_vars=n_vars)           # ∂f/∂x1 = 3
+    assert mixed_grad[2] == Polynomial('4*x0', n_vars=n_vars)        # ∂f/∂x2 = 4*x0
+    assert mixed_grad[3] == Polynomial('-15*x3**2', n_vars=n_vars)   # ∂f/∂x3 = -15*x3^2
+    assert mixed_grad[4] == Polynomial('0', n_vars=n_vars)           # ∂f/∂x4 = 0
+    assert mixed_grad[5] == Polynomial('0', n_vars=n_vars)           # ∂f/∂x5 = 0
+    
+    # Test evaluated gradient
+    point = [0.5, -1.0, 2.0, -0.5, 1.0, 3.0]
+    
+    # Zero polynomial: gradient should be all zeros
+    zero_eval = P_zero.gradient(point)
+    assert isinstance(zero_eval, np.ndarray)
+    assert zero_eval.shape == (n_vars,)
+    np.testing.assert_array_equal(zero_eval, np.zeros(n_vars))
+    
+    # Constant polynomial: gradient should be all zeros
+    one_eval = P_one.gradient(point)
+    assert isinstance(one_eval, np.ndarray)
+    assert one_eval.shape == (n_vars,)
+    np.testing.assert_array_equal(one_eval, np.zeros(n_vars))
+    
+    # Simple variable x0: gradient should be [1, 0, 0, 0, 0, 0]
+    q0_eval = P_q0.gradient(point)
+    assert isinstance(q0_eval, np.ndarray)
+    assert q0_eval.shape == (n_vars,)
+    expected_q0 = np.zeros(n_vars)
+    expected_q0[0] = 1.0
+    np.testing.assert_array_equal(q0_eval, expected_q0)
+    
+    # Test gradient of H = 0.5*p0^2 + q0^2
+    h_eval = P_H_simple.gradient(point)
+    assert isinstance(h_eval, np.ndarray)
+    assert h_eval.shape == (n_vars,)
+    expected_h = np.zeros(n_vars)
+    expected_h[0] = 2 * point[0]  # 2*q0 = 2*0.5 = 1.0
+    expected_h[1] = point[1]      # p0 = -1.0
+    np.testing.assert_array_almost_equal(h_eval, expected_h)
+    
+    # Test mixed polynomial: 2*x0^2 + 3*x1 + 4*x0*x2 - 5*x3^3 + 7
+    mixed_eval = P_mixed.gradient(point)
+    assert isinstance(mixed_eval, np.ndarray)
+    assert mixed_eval.shape == (n_vars,)
+    expected_mixed = np.zeros(n_vars)
+    expected_mixed[0] = 4 * point[0] + 4 * point[2]  # 4*x0 + 4*x2 = 4*0.5 + 4*2.0 = 10.0
+    expected_mixed[1] = 3                           # 3
+    expected_mixed[2] = 4 * point[0]                # 4*x0 = 4*0.5 = 2.0
+    expected_mixed[3] = -15 * point[3]**2           # -15*x3^2 = -15*(-0.5)^2 = -3.75
+    np.testing.assert_array_almost_equal(mixed_eval, expected_mixed)
+    
+    # Test error with wrong point length
+    with pytest.raises(ValueError):
+        P_H_simple.gradient([1, 2, 3])  # Too short
+
 def run_all_tests():
     """Run all test functions in this module."""
     n_vars = 6
@@ -527,6 +615,6 @@ def run_all_tests():
     test_truncate(n_vars, P_zero, P_one, P_mixed, P_H_simple)
     test_evaluate(n_vars, P_zero, P_one, P_q0, P_mixed, P_H_simple)
     test_as_float(n_vars)
+    test_gradient(n_vars, P_zero, P_one, P_q0, P_p0, P_mixed, P_H_simple)
     
     print("All polynomial tests passed!")
-

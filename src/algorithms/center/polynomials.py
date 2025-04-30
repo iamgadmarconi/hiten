@@ -2,9 +2,10 @@ import symengine as se
 import numpy as np # For isclose later if needed, though less critical with symbolic
 import math      # Add math import for factorial and isclose
 from collections import defaultdict # For efficient term collection in equality check
+from functools import lru_cache
 
 
-class Polynomial():
+class Polynomial:
     """
     An improved Polynomial class using symengine as the backend for symbolic manipulation.
     
@@ -125,7 +126,6 @@ class Polynomial():
         """
         return cls(1, n_vars=n_vars, variables=variables)
 
-
     def __repr__(self):
         # Use standard variable names in repr for consistency if possible
         std_vars_key = tuple(f'x{i}' for i in range(self.n_vars))
@@ -191,6 +191,10 @@ class Polynomial():
     def __neg__(self):
         """Negation: -Polynomial"""
         return Polynomial(-self.expr, self.n_vars, self.variables)
+
+    @lru_cache(maxsize=None)
+    def _d(expr, var):
+        return se.diff(expr, var)
 
     # --- Core Symbolic Operations ---
 
@@ -441,49 +445,7 @@ class Polynomial():
             return False
 
     def __eq__(self, other):
-        """Checks for mathematical equality using the improved equals method."""
-        if not isinstance(other, Polynomial):
-            return False
-        if self.n_vars != other.n_vars:
-            return False
-
-        # Special case for zero polynomial
-        if self.expr == se.sympify(0) and other.expr == se.sympify(0):
-            return True
-
-        # Use symbolic expansion to handle cases like (x+y)^2
-        try:
-            expanded_self = se.expand(self.expr)
-            expanded_other = se.expand(other.expr)
-            if expanded_self == expanded_other:
-                return True
-        except Exception:
-            pass  # Continue with other methods if expansion fails
-
-        # Compare coefficients using get_terms for expanded expressions
-        try:
-            # Create new Polynomial objects with expanded expressions
-            expanded_self_poly = Polynomial(se.expand(self.expr), self.n_vars, self.variables)
-            expanded_other_poly = Polynomial(se.expand(other.expr), self.n_vars, self.variables)
-            
-            terms1 = dict(expanded_self_poly.get_terms())
-            terms2 = dict(expanded_other_poly.get_terms())
-            
-            # Check if the sets of monomials are the same
-            if set(terms1.keys()) != set(terms2.keys()):
-                return False
-                
-            # Compare coefficients with tolerance
-            for exp_tuple in terms1:
-                coeff1 = terms1[exp_tuple]
-                coeff2 = terms2[exp_tuple]
-                if abs(coeff1 - coeff2) > 1e-12:
-                    return False
-                    
-            return True
-        except Exception:
-            # Fall back to direct comparison if term extraction fails
-            return False
+        return self.equals(other)
 
     # --- Term and Coefficient Extraction (Improved) ---
 
@@ -985,3 +947,37 @@ class Polynomial():
         conv = {c: se.Float(c.evalf(), prec)
                 for c in self.expr.atoms(se.Number) if not c.is_Integer}
         return Polynomial(self.expr.xreplace(conv), self.n_vars, self.variables)
+        
+    def gradient(self, point=None):
+        """
+        Computes the gradient (vector of partial derivatives) of the polynomial.
+        
+        Parameters
+        ----------
+        point : array-like, optional
+            If provided, evaluates the gradient at this point.
+            Should be a sequence of length n_vars.
+        
+        Returns
+        -------
+        numpy.ndarray
+            A vector of partial derivatives, evaluated at the given point if provided.
+            
+        Raises
+        ------
+        ValueError
+            If point is provided but has incorrect length.
+        """
+        # Compute partial derivatives with respect to each variable
+        derivatives = [self.differentiate(i) for i in range(self.n_vars)]
+        
+        if point is None:
+            # Return the symbolic gradient as a list of Polynomials
+            return derivatives
+        else:
+            # Validate point length
+            if len(point) != self.n_vars:
+                raise ValueError(f"Point must have length {self.n_vars}, got {len(point)}")
+                
+            # Evaluate each derivative at the given point
+            return np.array([derivative.evaluate(point) for derivative in derivatives])
