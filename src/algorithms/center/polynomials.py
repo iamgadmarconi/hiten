@@ -663,60 +663,6 @@ class Polynomial:
 
     # --- Optional Helper Methods ---
 
-    def degree(self, var_index=None):
-        """
-        Calculates the degree of the polynomial.
-
-        Parameters
-        ----------
-        var_index : int, optional
-            If specified, calculates the degree with respect to the variable at this index.
-            Otherwise, calculates the total degree (maximum sum of exponents in any term).
-            Assumes canonical ordering [q1, p1,...] if using indices.
-
-        Returns
-        -------
-        int
-            The degree, or -1 if the polynomial is zero (consistent with some conventions,
-            though SymPy uses -oo). Returns 0 for a non-zero constant.
-            
-        Raises
-        ------
-        ValueError
-            If var_index is out of range.
-        """
-        max_degree = -1 # Using -1 for zero polynomial degree convention
-
-        try:
-            is_zero = True
-            for exp_tuple, coeff in self.get_terms():
-                # Check if any non-zero coefficient exists
-                if not math.isclose(coeff.real, 0.0, abs_tol=1e-12) or \
-                    not math.isclose(coeff.imag, 0.0, abs_tol=1e-12):
-                    is_zero = False
-                    current_degree = 0
-                    if var_index is not None:
-                        if not (0 <= var_index < self.n_vars):
-                            raise ValueError(f"var_index must be between 0 and {self.n_vars-1}")
-                        current_degree = exp_tuple[var_index]
-                    else:
-                        # Total degree
-                        current_degree = sum(exp_tuple)
-
-                    if current_degree > max_degree:
-                        max_degree = current_degree
-
-            if is_zero:
-                return -1 # Degree of zero polynomial
-            else:
-                # Handle constant case (max_degree could still be 0 if only constant term exists)
-                return max(0, max_degree) # Ensure non-zero constant has degree 0
-
-        except Exception as e:
-            print(f"Error calculating degree via get_terms: {e}")
-            # Fallback or re-raise? Returning None indicates failure.
-            return None
-
     def total_degree(self):
         if self.expr == se.sympify(0):  # Special case for zero polynomial
             return -1
