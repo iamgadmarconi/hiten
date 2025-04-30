@@ -49,6 +49,9 @@ class Polynomial:
     def __eq__(self, other):
         return self.expression == other.expression
 
+    def __hash__(self):
+        return hash(self.expression)
+
     def evaluate(self, subs_dict: dict[se.Symbol, se.Basic]) -> se.Basic:
         return self.expression.subs(subs_dict)
 
@@ -56,11 +59,14 @@ class Polynomial:
         return Polynomial(self.variables, self.expression.diff(variable))
 
     def expand(self):
+        return self.expression.expand()
+
+    def series_expand(self):
         pass
 
 
 @lru_cache(maxsize=10000)
-def _poisson_bracket(expr1: se.Basic, expr2: se.Basic, variables: tuple[se.Symbol, ...]) -> se.Basic:
+def _poisson_bracket(poly1: Polynomial, poly2: Polynomial, variables: tuple[se.Symbol, ...]) -> Polynomial:
         n_vars = len(variables)
         num_dof = n_vars // 2
         result_expr = se.sympify(0)  # Start with zero expression
@@ -72,17 +78,21 @@ def _poisson_bracket(expr1: se.Basic, expr2: se.Basic, variables: tuple[se.Symbo
             pi = variables[pi_index]
 
             # Compute partial derivatives
-            d_expr1_dqi = se.diff(expr1, qi)
-            d_expr2_dpi = se.diff(expr2, pi)
-            term1 = d_expr1_dqi * d_expr2_dpi
+            d_expr1_dqi = poly1.derivative(qi)
+            d_expr2_dpi = poly2.derivative(pi)
+            term1 = d_expr1_dqi.expression * d_expr2_dpi.expression
 
-            d_expr1_dpi = se.diff(expr1, pi)
-            d_expr2_dqi = se.diff(expr2, qi)
-            term2 = d_expr1_dpi * d_expr2_dqi
+            d_expr1_dpi = poly1.derivative(pi)
+            d_expr2_dqi = poly2.derivative(qi)
+            term2 = d_expr1_dpi.expression * d_expr2_dqi.expression
 
             result_expr = result_expr + term1 - term2
 
         return Polynomial(list(variables), result_expr)
+
+
+def _lie_bracket(poly1: Polynomial, poly2: Polynomial, variables: tuple[se.Symbol, ...]) -> Polynomial:
+    return _poisson_bracket(poly1, poly2, variables)
 
 
 x = Symbol('x')
@@ -94,7 +104,7 @@ pz = Symbol('pz')
 
 variables = [x,y,z,px,py,pz]
 
-expression1 = x+y
+expression1 = (x+y)**2+y
 
 expression2 = x*y
 
@@ -112,12 +122,16 @@ poly4 = poly1 + poly2 / poly3
 
 print(poly4)
 
+print(poly4.expand())
+
 s_dict = {x: 1, y: 2, z: 3, px: 4, py: 5, pz: 6}
 
 print(poly4.evaluate(s_dict))
 
 print(poly4.derivative(x))
 
-poly5 = _poisson_bracket(poly1.expression, poly2.expression, tuple(variables))
+poly5 = _poisson_bracket(poly1, poly2, tuple(variables))
 
 print(poly5)
+
+
