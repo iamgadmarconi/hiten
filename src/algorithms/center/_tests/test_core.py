@@ -175,10 +175,10 @@ def test_formal_series_lie_transform(formal_series, cubic_poly, n_vars):
     assert set(transformed.degrees()) == {2, 3, 4}
     
     # Check that some terms are modified
-    # The quadratic term should be modified by {χ, H_2}
-    assert transformed[2] != formal_series[2]
+    # The quadratic term should NOT be modified (degree 2)
+    assert transformed[2] == formal_series[2]
     
-    # Higher terms should also change
+    # Higher terms should change (degree 3 and 4)
     assert transformed[3] != formal_series[3]
     assert transformed[4] != formal_series[4]
 

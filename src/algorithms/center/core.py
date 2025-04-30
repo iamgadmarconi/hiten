@@ -6,12 +6,13 @@ from collections import defaultdict
 from typing import Dict, Iterable, List, MutableMapping, Tuple, TYPE_CHECKING
 
 import math
-import numpy as np
+from math import factorial
 import symengine as se
+import numpy as np
+import pickle
 
 if TYPE_CHECKING:
     from algorithms.center.polynomials import Polynomial
-
 
 
 class Polynomial:
@@ -1039,7 +1040,7 @@ class FormalSeries(MutableMapping[int, "Polynomial"]):
         # higher-order brackets (r ≥ 2)
         r = 2
         while True:
-            coef = 1.0 / np.math.factorial(r)
+            coef = 1.0 / factorial(r)
             new_ad: Dict[int, Polynomial] = {}
             pushed = False
             for d, poly in ad_power.items():
@@ -1126,15 +1127,13 @@ class Hamiltonian:
             f.attrs["coords"] = self.coords
             grp = f.create_group("series")
             for d, poly in self.series._data.items():
-                # Use symengine's binary serialization for better efficiency
-                grp.create_dataset(str(d), data=se.serialize(poly.expr), dtype='S')
+                # Use pickle for binary serialization
+                binary_data = pickle.dumps(poly.expr)
+                grp.create_dataset(str(d), data=np.void(binary_data))
 
     @staticmethod
     def from_hdf(path: str) -> "Hamiltonian":
         import h5py
-        
-        # Postpone heavy imports until actually needed
-        from algorithms.center.polynomials import Polynomial
 
         with h5py.File(path, "r") as f:
             mu = float(f.attrs["mu"])
@@ -1142,7 +1141,9 @@ class Hamiltonian:
             data: Dict[int, Polynomial] = {}
             for name, ds in f["series"].items():
                 deg = int(name)
-                expr = se.deserialize(ds[()])
+                # Deserialize using pickle
+                binary_data = ds[()].tobytes()
+                expr = pickle.loads(binary_data)
                 data[deg] = Polynomial(expr)
         return Hamiltonian(FormalSeries(data), mu, coords)
 
