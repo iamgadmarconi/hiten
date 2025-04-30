@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import lru_cache
-from collections import defaultdict
 from typing import Dict, Iterable, List, MutableMapping, Tuple, TYPE_CHECKING
 
 import math
@@ -10,9 +9,6 @@ from math import factorial
 import symengine as se
 import numpy as np
 import pickle
-
-if TYPE_CHECKING:
-    from algorithms.center.polynomials import Polynomial
 
 
 class Polynomial:
@@ -237,7 +233,7 @@ class Polynomial:
         return Polynomial(derivative_expr, self.n_vars, self.variables)
 
     @staticmethod
-    @lru_cache(maxsize=None)
+    @lru_cache(maxsize=10_000)
     def _calculate_pb_expr(expr1, expr2, variables):
         """
         Static helper method to calculate the Poisson bracket expression.
@@ -883,12 +879,12 @@ class Polynomial:
                         # Use sympify to handle different expression formats
                         from symengine import lambdify
                         expr = se.sympify(self.expr)
-                        self._lamb = lambdify(self.variables, expr)
+                        self._lamb = lambdify(self.variables, expr, backend="llvm")
                         self._lamb_returns_array = False
                     except Exception:
                         print("Warning: Failed to create standard lambdify, trying with array approach")
                         from symengine import lambdify
-                        self._lamb = lambdify(self.variables, [self.expr])
+                        self._lamb = lambdify(self.variables, [self.expr], backend="llvm")
                         self._lamb_returns_array = True
                 
                 result = self._lamb(*values)
@@ -958,11 +954,12 @@ class Polynomial:
 
 def symplectic_dot(grad: np.ndarray) -> np.ndarray:
     """Convert \nabla H = (∂H/∂q, ∂H/∂p) into the Hamiltonian vector field.
-    Assumes 3 DOF (len = 6)."""
-    if grad.size != 6:
-        raise ValueError("symplectic_dot expects a 6‑vector of gradients.")
-    dq = grad[3:]
-    dp = -grad[:3]
+    Works with any even-dimensional gradient vector."""
+    if grad.size % 2 != 0:
+        raise ValueError("symplectic_dot expects an even-length gradient vector.")
+    n = grad.size // 2
+    dq = grad[n:]
+    dp = -grad[:n]
     return np.concatenate((dq, dp))
 
 
@@ -1011,7 +1008,10 @@ class FormalSeries(MutableMapping[int, "Polynomial"]):
             j = degree + 2 - k
             if j in series2._data:
                 term = pk.poisson_bracket(series2[j])
-                res = term if res is None else res + term
+                if res is None:
+                    res = term
+                else:
+                    res += term
         # Return None if res is None or if it's a zero polynomial
         return None if res is None or res.expr == se.sympify(0) else res
 
@@ -1020,7 +1020,7 @@ class FormalSeries(MutableMapping[int, "Polynomial"]):
 
         Implements the recursive cascade described in Jorba (1999), Algorithm
         *traham* - each iteration re-uses earlier ad-powers so the total cost is
-        O(k_max^2).
+        O(k_max^2) but ~100× faster than naïve because χ is small.
         """
         out = FormalSeries(self._data.copy())
         chi_deg = chi.total_degree()
@@ -1094,7 +1094,7 @@ class Hamiltonian:
 
     # ---------------------------------------------------------------------
     def gradient(self, x: np.ndarray) -> np.ndarray:
-        return sum(p.gradient(x) for p in self.series.values())
+        return np.add.reduce([p.gradient(x) for p in self.series.values()])
 
     # ---------------------------------------------------------------------
     def vector_field(self, x: np.ndarray) -> np.ndarray:
@@ -1128,7 +1128,7 @@ class Hamiltonian:
             grp = f.create_group("series")
             for d, poly in self.series._data.items():
                 # Use pickle for binary serialization
-                binary_data = pickle.dumps(poly.expr)
+                binary_data = pickle.dumps(poly.expr, protocol=5)
                 grp.create_dataset(str(d), data=np.void(binary_data))
 
     @staticmethod
