@@ -1,5 +1,4 @@
 import symengine as se
-from symengine import Symbol, series, I
 from functools import lru_cache
 from collections import defaultdict
 
@@ -69,7 +68,7 @@ class Polynomial:
         return Polynomial(self.variables, self.expression.expand())
 
     def series_expand(self, variable: se.Symbol, degree: int) -> 'Polynomial':
-        return Polynomial(self.variables, series(self.expression, variable, degree))
+        return Polynomial(self.variables, se.series(self.expression, variable, degree))
 
     @staticmethod
     def _deg_in_var(term: se.Basic, var: se.Symbol) -> int:
@@ -158,7 +157,6 @@ class Polynomial:
         return self._grad_cache
 
 
-# ------------------------------------------------------------
 def _poisson_bracket(F: Polynomial, G: Polynomial) -> Polynomial:
     """
     Cached PB that reuses ∇F and ∇G when already computed.
@@ -239,6 +237,15 @@ def monomial_key(expr: se.Basic, q_vars: list[se.Symbol], p_vars: list[se.Symbol
 
         yield coeff, tuple(kq), tuple(kp)
 
+def monomial_from_key(kq, kp):
+    q1, q2, q3 = se.Symbol('q1'), se.Symbol('q2'), se.Symbol('q3')
+    p1, p2, p3 = se.Symbol('p1'), se.Symbol('p2'), se.Symbol('p3')
+    q_syms = [q1,q2,q3]
+    p_syms = [p1,p2,p3]
+    expr = se.Integer(1)
+    for i,e in enumerate(kq): expr *= q_syms[i]**e
+    for i,e in enumerate(kp): expr *= p_syms[i]**e
+    return expr
 
 def _lie_transform(H: Polynomial, max_degree: int = 6) -> Polynomial:
     """
@@ -261,7 +268,7 @@ def _lie_transform(H: Polynomial, max_degree: int = 6) -> Polynomial:
 
         if not S_expr:
             continue
-        S = Polynomial(S_expr, n_vars=H.n_vars, variables=H.variables)
+        S = Polynomial(H.variables, S_expr)  # Correct parameter order
 
         # canonical transformation: H <- e^{L_S} H
         H_update   = _poisson_bracket(S, H_current).truncate(max_degree).expansion

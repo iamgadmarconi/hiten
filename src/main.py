@@ -1,70 +1,63 @@
 import numpy as np
-import pytest
-import sys
-import os
-import glob
-from pathlib import Path
+import symengine as se
+import sympy as sp
 
 from system.base import System, systemConfig
 from system.body import Body
+from system.libration import L1Point
 
 from algorithms.propagators import propagate_crtbp
 
-def find_test_files():
-    """Find all test_*.py files in the project."""
-    # Get the directory of the main.py file
-    src_dir = Path(os.path.dirname(os.path.abspath(__file__)))
-    project_root = src_dir.parent
-    test_files = []
-    
-    # Walk the directory structure to find all test_*.py files
-    for root, _, _ in os.walk(src_dir):
-        root_path = Path(root)
-        # Find all files matching test_*.py pattern
-        matches = list(root_path.glob("test_*.py"))
-        for match in matches:
-            # Convert to string and make path relative to current directory
-            test_files.append(str(match.resolve()))
-    
-    return test_files
+from algorithms.center.factory import hamiltonian, to_complex_canonical
+from algorithms.center.core import _lie_transform
 
 def main():
-    """Run the tests using pytest.
-    
-    Usage:
-        python main.py               # Run all tests
-        python main.py polynomials   # Run only tests containing 'polynomials' in path
-        python main.py linalg        # Run only tests containing 'linalg' in path
-    """
-    args = sys.argv[1:]
-    
-    # Find all test files
-    all_test_files = find_test_files()
-    test_paths = []
-    
-    if not args:
-        # Run all tests
-        test_paths = all_test_files
-    else:
-        # Filter tests based on arguments
-        for arg in args:
-            matching_files = [f for f in all_test_files if arg.lower() in f.lower()]
-            test_paths.extend(matching_files)
-    
-    if not test_paths:
-        print("No test files found matching the criteria")
-        return
-    
-    # Print test files being run
-    print(f"Running {len(test_paths)} test files:")
-    for path in test_paths:
-        print(f"  - {os.path.relpath(path)}")
-    
-    # Add pytest options
-    pytest_args = ["-xvs"] + test_paths
-    
-    # Run the tests
-    pytest.main(pytest_args)
+    # 1. pick the correct system and expansion order ------------------------
+    mu_ES   = 3.00348959632e-6                      # Earth–Sun mass ratio
+    L1_ES    = L1Point(mu_ES)                       # Earth–Sun L1
+    degree = 5
+    H_full   = hamiltonian(L1_ES, max_degree=degree)   # Section 2 expansion
+
+    # 2. Lie–series normal form (your cached routine) -----------------------
+    H_nf     = _lie_transform(H_full, max_degree=degree)  # Section 3.1
+
+    # 3. restrict to the centre manifold  (q1 = p1 = 0) --------------------
+    q1, p1 = se.Symbol('q1'), se.Symbol('p1')  # the actual symbols
+    H_cm    = H_nf.expression.subs({q1: 0, p1: 0}).expand()
+
+    # 4. switch from complex (q2,p2,q3,p3) to real (Q2,P2,Q3,P3) -----------
+    q2, p2, q3, p3 = se.symbols('q2 p2 q3 p3')  # Get symbol objects
+    Q2, P2, Q3, P3 = se.symbols('Q2 P2 Q3 P3')  # real canonical pair
+    to_real = {
+        q2: (Q2 - se.I*P2)/se.sqrt(2),   p2: (Q2 + se.I*P2)/se.sqrt(2),
+        q3: (Q3 - se.I*P3)/se.sqrt(2),   p3: (Q3 + se.I*P3)/se.sqrt(2),
+    }
+
+    H_real = se.sympify(se.expand(H_cm.subs(to_real)).subs({se.I: 0}))
+
+    # 5. grab the coefficients exactly as Table 1 does ----------------------
+    def centre_coeffs(expr, max_deg):
+        coeffs = {}
+        Q2, P2, Q3, P3 = sp.symbols('Q2 P2 Q3 P3')    # the same names
+
+        for term in expr.as_ordered_terms():          # SymPy method
+            c, monom = term.as_coeff_Mul()
+            powers   = monom.as_powers_dict()
+
+            k1 = powers.get(Q2, 0)
+            k2 = powers.get(P2, 0)
+            k3 = powers.get(Q3, 0)
+            k4 = powers.get(P3, 0)
+            tot = k1 + k2 + k3 + k4
+
+            if 0 < tot <= max_deg:
+                coeffs[(k1, k2, k3, k4)] = float(c)
+        return coeffs
+
+    tbl = centre_coeffs(H_real, max_deg=degree)
+    for k, h in sorted(tbl.items()):
+        print(f"{k}: {h:+.8e}")
+
 
 if __name__ == "__main__":
     main()
