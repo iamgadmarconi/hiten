@@ -1,8 +1,10 @@
 import pytest
 import numpy as np
 import symengine as se
+from collections import defaultdict
 
-from algorithms.center.core import Polynomial, _poisson_bracket
+
+from algorithms.center.core import Polynomial, _poisson_bracket, _split_coeff_and_factors, _update_by_deg
 
 
 # --- Pytest Fixtures ---
@@ -73,6 +75,10 @@ def P_p3(vars):
 @pytest.fixture
 def P_qp_sum(P_q1, P_p1):
     return P_q1 + P_p1
+
+@pytest.fixture
+def P_complex(P_q1, P_p1, P_q2, P_p2, P_q3, P_p3):
+    return (3*P_q1**2*P_p1 + 2*P_q2*P_p2 - 5* P_q3*P_p3**3).expansion 
 
 # --- Test Functions ---
 
@@ -277,4 +283,17 @@ def test_evaluate(P_zero, P_one, P_q1, P_p1, P_q2, P_q3, P_p2, P_p3):
     f = P_q1 * P_q2 * P_p1 + P_p1 * P_p2 - P_q3 * P_p3 ** 3
     assert f.evaluate({q1: 1, q2: 2, q3: 3, p1: 4, p2: 5, p3: 6}) == 1*2*4 + 4*5 - 3*6**3
 
+def test_split_coeff_and_factors(P_zero, P_one, P_q1, P_p1, P_q2, P_q3, P_p2, P_p3, P_complex):
+    f = P_complex
+    terms = f.expression.args if f.expression.is_Add else (f.expression,)
+    #print(terms)
+    coeff, factors = _split_coeff_and_factors(f.expression)
+    #print(coeff, factors)
+
+def test_update_by_deg(P_zero, P_one, P_q1, P_p1, P_q2, P_q3, P_p2, P_p3, P_complex):
+    f = P_complex
+    print(f.expression)
+    by_deg = defaultdict(list)
+    _update_by_deg(by_deg, f)
+    print(by_deg)
 
