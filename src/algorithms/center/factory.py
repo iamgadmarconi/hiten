@@ -12,7 +12,11 @@ px, py, pz = se.symbols('px py pz')
 
 def _build_T_polynomials(N: int) -> list[se.Basic]:
     """Return [T0 … TN] using the Legendre recurrence (paper eq. 6)."""
-
+    if N == 0:
+        return [se.Integer(1)]
+    if N == 1:
+        return [se.Integer(1), x]
+        
     T = [se.Integer(1), x]          # T0, T1
     for n in range(2, N + 1):
         n_ = se.Integer(n)
@@ -43,45 +47,68 @@ def hamiltonian(point: LibrationPoint, max_degree: int = 6) -> Polynomial:
     vars_phys = [x, y, z, px, py, pz]
     return Polynomial(vars_phys, H_phys)
 
+
 def to_complex_canonical(point: LibrationPoint,
-                        H_phys: Polynomial) -> Polynomial:
+                         H_phys: Polynomial) -> Polynomial:
     """
-    Apply the linear symplectic matrix C (eq. 10) and the complex map (eq. 12)
-    so that H₂ appears as λ₁q₁p₁ + iω₁q₂p₂ + iω₂q₃p₃.
+    Express the physical CR3BP Hamiltonian around a collinear point in the
+    complex canonical variables (q1,q2,q3,p1,p2,p3) used for the centre-
+    manifold normal-form computation (Jorba & Masdemont, 1999).
 
-    Resulting variables order: q1,q2,q3,p1,p2,p3  (all SymEngine symbols).
+    Parameters
+    ----------
+    point : LibrationPoint
+        Must implement `normal_form_transform()` → (C, Cinv) with C \subset \mathbb{R}^{6 \times 6}.
+    H_phys : Polynomial
+        Hamiltonian in the translated/scaled Cartesian variables
+        (x, y, z, px, py, pz).
+
+    Returns
+    -------
+    Polynomial
+        Same Hamiltonian written in (q1,q2,q3,p1,p2,p3).
     """
-    # 3.1 symbols
-    q1,q2,q3,p1,p2,p3 = se.symbols('q1 q2 q3 p1 p2 p3')
 
-    # 3.2 real → complex map (paper eq. 12)
-    subs_complex = {
-        x: q1,
-        y: (q2 + se.I*p2)/se.sqrt(2),
-        z: (q3 + se.I*p3)/se.sqrt(2),
-        px: p1,
-        py: (se.I*q2 + p2)/se.sqrt(2),
-        pz: (se.I*q3 + p3)/se.sqrt(2),
+    # ------------------------------------------------------------------
+    # 0. Symbols
+    # ------------------------------------------------------------------
+    x, y, z  = se.symbols('x y z')
+    px, py, pz = se.symbols('px py pz')
+    q1, q2, q3, p1, p2, p3 = se.symbols('q1 q2 q3 p1 p2 p3')
+
+    # ------------------------------------------------------------------
+    # 1. Real normal-form change  Z_old = C^{-1} · Z_new
+    # ------------------------------------------------------------------
+    _, Cinv_num = point.normal_form_transform()       # numpy array
+    Cinv = se.Matrix(Cinv_num.tolist())               # to SymEngine
+
+    xt, yt, zt, pxt, pyt, pzt = se.symbols('xt yt zt pxt pyt pzt')
+    Z_tilde   = se.Matrix([xt, yt, zt, pxt, pyt, pzt])
+    Z_old_exp = (Cinv * Z_tilde).applyfunc(se.expand) # list of 6 expressions
+
+    # ------------------------------------------------------------------
+    # 2. Complex canonical substitution  (Eq. 12)
+    # ------------------------------------------------------------------
+    sqrt2 = se.sqrt(2)
+    complex_subs = {
+        xt : q1,
+        pxt: p1,
+        yt : (q2 + se.I*p2) / sqrt2,
+        pyt: (se.I*q2 + p2) / sqrt2,
+        zt : (q3 + se.I*p3) / sqrt2,
+        pzt: (se.I*q3 + p3) / sqrt2,
     }
 
-    # 3.3 linear normal-form matrix C
-    C, Cinv = point.normal_form_transform()
-    # build a SymEngine matrix for substitution:   Z = C ⋅ (x,y,z,px,py,pz)^T
-    v_old = se.Matrix([x, y, z, px, py, pz])
-    v_new = Cinv @ v_old      # numeric for given μ
-    
-    # Convert each NumPy array element to a SymEngine expression
-    subs_C = {}
-    for i, old_var in enumerate(v_old):
-        # Handle both NumPy array and other cases
-        if isinstance(v_new[i], np.ndarray):
-            # Convert NumPy array element to string, then to SymEngine expression
-            val = se.sympify(str(v_new[i].item()))
-        else:
-            val = se.sympify(str(v_new[i]))
-        subs_C[old_var] = se.expand(val)
+    # ------------------------------------------------------------------
+    # 3. Build full mapping  (x,y,z,px,py,pz) → expressions(q,p)
+    # ------------------------------------------------------------------
+    subs_dict = {
+        old_sym : expr.subs(complex_subs)
+        for old_sym, expr in zip((x, y, z, px, py, pz), Z_old_exp)
+    }
 
-    # apply C first, then complexification
-    expr = H_phys.expression.subs(subs_C).subs(subs_complex).expand()
-
-    return Polynomial([q1,q2,q3,p1,p2,p3], expr)
+    # ------------------------------------------------------------------
+    # 4. Apply and wrap up
+    # ------------------------------------------------------------------
+    H_cc_expr = se.expand(H_phys.expression.subs(subs_dict))
+    return Polynomial([q1, q2, q3, p1, p2, p3], H_cc_expr)

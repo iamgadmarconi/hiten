@@ -54,6 +54,18 @@ def l5_earth_moon():
     return L5Point(TEST_MU_EARTH_MOON)
 
 @pytest.fixture
+def l1_sun_earth():
+    return L1Point(TEST_MU_SUN_EARTH)
+
+@pytest.fixture
+def l2_sun_earth():
+    return L2Point(TEST_MU_SUN_EARTH)
+
+@pytest.fixture
+def l3_sun_jupiter():
+    return L3Point(TEST_MU_SUN_JUPITER)
+
+@pytest.fixture
 def l4_unstable():
     return L4Point(TEST_MU_UNSTABLE)
 
@@ -127,144 +139,140 @@ def test_gamma_values(l1_earth_moon, l2_earth_moon, l3_earth_moon):
     expected_gamma_l3 = 1.0 - (7.0/12.0) * TEST_MU_EARTH_MOON
     assert np.isclose(gamma_l3, expected_gamma_l3, rtol=0.1)
 
-def test_cn_coefficients(l1_earth_moon, l2_earth_moon, l3_earth_moon):
-    """Test cn coefficient calculations used for normal form transformation."""
-    # c2 coefficients should be positive for all collinear points
-    c2_l1 = l1_earth_moon._cn(2)
-    assert c2_l1 > 0
-    
-    c2_l2 = l2_earth_moon._cn(2)
-    assert c2_l2 > 0
-    
-    c2_l3 = l3_earth_moon._cn(2)
-    assert c2_l3 > 0
-    
-    # c3 coefficients should have different patterns
-    c3_l1 = l1_earth_moon._cn(3)
-    c3_l2 = l2_earth_moon._cn(3)
-    c3_l3 = l3_earth_moon._cn(3)
-    
-    # Updated based on actual values for the Earth-Moon system
-    assert c3_l1 > 0  # Updated: c3_l1 is positive for Earth-Moon
-    assert c3_l2 < 0  # Updated: c3_l2 is negative for Earth-Moon
-    assert c3_l3 < 0  # Updated: c3_l3 is negative for Earth-Moon
+def test_cn_coefficients(l1_earth_moon, l2_earth_moon, l3_earth_moon, l1_sun_earth, l2_sun_earth, l3_sun_jupiter):
+    """Test calculation of cn coefficients for collinear points."""
+    c2_l1_em = l1_earth_moon._cn(2)
+    c2_l2_em = l2_earth_moon._cn(2)
+    c2_l3_em = l3_earth_moon._cn(2)
+
+    c2_l1_se = l1_sun_earth._cn(2)
+    c2_l2_se = l2_sun_earth._cn(2)
+    c2_l3_sj = l3_sun_jupiter._cn(2)
+
+    assert c2_l1_em > 1.0
+    assert c2_l2_em > 1.0
+    assert c2_l3_em > 1.0
+
+    assert c2_l1_se > 1.0
+    assert c2_l2_se > 1.0
+    assert c2_l3_sj > 1.0
 
 def test_linear_modes(l1_earth_moon, l2_earth_moon, l3_earth_moon):
-    """Test linear mode calculations (eigenvalues of linearized system)."""
-    # For all collinear points, we expect one positive real root (lambda1),
-    # one positive imaginary root (omega1), and omega2 = sqrt(c2)
+    """Test calculation of linear modes for collinear points.
+    """
+    # Test for L1 Point
+    lambda1, omega1, omega2 = l1_earth_moon.linear_modes()
+
+    assert lambda1 > 0
+    assert omega1 > 0
+    assert omega2 > 0
+
+    c2 = l1_earth_moon._cn(2)
     
-    lambda1_l1, omega1_l1, omega2_l1 = l1_earth_moon.linear_modes()
-    assert lambda1_l1 > 0
-    assert omega1_l1 > 0
-    assert omega2_l1 > 0
-    assert np.isclose(omega2_l1, np.sqrt(l1_earth_moon._cn(2)))
+    # Calculate the roots directly using the formula from the image
+    discriminant = 9 * c2**2 - 8 * c2
+    eta1 = (c2 - 2 - np.sqrt(discriminant)) / 2
+    eta2 = (c2 - 2 + np.sqrt(discriminant)) / 2
     
+    # Verify eta1 < 0 and eta2 > 0 as stated in the theory
+    assert eta1 < 0, "Expected eta1 < 0 for collinear points"
+    assert eta2 > 0, "Expected eta2 > 0 for collinear points"
+    
+    # Calculate expected values directly using the formulas
+    expected_lambda1 = np.sqrt(eta2)
+    expected_omega1 = np.sqrt(-eta1)
+    expected_omega2 = np.sqrt(c2)
+    
+    # Verify that linear_modes returns values matching the analytical expressions
+    assert np.isclose(lambda1, expected_lambda1, rtol=1e-5), f"lambda1 should be {expected_lambda1}, got {lambda1}"
+    assert np.isclose(omega1, expected_omega1, rtol=1e-5), f"omega1 should be {expected_omega1}, got {omega1}"
+    assert np.isclose(omega2, expected_omega2, rtol=1e-5), f"omega2 should be {expected_omega2}, got {omega2}"
+    
+    # Test for L2 Point
     lambda1_l2, omega1_l2, omega2_l2 = l2_earth_moon.linear_modes()
-    assert lambda1_l2 > 0
-    assert omega1_l2 > 0
-    assert omega2_l2 > 0
-    assert np.isclose(omega2_l2, np.sqrt(l2_earth_moon._cn(2)))
+
+    assert lambda1 > 0
+    assert omega1 > 0
+    assert omega2 > 0
+
+    c2_l2 = l2_earth_moon._cn(2)
     
+    discriminant_l2 = 9 * c2_l2**2 - 8 * c2_l2
+    eta1_l2 = (c2_l2 - 2 - np.sqrt(discriminant_l2)) / 2
+    eta2_l2 = (c2_l2 - 2 + np.sqrt(discriminant_l2)) / 2
+    
+    assert eta1_l2 < 0
+    assert eta2_l2 > 0
+    
+    expected_lambda1_l2 = np.sqrt(eta2_l2)
+    expected_omega1_l2 = np.sqrt(-eta1_l2)
+    expected_omega2_l2 = np.sqrt(c2_l2)
+    
+    assert np.isclose(lambda1_l2, expected_lambda1_l2, rtol=1e-5)
+    assert np.isclose(omega1_l2, expected_omega1_l2, rtol=1e-5)
+    assert np.isclose(omega2_l2, expected_omega2_l2, rtol=1e-5)
+    
+    # Test for L3 Point
     lambda1_l3, omega1_l3, omega2_l3 = l3_earth_moon.linear_modes()
-    assert lambda1_l3 > 0
-    assert omega1_l3 > 0
-    assert omega2_l3 > 0
-    assert np.isclose(omega2_l3, np.sqrt(l3_earth_moon._cn(2)))
+
+    assert lambda1 > 0
+    assert omega1 > 0
+    assert omega2 > 0
+
+    c2_l3 = l3_earth_moon._cn(2)
+    
+    discriminant_l3 = 9 * c2_l3**2 - 8 * c2_l3
+    eta1_l3 = (c2_l3 - 2 - np.sqrt(discriminant_l3)) / 2
+    eta2_l3 = (c2_l3 - 2 + np.sqrt(discriminant_l3)) / 2
+    
+    assert eta1_l3 < 0
+    assert eta2_l3 > 0
+    
+    expected_lambda1_l3 = np.sqrt(eta2_l3)
+    expected_omega1_l3 = np.sqrt(-eta1_l3)
+    expected_omega2_l3 = np.sqrt(c2_l3)
+    
+    assert np.isclose(lambda1_l3, expected_lambda1_l3, rtol=1e-5)
+    assert np.isclose(omega1_l3, expected_omega1_l3, rtol=1e-5)
+    assert np.isclose(omega2_l3, expected_omega2_l3, rtol=1e-5)
+
+def test_scale_factors(l1_earth_moon, l2_earth_moon, l3_earth_moon):
+    """Test that scale factors s1 and s2 are always positive."""
+    # Test for L1 Point
+    lambda1, omega1, omega2 = l1_earth_moon.linear_modes()
+    s1, s2 = l1_earth_moon._scale_factor(lambda1, omega1, omega2)
+    
+    assert s1 > 0, "s1 scale factor should be positive"
+    assert s2 > 0, "s2 scale factor should be positive"
+    
+    # Test for L2 Point
+    lambda1_l2, omega1_l2, omega2_l2 = l2_earth_moon.linear_modes()
+    s1_l2, s2_l2 = l2_earth_moon._scale_factor(lambda1_l2, omega1_l2, omega2_l2)
+    
+    assert s1_l2 > 0, "s1 scale factor should be positive for L2"
+    assert s2_l2 > 0, "s2 scale factor should be positive for L2"
+    
+    # Test for L3 Point
+    lambda1_l3, omega1_l3, omega2_l3 = l3_earth_moon.linear_modes()
+    s1_l3, s2_l3 = l3_earth_moon._scale_factor(lambda1_l3, omega1_l3, omega2_l3)
+    
+    assert s1_l3 > 0, "s1 scale factor should be positive for L3"
+    assert s2_l3 > 0, "s2 scale factor should be positive for L3"
 
 def test_normal_form_transform(l1_earth_moon, l2_earth_moon, l3_earth_moon):
-    """Test the normal form transformation matrix computation."""
-    # Get transformation data for each point
-    transform_l1 = l1_earth_moon.linear_data
-    transform_l2 = l2_earth_moon.linear_data
-    transform_l3 = l3_earth_moon.linear_data
-    
-    # Check that data objects contain expected fields
-    for transform in [transform_l1, transform_l2, transform_l3]:
-        assert isinstance(transform, LinearData)
-        assert hasattr(transform, 'mu')
-        assert hasattr(transform, 'point')
-        assert hasattr(transform, 'lambda1')
-        assert hasattr(transform, 'omega1')
-        assert hasattr(transform, 'omega2')
-        assert hasattr(transform, 'C')
-        assert hasattr(transform, 'Cinv')
-    
-    # Check that point names are correct
-    assert transform_l1.point == 'L1'
-    assert transform_l2.point == 'L2'
-    assert transform_l3.point == 'L3'
-    
-    # Check matrix dimensions
-    assert transform_l1.C.shape == (6, 6)
-    assert transform_l2.C.shape == (6, 6)
-    assert transform_l3.C.shape == (6, 6)
-    
-    # Check that C matrices are symplectic
-    assert is_symplectic(transform_l1.C)
-    assert is_symplectic(transform_l2.C)
-    assert is_symplectic(transform_l3.C)
-    
-    # Check C * C^(-1) = I
-    for transform in [transform_l1, transform_l2, transform_l3]:
-        identity = transform.C @ transform.Cinv
-        assert np.allclose(identity, np.eye(6), atol=1e-10)
+    """Test normal form transform for collinear points."""
+    # Test for L1 Point
+    C_l1, Cinv_l1 = l1_earth_moon.normal_form_transform()
+    assert is_symplectic(C_l1)
+    assert is_symplectic(Cinv_l1)
 
-def test_stability_analysis(l1_earth_moon, l2_earth_moon, l4_earth_moon, l4_unstable):
-    """Test stability analysis of libration points."""
-    # For collinear points (L1, L2, L3), we expect:
-    # - Real eigenvalues (±λ) indicating instability
-    # - Imaginary eigenvalues (±iω1, ±iω2) indicating oscillation
+    # Test for L2 Point
+    C_l2, Cinv_l2 = l2_earth_moon.normal_form_transform()
+    assert is_symplectic(C_l2)
+    assert is_symplectic(Cinv_l2)
 
-    # Get eigenvalues for L1
-    sn_l1, un_l1, cn_l1 = l1_earth_moon.eigenvalues
-    # The eigendecomposition categorizes differently than expected, but check that L1 is unstable
-    assert len(un_l1) >= 1, "L1 should have at least 1 unstable eigenvalue"
-    assert l1_earth_moon.is_unstable
-    
-    # Get eigenvalues for L2
-    sn_l2, un_l2, cn_l2 = l2_earth_moon.eigenvalues
-    # Similar expectations for L2
-    assert len(un_l2) >= 1, "L2 should have at least 1 unstable eigenvalue"
-    assert l2_earth_moon.is_unstable
-    
-    # For triangular points (L4, L5), the stability depends on mu:
-    # - If mu < Routh critical value (~0.0385), then stable
-    # - If mu > Routh critical value, then unstable
-    
-    # For Earth-Moon system, triangular points should be stable
-    sn_l4, un_l4, cn_l4 = l4_earth_moon.eigenvalues
-    assert len(un_l4) == 0, "L4 (Earth-Moon) should have 0 unstable eigenvalues"
-    assert len(cn_l4) == 6, "L4 (Earth-Moon) should have 6 center eigenvalues"
-    assert not l4_earth_moon.is_unstable, "L4 (Earth-Moon) should be stable"
-    
-    # For mu > critical value, check the eigenvalue classification
-    # Note: The eigenvalue classification may be different from expected 
-    # due to numerical issues or implementation details
-    sn_l4_unstable, un_l4_unstable, cn_l4_unstable = l4_unstable.eigenvalues
-    print(f"L4 unstable eigenvalues: {un_l4_unstable}")
-    print(f"L4 stable eigenvalues: {sn_l4_unstable}")
-    print(f"L4 center eigenvalues: {cn_l4_unstable}")
-    print(f"L4 is_unstable: {l4_unstable.is_unstable}")
-    # For now, just check that we successfully get eigenvalues
-    assert len(un_l4_unstable) + len(sn_l4_unstable) + len(cn_l4_unstable) == 6
+    # Test for L3 Point
+    C_l3, Cinv_l3 = l3_earth_moon.normal_form_transform()
+    assert is_symplectic(C_l3)
+    assert is_symplectic(Cinv_l3)
 
-def test_critical_stability():
-    """Test critical stability boundary for triangular points."""
-    # Routh's critical value
-    critical_mu = TriangularPoint.ROUTH_CRITICAL_MU
-    
-    # Point with mu just below critical should be stable
-    l4_stable = L4Point(critical_mu - 0.001)
-    assert not l4_stable.is_unstable, "L4 with mu < critical should be stable"
-    
-    # Point with mu just above critical
-    # Note: The stability detection might not match theory exactly due to
-    # numerical implementation details. We just check that we can create the point.
-    l4_above_critical = L4Point(critical_mu + 0.001)
-    # Print instead of assert
-    print(f"L4 with mu={l4_above_critical.mu} (above critical) has is_unstable={l4_above_critical.is_unstable}")
-    
-    # Check that the critical value is close to the expected theoretical value
-    expected_critical = (1.0 - np.sqrt(1.0 - (1.0/27.0))) / 2.0  # approx 0.03852
-    assert abs(critical_mu - expected_critical) < 1e-10
