@@ -33,8 +33,12 @@ def main():
         q3: (Q3 - se.I*P3)/se.sqrt(2),   p3: (Q3 + se.I*P3)/se.sqrt(2),
     }
 
-    H_real = se.sympify(se.expand(H_cm.subs(to_real)).subs({se.I: 0}))
+    H_se = se.expand(H_cm.subs(to_real)).subs({se.I: 0})
+    # this is still SymEngine:
+    H_real_se = se.sympify(H_se)
 
+    # now convert to SymPy:
+    H_real = sp.sympify(str(H_real_se))
     # 5. grab the coefficients exactly as Table 1 does ----------------------
     def centre_coeffs(expr, max_deg):
         coeffs = {}
@@ -55,6 +59,7 @@ def main():
         return coeffs
 
     tbl = centre_coeffs(H_real, max_deg=degree)
+    print(tbl)
     for k, h in sorted(tbl.items()):
         print(f"{k}: {h:+.8e}")
 
