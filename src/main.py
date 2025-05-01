@@ -2,19 +2,15 @@ import numpy as np
 import symengine as se
 import sympy as sp
 
-from system.base import System, systemConfig
-from system.body import Body
 from system.libration import L1Point
-
-from algorithms.propagators import propagate_crtbp
-
 from algorithms.center.factory import hamiltonian, to_complex_canonical
 from algorithms.center.core import _lie_transform
+
 
 def main():
     mu_ES = 3.00348959632e-6
     L1_ES = L1Point(mu_ES)
-    degree = 5
+    degree = 6
 
     # 1. full RTBP series in (q,p)
     H_full = hamiltonian(L1_ES, max_degree=degree)

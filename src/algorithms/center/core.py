@@ -159,7 +159,7 @@ class Polynomial:
 
 def _poisson_bracket(F: Polynomial, G: Polynomial) -> Polynomial:
     """
-    Cached PB that reuses ∇F and ∇G when already computed.
+    Cached PB that reuses nabla_F and nabla_G when already computed.
     """
     dF_dq, dF_dp = F._gradient()
     dG_dq, dG_dp = G._gradient()
