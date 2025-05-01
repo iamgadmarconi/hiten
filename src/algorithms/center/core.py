@@ -12,6 +12,8 @@ class Polynomial:
     def __init__(self, variables: list[se.Symbol], expression: se.Basic):
         self.variables = variables
         self.expression = expression
+        self._expansion = None
+        self._grad_cache = None
 
     def __str__(self):
         return str(self.expression)
@@ -55,6 +57,20 @@ class Polynomial:
     def __hash__(self):
         return hash(self.expression)
 
+    @property
+    def expansion(self) -> 'Polynomial':
+        if not self._expansion:
+            expanded = self._expand()
+            expanded._expansion = expanded
+            self._expansion = expanded
+        return self._expansion
+
+    def _expand(self) -> 'Polynomial':
+        return Polynomial(self.variables, self.expression.expand())
+
+    def series_expand(self, variable: se.Symbol, degree: int) -> 'Polynomial':
+        return Polynomial(self.variables, series(self.expression, variable, degree))
+
     @staticmethod
     def _deg_in_var(term: se.Basic, var: se.Symbol) -> int:
         """Degree of *var* in a single monomial *term* (term must NOT be an Add)."""
@@ -80,7 +96,7 @@ class Polynomial:
 
     def variable_degree(self, var: se.Symbol) -> int:
         """max_k  such that  var**k  divides some term."""
-        expr = self.expression.expand()
+        expr = self.expansion.expression
         if expr.is_Add:
             return max(self._deg_in_var(t, var) for t in expr.args)
         return self._deg_in_var(expr, var)
@@ -89,22 +105,35 @@ class Polynomial:
         """
         Maximum total degree (sum of exponents) among all monomials.
         """
-        expr = self.expression.expand()
+        expr = self.expansion.expression
         if expr.is_Add:
             return max(self._total_deg_term(t, self.variables) for t in expr.args)
         return self._total_deg_term(expr, self.variables)
 
-    def truncate(self, var: se.Symbol, max_deg: int) -> "Polynomial":
+    def truncate_by_var(self, var: se.Symbol, max_deg: int) -> "Polynomial":
         """
         Keep only terms where degree(var) <= max_deg.
         Useful when you reduce the Hamiltonian order-by-order.
         """
-        expr = self.expression.expand()
+        expr = self.expansion.expression
         if expr.is_Add:
             kept = [t for t in expr.args if self._deg_in_var(t, var) <= max_deg]
             new_expr = se.Add(*kept) if kept else se.Integer(0)
         else:
             new_expr = expr if self._deg_in_var(expr, var) <= max_deg else se.Integer(0)
+        return Polynomial(self.variables, new_expr)
+
+    def truncate(self, max_deg: int) -> "Polynomial":
+        """
+        Remove every monomial whose **total degree** exceeds `max_deg`.
+        """
+        expr = self.expansion.expression
+        if expr.is_Add:
+            kept = [t for t in expr.args
+                    if self._total_deg_term(t, self.variables) <= max_deg]
+            new_expr = se.Add(*kept) if kept else se.Integer(0)
+        else:
+            new_expr = expr if self._total_deg_term(expr, self.variables) <= max_deg else se.Integer(0)
         return Polynomial(self.variables, new_expr)
 
     def evaluate(self, subs_dict: dict[se.Symbol, se.Basic]) -> se.Basic:
@@ -113,37 +142,34 @@ class Polynomial:
     def derivative(self, variable: se.Symbol) -> 'Polynomial':
         return Polynomial(self.variables, self.expression.diff(variable))
 
-    def expand(self) -> 'Polynomial':
-        return Polynomial(self.variables, self.expression.expand())
+    def _gradient(self):
+        """
+        Returns (dF/dq, dF/dp) lists.  Computed once, reused by every
+        Poisson bracket that involves this Polynomial.
+        """
+        if self._grad_cache is None:
+            n_vars = len(self.variables)
+            n_dof = n_vars // 2
+            q_syms = self.variables[::2]
+            p_syms = self.variables[1::2]
+            dF_dq = [self.expression.diff(q) for q in q_syms]
+            dF_dp = [self.expression.diff(p) for p in p_syms]
+            self._grad_cache = (dF_dq, dF_dp)
+        return self._grad_cache
 
-    def series_expand(self, variable: se.Symbol, degree: int) -> 'Polynomial':
-        return Polynomial(self.variables, series(self.expression, variable, degree))
 
+# ------------------------------------------------------------
+def _poisson_bracket(F: Polynomial, G: Polynomial) -> Polynomial:
+    """
+    Cached PB that reuses ∇F and ∇G when already computed.
+    """
+    dF_dq, dF_dp = F._gradient()
+    dG_dq, dG_dp = G._gradient()
 
-@lru_cache(maxsize=10000)
-def _poisson_bracket(poly1: Polynomial, poly2: Polynomial, variables: tuple[se.Symbol, ...]) -> Polynomial:
-        n_vars = len(variables)
-        num_dof = n_vars // 2
-        result_expr = se.sympify(0)  # Start with zero expression
+    expr = sum(dF_dq[i] * dG_dp[i] - dF_dp[i] * dG_dq[i]
+               for i in range(len(dF_dq)))
+    return Polynomial(F.variables, expr)
 
-        for i in range(num_dof):
-            qi_index = 2 * i
-            pi_index = 2 * i + 1
-            qi = variables[qi_index]
-            pi = variables[pi_index]
-
-            # Compute partial derivatives
-            d_expr1_dqi = poly1.derivative(qi)
-            d_expr2_dpi = poly2.derivative(pi)
-            term1 = d_expr1_dqi.expression * d_expr2_dpi.expression
-
-            d_expr1_dpi = poly1.derivative(pi)
-            d_expr2_dqi = poly2.derivative(qi)
-            term2 = d_expr1_dpi.expression * d_expr2_dqi.expression
-
-            result_expr = result_expr + term1 - term2
-
-        return Polynomial(list(variables), result_expr)
 
 def _split_coeff_and_factors(term: se.Basic):
     """
@@ -164,25 +190,32 @@ def _split_coeff_and_factors(term: se.Basic):
                 symbolic.append(fac)
         return coeff, tuple(symbolic)
 
-    # every other object counts as “symbolic” factor with coeff 1
+    # every other object counts as "symbolic" factor with coeff 1
     return se.Integer(1), (term,)
-# -------------------------------------------------------------------------
 
 
-def monomial_key(expr: se.Basic,
-                 q_vars: list[se.Symbol],
-                 p_vars: list[se.Symbol]):
+def _update_by_deg(by_deg: dict[int, list], poly: Polynomial) -> None:
+    """
+    Insert all monomials of `poly` (already expanded) into the bucket map.
+    """
+    n_dof  = len(poly.variables) // 2
+    q_vars = poly.variables[:n_dof]
+    p_vars = poly.variables[n_dof:]
+
+    for coeff, kq, kp in monomial_key(poly.expression, q_vars, p_vars):
+        deg = sum(kq) + sum(kp)
+        by_deg[deg].append((coeff, kq, kp))
+
+
+def monomial_key(expr: se.Basic, q_vars: list[se.Symbol], p_vars: list[se.Symbol]):
     """
     Yield triples (coeff , kq , kp) for every monomial in *expr*.
-
-    * q_vars – ordered list  [q1,q2,q3]
-    * p_vars – ordered list  [p1,p2,p3]
+    expr is assumed to be already expanded
     """
     n = len(q_vars)
     var2idx = {v: i            for i, v in enumerate(q_vars)}
     var2idx.update({v: i - n   for i, v in enumerate(p_vars, n)})
 
-    expr = expr.expand()
     terms = expr.args if expr.is_Add else (expr,)
 
     for term in terms:
@@ -206,93 +239,35 @@ def monomial_key(expr: se.Basic,
 
         yield coeff, tuple(kq), tuple(kp)
 
-@lru_cache(maxsize=10000)
-def _lie_transform(H: Polynomial, max_degree: int) -> Polynomial:
+
+def _lie_transform(H: Polynomial, max_degree: int = 6) -> Polynomial:
     """
-    Lie-series reduction of `H` up to total order `max_degree`.
-    Assumes H.variables == [q1,q2,q3,p1,p2,p3] in that order and that
-    H2 is already diagonal (eq. 13 in the paper).
+    Normal-form Lie series up to 'max_degree' with incremental caches.
     """
-    q1,q2,q3,p1,p2,p3 = H.variables
-    lam = se.Symbol('lam1')
-    w1  = se.Symbol('w1')
-    w2  = se.Symbol('w2')
-    eta = (lam, se.I*w1, se.I*w2)
+    H_current = H.expansion
+    by_deg = defaultdict(list)
+    _update_by_deg(by_deg, H_current)   # ← build once
 
-    # split H into dict degree -> Expr
-    by_deg = defaultdict(lambda: se.Integer(0))
-    for coeff, kq, kp in monomial_key(H.expression,
-                                        q_vars=[q1,q2,q3],
-                                        p_vars=[p1,p2,p3]):
-        deg = sum(kq)+sum(kp)
-        by_deg[deg] += coeff * (
-            q1**kq[0]*q2**kq[1]*q3**kq[2] *
-            p1**kp[0]*p2**kp[1]*p3**kp[2])
-
-    H_current = H.expression
-    for n in range(3, max_degree+1):
-        Hn = by_deg[n]
-        if Hn == 0:
-            continue
-
-        # --- build G_n
-        G_terms = []
-        for coeff, kq, kp in monomial_key(H_current,
-                                        q_vars=[q1,q2,q3],
-                                        p_vars=[p1,p2,p3]):
-            if kq[0] != kp[0]:          # elimination condition
-                denom = sum((kp[i]-kq[i])*eta[i] for i in range(3))
-                G_terms.append((-coeff/denom) *
-                                q1**kq[0]*q2**kq[1]*q3**kq[2] *
-                                p1**kp[0]*p2**kp[1]*p3**kp[2])
+    # start at order 3 (quadratic part already normalised)
+    for n in range(3, max_degree + 1):
+        G_terms = by_deg.get(n, [])     # re-use cache, no rebuild
         if not G_terms:
             continue
-        G_n = se.Add(*G_terms)
-        Gpoly = Polynomial(H.variables, G_n)
 
-        # --- Lie transform truncated to order max_degree
-        def truncate(expr):
-            out = se.Integer(0)
-            for c, kq, kp in monomial_key(expr,
-                                        q_vars=[q1,q2,q3],
-                                        p_vars=[p1,p2,p3]):
-                if sum(kq)+sum(kp) <= max_degree:
-                    out += c*(q1**kq[0]*q2**kq[1]*q3**kq[2] *
-                                p1**kp[0]*p2**kp[1]*p3**kp[2])
-            return out
+        # assemble S_n ---------------------------------------------------
+        S_expr = sum(coeff * monomial_from_key(kq, kp)
+                     for coeff, kq, kp in G_terms
+                     if kq[0] != kp[0])           # kill mixed hyperbolic terms
 
-        L_G = _poisson_bracket  # cached PB you already wrote
+        if not S_expr:
+            continue
+        S = Polynomial(S_expr, n_vars=H.n_vars, variables=H.variables)
 
-        delta = L_G(Polynomial(H.variables, H_current),
-                    Gpoly, tuple(H.variables)).expression
-        # second-order commutator is already ≥ n+1 so enough to add first term
-        H_current = truncate(H_current + delta)
+        # canonical transformation: H <- e^{L_S} H
+        H_update   = _poisson_bracket(S, H_current).truncate(max_degree).expansion
+        H_current  = (H_current + H_update).truncate(max_degree).expansion
 
-        # update degree dictionary for next rounds
-        by_deg.clear()
-        for c, kq, kp in monomial_key(H_current,
-                                        q_vars=[q1,q2,q3],
-                                        p_vars=[p1,p2,p3]):
-            by_deg[sum(kq)+sum(kp)] += c*(q1**kq[0]*q2**kq[1]*q3**kq[2] *
-                                            p1**kp[0]*p2**kp[1]*p3**kp[2])
+        # only *new* terms need inserting into the cache
+        _update_by_deg(by_deg, H_update)
 
-    return Polynomial(H.variables, H_current)
-
-
-
-q1 = Symbol('q1')
-q2 = Symbol('q2')
-q3 = Symbol('q3')
-p1 = Symbol('p1')
-p2 = Symbol('p2')
-p3 = Symbol('p3')
-l1 = Symbol('l1')
-l2 = Symbol('l2')
-w1 = Symbol('w1')
-w2 = Symbol('w2')
-
-H_total = l1 * q1 * p1 + I * w1 * q2 * p2 + I * w2 * q3 * p3
-poly_H = Polynomial([q1,q2,q3,p1,p2,p3], H_total).expand()
-print(poly_H)
-H_bar  = _lie_transform(poly_H, max_degree=6)  # say up to sextic terms
-print(H_bar)
+    return H_current
