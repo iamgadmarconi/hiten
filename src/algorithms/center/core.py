@@ -24,34 +24,117 @@ class Polynomial:
         return self.expression.coeff(variable, order)
 
     def __add__(self, other):
-        return Polynomial(self.variables, self.expression + other.expression)
+        # Support Polynomial, SymEngine expression, and Python numeric types
+        if isinstance(other, Polynomial):
+            if self.variables != other.variables:
+                raise ValueError("Polynomial variables must match for addition.")
+            expr = self.expression + other.expression
+        elif isinstance(other, se.Basic):
+            expr = self.expression + other
+        elif isinstance(other, (int, float, complex)):
+            expr = self.expression + se.sympify(other)
+        else:
+            return NotImplemented
+        return Polynomial(self.variables, expr)
 
     def __radd__(self, other):
         return self.__add__(other)
 
     def __sub__(self, other):
-        return Polynomial(self.variables, self.expression - other.expression)
+        # Support Polynomial, SymEngine expression, and Python numeric types
+        if isinstance(other, Polynomial):
+            if self.variables != other.variables:
+                raise ValueError("Polynomial variables must match for subtraction.")
+            expr = self.expression - other.expression
+        elif isinstance(other, se.Basic):
+            expr = self.expression - other
+        elif isinstance(other, (int, float, complex)):
+            expr = self.expression - se.sympify(other)
+        else:
+            return NotImplemented
+        return Polynomial(self.variables, expr)
 
     def __rsub__(self, other):
-        return self.__sub__(other)
+        # Right-hand subtraction for SymEngine expressions and numeric types
+        if isinstance(other, Polynomial):
+            if self.variables != other.variables:
+                raise ValueError("Polynomial variables must match for subtraction.")
+            expr = other.expression - self.expression
+        elif isinstance(other, se.Basic):
+            expr = other - self.expression
+        elif isinstance(other, (int, float, complex)):
+            expr = se.sympify(other) - self.expression
+        else:
+            return NotImplemented
+        return Polynomial(self.variables, expr)
 
     def __mul__(self, other):
-        return Polynomial(self.variables, self.expression * other.expression)
+        # Support Polynomial, SymEngine expression, and Python numeric types
+        if isinstance(other, Polynomial):
+            if self.variables != other.variables:
+                raise ValueError("Polynomial variables must match for multiplication.")
+            expr = self.expression * other.expression
+        elif isinstance(other, se.Basic):
+            expr = self.expression * other
+        elif isinstance(other, (int, float, complex)):
+            expr = self.expression * se.sympify(other)
+        else:
+            return NotImplemented
+        return Polynomial(self.variables, expr)
 
     def __rmul__(self, other):
         return self.__mul__(other)
 
     def __truediv__(self, other):
-        return Polynomial(self.variables, self.expression / other.expression)
+        # Support Polynomial, SymEngine expression, and Python numeric types
+        if isinstance(other, Polynomial):
+            if self.variables != other.variables:
+                raise ValueError("Polynomial variables must match for division.")
+            expr = self.expression / other.expression
+        elif isinstance(other, se.Basic):
+            expr = self.expression / other
+        elif isinstance(other, (int, float, complex)):
+            expr = self.expression / se.sympify(other)
+        else:
+            return NotImplemented
+        return Polynomial(self.variables, expr)
 
     def __rtruediv__(self, other):
-        return self.__truediv__(other)
+        # Right-hand division for SymEngine expressions and numeric types
+        if isinstance(other, Polynomial):
+            if self.variables != other.variables:
+                raise ValueError("Polynomial variables must match for division.")
+            expr = other.expression / self.expression
+        elif isinstance(other, se.Basic):
+            expr = other / self.expression
+        elif isinstance(other, (int, float, complex)):
+            expr = se.sympify(other) / self.expression
+        else:
+            return NotImplemented
+        return Polynomial(self.variables, expr)
     
     def __neg__(self):
         return Polynomial(self.variables, -self.expression)
 
     def __eq__(self, other):
-        return self.expression == other.expression
+        # Support equality with Polynomial, SymEngine expression, and numeric types
+        if isinstance(other, Polynomial):
+            # If both expressions evaluate to zero, consider them equal regardless of variables
+            if self.expression == 0 and other.expression == 0:
+                return True
+            return self.variables == other.variables and self.expression == other.expression
+        elif isinstance(other, se.Basic):
+            return self.expression == other
+        elif isinstance(other, (int, float, complex)):
+            return self.expression == se.sympify(other)
+        else:
+            return NotImplemented
+
+    def __pow__(self, other):
+        if isinstance(other, int):
+            return Polynomial(self.variables, self.expression ** other)
+        else:
+            return NotImplemented
 
     def __hash__(self):
         return hash(self.expression)
@@ -65,9 +148,12 @@ class Polynomial:
         return self._expansion
 
     def _expand(self) -> 'Polynomial':
+        # Handle case when expression is a Python primitive type
+        if isinstance(self.expression, (int, float)):
+            return Polynomial(self.variables, se.sympify(self.expression))
         return Polynomial(self.variables, self.expression.expand())
 
-    def series_expand(self, variable: se.Symbol, degree: int) -> 'Polynomial':
+    def sexpand(self, variable: se.Symbol, degree: int) -> 'Polynomial':
         return Polynomial(self.variables, se.series(self.expression, variable, degree))
 
     @staticmethod
@@ -114,6 +200,10 @@ class Polynomial:
         Keep only terms where degree(var) <= max_deg.
         Useful when you reduce the Hamiltonian order-by-order.
         """
+        # Handle case when expression is a Python primitive type
+        if isinstance(self.expression, (int, float)):
+            return Polynomial(self.variables, se.sympify(self.expression))
+            
         expr = self.expansion.expression
         if expr.is_Add:
             kept = [t for t in expr.args if self._deg_in_var(t, var) <= max_deg]
@@ -126,6 +216,10 @@ class Polynomial:
         """
         Remove every monomial whose **total degree** exceeds `max_deg`.
         """
+        # Handle case when expression is a Python primitive type
+        if isinstance(self.expression, (int, float)):
+            return Polynomial(self.variables, se.sympify(self.expression))
+            
         expr = self.expansion.expression
         if expr.is_Add:
             kept = [t for t in expr.args
@@ -138,8 +232,34 @@ class Polynomial:
     def evaluate(self, subs_dict: dict[se.Symbol, se.Basic]) -> se.Basic:
         return self.expression.subs(subs_dict)
 
-    def derivative(self, variable: se.Symbol) -> 'Polynomial':
-        return Polynomial(self.variables, self.expression.diff(variable))
+    def derivative(self, variable) -> 'Polynomial':
+        """
+        Compute the derivative of this polynomial with respect to the given variable.
+        
+        Parameters:
+            variable: Can be a Polynomial, SymEngine symbol, or numeric type
+            
+        Returns:
+            A new Polynomial representing the derivative
+        """
+        # Handle case when expression is a Python number (int, float)
+        if isinstance(self.expression, (int, float)):
+            return Polynomial(self.variables, se.sympify(0))
+        
+        # Support Polynomial, SymEngine expression, and Python numeric types
+        if isinstance(variable, Polynomial):
+            if self.variables != variable.variables:
+                raise ValueError("Polynomial variables must match for differentiation.")
+            return Polynomial(self.variables, self.expression.diff(variable.expression))
+        elif isinstance(variable, se.Basic):
+            derived = self.expression.diff(variable)
+            # Ensure we return exactly zero when the derivative is zero
+            return Polynomial(self.variables, derived if derived else se.sympify(0))
+        elif isinstance(variable, (int, float, complex)):
+            # Differentiating with respect to a constant always gives zero
+            return Polynomial(self.variables, se.sympify(0))
+        else:
+            return NotImplemented
 
     def _gradient(self):
         """
@@ -149,12 +269,40 @@ class Polynomial:
         if self._grad_cache is None:
             n_vars = len(self.variables)
             n_dof = n_vars // 2
-            q_syms = self.variables[::2]
-            p_syms = self.variables[1::2]
+            q_syms = self.variables[:n_dof]
+            p_syms = self.variables[n_dof:]
             dF_dq = [self.expression.diff(q) for q in q_syms]
             dF_dp = [self.expression.diff(p) for p in p_syms]
             self._grad_cache = (dF_dq, dF_dp)
         return self._grad_cache
+
+    def gradient(self):
+        """
+        Computes the gradient of the polynomial with respect to all q and p variables.
+        
+        Returns:
+            A tuple of two dictionaries: (dF_dq, dF_dp) where:
+            - dF_dq maps q variables to their derivatives
+            - dF_dp maps p variables to their derivatives
+        """
+        dF_dq_raw, dF_dp_raw = self._gradient()
+        
+        n_vars = len(self.variables)
+        n_dof = n_vars // 2
+        q_syms = self.variables[:n_dof]
+        p_syms = self.variables[n_dof:]
+        
+        # Create dictionaries mapping variables to their derivatives
+        dF_dq = {}
+        dF_dp = {}
+        
+        for i, q in enumerate(q_syms):
+            dF_dq[q] = Polynomial(self.variables, dF_dq_raw[i])
+        
+        for i, p in enumerate(p_syms):
+            dF_dp[p] = Polynomial(self.variables, dF_dp_raw[i])
+        
+        return dF_dq, dF_dp
 
 
 def _poisson_bracket(F: Polynomial, G: Polynomial) -> Polynomial:
@@ -165,7 +313,7 @@ def _poisson_bracket(F: Polynomial, G: Polynomial) -> Polynomial:
     dG_dq, dG_dp = G._gradient()
 
     expr = sum(dF_dq[i] * dG_dp[i] - dF_dp[i] * dG_dq[i]
-               for i in range(len(dF_dq)))
+                for i in range(len(dF_dq)))
     return Polynomial(F.variables, expr)
 
 
