@@ -4,7 +4,7 @@ import symengine as se
 from collections import defaultdict
 
 
-from algorithms.center.core import Polynomial, _poisson_bracket, _split_coeff_and_factors, _update_by_deg
+from algorithms.center.core import Polynomial, _poisson_bracket, _split_coeff_and_factors, _update_by_deg, _monomial_key, _monomial_from_key, _lie_transform
 
 
 # --- Pytest Fixtures ---
@@ -79,6 +79,10 @@ def P_qp_sum(P_q1, P_p1):
 @pytest.fixture
 def P_complex(P_q1, P_p1, P_q2, P_p2, P_q3, P_p3):
     return (3*P_q1**2*P_p1 + 2*P_q2*P_p2 - 5* P_q3*P_p3**3).expansion 
+
+@pytest.fixture
+def P_high_order(P_q1, P_p1, P_q2, P_p2, P_q3, P_p3):
+    return (P_q1**7*P_p1 + P_q2**6*P_p2 + P_q3**5*P_p3+ P_q3**2*7).expansion
 
 # --- Test Functions ---
 
@@ -283,17 +287,188 @@ def test_evaluate(P_zero, P_one, P_q1, P_p1, P_q2, P_q3, P_p2, P_p3):
     f = P_q1 * P_q2 * P_p1 + P_p1 * P_p2 - P_q3 * P_p3 ** 3
     assert f.evaluate({q1: 1, q2: 2, q3: 3, p1: 4, p2: 5, p3: 6}) == 1*2*4 + 4*5 - 3*6**3
 
-def test_split_coeff_and_factors(P_zero, P_one, P_q1, P_p1, P_q2, P_q3, P_p2, P_p3, P_complex):
-    f = P_complex
-    terms = f.expression.args if f.expression.is_Add else (f.expression,)
-    #print(terms)
-    coeff, factors = _split_coeff_and_factors(f.expression)
-    #print(coeff, factors)
+def test_split_coeff_and_factors():
+    # Test with a number
+    coeff, factors = _split_coeff_and_factors(se.Integer(5))
+    assert coeff == 5
+    assert factors == ()
+    
+    # Test with a symbol
+    coeff, factors = _split_coeff_and_factors(q1)
+    assert coeff == 1
+    assert factors == (q1,)
+    
+    # Test with a product of symbols
+    coeff, factors = _split_coeff_and_factors(q1 * q2)
+    assert coeff == 1
+    assert set(factors) == {q1, q2}  # Order might vary
+    
+    # Test with coefficient and symbols
+    coeff, factors = _split_coeff_and_factors(3 * q1 * p1)
+    assert coeff == 3
+    assert set(factors) == {q1, p1}
+    
+    # Test with powers
+    coeff, factors = _split_coeff_and_factors(2 * q1**2 * p1)
+    assert coeff == 2
+    assert q1**2 in factors
+    assert p1 in factors
+    
+    # Test with imaginary unit
+    coeff, factors = _split_coeff_and_factors(se.I * q1)
+    assert coeff == se.I
+    assert factors == (q1,)
 
-def test_update_by_deg(P_zero, P_one, P_q1, P_p1, P_q2, P_q3, P_p2, P_p3, P_complex):
-    f = P_complex
-    print(f.expression)
+def test_monomial_key():
+    # Setup variables
+    q_vars = [q1, q2, q3]
+    p_vars = [p1, p2, p3]
+    
+    # Test with a simple monomial
+    expr = q1 * p1
+    result = list(_monomial_key(expr, q_vars, p_vars))
+    assert len(result) == 1
+    coeff, kq, kp = result[0]
+    assert coeff == 1
+    assert kq == (1,0,0)
+    assert kp == (1,0,0)
+    
+    # Test with a sum of monomials
+    expr = 3 * q1**2 * p1 + 2 * q2 * p2
+    result = list(_monomial_key(expr, q_vars, p_vars))
+    assert len(result) == 2
+    
+    # Find the specific terms
+    term1 = None
+    term2 = None
+    for item in result:
+        if item[0] == 3:
+            term1 = item
+        elif item[0] == 2:
+            term2 = item
+    
+    assert term1 is not None
+    assert term2 is not None
+    
+    coeff1, kq1, kp1 = term1  # Should be 3*q1^2*p1
+    coeff2, kq2, kp2 = term2  # Should be 2*q2*p2
+    
+    assert coeff1 == 3
+    assert kq1 == (2,0,0)
+    assert kp1 == (1,0,0)
+    
+    assert coeff2 == 2
+    assert kq2 == (0,1,0)
+    assert kp2 == (0,1,0)
+    
+    # Test with powers and negative coefficients
+    expr = q1**3 - 5 * p3**2 * q2
+    result = list(_monomial_key(expr, q_vars, p_vars))
+    assert len(result) == 2
+    
+    term1 = None
+    term2 = None
+    for item in result:
+        if item[0] == -5:
+            term1 = item
+        elif item[0] == 1:
+            term2 = item
+    
+    assert term1 is not None
+    assert term2 is not None
+    
+    coeff1, kq1, kp1 = term1  # Should be -5*q2*p3^2
+    coeff2, kq2, kp2 = term2  # Should be q1^3
+    
+    assert coeff1 == -5
+    assert kq1 == (0,1,0)
+    assert kp1 == (0,0,2)
+    
+    assert coeff2 == 1
+    assert kq2 == (3,0,0)
+    assert kp2 == (0,0,0)
+    
+    # Test with parameters (symbols not in q_vars or p_vars)
+    mu = se.symbols('mu')
+    expr = mu * q1 * p1
+    result = list(_monomial_key(expr, q_vars, p_vars))
+    assert len(result) == 1
+    coeff, kq, kp = result[0]
+    assert coeff == mu
+    assert kq == (1,0,0)
+    assert kp == (1,0,0)
+
+def test_update_by_deg(vars):
+    # Test with a simple monomial
     by_deg = defaultdict(list)
+    f = Polynomial(vars, q1 * p1)
     _update_by_deg(by_deg, f)
-    print(by_deg)
+    assert len(by_deg) == 1
+    assert 2 in by_deg  # Total degree is 2
+    # Convert tuple items to lists to make assertion easier
+    actual_deg2 = [(c, list(kq), list(kp)) for c, kq, kp in by_deg[2]]
+    expected_deg2 = [(1, [1,0,0], [1,0,0])]
+    assert actual_deg2 == expected_deg2
+    
+    # Test with multiple terms of different degrees
+    by_deg = defaultdict(list)
+    f = Polynomial(vars, q1**2 * p1 + q2 * p2)
+    _update_by_deg(by_deg, f.expansion)
+    assert len(by_deg) == 2
+    assert 3 in by_deg  # q1^2*p1 has degree 3
+    assert 2 in by_deg  # q2*p2 has degree 2
+    
+    # Convert tuple items to lists for easier comparison
+    actual_deg3 = [(c, list(kq), list(kp)) for c, kq, kp in by_deg[3]]
+    actual_deg2 = [(c, list(kq), list(kp)) for c, kq, kp in by_deg[2]]
+    
+    # Verify specific terms
+    expected_deg3 = [(1, [2,0,0], [1,0,0])]
+    expected_deg2 = [(1, [0,1,0], [0,1,0])]
+    
+    assert actual_deg3 == expected_deg3
+    assert actual_deg2 == expected_deg2
+    
+    # Test with numeric coefficients
+    by_deg = defaultdict(list)
+    f = Polynomial(vars, 3 * q1**2 * p1 + 2 * q2 * p2 - 5 * q3 * p3**3)
+    _update_by_deg(by_deg, f.expansion)
+    assert len(by_deg) == 3
+    assert 3 in by_deg  # 3*q1^2*p1 has degree 3
+    assert 2 in by_deg  # 2*q2*p2 has degree 2
+    assert 4 in by_deg  # -5*q3*p3^3 has degree 4
+    
+    # Convert tuple items to lists for easier comparison
+    actual_deg3 = [(c, list(kq), list(kp)) for c, kq, kp in by_deg[3]]
+    actual_deg2 = [(c, list(kq), list(kp)) for c, kq, kp in by_deg[2]]
+    actual_deg4 = [(c, list(kq), list(kp)) for c, kq, kp in by_deg[4]]
+    
+    # Expected values
+    expected_deg3 = [(3, [2,0,0], [1,0,0])]
+    expected_deg2 = [(2, [0,1,0], [0,1,0])]
+    expected_deg4 = [(-5, [0,0,1], [0,0,3])]
+    
+    assert actual_deg3 == expected_deg3
+    assert actual_deg2 == expected_deg2  
+    assert actual_deg4 == expected_deg4
 
+def test_monomial_from_key():
+    kq = (2, 1, 0)
+    kp = (0, 0, 3)
+    monomial = _monomial_from_key(kq, kp)
+    assert monomial == q1**2*q2*p3**3
+    
+    # Test with zero exponents
+    kq = (0, 0, 0)
+    kp = (0, 0, 0)
+    monomial = _monomial_from_key(kq, kp)
+    assert monomial == 1
+    
+    # Test with mixed exponents
+    kq = (1, 0, 2)
+    kp = (3, 1, 0)
+    monomial = _monomial_from_key(kq, kp)
+    assert monomial == q1*q3**2*p1**3*p2
+
+def test_lie_transform(vars):
+    pass

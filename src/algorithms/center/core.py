@@ -319,9 +319,35 @@ def _poisson_bracket(F: Polynomial, G: Polynomial) -> Polynomial:
 
 def _split_coeff_and_factors(term: se.Basic):
     """
-    Return (numeric_coefficient , tuple_of_symbolic_factors).
+    Split a symbolic expression term into its numeric coefficient and symbolic factors.
 
-    Works for SymEngine Expr; never uses as_coeff_* which SymEngine lacks.
+    Parameters
+    ----------
+    term : se.Basic
+        A SymEngine expression term (can be Number, Symbol, Mul, Pow, etc.)
+
+    Returns
+    -------
+    tuple
+        A tuple (coefficient, symbolic_factors) where:
+        - coefficient is a SymEngine number
+        - symbolic_factors is a tuple of symbolic expressions
+        
+    Notes
+    -----
+    This function handles three cases:
+    - For numeric terms (e.g., 7), returns (term, ())
+    - For Mul terms (e.g., 3*q1**2*p2), splits out numeric parts as coefficient
+    - For other symbolic terms, returns (1, (term,))
+    
+    Examples
+    --------
+    >>> _split_coeff_and_factors(se.Integer(7))
+    (7, ())
+    >>> _split_coeff_and_factors(q1)
+    (1, (q1,))
+    >>> _split_coeff_and_factors(3*q1**2*p2)
+    (3, (q1**2, p2))
     """
     if term.is_Number:                  # e.g.  7
         return term, ()
@@ -342,50 +368,142 @@ def _split_coeff_and_factors(term: se.Basic):
 
 def _update_by_deg(by_deg: dict[int, list], poly: Polynomial) -> None:
     """
-    Insert all monomials of `poly` (already expanded) into the bucket map.
+    Insert all monomials of a polynomial into a dictionary organized by total degree.
+    
+    Parameters
+    ----------
+    by_deg : dict[int, list]
+        A dictionary mapping degrees to lists of monomials
+    poly : Polynomial
+        The polynomial whose monomials will be added to the dictionary
+        
+    Returns
+    -------
+    None
+        The function modifies the by_deg dictionary in place
+        
+    Notes
+    -----
+    Each monomial is stored in the dictionary as a tuple (coeff, kq, kp) where:
+    - coeff is the numeric coefficient
+    - kq is a tuple of exponents for position variables (q)
+    - kp is a tuple of exponents for momentum variables (p)
+    The key in the dictionary is the total degree (sum of all exponents)
+    
+    Examples
+    --------
+    >>> by_deg = defaultdict(list)
+    >>> p = Polynomial([q1,q2,q3,p1,p2,p3], 3*q1**2*p1 + 2*q2*p2)
+    >>> _update_by_deg(by_deg, p)
+    >>> by_deg
+    {3: [(3, (2,0,0), (1,0,0))], 2: [(2, (0,1,0), (0,1,0))]}
     """
     n_dof  = len(poly.variables) // 2
     q_vars = poly.variables[:n_dof]
     p_vars = poly.variables[n_dof:]
 
-    for coeff, kq, kp in monomial_key(poly.expression, q_vars, p_vars):
+    for coeff, kq, kp in _monomial_key(poly.expression, q_vars, p_vars):
         deg = sum(kq) + sum(kp)
         by_deg[deg].append((coeff, kq, kp))
 
 
-def monomial_key(expr: se.Basic, q_vars: list[se.Symbol], p_vars: list[se.Symbol]):
+def _monomial_key(expr: se.Basic,
+                q_vars: list[se.Symbol],
+                p_vars: list[se.Symbol]):
     """
-    Yield triples (coeff , kq , kp) for every monomial in *expr*.
-    expr is assumed to be already expanded
+    Decompose an expression into its constituent monomials with separated q and p variable exponents.
+    
+    Parameters
+    ----------
+    expr : se.Basic
+        An **expanded** SymEngine expression to decompose
+    q_vars : list[se.Symbol]
+        List of position variables (q)
+    p_vars : list[se.Symbol]
+        List of momentum variables (p)
+        
+    Yields
+    ------
+    tuple
+        A tuple (coeff, kq, kp) for each monomial where:
+        - coeff is the numeric coefficient
+        - kq is a tuple of exponents for each q variable
+        - kp is a tuple of exponents for each p variable
+        
+    Notes
+    -----
+    This function:
+    1. Maps variables to their indices
+    2. Iterates through terms in the expression
+    3. Decomposes each term into coefficient and factors
+    4. Processes each factor to extract variable exponents
+    5. Yields the coefficient and exponent tuples
+    
+    Any symbolic terms not in q_vars or p_vars are treated as parameters
+    and incorporated into the coefficient.
+    
+    Examples
+    --------
+    >>> list(_monomial_key(3*q1**2*p1 + 2*q2*p2, [q1,q2,q3], [p1,p2,p3]))
+    [(3, (2,0,0), (1,0,0)), (2, (0,1,0), (0,1,0))]
     """
     n = len(q_vars)
-    var2idx = {v: i            for i, v in enumerate(q_vars)}
-    var2idx.update({v: i - n   for i, v in enumerate(p_vars, n)})
+    q2idx = {v: i for i, v in enumerate(q_vars)}     #  0 … n-1
+    p2idx = {v: i for i, v in enumerate(p_vars)}     #  0 … n-1
 
     terms = expr.args if expr.is_Add else (expr,)
 
     for term in terms:
         coeff, factors = _split_coeff_and_factors(term)
-
         kq = [0]*n
         kp = [0]*n
 
-        # decompose the symbolic part
-        for fac in factors:
+        for fac in factors:                          # fac = x   or   x**e
             base, exp = fac.as_base_exp() if fac.is_Pow else (fac, 1)
             exp = int(exp)
-            idx = var2idx.get(base)
-            if idx is None:                 # parameter (µ, λ, …) stays in coeff
+
+            if base in q2idx:                        # q-family
+                kq[q2idx[base]] += exp
+            elif base in p2idx:                      # p-family
+                kp[p2idx[base]] += exp
+            else:                                    # parameter (µ, λ, …)
                 coeff *= base**exp
-                continue
-            if idx >= 0:                    # q-family
-                kq[idx] += exp
-            else:                           # p-family
-                kp[idx+n] += exp
 
         yield coeff, tuple(kq), tuple(kp)
 
-def monomial_from_key(kq, kp):
+def _monomial_from_key(kq, kp):
+    """
+    Reconstruct a symbolic monomial from exponent tuples for q and p variables.
+    
+    Parameters
+    ----------
+    kq : tuple
+        Tuple of exponents for position variables (q1, q2, q3)
+    kp : tuple
+        Tuple of exponents for momentum variables (p1, p2, p3)
+        
+    Returns
+    -------
+    se.Basic
+        A SymEngine expression representing the monomial with the given exponents
+        
+    Notes
+    -----
+    This function is the inverse of _monomial_key. It takes the exponent representation
+    of a monomial and reconstructs the symbolic expression by raising each variable
+    to its corresponding exponent.
+    
+    This is particularly useful in normal form calculations where terms are processed
+    by degree and then need to be reconstructed into symbolic expressions.
+    
+    Examples
+    --------
+    >>> _monomial_from_key((2, 1, 0), (0, 0, 3))
+    q1**2*q2*p3**3
+    
+    >>> _monomial_from_key((1, 0, 0), (1, 0, 0))
+    q1*p1
+    """
     q1, q2, q3 = se.Symbol('q1'), se.Symbol('q2'), se.Symbol('q3')
     p1, p2, p3 = se.Symbol('p1'), se.Symbol('p2'), se.Symbol('p3')
     q_syms = [q1,q2,q3]
@@ -397,7 +515,40 @@ def monomial_from_key(kq, kp):
 
 def _lie_transform(H: Polynomial, max_degree: int = 6) -> Polynomial:
     """
-    Normal-form Lie series up to 'max_degree' with incremental caches.
+    Apply normal-form Lie series transformation to a Hamiltonian.
+    
+    Parameters
+    ----------
+    H : Polynomial
+        The input Hamiltonian polynomial to transform
+    max_degree : int, default=6
+        Maximum degree of terms to include in the transformation
+        
+    Returns
+    -------
+    Polynomial
+        The transformed Hamiltonian in normal form
+        
+    Notes
+    -----
+    This function applies a normal form transformation using Lie series to simplify
+    a Hamiltonian by eliminating certain types of terms. Specifically, it removes
+    mixed hyperbolic terms (terms with both q1 and p1 to the same power).
+    
+    The algorithm processes the Hamiltonian degree-by-degree, starting at degree 3
+    (assuming the quadratic part is already normalized). For each degree, it:
+    1. Identifies terms that need to be eliminated
+    2. Constructs a generating function S for the canonical transformation
+    3. Applies the transformation using Poisson brackets: H ← e^{L_S} H
+    4. Updates the terms cache for efficiency
+    
+    Examples
+    --------
+    >>> vars = [q1, q2, q3, p1, p2, p3]
+    >>> H = Polynomial(vars, q1**2 + p1**2 + q1*p1)
+    >>> H_transformed = _lie_transform(H)
+    >>> q1*p1 not in H_transformed.expression.expand().args
+    True
     """
     H_current = H.expansion
     by_deg = defaultdict(list)
@@ -410,7 +561,7 @@ def _lie_transform(H: Polynomial, max_degree: int = 6) -> Polynomial:
             continue
 
         # assemble S_n ---------------------------------------------------
-        S_expr = sum(coeff * monomial_from_key(kq, kp)
+        S_expr = sum(coeff * _monomial_from_key(kq, kp)
                      for coeff, kq, kp in G_terms
                      if kq[0] != kp[0])           # kill mixed hyperbolic terms
 
