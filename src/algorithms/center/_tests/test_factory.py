@@ -178,7 +178,7 @@ def test_truncation():
 def test_symplectic(lp):
     C, Cinv = lp.normal_form_transform()      # both are 6×6 numpy arrays
     J = np.block([[np.zeros((3,3)), np.eye(3)],
-                  [-np.eye(3),      np.zeros((3,3))]])
+                [-np.eye(3),      np.zeros((3,3))]])
     # C is the matrix used inside to_complex_canonical – should be symplectic
     assert np.allclose(C.T @ J @ C, J, atol=1e-12)
 
@@ -190,7 +190,6 @@ def quadratic_part(expr, vars_):
         if sum(t.as_powers_dict().get(v, 0) for v in vars_) == 2:
             quad += t
     return se.expand(quad)
-
 
 def test_quadratic_normal_form(lp, H_cc):
     vars_ = (q1, q2, q3, p1, p2, p3)

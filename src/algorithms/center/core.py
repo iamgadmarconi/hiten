@@ -1,3 +1,4 @@
+import math
 import symengine as se
 from functools import lru_cache
 from collections import defaultdict
@@ -513,7 +514,7 @@ def _monomial_from_key(kq, kp):
     for i,e in enumerate(kp): expr *= p_syms[i]**e
     return expr
 
-def _lie_transform(H: Polynomial, max_degree: int = 6) -> Polynomial:
+def _lie_transform(H: Polynomial, linear_modes: tuple, max_degree: int = 6) -> Polynomial:
     """
     Apply normal-form Lie series transformation to a Hamiltonian.
     
@@ -521,6 +522,8 @@ def _lie_transform(H: Polynomial, max_degree: int = 6) -> Polynomial:
     ----------
     H : Polynomial
         The input Hamiltonian polynomial to transform
+    linear_modes : tuple
+        The linear modes of the point (lambda1, omega1, omega2)
     max_degree : int, default=6
         Maximum degree of terms to include in the transformation
         
@@ -561,9 +564,13 @@ def _lie_transform(H: Polynomial, max_degree: int = 6) -> Polynomial:
             continue
 
         # assemble S_n ---------------------------------------------------
-        S_expr = sum(coeff * _monomial_from_key(kq, kp)
-                     for coeff, kq, kp in G_terms
-                     if kq[0] != kp[0])           # kill mixed hyperbolic terms
+        lam, w1, w2 = linear_modes
+
+        def divisor(kq,kp): 
+            return lam*(kp[0]-kq[0]) + 1j*w1*(kp[1]-kq[1]) + 1j*w2*(kp[2]-kq[2])
+
+        S_expr = sum( (coeff/divisor(kq,kp)) * _monomial_from_key(kq,kp)
+                    for coeff,kq,kp in G_terms if kq[0]!=kp[0])
 
         if not S_expr:
             continue

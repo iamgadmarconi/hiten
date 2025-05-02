@@ -10,13 +10,13 @@ from algorithms.center.core import _lie_transform
 def main():
     mu_ES = 3.00348959632e-6
     L1_ES = L1Point(mu_ES)
-    degree = 6
+    degree = 3
 
     # 1. full RTBP series in (q,p)
     H_full = hamiltonian(L1_ES, max_degree=degree)
 
     # 2. Lie-series normal form
-    H_nf = _lie_transform(H_full, max_degree=degree)
+    H_nf = _lie_transform(H_full, L1_ES.linear_modes(), max_degree=degree)
 
     # ---- original symbols ------------------------------------------------
     q1, q2, q3, p1, p2, p3 = H_nf.variables        # order guaranteed

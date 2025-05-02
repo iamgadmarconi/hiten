@@ -381,8 +381,8 @@ class CollinearPoint(LibrationPoint):
                 discriminant = mp_b**2 - 4*mp_a*mp_c
                 
                 # Find both roots
-                eta1 = (-mp_b + mp.sqrt(discriminant)) / (2*mp_a)
-                eta2 = (-mp_b - mp.sqrt(discriminant)) / (2*mp_a)
+                eta1 = (-mp_b - mp.sqrt(discriminant)) / (2*mp_a)
+                eta2 = (-mp_b + mp.sqrt(discriminant)) / (2*mp_a)
                 
                 # Convert to floats for further calculations
                 eta1_float = float(eta1)
@@ -427,12 +427,14 @@ class CollinearPoint(LibrationPoint):
         
         # Check if values are positive
         if expr1 < 0:
-            logger.warning(f"Expression for s1 is negative: {expr1}. Taking absolute value.")
-            expr1 = abs(expr1)
+            err = f"Expression for s1 is negative: {expr1}. Taking absolute value."
+            logger.error(err)
+            raise RuntimeError(err)
             
         if expr2 < 0:
-            logger.warning(f"Expression for s2 is negative: {expr2}. Taking absolute value.")
-            expr2 = abs(expr2)
+            err = f"Expression for s2 is negative: {expr2}. Taking absolute value."
+            logger.error(err)
+            raise RuntimeError(err)
         
         # Calculate scale factors
         s1 = np.sqrt(expr1)
@@ -594,13 +596,13 @@ class L1Point(CollinearPoint):
         return [1, -(3-mu), (3-2*mu), -mu, 2*mu, -mu]
         
     def _gamma_poly(self, x: float) -> float:
-        mu = self.mu
+        coeffs = self._get_gamma_poly_coeffs()
         term1 = x**5
-        term2 = -(3-mu) * x**4
-        term3 = (3-2*mu) * x**3
-        term4 = -mu*x**2
-        term5 = 2*mu*x
-        term6 = -mu
+        term2 = coeffs[1] * x**4
+        term3 = coeffs[2] * x**3
+        term4 = coeffs[3] * x**2
+        term5 = coeffs[4] * x
+        term6 = coeffs[5]
         return term1 + term2 + term3 + term4 + term5 + term6
         
     def _find_relevant_real_root(self, roots: np.ndarray) -> float | None:
@@ -632,7 +634,7 @@ class L1Point(CollinearPoint):
         term3 = (-1) ** n * ( (1-self.mu) * self.gamma ** (n+1) / (1 - self.gamma) ** (n+1) )
 
         c_n = term1 * (term2 + term3)
-
+        logger.info(f"c{n}(mu) = {c_n}")
         return c_n
 
 
@@ -688,13 +690,13 @@ class L2Point(CollinearPoint):
         return [1, (3-mu), (3-2*mu), -mu, -2*mu, -mu]
 
     def _gamma_poly(self, x: float) -> float:
-        mu = self.mu
+        coeffs = self._get_gamma_poly_coeffs()
         term1 = x**5
-        term2 = (3-mu) * x**4
-        term3 = (3-2*mu) * x**3
-        term4 = -mu*x**2
-        term5 = -2*mu*x
-        term6 = -mu
+        term2 = coeffs[1] * x**4
+        term3 = coeffs[2] * x**3
+        term4 = coeffs[3] * x**2
+        term5 = coeffs[4] * x
+        term6 = coeffs[5]
         return term1 + term2 + term3 + term4 + term5 + term6
         
     def _find_relevant_real_root(self, roots: np.ndarray) -> float | None:
@@ -726,7 +728,7 @@ class L2Point(CollinearPoint):
         term3 = (-1) ** n * ( (1-self.mu) * self.gamma ** (n+1) / (1 + self.gamma) ** (n+1) )
 
         c_n = term1 * (term2 + term3)
-
+        logger.info(f"c{n}(mu) = {c_n}")
         return c_n
 
 
@@ -785,14 +787,13 @@ class L3Point(CollinearPoint):
     def _gamma_poly(self, x: float) -> float:
         # Note: The root x of this polynomial is gamma_L3 = |x_L3 - (-mu)| = |-1 + delta - (-mu)| = |mu - 1 + delta|
         # where x_L3 = -1 + delta. This x IS the distance gamma_L3.
-        mu = self.mu
-        mu2 = 1 - mu
+        coeffs = self._get_gamma_poly_coeffs()
         term1 = x**5
-        term2 = (2+mu) * x**4
-        term3 = (1+2*mu) * x**3
-        term4 = -mu2 * x**2
-        term5 = -2*mu2*x
-        term6 = -mu2
+        term2 = coeffs[1] * x**4
+        term3 = coeffs[2] * x**3
+        term4 = coeffs[3] * x**2
+        term5 = coeffs[4] * x
+        term6 = coeffs[5]
         return term1 + term2 + term3 + term4 + term5 + term6
 
     def _find_relevant_real_root(self, roots: np.ndarray) -> float | None:
@@ -826,7 +827,7 @@ class L3Point(CollinearPoint):
         term3 = self.mu * self.gamma ** (n+1) / (1 + self.gamma) ** (n+1)
 
         c_n = term1 * (term2 + term3)
-
+        logger.info(f"c{n}(mu) = {c_n}")
         return c_n
 
 
