@@ -1,7 +1,6 @@
 import symengine as se
 import numpy as np
 
-
 from .core import Polynomial
 from system.libration import LibrationPoint
 

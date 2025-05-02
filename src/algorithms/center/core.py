@@ -310,6 +310,7 @@ def _poisson_bracket(F: Polynomial, G: Polynomial) -> Polynomial:
     """
     Cached PB that reuses nabla_F and nabla_G when already computed.
     """
+    assert F.variables == G.variables, "Variables must match for Poisson bracket"
     dF_dq, dF_dp = F._gradient()
     dG_dq, dG_dp = G._gradient()
 

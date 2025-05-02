@@ -10,7 +10,7 @@ from algorithms.center.core import _lie_transform
 def main():
     mu_ES = 3.00348959632e-6
     L1_ES = L1Point(mu_ES)
-    degree = 3
+    degree = 5
 
     # 1. full RTBP series in (q,p)
     H_full = hamiltonian(L1_ES, max_degree=degree)
