@@ -452,6 +452,13 @@ def test_update_by_deg(vars):
     assert actual_deg2 == expected_deg2  
     assert actual_deg4 == expected_deg4
 
+def test_build_by_degree(vars):
+    f = Polynomial(vars, q1 * p1)
+    by_deg = f.build_by_degree()
+    expected = defaultdict(list)
+    _update_by_deg(expected, f)
+    assert by_deg == expected
+
 def test_monomial_from_key():
     kq = (2, 1, 0)
     kp = (0, 0, 3)

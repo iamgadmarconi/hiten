@@ -13,6 +13,7 @@ class Polynomial:
         self.variables = variables
         self.expression = expression
         self._expansion = None
+        self._by_degree_cache = None
         self._grad_cache = None
 
     def __str__(self):
@@ -228,6 +229,9 @@ class Polynomial:
             new_expr = se.Add(*kept) if kept else se.Integer(0)
         else:
             new_expr = expr if self._total_deg_term(expr, self.variables) <= max_deg else se.Integer(0)
+        
+        self._by_degree_cache = None # Forcing rebuild of by_degree_cache
+
         return Polynomial(self.variables, new_expr)
 
     def evaluate(self, subs_dict: dict[se.Symbol, se.Basic]) -> se.Basic:
@@ -304,6 +308,14 @@ class Polynomial:
             dF_dp[p] = Polynomial(self.variables, dF_dp_raw[i])
         
         return dF_dq, dF_dp
+
+    def build_by_degree(self) -> dict[int, list]:
+        """Return {deg: [ (coeff, kq, kp), … ]} for the expanded polynomial."""
+        if self._by_degree_cache is None:
+            by_deg: dict[int, list] = defaultdict(list)
+            _update_by_deg(by_deg, self)          # ← your helper
+            self._by_degree_cache = by_deg
+        return self._by_degree_cache
 
 
 def _poisson_bracket(F: Polynomial, G: Polynomial) -> Polynomial:
