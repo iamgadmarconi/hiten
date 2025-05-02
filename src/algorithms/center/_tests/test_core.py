@@ -328,10 +328,11 @@ def test_monomial_key():
     expr = q1 * p1
     result = list(_monomial_key(expr, q_vars, p_vars))
     assert len(result) == 1
-    coeff, kq, kp = result[0]
-    assert coeff == 1
-    assert kq == (1,0,0)
-    assert kp == (1,0,0)
+    monomial = result[0]
+    assert monomial.coeff == 1
+    assert monomial.kq == (1,0,0)
+    assert monomial.kp == (1,0,0)
+    assert monomial.sym == q1*p1
     
     # Test with a sum of monomials
     expr = 3 * q1**2 * p1 + 2 * q2 * p2
@@ -342,24 +343,25 @@ def test_monomial_key():
     term1 = None
     term2 = None
     for item in result:
-        if item[0] == 3:
+        if item.coeff == 3:
             term1 = item
-        elif item[0] == 2:
+        elif item.coeff == 2:
             term2 = item
     
     assert term1 is not None
     assert term2 is not None
     
-    coeff1, kq1, kp1 = term1  # Should be 3*q1^2*p1
-    coeff2, kq2, kp2 = term2  # Should be 2*q2*p2
+    # Should be 3*q1^2*p1
+    assert term1.coeff == 3
+    assert term1.kq == (2,0,0)
+    assert term1.kp == (1,0,0)
+    assert term1.sym == 3*q1**2*p1
     
-    assert coeff1 == 3
-    assert kq1 == (2,0,0)
-    assert kp1 == (1,0,0)
-    
-    assert coeff2 == 2
-    assert kq2 == (0,1,0)
-    assert kp2 == (0,1,0)
+    # Should be 2*q2*p2
+    assert term2.coeff == 2
+    assert term2.kq == (0,1,0)
+    assert term2.kp == (0,1,0)
+    assert term2.sym == 2*q2*p2
     
     # Test with powers and negative coefficients
     expr = q1**3 - 5 * p3**2 * q2
@@ -369,34 +371,36 @@ def test_monomial_key():
     term1 = None
     term2 = None
     for item in result:
-        if item[0] == -5:
+        if item.coeff == -5:
             term1 = item
-        elif item[0] == 1:
+        elif item.coeff == 1:
             term2 = item
     
     assert term1 is not None
     assert term2 is not None
     
-    coeff1, kq1, kp1 = term1  # Should be -5*q2*p3^2
-    coeff2, kq2, kp2 = term2  # Should be q1^3
+    # Should be -5*q2*p3^2
+    assert term1.coeff == -5
+    assert term1.kq == (0,1,0)
+    assert term1.kp == (0,0,2)
+    assert term1.sym == -5*q2*p3**2
     
-    assert coeff1 == -5
-    assert kq1 == (0,1,0)
-    assert kp1 == (0,0,2)
-    
-    assert coeff2 == 1
-    assert kq2 == (3,0,0)
-    assert kp2 == (0,0,0)
+    # Should be q1^3
+    assert term2.coeff == 1
+    assert term2.kq == (3,0,0)
+    assert term2.kp == (0,0,0)
+    assert term2.sym == q1**3
     
     # Test with parameters (symbols not in q_vars or p_vars)
     mu = se.symbols('mu')
     expr = mu * q1 * p1
     result = list(_monomial_key(expr, q_vars, p_vars))
     assert len(result) == 1
-    coeff, kq, kp = result[0]
-    assert coeff == mu
-    assert kq == (1,0,0)
-    assert kp == (1,0,0)
+    monomial = result[0]
+    assert monomial.coeff == mu
+    assert monomial.kq == (1,0,0)
+    assert monomial.kp == (1,0,0)
+    assert monomial.sym == mu*q1*p1
 
 def test_update_by_deg(vars):
     # Test with a simple monomial
@@ -405,10 +409,13 @@ def test_update_by_deg(vars):
     _update_by_deg(by_deg, f)
     assert len(by_deg) == 1
     assert 2 in by_deg  # Total degree is 2
-    # Convert tuple items to lists to make assertion easier
-    actual_deg2 = [(c, list(kq), list(kp)) for c, kq, kp in by_deg[2]]
-    expected_deg2 = [(1, [1,0,0], [1,0,0])]
-    assert actual_deg2 == expected_deg2
+    
+    # Check monomial properties
+    monomial = by_deg[2][0]
+    assert monomial.coeff == 1
+    assert monomial.kq == (1,0,0)
+    assert monomial.kp == (1,0,0)
+    assert monomial.sym == q1*p1
     
     # Test with multiple terms of different degrees
     by_deg = defaultdict(list)
@@ -418,16 +425,31 @@ def test_update_by_deg(vars):
     assert 3 in by_deg  # q1^2*p1 has degree 3
     assert 2 in by_deg  # q2*p2 has degree 2
     
-    # Convert tuple items to lists for easier comparison
-    actual_deg3 = [(c, list(kq), list(kp)) for c, kq, kp in by_deg[3]]
-    actual_deg2 = [(c, list(kq), list(kp)) for c, kq, kp in by_deg[2]]
+    # Find specific monomials
+    monomial_deg3 = None
+    monomial_deg2 = None
+    
+    for monomial in by_deg[3]:
+        if monomial.kq == (2,0,0) and monomial.kp == (1,0,0):
+            monomial_deg3 = monomial
+    
+    for monomial in by_deg[2]:
+        if monomial.kq == (0,1,0) and monomial.kp == (0,1,0):
+            monomial_deg2 = monomial
+    
+    assert monomial_deg3 is not None
+    assert monomial_deg2 is not None
     
     # Verify specific terms
-    expected_deg3 = [(1, [2,0,0], [1,0,0])]
-    expected_deg2 = [(1, [0,1,0], [0,1,0])]
+    assert monomial_deg3.coeff == 1
+    assert monomial_deg3.kq == (2,0,0)
+    assert monomial_deg3.kp == (1,0,0)
+    assert monomial_deg3.sym == q1**2*p1
     
-    assert actual_deg3 == expected_deg3
-    assert actual_deg2 == expected_deg2
+    assert monomial_deg2.coeff == 1
+    assert monomial_deg2.kq == (0,1,0)
+    assert monomial_deg2.kp == (0,1,0)
+    assert monomial_deg2.sym == q2*p2
     
     # Test with numeric coefficients
     by_deg = defaultdict(list)
@@ -438,19 +460,42 @@ def test_update_by_deg(vars):
     assert 2 in by_deg  # 2*q2*p2 has degree 2
     assert 4 in by_deg  # -5*q3*p3^3 has degree 4
     
-    # Convert tuple items to lists for easier comparison
-    actual_deg3 = [(c, list(kq), list(kp)) for c, kq, kp in by_deg[3]]
-    actual_deg2 = [(c, list(kq), list(kp)) for c, kq, kp in by_deg[2]]
-    actual_deg4 = [(c, list(kq), list(kp)) for c, kq, kp in by_deg[4]]
+    # Find specific monomials
+    monomial_deg3 = None
+    monomial_deg2 = None
+    monomial_deg4 = None
     
-    # Expected values
-    expected_deg3 = [(3, [2,0,0], [1,0,0])]
-    expected_deg2 = [(2, [0,1,0], [0,1,0])]
-    expected_deg4 = [(-5, [0,0,1], [0,0,3])]
+    for monomial in by_deg[3]:
+        if monomial.kq == (2,0,0) and monomial.kp == (1,0,0):
+            monomial_deg3 = monomial
     
-    assert actual_deg3 == expected_deg3
-    assert actual_deg2 == expected_deg2  
-    assert actual_deg4 == expected_deg4
+    for monomial in by_deg[2]:
+        if monomial.kq == (0,1,0) and monomial.kp == (0,1,0):
+            monomial_deg2 = monomial
+    
+    for monomial in by_deg[4]:
+        if monomial.kq == (0,0,1) and monomial.kp == (0,0,3):
+            monomial_deg4 = monomial
+    
+    assert monomial_deg3 is not None
+    assert monomial_deg2 is not None
+    assert monomial_deg4 is not None
+    
+    # Verify specific terms
+    assert monomial_deg3.coeff == 3
+    assert monomial_deg3.kq == (2,0,0)
+    assert monomial_deg3.kp == (1,0,0)
+    assert monomial_deg3.sym == 3*q1**2*p1
+    
+    assert monomial_deg2.coeff == 2
+    assert monomial_deg2.kq == (0,1,0)
+    assert monomial_deg2.kp == (0,1,0)
+    assert monomial_deg2.sym == 2*q2*p2
+    
+    assert monomial_deg4.coeff == -5
+    assert monomial_deg4.kq == (0,0,1)
+    assert monomial_deg4.kp == (0,0,3)
+    assert monomial_deg4.sym == -5*q3*p3**3
 
 def test_build_by_degree(vars):
     f = Polynomial(vars, q1 * p1)
@@ -479,3 +524,56 @@ def test_monomial_from_key():
 
 def test_lie_transform(vars):
     pass
+
+def test_monomial_methods(vars):
+    # Test get_monomials
+    f = Polynomial(vars, 3 * q1**2 * p1 + 2 * q2 * p2)
+    monomials = f.get_monomials()
+    
+    assert len(monomials) == 2
+    
+    # Find specific monomials
+    m1 = None
+    m2 = None
+    for m in monomials:
+        if m.coeff == 3:
+            m1 = m
+        elif m.coeff == 2:
+            m2 = m
+    
+    assert m1 is not None
+    assert m2 is not None
+    
+    assert m1.coeff == 3
+    assert m1.kq == (2,0,0)
+    assert m1.kp == (1,0,0)
+    assert m1.sym == 3*q1**2*p1
+    
+    assert m2.coeff == 2
+    assert m2.kq == (0,1,0)
+    assert m2.kp == (0,1,0)
+    assert m2.sym == 2*q2*p2
+    
+    # Test from_monomials
+    f2 = Polynomial.from_monomials(vars, [m1, m2])
+    assert f.expansion.expression == f2.expansion.expression
+    
+    # Test with empty monomial list
+    f_empty = Polynomial.from_monomials(vars, [])
+    assert f_empty.expression == 0
+    
+    # Test with a single monomial
+    f_single = Polynomial.from_monomials(vars, [m1])
+    assert f_single.expression == 3*q1**2*p1
+    
+    # Test monomial filtering 
+    # Create a polynomial with terms of different degrees
+    f = Polynomial(vars, q1**3 + q1**2*p1 + q2*p2)
+    monomials = f.get_monomials()
+    
+    # Filter monomials by criteria (e.g., degree 3)
+    deg3_monomials = [m for m in monomials if sum(m.kq) + sum(m.kp) == 3]
+    f_deg3 = Polynomial.from_monomials(vars, deg3_monomials)
+    
+    assert len(deg3_monomials) == 2
+    assert f_deg3.expression == q1**3 + q1**2*p1

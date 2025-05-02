@@ -2,6 +2,18 @@ import math
 import symengine as se
 from functools import lru_cache
 from collections import defaultdict
+from dataclasses import dataclass
+
+
+@dataclass
+class Monomial:
+    coeff: se.Basic
+    kq: tuple[int]
+    kp: tuple[int]
+    sym: se.Basic        # the full q^k p^k expression
+
+    def exponents_qp_split(self):
+        return self.kq, self.kp
 
 
 class Polynomial:
@@ -15,6 +27,7 @@ class Polynomial:
         self._expansion = None
         self._by_degree_cache = None
         self._grad_cache = None
+        self._monomials_cache = None
 
     def __str__(self):
         return str(self.expression)
@@ -309,13 +322,97 @@ class Polynomial:
         
         return dF_dq, dF_dp
 
-    def build_by_degree(self) -> dict[int, list]:
-        """Return {deg: [ (coeff, kq, kp), … ]} for the expanded polynomial."""
+    def build_by_degree(self) -> dict[int, list[Monomial]]:
+        """
+        Return {deg: [Monomial, …]} for the expanded polynomial.
+        
+        Returns
+        -------
+        dict[int, list[Monomial]]
+            A dictionary mapping degrees to lists of Monomial objects
+            
+        Notes
+        -----
+        This method organizes the monomials of the polynomial by their total degree.
+        The total degree of a monomial is the sum of all exponents of its variables.
+        """
         if self._by_degree_cache is None:
             by_deg: dict[int, list] = defaultdict(list)
-            _update_by_deg(by_deg, self)          # ← your helper
+            _update_by_deg(by_deg, self)
             self._by_degree_cache = by_deg
         return self._by_degree_cache
+
+    def get_monomials(self) -> list[Monomial]:
+        """
+        Extract all monomials from the polynomial.
+        
+        Returns
+        -------
+        list[Monomial]
+            A list of Monomial objects representing each term in the polynomial
+            
+        Notes
+        -----
+        This method expands the polynomial first to ensure all terms are separated,
+        then extracts each term as a Monomial object with coefficient, exponents,
+        and symbolic representation.
+        
+        Examples
+        --------
+        >>> poly = Polynomial(vars, 3*q1**2*p1 + 2*q2*p2)
+        >>> monomials = poly.get_monomials()
+        >>> len(monomials)
+        2
+        >>> [m.sym for m in monomials]
+        [3*q1**2*p1, 2*q2*p2]
+        """
+        if self._monomials_cache is None:
+            n_dof = len(self.variables) // 2
+            q_vars = self.variables[:n_dof]
+            p_vars = self.variables[n_dof:]
+            
+            # Use _monomial_key to decompose the expanded expression
+            self._monomials_cache = list(_monomial_key(self.expansion.expression, q_vars, p_vars))
+            
+        return self._monomials_cache
+
+    @staticmethod
+    def from_monomials(variables: list[se.Symbol], monomials: list[Monomial]) -> 'Polynomial':
+        """
+        Create a Polynomial from a list of Monomial objects.
+        
+        Parameters
+        ----------
+        variables : list[se.Symbol]
+            The variables of the polynomial
+        monomials : list[Monomial]
+            The monomials to include in the polynomial
+            
+        Returns
+        -------
+        Polynomial
+            A new Polynomial constructed from the given monomials
+            
+        Notes
+        -----
+        This method allows direct construction of a polynomial from 
+        a list of Monomial objects, which is useful when manipulating
+        polynomials term by term.
+        
+        Examples
+        --------
+        >>> m1 = Monomial(coeff=3, kq=(2,0,0), kp=(1,0,0), sym=3*q1**2*p1)
+        >>> m2 = Monomial(coeff=2, kq=(0,1,0), kp=(0,1,0), sym=2*q2*p2)
+        >>> poly = Polynomial.from_monomials(vars, [m1, m2])
+        >>> str(poly)
+        '3*q1**2*p1 + 2*q2*p2'
+        """
+        if not monomials:
+            return Polynomial(variables, se.Integer(0))
+        
+        # Sum all the symbolic expressions of the monomials
+        expr = sum(monomial.sym for monomial in monomials)
+        return Polynomial(variables, expr)
 
 
 def _poisson_bracket(F: Polynomial, G: Polynomial) -> Polynomial:
@@ -398,27 +495,21 @@ def _update_by_deg(by_deg: dict[int, list], poly: Polynomial) -> None:
         
     Notes
     -----
-    Each monomial is stored in the dictionary as a tuple (coeff, kq, kp) where:
-    - coeff is the numeric coefficient
-    - kq is a tuple of exponents for position variables (q)
-    - kp is a tuple of exponents for momentum variables (p)
-    The key in the dictionary is the total degree (sum of all exponents)
+    Each monomial is stored in the dictionary as a Monomial object containing:
+    - coeff: the numeric coefficient
+    - kq: tuple of exponents for position variables (q)
+    - kp: tuple of exponents for momentum variables (p)
+    - sym: the full q^k p^k expression
     
-    Examples
-    --------
-    >>> by_deg = defaultdict(list)
-    >>> p = Polynomial([q1,q2,q3,p1,p2,p3], 3*q1**2*p1 + 2*q2*p2)
-    >>> _update_by_deg(by_deg, p)
-    >>> by_deg
-    {3: [(3, (2,0,0), (1,0,0))], 2: [(2, (0,1,0), (0,1,0))]}
+    The key in the dictionary is the total degree (sum of all exponents)
     """
     n_dof  = len(poly.variables) // 2
     q_vars = poly.variables[:n_dof]
     p_vars = poly.variables[n_dof:]
 
-    for coeff, kq, kp in _monomial_key(poly.expression, q_vars, p_vars):
-        deg = sum(kq) + sum(kp)
-        by_deg[deg].append((coeff, kq, kp))
+    for monomial in _monomial_key(poly.expression, q_vars, p_vars):
+        deg = sum(monomial.kq) + sum(monomial.kp)
+        by_deg[deg].append(monomial)
 
 
 def _monomial_key(expr: se.Basic,
@@ -438,11 +529,12 @@ def _monomial_key(expr: se.Basic,
         
     Yields
     ------
-    tuple
-        A tuple (coeff, kq, kp) for each monomial where:
-        - coeff is the numeric coefficient
-        - kq is a tuple of exponents for each q variable
-        - kp is a tuple of exponents for each p variable
+    Monomial
+        A Monomial instance for each term in the expression, containing:
+        - coeff: numeric coefficient
+        - kq: tuple of exponents for each q variable
+        - kp: tuple of exponents for each p variable
+        - sym: the full q^k p^k expression
         
     Notes
     -----
@@ -451,7 +543,7 @@ def _monomial_key(expr: se.Basic,
     2. Iterates through terms in the expression
     3. Decomposes each term into coefficient and factors
     4. Processes each factor to extract variable exponents
-    5. Yields the coefficient and exponent tuples
+    5. Yields Monomial instances
     
     Any symbolic terms not in q_vars or p_vars are treated as parameters
     and incorporated into the coefficient.
@@ -459,7 +551,8 @@ def _monomial_key(expr: se.Basic,
     Examples
     --------
     >>> list(_monomial_key(3*q1**2*p1 + 2*q2*p2, [q1,q2,q3], [p1,p2,p3]))
-    [(3, (2,0,0), (1,0,0)), (2, (0,1,0), (0,1,0))]
+    [Monomial(coeff=3, kq=(2,0,0), kp=(1,0,0), sym=3*q1**2*p1), 
+     Monomial(coeff=2, kq=(0,1,0), kp=(0,1,0), sym=2*q2*p2)]
     """
     n = len(q_vars)
     q2idx = {v: i for i, v in enumerate(q_vars)}     #  0 … n-1
@@ -483,7 +576,13 @@ def _monomial_key(expr: se.Basic,
             else:                                    # parameter (µ, λ, …)
                 coeff *= base**exp
 
-        yield coeff, tuple(kq), tuple(kp)
+        kq_tuple = tuple(kq)
+        kp_tuple = tuple(kp)
+        
+        # Create the symbolic expression for the monomial
+        sym_expr = coeff * _monomial_from_key(kq_tuple, kp_tuple)
+        
+        yield Monomial(coeff=coeff, kq=kq_tuple, kp=kp_tuple, sym=sym_expr)
 
 def _monomial_from_key(kq, kp):
     """
@@ -557,14 +656,6 @@ def _lie_transform(H: Polynomial, linear_modes: tuple, max_degree: int = 6) -> P
     2. Constructs a generating function S for the canonical transformation
     3. Applies the transformation using Poisson brackets: H ← e^{L_S} H
     4. Updates the terms cache for efficiency
-    
-    Examples
-    --------
-    >>> vars = [q1, q2, q3, p1, p2, p3]
-    >>> H = Polynomial(vars, q1**2 + p1**2 + q1*p1)
-    >>> H_transformed = _lie_transform(H)
-    >>> q1*p1 not in H_transformed.expression.expand().args
-    True
     """
     H_current = H.expansion
     by_deg = defaultdict(list)
@@ -579,11 +670,11 @@ def _lie_transform(H: Polynomial, linear_modes: tuple, max_degree: int = 6) -> P
         # assemble S_n ---------------------------------------------------
         lam, w1, w2 = linear_modes
 
-        def divisor(kq,kp): 
-            return lam*(kp[0]-kq[0]) + 1j*w1*(kp[1]-kq[1]) + 1j*w2*(kp[2]-kq[2])
+        def divisor(monomial): 
+            return lam*(monomial.kp[0]-monomial.kq[0]) + 1j*w1*(monomial.kp[1]-monomial.kq[1]) + 1j*w2*(monomial.kp[2]-monomial.kq[2])
 
-        S_expr = sum( (coeff/divisor(kq,kp)) * _monomial_from_key(kq,kp)
-                    for coeff,kq,kp in G_terms if kq[0]!=kp[0])
+        S_expr = sum((monomial.coeff/divisor(monomial)) * _monomial_from_key(monomial.kq, monomial.kp)
+                    for monomial in G_terms if monomial.kq[0] != monomial.kp[0])
 
         if not S_expr:
             continue
