@@ -3,8 +3,8 @@ import symengine as se
 import sympy as sp
 
 from system.libration import L1Point
-from algorithms.center.factory import hamiltonian, to_complex_canonical
-from algorithms.center.core import _lie_transform
+from algorithms.center.factory import hamiltonian, lie_transform
+
 
 
 def main():
@@ -16,7 +16,7 @@ def main():
     H_full = hamiltonian(L1_ES, max_degree=degree)
 
     # 2. Lie-series normal form
-    H_nf = _lie_transform(H_full, L1_ES.linear_modes(), max_degree=degree)
+    H_nf, G_list = lie_transform(L1_ES, H_full, max_degree=degree)
 
     # ---- original symbols ------------------------------------------------
     q1, q2, q3, p1, p2, p3 = H_nf.variables        # order guaranteed

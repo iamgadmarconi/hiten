@@ -106,30 +106,31 @@ def to_complex_canonical(point: LibrationPoint, H_real_normal: Polynomial) -> Po
     H_cn_expr = se.expand(H_real_normal.subs(complex_subs))
     return Polynomial([q1, q2, q3, p1, p2, p3], H_cn_expr)
 
-def lie_transform(H_init: Polynomial, lambda1: float, omega1: float, omega2: float, max_deg: int) -> tuple[Polynomial, list[Polynomial]]:
+def lie_transform(point: LibrationPoint, H_init: Polynomial, max_degree: int) -> tuple[Polynomial, list[Polynomial]]:
     """Bring *H_init* to the Jorba-Masdemont partial normal form up to
-    *max_deg* using a Lie-series expansion.  Returns the transformed
-    Hamiltonian and the list of generators [G_3, …, G_max_deg].
+    *max_degree* using a Lie-series expansion.  Returns the transformed
+    Hamiltonian and the list of generators [G_3, …, G_max_degree].
 
     Parameters
     ----------
     H_init : Polynomial
         Hamiltonian already expressed in complex canonical variables
         (q1,q2,q3,p1,p2,p3), with a working ``build_by_degree`` helper.
-    max_deg : int
+    max_degree : int
         Highest total degree to normalise and keep.
     lambda1, omega1, omega2 : (mp.mpf | float | symengine)  
         lambda, omega1, omega2 from the linear dynamics.
     """
-    # Internal working copy (will be updated in‑place).
-    H = H_init.copy()  # implement copy() in Polynomial if missing
+    lambda1, omega1, omega2 = point.linear_modes()
+
+    H = H_init.copy()
     by_deg = H.build_by_degree()
-    G_list = []  # store generators for optional post‑analysis
+    G_list = []
 
     # Convenience unpack
     q1, q2, q3, p1, p2, p3 = H.variables
 
-    for n in range(3, max_deg + 1):
+    for n in range(3, max_degree + 1):
         # --- 1. Homogeneous component of degree n ---
         Hn_expr = se.expand(sum(monomial.sym for monomial in by_deg.get(n, [])))
         if Hn_expr == 0:
@@ -145,7 +146,7 @@ def lie_transform(H_init: Polynomial, lambda1: float, omega1: float, omega2: flo
             # Term‑selection rule (paper eq. 17): remove only monomials
             # with *different* exponents in the hyperbolic coordinate.
             if kq[0] == kp[0]:
-                # This term already lives in the normal form ⇒ keep.
+                # This term already lives in the normal form -> keep.
                 continue
 
             # ⟨k_p − k_q , η⟩
@@ -153,7 +154,7 @@ def lie_transform(H_init: Polynomial, lambda1: float, omega1: float, omega2: flo
                        (kp[1] - kq[1]) * se.I * omega1 +
                        (kp[2] - kq[2]) * se.I * omega2)
             if divisor == 0:
-                # Exact resonance (should not occur for centre × saddle).
+                # Exact resonance (should not occur for centre x saddle).
                 continue
 
             Gn_terms.append(coeff / divisor * monom.sym)
@@ -167,16 +168,16 @@ def lie_transform(H_init: Polynomial, lambda1: float, omega1: float, omega2: flo
 
         # --- 3. Exponential Lie map via truncated BCH series ---
         # We build exp(L_G) H as H + {G,H} + 1/2{{G,{G,H}}} + … until the
-        # new term exceeds *max_deg*.
+        # new term exceeds *max_degree*.
         delta = Gn.poisson(H)
         k = 1
-        while delta.total_degree() <= max_deg and delta.expression != 0:
+        while delta.total_degree() <= max_degree and delta.expression != 0:
             H += delta / k
             k += 1
             delta = Gn.poisson(delta)
 
         # --- 4. Truncate to desired degree and refresh cache ---
-        H.truncate(max_deg)
+        H.truncate(max_degree)
         by_deg = H.build_by_degree()
 
     return H, G_list
