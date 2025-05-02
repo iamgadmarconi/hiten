@@ -246,6 +246,8 @@ class CollinearPoint(LibrationPoint):
         """Initialize a collinear Libration point."""
         super().__init__(mu)
         self._gamma = None # Cache for gamma value
+        self._cn_cache = {}  # Cache for cn values
+        self._linear_modes_cache = None  # Cache for linear modes
 
     @property
     def gamma(self, precision: int = 50) -> float:
@@ -295,6 +297,43 @@ class CollinearPoint(LibrationPoint):
             logger.info(f"Gamma for {type(self).__name__} calculated: gamma = {self._gamma}")
             
         return self._gamma
+
+    def _cn_cached(self, n: int) -> float:
+        """
+        Get the cached value of cn(mu) or compute it if not available.
+        
+        Parameters
+        ----------
+        n : int
+            The index for the cn coefficient
+            
+        Returns
+        -------
+        float
+            The value of cn(mu)
+        """
+        if n not in self._cn_cache:
+            # Compute and cache the value
+            self._cn_cache[n] = self._compute_cn(n)
+            logger.info(f"c{n}(mu) = {self._cn_cache[n]}")
+        else:
+            logger.debug(f"Using cached value for c{n}(mu) = {self._cn_cache[n]}")
+            
+        return self._cn_cache[n]
+        
+    @abstractmethod
+    def _compute_cn(self, n: int) -> float:
+        """
+        Compute the actual value of cn(mu) without caching.
+        This needs to be implemented by subclasses.
+        """
+        pass
+
+    def _cn(self, n: int) -> float:
+        """
+        Get the cn coefficient. This is a wrapper that uses caching.
+        """
+        return self._cn_cached(n)
 
     @abstractmethod
     def _get_gamma_poly_coeffs(self) -> list[float]:
@@ -348,11 +387,6 @@ class CollinearPoint(LibrationPoint):
 
         return expr
 
-    @abstractmethod
-    def _cn(self, n: int) -> float:
-        """Compute cn(mu) as in Jorba & Masdemont (1999), eq. (3) using self.gamma."""
-        pass
-
     def _planar_matrix(self) -> np.ndarray:
         """
         Return the 4x4 matrix M of eq. (9) restricted to (x,y,px,py) coordinates.
@@ -365,6 +399,31 @@ class CollinearPoint(LibrationPoint):
                         [0, -c2, -1, 0]], dtype=np.float64)
 
     def linear_modes(self):
+        """
+        Get the linear modes for the Libration point.
+        
+        Returns
+        -------
+        tuple
+            (lambda1, omega1, omega2) values
+        """
+        if self._linear_modes_cache is None:
+            logger.debug(f"Computing linear modes for {type(self).__name__}")
+            self._linear_modes_cache = self._compute_linear_modes()
+        else:
+            logger.debug(f"Using cached linear modes for {type(self).__name__}")
+            
+        return self._linear_modes_cache
+            
+    def _compute_linear_modes(self):
+        """
+        Compute the linear modes for the Libration point.
+        
+        Returns
+        -------
+        tuple
+            (lambda1, omega1, omega2) values for the libration point
+        """
         try:
             with mp.workdps(50):
                 c2 = self._cn(2)
@@ -455,11 +514,12 @@ class CollinearPoint(LibrationPoint):
         """
         logger.debug(f"Computing normal form transform for {type(self).__name__} with mu={self.mu}")
         
+        # Use the cached linear modes
         lambda1, omega1, omega2 = self.linear_modes()
-        logger.debug(f"Linear modes calculated: lambda1={lambda1}, omega1={omega1}, omega2={omega2}")
+        logger.debug(f"Using linear modes: lambda1={lambda1}, omega1={omega1}, omega2={omega2}")
         
         c2 = self._cn(2)
-        logger.debug(f"c2 coefficient calculated: c2={c2}")
+        logger.debug(f"Using c2 coefficient: c2={c2}")
 
         # Get normalization factors s1, s2
         s1, s2 = self._scale_factor(lambda1, omega1, omega2)
@@ -532,10 +592,16 @@ class CollinearPoint(LibrationPoint):
         LinearData
             Object containing the linear data for the Libration point
         """
+        logger.debug(f"Getting linear data for {type(self).__name__}")
+        
+        # Use cached linear modes
         lambda1, omega1, omega2 = self.linear_modes()
+        
+        # Get symplectic transformation matrices
         C, Cinv = self.normal_form_transform()
         
-        self._linear_data = LinearData(
+        # Create and return the LinearData object
+        return LinearData(
             mu=self.mu,
             point=type(self).__name__[:2],  # 'L1', 'L2', 'L3'
             lambda1=lambda1, 
@@ -544,8 +610,6 @@ class CollinearPoint(LibrationPoint):
             C=C, 
             Cinv=Cinv
         )
-        
-        return self._linear_data
 
 
 class L1Point(CollinearPoint):
@@ -627,14 +691,25 @@ class L1Point(CollinearPoint):
         # Rough estimate for gamma_L1 (distance from m2)
         return (self.mu / 3)**(1/3)
 
-    def _cn(self, n: int) -> float:
-        """Compute cn(mu) as in Jorba & Masdemont (1999), eq. (3) using self.gamma."""
+    def _compute_cn(self, n: int) -> float:
+        """
+        Compute cn(mu) as in Jorba & Masdemont (1999), eq. (3) using self.gamma for L1.
+        
+        Parameters
+        ----------
+        n : int
+            Index of the coefficient to compute
+            
+        Returns
+        -------
+        float
+            The cn coefficient value
+        """
         term1 = 1 / self.gamma ** 3
         term2 = (1) ** n * self.mu
         term3 = (-1) ** n * ( (1-self.mu) * self.gamma ** (n+1) / (1 - self.gamma) ** (n+1) )
 
         c_n = term1 * (term2 + term3)
-        logger.info(f"c{n}(mu) = {c_n}")
         return c_n
 
 
@@ -721,14 +796,25 @@ class L2Point(CollinearPoint):
         # Rough estimate for gamma_L2 (distance from m2)
         return (self.mu / 3)**(1/3)
 
-    def _cn(self, n: int) -> float:
-        """Compute cn(mu) as in Jorba & Masdemont (1999), eq. (3) using self.gamma."""
+    def _compute_cn(self, n: int) -> float:
+        """
+        Compute cn(mu) as in Jorba & Masdemont (1999), eq. (3) using self.gamma for L2.
+        
+        Parameters
+        ----------
+        n : int
+            Index of the coefficient to compute
+            
+        Returns
+        -------
+        float
+            The cn coefficient value
+        """
         term1 = 1 / self.gamma ** 3
         term2 = (-1) ** n * self.mu
         term3 = (-1) ** n * ( (1-self.mu) * self.gamma ** (n+1) / (1 + self.gamma) ** (n+1) )
 
         c_n = term1 * (term2 + term3)
-        logger.info(f"c{n}(mu) = {c_n}")
         return c_n
 
 
@@ -821,13 +907,25 @@ class L3Point(CollinearPoint):
         # Or using the relation from Szebehely, gamma_L3 approx 1 - (7/12)mu
         return 1.0 - (7.0 / 12.0) * self.mu
 
-    def _cn(self, n: int) -> float:
+    def _compute_cn(self, n: int) -> float:
+        """
+        Compute cn(mu) as in Jorba & Masdemont (1999), eq. (3) using self.gamma for L3.
+        
+        Parameters
+        ----------
+        n : int
+            Index of the coefficient to compute
+            
+        Returns
+        -------
+        float
+            The cn coefficient value
+        """
         term1 = (-1) ** n / self.gamma ** 3
         term2 = 1-self.mu
         term3 = self.mu * self.gamma ** (n+1) / (1 + self.gamma) ** (n+1)
 
         c_n = term1 * (term2 + term3)
-        logger.info(f"c{n}(mu) = {c_n}")
         return c_n
 
 

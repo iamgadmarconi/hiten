@@ -17,7 +17,7 @@ from log_config import logger
 
 def main():
 
-    degree = 6
+    degree = 9
 
     Sun = Body("Sun", 
                 Constants.bodies["sun"]["mass"], 

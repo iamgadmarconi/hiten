@@ -135,13 +135,9 @@ def _lie_transform(point: LibrationPoint, H_init: Polynomial, max_degree: int) -
 
         # Step 10: Add G_n to total generating function
         G_total = G_total + G_n
-        # Truncate G_total to max_degree? The paper doesn't explicitly state,
-        # but keeping it truncated might be more manageable. Let's truncate.
-        G_total = G_total.truncate(max_degree)
-
 
     # After the loop, H_transformed is the normalized Hamiltonian up to max_degree
-    # and G_total is the sum of generators G_3 + ... + G_max_degree
+    # and G_total is the sum of generators G_3 + ... + G_n
     return H_transformed, G_total
 
 def _get_homogeneous_terms(H: Polynomial, n: int) -> Polynomial:
