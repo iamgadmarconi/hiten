@@ -8,7 +8,10 @@ from system.libration import LibrationPoint
 
 x, y, z  = se.symbols('x y z')
 px, py, pz = se.symbols('px py pz')
-
+x_rn, y_rn, z_rn = se.symbols('x_rn y_rn z_rn')
+px_rn, py_rn, pz_rn = se.symbols('px_rn py_rn pz_rn')
+q1, q2, q3 = se.symbols('q1 q2 q3')
+p1, p2, p3 = se.symbols('p1 p2 p3')
 
 def _build_T_polynomials(N: int) -> list[se.Basic]:
     """Return [T0 … TN] using the Legendre recurrence (paper eq. 6)."""
@@ -48,8 +51,29 @@ def hamiltonian(point: LibrationPoint, max_degree: int = 6) -> Polynomial:
     return Polynomial(vars_phys, H_phys)
 
 
-def to_complex_canonical(point: LibrationPoint,
-                         H_phys: Polynomial) -> Polynomial:
+def to_real_normal(point: LibrationPoint, H_phys: Polynomial) -> Polynomial:
+    """
+    Express the physical CR3BP Hamiltonian around a collinear point in the
+    real normal-form variables (x,y,z,px,py,pz) used for the centre-
+    manifold normal-form computation (Jorba & Masdemont, 1999).
+    """
+    C_num, _ = point.normal_form_transform() # numpy array
+    C = se.Matrix(C_num.tolist()) # to SymEngine
+
+    Z_new = se.Matrix([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn])
+
+    subs_dict = {}
+    for i, var in enumerate([x, y, z, px, py, pz]):
+        expr = 0
+        for j in range(6):
+            expr += C[i, j] * Z_new[j]
+        subs_dict[var] = se.expand(expr)
+
+    H_rn = se.expand(H_phys.subs(subs_dict))
+
+    return Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn)
+
+def to_complex_canonical(point: LibrationPoint, H_real_normal: Polynomial) -> Polynomial:
     """
     Express the physical CR3BP Hamiltonian around a collinear point in the
     complex canonical variables (q1,q2,q3,p1,p2,p3) used for the centre-
@@ -59,9 +83,9 @@ def to_complex_canonical(point: LibrationPoint,
     ----------
     point : LibrationPoint
         Must implement `normal_form_transform()` → (C, Cinv) with C \subset \mathbb{R}^{6 \times 6}.
-    H_phys : Polynomial
-        Hamiltonian in the translated/scaled Cartesian variables
-        (x, y, z, px, py, pz).
+    H_real_normal : Polynomial
+        Hamiltonian in the real normal-form variables
+        (x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn).
 
     Returns
     -------
@@ -69,47 +93,16 @@ def to_complex_canonical(point: LibrationPoint,
         Same Hamiltonian written in (q1,q2,q3,p1,p2,p3).
     """
 
-    # ------------------------------------------------------------------
-    # 0. Symbols
-    # ------------------------------------------------------------------
-    x, y, z  = se.symbols('x y z')
-    px, py, pz = se.symbols('px py pz')
-    q1, q2, q3, p1, p2, p3 = se.symbols('q1 q2 q3 p1 p2 p3')
-
-    # ------------------------------------------------------------------
-    # 1. Real normal-form change  Z_old = C^{-1} · Z_new
-    # ------------------------------------------------------------------
-    C_num, Cinv_num = point.normal_form_transform()       # numpy array
-    C = se.Matrix(C_num.tolist())               # to SymEngine
-    Cinv = se.Matrix(Cinv_num.tolist())               # to SymEngine
-
-    xt, yt, zt, pxt, pyt, pzt = se.symbols('xt yt zt pxt pyt pzt')
-    Z_tilde   = se.Matrix([xt, yt, zt, pxt, pyt, pzt])
-    Z_old_exp = (Cinv * Z_tilde).applyfunc(se.expand) # list of 6 expressions
-
-    # ------------------------------------------------------------------
-    # 2. Complex canonical substitution  (Eq. 12)
-    # ------------------------------------------------------------------
     sqrt2 = se.sqrt(2)
     complex_subs = {
-        xt : q1,
-        pxt: p1,
-        yt : (q2 + se.I*p2) / sqrt2,
-        pyt: (se.I*q2 + p2) / sqrt2,
-        zt : (q3 + se.I*p3) / sqrt2,
-        pzt: (se.I*q3 + p3) / sqrt2,
+        x_rn : q1,
+        y_rn : (q2 + se.I*p2) / sqrt2,
+        z_rn : (q3 + se.I*p3) / sqrt2,
+        px_rn: p1,
+        py_rn: (se.I*q2 + p2) / sqrt2,
+        pz_rn: (se.I*q3 + p3) / sqrt2,
     }
 
-    # ------------------------------------------------------------------
-    # 3. Build full mapping  (x,y,z,px,py,pz) → expressions(q,p)
-    # ------------------------------------------------------------------
-    subs_dict = {
-        old_sym : expr.subs(complex_subs)
-        for old_sym, expr in zip((x, y, z, px, py, pz), Z_old_exp)
-    }
-
-    # ------------------------------------------------------------------
-    # 4. Apply and wrap up
-    # ------------------------------------------------------------------
-    H_cc_expr = se.expand(H_phys.expression.subs(subs_dict))
-    return Polynomial([q1, q2, q3, p1, p2, p3], H_cc_expr)
+    # Apply substitutions directly to the Hamiltonian expression
+    H_cn_expr = se.expand(H_real_normal.subs(complex_subs))
+    return Polynomial([q1, q2, q3, p1, p2, p3], H_cn_expr)

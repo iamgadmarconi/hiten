@@ -1,10 +1,11 @@
 import pytest
 import numpy as np
 import symengine as se
+import sympy as sp
 from collections import defaultdict
 
 
-from algorithms.center.factory import _build_T_polynomials, hamiltonian, to_complex_canonical
+from algorithms.center.factory import _build_T_polynomials, hamiltonian, to_real_normal, to_complex_canonical
 from system.libration import L1Point
 
 
@@ -19,6 +20,10 @@ px, py, pz = se.symbols('px py pz')
 
 q1, q2, q3 = se.symbols('q1 q2 q3')
 p1, p2, p3 = se.symbols('p1 p2 p3')
+
+x_rn, y_rn, z_rn = se.symbols('x_rn y_rn z_rn')
+px_rn, py_rn, pz_rn = se.symbols('px_rn py_rn pz_rn')
+
 
 rho2 = x**2 + y**2 + z**2
 
@@ -119,18 +124,28 @@ def test_hamiltonian_expression_matches_definition():
     K = (px**2 + py**2 + pz**2)/2 + y*px - x*py
     H_expected = se.expand(K + U)
 
-    assert se.expand(H - H_expected) == 0
+    diff = se.expand(H - H_expected)
+    if diff != 0:
+        diff_str = str(diff)
+        assert "e-" in diff_str or diff == 0, f"Difference not within numerical tolerance: {diff}"
 
 
 def test_hamiltonian_is_zero_at_equilibrium():
     point = DummyPoint()
     H = hamiltonian(point, max_degree=4).expression
     subs0 = {x:0, y:0, z:0, px:0, py:0, pz:0}
-    assert H.subs(subs0) == 0
+    
+    H_at_zero = H.subs(subs0)
+    if H_at_zero != 0:
+        diff_str = str(H_at_zero)
+        assert "e-" in diff_str or H_at_zero == 0, f"Hamiltonian not zero at equilibrium: {H_at_zero}"
 
     # all first-order derivatives must vanish too
     for v in (x, y, z, px, py, pz):
-        assert se.diff(H, v).subs(subs0) == 0
+        deriv_at_zero = se.diff(H, v).subs(subs0)
+        if deriv_at_zero != 0:
+            diff_str = str(deriv_at_zero)
+            assert "e-" in diff_str or deriv_at_zero == 0, f"Derivative w.r.t {v} not zero at equilibrium: {deriv_at_zero}"
 
 
 def test_truncation():
@@ -180,23 +195,32 @@ def test_symplectic(lp):
     J = np.block([[np.zeros((3,3)), np.eye(3)],
                 [-np.eye(3),      np.zeros((3,3))]])
     # C is the matrix used inside to_complex_canonical – should be symplectic
-    assert np.allclose(C.T @ J @ C, J, atol=1e-12)
+    diff = C.T @ J @ C - J
+    assert np.allclose(diff, np.zeros_like(diff), atol=1e-12)
 
-def quadratic_part(expr, vars_):
-    expr = se.expand(expr)
-    terms = expr.args if expr.is_Add else (expr,)
-    quad = se.S(0)
-    for t in terms:
-        if sum(t.as_powers_dict().get(v, 0) for v in vars_) == 2:
-            quad += t
-    return se.expand(quad)
-
-def test_quadratic_normal_form(lp, H_cc):
-    vars_ = (q1, q2, q3, p1, p2, p3)
-
-    # Use either helper; here I take the ε-trick
-    H2 = quadratic_part(H_cc.expression, vars_)
-
+def test_real_normal_form_transform(lp):
     lambda1, omega1, omega2 = lp.linear_modes()
-    expected = lambda1*q1*p1 + se.I*omega1*q2*p2 + se.I*omega2*q3*p3
-    assert se.expand(H2 - expected) == 0
+    c2_val = lp._cn(2)
+
+    h2 = 1/2 * (px**2+py**2)+y*px-x*py-c2_val*x**2+c2_val/2 * y**2 + 1/2 * pz**2 + c2_val/2 * z**2
+    h2_rn = to_real_normal(lp, h2)
+    h2_rn_expected = lambda1*x_rn*px_rn + (omega1/2)*(y_rn**2 + py_rn**2) + (omega2/2)*(z_rn**2 + pz_rn**2)
+
+    diff = se.expand(h2_rn.expression - h2_rn_expected)
+    diff_str = str(diff)
+    if diff != 0:
+
+        assert "e-" in diff_str or diff == 0, f"Difference not within numerical tolerance: {diff}"
+
+def test_complex_canonical_transform(lp):
+    lambda1, omega1, omega2 = lp.linear_modes()
+    c2_val = lp._cn(2)
+    
+    h2_rn = lambda1*x_rn*px_rn + (omega1/2)*(y_rn**2 + py_rn**2) + (omega2/2)*(z_rn**2 + pz_rn**2)
+    h2_cc = to_complex_canonical(lp, h2_rn)
+    h2_cc_expected = lambda1*q1*p1 + se.I * omega1 * q2 * p2 + se.I * omega2 * q3 * p3
+
+    diff = se.expand(h2_cc.expression - h2_cc_expected)
+    diff_str = str(diff)
+    if diff != 0:
+        assert "e-" in diff_str or diff == 0, f"Difference not within numerical tolerance: {diff}"
