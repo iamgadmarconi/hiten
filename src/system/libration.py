@@ -181,7 +181,7 @@ class LibrationPoint(ABC):
             (stable_eigenvalues, unstable_eigenvalues, center_eigenvalues)
         """
         if self._stability_info is None:
-             self.analyze_stability() # Ensure stability is analyzed
+            self.analyze_stability() # Ensure stability is analyzed
         sn, un, cn, _, _, _ = self._stability_info
         return (sn, un, cn)
     
@@ -196,7 +196,7 @@ class LibrationPoint(ABC):
             (stable_eigenvectors, unstable_eigenvectors, center_eigenvectors)
         """
         if self._stability_info is None:
-             self.analyze_stability() # Ensure stability is analyzed
+            self.analyze_stability() # Ensure stability is analyzed
         _, _, _, Ws, Wu, Wc = self._stability_info
         return (Ws, Wu, Wc)
     
@@ -246,6 +246,8 @@ class CollinearPoint(LibrationPoint):
         """Initialize a collinear Libration point."""
         super().__init__(mu)
         self._gamma = None # Cache for gamma value
+        self._cn_cache = {}  # Cache for cn values
+        self._linear_modes_cache = None  # Cache for linear modes
 
     @property
     def gamma(self, precision: int = 50) -> float:
@@ -280,8 +282,8 @@ class CollinearPoint(LibrationPoint):
             x0 = self._find_relevant_real_root(roots)
             
             if x0 is None:
-                 logger.warning(f"np.roots failed to find a suitable real root for {type(self).__name__}. Falling back to rough estimate.")
-                 x0 = self._get_fallback_gamma_estimate()
+                logger.warning(f"np.roots failed to find a suitable real root for {type(self).__name__}. Falling back to rough estimate.")
+                x0 = self._get_fallback_gamma_estimate()
             
             logger.debug(f"Initial estimate for {type(self).__name__} gamma: x0 = {x0}")
 
@@ -296,6 +298,43 @@ class CollinearPoint(LibrationPoint):
             
         return self._gamma
 
+    def _cn_cached(self, n: int) -> float:
+        """
+        Get the cached value of cn(mu) or compute it if not available.
+        
+        Parameters
+        ----------
+        n : int
+            The index for the cn coefficient
+            
+        Returns
+        -------
+        float
+            The value of cn(mu)
+        """
+        if n not in self._cn_cache:
+            # Compute and cache the value
+            self._cn_cache[n] = self._compute_cn(n)
+            logger.info(f"c{n}(mu) = {self._cn_cache[n]}")
+        else:
+            logger.debug(f"Using cached value for c{n}(mu) = {self._cn_cache[n]}")
+            
+        return self._cn_cache[n]
+        
+    @abstractmethod
+    def _compute_cn(self, n: int) -> float:
+        """
+        Compute the actual value of cn(mu) without caching.
+        This needs to be implemented by subclasses.
+        """
+        pass
+
+    def _cn(self, n: int) -> float:
+        """
+        Get the cn coefficient. This is a wrapper that uses caching.
+        """
+        return self._cn_cached(n)
+
     @abstractmethod
     def _get_gamma_poly_coeffs(self) -> list[float]:
         """Return the coefficients of the polynomial whose root is gamma."""
@@ -303,9 +342,9 @@ class CollinearPoint(LibrationPoint):
         
     @abstractmethod
     def _gamma_poly(self, x: float) -> float:
-         """Evaluate the polynomial whose root is gamma at point x."""
-         pass
-         
+        """Evaluate the polynomial whose root is gamma at point x."""
+        pass
+
     @abstractmethod
     def _find_relevant_real_root(self, roots: np.ndarray) -> float | None:
         """From the roots of the polynomial, find the one relevant to this point."""
@@ -344,12 +383,9 @@ class CollinearPoint(LibrationPoint):
         term2 = -(1 - mu) * (x + mu) / r1_3 if r1_3 > 0 else 0
         term3 = -mu * (x - (1 - mu)) / r2_3 if r2_3 > 0 else 0
         
-        return term1 + term2 + term3
+        expr = term1 + term2 + term3
 
-    @abstractmethod
-    def _cn(self, n: int) -> float:
-        """Compute cn(mu) as in Jorba & Masdemont (1999), eq. (3) using self.gamma."""
-        pass
+        return expr
 
     def _planar_matrix(self) -> np.ndarray:
         """
@@ -364,18 +400,107 @@ class CollinearPoint(LibrationPoint):
 
     def linear_modes(self):
         """
-        Solve η² + (2-c2)η + (1+c2-2c2²)=0  (η = λ²) to extract
-        λ1 > 0  (real) and ω1 > 0  (imag)  together with ω2=√c2.
+        Get the linear modes for the Libration point.
+        
+        Returns
+        -------
+        tuple
+            (lambda1, omega1, omega2) values
         """
-        c2 = self._cn(2)
-        a = 1.0
-        b = 2.0 - c2
-        c = 1.0 + c2 - 2.0*c2**2
-        eta1, eta2 = np.roots([a, b, c])
-        lambda1 = np.sqrt(max(eta2, eta1))     # positive real root
-        omega1  = np.sqrt(-min(eta2, eta1))    # positive imaginary root
-        omega2  = np.sqrt(c2)
-        return lambda1, omega1, omega2
+        if self._linear_modes_cache is None:
+            logger.debug(f"Computing linear modes for {type(self).__name__}")
+            self._linear_modes_cache = self._compute_linear_modes()
+        else:
+            logger.debug(f"Using cached linear modes for {type(self).__name__}")
+            
+        return self._linear_modes_cache
+            
+    def _compute_linear_modes(self):
+        """
+        Compute the linear modes for the Libration point.
+        
+        Returns
+        -------
+        tuple
+            (lambda1, omega1, omega2) values for the libration point
+        """
+        try:
+            with mp.workdps(50):
+                c2 = self._cn(2)
+                a = 1.0  # coefficient of x²
+                b = 2.0 - c2  # coefficient of x
+                c = 1.0 + c2 - 2.0*c2**2  # constant term
+                
+                # Convert coefficients to mpmath objects
+                mp_a = mp.mpf(a)
+                mp_b = mp.mpf(b)
+                mp_c = mp.mpf(c)
+                
+                # Use quadratic formula: x = (-b ± sqrt(b² - 4ac))/(2a)
+                discriminant = mp_b**2 - 4*mp_a*mp_c
+                
+                # Find both roots
+                eta1 = (-mp_b - mp.sqrt(discriminant)) / (2*mp_a)
+                eta2 = (-mp_b + mp.sqrt(discriminant)) / (2*mp_a)
+                
+                # Convert to floats for further calculations
+                eta1_float = float(eta1)
+                eta2_float = float(eta2)
+                
+                # Calculate the required values
+                lambda1 = float(mp.sqrt(max(eta1_float, eta2_float))) if max(eta1_float, eta2_float) > 0 else 0.0
+                omega1 = float(mp.sqrt(-min(eta1_float, eta2_float))) if min(eta1_float, eta2_float) < 0 else 0.0
+                omega2 = float(mp.sqrt(c2))
+                
+            logger.info(f"Quadratic roots: eta1={eta1_float}, eta2={eta2_float}")
+            logger.info(f"Calculated: lambda1={lambda1}, omega1={omega1}, omega2={omega2}")
+            return lambda1, omega1, omega2
+        except Exception as e:
+            # Handle errors more appropriately
+            logger.error(f"Failed to calculate linear modes: {e}")
+            raise RuntimeError(f"Linear modes calculation failed.") from e
+
+    def _scale_factor(self, lambda1, omega1, omega2):
+        """
+        Calculate the normalization factors s1 and s2 used in the normal form transformation.
+        
+        Parameters
+        ----------
+        lambda1 : float
+            The hyperbolic mode value
+        omega1 : float
+            The elliptic mode value
+        omega2 : float
+            The vertical oscillation frequency
+            
+        Returns
+        -------
+        s1, s2 : tuple of float
+            The normalization factors for the hyperbolic and elliptic components
+        """
+        c2 = self._cn(2)  # Get c2 coefficient
+        
+        # Calculate the expressions inside the square roots
+        expr1 = 2*lambda1*((4+3*c2)*lambda1**2 + 4 + 5*c2 - 6*c2**2)
+        expr2 = omega1*((4+3*c2)*omega1**2 - 4 - 5*c2 + 6*c2**2)
+        
+        # Check if values are positive
+        if expr1 < 0:
+            err = f"Expression for s1 is negative: {expr1}. Taking absolute value."
+            logger.error(err)
+            raise RuntimeError(err)
+            
+        if expr2 < 0:
+            err = f"Expression for s2 is negative: {expr2}. Taking absolute value."
+            logger.error(err)
+            raise RuntimeError(err)
+        
+        # Calculate scale factors
+        s1 = np.sqrt(expr1)
+        s2 = np.sqrt(expr2)
+        
+        logger.debug(f"Normalization factors calculated: s1={s1}, s2={s2}")
+        return s1, s2
 
     def normal_form_transform(self):
         """
@@ -384,20 +509,21 @@ class CollinearPoint(LibrationPoint):
 
         Returns
         -------
-        LinearData
+        tuple
+            (C, Cinv) where C is the symplectic transformation matrix and Cinv is its inverse
         """
         logger.debug(f"Computing normal form transform for {type(self).__name__} with mu={self.mu}")
         
+        # Use the cached linear modes
         lambda1, omega1, omega2 = self.linear_modes()
-        logger.debug(f"Linear modes calculated: lambda1={lambda1}, omega1={omega1}, omega2={omega2}")
+        logger.debug(f"Using linear modes: lambda1={lambda1}, omega1={omega1}, omega2={omega2}")
         
         c2 = self._cn(2)
-        logger.debug(f"c2 coefficient calculated: c2={c2}")
+        logger.debug(f"Using c2 coefficient: c2={c2}")
 
-        # factors s1, s2 from paper
-        s1 = np.sqrt( 2*lambda1*((4+3*c2)*lambda1**2 + 4 + 5*c2 - 6*c2**2) )
-        s2 = np.sqrt( omega1*((4+3*c2)*omega1**2 - 4 - 5*c2 + 6*c2**2) )
-        logger.debug(f"Normalization factors calculated: s1={s1}, s2={s2}")
+        # Get normalization factors s1, s2
+        s1, s2 = self._scale_factor(lambda1, omega1, omega2)
+        logger.debug(f"Scale factors: s1={s1}, s2={s2}")
 
         C = np.zeros((6,6))
         
@@ -458,13 +584,32 @@ class CollinearPoint(LibrationPoint):
         return C, Cinv
 
     def _get_linear_data(self):
-        C, Cinv = self.normal_form_transform()
+        """
+        Get the linear data for the Libration point.
+        
+        Returns
+        -------
+        LinearData
+            Object containing the linear data for the Libration point
+        """
+        logger.debug(f"Getting linear data for {type(self).__name__}")
+        
+        # Use cached linear modes
         lambda1, omega1, omega2 = self.linear_modes()
-        self._linear_data = LinearData(mu=self.mu,
-                                        point=type(self).__name__[:2],  # 'L1', 'L2', 'L3'
-                                        lambda1=lambda1, omega1=omega1, omega2=omega2,
-                                        C=C, Cinv=Cinv)
-        return self._linear_data
+        
+        # Get symplectic transformation matrices
+        C, Cinv = self.normal_form_transform()
+        
+        # Create and return the LinearData object
+        return LinearData(
+            mu=self.mu,
+            point=type(self).__name__[:2],  # 'L1', 'L2', 'L3'
+            lambda1=lambda1, 
+            omega1=omega1, 
+            omega2=omega2,
+            C=C, 
+            Cinv=Cinv
+        )
 
 
 class L1Point(CollinearPoint):
@@ -495,35 +640,35 @@ class L1Point(CollinearPoint):
         
         # Use high precision root finding
         try:
-             with mp.workdps(50):
-                 # Use lambda to pass self implicitly
-                 func = lambda x_val: self._dOmega_dx(x_val)
-                 # Provide the interval as a bracket if possible
-                 x = mp.findroot(func, interval)
-             x = float(x)
-             logger.info(f"L1 position calculated: x = {x}")
-             return np.array([x, 0, 0], dtype=np.float64)
+            with mp.workdps(50):
+                # Use lambda to pass self implicitly
+                func = lambda x_val: self._dOmega_dx(x_val)
+                # Provide the interval as a bracket if possible
+                x = mp.findroot(func, interval)
+            x = float(x)
+            logger.info(f"L1 position calculated: x = {x}")
+            return np.array([x, 0, 0], dtype=np.float64)
         except ValueError as e:
-             # Handle cases where findroot fails (e.g., no sign change in interval)
-             logger.error(f"Failed to find L1 root in interval {interval}: {e}")
-             # Optionally, could try a different solver or wider interval
-             # For now, re-raise or return NaN/error indicator
-             raise RuntimeError(f"L1 position calculation failed.") from e
-             
+            # Handle cases where findroot fails (e.g., no sign change in interval)
+            logger.error(f"Failed to find L1 root in interval {interval}: {e}")
+            # Optionally, could try a different solver or wider interval
+            # For now, re-raise or return NaN/error indicator
+            raise RuntimeError(f"L1 position calculation failed.") from e
+            
     def _get_gamma_poly_coeffs(self) -> list[float]:
         mu = self.mu
         return [1, -(3-mu), (3-2*mu), -mu, 2*mu, -mu]
         
     def _gamma_poly(self, x: float) -> float:
-         mu = self.mu
-         term1 = x**5
-         term2 = -(3-mu) * x**4
-         term3 = (3-2*mu) * x**3
-         term4 = -mu*x**2
-         term5 = 2*mu*x
-         term6 = -mu
-         return term1 + term2 + term3 + term4 + term5 + term6
-         
+        coeffs = self._get_gamma_poly_coeffs()
+        term1 = x**5
+        term2 = coeffs[1] * x**4
+        term3 = coeffs[2] * x**3
+        term4 = coeffs[3] * x**2
+        term5 = coeffs[4] * x
+        term6 = coeffs[5]
+        return term1 + term2 + term3 + term4 + term5 + term6
+        
     def _find_relevant_real_root(self, roots: np.ndarray) -> float | None:
         # For L1, gamma should be positive and small (distance from m2)
         # Position x is 1 - mu - gamma. Gamma = 1 - mu - x
@@ -535,25 +680,36 @@ class L1Point(CollinearPoint):
                 real_r = float(r.real)
                 # Gamma for L1 should be positive and typically less than 1
                 if 0 < real_r < 1.0:
-                     # Further check: is it physically plausible?
-                     # L1 position x = 1 - mu - real_r. Check if -mu < x < 1-mu
-                     x_pos = 1 - mu - real_r
-                     if -mu < x_pos < (1-mu):
-                         return real_r
+                    # Further check: is it physically plausible?
+                    # L1 position x = 1 - mu - real_r. Check if -mu < x < 1-mu
+                    x_pos = 1 - mu - real_r
+                    if -mu < x_pos < (1-mu):
+                        return real_r
         return None
         
     def _get_fallback_gamma_estimate(self) -> float:
         # Rough estimate for gamma_L1 (distance from m2)
         return (self.mu / 3)**(1/3)
 
-    def _cn(self, n: int) -> float:
-        """Compute cn(mu) as in Jorba & Masdemont (1999), eq. (3) using self.gamma."""
+    def _compute_cn(self, n: int) -> float:
+        """
+        Compute cn(mu) as in Jorba & Masdemont (1999), eq. (3) using self.gamma for L1.
+        
+        Parameters
+        ----------
+        n : int
+            Index of the coefficient to compute
+            
+        Returns
+        -------
+        float
+            The cn coefficient value
+        """
         term1 = 1 / self.gamma ** 3
         term2 = (1) ** n * self.mu
         term3 = (-1) ** n * ( (1-self.mu) * self.gamma ** (n+1) / (1 - self.gamma) ** (n+1) )
 
         c_n = term1 * (term2 + term3)
-
         return c_n
 
 
@@ -583,41 +739,41 @@ class L2Point(CollinearPoint):
         interval = [1.0, 2.0] # Initial guess interval for L2
         logger.debug(f"L2: Finding root of dOmega/dx in interval {interval}")
         try:
-             with mp.workdps(50):
-                 func = lambda x_val: self._dOmega_dx(x_val)
-                 x = mp.findroot(func, interval)
-             x = float(x)
-             logger.info(f"L2 position calculated: x = {x}")
-             return np.array([x, 0, 0], dtype=np.float64)
+            with mp.workdps(50):
+                func = lambda x_val: self._dOmega_dx(x_val)
+                x = mp.findroot(func, interval)
+            x = float(x)
+            logger.info(f"L2 position calculated: x = {x}")
+            return np.array([x, 0, 0], dtype=np.float64)
         except ValueError as e:
-             logger.error(f"Failed to find L2 root in interval {interval}: {e}")
-             # Try a wider interval as fallback?
-             logger.debug(f"L2: Retrying root finding in wider interval {[1 - self.mu + 1e-9, 2.0]}")
-             try:
-                 with mp.workdps(50):
+            logger.error(f"Failed to find L2 root in interval {interval}: {e}")
+            # Try a wider interval as fallback?
+            logger.debug(f"L2: Retrying root finding in wider interval {[1 - self.mu + 1e-9, 2.0]}")
+            try:
+                with mp.workdps(50):
                     func = lambda x_val: self._dOmega_dx(x_val)
                     x = mp.findroot(func, [1 - self.mu + 1e-9, 2.0])
-                 x = float(x)
-                 logger.info(f"L2 position calculated (retry): x = {x}")
-                 return np.array([x, 0, 0], dtype=np.float64)
-             except ValueError as e2:
+                x = float(x)
+                logger.info(f"L2 position calculated (retry): x = {x}")
+                return np.array([x, 0, 0], dtype=np.float64)
+            except ValueError as e2:
                 logger.error(f"Failed to find L2 root even in wider interval: {e2}")
                 raise RuntimeError(f"L2 position calculation failed.") from e2
-             
+ 
     def _get_gamma_poly_coeffs(self) -> list[float]:
         mu = self.mu
         return [1, (3-mu), (3-2*mu), -mu, -2*mu, -mu]
 
     def _gamma_poly(self, x: float) -> float:
-         mu = self.mu
-         term1 = x**5
-         term2 = (3-mu) * x**4
-         term3 = (3-2*mu) * x**3
-         term4 = -mu*x**2
-         term5 = -2*mu*x
-         term6 = -mu
-         return term1 + term2 + term3 + term4 + term5 + term6
-         
+        coeffs = self._get_gamma_poly_coeffs()
+        term1 = x**5
+        term2 = coeffs[1] * x**4
+        term3 = coeffs[2] * x**3
+        term4 = coeffs[3] * x**2
+        term5 = coeffs[4] * x
+        term6 = coeffs[5]
+        return term1 + term2 + term3 + term4 + term5 + term6
+        
     def _find_relevant_real_root(self, roots: np.ndarray) -> float | None:
         # For L2, gamma should be positive and small (distance from m2)
         # Position x = 1 - mu + gamma. Gamma = x - (1 - mu)
@@ -629,25 +785,36 @@ class L2Point(CollinearPoint):
                 real_r = float(r.real)
                 # Gamma for L2 should be positive and typically less than 1
                 if 0 < real_r < 1.0:
-                     # Further check: is it physically plausible?
-                     # L2 position x = 1 - mu + real_r. Check if x > 1-mu
-                     x_pos = 1 - mu + real_r
-                     if x_pos > (1-mu):
-                         return real_r
+                    # Further check: is it physically plausible?
+                    # L2 position x = 1 - mu + real_r. Check if x > 1-mu
+                    x_pos = 1 - mu + real_r
+                    if x_pos > (1-mu):
+                        return real_r
         return None
         
     def _get_fallback_gamma_estimate(self) -> float:
         # Rough estimate for gamma_L2 (distance from m2)
         return (self.mu / 3)**(1/3)
 
-    def _cn(self, n: int) -> float:
-        """Compute cn(mu) as in Jorba & Masdemont (1999), eq. (3) using self.gamma."""
+    def _compute_cn(self, n: int) -> float:
+        """
+        Compute cn(mu) as in Jorba & Masdemont (1999), eq. (3) using self.gamma for L2.
+        
+        Parameters
+        ----------
+        n : int
+            Index of the coefficient to compute
+            
+        Returns
+        -------
+        float
+            The cn coefficient value
+        """
         term1 = 1 / self.gamma ** 3
         term2 = (-1) ** n * self.mu
         term3 = (-1) ** n * ( (1-self.mu) * self.gamma ** (n+1) / (1 + self.gamma) ** (n+1) )
 
         c_n = term1 * (term2 + term3)
-
         return c_n
 
 
@@ -677,45 +844,44 @@ class L3Point(CollinearPoint):
         interval = [-self.mu - 0.01, -2.0] # Initial guess interval for L3
         logger.debug(f"L3: Finding root of dOmega/dx in interval {interval}")
         try:
-             with mp.workdps(50):
-                 func = lambda x_val: self._dOmega_dx(x_val)
-                 x = mp.findroot(func, interval)
-             x = float(x)
-             logger.info(f"L3 position calculated: x = {x}")
-             return np.array([x, 0, 0], dtype=np.float64)
+            with mp.workdps(50):
+                func = lambda x_val: self._dOmega_dx(x_val)
+                x = mp.findroot(func, interval)
+            x = float(x)
+            logger.info(f"L3 position calculated: x = {x}")
+            return np.array([x, 0, 0], dtype=np.float64)
         except ValueError as e:
-             logger.error(f"Failed to find L3 root in interval {interval}: {e}")
-             # Try a wider interval as fallback?
-             logger.debug(f"L3: Retrying root finding in wider interval {[-2.0, -self.mu - 1e-9]}")
-             try:
-                 with mp.workdps(50):
+            logger.error(f"Failed to find L3 root in interval {interval}: {e}")
+            # Try a wider interval as fallback?
+            logger.debug(f"L3: Retrying root finding in wider interval {[-2.0, -self.mu - 1e-9]}")
+            try:
+                with mp.workdps(50):
                     func = lambda x_val: self._dOmega_dx(x_val)
                     x = mp.findroot(func, [-2.0, -self.mu - 1e-9])
-                 x = float(x)
-                 logger.info(f"L3 position calculated (retry): x = {x}")
-                 return np.array([x, 0, 0], dtype=np.float64)
-             except ValueError as e2:
+                x = float(x)
+                logger.info(f"L3 position calculated (retry): x = {x}")
+                return np.array([x, 0, 0], dtype=np.float64)
+            except ValueError as e2:
                 logger.error(f"Failed to find L3 root even in wider interval: {e2}")
                 raise RuntimeError(f"L3 position calculation failed.") from e2
-             
+
     def _get_gamma_poly_coeffs(self) -> list[float]:
         mu = self.mu
         mu2 = 1 - mu # mu1 in some notations
         return [1, (2+mu), (1+2*mu), -mu2, -2*mu2, -mu2]
         
     def _gamma_poly(self, x: float) -> float:
-         # Note: The root x of this polynomial is gamma_L3 = |x_L3 - (-mu)| = |-1 + delta - (-mu)| = |mu - 1 + delta|
-         # where x_L3 = -1 + delta. This x IS the distance gamma_L3.
-         mu = self.mu
-         mu2 = 1 - mu
-         term1 = x**5
-         term2 = (2+mu) * x**4
-         term3 = (1+2*mu) * x**3
-         term4 = -mu2 * x**2
-         term5 = -2*mu2*x
-         term6 = -mu2
-         return term1 + term2 + term3 + term4 + term5 + term6
-         
+        # Note: The root x of this polynomial is gamma_L3 = |x_L3 - (-mu)| = |-1 + delta - (-mu)| = |mu - 1 + delta|
+        # where x_L3 = -1 + delta. This x IS the distance gamma_L3.
+        coeffs = self._get_gamma_poly_coeffs()
+        term1 = x**5
+        term2 = coeffs[1] * x**4
+        term3 = coeffs[2] * x**3
+        term4 = coeffs[3] * x**2
+        term5 = coeffs[4] * x
+        term6 = coeffs[5]
+        return term1 + term2 + term3 + term4 + term5 + term6
+
     def _find_relevant_real_root(self, roots: np.ndarray) -> float | None:
         # For L3, gamma is the distance from m1: gamma = |x_L3 - (-mu)|.
         # Since x_L3 is approx -1, gamma_L3 is approx |-1 - (-mu)| = |mu-1| which is approx 1.
@@ -726,12 +892,12 @@ class L3Point(CollinearPoint):
                 real_r = float(r.real)
                 # Gamma for L3 should be positive and close to 1
                 if 0.5 < real_r < 1.5: # Fairly wide check around 1
-                     # Further check: is it physically plausible?
-                     # L3 position x = -mu - real_r. Check if x < -mu
-                     x_pos = -mu - real_r
-                     if x_pos < -mu:
-                         # Need to be careful: L3 poly root is gamma, distance from m1
-                         return real_r 
+                    # Further check: is it physically plausible?
+                    # L3 position x = -mu - real_r. Check if x < -mu
+                    x_pos = -mu - real_r
+                    if x_pos < -mu:
+                        # Need to be careful: L3 poly root is gamma, distance from m1
+                        return real_r 
         return None
 
     def _get_fallback_gamma_estimate(self) -> float:
@@ -741,13 +907,25 @@ class L3Point(CollinearPoint):
         # Or using the relation from Szebehely, gamma_L3 approx 1 - (7/12)mu
         return 1.0 - (7.0 / 12.0) * self.mu
 
-    def _cn(self, n: int) -> float:
+    def _compute_cn(self, n: int) -> float:
+        """
+        Compute cn(mu) as in Jorba & Masdemont (1999), eq. (3) using self.gamma for L3.
+        
+        Parameters
+        ----------
+        n : int
+            Index of the coefficient to compute
+            
+        Returns
+        -------
+        float
+            The cn coefficient value
+        """
         term1 = (-1) ** n / self.gamma ** 3
         term2 = 1-self.mu
         term3 = self.mu * self.gamma ** (n+1) / (1 + self.gamma) ** (n+1)
 
         c_n = term1 * (term2 + term3)
-
         return c_n
 
 
@@ -772,7 +950,7 @@ class TriangularPoint(LibrationPoint):
         super().__init__(mu)
         # Log stability warning based on mu
         if mu > self.ROUTH_CRITICAL_MU:
-             logger.warning(f"Triangular points are potentially unstable for mu > {self.ROUTH_CRITICAL_MU:.6f} (current mu = {mu})")
+            logger.warning(f"Triangular points are potentially unstable for mu > {self.ROUTH_CRITICAL_MU:.6f} (current mu = {mu})")
 
     def _get_linear_data(self):
         raise NotImplementedError("Not implemented for triangular points.")

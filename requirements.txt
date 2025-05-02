@@ -4,3 +4,4 @@ scipy==1.15.2
 pytest==8.3.5
 symengine==0.14.1
 h5py==3.13.0
+sympy==1.14.0
