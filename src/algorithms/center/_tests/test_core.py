@@ -3,11 +3,10 @@ import numpy as np
 import symengine as se
 from collections import defaultdict
 
+from algorithms.center.core import (Polynomial, _poisson_bracket, 
+                                    _split_coeff_and_factors, _update_by_deg, 
+                                    _monomial_key, _monomial_from_key)
 
-from algorithms.center.core import Polynomial, _poisson_bracket, _split_coeff_and_factors, _update_by_deg, _monomial_key, _monomial_from_key, _lie_transform
-
-
-# --- Pytest Fixtures ---
 
 q1, q2, q3 = se.symbols('q1 q2 q3')
 p1, p2, p3 = se.symbols('p1 p2 p3')
@@ -84,7 +83,6 @@ def P_complex(P_q1, P_p1, P_q2, P_p2, P_q3, P_p3):
 def P_high_order(P_q1, P_p1, P_q2, P_p2, P_q3, P_p3):
     return (P_q1**7*P_p1 + P_q2**6*P_p2 + P_q3**5*P_p3+ P_q3**2*7).expansion
 
-# --- Test Functions ---
 
 def test_initialization(vars, P_zero, P_one, P_q1):
     assert len(P_zero.variables) == len(vars)
@@ -215,7 +213,6 @@ def test_differentiation(P_zero, P_one, P_q1, P_p1, P_q2, P_q3, P_p2, P_p3):
     sum_poly = f + g
     assert sum_poly.derivative(q1) == f.derivative(q1) + g.derivative(q1)
 
-
 def test_gradient(P_zero, P_one, P_q1, P_p1, P_p2):
     assert P_q1.gradient()[0][q1] == P_one
     assert P_p1.gradient()[1][p1] == P_one
@@ -226,7 +223,6 @@ def test_gradient(P_zero, P_one, P_q1, P_p1, P_p2):
     assert dF_dq[q1] == 4 * P_q1 + 3 * P_p1
     assert dF_dp[p1] == 3 * P_q1
     assert dF_dp[p2] == -10 * P_p2
-
 
 def test_poisson_bracket(P_zero, P_one, P_q1, P_p1, P_q2, P_q3, P_p2, P_p3):
     assert _poisson_bracket(P_q1, P_q1) == P_zero
@@ -246,8 +242,6 @@ def test_poisson_bracket(P_zero, P_one, P_q1, P_p1, P_q2, P_q3, P_p2, P_p3):
     pb8 = _poisson_bracket(g, pb6)
     pb9 = _poisson_bracket(h, pb1)
 
-
-    # Use our improved __neg__ method which properly distributes the negative sign
     assert pb1.expansion == (-pb2).expansion
 
     assert pb3.expansion == _poisson_bracket(f, g).expansion + _poisson_bracket(f, h).expansion

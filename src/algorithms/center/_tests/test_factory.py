@@ -5,7 +5,7 @@ import sympy as sp
 from collections import defaultdict
 
 
-from algorithms.center.factory import _build_T_polynomials, hamiltonian, to_real_normal, to_complex_canonical
+from algorithms.center.factory import _build_T_polynomials, hamiltonian, to_real_normal, to_complex_canonical, lie_transform
 from system.libration import L1Point
 
 
@@ -224,3 +224,9 @@ def test_complex_canonical_transform(lp):
     diff_str = str(diff)
     if diff != 0:
         assert "e-" in diff_str or diff == 0, f"Difference not within numerical tolerance: {diff}"
+
+def test_lie_transform(lp):
+    lambda1, omega1, omega2 = lp.linear_modes()
+    H_phys = hamiltonian(lp)
+    H_cc, G_list = lie_transform(H_phys, lambda1, omega1, omega2, 4)
+    print(H_cc)

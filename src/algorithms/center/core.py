@@ -35,6 +35,23 @@ class Polynomial:
     def __repr__(self):
         return str(self.expression)
 
+    def copy(self) -> 'Polynomial':
+        """
+        Create a deep copy of the polynomial with fresh caches.
+        
+        Returns
+        -------
+        Polynomial
+            A new polynomial instance with the same variables and expression
+            
+        Notes
+        -----
+        This creates a new instance with the same variables and expression,
+        but with all caches reset. This ensures that modifications to the
+        copy don't affect the original polynomial.
+        """
+        return Polynomial(self.variables, self.expression)
+
     def coefficient(self, variable: se.Symbol, order: int) -> se.Basic:
         return self.expression.coeff(variable, order)
 
@@ -414,6 +431,44 @@ class Polynomial:
         expr = sum(monomial.sym for monomial in monomials)
         return Polynomial(variables, expr)
 
+    def iter_terms(self):
+        """
+        Iterate through the terms of the polynomial, yielding (coefficient, monomial) pairs.
+        
+        Yields
+        ------
+        tuple
+            A tuple of (coefficient, monomial) for each term in the polynomial
+            
+        Notes
+        -----
+        This method is used for manipulations where both the coefficient and
+        the monomial structure (with its exponents) are needed separately.
+        """
+        for monomial in self.get_monomials():
+            yield monomial.coeff, monomial
+
+    def poisson(self, other: 'Polynomial') -> 'Polynomial':
+        """
+        Compute the Poisson bracket {self, other}.
+        
+        Parameters
+        ----------
+        other : Polynomial
+            The second polynomial for the Poisson bracket
+            
+        Returns
+        -------
+        Polynomial
+            A new polynomial representing {self, other}
+            
+        Notes
+        -----
+        The Poisson bracket is defined as:
+        {F, G} = sum_i (dF/dqi * dG/dpi - dF/dpi * dG/dqi)
+        """
+        return _poisson_bracket(self, other)
+
 
 def _poisson_bracket(F: Polynomial, G: Polynomial) -> Polynomial:
     """
@@ -625,66 +680,3 @@ def _monomial_from_key(kq, kp):
     for i,e in enumerate(kq): expr *= q_syms[i]**e
     for i,e in enumerate(kp): expr *= p_syms[i]**e
     return expr
-
-def _lie_transform(H: Polynomial, linear_modes: tuple, max_degree: int = 6) -> Polynomial:
-    """
-    Apply normal-form Lie series transformation to a Hamiltonian.
-    
-    Parameters
-    ----------
-    H : Polynomial
-        The input Hamiltonian polynomial to transform
-    linear_modes : tuple
-        The linear modes of the point (lambda1, omega1, omega2)
-    max_degree : int, default=6
-        Maximum degree of terms to include in the transformation
-        
-    Returns
-    -------
-    Polynomial
-        The transformed Hamiltonian in normal form
-        
-    Notes
-    -----
-    This function applies a normal form transformation using Lie series to simplify
-    a Hamiltonian by eliminating certain types of terms. Specifically, it removes
-    mixed hyperbolic terms (terms with both q1 and p1 to the same power).
-    
-    The algorithm processes the Hamiltonian degree-by-degree, starting at degree 3
-    (assuming the quadratic part is already normalized). For each degree, it:
-    1. Identifies terms that need to be eliminated
-    2. Constructs a generating function S for the canonical transformation
-    3. Applies the transformation using Poisson brackets: H ← e^{L_S} H
-    4. Updates the terms cache for efficiency
-    """
-    H_current = H.expansion
-    by_deg = defaultdict(list)
-    _update_by_deg(by_deg, H_current)   # ← build once
-
-    # start at order 3 (quadratic part already normalised)
-    for n in range(3, max_degree + 1):
-        G_terms = by_deg.get(n, [])     # re-use cache, no rebuild
-        if not G_terms:
-            continue
-
-        # assemble S_n ---------------------------------------------------
-        lam, w1, w2 = linear_modes
-
-        def divisor(monomial): 
-            return lam*(monomial.kp[0]-monomial.kq[0]) + 1j*w1*(monomial.kp[1]-monomial.kq[1]) + 1j*w2*(monomial.kp[2]-monomial.kq[2])
-
-        S_expr = sum((monomial.coeff/divisor(monomial)) * _monomial_from_key(monomial.kq, monomial.kp)
-                    for monomial in G_terms if monomial.kq[0] != monomial.kp[0])
-
-        if not S_expr:
-            continue
-        S = Polynomial(H.variables, S_expr)  # Correct parameter order
-
-        # canonical transformation: H <- e^{L_S} H
-        H_update   = _poisson_bracket(S, H_current).truncate(max_degree).expansion
-        H_current  = (H_current + H_update).truncate(max_degree).expansion
-
-        # only *new* terms need inserting into the cache
-        _update_by_deg(by_deg, H_update)
-
-    return H_current
