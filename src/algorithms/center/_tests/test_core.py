@@ -5,7 +5,7 @@ from collections import defaultdict
 
 from algorithms.center.core import (Polynomial, _poisson_bracket, 
                                     _split_coeff_and_factors, _update_by_deg, 
-                                    _monomial_key, _monomial_from_key)
+                                    _monomial_key, _monomial_from_key, _dot_product)
 
 
 q1, q2, q3 = se.symbols('q1 q2 q3')
@@ -516,9 +516,6 @@ def test_monomial_from_key():
     monomial = _monomial_from_key(kq, kp)
     assert monomial == q1*q3**2*p1**3*p2
 
-def test_lie_transform(vars):
-    pass
-
 def test_monomial_methods(vars):
     # Test get_monomials
     f = Polynomial(vars, 3 * q1**2 * p1 + 2 * q2 * p2)
@@ -571,3 +568,11 @@ def test_monomial_methods(vars):
     
     assert len(deg3_monomials) == 2
     assert f_deg3.expression == q1**3 + q1**2*p1
+
+def test_dot_product():
+    v1 = (1, 2, 3)
+    v2 = [q1, q2, q3]
+    result = _dot_product(v1, v2)
+    assert result == 1*q1 + 2*q2 + 3*q3
+
+

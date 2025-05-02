@@ -703,3 +703,14 @@ def _monomial_from_key(kq, kp):
     for i,e in enumerate(kq): expr *= q_syms[i]**e
     for i,e in enumerate(kp): expr *= p_syms[i]**e
     return expr
+
+def _dot_product(v1: tuple[int], v2: list[se.Basic]) -> se.Basic:
+    """Computes the dot product of an integer tuple and a list of SymEngine expressions."""
+    # Assuming v1 and v2 have compatible dimensions
+    if len(v1) != len(v2):
+        raise ValueError("Vectors must have the same dimension for dot product.")
+    
+    result = se.Integer(0)
+    for i in range(len(v1)):
+        result += se.sympify(v1[i]) * v2[i] # Ensure integer is sympified for multiplication
+    return result

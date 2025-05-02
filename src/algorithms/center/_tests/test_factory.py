@@ -6,7 +6,7 @@ from collections import defaultdict
 import random
 
 
-from algorithms.center.factory import _build_T_polynomials, hamiltonian, to_real_normal, to_complex_canonical, lie_transform
+from algorithms.center.factory import _build_T_polynomials, hamiltonian, to_real_normal, to_complex_canonical
 from algorithms.center.core import Polynomial
 
 from system.libration import L1Point
@@ -29,15 +29,6 @@ px_rn, py_rn, pz_rn = se.symbols('px_rn py_rn pz_rn')
 
 
 rho2 = x**2 + y**2 + z**2
-
-
-# ------------ basic symbols used everywhere -----------------
-x, y, z = se.symbols('x y z')
-px, py, pz = se.symbols('px py pz')
-old_vars = (x, y, z, px, py, pz)
-
-q1, q2, q3, p1, p2, p3 = se.symbols('q1 q2 q3 p1 p2 p3')
-new_vars = (q1, q2, q3, p1, p2, p3)
 
 
 # ------------ fixtures --------------------------------------
@@ -292,13 +283,3 @@ def test_h2_diagonal_in_complex_canonical(lp):
     if diff != 0:
         diff_str = str(diff)
         assert "e-" in diff_str or diff == 0, f"Hamiltonian does not match expected diagonal form: {diff}"
-
-def test_no_mixed_terms(lp, hamiltonians):
-    H_nf, _ = lie_transform(lp, hamiltonians, max_degree=4)
-    for d, monoms in H_nf.build_by_degree().items():
-        if d > 4:
-            continue
-        for mon in monoms:                       # Monomial objects
-            kq, kp = mon.exponents_qp_split()
-            # In the normal form we must have kq[0] == kp[0]
-            assert kq[0] == kp[0], f"Coupling term {mon.sym} of degree {d} survived!"

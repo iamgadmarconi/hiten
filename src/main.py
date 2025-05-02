@@ -7,7 +7,6 @@ from algorithms.center.factory import hamiltonian
 from algorithms.center.lie import lie_transform
 
 
-
 def main():
     mu_ES = 3.00348959632e-6
     L1_ES = L1Point(mu_ES)
