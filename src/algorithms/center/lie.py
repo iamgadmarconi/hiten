@@ -3,11 +3,114 @@ import numpy as np
 import math
 
 from .core import Polynomial, Monomial, _dot_product, _monomial_from_key
-from .factory import hamiltonian, to_real_normal, to_complex_canonical
+from .factory import hamiltonian, to_real_normal, to_complex_canonical, q1, p1, q2, p2, q3, p3
 from system.libration import LibrationPoint
 
 from log_config import logger
 
+
+def extract_coeffs_up_to_degree(H_cm: Polynomial, max_deg: int) -> list[tuple[int, int, int, int, se.Basic]]:
+    table = []
+
+    degree_monomials = H_cm.build_by_degree()
+    
+    for degree, monomials in degree_monomials.items():
+        for monomial in monomials:
+            coef = monomial.coeff
+            kq = monomial.kq
+            kp = monomial.kp
+            total_deg = sum(kq[1:]+kp[1:])  # skipping index 0 (q1,p1)
+            if 1 <= total_deg <= max_deg:
+                table.append((kq[1], kp[1], kq[2], kp[2], coef))
+    # Don't sort the table as it may contain complex numbers that can't be compared
+    return table
+
+def coefficients_to_table(coeffs: list[tuple[int, int, int, int, se.Basic]], save=False, filename=__file__) -> str:
+    """
+    Format the coefficients of the center manifold Hamiltonian as a nice table.
+    
+    Parameters
+    ----------
+    coeffs : list[tuple[int, int, int, int, se.Basic]]
+        The coefficients to format.
+    save : bool
+        Whether to save the table to a file.
+    filename : str
+        The filename to save the table to.
+        
+    Returns
+    -------
+    str
+        A formatted table string showing the coefficients.
+    """    
+    # Sort by degree and then by exponents for nicer display
+    def sort_key(entry):
+        k1, k2, k3, k4, _ = entry
+        total_deg = k1 + k2 + k3 + k4
+        return (total_deg, k1, k2, k3, k4)
+    
+    sorted_coeffs = sorted(coeffs, key=sort_key)
+    
+    # Create the header
+    header = "Coefficients of the transformed Hamiltonian restricted to the center manifold\n"
+    header += "The exponents (k1, k2, k3, k4) refer to the variables (q2, p2, q3, p3), in this order\n"
+    header += "=" * 120 + "\n"
+    
+    # Column headers
+    col_header = "{:<5} {:<5} {:<5} {:<5} {:<30}    {:<5} {:<5} {:<5} {:<5} {:<30}\n".format(
+        "k1", "k2", "k3", "k4", "hk", 
+        "k1", "k2", "k3", "k4", "hk"
+    )
+    header += col_header
+    
+    # Prepare data rows
+    rows = []
+    
+    # Split into two columns
+    mid_point = (len(sorted_coeffs) + 1) // 2
+    left_col = sorted_coeffs[:mid_point]
+    right_col = sorted_coeffs[mid_point:]
+    
+    # Helper function to format coefficient values safely
+    def format_coef(coef):
+        try:
+            # Try to evaluate to float and use scientific notation
+            return "{:<30e}".format(float(coef))
+        except (TypeError, ValueError, RuntimeError):
+            # For complex numbers or other types that can't be converted to float
+            # Just convert to string and format as is
+            return "{:<30}".format(str(coef))
+    
+    # Fill rows
+    for i in range(max(len(left_col), len(right_col))):
+        row = ""
+        
+        # Left column
+        if i < len(left_col):
+            k1, k2, k3, k4, coef = left_col[i]
+            row += "{:<5} {:<5} {:<5} {:<5} {}".format(k1, k2, k3, k4, format_coef(coef))
+        else:
+            row += " " * 50
+            
+        row += "    "  # Separator
+        
+        # Right column
+        if i < len(right_col):
+            k1, k2, k3, k4, coef = right_col[i]
+            row += "{:<5} {:<5} {:<5} {:<5} {}".format(k1, k2, k3, k4, format_coef(coef))
+        
+        rows.append(row)
+    
+    # Combine everything
+    table = header + "\n".join(rows)
+
+    if save:
+        with open(filename, 'w') as f:
+            f.write(table)
+    
+        logger.info(f"Table saved to {filename}")
+
+    return table
 
 def reduce_center_manifold(H_nf: Polynomial, max_degree: int) -> Polynomial:
     """
