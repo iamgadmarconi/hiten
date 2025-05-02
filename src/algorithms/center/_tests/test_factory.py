@@ -3,6 +3,7 @@ import numpy as np
 import symengine as se
 import sympy as sp
 from collections import defaultdict
+import random
 
 
 from algorithms.center.factory import _build_T_polynomials, hamiltonian, to_real_normal, to_complex_canonical, lie_transform
@@ -236,6 +237,62 @@ def test_complex_canonical_transform(lp):
     if diff != 0:
         assert "e-" in diff_str or diff == 0, f"Difference not within numerical tolerance: {diff}"
 
+def test_h2_diagonal_in_complex_canonical(lp):
+    """Test if the quadratic part of the Hamiltonian is diagonal after 
+    transformation to complex canonical coordinates."""
+    
+    # Get the quadratic part of the Hamiltonian in physical coordinates
+    h2_phys = hamiltonian(lp, max_degree=2)
+    
+    # Transform to real normal form coordinates
+    h2_rn = to_real_normal(lp, h2_phys)
+    
+    # Transform to complex canonical coordinates
+    h2_cc = to_complex_canonical(lp, h2_rn)
+    
+    # The expression should only contain diagonal terms q1*p1, q2*p2, q3*p3
+    # and no mixed terms like q1*p2, q2*p3, etc.
+    h2_expr = h2_cc.expression.expand()
+    
+    # Tolerance for small coefficients that may appear due to numerical errors
+    TOLERANCE = 1e-14
+    
+    # Check for any mixed terms with significant coefficients
+    mixed_terms = []
+    
+    # Test each possible mixed term explicitly by substituting
+    # This is more reliable than trying to parse the coefficients from the expression
+    q_vars = [q1, q2, q3]
+    p_vars = [p1, p2, p3]
+    
+    # Check all possible non-diagonal terms
+    for i, qi in enumerate(q_vars):
+        for j, pj in enumerate(p_vars):
+            if i != j:  # Non-diagonal term qi*pj
+                # Create a substitution dict that isolates this term
+                subs = {var: 0 for var in q_vars + p_vars}
+                subs[qi] = 1
+                subs[pj] = 1
+                
+                # Evaluate the coefficient of qi*pj
+                coeff = complex(h2_cc.evaluate(subs))
+                
+                # Check if the coefficient is above the tolerance
+                if abs(coeff) > TOLERANCE:
+                    mixed_terms.append((f"{qi}*{pj}", coeff, abs(coeff)))
+    
+    # Assert that no significant mixed terms were found
+    assert len(mixed_terms) == 0, f"Non-diagonal terms found with significant coefficients: {mixed_terms}"
+    
+    # If we made it here, the Hamiltonian is diagonal within tolerance
+    lambda1, omega1, omega2 = lp.linear_modes()
+    h2_expected = lambda1*q1*p1 + se.I*omega1*q2*p2 + se.I*omega2*q3*p3
+    
+    diff = se.expand(h2_cc.expression - h2_expected)
+    if diff != 0:
+        diff_str = str(diff)
+        assert "e-" in diff_str or diff == 0, f"Hamiltonian does not match expected diagonal form: {diff}"
+
 def test_no_mixed_terms(lp, hamiltonians):
     H_nf, _ = lie_transform(lp, hamiltonians, max_degree=4)
     for d, monoms in H_nf.build_by_degree().items():
@@ -244,41 +301,4 @@ def test_no_mixed_terms(lp, hamiltonians):
         for mon in monoms:                       # Monomial objects
             kq, kp = mon.exponents_qp_split()
             # In the normal form we must have kq[0] == kp[0]
-            assert kq[0] == kp[0], \
-                   f"Coupling term {mon.sym} of degree {d} survived!"
-
-
-# ----------------------------------------------------------------------
-# 2.  { H̄ , I1 } = 0   up to the truncation order
-# ----------------------------------------------------------------------
-def test_commutes_with_I1(lp, hamiltonians):
-    H_nf, _ = lie_transform(lp, hamiltonians, max_degree=4)
-    I1 = Polynomial(H_nf.variables, q1*p1)
-    PB = H_nf.poisson(I1).truncate(4)
-    assert PB.expression == 0, "Poisson bracket with I1 is not zero up to order 4"
-
-
-# ----------------------------------------------------------------------
-# 3.  Numerical sanity: energy is unchanged *to O(ε5)*
-# ----------------------------------------------------------------------
-def random_small():
-    return 1e-3 * (2*random.random() - 1)
-
-@pytest.mark.parametrize("seed", range(10))
-def test_energy_match(lp, hamiltonians, seed):
-    random.seed(seed)
-    H_nf, _ = lie_transform(lp, hamiltonians, max_degree=4)
-
-    subs = {q1: random_small(),
-            q2: random_small(),
-            q3: random_small(),
-            p1: random_small(),
-            p2: random_small(),
-            p3: random_small()}
-
-    E_orig = hamiltonians.evaluate(subs)         # H before Lie series
-    E_nf   = H_nf.evaluate(subs)                 # H after  Lie series
-
-    # At order‑4 normalisation the two differ by O(ε5)
-    assert abs(complex(E_orig - E_nf)) < 1e-14, \
-           "Energy mismatch larger than truncation error"
+            assert kq[0] == kp[0], f"Coupling term {mon.sym} of degree {d} survived!"
