@@ -1,5 +1,6 @@
 import symengine as se
 import numpy as np
+import sympy as sp  # Add sympy import for numerical cleanup
 
 from .core import Polynomial
 from system.libration import LibrationPoint
@@ -49,7 +50,7 @@ def hamiltonian(point: LibrationPoint, max_degree: int = 6) -> Polynomial:
     return Polynomial(vars_phys, H_phys)
 
 
-def to_real_normal(point: LibrationPoint, H_phys: Polynomial) -> Polynomial:
+def physical_to_real_normal(point: LibrationPoint, H_phys: Polynomial) -> Polynomial:
     """
     Express the physical CR3BP Hamiltonian around a collinear point in the
     real normal-form variables (x,y,z,px,py,pz) used for the centre-
@@ -83,7 +84,7 @@ def to_real_normal(point: LibrationPoint, H_phys: Polynomial) -> Polynomial:
 
     return Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn)
 
-def to_complex_canonical(point: LibrationPoint, H_real_normal: Polynomial) -> Polynomial:
+def real_normal_to_complex_canonical(point: LibrationPoint, H_real_normal: Polynomial) -> Polynomial:
     """
     Express the physical CR3BP Hamiltonian around a collinear point in the
     complex canonical variables (q1,q2,q3,p1,p2,p3) used for the centre-
@@ -116,4 +117,68 @@ def to_complex_canonical(point: LibrationPoint, H_real_normal: Polynomial) -> Po
     H_cn_expr = H_real_normal.subs(complex_subs).expansion.expression
 
     return Polynomial([q1, q2, q3, p1, p2, p3], H_cn_expr)
+
+def complex_canonical_to_real_normal(point: LibrationPoint, H_complex_canonical: Polynomial) -> Polynomial:
+    """
+    Express the Hamiltonian in the real normal-form variables (x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn)
+    from the complex canonical variables (q1, q2, q3, p1, p2, p3).
+    
+    Parameters
+    ----------
+    point : LibrationPoint
+        The LibrationPoint object
+    H_complex_canonical : Polynomial
+        The Hamiltonian in complex canonical variables
+    
+    Returns
+    -------
+    Polynomial
+        The transformed Hamiltonian in real normal-form variables
+    """
+    sqrt2 = se.sqrt(2)
+    real_subs = {
+        q1: x_rn,
+        q2: (y_rn - se.I*py_rn) * sqrt2 / 2,
+        q3: (z_rn - se.I*pz_rn) * sqrt2 / 2,
+        p1: px_rn,
+        p2: (py_rn - se.I*y_rn) * sqrt2 / 2,
+        p3: (pz_rn - se.I*z_rn) * sqrt2 / 2
+    }
+
+    H_rn_expr = H_complex_canonical.subs(real_subs).expansion.expression
+    
+    # Convert to sympy expression for cleanup of numerical artifacts
+    H_rn_expr_sp = sp.sympify(str(H_rn_expr))
+    
+    # Clean up small numerical artifacts
+    def clean_complex_coeffs(expr, tol=1e-12):
+        """Remove small real/imaginary parts from complex coefficients."""
+        if isinstance(expr, sp.Add):
+            return sp.Add(*[clean_complex_coeffs(arg, tol) for arg in expr.args])
+        elif isinstance(expr, sp.Mul):
+            coeff, rest = expr.as_coeff_Mul()
+            if isinstance(coeff, sp.Number) and coeff.is_complex:
+                re, im = float(sp.re(coeff)), float(sp.im(coeff))
+                if abs(re) < tol:
+                    re = 0
+                if abs(im) < tol:
+                    im = 0
+                if im == 0:
+                    new_coeff = sp.Float(re)
+                elif re == 0:
+                    new_coeff = sp.Float(im) * sp.I
+                else:
+                    new_coeff = sp.Float(re) + sp.Float(im) * sp.I
+                return new_coeff * rest
+            else:
+                return expr
+        else:
+            return expr
+    
+    H_rn_expr_clean = clean_complex_coeffs(H_rn_expr_sp)
+    
+    # Convert back to symengine
+    H_rn_expr_clean_se = se.sympify(str(H_rn_expr_clean))
+    
+    return Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn_expr_clean_se)
 

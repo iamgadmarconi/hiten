@@ -9,8 +9,8 @@ from utils.constants import Constants
 from algorithms.center.lie import (
     extract_coeffs_up_to_degree,
     compute_center_manifold,
-    reduce_center_manifold,
-    coefficients_to_table
+    real_normal_center_manifold,
+    coefficients_to_table,
 )
 
 from log_config import logger
@@ -45,12 +45,10 @@ def main():
     Lpoint_EM = system_EM.get_libration_point(2)
     Lpoint_SE = system_SE.get_libration_point(1)
 
-    # Compute the center manifold
-    H_nf, G_total = compute_center_manifold(Lpoint_SE, degree)
-    H_nfr = reduce_center_manifold(H_nf, degree)
+    H_rnr = real_normal_center_manifold(Lpoint_SE, degree)
 
     # Get formatted table of coefficients
-    coeffs = extract_coeffs_up_to_degree(H_nfr, degree)
+    coeffs = extract_coeffs_up_to_degree(H_rnr, 5)
     logger.info(f"Found {len(coeffs)} coefficients")
     table = coefficients_to_table(coeffs, save=False)
     logger.info(table)

@@ -6,7 +6,7 @@ from collections import defaultdict
 import random
 
 
-from algorithms.center.factory import _build_T_polynomials, hamiltonian, to_real_normal, to_complex_canonical
+from algorithms.center.factory import _build_T_polynomials, hamiltonian, physical_to_real_normal, real_normal_to_complex_canonical
 from algorithms.center.core import Polynomial
 
 from system.libration import L1Point
@@ -46,7 +46,7 @@ def H_phys(lp):
 @pytest.fixture()
 def H_cc(lp, H_phys):
     """Hamiltonian in complex canonical variables."""
-    return to_complex_canonical(lp, H_phys)
+    return real_normal_to_complex_canonical(lp, H_phys)
 
 @pytest.fixture
 def cartesian_vars():
@@ -60,8 +60,8 @@ def canonical_vars():
 def hamiltonians(lp):
     """Build the physical and complex-canonical Hamiltonians up to order 4."""
     H_phys = hamiltonian(lp, max_degree=4)
-    H_rn   = to_real_normal(lp, H_phys)
-    H_cn   = to_complex_canonical(lp, H_rn)
+    H_rn   = physical_to_real_normal(lp, H_phys)
+    H_cn   = real_normal_to_complex_canonical(lp, H_rn)
     return H_cn
 
 def test_T_base_cases():
@@ -195,7 +195,7 @@ def test_symplectic(lp):
     C, Cinv = lp.normal_form_transform()      # both are 6×6 numpy arrays
     J = np.block([[np.zeros((3,3)), np.eye(3)],
                 [-np.eye(3),      np.zeros((3,3))]])
-    # C is the matrix used inside to_complex_canonical – should be symplectic
+    # C is the matrix used inside real_normal_to_complex_canonical – should be symplectic
     diff = C.T @ J @ C - J
     assert np.allclose(diff, np.zeros_like(diff), atol=1e-12)
 
@@ -205,7 +205,7 @@ def test_real_normal_form_transform(lp):
 
     h2 = 1/2 * (px**2+py**2)+y*px-x*py-c2_val*x**2+c2_val/2 * y**2 + 1/2 * pz**2 + c2_val/2 * z**2
     h2 = Polynomial([x, y, z, px, py, pz], h2)
-    h2_rn = to_real_normal(lp, h2)
+    h2_rn = physical_to_real_normal(lp, h2)
     h2_rn_expected = lambda1*x_rn*px_rn + (omega1/2)*(y_rn**2 + py_rn**2) + (omega2/2)*(z_rn**2 + pz_rn**2)
 
     diff = se.expand(h2_rn.expression - h2_rn_expected)
@@ -220,7 +220,7 @@ def test_complex_canonical_transform(lp):
     
     h2_rn = lambda1*x_rn*px_rn + (omega1/2)*(y_rn**2 + py_rn**2) + (omega2/2)*(z_rn**2 + pz_rn**2)
     h2_rn = Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], h2_rn)
-    h2_cc = to_complex_canonical(lp, h2_rn)
+    h2_cc = real_normal_to_complex_canonical(lp, h2_rn)
     h2_cc_expected = lambda1*q1*p1 + se.I * omega1 * q2 * p2 + se.I * omega2 * q3 * p3
 
     diff = se.expand(h2_cc.expression - h2_cc_expected)
@@ -236,10 +236,10 @@ def test_h2_diagonal_in_complex_canonical(lp):
     h2_phys = hamiltonian(lp, max_degree=2)
     
     # Transform to real normal form coordinates
-    h2_rn = to_real_normal(lp, h2_phys)
+    h2_rn = physical_to_real_normal(lp, h2_phys)
     
     # Transform to complex canonical coordinates
-    h2_cc = to_complex_canonical(lp, h2_rn)
+    h2_cc = real_normal_to_complex_canonical(lp, h2_rn)
     
     # The expression should only contain diagonal terms q1*p1, q2*p2, q3*p3
     # and no mixed terms like q1*p2, q2*p3, etc.

@@ -6,7 +6,7 @@ from collections import defaultdict
 import random
 
 
-from algorithms.center.factory import _build_T_polynomials, hamiltonian, to_real_normal, to_complex_canonical
+from algorithms.center.factory import _build_T_polynomials, hamiltonian, physical_to_real_normal, real_normal_to_complex_canonical
 from algorithms.center.lie import _get_homogeneous_terms, _select_monomials_for_elimination, lie_transform, _solve_homological_equation
 from algorithms.center.core import Polynomial
 
@@ -44,12 +44,12 @@ def H_phys(lp):
 @pytest.fixture()
 def H_rn(lp, H_phys):
     """Hamiltonian in real normal form variables."""
-    return to_real_normal(lp, H_phys)
+    return physical_to_real_normal(lp, H_phys)
 
 @pytest.fixture()
 def H_cc(lp, H_rn):
     """Hamiltonian in complex canonical form variables."""
-    return to_complex_canonical(lp, H_rn)
+    return real_normal_to_complex_canonical(lp, H_rn)
 
 def test_select_monomials_for_elimination():
     expression = 2*q1*q2*p3 + 4*q1*p1*p2 + 3*q2**2*p2 + 5*q1**2*p1
