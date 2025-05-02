@@ -8,6 +8,11 @@ from algorithms.center.factory import _build_T_polynomials, hamiltonian, to_comp
 from system.libration import L1Point
 
 
+TEST_MU_EARTH_MOON = 0.01215  # Earth-Moon system
+TEST_MU_SUN_EARTH = 3.00348e-6  # Sun-Earth system
+TEST_MU_SUN_JUPITER = 9.5387e-4  # Sun-Jupiter system
+TEST_MU_UNSTABLE = 0.04  # Above Routh's critical value for triangular points
+
 
 x, y, z  = se.symbols('x y z')
 px, py, pz = se.symbols('px py pz')
@@ -16,8 +21,33 @@ q1, q2, q3 = se.symbols('q1 q2 q3')
 p1, p2, p3 = se.symbols('p1 p2 p3')
 
 rho2 = x**2 + y**2 + z**2
-# ────────────────────────────────────────────────────────────────
 
+
+# ------------ basic symbols used everywhere -----------------
+x, y, z = se.symbols('x y z')
+px, py, pz = se.symbols('px py pz')
+old_vars = (x, y, z, px, py, pz)
+
+q1, q2, q3, p1, p2, p3 = se.symbols('q1 q2 q3 p1 p2 p3')
+new_vars = (q1, q2, q3, p1, p2, p3)
+
+
+# ------------ fixtures --------------------------------------
+@pytest.fixture()
+def lp():
+    """Collinear point with μ chosen once for all the tests."""
+    mu = 0.0121505856          # Earth-Moon
+    return L1Point(mu)
+
+@pytest.fixture()
+def H_phys(lp):
+    """Full CR3BP Hamiltonian translated so that the point is at the origin."""
+    return hamiltonian(lp)        # Polynomial wrapper
+
+@pytest.fixture()
+def H_cc(lp, H_phys):
+    """Hamiltonian in complex canonical variables."""
+    return to_complex_canonical(lp, H_phys)
 
 @pytest.fixture
 def cartesian_vars():
@@ -144,3 +174,30 @@ def test_truncation():
                     exp_sum += power
             
         assert exp_sum <= deg, f"Term {mon} has degree {exp_sum} > {deg}"
+
+def test_symplectic(lp):
+    C, Cinv = lp.normal_form_transform()      # both are 6×6 numpy arrays
+    J = np.block([[np.zeros((3,3)), np.eye(3)],
+                  [-np.eye(3),      np.zeros((3,3))]])
+    # C is the matrix used inside to_complex_canonical – should be symplectic
+    assert np.allclose(C.T @ J @ C, J, atol=1e-12)
+
+def quadratic_part(expr, vars_):
+    expr = se.expand(expr)
+    terms = expr.args if expr.is_Add else (expr,)
+    quad = se.S(0)
+    for t in terms:
+        if sum(t.as_powers_dict().get(v, 0) for v in vars_) == 2:
+            quad += t
+    return se.expand(quad)
+
+
+def test_quadratic_normal_form(lp, H_cc):
+    vars_ = (q1, q2, q3, p1, p2, p3)
+
+    # Use either helper; here I take the ε-trick
+    H2 = quadratic_part(H_cc.expression, vars_)
+
+    lambda1, omega1, omega2 = lp.linear_modes()
+    expected = lambda1*q1*p1 + se.I*omega1*q2*p2 + se.I*omega2*q3*p3
+    assert se.expand(H2 - expected) == 0

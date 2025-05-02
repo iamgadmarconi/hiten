@@ -79,7 +79,8 @@ def to_complex_canonical(point: LibrationPoint,
     # ------------------------------------------------------------------
     # 1. Real normal-form change  Z_old = C^{-1} · Z_new
     # ------------------------------------------------------------------
-    _, Cinv_num = point.normal_form_transform()       # numpy array
+    C_num, Cinv_num = point.normal_form_transform()       # numpy array
+    C = se.Matrix(C_num.tolist())               # to SymEngine
     Cinv = se.Matrix(Cinv_num.tolist())               # to SymEngine
 
     xt, yt, zt, pxt, pyt, pzt = se.symbols('xt yt zt pxt pyt pzt')
