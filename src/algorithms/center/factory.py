@@ -87,6 +87,176 @@ def physical_to_real_normal(point: LibrationPoint, H_phys: Polynomial) -> Polyno
 
     return Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn)
 
+def clean_numerical_artifacts(expr, tol=1e-10):
+    """
+    Clean small numerical artifacts from symbolic expressions.
+    
+    This function removes small real/imaginary parts from complex coefficients
+    that are likely artifacts of numerical computations rather than actual values.
+    
+    Parameters
+    ----------
+    expr : sympy.Expr
+        The expression to clean
+    tol : float, optional
+        The tolerance below which values are considered artifacts, by default 1e-10
+        
+    Returns
+    -------
+    sympy.Expr
+        Cleaned expression
+    """
+    import sympy as sp
+    
+    # For basic expressions, convert to sympy if it's not already
+    if not isinstance(expr, sp.Expr):
+        expr = sp.sympify(str(expr))
+    
+    # Simple base cases
+    if isinstance(expr, (sp.Integer, sp.Rational)):
+        return expr
+    
+    if isinstance(expr, sp.Float):
+        if abs(float(expr)) < tol:
+            return sp.Integer(0)
+        return expr
+    
+    # Handle complex numbers directly
+    if isinstance(expr, sp.Number) and expr.is_complex:
+        re, im = float(sp.re(expr)), float(sp.im(expr))
+        
+        if abs(re) < tol:
+            re = 0
+        if abs(im) < tol:
+            im = 0
+            
+        if re == 0 and im == 0:
+            return sp.Integer(0)
+        elif im == 0:
+            return sp.Float(re)
+        elif re == 0:
+            return sp.Float(im) * sp.I
+        else:
+            return sp.Float(re) + sp.Float(im) * sp.I
+    
+    # For symbols and other atomic objects
+    if expr.is_Atom:
+        return expr
+    
+    # Use a completely different, non-recursive approach
+    # That simply zeros out small coefficients in the expanded form
+    
+    # First expand the expression to get a sum of terms
+    expanded = sp.expand(expr)
+    
+    # If it's already a basic expression, return it
+    if expanded.is_Atom:
+        return expanded
+    
+    # If expanded is a sum, clean each term
+    if expanded.is_Add:
+        cleaned_terms = []
+        for term in expanded.args:
+            # Extract coefficient and rest (symbols/powers)
+            if term.is_Mul:
+                coeff, rest = term.as_coeff_Mul()
+                
+                # Clean the coefficient
+                if isinstance(coeff, sp.Number):
+                    # Handle complex coefficients
+                    if coeff.is_complex:
+                        re, im = float(sp.re(coeff)), float(sp.im(coeff))
+                        
+                        if abs(re) < tol:
+                            re = 0
+                        if abs(im) < tol:
+                            im = 0
+                            
+                        if re == 0 and im == 0:
+                            # Skip this term completely
+                            continue
+                        elif im == 0:
+                            new_coeff = sp.Float(re)
+                        elif re == 0:
+                            new_coeff = sp.Float(im) * sp.I
+                        else:
+                            new_coeff = sp.Float(re) + sp.Float(im) * sp.I
+                        
+                        # Add the cleaned term
+                        cleaned_terms.append(new_coeff * rest)
+                    else:
+                        # For real coefficients
+                        if abs(float(coeff)) < tol:
+                            # Skip near-zero terms
+                            continue
+                        else:
+                            # Keep the term with its coefficient
+                            cleaned_terms.append(term)
+                else:
+                    # If coefficient is not a number, keep the term as is
+                    cleaned_terms.append(term)
+            else:
+                # For single terms without coefficients
+                if isinstance(term, sp.Number):
+                    if isinstance(term, sp.Float) and abs(float(term)) < tol:
+                        continue
+                    if term.is_complex:
+                        re, im = float(sp.re(term)), float(sp.im(term))
+                        if abs(re) < tol:
+                            re = 0
+                        if abs(im) < tol:
+                            im = 0
+                        if re == 0 and im == 0:
+                            continue
+                        elif im == 0:
+                            cleaned_terms.append(sp.Float(re))
+                        elif re == 0:
+                            cleaned_terms.append(sp.Float(im) * sp.I)
+                        else:
+                            cleaned_terms.append(sp.Float(re) + sp.Float(im) * sp.I)
+                    else:
+                        cleaned_terms.append(term)
+                else:
+                    cleaned_terms.append(term)
+        
+        # If all terms were eliminated, return zero
+        if not cleaned_terms:
+            return sp.Integer(0)
+        
+        # Combine cleaned terms into a sum
+        return sp.Add(*cleaned_terms)
+    
+    # If it's a product
+    if expanded.is_Mul:
+        coeff, rest = expanded.as_coeff_Mul()
+        
+        # Clean coefficient
+        if isinstance(coeff, sp.Number):
+            if coeff.is_complex:
+                re, im = float(sp.re(coeff)), float(sp.im(coeff))
+                
+                if abs(re) < tol:
+                    re = 0
+                if abs(im) < tol:
+                    im = 0
+                    
+                if re == 0 and im == 0:
+                    return sp.Integer(0)
+                elif im == 0:
+                    return sp.Float(re) * rest
+                elif re == 0:
+                    return sp.Float(im) * sp.I * rest
+                else:
+                    return (sp.Float(re) + sp.Float(im) * sp.I) * rest
+            else:
+                if abs(float(coeff)) < tol:
+                    return sp.Integer(0)
+                else:
+                    return expanded
+        
+    # For any other expression type, just return it as is
+    return expanded
+
 def real_normal_to_complex_canonical(point: LibrationPoint, H_real_normal: Polynomial) -> Polynomial:
     """
     Express the physical CR3BP Hamiltonian around a collinear point in the
@@ -139,48 +309,30 @@ def complex_canonical_to_real_normal(point: LibrationPoint, H_complex_canonical:
         The transformed Hamiltonian in real normal-form variables
     """
     sqrt2 = se.sqrt(2)
+    # Implement the exact inverse of the transformation in real_normal_to_complex_canonical
+    # This is directly derived from the equations in (12)
     real_subs = {
         q1: x_rn,
-        q2: (y_rn - se.I*py_rn) * sqrt2 / 2,
-        q3: (z_rn - se.I*pz_rn) * sqrt2 / 2,
+        q2: sqrt2 * (y_rn - se.I*py_rn) / 2,
+        q3: sqrt2 * (z_rn - se.I*pz_rn) / 2, 
         p1: px_rn,
-        p2: (py_rn - se.I*y_rn) * sqrt2 / 2,
-        p3: (pz_rn - se.I*z_rn) * sqrt2 / 2
+        p2: sqrt2 * (py_rn - se.I*y_rn) / 2,
+        p3: sqrt2 * (pz_rn - se.I*z_rn) / 2
     }
 
     H_rn_expr = H_complex_canonical.subs(real_subs).expansion.expression
     
-    # Convert to sympy expression for cleanup of numerical artifacts
+    # Convert to sympy expression for numerical cleanup
     H_rn_expr_sp = sp.sympify(str(H_rn_expr))
-    # Clean up small numerical artifacts
-    def clean_complex_coeffs(expr, tol=1e-14):
-        """Remove small real/imaginary parts from complex coefficients."""
-        if isinstance(expr, sp.Add):
-            return sp.Add(*[clean_complex_coeffs(arg, tol) for arg in expr.args])
-        elif isinstance(expr, sp.Mul):
-            coeff, rest = expr.as_coeff_Mul()
-            if isinstance(coeff, sp.Number) and coeff.is_complex:
-                re, im = float(sp.re(coeff)), float(sp.im(coeff))
-                if abs(re) < tol:
-                    re = 0
-                if abs(im) < tol:
-                    im = 0
-                if im == 0:
-                    new_coeff = sp.Float(re)
-                elif re == 0:
-                    new_coeff = sp.Float(im) * sp.I
-                else:
-                    new_coeff = sp.Float(re) + sp.Float(im) * sp.I
-                return new_coeff * rest
-            else:
-                return expr
-        else:
-            return expr
     
-    H_rn_expr_clean = clean_complex_coeffs(H_rn_expr_sp)
+    # Clean numerical artifacts using our non-recursive helper function
+    H_rn_expr_clean = clean_numerical_artifacts(H_rn_expr_sp, tol=1e-10)
     
     # Convert back to symengine
     H_rn_expr_clean_se = se.sympify(str(H_rn_expr_clean))
     
-    return Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn_expr_clean_se)
+    # Create the final polynomial with cleaned expression
+    result = Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn_expr_clean_se)
+    
+    return result
 
