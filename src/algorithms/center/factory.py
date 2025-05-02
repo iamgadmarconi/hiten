@@ -55,6 +55,18 @@ def to_real_normal(point: LibrationPoint, H_phys: Polynomial) -> Polynomial:
     Express the physical CR3BP Hamiltonian around a collinear point in the
     real normal-form variables (x,y,z,px,py,pz) used for the centre-
     manifold normal-form computation (Jorba & Masdemont, 1999).
+
+    Parameters
+    ----------
+    point : LibrationPoint
+        The LibrationPoint object
+    H_phys : Polynomial
+        The physical Hamiltonian to transform
+
+    Returns
+    -------
+    Polynomial
+        The transformed Hamiltonian in real normal-form variables
     """
     C_num, _ = point.normal_form_transform() # numpy array
     C = se.Matrix(C_num.tolist()) # to SymEngine
@@ -68,7 +80,7 @@ def to_real_normal(point: LibrationPoint, H_phys: Polynomial) -> Polynomial:
             expr += C[i, j] * Z_new[j]
         subs_dict[var] = se.expand(expr)
 
-    H_rn = se.expand(H_phys.subs(subs_dict))
+    H_rn = H_phys.subs(subs_dict).expansion.expression
 
     return Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn)
 
@@ -102,8 +114,8 @@ def to_complex_canonical(point: LibrationPoint, H_real_normal: Polynomial) -> Po
         pz_rn: (se.I*q3 + p3) / sqrt2,
     }
 
-    # Apply substitutions directly to the Hamiltonian expression
-    H_cn_expr = se.expand(H_real_normal.subs(complex_subs))
+    H_cn_expr = H_real_normal.subs(complex_subs).expansion.expression
+
     return Polynomial([q1, q2, q3, p1, p2, p3], H_cn_expr)
 
 def lie_transform(point: LibrationPoint, H_init: Polynomial, max_degree: int) -> tuple[Polynomial, list[Polynomial]]:

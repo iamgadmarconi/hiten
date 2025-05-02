@@ -6,6 +6,8 @@ from collections import defaultdict
 
 
 from algorithms.center.factory import _build_T_polynomials, hamiltonian, to_real_normal, to_complex_canonical, lie_transform
+from algorithms.center.core import Polynomial
+
 from system.libration import L1Point
 
 
@@ -62,6 +64,13 @@ def cartesian_vars():
 def canonical_vars():
     return [q1, q2, q3, p1, p2, p3]
 
+@pytest.fixture()
+def hamiltonians(lp):
+    """Build the physical and complex-canonical Hamiltonians up to order 4."""
+    H_phys = hamiltonian(lp, max_degree=4)
+    H_rn   = to_real_normal(lp, H_phys)
+    H_cn   = to_complex_canonical(lp, H_rn)
+    return H_cn
 
 def test_T_base_cases():
     T0, T1 = _build_T_polynomials(1)
@@ -203,6 +212,7 @@ def test_real_normal_form_transform(lp):
     c2_val = lp._cn(2)
 
     h2 = 1/2 * (px**2+py**2)+y*px-x*py-c2_val*x**2+c2_val/2 * y**2 + 1/2 * pz**2 + c2_val/2 * z**2
+    h2 = Polynomial([x, y, z, px, py, pz], h2)
     h2_rn = to_real_normal(lp, h2)
     h2_rn_expected = lambda1*x_rn*px_rn + (omega1/2)*(y_rn**2 + py_rn**2) + (omega2/2)*(z_rn**2 + pz_rn**2)
 
@@ -217,6 +227,7 @@ def test_complex_canonical_transform(lp):
     c2_val = lp._cn(2)
     
     h2_rn = lambda1*x_rn*px_rn + (omega1/2)*(y_rn**2 + py_rn**2) + (omega2/2)*(z_rn**2 + pz_rn**2)
+    h2_rn = Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], h2_rn)
     h2_cc = to_complex_canonical(lp, h2_rn)
     h2_cc_expected = lambda1*q1*p1 + se.I * omega1 * q2 * p2 + se.I * omega2 * q3 * p3
 
@@ -225,8 +236,49 @@ def test_complex_canonical_transform(lp):
     if diff != 0:
         assert "e-" in diff_str or diff == 0, f"Difference not within numerical tolerance: {diff}"
 
-def test_lie_transform(lp):
-    lambda1, omega1, omega2 = lp.linear_modes()
-    H_phys = hamiltonian(lp)
-    H_cc, G_list = lie_transform(H_phys, lambda1, omega1, omega2, 4)
-    print(H_cc)
+def test_no_mixed_terms(lp, hamiltonians):
+    H_nf, _ = lie_transform(lp, hamiltonians, max_degree=4)
+    for d, monoms in H_nf.build_by_degree().items():
+        if d > 4:
+            continue
+        for mon in monoms:                       # Monomial objects
+            kq, kp = mon.exponents_qp_split()
+            # In the normal form we must have kq[0] == kp[0]
+            assert kq[0] == kp[0], \
+                   f"Coupling term {mon.sym} of degree {d} survived!"
+
+
+# ----------------------------------------------------------------------
+# 2.  { H̄ , I1 } = 0   up to the truncation order
+# ----------------------------------------------------------------------
+def test_commutes_with_I1(lp, hamiltonians):
+    H_nf, _ = lie_transform(lp, hamiltonians, max_degree=4)
+    I1 = Polynomial(H_nf.variables, q1*p1)
+    PB = H_nf.poisson(I1).truncate(4)
+    assert PB.expression == 0, "Poisson bracket with I1 is not zero up to order 4"
+
+
+# ----------------------------------------------------------------------
+# 3.  Numerical sanity: energy is unchanged *to O(ε5)*
+# ----------------------------------------------------------------------
+def random_small():
+    return 1e-3 * (2*random.random() - 1)
+
+@pytest.mark.parametrize("seed", range(10))
+def test_energy_match(lp, hamiltonians, seed):
+    random.seed(seed)
+    H_nf, _ = lie_transform(lp, hamiltonians, max_degree=4)
+
+    subs = {q1: random_small(),
+            q2: random_small(),
+            q3: random_small(),
+            p1: random_small(),
+            p2: random_small(),
+            p3: random_small()}
+
+    E_orig = hamiltonians.evaluate(subs)         # H before Lie series
+    E_nf   = H_nf.evaluate(subs)                 # H after  Lie series
+
+    # At order‑4 normalisation the two differ by O(ε5)
+    assert abs(complex(E_orig - E_nf)) < 1e-14, \
+           "Energy mismatch larger than truncation error"

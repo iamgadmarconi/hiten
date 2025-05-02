@@ -260,7 +260,12 @@ class Polynomial:
         else:
             new_expr = expr if self._total_deg_term(expr, self.variables) <= max_deg else se.Integer(0)
         
-        self._by_degree_cache = None # Forcing rebuild of by_degree_cache
+        # Clear all caches to ensure they are rebuilt with the new truncated expression
+        self._expansion = None
+        self._by_degree_cache = None
+        self._grad_cache = None
+        self._monomials_cache = None
+        self.expression = new_expr
 
         return Polynomial(self.variables, new_expr)
 
@@ -468,6 +473,24 @@ class Polynomial:
         {F, G} = sum_i (dF/dqi * dG/dpi - dF/dpi * dG/dqi)
         """
         return _poisson_bracket(self, other)
+
+    def subs(self, subs_dict: dict[se.Symbol, se.Basic]) -> 'Polynomial':
+        """
+        Substitute variables in the polynomial using a dictionary.
+        
+        Parameters
+        ----------
+        subs_dict : dict[se.Symbol, se.Basic]
+            A dictionary mapping variables to their substitutions
+            
+        Returns
+        -------
+        Polynomial
+            A new polynomial with the substitutions applied
+        """
+        old_expr = se.sympify(self.expression)
+        new_expr = old_expr.subs(subs_dict)
+        return Polynomial(self.variables, new_expr)
 
 
 def _poisson_bracket(F: Polynomial, G: Polynomial) -> Polynomial:
