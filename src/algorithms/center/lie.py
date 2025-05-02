@@ -111,12 +111,12 @@ def _lie_transform(point: LibrationPoint, H_init: Polynomial, max_degree: int) -
     H_2 = _get_homogeneous_terms(H_init, 2)
 
     for n in range(3, max_degree + 1):
-        print(f"Normalizing order {n}...") # Progress indicator
+        logger.info(f"Normalizing order {n}...") # Progress indicator
 
         # Step 6: Extract homogeneous terms of degree n
         H_n_current = _get_homogeneous_terms(H_transformed, n)
         if H_n_current.total_degree() == 0: # If H_n is zero, nothing to eliminate
-            print(f"Order {n} is zero, skipping normalization for this order.")
+            logger.warning(f"Order {n} is zero, skipping normalization for this order.")
             continue
 
         # Step 7: Select monomials for elimination
@@ -124,7 +124,7 @@ def _lie_transform(point: LibrationPoint, H_init: Polynomial, max_degree: int) -
 
         # If there are no terms to eliminate at this order, skip
         if H_n_to_eliminate.total_degree() == 0:
-            print(f"No terms to eliminate at order {n}.")
+            logger.warning(f"No terms to eliminate at order {n}.")
             continue
 
         # Step 8: Solve homological equation to find G_n

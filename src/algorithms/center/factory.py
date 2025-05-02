@@ -5,6 +5,9 @@ import sympy as sp  # Add sympy import for numerical cleanup
 from .core import Polynomial
 from system.libration import LibrationPoint
 
+from log_config import logger
+
+
 x, y, z  = se.symbols('x y z')
 px, py, pz = se.symbols('px py pz')
 x_rn, y_rn, z_rn = se.symbols('x_rn y_rn z_rn')
@@ -149,9 +152,8 @@ def complex_canonical_to_real_normal(point: LibrationPoint, H_complex_canonical:
     
     # Convert to sympy expression for cleanup of numerical artifacts
     H_rn_expr_sp = sp.sympify(str(H_rn_expr))
-    
     # Clean up small numerical artifacts
-    def clean_complex_coeffs(expr, tol=1e-12):
+    def clean_complex_coeffs(expr, tol=1e-14):
         """Remove small real/imaginary parts from complex coefficients."""
         if isinstance(expr, sp.Add):
             return sp.Add(*[clean_complex_coeffs(arg, tol) for arg in expr.args])
