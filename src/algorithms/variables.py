@@ -32,12 +32,3 @@ def create_symbolic_cn(n: int) -> se.Symbol:
     if n == 2:
         return c2
     return se.Symbol(f'c{n}')
-
-
-
-
-
-
-
-
-

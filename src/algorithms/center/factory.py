@@ -41,7 +41,8 @@ def hamiltonian(point: LibrationPoint, max_degree: int = 6) -> Polynomial:
 
     c = [None, None]   # c_0, c_1 unused
     for n in range(2, max_degree + 1):
-        c.append(point._cn(n))
+        # c.append(point._cn(n))
+        c.append(create_symbolic_cn(n))
 
     U = -se.Add(*[c[n] * T[n] for n in range(2, max_degree + 1)])
 
@@ -49,8 +50,7 @@ def hamiltonian(point: LibrationPoint, max_degree: int = 6) -> Polynomial:
 
     H_phys = se.expand(K + U)
 
-    vars_phys = [x, y, z, px, py, pz]
-    return Polynomial(vars_phys, H_phys)
+    return Polynomial([x, y, z, px, py, pz], H_phys)
 
 
 def physical_to_real_normal(point: LibrationPoint, H_phys: Polynomial) -> Polynomial:

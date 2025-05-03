@@ -7,7 +7,7 @@ import random
 
 
 from algorithms.center.factory import _build_T_polynomials, hamiltonian, physical_to_real_normal, real_normal_to_complex_canonical
-from algorithms.variables import get_vars, canonical_normal_vars, physical_vars, real_normal_vars, linear_modes_vars
+from algorithms.variables import get_vars, canonical_normal_vars, physical_vars, real_normal_vars, linear_modes_vars, scale_factors_vars
 from algorithms.center.core import Polynomial
 
 from system.libration import L1Point
@@ -23,6 +23,7 @@ x, y, z, px, py, pz = get_vars(physical_vars)
 q1, q2, q3, p1, p2, p3 = get_vars(canonical_normal_vars)
 x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn = get_vars(real_normal_vars)
 omega1, omega2, lambda1, c2 = get_vars(linear_modes_vars)
+s1, s2 = get_vars(scale_factors_vars)
 
 
 rho2 = x**2 + y**2 + z**2
@@ -86,7 +87,6 @@ def test_T_recurrence(N):
             # Scientific notation for small numbers like 1.11022e-16
             assert "e-" in diff_str or diff == 0, f"Difference not negligible: {diff}"
 
-
 def test_T_known_closed_form():
     T = _build_T_polynomials(3)
     T2_expected = se.expand((3*x**2 - rho2) / 2)
@@ -104,7 +104,6 @@ def test_T_known_closed_form():
         diff_str = str(diff3)
         assert "e-" in diff_str or diff3 == 0, f"T3 difference not equivalent: {diff3}"
 
-
 class DummyPoint:
     """Stub that returns symbolic coefficients c₂ … c₆."""
     c2, c3, c4, c5, c6 = se.symbols("c2 c3 c4 c5 c6")
@@ -115,7 +114,6 @@ def test_hamiltonian_expression_matches_definition():
     max_deg = 6
     point = DummyPoint()
     H = hamiltonian(point, max_degree=max_deg).expression   # unwrap Polynomial
-
     # expected expression straight from the definition
     T = _build_T_polynomials(max_deg)
     U = -(point.c2*T[2] + point.c3*T[3] + point.c4*T[4] + point.c5*T[5] + point.c6*T[6])
@@ -126,7 +124,6 @@ def test_hamiltonian_expression_matches_definition():
     if diff != 0:
         diff_str = str(diff)
         assert "e-" in diff_str or diff == 0, f"Difference not within numerical tolerance: {diff}"
-
 
 def test_hamiltonian_is_zero_at_equilibrium():
     point = DummyPoint()
@@ -144,7 +141,6 @@ def test_hamiltonian_is_zero_at_equilibrium():
         if deriv_at_zero != 0:
             diff_str = str(deriv_at_zero)
             assert "e-" in diff_str or deriv_at_zero == 0, f"Derivative w.r.t {v} not zero at equilibrium: {deriv_at_zero}"
-
 
 def test_truncation():
     point = DummyPoint()
@@ -198,18 +194,19 @@ def test_symplectic(lp):
 
 def test_real_normal_form_transform(lp):
     lambda1_num, omega1_num, omega2_num = lp.linear_modes()
+    s1_num, s2_num = lp._scale_factor(lambda1_num, omega1_num, omega2_num)
     c2_val = lp._cn(2)
 
     h2 = 1/2 * (px**2+py**2)+y*px-x*py-c2_val*x**2+c2_val/2 * y**2 + 1/2 * pz**2 + c2_val/2 * z**2
     h2 = Polynomial([x, y, z, px, py, pz], h2)
-    h2_rn = physical_to_real_normal(lp, h2).subs({lambda1:lambda1_num, omega1:omega1_num, omega2:omega2_num, c2_val:c2_val})
-    h2_rn_expected = lambda1_num*x_rn*px_rn + (omega1_num/2)*(y_rn**2 + py_rn**2) + (omega2_num/2)*(z_rn**2 + pz_rn**2)
-
-    diff = se.expand(h2_rn.expression - h2_rn_expected)
-    diff_str = str(diff)
-    if diff != 0:
-
-        assert "e-" in diff_str or diff == 0, f"Difference not within numerical tolerance: {diff}"
+    h2_rn = physical_to_real_normal(lp, h2).subs({lambda1:lambda1_num, omega1:omega1_num, omega2:omega2_num, c2:c2_val, s1:s1_num, s2:s2_num})
+    print(f'h2_rn: {h2_rn.expansion.expression}')
+    h2_rn_expected = lambda1*x_rn*px_rn + (omega1/2)*(y_rn**2 + py_rn**2) + (omega2/2)*(z_rn**2 + pz_rn**2)
+    h2_rn_expected = Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], h2_rn_expected).subs({lambda1:lambda1_num, omega1:omega1_num, omega2:omega2_num, c2:c2_val})
+    print(f'h2_rn_expected: {h2_rn_expected.expansion.expression}')
+    diff = se.expand(h2_rn.expansion.expression - h2_rn_expected.expansion.expression)
+    
+    assert diff == 0, f"Difference not within numerical tolerance: {diff}"
 
 def test_complex_canonical_transform(lp):
     lambda1, omega1, omega2 = lp.linear_modes()
