@@ -7,13 +7,13 @@ from system.libration import LibrationPoint
 
 from log_config import logger
 
+from ..variables import physical_vars, real_normal_vars, canonical_normal_vars, get_vars, create_symbolic_cn
 
-x, y, z  = se.symbols('x y z')
-px, py, pz = se.symbols('px py pz')
-x_rn, y_rn, z_rn = se.symbols('x_rn y_rn z_rn')
-px_rn, py_rn, pz_rn = se.symbols('px_rn py_rn pz_rn')
-q1, q2, q3 = se.symbols('q1 q2 q3')
-p1, p2, p3 = se.symbols('p1 p2 p3')
+
+x, y, z, px, py, pz = get_vars(physical_vars)
+x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn = get_vars(real_normal_vars)
+q1, q2, q3, p1, p2, p3 = get_vars(canonical_normal_vars)
+
 
 def _build_T_polynomials(N: int) -> list[se.Basic]:
     """Return [T0 … TN] using the Legendre recurrence (paper eq. 6)."""
@@ -71,8 +71,9 @@ def physical_to_real_normal(point: LibrationPoint, H_phys: Polynomial) -> Polyno
     Polynomial
         The transformed Hamiltonian in real normal-form variables
     """
-    C_num, _ = point.normal_form_transform() # numpy array
-    C = se.Matrix(C_num.tolist()) # to SymEngine
+    # C_num, _ = point.normal_form_transform() # numpy array
+    # C = se.Matrix(C_num.tolist()) # to SymEngine
+    C, Cinv = point._symbolic_normal_form_transform() # SymEngine
 
     Z_new = se.Matrix([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn])
 

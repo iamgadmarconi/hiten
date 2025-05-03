@@ -658,11 +658,11 @@ def _monomial_key(expr: se.Basic,
         kp_tuple = tuple(kp)
         
         # Create the symbolic expression for the monomial
-        sym_expr = coeff * _monomial_from_key(kq_tuple, kp_tuple)
+        sym_expr = coeff * _monomial_from_key(kq_tuple, kp_tuple, q_vars, p_vars)
         
         yield Monomial(coeff=coeff, kq=kq_tuple, kp=kp_tuple, sym=sym_expr)
 
-def _monomial_from_key(kq, kp):
+def _monomial_from_key(kq, kp, q_syms, p_syms):
     """
     Reconstruct a symbolic monomial from exponent tuples for q and p variables.
     
@@ -695,10 +695,6 @@ def _monomial_from_key(kq, kp):
     >>> _monomial_from_key((1, 0, 0), (1, 0, 0))
     q1*p1
     """
-    q1, q2, q3 = se.Symbol('q1'), se.Symbol('q2'), se.Symbol('q3')
-    p1, p2, p3 = se.Symbol('p1'), se.Symbol('p2'), se.Symbol('p3')
-    q_syms = [q1,q2,q3]
-    p_syms = [p1,p2,p3]
     expr = se.Integer(1)
     for i,e in enumerate(kq): expr *= q_syms[i]**e
     for i,e in enumerate(kp): expr *= p_syms[i]**e

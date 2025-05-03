@@ -7,9 +7,9 @@ import random
 
 
 from algorithms.center.factory import _build_T_polynomials, hamiltonian, physical_to_real_normal, real_normal_to_complex_canonical
-from algorithms.center.lie import _get_homogeneous_terms, _select_monomials_for_elimination, lie_transform, _solve_homological_equation
+from algorithms.center.lie import _get_homogeneous_terms, _select_monomials_for_elimination, _lie_transform, _solve_homological_equation
 from algorithms.center.core import Polynomial
-
+from algorithms.variables import get_vars, canonical_normal_vars, physical_vars, real_normal_vars
 from system.libration import L1Point
 
 
@@ -19,15 +19,9 @@ TEST_MU_SUN_JUPITER = 9.5387e-4  # Sun-Jupiter system
 TEST_MU_UNSTABLE = 0.04  # Above Routh's critical value for triangular points
 MAX_DEGREE = 6
 
-
-x, y, z  = se.symbols('x y z')
-px, py, pz = se.symbols('px py pz')
-
-q1, q2, q3 = se.symbols('q1 q2 q3')
-p1, p2, p3 = se.symbols('p1 p2 p3')
-
-x_rn, y_rn, z_rn = se.symbols('x_rn y_rn z_rn')
-px_rn, py_rn, pz_rn = se.symbols('px_rn py_rn pz_rn')
+x, y, z, px, py, pz = get_vars(physical_vars)
+x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn = get_vars(real_normal_vars)
+q1, q2, q3, p1, p2, p3 = get_vars(canonical_normal_vars)
 
 
 @pytest.fixture()

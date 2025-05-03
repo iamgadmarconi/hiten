@@ -6,10 +6,10 @@ from collections import defaultdict
 from algorithms.center.core import (Polynomial, _poisson_bracket, 
                                     _split_coeff_and_factors, _update_by_deg, 
                                     _monomial_key, _monomial_from_key, _dot_product)
+from algorithms.variables import get_vars, canonical_normal_vars
 
 
-q1, q2, q3 = se.symbols('q1 q2 q3')
-p1, p2, p3 = se.symbols('p1 p2 p3')
+q1, q2, q3, p1, p2, p3 = get_vars(canonical_normal_vars)
 
 @pytest.fixture
 def vars():
@@ -501,19 +501,19 @@ def test_build_by_degree(vars):
 def test_monomial_from_key():
     kq = (2, 1, 0)
     kp = (0, 0, 3)
-    monomial = _monomial_from_key(kq, kp)
+    monomial = _monomial_from_key(kq, kp, [q1, q2, q3], [p1, p2, p3])
     assert monomial == q1**2*q2*p3**3
     
     # Test with zero exponents
     kq = (0, 0, 0)
     kp = (0, 0, 0)
-    monomial = _monomial_from_key(kq, kp)
+    monomial = _monomial_from_key(kq, kp, [q1, q2, q3], [p1, p2, p3])
     assert monomial == 1
     
     # Test with mixed exponents
     kq = (1, 0, 2)
     kp = (3, 1, 0)
-    monomial = _monomial_from_key(kq, kp)
+    monomial = _monomial_from_key(kq, kp, [q1, q2, q3], [p1, p2, p3])
     assert monomial == q1*q3**2*p1**3*p2
 
 def test_monomial_methods(vars):

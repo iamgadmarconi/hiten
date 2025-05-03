@@ -3,16 +3,22 @@ import numpy as np
 import math
 
 from .core import Polynomial, Monomial, _dot_product, _monomial_from_key
+from ..variables import physical_vars, real_normal_vars, canonical_normal_vars, linear_modes_vars, get_vars
 from .factory import (
     hamiltonian, 
     physical_to_real_normal, 
     real_normal_to_complex_canonical, 
-    complex_canonical_to_real_normal, 
-    q1, p1, q2, p2, q3, p3
+    complex_canonical_to_real_normal
 )
 from system.libration import LibrationPoint
 
 from log_config import logger
+
+
+x, y, z, px, py, pz = get_vars(physical_vars)
+x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn = get_vars(real_normal_vars)
+q1, q2, q3, p1, p2, p3 = get_vars(canonical_normal_vars)
+omega1, omega2, lambda1, c2 = get_vars(linear_modes_vars)
 
 
 def real_normal_center_manifold(point: LibrationPoint, max_degree: int) -> tuple[Polynomial, Polynomial]:
@@ -251,7 +257,7 @@ def _solve_homological_equation(H_n_to_eliminate: Polynomial, H_2: Polynomial, e
 
         # Create the Monomial for G_n
         # Need to reconstruct the symbolic expression for the monomial
-        g_sym_expr = g_coeff * _monomial_from_key(kq, kp)
+        g_sym_expr = g_coeff * _monomial_from_key(kq, kp, [q1,q2,q3], [p1,p2,p3])
 
         g_n_monomials.append(Monomial(coeff=g_coeff, kq=kq, kp=kp, sym=g_sym_expr))
 

@@ -7,6 +7,7 @@ import random
 
 
 from algorithms.center.factory import _build_T_polynomials, hamiltonian, physical_to_real_normal, real_normal_to_complex_canonical
+from algorithms.variables import get_vars, canonical_normal_vars, physical_vars, real_normal_vars, linear_modes_vars
 from algorithms.center.core import Polynomial
 
 from system.libration import L1Point
@@ -18,14 +19,10 @@ TEST_MU_SUN_JUPITER = 9.5387e-4  # Sun-Jupiter system
 TEST_MU_UNSTABLE = 0.04  # Above Routh's critical value for triangular points
 
 
-x, y, z  = se.symbols('x y z')
-px, py, pz = se.symbols('px py pz')
-
-q1, q2, q3 = se.symbols('q1 q2 q3')
-p1, p2, p3 = se.symbols('p1 p2 p3')
-
-x_rn, y_rn, z_rn = se.symbols('x_rn y_rn z_rn')
-px_rn, py_rn, pz_rn = se.symbols('px_rn py_rn pz_rn')
+x, y, z, px, py, pz = get_vars(physical_vars)
+q1, q2, q3, p1, p2, p3 = get_vars(canonical_normal_vars)
+x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn = get_vars(real_normal_vars)
+omega1, omega2, lambda1, c2 = get_vars(linear_modes_vars)
 
 
 rho2 = x**2 + y**2 + z**2
@@ -200,13 +197,13 @@ def test_symplectic(lp):
     assert np.allclose(diff, np.zeros_like(diff), atol=1e-12)
 
 def test_real_normal_form_transform(lp):
-    lambda1, omega1, omega2 = lp.linear_modes()
+    lambda1_num, omega1_num, omega2_num = lp.linear_modes()
     c2_val = lp._cn(2)
 
     h2 = 1/2 * (px**2+py**2)+y*px-x*py-c2_val*x**2+c2_val/2 * y**2 + 1/2 * pz**2 + c2_val/2 * z**2
     h2 = Polynomial([x, y, z, px, py, pz], h2)
-    h2_rn = physical_to_real_normal(lp, h2)
-    h2_rn_expected = lambda1*x_rn*px_rn + (omega1/2)*(y_rn**2 + py_rn**2) + (omega2/2)*(z_rn**2 + pz_rn**2)
+    h2_rn = physical_to_real_normal(lp, h2).subs({lambda1:lambda1_num, omega1:omega1_num, omega2:omega2_num, c2_val:c2_val})
+    h2_rn_expected = lambda1_num*x_rn*px_rn + (omega1_num/2)*(y_rn**2 + py_rn**2) + (omega2_num/2)*(z_rn**2 + pz_rn**2)
 
     diff = se.expand(h2_rn.expression - h2_rn_expected)
     diff_str = str(diff)
@@ -231,32 +228,20 @@ def test_complex_canonical_transform(lp):
 def test_h2_diagonal_in_complex_canonical(lp):
     """Test if the quadratic part of the Hamiltonian is diagonal after 
     transformation to complex canonical coordinates."""
-    
-    # Get the quadratic part of the Hamiltonian in physical coordinates
+
     h2_phys = hamiltonian(lp, max_degree=2)
-    
-    # Transform to real normal form coordinates
+
     h2_rn = physical_to_real_normal(lp, h2_phys)
-    
-    # Transform to complex canonical coordinates
+
     h2_cc = real_normal_to_complex_canonical(lp, h2_rn)
-    
-    # The expression should only contain diagonal terms q1*p1, q2*p2, q3*p3
-    # and no mixed terms like q1*p2, q2*p3, etc.
+
     h2_expr = h2_cc.expression.expand()
     
     # Tolerance for small coefficients that may appear due to numerical errors
     TOLERANCE = 1e-14
-    
-    # Check for any mixed terms with significant coefficients
+
     mixed_terms = []
-    
-    # Test each possible mixed term explicitly by substituting
-    # This is more reliable than trying to parse the coefficients from the expression
-    q_vars = [q1, q2, q3]
-    p_vars = [p1, p2, p3]
-    
-    # Check all possible non-diagonal terms
+
     for i, qi in enumerate(q_vars):
         for j, pj in enumerate(p_vars):
             if i != j:  # Non-diagonal term qi*pj
