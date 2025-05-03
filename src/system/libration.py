@@ -27,6 +27,7 @@ import symengine as se
 # Import existing dynamics functionality
 from algorithms.dynamics import jacobian_crtbp
 from algorithms.linalg import eigenvalue_decomposition
+from algorithms.variables import get_vars, linear_modes_vars, scale_factors_vars
 
 # Import custom logger
 from log_config import logger
@@ -515,13 +516,8 @@ class CollinearPoint(LibrationPoint):
         """
         logger.debug(f"Computing symbolic normal form transform for {type(self).__name__}")
         
-        # Define symbolic variables
-        lambda1 = se.Symbol('lambda1')
-        omega1 = se.Symbol('omega1')
-        omega2 = se.Symbol('omega2')
-        s1 = se.Symbol('s1')
-        s2 = se.Symbol('s2')
-        c2 = se.Symbol('c2')
+        lambda1, omega1, omega2, c2 = get_vars(linear_modes_vars)
+        s1, s2 = get_vars(scale_factors_vars)
         
         # Create the symbolic matrix C based on the mathematical expression in the image (eq. 10)
         # Create a zero matrix (symengine doesn't have Matrix.zeros like numpy)
