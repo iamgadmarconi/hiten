@@ -524,51 +524,51 @@ class CollinearPoint(LibrationPoint):
         C = se.Matrix([[0 for _ in range(6)] for _ in range(6)])
         
         # First row
-        C[0, 0] = 2 * lambda1_sym / s1_sym
-        C[0, 1] = 0
-        C[0, 2] = 0
-        C[0, 3] = -2 * lambda1_sym / s1_sym
-        C[0, 4] = 2 * omega1_sym / s2_sym
-        C[0, 5] = 0
+        C[0, 0] = se.Integer(2) * lambda1_sym / s1_sym
+        C[0, 1] = se.Integer(0)
+        C[0, 2] = se.Integer(0)
+        C[0, 3] = -se.Integer(2) * lambda1_sym / s1_sym
+        C[0, 4] = se.Integer(2) * omega1_sym / s2_sym
+        C[0, 5] = se.Integer(0)
         
         # Second row
-        C[1, 0] = (lambda1_sym**2 - 2*c2_sym - 1) / s1_sym
-        C[1, 1] = (-omega1_sym**2 - 2*c2_sym - 1) / s2_sym
-        C[1, 2] = 0
-        C[1, 3] = (lambda1_sym**2 - 2*c2_sym - 1) / s1_sym
-        C[1, 4] = 0
-        C[1, 5] = 0
+        C[1, 0] = (lambda1_sym**se.Integer(2) - se.Integer(2)*c2_sym - se.Integer(1)) / s1_sym
+        C[1, 1] = (-omega1_sym**se.Integer(2) - se.Integer(2)*c2_sym - se.Integer(1)) / s2_sym
+        C[1, 2] = se.Integer(0)
+        C[1, 3] = (lambda1_sym**se.Integer(2) - se.Integer(2)*c2_sym - se.Integer(1)) / s1_sym
+        C[1, 4] = se.Integer(0)
+        C[1, 5] = se.Integer(0)
         
         # Third row
-        C[2, 0] = 0
-        C[2, 1] = 0
-        C[2, 2] = 1 / se.sqrt(omega2_sym)
-        C[2, 3] = 0
-        C[2, 4] = 0
-        C[2, 5] = 0
+        C[2, 0] = se.Integer(0)
+        C[2, 1] = se.Integer(0)
+        C[2, 2] = se.Integer(1) / se.sqrt(omega2_sym)
+        C[2, 3] = se.Integer(0)
+        C[2, 4] = se.Integer(0)
+        C[2, 5] = se.Integer(0)
         
         # Fourth row
-        C[3, 0] = (lambda1_sym**2 + 2*c2_sym + 1) / s1_sym
-        C[3, 1] = (-omega1_sym**2 + 2*c2_sym + 1) / s2_sym
-        C[3, 2] = 0
-        C[3, 3] = (lambda1_sym**2 + 2*c2_sym + 1) / s1_sym
-        C[3, 4] = 0
-        C[3, 5] = 0
+        C[3, 0] = (lambda1_sym**se.Integer(2) + se.Integer(2)*c2_sym + se.Integer(1)) / s1_sym
+        C[3, 1] = (-omega1_sym**se.Integer(2) + se.Integer(2)*c2_sym + se.Integer(1)) / s2_sym
+        C[3, 2] = se.Integer(0)
+        C[3, 3] = (lambda1_sym**se.Integer(2) + se.Integer(2)*c2_sym + se.Integer(1)) / s1_sym
+        C[3, 4] = se.Integer(0)
+        C[3, 5] = se.Integer(0)
         
         # Fifth row
-        C[4, 0] = (lambda1_sym**3 + (1 - 2*c2_sym)*lambda1_sym) / s1_sym
-        C[4, 1] = 0
-        C[4, 2] = 0
-        C[4, 3] = (-lambda1_sym**3 - (1 - 2*c2_sym)*lambda1_sym) / s1_sym
-        C[4, 4] = (-omega1_sym**3 + (1 - 2*c2_sym)*omega1_sym) / s2_sym
-        C[4, 5] = 0
+        C[4, 0] = (lambda1_sym**se.Integer(3) + (se.Integer(1) - se.Integer(2)*c2_sym)*lambda1_sym) / s1_sym
+        C[4, 1] = se.Integer(0)
+        C[4, 2] = se.Integer(0)
+        C[4, 3] = (-lambda1_sym**se.Integer(3) - (se.Integer(1) - se.Integer(2)*c2_sym)*lambda1_sym) / s1_sym
+        C[4, 4] = (-omega1_sym**se.Integer(3) + (se.Integer(1) - se.Integer(2)*c2_sym)*omega1_sym) / s2_sym
+        C[4, 5] = se.Integer(0)
         
         # Sixth row
-        C[5, 0] = 0
-        C[5, 1] = 0
-        C[5, 2] = 0
-        C[5, 3] = 0
-        C[5, 4] = 0
+        C[5, 0] = se.Integer(0)
+        C[5, 1] = se.Integer(0)
+        C[5, 2] = se.Integer(0)
+        C[5, 3] = se.Integer(0)
+        C[5, 4] = se.Integer(0)
         C[5, 5] = se.sqrt(omega2_sym)
         
         # Compute the symbolic inverse
@@ -689,7 +689,7 @@ class CollinearPoint(LibrationPoint):
             omega2_sym: 'Vertical oscillation frequency',
             s1_sym: 'Hyperbolic normalization factor',
             s2_sym: 'Elliptic normalization factor',
-            symbols['c2']: 'Second-order coefficient in the potential'
+            c2_sym: 'Second-order coefficient in the potential'
         }
         
         return C_sym, Cinv_sym, params
