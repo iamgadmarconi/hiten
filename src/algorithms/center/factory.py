@@ -71,7 +71,7 @@ def physical_to_real_normal(point: LibrationPoint, H_phys: Polynomial) -> Polyno
         The transformed Hamiltonian in real normal-form variables with symbolic parameters
     """
     # Get the symbolic transformation matrices
-    C, _ = point._symbolic_normal_form_transform()
+    C, Cinv = point._symbolic_normal_form_transform()
 
     # Create the new coordinate vector
     Z_new = se.Matrix([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn])

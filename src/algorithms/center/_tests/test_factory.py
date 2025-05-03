@@ -200,12 +200,13 @@ def test_phys_to_rn(lp):
     h2 = 1/2 * (px**2+py**2)+y*px-x*py-c2*x**2+c2/2 * y**2 + 1/2 * pz**2 + c2/2 * z**2
     h2 = Polynomial([x, y, z, px, py, pz], h2)
 
-    h2_rn = physical_to_real_normal(lp, h2).subs({lambda1:lambda1_num, omega1:omega1_num, omega2:omega2_num, c2:c2_num, s1:s1_num, s2:s2_num})
+    h2_rn = physical_to_real_normal(lp, h2)
     h2_rn_expected = lambda1*x_rn*px_rn + (omega1/2)*(y_rn**2 + py_rn**2) + (omega2/2)*(z_rn**2 + pz_rn**2)
     h2_rn_expected = Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], h2_rn_expected)
 
     diff = se.expand(h2_rn.expansion.expression - h2_rn_expected.expansion.expression)
-    diff_str = str(diff)
+    diff_sp = sp.sympify(diff).simplify()
+    diff_str = str(diff_sp)
     print(f"\n\ntest_phys_to_rn:\n\n{diff_str}\n")
 
 def test_rn_to_cc(lp):
@@ -240,3 +241,23 @@ def test_cc_to_rn():
     diff = se.expand(h2_rn.expansion.expression - h2_rn_expected.expansion.expression)
     diff_str = str(diff)
     print(f"\n\ntest_cc_to_rn:\n\n{diff_str}\n")
+
+def test_phys_to_cc():
+    lp = L1Point(0.0121505856)
+    lambda1_num, omega1_num, omega2_num = lp.linear_modes()
+    s1_num, s2_num = lp._scale_factor(lambda1_num, omega1_num, omega2_num)
+    c2_num = lp._cn(2)
+    
+    h2 = 1/2 * (px**2+py**2)+y*px-x*py-c2*x**2+c2/2 * y**2 + 1/2 * pz**2 + c2/2 * z**2
+    h2 = Polynomial([x, y, z, px, py, pz], h2)
+
+    h2_rn = physical_to_real_normal(lp, h2)
+
+    h2_cc = real_normal_to_complex_canonical(lp, h2_rn)
+    h2_cc_expected = lambda1*q1*p1 + se.I * omega1 * q2 * p2 + se.I * omega2 * q3 * p3
+    h2_cc_expected = Polynomial([q1, q2, q3, p1, p2, p3], h2_cc_expected)
+
+    diff = se.expand(h2_cc.expansion.expression - h2_cc_expected.expansion.expression)
+    diff_str = str(diff)
+    print(f"\n\ntest_phys_to_cc:\n\n{diff_str}\n")
+
