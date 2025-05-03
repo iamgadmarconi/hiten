@@ -4,7 +4,6 @@ import sympy as sp  # Add sympy import for numerical cleanup
 
 from .core import Polynomial
 from system.libration import LibrationPoint
-
 from log_config import logger
 
 from ..variables import physical_vars, real_normal_vars, canonical_normal_vars, get_vars, create_symbolic_cn
@@ -69,15 +68,15 @@ def physical_to_real_normal(point: LibrationPoint, H_phys: Polynomial) -> Polyno
     Returns
     -------
     Polynomial
-        The transformed Hamiltonian in real normal-form variables
+        The transformed Hamiltonian in real normal-form variables with symbolic parameters
     """
     # Get the symbolic transformation matrices
-    #C, Cinv = point._symbolic_normal_form_transform() # SymEngine
-    C_num, _ = point.normal_form_transform() # numpy array
-    C = se.Matrix(C_num.tolist()) # to SymEngine
+    C, _ = point._symbolic_normal_form_transform()
 
+    # Create the new coordinate vector
     Z_new = se.Matrix([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn])
 
+    # Build the substitution dictionary from physical to real normal coordinates
     subs_dict = {}
     for i, var in enumerate([x, y, z, px, py, pz]):
         expr = 0
@@ -188,7 +187,6 @@ def clean_numerical_artifacts(expr, tol=1e-10):
     sympy.Expr
         Cleaned expression
     """
-    import sympy as sp
     
     # For basic expressions, convert to sympy if it's not already
     if not isinstance(expr, sp.Expr):

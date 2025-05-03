@@ -39,7 +39,7 @@ from log_config import logger
 CONTINUOUS_SYSTEM = 0
 DISCRETE_SYSTEM = 1
 
-lambda1_sym, omega1_sym, omega2_sym, c2_sym = get_vars(linear_modes_vars)
+omega1_sym, omega2_sym, lambda1_sym, c2_sym = get_vars(linear_modes_vars)
 s1_sym, s2_sym = get_vars(scale_factors_vars)
 
 
