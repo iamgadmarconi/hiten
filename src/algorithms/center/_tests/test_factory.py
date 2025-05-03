@@ -195,15 +195,13 @@ def test_symplectic(lp):
 def test_real_normal_form_transform(lp):
     lambda1_num, omega1_num, omega2_num = lp.linear_modes()
     s1_num, s2_num = lp._scale_factor(lambda1_num, omega1_num, omega2_num)
-    c2_val = lp._cn(2)
+    c2_num = lp._cn(2)
 
-    h2 = 1/2 * (px**2+py**2)+y*px-x*py-c2_val*x**2+c2_val/2 * y**2 + 1/2 * pz**2 + c2_val/2 * z**2
+    h2 = 1/2 * (px**2+py**2)+y*px-x*py-c2*x**2+c2/2 * y**2 + 1/2 * pz**2 + c2/2 * z**2
     h2 = Polynomial([x, y, z, px, py, pz], h2)
-    h2_rn = physical_to_real_normal(lp, h2).subs({lambda1:lambda1_num, omega1:omega1_num, omega2:omega2_num, c2:c2_val, s1:s1_num, s2:s2_num})
-    print(f'h2_rn: {h2_rn.expansion.expression}')
+    h2_rn = physical_to_real_normal(lp, h2).subs({lambda1:lambda1_num, omega1:omega1_num, omega2:omega2_num, c2:c2_num, s1:s1_num, s2:s2_num})
     h2_rn_expected = lambda1*x_rn*px_rn + (omega1/2)*(y_rn**2 + py_rn**2) + (omega2/2)*(z_rn**2 + pz_rn**2)
-    h2_rn_expected = Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], h2_rn_expected).subs({lambda1:lambda1_num, omega1:omega1_num, omega2:omega2_num, c2:c2_val})
-    print(f'h2_rn_expected: {h2_rn_expected.expansion.expression}')
+    h2_rn_expected = Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], h2_rn_expected).subs({lambda1:lambda1_num, omega1:omega1_num, omega2:omega2_num, c2:c2_num, s1:s1_num, s2:s2_num})
     diff = se.expand(h2_rn.expansion.expression - h2_rn_expected.expansion.expression)
     
     assert diff == 0, f"Difference not within numerical tolerance: {diff}"

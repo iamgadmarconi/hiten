@@ -71,9 +71,10 @@ def physical_to_real_normal(point: LibrationPoint, H_phys: Polynomial) -> Polyno
     Polynomial
         The transformed Hamiltonian in real normal-form variables
     """
-    # C_num, _ = point.normal_form_transform() # numpy array
-    # C = se.Matrix(C_num.tolist()) # to SymEngine
-    C, Cinv = point._symbolic_normal_form_transform() # SymEngine
+    # Get the symbolic transformation matrices
+    #C, Cinv = point._symbolic_normal_form_transform() # SymEngine
+    C_num, _ = point.normal_form_transform() # numpy array
+    C = se.Matrix(C_num.tolist()) # to SymEngine
 
     Z_new = se.Matrix([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn])
 
@@ -83,7 +84,7 @@ def physical_to_real_normal(point: LibrationPoint, H_phys: Polynomial) -> Polyno
         for j in range(6):
             expr += C[i, j] * Z_new[j]
         subs_dict[var] = se.expand(expr)
-
+    
     H_rn = H_phys.subs(subs_dict).expansion.expression
 
     return Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn)
