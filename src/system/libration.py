@@ -39,6 +39,9 @@ from log_config import logger
 CONTINUOUS_SYSTEM = 0
 DISCRETE_SYSTEM = 1
 
+lambda1_sym, omega1_sym, omega2_sym, c2_sym = get_vars(linear_modes_vars)
+s1_sym, s2_sym = get_vars(scale_factors_vars)
+
 
 @dataclass(slots=True)
 class LinearData:
@@ -515,52 +518,49 @@ class CollinearPoint(LibrationPoint):
             (C, Cinv) where C is the symbolic symplectic transformation matrix and Cinv is its inverse
         """
         logger.debug(f"Computing symbolic normal form transform for {type(self).__name__}")
-        
-        lambda1, omega1, omega2, c2 = get_vars(linear_modes_vars)
-        s1, s2 = get_vars(scale_factors_vars)
-        
+
         # Create the symbolic matrix C based on the mathematical expression in the image (eq. 10)
         # Create a zero matrix (symengine doesn't have Matrix.zeros like numpy)
         C = se.Matrix([[0 for _ in range(6)] for _ in range(6)])
         
         # First row
-        C[0, 0] = 2 * lambda1 / s1
+        C[0, 0] = 2 * lambda1_sym / s1_sym
         C[0, 1] = 0
         C[0, 2] = 0
-        C[0, 3] = -2 * lambda1 / s1
-        C[0, 4] = 2 * omega1 / s2
+        C[0, 3] = -2 * lambda1_sym / s1_sym
+        C[0, 4] = 2 * omega1_sym / s2_sym
         C[0, 5] = 0
         
         # Second row
-        C[1, 0] = (lambda1**2 - 2*c2 - 1) / s1
-        C[1, 1] = (-omega1**2 - 2*c2 - 1) / s2
+        C[1, 0] = (lambda1_sym**2 - 2*c2_sym - 1) / s1_sym
+        C[1, 1] = (-omega1_sym**2 - 2*c2_sym - 1) / s2_sym
         C[1, 2] = 0
-        C[1, 3] = (lambda1**2 - 2*c2 - 1) / s1
+        C[1, 3] = (lambda1_sym**2 - 2*c2_sym - 1) / s1_sym
         C[1, 4] = 0
         C[1, 5] = 0
         
         # Third row
         C[2, 0] = 0
         C[2, 1] = 0
-        C[2, 2] = 1 / se.sqrt(omega2)
+        C[2, 2] = 1 / se.sqrt(omega2_sym)
         C[2, 3] = 0
         C[2, 4] = 0
         C[2, 5] = 0
         
         # Fourth row
-        C[3, 0] = (lambda1**2 + 2*c2 + 1) / s1
-        C[3, 1] = (-omega1**2 + 2*c2 + 1) / s2
+        C[3, 0] = (lambda1_sym**2 + 2*c2_sym + 1) / s1_sym
+        C[3, 1] = (-omega1_sym**2 + 2*c2_sym + 1) / s2_sym
         C[3, 2] = 0
-        C[3, 3] = (lambda1**2 + 2*c2 + 1) / s1
+        C[3, 3] = (lambda1_sym**2 + 2*c2_sym + 1) / s1_sym
         C[3, 4] = 0
         C[3, 5] = 0
         
         # Fifth row
-        C[4, 0] = (lambda1**3 + (1 - 2*c2)*lambda1) / s1
+        C[4, 0] = (lambda1_sym**3 + (1 - 2*c2_sym)*lambda1_sym) / s1_sym
         C[4, 1] = 0
         C[4, 2] = 0
-        C[4, 3] = (-lambda1**3 - (1 - 2*c2)*lambda1) / s1
-        C[4, 4] = (-omega1**3 + (1 - 2*c2)*omega1) / s2
+        C[4, 3] = (-lambda1_sym**3 - (1 - 2*c2_sym)*lambda1_sym) / s1_sym
+        C[4, 4] = (-omega1_sym**3 + (1 - 2*c2_sym)*omega1_sym) / s2_sym
         C[4, 5] = 0
         
         # Sixth row
@@ -569,7 +569,7 @@ class CollinearPoint(LibrationPoint):
         C[5, 2] = 0
         C[5, 3] = 0
         C[5, 4] = 0
-        C[5, 5] = se.sqrt(omega2)
+        C[5, 5] = se.sqrt(omega2_sym)
         
         # Compute the symbolic inverse
         Cinv = C.inv()
@@ -593,24 +593,24 @@ class CollinearPoint(LibrationPoint):
         C_sym, Cinv_sym = self._symbolic_normal_form_transform()
         
         # Use the cached linear modes
-        lambda1, omega1, omega2 = self.linear_modes()
-        logger.debug(f"Using linear modes: lambda1={lambda1}, omega1={omega1}, omega2={omega2}")
+        lambda1_num, omega1_num, omega2_num = self.linear_modes()
+        logger.debug(f"Using linear modes: lambda1={lambda1_num}, omega1={omega1_num}, omega2={omega2_num}")
         
         c2 = self._cn(2)
         logger.debug(f"Using c2 coefficient: c2={c2}")
 
         # Get normalization factors s1, s2
-        s1, s2 = self._scale_factor(lambda1, omega1, omega2)
+        s1, s2 = self._scale_factor(lambda1_num, omega1_num, omega2_num)
         logger.debug(f"Scale factors: s1={s1}, s2={s2}")
 
         # Substitute the symbolic variables with their numerical values
         subs_dict = {
-            se.Symbol('lambda1'): float(lambda1),
-            se.Symbol('omega1'): float(omega1),
-            se.Symbol('omega2'): float(omega2),
-            se.Symbol('s1'): float(s1),
-            se.Symbol('s2'): float(s2),
-            se.Symbol('c2'): float(c2)
+            lambda1_sym: float(lambda1_num),
+            omega1_sym: float(omega1_num),
+            omega2_sym: float(omega2_num),
+            s1_sym: float(s1),
+            s2_sym: float(s2),
+            c2_sym: float(c2)
         }
         
         # Convert to numerical matrices
@@ -644,12 +644,12 @@ class CollinearPoint(LibrationPoint):
         
         # Substitute the symbolic variables with their numerical values
         subs_dict = {
-            se.Symbol('lambda1'): float(lambda1),
-            se.Symbol('omega1'): float(omega1),
-            se.Symbol('omega2'): float(omega2),
-            se.Symbol('s1'): float(s1),
-            se.Symbol('s2'): float(s2),
-            se.Symbol('c2'): float(c2)
+            lambda1_sym: float(lambda1),
+            omega1_sym: float(omega1),
+            omega2_sym: float(omega2),
+            s1_sym: float(s1),
+            s2_sym: float(s2),
+            c2_sym: float(c2)
         }
         
         # Convert to numerical matrices
@@ -684,12 +684,12 @@ class CollinearPoint(LibrationPoint):
         
         # Create a dictionary to map symbolic variables to their descriptions
         params = {
-            se.Symbol('lambda1'): 'Hyperbolic eigenvalue',
-            se.Symbol('omega1'): 'Planar oscillation frequency',
-            se.Symbol('omega2'): 'Vertical oscillation frequency',
-            se.Symbol('s1'): 'Hyperbolic normalization factor',
-            se.Symbol('s2'): 'Elliptic normalization factor',
-            se.Symbol('c2'): 'Second-order coefficient in the potential'
+            lambda1_sym: 'Hyperbolic eigenvalue',
+            omega1_sym: 'Planar oscillation frequency',
+            omega2_sym: 'Vertical oscillation frequency',
+            s1_sym: 'Hyperbolic normalization factor',
+            s2_sym: 'Elliptic normalization factor',
+            symbols['c2']: 'Second-order coefficient in the potential'
         }
         
         return C_sym, Cinv_sym, params
@@ -739,12 +739,12 @@ class CollinearPoint(LibrationPoint):
         
         # Create substitution dictionary for symengine
         subs_dict = {
-            se.Symbol('lambda1'): float(params['lambda1']),
-            se.Symbol('omega1'): float(params['omega1']),
-            se.Symbol('omega2'): float(params['omega2']),
-            se.Symbol('s1'): float(params['s1']),
-            se.Symbol('s2'): float(params['s2']),
-            se.Symbol('c2'): float(params['c2'])
+            lambda1_sym: float(params['lambda1']),
+            omega1_sym: float(params['omega1']),
+            omega2_sym: float(params['omega2']),
+            s1_sym: float(params['s1']),
+            s2_sym: float(params['s2']),
+            c2_sym: float(params['c2'])
         }
         
         # Apply substitution
