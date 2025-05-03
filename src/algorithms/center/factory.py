@@ -87,6 +87,86 @@ def physical_to_real_normal(point: LibrationPoint, H_phys: Polynomial) -> Polyno
 
     return Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn)
 
+def real_normal_to_complex_canonical(point: LibrationPoint, H_real_normal: Polynomial) -> Polynomial:
+    """
+    Express the physical CR3BP Hamiltonian around a collinear point in the
+    complex canonical variables (q1,q2,q3,p1,p2,p3) used for the centre-
+    manifold normal-form computation (Jorba & Masdemont, 1999).
+
+    Parameters
+    ----------
+    point : LibrationPoint
+        Must implement `normal_form_transform()` → (C, Cinv) with C \subset \mathbb{R}^{6 \times 6}.
+    H_real_normal : Polynomial
+        Hamiltonian in the real normal-form variables
+        (x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn).
+
+    Returns
+    -------
+    Polynomial
+        Same Hamiltonian written in (q1,q2,q3,p1,p2,p3).
+    """
+
+    sqrt2 = se.sqrt(2)
+    complex_subs = {
+        x_rn : q1,
+        y_rn : (q2 + se.I*p2) / sqrt2,
+        z_rn : (q3 + se.I*p3) / sqrt2,
+        px_rn: p1,
+        py_rn: (se.I*q2 + p2) / sqrt2,
+        pz_rn: (se.I*q3 + p3) / sqrt2,
+    }
+
+    H_cn_expr = H_real_normal.subs(complex_subs).expansion.expression
+
+    return Polynomial([q1, q2, q3, p1, p2, p3], H_cn_expr)
+
+def complex_canonical_to_real_normal(point: LibrationPoint, H_complex_canonical: Polynomial) -> Polynomial:
+    """
+    Express the Hamiltonian in the real normal-form variables (x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn)
+    from the complex canonical variables (q1, q2, q3, p1, p2, p3).
+    
+    Parameters
+    ----------
+    point : LibrationPoint
+        The LibrationPoint object
+    H_complex_canonical : Polynomial
+        The Hamiltonian in complex canonical variables
+    
+    Returns
+    -------
+    Polynomial
+        The transformed Hamiltonian in real normal-form variables
+    """
+    sqrt2 = se.sqrt(2)
+    # Implement the exact inverse of the transformation in real_normal_to_complex_canonical
+    # This is directly derived from the equations in (12)
+
+    real_subs = {
+        q1: x_rn,
+        q2: (y_rn - se.I*py_rn) / sqrt2,
+        q3: (z_rn - se.I*pz_rn) / sqrt2, 
+        p1: px_rn,
+        p2: (py_rn - se.I*y_rn) / sqrt2,
+        p3: (pz_rn - se.I*z_rn) / sqrt2
+    }
+
+    H_rn_expr = H_complex_canonical.subs(real_subs).expansion.expression
+    
+    # Convert to sympy expression for numerical cleanup
+    H_rn_expr_sp = sp.sympify(str(H_rn_expr))
+    
+    # Clean numerical artifacts using our non-recursive helper function
+    H_rn_expr_clean = clean_numerical_artifacts(H_rn_expr_sp, tol=1e-10)
+    
+    # Convert back to symengine
+    H_rn_expr_clean_se = se.sympify(str(H_rn_expr_clean))
+    
+    # Create the final polynomial with cleaned expression
+    result = Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn_expr_clean_se)
+    
+    return result
+
 def clean_numerical_artifacts(expr, tol=1e-10):
     """
     Clean small numerical artifacts from symbolic expressions.
@@ -256,83 +336,3 @@ def clean_numerical_artifacts(expr, tol=1e-10):
         
     # For any other expression type, just return it as is
     return expanded
-
-def real_normal_to_complex_canonical(point: LibrationPoint, H_real_normal: Polynomial) -> Polynomial:
-    """
-    Express the physical CR3BP Hamiltonian around a collinear point in the
-    complex canonical variables (q1,q2,q3,p1,p2,p3) used for the centre-
-    manifold normal-form computation (Jorba & Masdemont, 1999).
-
-    Parameters
-    ----------
-    point : LibrationPoint
-        Must implement `normal_form_transform()` → (C, Cinv) with C \subset \mathbb{R}^{6 \times 6}.
-    H_real_normal : Polynomial
-        Hamiltonian in the real normal-form variables
-        (x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn).
-
-    Returns
-    -------
-    Polynomial
-        Same Hamiltonian written in (q1,q2,q3,p1,p2,p3).
-    """
-
-    sqrt2 = se.sqrt(2)
-    complex_subs = {
-        x_rn : q1,
-        y_rn : (q2 + se.I*p2) / sqrt2,
-        z_rn : (q3 + se.I*p3) / sqrt2,
-        px_rn: p1,
-        py_rn: (se.I*q2 + p2) / sqrt2,
-        pz_rn: (se.I*q3 + p3) / sqrt2,
-    }
-
-    H_cn_expr = H_real_normal.subs(complex_subs).expansion.expression
-
-    return Polynomial([q1, q2, q3, p1, p2, p3], H_cn_expr)
-
-def complex_canonical_to_real_normal(point: LibrationPoint, H_complex_canonical: Polynomial) -> Polynomial:
-    """
-    Express the Hamiltonian in the real normal-form variables (x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn)
-    from the complex canonical variables (q1, q2, q3, p1, p2, p3).
-    
-    Parameters
-    ----------
-    point : LibrationPoint
-        The LibrationPoint object
-    H_complex_canonical : Polynomial
-        The Hamiltonian in complex canonical variables
-    
-    Returns
-    -------
-    Polynomial
-        The transformed Hamiltonian in real normal-form variables
-    """
-    sqrt2 = se.sqrt(2)
-    # Implement the exact inverse of the transformation in real_normal_to_complex_canonical
-    # This is directly derived from the equations in (12)
-    real_subs = {
-        q1: x_rn,
-        q2: sqrt2 * (y_rn - se.I*py_rn) / 2,
-        q3: sqrt2 * (z_rn - se.I*pz_rn) / 2, 
-        p1: px_rn,
-        p2: sqrt2 * (py_rn - se.I*y_rn) / 2,
-        p3: sqrt2 * (pz_rn - se.I*z_rn) / 2
-    }
-
-    H_rn_expr = H_complex_canonical.subs(real_subs).expansion.expression
-    
-    # Convert to sympy expression for numerical cleanup
-    H_rn_expr_sp = sp.sympify(str(H_rn_expr))
-    
-    # Clean numerical artifacts using our non-recursive helper function
-    H_rn_expr_clean = clean_numerical_artifacts(H_rn_expr_sp, tol=1e-10)
-    
-    # Convert back to symengine
-    H_rn_expr_clean_se = se.sympify(str(H_rn_expr_clean))
-    
-    # Create the final polynomial with cleaned expression
-    result = Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn_expr_clean_se)
-    
-    return result
-
