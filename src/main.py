@@ -1,6 +1,9 @@
 import numpy as np
 import symengine as se
 import sympy as sp
+import cProfile
+import pstats
+import io
 
 from system.libration import L1Point
 from system.body import Body
@@ -18,7 +21,7 @@ from log_config import logger
 
 def main():
 
-    max_degree = 6
+    max_degree = 5
 
     Sun = Body("Sun", 
                 Constants.bodies["sun"]["mass"], 
@@ -56,4 +59,16 @@ def main():
 
 
 if __name__ == "__main__":
+    # Use cProfile to profile the main function execution
+    profiler = cProfile.Profile()
+    profiler.enable()
+    
     main()
+    
+    profiler.disable()
+    
+    # Print the profiling results sorted by cumulative time
+    s = io.StringIO()
+    ps = pstats.Stats(profiler, stream=s).sort_stats('cumtime')
+    ps.print_stats(20)  # Print top 20 functions by cumulative time
+    logger.info("Profiling Statistics:\n" + s.getvalue())

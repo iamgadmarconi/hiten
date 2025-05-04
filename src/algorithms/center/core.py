@@ -184,10 +184,41 @@ class Polynomial:
         return self._expansion
 
     def _expand(self) -> 'Polynomial':
+        """
+        Optimized expansion method that uses caching and efficient expansion strategies
+        based on expression complexity.
+        """
         # Handle case when expression is a Python primitive type
         if isinstance(self.expression, (int, float)):
             return Polynomial(self.variables, se.sympify(self.expression))
-        return Polynomial(self.variables, self.expression.expand())
+        
+        # Use a class-level cache to avoid repeated identical expansions
+        if not hasattr(Polynomial, '_expand_cache'):
+            Polynomial._expand_cache = {}
+            
+        # Create a cache key based on the expression hash (this will work well for identical expressions)
+        cache_key = hash(self.expression)
+        
+        # Check if we've already expanded this expression
+        if cache_key in Polynomial._expand_cache:
+            expanded_expr = Polynomial._expand_cache[cache_key]
+            return Polynomial(self.variables, expanded_expr)
+            
+        # Optimize the expansion strategy based on expression type
+        expr = self.expression
+        
+        # For Add expressions, expand each term separately for better performance with many terms
+        if expr.is_Add and len(expr.args) > 10:
+            expanded_terms = [term.expand() for term in expr.args]
+            expanded_expr = se.Add(*expanded_terms)
+        else:
+            # Default expansion for simpler expressions
+            expanded_expr = expr.expand()
+            
+        # Cache the result
+        Polynomial._expand_cache[cache_key] = expanded_expr
+        
+        return Polynomial(self.variables, expanded_expr)
 
     def sexpand(self, variable: se.Symbol, degree: int) -> 'Polynomial':
         return Polynomial(self.variables, se.series(self.expression, variable, degree))
@@ -195,25 +226,73 @@ class Polynomial:
     @staticmethod
     def _deg_in_var(term: se.Basic, var: se.Symbol) -> int:
         """Degree of *var* in a single monomial *term* (term must NOT be an Add)."""
+        # Use a hash of the term and var to create a unique cache key
+        cache_key = (hash(term), hash(var))
+        
+        # Check if we have cached this calculation before
+        if hasattr(Polynomial, '_deg_in_var_cache') and cache_key in Polynomial._deg_in_var_cache:
+            return Polynomial._deg_in_var_cache[cache_key]
+            
+        # If not cached, compute the degree
+        result = 0
         if term.is_Number:                     #  constant
-            return 0
-        if term == var:                        #  just x
-            return 1
-        if term.is_Symbol:                     #  some other symbol
-            return 0
-        if term.is_Pow:                        #  x**n , n integer
+            result = 0
+        elif term == var:                        #  just x
+            result = 1
+        elif term.is_Symbol:                     #  some other symbol
+            result = 0
+        elif term.is_Pow:                        #  x**n , n integer
             base, exp = term.args
             if base == var and exp.is_integer:
-                return int(exp)
-            return 0
-        if term.is_Mul:                        #  product of factors
-            return sum(Polynomial._deg_in_var(f, var) for f in term.args)
-        raise ValueError(f"Non-polynomial term encountered: {term}")
+                result = int(exp)
+            else:
+                result = 0
+        elif term.is_Mul:                        #  product of factors
+            result = sum(Polynomial._deg_in_var(f, var) for f in term.args)
+        else:
+            raise ValueError(f"Non-polynomial term encountered: {term}")
+            
+        # Initialize the cache if it doesn't exist
+        if not hasattr(Polynomial, '_deg_in_var_cache'):
+            Polynomial._deg_in_var_cache = {}
+            
+        # Cache the result
+        Polynomial._deg_in_var_cache[cache_key] = result
+        return result
 
     @staticmethod
     def _total_deg_term(term: se.Basic, vars_: list[se.Symbol]) -> int:
         """Total degree of a single monomial."""
-        return sum(Polynomial._deg_in_var(term, v) for v in vars_)
+        # Use a hash of the term and a tuple of vars_ to create a unique cache key
+        cache_key = (hash(term), tuple(hash(v) for v in vars_))
+        
+        # Check if we have cached this calculation before
+        if hasattr(Polynomial, '_total_deg_term_cache') and cache_key in Polynomial._total_deg_term_cache:
+            return Polynomial._total_deg_term_cache[cache_key]
+        
+        # If no cache hit, compute total degree
+        # For simple terms, use optimized logic
+        if term.is_Number:
+            result = 0
+        elif term.is_Symbol and term in vars_:
+            result = 1
+        elif term.is_Pow and term.args[0] in vars_:
+            base, exp = term.args
+            if exp.is_integer:
+                result = int(exp)
+            else:
+                result = 0
+        else:
+            # For more complex terms, compute degrees for each variable
+            result = sum(Polynomial._deg_in_var(term, v) for v in vars_)
+            
+        # Initialize the cache if it doesn't exist
+        if not hasattr(Polynomial, '_total_deg_term_cache'):
+            Polynomial._total_deg_term_cache = {}
+            
+        # Cache the result
+        Polynomial._total_deg_term_cache[cache_key] = result
+        return result
 
     def variable_degree(self, var: se.Symbol) -> int:
         """max_k  such that  var**k  divides some term."""
@@ -583,6 +662,50 @@ class Polynomial:
         old_expr = se.sympify(self.expression)
         new_expr = old_expr.subs(subs_dict)
         return Polynomial(self.variables, new_expr)
+
+    @staticmethod
+    def clear_all_caches():
+        """
+        Clear all caches used by Polynomial class to free memory.
+        Call this function between major computation steps.
+        """
+        if hasattr(Polynomial, '_deg_in_var_cache'):
+            Polynomial._deg_in_var_cache.clear()
+            
+        if hasattr(Polynomial, '_total_deg_term_cache'):
+            Polynomial._total_deg_term_cache.clear()
+            
+        if hasattr(Polynomial, '_expand_cache'):
+            Polynomial._expand_cache.clear()
+            
+        if hasattr(Polynomial, 'memoized_poisson'):
+            Polynomial.memoized_poisson.cache_clear()
+        
+    @staticmethod
+    def limit_cache_size(max_size=10000):
+        """
+        Limit the size of all caches to prevent memory overflow.
+        
+        Parameters
+        ----------
+        max_size : int
+            Maximum number of entries in each cache
+        """
+        if hasattr(Polynomial, '_deg_in_var_cache') and len(Polynomial._deg_in_var_cache) > max_size:
+            # Keep only most recent entries
+            keys = list(Polynomial._deg_in_var_cache.keys())
+            for key in keys[:-max_size]:
+                del Polynomial._deg_in_var_cache[key]
+                
+        if hasattr(Polynomial, '_total_deg_term_cache') and len(Polynomial._total_deg_term_cache) > max_size:
+            keys = list(Polynomial._total_deg_term_cache.keys())
+            for key in keys[:-max_size]:
+                del Polynomial._total_deg_term_cache[key]
+                
+        if hasattr(Polynomial, '_expand_cache') and len(Polynomial._expand_cache) > max_size:
+            keys = list(Polynomial._expand_cache.keys())
+            for key in keys[:-max_size]:
+                del Polynomial._expand_cache[key]
 
 
 def _poisson_bracket(F: Polynomial, G: Polynomial) -> Polynomial:
