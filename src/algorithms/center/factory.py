@@ -237,7 +237,7 @@ def _generate_subs_dict(point: LibrationPoint, max_degree: int) -> dict:
 
     return subs_dict
 
-def _clean_numerical_artifacts(expr, tol=1e-10):
+def _clean_numerical_artifacts(expr, tol=1e-16):
     """
     Clean small numerical artifacts from symbolic expressions.
     

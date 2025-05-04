@@ -6,12 +6,6 @@ from system.libration import L1Point
 from system.body import Body
 from system.base import System, systemConfig
 from utils.constants import Constants
-from algorithms.variables import (
-    linear_modes_vars, 
-    scale_factors_vars, 
-    get_vars, 
-    create_symbolic_cn
-)
 from algorithms.center.lie import (
     extract_coeffs_up_to_degree,
     compute_center_manifold,
@@ -22,13 +16,9 @@ from algorithms.center.lie import (
 from log_config import logger
 
 
-omega1, omega2, lambda1, c2 = get_vars(linear_modes_vars)
-s1, s2 = get_vars(scale_factors_vars)
-
-
 def main():
 
-    max_degree = 4
+    max_degree = 6
 
     Sun = Body("Sun", 
                 Constants.bodies["sun"]["mass"], 
