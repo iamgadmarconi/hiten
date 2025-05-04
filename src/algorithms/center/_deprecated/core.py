@@ -1,988 +1,1187 @@
-from __future__ import annotations
-
-from dataclasses import dataclass, field
-from functools import lru_cache
-from typing import Dict, Iterable, List, MutableMapping, Tuple, TYPE_CHECKING
-
 import math
-from math import factorial
 import symengine as se
-import numpy as np
+import sympy as sp
+from functools import lru_cache
+from collections import defaultdict
+from dataclasses import dataclass
+
+
+from log_config import logger
+
+
+@dataclass
+class Monomial:
+    coeff: se.Basic
+    kq: tuple[int]
+    kp: tuple[int]
+    sym: se.Basic        # the full q^k p^k expression
+
+    def exponents_qp_split(self):
+        return self.kq, self.kp
 
 
 class Polynomial:
     """
-    Minimal, robust wrapper around a SymEngine expression.
-
-    * Default variables   :  x0, x1, …  (lower-case) so the unit-tests work.
-    * Optional `variables`:  list of SymEngine symbols in canonical order
-                             [q1, p1, q2, p2, …].  Length must equal `n_vars`.
+    Thin wrapper around a SymEngine expression.
     """
 
-    # ------------------------------------------------------------------ #
-    # simple cache so we don't re-create the same symbol objects
-    # key   = tuple of symbol *names*  ('x0','x1',…)
-    # value = list[Symbol]
-    _symbol_cache: dict[tuple[str, ...], list[se.Symbol]] = {}
-
-    # ------------------------------------------------------------------ #
-    def __init__(self, expr, n_vars: int = 6, variables: list[se.Symbol] | None = None):
-        if n_vars <= 0 or n_vars % 2:
-            raise ValueError("n_vars must be a positive, even integer")
-
-        # ---- choose / create variable list --------------------------------
-        if variables is None:
-            key = tuple(f"x{i}" for i in range(n_vars))      # ('x0','x1',...)
-            if key not in Polynomial._symbol_cache:
-                Polynomial._symbol_cache[key] = se.symbols(list(key))
-            self.variables = Polynomial._symbol_cache[key]
-        else:
-            if len(variables) != n_vars:
-                raise ValueError("len(variables) must equal n_vars")
-            # normalise to tuple of names so 'X' and Symbol('X') hash the same
-            key = tuple(str(s) for s in variables)
-            Polynomial._symbol_cache.setdefault(key, variables)
-            self.variables = Polynomial._symbol_cache[key]
-
-        self.n_vars = n_vars
-
-        # ---- parse / store expression -------------------------------------
-        if isinstance(expr, se.Basic):
-            self.expr = expr
-        elif isinstance(expr, (int, float, complex)):
-            self.expr = se.sympify(expr)
-        elif isinstance(expr, str):
-            parsed = se.sympify(expr)
-            # substitute any stray 'x0', 'x1'… symbols with the canonical ones
-            sub_map = {se.Symbol(f"x{i}"): self.variables[i] for i in range(n_vars)}
-            self.expr = parsed.xreplace(sub_map)
-        else:
-            raise TypeError(f"Unsupported expression type: {type(expr)}")
-
-    @classmethod
-    def zero(cls, n_vars=6, variables=None):
-        """
-        Creates a zero polynomial.
-        
-        Parameters
-        ----------
-        n_vars : int, optional
-            Number of variables. Default is 6.
-        variables : list, optional
-            A list of symengine symbols in canonical order. Default is None.
-            
-        Returns
-        -------
-        Polynomial
-            A polynomial with value 0.
-        """
-        return cls(0, n_vars=n_vars, variables=variables)
-
-    @classmethod
-    def one(cls, n_vars=6, variables=None):
-        """
-        Creates a one polynomial.
-        
-        Parameters
-        ----------
-        n_vars : int, optional
-            Number of variables. Default is 6.
-        variables : list, optional
-            A list of symengine symbols in canonical order. Default is None.
-            
-        Returns
-        -------
-        Polynomial
-            A polynomial with value 1.
-        """
-        return cls(1, n_vars=n_vars, variables=variables)
-
-    def __repr__(self):
-        # Use standard variable names in repr for consistency if possible
-        std_vars_key = tuple(f'x{i}' for i in range(self.n_vars))
-        std_vars = Polynomial._symbol_cache.get(std_vars_key, self.variables)
-        # Temporarily substitute canonical vars with standard names for repr if different
-        sub_dict_repr = {can_var: std_var for can_var, std_var in zip(self.variables, std_vars) if can_var!= std_var}
-        repr_expr = self.expr.subs(sub_dict_repr) if sub_dict_repr else self.expr
-        return f"Polynomial('{str(repr_expr)}', n_vars={self.n_vars})"
+    def __init__(self, variables: list[se.Symbol], expression: se.Basic):
+        self.variables = variables
+        self.expression = expression
+        self._expansion = None
+        self._by_degree_cache = None
+        self._grad_cache = None
+        self._monomials_cache = None
 
     def __str__(self):
-        return str(self.expr)
+        return str(self.expression)
 
-    # --- Arithmetic Operations (unchanged, rely on symengine) ---
+    def __repr__(self):
+        return str(self.expression)
+
+    def copy(self) -> 'Polynomial':
+        """
+        Create a deep copy of the polynomial with fresh caches.
+        
+        Returns
+        -------
+        Polynomial
+            A new polynomial instance with the same variables and expression
+            
+        Notes
+        -----
+        This creates a new instance with the same variables and expression,
+        but with all caches reset. This ensures that modifications to the
+        copy don't affect the original polynomial.
+        """
+        return Polynomial(self.variables, self.expression)
+
+    def coefficient(self, variable: se.Symbol, order: int) -> se.Basic:
+        return self.expression.coeff(variable, order)
+
     def __add__(self, other):
-        """Addition: Handles Polynomial + Polynomial or Polynomial + scalar"""
+        # Support Polynomial, SymEngine expression, and Python numeric types
         if isinstance(other, Polynomial):
-            if self.n_vars!= other.n_vars:
-                raise ValueError("Polynomials must have the same number of variables.")
-            return Polynomial(self.expr + other.expr, self.n_vars, self.variables)
-        elif isinstance(other, (int, float, complex, str)):
-            other_expr = se.sympify(other)
-            return Polynomial(self.expr + other_expr, self.n_vars, self.variables)
+            if self.variables != other.variables:
+                raise ValueError("Polynomial variables must match for addition.")
+            expr = self.expression + other.expression
+        elif isinstance(other, se.Basic):
+            expr = self.expression + other
+        elif isinstance(other, (int, float, complex)):
+            expr = self.expression + se.sympify(other)
         else:
             return NotImplemented
+        return Polynomial(self.variables, expr)
 
     def __radd__(self, other):
         return self.__add__(other)
 
     def __sub__(self, other):
-        """Subtraction: Handles Polynomial - Polynomial or Polynomial - scalar"""
+        # Support Polynomial, SymEngine expression, and Python numeric types
         if isinstance(other, Polynomial):
-            if self.n_vars!= other.n_vars:
-                raise ValueError("Polynomials must have the same number of variables.")
-            return Polynomial(self.expr - other.expr, self.n_vars, self.variables)
-        elif isinstance(other, (int, float, complex, str)):
-            other_expr = se.sympify(other)
-            return Polynomial(self.expr - other_expr, self.n_vars, self.variables)
+            if self.variables != other.variables:
+                raise ValueError("Polynomial variables must match for subtraction.")
+            expr = self.expression - other.expression
+        elif isinstance(other, se.Basic):
+            expr = self.expression - other
+        elif isinstance(other, (int, float, complex)):
+            expr = self.expression - se.sympify(other)
         else:
             return NotImplemented
+        return Polynomial(self.variables, expr)
 
     def __rsub__(self, other):
-        if isinstance(other, (int, float, complex, str)):
-            other_expr = se.sympify(other)
-            return Polynomial(other_expr - self.expr, self.n_vars, self.variables)
+        # Right-hand subtraction for SymEngine expressions and numeric types
+        if isinstance(other, Polynomial):
+            if self.variables != other.variables:
+                raise ValueError("Polynomial variables must match for subtraction.")
+            expr = other.expression - self.expression
+        elif isinstance(other, se.Basic):
+            expr = other - self.expression
+        elif isinstance(other, (int, float, complex)):
+            expr = se.sympify(other) - self.expression
         else:
             return NotImplemented
+        return Polynomial(self.variables, expr)
 
     def __mul__(self, other):
-        """Multiplication: Handles Polynomial * Polynomial or Polynomial * scalar"""
+        # Support Polynomial, SymEngine expression, and Python numeric types
         if isinstance(other, Polynomial):
-            if self.n_vars!= other.n_vars:
-                raise ValueError("Polynomials must have the same number of variables.")
-            return Polynomial(self.expr * other.expr, self.n_vars, self.variables)
-        elif isinstance(other, (int, float, complex, str)):
-            other_expr = se.sympify(other)
-            return Polynomial(self.expr * other_expr, self.n_vars, self.variables)
+            if self.variables != other.variables:
+                raise ValueError("Polynomial variables must match for multiplication.")
+            expr = self.expression * other.expression
+        elif isinstance(other, se.Basic):
+            expr = self.expression * other
+        elif isinstance(other, (int, float, complex)):
+            expr = self.expression * se.sympify(other)
         else:
             return NotImplemented
+        return Polynomial(self.variables, expr)
 
     def __rmul__(self, other):
         return self.__mul__(other)
 
-    def __neg__(self):
-        """Negation: -Polynomial"""
-        return Polynomial(-self.expr, self.n_vars, self.variables)
+    def __truediv__(self, other):
+        # Support Polynomial, SymEngine expression, and Python numeric types
+        if isinstance(other, Polynomial):
+            if self.variables != other.variables:
+                raise ValueError("Polynomial variables must match for division.")
+            expr = self.expression / other.expression
+        elif isinstance(other, se.Basic):
+            expr = self.expression / other
+        elif isinstance(other, (int, float, complex)):
+            expr = self.expression / se.sympify(other)
+        else:
+            return NotImplemented
+        return Polynomial(self.variables, expr)
 
-    def is_zero(self):
-        return self.expr == se.sympify(0)
-
-    def is_one(self):
-        return self.expr == se.sympify(1)
+    def __rtruediv__(self, other):
+        # Right-hand division for SymEngine expressions and numeric types
+        if isinstance(other, Polynomial):
+            if self.variables != other.variables:
+                raise ValueError("Polynomial variables must match for division.")
+            expr = other.expression / self.expression
+        elif isinstance(other, se.Basic):
+            expr = other / self.expression
+        elif isinstance(other, (int, float, complex)):
+            expr = se.sympify(other) / self.expression
+        else:
+            return NotImplemented
+        return Polynomial(self.variables, expr)
     
-    # --- Core Symbolic Operations ---
+    def __neg__(self):
+        return Polynomial(self.variables, -self.expression)
 
-    def differentiate(self, var_index):
+    def __eq__(self, other):
+        # Support equality with Polynomial, SymEngine expression, and numeric types
+        if isinstance(other, Polynomial):
+            # If both expressions evaluate to zero, consider them equal regardless of variables
+            if self.expression == 0 and other.expression == 0:
+                return True
+            return self.variables == other.variables and self.expression == other.expression
+        elif isinstance(other, se.Basic):
+            return self.expression == other
+        elif isinstance(other, (int, float, complex)):
+            return self.expression == se.sympify(other)
+        else:
+            return NotImplemented
+
+    def __pow__(self, other):
+        if isinstance(other, int):
+            return Polynomial(self.variables, self.expression ** other)
+        else:
+            return NotImplemented
+
+    def __hash__(self):
+        return hash(self.expression)
+
+    @property
+    def expansion(self) -> 'Polynomial':
+        if not self._expansion:
+            expanded = self._expand()
+            expanded._expansion = expanded
+            self._expansion = expanded
+        return self._expansion
+
+    def _expand(self) -> 'Polynomial':
         """
-        Differentiates the polynomial with respect to a given variable index.
-
-        Parameters
-        ----------
-        var_index : int
-            The 0-based index of the variable in self.variables.
-            Assumes canonical ordering [q1, p1,...] if using indices.
+        Optimized expansion method that uses caching and efficient expansion strategies
+        based on expression complexity.
+        """
+        # Handle case when expression is a Python primitive type
+        if isinstance(self.expression, (int, float)):
+            return Polynomial(self.variables, se.sympify(self.expression))
         
-        Returns
-        -------
-        Polynomial
-            The derivative of the polynomial with respect to the specified variable.
+        # Use a class-level cache to avoid repeated identical expansions
+        if not hasattr(Polynomial, '_expand_cache'):
+            Polynomial._expand_cache = {}
             
-        Raises
-        ------
-        ValueError
-            If var_index is out of range.
-        """
-        if not (0 <= var_index < self.n_vars):
-            raise ValueError(f"var_index must be between 0 and {self.n_vars-1}")
-        target_var = self.variables[var_index]
-        derivative_expr = se.diff(self.expr, target_var)
-        return Polynomial(derivative_expr, self.n_vars, self.variables)
+        # Create a cache key based on the expression hash (this will work well for identical expressions)
+        cache_key = hash(self.expression)
+        
+        # Check if we've already expanded this expression
+        if cache_key in Polynomial._expand_cache:
+            expanded_expr = Polynomial._expand_cache[cache_key]
+            return Polynomial(self.variables, expanded_expr)
+            
+        # Optimize the expansion strategy based on expression type
+        expr = self.expression
+        
+        # For Add expressions, expand each term separately for better performance with many terms
+        if expr.is_Add and len(expr.args) > 10:
+            expanded_terms = [term.expand() for term in expr.args]
+            expanded_expr = se.Add(*expanded_terms)
+        else:
+            # Default expansion for simpler expressions
+            expanded_expr = expr.expand()
+            
+        # Cache the result
+        Polynomial._expand_cache[cache_key] = expanded_expr
+        
+        return Polynomial(self.variables, expanded_expr)
+
+    def sexpand(self, variable: se.Symbol, degree: int) -> 'Polynomial':
+        return Polynomial(self.variables, se.series(self.expression, variable, degree))
 
     @staticmethod
-    @lru_cache(maxsize=10_000)
-    def _calculate_pb_expr(expr1, expr2, variables):
-        """
-        Static helper method to calculate the Poisson bracket expression.
-        This method is cached for performance.
+    def _deg_in_var(term: se.Basic, var: se.Symbol) -> int:
+        """Degree of *var* in a single monomial *term* (term must NOT be an Add)."""
+        # Use a hash of the term and var to create a unique cache key
+        cache_key = (hash(term), hash(var))
         
-        Parameters
-        ----------
-        expr1 : symengine.Expr
-            First expression for Poisson bracket.
-        expr2 : symengine.Expr
-            Second expression for Poisson bracket.
-        variables : tuple
-            Tuple of symengine symbols in canonical order [q1, p1, q2, p2,...].
+        # Check if we have cached this calculation before
+        if hasattr(Polynomial, '_deg_in_var_cache') and cache_key in Polynomial._deg_in_var_cache:
+            return Polynomial._deg_in_var_cache[cache_key]
             
+        # If not cached, compute the degree
+        result = 0
+        if term.is_Number:                     #  constant
+            result = 0
+        elif term == var:                        #  just x
+            result = 1
+        elif term.is_Symbol:                     #  some other symbol
+            result = 0
+        elif term.is_Pow:                        #  x**n , n integer
+            base, exp = term.args
+            if base == var and exp.is_integer:
+                result = int(exp)
+            else:
+                result = 0
+        elif term.is_Mul:                        #  product of factors
+            result = sum(Polynomial._deg_in_var(f, var) for f in term.args)
+        else:
+            raise ValueError(f"Non-polynomial term encountered: {term}")
+            
+        # Initialize the cache if it doesn't exist
+        if not hasattr(Polynomial, '_deg_in_var_cache'):
+            Polynomial._deg_in_var_cache = {}
+            
+        # Cache the result
+        Polynomial._deg_in_var_cache[cache_key] = result
+        return result
+
+    @staticmethod
+    def _total_deg_term(term: se.Basic, vars_: list[se.Symbol]) -> int:
+        """Total degree of a single monomial."""
+        # Use a hash of the term and a tuple of vars_ to create a unique cache key
+        cache_key = (hash(term), tuple(hash(v) for v in vars_))
+        
+        # Check if we have cached this calculation before
+        if hasattr(Polynomial, '_total_deg_term_cache') and cache_key in Polynomial._total_deg_term_cache:
+            return Polynomial._total_deg_term_cache[cache_key]
+        
+        # If no cache hit, compute total degree
+        # For simple terms, use optimized logic
+        if term.is_Number:
+            result = 0
+        elif term.is_Symbol and term in vars_:
+            result = 1
+        elif term.is_Pow and term.args[0] in vars_:
+            base, exp = term.args
+            if exp.is_integer:
+                result = int(exp)
+            else:
+                result = 0
+        else:
+            # For more complex terms, compute degrees for each variable
+            result = sum(Polynomial._deg_in_var(term, v) for v in vars_)
+            
+        # Initialize the cache if it doesn't exist
+        if not hasattr(Polynomial, '_total_deg_term_cache'):
+            Polynomial._total_deg_term_cache = {}
+            
+        # Cache the result
+        Polynomial._total_deg_term_cache[cache_key] = result
+        return result
+
+    def variable_degree(self, var: se.Symbol) -> int:
+        """max_k  such that  var**k  divides some term."""
+        expr = self.expansion.expression
+        if expr.is_Add:
+            return max(self._deg_in_var(t, var) for t in expr.args)
+        return self._deg_in_var(expr, var)
+
+    def total_degree(self) -> int:
+        """
+        Maximum total degree (sum of exponents) among all monomials.
+        """
+        expr = self.expansion.expression
+        if expr.is_Add:
+            return max(self._total_deg_term(t, self.variables) for t in expr.args)
+        return self._total_deg_term(expr, self.variables)
+
+    def truncate_by_var(self, var: se.Symbol, max_deg: int) -> "Polynomial":
+        """
+        Keep only terms where degree(var) <= max_deg.
+        Useful when you reduce the Hamiltonian order-by-order.
+        """
+        # Handle case when expression is a Python primitive type
+        if isinstance(self.expression, (int, float)):
+            return Polynomial(self.variables, se.sympify(self.expression))
+            
+        expr = self.expansion.expression
+        if expr.is_Add:
+            kept = [t for t in expr.args if self._deg_in_var(t, var) <= max_deg]
+            new_expr = se.Add(*kept) if kept else se.Integer(0)
+        else:
+            new_expr = expr if self._deg_in_var(expr, var) <= max_deg else se.Integer(0)
+        return Polynomial(self.variables, new_expr)
+
+    def truncate(self, max_deg: int) -> "Polynomial":
+        """
+        Remove every monomial whose **total degree** exceeds `max_deg`.
+        """
+        # Handle case when expression is a Python primitive type
+        if isinstance(self.expression, (int, float)):
+            return Polynomial(self.variables, se.sympify(self.expression))
+            
+        expr = self.expansion.expression
+        if expr.is_Add:
+            kept = [t for t in expr.args
+                    if self._total_deg_term(t, self.variables) <= max_deg]
+            new_expr = se.Add(*kept) if kept else se.Integer(0)
+        else:
+            new_expr = expr if self._total_deg_term(expr, self.variables) <= max_deg else se.Integer(0)
+        
+        # Clear all caches to ensure they are rebuilt with the new truncated expression
+        self._expansion = None
+        self._by_degree_cache = None
+        self._grad_cache = None
+        self._monomials_cache = None
+        self.expression = new_expr
+
+        return Polynomial(self.variables, new_expr)
+
+    def evaluate(self, subs_dict: dict[se.Symbol, se.Basic]) -> se.Basic:
+        return self.expression.subs(subs_dict)
+
+    def derivative(self, variable) -> 'Polynomial':
+        """
+        Compute the derivative of this polynomial with respect to the given variable.
+        
+        Parameters:
+            variable: Can be a Polynomial, SymEngine symbol, or numeric type
+            
+        Returns:
+            A new Polynomial representing the derivative
+        """
+        # Handle case when expression is a Python number (int, float)
+        if isinstance(self.expression, (int, float)):
+            return Polynomial(self.variables, se.sympify(0))
+        
+        # Support Polynomial, SymEngine expression, and Python numeric types
+        if isinstance(variable, Polynomial):
+            if self.variables != variable.variables:
+                raise ValueError("Polynomial variables must match for differentiation.")
+            return Polynomial(self.variables, self.expression.diff(variable.expression))
+        elif isinstance(variable, se.Basic):
+            derived = self.expression.diff(variable)
+            # Ensure we return exactly zero when the derivative is zero
+            return Polynomial(self.variables, derived if derived else se.sympify(0))
+        elif isinstance(variable, (int, float, complex)):
+            # Differentiating with respect to a constant always gives zero
+            return Polynomial(self.variables, se.sympify(0))
+        else:
+            return NotImplemented
+
+    def _gradient(self):
+        """
+        Returns (dF/dq, dF/dp) lists.  Computed once, reused by every
+        Poisson bracket that involves this Polynomial.
+        """
+        if self._grad_cache is None:
+            n_vars = len(self.variables)
+            n_dof = n_vars // 2
+            q_syms = self.variables[:n_dof]
+            p_syms = self.variables[n_dof:]
+            
+            # Make sure we're working with expanded expressions for more efficient differentiation
+            expr = self.expansion.expression
+            
+            # For sparse polynomials, term-by-term differentiation may be faster
+            if expr.is_Add and len(expr.args) < n_dof:
+                dF_dq = []
+                dF_dp = []
+                for i in range(n_dof):
+                    q_derivative = sum((term.diff(q_syms[i]) for term in expr.args if term.has(q_syms[i])), se.Integer(0))
+                    p_derivative = sum((term.diff(p_syms[i]) for term in expr.args if term.has(p_syms[i])), se.Integer(0))
+                    dF_dq.append(q_derivative)
+                    dF_dp.append(p_derivative)
+            else:
+                # Standard differentiation for dense expressions
+                dF_dq = [expr.diff(q) for q in q_syms]
+                dF_dp = [expr.diff(p) for p in p_syms]
+            
+            self._grad_cache = (dF_dq, dF_dp)
+        return self._grad_cache
+
+    def gradient(self):
+        """
+        Computes the gradient of the polynomial with respect to all q and p variables.
+        
+        Returns:
+            A tuple of two dictionaries: (dF_dq, dF_dp) where:
+            - dF_dq maps q variables to their derivatives
+            - dF_dp maps p variables to their derivatives
+        """
+        dF_dq_raw, dF_dp_raw = self._gradient()
+        
+        n_vars = len(self.variables)
+        n_dof = n_vars // 2
+        q_syms = self.variables[:n_dof]
+        p_syms = self.variables[n_dof:]
+        
+        # Create dictionaries mapping variables to their derivatives
+        dF_dq = {}
+        dF_dp = {}
+        
+        for i, q in enumerate(q_syms):
+            dF_dq[q] = Polynomial(self.variables, dF_dq_raw[i])
+        
+        for i, p in enumerate(p_syms):
+            dF_dp[p] = Polynomial(self.variables, dF_dp_raw[i])
+        
+        return dF_dq, dF_dp
+
+    def build_by_degree(self) -> dict[int, list[Monomial]]:
+        """
+        Return {deg: [Monomial, …]} for the expanded polynomial.
+        
         Returns
         -------
-        symengine.Expr
-            The expression resulting from Poisson bracket calculation.
-        """
-        n_vars = len(variables)
-        num_dof = n_vars // 2
-        result_expr = se.sympify(0)  # Start with zero expression
-
-        for i in range(num_dof):
-            qi_index = 2 * i
-            pi_index = 2 * i + 1
-            qi = variables[qi_index]
-            pi = variables[pi_index]
-
-            # Compute partial derivatives
-            d_expr1_dqi = se.diff(expr1, qi)
-            d_expr2_dpi = se.diff(expr2, pi)
-            term1 = d_expr1_dqi * d_expr2_dpi
-
-            d_expr1_dpi = se.diff(expr1, pi)
-            d_expr2_dqi = se.diff(expr2, qi)
-            term2 = d_expr1_dpi * d_expr2_dqi
-
-            result_expr = result_expr + term1 - term2
-
-        return result_expr
-
-    def poisson_bracket(self, other):
-        """
-        Computes the Poisson bracket {self, other}.
-        
-        Parameters
-        ----------
-        other : Polynomial or scalar
-            The second argument of the Poisson bracket.
-            
-        Returns
-        -------
-        Polynomial
-            The result of the Poisson bracket operation.
-            
-        Raises
-        ------
-        TypeError
-            If other is not a Polynomial or numeric scalar.
-        ValueError
-            If polynomials have different number of variables.
-        IndexError
-            If there's a variable indexing error during calculation.
+        dict[int, list[Monomial]]
+            A dictionary mapping degrees to lists of Monomial objects
             
         Notes
         -----
-        Assumes canonical variables ordered [q1, p1, q2, p2,...] in self.variables.
+        This method organizes the monomials of the polynomial by their total degree.
+        The total degree of a monomial is the sum of all exponents of its variables.
         """
-        if not isinstance(other, Polynomial):
-            if isinstance(other, (int, float, complex, str)):
-                other_expr = se.sympify(other)
-                if other_expr.is_Number:
-                    return Polynomial.zero(self.n_vars, self.variables) # Bracket with constant is 0
-            raise TypeError("Poisson bracket requires another Polynomial or a numeric scalar.")
+        if self._by_degree_cache is None:
+            by_deg: dict[int, list] = defaultdict(list)
+            _update_by_deg(by_deg, self)
+            self._by_degree_cache = by_deg
+        return self._by_degree_cache
 
-        if self.n_vars!= other.n_vars:
-            raise ValueError("Polynomials must have the same number of variables for Poisson bracket.")
-
-        if self.expr.is_Number or other.expr.is_Number:
-            return Polynomial.zero(self.n_vars, self.variables)
-
-        result_expr = Polynomial._calculate_pb_expr(self.expr, other.expr,
-                                                    tuple(self.variables))
-
-        return Polynomial(result_expr, self.n_vars, self.variables)
-
-    def substitute(self, var_map):
+    def get_monomials(self) -> list[Monomial]:
         """
-        Substitutes variables in the expression.
+        Extract all monomials from the polynomial.
+        
+        Returns
+        -------
+        list[Monomial]
+            A list of Monomial objects representing each term in the polynomial
+            
+        Notes
+        -----
+        This method expands the polynomial first to ensure all terms are separated,
+        then extracts each term as a Monomial object with coefficient, exponents,
+        and symbolic representation.
+        
+        Examples
+        --------
+        >>> poly = Polynomial(vars, 3*q1**2*p1 + 2*q2*p2)
+        >>> monomials = poly.get_monomials()
+        >>> len(monomials)
+        2
+        >>> [m.sym for m in monomials]
+        [3*q1**2*p1, 2*q2*p2]
+        """
+        if self._monomials_cache is None:
+            n_dof = len(self.variables) // 2
+            q_vars = self.variables[:n_dof]
+            p_vars = self.variables[n_dof:]
+            
+            # Use _monomial_key to decompose the expanded expression
+            self._monomials_cache = list(_monomial_key(self.expansion.expression, q_vars, p_vars))
+            
+        return self._monomials_cache
 
+    @staticmethod
+    def from_monomials(variables: list[se.Symbol], monomials: list[Monomial]) -> 'Polynomial':
+        """
+        Create a Polynomial from a list of Monomial objects.
+        
         Parameters
         ----------
-        var_map : dict
-            A dictionary mapping symengine symbols, variable indices, or variable 
-            names (str) to their substitution values (numbers, strings, symengine 
-            expressions, or other Polynomials).
+        variables : list[se.Symbol]
+            The variables of the polynomial
+        monomials : list[Monomial]
+            The monomials to include in the polynomial
             
         Returns
         -------
         Polynomial
-            A new polynomial with the substitutions applied.
+            A new Polynomial constructed from the given monomials
             
-        Raises
+        Notes
+        -----
+        This method allows direct construction of a polynomial from 
+        a list of Monomial objects, which is useful when manipulating
+        polynomials term by term.
+        
+        Examples
+        --------
+        >>> m1 = Monomial(coeff=3, kq=(2,0,0), kp=(1,0,0), sym=3*q1**2*p1)
+        >>> m2 = Monomial(coeff=2, kq=(0,1,0), kp=(0,1,0), sym=2*q2*p2)
+        >>> poly = Polynomial.from_monomials(vars, [m1, m2])
+        >>> str(poly)
+        '3*q1**2*p1 + 2*q2*p2'
+        """
+        if not monomials:
+            return Polynomial(variables, se.Integer(0))
+        
+        # Sum all the symbolic expressions of the monomials
+        expr = sum(monomial.sym for monomial in monomials)
+        return Polynomial(variables, expr)
+
+    def iter_terms(self):
+        """
+        Iterate through the terms of the polynomial, yielding (coefficient, monomial) pairs.
+        
+        Yields
         ------
-        ValueError
-            If a symbol or index is not found in the polynomial variables.
-        TypeError
-            If key or value types in var_map are invalid.
+        tuple
+            A tuple of (coefficient, monomial) for each term in the polynomial
+            
+        Notes
+        -----
+        This method is used for manipulations where both the coefficient and
+        the monomial structure (with its exponents) are needed separately.
         """
-        sub_dict = {}
-        for k, v in var_map.items():
-            key_symbol = None
-            if isinstance(k, int): # Allow substitution by index
-                if 0 <= k < self.n_vars:
-                    key_symbol = self.variables[k]
-                else:
-                    raise ValueError(f"Invalid variable index {k} for substitution.")
-            elif isinstance(k, se.Symbol):
-                # Ensure the symbol is one of the polynomial's variables
-                if k not in self.variables:
-                    raise ValueError(f"Symbol {k} not found in polynomial variables {self.variables}")
-                key_symbol = k
-            elif isinstance(k, str):
-                # Find symbol by name
-                found = False
-                for sym in self.variables:
-                    if str(sym) == k:
-                        key_symbol = sym
-                        found = True
-                        break
-                if not found:
-                    raise ValueError(f"Symbol string '{k}' not found in polynomial variables.")
-            else:
-                raise TypeError(f"Invalid key type in var_map: {type(k)}")
+        for monomial in self.get_monomials():
+            yield monomial.coeff, monomial
 
-            # Process value
-            value_expr = None
-            if isinstance(v, Polynomial):
-                if v.n_vars!= self.n_vars:
-                    # We could potentially allow substitution with polynomials of different n_vars,
-                    # but it might lead to unexpected variable sets in the result.
-                    # Forcing same n_vars seems safer for now.
-                    print(f"Warning: Substituting with Polynomial of different n_vars ({v.n_vars}). Result retains original n_vars ({self.n_vars}).")
-                value_expr = v.expr
-            elif isinstance(v, (int, float, complex, str, se.Expr)):
-                value_expr = se.sympify(v) # Ensure value is a symengine expression
-            else:
-                raise TypeError(f"Invalid value type in var_map: {type(v)}")
-
-            sub_dict[key_symbol] = value_expr
-
-        substituted_expr = self.expr.subs(sub_dict)
-        # Return a new Polynomial, maintaining the original n_vars and variables
-        # This assumes the substitution doesn't fundamentally change the variable space context.
-        return Polynomial(substituted_expr, self.n_vars, self.variables)
-
-    # --- Equality Check (Improved) ---
-
-    def equals(self, other, tolerance=1e-12):
+    def poisson(self, other: 'Polynomial') -> 'Polynomial':
         """
-        Checks for mathematical equality between two polynomials by comparing
-        their terms and coefficients without explicit expansion.
-
+        Compute the Poisson bracket {self, other}.
+        
         Parameters
         ----------
         other : Polynomial
-            The polynomial to compare against.
-        tolerance : float, optional
-            The absolute and relative tolerance for comparing floating-point coefficients.
-            Default is 1e-12.
+            The second polynomial for the Poisson bracket
             
-        Returns
-        -------
-        bool
-            True if the polynomials are mathematically equal within the given tolerance, 
-            False otherwise.
-        """
-        if not isinstance(other, Polynomial):
-            return False
-        if self.n_vars != other.n_vars:
-            return False
-
-        # Special case for zero polynomial
-        if self.expr == se.sympify(0) and other.expr == se.sympify(0):
-            return True
-
-        # Special handling for simple cases: numbers or single variables
-        if self.expr.is_Number and other.expr.is_Number:
-            try:
-                return math.isclose(float(self.expr), float(other.expr), 
-                                  rel_tol=tolerance, abs_tol=tolerance)
-            except (TypeError, ValueError):
-                return self.expr == other.expr
-
-        # Use symbolic expansion to handle cases like (x+y)^2
-        try:
-            expanded_self = se.expand(self.expr)
-            expanded_other = se.expand(other.expr)
-            if expanded_self == expanded_other:
-                return True
-        except Exception:
-            pass  # Continue with other methods if expansion fails
-
-        # Numerical comparison approach
-        # Test with sample points - fast and reliable for polynomials
-        import random
-        test_points = 10
-        try:
-            for _ in range(test_points):
-                point = [random.uniform(-1, 1) for _ in range(self.n_vars)]
-                val1 = self.evaluate(point)
-                val2 = other.evaluate(point)
-                if not math.isclose(val1, val2, rel_tol=tolerance, abs_tol=tolerance):
-                    return False
-            return True
-        except Exception as e:
-            print(f"Warning: Error during numerical comparison in equals method: {e}. Continuing with term comparison.")
-
-        # Compare coefficients using get_terms for expanded expressions
-        try:
-            # Create new Polynomial objects with expanded expressions
-            expanded_self_poly = Polynomial(se.expand(self.expr), self.n_vars, self.variables)
-            expanded_other_poly = Polynomial(se.expand(other.expr), self.n_vars, self.variables)
-            
-            terms1 = dict(expanded_self_poly.get_terms())
-            terms2 = dict(expanded_other_poly.get_terms())
-            
-            # Check if the sets of monomials are the same
-            if set(terms1.keys()) != set(terms2.keys()):
-                return False
-                
-            # Compare coefficients with tolerance
-            for exp_tuple in terms1:
-                coeff1 = terms1[exp_tuple]
-                coeff2 = terms2[exp_tuple]
-                if abs(coeff1 - coeff2) > tolerance:
-                    return False
-                    
-            return True
-        except Exception as e:
-            print(f"Warning: Could not extract terms for equality check: {e}. Falling back to False.")
-            return False
-
-    def __eq__(self, other):
-        return self.equals(other)
-
-    # --- Term and Coefficient Extraction (Improved) ---
-
-    def get_terms(self):
-        """
-        Yield (exponent_tuple, coefficient) pairs.
-
-        Works for *any* SymEngine expression after se.expand():  
-        constants, a lone monomial, or an Add of monomials.
-
-        Assumes self.variables is ordered [X, Y, Z, PX, PY, PZ] (6 vars).
-        """
-        var2idx = {v: i for i, v in enumerate(self.variables)}
-
-        def _one_term(expr):
-            # constant
-            if expr.is_Number:
-                yield (tuple([0] * self.n_vars), complex(float(expr)))
-                return
-
-            # generic monomial  -> use as_powers_dict()
-            powers = expr.as_powers_dict()           # {Symbol: exponent}
-            coeff  = expr / se.Mul(*[b**e for b, e in powers.items()])
-
-            exps = [0] * self.n_vars
-            for base, exp in powers.items():
-                if base not in var2idx:
-                    # Instead of silently dropping the term, raise an error
-                    # so that the issue is more visible
-                    raise ValueError(f"Symbol {base} not found in variables {self.variables}")
-                exps[var2idx[base]] = int(exp)
-            yield tuple(exps), complex(float(coeff))
-
-        # expand once; if the result is an Add, walk its .args
-        expanded = se.expand(self.expr)
-        if isinstance(expanded, se.Add):
-            for term in expanded.args:
-                yield from _one_term(term)
-        else:
-            yield from _one_term(expanded)
-
-    def get_coefficient(self, exponent_tuple):
-        """
-        Return the numeric coefficient of the monomial with exponents
-        `exponent_tuple`.  Works for constants (all zeros) as well.
-
-        This version does *not* rely on get_terms(); instead it queries
-        SymEngine's internal coefficient map after a single expand().
-        """
-        if len(exponent_tuple) != self.n_vars:
-            raise ValueError("Exponent tuple length must match n_vars.")
-        if any(e < 0 for e in exponent_tuple):
-            raise ValueError("Exponents must be non-negative integers.")
-
-        expanded = se.expand(self.expr)
-        coeff_dict = expanded.as_coefficients_dict()
-
-        # Build the monomial key   var0**e0 * var1**e1 * …
-        monomial = se.Integer(1)
-        for var, exp in zip(self.variables, exponent_tuple):
-            if exp:
-                monomial *= var**exp
-
-        coeff = coeff_dict.get(monomial, se.Integer(0))
-        return complex(float(coeff))
-
-    def total_degree(self):
-        if self.expr == se.sympify(0):  # Special case for zero polynomial
-            return -1
-        if self.expr.is_Number:
-            return 0                 # constant
-
-        # 2) try normal term walk
-        terms = list(self.get_terms())
-        if terms:                    # at least one monomial found
-            return max(sum(mon) for mon, _ in terms)
-
-        # 3) fallback: treat *expr* itself as a single monomial
-        #    => total degree = sum of exponents in .as_powers_dict()
-        return sum(self.expr.as_powers_dict().values())
-
-    def degree_by_var(self, i):
-        if self.expr == se.sympify(0):  # Special case for zero polynomial
-            return -1
-        return max(mon[i] for mon, _ in self.get_terms())
-
-    def truncate(self, max_degree):
-        """
-        Truncates the polynomial, keeping only terms with total degree less than
-        or equal to max_degree.
-
-        Parameters
-        ----------
-        max_degree : int
-            The maximum total degree to keep. Must be non-negative.
-
         Returns
         -------
         Polynomial
-            A new Polynomial instance containing only the terms up to the specified 
-            maximum degree.
+            A new polynomial representing {self, other}
             
-        Raises
-        ------
-        ValueError
-            If max_degree is not a non-negative integer.
-        RuntimeError
-            If truncation fails due to error in get_terms.
+        Notes
+        -----
+        The Poisson bracket is defined as:
+        {F, G} = sum_i (dF/dqi * dG/dpi - dF/dpi * dG/dqi)
         """
-        if not isinstance(max_degree, int) or max_degree < 0:
-            raise ValueError("max_degree must be a non-negative integer.")
+        return _poisson_bracket(self, other)
 
-        # Special case for zero polynomial
-        if self.expr == se.sympify(0):
-            return Polynomial.zero(self.n_vars, self.variables)
-            
-        # Special cases: constant term only for max_degree=0
-        if max_degree == 0:
-            # Extract the constant term
-            try:
-                const_exp = tuple([0] * self.n_vars)
-                coeff = self.get_coefficient(const_exp)
-                if abs(coeff) < 1e-12:  # No constant term
-                    return Polynomial.zero(self.n_vars, self.variables)
-                else:
-                    # Use string format to avoid complex notation
-                    return Polynomial(str(int(coeff) if coeff.imag == 0 and coeff.real == int(coeff.real) 
-                                        else float(coeff.real)), n_vars=self.n_vars, variables=self.variables)
-            except Exception as e:
-                print(f"Warning: Error extracting constant term: {e}. Using fallback method.")
-                # Fall through to regular method
-            
-        # If polynomial is already of degree <= max_degree, return a copy
-        try:
-            if self.total_degree() <= max_degree:
-                return Polynomial(self.expr, self.n_vars, self.variables)
-        except Exception:
-            # If total_degree fails, continue with truncation
-            pass
-
-        # For numerical comparison, expand the expression first
-        expanded_expr = se.expand(self.expr)
-        try:
-            # Create a new polynomial with the expanded expression for easier term extraction
-            expanded_poly = Polynomial(expanded_expr, self.n_vars, self.variables)
-            
-            # Build the truncated polynomial manually - this approach avoids complex notation
-            terms = []
-            for exp_tuple, coeff in expanded_poly.get_terms():
-                term_degree = sum(exp_tuple)
-                if term_degree <= max_degree and abs(coeff) > 1e-12:
-                    # Format coefficient to avoid complex notation
-                    coeff_str = str(int(coeff.real) if coeff.imag == 0 and coeff.real == int(coeff.real) 
-                                   else float(coeff.real))
-                    if coeff_str == "1" and sum(exp_tuple) > 0:
-                        coeff_str = ""  # Skip "1*" for variables
-                    elif coeff_str == "-1" and sum(exp_tuple) > 0:
-                        coeff_str = "-"  # Use just "-" for negative vars
-                    elif coeff_str != "0":
-                        coeff_str += "*"  # Add multiplication symbol
-                        
-                    # Skip the term if coefficient is zero
-                    if coeff_str == "0" or coeff_str == "0.0*":
-                        continue
-                        
-                    # Build the variables part
-                    var_parts = []
-                    for i, power in enumerate(exp_tuple):
-                        if power == 0:
-                            continue
-                        elif power == 1:
-                            var_parts.append(f"x{i}")
-                        else:
-                            var_parts.append(f"x{i}**{power}")
-                    
-                    # Combine coefficient and variables
-                    if var_parts:
-                        if coeff_str in ["", "-"]:
-                            term = f"{coeff_str}{var_parts[0]}"
-                            for var in var_parts[1:]:
-                                term += f"*{var}"
-                        else:
-                            term = f"{coeff_str}{var_parts[0]}"
-                            for var in var_parts[1:]:
-                                term += f"*{var}"
-                    else:
-                        # Constant term
-                        term = coeff_str.rstrip("*")
-                    
-                    terms.append(term)
-            
-            # Special case for zero result (no terms)
-            if not terms:
-                return Polynomial.zero(self.n_vars, self.variables)
-                
-            # Build the polynomial expression
-            result_str = " + ".join(terms).replace(" + -", " - ")
-            return Polynomial(result_str, self.n_vars, self.variables)
-
-        except Exception as e:
-            print(f"Error during truncate: {e}")
-            # Fallback method if the more precise approach fails
-            new_expr = se.sympify(0)
-            for exp_tuple, coeff in expanded_poly.get_terms():
-                term_degree = sum(exp_tuple)
-                if term_degree <= max_degree:
-                    # Reconstruct the term
-                    term = se.sympify(1)
-                    for i, power in enumerate(exp_tuple):
-                        if power > 0:
-                            term *= self.variables[i]**power
-                    term *= coeff
-                    new_expr += term
-
-            return Polynomial(new_expr, self.n_vars, self.variables)
-
-    def evaluate(self, values, use_lambda=True):
+    def optimized_poisson(self, other: 'Polynomial', method: str = 'auto', use_cache: bool = True) -> 'Polynomial':
         """
-        Evaluates the polynomial at the given values.
+        Compute the Poisson bracket {self, other} using optimized methods.
         
         Parameters
         ----------
-        values : list
-            List of values to substitute for variables [x0, x1, ...].
-            Length must match n_vars.
-        use_lambda : bool, optional
-            Whether to use symengine's lambdify for faster evaluation.
-            If False, uses symbolic substitution. Default is True.
+        other : Polynomial
+            The second polynomial for the Poisson bracket
+        method : str, optional
+            The method to use for computation:
+            - 'auto': Automatically select the best method
+            - 'standard': Use the standard implementation
+            - 'term_by_term': Use term-by-term differentiation
+        use_cache : bool, optional
+            Whether to use memoization for repeated calculations
             
         Returns
         -------
-        float
-            The value of the polynomial at the given point.
+        Polynomial
+            A new polynomial representing {self, other}
             
-        Raises
-        ------
-        ValueError
-            If length of values doesn't match n_vars.
+        Notes
+        -----
+        Different methods may be more efficient for different types of polynomials:
+        - Standard method: Good for dense polynomials with few variables
+        - Term-by-term: Better for sparse polynomials with many variables
+        - Memoization: Beneficial when the same brackets are computed repeatedly
         """
-        if len(values) != self.n_vars:
-            raise ValueError("length mismatch")
+        if use_cache:
+            # Convert to hashable expressions for caching
+            hash_F = Polynomial(self.variables, self.expression)
+            hash_G = Polynomial(other.variables, other.expression)
+            return Polynomial.memoized_poisson(hash_F, hash_G)
         
-        # Special case for zero polynomial
-        if self.expr == se.sympify(0):
-            return 0.0
+        if method == 'term_by_term':
+            return _poisson_bracket_term_by_term(self, other)
+        elif method == 'standard':
+            return _poisson_bracket(self, other)
+        else:  # 'auto'
+            # Simple heuristic: use term-by-term for sparse polynomials
+            F_monomials = len(self.expansion.get_monomials())
+            G_monomials = len(other.expansion.get_monomials())
+            n_vars = len(self.variables) // 2
             
-        # Special case for constant polynomials
-        if self.expr.is_Number:
-            return float(self.expr)
-            
-        # Special case for single variable
-        if self.expr.is_Symbol:
-            var_idx = self.variables.index(self.expr)
-            return float(values[var_idx])
-            
-        if use_lambda:
-            try:
-                # First, try direct numerical evaluation without lambdify
-                subs_dict = {var: se.Float(val) for var, val in zip(self.variables, values)}
-                direct_result = self.expr.subs(subs_dict)
-                if direct_result.is_Number:
-                    return float(direct_result)
-                
-                # If that fails, try lambdify
-                if not hasattr(self, "_lamb"):
-                    try:
-                        # Use sympify to handle different expression formats
-                        from symengine import lambdify
-                        expr = se.sympify(self.expr)
-                        self._lamb = lambdify(self.variables, expr, backend="llvm")
-                        self._lamb_returns_array = False
-                    except Exception:
-                        print("Warning: Failed to create standard lambdify, trying with array approach")
-                        from symengine import lambdify
-                        self._lamb = lambdify(self.variables, [self.expr], backend="llvm")
-                        self._lamb_returns_array = True
-                
-                result = self._lamb(*values)
-                if hasattr(self, "_lamb_returns_array") and self._lamb_returns_array:
-                    if hasattr(result, "__len__"):
-                        return float(result[0])
-                    else:
-                        return float(result)
-                else:
-                    return float(result)
-            except Exception as e:
-                print(f"Warning: Lambda evaluation failed: {e}. Falling back to substitution.")
-                use_lambda = False
-        
-        # Use direct substitution without evalf
-        try:
-            subs_dict = {var: se.Float(val) for var, val in zip(self.variables, values)}
-            result = self.expr.subs(subs_dict)
-            return float(result)
-        except Exception as e:
-            print(f"Warning: Substitution evaluation failed: {e}")
-            # Last resort: try with sympify and numeric evaluation
-            numeric_expr = self.expr
-            for i, var in enumerate(self.variables):
-                numeric_expr = numeric_expr.subs(var, se.Float(values[i]))
-            return float(numeric_expr)
+            # If both polynomials are sparse relative to the number of variables
+            if F_monomials * G_monomials < 4 * n_vars**2:
+                return _poisson_bracket_term_by_term(self, other)
+            else:
+                return _poisson_bracket(self, other)
 
-    def as_float(self, prec=53):
-        conv = {c: se.Float(c.evalf(), prec)
-                for c in self.expr.atoms(se.Number) if not c.is_Integer}
-        return Polynomial(self.expr.xreplace(conv), self.n_vars, self.variables)
-        
-    def gradient(self, point=None):
+    @staticmethod
+    @lru_cache(maxsize=128)
+    def memoized_poisson(F: 'Polynomial', G: 'Polynomial') -> 'Polynomial':
         """
-        Computes the gradient (vector of partial derivatives) of the polynomial.
+        Compute the Poisson bracket with result caching.
+        
+        This method caches the result of Poisson brackets between 
+        polynomial pairs, which can significantly speed up calculations
+        when the same brackets are computed multiple times.
         
         Parameters
         ----------
-        point : array-like, optional
-            If provided, evaluates the gradient at this point.
-            Should be a sequence of length n_vars.
-        
+        F, G : Polynomial
+            The polynomials for which to compute {F, G}
+            
         Returns
         -------
-        numpy.ndarray
-            A vector of partial derivatives, evaluated at the given point if provided.
-            
-        Raises
-        ------
-        ValueError
-            If point is provided but has incorrect length.
+        Polynomial
+            The Poisson bracket result
         """
-        # Compute partial derivatives with respect to each variable
-        derivatives = [self.differentiate(i) for i in range(self.n_vars)]
+        return _poisson_bracket(F, G)
+
+    def subs(self, subs_dict: dict[se.Symbol, se.Basic]) -> 'Polynomial':
+        """
+        Substitute variables in the polynomial using a dictionary.
         
-        if point is None:
-            # Return the symbolic gradient as a list of Polynomials
-            return derivatives
+        Parameters
+        ----------
+        subs_dict : dict[se.Symbol, se.Basic]
+            A dictionary mapping variables to their substitutions
+            
+        Returns
+        -------
+        Polynomial
+            A new polynomial with the substitutions applied
+        """
+        old_expr = se.sympify(self.expression)
+        new_expr = old_expr.subs(subs_dict)
+        return Polynomial(self.variables, new_expr)
+
+    @staticmethod
+    def clear_all_caches():
+        """
+        Clear all caches used by Polynomial class to free memory.
+        Call this function between major computation steps.
+        """
+        if hasattr(Polynomial, '_deg_in_var_cache'):
+            Polynomial._deg_in_var_cache.clear()
+            
+        if hasattr(Polynomial, '_total_deg_term_cache'):
+            Polynomial._total_deg_term_cache.clear()
+            
+        if hasattr(Polynomial, '_expand_cache'):
+            Polynomial._expand_cache.clear()
+            
+        if hasattr(Polynomial, 'memoized_poisson'):
+            Polynomial.memoized_poisson.cache_clear()
+        
+    @staticmethod
+    def limit_cache_size(max_size=10000):
+        """
+        Limit the size of all caches to prevent memory overflow.
+        
+        Parameters
+        ----------
+        max_size : int
+            Maximum number of entries in each cache
+        """
+        if hasattr(Polynomial, '_deg_in_var_cache') and len(Polynomial._deg_in_var_cache) > max_size:
+            # Keep only most recent entries
+            keys = list(Polynomial._deg_in_var_cache.keys())
+            for key in keys[:-max_size]:
+                del Polynomial._deg_in_var_cache[key]
+                
+        if hasattr(Polynomial, '_total_deg_term_cache') and len(Polynomial._total_deg_term_cache) > max_size:
+            keys = list(Polynomial._total_deg_term_cache.keys())
+            for key in keys[:-max_size]:
+                del Polynomial._total_deg_term_cache[key]
+                
+        if hasattr(Polynomial, '_expand_cache') and len(Polynomial._expand_cache) > max_size:
+            keys = list(Polynomial._expand_cache.keys())
+            for key in keys[:-max_size]:
+                del Polynomial._expand_cache[key]
+
+
+def _poisson_bracket(F: Polynomial, G: Polynomial) -> Polynomial:
+    """
+    Cached PB that reuses nabla_F and nabla_G when already computed.
+    """
+    assert F.variables == G.variables, "Variables must match for Poisson bracket"
+    dF_dq, dF_dp = F._gradient()
+    dG_dq, dG_dp = G._gradient()
+
+    expr = sum(dF_dq[i] * dG_dp[i] - dF_dp[i] * dG_dq[i]
+                for i in range(len(dF_dq)))
+    return Polynomial(F.variables, expr)
+
+
+def _poisson_bracket_term_by_term(F: Polynomial, G: Polynomial) -> Polynomial:
+    """
+    Compute Poisson bracket by differentiating term-by-term.
+    
+    This implementation may be more efficient for sparse polynomials
+    where many terms have zero derivatives.
+    
+    Parameters
+    ----------
+    F, G : Polynomial
+        The polynomials for which to compute {F, G}
+        
+    Returns
+    -------
+    Polynomial
+        The Poisson bracket result
+    """
+    assert F.variables == G.variables, "Variables must match for Poisson bracket"
+    n_vars = len(F.variables)
+    n_dof = n_vars // 2
+    
+    # Get expanded polynomials
+    F_exp = F.expansion
+    G_exp = G.expansion
+    
+    # Get monomials for term-by-term differentiation
+    F_monomials = F_exp.get_monomials()
+    G_monomials = G_exp.get_monomials()
+    
+    result_terms = []
+    
+    # Process each pair of monomials
+    for F_mono in F_monomials:
+        F_term = Polynomial(F.variables, F_mono.sym)
+        dF_dq, dF_dp = F_term._gradient()
+        
+        for G_mono in G_monomials:
+            G_term = Polynomial(G.variables, G_mono.sym)
+            dG_dq, dG_dp = G_term._gradient()
+            
+            # Compute the bracket for this pair of terms
+            term_expr = sum(dF_dq[i] * dG_dp[i] - dF_dp[i] * dG_dq[i]
+                          for i in range(n_dof))
+            
+            if term_expr != 0:  # Only add non-zero terms
+                result_terms.append(term_expr)
+    
+    # Sum all resulting terms
+    if not result_terms:
+        return Polynomial(F.variables, se.Integer(0))
+    
+    return Polynomial(F.variables, sum(result_terms))
+
+
+def _split_coeff_and_factors(term: se.Basic):
+    """
+    Split a symbolic expression term into its numeric coefficient and symbolic factors.
+
+    Parameters
+    ----------
+    term : se.Basic
+        A SymEngine expression term (can be Number, Symbol, Mul, Pow, etc.)
+
+    Returns
+    -------
+    tuple
+        A tuple (coefficient, symbolic_factors) where:
+        - coefficient is a SymEngine number
+        - symbolic_factors is a tuple of symbolic expressions
+        
+    Notes
+    -----
+    This function handles three cases:
+    - For numeric terms (e.g., 7), returns (term, ())
+    - For Mul terms (e.g., 3*q1**2*p2), splits out numeric parts as coefficient
+    - For other symbolic terms, returns (1, (term,))
+    
+    Examples
+    --------
+    >>> _split_coeff_and_factors(se.Integer(7))
+    (7, ())
+    >>> _split_coeff_and_factors(q1)
+    (1, (q1,))
+    >>> _split_coeff_and_factors(3*q1**2*p2)
+    (3, (q1**2, p2))
+    """
+    if term.is_Number:                  # e.g.  7
+        return term, ()
+
+    if term.is_Mul:                     # e.g.  3*q1**2*p2
+        coeff = se.Integer(1)
+        symbolic = []
+        for fac in term.args:
+            if fac.is_Number:
+                coeff *= fac
+            else:
+                symbolic.append(fac)
+        return coeff, tuple(symbolic)
+
+    # every other object counts as "symbolic" factor with coeff 1
+    return se.Integer(1), (term,)
+
+
+def _update_by_deg(by_deg: dict[int, list], poly: Polynomial) -> None:
+    """
+    Insert all monomials of a polynomial into a dictionary organized by total degree.
+    
+    Parameters
+    ----------
+    by_deg : dict[int, list]
+        A dictionary mapping degrees to lists of monomials
+    poly : Polynomial
+        The polynomial whose monomials will be added to the dictionary
+        
+    Returns
+    -------
+    None
+        The function modifies the by_deg dictionary in place
+        
+    Notes
+    -----
+    Each monomial is stored in the dictionary as a Monomial object containing:
+    - coeff: the numeric coefficient
+    - kq: tuple of exponents for position variables (q)
+    - kp: tuple of exponents for momentum variables (p)
+    - sym: the full q^k p^k expression
+    
+    The key in the dictionary is the total degree (sum of all exponents)
+    """
+    n_dof  = len(poly.variables) // 2
+    q_vars = poly.variables[:n_dof]
+    p_vars = poly.variables[n_dof:]
+
+    # Use the expansion from the polynomial object
+    expanded_expr = poly.expansion.expression
+    # Optional: Force re-expansion if needed, might help with float aggregation sometimes
+
+    # clean the expression
+    sp_expanded_expr = sp.sympify(expanded_expr)
+    expanded_expr = _clean_numerical_artifacts(sp_expanded_expr)
+    expanded_expr = se.sympify(expanded_expr)
+
+    # --- Internal Aggregation Step ---
+    # Temporary storage: {deg: {(kq, kp): aggregated_coeff}}
+    aggregated_coeffs = defaultdict(lambda: defaultdict(lambda: se.Integer(0)))
+
+    # Use the (slightly modified) _monomial_key generator
+    for monomial_data in _monomial_key(expanded_expr, q_vars, p_vars):
+        # Calculate degree from the exponent tuples
+        deg = sum(monomial_data.kq) + sum(monomial_data.kp)
+        # Create the unique key for aggregation based on exponents
+        key = (monomial_data.kq, monomial_data.kp)
+        # Add the coefficient of the current term to the aggregated total for this key
+        aggregated_coeffs[deg][key] += monomial_data.coeff
+
+    # --- Populate the Output Dictionary `by_deg` Step ---
+    for deg, terms_dict in aggregated_coeffs.items():
+        for (kq, kp), final_coeff in terms_dict.items():
+            # Only create entries for terms that are non-zero after aggregation
+            if final_coeff != 0:
+                # Reconstruct the symbolic part (variables and exponents only)
+                # using the original helper function
+                sym_part = _monomial_from_key(kq, kp, q_vars, p_vars)
+                # Combine with the final aggregated coefficient to get the full term symbol
+                final_sym = final_coeff * sym_part
+
+                # Create the final Monomial object with all fields populated,
+                # matching the expected output structure.
+                final_monomial = Monomial(coeff=final_coeff, kq=kq, kp=kp, sym=final_sym)
+
+                # Append this aggregated Monomial to the list for the correct degree
+                # in the original dictionary provided to the function.
+                # This assumes by_deg was initialized (e.g., defaultdict(list)).
+                by_deg[deg].append(final_monomial)
+
+def _monomial_key(expr: se.Basic,
+                q_vars: list[se.Symbol],
+                p_vars: list[se.Symbol]):
+    """
+    Decompose an expression into its constituent monomials with separated q and p variable exponents.
+    
+    Parameters
+    ----------
+    expr : se.Basic
+        An **expanded** SymEngine expression to decompose
+    q_vars : list[se.Symbol]
+        List of position variables (q)
+    p_vars : list[se.Symbol]
+        List of momentum variables (p)
+        
+    Yields
+    ------
+    Monomial
+        A Monomial instance for each term in the expression, containing:
+        - coeff: numeric coefficient
+        - kq: tuple of exponents for each q variable
+        - kp: tuple of exponents for each p variable
+        - sym: the full q^k p^k expression
+        
+    Notes
+    -----
+    This function:
+    1. Maps variables to their indices
+    2. Iterates through terms in the expression
+    3. Decomposes each term into coefficient and factors
+    4. Processes each factor to extract variable exponents
+    5. Yields Monomial instances
+    
+    Any symbolic terms not in q_vars or p_vars are treated as parameters
+    and incorporated into the coefficient.
+    
+    Examples
+    --------
+    >>> list(_monomial_key(3*q1**2*p1 + 2*q2*p2, [q1,q2,q3], [p1,p2,p3]))
+    [Monomial(coeff=3, kq=(2,0,0), kp=(1,0,0), sym=3*q1**2*p1), 
+     Monomial(coeff=2, kq=(0,1,0), kp=(0,1,0), sym=2*q2*p2)]
+    """
+    n = len(q_vars)
+    q2idx = {v: i for i, v in enumerate(q_vars)}     #  0 … n-1
+    p2idx = {v: i for i, v in enumerate(p_vars)}     #  0 … n-1
+
+    terms = expr.args if expr.is_Add else (expr,)
+
+    for term in terms:
+        coeff, factors = _split_coeff_and_factors(term)
+        kq = [0]*n
+        kp = [0]*n
+
+        for fac in factors:                          # fac = x   or   x**e
+            base, exp = fac.as_base_exp() if fac.is_Pow else (fac, 1)
+            exp = int(exp)
+
+            if base in q2idx:                        # q-family
+                kq[q2idx[base]] += exp
+            elif base in p2idx:                      # p-family
+                kp[p2idx[base]] += exp
+            else:                                    # parameter (µ, λ, …)
+                coeff *= base**exp
+
+        kq_tuple = tuple(kq)
+        kp_tuple = tuple(kp)
+        
+        # Create the symbolic expression for the monomial
+        sym_expr = coeff * _monomial_from_key(kq_tuple, kp_tuple, q_vars, p_vars)
+        
+        yield Monomial(coeff=coeff, kq=kq_tuple, kp=kp_tuple, sym=sym_expr)
+
+def _monomial_from_key(kq, kp, q_syms, p_syms):
+    """
+    Reconstruct a symbolic monomial from exponent tuples for q and p variables.
+    
+    Parameters
+    ----------
+    kq : tuple
+        Tuple of exponents for position variables (q1, q2, q3)
+    kp : tuple
+        Tuple of exponents for momentum variables (p1, p2, p3)
+        
+    Returns
+    -------
+    se.Basic
+        A SymEngine expression representing the monomial with the given exponents
+        
+    Notes
+    -----
+    This function is the inverse of _monomial_key. It takes the exponent representation
+    of a monomial and reconstructs the symbolic expression by raising each variable
+    to its corresponding exponent.
+    
+    This is particularly useful in normal form calculations where terms are processed
+    by degree and then need to be reconstructed into symbolic expressions.
+    
+    Examples
+    --------
+    >>> _monomial_from_key((2, 1, 0), (0, 0, 3))
+    q1**2*q2*p3**3
+    
+    >>> _monomial_from_key((1, 0, 0), (1, 0, 0))
+    q1*p1
+    """
+    expr = se.Integer(1)
+    for i,e in enumerate(kq): expr *= q_syms[i]**e
+    for i,e in enumerate(kp): expr *= p_syms[i]**e
+    return expr
+
+def _dot_product(v1: tuple[int], v2: list[se.Basic]) -> se.Basic:
+    """Computes the dot product of an integer tuple and a list of SymEngine expressions."""
+    # Assuming v1 and v2 have compatible dimensions
+    if len(v1) != len(v2):
+        raise ValueError("Vectors must have the same dimension for dot product.")
+    
+    result = se.Integer(0)
+    for i in range(len(v1)):
+        result += se.sympify(v1[i]) * v2[i] # Ensure integer is sympified for multiplication
+    return result
+
+def _clean_numerical_artifacts(expr: sp.Expr, tol: float = 1e-16) -> sp.Expr:
+    """
+    Clean small numerical artifacts from symbolic expressions.
+    
+    This function removes small real/imaginary parts from complex coefficients
+    that are likely artifacts of numerical computations rather than actual values.
+    
+    Parameters
+    ----------
+    expr : sympy.Expr
+        The expression to clean
+    tol : float, optional
+        The tolerance below which values are considered artifacts, by default 1e-10
+        
+    Returns
+    -------
+    sympy.Expr
+        Cleaned expression
+    """
+    
+    # For basic expressions, convert to sympy if it's not already
+    if not isinstance(expr, sp.Expr):
+        expr = sp.sympify(str(expr))
+    
+    # Simple base cases
+    if isinstance(expr, (sp.Integer, sp.Rational)):
+        return expr
+    
+    if isinstance(expr, sp.Float):
+        if abs(float(expr)) < tol:
+            return sp.Integer(0)
+        return expr
+    
+    # Handle complex numbers directly
+    if isinstance(expr, sp.Number) and expr.is_complex:
+        re, im = float(sp.re(expr)), float(sp.im(expr))
+        
+        if abs(re) < tol:
+            re = 0
+        if abs(im) < tol:
+            im = 0
+            
+        if re == 0 and im == 0:
+            return sp.Integer(0)
+        elif im == 0:
+            return sp.Float(re)
+        elif re == 0:
+            return sp.Float(im) * sp.I
         else:
-            # Validate point length
-            if len(point) != self.n_vars:
-                raise ValueError(f"Point must have length {self.n_vars}, got {len(point)}")
+            return sp.Float(re) + sp.Float(im) * sp.I
+    
+    # For symbols and other atomic objects
+    if expr.is_Atom:
+        return expr
+    
+    # Use a completely different, non-recursive approach
+    # That simply zeros out small coefficients in the expanded form
+    
+    # First expand the expression to get a sum of terms
+    expanded = sp.expand(expr)
+    
+    # If it's already a basic expression, return it
+    if expanded.is_Atom:
+        return expanded
+    
+    # If expanded is a sum, clean each term
+    if expanded.is_Add:
+        cleaned_terms = []
+        for term in expanded.args:
+            # Extract coefficient and rest (symbols/powers)
+            if term.is_Mul:
+                coeff, rest = term.as_coeff_Mul()
                 
-            # Evaluate each derivative at the given point
-            return np.array([derivative.evaluate(point) for derivative in derivatives])
-
-
-class FormalSeries(MutableMapping[int, "Polynomial"]):
-    """
-    Sparse homogeneous power series.
-    """
-
-    def __init__(self, mapping: Dict[int, "Polynomial"] | None = None):
-        self._data: Dict[int, Polynomial] = dict(mapping or {})
-        if mapping:
-            for k, v in mapping.items():
-                self[k] = v  # uses __setitem__ validation
-
-    # --- mutable‑mapping protocol -------------------------------------------
-    def __getitem__(self, key: int):
-        return self._data[key]
-
-    def __setitem__(self, key: int, value: "Polynomial"):
-        if not isinstance(key, int) or key < 0:
-            raise KeyError("Degree must be a non‑negative integer.")
-        self._data[key] = value
-
-    def __delitem__(self, key: int):
-        del self._data[key]
-
-    def __iter__(self):
-        return iter(self._data)
-
-    def __len__(self):
-        return len(self._data)
-
-    def degrees(self) -> List[int]:
-        return sorted(self._data.keys())
-
-    def truncate(self, max_degree: int) -> "FormalSeries":
-        """Return a shallow copy containing only terms ≤ max_degree."""
-        return FormalSeries({k: v for k, v in self._data.items() if k <= max_degree})
-
-    @staticmethod
-    def poisson_pair(series1: "FormalSeries", series2: "FormalSeries", degree: int):
-        """Return the homogeneous degree-`degree` part of {S1, S2}."""
-        # Leibniz: look at all pairs k + j - 2 == degree (since PB adds degrees‑2)
-        res = None
-        for k, pk in series1._data.items():
-            j = degree + 2 - k
-            if j in series2._data:
-                term = pk.poisson_bracket(series2[j])
-                if res is None:
-                    res = term
+                # Clean the coefficient
+                if isinstance(coeff, sp.Number):
+                    # Handle complex coefficients
+                    if coeff.is_complex:
+                        re, im = float(sp.re(coeff)), float(sp.im(coeff))
+                        
+                        if abs(re) < tol:
+                            re = 0
+                        if abs(im) < tol:
+                            im = 0
+                            
+                        if re == 0 and im == 0:
+                            # Skip this term completely
+                            continue
+                        elif im == 0:
+                            new_coeff = sp.Float(re)
+                        elif re == 0:
+                            new_coeff = sp.Float(im) * sp.I
+                        else:
+                            new_coeff = sp.Float(re) + sp.Float(im) * sp.I
+                        
+                        # Add the cleaned term
+                        cleaned_terms.append(new_coeff * rest)
+                    else:
+                        # For real coefficients
+                        if abs(float(coeff)) < tol:
+                            # Skip near-zero terms
+                            continue
+                        else:
+                            # Keep the term with its coefficient
+                            cleaned_terms.append(term)
                 else:
-                    res += term
-        # Return None if res is None or if it's a zero polynomial
-        return None if res is None or res.expr == se.sympify(0) else res
-
-    def lie_transform(self, chi: Polynomial, k_max: int) -> "FormalSeries":
-        """Return *new* series  e^{L_χ} H  truncated at total degree k_max.
-
-        Implements the recursive cascade described in Jorba (1999), Algorithm
-        *traham* - each iteration re-uses earlier ad-powers so the total cost is
-        O(k_max^2) but ~100× faster than naïve because χ is small.
-        """
-        out = FormalSeries(self._data.copy())
-        chi_deg = chi.total_degree()
-        if chi.is_zero():
-            return out
-
-        # ad_power[d] holds (ad_χ)^r (H_{d}) for current r
-        ad_power: Dict[int, Polynomial] = {}
-
-        # first-order bracket
-        for d, poly in self._data.items():
-            tgt = d + chi_deg - 2
-            if tgt <= k_max:
-                ad_power[tgt] = ad_power.get(tgt, Polynomial.zero(poly.n_vars, poly.variables)) + chi.poisson_bracket(poly)
-                out[tgt] = out.get(tgt, Polynomial.zero(poly.n_vars, poly.variables)) + ad_power[tgt]
-
-        # higher-order brackets (r ≥ 2)
-        r = 2
-        while True:
-            coef = 1.0 / factorial(r)
-            new_ad: Dict[int, Polynomial] = {}
-            pushed = False
-            for d, poly in ad_power.items():
-                tgt = d + chi_deg - 2
-                if tgt > k_max:
-                    continue
-                term = chi.poisson_bracket(poly)
-                if term.is_zero():
-                    continue
-                new_ad[tgt] = term
-                out[tgt] = out.get(tgt, Polynomial.zero(term.n_vars, term.variables)) + coef * term
-                pushed = True
-            if not pushed:
-                break  # nothing new added – convergence
-            ad_power = new_ad
-            r += 1
-        return out
-
-    def __str__(self):
-        terms = ", ".join(f"deg{d}" for d in self.degrees())
-        return f"FormalSeries({terms})"
-
-    __repr__ = __str__
-
-
-@dataclass(slots=True)
-class Hamiltonian:
-    series: FormalSeries
-    mu: float
-    coords: str = "synodic"  # 'synodic', 'normal', 'center'
-    order: int = field(init=False)
-
-    def __post_init__(self):
-        self.order = max(self.series.degrees()) if len(self.series) else 0
-
-    # ---------------------------------------------------------------------
-    def quadratic(self):
-        return self.series[2]
-
-    # ---------------------------------------------------------------------
-    def evaluate(self, x: np.ndarray, float_only: bool = True) -> float:
-        """Evaluate ∑ H_k(x).
-
-        Parameters
-        ----------
-        x : np.ndarray length = n_vars
-        float_only : if True, cast result to float (double‑precision).
-        """
-        val = sum(p.evaluate(x) for p in self.series.values())
-        return float(val) if float_only else val
-
-    # ---------------------------------------------------------------------
-    def gradient(self, x: np.ndarray) -> np.ndarray:
-        return np.add.reduce([p.gradient(x) for p in self.series.values()])
-
-    def symplectic_dot(self, grad: np.ndarray) -> np.ndarray:
-        """Convert \nabla H = (∂H/∂q, ∂H/∂p) into the Hamiltonian vector field.
-        Works with any even-dimensional gradient vector."""
-        if grad.size % 2 != 0:
-            raise ValueError("symplectic_dot expects an even-length gradient vector.")
-        n = grad.size // 2
-        dq = grad[n:]
-        dp = -grad[:n]
-        return np.concatenate((dq, dp))
-
-    # ---------------------------------------------------------------------
-    def vector_field(self, x: np.ndarray) -> np.ndarray:
-        return self.symplectic_dot(self.gradient(x))
-
-    # ---------------------------------------------------------------------
-    def poisson(self, other: "Hamiltonian") -> "Hamiltonian":
-        max_deg = self.order + other.order - 2
-        data: Dict[int, "Polynomial"] = {}
-        for d in range(2, max_deg + 1):
-            val = FormalSeries.poisson_pair(self.series, other.series, d)
-            if val is not None:
-                data[d] = val
-        return Hamiltonian(FormalSeries(data), self.mu, self.coords)
-
-    # ---------------------------------------------------------------------
-    def change_variables(self, transform) -> "Hamiltonian":
-        """Return a new Hamiltonian H∘T where `transform` is a callable that
-        maps a Polynomial to another Polynomial (e.g. linear C⁻¹ map, Lie
-        transform, centre-manifold injection…)."""
-        new_series = FormalSeries({k: transform(p) for k, p in self.series.items()})
-        return Hamiltonian(new_series, self.mu, self.coords)
-
-    # ---------------------------------------------------------------------
-    # I/O helpers ----------------------------------------------------------
-    def to_hdf(self, path: str):
-        import h5py, pickle
-        with h5py.File(path, "w") as f:
-            f.attrs["mu"] = self.mu
-            f.attrs["coords"] = self.coords
-            grp = f.create_group("series")
-            for d, poly in self.series._data.items():
-                # Use pickle for binary serialization
-                binary_data = pickle.dumps(poly.expr, protocol=5)
-                grp.create_dataset(str(d), data=np.void(binary_data))
-
-    @staticmethod
-    def from_hdf(path: str) -> "Hamiltonian":
-        import h5py, pickle
-
-        with h5py.File(path, "r") as f:
-            mu = float(f.attrs["mu"])
-            coords = f.attrs["coords"]
-            data: Dict[int, Polynomial] = {}
-            for name, ds in f["series"].items():
-                deg = int(name)
-                # Deserialize using pickle
-                binary_data = ds[()].tobytes()
-                expr = pickle.loads(binary_data)
-                data[deg] = Polynomial(expr)
-        return Hamiltonian(FormalSeries(data), mu, coords)
-
-    # ---------------------------------------------------------------------
-    def __str__(self):
-        return f"Hamiltonian(order≤{self.order}, coords='{self.coords}', μ={self.mu})"
-
-    __repr__ = __str__
+                    # If coefficient is not a number, keep the term as is
+                    cleaned_terms.append(term)
+            else:
+                # For single terms without coefficients
+                if isinstance(term, sp.Number):
+                    if isinstance(term, sp.Float) and abs(float(term)) < tol:
+                        continue
+                    if term.is_complex:
+                        re, im = float(sp.re(term)), float(sp.im(term))
+                        if abs(re) < tol:
+                            re = 0
+                        if abs(im) < tol:
+                            im = 0
+                        if re == 0 and im == 0:
+                            continue
+                        elif im == 0:
+                            cleaned_terms.append(sp.Float(re))
+                        elif re == 0:
+                            cleaned_terms.append(sp.Float(im) * sp.I)
+                        else:
+                            cleaned_terms.append(sp.Float(re) + sp.Float(im) * sp.I)
+                    else:
+                        cleaned_terms.append(term)
+                else:
+                    cleaned_terms.append(term)
+        
+        # If all terms were eliminated, return zero
+        if not cleaned_terms:
+            return sp.Integer(0)
+        
+        # Combine cleaned terms into a sum
+        return sp.Add(*cleaned_terms)
+    
+    # If it's a product
+    if expanded.is_Mul:
+        coeff, rest = expanded.as_coeff_Mul()
+        
+        # Clean coefficient
+        if isinstance(coeff, sp.Number):
+            if coeff.is_complex:
+                re, im = float(sp.re(coeff)), float(sp.im(coeff))
+                
+                if abs(re) < tol:
+                    re = 0
+                if abs(im) < tol:
+                    im = 0
+                    
+                if re == 0 and im == 0:
+                    return sp.Integer(0)
+                elif im == 0:
+                    return sp.Float(re) * rest
+                elif re == 0:
+                    return sp.Float(im) * sp.I * rest
+                else:
+                    return (sp.Float(re) + sp.Float(im) * sp.I) * rest
+            else:
+                if abs(float(coeff)) < tol:
+                    return sp.Integer(0)
+                else:
+                    return expanded
+        
+    # For any other expression type, just return it as is
+    return expanded
