@@ -330,9 +330,14 @@ def _apply_lie_transform(H_current: Polynomial, G_n: Polynomial, N_max: int,
     PB_term = H_old.copy() # Start with H_old
     G_degree = G_n.total_degree()
 
+    # Dynamic MAX_LIE_ITERATIONS based on the order of G_n
+    # From observation: terms of order n typically converge after n-2 iterations
+    # Minimum of 1 iteration to ensure at least one transform is applied
+    MAX_LIE_ITERATIONS = max(1, G_degree - 2)
+    
     logger.debug(f"Applying transform for G of degree {G_degree}")
-    MAX_LIE_ITERATIONS = N_max - 1 # Heuristic: Max iterations needed likely related to N_max
-
+    logger.info(f"MAX_LIE_ITERATIONS = {MAX_LIE_ITERATIONS}")
+    
     # Clear memoization cache at the beginning of each transform application
     if use_cache:
         Polynomial.memoized_poisson.cache_clear()
@@ -357,27 +362,20 @@ def _apply_lie_transform(H_current: Polynomial, G_n: Polynomial, N_max: int,
         else:
             # Use specified method without caching
             PB_term = PB_term.optimized_poisson(G_n_expanded, method=poisson_method, use_cache=False)
-            
-        # Check if the term is numerically zero
-        # Use a tolerance or check if expression simplifies to 0
+
         is_zero = (PB_term.total_degree() == 0 and PB_term.expression == 0) # Basic check, might need tolerance
         logger.debug(f"is_zero: {is_zero}, total_degree: {PB_term.total_degree()}")
         if is_zero:
-             logger.info(f"Stopping Lie series at k={k} because PB_term is zero.")
-             break
+            logger.info(f"Stopping Lie series at k={k} because PB_term is zero.")
+            break
 
-        # --- Optional: Log intermediate term degree ---
         term_degree = PB_term.total_degree()
         logger.info(f"Lie series k={k}: PB_term max degree = {term_degree}")
-        # ---
 
-        # Apply the correct factorial coefficient
         factorial_k = math.factorial(k)
-        term_coefficient = se.sympify(1) / se.sympify(factorial_k)
+        term_coefficient = se.Integer(1) / se.Integer(factorial_k)
 
-        # Create the term to add WITHOUT intermediate truncation
         term_to_add = PB_term * term_coefficient
-        # logger.debug(f"Term added for k={k}:\n{term_to_add.expression}\n") # Verbose
 
         H_new = H_new + term_to_add
 
@@ -386,19 +384,16 @@ def _apply_lie_transform(H_current: Polynomial, G_n: Polynomial, N_max: int,
             logger.warning(f"Reached MAX_LIE_ITERATIONS = {k}. Stopping series.")
             break
 
-    # Final truncation AFTER the loop finishes
     H_final = H_new.truncate(N_max)
+
     logger.debug(f"Final H after transform (truncated to {N_max}):\n{H_final.expression}\n")
 
     return H_final
 
 def extract_coeffs_up_to_degree(H_cm: Polynomial, max_deg: int) -> list[tuple[int, int, int, int, se.Basic]]:
     table = []
-    logger.info(f"Input H_cm expression:\n{H_cm.expression}\n")
-    logger.info(f"Input H_cm EXPANDED expression:\n{H_cm.expansion.expression}\n") # Check if expanded looks combined
 
     degree_monomials = H_cm.build_by_degree()
-    logger.info(f"Result from build_by_degree (shows counts per exponent set):\n{ {deg: { (m.kq, m.kp): sum(1 for mon in mons if mon.kq==m.kq and mon.kp==m.kp) for m in mons} for deg, mons in degree_monomials.items()} }\n")
 
     for degree, monomials in degree_monomials.items():
         for monomial in monomials:
