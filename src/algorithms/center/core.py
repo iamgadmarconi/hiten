@@ -727,10 +727,11 @@ def _update_by_deg(by_deg: dict[int, list], poly: Polynomial) -> None:
     q_vars = poly.variables[:n_dof]
     p_vars = poly.variables[n_dof:]
 
-    for monomial in _monomial_key(poly.expression, q_vars, p_vars):
+    expanded_expr = poly.expansion.expression
+
+    for monomial in _monomial_key(expanded_expr, q_vars, p_vars): # Use expanded_expr here
         deg = sum(monomial.kq) + sum(monomial.kp)
         by_deg[deg].append(monomial)
-
 
 def _monomial_key(expr: se.Basic,
                 q_vars: list[se.Symbol],

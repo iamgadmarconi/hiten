@@ -331,7 +331,7 @@ def _apply_lie_transform(H_current: Polynomial, G_n: Polynomial, N_max: int,
     G_degree = G_n.total_degree()
 
     logger.debug(f"Applying transform for G of degree {G_degree}")
-    MAX_LIE_ITERATIONS = N_max - 2 # Heuristic: Max iterations needed likely related to N_max
+    MAX_LIE_ITERATIONS = N_max - 1 # Heuristic: Max iterations needed likely related to N_max
 
     # Clear memoization cache at the beginning of each transform application
     if use_cache:
@@ -341,18 +341,6 @@ def _apply_lie_transform(H_current: Polynomial, G_n: Polynomial, N_max: int,
     H_old_expanded = H_old.expansion
     G_n_expanded = G_n.expansion
     PB_term = H_old_expanded.copy()
-        
-    # Log performance info about the polynomials for debugging
-    if logger.level <= logging.DEBUG:
-        H_terms = len(H_old_expanded.get_monomials())
-        G_terms = len(G_n_expanded.get_monomials())
-        logger.debug(f"H has {H_terms} terms, G has {G_terms} terms")
-        
-        # If sparse, term-by-term might be faster
-        if poisson_method == 'auto' and H_terms * G_terms < 4 * (len(H_old.variables) // 2)**2:
-            logger.debug("Auto-selected 'term_by_term' method based on polynomial sparsity")
-        elif poisson_method == 'auto':
-            logger.debug("Auto-selected 'standard' method based on polynomial density")
 
     # Process and reuse gradient calculations if needed
     if poisson_method == 'standard':
@@ -362,11 +350,6 @@ def _apply_lie_transform(H_current: Polynomial, G_n: Polynomial, N_max: int,
     for k in range(1, MAX_LIE_ITERATIONS + 1):
         logger.info(f"Applying transform for G of degree {G_degree} at iteration {k}...")
         
-        # Use optimized Poisson bracket calculation
-        start_time = None
-        if logger.level <= logging.DEBUG:
-            start_time = time.time()
-            
         # Calculate the next Poisson bracket term {PB_term, G} using optimized method
         if use_cache:
             # Use memoized version for repeated calculations
@@ -375,13 +358,10 @@ def _apply_lie_transform(H_current: Polynomial, G_n: Polynomial, N_max: int,
             # Use specified method without caching
             PB_term = PB_term.optimized_poisson(G_n_expanded, method=poisson_method, use_cache=False)
             
-        if logger.level <= logging.DEBUG and start_time is not None:
-            elapsed = time.time() - start_time
-            logger.debug(f"Poisson bracket computation took {elapsed:.6f} seconds")
-
         # Check if the term is numerically zero
         # Use a tolerance or check if expression simplifies to 0
         is_zero = (PB_term.total_degree() == 0 and PB_term.expression == 0) # Basic check, might need tolerance
+        logger.debug(f"is_zero: {is_zero}, total_degree: {PB_term.total_degree()}")
         if is_zero:
              logger.info(f"Stopping Lie series at k={k} because PB_term is zero.")
              break
@@ -409,11 +389,6 @@ def _apply_lie_transform(H_current: Polynomial, G_n: Polynomial, N_max: int,
     # Final truncation AFTER the loop finishes
     H_final = H_new.truncate(N_max)
     logger.debug(f"Final H after transform (truncated to {N_max}):\n{H_final.expression}\n")
-
-    # If we're using caching, report cache statistics
-    if use_cache and logger.level <= logging.DEBUG:
-        cache_info = Polynomial.memoized_poisson.cache_info()
-        logger.debug(f"Cache statistics - hits: {cache_info.hits}, misses: {cache_info.misses}, size: {cache_info.currsize}")
 
     return H_final
 
