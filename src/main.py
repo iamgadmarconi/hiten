@@ -18,7 +18,7 @@ from log_config import logger
 
 def main():
 
-    max_degree = 5
+    max_degree = 6
 
     Sun = Body("Sun", 
                 Constants.bodies["sun"]["mass"], 

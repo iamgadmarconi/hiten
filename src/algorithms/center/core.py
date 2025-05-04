@@ -1,8 +1,12 @@
 import math
 import symengine as se
+import sympy as sp
 from functools import lru_cache
 from collections import defaultdict
 from dataclasses import dataclass
+
+
+from log_config import logger
 
 
 @dataclass
@@ -727,11 +731,47 @@ def _update_by_deg(by_deg: dict[int, list], poly: Polynomial) -> None:
     q_vars = poly.variables[:n_dof]
     p_vars = poly.variables[n_dof:]
 
+    # Use the expansion from the polynomial object
     expanded_expr = poly.expansion.expression
+    # Optional: Force re-expansion if needed, might help with float aggregation sometimes
 
-    for monomial in _monomial_key(expanded_expr, q_vars, p_vars): # Use expanded_expr here
-        deg = sum(monomial.kq) + sum(monomial.kp)
-        by_deg[deg].append(monomial)
+    # clean the expression
+    sp_expanded_expr = sp.sympify(expanded_expr)
+    expanded_expr = _clean_numerical_artifacts(sp_expanded_expr)
+    expanded_expr = se.sympify(expanded_expr)
+
+    # --- Internal Aggregation Step ---
+    # Temporary storage: {deg: {(kq, kp): aggregated_coeff}}
+    aggregated_coeffs = defaultdict(lambda: defaultdict(lambda: se.Integer(0)))
+
+    # Use the (slightly modified) _monomial_key generator
+    for monomial_data in _monomial_key(expanded_expr, q_vars, p_vars):
+        # Calculate degree from the exponent tuples
+        deg = sum(monomial_data.kq) + sum(monomial_data.kp)
+        # Create the unique key for aggregation based on exponents
+        key = (monomial_data.kq, monomial_data.kp)
+        # Add the coefficient of the current term to the aggregated total for this key
+        aggregated_coeffs[deg][key] += monomial_data.coeff
+
+    # --- Populate the Output Dictionary `by_deg` Step ---
+    for deg, terms_dict in aggregated_coeffs.items():
+        for (kq, kp), final_coeff in terms_dict.items():
+            # Only create entries for terms that are non-zero after aggregation
+            if final_coeff != 0:
+                # Reconstruct the symbolic part (variables and exponents only)
+                # using the original helper function
+                sym_part = _monomial_from_key(kq, kp, q_vars, p_vars)
+                # Combine with the final aggregated coefficient to get the full term symbol
+                final_sym = final_coeff * sym_part
+
+                # Create the final Monomial object with all fields populated,
+                # matching the expected output structure.
+                final_monomial = Monomial(coeff=final_coeff, kq=kq, kp=kp, sym=final_sym)
+
+                # Append this aggregated Monomial to the list for the correct degree
+                # in the original dictionary provided to the function.
+                # This assumes by_deg was initialized (e.g., defaultdict(list)).
+                by_deg[deg].append(final_monomial)
 
 def _monomial_key(expr: se.Basic,
                 q_vars: list[se.Symbol],
@@ -853,3 +893,172 @@ def _dot_product(v1: tuple[int], v2: list[se.Basic]) -> se.Basic:
     for i in range(len(v1)):
         result += se.sympify(v1[i]) * v2[i] # Ensure integer is sympified for multiplication
     return result
+
+def _clean_numerical_artifacts(expr: sp.Expr, tol: float = 1e-16) -> sp.Expr:
+    """
+    Clean small numerical artifacts from symbolic expressions.
+    
+    This function removes small real/imaginary parts from complex coefficients
+    that are likely artifacts of numerical computations rather than actual values.
+    
+    Parameters
+    ----------
+    expr : sympy.Expr
+        The expression to clean
+    tol : float, optional
+        The tolerance below which values are considered artifacts, by default 1e-10
+        
+    Returns
+    -------
+    sympy.Expr
+        Cleaned expression
+    """
+    
+    # For basic expressions, convert to sympy if it's not already
+    if not isinstance(expr, sp.Expr):
+        expr = sp.sympify(str(expr))
+    
+    # Simple base cases
+    if isinstance(expr, (sp.Integer, sp.Rational)):
+        return expr
+    
+    if isinstance(expr, sp.Float):
+        if abs(float(expr)) < tol:
+            return sp.Integer(0)
+        return expr
+    
+    # Handle complex numbers directly
+    if isinstance(expr, sp.Number) and expr.is_complex:
+        re, im = float(sp.re(expr)), float(sp.im(expr))
+        
+        if abs(re) < tol:
+            re = 0
+        if abs(im) < tol:
+            im = 0
+            
+        if re == 0 and im == 0:
+            return sp.Integer(0)
+        elif im == 0:
+            return sp.Float(re)
+        elif re == 0:
+            return sp.Float(im) * sp.I
+        else:
+            return sp.Float(re) + sp.Float(im) * sp.I
+    
+    # For symbols and other atomic objects
+    if expr.is_Atom:
+        return expr
+    
+    # Use a completely different, non-recursive approach
+    # That simply zeros out small coefficients in the expanded form
+    
+    # First expand the expression to get a sum of terms
+    expanded = sp.expand(expr)
+    
+    # If it's already a basic expression, return it
+    if expanded.is_Atom:
+        return expanded
+    
+    # If expanded is a sum, clean each term
+    if expanded.is_Add:
+        cleaned_terms = []
+        for term in expanded.args:
+            # Extract coefficient and rest (symbols/powers)
+            if term.is_Mul:
+                coeff, rest = term.as_coeff_Mul()
+                
+                # Clean the coefficient
+                if isinstance(coeff, sp.Number):
+                    # Handle complex coefficients
+                    if coeff.is_complex:
+                        re, im = float(sp.re(coeff)), float(sp.im(coeff))
+                        
+                        if abs(re) < tol:
+                            re = 0
+                        if abs(im) < tol:
+                            im = 0
+                            
+                        if re == 0 and im == 0:
+                            # Skip this term completely
+                            continue
+                        elif im == 0:
+                            new_coeff = sp.Float(re)
+                        elif re == 0:
+                            new_coeff = sp.Float(im) * sp.I
+                        else:
+                            new_coeff = sp.Float(re) + sp.Float(im) * sp.I
+                        
+                        # Add the cleaned term
+                        cleaned_terms.append(new_coeff * rest)
+                    else:
+                        # For real coefficients
+                        if abs(float(coeff)) < tol:
+                            # Skip near-zero terms
+                            continue
+                        else:
+                            # Keep the term with its coefficient
+                            cleaned_terms.append(term)
+                else:
+                    # If coefficient is not a number, keep the term as is
+                    cleaned_terms.append(term)
+            else:
+                # For single terms without coefficients
+                if isinstance(term, sp.Number):
+                    if isinstance(term, sp.Float) and abs(float(term)) < tol:
+                        continue
+                    if term.is_complex:
+                        re, im = float(sp.re(term)), float(sp.im(term))
+                        if abs(re) < tol:
+                            re = 0
+                        if abs(im) < tol:
+                            im = 0
+                        if re == 0 and im == 0:
+                            continue
+                        elif im == 0:
+                            cleaned_terms.append(sp.Float(re))
+                        elif re == 0:
+                            cleaned_terms.append(sp.Float(im) * sp.I)
+                        else:
+                            cleaned_terms.append(sp.Float(re) + sp.Float(im) * sp.I)
+                    else:
+                        cleaned_terms.append(term)
+                else:
+                    cleaned_terms.append(term)
+        
+        # If all terms were eliminated, return zero
+        if not cleaned_terms:
+            return sp.Integer(0)
+        
+        # Combine cleaned terms into a sum
+        return sp.Add(*cleaned_terms)
+    
+    # If it's a product
+    if expanded.is_Mul:
+        coeff, rest = expanded.as_coeff_Mul()
+        
+        # Clean coefficient
+        if isinstance(coeff, sp.Number):
+            if coeff.is_complex:
+                re, im = float(sp.re(coeff)), float(sp.im(coeff))
+                
+                if abs(re) < tol:
+                    re = 0
+                if abs(im) < tol:
+                    im = 0
+                    
+                if re == 0 and im == 0:
+                    return sp.Integer(0)
+                elif im == 0:
+                    return sp.Float(re) * rest
+                elif re == 0:
+                    return sp.Float(im) * sp.I * rest
+                else:
+                    return (sp.Float(re) + sp.Float(im) * sp.I) * rest
+            else:
+                if abs(float(coeff)) < tol:
+                    return sp.Integer(0)
+                else:
+                    return expanded
+        
+    # For any other expression type, just return it as is
+    return expanded

@@ -659,7 +659,7 @@ def test_monomial_key():
     assert term2.sym == 2*q2*p2
     
     # Test with powers and negative coefficients
-    expr = q1**3 - 5 * p3**2 * q2
+    expr = q1**5 - 5 * p3**2 * q2
     result = list(_monomial_key(expr, q_vars, p_vars))
     assert len(result) == 2
     
@@ -680,11 +680,11 @@ def test_monomial_key():
     assert term1.kp == (0,0,2)
     assert term1.sym == -5*q2*p3**2
     
-    # Should be q1^3
+    # Should be q1^5
     assert term2.coeff == 1
-    assert term2.kq == (3,0,0)
+    assert term2.kq == (5,0,0)
     assert term2.kp == (0,0,0)
-    assert term2.sym == q1**3
+    assert term2.sym == q1**5
     
     # Test with parameters (symbols not in q_vars or p_vars)
     mu = se.symbols('mu')

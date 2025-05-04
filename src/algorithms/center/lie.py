@@ -394,9 +394,12 @@ def _apply_lie_transform(H_current: Polynomial, G_n: Polynomial, N_max: int,
 
 def extract_coeffs_up_to_degree(H_cm: Polynomial, max_deg: int) -> list[tuple[int, int, int, int, se.Basic]]:
     table = []
+    logger.info(f"Input H_cm expression:\n{H_cm.expression}\n")
+    logger.info(f"Input H_cm EXPANDED expression:\n{H_cm.expansion.expression}\n") # Check if expanded looks combined
 
     degree_monomials = H_cm.build_by_degree()
-    
+    logger.info(f"Result from build_by_degree (shows counts per exponent set):\n{ {deg: { (m.kq, m.kp): sum(1 for mon in mons if mon.kq==m.kq and mon.kp==m.kp) for m in mons} for deg, mons in degree_monomials.items()} }\n")
+
     for degree, monomials in degree_monomials.items():
         for monomial in monomials:
             coef = monomial.coeff
