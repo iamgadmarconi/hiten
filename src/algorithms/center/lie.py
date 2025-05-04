@@ -333,7 +333,7 @@ def _apply_lie_transform(H_current: Polynomial, G_n: Polynomial, N_max: int,
     # Dynamic MAX_LIE_ITERATIONS based on the order of G_n
     # From observation: terms of order n typically converge after n-2 iterations
     # Minimum of 1 iteration to ensure at least one transform is applied
-    MAX_LIE_ITERATIONS = max(1, G_degree - 2)
+    MAX_LIE_ITERATIONS = max(1, G_degree - 1)
     
     logger.debug(f"Applying transform for G of degree {G_degree}")
     logger.info(f"MAX_LIE_ITERATIONS = {MAX_LIE_ITERATIONS}")
