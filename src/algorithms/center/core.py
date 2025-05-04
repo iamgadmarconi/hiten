@@ -1,8 +1,12 @@
 import math
 import symengine as se
+import sympy as sp
 from functools import lru_cache
 from collections import defaultdict
 from dataclasses import dataclass
+
+
+from log_config import logger
 
 
 @dataclass
@@ -311,8 +315,24 @@ class Polynomial:
             n_dof = n_vars // 2
             q_syms = self.variables[:n_dof]
             p_syms = self.variables[n_dof:]
-            dF_dq = [self.expression.diff(q) for q in q_syms]
-            dF_dp = [self.expression.diff(p) for p in p_syms]
+            
+            # Make sure we're working with expanded expressions for more efficient differentiation
+            expr = self.expansion.expression
+            
+            # For sparse polynomials, term-by-term differentiation may be faster
+            if expr.is_Add and len(expr.args) < n_dof:
+                dF_dq = []
+                dF_dp = []
+                for i in range(n_dof):
+                    q_derivative = sum((term.diff(q_syms[i]) for term in expr.args if term.has(q_syms[i])), se.Integer(0))
+                    p_derivative = sum((term.diff(p_syms[i]) for term in expr.args if term.has(p_syms[i])), se.Integer(0))
+                    dF_dq.append(q_derivative)
+                    dF_dp.append(p_derivative)
+            else:
+                # Standard differentiation for dense expressions
+                dF_dq = [expr.diff(q) for q in q_syms]
+                dF_dp = [expr.diff(p) for p in p_syms]
+            
             self._grad_cache = (dF_dq, dF_dp)
         return self._grad_cache
 
@@ -474,6 +494,78 @@ class Polynomial:
         """
         return _poisson_bracket(self, other)
 
+    def optimized_poisson(self, other: 'Polynomial', method: str = 'auto', use_cache: bool = True) -> 'Polynomial':
+        """
+        Compute the Poisson bracket {self, other} using optimized methods.
+        
+        Parameters
+        ----------
+        other : Polynomial
+            The second polynomial for the Poisson bracket
+        method : str, optional
+            The method to use for computation:
+            - 'auto': Automatically select the best method
+            - 'standard': Use the standard implementation
+            - 'term_by_term': Use term-by-term differentiation
+        use_cache : bool, optional
+            Whether to use memoization for repeated calculations
+            
+        Returns
+        -------
+        Polynomial
+            A new polynomial representing {self, other}
+            
+        Notes
+        -----
+        Different methods may be more efficient for different types of polynomials:
+        - Standard method: Good for dense polynomials with few variables
+        - Term-by-term: Better for sparse polynomials with many variables
+        - Memoization: Beneficial when the same brackets are computed repeatedly
+        """
+        if use_cache:
+            # Convert to hashable expressions for caching
+            hash_F = Polynomial(self.variables, self.expression)
+            hash_G = Polynomial(other.variables, other.expression)
+            return Polynomial.memoized_poisson(hash_F, hash_G)
+        
+        if method == 'term_by_term':
+            return _poisson_bracket_term_by_term(self, other)
+        elif method == 'standard':
+            return _poisson_bracket(self, other)
+        else:  # 'auto'
+            # Simple heuristic: use term-by-term for sparse polynomials
+            F_monomials = len(self.expansion.get_monomials())
+            G_monomials = len(other.expansion.get_monomials())
+            n_vars = len(self.variables) // 2
+            
+            # If both polynomials are sparse relative to the number of variables
+            if F_monomials * G_monomials < 4 * n_vars**2:
+                return _poisson_bracket_term_by_term(self, other)
+            else:
+                return _poisson_bracket(self, other)
+
+    @staticmethod
+    @lru_cache(maxsize=128)
+    def memoized_poisson(F: 'Polynomial', G: 'Polynomial') -> 'Polynomial':
+        """
+        Compute the Poisson bracket with result caching.
+        
+        This method caches the result of Poisson brackets between 
+        polynomial pairs, which can significantly speed up calculations
+        when the same brackets are computed multiple times.
+        
+        Parameters
+        ----------
+        F, G : Polynomial
+            The polynomials for which to compute {F, G}
+            
+        Returns
+        -------
+        Polynomial
+            The Poisson bracket result
+        """
+        return _poisson_bracket(F, G)
+
     def subs(self, subs_dict: dict[se.Symbol, se.Basic]) -> 'Polynomial':
         """
         Substitute variables in the polynomial using a dictionary.
@@ -504,6 +596,60 @@ def _poisson_bracket(F: Polynomial, G: Polynomial) -> Polynomial:
     expr = sum(dF_dq[i] * dG_dp[i] - dF_dp[i] * dG_dq[i]
                 for i in range(len(dF_dq)))
     return Polynomial(F.variables, expr)
+
+
+def _poisson_bracket_term_by_term(F: Polynomial, G: Polynomial) -> Polynomial:
+    """
+    Compute Poisson bracket by differentiating term-by-term.
+    
+    This implementation may be more efficient for sparse polynomials
+    where many terms have zero derivatives.
+    
+    Parameters
+    ----------
+    F, G : Polynomial
+        The polynomials for which to compute {F, G}
+        
+    Returns
+    -------
+    Polynomial
+        The Poisson bracket result
+    """
+    assert F.variables == G.variables, "Variables must match for Poisson bracket"
+    n_vars = len(F.variables)
+    n_dof = n_vars // 2
+    
+    # Get expanded polynomials
+    F_exp = F.expansion
+    G_exp = G.expansion
+    
+    # Get monomials for term-by-term differentiation
+    F_monomials = F_exp.get_monomials()
+    G_monomials = G_exp.get_monomials()
+    
+    result_terms = []
+    
+    # Process each pair of monomials
+    for F_mono in F_monomials:
+        F_term = Polynomial(F.variables, F_mono.sym)
+        dF_dq, dF_dp = F_term._gradient()
+        
+        for G_mono in G_monomials:
+            G_term = Polynomial(G.variables, G_mono.sym)
+            dG_dq, dG_dp = G_term._gradient()
+            
+            # Compute the bracket for this pair of terms
+            term_expr = sum(dF_dq[i] * dG_dp[i] - dF_dp[i] * dG_dq[i]
+                          for i in range(n_dof))
+            
+            if term_expr != 0:  # Only add non-zero terms
+                result_terms.append(term_expr)
+    
+    # Sum all resulting terms
+    if not result_terms:
+        return Polynomial(F.variables, se.Integer(0))
+    
+    return Polynomial(F.variables, sum(result_terms))
 
 
 def _split_coeff_and_factors(term: se.Basic):
@@ -585,10 +731,47 @@ def _update_by_deg(by_deg: dict[int, list], poly: Polynomial) -> None:
     q_vars = poly.variables[:n_dof]
     p_vars = poly.variables[n_dof:]
 
-    for monomial in _monomial_key(poly.expression, q_vars, p_vars):
-        deg = sum(monomial.kq) + sum(monomial.kp)
-        by_deg[deg].append(monomial)
+    # Use the expansion from the polynomial object
+    expanded_expr = poly.expansion.expression
+    # Optional: Force re-expansion if needed, might help with float aggregation sometimes
 
+    # clean the expression
+    sp_expanded_expr = sp.sympify(expanded_expr)
+    expanded_expr = _clean_numerical_artifacts(sp_expanded_expr)
+    expanded_expr = se.sympify(expanded_expr)
+
+    # --- Internal Aggregation Step ---
+    # Temporary storage: {deg: {(kq, kp): aggregated_coeff}}
+    aggregated_coeffs = defaultdict(lambda: defaultdict(lambda: se.Integer(0)))
+
+    # Use the (slightly modified) _monomial_key generator
+    for monomial_data in _monomial_key(expanded_expr, q_vars, p_vars):
+        # Calculate degree from the exponent tuples
+        deg = sum(monomial_data.kq) + sum(monomial_data.kp)
+        # Create the unique key for aggregation based on exponents
+        key = (monomial_data.kq, monomial_data.kp)
+        # Add the coefficient of the current term to the aggregated total for this key
+        aggregated_coeffs[deg][key] += monomial_data.coeff
+
+    # --- Populate the Output Dictionary `by_deg` Step ---
+    for deg, terms_dict in aggregated_coeffs.items():
+        for (kq, kp), final_coeff in terms_dict.items():
+            # Only create entries for terms that are non-zero after aggregation
+            if final_coeff != 0:
+                # Reconstruct the symbolic part (variables and exponents only)
+                # using the original helper function
+                sym_part = _monomial_from_key(kq, kp, q_vars, p_vars)
+                # Combine with the final aggregated coefficient to get the full term symbol
+                final_sym = final_coeff * sym_part
+
+                # Create the final Monomial object with all fields populated,
+                # matching the expected output structure.
+                final_monomial = Monomial(coeff=final_coeff, kq=kq, kp=kp, sym=final_sym)
+
+                # Append this aggregated Monomial to the list for the correct degree
+                # in the original dictionary provided to the function.
+                # This assumes by_deg was initialized (e.g., defaultdict(list)).
+                by_deg[deg].append(final_monomial)
 
 def _monomial_key(expr: se.Basic,
                 q_vars: list[se.Symbol],
@@ -658,11 +841,11 @@ def _monomial_key(expr: se.Basic,
         kp_tuple = tuple(kp)
         
         # Create the symbolic expression for the monomial
-        sym_expr = coeff * _monomial_from_key(kq_tuple, kp_tuple)
+        sym_expr = coeff * _monomial_from_key(kq_tuple, kp_tuple, q_vars, p_vars)
         
         yield Monomial(coeff=coeff, kq=kq_tuple, kp=kp_tuple, sym=sym_expr)
 
-def _monomial_from_key(kq, kp):
+def _monomial_from_key(kq, kp, q_syms, p_syms):
     """
     Reconstruct a symbolic monomial from exponent tuples for q and p variables.
     
@@ -695,10 +878,6 @@ def _monomial_from_key(kq, kp):
     >>> _monomial_from_key((1, 0, 0), (1, 0, 0))
     q1*p1
     """
-    q1, q2, q3 = se.Symbol('q1'), se.Symbol('q2'), se.Symbol('q3')
-    p1, p2, p3 = se.Symbol('p1'), se.Symbol('p2'), se.Symbol('p3')
-    q_syms = [q1,q2,q3]
-    p_syms = [p1,p2,p3]
     expr = se.Integer(1)
     for i,e in enumerate(kq): expr *= q_syms[i]**e
     for i,e in enumerate(kp): expr *= p_syms[i]**e
@@ -714,3 +893,172 @@ def _dot_product(v1: tuple[int], v2: list[se.Basic]) -> se.Basic:
     for i in range(len(v1)):
         result += se.sympify(v1[i]) * v2[i] # Ensure integer is sympified for multiplication
     return result
+
+def _clean_numerical_artifacts(expr: sp.Expr, tol: float = 1e-16) -> sp.Expr:
+    """
+    Clean small numerical artifacts from symbolic expressions.
+    
+    This function removes small real/imaginary parts from complex coefficients
+    that are likely artifacts of numerical computations rather than actual values.
+    
+    Parameters
+    ----------
+    expr : sympy.Expr
+        The expression to clean
+    tol : float, optional
+        The tolerance below which values are considered artifacts, by default 1e-10
+        
+    Returns
+    -------
+    sympy.Expr
+        Cleaned expression
+    """
+    
+    # For basic expressions, convert to sympy if it's not already
+    if not isinstance(expr, sp.Expr):
+        expr = sp.sympify(str(expr))
+    
+    # Simple base cases
+    if isinstance(expr, (sp.Integer, sp.Rational)):
+        return expr
+    
+    if isinstance(expr, sp.Float):
+        if abs(float(expr)) < tol:
+            return sp.Integer(0)
+        return expr
+    
+    # Handle complex numbers directly
+    if isinstance(expr, sp.Number) and expr.is_complex:
+        re, im = float(sp.re(expr)), float(sp.im(expr))
+        
+        if abs(re) < tol:
+            re = 0
+        if abs(im) < tol:
+            im = 0
+            
+        if re == 0 and im == 0:
+            return sp.Integer(0)
+        elif im == 0:
+            return sp.Float(re)
+        elif re == 0:
+            return sp.Float(im) * sp.I
+        else:
+            return sp.Float(re) + sp.Float(im) * sp.I
+    
+    # For symbols and other atomic objects
+    if expr.is_Atom:
+        return expr
+    
+    # Use a completely different, non-recursive approach
+    # That simply zeros out small coefficients in the expanded form
+    
+    # First expand the expression to get a sum of terms
+    expanded = sp.expand(expr)
+    
+    # If it's already a basic expression, return it
+    if expanded.is_Atom:
+        return expanded
+    
+    # If expanded is a sum, clean each term
+    if expanded.is_Add:
+        cleaned_terms = []
+        for term in expanded.args:
+            # Extract coefficient and rest (symbols/powers)
+            if term.is_Mul:
+                coeff, rest = term.as_coeff_Mul()
+                
+                # Clean the coefficient
+                if isinstance(coeff, sp.Number):
+                    # Handle complex coefficients
+                    if coeff.is_complex:
+                        re, im = float(sp.re(coeff)), float(sp.im(coeff))
+                        
+                        if abs(re) < tol:
+                            re = 0
+                        if abs(im) < tol:
+                            im = 0
+                            
+                        if re == 0 and im == 0:
+                            # Skip this term completely
+                            continue
+                        elif im == 0:
+                            new_coeff = sp.Float(re)
+                        elif re == 0:
+                            new_coeff = sp.Float(im) * sp.I
+                        else:
+                            new_coeff = sp.Float(re) + sp.Float(im) * sp.I
+                        
+                        # Add the cleaned term
+                        cleaned_terms.append(new_coeff * rest)
+                    else:
+                        # For real coefficients
+                        if abs(float(coeff)) < tol:
+                            # Skip near-zero terms
+                            continue
+                        else:
+                            # Keep the term with its coefficient
+                            cleaned_terms.append(term)
+                else:
+                    # If coefficient is not a number, keep the term as is
+                    cleaned_terms.append(term)
+            else:
+                # For single terms without coefficients
+                if isinstance(term, sp.Number):
+                    if isinstance(term, sp.Float) and abs(float(term)) < tol:
+                        continue
+                    if term.is_complex:
+                        re, im = float(sp.re(term)), float(sp.im(term))
+                        if abs(re) < tol:
+                            re = 0
+                        if abs(im) < tol:
+                            im = 0
+                        if re == 0 and im == 0:
+                            continue
+                        elif im == 0:
+                            cleaned_terms.append(sp.Float(re))
+                        elif re == 0:
+                            cleaned_terms.append(sp.Float(im) * sp.I)
+                        else:
+                            cleaned_terms.append(sp.Float(re) + sp.Float(im) * sp.I)
+                    else:
+                        cleaned_terms.append(term)
+                else:
+                    cleaned_terms.append(term)
+        
+        # If all terms were eliminated, return zero
+        if not cleaned_terms:
+            return sp.Integer(0)
+        
+        # Combine cleaned terms into a sum
+        return sp.Add(*cleaned_terms)
+    
+    # If it's a product
+    if expanded.is_Mul:
+        coeff, rest = expanded.as_coeff_Mul()
+        
+        # Clean coefficient
+        if isinstance(coeff, sp.Number):
+            if coeff.is_complex:
+                re, im = float(sp.re(coeff)), float(sp.im(coeff))
+                
+                if abs(re) < tol:
+                    re = 0
+                if abs(im) < tol:
+                    im = 0
+                    
+                if re == 0 and im == 0:
+                    return sp.Integer(0)
+                elif im == 0:
+                    return sp.Float(re) * rest
+                elif re == 0:
+                    return sp.Float(im) * sp.I * rest
+                else:
+                    return (sp.Float(re) + sp.Float(im) * sp.I) * rest
+            else:
+                if abs(float(coeff)) < tol:
+                    return sp.Integer(0)
+                else:
+                    return expanded
+        
+    # For any other expression type, just return it as is
+    return expanded

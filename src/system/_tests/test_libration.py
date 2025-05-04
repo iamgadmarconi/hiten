@@ -1,5 +1,6 @@
 import pytest
 import numpy as np
+import symengine as se
 
 from system.libration import (
     LibrationPoint, CollinearPoint, TriangularPoint,
@@ -275,4 +276,3 @@ def test_normal_form_transform(l1_earth_moon, l2_earth_moon, l3_earth_moon):
     C_l3, Cinv_l3 = l3_earth_moon.normal_form_transform()
     assert is_symplectic(C_l3)
     assert is_symplectic(Cinv_l3)
-

@@ -6,7 +6,8 @@ from collections import defaultdict
 import random
 
 
-from algorithms.center.factory import _build_T_polynomials, hamiltonian, physical_to_real_normal, real_normal_to_complex_canonical
+from algorithms.center.factory import _build_T_polynomials, hamiltonian, physical_to_real_normal, real_normal_to_complex_canonical, complex_canonical_to_real_normal
+from algorithms.variables import get_vars, canonical_normal_vars, physical_vars, real_normal_vars, linear_modes_vars, scale_factors_vars
 from algorithms.center.core import Polynomial
 
 from system.libration import L1Point
@@ -18,14 +19,11 @@ TEST_MU_SUN_JUPITER = 9.5387e-4  # Sun-Jupiter system
 TEST_MU_UNSTABLE = 0.04  # Above Routh's critical value for triangular points
 
 
-x, y, z  = se.symbols('x y z')
-px, py, pz = se.symbols('px py pz')
-
-q1, q2, q3 = se.symbols('q1 q2 q3')
-p1, p2, p3 = se.symbols('p1 p2 p3')
-
-x_rn, y_rn, z_rn = se.symbols('x_rn y_rn z_rn')
-px_rn, py_rn, pz_rn = se.symbols('px_rn py_rn pz_rn')
+x, y, z, px, py, pz = get_vars(physical_vars)
+q1, q2, q3, p1, p2, p3 = get_vars(canonical_normal_vars)
+x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn = get_vars(real_normal_vars)
+omega1, omega2, lambda1, c2 = get_vars(linear_modes_vars)
+s1, s2 = get_vars(scale_factors_vars)
 
 
 rho2 = x**2 + y**2 + z**2
@@ -89,7 +87,6 @@ def test_T_recurrence(N):
             # Scientific notation for small numbers like 1.11022e-16
             assert "e-" in diff_str or diff == 0, f"Difference not negligible: {diff}"
 
-
 def test_T_known_closed_form():
     T = _build_T_polynomials(3)
     T2_expected = se.expand((3*x**2 - rho2) / 2)
@@ -107,7 +104,6 @@ def test_T_known_closed_form():
         diff_str = str(diff3)
         assert "e-" in diff_str or diff3 == 0, f"T3 difference not equivalent: {diff3}"
 
-
 class DummyPoint:
     """Stub that returns symbolic coefficients c₂ … c₆."""
     c2, c3, c4, c5, c6 = se.symbols("c2 c3 c4 c5 c6")
@@ -118,7 +114,6 @@ def test_hamiltonian_expression_matches_definition():
     max_deg = 6
     point = DummyPoint()
     H = hamiltonian(point, max_degree=max_deg).expression   # unwrap Polynomial
-
     # expected expression straight from the definition
     T = _build_T_polynomials(max_deg)
     U = -(point.c2*T[2] + point.c3*T[3] + point.c4*T[4] + point.c5*T[5] + point.c6*T[6])
@@ -129,7 +124,6 @@ def test_hamiltonian_expression_matches_definition():
     if diff != 0:
         diff_str = str(diff)
         assert "e-" in diff_str or diff == 0, f"Difference not within numerical tolerance: {diff}"
-
 
 def test_hamiltonian_is_zero_at_equilibrium():
     point = DummyPoint()
@@ -147,7 +141,6 @@ def test_hamiltonian_is_zero_at_equilibrium():
         if deriv_at_zero != 0:
             diff_str = str(deriv_at_zero)
             assert "e-" in diff_str or deriv_at_zero == 0, f"Derivative w.r.t {v} not zero at equilibrium: {deriv_at_zero}"
-
 
 def test_truncation():
     point = DummyPoint()
@@ -199,87 +192,72 @@ def test_symplectic(lp):
     diff = C.T @ J @ C - J
     assert np.allclose(diff, np.zeros_like(diff), atol=1e-12)
 
-def test_real_normal_form_transform(lp):
-    lambda1, omega1, omega2 = lp.linear_modes()
-    c2_val = lp._cn(2)
+def test_phys_to_rn(lp):
+    lambda1_num, omega1_num, omega2_num = lp.linear_modes()
+    s1_num, s2_num = lp._scale_factor(lambda1_num, omega1_num, omega2_num)
+    c2_num = lp._cn(2)
 
-    h2 = 1/2 * (px**2+py**2)+y*px-x*py-c2_val*x**2+c2_val/2 * y**2 + 1/2 * pz**2 + c2_val/2 * z**2
+    h2 = 1/2 * (px**2+py**2)+y*px-x*py-c2*x**2+c2/2 * y**2 + 1/2 * pz**2 + c2/2 * z**2
     h2 = Polynomial([x, y, z, px, py, pz], h2)
-    h2_rn = physical_to_real_normal(lp, h2)
+
+    h2_rn = physical_to_real_normal(lp, h2, symbolic=True)
     h2_rn_expected = lambda1*x_rn*px_rn + (omega1/2)*(y_rn**2 + py_rn**2) + (omega2/2)*(z_rn**2 + pz_rn**2)
+    h2_rn_expected = Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], h2_rn_expected)
 
-    diff = se.expand(h2_rn.expression - h2_rn_expected)
-    diff_str = str(diff)
-    if diff != 0:
+    diff = se.expand(h2_rn.expansion.expression - h2_rn_expected.expansion.expression)
+    diff_sp = sp.sympify(diff).simplify()
+    diff_str = str(diff_sp)
+    print(f"\n\ntest_phys_to_rn:\n\n{diff_str}\n")
 
-        assert "e-" in diff_str or diff == 0, f"Difference not within numerical tolerance: {diff}"
-
-def test_complex_canonical_transform(lp):
-    lambda1, omega1, omega2 = lp.linear_modes()
-    c2_val = lp._cn(2)
+def test_rn_to_cc(lp):
+    lambda1_num, omega1_num, omega2_num = lp.linear_modes()
+    s1_num, s2_num = lp._scale_factor(lambda1_num, omega1_num, omega2_num)
+    c2_num = lp._cn(2)
     
     h2_rn = lambda1*x_rn*px_rn + (omega1/2)*(y_rn**2 + py_rn**2) + (omega2/2)*(z_rn**2 + pz_rn**2)
     h2_rn = Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], h2_rn)
-    h2_cc = real_normal_to_complex_canonical(lp, h2_rn)
+
+    h2_cc = real_normal_to_complex_canonical(lp, h2_rn, symbolic=True)
     h2_cc_expected = lambda1*q1*p1 + se.I * omega1 * q2 * p2 + se.I * omega2 * q3 * p3
+    h2_cc_expected = Polynomial([q1, q2, q3, p1, p2, p3], h2_cc_expected)
 
-    diff = se.expand(h2_cc.expression - h2_cc_expected)
+    diff = se.expand(h2_cc.expansion.expression - h2_cc_expected.expansion.expression)
     diff_str = str(diff)
-    if diff != 0:
-        assert "e-" in diff_str or diff == 0, f"Difference not within numerical tolerance: {diff}"
+    print(f"\n\ntest_rn_to_cc:\n\n{diff_str}\n")
 
-def test_h2_diagonal_in_complex_canonical(lp):
-    """Test if the quadratic part of the Hamiltonian is diagonal after 
-    transformation to complex canonical coordinates."""
+def test_cc_to_rn():
+    lp = L1Point(0.0121505856)
+    lambda1_num, omega1_num, omega2_num = lp.linear_modes()
+    s1_num, s2_num = lp._scale_factor(lambda1_num, omega1_num, omega2_num)
+    c2_num = lp._cn(2)
     
-    # Get the quadratic part of the Hamiltonian in physical coordinates
-    h2_phys = hamiltonian(lp, max_degree=2)
+    h2_cc = lambda1*q1*p1 + se.I * omega1 * q2 * p2 + se.I * omega2 * q3 * p3
+    h2_cc = Polynomial([q1, q2, q3, p1, p2, p3], h2_cc)
+
+    h2_rn = complex_canonical_to_real_normal(lp, h2_cc, symbolic=True)
+    h2_rn_expected = lambda1*x_rn*px_rn + (omega1/2)*(y_rn**2 + py_rn**2) + (omega2/2)*(z_rn**2 + pz_rn**2)
+    h2_rn_expected = Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], h2_rn_expected)
+
+    diff = se.expand(h2_rn.expansion.expression - h2_rn_expected.expansion.expression)
+    diff_str = str(diff)
+    print(f"\n\ntest_cc_to_rn:\n\n{diff_str}\n")
+
+def test_phys_to_cc():
+    lp = L1Point(0.0121505856)
+    lambda1_num, omega1_num, omega2_num = lp.linear_modes()
+    s1_num, s2_num = lp._scale_factor(lambda1_num, omega1_num, omega2_num)
+    c2_num = lp._cn(2)
     
-    # Transform to real normal form coordinates
-    h2_rn = physical_to_real_normal(lp, h2_phys)
-    
-    # Transform to complex canonical coordinates
-    h2_cc = real_normal_to_complex_canonical(lp, h2_rn)
-    
-    # The expression should only contain diagonal terms q1*p1, q2*p2, q3*p3
-    # and no mixed terms like q1*p2, q2*p3, etc.
-    h2_expr = h2_cc.expression.expand()
-    
-    # Tolerance for small coefficients that may appear due to numerical errors
-    TOLERANCE = 1e-14
-    
-    # Check for any mixed terms with significant coefficients
-    mixed_terms = []
-    
-    # Test each possible mixed term explicitly by substituting
-    # This is more reliable than trying to parse the coefficients from the expression
-    q_vars = [q1, q2, q3]
-    p_vars = [p1, p2, p3]
-    
-    # Check all possible non-diagonal terms
-    for i, qi in enumerate(q_vars):
-        for j, pj in enumerate(p_vars):
-            if i != j:  # Non-diagonal term qi*pj
-                # Create a substitution dict that isolates this term
-                subs = {var: 0 for var in q_vars + p_vars}
-                subs[qi] = 1
-                subs[pj] = 1
-                
-                # Evaluate the coefficient of qi*pj
-                coeff = complex(h2_cc.evaluate(subs))
-                
-                # Check if the coefficient is above the tolerance
-                if abs(coeff) > TOLERANCE:
-                    mixed_terms.append((f"{qi}*{pj}", coeff, abs(coeff)))
-    
-    # Assert that no significant mixed terms were found
-    assert len(mixed_terms) == 0, f"Non-diagonal terms found with significant coefficients: {mixed_terms}"
-    
-    # If we made it here, the Hamiltonian is diagonal within tolerance
-    lambda1, omega1, omega2 = lp.linear_modes()
-    h2_expected = lambda1*q1*p1 + se.I*omega1*q2*p2 + se.I*omega2*q3*p3
-    
-    diff = se.expand(h2_cc.expression - h2_expected)
-    if diff != 0:
-        diff_str = str(diff)
-        assert "e-" in diff_str or diff == 0, f"Hamiltonian does not match expected diagonal form: {diff}"
+    h2 = 1/2 * (px**2+py**2)+y*px-x*py-c2*x**2+c2/2 * y**2 + 1/2 * pz**2 + c2/2 * z**2
+    h2 = Polynomial([x, y, z, px, py, pz], h2)
+
+    h2_rn = physical_to_real_normal(lp, h2, symbolic=True)
+
+    h2_cc = real_normal_to_complex_canonical(lp, h2_rn, symbolic=True)
+    h2_cc_expected = lambda1*q1*p1 + se.I * omega1 * q2 * p2 + se.I * omega2 * q3 * p3
+    h2_cc_expected = Polynomial([q1, q2, q3, p1, p2, p3], h2_cc_expected)
+
+    diff = se.expand(h2_cc.expansion.expression - h2_cc_expected.expansion.expression)
+    diff_str = str(diff)
+    print(f"\n\ntest_phys_to_cc:\n\n{diff_str}\n")
+

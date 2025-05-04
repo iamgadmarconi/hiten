@@ -15,9 +15,10 @@ from algorithms.center.lie import (
 
 from log_config import logger
 
+
 def main():
 
-    degree = 9
+    max_degree = 6
 
     Sun = Body("Sun", 
                 Constants.bodies["sun"]["mass"], 
@@ -45,7 +46,7 @@ def main():
     Lpoint_EM = system_EM.get_libration_point(2)
     Lpoint_SE = system_SE.get_libration_point(1)
 
-    H_rnr = real_normal_center_manifold(Lpoint_SE, degree)
+    H_rnr = real_normal_center_manifold(Lpoint_SE, symbolic=False, max_degree=max_degree)
 
     # Get formatted table of coefficients
     coeffs = extract_coeffs_up_to_degree(H_rnr, 5)

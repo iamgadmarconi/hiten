@@ -22,10 +22,12 @@ import mpmath as mp
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Tuple, Union
+import symengine as se
 
 # Import existing dynamics functionality
 from algorithms.dynamics import jacobian_crtbp
 from algorithms.linalg import eigenvalue_decomposition
+from algorithms.variables import get_vars, linear_modes_vars, scale_factors_vars
 
 # Import custom logger
 from log_config import logger
@@ -36,6 +38,9 @@ from log_config import logger
 # Constants for stability analysis mode
 CONTINUOUS_SYSTEM = 0
 DISCRETE_SYSTEM = 1
+
+omega1_sym, omega2_sym, lambda1_sym, c2_sym = get_vars(linear_modes_vars)
+s1_sym, s2_sym = get_vars(scale_factors_vars)
 
 
 @dataclass(slots=True)
@@ -486,12 +491,12 @@ class CollinearPoint(LibrationPoint):
         
         # Check if values are positive
         if expr1 < 0:
-            err = f"Expression for s1 is negative: {expr1}. Taking absolute value."
+            err = f"Expression for s1 is negative: {expr1}."
             logger.error(err)
             raise RuntimeError(err)
             
         if expr2 < 0:
-            err = f"Expression for s2 is negative: {expr2}. Taking absolute value."
+            err = f"Expression for s2 is negative: {expr2}."
             logger.error(err)
             raise RuntimeError(err)
         
@@ -501,6 +506,76 @@ class CollinearPoint(LibrationPoint):
         
         logger.debug(f"Normalization factors calculated: s1={s1}, s2={s2}")
         return s1, s2
+
+    def _symbolic_normal_form_transform(self) -> Tuple[se.Matrix, se.Matrix]:
+        """
+        Build the 6x6 symplectic matrix C symbolically as in eq. (10) that sends H_2 to
+        lambda_1 x px + (omega_1/2)(y²+p_y²) + (omega_2/2)(z²+p_z²).
+
+        Returns
+        -------
+        tuple
+            (C, Cinv) where C is the symbolic symplectic transformation matrix and Cinv is its inverse
+        """
+        logger.debug(f"Computing symbolic normal form transform for {type(self).__name__}")
+
+        # Create the symbolic matrix C based on the mathematical expression in the image (eq. 10)
+        # Create a zero matrix (symengine doesn't have Matrix.zeros like numpy)
+        C = se.Matrix([[0 for _ in range(6)] for _ in range(6)])
+        
+        # First row
+        C[0, 0] = se.Integer(2) * lambda1_sym / s1_sym
+        C[0, 1] = se.Integer(0)
+        C[0, 2] = se.Integer(0)
+        C[0, 3] = -se.Integer(2) * lambda1_sym / s1_sym
+        C[0, 4] = se.Integer(2) * omega1_sym / s2_sym
+        C[0, 5] = se.Integer(0)
+        
+        # Second row
+        C[1, 0] = (lambda1_sym**se.Integer(2) - se.Integer(2)*c2_sym - se.Integer(1)) / s1_sym
+        C[1, 1] = (-omega1_sym**se.Integer(2) - se.Integer(2)*c2_sym - se.Integer(1)) / s2_sym
+        C[1, 2] = se.Integer(0)
+        C[1, 3] = (lambda1_sym**se.Integer(2) - se.Integer(2)*c2_sym - se.Integer(1)) / s1_sym
+        C[1, 4] = se.Integer(0)
+        C[1, 5] = se.Integer(0)
+        
+        # Third row
+        C[2, 0] = se.Integer(0)
+        C[2, 1] = se.Integer(0)
+        C[2, 2] = se.Integer(1) / se.sqrt(omega2_sym)
+        C[2, 3] = se.Integer(0)
+        C[2, 4] = se.Integer(0)
+        C[2, 5] = se.Integer(0)
+        
+        # Fourth row
+        C[3, 0] = (lambda1_sym**se.Integer(2) + se.Integer(2)*c2_sym + se.Integer(1)) / s1_sym
+        C[3, 1] = (-omega1_sym**se.Integer(2) + se.Integer(2)*c2_sym + se.Integer(1)) / s2_sym
+        C[3, 2] = se.Integer(0)
+        C[3, 3] = (lambda1_sym**se.Integer(2) + se.Integer(2)*c2_sym + se.Integer(1)) / s1_sym
+        C[3, 4] = se.Integer(0)
+        C[3, 5] = se.Integer(0)
+        
+        # Fifth row
+        C[4, 0] = (lambda1_sym**se.Integer(3) + (se.Integer(1) - se.Integer(2)*c2_sym)*lambda1_sym) / s1_sym
+        C[4, 1] = se.Integer(0)
+        C[4, 2] = se.Integer(0)
+        C[4, 3] = (-lambda1_sym**se.Integer(3) - (se.Integer(1) - se.Integer(2)*c2_sym)*lambda1_sym) / s1_sym
+        C[4, 4] = (-omega1_sym**se.Integer(3) + (se.Integer(1) - se.Integer(2)*c2_sym)*omega1_sym) / s2_sym
+        C[4, 5] = se.Integer(0)
+        
+        # Sixth row
+        C[5, 0] = se.Integer(0)
+        C[5, 1] = se.Integer(0)
+        C[5, 2] = se.Integer(0)
+        C[5, 3] = se.Integer(0)
+        C[5, 4] = se.Integer(0)
+        C[5, 5] = se.sqrt(omega2_sym)
+        
+        # Compute the symbolic inverse
+        Cinv = C.inv()
+        
+        logger.debug(f"Symbolic normal form transformation matrix computed")
+        return C, Cinv
 
     def normal_form_transform(self):
         """
@@ -514,71 +589,34 @@ class CollinearPoint(LibrationPoint):
         """
         logger.debug(f"Computing normal form transform for {type(self).__name__} with mu={self.mu}")
         
+        # Get the symbolic form of the matrix
+        C_sym, Cinv_sym = self._symbolic_normal_form_transform()
+        
         # Use the cached linear modes
-        lambda1, omega1, omega2 = self.linear_modes()
-        logger.debug(f"Using linear modes: lambda1={lambda1}, omega1={omega1}, omega2={omega2}")
+        lambda1_num, omega1_num, omega2_num = self.linear_modes()
+        logger.debug(f"Using linear modes: lambda1={lambda1_num}, omega1={omega1_num}, omega2={omega2_num}")
         
         c2 = self._cn(2)
         logger.debug(f"Using c2 coefficient: c2={c2}")
 
         # Get normalization factors s1, s2
-        s1, s2 = self._scale_factor(lambda1, omega1, omega2)
+        s1, s2 = self._scale_factor(lambda1_num, omega1_num, omega2_num)
         logger.debug(f"Scale factors: s1={s1}, s2={s2}")
 
-        C = np.zeros((6,6))
+        # Substitute the symbolic variables with their numerical values
+        subs_dict = {
+            lambda1_sym: float(lambda1_num),
+            omega1_sym: float(omega1_num),
+            omega2_sym: float(omega2_num),
+            s1_sym: float(s1),
+            s2_sym: float(s2),
+            c2_sym: float(c2)
+        }
         
-        # Populate the matrix C based on the mathematical expression
-        # First row
-        C[0,0] = 2*lambda1/s1
-        C[0,1] = 0
-        C[0,2] = 0
-        C[0,3] = -2*lambda1/s1
-        C[0,4] = 2*omega1/s2
-        C[0,5] = 0
+        # Convert to numerical matrices
+        C = np.array(C_sym.subs(subs_dict).tolist(), dtype=np.float64)
+        Cinv = np.array(Cinv_sym.subs(subs_dict).tolist(), dtype=np.float64)
         
-        # Second row
-        C[1,0] = (lambda1**2 - 2*c2 - 1)/s1
-        C[1,1] = (-omega1**2 - 2*c2 - 1)/s2
-        C[1,2] = 0
-        C[1,3] = (lambda1**2 - 2*c2 - 1)/s1
-        C[1,4] = 0
-        C[1,5] = 0
-        
-        # Third row
-        C[2,0] = 0
-        C[2,1] = 0
-        C[2,2] = 1/np.sqrt(omega2)
-        C[2,3] = 0
-        C[2,4] = 0
-        C[2,5] = 0
-        
-        # Fourth row
-        C[3,0] = (lambda1**2 + 2*c2 + 1)/s1
-        C[3,1] = (-omega1**2 + 2*c2 + 1)/s2
-        C[3,2] = 0
-        C[3,3] = (lambda1**2 + 2*c2 + 1)/s1
-        C[3,4] = 0
-        C[3,5] = 0
-        
-        # Fifth row
-        C[4,0] = (lambda1**3 + (1 - 2*c2)*lambda1)/s1
-        C[4,1] = 0
-        C[4,2] = 0
-        C[4,3] = (-lambda1**3 - (1 - 2*c2)*lambda1)/s1
-        C[4,4] = (-omega1**3 + (1 - 2*c2)*omega1)/s2
-        C[4,5] = 0
-        
-        # Sixth row
-        C[5,0] = 0
-        C[5,1] = 0
-        C[5,2] = 0
-        C[5,3] = 0
-        C[5,4] = 0
-        C[5,5] = np.sqrt(omega2)
-        
-        logger.debug(f"Symplectic matrix C constructed with shape {C.shape}")
-
-        Cinv = np.linalg.inv(C)
         logger.info(f"Normal form transformation matrix computed for {type(self).__name__}")
 
         return C, Cinv
@@ -596,9 +634,27 @@ class CollinearPoint(LibrationPoint):
         
         # Use cached linear modes
         lambda1, omega1, omega2 = self.linear_modes()
+        c2 = self._cn(2)
         
-        # Get symplectic transformation matrices
-        C, Cinv = self.normal_form_transform()
+        # Get normalization factors s1, s2
+        s1, s2 = self._scale_factor(lambda1, omega1, omega2)
+        
+        # Get symbolic transformation matrices
+        C_sym, Cinv_sym = self._symbolic_normal_form_transform()
+        
+        # Substitute the symbolic variables with their numerical values
+        subs_dict = {
+            lambda1_sym: float(lambda1),
+            omega1_sym: float(omega1),
+            omega2_sym: float(omega2),
+            s1_sym: float(s1),
+            s2_sym: float(s2),
+            c2_sym: float(c2)
+        }
+        
+        # Convert to numerical matrices
+        C = np.array(C_sym.subs(subs_dict).tolist(), dtype=np.float64)
+        Cinv = np.array(Cinv_sym.subs(subs_dict).tolist(), dtype=np.float64)
         
         # Create and return the LinearData object
         return LinearData(
@@ -610,6 +666,89 @@ class CollinearPoint(LibrationPoint):
             C=C, 
             Cinv=Cinv
         )
+
+    def get_symbolic_transform(self) -> Tuple[se.Matrix, se.Matrix, dict]:
+        """
+        Get the symbolic normal form transformation matrices and the parameters.
+        
+        Returns
+        -------
+        tuple
+            (C_sym, Cinv_sym, params) where:
+            - C_sym is the symbolic transformation matrix
+            - Cinv_sym is its symbolic inverse
+            - params is a dictionary mapping symbolic parameters to their names
+        """
+        # Get the symbolic matrices
+        C_sym, Cinv_sym = self._symbolic_normal_form_transform()
+        
+        # Create a dictionary to map symbolic variables to their descriptions
+        params = {
+            lambda1_sym: 'Hyperbolic eigenvalue',
+            omega1_sym: 'Planar oscillation frequency',
+            omega2_sym: 'Vertical oscillation frequency',
+            s1_sym: 'Hyperbolic normalization factor',
+            s2_sym: 'Elliptic normalization factor',
+            c2_sym: 'Second-order coefficient in the potential'
+        }
+        
+        return C_sym, Cinv_sym, params
+
+    def get_normal_form_parameters(self) -> dict:
+        """
+        Get the numerical values of the parameters used in the normal form transformation.
+        
+        Returns
+        -------
+        dict
+            A dictionary mapping parameter names to their numerical values
+        """
+        # Calculate the values if not already cached
+        lambda1, omega1, omega2 = self.linear_modes()
+        c2 = self._cn(2)
+        s1, s2 = self._scale_factor(lambda1, omega1, omega2)
+        
+        # Create a dictionary with parameter names and values
+        params = {
+            'lambda1': lambda1,
+            'omega1': omega1,
+            'omega2': omega2,
+            's1': s1,
+            's2': s2,
+            'c2': c2
+        }
+        
+        return params
+
+    def substitute_parameters(self, expression: se.Basic) -> se.Basic:
+        """
+        Substitute the numerical parameter values into a symbolic expression.
+        
+        Parameters
+        ----------
+        expression : se.Basic
+            The symbolic expression with parameters like lambda1, omega1, etc.
+            
+        Returns
+        -------
+        se.Basic
+            The expression with numerical values substituted
+        """
+        # Get parameter values
+        params = self.get_normal_form_parameters()
+        
+        # Create substitution dictionary for symengine
+        subs_dict = {
+            lambda1_sym: float(params['lambda1']),
+            omega1_sym: float(params['omega1']),
+            omega2_sym: float(params['omega2']),
+            s1_sym: float(params['s1']),
+            s2_sym: float(params['s2']),
+            c2_sym: float(params['c2'])
+        }
+        
+        # Apply substitution
+        return expression.subs(subs_dict)
 
 
 class L1Point(CollinearPoint):
