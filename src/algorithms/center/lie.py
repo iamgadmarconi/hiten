@@ -21,7 +21,7 @@ q1, q2, q3, p1, p2, p3 = get_vars(canonical_normal_vars)
 omega1, omega2, lambda1, c2 = get_vars(linear_modes_vars)
 
 
-def real_normal_center_manifold(point: LibrationPoint, max_degree: int) -> tuple[Polynomial, Polynomial]:
+def real_normal_center_manifold(point: LibrationPoint, symbolic: bool = False, max_degree: int = None) -> tuple[Polynomial, Polynomial]:
     """
     Compute the center manifold of a libration point up to a given degree in real normal form.
 
@@ -37,11 +37,11 @@ def real_normal_center_manifold(point: LibrationPoint, max_degree: int) -> tuple
     Polynomial
         The center manifold Hamiltonian in real normal form.
     """
-    H_cnr = reduce_center_manifold(point, max_degree)
-    H_rnr = complex_canonical_to_real_normal(point, H_cnr)
+    H_cnr = reduce_center_manifold(point, symbolic, max_degree)
+    H_rnr = complex_canonical_to_real_normal(point, H_cnr, symbolic, max_degree)
     return H_rnr
 
-def reduce_center_manifold(point: LibrationPoint,  max_degree: int) -> Polynomial:
+def reduce_center_manifold(point: LibrationPoint, symbolic: bool = False, max_degree: int = None) -> Polynomial:
     """
     Reduce the transformed center manifold Hamiltonian in complex normal 
     form to a given degree.
@@ -58,11 +58,11 @@ def reduce_center_manifold(point: LibrationPoint,  max_degree: int) -> Polynomia
     Polynomial
         The reduced center manifold Hamiltonian in reduced complex normal form.
     """
-    H_cnt = compute_center_manifold(point, max_degree)[0]
+    H_cnt = compute_center_manifold(point, symbolic, max_degree)[0]
     H_cnr = H_cnt.subs({q1: 0, p1: 0}).truncate(max_degree)
     return H_cnr
 
-def compute_center_manifold(point: LibrationPoint, max_degree: int) -> tuple[Polynomial, Polynomial]:
+def compute_center_manifold(point: LibrationPoint, symbolic: bool = False, max_degree: int = None) -> tuple[Polynomial, Polynomial]:
     """
     Compute the transformed center manifold Hamiltonian and the generating 
     function in complex normal form up to a given degree.
@@ -81,8 +81,8 @@ def compute_center_manifold(point: LibrationPoint, max_degree: int) -> tuple[Pol
         and the generating function.
     """
     H_phys = hamiltonian(point, max_degree)
-    H_rn   = physical_to_real_normal(point, H_phys)
-    H_cn   = real_normal_to_complex_canonical(point, H_rn)
+    H_rn   = physical_to_real_normal(point, H_phys, symbolic, max_degree)
+    H_cn   = real_normal_to_complex_canonical(point, H_rn, symbolic, max_degree)
     H_cnt, G_total = _lie_transform(point, H_cn, max_degree)
     return H_cnt, G_total
 

@@ -200,7 +200,7 @@ def test_phys_to_rn(lp):
     h2 = 1/2 * (px**2+py**2)+y*px-x*py-c2*x**2+c2/2 * y**2 + 1/2 * pz**2 + c2/2 * z**2
     h2 = Polynomial([x, y, z, px, py, pz], h2)
 
-    h2_rn = physical_to_real_normal(lp, h2)
+    h2_rn = physical_to_real_normal(lp, h2, symbolic=True)
     h2_rn_expected = lambda1*x_rn*px_rn + (omega1/2)*(y_rn**2 + py_rn**2) + (omega2/2)*(z_rn**2 + pz_rn**2)
     h2_rn_expected = Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], h2_rn_expected)
 
@@ -217,7 +217,7 @@ def test_rn_to_cc(lp):
     h2_rn = lambda1*x_rn*px_rn + (omega1/2)*(y_rn**2 + py_rn**2) + (omega2/2)*(z_rn**2 + pz_rn**2)
     h2_rn = Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], h2_rn)
 
-    h2_cc = real_normal_to_complex_canonical(lp, h2_rn)
+    h2_cc = real_normal_to_complex_canonical(lp, h2_rn, symbolic=True)
     h2_cc_expected = lambda1*q1*p1 + se.I * omega1 * q2 * p2 + se.I * omega2 * q3 * p3
     h2_cc_expected = Polynomial([q1, q2, q3, p1, p2, p3], h2_cc_expected)
 
@@ -234,7 +234,7 @@ def test_cc_to_rn():
     h2_cc = lambda1*q1*p1 + se.I * omega1 * q2 * p2 + se.I * omega2 * q3 * p3
     h2_cc = Polynomial([q1, q2, q3, p1, p2, p3], h2_cc)
 
-    h2_rn = complex_canonical_to_real_normal(lp, h2_cc)
+    h2_rn = complex_canonical_to_real_normal(lp, h2_cc, symbolic=True)
     h2_rn_expected = lambda1*x_rn*px_rn + (omega1/2)*(y_rn**2 + py_rn**2) + (omega2/2)*(z_rn**2 + pz_rn**2)
     h2_rn_expected = Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], h2_rn_expected)
 
@@ -251,9 +251,9 @@ def test_phys_to_cc():
     h2 = 1/2 * (px**2+py**2)+y*px-x*py-c2*x**2+c2/2 * y**2 + 1/2 * pz**2 + c2/2 * z**2
     h2 = Polynomial([x, y, z, px, py, pz], h2)
 
-    h2_rn = physical_to_real_normal(lp, h2)
+    h2_rn = physical_to_real_normal(lp, h2, symbolic=True)
 
-    h2_cc = real_normal_to_complex_canonical(lp, h2_rn)
+    h2_cc = real_normal_to_complex_canonical(lp, h2_rn, symbolic=True)
     h2_cc_expected = lambda1*q1*p1 + se.I * omega1 * q2 * p2 + se.I * omega2 * q3 * p3
     h2_cc_expected = Polynomial([q1, q2, q3, p1, p2, p3], h2_cc_expected)
 

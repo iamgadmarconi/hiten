@@ -6,12 +6,14 @@ from .core import Polynomial
 from system.libration import LibrationPoint
 from log_config import logger
 
-from ..variables import physical_vars, real_normal_vars, canonical_normal_vars, get_vars, create_symbolic_cn
+from ..variables import physical_vars, real_normal_vars, canonical_normal_vars, linear_modes_vars, scale_factors_vars, get_vars, create_symbolic_cn
 
 
 x, y, z, px, py, pz = get_vars(physical_vars)
 x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn = get_vars(real_normal_vars)
 q1, q2, q3, p1, p2, p3 = get_vars(canonical_normal_vars)
+omega1, omega2, lambda1, c2 = get_vars(linear_modes_vars)
+s1, s2 = get_vars(scale_factors_vars)
 
 
 def _build_T_polynomials(N: int) -> list[se.Basic]:
@@ -52,7 +54,7 @@ def hamiltonian(point: LibrationPoint, max_degree: int = 6) -> Polynomial:
     return Polynomial([x, y, z, px, py, pz], H_phys)
 
 
-def physical_to_real_normal(point: LibrationPoint, H_phys: Polynomial) -> Polynomial:
+def physical_to_real_normal(point: LibrationPoint, H_phys: Polynomial, symbolic: bool = False, max_degree: int = None) -> Polynomial:
     """
     Express the physical CR3BP Hamiltonian around a collinear point in the
     real normal-form variables (x,y,z,px,py,pz) used for the centre-
@@ -86,9 +88,25 @@ def physical_to_real_normal(point: LibrationPoint, H_phys: Polynomial) -> Polyno
     
     H_rn = H_phys.subs(subs_dict).expansion.expression
 
+    if not symbolic:
+        if not max_degree:
+            err = "Max degree must be provided if symbolic is False"
+            logger.error(err)
+            raise ValueError(err)
+
+        subs_dict = _generate_subs_dict(point, max_degree)
+        H_rn = H_rn.subs(subs_dict)
+        H_rn_sp = sp.sympify(H_rn)
+        H_rn_clean = _clean_numerical_artifacts(H_rn_sp)
+        H_rn = se.sympify(H_rn_clean)
+
+        logger.debug(f"\n\nH_rn:\n\n{H_rn}\n\n")
+
+        return Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn)
+
     return Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn)
 
-def real_normal_to_complex_canonical(point: LibrationPoint, H_real_normal: Polynomial) -> Polynomial:
+def real_normal_to_complex_canonical(point: LibrationPoint, H_real_normal: Polynomial, symbolic: bool = False, max_degree: int = None) -> Polynomial:
     """
     Express the physical CR3BP Hamiltonian around a collinear point in the
     complex canonical variables (q1,q2,q3,p1,p2,p3) used for the centre-
@@ -120,9 +138,26 @@ def real_normal_to_complex_canonical(point: LibrationPoint, H_real_normal: Polyn
 
     H_cn_expr = H_real_normal.subs(complex_subs).expansion.expression
 
+    if not symbolic:
+        if not max_degree:
+            err = "Max degree must be provided if symbolic is False"
+            logger.error(err)
+            raise ValueError(err)
+
+        subs_dict = _generate_subs_dict(point, max_degree)
+        H_cn_expr = H_cn_expr.subs(subs_dict)
+
+        H_cn_expr_sp = sp.sympify(H_cn_expr)
+        H_cn_expr_clean = _clean_numerical_artifacts(H_cn_expr_sp)
+        H_cn = se.sympify(H_cn_expr_clean)
+
+        logger.debug(f"\n\nH_cn_expr_clean:\n\n{H_cn_expr_clean}\n\n")
+
+        return Polynomial([q1, q2, q3, p1, p2, p3], H_cn)
+
     return Polynomial([q1, q2, q3, p1, p2, p3], H_cn_expr)
 
-def complex_canonical_to_real_normal(point: LibrationPoint, H_complex_canonical: Polynomial) -> Polynomial:
+def complex_canonical_to_real_normal(point: LibrationPoint, H_complex_canonical: Polynomial, symbolic: bool = False, max_degree: int = None) -> Polynomial:
     """
     Express the Hamiltonian in the real normal-form variables (x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn)
     from the complex canonical variables (q1, q2, q3, p1, p2, p3).
@@ -153,22 +188,56 @@ def complex_canonical_to_real_normal(point: LibrationPoint, H_complex_canonical:
     }
 
     H_rn_expr = H_complex_canonical.subs(real_subs).expansion.expression
-    
-    # Convert to sympy expression for numerical cleanup
-    H_rn_expr_sp = sp.sympify(str(H_rn_expr))
-    
-    # Clean numerical artifacts using our non-recursive helper function
-    H_rn_expr_clean = clean_numerical_artifacts(H_rn_expr_sp, tol=1e-10)
-    
-    # Convert back to symengine
-    H_rn_expr_clean_se = se.sympify(str(H_rn_expr_clean))
-    
-    # Create the final polynomial with cleaned expression
-    result = Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn_expr_clean_se)
-    
-    return result
 
-def clean_numerical_artifacts(expr, tol=1e-10):
+    if not symbolic:
+        if not max_degree:
+            err = "Max degree must be provided if symbolic is False"
+            logger.error(err)
+            raise ValueError(err)
+
+        subs_dict = _generate_subs_dict(point, max_degree)
+        H_rn = H_rn_expr.subs(subs_dict)
+
+        H_rn_sp = sp.sympify(H_rn)
+        H_rn_clean = _clean_numerical_artifacts(H_rn_sp)
+        H_rn = se.sympify(H_rn_clean)
+
+        logger.debug(f"\n\nH_rn:\n\n{H_rn}\n\n")
+
+        return Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn)
+
+    return Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn_expr)
+
+def _generate_subs_dict(point: LibrationPoint, max_degree: int) -> dict:
+
+    # Generate all necessary c symbols based on degree
+    c_symbols = {c2: c2}  # Start with c2 which is already defined
+    for n in range(3, max_degree+1):
+        c_symbols[create_symbolic_cn(n)] = create_symbolic_cn(n)
+
+    lambda1_num, omega1_num, omega2_num = point.linear_modes()
+    s1_num, s2_num = point._scale_factor(lambda1_num, omega1_num, omega2_num)
+
+    c_nums = {}
+    for n in range(2, max_degree+1):
+        c_sym = create_symbolic_cn(n)
+        c_num = point._cn(n)
+        c_nums[c_sym] = c_num
+
+    subs_dict = {
+        lambda1: lambda1_num, 
+        omega1: omega1_num, 
+        omega2: omega2_num,
+        s1: s1_num, 
+        s2: s2_num
+    }
+
+    for c_sym, c_val in c_nums.items():
+        subs_dict[c_sym] = c_val
+
+    return subs_dict
+
+def _clean_numerical_artifacts(expr, tol=1e-10):
     """
     Clean small numerical artifacts from symbolic expressions.
     
