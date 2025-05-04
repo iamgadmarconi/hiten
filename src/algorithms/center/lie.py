@@ -1,8 +1,10 @@
 import symengine as se
 import numpy as np
 import math
+import time
+import logging
 
-from .core import Polynomial, Monomial, _dot_product, _monomial_from_key
+from .core import Polynomial, Monomial, _poisson_bracket, _poisson_bracket_term_by_term, _dot_product, _monomial_from_key
 from ..variables import physical_vars, real_normal_vars, canonical_normal_vars, linear_modes_vars, get_vars
 from .factory import (
     hamiltonian, 
@@ -21,7 +23,8 @@ q1, q2, q3, p1, p2, p3 = get_vars(canonical_normal_vars)
 omega1, omega2, lambda1, c2 = get_vars(linear_modes_vars)
 
 
-def real_normal_center_manifold(point: LibrationPoint, symbolic: bool = False, max_degree: int = None) -> tuple[Polynomial, Polynomial]:
+def real_normal_center_manifold(point: LibrationPoint, symbolic: bool = False, max_degree: int = None, 
+                               poisson_method: str = 'auto', use_cache: bool = True) -> tuple[Polynomial, Polynomial]:
     """
     Compute the center manifold of a libration point up to a given degree in real normal form.
 
@@ -29,19 +32,29 @@ def real_normal_center_manifold(point: LibrationPoint, symbolic: bool = False, m
     ----------
     point : LibrationPoint
         The libration point to compute the center manifold for.
+    symbolic : bool
+        Whether to use symbolic expressions or numeric values.
     max_degree : int
         The maximum degree of the center manifold.
+    poisson_method : str, optional
+        Method to use for Poisson bracket calculations:
+        - 'auto': Automatically select the best method
+        - 'standard': Use the standard implementation
+        - 'term_by_term': Use term-by-term differentiation
+    use_cache : bool, optional
+        Whether to cache Poisson bracket results for reuse
 
     Returns
     -------
     Polynomial
         The center manifold Hamiltonian in real normal form.
     """
-    H_cnr = reduce_center_manifold(point, symbolic, max_degree)
+    H_cnr = reduce_center_manifold(point, symbolic, max_degree, poisson_method, use_cache)
     H_rnr = complex_canonical_to_real_normal(point, H_cnr, symbolic, max_degree)
     return H_rnr
 
-def reduce_center_manifold(point: LibrationPoint, symbolic: bool = False, max_degree: int = None) -> Polynomial:
+def reduce_center_manifold(point: LibrationPoint, symbolic: bool = False, max_degree: int = None,
+                          poisson_method: str = 'auto', use_cache: bool = True) -> Polynomial:
     """
     Reduce the transformed center manifold Hamiltonian in complex normal 
     form to a given degree.
@@ -50,19 +63,26 @@ def reduce_center_manifold(point: LibrationPoint, symbolic: bool = False, max_de
     ----------
     point : LibrationPoint
         The libration point to compute the center manifold for.
+    symbolic : bool
+        Whether to use symbolic expressions or numeric values.
     max_degree : int
         The maximum degree of the center manifold.
+    poisson_method : str, optional
+        Method to use for Poisson bracket calculations
+    use_cache : bool, optional
+        Whether to cache Poisson bracket results for reuse
 
     Returns
     -------
     Polynomial
         The reduced center manifold Hamiltonian in reduced complex normal form.
     """
-    H_cnt = compute_center_manifold(point, symbolic, max_degree)[0]
+    H_cnt = compute_center_manifold(point, symbolic, max_degree, poisson_method, use_cache)[0]
     H_cnr = H_cnt.subs({q1: 0, p1: 0}).truncate(max_degree)
     return H_cnr
 
-def compute_center_manifold(point: LibrationPoint, symbolic: bool = False, max_degree: int = None) -> tuple[Polynomial, Polynomial]:
+def compute_center_manifold(point: LibrationPoint, symbolic: bool = False, max_degree: int = None,
+                           poisson_method: str = 'auto', use_cache: bool = True) -> tuple[Polynomial, Polynomial]:
     """
     Compute the transformed center manifold Hamiltonian and the generating 
     function in complex normal form up to a given degree.
@@ -71,8 +91,14 @@ def compute_center_manifold(point: LibrationPoint, symbolic: bool = False, max_d
     ----------
     point : LibrationPoint
         The libration point to compute the center manifold for.
+    symbolic : bool
+        Whether to use symbolic expressions or numeric values.
     max_degree : int
         The maximum degree of the center manifold.
+    poisson_method : str, optional
+        Method to use for Poisson bracket calculations
+    use_cache : bool, optional
+        Whether to cache Poisson bracket results for reuse
 
     Returns
     -------
@@ -83,10 +109,11 @@ def compute_center_manifold(point: LibrationPoint, symbolic: bool = False, max_d
     H_phys = hamiltonian(point, max_degree)
     H_rn   = physical_to_real_normal(point, H_phys, symbolic, max_degree)
     H_cn   = real_normal_to_complex_canonical(point, H_rn, symbolic, max_degree)
-    H_cnt, G_total = _lie_transform(point, H_cn, max_degree)
+    H_cnt, G_total = _lie_transform(point, H_cn, max_degree, poisson_method, use_cache)
     return H_cnt, G_total
 
-def _lie_transform(point: LibrationPoint, H_init: Polynomial, max_degree: int) -> tuple[Polynomial, Polynomial]:
+def _lie_transform(point: LibrationPoint, H_init: Polynomial, max_degree: int,
+                  poisson_method: str = 'auto', use_cache: bool = True) -> tuple[Polynomial, Polynomial]:
     """
     Bring *H_init* to the Jorba-Masdemont partial normal form up to
     *max_degree* using a Lie-series expansion.
@@ -100,6 +127,13 @@ def _lie_transform(point: LibrationPoint, H_init: Polynomial, max_degree: int) -
         (q1,q2,q3,p1,p2,p3), with a working ``build_by_degree`` helper.
     max_degree : int
         Highest total degree to normalise and keep.
+    poisson_method : str, optional
+        Method to use for Poisson bracket calculations:
+        - 'auto': Automatically select the best method
+        - 'standard': Use the standard implementation
+        - 'term_by_term': Use term-by-term differentiation
+    use_cache : bool, optional
+        Whether to cache Poisson bracket results for reuse
 
     Returns
     -------
@@ -121,13 +155,15 @@ def _lie_transform(point: LibrationPoint, H_init: Polynomial, max_degree: int) -
 
         # Step 6: Extract homogeneous terms of degree n
         H_n_current = _get_homogeneous_terms(H_transformed, n)
+        logger.debug(f"--- n = {n} ---")
+        logger.debug(f"H_{n}_current:\n{H_n_current.expression}\n")
         if H_n_current.total_degree() == 0: # If H_n is zero, nothing to eliminate
             logger.warning(f"Order {n} is zero, skipping normalization for this order.")
             continue
 
         # Step 7: Select monomials for elimination
         H_n_to_eliminate = _select_monomials_for_elimination(H_n_current)
-
+        logger.debug(f"H_{n}_to_eliminate:\n{H_n_to_eliminate.expression}\n")
         # If there are no terms to eliminate at this order, skip
         if H_n_to_eliminate.total_degree() == 0:
             logger.warning(f"No terms to eliminate at order {n}.")
@@ -135,9 +171,9 @@ def _lie_transform(point: LibrationPoint, H_init: Polynomial, max_degree: int) -
 
         # Step 8: Solve homological equation to find G_n
         G_n = _solve_homological_equation(H_n_to_eliminate, H_2, eta_vector, H_init.variables)
-
+        logger.debug(f"G_{n}:\n{G_n.expression}\n")
         # Step 9: Apply Lie series transform generated by G_n to H_transformed
-        H_transformed = _apply_lie_transform(H_transformed, G_n, max_degree)
+        H_transformed = _apply_lie_transform(H_transformed, G_n, max_degree, poisson_method, use_cache)
 
         # Step 10: Add G_n to total generating function
         G_total = G_total + G_n
@@ -188,20 +224,16 @@ def _select_monomials_for_elimination(H_n_current: Polynomial) -> Polynomial:
     Polynomial
         A polynomial containing only the terms from H_n_current to be eliminated.
     """
+    # Use the more efficient monomial extraction through get_monomials()
     monomials_to_eliminate = []
-
-    # Iterate through all monomials in the homogeneous polynomial
-    for coeff, monomial in H_n_current.iter_terms():
-        # Fix: Refine the selection logic to ensure (1,1,1,1) patterns aren't missed
-        # Still check the primary condition kq[0] != kp[0]
+    
+    # Get all monomials at once rather than iterating term by term
+    all_monomials = H_n_current.get_monomials()
+    
+    # Filter the monomials based on our criterion
+    for monomial in all_monomials:
+        # ONLY keep this condition based on Section 3.1 for partial uncoupling
         if monomial.kq[0] != monomial.kp[0]:
-            monomials_to_eliminate.append(monomial)
-        # Fix: Special handling for terms that need to be kept even if kq[0] == kp[0]
-        # Check specifically for balanced exponents in the remaining variables
-        elif (sum(monomial.kq[1:]) > 0 and sum(monomial.kp[1:]) > 0 and 
-              not (monomial.kq[1] == monomial.kp[1] and monomial.kq[2] == monomial.kp[2])):
-            # This will catch terms like (1,1,1,1) that have balanced q₂/p₂ and q₃/p₃ exponents
-            # but aren't fully symmetric
             monomials_to_eliminate.append(monomial)
 
     # Construct a new Polynomial from the selected monomials
@@ -264,7 +296,8 @@ def _solve_homological_equation(H_n_to_eliminate: Polynomial, H_2: Polynomial, e
     # Construct the Polynomial for G_n
     return Polynomial.from_monomials(variables, g_n_monomials)
 
-def _apply_lie_transform(H_current: Polynomial, G_n: Polynomial, N_max: int) -> Polynomial:
+def _apply_lie_transform(H_current: Polynomial, G_n: Polynomial, N_max: int, 
+                        poisson_method: str = 'auto', use_cache: bool = True) -> Polynomial:
     """
     Applies the Lie series transform generated by G_n to H_current up to order N_max.
     Implements equation (16) from Jorba-Masdemont paper:
@@ -278,6 +311,13 @@ def _apply_lie_transform(H_current: Polynomial, G_n: Polynomial, N_max: int) -> 
         The generating function for this order.
     N_max : int
         The maximum total degree to keep in the transformed Hamiltonian.
+    poisson_method : str, optional
+        Method to use for Poisson bracket calculations:
+        - 'auto': Automatically select the best method
+        - 'standard': Use the standard implementation
+        - 'term_by_term': Use term-by-term differentiation
+    use_cache : bool, optional
+        Whether to cache Poisson bracket results for reuse
 
     Returns
     -------
@@ -285,41 +325,97 @@ def _apply_lie_transform(H_current: Polynomial, G_n: Polynomial, N_max: int) -> 
         The transformed Hamiltonian, truncated at N_max.
     """
     # Start with the initial Hamiltonian
-    H_new = H_current.copy()
-    
-    # Initialize the first term for the series (this will become {H,G})
-    PB_term = H_current.copy()
+    H_old = H_current.copy()
+    H_new = H_old.copy()
+    PB_term = H_old.copy() # Start with H_old
     G_degree = G_n.total_degree()
-    
-    # Prepare to accumulate Lie series terms
-    for k in range(1, N_max + 1):
-        # Calculate the next Poisson bracket term {PB_term, G}
-        PB_term = PB_term.poisson(G_n)
+
+    logger.debug(f"Applying transform for G of degree {G_degree}")
+    MAX_LIE_ITERATIONS = N_max # Heuristic: Max iterations needed likely related to N_max
+
+    # Clear memoization cache at the beginning of each transform application
+    if use_cache:
+        Polynomial.memoized_poisson.cache_clear()
         
-        # Check if we've exceeded maximum degree or if the term is zero
-        if PB_term.total_degree() > N_max or (PB_term.total_degree() == 0 and PB_term.expression == 0):
-            break
+    # Pre-expand polynomials for better performance in repeated operations
+    H_old_expanded = H_old.expansion
+    G_n_expanded = G_n.expansion
+    PB_term = H_old_expanded.copy()
+        
+    # Log performance info about the polynomials for debugging
+    if logger.level <= logging.DEBUG:
+        H_terms = len(H_old_expanded.get_monomials())
+        G_terms = len(G_n_expanded.get_monomials())
+        logger.debug(f"H has {H_terms} terms, G has {G_terms} terms")
+        
+        # If sparse, term-by-term might be faster
+        if poisson_method == 'auto' and H_terms * G_terms < 4 * (len(H_old.variables) // 2)**2:
+            logger.debug("Auto-selected 'term_by_term' method based on polynomial sparsity")
+        elif poisson_method == 'auto':
+            logger.debug("Auto-selected 'standard' method based on polynomial density")
+
+    # Process and reuse gradient calculations if needed
+    if poisson_method == 'standard':
+        # Pre-compute gradients to avoid recalculation in each iteration
+        G_n_expanded._gradient()
+
+    for k in range(1, MAX_LIE_ITERATIONS + 1):
+        logger.info(f"Applying transform for G of degree {G_degree} at iteration {k}...")
+        
+        # Use optimized Poisson bracket calculation
+        start_time = None
+        if logger.level <= logging.DEBUG:
+            start_time = time.time()
             
-        # Apply the correct factorial coefficient as per equation (16)
+        # Calculate the next Poisson bracket term {PB_term, G} using optimized method
+        if use_cache:
+            # Use memoized version for repeated calculations
+            PB_term = PB_term.optimized_poisson(G_n_expanded, method=poisson_method, use_cache=True)
+        else:
+            # Use specified method without caching
+            PB_term = PB_term.optimized_poisson(G_n_expanded, method=poisson_method, use_cache=False)
+            
+        if logger.level <= logging.DEBUG and start_time is not None:
+            elapsed = time.time() - start_time
+            logger.debug(f"Poisson bracket computation took {elapsed:.6f} seconds")
+
+        # Check if the term is numerically zero
+        # Use a tolerance or check if expression simplifies to 0
+        is_zero = (PB_term.total_degree() == 0 and PB_term.expression == 0) # Basic check, might need tolerance
+        if is_zero:
+             logger.info(f"Stopping Lie series at k={k} because PB_term is zero.")
+             break
+
+        # --- Optional: Log intermediate term degree ---
+        term_degree = PB_term.total_degree()
+        logger.info(f"Lie series k={k}: PB_term max degree = {term_degree}")
+        # ---
+
+        # Apply the correct factorial coefficient
         factorial_k = math.factorial(k)
         term_coefficient = se.sympify(1) / se.sympify(factorial_k)
-        
-        # Add the term to the transformed Hamiltonian
-        term_to_add = PB_term * term_coefficient
-        H_new = H_new + term_to_add
-        
-        # Truncate to prevent degree explosion in intermediate calculations
-        # This is crucial for computational efficiency
-        truncation_degree = N_max
-        if k < N_max:  # If we're not at the last term, allow for future growth
-            PB_term = PB_term.truncate(truncation_degree)
-    
-    # Final truncation to ensure we only keep terms up to the specified maximum degree
-    # This matches the discussion in the paper about keeping the dynamics up to order N
-    H_final = H_new.truncate(N_max)
-    
-    return H_final
 
+        # Create the term to add WITHOUT intermediate truncation
+        term_to_add = PB_term * term_coefficient
+        # logger.debug(f"Term added for k={k}:\n{term_to_add.expression}\n") # Verbose
+
+        H_new = H_new + term_to_add
+
+        # --- Check if max iterations reached ---
+        if k == MAX_LIE_ITERATIONS:
+            logger.warning(f"Reached MAX_LIE_ITERATIONS = {k}. Stopping series.")
+            break
+
+    # Final truncation AFTER the loop finishes
+    H_final = H_new.truncate(N_max)
+    logger.debug(f"Final H after transform (truncated to {N_max}):\n{H_final.expression}\n")
+
+    # If we're using caching, report cache statistics
+    if use_cache and logger.level <= logging.DEBUG:
+        cache_info = Polynomial.memoized_poisson.cache_info()
+        logger.debug(f"Cache statistics - hits: {cache_info.hits}, misses: {cache_info.misses}, size: {cache_info.currsize}")
+
+    return H_final
 
 def extract_coeffs_up_to_degree(H_cm: Polynomial, max_deg: int) -> list[tuple[int, int, int, int, se.Basic]]:
     table = []

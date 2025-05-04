@@ -250,6 +250,307 @@ def test_poisson_bracket(P_zero, P_one, P_q1, P_p1, P_q2, P_q3, P_p2, P_p3):
 
     assert (pb7+pb8+pb9).expansion == 0
 
+def test_optimized_poisson_standard(P_zero, P_one, P_q1, P_p1, P_q2, P_q3, P_p2, P_p3):
+    """Test that optimized_poisson with 'standard' method gives the same results as the original implementation."""
+    f = 2 * P_q1 * P_q1 + 3 * P_q1 * P_p1 - 5 * P_p2 * P_p2
+    g = P_q1 * P_q2 ** 2 * P_p1 + P_p1 * P_p2 - P_q3 * P_p3
+    h = P_q1 * P_q2 * P_p1 + P_p1 * P_p2 - P_q3 * P_p3
+    
+    # Compare results with standard method
+    pb_standard = _poisson_bracket(f, g)
+    pb_optimized = f.optimized_poisson(g, method='standard', use_cache=False)
+    
+    assert pb_standard.expansion.expression == pb_optimized.expansion.expression
+    
+    # Test with simpler polynomials
+    assert P_q1.optimized_poisson(P_q1, method='standard', use_cache=False) == P_zero
+    
+    # Test with constants
+    assert P_one.optimized_poisson(P_q1, method='standard', use_cache=False) == P_zero
+    
+    # Test all Poisson bracket identities
+    
+    # 1. Antisymmetry: {f, g} = -{g, f}
+    pb1 = f.optimized_poisson(g, method='standard', use_cache=False)
+    pb2 = g.optimized_poisson(f, method='standard', use_cache=False)
+    assert pb1.expansion.expression == (-pb2).expansion.expression
+    
+    # 2. Linearity: {f, g + h} = {f, g} + {f, h}
+    pb3 = f.optimized_poisson(g + h, method='standard', use_cache=False)
+    assert pb3.expansion.expression == (
+        f.optimized_poisson(g, method='standard', use_cache=False) +
+        f.optimized_poisson(h, method='standard', use_cache=False)
+    ).expansion.expression
+    
+    # 3. Leibniz Rule: {f, g*h} = {f, g}*h + g*{f, h}
+    pb4 = f.optimized_poisson(g*h, method='standard', use_cache=False)
+    assert pb4.expansion.expression == (
+        f.optimized_poisson(g, method='standard', use_cache=False) * h +
+        g * f.optimized_poisson(h, method='standard', use_cache=False)
+    ).expansion.expression
+    
+    # 4. Jacobi Identity: {f, {g, h}} + {g, {h, f}} + {h, {f, g}} = 0
+    pb5 = f.optimized_poisson(g.optimized_poisson(h, method='standard', use_cache=False), 
+                           method='standard', use_cache=False)
+    pb6 = g.optimized_poisson(h.optimized_poisson(f, method='standard', use_cache=False), 
+                           method='standard', use_cache=False)
+    pb7 = h.optimized_poisson(f.optimized_poisson(g, method='standard', use_cache=False), 
+                           method='standard', use_cache=False)
+    
+    assert (pb5 + pb6 + pb7).expansion.expression == 0
+
+def test_optimized_poisson_term_by_term(P_zero, P_one, P_q1, P_p1, P_q2, P_q3, P_p2, P_p3):
+    """Test that optimized_poisson with 'term_by_term' method gives correct results."""
+    f = 2 * P_q1 * P_q1 + 3 * P_q1 * P_p1 - 5 * P_p2 * P_p2
+    g = P_q1 * P_q2 ** 2 * P_p1 + P_p1 * P_p2 - P_q3 * P_p3
+    h = P_q1 * P_q2 * P_p1 + P_p1 * P_p2 - P_q3 * P_p3
+    
+    # Compare results with standard method
+    pb_standard = _poisson_bracket(f, g)
+    pb_term_by_term = f.optimized_poisson(g, method='term_by_term', use_cache=False)
+    
+    assert pb_standard.expansion.expression == pb_term_by_term.expansion.expression
+    
+    # Test with simpler polynomials
+    assert P_q1.optimized_poisson(P_q1, method='term_by_term', use_cache=False) == P_zero
+    
+    # Test with constants
+    assert P_one.optimized_poisson(P_q1, method='term_by_term', use_cache=False) == P_zero
+    
+    # Test all Poisson bracket identities
+    
+    # 1. Antisymmetry: {f, g} = -{g, f}
+    pb1 = f.optimized_poisson(g, method='term_by_term', use_cache=False)
+    pb2 = g.optimized_poisson(f, method='term_by_term', use_cache=False)
+    assert pb1.expansion.expression == (-pb2).expansion.expression
+    
+    # 2. Linearity: {f, g + h} = {f, g} + {f, h}
+    pb3 = f.optimized_poisson(g + h, method='term_by_term', use_cache=False)
+    assert pb3.expansion.expression == (
+        f.optimized_poisson(g, method='term_by_term', use_cache=False) +
+        f.optimized_poisson(h, method='term_by_term', use_cache=False)
+    ).expansion.expression
+    
+    # 3. Leibniz Rule: {f, g*h} = {f, g}*h + g*{f, h}
+    pb4 = f.optimized_poisson(g*h, method='term_by_term', use_cache=False)
+    assert pb4.expansion.expression == (
+        f.optimized_poisson(g, method='term_by_term', use_cache=False) * h +
+        g * f.optimized_poisson(h, method='term_by_term', use_cache=False)
+    ).expansion.expression
+    
+    # 4. Jacobi Identity: {f, {g, h}} + {g, {h, f}} + {h, {f, g}} = 0
+    pb5 = f.optimized_poisson(g.optimized_poisson(h, method='term_by_term', use_cache=False), 
+                           method='term_by_term', use_cache=False)
+    pb6 = g.optimized_poisson(h.optimized_poisson(f, method='term_by_term', use_cache=False), 
+                           method='term_by_term', use_cache=False)
+    pb7 = h.optimized_poisson(f.optimized_poisson(g, method='term_by_term', use_cache=False), 
+                           method='term_by_term', use_cache=False)
+    
+    assert (pb5 + pb6 + pb7).expansion.expression == 0
+
+def test_optimized_poisson_auto(P_zero, P_one, P_q1, P_p1, P_q2, P_q3, P_p2, P_p3):
+    """Test that optimized_poisson with 'auto' method gives correct results."""
+    f = 2 * P_q1 * P_q1 + 3 * P_q1 * P_p1 - 5 * P_p2 * P_p2
+    g = P_q1 * P_q2 ** 2 * P_p1 + P_p1 * P_p2 - P_q3 * P_p3
+    h = P_q1 * P_q2 * P_p1 + P_p1 * P_p2 - P_q3 * P_p3
+    
+    # Compare results with standard method
+    pb_standard = _poisson_bracket(f, g)
+    pb_auto = f.optimized_poisson(g, method='auto', use_cache=False)
+    
+    assert pb_standard.expansion.expression == pb_auto.expansion.expression
+    
+    # Test with high-degree polynomial which should trigger different algorithm selections
+    f_high = P_q1**5 * P_q2**3 + P_p1**4 * P_p2
+    g_sparse = P_q1 * P_p1
+    
+    # These should still give consistent results regardless of algorithm chosen
+    pb1 = f_high.optimized_poisson(g_sparse, method='standard', use_cache=False)
+    pb2 = f_high.optimized_poisson(g_sparse, method='term_by_term', use_cache=False)
+    pb3 = f_high.optimized_poisson(g_sparse, method='auto', use_cache=False)
+    
+    assert pb1.expansion.expression == pb2.expansion.expression
+    assert pb1.expansion.expression == pb3.expansion.expression
+    
+    # Test all Poisson bracket identities
+    
+    # 1. Antisymmetry: {f, g} = -{g, f}
+    pb1 = f.optimized_poisson(g, method='auto', use_cache=False)
+    pb2 = g.optimized_poisson(f, method='auto', use_cache=False)
+    assert pb1.expansion.expression == (-pb2).expansion.expression
+    
+    # 2. Linearity: {f, g + h} = {f, g} + {f, h}
+    pb3 = f.optimized_poisson(g + h, method='auto', use_cache=False)
+    assert pb3.expansion.expression == (
+        f.optimized_poisson(g, method='auto', use_cache=False) +
+        f.optimized_poisson(h, method='auto', use_cache=False)
+    ).expansion.expression
+    
+    # 3. Leibniz Rule: {f, g*h} = {f, g}*h + g*{f, h}
+    pb4 = f.optimized_poisson(g*h, method='auto', use_cache=False)
+    assert pb4.expansion.expression == (
+        f.optimized_poisson(g, method='auto', use_cache=False) * h +
+        g * f.optimized_poisson(h, method='auto', use_cache=False)
+    ).expansion.expression
+    
+    # 4. Jacobi Identity: {f, {g, h}} + {g, {h, f}} + {h, {f, g}} = 0
+    pb5 = f.optimized_poisson(g.optimized_poisson(h, method='auto', use_cache=False), 
+                           method='auto', use_cache=False)
+    pb6 = g.optimized_poisson(h.optimized_poisson(f, method='auto', use_cache=False), 
+                           method='auto', use_cache=False)
+    pb7 = h.optimized_poisson(f.optimized_poisson(g, method='auto', use_cache=False), 
+                           method='auto', use_cache=False)
+    
+    assert (pb5 + pb6 + pb7).expansion.expression == 0
+
+def test_memoized_poisson(P_zero, P_one, P_q1, P_p1, P_q2, P_q3, P_p2, P_p3):
+    """Test that memoized_poisson gives correct results and caches calculations."""
+    f = 2 * P_q1 * P_q1 + 3 * P_q1 * P_p1 - 5 * P_p2 * P_p2
+    g = P_q1 * P_q2 ** 2 * P_p1 + P_p1 * P_p2 - P_q3 * P_p3
+    h = P_q1 * P_q2 * P_p1 + P_p1 * P_p2 - P_q3 * P_p3
+    
+    # Clear the LRU cache before running this test to ensure accurate results
+    Polynomial.memoized_poisson.cache_clear()
+    
+    # First call should compute and cache the result
+    pb1 = Polynomial.memoized_poisson(f, g)
+    
+    # Second call should use the cached result
+    pb2 = Polynomial.memoized_poisson(f, g)
+    
+    # Both should match the standard implementation
+    pb_standard = _poisson_bracket(f, g)
+    
+    assert pb1.expansion.expression == pb_standard.expansion.expression
+    assert pb2.expansion.expression == pb_standard.expansion.expression
+    
+    # Check that the cache has at least one entry
+    assert Polynomial.memoized_poisson.cache_info().currsize > 0
+    
+    # Test all Poisson bracket identities with memoized_poisson
+    
+    # 1. Antisymmetry: {f, g} = -{g, f}
+    pb1 = Polynomial.memoized_poisson(f, g)
+    pb2 = Polynomial.memoized_poisson(g, f)
+    assert pb1.expansion.expression == (-pb2).expansion.expression
+    
+    # 2. Linearity: {f, g + h} = {f, g} + {f, h}
+    pb3 = Polynomial.memoized_poisson(f, g + h)
+    assert pb3.expansion.expression == (
+        Polynomial.memoized_poisson(f, g) +
+        Polynomial.memoized_poisson(f, h)
+    ).expansion.expression
+    
+    # 3. Leibniz Rule: {f, g*h} = {f, g}*h + g*{f, h}
+    pb4 = Polynomial.memoized_poisson(f, g*h)
+    assert pb4.expansion.expression == (
+        Polynomial.memoized_poisson(f, g) * h +
+        g * Polynomial.memoized_poisson(f, h)
+    ).expansion.expression
+    
+    # 4. Jacobi Identity: {f, {g, h}} + {g, {h, f}} + {h, {f, g}} = 0
+    pb5 = Polynomial.memoized_poisson(f, Polynomial.memoized_poisson(g, h))
+    pb6 = Polynomial.memoized_poisson(g, Polynomial.memoized_poisson(h, f))
+    pb7 = Polynomial.memoized_poisson(h, Polynomial.memoized_poisson(f, g))
+    
+    assert (pb5 + pb6 + pb7).expansion.expression == 0
+    
+    # Check cache hits during identity testing
+    cache_info = Polynomial.memoized_poisson.cache_info()
+    assert cache_info.hits > 0, "Cache should have been used during identity testing"
+
+def test_poisson_methods_mathematical_properties(P_zero, P_one, P_q1, P_p1, P_q2, P_q3, P_p2, P_p3):
+    """Test that all Poisson bracket methods satisfy the mathematical properties."""
+    f = 2 * P_q1 * P_q1 + 3 * P_q1 * P_p1 - 5 * P_p2 * P_p2
+    g = P_q1 * P_q2 ** 2 * P_p1 + P_p1 * P_p2 - P_q3 * P_p3
+    h = P_q1 * P_q2 * P_p1 + P_p1 * P_p2 - P_q3 * P_p3
+    
+    # Test different methods for computing {f, g}
+    methods = ['standard', 'term_by_term', 'auto']
+    
+    for method in methods:
+        # 1. Antisymmetry: {f, g} = -{g, f}
+        pb_fg = f.optimized_poisson(g, method=method, use_cache=False)
+        pb_gf = g.optimized_poisson(f, method=method, use_cache=False)
+        assert pb_fg.expansion.expression == (-pb_gf).expansion.expression
+        
+        # 2. Linearity: {f, g + h} = {f, g} + {f, h}
+        pb_fgh = f.optimized_poisson(g + h, method=method, use_cache=False)
+        pb_fg_plus_pb_fh = f.optimized_poisson(g, method=method, use_cache=False) + f.optimized_poisson(h, method=method, use_cache=False)
+        assert pb_fgh.expansion.expression == pb_fg_plus_pb_fh.expansion.expression
+        
+        # 3. Leibniz Rule: {f, g*h} = {f, g}*h + g*{f, h}
+        pb_fgh_product = f.optimized_poisson(g * h, method=method, use_cache=False)
+        product_rule = f.optimized_poisson(g, method=method, use_cache=False) * h + g * f.optimized_poisson(h, method=method, use_cache=False)
+        assert pb_fgh_product.expansion.expression == product_rule.expansion.expression
+        
+        # 4. Jacobi Identity: {f, {g, h}} + {g, {h, f}} + {h, {f, g}} = 0
+        pb_gh = g.optimized_poisson(h, method=method, use_cache=False)
+        pb_hf = h.optimized_poisson(f, method=method, use_cache=False)
+        pb_fg = f.optimized_poisson(g, method=method, use_cache=False)
+        
+        pb_f_gh = f.optimized_poisson(pb_gh, method=method, use_cache=False)
+        pb_g_hf = g.optimized_poisson(pb_hf, method=method, use_cache=False)
+        pb_h_fg = h.optimized_poisson(pb_fg, method=method, use_cache=False)
+        
+        jacobi_sum = (pb_f_gh + pb_g_hf + pb_h_fg).expansion.expression
+        assert jacobi_sum == 0
+
+def test_optimized_poisson_performance(P_complex, P_high_order):
+    """
+    Test performance characteristics of the different Poisson bracket implementations.
+    This is not a strict test but provides information about the relative performance.
+    """
+    import time
+    
+    # Complex polynomials for testing
+    f = P_complex
+    g = P_high_order
+    
+    # Measure time for each method
+    methods = {
+        'standard': lambda: f.optimized_poisson(g, method='standard', use_cache=False),
+        'term_by_term': lambda: f.optimized_poisson(g, method='term_by_term', use_cache=False),
+        'auto': lambda: f.optimized_poisson(g, method='auto', use_cache=False),
+        'memoized': lambda: f.optimized_poisson(g, use_cache=True)
+    }
+    
+    results = {}
+    iterations = 5  # Number of iterations for each method
+    
+    for name, method_func in methods.items():
+        # Clear cache for fair comparison
+        if name == 'memoized':
+            Polynomial.memoized_poisson.cache_clear()
+        
+        # Warm-up call
+        result = method_func()
+        
+        # Measure time
+        start_time = time.time()
+        for _ in range(iterations):
+            method_func()
+        end_time = time.time()
+        
+        avg_time = (end_time - start_time) / iterations
+        results[name] = avg_time
+    
+    # No assertions here, just print performance info
+    # Results will vary by machine, so this is mainly for development reference
+    print(f"\nPoisson bracket performance (avg time over {iterations} iterations):")
+    for name, avg_time in results.items():
+        print(f"  {name}: {avg_time:.6f} seconds")
+    
+    # Verify all methods give the same result
+    pb_standard = f.optimized_poisson(g, method='standard', use_cache=False)
+    pb_term_by_term = f.optimized_poisson(g, method='term_by_term', use_cache=False)
+    pb_auto = f.optimized_poisson(g, method='auto', use_cache=False)
+    pb_memoized = f.optimized_poisson(g, use_cache=True)
+    
+    assert pb_standard.expansion.expression == pb_term_by_term.expansion.expression
+    assert pb_standard.expansion.expression == pb_auto.expansion.expression
+    assert pb_standard.expansion.expression == pb_memoized.expansion.expression
+
 def test_series_expansion(P_zero, P_one, P_q1, P_p1, P_q2, P_q3, P_p2, P_p3):
     f = P_q1 * P_q2 * P_p1 + P_p1 * P_p2 - P_q3 * P_p3
     assert f.sexpand(q1, 2).expansion == P_q1 * P_q2 * P_p1 + P_p1 * P_p2 - P_q3 * P_p3
@@ -574,5 +875,160 @@ def test_dot_product():
     v2 = [q1, q2, q3]
     result = _dot_product(v1, v2)
     assert result == 1*q1 + 2*q2 + 3*q3
+
+def test_sparse_polynomial_optimization(vars):
+    """
+    Test specifically focused on sparse polynomials where term-by-term
+    differentiation would have an advantage over standard differentiation.
+    """
+    import time
+    
+    # Create very high-dimensional but sparse polynomials
+    q1, q2, q3, p1, p2, p3 = vars
+    
+    # Sparse polynomial with high powers but few terms
+    sparse_f = Polynomial(vars, q1**10 + p1**10)
+    sparse_g = Polynomial(vars, q2**10 + p2**10)
+    
+    # Dense polynomial with many terms
+    terms = []
+    for i in range(5):
+        for j in range(5):
+            terms.append(q1**i * q2**j * p1**(4-i) * p2**(4-j))
+    dense_f = Polynomial(vars, sum(terms))
+    dense_g = Polynomial(vars, sum(terms) * 2)
+    
+    # Define test cases
+    test_cases = [
+        ("sparse-sparse", sparse_f, sparse_g),
+        ("sparse-dense", sparse_f, dense_g),
+        ("dense-dense", dense_f, dense_g)
+    ]
+    
+    # Number of iterations for timing
+    iterations = 3
+    
+    for name, f, g in test_cases:
+        print(f"\nTest case: {name}")
+        
+        # Term counts for reference
+        f_terms = len(f.expansion.get_monomials())
+        g_terms = len(g.expansion.get_monomials())
+        print(f"  F has {f_terms} terms, G has {g_terms} terms")
+        
+        # Time standard method
+        start_time = time.time()
+        for _ in range(iterations):
+            result_standard = f.optimized_poisson(g, method='standard', use_cache=False)
+        standard_time = (time.time() - start_time) / iterations
+        
+        # Time term-by-term method
+        start_time = time.time()
+        for _ in range(iterations):
+            result_term = f.optimized_poisson(g, method='term_by_term', use_cache=False)
+        term_time = (time.time() - start_time) / iterations
+        
+        # Time auto method (should select the faster one)
+        start_time = time.time()
+        for _ in range(iterations):
+            result_auto = f.optimized_poisson(g, method='auto', use_cache=False)
+        auto_time = (time.time() - start_time) / iterations
+        
+        print(f"  Standard method: {standard_time:.6f} seconds")
+        print(f"  Term-by-term method: {term_time:.6f} seconds")
+        print(f"  Auto method: {auto_time:.6f} seconds")
+        
+        # Verify results match
+        assert result_standard.expansion.expression == result_term.expansion.expression
+        assert result_standard.expansion.expression == result_auto.expansion.expression
+        
+        # For sparse polynomials, term-by-term should be faster
+        # (we don't assert this because it may not always be true depending on implementations)
+        if name == "sparse-sparse":
+            print(f"  Relative speed (term-by-term vs standard): {standard_time/term_time:.2f}x")
+            
+        # Check which method was chosen by 'auto'
+        method_chosen = "term-by-term" if abs(auto_time - term_time) < abs(auto_time - standard_time) else "standard"
+        print(f"  Auto method likely chose: {method_chosen}")
+
+def test_memoization_efficiency(P_complex):
+    """
+    Test the efficiency gains of memoization when doing repeated calculations.
+    This simulates a real-world scenario where the same Poisson brackets
+    are computed multiple times during normal form calculations.
+    """
+    import time
+    
+    # Create several polynomials for testing
+    f = P_complex
+    g = f * 2
+    h = f * 3
+    j = f * 4
+    k = f * 5
+    
+    # List of polynomial pairs to compute brackets for
+    bracket_pairs = [
+        (f, g), (f, h), (f, j), (f, k),
+        (g, h), (g, j), (g, k),
+        (h, j), (h, k),
+        (j, k)
+    ]
+    
+    # Function to run calculation with or without cache
+    def run_calculation(use_cache):
+        # First calculate all brackets
+        results = []
+        for p1, p2 in bracket_pairs:
+            results.append(p1.optimized_poisson(p2, use_cache=use_cache))
+        
+        # Then calculate all brackets again (with some repetition)
+        second_results = []
+        for p1, p2 in bracket_pairs:
+            second_results.append(p1.optimized_poisson(p2, use_cache=use_cache))
+            
+        # Calculate some brackets between the results (creates new combinations)
+        for i in range(5):  # Only use a subset to keep test runtime reasonable
+            for j in range(i+1, 5):
+                results.append(results[i].optimized_poisson(results[j], use_cache=use_cache))
+        
+        return results, second_results
+    
+    # Clear the cache before starting
+    Polynomial.memoized_poisson.cache_clear()
+    
+    # Time without memoization
+    print("\nMemoization efficiency test:")
+    start_time = time.time()
+    results_no_cache, second_results_no_cache = run_calculation(use_cache=False)
+    no_cache_time = time.time() - start_time
+    print(f"  Without memoization: {no_cache_time:.6f} seconds")
+    
+    # Clear the cache
+    Polynomial.memoized_poisson.cache_clear()
+    
+    # Time with memoization
+    start_time = time.time()
+    results_with_cache, second_results_with_cache = run_calculation(use_cache=True)
+    with_cache_time = time.time() - start_time
+    print(f"  With memoization: {with_cache_time:.6f} seconds")
+    
+    # Verify results match
+    for i in range(len(results_no_cache)):
+        assert results_no_cache[i].expansion.expression == results_with_cache[i].expansion.expression
+    
+    # Report cache stats
+    cache_info = Polynomial.memoized_poisson.cache_info()
+    print(f"  Cache hits: {cache_info.hits}")
+    print(f"  Cache misses: {cache_info.misses}")
+    print(f"  Cache current size: {cache_info.currsize}")
+    
+    # Performance improvement
+    speedup = no_cache_time / with_cache_time if with_cache_time > 0 else float('inf')
+    print(f"  Speedup with memoization: {speedup:.2f}x")
+    
+    # With sufficient repetition, we should see a significant speedup
+    # This assertion may occasionally fail depending on test environment
+    # so we make it very conservative
+    assert speedup > 1.1, "Memoization should provide at least a 10% speedup with repeated calculations"
 
 

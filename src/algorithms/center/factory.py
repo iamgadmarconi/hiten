@@ -100,7 +100,7 @@ def physical_to_real_normal(point: LibrationPoint, H_phys: Polynomial, symbolic:
         H_rn_clean = _clean_numerical_artifacts(H_rn_sp)
         H_rn = se.sympify(H_rn_clean)
 
-        logger.debug(f"\n\nH_rn:\n\n{H_rn}\n\n")
+        # logger.debug(f"\n\nH_rn:\n\n{H_rn}\n\n")
 
         return Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn)
 
@@ -151,7 +151,7 @@ def real_normal_to_complex_canonical(point: LibrationPoint, H_real_normal: Polyn
         H_cn_expr_clean = _clean_numerical_artifacts(H_cn_expr_sp)
         H_cn = se.sympify(H_cn_expr_clean)
 
-        logger.debug(f"\n\nH_cn_expr_clean:\n\n{H_cn_expr_clean}\n\n")
+        # logger.debug(f"\n\nH_cn_expr_clean:\n\n{H_cn_expr_clean}\n\n")
 
         return Polynomial([q1, q2, q3, p1, p2, p3], H_cn)
 
@@ -202,7 +202,7 @@ def complex_canonical_to_real_normal(point: LibrationPoint, H_complex_canonical:
         H_rn_clean = _clean_numerical_artifacts(H_rn_sp)
         H_rn = se.sympify(H_rn_clean)
 
-        logger.debug(f"\n\nH_rn:\n\n{H_rn}\n\n")
+        # logger.debug(f"\n\nH_rn:\n\n{H_rn}\n\n")
 
         return Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn)
 

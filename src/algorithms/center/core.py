@@ -311,8 +311,24 @@ class Polynomial:
             n_dof = n_vars // 2
             q_syms = self.variables[:n_dof]
             p_syms = self.variables[n_dof:]
-            dF_dq = [self.expression.diff(q) for q in q_syms]
-            dF_dp = [self.expression.diff(p) for p in p_syms]
+            
+            # Make sure we're working with expanded expressions for more efficient differentiation
+            expr = self.expansion.expression
+            
+            # For sparse polynomials, term-by-term differentiation may be faster
+            if expr.is_Add and len(expr.args) < n_dof:
+                dF_dq = []
+                dF_dp = []
+                for i in range(n_dof):
+                    q_derivative = sum((term.diff(q_syms[i]) for term in expr.args if term.has(q_syms[i])), se.Integer(0))
+                    p_derivative = sum((term.diff(p_syms[i]) for term in expr.args if term.has(p_syms[i])), se.Integer(0))
+                    dF_dq.append(q_derivative)
+                    dF_dp.append(p_derivative)
+            else:
+                # Standard differentiation for dense expressions
+                dF_dq = [expr.diff(q) for q in q_syms]
+                dF_dp = [expr.diff(p) for p in p_syms]
+            
             self._grad_cache = (dF_dq, dF_dp)
         return self._grad_cache
 
@@ -474,6 +490,78 @@ class Polynomial:
         """
         return _poisson_bracket(self, other)
 
+    def optimized_poisson(self, other: 'Polynomial', method: str = 'auto', use_cache: bool = True) -> 'Polynomial':
+        """
+        Compute the Poisson bracket {self, other} using optimized methods.
+        
+        Parameters
+        ----------
+        other : Polynomial
+            The second polynomial for the Poisson bracket
+        method : str, optional
+            The method to use for computation:
+            - 'auto': Automatically select the best method
+            - 'standard': Use the standard implementation
+            - 'term_by_term': Use term-by-term differentiation
+        use_cache : bool, optional
+            Whether to use memoization for repeated calculations
+            
+        Returns
+        -------
+        Polynomial
+            A new polynomial representing {self, other}
+            
+        Notes
+        -----
+        Different methods may be more efficient for different types of polynomials:
+        - Standard method: Good for dense polynomials with few variables
+        - Term-by-term: Better for sparse polynomials with many variables
+        - Memoization: Beneficial when the same brackets are computed repeatedly
+        """
+        if use_cache:
+            # Convert to hashable expressions for caching
+            hash_F = Polynomial(self.variables, self.expression)
+            hash_G = Polynomial(other.variables, other.expression)
+            return Polynomial.memoized_poisson(hash_F, hash_G)
+        
+        if method == 'term_by_term':
+            return _poisson_bracket_term_by_term(self, other)
+        elif method == 'standard':
+            return _poisson_bracket(self, other)
+        else:  # 'auto'
+            # Simple heuristic: use term-by-term for sparse polynomials
+            F_monomials = len(self.expansion.get_monomials())
+            G_monomials = len(other.expansion.get_monomials())
+            n_vars = len(self.variables) // 2
+            
+            # If both polynomials are sparse relative to the number of variables
+            if F_monomials * G_monomials < 4 * n_vars**2:
+                return _poisson_bracket_term_by_term(self, other)
+            else:
+                return _poisson_bracket(self, other)
+
+    @staticmethod
+    @lru_cache(maxsize=128)
+    def memoized_poisson(F: 'Polynomial', G: 'Polynomial') -> 'Polynomial':
+        """
+        Compute the Poisson bracket with result caching.
+        
+        This method caches the result of Poisson brackets between 
+        polynomial pairs, which can significantly speed up calculations
+        when the same brackets are computed multiple times.
+        
+        Parameters
+        ----------
+        F, G : Polynomial
+            The polynomials for which to compute {F, G}
+            
+        Returns
+        -------
+        Polynomial
+            The Poisson bracket result
+        """
+        return _poisson_bracket(F, G)
+
     def subs(self, subs_dict: dict[se.Symbol, se.Basic]) -> 'Polynomial':
         """
         Substitute variables in the polynomial using a dictionary.
@@ -504,6 +592,60 @@ def _poisson_bracket(F: Polynomial, G: Polynomial) -> Polynomial:
     expr = sum(dF_dq[i] * dG_dp[i] - dF_dp[i] * dG_dq[i]
                 for i in range(len(dF_dq)))
     return Polynomial(F.variables, expr)
+
+
+def _poisson_bracket_term_by_term(F: Polynomial, G: Polynomial) -> Polynomial:
+    """
+    Compute Poisson bracket by differentiating term-by-term.
+    
+    This implementation may be more efficient for sparse polynomials
+    where many terms have zero derivatives.
+    
+    Parameters
+    ----------
+    F, G : Polynomial
+        The polynomials for which to compute {F, G}
+        
+    Returns
+    -------
+    Polynomial
+        The Poisson bracket result
+    """
+    assert F.variables == G.variables, "Variables must match for Poisson bracket"
+    n_vars = len(F.variables)
+    n_dof = n_vars // 2
+    
+    # Get expanded polynomials
+    F_exp = F.expansion
+    G_exp = G.expansion
+    
+    # Get monomials for term-by-term differentiation
+    F_monomials = F_exp.get_monomials()
+    G_monomials = G_exp.get_monomials()
+    
+    result_terms = []
+    
+    # Process each pair of monomials
+    for F_mono in F_monomials:
+        F_term = Polynomial(F.variables, F_mono.sym)
+        dF_dq, dF_dp = F_term._gradient()
+        
+        for G_mono in G_monomials:
+            G_term = Polynomial(G.variables, G_mono.sym)
+            dG_dq, dG_dp = G_term._gradient()
+            
+            # Compute the bracket for this pair of terms
+            term_expr = sum(dF_dq[i] * dG_dp[i] - dF_dp[i] * dG_dq[i]
+                          for i in range(n_dof))
+            
+            if term_expr != 0:  # Only add non-zero terms
+                result_terms.append(term_expr)
+    
+    # Sum all resulting terms
+    if not result_terms:
+        return Polynomial(F.variables, se.Integer(0))
+    
+    return Polynomial(F.variables, sum(result_terms))
 
 
 def _split_coeff_and_factors(term: se.Basic):
