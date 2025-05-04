@@ -331,7 +331,7 @@ def _apply_lie_transform(H_current: Polynomial, G_n: Polynomial, N_max: int,
     G_degree = G_n.total_degree()
 
     logger.debug(f"Applying transform for G of degree {G_degree}")
-    MAX_LIE_ITERATIONS = N_max # Heuristic: Max iterations needed likely related to N_max
+    MAX_LIE_ITERATIONS = N_max - 2 # Heuristic: Max iterations needed likely related to N_max
 
     # Clear memoization cache at the beginning of each transform application
     if use_cache:
