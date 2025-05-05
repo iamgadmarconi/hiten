@@ -67,14 +67,20 @@ def encode_multiindex(k: np.ndarray, degree: int, psi, clmo) -> int:
     return -1
 
 
+def make_poly(degree: int, psi, complex_dtype: bool=False) -> np.ndarray:
+    if complex_dtype:
+        return _make_poly_complex(degree, psi)
+    else:
+        return _make_poly_real(degree, psi)
+
+
 @njit(fastmath=True, cache=True)
-def make_poly(degree: int, psi) -> np.ndarray:
+def _make_poly_real(degree: int, psi) -> np.ndarray:
     size = psi[N_VARS, degree]
     return np.zeros(size, dtype=np.float64)
 
 
 @njit(fastmath=True, cache=True)
-def make_poly_complex(degree: int, psi) -> np.ndarray:
+def _make_poly_complex(degree: int, psi) -> np.ndarray:
     size = psi[N_VARS, degree]
     return np.zeros(size, dtype=np.complex128)
-
