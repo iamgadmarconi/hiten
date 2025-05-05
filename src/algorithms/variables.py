@@ -1,6 +1,8 @@
 import symengine as se
 
 
+N_VARS = 6
+
 x, y, z  = se.symbols('x y z')
 px, py, pz = se.symbols('px py pz')
 physical_vars = {'x': x, 'y': y, 'z': z, 'px': px, 'py': py, 'pz': pz}
