@@ -75,3 +75,14 @@ def poisson(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clmo) -> 
         for i in range(term2.shape[0]):
             r[i] -= term2[i]
     return r
+
+
+@njit(fastmath=True, cache=True)
+def get_polynomial_degree(poly: np.ndarray, psi) -> int:
+    """Get the degree of a polynomial in our custom representation."""
+    for d in range(len(psi[N_VARS]) - 1, -1, -1):
+        size = psi[N_VARS, d]
+        for i in range(size):
+            if abs(poly[i]) > 1e-15:
+                return d
+    return 0

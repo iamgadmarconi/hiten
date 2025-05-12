@@ -1,14 +1,24 @@
 import numpy as np
 import pytest
 from numba.typed import List
+import symengine as se
+import re # Import re module
 
-from algorithms.polynomial.base import init_index_tables, make_poly, make_poly_complex, encode_multiindex, decode_multiindex
+from algorithms.polynomial.base import init_index_tables, make_poly, encode_multiindex, decode_multiindex, _extract_symengine_term_details, symengine_to_custom_poly
 from algorithms.polynomial.algebra import poly_add, poly_scale, poly_mul, differentiate, poisson
 from algorithms.variables import N_VARS
 
 # Initialize tables for tests
 MAX_DEGREE = 5
 PSI, CLMO = init_index_tables(MAX_DEGREE)
+
+# Define Symengine variables for tests, matching N_VARS and typical order
+# Assuming variables are x0, x1, x2, x3, x4, x5 based on N_VARS
+if N_VARS == 6:
+    s_vars = se.symbols(f'x0:{N_VARS}') 
+else:
+    # Fallback for different N_VARS, though tests are geared towards N_VARS=6
+    s_vars = se.symbols(','.join([f'x{i}' for i in range(N_VARS)]))
 
 def test_init_index_tables():
     """Test if the index tables are initialized correctly"""
@@ -44,7 +54,7 @@ def test_make_poly():
         assert poly.dtype == np.float64
         
         # Test complex polynomial
-        complex_poly = make_poly_complex(degree, PSI)
+        complex_poly = make_poly(degree, PSI, complex_dtype=True)
         assert complex_poly.shape[0] == expected_size
         assert np.all(complex_poly == 0.0)
         assert complex_poly.dtype == np.complex128
@@ -333,9 +343,9 @@ def test_add_complex_numbers():
     size = PSI[N_VARS, degree]
     
     # Create complex polynomials
-    a = make_poly_complex(degree, PSI)
-    b = make_poly_complex(degree, PSI)
-    result = make_poly_complex(degree, PSI)
+    a = make_poly(degree, PSI, complex_dtype=True)
+    b = make_poly(degree, PSI, complex_dtype=True)
+    result = make_poly(degree, PSI, complex_dtype=True)
     
     # Set complex coefficients in a
     for i in range(size):
@@ -364,9 +374,9 @@ def test_add_complex_numbers():
         assert abs(result[i].imag) < 1e-10
     
     # Test with different patterns of complex numbers
-    a = make_poly_complex(degree, PSI)
-    b = make_poly_complex(degree, PSI)
-    result = make_poly_complex(degree, PSI)
+    a = make_poly(degree, PSI, complex_dtype=True)
+    b = make_poly(degree, PSI, complex_dtype=True)
+    result = make_poly(degree, PSI, complex_dtype=True)
     
     # Pattern 1: Alternating real and imaginary
     for i in range(size):
@@ -386,9 +396,9 @@ def test_add_complex_numbers():
     np.testing.assert_array_almost_equal(result, expected)
     
     # Test with complex conjugates
-    a = make_poly_complex(degree, PSI)
-    b = make_poly_complex(degree, PSI)
-    result = make_poly_complex(degree, PSI)
+    a = make_poly(degree, PSI, complex_dtype=True)
+    b = make_poly(degree, PSI, complex_dtype=True)
+    result = make_poly(degree, PSI, complex_dtype=True)
     
     # a and b are complex conjugates of each other
     for i in range(size):
@@ -558,8 +568,8 @@ def test_poly_scale_complex():
     size = PSI[N_VARS, degree]
     
     # Create complex polynomial
-    p = make_poly_complex(degree, PSI)
-    result = make_poly_complex(degree, PSI)
+    p = make_poly(degree, PSI, complex_dtype=True)
+    result = make_poly(degree, PSI, complex_dtype=True)
     
     # Set complex coefficients
     for i in range(size):
@@ -776,8 +786,8 @@ def test_poly_mul_complex():
     deg_q = 1
     
     # Create complex polynomials
-    p = make_poly_complex(deg_p, PSI)
-    q = make_poly_complex(deg_q, PSI)
+    p = make_poly(deg_p, PSI, complex_dtype=True)
+    q = make_poly(deg_q, PSI, complex_dtype=True)
     
     # Set values in p and q
     # p = (1+i)*x0 + (2+2i)*x1
@@ -1030,7 +1040,7 @@ def test_differentiate_complex():
     """Test differentiation of complex polynomials"""
     # Create a complex polynomial
     degree = 2
-    p = make_poly_complex(degree, PSI)
+    p = make_poly(degree, PSI, complex_dtype=True)
     
     # Set p = (1+2i)*x0^2 + (3+4i)*x0*x1 + (5+6i)*x1^2
     idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), degree, PSI, CLMO)
@@ -1333,8 +1343,8 @@ def test_poisson_complex():
     deg_p = 2
     deg_q = 2
     
-    p = make_poly_complex(deg_p, PSI)
-    q = make_poly_complex(deg_q, PSI)
+    p = make_poly(deg_p, PSI, complex_dtype=True)
+    q = make_poly(deg_q, PSI, complex_dtype=True)
     
     # Set values in p and q
     # p = (1+i)*x0^2 + (2+2i)*p0^2
@@ -1353,7 +1363,7 @@ def test_poisson_complex():
     qp = poisson(q, deg_q, p, deg_p, PSI, CLMO)
     
     # Test antisymmetry with complex polynomials
-    neg_qp = make_poly_complex(deg_p + deg_q - 2, PSI)
+    neg_qp = make_poly(deg_p + deg_q - 2, PSI, complex_dtype=True)
     poly_scale(qp, -1.0, neg_qp)
     
     # {P, Q} should equal -{Q, P}
@@ -1510,3 +1520,302 @@ def test_poisson_canonical_relations():
                 # {q_i, p_j} should be 0 for i ≠ j
                 for k in range(qi_pj.shape[0]):
                     assert abs(qi_pj[k]) < 1e-10
+
+# --- Tests for Symengine to Custom Polynomial Conversion ---
+
+def test_extract_symengine_term_details_simple_monomials():
+    """Test _extract_symengine_term_details with simple monomials."""
+    x0, x1, x2, x3, x4, x5 = s_vars
+
+    # Test 1: Constant term
+    term1 = se.Integer(5)
+    coeff1, k1, deg1 = _extract_symengine_term_details(term1, list(s_vars))
+    assert coeff1 == 5.0
+    np.testing.assert_array_equal(k1, np.array([0]*N_VARS, dtype=np.int64))
+    assert deg1 == 0
+
+    # Test 2: Linear term: 3*x0
+    term2 = 3 * x0
+    coeff2, k2, deg2 = _extract_symengine_term_details(term2, list(s_vars))
+    assert coeff2 == 3.0
+    expected_k2 = np.zeros(N_VARS, dtype=np.int64)
+    expected_k2[0] = 1
+    np.testing.assert_array_equal(k2, expected_k2)
+    assert deg2 == 1
+
+    # Test 3: Quadratic term: 2*x1**2
+    term3 = 2 * x1**2
+    coeff3, k3, deg3 = _extract_symengine_term_details(term3, list(s_vars))
+    assert coeff3 == 2.0
+    expected_k3 = np.zeros(N_VARS, dtype=np.int64)
+    expected_k3[1] = 2
+    np.testing.assert_array_equal(k3, expected_k3)
+    assert deg3 == 2
+
+    # Test 4: Mixed term: 4*x0*x2**3
+    term4 = 4 * x0 * x2**3
+    coeff4, k4, deg4 = _extract_symengine_term_details(term4, list(s_vars))
+    assert coeff4 == 4.0
+    expected_k4 = np.zeros(N_VARS, dtype=np.int64)
+    expected_k4[0] = 1
+    expected_k4[2] = 3
+    np.testing.assert_array_equal(k4, expected_k4)
+    assert deg4 == 4
+
+    # Test 5: Term with coefficient 1: x0
+    term5 = x0
+    coeff5, k5, deg5 = _extract_symengine_term_details(term5, list(s_vars))
+    assert coeff5 == 1.0
+    expected_k5 = np.zeros(N_VARS, dtype=np.int64)
+    expected_k5[0] = 1
+    np.testing.assert_array_equal(k5, expected_k5)
+    assert deg5 == 1
+    
+    # Test 6: Term x0*x1 (product of symbols)
+    term6 = x0 * x1
+    coeff6, k6, deg6 = _extract_symengine_term_details(term6, list(s_vars))
+    assert coeff6 == 1.0
+    expected_k6 = np.zeros(N_VARS, dtype=np.int64)
+    expected_k6[0] = 1
+    expected_k6[1] = 1
+    np.testing.assert_array_equal(k6, expected_k6)
+    assert deg6 == 2
+
+def test_extract_symengine_term_details_complex_coeffs():
+    """Test _extract_symengine_term_details with complex coefficients."""
+    x0, x1, x2, x3, x4, x5 = s_vars
+    
+    # Test 1: (2+3j)*x0
+    term1 = (2 + 3*se.I) * x0
+    coeff1, k1, deg1 = _extract_symengine_term_details(term1, list(s_vars))
+    assert coeff1 == complex(2.0, 3.0)
+    expected_k1 = np.zeros(N_VARS, dtype=np.int64)
+    expected_k1[0] = 1
+    np.testing.assert_array_equal(k1, expected_k1)
+    assert deg1 == 1
+
+    # Test 2: Pure imaginary coefficient: 4j*x1**2
+    term2 = (4*se.I) * x1**2
+    coeff2, k2, deg2 = _extract_symengine_term_details(term2, list(s_vars))
+    assert coeff2 == complex(0.0, 4.0)
+    expected_k2 = np.zeros(N_VARS, dtype=np.int64)
+    expected_k2[1] = 2
+    np.testing.assert_array_equal(k2, expected_k2)
+    assert deg2 == 2
+
+def test_extract_symengine_term_details_error_handling():
+    """Test error handling in _extract_symengine_term_details."""
+    x0, x1, x2, x3, x4, x5 = s_vars
+    y = se.Symbol('y') # A variable not in s_vars
+
+    # Error: Variable in term not in provided variables list
+    term_unknown_var = 3 * y
+    with pytest.raises(ValueError, match="Variable 'y' in term"):
+        _extract_symengine_term_details(term_unknown_var, list(s_vars))
+
+    # Error: Non-integer exponent (Symengine might simplify, so construct carefully)
+    # e.g., x0**(1.5) might get simplified or error out earlier.
+    # The check is for se.Integer as exponent.
+    # term_non_int_exp = x0**se.Rational(3,2) # This is valid in SymEngine
+    # Instead, we need to ensure the Pow object has a non-Integer exponent if one were to form.
+    # The current code structure might make this hard to trigger directly if symengine pre-processes.
+    # The protection is against an se.Pow node whose exponent is not se.Integer.
+
+    # Error: Unresolved symbolic coefficient
+    c = se.Symbol('c')
+    term_symbolic_coeff = c * x0
+    # If 'c' is not in the `variables` list, it will be treated as an unknown variable within var_expr.
+    expected_vars_str = str(list(s_vars)) # Convert list of symbols to string for the message
+    # Escape the dynamic parts of the message for regex matching
+    # Also ensure the 'c' in "Variable 'c'" is matched literally if needed, but here it's fine as a literal char.
+    match_pattern = (f"Variable '{re.escape(str(c))}' in term '{re.escape(str(term_symbolic_coeff))}' "
+                     f"not found in variables list: {re.escape(expected_vars_str)}")
+    with pytest.raises(ValueError, match=match_pattern):
+        _extract_symengine_term_details(term_symbolic_coeff, list(s_vars))
+
+def test_symengine_to_custom_poly_zero_and_constant():
+    """Test symengine_to_custom_poly with zero and constant expressions."""
+    # Test 1: Zero expression
+    expr_zero = se.Integer(0)
+    poly_list_zero = symengine_to_custom_poly(expr_zero, list(s_vars), MAX_DEGREE, PSI, CLMO)
+    assert len(poly_list_zero) == MAX_DEGREE + 1
+    for d_poly in poly_list_zero:
+        assert np.all(d_poly == 0.0)
+
+    # Test 2: Constant expression
+    expr_const = se.Integer(7)
+    poly_list_const = symengine_to_custom_poly(expr_const, list(s_vars), MAX_DEGREE, PSI, CLMO)
+    assert len(poly_list_const) == MAX_DEGREE + 1
+    for i, d_poly in enumerate(poly_list_const):
+        if i == 0: # Degree 0
+            assert d_poly.shape[0] == PSI[N_VARS, 0]
+            if d_poly.shape[0] > 0: # Should be 1 for degree 0
+                 assert d_poly[0] == 7.0
+                 assert np.all(d_poly[1:] == 0.0) # if somehow size > 1
+            else: # Should not happen for deg 0
+                 assert d_poly.shape[0] == 1 
+        else: # Higher degrees
+            assert np.all(d_poly == 0.0)
+
+def test_symengine_to_custom_poly_simple_real():
+    """Test symengine_to_custom_poly with a simple real polynomial."""
+    x0, x1, x2, x3, x4, x5 = s_vars
+    expr = 1 + 2*x0 + 3*x1**2 - 4*x0*x2**3 # Max degree of this term is 4
+    
+    # Test with max_degree = 4 (exact for expression)
+    poly_list = symengine_to_custom_poly(expr, list(s_vars), 4, PSI, CLMO)
+    assert len(poly_list) == 4 + 1
+
+    # Degree 0: constant term 1
+    idx_const = encode_multiindex(np.array([0]*N_VARS, dtype=np.int64), 0, PSI, CLMO)
+    assert poly_list[0][idx_const] == 1.0
+    
+    # Degree 1: 2*x0
+    idx_x0 = encode_multiindex(np.array([1,0,0,0,0,0], dtype=np.int64), 1, PSI, CLMO)
+    assert poly_list[1][idx_x0] == 2.0
+    
+    # Degree 2: 3*x1**2
+    idx_x1sq = encode_multiindex(np.array([0,2,0,0,0,0], dtype=np.int64), 2, PSI, CLMO)
+    assert poly_list[2][idx_x1sq] == 3.0
+
+    # Degree 3: (no terms)
+    assert np.all(poly_list[3] == 0.0)
+
+    # Degree 4: -4*x0*x2**3
+    k_x0x2_3 = np.zeros(N_VARS, dtype=np.int64)
+    k_x0x2_3[0] = 1
+    k_x0x2_3[2] = 3
+    idx_x0x2_3 = encode_multiindex(k_x0x2_3, 4, PSI, CLMO)
+    assert poly_list[4][idx_x0x2_3] == -4.0
+
+    # Test with max_degree = 2 (truncation)
+    poly_list_trunc = symengine_to_custom_poly(expr, list(s_vars), 2, PSI, CLMO)
+    assert len(poly_list_trunc) == 2 + 1
+    assert poly_list_trunc[0][idx_const] == 1.0
+    assert poly_list_trunc[1][idx_x0] == 2.0
+    assert poly_list_trunc[2][idx_x1sq] == 3.0
+    # Higher degree terms should not be present.
+
+def test_symengine_to_custom_poly_complex():
+    """Test symengine_to_custom_poly with complex coefficients."""
+    x0, x1, x2, x3, x4, x5 = s_vars
+    expr = (1+2*se.I) + (3-1*se.I)*x0 + (0.5+0.5*se.I)*x1**2
+
+    poly_list = symengine_to_custom_poly(expr, list(s_vars), 2, PSI, CLMO, complex_dtype=True)
+    assert len(poly_list) == 2 + 1
+    assert poly_list[0].dtype == np.complex128
+
+    # Degree 0: (1+2j)
+    idx_const = encode_multiindex(np.array([0]*N_VARS, dtype=np.int64), 0, PSI, CLMO)
+    assert poly_list[0][idx_const] == complex(1.0, 2.0)
+
+    # Degree 1: (3-1j)*x0
+    idx_x0 = encode_multiindex(np.array([1,0,0,0,0,0], dtype=np.int64), 1, PSI, CLMO)
+    assert poly_list[1][idx_x0] == complex(3.0, -1.0)
+
+    # Degree 2: (0.5+0.5j)*x1**2
+    idx_x1sq = encode_multiindex(np.array([0,2,0,0,0,0], dtype=np.int64), 2, PSI, CLMO)
+    assert poly_list[2][idx_x1sq] == complex(0.5, 0.5)
+
+    # Test error if complex_dtype is False but expr has complex parts
+    with pytest.raises(ValueError, match="Complex coefficient .* encountered .* but complex_dtype is False"):
+        symengine_to_custom_poly(expr, list(s_vars), 2, PSI, CLMO, complex_dtype=False)
+    
+    # Test with only real part if imag part is below tolerance
+    expr_real_dominant = 1.0 + (2.0 + 1e-20 * se.I) * x0
+    poly_list_real_dom = symengine_to_custom_poly(expr_real_dominant, list(s_vars), 1, PSI, CLMO, complex_dtype=False)
+    assert poly_list_real_dom[1][idx_x0] == pytest.approx(2.0)
+
+
+def test_symengine_to_custom_poly_tolerance():
+    """Test coefficient tolerance in symengine_to_custom_poly."""
+    x0, x1, x2, x3, x4, x5 = s_vars
+    expr = 1e-20 * x0 + 5 * x1 
+    
+    # Default tolerance is 1e-18
+    poly_list = symengine_to_custom_poly(expr, list(s_vars), 1, PSI, CLMO)
+    idx_x0 = encode_multiindex(np.array([1,0,0,0,0,0], dtype=np.int64), 1, PSI, CLMO)
+    idx_x1 = encode_multiindex(np.array([0,1,0,0,0,0], dtype=np.int64), 1, PSI, CLMO)
+    
+    assert poly_list[1][idx_x0] == 0.0 # Should be zeroed out
+    assert poly_list[1][idx_x1] == 5.0
+
+    # Test with a larger tolerance
+    poly_list_larger_tol = symengine_to_custom_poly(expr, list(s_vars), 1, PSI, CLMO, tolerance=1e-10)
+    assert poly_list_larger_tol[1][idx_x0] == 0.0
+    assert poly_list_larger_tol[1][idx_x1] == 5.0
+    
+    expr_just_above_default = 1e-17 * x0
+    poly_list_jad = symengine_to_custom_poly(expr_just_above_default, list(s_vars), 1, PSI, CLMO)
+    assert poly_list_jad[1][idx_x0] == 1e-17
+
+
+def test_symengine_to_custom_poly_error_handling():
+    """Test various error conditions for symengine_to_custom_poly."""
+    x0, x1, x2, x3, x4, x5 = s_vars
+
+    # Error: Incorrect number of variables
+    wrong_vars = list(s_vars)[:N_VARS-1]
+    expr = x0
+    with pytest.raises(ValueError, match=f"Expected {N_VARS} variables, got {N_VARS-1}"):
+        symengine_to_custom_poly(expr, wrong_vars, 1, PSI, CLMO)
+
+    # Error: Unresolved symbolic coefficient in expression
+    c = se.Symbol('c')
+    expr_sym_coeff = c * x0 + x1 # The term c*x0 will be processed by _extract_symengine_term_details.
+    # Define the term that will actually cause the error within _extract_symengine_term_details
+    term_causing_error = c * x0 
+    expected_vars_str = str(list(s_vars))
+    
+    # The error will originate from _extract_symengine_term_details when processing the term_causing_error (c*x0)
+    # because 'c' is not in list(s_vars).
+    match_pattern = (f"Variable '{re.escape(str(c))}' in term '{re.escape(str(term_causing_error))}' "
+                     f"not found in variables list: {re.escape(expected_vars_str)}")
+    with pytest.raises(ValueError, match=match_pattern):
+        symengine_to_custom_poly(expr_sym_coeff, list(s_vars), 1, PSI, CLMO)
+
+    # Test with expression containing variables not in the provided list
+    y = se.Symbol('y_unlisted')
+    expr_unknown_var = x0 + y
+    with pytest.raises(ValueError, match="Variable 'y_unlisted' in term"):
+        symengine_to_custom_poly(expr_unknown_var, list(s_vars), 1, PSI, CLMO)
+
+def test_symengine_to_custom_poly_variable_order():
+    """Test that the order of variables matters and is respected."""
+    x0, x1 = s_vars[0], s_vars[1] # Assuming N_VARS >= 2
+    
+    expr = 2*x0 + 3*x1
+    
+    # Standard order: [x0, x1, ...]
+    poly_list_std = symengine_to_custom_poly(expr, list(s_vars), 1, PSI, CLMO)
+    
+    k_x0_std = np.zeros(N_VARS, dtype=np.int64); k_x0_std[0] = 1
+    idx_x0_std = encode_multiindex(k_x0_std, 1, PSI, CLMO)
+    
+    k_x1_std = np.zeros(N_VARS, dtype=np.int64); k_x1_std[1] = 1
+    idx_x1_std = encode_multiindex(k_x1_std, 1, PSI, CLMO)
+    
+    assert poly_list_std[1][idx_x0_std] == 2.0
+    assert poly_list_std[1][idx_x1_std] == 3.0
+
+    # Swapped order for the first two variables in the `variables` list
+    if N_VARS >= 2:
+        swapped_s_vars = list(s_vars)
+        swapped_s_vars[0], swapped_s_vars[1] = swapped_s_vars[1], swapped_s_vars[0] # now [x1, x0, ...]
+        
+        poly_list_swapped = symengine_to_custom_poly(expr, swapped_s_vars, 1, PSI, CLMO)
+        
+        # In the swapped_s_vars list, x0 is now at index 1, x1 is at index 0.
+        # So, for the term 2*x0: k should be [0,1,0,...] referring to swapped_s_vars
+        # And for the term 3*x1: k should be [1,0,0,...] referring to swapped_s_vars
+        
+        # k for term 2*x0 (which is s_vars[0]), but its position in swapped_s_vars is 1
+        k_x0_swapped_map = np.zeros(N_VARS, dtype=np.int64); k_x0_swapped_map[1] = 1
+        idx_x0_in_swapped = encode_multiindex(k_x0_swapped_map, 1, PSI, CLMO)
+        
+        # k for term 3*x1 (which is s_vars[1]), but its position in swapped_s_vars is 0
+        k_x1_swapped_map = np.zeros(N_VARS, dtype=np.int64); k_x1_swapped_map[0] = 1
+        idx_x1_in_swapped = encode_multiindex(k_x1_swapped_map, 1, PSI, CLMO)
+
+        assert poly_list_swapped[1][idx_x0_in_swapped] == 2.0 # Coeff of x0
+        assert poly_list_swapped[1][idx_x1_in_swapped] == 3.0 # Coeff of x1
