@@ -39,13 +39,22 @@ def lie_transform(
 
     for n in range(3, max_degree+1):
         Hn = H_trans[n]
-        if not Hn.any(): continue
+        if not Hn.any(): 
+            continue
         ToKill = _select_terms_for_elimination(Hn, n, psi, clmo)
-        if not ToKill.any(): continue
+        if not ToKill.any(): 
+            continue
         Gn = _solve_homological_equation(ToKill, n, eta, psi, clmo)
         H_trans = _apply_lie_transform(H_trans, Gn, n, max_degree, psi, clmo)
         # accumulate G_total
         G_total[n] += Gn
+        nonzero = False
+        for arr in ToKill:
+            if arr.any():
+                nonzero = True
+                break
+        if not nonzero:
+            break
     return H_trans, G_total
 
 

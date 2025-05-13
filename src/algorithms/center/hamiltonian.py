@@ -38,18 +38,21 @@ def _build_T_polynomials(N: int) -> list[se.Basic]:
 
 
 def hamiltonian_arrays(point, max_degree, psi, clmo):
-    """Return H_phys as a list of NumPy arrays (degree-indexed)."""
-    # Build symbolic expansion once (cheap, O(max_degree^2))
+    """Return physical Hamiltonian as degree‑indexed NumPy arrays (real)."""
+    # symbolic expansion first
     T = _build_T_polynomials(max_degree)
-    coeffs = [None, None]  # c_0, c_1 unused
+    symbolic_coeffs = [None, None]  # c0, c1 unused
     for n in range(2, max_degree+1):
-        coeffs.append(create_symbolic_cn(n))  # keep symbolic for later substitution
+        symbolic_coeffs.append(create_symbolic_cn(n))
 
-    U = -se.Add(*[coeffs[n] * T[n] for n in range(2, max_degree+1)])
+    U = -se.Add(*[symbolic_coeffs[n] * T[n] for n in range(2, max_degree+1)])
     K = se.Rational(1, 2) * (px**2 + py**2 + pz**2) + y*px - x*py
     expr = se.expand(K + U)
 
-    return symengine2poly(expr,
+    subs_c = {create_symbolic_cn(n): point._cn(n) for n in range(2, max_degree+1)}
+    expr_num = expr.subs(subs_c)
+
+    return symengine2poly(expr_num,
                                     [x, y, z, px, py, pz],
                                     max_degree,
                                     psi, clmo,
@@ -57,133 +60,61 @@ def hamiltonian_arrays(point, max_degree, psi, clmo):
 
 
 def _linear_substitution(expr: se.Basic, subs: dict, var_out: list[se.Symbol],
-                        max_degree: int, psi, clmo, point,
-                        complex_out: bool = False):
-    """Apply `subs` to `expr`, expand, substitute numerical params, convert to coefficient arrays."""
-    expanded_symbolic_params = se.expand(expr.subs(subs))
-
-    # Substitute numerical values for transformation parameters (lambda1_sym, c2_sym, etc.)
-    # This uses the point's method that knows about lambda1_sym, omega1_sym, s1_sym, s2_sym, c2_sym
-    expanded_numerical_modes = point.substitute_parameters(expanded_symbolic_params)
-    
-    # Substitute numerical values for remaining cn_k (k>2).
-    # point._cn(k) provides numeric values. create_symbolic_cn(k) provides symbolic versions.
-    # c2 is handled by substitute_parameters as c2_sym.
-    cn_substitutions = {create_symbolic_cn(n): point._cn(n) for n in range(3, max_degree + 1)}
-    
-    expanded_fully_numerical = expanded_numerical_modes.subs(cn_substitutions)
-
-    return symengine2poly(expanded_fully_numerical,
+                        max_degree: int, psi, clmo, complex_out: bool = False):
+    expr_sub = se.expand(expr.subs(subs))
+    return symengine2poly(expr_sub,
                                     var_out,
                                     max_degree,
                                     psi, clmo,
                                     complex_dtype=complex_out)
 
-
 def physical_to_real_normal_arrays(point, H_phys_arrays, max_degree, psi, clmo):
-    # Recover symbolic expression from arrays (utility below)
-    # Assuming H_phys_arrays came from an expression where c_n were already numeric.
     expr_phys = poly2symengine(H_phys_arrays,
-                                    get_vars(physical_vars), # Use get_vars for consistency
-                                    psi, clmo)
-    C, _ = point._symbolic_normal_form_transform()  # 6×6 numeric matrix from real point
-    
-    # Z_new uses the actual real_normal_vars symbols
-    real_vars = get_vars(real_normal_vars)
-    Z_new_matrix = se.Matrix(real_vars) # Use Matrix constructor with list of symbols
-    
-    subs_dict = {var: se.expand(sum(C[i, j]*Z_new_matrix[j] for j in range(6)))
-                 for i, var in enumerate(get_vars(physical_vars))}
-
-    return _linear_substitution(expr_phys, subs_dict,
-                                real_vars, # Pass the actual list of symbols
-                                max_degree, psi, clmo, point=point, complex_out=False)
+                            [x, y, z, px, py, pz],
+                            psi, clmo)
+    C, _ = point._symbolic_normal_form_transform()  # numeric matrix 6×6
+    Z_new = se.Matrix([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn])
+    subs = {var: se.expand(sum(C[i, j]*Z_new[j] for j in range(6)))
+            for i, var in enumerate([x, y, z, px, py, pz])}
+    return _linear_substitution(expr_phys, subs,
+                                [x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn],
+                                max_degree, psi, clmo, complex_out=False)
 
 
 def real_normal_to_complex_arrays(point, H_rn_arrays, max_degree, psi, clmo):
-    """Transform Hamiltonian from real normal to complex canonical coordinates.
-    
-    This transformation involves complex numbers, so the resulting arrays will have complex dtype.
-    The implementation follows exactly the same substitution as in the deprecated version.
-    """
-    # Convert arrays back to symbolic form for substitution
-    expr_rn = poly2symengine(H_rn_arrays, get_vars(real_normal_vars), psi, clmo)
-    
-    # Prepare the complex transformation
+    expr_rn = poly2symengine(H_rn_arrays,
+                            [x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn],
+                            psi, clmo)
     sqrt2 = se.sqrt(2)
-    
-    # Target variables - canonical complex normal form
-    q1, q2, q3, p1, p2, p3 = get_vars(canonical_normal_vars)
-    
-    # Source variables - real normal variables
-    x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn = get_vars(real_normal_vars)
-
-    # Use exact same substitution as the deprecated implementation
-    # This maps from real normal to complex canonical coordinates
     subs = {
-        x_rn: q1,                         # Center coordinate
-        y_rn: (q2 + se.I*p2) / sqrt2,     # Complex planar coordinate
-        z_rn: (q3 + se.I*p3) / sqrt2,     # Complex vertical coordinate
-        px_rn: p1,                        # Center momentum
-        py_rn: (se.I*q2 + p2) / sqrt2,    # Complex planar momentum
-        pz_rn: (se.I*q3 + p3) / sqrt2,    # Complex vertical momentum
+        x_rn: q1,
+        y_rn: (q2 + se.I*p2) / sqrt2,
+        z_rn: (q3 + se.I*p3) / sqrt2,
+        px_rn: p1,
+        py_rn: (se.I*q2 + p2) / sqrt2,
+        pz_rn: (se.I*q3 + p3) / sqrt2,
     }
-    
-    # Perform the substitution with full expansion
-    expanded = se.expand(expr_rn.subs(subs))
-    
-    # Handle parameter substitution like in the deprecated implementation
-    # This uses the point's method that knows about lambda1_sym, omega1_sym, s1_sym, s2_sym, c2_sym
-    expanded_with_params = point.substitute_parameters(expanded)
-    
-    # Substitute numerical values for remaining cn_k (k>2).
-    # point._cn(k) provides numeric values. create_symbolic_cn(k) provides symbolic versions.
-    # c2 is handled by substitute_parameters as c2_sym.
-    cn_substitutions = {create_symbolic_cn(n): point._cn(n) for n in range(3, max_degree + 1)}
-    expanded_fully_numerical = expanded_with_params.subs(cn_substitutions)
-    
-    # Clean numerical artifacts (similar to deprecated implementation)
-    # Convert to sympy for cleaning
-    import sympy as sp
-    expanded_sp = sp.sympify(expanded_fully_numerical)
-    from algorithms.center._deprecated.dep_core import _clean_numerical_artifacts
-    cleaned_sp = _clean_numerical_artifacts(expanded_sp, tol=1e-16)
-    cleaned_expr = se.sympify(cleaned_sp)  # Convert back to symengine
-    
-    # Important: set complex_dtype=True to ensure arrays have complex dtype
-    # and all the imaginary terms are correctly preserved
-    return symengine2poly(cleaned_expr,
-                         get_vars(canonical_normal_vars),
-                         max_degree,
-                         psi, clmo,
-                         complex_dtype=True)
+    return _linear_substitution(expr_rn, subs,
+                                [q1, q2, q3, p1, p2, p3],
+                                max_degree, psi, clmo, complex_out=True)
 
 
 def complex_to_real_arrays(point, H_cn_arrays, max_degree, psi, clmo):
-    # Assuming H_cn_arrays came from an expression where relevant params were numeric
     expr_cn = poly2symengine(H_cn_arrays,
-                                     get_vars(canonical_normal_vars), # Use get_vars
-                                     psi, clmo)
+                            [q1, q2, q3, p1, p2, p3],
+                            psi, clmo)
     sqrt2 = se.sqrt(2)
-
-    # Target variables
-    rn_vars_ordered = get_vars(real_normal_vars)
-    x_rn_s, y_rn_s, z_rn_s, px_rn_s, py_rn_s, pz_rn_s = rn_vars_ordered
-
-    # Source variables
-    q1_s, q2_s, q3_s, p1_s, p2_s, p3_s = get_vars(canonical_normal_vars)
-    
     subs = {
-        q1_s: x_rn_s,
-        q2_s: (y_rn_s - se.I*py_rn_s) / sqrt2,
-        q3_s: (z_rn_s - se.I*pz_rn_s) / sqrt2,
-        p1_s: px_rn_s,
-        p2_s: (py_rn_s - se.I*y_rn_s) / sqrt2, # Note: original had I*q2_s here, fixed from Jorba. JM(12) py_rn - I y_rn for p2
-        p3_s: (pz_rn_s - se.I*z_rn_s) / sqrt2, # Note: original had I*q3_s here, fixed from Jorba. JM(12) pz_rn - I z_rn for p3
+        q1: x_rn,
+        q2: (y_rn - se.I*py_rn) / sqrt2,
+        q3: (z_rn - se.I*pz_rn) / sqrt2,
+        p1: px_rn,
+        p2: (py_rn - se.I*y_rn) / sqrt2,
+        p3: (pz_rn - se.I*z_rn) / sqrt2,
     }
     return _linear_substitution(expr_cn, subs,
-                                rn_vars_ordered, # Pass the actual list of symbols
-                                max_degree, psi, clmo, point=point, complex_out=False)
+                                [x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn],
+                                max_degree, psi, clmo, complex_out=True)
 
 
 @njit(fastmath=True, cache=True)
