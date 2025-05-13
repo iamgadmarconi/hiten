@@ -122,15 +122,28 @@ def _extract_symengine_term_details(term: se.Basic, variables: list[se.Symbol]) 
     for factor in factors:
         if isinstance(factor, se.Pow):
             base, exp_obj = factor.args
-            # Ensure exponent is a SymEngine Integer and convert to Python int
-            if not isinstance(exp_obj, se.Integer):
-                raise ValueError(f"Exponent in Pow '{factor}' is not an integer: {exp_obj}")
-            exp = int(exp_obj)
-            try:
-                var_idx = variables.index(base)
-                k[var_idx] = exp
-            except ValueError:
-                raise ValueError(f"Variable '{base}' in term '{term}' not found in variables list: {variables}")
+            if isinstance(base, se.Symbol) and isinstance(exp_obj, se.Integer):
+                # This is a variable raised to an integer power
+                exp = int(exp_obj)
+                try:
+                    var_idx = variables.index(base)
+                    k[var_idx] = exp
+                except ValueError:
+                    raise ValueError(f"Variable '{base}' in term '{term}' not found in variables list: {variables}")
+            elif isinstance(base, se.Number):
+                # This is a number raised to some power (e.g., sqrt(2) which is 2**(1/2))
+                # It should be treated as part of the coefficient.
+                num_factor_val = factor.evalf()
+                if isinstance(internal_coeff_accumulator, complex) or isinstance(num_factor_val, (se.ComplexMPC, se.ComplexDouble, complex)):
+                    if not isinstance(internal_coeff_accumulator, complex):
+                        internal_coeff_accumulator = complex(internal_coeff_accumulator)
+                    internal_coeff_accumulator *= complex(num_factor_val)
+                else:
+                    internal_coeff_accumulator *= float(num_factor_val)
+            else:
+                # Other Pow cases (e.g., symbolic base with non-integer exponent, or non-numeric base)
+                # This might indicate an expression structure not directly convertible by this function.
+                raise ValueError(f"Unhandled Pow factor: '{factor}'. Base type: {type(base)}, Exp type: {type(exp_obj)}. Term: '{term}'")
         elif isinstance(factor, se.Symbol):
             try:
                 var_idx = variables.index(factor)

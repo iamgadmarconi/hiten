@@ -2,12 +2,11 @@ import symengine as se
 import numpy as np
 import sympy as sp  # Add sympy import for numerical cleanup
 
-from .core import Polynomial, _clean_numerical_artifacts
+from .dep_core import Polynomial, _clean_numerical_artifacts
 from system.libration import LibrationPoint
 from log_config import logger
 
 from algorithms.variables import physical_vars, real_normal_vars, canonical_normal_vars, linear_modes_vars, scale_factors_vars, get_vars, create_symbolic_cn
-from ..polynomial.base import symengine_to_custom_poly
 
 x, y, z, px, py, pz = get_vars(physical_vars)
 x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn = get_vars(real_normal_vars)
@@ -114,7 +113,7 @@ def real_normal_to_complex_canonical(point: LibrationPoint, H_real_normal: Polyn
     Parameters
     ----------
     point : LibrationPoint
-        Must implement `normal_form_transform()` → (C, Cinv) with C \subset \mathbb{R}^{6 \times 6}.
+        Must implement `normal_form_transform()` → (C, Cinv) with C \\subset \mathbb{R}^{6 \times 6}.
     H_real_normal : Polynomial
         Hamiltonian in the real normal-form variables
         (x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn).
