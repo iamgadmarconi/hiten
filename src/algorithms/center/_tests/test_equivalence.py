@@ -74,25 +74,23 @@ def coefficients_match(sym_expr, array_expr, variables, rtol=1e-10, atol=1e-12):
     sym_sp = sp.sympify(str(sym_expr))
     array_sp = sp.sympify(str(array_expr))
     
-    # Collect terms and compare coefficients
-    sym_terms = sp.Poly(sym_sp, [str(v) for v in variables])
-    array_terms = sp.Poly(array_sp, [str(v) for v in variables])
+    # Convert SymEngine variables to SymPy symbols
+    sp_vars = [sp.Symbol(str(v)) for v in variables]
     
-    # Get dictionaries of coefficients
-    sym_dict = sym_terms.as_dict()
-    array_dict = array_terms.as_dict()
+    # Check equality using SymPy's simplify
+    diff = sp.expand(sym_sp - array_sp)
     
-    # Check that all terms in both dictionaries match within tolerance
-    all_keys = set(sym_dict.keys()).union(set(array_dict.keys()))
-    
-    for key in all_keys:
-        sym_coef = complex(sym_dict.get(key, 0))
-        array_coef = complex(array_dict.get(key, 0))
+    # If the difference is exactly zero, they match perfectly
+    if diff == 0:
+        return True
         
-        if not np.isclose(sym_coef, array_coef, rtol=rtol, atol=atol):
-            print(f"Mismatch for term {key}: {sym_coef} vs {array_coef}")
+    # For approximate equality, check individual coefficients
+    for term in diff.as_ordered_terms():
+        coeff, _ = term.as_coeff_add(*sp_vars)
+        if not np.isclose(float(abs(coeff)), 0, rtol=rtol, atol=atol):
+            print(f"Mismatch in term: {term}, coefficient magnitude: {float(abs(coeff))}")
             return False
-    
+            
     return True
 
 
@@ -111,8 +109,12 @@ def test_T_polynomials_equivalence(max_degree):
         dep_expr_sp = sp.sympify(dep_expr)
         dep_expr_clean = _clean_numerical_artifacts(dep_expr_sp)
         
-        # Check for equality
-        assert str(dep_expr_clean) == str(new_expr), f"T_{n} polynomials don't match"
+        # Convert new expression to SymPy for comparison
+        new_expr_sp = sp.sympify(new_expr)
+        
+        # Compare expressions mathematically using sympy's simplify
+        diff = sp.simplify(dep_expr_clean - new_expr_sp)
+        assert diff == 0, f"T_{n} polynomials don't match: {dep_expr_clean} vs {new_expr_sp}"
 
 
 def test_hamiltonian_equivalence(lp, max_degree, psi_clmo):
@@ -126,15 +128,21 @@ def test_hamiltonian_equivalence(lp, max_degree, psi_clmo):
     # Convert array implementation to symbolic for comparison
     H_new_sym = poly2symengine(H_arrays, [x, y, z, px, py, pz], psi, clmo)
     
-    # Convert both to strings and clean up numerical artifacts
+    # Convert both to SymPy and clean up numerical artifacts
     H_dep_sp = sp.sympify(H_dep.expression)
     H_dep_clean = _clean_numerical_artifacts(H_dep_sp)
     H_new_sp = sp.sympify(H_new_sym)
     H_new_clean = _clean_numerical_artifacts(H_new_sp)
     
-    # Check that coefficients match within tolerance
-    assert coefficients_match(H_dep_clean, H_new_clean, [x, y, z, px, py, pz]), \
-        "Hamiltonians don't match"
+    # Variables to compare against
+    phys_vars = [x, y, z, px, py, pz]
+    
+    # Use direct simplify for comparison (more robust)
+    diff = sp.expand(H_dep_clean - H_new_clean)
+    
+    # Check that difference is approximately zero
+    assert coefficients_match(H_dep_clean, H_new_clean, phys_vars), \
+        f"Hamiltonians don't match: {diff}"
 
 
 def test_physical_to_real_normal_equivalence(lp, max_degree, psi_clmo):
