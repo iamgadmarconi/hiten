@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 from numba.typed import List
 import symengine as se
+import random
 
 from algorithms.center.polynomial.base import init_index_tables, make_poly, encode_multiindex, decode_multiindex
 from algorithms.variables import N_VARS
@@ -153,3 +154,20 @@ def test_multi_index_roundtrip():
             
             # Verify multiindices are identical
             np.testing.assert_array_equal(k1, k2)
+
+
+@pytest.mark.parametrize("deg", [0, 1, 2, 3, 4, 5, 6])
+def test_encode_decode_roundtrip(deg):
+    psi, clmo = init_index_tables(6)
+    # draw 10 random exponent vectors of total degree = deg
+    for _ in range(10):
+        k = np.zeros(N_VARS, dtype=np.int64)
+        remaining = deg
+        for i in range(N_VARS - 1):
+            k[i] = random.randint(0, remaining)
+            remaining -= k[i]
+        k[-1] = remaining
+        idx = encode_multiindex(k, deg, psi, clmo)
+        assert idx >= 0
+        k_back = decode_multiindex(idx, deg, clmo)
+        assert np.array_equal(k_back, k)

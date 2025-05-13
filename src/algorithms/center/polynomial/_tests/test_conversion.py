@@ -10,7 +10,7 @@ from algorithms.center.polynomial.conversions import (
     symengine2poly,
     poly2symengine,
 )
-from algorithms.variables import N_VARS, q1, q2, q3, p1, p2, p3
+from algorithms.variables import N_VARS, q1, q2, q3, p1, p2, p3, x, y, z, px, py, pz
 
 # Initialize tables for tests
 MAX_DEGREE = 5
@@ -427,10 +427,9 @@ def test_poly2symengine_round_trip():
     
     # Check if the difference is "close enough" to zero.
     if diff.is_Number:
-        assert abs(complex(diff.evalf())) < 1e-12 # Allow for small floating point errors
+        assert abs(diff.evalf()) < 1e-12  # Allow small floating-point errors
     else:
-        # If not a number, it means there are symbolic terms left, which is an error.
-        assert diff == 0, f"Round trip failed. Difference is not zero: {diff}"
+        assert diff == 0
 
     # Test with a purely real expression too
     original_expr_real = 2*x0 + 3*x1**2 - 4*x0*x2**3
@@ -444,3 +443,21 @@ def test_poly2symengine_round_trip():
         assert abs(diff_real.evalf()) < 1e-12
     else:
         assert diff_real == 0, f"Round trip failed for real expression. Difference is not zero: {diff_real}"
+
+@pytest.mark.parametrize("complex_flag", [False, True])
+def test_symengine_conversion_identity(complex_flag):
+    psi, clmo = init_index_tables(4)
+    # build a toy expression with real and optional complex coeffs
+    expr = 3*x**2*p1 - 5*y*p2 + 7
+    if complex_flag:
+        expr += (2+1j)*p3**2  # Use p3 instead of q2
+    
+    variables = [x, y, z, p1, p2, p3]  # Use the same variables list for both cases
+    
+    arrays = symengine2poly(expr, variables, 4, psi, clmo, complex_dtype=complex_flag)
+    expr_back = poly2symengine(arrays, variables, psi, clmo)
+    diff = se.expand(expr - expr_back)
+    if diff.is_Number:
+        assert abs(diff.evalf()) < 1e-12  # Allow small floating-point errors
+    else:
+        assert diff == 0, f"Round trip failed. Difference is not zero: {diff}"
