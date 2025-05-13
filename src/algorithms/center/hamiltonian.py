@@ -7,7 +7,7 @@ from system.libration import LibrationPoint
 from log_config import logger
 
 from ..variables import physical_vars, real_normal_vars, canonical_normal_vars, linear_modes_vars, scale_factors_vars, get_vars, create_symbolic_cn
-
+from ..polynomial.base import symengine_to_custom_poly
 
 x, y, z, px, py, pz = get_vars(physical_vars)
 x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn = get_vars(real_normal_vars)
@@ -23,7 +23,7 @@ def _build_T_polynomials(N: int) -> list[se.Basic]:
     if N == 1:
         return [se.Integer(1), x]
         
-    T = [se.Integer(1), x]          # T0, T1
+    T = [se.Integer(1), x]
     for n in range(2, N + 1):
         n_ = se.Integer(n)
         Tn = ( (2*n_-1)/n_ ) * x * T[n-1] - ( (n_-1)/n_ ) * (x**2 + y**2 + z**2) * T[n-2]
@@ -52,6 +52,18 @@ def hamiltonian(point: LibrationPoint, max_degree: int = 6) -> Polynomial:
     H_phys = se.expand(K + U)
 
     return Polynomial([x, y, z, px, py, pz], H_phys)
+
+
+def hamiltonian_arrays(point, max_degree, psi, clmo):
+    """
+    Return H_phys as list[np.ndarray] in the order [x,y,z,px,py,pz].
+    """
+    expr = hamiltonian(point, max_degree).expansion.expression
+    return symengine_to_custom_poly(expr,
+                                    [x, y, z, px, py, pz],
+                                    max_degree,
+                                    psi, clmo,
+                                    complex_dtype=False)
 
 
 def physical_to_real_normal(point: LibrationPoint, H_phys: Polynomial, symbolic: bool = False, max_degree: int = None) -> Polynomial:

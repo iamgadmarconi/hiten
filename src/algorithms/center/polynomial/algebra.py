@@ -4,7 +4,7 @@ from numba import njit
 from numba.typed import List
 
 from algorithms.variables import N_VARS
-from algorithms.polynomial.base import encode_multiindex, decode_multiindex
+from algorithms.center.polynomial.base import encode_multiindex, decode_multiindex
 
 
 @njit(fastmath=True, cache=True)

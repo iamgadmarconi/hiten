@@ -2,11 +2,11 @@ import numpy as np
 import pytest
 from numba.typed import List
 
-from algorithms.polynomial.base import init_index_tables, make_poly, encode_multiindex, decode_multiindex
+from algorithms.center.polynomial.base import init_index_tables, make_poly, encode_multiindex, decode_multiindex
 from algorithms.variables import N_VARS
 from algorithms.center.lie import (_get_homogeneous_terms, _select_terms_for_elimination, 
                                   _solve_homological_equation, _apply_lie_transform, lie_transform)
-from algorithms.polynomial.algebra import poisson
+from algorithms.center.polynomial.algebra import poisson
 
 # Initialize tables for tests
 MAX_DEGREE = 5

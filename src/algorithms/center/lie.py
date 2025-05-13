@@ -5,8 +5,8 @@ from numba.typed import List
 import numpy as np
 
 from algorithms.variables import N_VARS
-from algorithms.polynomial.base import decode_multiindex, make_poly
-from algorithms.polynomial.algebra import poisson
+from algorithms.center.polynomial.base import decode_multiindex, make_poly
+from algorithms.center.polynomial.algebra import poisson
 
 
 def lie_transform(

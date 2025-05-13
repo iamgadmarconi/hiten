@@ -4,9 +4,9 @@ from numba.typed import List
 import symengine as se
 import re # Import re module
 
-from algorithms.polynomial.base import init_index_tables, make_poly, encode_multiindex, decode_multiindex, _extract_symengine_term_details, symengine_to_custom_poly
-from algorithms.polynomial.algebra import poly_add, poly_scale, poly_mul, differentiate, poisson
-from algorithms.variables import N_VARS
+from algorithms.center.polynomial.base import init_index_tables, make_poly, encode_multiindex, decode_multiindex, _extract_symengine_term_details, symengine_to_custom_poly
+from algorithms.center.polynomial.algebra import poly_add, poly_scale, poly_mul, differentiate, poisson
+from algorithms.variables import N_VARS, q1, q2, q3, p1, p2, p3
 
 # Initialize tables for tests
 MAX_DEGREE = 5
@@ -1780,6 +1780,7 @@ def test_symengine_to_custom_poly_error_handling():
     with pytest.raises(ValueError, match="Variable 'y_unlisted' in term"):
         symengine_to_custom_poly(expr_unknown_var, list(s_vars), 1, PSI, CLMO)
 
+
 def test_symengine_to_custom_poly_variable_order():
     """Test that the order of variables matters and is respected."""
     x0, x1 = s_vars[0], s_vars[1] # Assuming N_VARS >= 2
@@ -1819,3 +1820,16 @@ def test_symengine_to_custom_poly_variable_order():
 
         assert poly_list_swapped[1][idx_x0_in_swapped] == 2.0 # Coeff of x0
         assert poly_list_swapped[1][idx_x1_in_swapped] == 3.0 # Coeff of x1
+
+
+def test_pipeline():
+    psi, clmo = init_index_tables(6)
+    expr = (3+2j)*q1**2*p1 - 5*q2*p2 + 7      # toy H
+    poly = symengine_to_custom_poly(expr,
+                                    [q1,q2,q3,p1,p2,p3],
+                                    max_degree=6,
+                                    psi=psi, clmo=clmo,
+                                    complex_dtype=True)
+    assert abs(poly[3][encode_multiindex(np.array([2,0,0,1,0,0]),3,psi,clmo)]-(3+2j)) < 1e-12
+    assert abs(poly[2][encode_multiindex(np.array([0,1,0,0,1,0]),2,psi,clmo)]+5) < 1e-12
+    assert poly[0][0] == 7
