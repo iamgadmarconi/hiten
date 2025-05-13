@@ -116,26 +116,9 @@ def complex_to_real_arrays(point, H_cn_arrays, max_degree, psi, clmo):
                                 max_degree, psi, clmo, complex_out=True)
 
 
-def poly_list_to_symengine(poly_list, variables, psi, clmo):
-    """Convert list[np.ndarray] back to a SymEngine expression (for substitutions)."""
-    expr = se.Integer(0)
-    for d, coeffs in enumerate(poly_list):
-        for idx in range(coeffs.size):
-            c = coeffs[idx]
-            if c == 0:
-                continue
-            k = decode_multiindex(idx, d, clmo)
-            mon = se.Integer(1)
-            for var, exp in zip(variables, k):
-                if exp:
-                    mon *= var**exp
-            expr += c * mon
-    return se.expand(expr)
-
-
 @njit(fastmath=True, cache=True)
 def _zero_q1_p1(H_list):
-    """Set coefficients with q1 or p1 exponents >0 to zero (in‑place)."""
+    """Set coefficients with q1 or p1 exponents >0 to zero (in-place)."""
     for d in range(len(H_list)):
         arr = H_list[d]
         if arr.size == 0:
@@ -169,7 +152,7 @@ def compute_center_manifold_arrays(point, max_degree):
 
 def reduce_center_manifold_arrays(point, max_degree):
     H_cnt, _ = compute_center_manifold_arrays(point, max_degree)
-    _zero_q1_p1(H_cnt)                    # kill hyperbolic pair
+    _zero_q1_p1(H_cnt)
     return H_cnt
 
 
