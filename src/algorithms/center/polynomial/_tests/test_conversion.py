@@ -123,7 +123,7 @@ def test_extract_symengine_term_details_error_handling():
     with pytest.raises(ValueError, match=match_pattern):
         _extract_symengine_term_details(term_symbolic_coeff, list(s_vars))
 
-def test_symengine_to_custom_poly_zero_and_constant():
+def test_symengine2poly_zero_and_constant():
     """Test symengine2poly with zero and constant expressions."""
     expr_zero = se.Integer(0)
     poly_list_zero = symengine2poly(expr_zero, list(s_vars), MAX_DEGREE, PSI, CLMO)
@@ -144,7 +144,7 @@ def test_symengine_to_custom_poly_zero_and_constant():
         else: # Higher degrees
             assert np.all(d_poly == 0.0)
 
-def test_symengine_to_custom_poly_simple_real():
+def test_symengine2poly_simple_real():
     """Test symengine2poly with a simple real polynomial."""
     x0, x1, x2, x3, x4, x5 = s_vars
     expr = 1 + 2*x0 + 3*x1**2 - 4*x0*x2**3 # Max degree of this term is 4
@@ -182,7 +182,7 @@ def test_symengine_to_custom_poly_simple_real():
     assert poly_list_trunc[2][idx_x1sq] == 3.0
     # Higher degree terms should not be present.
 
-def test_symengine_to_custom_poly_complex():
+def test_symengine2poly_complex():
     """Test symengine2poly with complex coefficients."""
     x0, x1, x2, x3, x4, x5 = s_vars
     expr = (1+2*se.I) + (3-1*se.I)*x0 + (0.5+0.5*se.I)*x1**2
@@ -213,7 +213,7 @@ def test_symengine_to_custom_poly_complex():
     assert poly_list_real_dom[1][idx_x0] == pytest.approx(2.0)
 
 
-def test_symengine_to_custom_poly_tolerance():
+def test_symengine2poly_tolerance():
     """Test coefficient tolerance in symengine2poly."""
     x0, x1, x2, x3, x4, x5 = s_vars
     expr = 1e-20 * x0 + 5 * x1 
@@ -236,7 +236,7 @@ def test_symengine_to_custom_poly_tolerance():
     assert poly_list_jad[1][idx_x0] == 1e-17
 
 
-def test_symengine_to_custom_poly_error_handling():
+def test_symengine2poly_error_handling():
     """Test various error conditions for symengine2poly."""
     x0, x1, x2, x3, x4, x5 = s_vars
 
@@ -267,7 +267,7 @@ def test_symengine_to_custom_poly_error_handling():
         symengine2poly(expr_unknown_var, list(s_vars), 1, PSI, CLMO)
 
 
-def test_symengine_to_custom_poly_variable_order():
+def test_symengine2poly_variable_order():
     """Test that the order of variables matters and is respected."""
     x0, x1 = s_vars[0], s_vars[1] # Assuming N_VARS >= 2
     
@@ -307,7 +307,6 @@ def test_symengine_to_custom_poly_variable_order():
         assert poly_list_swapped[1][idx_x0_in_swapped] == 2.0 # Coeff of x0
         assert poly_list_swapped[1][idx_x1_in_swapped] == 3.0 # Coeff of x1
 
-
 def test_pipeline():
     psi, clmo = init_index_tables(6)
     expr = (3+2j)*q1**2*p1 - 5*q2*p2 + 7      # toy H
@@ -319,3 +318,129 @@ def test_pipeline():
     assert abs(poly[3][encode_multiindex(np.array([2,0,0,1,0,0]),3,psi,clmo)]-(3+2j)) < 1e-12
     assert abs(poly[2][encode_multiindex(np.array([0,1,0,0,1,0]),2,psi,clmo)]+5) < 1e-12
     assert poly[0][0] == 7
+
+def test_poly2symengine_zero():
+    """Test poly2symengine with a zero polynomial."""
+    poly_list_zero = [np.zeros(PSI[N_VARS, d]) for d in range(MAX_DEGREE + 1)]
+    expr_zero_restored = poly2symengine(poly_list_zero, list(s_vars), PSI, CLMO)
+    assert expr_zero_restored == se.Integer(0)
+
+def test_poly2symengine_constant():
+    """Test poly2symengine with a constant polynomial."""
+    poly_list_const = [np.zeros(PSI[N_VARS, d]) for d in range(MAX_DEGREE + 1)]
+    if PSI[N_VARS, 0] > 0: # Should be 1 for degree 0
+        poly_list_const[0][0] = 7.0
+    
+    expr_const_restored = poly2symengine(poly_list_const, list(s_vars), PSI, CLMO)
+    assert expr_const_restored == 7.0
+
+def test_poly2symengine_simple_real():
+    """Test poly2symengine with a simple real polynomial."""
+    x0, x1, x2, x3, x4, x5 = s_vars
+    
+    # Create a poly_list representing: 1 + 2*x0 + 3*x1**2 - 4*x0*x2**3 (max degree 4)
+    current_max_degree = 4
+    poly_list = [np.zeros(PSI[N_VARS, d]) for d in range(current_max_degree + 1)]
+
+    # Degree 0: constant term 1
+    idx_const = encode_multiindex(np.array([0]*N_VARS, dtype=np.int64), 0, PSI, CLMO)
+    poly_list[0][idx_const] = 1.0
+    
+    # Degree 1: 2*x0
+    idx_x0 = encode_multiindex(np.array([1,0,0,0,0,0], dtype=np.int64), 1, PSI, CLMO)
+    poly_list[1][idx_x0] = 2.0
+    
+    # Degree 2: 3*x1**2
+    idx_x1sq = encode_multiindex(np.array([0,2,0,0,0,0], dtype=np.int64), 2, PSI, CLMO)
+    poly_list[2][idx_x1sq] = 3.0
+
+    # Degree 4: -4*x0*x2**3
+    k_x0x2_3 = np.zeros(N_VARS, dtype=np.int64)
+    k_x0x2_3[0] = 1
+    k_x0x2_3[2] = 3
+    idx_x0x2_3 = encode_multiindex(k_x0x2_3, 4, PSI, CLMO)
+    poly_list[4][idx_x0x2_3] = -4.0
+    
+    restored_expr = poly2symengine(poly_list, list(s_vars), PSI, CLMO)
+    
+    expected_expr = se.Integer(1) + 2*x0 + 3*x1**2 - 4*x0*x2**3
+    # SymEngine might order terms differently, so check expanded difference is zero
+    diff = se.expand(restored_expr - expected_expr)
+    if diff.is_Number:
+        assert abs(diff.evalf()) < 1e-12 # Check if numerically zero
+    else:
+        assert diff == 0, f"Difference is not zero: {diff}"
+
+def test_poly2symengine_complex():
+    """Test poly2symengine with complex coefficients."""
+    x0, x1 = s_vars[0], s_vars[1]
+    current_max_degree = 2
+    poly_list = [np.zeros(PSI[N_VARS, d], dtype=np.complex128) for d in range(current_max_degree + 1)]
+
+    # (1+2j)
+    idx_const = encode_multiindex(np.array([0]*N_VARS, dtype=np.int64), 0, PSI, CLMO)
+    poly_list[0][idx_const] = complex(1.0, 2.0)
+
+    # (3-1j)*x0
+    idx_x0 = encode_multiindex(np.array([1,0,0,0,0,0], dtype=np.int64), 1, PSI, CLMO)
+    poly_list[1][idx_x0] = complex(3.0, -1.0)
+
+    # (0.5+0.5j)*x1**2
+    idx_x1sq = encode_multiindex(np.array([0,2,0,0,0,0], dtype=np.int64), 2, PSI, CLMO)
+    poly_list[2][idx_x1sq] = complex(0.5, 0.5)
+
+    restored_expr = poly2symengine(poly_list, list(s_vars), PSI, CLMO)
+    
+    expected_expr = (1+2*se.I) + (3-1*se.I)*x0 + (0.5+0.5*se.I)*x1**2
+    # For complex numbers, direct comparison might have floating point issues.
+    # SymEngine's expand and subtract should handle it.
+    diff = se.expand(restored_expr - expected_expr)
+    
+    # Check if the difference is "close enough" to zero.
+    # One way is to convert to our poly format and check coefficients.
+    # Or, substitute random values (more involved).
+    # For now, let's assume if diff.is_Number and abs(diff) is small, it's okay.
+    # A more robust check might involve checking coefficients of the difference.
+    if diff.is_Number:
+        assert abs(complex(diff.evalf())) < 1e-12 # Allow for small floating point errors
+    else: # If not a number, it means there are symbolic terms left, which is an error.
+        # To be more precise, check if it's truly zero symbolically
+        assert diff == 0, f"Difference is not zero: {diff}"
+
+def test_poly2symengine_round_trip():
+    """Test symengine -> poly -> symengine round trip."""
+    x0, x1, x2 = s_vars[0], s_vars[1], s_vars[2]
+    
+    original_expr = 1.5 * x0 - 2.0 * x1**2 * x2 + 0.5 * x0*x1*x2 + (3.0 - 4.0*se.I) * x2**3
+    max_deg_expr = 3 # Max degree of original_expr
+    
+    # 1. Convert symengine to poly
+    poly_representation = symengine2poly(original_expr, list(s_vars), max_deg_expr, PSI, CLMO, complex_dtype=True)
+    
+    # 2. Convert poly back to symengine
+    restored_expr = poly2symengine(poly_representation, list(s_vars), PSI, CLMO)
+    
+    # 3. Compare original and restored expressions
+    # The expressions should be symbolically equivalent.
+    # Expanding the difference should result in 0.
+    diff = se.expand(original_expr - restored_expr)
+    
+    # Check if the difference is "close enough" to zero.
+    if diff.is_Number:
+        assert abs(complex(diff.evalf())) < 1e-12 # Allow for small floating point errors
+    else:
+        # If not a number, it means there are symbolic terms left, which is an error.
+        assert diff == 0, f"Round trip failed. Difference is not zero: {diff}"
+
+    # Test with a purely real expression too
+    original_expr_real = 2*x0 + 3*x1**2 - 4*x0*x2**3
+    max_deg_real = 4
+
+    poly_rep_real = symengine2poly(original_expr_real, list(s_vars), max_deg_real, PSI, CLMO, complex_dtype=False)
+    restored_expr_real = poly2symengine(poly_rep_real, list(s_vars), PSI, CLMO)
+    diff_real = se.expand(original_expr_real - restored_expr_real)
+    # Check if the difference is "close enough" to zero for real case.
+    if diff_real.is_Number:
+        assert abs(diff_real.evalf()) < 1e-12
+    else:
+        assert diff_real == 0, f"Round trip failed for real expression. Difference is not zero: {diff_real}"

@@ -11,6 +11,7 @@ from algorithms.variables import N_VARS
 
 def poly2symengine(poly_list, variables, psi, clmo):
     """Convert list[np.ndarray] back to a SymEngine expression (for substitutions)."""
+    expr = se.Integer(0)  # Initialize expr
     for d, coeffs in enumerate(poly_list):
         for idx in range(coeffs.size):
             c = coeffs[idx]
