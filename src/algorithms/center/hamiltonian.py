@@ -1,13 +1,17 @@
 import symengine as se
 import numpy as np
-import sympy as sp  # Add sympy import for numerical cleanup
+from numba import njit
 
-from .core import Polynomial, _clean_numerical_artifacts
-from system.libration import LibrationPoint
-from log_config import logger
-
-from ..variables import physical_vars, real_normal_vars, canonical_normal_vars, linear_modes_vars, scale_factors_vars, get_vars, create_symbolic_cn
-from ..polynomial.base import symengine_to_custom_poly
+from algorithms.center.polynomial.base import (
+    init_index_tables, decode_multiindex,
+    symengine_to_custom_poly
+)
+from algorithms.center.lie import lie_transform
+from algorithms.variables import (
+    physical_vars, real_normal_vars, canonical_normal_vars,
+    get_vars, create_symbolic_cn,
+    linear_modes_vars, scale_factors_vars, N_VARS
+)
 
 x, y, z, px, py, pz = get_vars(physical_vars)
 x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn = get_vars(real_normal_vars)
@@ -17,48 +21,32 @@ s1, s2 = get_vars(scale_factors_vars)
 
 
 def _build_T_polynomials(N: int) -> list[se.Basic]:
-    """Return [T0 … TN] using the Legendre recurrence (paper eq. 6)."""
+    """Return [T0 … TN] via the Legendre-type recurrence (JM99, eq. 6)."""
     if N == 0:
         return [se.Integer(1)]
     if N == 1:
         return [se.Integer(1), x]
-        
+
     T = [se.Integer(1), x]
     for n in range(2, N + 1):
         n_ = se.Integer(n)
-        Tn = ( (2*n_-1)/n_ ) * x * T[n-1] - ( (n_-1)/n_ ) * (x**2 + y**2 + z**2) * T[n-2]
+        Tn = ((2*n_ - 1)/n_) * x * T[n-1] - ((n_-1)/n_) * (x**2 + y**2 + z**2) * T[n-2]
         T.append(se.expand(Tn))
     return T
 
 
-def hamiltonian(point: LibrationPoint, max_degree: int = 6) -> Polynomial:
-    """
-    Construct the Hamiltonian expansion (eq. 4) around the chosen collinear point,
-    already translated & scaled so that (x,y,z)=(0,0,0) is the equilibrium.
-
-    Returns a Polynomial in the *physical* coordinates (x,y,z,px,py,pz).
-    """
-    T = _build_T_polynomials(max_degree)
-
-    c = [None, None]   # c_0, c_1 unused
-    for n in range(2, max_degree + 1):
-        # c.append(point._cn(n))
-        c.append(create_symbolic_cn(n))
-
-    U = -se.Add(*[c[n] * T[n] for n in range(2, max_degree + 1)])
-
-    K = se.Rational(1,2)*(px**2 + py**2 + pz**2) + y*px - x*py
-
-    H_phys = se.expand(K + U)
-
-    return Polynomial([x, y, z, px, py, pz], H_phys)
-
-
 def hamiltonian_arrays(point, max_degree, psi, clmo):
-    """
-    Return H_phys as list[np.ndarray] in the order [x,y,z,px,py,pz].
-    """
-    expr = hamiltonian(point, max_degree).expansion.expression
+    """Return H_phys as a list of NumPy arrays (degree-indexed)."""
+    # Build symbolic expansion once (cheap, O(max_degree^2))
+    T = _build_T_polynomials(max_degree)
+    coeffs = [None, None]  # c_0, c_1 unused
+    for n in range(2, max_degree+1):
+        coeffs.append(create_symbolic_cn(n))  # keep symbolic for later substitution
+
+    U = -se.Add(*[coeffs[n] * T[n] for n in range(2, max_degree+1)])
+    K = se.Rational(1, 2) * (px**2 + py**2 + pz**2) + y*px - x*py
+    expr = se.expand(K + U)
+
     return symengine_to_custom_poly(expr,
                                     [x, y, z, px, py, pz],
                                     max_degree,
@@ -66,185 +54,126 @@ def hamiltonian_arrays(point, max_degree, psi, clmo):
                                     complex_dtype=False)
 
 
-def physical_to_real_normal(point: LibrationPoint, H_phys: Polynomial, symbolic: bool = False, max_degree: int = None) -> Polynomial:
-    """
-    Express the physical CR3BP Hamiltonian around a collinear point in the
-    real normal-form variables (x,y,z,px,py,pz) used for the centre-
-    manifold normal-form computation (Jorba & Masdemont, 1999).
+def _linear_substitution(expr: se.Basic, subs: dict, var_out: list[se.Symbol],
+                        max_degree: int, psi, clmo, complex_out: bool = False):
+    """Apply `subs` to `expr`, expand, convert to coefficient arrays."""
+    expanded = se.expand(expr.subs(subs))
+    return symengine_to_custom_poly(expanded,
+                                    var_out,
+                                    max_degree,
+                                    psi, clmo,
+                                    complex_dtype=complex_out)
 
-    Parameters
-    ----------
-    point : LibrationPoint
-        The LibrationPoint object
-    H_phys : Polynomial
-        The physical Hamiltonian to transform
 
-    Returns
-    -------
-    Polynomial
-        The transformed Hamiltonian in real normal-form variables with symbolic parameters
-    """
-    # Get the symbolic transformation matrices
-    C, Cinv = point._symbolic_normal_form_transform()
-
-    # Create the new coordinate vector
+def physical_to_real_normal_arrays(point, H_phys_arrays, max_degree, psi, clmo):
+    # Recover symbolic expression from arrays (utility below)
+    expr_phys = poly_list_to_symengine(H_phys_arrays,
+                                    [x, y, z, px, py, pz],
+                                    psi, clmo)
+    C, _ = point._symbolic_normal_form_transform()  # 6×6 numeric matrix
     Z_new = se.Matrix([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn])
+    subs = {var: se.expand(sum(C[i, j]*Z_new[j] for j in range(6)))
+            for i, var in enumerate([x, y, z, px, py, pz])}
 
-    # Build the substitution dictionary from physical to real normal coordinates
-    subs_dict = {}
-    for i, var in enumerate([x, y, z, px, py, pz]):
-        expr = 0
-        for j in range(6):
-            expr += C[i, j] * Z_new[j]
-        subs_dict[var] = se.expand(expr)
-    
-    H_rn = H_phys.subs(subs_dict).expansion.expression
+    return _linear_substitution(expr_phys, subs,
+                                [x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn],
+                                max_degree, psi, clmo, complex_out=False)
 
-    if not symbolic:
-        if not max_degree:
-            err = "Max degree must be provided if symbolic is False"
-            logger.error(err)
-            raise ValueError(err)
 
-        subs_dict = _generate_subs_dict(point, max_degree)
-        H_rn = H_rn.subs(subs_dict)
-        H_rn_sp = sp.sympify(H_rn)
-        H_rn_clean = _clean_numerical_artifacts(H_rn_sp)
-        H_rn = se.sympify(H_rn_clean)
-
-        # logger.debug(f"\n\nH_rn:\n\n{H_rn}\n\n")
-
-        return Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn)
-
-    return Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn)
-
-def real_normal_to_complex_canonical(point: LibrationPoint, H_real_normal: Polynomial, symbolic: bool = False, max_degree: int = None) -> Polynomial:
-    """
-    Express the physical CR3BP Hamiltonian around a collinear point in the
-    complex canonical variables (q1,q2,q3,p1,p2,p3) used for the centre-
-    manifold normal-form computation (Jorba & Masdemont, 1999).
-
-    Parameters
-    ----------
-    point : LibrationPoint
-        Must implement `normal_form_transform()` → (C, Cinv) with C \subset \mathbb{R}^{6 \times 6}.
-    H_real_normal : Polynomial
-        Hamiltonian in the real normal-form variables
-        (x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn).
-
-    Returns
-    -------
-    Polynomial
-        Same Hamiltonian written in (q1,q2,q3,p1,p2,p3).
-    """
-
+def real_normal_to_complex_arrays(point, H_rn_arrays, max_degree, psi, clmo):
+    expr_rn = poly_list_to_symengine(H_rn_arrays,
+                                     [x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn],
+                                     psi, clmo)
     sqrt2 = se.sqrt(2)
-    complex_subs = {
-        x_rn : q1,
-        y_rn : (q2 + se.I*p2) / sqrt2,
-        z_rn : (q3 + se.I*p3) / sqrt2,
+    subs = {
+        x_rn: q1,
+        y_rn: (q2 + se.I*p2) / sqrt2,
+        z_rn: (q3 + se.I*p3) / sqrt2,
         px_rn: p1,
         py_rn: (se.I*q2 + p2) / sqrt2,
         pz_rn: (se.I*q3 + p3) / sqrt2,
     }
+    return _linear_substitution(expr_rn, subs,
+                                [q1, q2, q3, p1, p2, p3],
+                                max_degree, psi, clmo, complex_out=True)
 
-    H_cn_expr = H_real_normal.subs(complex_subs).expansion.expression
 
-    if not symbolic:
-        if not max_degree:
-            err = "Max degree must be provided if symbolic is False"
-            logger.error(err)
-            raise ValueError(err)
-
-        subs_dict = _generate_subs_dict(point, max_degree)
-        H_cn_expr = H_cn_expr.subs(subs_dict)
-
-        H_cn_expr_sp = sp.sympify(H_cn_expr)
-        H_cn_expr_clean = _clean_numerical_artifacts(H_cn_expr_sp)
-        H_cn = se.sympify(H_cn_expr_clean)
-
-        # logger.debug(f"\n\nH_cn_expr_clean:\n\n{H_cn_expr_clean}\n\n")
-
-        return Polynomial([q1, q2, q3, p1, p2, p3], H_cn)
-
-    return Polynomial([q1, q2, q3, p1, p2, p3], H_cn_expr)
-
-def complex_canonical_to_real_normal(point: LibrationPoint, H_complex_canonical: Polynomial, symbolic: bool = False, max_degree: int = None) -> Polynomial:
-    """
-    Express the Hamiltonian in the real normal-form variables (x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn)
-    from the complex canonical variables (q1, q2, q3, p1, p2, p3).
-    
-    Parameters
-    ----------
-    point : LibrationPoint
-        The LibrationPoint object
-    H_complex_canonical : Polynomial
-        The Hamiltonian in complex canonical variables
-    
-    Returns
-    -------
-    Polynomial
-        The transformed Hamiltonian in real normal-form variables
-    """
+def complex_to_real_arrays(point, H_cn_arrays, max_degree, psi, clmo):
+    expr_cn = poly_list_to_symengine(H_cn_arrays,
+                                     [q1, q2, q3, p1, p2, p3],
+                                     psi, clmo)
     sqrt2 = se.sqrt(2)
-    # Implement the exact inverse of the transformation in real_normal_to_complex_canonical
-    # This is directly derived from the equations in (12)
-
-    real_subs = {
+    subs = {
         q1: x_rn,
         q2: (y_rn - se.I*py_rn) / sqrt2,
-        q3: (z_rn - se.I*pz_rn) / sqrt2, 
+        q3: (z_rn - se.I*pz_rn) / sqrt2,
         p1: px_rn,
         p2: (py_rn - se.I*y_rn) / sqrt2,
-        p3: (pz_rn - se.I*z_rn) / sqrt2
+        p3: (pz_rn - se.I*z_rn) / sqrt2,
     }
+    return _linear_substitution(expr_cn, subs,
+                                [x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn],
+                                max_degree, psi, clmo, complex_out=True)
 
-    H_rn_expr = H_complex_canonical.subs(real_subs).expansion.expression
 
-    if not symbolic:
-        if not max_degree:
-            err = "Max degree must be provided if symbolic is False"
-            logger.error(err)
-            raise ValueError(err)
+def poly_list_to_symengine(poly_list, variables, psi, clmo):
+    """Convert list[np.ndarray] back to a SymEngine expression (for substitutions)."""
+    expr = se.Integer(0)
+    for d, coeffs in enumerate(poly_list):
+        for idx in range(coeffs.size):
+            c = coeffs[idx]
+            if c == 0:
+                continue
+            k = decode_multiindex(idx, d, clmo)
+            mon = se.Integer(1)
+            for var, exp in zip(variables, k):
+                if exp:
+                    mon *= var**exp
+            expr += c * mon
+    return se.expand(expr)
 
-        subs_dict = _generate_subs_dict(point, max_degree)
-        H_rn = H_rn_expr.subs(subs_dict)
 
-        H_rn_sp = sp.sympify(H_rn)
-        H_rn_clean = _clean_numerical_artifacts(H_rn_sp)
-        H_rn = se.sympify(H_rn_clean)
+@njit(fastmath=True, cache=True)
+def _zero_q1_p1(H_list):
+    """Set coefficients with q1 or p1 exponents >0 to zero (in‑place)."""
+    for d in range(len(H_list)):
+        arr = H_list[d]
+        if arr.size == 0:
+            continue
+        for idx in range(arr.size):
+            if arr[idx] == 0:
+                continue
+            k = decode_multiindex(idx, d, clmo_cached)
+            if k[0] > 0 or k[3] > 0:
+                arr[idx] = 0
 
-        # logger.debug(f"\n\nH_rn:\n\n{H_rn}\n\n")
+# `clmo_cached` will be set once via initialise() below so that the njit'ed
+# function sees it as a global read‑only list.  (Numba limitation.)
+clmo_cached = None  # type: ignore
 
-        return Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn)
 
-    return Polynomial([x_rn, y_rn, z_rn, px_rn, py_rn, pz_rn], H_rn_expr)
+def initialise_tables(max_degree):
+    global psi_cached, clmo_cached
+    psi_cached, clmo_cached = init_index_tables(max_degree)
+    return psi_cached, clmo_cached
 
-def _generate_subs_dict(point: LibrationPoint, max_degree: int) -> dict:
 
-    # Generate all necessary c symbols based on degree
-    c_symbols = {c2: c2}  # Start with c2 which is already defined
-    for n in range(3, max_degree+1):
-        c_symbols[create_symbolic_cn(n)] = create_symbolic_cn(n)
+def compute_center_manifold_arrays(point, max_degree):
+    psi, clmo = initialise_tables(max_degree)
+    H_phys = hamiltonian_arrays(point, max_degree, psi, clmo)
+    H_rn   = physical_to_real_normal_arrays(point, H_phys, max_degree, psi, clmo)
+    H_cn   = real_normal_to_complex_arrays(point, H_rn, max_degree, psi, clmo)
+    H_cnt, G_tot = lie_transform(point, H_cn, psi, clmo, max_degree)
+    return H_cnt, G_tot
 
-    lambda1_num, omega1_num, omega2_num = point.linear_modes()
-    s1_num, s2_num = point._scale_factor(lambda1_num, omega1_num, omega2_num)
 
-    c_nums = {}
-    for n in range(2, max_degree+1):
-        c_sym = create_symbolic_cn(n)
-        c_num = point._cn(n)
-        c_nums[c_sym] = c_num
+def reduce_center_manifold_arrays(point, max_degree):
+    H_cnt, _ = compute_center_manifold_arrays(point, max_degree)
+    _zero_q1_p1(H_cnt)                    # kill hyperbolic pair
+    return H_cnt
 
-    subs_dict = {
-        lambda1: lambda1_num, 
-        omega1: omega1_num, 
-        omega2: omega2_num,
-        s1: s1_num, 
-        s2: s2_num
-    }
 
-    for c_sym, c_val in c_nums.items():
-        subs_dict[c_sym] = c_val
-
-    return subs_dict
+def real_normal_center_manifold_arrays(point, max_degree):
+    psi, clmo = initialise_tables(max_degree)
+    H_cnr = reduce_center_manifold_arrays(point, max_degree)
+    return complex_to_real_arrays(point, H_cnr, max_degree, psi, clmo)
