@@ -68,6 +68,7 @@ def _linear_substitution(expr: se.Basic, subs: dict, var_out: list[se.Symbol],
                                     psi, clmo,
                                     complex_dtype=complex_out)
 
+
 def physical_to_real_normal_arrays(point, H_phys_arrays, max_degree, psi, clmo):
     expr_phys = poly2symengine(H_phys_arrays,
                             [x, y, z, px, py, pz],
@@ -131,8 +132,7 @@ def _zero_q1_p1(H_list):
             if k[0] > 0 or k[3] > 0:
                 arr[idx] = 0
 
-# `clmo_cached` will be set once via initialise() below so that the njit'ed
-# function sees it as a global read‑only list.  (Numba limitation.)
+
 clmo_cached = None  # type: ignore
 
 

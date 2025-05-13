@@ -4,9 +4,9 @@ import math
 import time
 import logging
 
-from .core import Polynomial, Monomial, _poisson_bracket, _poisson_bracket_term_by_term, _dot_product, _monomial_from_key
+from .dep_core import Polynomial, Monomial, _poisson_bracket, _poisson_bracket_term_by_term, _dot_product, _monomial_from_key
 from algorithms.variables import physical_vars, real_normal_vars, canonical_normal_vars, linear_modes_vars, get_vars
-from .factory import (
+from .dep_hamiltonian import (
     hamiltonian, 
     physical_to_real_normal, 
     real_normal_to_complex_canonical, 
