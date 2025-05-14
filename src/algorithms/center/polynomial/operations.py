@@ -37,12 +37,14 @@ def polynomial_variables_list(max_deg: int, psi, complex_dtype=False) -> List[Li
     return var_polys
 
 
-def polynomial_add_inplace(dest: List[np.ndarray], src: List[np.ndarray], scale=1.0):
+def polynomial_add_inplace(dest: List[np.ndarray], src: List[np.ndarray], scale=1.0, max_deg: int = None):
     """
     Add src to dest with optional scaling: dest += scale * src (in-place).
     dest[d] += scale * src[d] for each degree d.
     """
-    for d in range(len(dest)):
+    if max_deg is None:
+        max_deg = len(dest) - 1
+    for d in range(max_deg + 1):
         if scale == 1:
             dest[d] += src[d]
         elif scale == -1:
