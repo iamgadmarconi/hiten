@@ -3,7 +3,7 @@ import pytest
 import symengine as se
 
 from algorithms.center.polynomial.base import init_index_tables, make_poly, encode_multiindex
-from algorithms.center.polynomial.algebra import poly_add, poly_scale, poly_mul, differentiate, poisson
+from algorithms.center.polynomial.algebra import _poly_mul, _poly_add, _poly_scale, _poly_mul, _poly_diff, poisson
 from algorithms.variables import N_VARS, q1, q2, q3, p1, p2, p3
 
 # Initialize tables for tests
@@ -32,7 +32,7 @@ def test_poly_add():
         if degree == 0:
             a[0] = 1.5
             b[0] = 2.5
-            poly_add(a, b, result)
+            _poly_add(a, b, result)
             assert result[0] == 4.0
             continue
         
@@ -47,7 +47,7 @@ def test_poly_add():
         # Test zero addition
         zero_poly = make_poly(degree, PSI)
         result_zero = make_poly(degree, PSI)
-        poly_add(a, zero_poly, result_zero)
+        _poly_add(a, zero_poly, result_zero)
         np.testing.assert_array_equal(a, result_zero)
         
         # Test regular addition
@@ -55,21 +55,21 @@ def test_poly_add():
         for i in range(a.shape[0]):
             expected[i] = a[i] + b[i]
         
-        poly_add(a, b, result)
+        _poly_add(a, b, result)
         np.testing.assert_array_almost_equal(result, expected)
         
         # Test commutativity: a + b = b + a
         result_commute = make_poly(degree, PSI)
-        poly_add(b, a, result_commute)
+        _poly_add(b, a, result_commute)
         np.testing.assert_array_almost_equal(result, result_commute)
         
         # Test adding a polynomial to itself
         double_a = make_poly(degree, PSI)
-        poly_add(a, a, double_a)
+        _poly_add(a, a, double_a)
         
         # Should be equivalent to scaling by 2
         expected_double = make_poly(degree, PSI)
-        poly_scale(a, 2.0, expected_double)
+        _poly_scale(a, 2.0, expected_double)
         np.testing.assert_array_almost_equal(double_a, expected_double)
 
 def test_add_negative_numbers():
@@ -91,7 +91,7 @@ def test_add_negative_numbers():
     for i in range(size):
         expected[i] = a[i] + b[i]
     
-    poly_add(a, b, result)
+    _poly_add(a, b, result)
     np.testing.assert_array_almost_equal(result, expected)
 
 def test_add_large_values():
@@ -113,7 +113,7 @@ def test_add_large_values():
     for i in range(size):
         expected[i] = a[i] + b[i]
     
-    poly_add(a, b, result)
+    _poly_add(a, b, result)
     np.testing.assert_array_almost_equal(result, expected)
 
 def test_add_small_values():
@@ -135,7 +135,7 @@ def test_add_small_values():
     for i in range(size):
         expected[i] = a[i] + b[i]
     
-    poly_add(a, b, result)
+    _poly_add(a, b, result)
     np.testing.assert_array_almost_equal(result, expected)
 
 def test_add_mixed_values():
@@ -164,7 +164,7 @@ def test_add_mixed_values():
     for i in range(size):
         expected[i] = a[i] + b[i]
     
-    poly_add(a, b, result)
+    _poly_add(a, b, result)
     np.testing.assert_array_almost_equal(result, expected)
 
 def test_add_special_values():
@@ -184,7 +184,7 @@ def test_add_special_values():
     b[1] = -np.inf
     b[2] = 1.0
     
-    poly_add(a, b, result)
+    _poly_add(a, b, result)
     
     # Check expected behavior for inf + finite = inf
     assert np.isinf(result[0])
@@ -221,7 +221,7 @@ def test_add_complex_numbers():
         expected[i] = a[i] + b[i]
     
     # Perform addition
-    poly_add(a, b, result)
+    _poly_add(a, b, result)
     
     # Verify result
     np.testing.assert_array_almost_equal(result, expected)
@@ -252,7 +252,7 @@ def test_add_complex_numbers():
     for i in range(size):
         expected[i] = a[i] + b[i]
     
-    poly_add(a, b, result)
+    _poly_add(a, b, result)
     np.testing.assert_array_almost_equal(result, expected)
     
     # Test with complex conjugates
@@ -270,7 +270,7 @@ def test_add_complex_numbers():
     for i in range(size):
         expected[i] = a[i] + b[i]
     
-    poly_add(a, b, result)
+    _poly_add(a, b, result)
     np.testing.assert_array_almost_equal(result, expected)
     
     # Verify all results have zero imaginary part
@@ -298,7 +298,7 @@ def test_poly_scale_basic():
         result = make_poly(degree, PSI)
         
         # Scale the polynomial
-        poly_scale(p, factor, result)
+        _poly_scale(p, factor, result)
         
         # Check results
         for i in range(size):
@@ -322,7 +322,7 @@ def test_poly_scale_zero():
         p[i] = 10.0 * (i + 1)
     
     # Scale by zero
-    poly_scale(p, 0.0, result)
+    _poly_scale(p, 0.0, result)
     
     # All values should be zero
     assert np.all(result == 0.0)
@@ -346,7 +346,7 @@ def test_poly_scale_large_values():
     
     # Scale by large factor
     large_factor = 1e8
-    poly_scale(p, large_factor, result)
+    _poly_scale(p, large_factor, result)
     
     # Check results
     for i in range(size):
@@ -368,7 +368,7 @@ def test_poly_scale_small_values():
     
     # Scale by small factor
     small_factor = 1e-8
-    poly_scale(p, small_factor, result)
+    _poly_scale(p, small_factor, result)
     
     # Check results
     expected = np.zeros_like(p)
@@ -392,7 +392,7 @@ def test_poly_scale_special_values():
     p[3] = 1.0
     
     # Scale by positive value
-    poly_scale(p, 2.0, result)
+    _poly_scale(p, 2.0, result)
     
     # Check results
     assert np.isinf(result[0])
@@ -403,7 +403,7 @@ def test_poly_scale_special_values():
     assert result[3] == 2.0
     
     # Scale by negative value
-    poly_scale(p, -1.0, result)
+    _poly_scale(p, -1.0, result)
     
     # Check results
     assert np.isinf(result[0])
@@ -414,7 +414,7 @@ def test_poly_scale_special_values():
     assert result[3] == -1.0
     
     # Scale by zero
-    poly_scale(p, 0.0, result)
+    _poly_scale(p, 0.0, result)
     
     # Check results (0 * inf = nan in IEEE 754)
     assert np.isnan(result[0])
@@ -437,7 +437,7 @@ def test_poly_scale_complex():
     
     # Test with real scalar
     real_factor = 2.0
-    poly_scale(p, real_factor, result)
+    _poly_scale(p, real_factor, result)
     
     # Check results
     for i in range(size):
@@ -447,7 +447,7 @@ def test_poly_scale_complex():
     
     # Test with complex scalar
     complex_factor = complex(1.0, 2.0)
-    poly_scale(p, complex_factor, result)
+    _poly_scale(p, complex_factor, result)
     
     # Check results
     for i in range(size):
@@ -457,7 +457,7 @@ def test_poly_scale_complex():
     
     # Test with zero complex scalar
     zero_complex = complex(0.0, 0.0)
-    poly_scale(p, zero_complex, result)
+    _poly_scale(p, zero_complex, result)
     
     # All values should be zero
     for i in range(size):
@@ -484,7 +484,7 @@ def test_poly_mul_monomials():
     q[idx_x0x1] = 3.0  # q = 3*x0*x1
     
     # Multiply the polynomials
-    result = poly_mul(p, deg_p, q, deg_q, PSI, CLMO)
+    result = _poly_mul(p, deg_p, q, deg_q, PSI, CLMO)
     
     # Verify the degree of the result
     assert result.shape[0] == PSI[N_VARS, deg_p + deg_q]
@@ -510,7 +510,7 @@ def test_poly_mul_monomials():
     q[idx_x2sq] = 5.0
     
     # Multiply
-    result = poly_mul(p, deg_p, q, deg_q, PSI, CLMO)
+    result = _poly_mul(p, deg_p, q, deg_q, PSI, CLMO)
     
     # Result should be 20*x1*x2^2
     idx_result = encode_multiindex(np.array([0, 1, 2, 0, 0, 0], dtype=np.int64), deg_p + deg_q, PSI, CLMO)
@@ -547,7 +547,7 @@ def test_poly_mul_basic():
     q[idx_x1q] = 6.0
     
     # Multiply the polynomials
-    result = poly_mul(p, deg_p, q, deg_q, PSI, CLMO)
+    result = _poly_mul(p, deg_p, q, deg_q, PSI, CLMO)
     
     # Expected terms in the result:
     # 2*x0 * 5*x0 = 10*x0^2
@@ -580,8 +580,8 @@ def test_poly_mul_commutativity():
         q[i] = i * 0.75
     
     # Compute p * q and q * p
-    result1 = poly_mul(p, deg_p, q, deg_q, PSI, CLMO)
-    result2 = poly_mul(q, deg_q, p, deg_p, PSI, CLMO)
+    result1 = _poly_mul(p, deg_p, q, deg_q, PSI, CLMO)
+    result2 = _poly_mul(q, deg_q, p, deg_p, PSI, CLMO)
     
     # They should be equal
     np.testing.assert_array_almost_equal(result1, result2)
@@ -600,13 +600,13 @@ def test_poly_mul_zero():
         p[i] = i * 2.0
     
     # Multiply by zero
-    result = poly_mul(p, deg_p, zero_poly, deg_q, PSI, CLMO)
+    result = _poly_mul(p, deg_p, zero_poly, deg_q, PSI, CLMO)
     
     # Result should be all zeros
     assert np.all(result == 0.0)
     
     # Also test zero times anything is zero
-    result = poly_mul(zero_poly, deg_q, p, deg_p, PSI, CLMO)
+    result = _poly_mul(zero_poly, deg_q, p, deg_p, PSI, CLMO)
     assert np.all(result == 0.0)
 
 def test_poly_mul_identity():
@@ -628,7 +628,7 @@ def test_poly_mul_identity():
         p[i] = i * 1.5
     
     # p * 1 should equal p
-    result = poly_mul(p, deg_p, const_one, deg_const, PSI, CLMO)
+    result = _poly_mul(p, deg_p, const_one, deg_const, PSI, CLMO)
     
     # The result should have the same degree as p
     assert result.shape[0] == PSI[N_VARS, deg_p]
@@ -637,7 +637,7 @@ def test_poly_mul_identity():
     np.testing.assert_array_almost_equal(result, p)
     
     # 1 * p should also equal p
-    result = poly_mul(const_one, deg_const, p, deg_p, PSI, CLMO)
+    result = _poly_mul(const_one, deg_const, p, deg_p, PSI, CLMO)
     np.testing.assert_array_almost_equal(result, p)
 
 def test_poly_mul_complex():
@@ -665,7 +665,7 @@ def test_poly_mul_complex():
     q[idx_x1q] = complex(1.0, -1.0)
     
     # Multiply
-    result = poly_mul(p, deg_p, q, deg_q, PSI, CLMO)
+    result = _poly_mul(p, deg_p, q, deg_q, PSI, CLMO)
     
     # Expected result:
     # (1+i)*(3-i)*x0^2 = (3-i+3i-i^2)*x0^2 = (3-i+3i+1)*x0^2 = (4+2i)*x0^2
@@ -701,7 +701,7 @@ def test_differentiate_monomial():
     p[idx] = 3.0
     
     # Differentiate with respect to x0
-    dp = differentiate(p, 0, degree, PSI, CLMO)
+    dp = _poly_diff(p, 0, degree, PSI, CLMO)
     
     # Result should be 6*x0 (d/dx0(3*x0^2) = 6*x0)
     idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
@@ -712,7 +712,7 @@ def test_differentiate_monomial():
     assert np.all(dp == 0.0)
     
     # Differentiate with respect to a variable that doesn't appear in the term
-    dp2 = differentiate(p, 1, degree, PSI, CLMO)
+    dp2 = _poly_diff(p, 1, degree, PSI, CLMO)
     
     # Result should be all zeros
     assert np.all(dp2 == 0.0)
@@ -732,7 +732,7 @@ def test_differentiate_mixed_terms():
     p[idx_x1sq] = 4.0
     
     # Differentiate with respect to x0
-    dp = differentiate(p, 0, degree, PSI, CLMO)
+    dp = _poly_diff(p, 0, degree, PSI, CLMO)
     
     # d/dx0(2*x0^2 + 3*x0*x1 + 4*x1^2) = 4*x0 + 3*x1
     idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
@@ -747,7 +747,7 @@ def test_differentiate_mixed_terms():
     assert np.all(dp == 0.0)
     
     # Differentiate with respect to x1
-    dp2 = differentiate(p, 1, degree, PSI, CLMO)
+    dp2 = _poly_diff(p, 1, degree, PSI, CLMO)
     
     # d/dx1(2*x0^2 + 3*x0*x1 + 4*x1^2) = 3*x0 + 8*x1
     idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
@@ -778,7 +778,7 @@ def test_differentiate_higher_degree():
     p[idx_x1_3] = 1.0
     
     # Differentiate with respect to x0
-    dp = differentiate(p, 0, degree, PSI, CLMO)
+    dp = _poly_diff(p, 0, degree, PSI, CLMO)
     
     # d/dx0(x0^3 + x0^2*x1 + x0*x1^2 + x1^3) = 3*x0^2 + 2*x0*x1 + x1^2
     idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
@@ -801,7 +801,7 @@ def test_differentiate_zero_polynomial():
     p = make_poly(degree, PSI)  # All zeros by default
     
     # Differentiate zero polynomial
-    dp = differentiate(p, 0, degree, PSI, CLMO)
+    dp = _poly_diff(p, 0, degree, PSI, CLMO)
     
     # Result should be a zero polynomial of degree-1
     assert np.all(dp == 0.0)
@@ -813,10 +813,10 @@ def test_differentiate_constant():
     p = make_poly(degree, PSI)
     p[0] = 5.0  # Constant polynomial with value 5
     
-    # For a Numba JIT function, trying to differentiate a constant will not raise an exception
+    # For a Numba JIT function, trying to _poly_diff a constant will not raise an exception
     # but should return an appropriate result (likely an empty array or zeros)
     for var in range(N_VARS):
-        dp = differentiate(p, var, degree, PSI, CLMO)
+        dp = _poly_diff(p, var, degree, PSI, CLMO)
         
         # The size should be PSI[N_VARS, -1] which should be 0 or a very small array
         # Just verify that the result doesn't contain any non-zero values
@@ -833,28 +833,28 @@ def test_differentiate_multi_variable():
     p[idx] = 2.0
     
     # Differentiate with respect to x0
-    dp0 = differentiate(p, 0, degree, PSI, CLMO)
+    dp0 = _poly_diff(p, 0, degree, PSI, CLMO)
     
     # d/dx0(2*x0*x1*x2) = 2*x1*x2
     idx_x1x2 = encode_multiindex(np.array([0, 1, 1, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
     assert dp0[idx_x1x2] == 2.0
     
     # Differentiate with respect to x1
-    dp1 = differentiate(p, 1, degree, PSI, CLMO)
+    dp1 = _poly_diff(p, 1, degree, PSI, CLMO)
     
     # d/dx1(2*x0*x1*x2) = 2*x0*x2
     idx_x0x2 = encode_multiindex(np.array([1, 0, 1, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
     assert dp1[idx_x0x2] == 2.0
     
     # Differentiate with respect to x2
-    dp2 = differentiate(p, 2, degree, PSI, CLMO)
+    dp2 = _poly_diff(p, 2, degree, PSI, CLMO)
     
     # d/dx2(2*x0*x1*x2) = 2*x0*x1
     idx_x0x1 = encode_multiindex(np.array([1, 1, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
     assert dp2[idx_x0x1] == 2.0
     
     # Differentiate with respect to x3 (not in the polynomial)
-    dp3 = differentiate(p, 3, degree, PSI, CLMO)
+    dp3 = _poly_diff(p, 3, degree, PSI, CLMO)
     
     # d/dx3(2*x0*x1*x2) = 0
     assert np.all(dp3 == 0.0)
@@ -869,28 +869,28 @@ def test_differentiate_high_exponent():
     p[idx] = 1.0
     
     # Differentiate with respect to x0
-    dp = differentiate(p, 0, degree, PSI, CLMO)
+    dp = _poly_diff(p, 0, degree, PSI, CLMO)
     
     # d/dx0(x0^4) = 4*x0^3
     idx_x0_3 = encode_multiindex(np.array([3, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
     assert dp[idx_x0_3] == 4.0
     
     # Differentiate again
-    dp2 = differentiate(dp, 0, degree-1, PSI, CLMO)
+    dp2 = _poly_diff(dp, 0, degree-1, PSI, CLMO)
     
     # d/dx0(4*x0^3) = 12*x0^2
     idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), degree-2, PSI, CLMO)
     assert dp2[idx_x0sq] == 12.0
     
     # Differentiate a third time
-    dp3 = differentiate(dp2, 0, degree-2, PSI, CLMO)
+    dp3 = _poly_diff(dp2, 0, degree-2, PSI, CLMO)
     
     # d/dx0(12*x0^2) = 24*x0
     idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), degree-3, PSI, CLMO)
     assert dp3[idx_x0] == 24.0
     
     # Differentiate a fourth time
-    dp4 = differentiate(dp3, 0, degree-3, PSI, CLMO)
+    dp4 = _poly_diff(dp3, 0, degree-3, PSI, CLMO)
     
     # d/dx0(24*x0) = 24
     idx_const = encode_multiindex(np.array([0, 0, 0, 0, 0, 0], dtype=np.int64), degree-4, PSI, CLMO)
@@ -912,7 +912,7 @@ def test_differentiate_complex():
     p[idx_x1sq] = complex(5.0, 6.0)
     
     # Differentiate with respect to x0
-    dp = differentiate(p, 0, degree, PSI, CLMO)
+    dp = _poly_diff(p, 0, degree, PSI, CLMO)
     
     # d/dx0((1+2i)*x0^2 + (3+4i)*x0*x1 + (5+6i)*x1^2) = (2+4i)*x0 + (3+4i)*x1
     idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
@@ -924,7 +924,7 @@ def test_differentiate_complex():
     assert dp[idx_x1].imag == 4.0
     
     # Differentiate with respect to x1
-    dp2 = differentiate(p, 1, degree, PSI, CLMO)
+    dp2 = _poly_diff(p, 1, degree, PSI, CLMO)
     
     # d/dx1((1+2i)*x0^2 + (3+4i)*x0*x1 + (5+6i)*x1^2) = (3+4i)*x0 + (10+12i)*x1
     idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
@@ -965,7 +965,7 @@ def test_poisson_antisymmetry():
     
     # Compute -{Q, P} (scale qp by -1)
     neg_qp = np.zeros_like(qp)
-    poly_scale(qp, -1.0, neg_qp)
+    _poly_scale(qp, -1.0, neg_qp)
     
     # {P, Q} should equal -{Q, P}
     np.testing.assert_array_almost_equal(pq, neg_qp)
@@ -1003,9 +1003,9 @@ def test_poisson_first_argument_linearity():
     bq = make_poly(deg_q, PSI)
     apbq = make_poly(deg_p, PSI)  # assuming deg_p == deg_q
     
-    poly_scale(p, a, ap)
-    poly_scale(q, b, bq)
-    poly_add(ap, bq, apbq)
+    _poly_scale(p, a, ap)
+    _poly_scale(q, b, bq)
+    _poly_add(ap, bq, apbq)
     
     # Compute {aP+bQ, R}
     apbq_r = poisson(apbq, deg_p, r, deg_r, PSI, CLMO)
@@ -1018,9 +1018,9 @@ def test_poisson_first_argument_linearity():
     bqr = make_poly(deg_q + deg_r - 2, PSI)
     result = make_poly(deg_p + deg_r - 2, PSI)
     
-    poly_scale(pr, a, apr)
-    poly_scale(qr, b, bqr)
-    poly_add(apr, bqr, result)
+    _poly_scale(pr, a, apr)
+    _poly_scale(qr, b, bqr)
+    _poly_add(apr, bqr, result)
     
     # {aP+bQ, R} should equal a{P,R} + b{Q,R}
     np.testing.assert_array_almost_equal(apbq_r, result)
@@ -1058,9 +1058,9 @@ def test_poisson_second_argument_linearity():
     br = make_poly(deg_r, PSI)
     aqbr = make_poly(deg_q, PSI)  # assuming deg_q == deg_r
     
-    poly_scale(q, a, aq)
-    poly_scale(r, b, br)
-    poly_add(aq, br, aqbr)
+    _poly_scale(q, a, aq)
+    _poly_scale(r, b, br)
+    _poly_add(aq, br, aqbr)
     
     # Compute {P, aQ+bR}
     p_aqbr = poisson(p, deg_p, aqbr, deg_q, PSI, CLMO)
@@ -1073,9 +1073,9 @@ def test_poisson_second_argument_linearity():
     bpr = make_poly(deg_p + deg_r - 2, PSI)
     result = make_poly(deg_p + deg_q - 2, PSI)
     
-    poly_scale(pq, a, apq)
-    poly_scale(pr, b, bpr)
-    poly_add(apq, bpr, result)
+    _poly_scale(pq, a, apq)
+    _poly_scale(pr, b, bpr)
+    _poly_add(apq, bpr, result)
     
     # {P, aQ+bR} should equal a{P,Q} + b{P,R}
     np.testing.assert_array_almost_equal(p_aqbr, result)
@@ -1133,8 +1133,8 @@ def test_poisson_jacobi_identity():
     sum_result = make_poly(sum_deg, PSI)
     
     temp = make_poly(sum_deg, PSI)
-    poly_add(p_qr, q_rp, temp)
-    poly_add(temp, r_pq, sum_result)
+    _poly_add(p_qr, q_rp, temp)
+    _poly_add(temp, r_pq, sum_result)
     
     # The sum should be zero
     for i in range(sum_result.shape[0]):
@@ -1224,7 +1224,7 @@ def test_poisson_complex():
     
     # Test antisymmetry with complex polynomials
     neg_qp = make_poly(deg_p + deg_q - 2, PSI, complex_dtype=True)
-    poly_scale(qp, -1.0, neg_qp)
+    _poly_scale(qp, -1.0, neg_qp)
     
     # {P, Q} should equal -{Q, P}
     np.testing.assert_array_almost_equal(pq, neg_qp)
@@ -1257,7 +1257,7 @@ def test_poisson_leibniz_rule():
     r[idx_p0] = 1.0
     
     # Compute Q*R
-    qr = poly_mul(q, deg_q, r, deg_r, PSI, CLMO)
+    qr = _poly_mul(q, deg_q, r, deg_r, PSI, CLMO)
     deg_qr = deg_q + deg_r
     
     # Compute {P, Q*R}
@@ -1267,17 +1267,17 @@ def test_poisson_leibniz_rule():
     pq = poisson(p, deg_p, q, deg_q, PSI, CLMO)
     
     # Compute {P, Q}*R
-    pq_r = poly_mul(pq, deg_p + deg_q - 2, r, deg_r, PSI, CLMO)
+    pq_r = _poly_mul(pq, deg_p + deg_q - 2, r, deg_r, PSI, CLMO)
     
     # Compute {P, R}
     pr = poisson(p, deg_p, r, deg_r, PSI, CLMO)
     
     # Compute Q*{P, R}
-    q_pr = poly_mul(q, deg_q, pr, deg_p + deg_r - 2, PSI, CLMO)
+    q_pr = _poly_mul(q, deg_q, pr, deg_p + deg_r - 2, PSI, CLMO)
     
     # Compute {P, Q}*R + Q*{P, R}
     result = make_poly(deg_p + deg_qr - 2, PSI)
-    poly_add(pq_r, q_pr, result)
+    _poly_add(pq_r, q_pr, result)
     
     # {P, Q*R} should equal {P, Q}*R + Q*{P, R}
     np.testing.assert_array_almost_equal(p_qr, result)

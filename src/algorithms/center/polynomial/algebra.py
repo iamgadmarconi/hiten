@@ -8,19 +8,17 @@ from algorithms.center.polynomial.base import encode_multiindex, decode_multiind
 
 
 @njit(fastmath=True, cache=True)
-def poly_add(a: np.ndarray, b: np.ndarray, out: np.ndarray) -> None:
+def _poly_add(a: np.ndarray, b: np.ndarray, out: np.ndarray) -> None:
     for i in range(a.shape[0]):
         out[i] = a[i] + b[i]
 
-
 @njit(fastmath=True, cache=True)
-def poly_scale(a: np.ndarray, alpha, out: np.ndarray) -> None:
+def _poly_scale(a: np.ndarray, alpha, out: np.ndarray) -> None:
     for i in range(a.shape[0]):
         out[i] = alpha * a[i]
 
-
 @njit(fastmath=True, cache=True)
-def poly_mul(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clmo) -> np.ndarray:
+def _poly_mul(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clmo) -> np.ndarray:
     deg_r = deg_p + deg_q
     r = np.zeros(psi[N_VARS, deg_r], dtype=p.dtype)
     for i in range(p.shape[0]):
@@ -40,9 +38,8 @@ def poly_mul(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clmo) ->
             r[idx] += pi * qj
     return r
 
-
 @njit(fastmath=True, cache=True)
-def differentiate(p: np.ndarray, var: int, degree: int, psi, clmo) -> np.ndarray:
+def _poly_diff(p: np.ndarray, var: int, degree: int, psi, clmo) -> np.ndarray:
     out_size = psi[N_VARS, degree-1]
     dp = np.zeros(out_size, dtype=p.dtype)
     for i in range(p.shape[0]):
@@ -58,24 +55,22 @@ def differentiate(p: np.ndarray, var: int, degree: int, psi, clmo) -> np.ndarray
         dp[idx] += coeff * exp
     return dp
 
-
 @njit(fastmath=True, cache=True)
 def poisson(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clmo) -> np.ndarray:
     deg_r = deg_p + deg_q - 2
     r = np.zeros(psi[N_VARS, deg_r], dtype=p.dtype)
     for m in range(3):
-        dpx = differentiate(p, m, deg_p, psi, clmo)
-        dqqp = differentiate(q, m+3, deg_q, psi, clmo)
-        term1 = poly_mul(dpx, deg_p-1, dqqp, deg_q-1, psi, clmo)
+        dpx = _poly_diff(p, m, deg_p, psi, clmo)
+        dqqp = _poly_diff(q, m+3, deg_q, psi, clmo)
+        term1 = _poly_mul(dpx, deg_p-1, dqqp, deg_q-1, psi, clmo)
         for i in range(term1.shape[0]):
             r[i] += term1[i]
-        dpq = differentiate(p, m+3, deg_p, psi, clmo)
-        dqx = differentiate(q, m, deg_q, psi, clmo)
-        term2 = poly_mul(dpq, deg_p-1, dqx, deg_q-1, psi, clmo)
+        dpq = _poly_diff(p, m+3, deg_p, psi, clmo)
+        dqx = _poly_diff(q, m, deg_q, psi, clmo)
+        term2 = _poly_mul(dpq, deg_p-1, dqx, deg_q-1, psi, clmo)
         for i in range(term2.shape[0]):
             r[i] -= term2[i]
     return r
-
 
 @njit(fastmath=True, cache=True)
 def get_polynomial_degree(poly: np.ndarray, psi) -> int:
