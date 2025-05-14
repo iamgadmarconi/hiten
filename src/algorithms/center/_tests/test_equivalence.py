@@ -311,7 +311,6 @@ def test_phys2rn_equivalence(mu_val, max_degree_test):
 
 @pytest.mark.parametrize("mu_val, max_degree_test", [
     (0.01215058162465319, 2),
-    (0.01215058162465319, 2),
     (0.01215058162465319, 3),
     (0.01215058162465319, 4),
     (0.01215058162465319, 5),

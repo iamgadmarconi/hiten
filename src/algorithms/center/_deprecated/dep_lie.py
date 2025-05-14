@@ -24,7 +24,7 @@ omega1, omega2, lambda1, c2 = get_vars(linear_modes_vars)
 
 
 def real_normal_center_manifold(point: LibrationPoint, symbolic: bool = False, max_degree: int = None, 
-                               poisson_method: str = 'auto', use_cache: bool = True) -> tuple[Polynomial, Polynomial]:
+                                poisson_method: str = 'auto', use_cache: bool = True) -> tuple[Polynomial, Polynomial]:
     """
     Compute the center manifold of a libration point up to a given degree in real normal form.
 
