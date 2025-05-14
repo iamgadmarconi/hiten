@@ -9,11 +9,10 @@ from system.libration import L1Point
 from system.body import Body
 from system.base import System, systemConfig
 from utils.constants import Constants
-from algorithms.center.lie import (
-    extract_coeffs_up_to_degree,
-    compute_center_manifold,
-    real_normal_center_manifold,
-    coefficients_to_table,
+from algorithms.center.polynomial.base import init_index_tables
+from algorithms.center.manifold import (
+    reduce_center_manifold_arrays,
+    coefficients_to_table_arrays,
 )
 
 from log_config import logger
@@ -22,6 +21,8 @@ from log_config import logger
 def main():
 
     max_degree = 5
+    
+    psi, clmo = init_index_tables(max_degree)
 
     Sun = Body("Sun", 
                 Constants.bodies["sun"]["mass"], 
@@ -49,13 +50,9 @@ def main():
     Lpoint_EM = system_EM.get_libration_point(2)
     Lpoint_SE = system_SE.get_libration_point(1)
 
-    H_rnr = real_normal_center_manifold(Lpoint_SE, symbolic=False, max_degree=max_degree)
-
-    # Get formatted table of coefficients
-    coeffs = extract_coeffs_up_to_degree(H_rnr, 5)
-    logger.info(f"Found {len(coeffs)} coefficients")
-    table = coefficients_to_table(coeffs, save=False)
-    logger.info(table)
+    H_cnr = reduce_center_manifold_arrays(Lpoint_EM, max_degree,
+                                        psi=psi, clmo=clmo)
+    print(coefficients_to_table_arrays(H_cnr, psi, clmo))
 
 
 if __name__ == "__main__":

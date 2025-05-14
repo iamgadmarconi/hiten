@@ -24,7 +24,7 @@ def build_physical_hamiltonian(point,
     """
     complex_dt = psi_config[1]
     
-    psi_table, clmo_table = init_index_tables(clmo_tables_deg)
+    psi_table, clmo_table = init_index_tables(max_deg)
 
     H = polynomial_zero_list(max_deg, psi_table, complex_dt)
 
@@ -83,7 +83,6 @@ def build_physical_hamiltonian(point,
 
     return H
 
-
 def _linear_variable_polys(C: np.ndarray,
                         max_deg: int,
                         psi,
@@ -105,7 +104,6 @@ def _linear_variable_polys(C: np.ndarray,
             polynomial_add_inplace(pol, new_basis[j], C[i, j], max_deg)
         L.append(pol)
     return L
-
 
 def substitute_linear(H_old: List[np.ndarray],
                       C: np.ndarray,
