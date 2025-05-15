@@ -154,62 +154,10 @@ def encode_multiindex(k: np.ndarray, degree: int, psi, clmo) -> int:
     return -1
 
 
-def make_poly(degree: int, psi, complex_dtype: bool=False) -> np.ndarray:
-    """
-    Create a new polynomial coefficient array of specified degree.
-    
-    Parameters
-    ----------
-    degree : int
-        Degree of the polynomial
-    psi : numpy.ndarray
-        Combinatorial table from init_index_tables
-    complex_dtype : bool, optional
-        Whether to use complex coefficients (default is False, using real coefficients)
-        
-    Returns
-    -------
-    numpy.ndarray
-        Array of zeros with appropriate size and data type to represent
-        a polynomial of the specified degree
-        
-    Notes
-    -----
-    The size of the array is determined by psi[N_VARS, degree], which gives
-    the number of monomials of degree 'degree' in N_VARS variables.
-    """
-    if complex_dtype:
-        return _make_poly_complex(degree, psi)
-    else:
-        return _make_poly_real(degree, psi)
-
-
 @njit(fastmath=True, cache=True)
-def _make_poly_real(degree: int, psi) -> np.ndarray:
+def make_poly(degree: int, psi) -> np.ndarray:
     """
-    Create a polynomial coefficient array with real coefficients.
-    
-    Parameters
-    ----------
-    degree : int
-        Degree of the polynomial
-    psi : numpy.ndarray
-        Combinatorial table from init_index_tables
-        
-    Returns
-    -------
-    numpy.ndarray
-        Array of zeros with float64 data type and size equal to the number
-        of monomials of degree 'degree' in N_VARS variables
-    """
-    size = psi[N_VARS, degree]
-    return np.zeros(size, dtype=np.float64)
-
-
-@njit(fastmath=True, cache=True)
-def _make_poly_complex(degree: int, psi) -> np.ndarray:
-    """
-    Create a polynomial coefficient array with complex coefficients.
+    Create a new polynomial coefficient array of specified degree with complex128 dtype.
     
     Parameters
     ----------
@@ -223,6 +171,12 @@ def _make_poly_complex(degree: int, psi) -> np.ndarray:
     numpy.ndarray
         Array of zeros with complex128 data type and size equal to the number
         of monomials of degree 'degree' in N_VARS variables
+        
+    Notes
+    -----
+    The size of the array is determined by psi[N_VARS, degree], which gives
+    the number of monomials of degree 'degree' in N_VARS variables.
+    All polynomials use complex128 data type for consistency.
     """
     size = psi[N_VARS, degree]
     return np.zeros(size, dtype=np.complex128)

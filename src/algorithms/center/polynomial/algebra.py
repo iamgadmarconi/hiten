@@ -78,6 +78,45 @@ def get_polynomial_degree(poly: np.ndarray, psi) -> int:
     for d in range(len(psi[N_VARS]) - 1, -1, -1):
         size = psi[N_VARS, d]
         for i in range(size):
-            if abs(poly[i]) > 1e-15:
+            if abs(poly[i]) > 1e-15: # abs will work fine for complex numbers
                 return d
     return 0
+
+@njit(fastmath=True, cache=True)
+def _poly_clean_inplace(p: np.ndarray, tol: float) -> None:
+    """
+    Zero out noise terms in-place in the polynomial coefficient array p.
+    Any coefficient whose absolute value is less than tol is set to zero.
+    
+    Parameters
+    ----------
+    p   : np.ndarray
+        1D array of complex or real coefficients.
+    tol : float
+        Threshold below which coefficients are considered numerical noise.
+    """
+    for i in range(p.shape[0]):
+        # np.abs works for real or complex types under numba
+        if np.abs(p[i]) < tol:
+            p[i] = 0
+
+@njit(fastmath=True, cache=True)
+def _poly_clean(p: np.ndarray, tol: float, out: np.ndarray) -> None:
+    """
+    Zero out noise terms out-of-place: reads from p, writes cleaned result into out.
+    Any coefficient in p whose magnitude < tol becomes 0 in out; otherwise it’s copied.
+    
+    Parameters
+    ----------
+    p   : np.ndarray
+        Input 1D coefficient array.
+    tol : float
+        Noise threshold.
+    out : np.ndarray
+        Pre-allocated array of same shape as p. Receives the cleaned coefficients.
+    """
+    for i in range(p.shape[0]):
+        if np.abs(p[i]) < tol:
+            out[i] = 0
+        else:
+            out[i] = p[i]

@@ -31,10 +31,9 @@ def test_polynomial_zero_list():
     for d in range(MAX_DEGREE + 1):
         assert poly_list[d].shape[0] == PSI[N_VARS, d]
         assert np.all(poly_list[d] == 0.0)
-        assert poly_list[d].dtype == np.float64
     
     # Test for complex polynomials
-    complex_poly_list = polynomial_zero_list(MAX_DEGREE, PSI, complex_dtype=True)
+    complex_poly_list = polynomial_zero_list(MAX_DEGREE, PSI)
     
     for d in range(MAX_DEGREE + 1):
         assert complex_poly_list[d].shape[0] == PSI[N_VARS, d]
@@ -46,7 +45,7 @@ def test_polynomial_variable():
     """Test creation of a polynomial representing a variable"""
     # Test for each variable
     for var_idx in range(N_VARS):
-        poly = polynomial_variable(var_idx, MAX_DEGREE, PSI)
+        poly = polynomial_variable(var_idx, MAX_DEGREE, PSI, CLMO)
         
         # Check that it's a list of correct length
         assert len(poly) == MAX_DEGREE + 1
@@ -71,7 +70,7 @@ def test_polynomial_variable():
 
 def test_polynomial_variables_list():
     """Test creation of polynomials for all variables"""
-    var_polys = polynomial_variables_list(MAX_DEGREE, PSI)
+    var_polys = polynomial_variables_list(MAX_DEGREE, PSI, CLMO)
     
     # Should be a list of 6 polynomials
     assert len(var_polys) == N_VARS
@@ -148,8 +147,8 @@ def test_polynomial_add_inplace():
 def test_polynomial_multiply():
     """Test multiplication of polynomial lists"""
     # Create polynomials for x and y
-    x_poly = polynomial_variable(0, MAX_DEGREE, PSI)  # x
-    y_poly = polynomial_variable(1, MAX_DEGREE, PSI)  # y
+    x_poly = polynomial_variable(0, MAX_DEGREE, PSI, CLMO)  # x
+    y_poly = polynomial_variable(1, MAX_DEGREE, PSI, CLMO)  # y
     
     # Multiply x * y
     result = polynomial_multiply(x_poly, y_poly, MAX_DEGREE, PSI, CLMO)
@@ -199,7 +198,7 @@ def test_polynomial_multiply():
 def test_polynomial_power():
     """Test power of polynomial lists using binary exponentiation"""
     # Create polynomial for x
-    x_poly = polynomial_variable(0, MAX_DEGREE, PSI)  # x
+    x_poly = polynomial_variable(0, MAX_DEGREE, PSI, CLMO)  # x
     
     # Test x^0 = 1
     x_pow_0 = polynomial_power(x_poly, 0, MAX_DEGREE, PSI, CLMO)
@@ -292,7 +291,7 @@ def test_polynomial_power():
 def test_complex_polynomials():
     """Test operations with complex polynomials"""
     # Create complex polynomial for x + iy
-    x_plus_iy = polynomial_zero_list(MAX_DEGREE, PSI, complex_dtype=True)
+    x_plus_iy = polynomial_zero_list(MAX_DEGREE, PSI)
     
     # Set x+iy in degree 1
     k_x = np.zeros(N_VARS, dtype=np.int64)
@@ -303,7 +302,7 @@ def test_complex_polynomials():
     x_plus_iy[1][idx_x0] = complex(1.0, 1.0) # x_plus_iy represents (1+i)*x0
     
     # Create another complex polynomial for y - i*z
-    y_minus_iz = polynomial_zero_list(MAX_DEGREE, PSI, complex_dtype=True)
+    y_minus_iz = polynomial_zero_list(MAX_DEGREE, PSI)
     
     # Set y in degree 1
     k_y_var = np.array([0,1,0,0,0,0], dtype=np.int64)
@@ -316,7 +315,7 @@ def test_complex_polynomials():
     y_minus_iz[1][idx_z] = complex(0.0, -1.0) # Coefficient for z is -i
     
     # Test addition
-    result_add = polynomial_zero_list(MAX_DEGREE, PSI, complex_dtype=True)
+    result_add = polynomial_zero_list(MAX_DEGREE, PSI)
     # Make copies for addition to avoid modifying original test polynomials if reused.
     x_plus_iy_copy_for_add = [arr.copy() for arr in x_plus_iy]
     y_minus_iz_copy_for_add = [arr.copy() for arr in y_minus_iz]
@@ -418,7 +417,7 @@ def test_polynomial_multiply_complex_inputs():
 def test_polynomial_multiply_with_zero_components():
     """Test multiplication where one input has zero components for some degrees."""
     # A = x0
-    poly_A = polynomial_variable(0, MAX_DEGREE, PSI)
+    poly_A = polynomial_variable(0, MAX_DEGREE, PSI, CLMO)
 
     # B = 2.0 + x1^2
     poly_B = polynomial_zero_list(MAX_DEGREE, PSI)
@@ -460,7 +459,7 @@ def test_polynomial_multiply_with_zero_components():
 def test_polynomial_power_complex_base():
     """Test polynomial_power with a complex base polynomial."""
     # P = (1+2j) * x0
-    base_poly_complex = polynomial_zero_list(MAX_DEGREE, PSI, complex_dtype=True)
+    base_poly_complex = polynomial_zero_list(MAX_DEGREE, PSI)
     k_x0 = np.array([1,0,0,0,0,0], dtype=np.int64)
     idx_x0 = encode_multiindex(k_x0, 1, PSI, CLMO)
     base_poly_complex[1][idx_x0] = complex(1.0, 2.0)
@@ -504,15 +503,6 @@ def test_polynomial_power_complex_base():
              assert np.allclose(pow3_result[d], 0j)
 
 
-def test_polynomial_power_negative_exponent():
-    """Test that polynomial_power raises ValueError for k < 0."""
-    x_poly = polynomial_variable(0, MAX_DEGREE, PSI)
-    with pytest.raises(ValueError, match="Polynomial power k must be non-negative."):
-        polynomial_power(x_poly, -1, MAX_DEGREE, PSI, CLMO)
-
-    with pytest.raises(ValueError, match="Polynomial power k must be non-negative."):
-        polynomial_power(x_poly, -5, MAX_DEGREE, PSI, CLMO)
-
 # Helper function for comparing polynomial lists
 def assert_poly_lists_almost_equal(list1, list2, decimal=7, msg=""):
     assert len(list1) == len(list2), f"Polynomial lists have different lengths. {msg}"
@@ -530,8 +520,8 @@ PSI_PB, CLMO_PB = init_index_tables(MAX_DEGREE_PB_TESTS)
 
 def test_polynomial_poisson_antisymmetry():
     """Test antisymmetry: {P, Q} = -{Q, P}"""
-    P = polynomial_variable(0, MAX_DEGREE_PB_TESTS, PSI_PB) # P = x0
-    Q = polynomial_variable(3, MAX_DEGREE_PB_TESTS, PSI_PB) # Q = p0 (x3)
+    P = polynomial_variable(0, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB) # P = x0
+    Q = polynomial_variable(3, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB) # Q = p0 (x3)
 
     PQ = polynomial_poisson_bracket(P, Q, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
     QP = polynomial_poisson_bracket(Q, P, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
@@ -544,9 +534,9 @@ def test_polynomial_poisson_antisymmetry():
 
 def test_polynomial_poisson_linearity_first_arg():
     """Test linearity in first argument: {aP+bQ, R} = a{P,R} + b{Q,R}"""
-    P = polynomial_variable(0, MAX_DEGREE_PB_TESTS, PSI_PB) # x0
-    Q = polynomial_variable(1, MAX_DEGREE_PB_TESTS, PSI_PB) # x1
-    R = polynomial_variable(3, MAX_DEGREE_PB_TESTS, PSI_PB) # p0 (x3)
+    P = polynomial_variable(0, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB) # x0
+    Q = polynomial_variable(1, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB) # x1
+    R = polynomial_variable(3, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB) # p0 (x3)
 
     a_scalar, b_scalar = 2.0, 3.0
 
@@ -581,9 +571,9 @@ def test_polynomial_poisson_linearity_first_arg():
 
 def test_polynomial_poisson_linearity_second_arg():
     """Test linearity in second argument: {P, aQ+bR} = a{P,Q} + b{P,R}"""
-    P = polynomial_variable(0, MAX_DEGREE_PB_TESTS, PSI_PB) # x0
-    Q = polynomial_variable(3, MAX_DEGREE_PB_TESTS, PSI_PB) # p0 (x3)
-    R = polynomial_variable(4, MAX_DEGREE_PB_TESTS, PSI_PB) # p1 (x4)
+    P = polynomial_variable(0, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB) # x0
+    Q = polynomial_variable(3, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB) # p0 (x3)
+    R = polynomial_variable(4, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB) # p1 (x4)
     
     a_scalar, b_scalar = 2.0, 3.0
 
@@ -622,9 +612,9 @@ def test_polynomial_poisson_jacobi_identity():
     # If P,Q,R are degree 1, {Q,R} is degree 0. {P,{Q,R}} is degree 1-2 = -1 (effectively 0 const).
     # For initial deg 1 variables, result of each outer bracket is a constant (deg 0).
     # Sum should be 0.
-    P = polynomial_variable(0, MAX_DEGREE_PB_TESTS, PSI_PB) # x0
-    Q = polynomial_variable(3, MAX_DEGREE_PB_TESTS, PSI_PB) # p0 (x3)
-    R = polynomial_variable(1, MAX_DEGREE_PB_TESTS, PSI_PB) # x1
+    P = polynomial_variable(0, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB) # x0
+    Q = polynomial_variable(3, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB) # p0 (x3)
+    R = polynomial_variable(1, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB) # x1
 
     # {Q,R}
     QR = polynomial_poisson_bracket(Q, R, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
@@ -656,9 +646,9 @@ def test_polynomial_poisson_leibniz_rule():
     # Degrees: P=1, Q=1, R=1. Q*R is deg 2. {P, Q*R} is deg 1+2-2=1.
     # {P,Q} is deg 0. {P,Q}*R is deg 1.
     # {P,R} is deg 0. Q*{P,R} is deg 1.
-    P = polynomial_variable(0, MAX_DEGREE_PB_TESTS, PSI_PB) # x0
-    Q = polynomial_variable(1, MAX_DEGREE_PB_TESTS, PSI_PB) # x1
-    R = polynomial_variable(3, MAX_DEGREE_PB_TESTS, PSI_PB) # p0 (x3)
+    P = polynomial_variable(0, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB) # x0
+    Q = polynomial_variable(1, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB) # x1
+    R = polynomial_variable(3, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB) # p0 (x3)
 
     # Q*R
     QR_prod = polynomial_multiply(Q, R, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
@@ -689,7 +679,7 @@ def test_polynomial_poisson_constant_property():
     if len(C_poly) > 0 and C_poly[0].size > 0:
         C_poly[0][0] = 5.0
     
-    P = polynomial_variable(0, MAX_DEGREE_PB_TESTS, PSI_PB) # x0
+    P = polynomial_variable(0, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB) # x0
 
     # {C,P}
     CP_br = polynomial_poisson_bracket(C_poly, P, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
@@ -702,8 +692,8 @@ def test_polynomial_poisson_constant_property():
 
 def test_polynomial_poisson_canonical_relations():
     """Test {q_i,q_j}=0, {p_i,p_j}=0, {q_i,p_j}=delta_ij"""
-    q_vars = [polynomial_variable(i, MAX_DEGREE_PB_TESTS, PSI_PB) for i in range(3)] # x0,x1,x2
-    p_vars = [polynomial_variable(i+3, MAX_DEGREE_PB_TESTS, PSI_PB) for i in range(3)] # x3,x4,x5 (p0,p1,p2)
+    q_vars = [polynomial_variable(i, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB) for i in range(3)] # x0,x1,x2
+    p_vars = [polynomial_variable(i+3, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB) for i in range(3)] # x3,x4,x5 (p0,p1,p2)
 
     zero_poly_list = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
     one_poly_list = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)

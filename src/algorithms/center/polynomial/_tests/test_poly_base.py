@@ -34,9 +34,9 @@ def test_init_index_tables():
         assert len(CLMO[d]) == PSI[N_VARS, d]
 
 def test_make_poly():
-    """Test creation of zero polynomials"""
+    """Test creation of zero polynomials with complex128 dtype"""
     for degree in range(MAX_DEGREE + 1):
-        # Test real polynomial
+        # Test polynomial creation
         poly = make_poly(degree, PSI)
         
         # Check size
@@ -46,14 +46,8 @@ def test_make_poly():
         # Check if all coefficients are zero
         assert np.all(poly == 0.0)
         
-        # Check data type
-        assert poly.dtype == np.float64
-        
-        # Test complex polynomial
-        complex_poly = make_poly(degree, PSI, complex_dtype=True)
-        assert complex_poly.shape[0] == expected_size
-        assert np.all(complex_poly == 0.0)
-        assert complex_poly.dtype == np.complex128
+        # Check data type is always complex128
+        assert poly.dtype == np.complex128
 
 def test_decode_multiindex():
     """Test decoding multiindices"""

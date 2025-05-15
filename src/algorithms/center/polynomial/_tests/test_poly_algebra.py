@@ -203,9 +203,9 @@ def test_add_complex_numbers():
     size = PSI[N_VARS, degree]
     
     # Create complex polynomials
-    a = make_poly(degree, PSI, complex_dtype=True)
-    b = make_poly(degree, PSI, complex_dtype=True)
-    result = make_poly(degree, PSI, complex_dtype=True)
+    a = make_poly(degree, PSI)
+    b = make_poly(degree, PSI)
+    result = make_poly(degree, PSI)
     
     # Set complex coefficients in a
     for i in range(size):
@@ -234,9 +234,9 @@ def test_add_complex_numbers():
         assert abs(result[i].imag) < 1e-10
     
     # Test with different patterns of complex numbers
-    a = make_poly(degree, PSI, complex_dtype=True)
-    b = make_poly(degree, PSI, complex_dtype=True)
-    result = make_poly(degree, PSI, complex_dtype=True)
+    a = make_poly(degree, PSI)
+    b = make_poly(degree, PSI)
+    result = make_poly(degree, PSI)
     
     # Pattern 1: Alternating real and imaginary
     for i in range(size):
@@ -256,9 +256,9 @@ def test_add_complex_numbers():
     np.testing.assert_array_almost_equal(result, expected)
     
     # Test with complex conjugates
-    a = make_poly(degree, PSI, complex_dtype=True)
-    b = make_poly(degree, PSI, complex_dtype=True)
-    result = make_poly(degree, PSI, complex_dtype=True)
+    a = make_poly(degree, PSI)
+    b = make_poly(degree, PSI)
+    result = make_poly(degree, PSI)
     
     # a and b are complex conjugates of each other
     for i in range(size):
@@ -428,8 +428,8 @@ def test_poly_scale_complex():
     size = PSI[N_VARS, degree]
     
     # Create complex polynomial
-    p = make_poly(degree, PSI, complex_dtype=True)
-    result = make_poly(degree, PSI, complex_dtype=True)
+    p = make_poly(degree, PSI)
+    result = make_poly(degree, PSI)
     
     # Set complex coefficients
     for i in range(size):
@@ -646,8 +646,8 @@ def test_poly_mul_complex():
     deg_q = 1
     
     # Create complex polynomials
-    p = make_poly(deg_p, PSI, complex_dtype=True)
-    q = make_poly(deg_q, PSI, complex_dtype=True)
+    p = make_poly(deg_p, PSI)
+    q = make_poly(deg_q, PSI)
     
     # Set values in p and q
     # p = (1+i)*x0 + (2+2i)*x1
@@ -900,7 +900,7 @@ def test_differentiate_complex():
     """Test differentiation of complex polynomials"""
     # Create a complex polynomial
     degree = 2
-    p = make_poly(degree, PSI, complex_dtype=True)
+    p = make_poly(degree, PSI)
     
     # Set p = (1+2i)*x0^2 + (3+4i)*x0*x1 + (5+6i)*x1^2
     idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), degree, PSI, CLMO)
@@ -1203,8 +1203,8 @@ def test_poisson_complex():
     deg_p = 2
     deg_q = 2
     
-    p = make_poly(deg_p, PSI, complex_dtype=True)
-    q = make_poly(deg_q, PSI, complex_dtype=True)
+    p = make_poly(deg_p, PSI)
+    q = make_poly(deg_q, PSI)
     
     # Set values in p and q
     # p = (1+i)*x0^2 + (2+2i)*p0^2
@@ -1223,7 +1223,7 @@ def test_poisson_complex():
     qp = poisson(q, deg_q, p, deg_p, PSI, CLMO)
     
     # Test antisymmetry with complex polynomials
-    neg_qp = make_poly(deg_p + deg_q - 2, PSI, complex_dtype=True)
+    neg_qp = make_poly(deg_p + deg_q - 2, PSI)
     _poly_scale(qp, -1.0, neg_qp)
     
     # {P, Q} should equal -{Q, P}
