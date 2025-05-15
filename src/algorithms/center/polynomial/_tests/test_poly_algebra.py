@@ -3,7 +3,7 @@ import pytest
 import symengine as se
 
 from algorithms.center.polynomial.base import init_index_tables, make_poly, encode_multiindex
-from algorithms.center.polynomial.algebra import _poly_mul, _poly_add, _poly_scale, _poly_mul, _poly_diff, poisson
+from algorithms.center.polynomial.algebra import _poly_mul, _poly_add, _poly_scale, _poly_mul, _poly_diff, poisson, _get_degree, _poly_clean_inplace, _poly_clean
 from algorithms.variables import N_VARS, q1, q2, q3, p1, p2, p3
 
 # Initialize tables for tests
@@ -1380,3 +1380,188 @@ def test_poisson_canonical_relations():
                 # {q_i, p_j} should be 0 for i ≠ j
                 for k in range(qi_pj.shape[0]):
                     assert abs(qi_pj[k]) < 1e-10
+
+def test_get_degree():
+    """Test the _get_degree function for homogeneous polynomials"""
+    # Test constant polynomial (degree 0)
+    const_poly = make_poly(0, PSI)
+    assert _get_degree(const_poly, PSI) == 0
+
+    # Test linear polynomial (degree 1)
+    linear_poly = make_poly(1, PSI)
+    assert _get_degree(linear_poly, PSI) == 1
+
+    # Test quadratic polynomial (degree 2)
+    quad_poly = make_poly(2, PSI)
+    assert _get_degree(quad_poly, PSI) == 2
+
+    # Test higher degree polynomial (degree MAX_DEGREE)
+    high_deg_poly = make_poly(MAX_DEGREE, PSI)
+    assert _get_degree(high_deg_poly, PSI) == MAX_DEGREE
+    
+    # Test with a polynomial that has coefficients (values don't matter for _get_degree)
+    poly_deg3 = make_poly(3, PSI)
+    k_x0_cubed = np.array([3, 0, 0, 0, 0, 0], dtype=np.int64)
+    idx_x0_cubed = encode_multiindex(k_x0_cubed, 3, PSI, CLMO)
+    if idx_x0_cubed != -1 and idx_x0_cubed < poly_deg3.shape[0]:
+        poly_deg3[idx_x0_cubed] = 1.0 # Assign a dummy value
+    assert _get_degree(poly_deg3, PSI) == 3
+
+    # Test with a polynomial that might be all zeros but allocated for a certain degree
+    all_zeros_deg4 = make_poly(4, PSI) # this is already all zeros
+    assert _get_degree(all_zeros_deg4, PSI) == 4
+
+
+def test_poly_clean_inplace():
+    """Test the _poly_clean_inplace function"""
+    # Test with real polynomial
+    poly = make_poly(2, PSI)
+    # Set some values
+    for i in range(poly.shape[0]):
+        if i % 3 == 0:
+            poly[i] = 1.0  # Normal value
+        elif i % 3 == 1:
+            poly[i] = 1e-16  # Very small value (noise)
+        else:
+            poly[i] = 1e-8  # Small but significant value
+    
+    # Copy for later comparison
+    poly_orig = poly.copy()
+    
+    # Clean with tolerance 1e-10 (should only remove the 1e-16 values)
+    _poly_clean_inplace(poly, 1e-10)
+    
+    for i in range(poly.shape[0]):
+        if i % 3 == 0:
+            assert poly[i] == 1.0  # Normal values unchanged
+        elif i % 3 == 1:
+            assert poly[i] == 0.0  # Very small values zeroed
+        else:
+            assert poly[i] == 1e-8  # Small but significant values unchanged
+    
+    # Test with higher tolerance
+    poly = poly_orig.copy()
+    _poly_clean_inplace(poly, 1e-7)
+    
+    for i in range(poly.shape[0]):
+        if i % 3 == 0:
+            assert poly[i] == 1.0  # Normal values unchanged
+        elif i % 3 == 1 or i % 3 == 2:
+            assert poly[i] == 0.0  # All small values zeroed
+    
+    # Test with complex polynomial
+    complex_poly = make_poly(3, PSI)
+    # Set some complex values
+    for i in range(complex_poly.shape[0]):
+        if i % 4 == 0:
+            complex_poly[i] = complex(1.0, 1.0)  # Normal value
+        elif i % 4 == 1:
+            complex_poly[i] = complex(1e-16, 0.0)  # Small real part
+        elif i % 4 == 2:
+            complex_poly[i] = complex(0.0, 1e-16)  # Small imaginary part
+        else:
+            complex_poly[i] = complex(1e-16, 1e-16)  # Both parts small
+    
+    # Copy for comparison
+    complex_orig = complex_poly.copy()
+    
+    # Clean with tolerance 1e-10
+    _poly_clean_inplace(complex_poly, 1e-10)
+    
+    for i in range(complex_poly.shape[0]):
+        if i % 4 == 0:
+            assert complex_poly[i] == complex(1.0, 1.0)  # Normal values unchanged
+        else:
+            assert complex_poly[i] == 0.0  # All small values zeroed
+    
+    # Test with values exactly at tolerance threshold
+    threshold_poly = make_poly(1, PSI)
+    tol = 1e-8
+    threshold_poly[0] = tol  # Exactly at threshold
+    threshold_poly[1] = tol + 1e-10  # Just above threshold
+    threshold_poly[2] = tol - 1e-10  # Just below threshold
+    
+    _poly_clean_inplace(threshold_poly, tol)
+    assert threshold_poly[0] == 0.0  # At threshold should be zeroed
+    assert threshold_poly[1] != 0.0  # Just above should be kept
+    assert threshold_poly[2] == 0.0  # Just below should be zeroed
+
+def test_poly_clean():
+    """Test the _poly_clean function (out-of-place cleaning)"""
+    # Test with real polynomial
+    poly = make_poly(2, PSI)
+    result = make_poly(2, PSI)
+    
+    # Set some values
+    for i in range(poly.shape[0]):
+        if i % 3 == 0:
+            poly[i] = 1.0  # Normal value
+        elif i % 3 == 1:
+            poly[i] = 1e-16  # Very small value (noise)
+        else:
+            poly[i] = 1e-8  # Small but significant value
+    
+    # Clean with tolerance 1e-10 (should only remove the 1e-16 values)
+    _poly_clean(poly, 1e-10, result)
+    
+    # Verify original is unchanged
+    for i in range(poly.shape[0]):
+        if i % 3 == 0:
+            assert poly[i] == 1.0
+        elif i % 3 == 1:
+            assert poly[i] == 1e-16
+        else:
+            assert poly[i] == 1e-8
+    
+    # Verify result is cleaned
+    for i in range(result.shape[0]):
+        if i % 3 == 0:
+            assert result[i] == 1.0  # Normal values copied
+        elif i % 3 == 1:
+            assert result[i] == 0.0  # Very small values zeroed
+        else:
+            assert result[i] == 1e-8  # Small but significant values copied
+    
+    # Test with complex polynomial
+    complex_poly = make_poly(3, PSI)
+    complex_result = make_poly(3, PSI)
+    
+    # Set some complex values
+    for i in range(complex_poly.shape[0]):
+        if i % 4 == 0:
+            complex_poly[i] = complex(1.0, 1.0)  # Normal value
+        elif i % 4 == 1:
+            complex_poly[i] = complex(1e-16, 0.0)  # Small real part
+        elif i % 4 == 2:
+            complex_poly[i] = complex(0.0, 1e-16)  # Small imaginary part
+        else:
+            complex_poly[i] = complex(1e-16, 1e-16)  # Both parts small
+    
+    # Clean with tolerance 1e-10
+    _poly_clean(complex_poly, 1e-10, complex_result)
+    
+    # Verify original is unchanged
+    for i in range(complex_poly.shape[0]):
+        if i % 4 == 0:
+            assert complex_poly[i] == complex(1.0, 1.0)
+        elif i % 4 == 1:
+            assert complex_poly[i] == complex(1e-16, 0.0)
+        elif i % 4 == 2:
+            assert complex_poly[i] == complex(0.0, 1e-16)
+        else:
+            assert complex_poly[i] == complex(1e-16, 1e-16)
+    
+    # Verify result is cleaned
+    for i in range(complex_result.shape[0]):
+        if i % 4 == 0:
+            assert complex_result[i] == complex(1.0, 1.0)  # Normal values copied
+        else:
+            assert complex_result[i] == 0.0  # All small values zeroed
+    
+    # Test with zero tolerance (should not modify anything)
+    zero_tol_result = make_poly(2, PSI)
+    _poly_clean(poly, 0.0, zero_tol_result)
+    
+    # All values should be copied exactly
+    for i in range(poly.shape[0]):
+        assert zero_tol_result[i] == poly[i]

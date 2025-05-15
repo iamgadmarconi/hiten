@@ -10,7 +10,9 @@ from algorithms.center.polynomial.operations import (
     polynomial_add_inplace,
     polynomial_multiply,
     polynomial_power,
-    polynomial_poisson_bracket
+    polynomial_poisson_bracket,
+    polynomial_clean,
+    polynomial_degree
 )
 from algorithms.variables import N_VARS
 
@@ -690,7 +692,7 @@ def test_polynomial_poisson_constant_property():
     PC_br = polynomial_poisson_bracket(P, C_poly, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
     assert_poly_lists_almost_equal(PC_br, zero_poly_list, msg="{P,C} != 0 failed")
 
-def test_polynomial_poisson_canonical_relations():
+def test_polynomial_canonical_relations():
     """Test {q_i,q_j}=0, {p_i,p_j}=0, {q_i,p_j}=delta_ij"""
     q_vars = [polynomial_variable(i, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB) for i in range(3)] # x0,x1,x2
     p_vars = [polynomial_variable(i+3, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB) for i in range(3)] # x3,x4,x5 (p0,p1,p2)
@@ -716,3 +718,163 @@ def test_polynomial_poisson_canonical_relations():
                 assert_poly_lists_almost_equal(qi_pj_br, one_poly_list, msg=f"{{q{i},p{j}}} != 1 (i=j)")
             else:
                 assert_poly_lists_almost_equal(qi_pj_br, zero_poly_list, msg=f"{{q{i},p{j}}} != 0 (i!=j)")
+
+def test_polynomial_clean_basic():
+    """Test basic functionality of polynomial_clean"""
+    # Create a polynomial list with numerical noise
+    p = polynomial_zero_list(MAX_DEGREE, PSI)
+    
+    # Set some values including noise
+    for d in range(MAX_DEGREE + 1):
+        for i in range(min(p[d].shape[0], 5)):
+            if i % 3 == 0:
+                p[d][i] = 1.0  # Normal value
+            elif i % 3 == 1:
+                p[d][i] = 1e-16  # Very small value (noise)
+            else:
+                p[d][i] = 1e-8  # Small but significant value
+    
+    # Create a copy to verify original isn't modified
+    p_copy = [arr.copy() for arr in p]
+    
+    # Clean with tolerance 1e-10 (should only remove the 1e-16 values)
+    cleaned = polynomial_clean(p, 1e-10)
+    
+    # Verify original is unchanged
+    for d in range(MAX_DEGREE + 1):
+        np.testing.assert_array_equal(p[d], p_copy[d])
+    
+    # Check that the cleaned list has correct values
+    for d in range(MAX_DEGREE + 1):
+        for i in range(min(cleaned[d].shape[0], 5)):
+            if i % 3 == 0:
+                assert cleaned[d][i] == 1.0  # Normal values unchanged
+            elif i % 3 == 1:
+                assert cleaned[d][i] == 0.0  # Very small values zeroed
+            else:
+                assert cleaned[d][i] == 1e-8  # Small but significant values unchanged
+
+def test_polynomial_clean_complex():
+    """Test polynomial_clean with complex polynomials"""
+    # Create a polynomial list with complex values
+    p = polynomial_zero_list(MAX_DEGREE, PSI)
+    
+    # Set some complex values including noise
+    for d in range(MAX_DEGREE + 1):
+        for i in range(min(p[d].shape[0], 8)):
+            if i % 4 == 0:
+                p[d][i] = complex(1.0, 1.0)  # Normal value
+            elif i % 4 == 1:
+                p[d][i] = complex(1e-16, 0.0)  # Small real part
+            elif i % 4 == 2:
+                p[d][i] = complex(0.0, 1e-16)  # Small imaginary part
+            else:
+                p[d][i] = complex(1e-16, 1e-16)  # Both parts small
+    
+    # Clean with tolerance 1e-10
+    cleaned = polynomial_clean(p, 1e-10)
+    
+    # Check that the cleaned list has correct values
+    for d in range(MAX_DEGREE + 1):
+        for i in range(min(cleaned[d].shape[0], 8)):
+            if i % 4 == 0:
+                assert cleaned[d][i] == complex(1.0, 1.0)  # Normal values unchanged
+            else:
+                assert cleaned[d][i] == 0.0  # All small values zeroed
+
+def test_polynomial_clean_tolerances():
+    """Test polynomial_clean with different tolerance levels"""
+    # Create a polynomial list with values of different magnitudes
+    p = polynomial_zero_list(MAX_DEGREE, PSI)
+    
+    # Set values with increasing orders of magnitude
+    for d in range(MAX_DEGREE + 1):
+        for i in range(min(p[d].shape[0], 10)):
+            p[d][i] = 10**(-i)  # 1, 0.1, 0.01, 0.001, ...
+    
+    # Test with different tolerance levels
+    tol_tests = [0.0, 1e-10, 1e-5, 1e-3, 1e-1]
+    
+    for tol in tol_tests:
+        cleaned = polynomial_clean(p, tol)
+        
+        for d in range(MAX_DEGREE + 1):
+            for i in range(min(cleaned[d].shape[0], 10)):
+                if 10**(-i) <= tol:
+                    assert cleaned[d][i] == 0.0  # Values less than or equal to tolerance are zeroed
+                else:
+                    assert cleaned[d][i] == 10**(-i)  # Values above tolerance are unchanged
+
+def test_polynomial_degree():
+    """Test the polynomial_degree function for a list of homogeneous polynomials."""
+    # Test case 1: Zero polynomial (list of zero arrays up to MAX_DEGREE)
+    zero_p = polynomial_zero_list(MAX_DEGREE, PSI)
+    assert polynomial_degree(zero_p) == -1, "Test Case 1 Failed: Zero polynomial"
+
+    # Test case 2: Constant polynomial (e.g., P(x) = 5)
+    const_p = polynomial_zero_list(MAX_DEGREE, PSI)
+    if len(const_p) > 0 and const_p[0].size > 0:
+        const_p[0][0] = 5.0
+    assert polynomial_degree(const_p) == 0, "Test Case 2 Failed: Constant polynomial"
+
+    # Test case 3: Linear polynomial (e.g., P(x) = 2x0)
+    linear_p = polynomial_zero_list(MAX_DEGREE, PSI)
+    if MAX_DEGREE >= 1 and len(linear_p) > 1 and linear_p[1].size > 0:
+        k_x0 = np.array([1,0,0,0,0,0], dtype=np.int64)
+        idx_x0 = encode_multiindex(k_x0, 1, PSI, CLMO)
+        if idx_x0 != -1 and idx_x0 < linear_p[1].shape[0]:
+             linear_p[1][idx_x0] = 2.0
+    assert polynomial_degree(linear_p) == 1, "Test Case 3 Failed: Linear polynomial"
+
+    # Test case 4: Quadratic polynomial with leading zero terms
+    # P(x) = 0*x^3 + 3x^2 + ... (degree should be 2)
+    quad_p = polynomial_zero_list(3, PSI) # Max degree 3
+    if len(quad_p) > 2 and quad_p[2].size > 0:
+        k_x1_sq = np.array([0,2,0,0,0,0], dtype=np.int64)
+        idx_x1_sq = encode_multiindex(k_x1_sq, 2, PSI, CLMO)
+        if idx_x1_sq != -1 and idx_x1_sq < quad_p[2].shape[0]:
+            quad_p[2][idx_x1_sq] = 3.0 
+    # quad_p[3] is all zeros
+    assert polynomial_degree(quad_p) == 2, "Test Case 4 Failed: Quadratic with leading zeros"
+
+    # Test case 5: Polynomial with highest degree term non-zero
+    # P(x) = x^MAX_DEGREE + ...
+    high_deg_p = polynomial_zero_list(MAX_DEGREE, PSI)
+    if MAX_DEGREE > 0 and len(high_deg_p) > MAX_DEGREE and high_deg_p[MAX_DEGREE].size > 0:
+        # Get some valid index for the highest degree part
+        # For simplicity, let's assume the first coeff of highest degree part is non-zero
+        high_deg_p[MAX_DEGREE][0] = 1.0 
+    # If MAX_DEGREE is 0, this is like constant_p, handled by case 2 if non-zero.
+    # If MAX_DEGREE is 0 and it's zero, handled by case 1.
+    if MAX_DEGREE > 0: # Only assert if we actually set a high degree term
+      assert polynomial_degree(high_deg_p) == MAX_DEGREE, "Test Case 5 Failed: Highest degree non-zero"
+    elif MAX_DEGREE == 0 and np.any(high_deg_p[0]):
+      assert polynomial_degree(high_deg_p) == 0, "Test Case 5 Failed: Highest degree (0) non-zero"
+    else: # MAX_DEGREE == 0 and it's zero
+      assert polynomial_degree(high_deg_p) == -1, "Test Case 5 Failed: Highest degree (0) zero"
+
+    # Test case 7: Polynomial with only noise in higher degrees (should still count if non-zero)
+    noisy_p = polynomial_zero_list(MAX_DEGREE, PSI)
+    if MAX_DEGREE >= 2 and len(noisy_p) > MAX_DEGREE and noisy_p[MAX_DEGREE].size > 0:
+        noisy_p[MAX_DEGREE][0] = 1e-18 # Small non-zero noise
+    if MAX_DEGREE >= 1 and len(noisy_p) > 1 and noisy_p[1].size > 0:
+        k_x0 = np.array([1,0,0,0,0,0], dtype=np.int64)
+        idx_x0 = encode_multiindex(k_x0, 1, PSI, CLMO)
+        if idx_x0 != -1 and idx_x0 < noisy_p[1].shape[0]:
+            noisy_p[1][idx_x0] = 1.0 # Actual term at degree 1
+            
+    # np.any(1e-18) is True. So degree is MAX_DEGREE if MAX_DEGREE >=2
+    if MAX_DEGREE >=2:
+        assert polynomial_degree(noisy_p) == MAX_DEGREE, "Test Case 7 Failed: Noisy high degree"
+    elif MAX_DEGREE == 1:
+        assert polynomial_degree(noisy_p) == 1, "Test Case 7 Failed: Noisy high degree (deg 1)"
+    elif MAX_DEGREE == 0 and np.any(noisy_p[0]):
+        assert polynomial_degree(noisy_p) == 0, "Test Case 7 Failed: Noisy high degree (deg 0)"
+    else: # MAX_DEGREE == 0 and it's zero
+        assert polynomial_degree(noisy_p) == -1, "Test Case 7 Failed: Noisy high degree (deg 0 zero)"
+
+    # Test case 8: Polynomial where only degree 0 is non-zero, but list is longer
+    const_in_long_list = polynomial_zero_list(MAX_DEGREE, PSI)
+    if len(const_in_long_list) > 0 and const_in_long_list[0].size > 0:
+        const_in_long_list[0][0] = 1.0
+    assert polynomial_degree(const_in_long_list) == 0, "Test Case 8 Failed: Constant in longer list"

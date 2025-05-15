@@ -73,20 +73,39 @@ def poisson(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clmo) -> 
     return r
 
 @njit(fastmath=True, cache=True)
-def get_polynomial_degree(poly: np.ndarray, psi) -> int:
-    """Get the degree of a polynomial in our custom representation."""
-    for d in range(len(psi[N_VARS]) - 1, -1, -1):
-        size = psi[N_VARS, d]
-        for i in range(size):
-            if abs(poly[i]) > 1e-15: # abs will work fine for complex numbers
-                return d
-    return 0
+def _get_degree(poly: np.ndarray, psi) -> int:
+    """
+    Get the degree of a homogeneous polynomial in our custom representation.
+
+    Parameters
+    ----------
+    poly : np.ndarray
+        Polynomial coefficient array
+    psi : 2D array
+        Index table used in the polynomial representation.
+        psi[N_VARS, d] gives the number of monomials of degree d.
+        
+    Returns
+    -------
+    int
+        The degree of the polynomial. Returns -1 if degree cannot be determined.
+    """
+    num_coeffs = poly.shape[0]
+    if num_coeffs == 0: # Should not happen for valid polynomials
+        return -1 
+    
+    # N_VARS is imported from algorithms.variables
+    # psi.shape[1] is max_degree + 1
+    for d in range(psi.shape[1]): 
+        if psi[N_VARS, d] == num_coeffs:
+            return d
+    return -1 # Should not be reached if poly and psi are consistent
 
 @njit(fastmath=True, cache=True)
 def _poly_clean_inplace(p: np.ndarray, tol: float) -> None:
     """
     Zero out noise terms in-place in the polynomial coefficient array p.
-    Any coefficient whose absolute value is less than tol is set to zero.
+    Any coefficient whose absolute value is less than or equal to tol is set to zero.
     
     Parameters
     ----------
@@ -97,14 +116,14 @@ def _poly_clean_inplace(p: np.ndarray, tol: float) -> None:
     """
     for i in range(p.shape[0]):
         # np.abs works for real or complex types under numba
-        if np.abs(p[i]) < tol:
+        if np.abs(p[i]) <= tol:
             p[i] = 0
 
 @njit(fastmath=True, cache=True)
 def _poly_clean(p: np.ndarray, tol: float, out: np.ndarray) -> None:
     """
     Zero out noise terms out-of-place: reads from p, writes cleaned result into out.
-    Any coefficient in p whose magnitude < tol becomes 0 in out; otherwise it’s copied.
+    Any coefficient in p whose magnitude is less than or equal to tol becomes 0 in out; otherwise it's copied.
     
     Parameters
     ----------
@@ -116,7 +135,7 @@ def _poly_clean(p: np.ndarray, tol: float, out: np.ndarray) -> None:
         Pre-allocated array of same shape as p. Receives the cleaned coefficients.
     """
     for i in range(p.shape[0]):
-        if np.abs(p[i]) < tol:
+        if np.abs(p[i]) <= tol:
             out[i] = 0
         else:
             out[i] = p[i]

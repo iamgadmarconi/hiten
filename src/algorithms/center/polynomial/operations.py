@@ -137,3 +137,27 @@ def polynomial_clean(polys, tol):
         _poly_clean(p, tol, out)
         cleaned.append(out)
     return cleaned
+
+@njit(fastmath=True, cache=True)
+def polynomial_degree(polys: List[np.ndarray]) -> int:
+    """
+    Get the degree of a polynomial represented as a list of homogeneous parts.
+
+    The degree is the highest index d for which polys[d] contains non-zero coefficients.
+
+    Parameters
+    ----------
+    polys : List[np.ndarray]
+        A list where polys[d] is a NumPy array of coefficients for the
+        homogeneous part of degree d.
+
+    Returns
+    -------
+    int
+        The degree of the polynomial. Returns -1 if the polynomial is zero.
+    """
+    for d in range(len(polys) - 1, -1, -1):
+        # Check if any element in the coefficient array for degree d is non-zero
+        if np.any(polys[d]):
+            return d
+    return -1 # All parts are zero or polys is empty
