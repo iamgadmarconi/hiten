@@ -461,14 +461,16 @@ def test_symplectic(point):
                   [-np.eye(3),        np.zeros((3, 3))]])
     assert np.allclose(C.T @ J @ C, J, atol=1e-13)
 
-def test_real_normal_form(point, max_deg, psi_clmo):
-    psi, clmo = psi_clmo
+@pytest.mark.parametrize("max_deg", [2, 3, 4, 6])
+def test_real_normal_form(point, max_deg):
+    # Create fresh psi, clmo for each test instead of using the fixture
+    psi, clmo = base.init_index_tables(max_deg)
     H_phys = build_physical_hamiltonian(point, max_deg, (psi, np.float64), clmo)
     H_rn   = phys2rn(point, H_phys, max_deg, psi, clmo)
 
     x, y, z, px, py, pz = sp.symbols('x y z px py pz')
     expr = poly_list_to_sympy(H_rn, (x, y, z, px, py, pz), psi, clmo)
-    
+
     # pull out degree-2 terms
     poly = sp.Poly(expr, x, y, z, px, py, pz)
     quad_terms = {m: c for m, c in poly.terms() if sum(m) == 2}
@@ -504,8 +506,10 @@ def test_real_normal_form(point, max_deg, psi_clmo):
     assert np.isclose(coeff_z2,  0.5*omega2, rtol=1e-12)
     assert np.isclose(coeff_pz2, 0.5*omega2, rtol=1e-12)
 
-def test_complex_normal_form(point, max_deg, psi_clmo):
-    psi, clmo = psi_clmo
+@pytest.mark.parametrize("max_deg", [2, 3, 4, 6])
+def test_complex_normal_form(point, max_deg):
+    # Create fresh psi, clmo for each test instead of using the fixture
+    psi, clmo = base.init_index_tables(max_deg)
 
     # 1) build physical Hamiltonian, go to real normal form, then complex
     H_phys = build_physical_hamiltonian(point, max_deg, (psi, np.float64), clmo)
@@ -550,43 +554,77 @@ def test_complex_normal_form(point, max_deg, psi_clmo):
     assert np.isclose(coeff_q3p3 / 1j, omega2, rtol=1e-12)
     # ---------------- Poisson‑bracket sanity tests -------------------------
     # Extract the degree-2 part of the Hamiltonian
-    # H2 = op.polynomial_zero_list(max_deg, psi, complex_dtype=True)
-    # for d in range(len(H_cn)):
-    #     if d == 2:  # Only copy degree 2 terms
-    #         H2[d] = H_cn[d].copy()
+    H2 = op.polynomial_zero_list(max_deg, psi, complex_dtype=True)
+    for d in range(len(H_cn)):
+        if d == 2:  # Only copy degree 2 terms
+            H2[d] = H_cn[d].copy()
     
-    # # Create |q2|² = q2 * p2 polynomial
-    # q2_var = op.polynomial_variable(1, max_deg, psi, complex_dtype=True)
-    # p2_var = op.polynomial_variable(4, max_deg, psi, complex_dtype=True)
-    # q2p2_poly = op.polynomial_multiply(q2_var, p2_var, max_deg, psi, clmo)
+    # Create |q2|² = q2 * p2 polynomial
+    q2_var = op.polynomial_variable(1, max_deg, psi, complex_dtype=True)
+    p2_var = op.polynomial_variable(4, max_deg, psi, complex_dtype=True)
+    q2p2_poly = op.polynomial_multiply(q2_var, p2_var, max_deg, psi, clmo)
     
-    # # Create |q3|² = q3 * p3 polynomial
-    # q3_var = op.polynomial_variable(2, max_deg, psi, complex_dtype=True)
-    # p3_var = op.polynomial_variable(5, max_deg, psi, complex_dtype=True)
-    # q3p3_poly = op.polynomial_multiply(q3_var, p3_var, max_deg, psi, clmo)
+    # Create |q3|² = q3 * p3 polynomial
+    q3_var = op.polynomial_variable(2, max_deg, psi, complex_dtype=True)
+    p3_var = op.polynomial_variable(5, max_deg, psi, complex_dtype=True)
+    q3p3_poly = op.polynomial_multiply(q3_var, p3_var, max_deg, psi, clmo)
     
-    # # Compute the Poisson brackets
-    # pb_H2_q2p2 = op.polynomial_poisson_bracket(H2, q2p2_poly, max_deg, psi, clmo)
-    # pb_H2_q3p3 = op.polynomial_poisson_bracket(H2, q3p3_poly, max_deg, psi, clmo)
+    # Compute the Poisson brackets
+    pb_H2_q2p2 = op.polynomial_poisson_bracket(H2, q2p2_poly, max_deg, psi, clmo)
+    pb_H2_q3p3 = op.polynomial_poisson_bracket(H2, q3p3_poly, max_deg, psi, clmo)
     
-    # # Check that the Poisson brackets are zero (within numerical tolerance)
-    # for d in range(max_deg + 1):
-    #     if pb_H2_q2p2[d].size > 0:
-    #         assert np.allclose(pb_H2_q2p2[d], 0, atol=1e-12), \
-    #             f"Poisson bracket {{{H2}, |q2|²}} should be zero, but degree {d} terms are not"
-    #     if pb_H2_q3p3[d].size > 0:
-    #         assert np.allclose(pb_H2_q3p3[d], 0, atol=1e-12), \
-    #             f"Poisson bracket {{{H2}, |q3|²}} should be zero, but degree {d} terms are not"
+    # Check that the Poisson brackets are zero (within numerical tolerance)
+    for d in range(max_deg + 1):
+        if pb_H2_q2p2[d].size > 0:
+            assert np.allclose(pb_H2_q2p2[d], 0, atol=1e-12), \
+                f"Poisson bracket {{{H2}, |q2|²}} should be zero, but degree {d} terms are not"
+        if pb_H2_q3p3[d].size > 0:
+            assert np.allclose(pb_H2_q3p3[d], 0, atol=1e-12), \
+                f"Poisson bracket {{{H2}, |q3|²}} should be zero, but degree {d} terms are not"
     
-    # # Also test the bracket with hyperbolic action I1 = q1 * p1
-    # q1_var = op.polynomial_variable(0, max_deg, psi, complex_dtype=True)
-    # p1_var = op.polynomial_variable(3, max_deg, psi, complex_dtype=True)
-    # q1p1_poly = op.polynomial_multiply(q1_var, p1_var, max_deg, psi, clmo)
+    # Also test the bracket with hyperbolic action I1 = q1 * p1
+    q1_var = op.polynomial_variable(0, max_deg, psi, complex_dtype=True)
+    p1_var = op.polynomial_variable(3, max_deg, psi, complex_dtype=True)
+    q1p1_poly = op.polynomial_multiply(q1_var, p1_var, max_deg, psi, clmo)
     
-    # pb_H2_q1p1 = op.polynomial_poisson_bracket(H2, q1p1_poly, max_deg, psi, clmo)
+    pb_H2_q1p1 = op.polynomial_poisson_bracket(H2, q1p1_poly, max_deg, psi, clmo)
     
-    # for d in range(max_deg + 1):
-    #     if pb_H2_q1p1[d].size > 0:
-    #         assert np.allclose(pb_H2_q1p1[d], 0, atol=1e-12), \
-    #             f"Poisson bracket {{{H2}, |q1|²}} should be zero, but degree {d} terms are not"
+    for d in range(max_deg + 1):
+        if pb_H2_q1p1[d].size > 0:
+            assert np.allclose(pb_H2_q1p1[d], 0, atol=1e-12), \
+                f"Poisson bracket {{{H2}, |q1|²}} should be zero, but degree {d} terms are not"
 
+@pytest.mark.parametrize("max_deg", [2, 3, 4, 6])
+def test_cn2rn_inverse(point, max_deg):
+    # Create fresh psi, clmo for each test instead of using the fixture
+    psi, clmo = base.init_index_tables(max_deg)
+
+    # pipeline ---------------------------------------------------------------
+    H_phys = build_physical_hamiltonian(point, max_deg, (psi, np.float64), clmo)
+    H_rn   = phys2rn(point, H_phys, max_deg, psi, clmo)
+    H_cn   = rn2cn(       H_rn,   max_deg, psi, clmo)
+    H_back = cn2rn(       H_cn,   max_deg, psi, clmo)
+
+    # (1) coefficient-by-coefficient equality with appropriate tolerance
+    for d in range(max_deg+1):
+        assert np.allclose(H_back[d], H_rn[d], atol=1e-14, rtol=1e-14), f"degree {d} mismatch"
+
+        # (2) quadratic-block sanity (reuse earlier helper)
+        x,y,z,px,py,pz = sp.symbols('x y z px py pz')
+        expr = poly_list_to_sympy(H_back, (x,y,z,px,py,pz), psi, clmo)
+        all_terms = {m:c for m,c in sp.Poly(expr, x,y,z,px,py,pz).terms()}
+        
+        # Filter out terms with very small coefficients (numerical artifacts)
+        quad = {m:c for m,c in all_terms.items() if sum(m)==2 and abs(complex(c)) > 1e-12}
+
+        lambda1, omega1, omega2 = point.linear_modes()
+        expected = {
+            (1,0,0,1,0,0):  lambda1,
+            (0,2,0,0,0,0):  0.5*omega1,  (0,0,0,0,2,0): 0.5*omega1,
+            (0,0,2,0,0,0):  0.5*omega2,  (0,0,0,0,0,2): 0.5*omega2,
+        }
+        
+        # Compare with approximate equality
+        assert set(quad.keys()) == set(expected.keys()), "Quadratic terms have different monomials"
+        for k in expected:
+            assert np.isclose(abs(complex(quad[k])), abs(complex(expected[k])), atol=1e-12, rtol=1e-12), f"Value mismatch for term {k}"

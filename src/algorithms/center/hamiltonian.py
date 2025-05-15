@@ -159,7 +159,15 @@ def substitute_linear(H_old: List[np.ndarray],
             
             # build product  Π_i  (var_polys[i] ** k_i)
             term = polynomial_zero_list(max_deg, psi, complex_dtype)
-            term[0][0] = coeff
+            
+            # Ensure we preserve the complex value of coeff
+            if complex_dtype:
+                # Force complex type to avoid implicit casting
+                term[0][0] = complex(coeff.real, coeff.imag) if hasattr(coeff, 'imag') else complex(coeff)
+            else:
+                # For real case, just use the real part
+                term[0][0] = coeff.real if hasattr(coeff, 'real') else coeff
+                
             for i_var in range(6):
                 if k[i_var] == 0:
                     continue
@@ -218,9 +226,9 @@ def cn2rn(H_cn: List[np.ndarray],
     Cinv[2, 2] = 1/sqrt2                         # z
     Cinv[2, 5] = -1j/sqrt2
     Cinv[3, 3] = 1.0                             # px
-    Cinv[4, 1] = -1j/sqrt2                         # py
+    Cinv[4, 1] = -1j/sqrt2                       # py
     Cinv[4, 4] = 1/sqrt2
-    Cinv[5, 2] = -1j/sqrt2                         # pz
+    Cinv[5, 2] = -1j/sqrt2                       # pz
     Cinv[5, 5] = 1/sqrt2
 
     return substitute_linear(H_cn, Cinv, max_deg, psi, clmo, complex_dtype=True)
