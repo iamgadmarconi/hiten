@@ -295,50 +295,219 @@ def test_complex_polynomials():
     
     # Set x+iy in degree 1
     k_x = np.zeros(N_VARS, dtype=np.int64)
-    k_x[0] = 1
-    idx_x = encode_multiindex(k_x, 1, PSI, CLMO)
-    x_plus_iy[1][idx_x] = complex(1.0, 1.0)  # 1 + i
+    # In the original test, k_x[0] = 1 makes x_plus_iy[1][idx_x] complex(1.0,1.0) refer to x0.
+    # Let's make it (1+i)*x0 by setting the coefficient for x0.
+    k_x0_var = np.array([1,0,0,0,0,0], dtype=np.int64)
+    idx_x0 = encode_multiindex(k_x0_var, 1, PSI, CLMO)
+    x_plus_iy[1][idx_x0] = complex(1.0, 1.0) # x_plus_iy represents (1+i)*x0
     
-    # Create another complex polynomial
+    # Create another complex polynomial for y - i*z
     y_minus_iz = polynomial_zero_list(MAX_DEGREE, PSI, complex_dtype=True)
     
-    # Set y-iz in degree 1
-    k_y = np.zeros(N_VARS, dtype=np.int64)
-    k_z = np.zeros(N_VARS, dtype=np.int64)
-    k_y[1] = 1
-    k_z[2] = 1
-    idx_y = encode_multiindex(k_y, 1, PSI, CLMO)
-    idx_z = encode_multiindex(k_z, 1, PSI, CLMO)
-    y_minus_iz[1][idx_y] = 1.0
-    y_minus_iz[1][idx_z] = complex(0.0, -1.0)  # -i
+    # Set y in degree 1
+    k_y_var = np.array([0,1,0,0,0,0], dtype=np.int64)
+    idx_y = encode_multiindex(k_y_var, 1, PSI, CLMO)
+    y_minus_iz[1][idx_y] = 1.0 # Coefficient for y is 1.0
+    
+    # Set -i*z in degree 1
+    k_z_var = np.array([0,0,1,0,0,0], dtype=np.int64)
+    idx_z = encode_multiindex(k_z_var, 1, PSI, CLMO)
+    y_minus_iz[1][idx_z] = complex(0.0, -1.0) # Coefficient for z is -i
     
     # Test addition
-    result = polynomial_zero_list(MAX_DEGREE, PSI, complex_dtype=True)
-    polynomial_add_inplace(result, x_plus_iy)
-    polynomial_add_inplace(result, y_minus_iz)
+    result_add = polynomial_zero_list(MAX_DEGREE, PSI, complex_dtype=True)
+    # Make copies for addition to avoid modifying original test polynomials if reused.
+    x_plus_iy_copy_for_add = [arr.copy() for arr in x_plus_iy]
+    y_minus_iz_copy_for_add = [arr.copy() for arr in y_minus_iz]
+
+    polynomial_add_inplace(result_add, x_plus_iy_copy_for_add)
+    polynomial_add_inplace(result_add, y_minus_iz_copy_for_add)
     
-    # Check x coefficient: should be 1+i
-    assert result[1][idx_x] == complex(1.0, 1.0)
+    # Check x0 coefficient: should be 1+i
+    assert result_add[1][idx_x0] == complex(1.0, 1.0)
     
     # Check y coefficient: should be 1
-    assert result[1][idx_y] == 1.0
+    assert result_add[1][idx_y] == 1.0
     
     # Check z coefficient: should be -i
-    assert result[1][idx_z] == complex(0.0, -1.0)
+    assert result_add[1][idx_z] == complex(0.0, -1.0)
     
-    # Test multiplication
+    # Test multiplication: ((1+i)x0) * (y - iz)
     product = polynomial_multiply(x_plus_iy, y_minus_iz, MAX_DEGREE, PSI, CLMO)
     
-    # (1+i)x * y = (1+i)xy
-    k = np.zeros(N_VARS, dtype=np.int64)
-    k[0] = 1
-    k[1] = 1
-    idx = encode_multiindex(k, 2, PSI, CLMO)
-    assert product[2][idx] == complex(1.0, 1.0)
+    # (1+i)x0 * y = (1+i)x0y
+    k_x0y = np.array([1,1,0,0,0,0], dtype=np.int64)
+    idx_prod_x0y = encode_multiindex(k_x0y, 2, PSI, CLMO) # degree is 1+1=2
+    assert product[2][idx_prod_x0y] == complex(1.0, 1.0)
     
-    # (1+i)x * (-i)z = -(1+i)ixz = -(i-1)xz = (1-i)xz
-    k = np.zeros(N_VARS, dtype=np.int64)
-    k[0] = 1
-    k[2] = 1
-    idx = encode_multiindex(k, 2, PSI, CLMO)
-    assert product[2][idx] == complex(1.0, -1.0)
+    # (1+i)x0 * (-i)z = -(1+i)i*x0z = (-i-i^2)*x0z = (-i+1)*x0z = (1-i)x0z
+    k_x0z = np.array([1,0,1,0,0,0], dtype=np.int64)
+    idx_prod_x0z = encode_multiindex(k_x0z, 2, PSI, CLMO) # degree is 1+1=2
+    assert product[2][idx_prod_x0z] == complex(1.0, -1.0)
+
+    # Ensure other terms in degree 2 are zero
+    product[2][idx_prod_x0y] = 0.0
+    product[2][idx_prod_x0z] = 0.0
+    assert np.all(product[2] == 0.0)
+    # Ensure other degrees are zero
+    for d_idx in range(MAX_DEGREE + 1):
+        if d_idx != 2:
+            assert np.all(product[d_idx] == 0.0)
+
+
+def test_polynomial_multiply_complex_inputs():
+    """Test multiplication of polynomials with multiple terms e.g. (x0+x1)*(x0-x2)."""
+    # P1 = x0 + x1
+    p1 = polynomial_zero_list(MAX_DEGREE, PSI)
+    k_x0 = np.array([1,0,0,0,0,0], dtype=np.int64)
+    k_x1 = np.array([0,1,0,0,0,0], dtype=np.int64)
+    idx_x0_p1 = encode_multiindex(k_x0, 1, PSI, CLMO)
+    idx_x1_p1 = encode_multiindex(k_x1, 1, PSI, CLMO)
+    p1[1][idx_x0_p1] = 1.0
+    p1[1][idx_x1_p1] = 1.0
+
+    # P2 = x0 - x2
+    p2 = polynomial_zero_list(MAX_DEGREE, PSI)
+    k_x2 = np.array([0,0,1,0,0,0], dtype=np.int64)
+    idx_x0_p2 = encode_multiindex(k_x0, 1, PSI, CLMO) # same x0 as above
+    idx_x2_p2 = encode_multiindex(k_x2, 1, PSI, CLMO)
+    p2[1][idx_x0_p2] = 1.0
+    p2[1][idx_x2_p2] = -1.0
+
+    # Expected P1 * P2 = (x0+x1)*(x0-x2) = x0*x0 - x0*x2 + x1*x0 - x1*x2
+    # Resulting polynomial is degree 2.
+    result = polynomial_multiply(p1, p2, MAX_DEGREE, PSI, CLMO)
+
+    assert len(result) == MAX_DEGREE + 1
+
+    # Check degree 2 terms
+    # x0*x0 (x0^2)
+    k_x0_sq = np.array([2,0,0,0,0,0], dtype=np.int64)
+    idx_x0_sq = encode_multiindex(k_x0_sq, 2, PSI, CLMO)
+    assert abs(result[2][idx_x0_sq] - 1.0) < 1e-9
+
+    # -x0*x2
+    k_x0x2 = np.array([1,0,1,0,0,0], dtype=np.int64)
+    idx_x0x2 = encode_multiindex(k_x0x2, 2, PSI, CLMO)
+    assert abs(result[2][idx_x0x2] - (-1.0)) < 1e-9
+    
+    # +x1*x0
+    k_x1x0 = np.array([1,1,0,0,0,0], dtype=np.int64) # Standard order is x0 then x1
+    idx_x1x0 = encode_multiindex(k_x1x0, 2, PSI, CLMO)
+    assert abs(result[2][idx_x1x0] - 1.0) < 1e-9
+
+    # -x1*x2
+    k_x1x2 = np.array([0,1,1,0,0,0], dtype=np.int64)
+    idx_x1x2 = encode_multiindex(k_x1x2, 2, PSI, CLMO)
+    assert abs(result[2][idx_x1x2] - (-1.0)) < 1e-9
+    
+    # Zero out checked terms and verify rest of degree 2 is zero
+    result[2][idx_x0_sq] = 0.0
+    result[2][idx_x0x2] = 0.0
+    result[2][idx_x1x0] = 0.0
+    result[2][idx_x1x2] = 0.0
+    assert np.allclose(result[2], 0.0)
+
+    # Verify other degrees are zero
+    for d in range(MAX_DEGREE + 1):
+        if d != 2:
+            assert np.allclose(result[d], 0.0)
+
+
+def test_polynomial_multiply_with_zero_components():
+    """Test multiplication where one input has zero components for some degrees."""
+    # A = x0
+    poly_A = polynomial_variable(0, MAX_DEGREE, PSI)
+
+    # B = 2.0 + x1^2
+    poly_B = polynomial_zero_list(MAX_DEGREE, PSI)
+    poly_B[0][0] = 2.0 # Constant term
+    k_x1_sq = np.array([0,1,0,0,0,0], dtype=np.int64) # Error here: x1^2 means k[1]=2
+    k_x1_sq_corrected = np.array([0,1,0,0,0,0], dtype=np.int64)
+    k_x1_sq_corrected[1] = 2 # Corrected: k for x1^2 is [0,2,0,0,0,0]
+    idx_x1_sq = encode_multiindex(k_x1_sq_corrected, 2, PSI, CLMO)
+    poly_B[2][idx_x1_sq] = 1.0
+
+    # poly_B[1] is all zeros, which tests the `not np.any(b[d2])` condition
+
+    # Expected result: A * B = x0 * (2.0 + x1^2) = 2.0*x0 + x0*x1^2
+    # Output max degree is MAX_DEGREE
+    result = polynomial_multiply(poly_A, poly_B, MAX_DEGREE, PSI, CLMO)
+
+    assert len(result) == MAX_DEGREE + 1
+
+    # Check for 2.0*x0 (degree 1)
+    k_x0 = np.array([1,0,0,0,0,0], dtype=np.int64)
+    idx_x0 = encode_multiindex(k_x0, 1, PSI, CLMO)
+    assert abs(result[1][idx_x0] - 2.0) < 1e-9
+    result[1][idx_x0] = 0.0 # Zero out for later check
+    assert np.allclose(result[1], 0.0)
+
+    # Check for x0*x1^2 (degree 3)
+    k_x0_x1sq = np.array([1,2,0,0,0,0], dtype=np.int64) # Corrected: k for x0*x1^2 is [1,2,0,0,0,0]
+    idx_x0_x1sq = encode_multiindex(k_x0_x1sq, 3, PSI, CLMO)
+    assert abs(result[3][idx_x0_x1sq] - 1.0) < 1e-9
+    result[3][idx_x0_x1sq] = 0.0 # Zero out for later check
+    assert np.allclose(result[3], 0.0)
+    
+    # Check other degrees are zero
+    for d in range(MAX_DEGREE + 1):
+        if d not in [1, 3]: # Degrees 1 and 3 were checked and zeroed out
+            assert np.allclose(result[d], 0.0)
+
+
+def test_polynomial_power_complex_base():
+    """Test polynomial_power with a complex base polynomial."""
+    # P = (1+2j) * x0
+    base_poly_complex = polynomial_zero_list(MAX_DEGREE, PSI, complex_dtype=True)
+    k_x0 = np.array([1,0,0,0,0,0], dtype=np.int64)
+    idx_x0 = encode_multiindex(k_x0, 1, PSI, CLMO)
+    base_poly_complex[1][idx_x0] = complex(1.0, 2.0)
+
+    # Test P^2 = ((1+2j)x0)^2 = (1+2j)^2 * x0^2 = (1 + 4j + 4j^2) * x0^2 = (-3 + 4j) * x0^2
+    pow2_result = polynomial_power(base_poly_complex, 2, MAX_DEGREE, PSI, CLMO)
+    
+    assert len(pow2_result) == MAX_DEGREE + 1
+    k_x0_sq = np.array([2,0,0,0,0,0], dtype=np.int64)
+    idx_x0_sq = encode_multiindex(k_x0_sq, 2, PSI, CLMO)
+    
+    expected_coeff_pow2 = complex(-3.0, 4.0)
+    assert np.isclose(pow2_result[2][idx_x0_sq].real, expected_coeff_pow2.real)
+    assert np.isclose(pow2_result[2][idx_x0_sq].imag, expected_coeff_pow2.imag)
+
+    # Zero out and check rest of degree 2
+    pow2_result[2][idx_x0_sq] = 0j
+    assert np.allclose(pow2_result[2], 0j)
+    for d in range(MAX_DEGREE + 1):
+        if d != 2:
+            assert np.allclose(pow2_result[d], 0j)
+
+    # Test P^3 = P^2 * P = ((-3+4j)x0^2) * ((1+2j)x0)
+    # = (-3+4j)(1+2j) * x0^3
+    # = (-3 -6j +4j +8j^2) * x0^3
+    # = (-3 -2j -8) * x0^3 = (-11 -2j) * x0^3
+    pow3_result = polynomial_power(base_poly_complex, 3, MAX_DEGREE, PSI, CLMO)
+    assert len(pow3_result) == MAX_DEGREE + 1
+    k_x0_cb = np.array([3,0,0,0,0,0], dtype=np.int64)
+    idx_x0_cb = encode_multiindex(k_x0_cb, 3, PSI, CLMO)
+
+    expected_coeff_pow3 = complex(-11.0, -2.0)
+    assert np.isclose(pow3_result[3][idx_x0_cb].real, expected_coeff_pow3.real)
+    assert np.isclose(pow3_result[3][idx_x0_cb].imag, expected_coeff_pow3.imag)
+
+    # Zero out and check rest of degree 3
+    pow3_result[3][idx_x0_cb] = 0j
+    assert np.allclose(pow3_result[3], 0j)
+    for d in range(MAX_DEGREE + 1):
+        if d != 3:
+             assert np.allclose(pow3_result[d], 0j)
+
+
+def test_polynomial_power_negative_exponent():
+    """Test that polynomial_power raises ValueError for k < 0."""
+    x_poly = polynomial_variable(0, MAX_DEGREE, PSI)
+    with pytest.raises(ValueError, match="Polynomial power k must be non-negative."):
+        polynomial_power(x_poly, -1, MAX_DEGREE, PSI, CLMO)
+
+    with pytest.raises(ValueError, match="Polynomial power k must be non-negative."):
+        polynomial_power(x_poly, -5, MAX_DEGREE, PSI, CLMO)
