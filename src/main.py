@@ -20,7 +20,7 @@ from log_config import logger
 
 def main():
 
-    max_degree = 5
+    max_degree = 8
     
     psi, clmo = init_index_tables(max_degree)
 

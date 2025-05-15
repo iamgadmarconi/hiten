@@ -8,6 +8,34 @@ from algorithms.variables import N_VARS
 
 
 def init_index_tables(max_degree: int):
+    """
+    Initialize lookup tables for polynomial multi-index encoding and decoding.
+    
+    This function creates two data structures essential for polynomial operations:
+    1. A table of combinations (psi) that counts monomials for given degrees
+    2. A list of packed multi-indices (clmo) that efficiently stores monomial exponents
+    
+    Parameters
+    ----------
+    max_degree : int
+        Maximum polynomial degree to initialize tables for
+        
+    Returns
+    -------
+    psi : numpy.ndarray
+        2D array where psi[i, d] contains the number of monomials of degree d 
+        in i variables. Shape is (N_VARS+1, max_degree+1)
+    
+    clmo : numba.typed.List
+        List of arrays where clmo[d] contains packed representations of all
+        multi-indices for monomials of degree d. Each multi-index is packed
+        into a uint32 value for efficient storage and lookup.
+        
+    Notes
+    -----
+    The packing scheme allocates 6 bits for each variable x_1 through x_5,
+    with x_0's exponent implicitly determined by the total degree.
+    """
     psi = np.zeros((N_VARS+1, max_degree+1), dtype=np.int64)
     for i in range(1, N_VARS+1):
         for d in range(max_degree+1):
@@ -37,9 +65,42 @@ def init_index_tables(max_degree: int):
         clmo.append(arr)
     return psi, clmo
 
+# -----------------------------------------------------------------------------
+#  GLOBAL clmo cache (Numba functions need it at definition time)
+# -----------------------------------------------------------------------------
+PSI_GLOBAL, CLMO_GLOBAL = init_index_tables(30)  # default; will be overwritten
 
 @njit(fastmath=True, cache=True)
 def decode_multiindex(pos: int, degree: int, clmo) -> np.ndarray:
+    """
+    Decode a packed multi-index from its position in the lookup table.
+    
+    Parameters
+    ----------
+    pos : int
+        Position of the multi-index in the clmo[degree] array
+    degree : int
+        Degree of the monomial
+    clmo : numba.typed.List
+        List of arrays containing packed multi-indices, as returned by init_index_tables
+        
+    Returns
+    -------
+    k : numpy.ndarray
+        Array of length N_VARS containing the exponents [k_0, k_1, k_2, k_3, k_4, k_5]
+        where k_0 + k_1 + k_2 + k_3 + k_4 + k_5 = degree
+        
+    Notes
+    -----
+    The function unpacks a 32-bit integer where:
+    - k_1 uses bits 0-5
+    - k_2 uses bits 6-11
+    - k_3 uses bits 12-17
+    - k_4 uses bits 18-23
+    - k_5 uses bits 24-29
+    
+    k_0 is calculated as (degree - sum of other exponents)
+    """
     packed = clmo[degree][pos]
     k = np.empty(N_VARS, dtype=np.int64)
     k[1] = packed & 0x3F
@@ -54,6 +115,31 @@ def decode_multiindex(pos: int, degree: int, clmo) -> np.ndarray:
 
 @njit(fastmath=True, cache=True)
 def encode_multiindex(k: np.ndarray, degree: int, psi, clmo) -> int:
+    """
+    Encode a multi-index to find its position in the coefficient array.
+    
+    Parameters
+    ----------
+    k : numpy.ndarray
+        Array of length N_VARS containing the exponents [k_0, k_1, k_2, k_3, k_4, k_5]
+    degree : int
+        Degree of the monomial (should equal sum of elements in k)
+    psi : numpy.ndarray
+        Combinatorial table from init_index_tables
+    clmo : numba.typed.List
+        List of arrays containing packed multi-indices from init_index_tables
+        
+    Returns
+    -------
+    int
+        The position of the multi-index in the coefficient array for the given degree,
+        or -1 if the multi-index is not found
+        
+    Notes
+    -----
+    This function is the inverse of decode_multiindex. It packs the exponents
+    k_1 through k_5 into a 32-bit integer and searches for this value in clmo[degree].
+    """
     packed = (
         (k[1] & 0x3F)
         | ((k[2] & 0x3F) << 6)
@@ -69,6 +155,29 @@ def encode_multiindex(k: np.ndarray, degree: int, psi, clmo) -> int:
 
 
 def make_poly(degree: int, psi, complex_dtype: bool=False) -> np.ndarray:
+    """
+    Create a new polynomial coefficient array of specified degree.
+    
+    Parameters
+    ----------
+    degree : int
+        Degree of the polynomial
+    psi : numpy.ndarray
+        Combinatorial table from init_index_tables
+    complex_dtype : bool, optional
+        Whether to use complex coefficients (default is False, using real coefficients)
+        
+    Returns
+    -------
+    numpy.ndarray
+        Array of zeros with appropriate size and data type to represent
+        a polynomial of the specified degree
+        
+    Notes
+    -----
+    The size of the array is determined by psi[N_VARS, degree], which gives
+    the number of monomials of degree 'degree' in N_VARS variables.
+    """
     if complex_dtype:
         return _make_poly_complex(degree, psi)
     else:
@@ -77,11 +186,43 @@ def make_poly(degree: int, psi, complex_dtype: bool=False) -> np.ndarray:
 
 @njit(fastmath=True, cache=True)
 def _make_poly_real(degree: int, psi) -> np.ndarray:
+    """
+    Create a polynomial coefficient array with real coefficients.
+    
+    Parameters
+    ----------
+    degree : int
+        Degree of the polynomial
+    psi : numpy.ndarray
+        Combinatorial table from init_index_tables
+        
+    Returns
+    -------
+    numpy.ndarray
+        Array of zeros with float64 data type and size equal to the number
+        of monomials of degree 'degree' in N_VARS variables
+    """
     size = psi[N_VARS, degree]
     return np.zeros(size, dtype=np.float64)
 
 
 @njit(fastmath=True, cache=True)
 def _make_poly_complex(degree: int, psi) -> np.ndarray:
+    """
+    Create a polynomial coefficient array with complex coefficients.
+    
+    Parameters
+    ----------
+    degree : int
+        Degree of the polynomial
+    psi : numpy.ndarray
+        Combinatorial table from init_index_tables
+        
+    Returns
+    -------
+    numpy.ndarray
+        Array of zeros with complex128 data type and size equal to the number
+        of monomials of degree 'degree' in N_VARS variables
+    """
     size = psi[N_VARS, degree]
     return np.zeros(size, dtype=np.complex128)
