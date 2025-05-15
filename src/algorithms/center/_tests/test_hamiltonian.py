@@ -9,13 +9,10 @@ from algorithms.center.hamiltonian import (
     build_physical_hamiltonian, 
     _build_T_polynomials, 
     _linear_variable_polys,
-    substitute_linear
+    substitute_linear,
+    phys2rn
 )
 from system.libration import L1Point  # noqa: F401 – used in fixture
-
-# -----------------------------------------------------------------------------
-# Fixtures
-# -----------------------------------------------------------------------------
 
 _sympy_vars = sp.symbols("x y z px py pz")
 
@@ -33,10 +30,6 @@ def max_deg(request):
 def psi_clmo(max_deg):
     psi, clmo = base.init_index_tables(max_deg)
     return psi, clmo
-
-# -----------------------------------------------------------------------------
-# Helper utilities
-# -----------------------------------------------------------------------------
 
 def sympy_reference(point: L1Point, max_deg: int) -> sp.Expr:
     """Exact Hamiltonian expanded with SymPy up to *max_deg* total degree."""
@@ -74,7 +67,6 @@ def sympy_reference(point: L1Point, max_deg: int) -> sp.Expr:
             f"Error: {e}"
         )
         raise type(e)(error_msg) from e
-
 
 def sympy_to_poly(sym_expr: sp.Expr, max_deg: int, psi, clmo):
     """Convert a SymPy polynomial into the coefficient-list format used by the codebase."""
@@ -130,10 +122,6 @@ def evaluate_poly(poly, values, psi, clmo):
     return total
 
 
-# -----------------------------------------------------------------------------
-# Tests
-# -----------------------------------------------------------------------------
-
 @pytest.mark.parametrize("max_deg", [4, 6, 8])
 def test_symbolic_identity(point, max_deg):
     """Coefficient arrays must match a SymPy ground-truth for small degrees."""
@@ -150,7 +138,6 @@ def test_symbolic_identity(point, max_deg):
         assert np.allclose(
             H_build[d], H_ref[d], atol=1e-12, rtol=1e-9
         ), f"Mismatch found in degree slice {d}.\nBuild: {H_build[d]}\nRef:   {H_ref[d]}"
-
 
 @pytest.mark.parametrize("max_deg", [4, 6, 8])
 def test_legendre_recursion(point, max_deg):
@@ -197,7 +184,6 @@ def test_legendre_recursion(point, max_deg):
         for d in range(max_deg + 1):
             assert np.array_equal(lhs[d], rhs[d]), f"Legendre recursion failed at n={n}, degree slice d={d}"
 
-
 @pytest.mark.parametrize("max_deg", [4, 6, 8])
 def test_numerical_evaluation(point, max_deg):
     """Evaluate both Hamiltonians at random points and compare numerically."""
@@ -216,7 +202,6 @@ def test_numerical_evaluation(point, max_deg):
         assert np.isclose(
             H_num_poly, H_num_sym, atol=1e-12
         ), "Numerical mismatch between polynomial and SymPy Hamiltonians"
-
 
 @pytest.mark.parametrize("max_deg", [0, 1, 2, 3, 4, 5])
 @pytest.mark.parametrize("complex_dtype_bool", [False, True])
@@ -398,12 +383,6 @@ def test_identity(max_deg, psi_clmo):
         np.array_equal(a, b) for a, b in zip(P, P_sub)
     ), "Identity substitution should return an identical polynomial."
 
-
-# ---------------------------------------------------------------------------
-# Test 2 – variable permutation (swap x ↔ y) matches SymPy substitution
-# ---------------------------------------------------------------------------
-
-
 def test_permutation(max_deg, psi_clmo):
     psi, clmo = psi_clmo
     # permutation matrix that swaps x and y (indices 0,1)
@@ -414,9 +393,6 @@ def test_permutation(max_deg, psi_clmo):
     # Let's debug to see what's happening
     x, y, z, px, py, pz = _sympy_vars
     expr = x**2 + 2*y*px + 3*z**2
-    
-    # Print matrix to verify its structure
-    print(f"\nPermutation Matrix:\n{Pmat}")
     
     # In the permutation matrix, we have:
     # - Pmat[0,1] = 1, meaning old_x = new_y
@@ -430,21 +406,10 @@ def test_permutation(max_deg, psi_clmo):
     # x^2 → y^2, 2*y*px → 2*x*px, 3*z^2 → 3*z^2
     expected_expr = y**2 + 2*x*px + 3*z**2
     expr_test = poly_list_to_sympy(P_new, psi, clmo)
-    
-    print(f"\nMax Deg: {max_deg}")
-    print(f"Original expr: {expr}")
-    print(f"Expected after x→y, y→x: {expected_expr}")
-    print(f"Actual result: {expr_test}")
+
     diff = sp.expand(expected_expr - expr_test)
-    print(f"Difference (expected - actual): {diff}")
     
     assert diff == 0, f"Mismatch for permutation test with max_deg={max_deg}. Difference: {diff}"
-
-
-# ---------------------------------------------------------------------------
-# Test 3 – random integer matrix, compare against SymPy ground truth
-# ---------------------------------------------------------------------------
-
 
 @pytest.mark.parametrize("seed", [1, 2, 3])
 def test_random_matrix(seed, max_deg, psi_clmo):
@@ -484,3 +449,53 @@ def test_random_matrix(seed, max_deg, psi_clmo):
     expr_test = poly_list_to_sympy(P_new, psi, clmo)
 
     assert sp.expand(expr_truth - expr_test) == 0, f"Mismatch for seed {seed} and degree {max_deg}"
+
+def test_symplectic(point):
+    C, _ = point.normal_form_transform()
+    J = np.block([[np.zeros((3, 3)),  np.eye(3)],
+                  [-np.eye(3),        np.zeros((3, 3))]])
+    assert np.allclose(C.T @ J @ C, J, atol=1e-13)
+
+def test_real_normal_form(point, max_deg, psi_clmo):
+    psi, clmo = psi_clmo
+    H_phys = build_physical_hamiltonian(point, max_deg, (psi, np.float64), clmo)
+    H_rn   = phys2rn(point, H_phys, max_deg, psi, clmo)
+
+    # ---- convert quadratic part to SymPy for human-readable comparison -----
+    x, y, z, px, py, pz = sp.symbols('x y z px py pz')
+    expr = poly_list_to_sympy(H_rn, psi, clmo)
+
+    # pull out degree-2 terms
+    poly = sp.Poly(expr, x, y, z, px, py, pz)
+    quad_terms = {m: c for m, c in poly.terms() if sum(m) == 2}
+    
+    # Filter out terms with negligible coefficients (numerical noise)
+    significant_quad_terms = {m: c for m, c in quad_terms.items() if abs(float(c)) > 1e-12}
+
+    allowed = {(1, 0, 0, 1, 0, 0),   # x * px
+               (0, 2, 0, 0, 0, 0),   # y**2
+               (0, 0, 0, 0, 2, 0),   # py**2
+               (0, 0, 2, 0, 0, 0),   # z**2
+               (0, 0, 0, 0, 0, 2)}   # pz**2
+
+    # (1) no cross-terms remain
+    assert set(significant_quad_terms).issubset(allowed), (
+        "Unexpected quadratic monomials after phys→rn transformation")
+
+    # (2) coefficients equal the eigenvalues of the physical H2
+    #     ( λ1 for x·px  , ω1**2/2  for y**2 & py**2 , etc. )
+    # Get eigenvalues from the point's linear_modes method instead of calculating them
+    lambda1, omega1, omega2 = point.linear_modes()
+    
+    # read coefficients back from the quadratic dict
+    coeff_xpx = float(significant_quad_terms[(1,0,0,1,0,0)])
+    coeff_y2  = float(significant_quad_terms[(0,2,0,0,0,0)])
+    coeff_py2 = float(significant_quad_terms[(0,0,0,0,2,0)])
+    coeff_z2  = float(significant_quad_terms[(0,0,2,0,0,0)])
+    coeff_pz2 = float(significant_quad_terms[(0,0,0,0,0,2)])
+
+    assert np.isclose(coeff_xpx, lambda1, rtol=1e-12)
+    assert np.isclose(coeff_y2,  0.5*omega1, rtol=1e-12)
+    assert np.isclose(coeff_py2, 0.5*omega1, rtol=1e-12)
+    assert np.isclose(coeff_z2,  0.5*omega2, rtol=1e-12)
+    assert np.isclose(coeff_pz2, 0.5*omega2, rtol=1e-12)
