@@ -71,7 +71,7 @@ def sympy_reference(point: L1Point, max_deg: int) -> sp.Expr:
 def sympy_to_poly(sym_expr: sp.Expr, max_deg: int, psi, clmo):
     """Convert a SymPy polynomial into the coefficient-list format used by the codebase."""
 
-    poly = op.polynomial_zero_list(max_deg, psi, complex_dtype=False)
+    poly = op.polynomial_zero_list(max_deg, psi)
 
     for term in sym_expr.as_ordered_terms():
         coeff, monom = term.as_coeff_Mul()
@@ -134,7 +134,7 @@ def test_symbolic_identity(point, max_deg):
     psi, clmo = base.init_index_tables(max_deg)
     bph_psi_config = (None, False)
     bph_clmo_deg = max_deg
-    H_build = build_physical_hamiltonian(point, max_deg, bph_psi_config, bph_clmo_deg)
+    H_build = build_physical_hamiltonian(point, max_deg)
 
     H_sympy = sympy_reference(point, max_deg)
     H_ref = sympy_to_poly(H_sympy, max_deg, psi, clmo)
@@ -150,16 +150,16 @@ def test_legendre_recursion(point, max_deg):
 
     psi, clmo = base.init_index_tables(max_deg)
     x_poly, y_poly, z_poly, *_ = [
-        op.polynomial_variable(i, max_deg, psi, complex_dtype=False) for i in range(6)
+        op.polynomial_variable(i, max_deg, psi, clmo) for i in range(6)
     ]
 
     # Call the refactored helper function directly
-    T = _build_T_polynomials(x_poly, y_poly, z_poly, max_deg, psi, clmo, complex_dt=False)
+    T = _build_T_polynomials(x_poly, y_poly, z_poly, max_deg, psi, clmo)
 
     # The rest of the test logic for verification remains largely the same,
     # but it uses the T computed above.
     # We still need sum_sq for the RHS of the recursion check.
-    sum_sq = op.polynomial_zero_list(max_deg, psi, complex_dtype=False)
+    sum_sq = op.polynomial_zero_list(max_deg, psi)
     for var in (x_poly, y_poly, z_poly): # Use polynomial variables
         op.polynomial_add_inplace(sum_sq, op.polynomial_multiply(var, var, max_deg, psi, clmo), 1.0)
     
@@ -175,14 +175,14 @@ def test_legendre_recursion(point, max_deg):
         # (a * x * T[n-1] - b * sum_sq * T[n-2])
         
         term1_mult = op.polynomial_multiply(x_poly, T[n - 1], max_deg, psi, clmo)
-        term1 = op.polynomial_zero_list(max_deg, psi, complex_dtype=False)
+        term1 = op.polynomial_zero_list(max_deg, psi)
         op.polynomial_add_inplace(term1, term1_mult, a)
         
         term2_mult = op.polynomial_multiply(sum_sq, T[n - 2], max_deg, psi, clmo)
-        term2 = op.polynomial_zero_list(max_deg, psi, complex_dtype=False)
+        term2 = op.polynomial_zero_list(max_deg, psi)
         op.polynomial_add_inplace(term2, term2_mult, -b) # -b factor
 
-        rhs = op.polynomial_zero_list(max_deg, psi, complex_dtype=False)
+        rhs = op.polynomial_zero_list(max_deg, psi)
         op.polynomial_add_inplace(rhs, term1, 1.0)
         op.polynomial_add_inplace(rhs, term2, 1.0)
 
@@ -194,7 +194,7 @@ def test_numerical_evaluation(point, max_deg):
     """Evaluate both Hamiltonians at random points and compare numerically."""
 
     psi, clmo = base.init_index_tables(max_deg)
-    H_poly = build_physical_hamiltonian(point, max_deg, (psi, np.float64), clmo) # Pass psi as first element of tuple for psi_config
+    H_poly = build_physical_hamiltonian(point, max_deg) 
     H_sym = sympy_reference(point, max_deg)
 
     rng = np.random.default_rng(42)
@@ -234,14 +234,14 @@ def test_linear_variable_polys(max_deg, complex_dtype_bool):
         C = C_base.astype(float)
 
     # Call the function to be tested
-    L_actual = _linear_variable_polys(C, max_deg, psi, clmo, complex_dtype_bool)
+    L_actual = _linear_variable_polys(C, max_deg, psi, clmo)
 
     # Construct the expected result
-    new_basis_expected = [op.polynomial_variable(j, max_deg, psi, complex_dtype_bool) for j in range(6)]
+    new_basis_expected = [op.polynomial_variable(j, max_deg, psi, clmo) for j in range(6)]
     
     L_expected = []
     for i in range(6):
-        pol_expected_i = op.polynomial_zero_list(max_deg, psi, complex_dtype_bool)
+        pol_expected_i = op.polynomial_zero_list(max_deg, psi)
         for j in range(6):
             if C[i, j] != 0: 
                 op.polynomial_add_inplace(pol_expected_i, new_basis_expected[j], C[i, j], max_deg)
@@ -264,11 +264,6 @@ def test_linear_variable_polys(max_deg, complex_dtype_bool):
             coeffs_actual = poly_actual_i[deg_idx]
             coeffs_expected = poly_expected_i[deg_idx]
             
-            assert coeffs_actual.dtype == expected_np_dtype, \
-                f"Test({max_deg=}, {complex_dtype_bool=}): L_actual[{i}][{deg_idx}] dtype mismatch. Expected {expected_np_dtype}, got {coeffs_actual.dtype}"
-            assert coeffs_expected.dtype == expected_np_dtype, \
-                f"Test({max_deg=}, {complex_dtype_bool=}): L_expected[{i}][{deg_idx}] dtype mismatch. Expected {expected_np_dtype}, got {coeffs_expected.dtype}"
-
             assert np.allclose(
                 coeffs_actual, coeffs_expected, atol=1e-15, rtol=1e-12
             ), (f"Test({max_deg=}, {complex_dtype_bool=}): Mismatch for old_var {i}, degree {deg_idx}.\n"
@@ -282,13 +277,13 @@ def test_substitute_linear(max_deg_test, complex_dtype_bool):
     dtype = np.complex128 if complex_dtype_bool else np.float64
 
     # Common helper to create a polynomial for a constant coeff
-    def create_const_poly(val, max_deg_local, psi_local, complex_local):
-        p = op.polynomial_zero_list(max_deg_local, psi_local, complex_local)
+    def create_const_poly(val, max_deg_local, psi_local):
+        p = op.polynomial_zero_list(max_deg_local, psi_local)
         p[0][0] = val
         return p
 
     # Test Case 0: H_old is a constant
-    H_old0 = op.polynomial_zero_list(max_deg_test, psi, complex_dtype_bool)
+    H_old0 = op.polynomial_zero_list(max_deg_test, psi)
     const_val = dtype(5.0 - (2.0j if complex_dtype_bool else 0.0))
     H_old0[0][0] = const_val
     
@@ -296,7 +291,7 @@ def test_substitute_linear(max_deg_test, complex_dtype_bool):
                      [0.5, 1.0, 0,0,0,0],
                      [0,0,1,0,0,0],[0,0,0,1,0,0],[0,0,0,0,1,0],[0,0,0,0,0,1]], dtype=dtype)
 
-    H_actual0 = substitute_linear(H_old0, C0, max_deg_test, psi, clmo, complex_dtype_bool)
+    H_actual0 = substitute_linear(H_old0, C0, max_deg_test, psi, clmo)
     # Expected is just H_old0 itself, as constants are unaffected by variable substitution.
     for d_idx in range(max_deg_test + 1):
         assert np.allclose(H_actual0[d_idx], H_old0[d_idx], atol=1e-15, rtol=1e-12), \
@@ -304,7 +299,7 @@ def test_substitute_linear(max_deg_test, complex_dtype_bool):
 
     # Test Case 1: H_old = c0 * x_old_0 + c1 * x_old_1 (only if max_deg_test >= 1)
     if max_deg_test >= 1:
-        H_old1 = op.polynomial_zero_list(max_deg_test, psi, complex_dtype_bool)
+        H_old1 = op.polynomial_zero_list(max_deg_test, psi)
         c0_val = dtype(2.0 + (1.0j if complex_dtype_bool else 0.0))
         c1_val = dtype(3.0 - (0.5j if complex_dtype_bool else 0.0))
 
@@ -320,17 +315,17 @@ def test_substitute_linear(max_deg_test, complex_dtype_bool):
         C1[0,1] = dtype(0.5 + (0.2j if complex_dtype_bool else 0.0)) # x_old_0 = 1*x_new_0 + (0.5+0.2j)*x_new_1
         C1[1,0] = dtype(0.3 - (0.1j if complex_dtype_bool else 0.0)) # x_old_1 = (0.3-0.1j)*x_new_0 + 1*x_new_1
 
-        H_actual1 = substitute_linear(H_old1, C1, max_deg_test, psi, clmo, complex_dtype_bool)
+        H_actual1 = substitute_linear(H_old1, C1, max_deg_test, psi, clmo)
         
-        L1 = _linear_variable_polys(C1, max_deg_test, psi, clmo, complex_dtype_bool)
+        L1 = _linear_variable_polys(C1, max_deg_test, psi, clmo)
         
-        const_poly_c0 = create_const_poly(c0_val, max_deg_test, psi, complex_dtype_bool)
-        const_poly_c1 = create_const_poly(c1_val, max_deg_test, psi, complex_dtype_bool)
+        const_poly_c0 = create_const_poly(c0_val, max_deg_test, psi)
+        const_poly_c1 = create_const_poly(c1_val, max_deg_test, psi)
 
         term_for_c0_x_old_0 = op.polynomial_multiply(const_poly_c0, L1[0], max_deg_test, psi, clmo)
         term_for_c1_x_old_1 = op.polynomial_multiply(const_poly_c1, L1[1], max_deg_test, psi, clmo)
         
-        H_expected1 = op.polynomial_zero_list(max_deg_test, psi, complex_dtype_bool)
+        H_expected1 = op.polynomial_zero_list(max_deg_test, psi)
         op.polynomial_add_inplace(H_expected1, term_for_c0_x_old_0, 1.0, max_deg_test)
         op.polynomial_add_inplace(H_expected1, term_for_c1_x_old_1, 1.0, max_deg_test)
 
@@ -340,7 +335,7 @@ def test_substitute_linear(max_deg_test, complex_dtype_bool):
 
     # Test Case 2: H_old = c_sq * (x_old_0)^2 (only if max_deg_test >= 2)
     if max_deg_test >= 2:
-        H_old2 = op.polynomial_zero_list(max_deg_test, psi, complex_dtype_bool)
+        H_old2 = op.polynomial_zero_list(max_deg_test, psi)
         c_sq_val = dtype(1.5 + (0.5j if complex_dtype_bool else 0.0))
         
         k_x0sq = tuple([2 if i == 0 else 0 for i in range(6)])
@@ -351,10 +346,10 @@ def test_substitute_linear(max_deg_test, complex_dtype_bool):
         C2[0,0] = dtype(1.2 - (0.3j if complex_dtype_bool else 0.0)) 
         C2[0,1] = dtype(0.7 + (0.4j if complex_dtype_bool else 0.0)) # x_old_0 = C2[0,0]*x_new_0 + C2[0,1]*x_new_1
         
-        H_actual2 = substitute_linear(H_old2, C2, max_deg_test, psi, clmo, complex_dtype_bool)
+        H_actual2 = substitute_linear(H_old2, C2, max_deg_test, psi, clmo)
         
-        L2 = _linear_variable_polys(C2, max_deg_test, psi, clmo, complex_dtype_bool)
-        const_poly_c_sq = create_const_poly(c_sq_val, max_deg_test, psi, complex_dtype_bool)
+        L2 = _linear_variable_polys(C2, max_deg_test, psi, clmo)
+        const_poly_c_sq = create_const_poly(c_sq_val, max_deg_test, psi)
         
         powered_L0 = op.polynomial_power(L2[0], 2, max_deg_test, psi, clmo)
         H_expected2 = op.polynomial_multiply(const_poly_c_sq, powered_L0, max_deg_test, psi, clmo)
@@ -465,7 +460,7 @@ def test_symplectic(point):
 def test_real_normal_form(point, max_deg):
     # Create fresh psi, clmo for each test instead of using the fixture
     psi, clmo = base.init_index_tables(max_deg)
-    H_phys = build_physical_hamiltonian(point, max_deg, (psi, np.float64), clmo)
+    H_phys = build_physical_hamiltonian(point, max_deg)
     H_rn   = phys2rn(point, H_phys, max_deg, psi, clmo)
 
     x, y, z, px, py, pz = sp.symbols('x y z px py pz')
@@ -512,7 +507,7 @@ def test_complex_normal_form(point, max_deg):
     psi, clmo = base.init_index_tables(max_deg)
 
     # 1) build physical Hamiltonian, go to real normal form, then complex
-    H_phys = build_physical_hamiltonian(point, max_deg, (psi, np.float64), clmo)
+    H_phys = build_physical_hamiltonian(point, max_deg)
     H_rn   = phys2rn(point, H_phys, max_deg, psi, clmo)
     H_cn   = rn2cn(       H_rn,   max_deg, psi, clmo)
 
@@ -554,19 +549,19 @@ def test_complex_normal_form(point, max_deg):
     assert np.isclose(coeff_q3p3 / 1j, omega2, rtol=1e-12)
     # ---------------- Poisson‑bracket sanity tests -------------------------
     # Extract the degree-2 part of the Hamiltonian
-    H2 = op.polynomial_zero_list(max_deg, psi, complex_dtype=True)
+    H2 = op.polynomial_zero_list(max_deg, psi)
     for d in range(len(H_cn)):
         if d == 2:  # Only copy degree 2 terms
             H2[d] = H_cn[d].copy()
     
     # Create |q2|² = q2 * p2 polynomial
-    q2_var = op.polynomial_variable(1, max_deg, psi, complex_dtype=True)
-    p2_var = op.polynomial_variable(4, max_deg, psi, complex_dtype=True)
+    q2_var = op.polynomial_variable(1, max_deg, psi, clmo)
+    p2_var = op.polynomial_variable(4, max_deg, psi, clmo)
     q2p2_poly = op.polynomial_multiply(q2_var, p2_var, max_deg, psi, clmo)
     
     # Create |q3|² = q3 * p3 polynomial
-    q3_var = op.polynomial_variable(2, max_deg, psi, complex_dtype=True)
-    p3_var = op.polynomial_variable(5, max_deg, psi, complex_dtype=True)
+    q3_var = op.polynomial_variable(2, max_deg, psi, clmo)
+    p3_var = op.polynomial_variable(5, max_deg, psi, clmo)
     q3p3_poly = op.polynomial_multiply(q3_var, p3_var, max_deg, psi, clmo)
     
     # Compute the Poisson brackets
@@ -583,8 +578,8 @@ def test_complex_normal_form(point, max_deg):
                 f"Poisson bracket {{{H2}, |q3|²}} should be zero, but degree {d} terms are not"
     
     # Also test the bracket with hyperbolic action I1 = q1 * p1
-    q1_var = op.polynomial_variable(0, max_deg, psi, complex_dtype=True)
-    p1_var = op.polynomial_variable(3, max_deg, psi, complex_dtype=True)
+    q1_var = op.polynomial_variable(0, max_deg, psi, clmo)
+    p1_var = op.polynomial_variable(3, max_deg, psi, clmo)
     q1p1_poly = op.polynomial_multiply(q1_var, p1_var, max_deg, psi, clmo)
     
     pb_H2_q1p1 = op.polynomial_poisson_bracket(H2, q1p1_poly, max_deg, psi, clmo)
@@ -600,7 +595,7 @@ def test_cn2rn_inverse(point, max_deg):
     psi, clmo = base.init_index_tables(max_deg)
 
     # pipeline ---------------------------------------------------------------
-    H_phys = build_physical_hamiltonian(point, max_deg, (psi, np.float64), clmo)
+    H_phys = build_physical_hamiltonian(point, max_deg)
     H_rn   = phys2rn(point, H_phys, max_deg, psi, clmo)
     H_cn   = rn2cn(       H_rn,   max_deg, psi, clmo)
     H_back = cn2rn(       H_cn,   max_deg, psi, clmo)

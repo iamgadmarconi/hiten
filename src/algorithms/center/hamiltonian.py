@@ -14,9 +14,9 @@ from algorithms.center.polynomial.operations import (
 )
 
 
-def _build_T_polynomials(x, y, z, max_deg: int, psi_table, clmo_table, complex_dt) -> list:
+def _build_T_polynomials(x, y, z, max_deg: int, psi_table, clmo_table) -> list:
     """Helper function to build the T polynomials."""
-    T = [polynomial_zero_list(max_deg, psi_table, complex_dt) for _ in range(max_deg + 1)]
+    T = [polynomial_zero_list(max_deg, psi_table) for _ in range(max_deg + 1)]
     if max_deg >= 0 and len(T[0]) > 0 and len(T[0][0]) > 0:
         T[0][0][0] = 1.0
     if max_deg >= 1:
@@ -28,49 +28,49 @@ def _build_T_polynomials(x, y, z, max_deg: int, psi_table, clmo_table, complex_d
         b = (n_ - 1) / n_
 
         term1_mult = polynomial_multiply(x, T[n - 1], max_deg, psi_table, clmo_table)
-        term1 = polynomial_zero_list(max_deg, psi_table, complex_dt)
+        term1 = polynomial_zero_list(max_deg, psi_table)
         polynomial_add_inplace(term1, term1_mult, a)
 
         x_sq = polynomial_multiply(x, x, max_deg, psi_table, clmo_table)
         y_sq = polynomial_multiply(y, y, max_deg, psi_table, clmo_table)
         z_sq = polynomial_multiply(z, z, max_deg, psi_table, clmo_table)
 
-        sum_sq = polynomial_zero_list(max_deg, psi_table, complex_dt)
+        sum_sq = polynomial_zero_list(max_deg, psi_table)
         polynomial_add_inplace(sum_sq, x_sq, 1.0)
         polynomial_add_inplace(sum_sq, y_sq, 1.0)
         polynomial_add_inplace(sum_sq, z_sq, 1.0)
 
         term2_mult = polynomial_multiply(sum_sq, T[n - 2], max_deg, psi_table, clmo_table)
-        term2 = polynomial_zero_list(max_deg, psi_table, complex_dt)
+        term2 = polynomial_zero_list(max_deg, psi_table)
         polynomial_add_inplace(term2, term2_mult, -b)
 
-        Tn = polynomial_zero_list(max_deg, psi_table, complex_dt)
+        Tn = polynomial_zero_list(max_deg, psi_table)
         polynomial_add_inplace(Tn, term1, 1.0)
         polynomial_add_inplace(Tn, term2, 1.0)
         T[n] = Tn
     return T
 
 
-def _build_potential_U(T_polynomials, point, max_deg: int, psi_table, complex_dt) -> np.ndarray:
+def _build_potential_U(T_polynomials, point, max_deg: int, psi_table) -> np.ndarray:
     """Helper function to build the U_potential polynomial."""
-    U_potential = polynomial_zero_list(max_deg, psi_table, complex_dt)
+    U_potential = polynomial_zero_list(max_deg, psi_table)
     for n in range(2, max_deg + 1):
         polynomial_add_inplace(U_potential, T_polynomials[n], -point._cn(n))
     return U_potential
 
 
-def _build_kinetic_energy_terms(px, py, pz, max_deg: int, psi_table, clmo_table, complex_dt) -> np.ndarray:
+def _build_kinetic_energy_terms(px, py, pz, max_deg: int, psi_table, clmo_table) -> np.ndarray:
     """Helper function to build the kinetic energy terms of the Hamiltonian."""
-    kinetic_energy = polynomial_zero_list(max_deg, psi_table, complex_dt)
+    kinetic_energy = polynomial_zero_list(max_deg, psi_table)
     for mom in (px, py, pz):
         term = polynomial_multiply(mom, mom, max_deg, psi_table, clmo_table)
         polynomial_add_inplace(kinetic_energy, term, 0.5)
     return kinetic_energy
 
 
-def _build_rotational_terms(x, y, px, py, max_deg: int, psi_table, clmo_table, complex_dt) -> np.ndarray:
+def _build_rotational_terms(x, y, px, py, max_deg: int, psi_table, clmo_table) -> np.ndarray:
     """Helper function to build the rotational terms (y*px - x*py) of the Hamiltonian."""
-    rotational_terms = polynomial_zero_list(max_deg, psi_table, complex_dt)
+    rotational_terms = polynomial_zero_list(max_deg, psi_table)
     
     term_ypx = polynomial_multiply(y, px, max_deg, psi_table, clmo_table)
     polynomial_add_inplace(rotational_terms, term_ypx, 1.0)
@@ -81,53 +81,45 @@ def _build_rotational_terms(x, y, px, py, max_deg: int, psi_table, clmo_table, c
     return rotational_terms
 
 
-def build_physical_hamiltonian(point,
-                            max_deg: int,
-                            psi_config,
-                            clmo_tables_deg: int) -> List[np.ndarray]:
+def build_physical_hamiltonian(point, max_deg: int) -> List[np.ndarray]:
     """
     Return the physical-frame Hamiltonian as Poly in vars
     [x, y, z, px, py, pz]  (indices 0…5).
     """
-    complex_dt = psi_config[1]
     
     psi_table, clmo_table = init_index_tables(max_deg)
 
-    H = polynomial_zero_list(max_deg, psi_table, complex_dt)
+    H = polynomial_zero_list(max_deg, psi_table)
 
     x, y, z, px, py, pz = [
-        polynomial_variable(i, max_deg, psi_table, complex_dtype=complex_dt) for i in range(6)
+        polynomial_variable(i, max_deg, psi_table, clmo_table) for i in range(6)
     ]
 
-    kinetic_energy = _build_kinetic_energy_terms(px, py, pz, max_deg, psi_table, clmo_table, complex_dt)
+    kinetic_energy = _build_kinetic_energy_terms(px, py, pz, max_deg, psi_table, clmo_table)
     polynomial_add_inplace(H, kinetic_energy, 1.0)
 
-    rotational_terms = _build_rotational_terms(x, y, px, py, max_deg, psi_table, clmo_table, complex_dt)
+    rotational_terms = _build_rotational_terms(x, y, px, py, max_deg, psi_table, clmo_table)
     polynomial_add_inplace(H, rotational_terms, 1.0)
 
-    T = _build_T_polynomials(x, y, z, max_deg, psi_table, clmo_table, complex_dt)
+    T = _build_T_polynomials(x, y, z, max_deg, psi_table, clmo_table)
     
-    U_potential = _build_potential_U(T, point, max_deg, psi_table, complex_dt)
+    U_potential = _build_potential_U(T, point, max_deg, psi_table)
 
     polynomial_add_inplace(H, U_potential, 1.0)
 
     return H
 
-def _linear_variable_polys(C: np.ndarray,
-                        max_deg: int,
-                        psi,
-                        clmo,
-                        complex_dtype=False) -> List[np.ndarray]:
+def _linear_variable_polys(C: np.ndarray, max_deg: int, psi, clmo) -> List[np.ndarray]:
     """
     Return list L[old_idx] = polynomial for the old variable expressed
     in the NEW variables (which are the basis vectors under C).
 
     C  is shape (6,6):   old_var_i  =  Σ_j  C[i,j] * new_var_j
     """
-    new_basis = [polynomial_variable(j, max_deg, psi, complex_dtype) for j in range(6)]
+    new_basis = [polynomial_variable(j, max_deg, psi, clmo) for j in range(6)]
     L: List[np.ndarray] = []
     for i in range(6):
-        pol = polynomial_zero_list(max_deg, psi, complex_dtype)
+        pol = polynomial_zero_list(max_deg, psi)
         for j in range(6):
             if C[i, j] == 0:
                 continue
@@ -135,18 +127,13 @@ def _linear_variable_polys(C: np.ndarray,
         L.append(pol)
     return L
 
-def substitute_linear(H_old: List[np.ndarray],
-                      C: np.ndarray,
-                      max_deg: int,
-                      psi,
-                      clmo,
-                      complex_dtype=False) -> List[np.ndarray]:
+def substitute_linear(H_old: List[np.ndarray], C: np.ndarray, max_deg: int, psi, clmo) -> List[np.ndarray]:
     """
     Substitute each old variable via the linear map defined by C.
     Returns polynomial in the NEW variable set.
     """
-    var_polys = _linear_variable_polys(C, max_deg, psi, clmo, complex_dtype)
-    H_new = polynomial_zero_list(max_deg, psi, complex_dtype)
+    var_polys = _linear_variable_polys(C, max_deg, psi, clmo)
+    H_new = polynomial_zero_list(max_deg, psi)
 
     for deg in range(max_deg + 1):
         coeff_vec = H_old[deg]
@@ -158,15 +145,10 @@ def substitute_linear(H_old: List[np.ndarray],
             k = decode_multiindex(pos, deg, clmo)
             
             # build product  Π_i  (var_polys[i] ** k_i)
-            term = polynomial_zero_list(max_deg, psi, complex_dtype)
+            term = polynomial_zero_list(max_deg, psi)
             
-            # Ensure we preserve the complex value of coeff
-            if complex_dtype:
-                # Force complex type to avoid implicit casting
-                term[0][0] = complex(coeff.real, coeff.imag) if hasattr(coeff, 'imag') else complex(coeff)
-            else:
-                # For real case, just use the real part
-                term[0][0] = coeff.real if hasattr(coeff, 'real') else coeff
+            # Fix: Preserve the full complex value instead of just the real part
+            term[0][0] = coeff
                 
             for i_var in range(6):
                 if k[i_var] == 0:
@@ -178,21 +160,14 @@ def substitute_linear(H_old: List[np.ndarray],
 
     return H_new
 
-def phys2rn(point,
-            H_phys: List[np.ndarray],
-            max_deg: int,
-            psi,
-            clmo) -> List[np.ndarray]:
+def phys2rn(point, H_phys: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
     """
-    Apply the numeric normal-form matrix  C  returned by point.
+    Apply the numeric normal-form matrix C returned by point.
     """
-    C, _ = point.normal_form_transform()   # shape (6,6)  float64
-    return substitute_linear(H_phys, C, max_deg, psi, clmo, complex_dtype=False)
+    C, _ = point.normal_form_transform()
+    return substitute_linear(H_phys, C, max_deg, psi, clmo)
 
-def rn2cn(H_rn: List[np.ndarray],
-        max_deg: int,
-        psi,
-        clmo) -> List[np.ndarray]:
+def rn2cn(H_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
     sqrt2 = math.sqrt(2.0)
     C = np.zeros((6, 6), dtype=np.complex128)
 
@@ -209,12 +184,9 @@ def rn2cn(H_rn: List[np.ndarray],
     C[5, 2] = 1j/sqrt2                         # pz_rn
     C[5, 5] = 1/sqrt2
 
-    return substitute_linear(H_rn, C, max_deg, psi, clmo, complex_dtype=True)
+    return substitute_linear(H_rn, C, max_deg, psi, clmo)
 
-def cn2rn(H_cn: List[np.ndarray],
-        max_deg: int,
-        psi,
-        clmo) -> List[np.ndarray]:
+def cn2rn(H_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
     sqrt2 = math.sqrt(2.0)
     Cinv = np.zeros((6, 6), dtype=np.complex128)
 
@@ -231,4 +203,4 @@ def cn2rn(H_cn: List[np.ndarray],
     Cinv[5, 2] = -1j/sqrt2                       # pz
     Cinv[5, 5] = 1/sqrt2
 
-    return substitute_linear(H_cn, Cinv, max_deg, psi, clmo, complex_dtype=True)
+    return substitute_linear(H_cn, Cinv, max_deg, psi, clmo)
