@@ -9,7 +9,8 @@ from algorithms.center.polynomial.operations import (
     polynomial_variables_list,
     polynomial_add_inplace,
     polynomial_multiply,
-    polynomial_power
+    polynomial_power,
+    polynomial_poisson_bracket
 )
 from algorithms.variables import N_VARS
 
@@ -511,3 +512,217 @@ def test_polynomial_power_negative_exponent():
 
     with pytest.raises(ValueError, match="Polynomial power k must be non-negative."):
         polynomial_power(x_poly, -5, MAX_DEGREE, PSI, CLMO)
+
+# Helper function for comparing polynomial lists
+def assert_poly_lists_almost_equal(list1, list2, decimal=7, msg=""):
+    assert len(list1) == len(list2), f"Polynomial lists have different lengths. {msg}"
+    for d in range(len(list1)):
+        np.testing.assert_array_almost_equal(
+            list1[d], list2[d], decimal=decimal,
+            err_msg=f"Mismatch at degree {d}. {msg}"
+        )
+
+# Poisson Bracket Identity Tests
+
+# Use a potentially higher max degree for identities where degrees can grow
+MAX_DEGREE_PB_TESTS = 4 # Sufficient for most identities with initial degree 1 or 2 inputs
+PSI_PB, CLMO_PB = init_index_tables(MAX_DEGREE_PB_TESTS)
+
+def test_polynomial_poisson_antisymmetry():
+    """Test antisymmetry: {P, Q} = -{Q, P}"""
+    P = polynomial_variable(0, MAX_DEGREE_PB_TESTS, PSI_PB) # P = x0
+    Q = polynomial_variable(3, MAX_DEGREE_PB_TESTS, PSI_PB) # Q = p0 (x3)
+
+    PQ = polynomial_poisson_bracket(P, Q, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+    QP = polynomial_poisson_bracket(Q, P, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+
+    # Compute -{Q, P}
+    neg_QP = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
+    polynomial_add_inplace(neg_QP, QP, scale=-1.0)
+
+    assert_poly_lists_almost_equal(PQ, neg_QP, msg="{P,Q} != -{Q,P}")
+
+def test_polynomial_poisson_linearity_first_arg():
+    """Test linearity in first argument: {aP+bQ, R} = a{P,R} + b{Q,R}"""
+    P = polynomial_variable(0, MAX_DEGREE_PB_TESTS, PSI_PB) # x0
+    Q = polynomial_variable(1, MAX_DEGREE_PB_TESTS, PSI_PB) # x1
+    R = polynomial_variable(3, MAX_DEGREE_PB_TESTS, PSI_PB) # p0 (x3)
+
+    a_scalar, b_scalar = 2.0, 3.0
+
+    # aP
+    aP = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
+    polynomial_add_inplace(aP, P, scale=a_scalar)
+    # bQ
+    bQ = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
+    polynomial_add_inplace(bQ, Q, scale=b_scalar)
+    # aP + bQ
+    aPbQ = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
+    polynomial_add_inplace(aPbQ, aP)
+    polynomial_add_inplace(aPbQ, bQ)
+
+    # LHS: {aP+bQ, R}
+    lhs = polynomial_poisson_bracket(aPbQ, R, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+
+    # RHS: a{P,R} + b{Q,R}
+    PR = polynomial_poisson_bracket(P, R, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+    QR = polynomial_poisson_bracket(Q, R, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+    
+    aPR = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
+    polynomial_add_inplace(aPR, PR, scale=a_scalar)
+    bQR = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
+    polynomial_add_inplace(bQR, QR, scale=b_scalar)
+
+    rhs = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
+    polynomial_add_inplace(rhs, aPR)
+    polynomial_add_inplace(rhs, bQR)
+
+    assert_poly_lists_almost_equal(lhs, rhs, msg="{aP+bQ, R} != a{P,R} + b{Q,R}")
+
+def test_polynomial_poisson_linearity_second_arg():
+    """Test linearity in second argument: {P, aQ+bR} = a{P,Q} + b{P,R}"""
+    P = polynomial_variable(0, MAX_DEGREE_PB_TESTS, PSI_PB) # x0
+    Q = polynomial_variable(3, MAX_DEGREE_PB_TESTS, PSI_PB) # p0 (x3)
+    R = polynomial_variable(4, MAX_DEGREE_PB_TESTS, PSI_PB) # p1 (x4)
+    
+    a_scalar, b_scalar = 2.0, 3.0
+
+    # aQ
+    aQ = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
+    polynomial_add_inplace(aQ, Q, scale=a_scalar)
+    # bR
+    bR = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
+    polynomial_add_inplace(bR, R, scale=b_scalar)
+    # aQ + bR
+    aQbR = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
+    polynomial_add_inplace(aQbR, aQ)
+    polynomial_add_inplace(aQbR, bR)
+
+    # LHS: {P, aQ+bR}
+    lhs = polynomial_poisson_bracket(P, aQbR, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+
+    # RHS: a{P,Q} + b{P,R}
+    PQ = polynomial_poisson_bracket(P, Q, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+    PR = polynomial_poisson_bracket(P, R, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+
+    aPQ = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
+    polynomial_add_inplace(aPQ, PQ, scale=a_scalar)
+    bPR = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
+    polynomial_add_inplace(bPR, PR, scale=b_scalar)
+
+    rhs = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
+    polynomial_add_inplace(rhs, aPQ)
+    polynomial_add_inplace(rhs, bPR)
+
+    assert_poly_lists_almost_equal(lhs, rhs, msg="{P, aQ+bR} != a{P,Q} + b{P,R}")
+
+def test_polynomial_poisson_jacobi_identity():
+    """Test Jacobi identity: {P,{Q,R}} + {Q,{R,P}} + {R,{P,Q}} = 0"""
+    # Jacobi can result in higher degrees, ensure MAX_DEGREE_PB_TESTS is adequate.
+    # If P,Q,R are degree 1, {Q,R} is degree 0. {P,{Q,R}} is degree 1-2 = -1 (effectively 0 const).
+    # For initial deg 1 variables, result of each outer bracket is a constant (deg 0).
+    # Sum should be 0.
+    P = polynomial_variable(0, MAX_DEGREE_PB_TESTS, PSI_PB) # x0
+    Q = polynomial_variable(3, MAX_DEGREE_PB_TESTS, PSI_PB) # p0 (x3)
+    R = polynomial_variable(1, MAX_DEGREE_PB_TESTS, PSI_PB) # x1
+
+    # {Q,R}
+    QR = polynomial_poisson_bracket(Q, R, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+    # {P,{Q,R}}
+    P_QR = polynomial_poisson_bracket(P, QR, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+
+    # {R,P}
+    RP = polynomial_poisson_bracket(R, P, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+    # {Q,{R,P}}
+    Q_RP = polynomial_poisson_bracket(Q, RP, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+
+    # {P,Q}
+    PQ = polynomial_poisson_bracket(P, Q, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+    # {R,{P,Q}}
+    R_PQ = polynomial_poisson_bracket(R, PQ, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+
+    sum_jacobi = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
+    polynomial_add_inplace(sum_jacobi, P_QR)
+    polynomial_add_inplace(sum_jacobi, Q_RP)
+    polynomial_add_inplace(sum_jacobi, R_PQ)
+
+    # Expected result is the zero polynomial
+    zero_poly_list = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
+    assert_poly_lists_almost_equal(sum_jacobi, zero_poly_list, msg="Jacobi identity failed")
+
+def test_polynomial_poisson_leibniz_rule():
+    """Test Leibniz rule: {P, Q*R} = {P,Q}*R + Q*{P,R}"""
+    # P=x0, Q=x1, R=p0 (x3)
+    # Degrees: P=1, Q=1, R=1. Q*R is deg 2. {P, Q*R} is deg 1+2-2=1.
+    # {P,Q} is deg 0. {P,Q}*R is deg 1.
+    # {P,R} is deg 0. Q*{P,R} is deg 1.
+    P = polynomial_variable(0, MAX_DEGREE_PB_TESTS, PSI_PB) # x0
+    Q = polynomial_variable(1, MAX_DEGREE_PB_TESTS, PSI_PB) # x1
+    R = polynomial_variable(3, MAX_DEGREE_PB_TESTS, PSI_PB) # p0 (x3)
+
+    # Q*R
+    QR_prod = polynomial_multiply(Q, R, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+    # LHS: {P, Q*R}
+    lhs = polynomial_poisson_bracket(P, QR_prod, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+
+    # {P,Q}
+    PQ_br = polynomial_poisson_bracket(P, Q, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+    # {P,Q}*R
+    PQ_br_R = polynomial_multiply(PQ_br, R, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+    
+    # {P,R}
+    PR_br = polynomial_poisson_bracket(P, R, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+    # Q*{P,R}
+    Q_PR_br = polynomial_multiply(Q, PR_br, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+
+    # RHS: {P,Q}*R + Q*{P,R}
+    rhs = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
+    polynomial_add_inplace(rhs, PQ_br_R)
+    polynomial_add_inplace(rhs, Q_PR_br)
+
+    assert_poly_lists_almost_equal(lhs, rhs, msg="Leibniz rule {P,QR} failed")
+
+def test_polynomial_poisson_constant_property():
+    """Test {C, P} = 0 where C is a constant."""
+    # C = 5.0 (degree 0 polynomial)
+    C_poly = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
+    if len(C_poly) > 0 and C_poly[0].size > 0:
+        C_poly[0][0] = 5.0
+    
+    P = polynomial_variable(0, MAX_DEGREE_PB_TESTS, PSI_PB) # x0
+
+    # {C,P}
+    CP_br = polynomial_poisson_bracket(C_poly, P, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+    zero_poly_list = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
+    assert_poly_lists_almost_equal(CP_br, zero_poly_list, msg="{C,P} != 0 failed")
+
+    # {P,C}
+    PC_br = polynomial_poisson_bracket(P, C_poly, MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+    assert_poly_lists_almost_equal(PC_br, zero_poly_list, msg="{P,C} != 0 failed")
+
+def test_polynomial_poisson_canonical_relations():
+    """Test {q_i,q_j}=0, {p_i,p_j}=0, {q_i,p_j}=delta_ij"""
+    q_vars = [polynomial_variable(i, MAX_DEGREE_PB_TESTS, PSI_PB) for i in range(3)] # x0,x1,x2
+    p_vars = [polynomial_variable(i+3, MAX_DEGREE_PB_TESTS, PSI_PB) for i in range(3)] # x3,x4,x5 (p0,p1,p2)
+
+    zero_poly_list = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
+    one_poly_list = polynomial_zero_list(MAX_DEGREE_PB_TESTS, PSI_PB)
+    if len(one_poly_list) > 0 and one_poly_list[0].size > 0:
+        one_poly_list[0][0] = 1.0 # Constant 1 polynomial
+
+    for i in range(3):
+        for j in range(3):
+            # {q_i, q_j}
+            qi_qj_br = polynomial_poisson_bracket(q_vars[i], q_vars[j], MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+            assert_poly_lists_almost_equal(qi_qj_br, zero_poly_list, msg=f"{{q{i},q{j}}} != 0")
+
+            # {p_i, p_j}
+            pi_pj_br = polynomial_poisson_bracket(p_vars[i], p_vars[j], MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+            assert_poly_lists_almost_equal(pi_pj_br, zero_poly_list, msg=f"{{p{i},p{j}}} != 0")
+
+            # {q_i, p_j}
+            qi_pj_br = polynomial_poisson_bracket(q_vars[i], p_vars[j], MAX_DEGREE_PB_TESTS, PSI_PB, CLMO_PB)
+            if i == j:
+                assert_poly_lists_almost_equal(qi_pj_br, one_poly_list, msg=f"{{q{i},p{j}}} != 1 (i=j)")
+            else:
+                assert_poly_lists_almost_equal(qi_pj_br, zero_poly_list, msg=f"{{q{i},p{j}}} != 0 (i!=j)")

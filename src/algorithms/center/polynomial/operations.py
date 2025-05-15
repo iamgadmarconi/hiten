@@ -3,7 +3,7 @@ from numba import njit
 from numba.typed import List
 
 from algorithms.variables import N_VARS
-from algorithms.center.polynomial.algebra import _poly_mul, _poly_diff, _poly_scale
+from algorithms.center.polynomial.algebra import _poly_mul, _poly_diff, _poly_scale, poisson
 from algorithms.center.polynomial.base import init_index_tables, make_poly, encode_multiindex, _make_poly_real, _make_poly_complex, PSI_GLOBAL, CLMO_GLOBAL
 
 
@@ -189,3 +189,75 @@ def polynomial_power(base: List[np.ndarray], k: int, max_deg: int, psi, clmo) ->
         return _polynomial_power_complex(base, k, max_deg, psi, clmo)
     else:
         return _polynomial_power_real(base, k, max_deg, psi, clmo)
+
+
+@njit(fastmath=True, cache=True)
+def _polynomial_poisson_bracket_real(a: List[np.ndarray], b: List[np.ndarray],
+                                     out_max_deg: int, psi, clmo) -> List[np.ndarray]:
+    c = _polynomial_zero_list_real(out_max_deg, psi)
+    for d1 in range(len(a)):
+        if not np.any(a[d1]): # Skip if component a[d1] is all zeros
+            continue
+        for d2 in range(len(b)):
+            if not np.any(b[d2]): # Skip if component b[d2] is all zeros
+                continue
+
+            res_deg = d1 + d2 - 2 # Degree of {a[d1], b[d2]}
+
+            if res_deg < 0 or res_deg > out_max_deg:
+                continue
+            
+            # Call the low-level Poisson bracket for homogeneous polynomials
+            term_coeffs = poisson(a[d1], d1, b[d2], d2, psi, clmo)
+
+            # Add the resulting term to the correct degree in c
+            # Assuming term_coeffs is correctly sized for res_deg by poisson
+            c[res_deg] += term_coeffs
+    return c
+
+@njit(fastmath=True, cache=True)
+def _polynomial_poisson_bracket_complex(a: List[np.ndarray], b: List[np.ndarray],
+                                        out_max_deg: int, psi, clmo) -> List[np.ndarray]:
+    c = _polynomial_zero_list_complex(out_max_deg, psi)
+    for d1 in range(len(a)):
+        if not np.any(a[d1]):
+            continue
+        for d2 in range(len(b)):
+            if not np.any(b[d2]):
+                continue
+
+            res_deg = d1 + d2 - 2
+
+            if res_deg < 0 or res_deg > out_max_deg:
+                continue
+            
+            term_coeffs = poisson(a[d1], d1, b[d2], d2, psi, clmo)
+            c[res_deg] += term_coeffs
+    return c
+
+def polynomial_poisson_bracket(a: List[np.ndarray], b: List[np.ndarray],
+                               max_deg: int, psi, clmo) -> List[np.ndarray]:
+    """
+    Compute the Poisson bracket {a, b} of two polynomials.
+    Polynomials are represented as lists of coefficient arrays by degree.
+    The result is truncated at max_deg.
+    """
+    is_complex_computation = False
+    # Check first non-empty component of 'a' for dtype
+    for poly_a_deg in a:
+        if poly_a_deg.size > 0:
+            if poly_a_deg.dtype == np.complex128:
+                is_complex_computation = True
+            break
+    # If not found in 'a', check 'b'
+    if not is_complex_computation:
+        for poly_b_deg in b:
+            if poly_b_deg.size > 0:
+                if poly_b_deg.dtype == np.complex128:
+                    is_complex_computation = True
+                break
+    
+    if is_complex_computation:
+        return _polynomial_poisson_bracket_complex(a, b, max_deg, psi, clmo)
+    else:
+        return _polynomial_poisson_bracket_real(a, b, max_deg, psi, clmo)
