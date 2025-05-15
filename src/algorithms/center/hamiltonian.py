@@ -156,6 +156,7 @@ def substitute_linear(H_old: List[np.ndarray],
             if coeff == 0:
                 continue
             k = decode_multiindex(pos, deg, clmo)
+            
             # build product  Π_i  (var_polys[i] ** k_i)
             term = polynomial_zero_list(max_deg, psi, complex_dtype)
             term[0][0] = coeff
@@ -164,6 +165,7 @@ def substitute_linear(H_old: List[np.ndarray],
                     continue
                 pwr = polynomial_power(var_polys[i_var], k[i_var], max_deg, psi, clmo)
                 term = polynomial_multiply(term, pwr, max_deg, psi, clmo)
+                
             polynomial_add_inplace(H_new, term, 1.0, max_deg)
 
     return H_new

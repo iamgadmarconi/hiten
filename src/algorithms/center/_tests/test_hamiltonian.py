@@ -10,7 +10,7 @@ from algorithms.center.hamiltonian import (
     _build_T_polynomials, 
     _linear_variable_polys,
     substitute_linear,
-    phys2rn
+    phys2rn, rn2cn, cn2rn
 )
 from system.libration import L1Point  # noqa: F401 – used in fixture
 
@@ -89,23 +89,28 @@ def sympy_to_poly(sym_expr: sp.Expr, max_deg: int, psi, clmo):
 
     return poly
 
-def poly_list_to_sympy(P, psi, clmo):
-    """Return a SymPy expression equivalent to the coefficient-list *P*."""
-    _sympy_vars = sp.symbols("x y z px py pz")
+def poly_list_to_sympy(P, vars, psi, clmo):
+    """
+    Convert coefficient-list *P* to a SymPy expression.
+
+    Parameters
+    ----------
+    P : List[np.ndarray]
+        one coefficient vector per total degree
+    vars : Sequence[sympy.Symbol]
+        the symbol that corresponds to each of the six packed exponents
+    psi, clmo : lookup tables
+    """
     expr = 0
     for deg, coeff_vec in enumerate(P):
-        if len(coeff_vec) == 0:
-            continue
         for pos, coeff in enumerate(coeff_vec):
             if coeff == 0:
                 continue
-            exps = algebra.decode_multiindex(pos, deg, clmo)
-            mon = 1
-            for v, k in zip(_sympy_vars, exps):
-                if k:
-                    mon *= v**k
+            exps = algebra.decode_multiindex(pos, deg, clmo)  # 6-tuple
+            mon  = sp.prod(v**k for v, k in zip(vars, exps) if k)
             expr += coeff * mon
-    return sp.simplify(expr)
+    return sp.expand(expr)
+
 
 def evaluate_poly(poly, values, psi, clmo):
     """Brute-force evaluation of a coefficient-list polynomial at *values* (ℝ⁶)."""
@@ -405,7 +410,7 @@ def test_permutation(max_deg, psi_clmo):
     # Expected result after substitution: x→y, y→x
     # x^2 → y^2, 2*y*px → 2*x*px, 3*z^2 → 3*z^2
     expected_expr = y**2 + 2*x*px + 3*z**2
-    expr_test = poly_list_to_sympy(P_new, psi, clmo)
+    expr_test = poly_list_to_sympy(P_new, _sympy_vars, psi, clmo)
 
     diff = sp.expand(expected_expr - expr_test)
     
@@ -446,7 +451,7 @@ def test_random_matrix(seed, max_deg, psi_clmo):
     x_old = np.array(_sympy_vars[:6])  # same symbols
     subs_dict = {x_old[i]: sum(int(C[i, j]) * x_old[j] for j in range(6)) for i in range(6)}
     expr_truth = expr.xreplace(subs_dict)
-    expr_test = poly_list_to_sympy(P_new, psi, clmo)
+    expr_test = poly_list_to_sympy(P_new, _sympy_vars, psi, clmo)
 
     assert sp.expand(expr_truth - expr_test) == 0, f"Mismatch for seed {seed} and degree {max_deg}"
 
@@ -461,10 +466,9 @@ def test_real_normal_form(point, max_deg, psi_clmo):
     H_phys = build_physical_hamiltonian(point, max_deg, (psi, np.float64), clmo)
     H_rn   = phys2rn(point, H_phys, max_deg, psi, clmo)
 
-    # ---- convert quadratic part to SymPy for human-readable comparison -----
     x, y, z, px, py, pz = sp.symbols('x y z px py pz')
-    expr = poly_list_to_sympy(H_rn, psi, clmo)
-
+    expr = poly_list_to_sympy(H_rn, (x, y, z, px, py, pz), psi, clmo)
+    
     # pull out degree-2 terms
     poly = sp.Poly(expr, x, y, z, px, py, pz)
     quad_terms = {m: c for m, c in poly.terms() if sum(m) == 2}
@@ -499,3 +503,90 @@ def test_real_normal_form(point, max_deg, psi_clmo):
     assert np.isclose(coeff_py2, 0.5*omega1, rtol=1e-12)
     assert np.isclose(coeff_z2,  0.5*omega2, rtol=1e-12)
     assert np.isclose(coeff_pz2, 0.5*omega2, rtol=1e-12)
+
+def test_complex_normal_form(point, max_deg, psi_clmo):
+    psi, clmo = psi_clmo
+
+    # 1) build physical Hamiltonian, go to real normal form, then complex
+    H_phys = build_physical_hamiltonian(point, max_deg, (psi, np.float64), clmo)
+    H_rn   = phys2rn(point, H_phys, max_deg, psi, clmo)
+    H_cn   = rn2cn(       H_rn,   max_deg, psi, clmo)
+
+    # 2) symbolic expression of degree‑2 part
+    q1, q2, q3, p1, p2, p3 = sp.symbols("q1 q2 q3 p1 p2 p3")
+    expr = poly_list_to_sympy(H_cn, (q1, q2, q3, p1, p2, p3), psi, clmo)
+
+    quad_terms = {
+        m: c for m, c in sp.Poly(expr, q1, q2, q3, p1, p2, p3).terms() if sum(m) == 2
+    }
+
+    # discard numerical noise
+    quad_terms = {
+        m: complex(c.evalf()) for m, c in quad_terms.items() if abs(complex(c)) > 1e-12
+    }
+
+    # ---- allowed monomials & their expected coefficients ------------------
+    allowed = {
+        (1, 0, 0, 1, 0, 0): "q1p1",  # q1 * p1  ->  λ1      (real)
+        (0, 1, 0, 0, 1, 0): "q2p2",  # q2 * p2  ->  i ω1    (imag)
+        (0, 0, 1, 0, 0, 1): "q3p3",  # q3 * p3  ->  i ω2    (imag)
+    }
+
+    assert set(quad_terms).issubset(allowed), "Unexpected quadratic monomials after rn→cn"
+
+    # ---- numerical values --------------------------------------------------
+    lambda1, omega1, omega2 = point.linear_modes()
+
+    coeff_q1p1 = quad_terms[(1, 0, 0, 1, 0, 0)]
+    coeff_q2p2 = quad_terms[(0, 1, 0, 0, 1, 0)]
+    coeff_q3p3 = quad_terms[(0, 0, 1, 0, 0, 1)]
+
+    # real hyperbolic coefficient
+    assert np.isclose(coeff_q1p1.real, lambda1, rtol=1e-12)
+    assert abs(coeff_q1p1.imag) < 1e-12
+
+    # imaginary elliptic coefficients (should be  i ω )
+    assert np.isclose(coeff_q2p2 / 1j, omega1, rtol=1e-12)
+    assert np.isclose(coeff_q3p3 / 1j, omega2, rtol=1e-12)
+    # ---------------- Poisson‑bracket sanity tests -------------------------
+    # Extract the degree-2 part of the Hamiltonian
+    # H2 = op.polynomial_zero_list(max_deg, psi, complex_dtype=True)
+    # for d in range(len(H_cn)):
+    #     if d == 2:  # Only copy degree 2 terms
+    #         H2[d] = H_cn[d].copy()
+    
+    # # Create |q2|² = q2 * p2 polynomial
+    # q2_var = op.polynomial_variable(1, max_deg, psi, complex_dtype=True)
+    # p2_var = op.polynomial_variable(4, max_deg, psi, complex_dtype=True)
+    # q2p2_poly = op.polynomial_multiply(q2_var, p2_var, max_deg, psi, clmo)
+    
+    # # Create |q3|² = q3 * p3 polynomial
+    # q3_var = op.polynomial_variable(2, max_deg, psi, complex_dtype=True)
+    # p3_var = op.polynomial_variable(5, max_deg, psi, complex_dtype=True)
+    # q3p3_poly = op.polynomial_multiply(q3_var, p3_var, max_deg, psi, clmo)
+    
+    # # Compute the Poisson brackets
+    # pb_H2_q2p2 = op.polynomial_poisson_bracket(H2, q2p2_poly, max_deg, psi, clmo)
+    # pb_H2_q3p3 = op.polynomial_poisson_bracket(H2, q3p3_poly, max_deg, psi, clmo)
+    
+    # # Check that the Poisson brackets are zero (within numerical tolerance)
+    # for d in range(max_deg + 1):
+    #     if pb_H2_q2p2[d].size > 0:
+    #         assert np.allclose(pb_H2_q2p2[d], 0, atol=1e-12), \
+    #             f"Poisson bracket {{{H2}, |q2|²}} should be zero, but degree {d} terms are not"
+    #     if pb_H2_q3p3[d].size > 0:
+    #         assert np.allclose(pb_H2_q3p3[d], 0, atol=1e-12), \
+    #             f"Poisson bracket {{{H2}, |q3|²}} should be zero, but degree {d} terms are not"
+    
+    # # Also test the bracket with hyperbolic action I1 = q1 * p1
+    # q1_var = op.polynomial_variable(0, max_deg, psi, complex_dtype=True)
+    # p1_var = op.polynomial_variable(3, max_deg, psi, complex_dtype=True)
+    # q1p1_poly = op.polynomial_multiply(q1_var, p1_var, max_deg, psi, clmo)
+    
+    # pb_H2_q1p1 = op.polynomial_poisson_bracket(H2, q1p1_poly, max_deg, psi, clmo)
+    
+    # for d in range(max_deg + 1):
+    #     if pb_H2_q1p1[d].size > 0:
+    #         assert np.allclose(pb_H2_q1p1[d], 0, atol=1e-12), \
+    #             f"Poisson bracket {{{H2}, |q1|²}} should be zero, but degree {d} terms are not"
+
