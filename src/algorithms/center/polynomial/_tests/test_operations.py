@@ -12,7 +12,8 @@ from algorithms.center.polynomial.operations import (
     polynomial_power,
     polynomial_poisson_bracket,
     polynomial_clean,
-    polynomial_degree
+    polynomial_degree,
+    polynomial_differentiate
 )
 from algorithms.variables import N_VARS
 
@@ -115,8 +116,11 @@ def test_polynomial_add_inplace():
             else:
                 assert a[d][i] == a_copy[d][i]  # Other values should be unchanged
     
-    # Reset a
-    a = [arr.copy() for arr in a_copy]
+    # Reset a and ensure it's a Numba Typed List
+    current_a_python_list = [arr.copy() for arr in a_copy]
+    a = List()
+    for arr in current_a_python_list:
+        a.append(arr)
     
     # Test addition with positive scaling
     scale = 2.0
@@ -130,8 +134,11 @@ def test_polynomial_add_inplace():
             else:
                 assert a[d][i] == a_copy[d][i]
     
-    # Reset a
-    a = [arr.copy() for arr in a_copy]
+    # Reset a and ensure it's a Numba Typed List
+    current_a_python_list_2 = [arr.copy() for arr in a_copy]
+    a = List()
+    for arr in current_a_python_list_2:
+        a.append(arr)
     
     # Test addition with negative scaling (subtraction)
     scale = -1.0
@@ -319,8 +326,16 @@ def test_complex_polynomials():
     # Test addition
     result_add = polynomial_zero_list(MAX_DEGREE, PSI)
     # Make copies for addition to avoid modifying original test polynomials if reused.
-    x_plus_iy_copy_for_add = [arr.copy() for arr in x_plus_iy]
-    y_minus_iz_copy_for_add = [arr.copy() for arr in y_minus_iz]
+    # Ensure copies are Numba Typed Lists
+    x_plus_iy_copy_for_add_pylist = [arr.copy() for arr in x_plus_iy]
+    x_plus_iy_copy_for_add = List()
+    for arr in x_plus_iy_copy_for_add_pylist:
+        x_plus_iy_copy_for_add.append(arr)
+
+    y_minus_iz_copy_for_add_pylist = [arr.copy() for arr in y_minus_iz]
+    y_minus_iz_copy_for_add = List()
+    for arr in y_minus_iz_copy_for_add_pylist:
+        y_minus_iz_copy_for_add.append(arr)
 
     polynomial_add_inplace(result_add, x_plus_iy_copy_for_add)
     polynomial_add_inplace(result_add, y_minus_iz_copy_for_add)
@@ -342,7 +357,7 @@ def test_complex_polynomials():
     idx_prod_x0y = encode_multiindex(k_x0y, 2, PSI, CLMO) # degree is 1+1=2
     assert product[2][idx_prod_x0y] == complex(1.0, 1.0)
     
-    # (1+i)x0 * (-i)z = -(1+i)i*x0z = (-i-i^2)*x0z = (-i+1)*x0z = (1-i)x0z
+    # (1+i)x0 * (-i)z = -(1+i)i*x0z = (-i-i^2)*x0z = (-i+1)*x0z
     k_x0z = np.array([1,0,1,0,0,0], dtype=np.int64)
     idx_prod_x0z = encode_multiindex(k_x0z, 2, PSI, CLMO) # degree is 1+1=2
     assert product[2][idx_prod_x0z] == complex(1.0, -1.0)
@@ -878,3 +893,196 @@ def test_polynomial_degree():
     if len(const_in_long_list) > 0 and const_in_long_list[0].size > 0:
         const_in_long_list[0][0] = 1.0
     assert polynomial_degree(const_in_long_list) == 0, "Test Case 8 Failed: Constant in longer list"
+
+def test_polynomial_differentiate_simple_monomial():
+    """Test differentiation of a simple monomial: 2*x0^2."""
+    original_max_deg = 2
+    psi_local, clmo_local = init_index_tables(original_max_deg)
+    
+    p_coeffs = polynomial_zero_list(original_max_deg, psi_local)
+    k_x0_sq = np.array([2,0,0,0,0,0], dtype=np.int64)
+    idx_x0_sq = encode_multiindex(k_x0_sq, 2, psi_local, clmo_local)
+    if idx_x0_sq != -1: p_coeffs[2][idx_x0_sq] = 2.0
+
+    var_idx = 0
+    # Determine derivative's max_deg and init its tables
+    expected_deriv_max_deg = original_max_deg - 1 if original_max_deg > 0 else 0
+    deriv_psi, deriv_clmo = init_index_tables(expected_deriv_max_deg)
+
+    deriv_coeffs, returned_deriv_max_deg = \
+        polynomial_differentiate(p_coeffs, var_idx, original_max_deg, psi_local, clmo_local, deriv_psi, deriv_clmo)
+
+    assert returned_deriv_max_deg == expected_deriv_max_deg
+    assert len(deriv_coeffs) == expected_deriv_max_deg + 1
+    # Assertions for deriv_coeffs[0].size and deriv_coeffs[1].size are implicitly checked by assert_poly_lists_almost_equal
+
+    expected_coeffs = polynomial_zero_list(expected_deriv_max_deg, deriv_psi)
+    k_x0 = np.array([1,0,0,0,0,0], dtype=np.int64)
+    idx_x0 = encode_multiindex(k_x0, 1, deriv_psi, deriv_clmo) # Use deriv_psi, deriv_clmo for encoding into expected_coeffs
+    if idx_x0 != -1: expected_coeffs[1][idx_x0] = 4.0
+    
+    assert_poly_lists_almost_equal(deriv_coeffs, expected_coeffs, msg="dP/dx0 of 2x0^2")
+
+    var_idx_x1 = 1
+    expected_deriv_max_deg_x1 = original_max_deg - 1 if original_max_deg > 0 else 0
+    deriv_psi_x1, deriv_clmo_x1 = init_index_tables(expected_deriv_max_deg_x1)
+    deriv_coeffs_x1, returned_deriv_max_deg_x1 = \
+        polynomial_differentiate(p_coeffs, var_idx_x1, original_max_deg, psi_local, clmo_local, deriv_psi_x1, deriv_clmo_x1)
+    
+    assert returned_deriv_max_deg_x1 == expected_deriv_max_deg_x1
+    expected_zero_coeffs = polynomial_zero_list(expected_deriv_max_deg_x1, deriv_psi_x1)
+    assert_poly_lists_almost_equal(deriv_coeffs_x1, expected_zero_coeffs, msg="dP/dx1 of 2x0^2")
+
+
+def test_polynomial_differentiate_mixed_terms():
+    """Test differentiation of P = x0*x1 + 3*x1^2."""
+    original_max_deg = 2
+    psi_local, clmo_local = init_index_tables(original_max_deg)
+
+    p_coeffs = polynomial_zero_list(original_max_deg, psi_local)
+    k_x0x1 = np.array([1,1,0,0,0,0], dtype=np.int64)
+    idx_x0x1 = encode_multiindex(k_x0x1, 2, psi_local, clmo_local)
+    k_x1_sq = np.array([0,2,0,0,0,0], dtype=np.int64)
+    idx_x1_sq = encode_multiindex(k_x1_sq, 2, psi_local, clmo_local)
+    if idx_x0x1 != -1: p_coeffs[2][idx_x0x1] = 1.0
+    if idx_x1_sq != -1: p_coeffs[2][idx_x1_sq] = 3.0
+
+    var_idx_x0 = 0
+    expected_deriv_max_deg_x0 = original_max_deg - 1 if original_max_deg > 0 else 0
+    deriv_psi_x0, deriv_clmo_x0 = init_index_tables(expected_deriv_max_deg_x0)
+    deriv_coeffs_x0, returned_deriv_max_deg_x0 = \
+        polynomial_differentiate(p_coeffs, var_idx_x0, original_max_deg, psi_local, clmo_local, deriv_psi_x0, deriv_clmo_x0)
+    
+    assert returned_deriv_max_deg_x0 == expected_deriv_max_deg_x0
+    expected_coeffs_x0 = polynomial_zero_list(expected_deriv_max_deg_x0, deriv_psi_x0)
+    k_x1 = np.array([0,1,0,0,0,0], dtype=np.int64)
+    idx_x1 = encode_multiindex(k_x1, 1, deriv_psi_x0, deriv_clmo_x0)
+    if idx_x1 != -1: expected_coeffs_x0[1][idx_x1] = 1.0
+    assert_poly_lists_almost_equal(deriv_coeffs_x0, expected_coeffs_x0, msg="dP/dx0 of x0x1 + 3x1^2")
+
+    var_idx_x1 = 1
+    expected_deriv_max_deg_x1 = original_max_deg - 1 if original_max_deg > 0 else 0
+    deriv_psi_x1, deriv_clmo_x1 = init_index_tables(expected_deriv_max_deg_x1)
+    deriv_coeffs_x1, returned_deriv_max_deg_x1 = \
+        polynomial_differentiate(p_coeffs, var_idx_x1, original_max_deg, psi_local, clmo_local, deriv_psi_x1, deriv_clmo_x1)
+
+    assert returned_deriv_max_deg_x1 == expected_deriv_max_deg_x1
+    expected_coeffs_x1 = polynomial_zero_list(expected_deriv_max_deg_x1, deriv_psi_x1)
+    k_x0 = np.array([1,0,0,0,0,0], dtype=np.int64)
+    idx_x0 = encode_multiindex(k_x0, 1, deriv_psi_x1, deriv_clmo_x1)
+    idx_x1 = encode_multiindex(k_x1, 1, deriv_psi_x1, deriv_clmo_x1) # k_x1 defined above
+    if idx_x0 != -1: expected_coeffs_x1[1][idx_x0] = 1.0
+    if idx_x1 != -1: expected_coeffs_x1[1][idx_x1] = 6.0
+    assert_poly_lists_almost_equal(deriv_coeffs_x1, expected_coeffs_x1, msg="dP/dx1 of x0x1 + 3x1^2")
+
+
+def test_polynomial_differentiate_constant():
+    """Test differentiation of a constant polynomial P = 5."""
+    original_max_deg = 0
+    psi_local, clmo_local = init_index_tables(original_max_deg)
+    p_coeffs = polynomial_zero_list(original_max_deg, psi_local)
+    if p_coeffs[0].size > 0: p_coeffs[0][0] = 5.0
+
+    var_idx = 0
+    expected_deriv_max_deg = 0 # Derivative of constant is constant (deg 0)
+    deriv_psi, deriv_clmo = init_index_tables(expected_deriv_max_deg)
+    deriv_coeffs, returned_deriv_max_deg = \
+        polynomial_differentiate(p_coeffs, var_idx, original_max_deg, psi_local, clmo_local, deriv_psi, deriv_clmo)
+
+    assert returned_deriv_max_deg == expected_deriv_max_deg
+    expected_coeffs = polynomial_zero_list(expected_deriv_max_deg, deriv_psi)
+    assert_poly_lists_almost_equal(deriv_coeffs, expected_coeffs, msg="dP/dx of constant 5")
+
+
+def test_polynomial_differentiate_zero_polynomial():
+    """Test differentiation of a zero polynomial."""
+    original_max_deg = 3
+    psi_local, clmo_local = init_index_tables(original_max_deg)
+    p_coeffs = polynomial_zero_list(original_max_deg, psi_local)
+
+    var_idx = 0
+    expected_deriv_max_deg = original_max_deg - 1
+    deriv_psi, deriv_clmo = init_index_tables(expected_deriv_max_deg)
+    deriv_coeffs, returned_deriv_max_deg = \
+        polynomial_differentiate(p_coeffs, var_idx, original_max_deg, psi_local, clmo_local, deriv_psi, deriv_clmo)
+
+    assert returned_deriv_max_deg == expected_deriv_max_deg
+    expected_coeffs = polynomial_zero_list(expected_deriv_max_deg, deriv_psi)
+    assert_poly_lists_almost_equal(deriv_coeffs, expected_coeffs, msg="dP/dx of zero polynomial")
+
+
+def test_polynomial_differentiate_to_zero_constant():
+    """Test differentiation of a linear polynomial to a constant: P = 2*x0 -> dP/dx0 = 2."""
+    original_max_deg = 1
+    psi_local, clmo_local = init_index_tables(original_max_deg)
+    p_coeffs = polynomial_variable(0, original_max_deg, psi_local, clmo_local)
+    polynomial_add_inplace(p_coeffs, p_coeffs, 1.0) # p_coeffs is now 2*x0
+
+    var_idx = 0
+    expected_deriv_max_deg = 0 # 2*x0 -> 2 (deg 0)
+    deriv_psi, deriv_clmo = init_index_tables(expected_deriv_max_deg)
+    deriv_coeffs, returned_deriv_max_deg = \
+        polynomial_differentiate(p_coeffs, var_idx, original_max_deg, psi_local, clmo_local, deriv_psi, deriv_clmo)
+    
+    assert returned_deriv_max_deg == expected_deriv_max_deg
+    expected_coeffs = polynomial_zero_list(expected_deriv_max_deg, deriv_psi)
+    if expected_coeffs[0].size > 0: expected_coeffs[0][0] = 2.0
+    assert_poly_lists_almost_equal(deriv_coeffs, expected_coeffs, msg="dP/dx0 of 2x0")
+
+
+def test_polynomial_differentiate_multiple_vars_complex():
+    """Test differentiation with multiple variables and complex coefficients."""
+    original_max_deg = 3
+    psi_local, clmo_local = init_index_tables(original_max_deg)
+    p_coeffs = polynomial_zero_list(original_max_deg, psi_local)
+    k_x0sq_x1 = np.array([2,1,0,0,0,0], dtype=np.int64)
+    idx_x0sq_x1 = encode_multiindex(k_x0sq_x1, 3, psi_local, clmo_local)
+    if idx_x0sq_x1 != -1: p_coeffs[3][idx_x0sq_x1] = complex(1.0, 1.0)
+    k_x1_x2sq = np.array([0,1,2,0,0,0], dtype=np.int64)
+    idx_x1_x2sq = encode_multiindex(k_x1_x2sq, 3, psi_local, clmo_local)
+    if idx_x1_x2sq != -1: p_coeffs[3][idx_x1_x2sq] = complex(2.0, -1.0)
+
+    # dP/dx0 = (2+2j)*x0*x1
+    var_idx_x0 = 0
+    expected_deriv_max_deg_x0 = original_max_deg - 1
+    deriv_psi_x0, deriv_clmo_x0 = init_index_tables(expected_deriv_max_deg_x0)
+    deriv_coeffs_x0, returned_deriv_max_deg_x0 = \
+        polynomial_differentiate(p_coeffs, var_idx_x0, original_max_deg, psi_local, clmo_local, deriv_psi_x0, deriv_clmo_x0)
+    
+    assert returned_deriv_max_deg_x0 == expected_deriv_max_deg_x0
+    expected_coeffs_x0 = polynomial_zero_list(expected_deriv_max_deg_x0, deriv_psi_x0)
+    k_x0x1 = np.array([1,1,0,0,0,0], dtype=np.int64)
+    idx_x0x1_deriv = encode_multiindex(k_x0x1, 2, deriv_psi_x0, deriv_clmo_x0)
+    if idx_x0x1_deriv != -1: expected_coeffs_x0[2][idx_x0x1_deriv] = complex(2.0, 2.0)
+    assert_poly_lists_almost_equal(deriv_coeffs_x0, expected_coeffs_x0, msg="Complex dP/dx0")
+
+    # dP/dx1 = (1+1j)*x0^2 + (2-1j)*x2^2
+    var_idx_x1 = 1
+    expected_deriv_max_deg_x1 = original_max_deg - 1
+    deriv_psi_x1, deriv_clmo_x1 = init_index_tables(expected_deriv_max_deg_x1)
+    deriv_coeffs_x1, returned_deriv_max_deg_x1 = \
+        polynomial_differentiate(p_coeffs, var_idx_x1, original_max_deg, psi_local, clmo_local, deriv_psi_x1, deriv_clmo_x1)
+    
+    assert returned_deriv_max_deg_x1 == expected_deriv_max_deg_x1
+    expected_coeffs_x1 = polynomial_zero_list(expected_deriv_max_deg_x1, deriv_psi_x1)
+    k_x0sq = np.array([2,0,0,0,0,0], dtype=np.int64)
+    idx_x0sq_deriv = encode_multiindex(k_x0sq, 2, deriv_psi_x1, deriv_clmo_x1)
+    if idx_x0sq_deriv != -1: expected_coeffs_x1[2][idx_x0sq_deriv] = complex(1.0, 1.0)
+    k_x2sq = np.array([0,0,2,0,0,0], dtype=np.int64)
+    idx_x2sq_deriv = encode_multiindex(k_x2sq, 2, deriv_psi_x1, deriv_clmo_x1)
+    if idx_x2sq_deriv != -1: expected_coeffs_x1[2][idx_x2sq_deriv] = complex(2.0, -1.0)
+    assert_poly_lists_almost_equal(deriv_coeffs_x1, expected_coeffs_x1, msg="Complex dP/dx1")
+
+    # dP/dx2 = (2-1j)*x1*(2*x2) = (4-2j)*x1*x2
+    var_idx_x2 = 2
+    expected_deriv_max_deg_x2 = original_max_deg - 1
+    deriv_psi_x2, deriv_clmo_x2 = init_index_tables(expected_deriv_max_deg_x2)
+    deriv_coeffs_x2, returned_deriv_max_deg_x2 = \
+        polynomial_differentiate(p_coeffs, var_idx_x2, original_max_deg, psi_local, clmo_local, deriv_psi_x2, deriv_clmo_x2)
+    
+    assert returned_deriv_max_deg_x2 == expected_deriv_max_deg_x2
+    expected_coeffs_x2 = polynomial_zero_list(expected_deriv_max_deg_x2, deriv_psi_x2)
+    k_x1x2 = np.array([0,1,1,0,0,0], dtype=np.int64)
+    idx_x1x2_deriv = encode_multiindex(k_x1x2, 2, deriv_psi_x2, deriv_clmo_x2)
+    if idx_x1x2_deriv != -1: expected_coeffs_x2[2][idx_x1x2_deriv] = complex(4.0, -2.0)
+    assert_poly_lists_almost_equal(deriv_coeffs_x2, expected_coeffs_x2, msg="Complex dP/dx2")

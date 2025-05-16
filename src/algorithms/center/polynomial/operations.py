@@ -127,16 +127,19 @@ def polynomial_poisson_bracket(a: List[np.ndarray], b: List[np.ndarray], max_deg
     return c
 
 @njit(fastmath=True, cache=True)
-def polynomial_clean(polys, tol):
+def polynomial_clean(polys: List[np.ndarray], tol: float) -> List[np.ndarray]:
     """
     Given a list of coefficient-arrays, return cleaned copies.
+    Ensures the returned list is a Numba Typed List.
     """
-    cleaned = []
-    for p in polys:
-        out = np.empty_like(p)
-        _poly_clean(p, tol, out)
-        cleaned.append(out)
-    return cleaned
+    # Initialize a Numba Typed List with the correct item type
+    # The item type is complex128 1D array, matching the elements of polys.
+    cleaned_list = List.empty_list(np.complex128[::1])
+    for p_arr in polys:
+        out_arr = np.empty_like(p_arr)
+        _poly_clean(p_arr, tol, out_arr)
+        cleaned_list.append(out_arr)
+    return cleaned_list
 
 @njit(fastmath=True, cache=True)
 def polynomial_degree(polys: List[np.ndarray]) -> int:
@@ -161,3 +164,60 @@ def polynomial_degree(polys: List[np.ndarray]) -> int:
         if np.any(polys[d]):
             return d
     return -1 # All parts are zero or polys is empty
+
+@njit(fastmath=True, cache=True)
+def polynomial_differentiate(
+    original_coeffs: List[np.ndarray], 
+    var_idx: int, 
+    original_max_deg: int, 
+    original_psi_table: np.ndarray, 
+    original_clmo_table: List[np.ndarray],
+    derivative_psi_table: np.ndarray,
+    derivative_clmo_table: List[np.ndarray]
+):
+    """
+    Differentiates a polynomial (list of coefficient arrays) with respect to a variable.
+    The caller is responsible for providing psi/clmo tables for the derivative.
+
+    Parameters
+    ----------
+    original_coeffs : List[np.ndarray]
+    var_idx : int
+    original_max_deg : int
+    original_psi_table : np.ndarray
+    original_clmo_table : List[np.ndarray]
+    derivative_psi_table : np.ndarray
+        Pre-initialized psi_table for the derivative's max_deg.
+    derivative_clmo_table : List[np.ndarray]
+        Pre-initialized clmo_table for the derivative's max_deg.
+
+    Returns
+    -------
+    Tuple[List[np.ndarray], int]
+        A tuple containing:
+        - derivative_coeffs_list: List of coefficient arrays for the derivative.
+        - derivative_max_deg: Maximum degree of the derivative.
+    """
+    derivative_max_deg = original_max_deg - 1
+    if derivative_max_deg < 0:
+        derivative_max_deg = 0
+
+    derivative_coeffs_list = polynomial_zero_list(derivative_max_deg, derivative_psi_table)
+
+    for d_orig in range(1, original_max_deg + 1):
+        d_res = d_orig - 1 
+        
+        if d_res <= derivative_max_deg:
+            if d_orig < len(original_coeffs) and np.any(original_coeffs[d_orig]):
+                term_diff_coeffs = _poly_diff(
+                    original_coeffs[d_orig], 
+                    var_idx, 
+                    d_orig, 
+                    original_psi_table, 
+                    original_clmo_table
+                )
+                
+                if d_res < len(derivative_coeffs_list) and derivative_coeffs_list[d_res].shape[0] == term_diff_coeffs.shape[0]:
+                    derivative_coeffs_list[d_res] = term_diff_coeffs
+
+    return derivative_coeffs_list, derivative_max_deg

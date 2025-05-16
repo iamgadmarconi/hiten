@@ -6,7 +6,32 @@ import symengine as se
 
 from algorithms.variables import N_VARS
 
+@njit(fastmath=True,cache=True)
+def _factorial(n: int) -> int:
+    if n < 0:
+        pass
+    res = 1
+    for i in range(1, n + 1):
+        res *= i
+    return res
 
+@njit(fastmath=True, cache=True)
+def _combinations(n: int, k: int) -> int:
+    if k < 0 or k > n:
+        return 0
+    if k == 0 or k == n:
+        return 1
+    if k > n // 2:
+        k = n - k
+    if k == 0:
+        return 1
+    
+    res = 1
+    for i in range(1, k + 1):
+        res = res * (n - i + 1) // i
+    return res
+
+@njit(fastmath=True,cache=True)
 def init_index_tables(max_degree: int):
     """
     Initialize lookup tables for polynomial multi-index encoding and decoding.
@@ -37,12 +62,16 @@ def init_index_tables(max_degree: int):
     with x_0's exponent implicitly determined by the total degree.
     """
     psi = np.zeros((N_VARS+1, max_degree+1), dtype=np.int64)
-    for i in range(1, N_VARS+1):
-        for d in range(max_degree+1):
-            psi[i, d] = math.comb(d + i - 1, i - 1)
+    for i_vars_count in range(1, N_VARS+1):
+        for d_degree in range(max_degree+1):
+            # psi[i, d] = math.comb(d + i - 1, i - 1)
+            # n = d + i_vars_count - 1
+            # k = i_vars_count - 1
+            # psi[i_vars_count, d_degree] = _factorial(n) // (_factorial(k) * _factorial(n - k))
+            psi[i_vars_count, d_degree] = _combinations(d_degree + i_vars_count - 1, i_vars_count - 1)
     psi[0, 0] = 1
 
-    clmo = List()
+    clmo = List.empty_list(np.uint32[::1]) # Ensure clmo is typed correctly for Numba
     for d in range(max_degree+1):
         count = psi[N_VARS, d]
         arr = np.empty(count, dtype=np.uint32)
@@ -112,7 +141,6 @@ def decode_multiindex(pos: int, degree: int, clmo) -> np.ndarray:
     k[0] = degree - s
     return k
 
-
 @njit(fastmath=True, cache=True)
 def encode_multiindex(k: np.ndarray, degree: int, psi, clmo) -> int:
     """
@@ -152,7 +180,6 @@ def encode_multiindex(k: np.ndarray, degree: int, psi, clmo) -> int:
         if arr[idx] == packed:
             return idx
     return -1
-
 
 @njit(fastmath=True, cache=True)
 def make_poly(degree: int, psi) -> np.ndarray:
