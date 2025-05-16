@@ -4,10 +4,7 @@ from numba import types, njit
 from numba.experimental import jitclass
 from numba.typed import List
 
-# Assuming these imports are resolvable relative to polynomial.py
 from algorithms.center.polynomial.base import init_index_tables
-# N_VARS is used by polynomial_degree and other underlying functions implicitly.
-# Ensure N_VARS from algorithms.variables is accessible in the environment where these are run.
 from algorithms.center.polynomial.operations import (
     polynomial_zero_list,
     polynomial_variable,
@@ -19,7 +16,7 @@ from algorithms.center.polynomial.operations import (
     polynomial_degree,
     polynomial_differentiate
 )
-from algorithms.center.polynomial.algebra import _poly_scale, _poly_diff # _get_degree is used by polynomial_degree
+from algorithms.center.polynomial.algebra import _poly_scale
 
 
 @njit
@@ -43,7 +40,8 @@ jit_polynomial_spec = [
     ('polynomials', types.ListType(types.complex128[::1])), # List of 1D complex arrays
     ('max_deg', types.int64),
     ('psi_table', types.int64[:,::1]), # 2D int64 array
-    ('clmo_table', types.ListType(types.uint32[::1])) # List of 1D uint32 arrays
+    ('clmo_table', types.ListType(types.uint32[::1])), # List of 1D uint32 arrays
+    ('_degree', types.int64)  # Cache for the effective degree, -2 indicates not yet computed
 ]
 
 @jitclass(jit_polynomial_spec)
@@ -56,13 +54,20 @@ class JITPolynomial:
         self.max_deg = max_deg_val
         self.psi_table = psi_table_val
         self.clmo_table = clmo_table_val
+        # Initialize _degree to a sentinel value indicating it's not yet computed.
+        # -1 is a valid degree (zero polynomial), so use another value like -2.
+        self._degree = -2 
 
     def copy(self) -> 'JITPolynomial':
         """Creates a deep copy of the polynomial."""
         copied_polys = _njit_deep_copy_typed_list_of_arrays_complex128(self.polynomials)
         copied_clmo = _njit_deep_copy_typed_list_of_arrays_uint32(self.clmo_table)
         # psi_table is a NumPy array, .copy() is sufficient.
-        return JITPolynomial(copied_polys, self.max_deg, self.psi_table.copy(), copied_clmo)
+        new_poly = JITPolynomial(copied_polys, self.max_deg, self.psi_table.copy(), copied_clmo)
+        # If the degree of the original was already computed, copy it to the new one.
+        # Otherwise, the new one will also compute it lazily.
+        new_poly._degree = self._degree 
+        return new_poly
 
     def __add__(self, other: 'JITPolynomial') -> 'JITPolynomial':
         """Adds two polynomials: self + other."""
@@ -107,31 +112,38 @@ class JITPolynomial:
     def __pow__(self, k_exponent: int) -> 'JITPolynomial':
         """Raises the polynomial to the power k_exponent: self ** k_exponent."""
         if k_exponent < 0:
-            # Or handle appropriately (e.g. inverse if applicable, or error)
-            # For now, Numba does not support raising Python exceptions directly in all contexts like this.
-            # A consuming function might check or this might lead to a Numba error.
-            # For simplicity, assume k_exponent is non-negative.
-            pass # Consider raising error if this were pure Python
+            raise
 
-        # The result is truncated at self.max_deg, using self's tables for the operation.
-        # The new polynomial instance will also have self.max_deg.
-        res_coeffs = polynomial_power(self.polynomials, k_exponent, self.max_deg,
-                                      self.psi_table, self.clmo_table)
+        if k_exponent == 0:
+            res_max_deg_for_one = 0
+            psi_one, clmo_one = init_index_tables(res_max_deg_for_one)
+            res_coeffs_one = polynomial_zero_list(res_max_deg_for_one, psi_one)
+            if res_coeffs_one[0].size > 0: # Ensure degree 0 list part exists and is not empty
+                res_coeffs_one[0][0] = 1.0 + 0.0j
+            return JITPolynomial(res_coeffs_one, res_max_deg_for_one, psi_one, clmo_one)
+
+        if k_exponent == 1:
+            return self.copy()
+
+        if self.max_deg == 0:
+            result_poly_max_deg = 0
+        else:
+            result_poly_max_deg = self.max_deg * k_exponent 
+
+        result_psi_table, result_clmo_table_list = init_index_tables(result_poly_max_deg)
         
-        return JITPolynomial(res_coeffs, self.max_deg, self.psi_table.copy(), 
-                             _njit_deep_copy_typed_list_of_arrays_uint32(self.clmo_table))
+        res_coeffs = polynomial_power(self.polynomials, k_exponent, result_poly_max_deg,
+                                    result_psi_table, result_clmo_table_list)
+        
+        return JITPolynomial(res_coeffs, result_poly_max_deg, result_psi_table, result_clmo_table_list)
 
     def scale(self, factor: complex) -> 'JITPolynomial':
         """Scales the polynomial by a factor."""
-        # Initialize a new list for scaled coefficients, matching self's structure.
         scaled_coeffs_list = polynomial_zero_list(self.max_deg, self.psi_table)
         
         for d in range(self.max_deg + 1):
-            # Check ensures we don't go out of bounds if self.polynomials is somehow shorter
-            # than self.max_deg + 1, though it shouldn't be by construction.
             if d < len(self.polynomials) and d < len(scaled_coeffs_list):
                 original_term_coeffs = self.polynomials[d]
-                # _poly_scale(a_coeffs, alpha, out_coeffs)
                 _poly_scale(original_term_coeffs, factor, scaled_coeffs_list[d])
         
         return JITPolynomial(scaled_coeffs_list, self.max_deg, self.psi_table.copy(), 
@@ -199,9 +211,10 @@ class JITPolynomial:
 
     @property
     def degree(self) -> int:
-        """Computes the effective degree of the polynomial."""
-        # polynomial_degree takes the list of coefficient arrays.
-        return polynomial_degree(self.polynomials)
+        """Computes the effective degree of the polynomial lazily."""
+        if self._degree == -2: # Check if degree hasn't been computed yet
+            self._degree = polynomial_degree(self.polynomials)
+        return self._degree
 
 
 # --- Factory Functions ---

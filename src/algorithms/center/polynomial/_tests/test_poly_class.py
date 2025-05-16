@@ -49,7 +49,7 @@ def assert_jit_poly_vs_coeffs_equal(jit_poly: JITPolynomial, expected_coeffs: Li
 
 
 # --- Global test setup ---
-MAX_TEST_DEG = 5 # Keep tests manageable
+MAX_TEST_DEG = 10 # Keep tests manageable
 
 # --- Test Cases ---
 
@@ -188,18 +188,30 @@ def test_jitpolynomial_pow():
     p_x0 = create_variable_jitpolynomial(0, MAX_TEST_DEG) # x0
 
     # x0^2
-    p_x0_sq = p_x0 ** 2
-    # __pow__ uses self.max_deg and self's tables for the operation, and the result has self.max_deg.
-    assert p_x0_sq.max_deg == p_x0.max_deg
-    expected_coeffs_sq = polynomial_power(p_x0.polynomials, 2, p_x0.max_deg, p_x0.psi_table, p_x0.clmo_table)
-    assert_jit_poly_vs_coeffs_equal(p_x0_sq, expected_coeffs_sq, p_x0.max_deg, "x0^2")
+    exponent = 2
+    p_x0_sq = p_x0 ** exponent
+    
+    # The max_deg of the result P^k should be P.max_deg * k, unless P.max_deg is 0.
+    expected_res_max_deg_sq = p_x0.max_deg * exponent if p_x0.max_deg > 0 else 0
+    assert p_x0_sq.max_deg == expected_res_max_deg_sq
+    
+    # For comparison, expected_coeffs_sq needs tables based on expected_res_max_deg_sq
+    psi_sq, clmo_sq = init_index_tables(expected_res_max_deg_sq)
+    expected_coeffs_sq = polynomial_power(p_x0.polynomials, exponent, expected_res_max_deg_sq, psi_sq, clmo_sq)
+    assert_jit_poly_vs_coeffs_equal(p_x0_sq, expected_coeffs_sq, expected_res_max_deg_sq, "x0^2")
     assert p_x0_sq.degree == 2
 
     # x0^0 = 1
-    p_x0_p0 = p_x0 ** 0
-    assert p_x0_p0.max_deg == p_x0.max_deg
-    expected_coeffs_p0 = polynomial_power(p_x0.polynomials, 0, p_x0.max_deg, p_x0.psi_table, p_x0.clmo_table)
-    assert_jit_poly_vs_coeffs_equal(p_x0_p0, expected_coeffs_p0, p_x0.max_deg, "x0^0")
+    exponent_zero = 0
+    p_x0_p0 = p_x0 ** exponent_zero
+    
+    # Result of P^0 is a constant polynomial (degree 0) with max_deg 0.
+    expected_res_max_deg_p0 = 0 # Max degree of a constant is 0
+    assert p_x0_p0.max_deg == expected_res_max_deg_p0
+    
+    psi_p0, clmo_p0 = init_index_tables(expected_res_max_deg_p0)
+    expected_coeffs_p0 = polynomial_power(p_x0.polynomials, exponent_zero, expected_res_max_deg_p0, psi_p0, clmo_p0)
+    assert_jit_poly_vs_coeffs_equal(p_x0_p0, expected_coeffs_p0, expected_res_max_deg_p0, "x0^0")
     assert p_x0_p0.degree == 0
     if p_x0_p0.polynomials[0].size > 0:
         assert np.isclose(p_x0_p0.polynomials[0][0], 1.0)
