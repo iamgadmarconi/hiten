@@ -2,23 +2,20 @@ import numpy as np
 import pytest
 from numba.typed import List
 
-from algorithms.variables import N_VARS
-from algorithms.center.polynomial.base import init_index_tables, encode_multiindex
+from algorithms.center.polynomial.base import (encode_multiindex,
+                                               init_index_tables)
+from algorithms.center.polynomial.operations import (polynomial_add_inplace,
+                                                     polynomial_clean)
+from algorithms.center.polynomial.operations import \
+    polynomial_differentiate as op_differentiate  # Alias to avoid clash
 from algorithms.center.polynomial.operations import (
-    polynomial_zero_list, 
-    polynomial_add_inplace, 
-    polynomial_multiply, 
-    polynomial_power, 
-    polynomial_poisson_bracket,
-    polynomial_clean,
-    polynomial_differentiate as op_differentiate # Alias to avoid clash
-)
+    polynomial_multiply, polynomial_poisson_bracket, polynomial_power,
+    polynomial_zero_list)
 # Import JITPolynomial and its factory functions
 from algorithms.center.polynomial.polynomial import (
-    JITPolynomial, 
-    create_zero_jitpolynomial, 
-    create_variable_jitpolynomial
-)
+    JITPolynomial, create_variable_jitpolynomial, create_zero_jitpolynomial)
+from algorithms.variables import N_VARS
+
 
 # Helper to compare JITPolynomial instances
 def assert_jit_polynomials_equal(p1: JITPolynomial, p2: JITPolynomial, msg=""):

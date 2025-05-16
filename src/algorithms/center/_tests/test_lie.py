@@ -8,7 +8,7 @@ from algorithms.center.hamiltonian import build_physical_hamiltonian
 from algorithms.center.lie import (_apply_lie_transform,
                                    _get_homogeneous_terms,
                                    _select_terms_for_elimination,
-                                   _solve_homological_equation)
+                                   _solve_homological_equation, lie_transform)
 from algorithms.center.polynomial.algebra import _poly_poisson
 from algorithms.center.polynomial.base import (decode_multiindex,
                                                encode_multiindex,
@@ -16,7 +16,6 @@ from algorithms.center.polynomial.base import (decode_multiindex,
 from algorithms.center.polynomial.conversion import sympy2poly
 from algorithms.center.polynomial.operations import polynomial_zero_list
 from algorithms.center.transforms import phys2rn, rn2cn
-from algorithms.center.lie import lie_transform
 from algorithms.variables import N_VARS
 from system.libration import L1Point
 

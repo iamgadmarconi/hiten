@@ -1,10 +1,12 @@
-import numpy as np
 import math
+
+import numpy as np
+import symengine as se
 from numba import njit
 from numba.typed import List
-import symengine as se
 
 from algorithms.variables import N_VARS
+
 
 @njit(fastmath=True,cache=True)
 def _factorial(n: int) -> int:

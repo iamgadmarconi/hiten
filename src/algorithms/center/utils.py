@@ -1,4 +1,5 @@
 from typing import List
+
 import numpy as np
 
 from algorithms.center.polynomial.base import decode_multiindex

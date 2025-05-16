@@ -2,14 +2,13 @@ import cProfile
 import io
 import pstats
 
-
 from algorithms.center.manifold import center_manifold_cn, center_manifold_rn
 from algorithms.center.polynomial.base import init_index_tables
+from algorithms.center.utils import format_cm_table
 from log_config import logger
 from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
-from algorithms.center.utils import format_cm_table
 
 MAX_DEG = 8
 TOL     = 1e-14

@@ -1,13 +1,12 @@
-import pytest
 import numpy as np
+import pytest
 import sympy as sp
 from numba.typed import List
 
-from algorithms.variables import N_VARS
+from algorithms.center.polynomial.base import (CLMO_GLOBAL, PSI_GLOBAL,
+                                               encode_multiindex, make_poly)
 from algorithms.center.polynomial.conversion import poly2sympy, sympy2poly
-from algorithms.center.polynomial.base import (
-    make_poly, encode_multiindex, PSI_GLOBAL, CLMO_GLOBAL
-)
+from algorithms.variables import N_VARS
 
 # Test Sympy variables (consistent with N_VARS)
 s_vars = list(sp.symbols(f'x_0:{N_VARS}'))
