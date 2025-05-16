@@ -5,7 +5,7 @@ from numba.typed import List
 import numpy as np
 
 from algorithms.variables import N_VARS
-from algorithms.center.polynomial.base import decode_multiindex, make_poly
+from algorithms.center.polynomial.base import decode_multiindex, make_poly, _factorial
 from algorithms.center.polynomial.algebra import _poly_poisson
 
 
@@ -89,7 +89,7 @@ def _select_terms_for_elimination(Hn: np.ndarray, n: int, clmo: np.ndarray) -> n
     for i in range(Hn.shape[0]):
         if E[i] != 0.0:     # skip explicit zeros
             k = decode_multiindex(i, n, clmo)
-            if k[0] == k[3]:   # not a “bad” monomial → zero it
+            if k[0] == k[3]:   # not a "bad" monomial -> zero it
                 E[i] = 0.0
     return E
 
@@ -108,52 +108,41 @@ def _solve_homological_equation(Hn_bad: np.ndarray, n: int, eta: np.ndarray, clm
     return G
 
 
+@njit(fastmath=True, cache=True)
+def _apply_lie_transform(H_coeffs_py: list[np.ndarray], G_n: np.ndarray, deg_G: int, N_max: int, psi: np.ndarray, clmo) -> list[np.ndarray]:
 
-def _apply_lie_transform(
-    H_coeffs: list[np.ndarray],  # H_coeffs[d] is coeff‐array for degree d
-    G_n:     np.ndarray,         # coeff‐array for generating function (degree=deg_G)
-    deg_G:   int,                # total degree of G_n
-    N_max:   int,                # truncate final H at this degree
-    psi:     np.ndarray,
-    clmo,
-) -> list[np.ndarray]:
-    """
-    Apply H -> exp(L_{G_n}) H up to order N_max, i.e.
-    H_new = sum_{k=0}^K  (1/k!) ad_{G_n}^k (H),
-    where K = max(1, deg_G-1), and ad = Poisson bracket.
-    """
-    # 1) make a *deep* copy of H_coeffs to accumulate into
-    H_new = [ h.copy() for h in H_coeffs ]
+    H_new_py = [make_poly(d, psi) for d in range(N_max + 1)]
+    for i in range(min(len(H_coeffs_py), N_max + 1)):
+        if i < len(H_coeffs_py):
+            H_new_py[i] = H_coeffs_py[i].copy()
 
-    # 2) prepare factorials 1!,2!,…,(deg_G-1)! in Python
     K = max(1, deg_G - 1)
-    factorials = [math.factorial(k) for k in range(K+1)]  # factorials[0]=1 for consistency
+    factorials = [_factorial(k) for k in range(K+1)]
 
-    # 3) initialize PB_term_list = H_coeffs  (so ad^0 H = H itself)
-    PB_term_list = H_coeffs
+    PB_term_list_typed = List()
+    for d in range(N_max + 1):
+        if d < len(H_coeffs_py):
+            PB_term_list_typed.append(H_coeffs_py[d].copy())
+        else:
+            PB_term_list_typed.append(make_poly(d, psi))
 
-    # 4) iteratively compute ad_{G_n}^k H
-    for k in range(1, K+1):
-        # build next Poisson-bracket term: PB_term_list <- { PB_term_list, G_n }
-        PB_next = [ make_poly(d, psi) for d in range(N_max+1) ]
+    for k in range(1, K + 1):
+        PB_next_loop_typed = List()
+        for d_idx in range(N_max + 1):
+            PB_next_loop_typed.append(make_poly(d_idx, psi))
     
-        # loop over all degrees in PB_term_list
-        for deg_H, H_d in enumerate(PB_term_list):
+        for deg_H, H_d in enumerate(PB_term_list_typed):
             if not H_d.any(): 
                 continue
             deg_R = deg_H + deg_G - 2
             if 0 <= deg_R <= N_max:
-                # compute the bracket of the two homogeneous arrays
-                R_d = _poly_poisson(H_d, deg_H, G_n, deg_G, psi, clmo)
-                # accumulate into PB_next[deg_R]
-                PB_next[deg_R] += R_d
+                R_d_coeff = _poly_poisson(H_d, deg_H, G_n, deg_G, psi, clmo)
+                PB_next_loop_typed[deg_R] += R_d_coeff
 
-        PB_term_list = PB_next
+        PB_term_list_typed = PB_next_loop_typed
 
-        # scale by 1/k! and add into H_new
         inv_fact = 1.0 / factorials[k]
-        for d in range(N_max+1):
-            H_new[d] += PB_term_list[d] * inv_fact
-
-    # 5) finally, truncate (zero‐out any degrees > N_max) and return
-    return H_new
+        for d in range(N_max + 1):
+            H_new_py[d] += PB_term_list_typed[d] * inv_fact
+            
+    return H_new_py
