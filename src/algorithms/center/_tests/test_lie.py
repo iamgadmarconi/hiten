@@ -10,6 +10,7 @@ from algorithms.center.transforms import phys2rn, rn2cn
 from algorithms.center.polynomial.base import decode_multiindex, encode_multiindex
 from algorithms.center.polynomial.operations import polynomial_zero_list
 from algorithms.center.polynomial.algebra import _poly_poisson
+from algorithms.center.polynomial.conversion import sympy2poly
 from system.libration import L1Point
 
 
@@ -188,83 +189,112 @@ def test_homological_property(n):
             assert g == 0
 
 
-def test_apply_lie_transform():
-    psi, clmo = base.init_index_tables(4)
+# Define parameter sets for the test
+test_params = [
+    pytest.param("base_degG3_Nmax4_realH", 3, (2,0,0,0,1,0), 0.7, 1.3, 4, id="Base_degG3_Nmax4_realH"),
+    pytest.param("high_degG5_Nmax8_realH", 5, (4,0,0,0,1,0), 0.7, 1.3, 8, id="High_degG5_Nmax8_realH"), # N_max=8 for {{H,G},G}
+    pytest.param("Nmax6_degG4_realH", 4, (3,0,0,0,1,0), 0.7, 1.3, 6, id="Nmax6_degG4_realH_Term2_deg6"), # deg(H)=2, deg(G)=4 -> {{H,G},G} is deg 6
+    pytest.param("complexH_degG3_Nmax4", 3, (2,0,0,0,1,0), 0.7, 1.3+0.5j, 4, id="ComplexH_degG3_Nmax4"),
+    pytest.param("degG2_Nmax4_realH", 2, (1,0,0,0,1,0), 0.7, 1.3, 4, id="Low_degG2_Nmax4_realH_K_is_1"), # K = max(1, deg_G-1) = max(1,1)=1
+]
 
-    # generator: G = α q1^2 p2  (degree 3, "bad" term)
-    G_coeffs_list = polynomial_zero_list(4, psi)
-    idx_G = encode_multiindex((2,0,0,0,1,0), 3, psi, clmo)
-    G_coeffs_list[3][idx_G] = 0.7
+@pytest.mark.parametrize(
+    "test_name, G_deg_actual, G_exps, G_coeff_val, H_coeff_val, N_max_test",
+    test_params
+)
+def test_apply_lie_transform(test_name, G_deg_actual, G_exps, G_coeff_val, H_coeff_val, N_max_test):
+    psi, clmo = base.init_index_tables(N_max_test)
 
-    # Hamiltonian: H = β q2 p2  (degree 2)
-    H_coeffs_list = polynomial_zero_list(4, psi)
-    idx_H = encode_multiindex((0,1,0,0,1,0), 2, psi, clmo)
-    H_coeffs_list[2][idx_H] = 1.3
+    # --- Setup H_coeffs_list ---
+    # H is always c_H * q2*p2 (degree 2)
+    H_deg_actual = 2
+    H_exps = (0,1,0,0,1,0) 
+    H_coeffs_list = polynomial_zero_list(N_max_test, psi)
+    idx_H = encode_multiindex(H_exps, H_deg_actual, psi, clmo)
+    if H_deg_actual <= N_max_test: # Ensure degree is within bounds of the list
+        H_coeffs_list[H_deg_actual][idx_H] = H_coeff_val
 
-    # Call the function under test. G_coeffs_list[3] is the G_n array for deg_G=3
-    H1_transformed_coeffs = _apply_lie_transform(H_coeffs_list, G_coeffs_list[3], 3, 4, psi, clmo)
+    # --- Setup G_coeffs_list ---
+    # G is c_G * q1^A * p2 (or similar based on G_exps)
+    G_coeffs_list = polynomial_zero_list(N_max_test, psi) # G_n is just one component
+    # The G_n passed to _apply_lie_transform is a single ndarray, not a list.
+    # So, G_coeffs_list itself is not directly used but helps create G_n_array.
+    G_n_array = polynomial_zero_list(G_deg_actual, psi)[G_deg_actual] # Get a correctly sized array for G_deg_actual
+    
+    idx_G = encode_multiindex(G_exps, G_deg_actual, psi, clmo)
+    G_n_array[idx_G] = G_coeff_val
+    
+    # Call the function under test
+    H1_transformed_coeffs = _apply_lie_transform(H_coeffs_list, G_n_array, G_deg_actual, N_max_test, psi, clmo)
 
-    # SymPy reference
+    # --- SymPy Reference Calculation ---
     q1,q2,q3,p1,p2,p3 = sp.symbols('q1 q2 q3 p1 p2 p3')
-    coords = (q1,q2,q3,p1,p2,p3) # Tuple of coordinates
+    coords = (q1,q2,q3,p1,p2,p3)
 
-    Hsym = 1.3*q2*p2    # Symbolic Hamiltonian
-    Gsym = 0.7*q1**2*p2 # Symbolic generator
+    # Construct Hsym
+    Hsym = sp.sympify(H_coeff_val) # Handles complex numbers correctly
+    for i, exp_val in enumerate(H_exps):
+        if exp_val > 0:
+            Hsym *= coords[i]**exp_val
 
+    # Construct Gsym
+    Gsym = sp.sympify(G_coeff_val)
+    for i, exp_val in enumerate(G_exps):
+        if exp_val > 0:
+            Gsym *= coords[i]**exp_val
+    
     def sympy_poisson_bracket(f, g, variables_tuple):
         q_vars = variables_tuple[:len(variables_tuple)//2]
         p_vars = variables_tuple[len(variables_tuple)//2:]
         bracket = sp.S.Zero
-        for i in range(len(q_vars)):
-            bracket += (sp.diff(f, q_vars[i]) * sp.diff(g, p_vars[i]) -
-                        sp.diff(f, p_vars[i]) * sp.diff(g, q_vars[i]))
+        for i_pb in range(len(q_vars)): # Renamed loop var to avoid conflict
+            bracket += (sp.diff(f, q_vars[i_pb]) * sp.diff(g, p_vars[i_pb]) -
+                        sp.diff(f, p_vars[i_pb]) * sp.diff(g, q_vars[i_pb]))
         return sp.expand(bracket)
 
-    # Calculate terms for H_new = H + {H,G}/1! + {{H,G},G}/2!
-    # This matches the apparent structure of _apply_lie_transform
-    Term0_sym = Hsym
-    Term1_sym = sympy_poisson_bracket(Term0_sym, Gsym, coords)
-    Term2_sym = sympy_poisson_bracket(Term1_sym, Gsym, coords)
+    # Calculate Lie series: H_ref = sum_{k=0 to K_series} Ad_G^k(H) / k!
+    # K_series matches K = max(1, deg_G - 1) from _apply_lie_transform
+    K_series = max(1, G_deg_actual - 1)
     
-    # The K in _apply_lie_transform is max(1, deg_G - 1). For deg_G=3, K=2.
-    # The sum includes terms up to k=K, using factorials[k].
-    # factorials[0]=0!, factorials[1]=1!, factorials[2]=2!
-    # H_new_py starts with H (term for k=0, coeff 1/0! = 1 implicitly)
-    # Then adds PB_term_list[d] * (1/factorials[k]) for k=1 and k=2.
-    # Href = Term0_sym + Term1_sym / math.factorial(1) + Term2_sym / math.factorial(2) # Original Line
-    # The variable name Href is used later in the test, so we assign to it.
-    Href = Term0_sym + Term1_sym / math.factorial(1) + Term2_sym / math.factorial(2)
+    current_ad_term_sym = Hsym 
+    Href_sym_calc = Hsym # Term for k=0
 
-    # For now, let's ensure the test has an assertion.
-    # This is a placeholder: actual comparison logic would be more complex.
-    # Example: If Href results in 1.3*q2*p2 + 0.91*q1**2*p2
-    expected_H2_idx = encode_multiindex((0,1,0,0,1,0), 2, psi, clmo) # q2*p2
-    expected_H3_idx = encode_multiindex((2,0,0,0,1,0), 3, psi, clmo) # q1^2*p2
+    if K_series > 0 : # Only proceed if there are bracket terms to add
+        for k_val in range(1, K_series + 1):
+            current_ad_term_sym = sympy_poisson_bracket(current_ad_term_sym, Gsym, coords)
+            Href_sym_calc += current_ad_term_sym / math.factorial(k_val)
+    
+    # Convert the SymPy reference Href_sym_calc to our polynomial coefficient list format
+    # The list(coords) is important as sympy2poly expects a Python list of symbols.
+    # psi and clmo should be the ones initialized with N_max_test.
+    Href_poly = sympy2poly(Href_sym_calc, list(coords), psi, clmo)
 
-    # This is a simplified check. The actual test would convert Href to a full coefficient list.
-    # Based on manual calculation: {H,G} = 0.91*q1**2*p2, {{H,G},G} = 0
-    # So Href = 1.3*q2*p2 + 0.91*q1**2*p2
-    # H1_transformed_coeffs should have:
-    # Degree 2: H_coeffs_list[2] + 0 (from Term1_sym/1!) + 0 (from Term2_sym/2!) if {H,G} is deg 3
-    # Degree 3: 0 (from H_coeffs_list[3]) + {H,G}[3]/1! + 0
-    # Actually, H1_transformed_coeffs[2][expected_H2_idx] should be 1.3
-    # And H1_transformed_coeffs[3][expected_H3_idx] should be 0.91
+    # --- Comparison ---
+    length_error_msg = f"Test '{test_name}': Output H1_transformed_coeffs has unexpected length {len(H1_transformed_coeffs)}, expected {N_max_test + 1}"
+    assert len(H1_transformed_coeffs) == N_max_test + 1, length_error_msg
 
-    # The test likely uses a utility to convert Href to coefficient list for comparison.
-    # Assuming such a utility `test_utils.coeffs_from_sympy` and `test_utils.assert_poly_lists_almost_equal`
-    # For the purpose of this fix, we've corrected Href. The existing comparison mechanism should then work.
-    # If not, that would be a separate issue in the comparison part of the test.
-    # print("Calculated Href_sym:", Href) # For debugging if needed
+    for d in range(N_max_test + 1):
+        coeffs_from_lie_transform = H1_transformed_coeffs[d]
+        
+        if d < len(Href_poly):
+            coeffs_from_sympy_ref = Href_poly[d]
+        else:
+            # If Href_poly doesn't have this degree, all coeffs are zero.
+            expected_size = psi[base.N_VARS, d] if d < psi.shape[1] else 0 
+            if expected_size < 0: expected_size = 0 
+            coeffs_from_sympy_ref = np.zeros(expected_size, dtype=np.complex128)
 
-    # Placeholder for where the actual comparison with H1_transformed_coeffs occurs
-    # This requires a function to convert SymPy expression Href to the polynomial coefficient list format
-    # E.g., Href_coeffs = test_utils.coeffs_from_sympy(Href, coords, 4, psi, clmo)
-    # test_utils.assert_poly_lists_almost_equal(H1_transformed_coeffs, Href_coeffs, "Lie transform mismatch")
-
-    # Since the original test failed *before* comparison due to bad Href,
-    # fixing Href calculation is the primary goal.
-    # The subsequent lines of the test would handle the conversion and assertion.
-    # If those lines are missing or incorrect, that's a different problem.
-    # For now, we are just fixing the Href calculation.
-    # The test will proceed with this corrected Href.
-    assert Href is not None # Minimal assertion to ensure Href was calculated.
+        # Reshape scalar-like 0-dim arrays that might come from make_poly for degree 0 if not careful
+        if coeffs_from_lie_transform.ndim == 0 and coeffs_from_lie_transform.size == 1:
+             coeffs_from_lie_transform = coeffs_from_lie_transform.reshape(1)
+        if coeffs_from_sympy_ref.ndim == 0 and coeffs_from_sympy_ref.size == 1:
+             coeffs_from_sympy_ref = coeffs_from_sympy_ref.reshape(1)
+        
+        mismatch_msg = (
+            f"Test '{test_name}': Mismatch at degree {d}.\n"
+            f"Computed (Lie): {coeffs_from_lie_transform}\n"
+            f"Expected (SymPy): {coeffs_from_sympy_ref}\n"
+            f"Sympy Href: {Href_sym_calc}"
+        )
+        assert np.allclose(coeffs_from_lie_transform, coeffs_from_sympy_ref, atol=1e-14, rtol=1e-14), \
+            mismatch_msg
