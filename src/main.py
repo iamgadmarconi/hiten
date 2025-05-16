@@ -1,59 +1,56 @@
-import numpy as np
-import symengine as se
-import sympy as sp
 import cProfile
-import pstats
 import io
+import pstats
 
-from system.libration import L1Point
-from system.body import Body
-from system.base import System, systemConfig
-from utils.constants import Constants
+
+from algorithms.center.manifold import center_manifold_cn, center_manifold_rn
 from algorithms.center.polynomial.base import init_index_tables
-from algorithms.center.manifold import (
-    reduce_center_manifold_arrays,
-    coefficients_to_table_arrays,
-)
-
 from log_config import logger
+from system.base import System, systemConfig
+from system.body import Body
+from utils.constants import Constants
+from algorithms.center.utils import format_cm_table
+
+MAX_DEG = 5
+TOL     = 1e-14
 
 
-def main():
+def build_three_body_system():
+    """Return (System EM, System SE)."""
+    Sun   = Body("Sun",   Constants.bodies["sun"  ]["mass"],   Constants.bodies["sun"  ]["radius"],   "yellow")
+    Earth = Body("Earth", Constants.bodies["earth"]["mass"],   Constants.bodies["earth"]["radius"], "blue", Sun)
+    Moon  = Body("Moon",  Constants.bodies["moon" ]["mass"],   Constants.bodies["moon" ]["radius"],  "gray",  Earth)
 
-    max_degree = 8
-    
-    psi, clmo = init_index_tables(max_degree)
+    d_EM = Constants.get_orbital_distance("earth", "moon")
+    d_SE = Constants.get_orbital_distance("sun",   "earth")
 
-    Sun = Body("Sun", 
-                Constants.bodies["sun"]["mass"], 
-                Constants.bodies["sun"]["radius"], 
-                "yellow")
+    system_EM = System(systemConfig(Earth, Moon,  d_EM))
+    system_SE = System(systemConfig(Sun,   Earth, d_SE))
+    return system_EM, system_SE
 
-    Earth = Body("Earth", 
-                Constants.bodies["earth"]["mass"], 
-                Constants.bodies["earth"]["radius"], 
-                "blue",
-                Sun)
 
-    Moon = Body("Moon", 
-                Constants.bodies["moon"]["mass"], 
-                Constants.bodies["moon"]["radius"], 
-                "gray", 
-                Earth)
+def main() -> None:
+    # ---------------- lookup tables for polynomial indexing --------------
+    psi, clmo = init_index_tables(MAX_DEG)
 
-    distance_EM = Constants.get_orbital_distance("earth", "moon")
-    distance_SE = Constants.get_orbital_distance("sun", "earth")
+    # ---------------- choose equilibrium point --------------------------
+    system_EM, system_SE = build_three_body_system()
+    L1_EM        = system_EM.get_libration_point(1)   # Earth‑Moon L₁
+    L2_EM        = system_EM.get_libration_point(2)   # Earth‑Moon L₂
+    L1_SE        = system_SE.get_libration_point(1)   # Sun‑Earth L₁
+    L2_SE        = system_SE.get_libration_point(2)   # Sun‑Earth L₂
 
-    system_EM = System(systemConfig(Earth, Moon, distance_EM))
-    system_SE = System(systemConfig(Sun, Earth, distance_SE))
+    # ---------------- centre‑manifold reduction -------------------------
+    # H_cm_cn_full is the full list of coefficient arrays, indexed by degree
+    H_cm_cn_full = center_manifold_cn(L1_SE, psi, clmo, MAX_DEG)
+    H_cm_rn_full = center_manifold_rn(L1_SE, psi, clmo, MAX_DEG)
 
-    Lpoint_EM = system_EM.get_libration_point(2)
-    Lpoint_SE = system_SE.get_libration_point(1)
-
-    H_cnr = reduce_center_manifold_arrays(Lpoint_EM, max_degree,
-                                        psi=psi, clmo=clmo)
-    print(coefficients_to_table_arrays(H_cnr, psi, clmo))
-
+    # ---------------- pretty print (Table 1 style) ----------------------
+    print("Centre-manifold Hamiltonian (deg 2 to 5) in complex NF variables\n")
+    print(format_cm_table(H_cm_cn_full, clmo))
+    print("\n")
+    print("Centre-manifold Hamiltonian (deg 2 to 5) in real NF variables\n")
+    print(format_cm_table(H_cm_rn_full, clmo))
 
 if __name__ == "__main__":
     # Use cProfile to profile the main function execution
