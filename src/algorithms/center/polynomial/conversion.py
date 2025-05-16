@@ -4,11 +4,11 @@ from numba.typed import List
 import typing
 
 from algorithms.variables import N_VARS
-from algorithms.center.polynomial.base import decode_multiindex, PSI_GLOBAL, CLMO_GLOBAL, make_poly, encode_multiindex
+from algorithms.center.polynomial.base import decode_multiindex, make_poly, encode_multiindex
 from algorithms.center.polynomial.algebra import _get_degree
 
 
-def poly2sympy(poly_list: List[np.ndarray], vars_list: typing.List[sp.Symbol]) -> sp.Expr:
+def poly2sympy(poly_list: List[np.ndarray], vars_list: typing.List[sp.Symbol], psi: np.ndarray, clmo: np.ndarray) -> sp.Expr:
     """
     Convert a polynomial, represented as a list of homogeneous component coefficient arrays,
     from numpy array to sympy expression using the provided list of sympy variables.
@@ -22,12 +22,12 @@ def poly2sympy(poly_list: List[np.ndarray], vars_list: typing.List[sp.Symbol]) -
     total_sympy_expr = sp.Integer(0)
     for degree, coeffs_for_degree in enumerate(poly_list):
         if coeffs_for_degree is not None and coeffs_for_degree.size > 0:
-            homogeneous_expr = hpoly2sympy(coeffs_for_degree, vars_list)
+            homogeneous_expr = hpoly2sympy(coeffs_for_degree, vars_list, psi, clmo)
             total_sympy_expr += homogeneous_expr
     return total_sympy_expr
 
 
-def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol]) -> List[np.ndarray]:
+def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray, clmo: np.ndarray) -> List[np.ndarray]:
     """
     Convert a sympy expression to a list of numpy arrays (custom polynomial representation)
     using the provided list of sympy variables.
@@ -39,7 +39,7 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol]) -> List[np.ndar
 
     if expr == sp.S.Zero:
         # Return a list representing a zero polynomial (degree 0, coefficient 0)
-        return [make_poly(0, PSI_GLOBAL)]
+        return [make_poly(0, psi)]
 
     # Attempt to convert the expression to a Sympy Poly object
     try:
@@ -52,7 +52,7 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol]) -> List[np.ndar
         raise TypeError(f"Input expr (type: {type(expr)}) did not convert to a Sympy Poly object.")
     
     if sp_poly.is_zero:
-        return [make_poly(0, PSI_GLOBAL)]
+        return [make_poly(0, psi)]
 
     # Determine the maximum degree of the polynomial
     max_deg_expr = -1
@@ -63,18 +63,18 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol]) -> List[np.ndar
                 max_deg_expr = int(current_deg)
     
     if max_deg_expr == -1 : # Should only happen if sp_poly was zero, handled already. Safety.
-        return [make_poly(0, PSI_GLOBAL)]
+        return [make_poly(0, psi)]
 
     # Check if the polynomial's degree exceeds precomputed table limits
-    max_supported_degree = PSI_GLOBAL.shape[1] - 1
+    max_supported_degree = psi.shape[1] - 1
     if max_deg_expr > max_supported_degree:
         raise ValueError(
             f"Expression degree ({max_deg_expr}) exceeds precomputed table limit ({max_supported_degree}). "
-            "Re-initialize PSI_GLOBAL/CLMO_GLOBAL with a higher max_degree if needed."
+            "Re-initialize psi/clmo with a higher max_degree if needed."
         )
 
     # Initialize list of coefficient arrays (one for each degree up to max_deg_expr)
-    coeffs_list = [make_poly(d, PSI_GLOBAL) for d in range(max_deg_expr + 1)]
+    coeffs_list = [make_poly(d, psi) for d in range(max_deg_expr + 1)]
 
     # Populate coefficient arrays
     for monom_exp_tuple, coeff_val_sympy in sp_poly.terms():
@@ -90,13 +90,13 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol]) -> List[np.ndar
         term_degree = int(sum(k_np))
 
         # Get position in our coefficient array using encode_multiindex
-        pos = encode_multiindex(k_np, term_degree, PSI_GLOBAL, CLMO_GLOBAL)
+        pos = encode_multiindex(k_np, term_degree, psi, clmo)
 
         if pos == -1:
-            # This can happen if term_degree > max_degree for CLMO_GLOBAL or other encoding issues
+            # This can happen if term_degree > max_degree for clmo or other encoding issues
             raise ValueError(
                 f"Failed to encode multi-index {k_np.tolist()} for degree {term_degree}. "
-                "This may indicate an unsupported monomial, a degree outside CLMO table range, or an internal error."
+                "This may indicate an unsupported monomial, a degree outside clmo table range, or an internal error."
             )
         
         if term_degree >= len(coeffs_list):
@@ -133,7 +133,7 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol]) -> List[np.ndar
     return coeffs_list
 
 
-def hpoly2sympy(poly_coeffs: np.ndarray, vars_list: typing.List[sp.Symbol]) -> sp.Expr:
+def hpoly2sympy(poly_coeffs: np.ndarray, vars_list: typing.List[sp.Symbol], psi: np.ndarray, clmo: np.ndarray) -> sp.Expr:
     """
     Convert a homogeneous polynomial from numpy array of coefficients to sympy expression
     using the provided list of sympy variables.
@@ -142,7 +142,7 @@ def hpoly2sympy(poly_coeffs: np.ndarray, vars_list: typing.List[sp.Symbol]) -> s
     if poly_coeffs is None or poly_coeffs.size == 0:
         return sp.Integer(0)
 
-    degree = _get_degree(poly_coeffs, PSI_GLOBAL)
+    degree = _get_degree(poly_coeffs, psi)
 
     if degree == -1:
         if poly_coeffs.size > 0:
@@ -152,7 +152,7 @@ def hpoly2sympy(poly_coeffs: np.ndarray, vars_list: typing.List[sp.Symbol]) -> s
         return sp.Integer(0)
 
     sympy_expr = sp.Integer(0)
-    num_coefficients = PSI_GLOBAL[N_VARS, degree]
+    num_coefficients = psi[N_VARS, degree]
 
     if len(poly_coeffs) != num_coefficients:
         raise ValueError(
@@ -169,7 +169,7 @@ def hpoly2sympy(poly_coeffs: np.ndarray, vars_list: typing.List[sp.Symbol]) -> s
         if coeff == 0:
             continue
 
-        k_vector = decode_multiindex(pos, degree, CLMO_GLOBAL)
+        k_vector = decode_multiindex(pos, degree, clmo)
         
         monomial_expr = sp.Integer(1)
         for i in range(N_VARS):
