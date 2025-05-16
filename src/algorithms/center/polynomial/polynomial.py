@@ -1,22 +1,16 @@
 from dataclasses import dataclass
+
 import numpy as np
-from numba import types, njit
+from numba import njit, types
 from numba.experimental import jitclass
 from numba.typed import List
 
+from algorithms.center.polynomial.algebra import _poly_scale
 from algorithms.center.polynomial.base import init_index_tables
 from algorithms.center.polynomial.operations import (
-    polynomial_zero_list,
-    polynomial_variable,
-    polynomial_add_inplace,
-    polynomial_multiply,
-    polynomial_power,
-    polynomial_poisson_bracket,
-    polynomial_clean,
-    polynomial_degree,
-    polynomial_differentiate
-)
-from algorithms.center.polynomial.algebra import _poly_scale
+    polynomial_add_inplace, polynomial_clean, polynomial_degree,
+    polynomial_differentiate, polynomial_multiply, polynomial_poisson_bracket,
+    polynomial_power, polynomial_variable, polynomial_zero_list)
 
 
 @njit

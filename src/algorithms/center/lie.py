@@ -1,60 +1,55 @@
-import math
-
+import numpy as np
 from numba import njit
 from numba.typed import List
-import numpy as np
 
-from algorithms.variables import N_VARS
-from algorithms.center.polynomial.base import decode_multiindex, make_poly, _factorial
-from algorithms.center.polynomial.algebra import _poly_poisson
+from algorithms.center.polynomial.base import (_factorial, decode_multiindex,
+                                               make_poly)
+from algorithms.center.polynomial.operations import (polynomial_poisson_bracket,
+                                                     polynomial_zero_list,
+                                                     polynomial_clean)
 
 
-def lie_transform(
-    point,
-    H_init_coeffs: list[np.ndarray],
-    psi: np.ndarray,
-    clmo,
-    max_degree: int
-) -> tuple[list[np.ndarray], list[np.ndarray]]:
-    """
-    Bring H_init_coeffs to partial normal form up to max_degree.
 
-    point: LibrationPoint with method linear_modes() -> (lambda1, omega1, omega2)
-    H_init_coeffs: list of degree-indexed coeff arrays
-    psi, clmo: index tables
-    max_degree: highest degree to normalize
-    Returns: (H_normalized_coeffs, G_total_coeffs)
-    """
-    # extract linear eigenvalues
+def lie_transform(point, H_init_coeffs: list[np.ndarray], psi: np.ndarray, clmo: np.ndarray, max_degree: int, tol: float = 1e-15) -> tuple[list[np.ndarray], list[np.ndarray]]:
     lam, om1, om2 = point.linear_modes()
     eta = np.array([lam, 1j*om1, 1j*om2], dtype=np.complex128)
 
-    # initialize
     H_trans = [h.copy() for h in H_init_coeffs]
-    G_total = [make_poly(d, psi)
-               for d in range(max_degree+1)]
-
-    # quadratic part
-    # H2 = H_trans[2]  # not directly needed here
+    G_total = polynomial_zero_list(max_degree, psi)
 
     for n in range(3, max_degree+1):
         Hn = H_trans[n]
-        if not Hn.any(): 
+        if not Hn.any():
             continue
-        ToKill = _select_terms_for_elimination(Hn, n, clmo)
-        if not ToKill.any(): 
+        to_eliminate = _select_terms_for_elimination(Hn, n, clmo)
+        if not to_eliminate.any():
             continue
-        Gn = _solve_homological_equation(ToKill, n, eta, psi, clmo)
-        H_trans = _apply_lie_transform(H_trans, Gn, n, max_degree, psi, clmo)
-        # accumulate G_total
-        G_total[n] += Gn
-        nonzero = False
-        for arr in ToKill:
-            if arr.any():
-                nonzero = True
-                break
-        if not nonzero:
-            break
+        Gn = _solve_homological_equation(to_eliminate, n, eta, clmo)
+        
+        # Clean Gn using a Numba typed list for compatibility with polynomial_clean
+        if Gn.any(): # Only clean if there's something to clean
+            temp_Gn_list = List()
+            temp_Gn_list.append(Gn)
+            cleaned_Gn_list = polynomial_clean(temp_Gn_list, tol)
+            Gn = cleaned_Gn_list[0]
+
+        # Pass the cleaned Gn to _apply_lie_transform
+        # Convert H_trans to Numba typed list for _apply_lie_transform
+        h_trans_typed = List()
+        for item_arr in H_trans:
+            h_trans_typed.append(item_arr)
+        # _apply_lie_transform expects a Numba List for H_coeffs_py and returns a Python list
+        H_trans = _apply_lie_transform(h_trans_typed, Gn, n, max_degree, psi, clmo, tol)
+        
+        if n < len(G_total) and G_total[n].shape == Gn.shape:
+             G_total[n] += Gn
+        elif n < len(G_total) and G_total[n].size == Gn.size:
+             G_total[n] += Gn.reshape(G_total[n].shape)
+
+        if not _select_terms_for_elimination(H_trans[n], n, clmo).any():
+            continue
+            
+    G_total = polynomial_clean(G_total, tol)
     return H_trans, G_total
 
 
@@ -109,12 +104,15 @@ def _solve_homological_equation(Hn_bad: np.ndarray, n: int, eta: np.ndarray, clm
 
 
 @njit(fastmath=True, cache=True)
-def _apply_lie_transform(H_coeffs_py: list[np.ndarray], G_n: np.ndarray, deg_G: int, N_max: int, psi: np.ndarray, clmo) -> list[np.ndarray]:
+def _apply_lie_transform(H_coeffs_py: List[np.ndarray], G_n: np.ndarray, deg_G: int, N_max: int, psi: np.ndarray, clmo, tol: float) -> list[np.ndarray]:
 
-    H_new_py = [make_poly(d, psi) for d in range(N_max + 1)]
+    H_new_py = polynomial_zero_list(N_max, psi) # Use helper for clarity
     for i in range(min(len(H_coeffs_py), N_max + 1)):
-        if i < len(H_coeffs_py):
-            H_new_py[i] = H_coeffs_py[i].copy()
+        if i < len(H_coeffs_py) and H_coeffs_py[i].shape == H_new_py[i].shape:
+             H_new_py[i] = H_coeffs_py[i].copy()
+        elif i < len(H_coeffs_py) and H_coeffs_py[i].size == H_new_py[i].size: # check for size if shape is different but compatible
+             H_new_py[i] = H_coeffs_py[i].copy().reshape(H_new_py[i].shape)
+
 
     K = max(1, deg_G - 1)
     factorials = [_factorial(k) for k in range(K+1)]
@@ -126,23 +124,32 @@ def _apply_lie_transform(H_coeffs_py: list[np.ndarray], G_n: np.ndarray, deg_G: 
         else:
             PB_term_list_typed.append(make_poly(d, psi))
 
-    for k in range(1, K + 1):
-        PB_next_loop_typed = List()
-        for d_idx in range(N_max + 1):
-            PB_next_loop_typed.append(make_poly(d_idx, psi))
-    
-        for deg_H, H_d in enumerate(PB_term_list_typed):
-            if not H_d.any(): 
-                continue
-            deg_R = deg_H + deg_G - 2
-            if 0 <= deg_R <= N_max:
-                R_d_coeff = _poly_poisson(H_d, deg_H, G_n, deg_G, psi, clmo)
-                PB_next_loop_typed[deg_R] += R_d_coeff
+    G_n_as_list = polynomial_zero_list(N_max, psi) # Ensure G_n_as_list can go up to N_max if deg_G is high
+    if deg_G <= N_max and deg_G < len(G_n_as_list): # Check if deg_G is a valid index for G_n_as_list
+        if G_n_as_list[deg_G].shape == G_n.shape:
+            G_n_as_list[deg_G] = G_n.copy()
+        elif G_n_as_list[deg_G].size == G_n.size : # check for size if shape is different but compatible
+            G_n_as_list[deg_G] = G_n.copy().reshape(G_n_as_list[deg_G].shape)
 
-        PB_term_list_typed = PB_next_loop_typed
+
+    for k in range(1, K + 1):
+        PB_term_list_typed = polynomial_poisson_bracket(
+            PB_term_list_typed,
+            G_n_as_list,
+            N_max,
+            psi,
+            clmo
+        )
+        PB_term_list_typed = polynomial_clean(PB_term_list_typed, tol)
 
         inv_fact = 1.0 / factorials[k]
         for d in range(N_max + 1):
-            H_new_py[d] += PB_term_list_typed[d] * inv_fact
-            
+            if d < len(PB_term_list_typed) and d < len(H_new_py) and \
+               H_new_py[d].shape == PB_term_list_typed[d].shape:
+                 H_new_py[d] += PB_term_list_typed[d] * inv_fact
+            elif d < len(PB_term_list_typed) and d < len(H_new_py) and \
+                 H_new_py[d].size == PB_term_list_typed[d].size: # check for size if shape is different but compatible
+                 H_new_py[d] += PB_term_list_typed[d].reshape(H_new_py[d].shape) * inv_fact
+
+    H_new_py = polynomial_clean(H_new_py, tol)
     return H_new_py

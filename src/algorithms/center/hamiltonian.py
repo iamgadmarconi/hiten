@@ -2,12 +2,10 @@ import numpy as np
 from numba.typed import List
 
 from algorithms.center.polynomial.base import init_index_tables
-from algorithms.center.polynomial.operations import (
-    polynomial_multiply,
-    polynomial_zero_list,
-    polynomial_add_inplace,
-    polynomial_variable
-)
+from algorithms.center.polynomial.operations import (polynomial_add_inplace,
+                                                     polynomial_multiply,
+                                                     polynomial_variable,
+                                                     polynomial_zero_list)
 
 
 def _build_T_polynomials(x, y, z, max_deg: int, psi_table, clmo_table) -> list:

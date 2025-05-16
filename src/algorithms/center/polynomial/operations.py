@@ -2,9 +2,13 @@ import numpy as np
 from numba import njit
 from numba.typed import List
 
+from algorithms.center.polynomial.algebra import (_poly_clean, _poly_diff,
+                                                  _poly_mul, _poly_poisson,
+                                                  _poly_scale)
+from algorithms.center.polynomial.base import (CLMO_GLOBAL, PSI_GLOBAL,
+                                               encode_multiindex,
+                                               init_index_tables, make_poly)
 from algorithms.variables import N_VARS
-from algorithms.center.polynomial.algebra import _poly_mul, _poly_diff, _poly_scale, _poly_poisson, _poly_clean
-from algorithms.center.polynomial.base import init_index_tables, make_poly, encode_multiindex, PSI_GLOBAL, CLMO_GLOBAL
 
 
 @njit(fastmath=True, cache=True)

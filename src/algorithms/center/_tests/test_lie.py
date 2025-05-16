@@ -1,16 +1,23 @@
+import math
+
 import numpy as np
 import pytest
 import sympy as sp
-import math
 
-from algorithms.center.polynomial import base
-from algorithms.center.lie import _get_homogeneous_terms, _select_terms_for_elimination, _solve_homological_equation, _apply_lie_transform
 from algorithms.center.hamiltonian import build_physical_hamiltonian
-from algorithms.center.transforms import phys2rn, rn2cn
-from algorithms.center.polynomial.base import decode_multiindex, encode_multiindex
-from algorithms.center.polynomial.operations import polynomial_zero_list
+from algorithms.center.lie import (_apply_lie_transform,
+                                   _get_homogeneous_terms,
+                                   _select_terms_for_elimination,
+                                   _solve_homological_equation)
 from algorithms.center.polynomial.algebra import _poly_poisson
+from algorithms.center.polynomial.base import (decode_multiindex,
+                                               encode_multiindex,
+                                               init_index_tables)
 from algorithms.center.polynomial.conversion import sympy2poly
+from algorithms.center.polynomial.operations import polynomial_zero_list
+from algorithms.center.transforms import phys2rn, rn2cn
+from algorithms.center.lie import lie_transform
+from algorithms.variables import N_VARS
 from system.libration import L1Point
 
 
@@ -20,7 +27,7 @@ def cn_hamiltonian_data(request):
 
     # psi table needs to be large enough for n_missing in _get_homogeneous_terms tests
     psi_init_deg = max_deg + 2
-    psi, clmo = base.init_index_tables(psi_init_deg)
+    psi, clmo = init_index_tables(psi_init_deg)
 
     # Use a standard mu value (e.g., Earth-Moon L1)
     mu_earth_moon = 0.012150585609624
@@ -91,7 +98,7 @@ def test_get_homogeneous_terms_when_n_is_at_psi_table_edge(cn_hamiltonian_data):
 @pytest.mark.parametrize("n", [3, 4, 6])
 def test_select_terms_for_elimination(n):
     max_deg = n                       # lookup tables big enough
-    psi, clmo = base.init_index_tables(max_deg)
+    psi, clmo = init_index_tables(max_deg)
 
     size = psi[6, n]
     rng  = np.random.default_rng(0)
@@ -143,7 +150,7 @@ def test_select_terms_for_elimination(n):
 @pytest.mark.parametrize("n", [2, 3, 4, 6, 9])
 def test_homological_property(n):
     max_deg = n
-    psi, clmo = base.init_index_tables(max_deg)
+    psi, clmo = init_index_tables(max_deg)
 
     # pick arbitrary non-resonant frequencies
     lam, w1, w2 = 3.1, 2.4, 2.2
@@ -203,7 +210,7 @@ test_params = [
     test_params
 )
 def test_apply_lie_transform(test_name, G_deg_actual, G_exps, G_coeff_val, H_coeff_val, N_max_test):
-    psi, clmo = base.init_index_tables(N_max_test)
+    psi, clmo = init_index_tables(N_max_test)
 
     # --- Setup H_coeffs_list ---
     # H is always c_H * q2*p2 (degree 2)
@@ -225,7 +232,7 @@ def test_apply_lie_transform(test_name, G_deg_actual, G_exps, G_coeff_val, H_coe
     G_n_array[idx_G] = G_coeff_val
     
     # Call the function under test
-    H1_transformed_coeffs = _apply_lie_transform(H_coeffs_list, G_n_array, G_deg_actual, N_max_test, psi, clmo)
+    H1_transformed_coeffs = _apply_lie_transform(H_coeffs_list, G_n_array, G_deg_actual, N_max_test, psi, clmo, tol=1e-15)
 
     # --- SymPy Reference Calculation ---
     q1,q2,q3,p1,p2,p3 = sp.symbols('q1 q2 q3 p1 p2 p3')
@@ -280,7 +287,7 @@ def test_apply_lie_transform(test_name, G_deg_actual, G_exps, G_coeff_val, H_coe
             coeffs_from_sympy_ref = Href_poly[d]
         else:
             # If Href_poly doesn't have this degree, all coeffs are zero.
-            expected_size = psi[base.N_VARS, d] if d < psi.shape[1] else 0 
+            expected_size = psi[N_VARS, d] if d < psi.shape[1] else 0 
             if expected_size < 0: expected_size = 0 
             coeffs_from_sympy_ref = np.zeros(expected_size, dtype=np.complex128)
 
@@ -298,3 +305,20 @@ def test_apply_lie_transform(test_name, G_deg_actual, G_exps, G_coeff_val, H_coe
         )
         assert np.allclose(coeffs_from_lie_transform, coeffs_from_sympy_ref, atol=1e-14, rtol=1e-14), \
             mismatch_msg
+
+
+@pytest.mark.parametrize("cn_hamiltonian_data", [2, 3, 4, 6], indirect=True)
+def test_lie_transform_removes_bad_terms(cn_hamiltonian_data):
+    H_coeffs, psi, clmo, max_deg = cn_hamiltonian_data
+    mu_earth_moon = 0.012150585609624
+    point = L1Point(mu=mu_earth_moon)
+    H_out, G_total = lie_transform(point, H_coeffs, psi, clmo, max_deg)
+
+    # property: no bad monomials remain in any degree ≥3
+    for n in range(3, max_deg + 1):
+        bad = _select_terms_for_elimination(H_out[n], n, clmo)
+        assert not bad.any(), (
+            f"Bad monomials not eliminated at degree {n}: {np.where(bad!=0)}")
+
+    # quadratic part should be exactly what we started with
+    assert np.allclose(H_out[2], H_coeffs[2], atol=0, rtol=0)
