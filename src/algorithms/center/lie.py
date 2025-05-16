@@ -31,7 +31,7 @@ def lie_transform(
 
     # initialize
     H_trans = [h.copy() for h in H_init_coeffs]
-    G_total = [make_poly(d, psi, complex_dtype=True)
+    G_total = [make_poly(d, psi)
                for d in range(max_degree+1)]
 
     # quadratic part

@@ -120,10 +120,7 @@ def compute_center_manifold_arrays(
     bph_clmo_deg_arg = max_degree
 
     # Call build_physical_hamiltonian with these specially crafted arguments
-    H_phys = build_physical_hamiltonian(point,
-                                        max_degree,
-                                        bph_psi_config_arg,
-                                        bph_clmo_deg_arg)
+    H_phys = build_physical_hamiltonian(point, max_degree)
 
     # Subsequent linear changes of coordinates and Lie transforms use the main psi/clmo tables
     # prepared at the beginning of this function.
