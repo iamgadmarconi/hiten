@@ -56,7 +56,7 @@ def _poly_diff(p: np.ndarray, var: int, degree: int, psi, clmo) -> np.ndarray:
     return dp
 
 @njit(fastmath=True, cache=True)
-def poisson(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clmo) -> np.ndarray:
+def _poly_poisson(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clmo) -> np.ndarray:
     deg_r = deg_p + deg_q - 2
     r = np.zeros(psi[N_VARS, deg_r], dtype=p.dtype)
     for m in range(3):

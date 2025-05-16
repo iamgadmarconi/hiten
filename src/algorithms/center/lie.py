@@ -6,7 +6,7 @@ import numpy as np
 
 from algorithms.variables import N_VARS
 from algorithms.center.polynomial.base import decode_multiindex, make_poly
-from algorithms.center.polynomial.algebra import poisson
+from algorithms.center.polynomial.algebra import _poly_poisson
 
 
 def lie_transform(
@@ -41,7 +41,7 @@ def lie_transform(
         Hn = H_trans[n]
         if not Hn.any(): 
             continue
-        ToKill = _select_terms_for_elimination(Hn, n, psi, clmo)
+        ToKill = _select_terms_for_elimination(Hn, n, clmo)
         if not ToKill.any(): 
             continue
         Gn = _solve_homological_equation(ToKill, n, eta, psi, clmo)
@@ -58,8 +58,8 @@ def lie_transform(
     return H_trans, G_total
 
 
-def _get_homogeneous_terms(H_coeffs: List[np.ndarray], n: int,
-                          psi: np.ndarray, complex_dtype: bool=False) -> np.ndarray:
+@njit(fastmath=True, cache=True)
+def _get_homogeneous_terms(H_coeffs: List[np.ndarray], n: int, psi: np.ndarray) -> np.ndarray:
     """
     Return the degree-n homogeneous component of H.
 
@@ -69,8 +69,6 @@ def _get_homogeneous_terms(H_coeffs: List[np.ndarray], n: int,
         Desired homogeneous degree.
     psi : np.ndarray
         The psi table from init_index_tables (for zero-padding when needed).
-    complex_dtype : bool
-        If True, create a complex-typed zero array when n exceeds len(H_coeffs).
 
     Returns
     -------
@@ -79,71 +77,36 @@ def _get_homogeneous_terms(H_coeffs: List[np.ndarray], n: int,
         or zeros if n is beyond the current maximum degree.
     """
     if n < len(H_coeffs):
-        # We already have exactly the degree-n component
-        return H_coeffs[n]
+        result = H_coeffs[n].copy()
     else:
-        # No degree-n terms were ever set → return a zero array
-        if complex_dtype:
-            return np.zeros(psi[N_VARS, n], dtype=np.complex128)
-        else:
-            return np.zeros(psi[N_VARS, n], dtype=np.float64)
+        result = make_poly(n, psi)
+    return result
 
 
 @njit(fastmath=True, cache=True)
-def _select_terms_for_elimination(
-    Hn: np.ndarray,   # coeffs of H_n, length = psi[6,n]
-    n: int,           # the degree n
-    psi: np.ndarray,  # the psi table
-    clmo             # the clmo list
-) -> np.ndarray:
-    """
-    Return an array E of the same shape as Hn, with
-    E[i] = Hn[i]  if exponent(q1)!=exponent(p1) in monomial i,
-         = 0       otherwise.
-    """
-    E = np.zeros_like(Hn)
+def _select_terms_for_elimination(Hn: np.ndarray, n: int, clmo: np.ndarray) -> np.ndarray:
+    E = Hn.copy()           # independent buffer
     for i in range(Hn.shape[0]):
-        ci = Hn[i]
-        if ci != 0.0:
+        if E[i] != 0.0:     # skip explicit zeros
             k = decode_multiindex(i, n, clmo)
-            # k[0] is exponent of q1, k[3] is exponent of p1
-            if k[0] != k[3]:
-                E[i] = ci
+            if k[0] == k[3]:   # not a “bad” monomial → zero it
+                E[i] = 0.0
     return E
 
 
 @njit(fastmath=True, cache=True)
-def _solve_homological_equation(
-    Hn_elim: np.ndarray,   # degree-n coefficients to eliminate
-    n: int,                # the degree n
-    eta: np.ndarray,       # length-3 array of eta_1, eta_2, eta_3 (complex128)
-    psi: np.ndarray,       # psi table from init_index_tables
-    clmo                  # clmo list from init_index_tables
-) -> np.ndarray:
-    """
-    Solve {H2, G_n} = -Hn_elim for G_n in complex normal form:
-        G_n[i] = - Hn_elim[i] / dot(kp-kq, eta)
-    """
-    # allocate G_n with same shape & dtype
-    G = np.zeros_like(Hn_elim)
-    for i in range(Hn_elim.shape[0]):
-        ci = Hn_elim[i]
-        if ci != 0:
-            # decode full 6-vector of exponents
+def _solve_homological_equation(Hn_bad: np.ndarray, n: int, eta: np.ndarray, clmo: np.ndarray) -> np.ndarray:
+    G = np.zeros_like(Hn_bad)
+    for i in range(Hn_bad.shape[0]):
+        c = Hn_bad[i]
+        if c != 0.0:
             k = decode_multiindex(i, n, clmo)
-            # split into q-exponents (k[0..2]) and p-exponents (k[3..5])
-            # compute kp − kq in length-3
-            denom = (k[3] - k[0]) * eta[0] \
-                  + (k[4] - k[1]) * eta[1] \
-                  + (k[5] - k[2]) * eta[2]
-            # small-divisor check (paper guarantees denom ≠ 0 for selected terms)
-            # but we guard against numerical zero
-            if denom == 0:
-                # you could raise, or skip, or set G[i]=0
-                # here we simply leave G[i]=0
-                continue
-            G[i] = -ci / denom
+            denom = ((k[3]-k[0]) * eta[0] +
+                     (k[4]-k[1]) * eta[1] +
+                     (k[5]-k[2]) * eta[2])
+            G[i] = -c / denom
     return G
+
 
 
 def _apply_lie_transform(
@@ -172,9 +135,8 @@ def _apply_lie_transform(
     # 4) iteratively compute ad_{G_n}^k H
     for k in range(1, K+1):
         # build next Poisson-bracket term: PB_term_list <- { PB_term_list, G_n }
-        PB_next = [ np.zeros(psi[N_VARS, d], dtype=G_n.dtype) 
-                    for d in range(N_max+1) ]
-
+        PB_next = [ make_poly(d, psi) for d in range(N_max+1) ]
+    
         # loop over all degrees in PB_term_list
         for deg_H, H_d in enumerate(PB_term_list):
             if not H_d.any(): 
@@ -182,7 +144,7 @@ def _apply_lie_transform(
             deg_R = deg_H + deg_G - 2
             if 0 <= deg_R <= N_max:
                 # compute the bracket of the two homogeneous arrays
-                R_d = poisson(H_d, deg_H, G_n, deg_G, psi, clmo)
+                R_d = _poly_poisson(H_d, deg_H, G_n, deg_G, psi, clmo)
                 # accumulate into PB_next[deg_R]
                 PB_next[deg_R] += R_d
 

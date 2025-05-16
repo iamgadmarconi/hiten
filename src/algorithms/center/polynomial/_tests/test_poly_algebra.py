@@ -3,7 +3,7 @@ import pytest
 import symengine as se
 
 from algorithms.center.polynomial.base import init_index_tables, make_poly, encode_multiindex
-from algorithms.center.polynomial.algebra import _poly_mul, _poly_add, _poly_scale, _poly_mul, _poly_diff, poisson, _get_degree, _poly_clean_inplace, _poly_clean
+from algorithms.center.polynomial.algebra import _poly_mul, _poly_add, _poly_scale, _poly_mul, _poly_diff, _poly_poisson, _get_degree, _poly_clean_inplace, _poly_clean
 from algorithms.variables import N_VARS, q1, q2, q3, p1, p2, p3
 
 # Initialize tables for tests
@@ -935,8 +935,8 @@ def test_differentiate_complex():
     assert dp2[idx_x1].real == 10.0
     assert dp2[idx_x1].imag == 12.0
 
-def test_poisson_antisymmetry():
-    """Test antisymmetry property of Poisson bracket: {P, Q} = -{Q, P}"""
+def test__poly_poisson_antisymmetry():
+    """Test antisymmetry property of _poly_poisson bracket: {P, Q} = -{Q, P}"""
     # Create two test polynomials
     deg_p = 2
     deg_q = 2
@@ -960,8 +960,8 @@ def test_poisson_antisymmetry():
     q[idx_p0p1] = 1.0
     
     # Compute {P, Q} and {Q, P}
-    pq = poisson(p, deg_p, q, deg_q, PSI, CLMO)
-    qp = poisson(q, deg_q, p, deg_p, PSI, CLMO)
+    pq = _poly_poisson(p, deg_p, q, deg_q, PSI, CLMO)
+    qp = _poly_poisson(q, deg_q, p, deg_p, PSI, CLMO)
     
     # Compute -{Q, P} (scale qp by -1)
     neg_qp = np.zeros_like(qp)
@@ -970,7 +970,7 @@ def test_poisson_antisymmetry():
     # {P, Q} should equal -{Q, P}
     np.testing.assert_array_almost_equal(pq, neg_qp)
 
-def test_poisson_first_argument_linearity():
+def test__poly_poisson_first_argument_linearity():
     """Test linearity in the first argument: {aP+bQ, R} = a{P,R} + b{Q,R}"""
     # Create three test polynomials
     deg_p = 2
@@ -1008,11 +1008,11 @@ def test_poisson_first_argument_linearity():
     _poly_add(ap, bq, apbq)
     
     # Compute {aP+bQ, R}
-    apbq_r = poisson(apbq, deg_p, r, deg_r, PSI, CLMO)
+    apbq_r = _poly_poisson(apbq, deg_p, r, deg_r, PSI, CLMO)
     
     # Compute a{P,R} + b{Q,R}
-    pr = poisson(p, deg_p, r, deg_r, PSI, CLMO)
-    qr = poisson(q, deg_q, r, deg_r, PSI, CLMO)
+    pr = _poly_poisson(p, deg_p, r, deg_r, PSI, CLMO)
+    qr = _poly_poisson(q, deg_q, r, deg_r, PSI, CLMO)
     
     apr = make_poly(deg_p + deg_r - 2, PSI)
     bqr = make_poly(deg_q + deg_r - 2, PSI)
@@ -1025,7 +1025,7 @@ def test_poisson_first_argument_linearity():
     # {aP+bQ, R} should equal a{P,R} + b{Q,R}
     np.testing.assert_array_almost_equal(apbq_r, result)
 
-def test_poisson_second_argument_linearity():
+def test__poly_poisson_second_argument_linearity():
     """Test linearity in the second argument: {P, aQ+bR} = a{P,Q} + b{P,R}"""
     # Create three test polynomials
     deg_p = 2
@@ -1063,11 +1063,11 @@ def test_poisson_second_argument_linearity():
     _poly_add(aq, br, aqbr)
     
     # Compute {P, aQ+bR}
-    p_aqbr = poisson(p, deg_p, aqbr, deg_q, PSI, CLMO)
+    p_aqbr = _poly_poisson(p, deg_p, aqbr, deg_q, PSI, CLMO)
     
     # Compute a{P,Q} + b{P,R}
-    pq = poisson(p, deg_p, q, deg_q, PSI, CLMO)
-    pr = poisson(p, deg_p, r, deg_r, PSI, CLMO)
+    pq = _poly_poisson(p, deg_p, q, deg_q, PSI, CLMO)
+    pr = _poly_poisson(p, deg_p, r, deg_r, PSI, CLMO)
     
     apq = make_poly(deg_p + deg_q - 2, PSI)
     bpr = make_poly(deg_p + deg_r - 2, PSI)
@@ -1080,7 +1080,7 @@ def test_poisson_second_argument_linearity():
     # {P, aQ+bR} should equal a{P,Q} + b{P,R}
     np.testing.assert_array_almost_equal(p_aqbr, result)
 
-def test_poisson_jacobi_identity():
+def test__poly_poisson_jacobi_identity():
     """Test Jacobi identity: {P, {Q, R}} + {Q, {R, P}} + {R, {P, Q}} = 0"""
     # Create three test polynomials of low degree to keep test manageable
     deg_p = 2
@@ -1106,27 +1106,27 @@ def test_poisson_jacobi_identity():
     
     # Compute {Q, R}
     qr_deg = deg_q + deg_r - 2
-    qr = poisson(q, deg_q, r, deg_r, PSI, CLMO)
+    qr = _poly_poisson(q, deg_q, r, deg_r, PSI, CLMO)
     
     # Compute {P, {Q, R}}
     p_qr_deg = deg_p + qr_deg - 2
-    p_qr = poisson(p, deg_p, qr, qr_deg, PSI, CLMO)
+    p_qr = _poly_poisson(p, deg_p, qr, qr_deg, PSI, CLMO)
     
     # Compute {R, P}
     rp_deg = deg_r + deg_p - 2
-    rp = poisson(r, deg_r, p, deg_p, PSI, CLMO)
+    rp = _poly_poisson(r, deg_r, p, deg_p, PSI, CLMO)
     
     # Compute {Q, {R, P}}
     q_rp_deg = deg_q + rp_deg - 2
-    q_rp = poisson(q, deg_q, rp, rp_deg, PSI, CLMO)
+    q_rp = _poly_poisson(q, deg_q, rp, rp_deg, PSI, CLMO)
     
     # Compute {P, Q}
     pq_deg = deg_p + deg_q - 2
-    pq = poisson(p, deg_p, q, deg_q, PSI, CLMO)
+    pq = _poly_poisson(p, deg_p, q, deg_q, PSI, CLMO)
     
     # Compute {R, {P, Q}}
     r_pq_deg = deg_r + pq_deg - 2
-    r_pq = poisson(r, deg_r, pq, pq_deg, PSI, CLMO)
+    r_pq = _poly_poisson(r, deg_r, pq, pq_deg, PSI, CLMO)
     
     # Compute the sum: {P, {Q, R}} + {Q, {R, P}} + {R, {P, Q}}
     sum_deg = max(p_qr_deg, q_rp_deg, r_pq_deg)
@@ -1140,8 +1140,8 @@ def test_poisson_jacobi_identity():
     for i in range(sum_result.shape[0]):
         assert abs(sum_result[i]) < 1e-10
 
-def test_poisson_hamiltonian():
-    """Test Poisson bracket properties with the Hamiltonian H = 0.5*p0^2 + q0^2"""
+def test__poly_poisson_hamiltonian():
+    """Test _poly_poisson bracket properties with the Hamiltonian H = 0.5*p0^2 + q0^2"""
     # Create Hamiltonian H = 0.5*p0^2 + q0^2
     deg_h = 2
     h = make_poly(deg_h, PSI)
@@ -1155,7 +1155,7 @@ def test_poisson_hamiltonian():
     h[idx_x0sq] = 1.0
     
     # Test 1: {H, H} = 0
-    hh = poisson(h, deg_h, h, deg_h, PSI, CLMO)
+    hh = _poly_poisson(h, deg_h, h, deg_h, PSI, CLMO)
     
     # {H, H} should be zero
     for i in range(hh.shape[0]):
@@ -1169,7 +1169,7 @@ def test_poisson_hamiltonian():
     q0[idx_x0] = 1.0
     
     # Compute {H, q0}
-    h_q0 = poisson(h, deg_h, q0, deg_q0, PSI, CLMO)
+    h_q0 = _poly_poisson(h, deg_h, q0, deg_q0, PSI, CLMO)
     
     # Expected result: -p0
     idx_p0 = encode_multiindex(np.array([0, 0, 0, 1, 0, 0], dtype=np.int64), 1, PSI, CLMO)
@@ -1187,7 +1187,7 @@ def test_poisson_hamiltonian():
     p0[idx_p0] = 1.0
     
     # Compute {H, p0}
-    h_p0 = poisson(h, deg_h, p0, deg_p0, PSI, CLMO)
+    h_p0 = _poly_poisson(h, deg_h, p0, deg_p0, PSI, CLMO)
     
     # Expected result: 2*q0 (2*x0)
     idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), 1, PSI, CLMO)
@@ -1197,8 +1197,8 @@ def test_poisson_hamiltonian():
     # {H, p0} should equal 2*q0
     np.testing.assert_array_almost_equal(h_p0, expected_h_p0)
 
-def test_poisson_complex():
-    """Test Poisson bracket with complex polynomials"""
+def test__poly_poisson_complex():
+    """Test _poly_poisson bracket with complex polynomials"""
     # Create complex polynomials
     deg_p = 2
     deg_q = 2
@@ -1219,8 +1219,8 @@ def test_poisson_complex():
     q[idx_x0p0] = complex(3.0, -1.0)
     
     # Compute {P, Q} and {Q, P}
-    pq = poisson(p, deg_p, q, deg_q, PSI, CLMO)
-    qp = poisson(q, deg_q, p, deg_p, PSI, CLMO)
+    pq = _poly_poisson(p, deg_p, q, deg_q, PSI, CLMO)
+    qp = _poly_poisson(q, deg_q, p, deg_p, PSI, CLMO)
     
     # Test antisymmetry with complex polynomials
     neg_qp = make_poly(deg_p + deg_q - 2, PSI)
@@ -1232,7 +1232,7 @@ def test_poisson_complex():
     # Verify a specific term in the result to check complex arithmetic correctness
     # We'd need to calculate the expected result manually for a specific term
 
-def test_poisson_leibniz_rule():
+def test__poly_poisson_leibniz_rule():
     """Test Leibniz product rule: {P, Q*R} = {P, Q}*R + Q*{P, R}"""
     # Create test polynomials of low degree
     deg_p = 2
@@ -1261,16 +1261,16 @@ def test_poisson_leibniz_rule():
     deg_qr = deg_q + deg_r
     
     # Compute {P, Q*R}
-    p_qr = poisson(p, deg_p, qr, deg_qr, PSI, CLMO)
+    p_qr = _poly_poisson(p, deg_p, qr, deg_qr, PSI, CLMO)
     
     # Compute {P, Q}
-    pq = poisson(p, deg_p, q, deg_q, PSI, CLMO)
+    pq = _poly_poisson(p, deg_p, q, deg_q, PSI, CLMO)
     
     # Compute {P, Q}*R
     pq_r = _poly_mul(pq, deg_p + deg_q - 2, r, deg_r, PSI, CLMO)
     
     # Compute {P, R}
-    pr = poisson(p, deg_p, r, deg_r, PSI, CLMO)
+    pr = _poly_poisson(p, deg_p, r, deg_r, PSI, CLMO)
     
     # Compute Q*{P, R}
     q_pr = _poly_mul(q, deg_q, pr, deg_p + deg_r - 2, PSI, CLMO)
@@ -1282,8 +1282,8 @@ def test_poisson_leibniz_rule():
     # {P, Q*R} should equal {P, Q}*R + Q*{P, R}
     np.testing.assert_array_almost_equal(p_qr, result)
 
-def test_poisson_constant():
-    """Test Poisson bracket with constant function: {1, F} = 0"""
+def test__poly_poisson_constant():
+    """Test _poly_poisson bracket with constant function: {1, F} = 0"""
     # Create constant polynomial 1
     deg_const = 0
     const_one = make_poly(deg_const, PSI)
@@ -1301,21 +1301,21 @@ def test_poisson_constant():
     f[idx_p0sq] = 1.0
     
     # Compute {1, F}
-    one_f = poisson(const_one, deg_const, f, deg_f, PSI, CLMO)
+    one_f = _poly_poisson(const_one, deg_const, f, deg_f, PSI, CLMO)
     
     # {1, F} should be zero
     for i in range(one_f.shape[0]):
         assert abs(one_f[i]) < 1e-10
     
     # Test the other way: {F, 1}
-    f_one = poisson(f, deg_f, const_one, deg_const, PSI, CLMO)
+    f_one = _poly_poisson(f, deg_f, const_one, deg_const, PSI, CLMO)
     
     # {F, 1} should also be zero
     for i in range(f_one.shape[0]):
         assert abs(f_one[i]) < 1e-10
 
-def test_poisson_canonical_relations():
-    """Test canonical Poisson bracket relations: {q_i,q_j}=0, {p_i,p_j}=0, {q_i,p_j}=δ_ij"""
+def test__poly_poisson_canonical_relations():
+    """Test canonical _poly_poisson bracket relations: {q_i,q_j}=0, {p_i,p_j}=0, {q_i,p_j}=δ_ij"""
     # Test for the first few position and momentum variables
     for i in range(3):  # Test x0, x1, x2
         for j in range(3):  # Test x0, x1, x2
@@ -1355,21 +1355,21 @@ def test_poisson_canonical_relations():
             pj[pj_idx] = 1.0
             
             # Test {q_i, q_j} = 0
-            qi_qj = poisson(qi, deg_q, qj, deg_q, PSI, CLMO)
+            qi_qj = _poly_poisson(qi, deg_q, qj, deg_q, PSI, CLMO)
             
-            # Should be zero (positions Poisson-commute)
+            # Should be zero (positions _poly_poisson-commute)
             for k in range(qi_qj.shape[0]):
                 assert abs(qi_qj[k]) < 1e-10
             
             # Test {p_i, p_j} = 0
-            pi_pj = poisson(pi, deg_q, pj, deg_q, PSI, CLMO)
+            pi_pj = _poly_poisson(pi, deg_q, pj, deg_q, PSI, CLMO)
             
-            # Should be zero (momenta Poisson-commute)
+            # Should be zero (momenta _poly_poisson-commute)
             for k in range(pi_pj.shape[0]):
                 assert abs(pi_pj[k]) < 1e-10
             
             # Test {q_i, p_j} = δ_ij (Kronecker delta)
-            qi_pj = poisson(qi, deg_q, pj, deg_q, PSI, CLMO)
+            qi_pj = _poly_poisson(qi, deg_q, pj, deg_q, PSI, CLMO)
             
             if i == j:
                 # {q_i, p_i} should be 1

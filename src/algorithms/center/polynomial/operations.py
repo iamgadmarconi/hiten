@@ -3,7 +3,7 @@ from numba import njit
 from numba.typed import List
 
 from algorithms.variables import N_VARS
-from algorithms.center.polynomial.algebra import _poly_mul, _poly_diff, _poly_scale, poisson, _poly_clean
+from algorithms.center.polynomial.algebra import _poly_mul, _poly_diff, _poly_scale, _poly_poisson, _poly_clean
 from algorithms.center.polynomial.base import init_index_tables, make_poly, encode_multiindex, PSI_GLOBAL, CLMO_GLOBAL
 
 
@@ -122,7 +122,7 @@ def polynomial_poisson_bracket(a: List[np.ndarray], b: List[np.ndarray], max_deg
             if res_deg < 0 or res_deg > max_deg:
                 continue
             
-            term_coeffs = poisson(a[d1], d1, b[d2], d2, psi, clmo)
+            term_coeffs = _poly_poisson(a[d1], d1, b[d2], d2, psi, clmo)
             c[res_deg] += term_coeffs
     return c
 
