@@ -11,7 +11,7 @@ from system.body import Body
 from utils.constants import Constants
 from algorithms.center.utils import format_cm_table
 
-MAX_DEG = 5
+MAX_DEG = 8
 TOL     = 1e-14
 
 
