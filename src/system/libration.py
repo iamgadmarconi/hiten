@@ -17,18 +17,20 @@ Each class provides methods for computing position, stability analysis, and
 eigenvalue decomposition appropriate to the specific dynamics of that point type.
 """
 
-import numpy as np
-import mpmath as mp
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Tuple, Union
+
+import mpmath as mp
+import numpy as np
 import symengine as se
 
-# Import existing dynamics functionality
 from algorithms.dynamics import jacobian_crtbp
+# Import existing dynamics functionality
+from algorithms.energy import crtbp_energy, energy_to_jacobi
 from algorithms.linalg import eigenvalue_decomposition
-from algorithms.variables import get_vars, linear_modes_vars, scale_factors_vars
-
+from algorithms.variables import (get_vars, linear_modes_vars,
+                                  scale_factors_vars)
 # Import custom logger
 from log_config import logger
 
@@ -74,6 +76,8 @@ class LibrationPoint(ABC):
         self._position = None
         self._stability_info = None
         self._linear_data = None
+        self._energy = None
+        self._jacobi_constant = None
         
         # Log initialization - using type(self).__name__ to get the specific subclass name
         logger.debug(f"Initialized {type(self).__name__} with mu = {self.mu}")
@@ -98,6 +102,24 @@ class LibrationPoint(ABC):
             logger.debug(f"Calculating position for {type(self).__name__} (mu={self.mu}).")
             self._position = self._calculate_position()
         return self._position
+    
+    @property
+    def energy(self) -> float:
+        """
+        Get the energy of the Libration point.
+        """
+        if self._energy is None:
+            self._energy = self._compute_energy()
+        return self._energy
+    
+    @property
+    def jacobi_constant(self) -> float:
+        """
+        Get the Jacobi constant of the Libration point.
+        """
+        if self._jacobi_constant is None:
+            self._jacobi_constant = self._compute_jacobi_constant()
+        return self._jacobi_constant
     
     @property
     def is_stable(self) -> bool:
@@ -130,6 +152,19 @@ class LibrationPoint(ABC):
         if self._linear_data is None:
             self._linear_data = self._get_linear_data()
         return self._linear_data
+
+    def _compute_energy(self) -> float:
+        """
+        Compute the energy of the Libration point.
+        """
+        state = np.concatenate([self.position, [0, 0, 0]])
+        return crtbp_energy(state, self.mu)
+
+    def _compute_jacobi_constant(self) -> float:
+        """
+        Compute the Jacobi constant of the Libration point.
+        """
+        return energy_to_jacobi(self.energy)
 
     def analyze_stability(self, discrete: int = CONTINUOUS_SYSTEM, delta: float = 1e-4) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """
