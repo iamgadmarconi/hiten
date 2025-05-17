@@ -6,7 +6,7 @@ from numba.typed import List
 from algorithms.center.polynomial.base import init_index_tables, encode_multiindex
 from algorithms.center.polynomial.operations import polynomial_evaluate, polynomial_jacobian
 from algorithms.integrators.symplectic import (
-    integrate_tao_polynomial_cm,
+    integrate_symplectic,
     N_CM_DOF as INTEGRATOR_N_CM_DOF, # Get N_CM_DOF used by integrator
     N_VARS_POLY, CM_Q_POLY_INDICES, CM_P_POLY_INDICES
 )
@@ -139,7 +139,7 @@ def test_energy_conservation_pendulum(pendulum_hamiltonian_data):
     order = 6 # Test with 6th order
     omega_tao = 20.0 # Increased from 5.0 for better energy conservation
 
-    trajectory = integrate_tao_polynomial_cm(
+    trajectory = integrate_symplectic(
         initial_cm_state_4d=initial_state, # Adapt based on INTEGRATOR_N_CM_DOF
         t_values=times,
         jac_H_cm_rn_typed=jac_H,
@@ -177,7 +177,7 @@ def test_reversibility_pendulum(pendulum_hamiltonian_data):
     omega_tao = 5.0  # Increased from 0.1 for better energy conservation
 
     # Forward integration
-    traj_fwd = integrate_tao_polynomial_cm(
+    traj_fwd = integrate_symplectic(
         initial_state, times_forward, jac_H, clmo, order, c_omega_heuristic=omega_tao
     )
     state_at_t_final = traj_fwd[-1].copy()
@@ -185,7 +185,7 @@ def test_reversibility_pendulum(pendulum_hamiltonian_data):
     # Backward integration
     # For Hamiltonian systems, reversing time implies P -> -P if H(q,-p) = H(q,p)
     # Tao's method is time-reversible directly by using negative timesteps.
-    traj_bwd = integrate_tao_polynomial_cm(
+    traj_bwd = integrate_symplectic(
         state_at_t_final, times_backward, jac_H, clmo, order, c_omega_heuristic=omega_tao
     )
     final_state_reversed = traj_bwd[-1]
@@ -217,13 +217,13 @@ def test_final_state_error_pendulum(pendulum_hamiltonian_data):
     # Run with a moderate number of steps
     num_steps1 = 200
     times1 = np.linspace(0, t_final, num_steps1, dtype=np.float64)
-    traj1 = integrate_tao_polynomial_cm(initial_state, times1, jac_H, clmo, order, c_omega_heuristic=omega_tao)
+    traj1 = integrate_symplectic(initial_state, times1, jac_H, clmo, order, c_omega_heuristic=omega_tao)
     final_state1 = traj1[-1]
 
     # Run with many more steps (reference)
     num_steps2 = 800 
     times2 = np.linspace(0, t_final, num_steps2, dtype=np.float64)
-    traj2 = integrate_tao_polynomial_cm(initial_state, times2, jac_H, clmo, order, c_omega_heuristic=omega_tao)
+    traj2 = integrate_symplectic(initial_state, times2, jac_H, clmo, order, c_omega_heuristic=omega_tao)
     final_state_ref = traj2[-1]
 
     # Check that final_state1 is reasonably close to final_state_ref
@@ -296,7 +296,7 @@ def test_comparison_with_solve_ivp(pendulum_hamiltonian_data):
     order = 6  # Higher order for better accuracy
     omega_tao = 20.0
     
-    symplectic_traj = integrate_tao_polynomial_cm(
+    symplectic_traj = integrate_symplectic(
         initial_state,
         actual_times,
         jac_H,

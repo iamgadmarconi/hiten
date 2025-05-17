@@ -10,8 +10,8 @@ CM_Q_POLY_INDICES = np.array([1, 2], dtype=np.int64)
 CM_P_POLY_INDICES = np.array([4, 5], dtype=np.int64)
 
 
-@njit(cache=True)
-def get_tao_omega (delta: float, order: int, c: float = 10.0) -> float:
+@njit(fastmath=True, cache=True)
+def _get_tao_omega (delta: float, order: int, c: float = 10.0) -> float:
     """
     Uses a heuristic to give an estimate for the binding coefficient omega 
     in the nonseparable Hamiltonian integrator.
@@ -258,7 +258,7 @@ def _recursive_update_poly(
 
 
 @njit(cache=True)
-def integrate_tao_polynomial_cm(
+def integrate_symplectic(
     initial_cm_state_4d: np.ndarray,
     t_values: np.ndarray,
     jac_H_cm_rn_typed: List[List[np.ndarray]], # Numba typed List of (Numba typed List of np.ndarray(complex128))
@@ -294,10 +294,7 @@ def integrate_tao_polynomial_cm(
         valid_input = False
     
     if not valid_input:
-        # In Numba, it's hard to raise exceptions like ValueError.
-        # One option is to return an empty array or a specific status code.
-        # For now, returning an empty trajectory of the expected shape.
-        return np.empty((len(t_values), 2 * N_CM_DOF), dtype=np.float64) 
+        raise
 
     num_output_timesteps = len(t_values)
     trajectory = np.empty((num_output_timesteps, 2 * N_CM_DOF), dtype=np.float64)
@@ -318,18 +315,11 @@ def integrate_tao_polynomial_cm(
 
     timesteps_to_integrate = np.diff(t_values)
 
-    # Calculate omega using the first timestep magnitude for the heuristic
-    # If timesteps can vary significantly, this might need reconsideration or averaging.
-    first_dt_magnitude = np.abs(timesteps_to_integrate[0]) if len(timesteps_to_integrate) > 0 else 0.01
-    if first_dt_magnitude == 0: # Avoid issues if first dt is zero for some reason
-        first_dt_magnitude = 0.01 # A small default positive dt for omega calculation
-        
-    omega = get_tao_omega(first_dt_magnitude, order, c_omega_heuristic)
-
     for i in range(len(timesteps_to_integrate)):
         dt = timesteps_to_integrate[i]
-        # Note: If omega should be recalculated per-step if dt varies, adjust here.
-        # Current implementation uses omega based on the first dt.
+    
+        omega = _get_tao_omega(dt, order, c_omega_heuristic)
+        
         _recursive_update_poly(q_ext, dt, order, omega, jac_H_cm_rn_typed, clmo_H_typed)
         trajectory[i + 1, 0:N_CM_DOF] = q_ext[0:N_CM_DOF].copy()
         trajectory[i + 1, N_CM_DOF : 2*N_CM_DOF] = q_ext[N_CM_DOF : 2*N_CM_DOF].copy()
