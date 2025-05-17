@@ -10,7 +10,7 @@ from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
 
-MAX_DEG = 16
+MAX_DEG = 8
 TOL     = 1e-14
 
 
@@ -43,7 +43,7 @@ def main() -> None:
     # H_cm_cn_full is the full list of coefficient arrays, indexed by degree
     # H_cm_cn_full = center_manifold_cn(L1_SE, psi, clmo, MAX_DEG)
     H_cm_rn_full = center_manifold_rn(L1_SE, psi, clmo, MAX_DEG)
-
+    logger.info(H_cm_rn_full)
     # ---------------- pretty print (Table 1 style) ----------------------
     # print("Centre-manifold Hamiltonian (deg 2 to 5) in complex NF variables\n")
     # print(format_cm_table(H_cm_cn_full, clmo))

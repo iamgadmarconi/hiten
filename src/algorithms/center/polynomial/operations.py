@@ -1,5 +1,5 @@
 import numpy as np
-from numba import njit
+from numba import njit, prange
 from numba.typed import List
 
 from algorithms.center.polynomial.algebra import (_poly_clean, _poly_diff,
@@ -225,6 +225,54 @@ def polynomial_differentiate(
                     derivative_coeffs_list[d_res] = term_diff_coeffs
 
     return derivative_coeffs_list, derivative_max_deg
+
+@njit(fastmath=True, cache=True)
+def polynomial_jacobian(
+    poly_coeffs: List[np.ndarray],
+    original_max_deg: int,
+    psi_table: np.ndarray,
+    clmo_table: List[np.ndarray]
+) -> List[List[np.ndarray]]:
+    """
+    Computes the Jacobian of a polynomial with respect to all N_VARS variables.
+    Returns a list of N_VARS polynomials, where each polynomial is the
+    partial derivative of the input polynomial with respect to one variable.
+    Each derivative polynomial is represented as a list of coefficient arrays.
+
+    Parameters
+    ----------
+    poly_coeffs : List[np.ndarray]
+        Coefficient arrays of the polynomial to differentiate.
+    original_max_deg : int
+        Maximum degree of the input polynomial.
+    psi_table : np.ndarray
+        PSI table for the input polynomial's degree structure. This table will
+        also be used for the derivatives, assuming it's sufficiently large.
+    clmo_table : List[np.ndarray]
+        CLMO table for the input polynomial's degree structure. This table will
+        also be used for the derivatives.
+
+    Returns
+    -------
+    List[List[np.ndarray]]
+        A Numba typed list containing N_VARS items. Each item is a
+        derivative polynomial (itself a Numba typed list of coefficient arrays).
+    """
+    jacobian_list = List.empty_list(List.empty_list(np.complex128[::1])) # Typed list for list of polynomials
+
+    for i in prange(N_VARS): # Iterate over all variables
+        derivative_poly_coeffs, _ = polynomial_differentiate(
+            original_coeffs=poly_coeffs,
+            var_idx=i,
+            original_max_deg=original_max_deg,
+            original_psi_table=psi_table,
+            original_clmo_table=clmo_table,
+            derivative_psi_table=psi_table,  # Use original psi table for derivative
+            derivative_clmo_table=clmo_table # Use original clmo table for derivative
+        )
+        jacobian_list.append(derivative_poly_coeffs)
+    
+    return jacobian_list
 
 @njit(fastmath=True, cache=True)
 def polynomial_evaluate(

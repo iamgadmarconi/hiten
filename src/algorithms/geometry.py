@@ -5,7 +5,7 @@ from scipy.optimize import root_scalar
 from typing import Callable, Any, Tuple
 
 from system.libration import LibrationPoint, CollinearPoint, L1Point, L2Point, L3Point
-from algorithms.propagators import propagate_crtbp
+from src.algorithms.integrators.standard import propagate_crtbp
 from log_config import logger
 
 

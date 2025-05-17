@@ -8,9 +8,9 @@ from algorithms.center.polynomial.base import (decode_multiindex,
                                                init_index_tables)
 from algorithms.center.polynomial.operations import (
     polynomial_add_inplace, polynomial_clean, polynomial_degree,
-    polynomial_differentiate, polynomial_evaluate, polynomial_multiply,
-    polynomial_poisson_bracket, polynomial_power, polynomial_variable,
-    polynomial_variables_list, polynomial_zero_list)
+    polynomial_differentiate, polynomial_evaluate, polynomial_jacobian,
+    polynomial_multiply, polynomial_poisson_bracket, polynomial_power,
+    polynomial_variable, polynomial_variables_list, polynomial_zero_list)
 from algorithms.variables import N_VARS
 
 # Initialize tables for tests
@@ -1270,3 +1270,84 @@ def test_polynomial_evaluate_empty_parts():
     sym_eval = complex(sym_poly.subs(point_map).evalf())
     assert np.isclose(sym_eval, expected_val)
     assert np.isclose(numeric_eval, sym_eval)
+
+def test_polynomial_jacobian():
+    """Test the polynomial_jacobian function."""
+    original_max_deg_main = 3
+    # PSI, CLMO are globally defined and initialized with MAX_DEGREE = 5, suitable here.
+
+    # Test Case 1: P = 2.0 * x0^2 * x1 + (1.0+1.0j) * x1 * x2^2
+    p_coeffs_main = polynomial_zero_list(original_max_deg_main, PSI)
+
+    # Term 1: 2.0 * x0^2 * x1 (degree 3)
+    k_x0sq_x1 = np.array([2, 1, 0, 0, 0, 0], dtype=np.int64)
+    idx_x0sq_x1 = encode_multiindex(k_x0sq_x1, 3, PSI, CLMO)
+    if idx_x0sq_x1 != -1: p_coeffs_main[3][idx_x0sq_x1] = 2.0
+
+    # Term 2: (1.0+1.0j) * x1 * x2^2 (degree 3)
+    k_x1_x2sq = np.array([0, 1, 2, 0, 0, 0], dtype=np.int64)
+    idx_x1_x2sq = encode_multiindex(k_x1_x2sq, 3, PSI, CLMO)
+    if idx_x1_x2sq != -1: p_coeffs_main[3][idx_x1_x2sq] = complex(1.0, 1.0)
+
+    jacobian_P_main = polynomial_jacobian(p_coeffs_main, original_max_deg_main, PSI, CLMO)
+
+    assert len(jacobian_P_main) == N_VARS, "Jacobian should have N_VARS components"
+
+    deriv_max_deg_main = original_max_deg_main - 1 # Should be 2
+
+    # Expected dP/dx0 = 4.0 * x0 * x1 (degree 2)
+    expected_dP_dx0 = polynomial_zero_list(deriv_max_deg_main, PSI)
+    k_x0_x1 = np.array([1, 1, 0, 0, 0, 0], dtype=np.int64)
+    idx_x0_x1 = encode_multiindex(k_x0_x1, 2, PSI, CLMO)
+    if idx_x0_x1 != -1: expected_dP_dx0[2][idx_x0_x1] = 4.0
+    assert_poly_lists_almost_equal(jacobian_P_main[0], expected_dP_dx0, msg="dP/dx0 mismatch")
+
+    # Expected dP/dx1 = 2.0 * x0^2 + (1.0+1.0j) * x2^2 (degree 2)
+    expected_dP_dx1 = polynomial_zero_list(deriv_max_deg_main, PSI)
+    k_x0sq = np.array([2, 0, 0, 0, 0, 0], dtype=np.int64)
+    idx_x0sq = encode_multiindex(k_x0sq, 2, PSI, CLMO)
+    if idx_x0sq != -1: expected_dP_dx1[2][idx_x0sq] = 2.0
+    k_x2sq = np.array([0, 0, 2, 0, 0, 0], dtype=np.int64)
+    idx_x2sq = encode_multiindex(k_x2sq, 2, PSI, CLMO)
+    if idx_x2sq != -1: expected_dP_dx1[2][idx_x2sq] = complex(1.0, 1.0)
+    assert_poly_lists_almost_equal(jacobian_P_main[1], expected_dP_dx1, msg="dP/dx1 mismatch")
+
+    # Expected dP/dx2 = (2.0+2.0j) * x1 * x2 (degree 2)
+    expected_dP_dx2 = polynomial_zero_list(deriv_max_deg_main, PSI)
+    k_x1_x2 = np.array([0, 1, 1, 0, 0, 0], dtype=np.int64)
+    idx_x1_x2 = encode_multiindex(k_x1_x2, 2, PSI, CLMO)
+    if idx_x1_x2 != -1: expected_dP_dx2[2][idx_x1_x2] = complex(2.0, 2.0)
+    assert_poly_lists_almost_equal(jacobian_P_main[2], expected_dP_dx2, msg="dP/dx2 mismatch")
+
+    # Expected dP/dxi = 0 for i = 3, 4, 5
+    expected_zero_deriv_main = polynomial_zero_list(deriv_max_deg_main, PSI)
+    for i in range(3, N_VARS):
+        assert_poly_lists_almost_equal(jacobian_P_main[i], expected_zero_deriv_main, msg=f"dP/dx{i} mismatch, should be zero")
+
+    # Test Case 2: Constant polynomial P = 5.0
+    original_max_deg_const = 0
+    p_coeffs_const = polynomial_zero_list(original_max_deg_const, PSI)
+    if p_coeffs_const[0].size > 0: p_coeffs_const[0][0] = 5.0
+
+    jacobian_P_const = polynomial_jacobian(p_coeffs_const, original_max_deg_const, PSI, CLMO)
+    assert len(jacobian_P_const) == N_VARS
+    deriv_max_deg_const = 0 # Max degree of derivative of constant is 0
+
+    expected_zero_deriv_const = polynomial_zero_list(deriv_max_deg_const, PSI)
+    for i in range(N_VARS):
+        assert len(jacobian_P_const[i]) == deriv_max_deg_const + 1
+        assert_poly_lists_almost_equal(jacobian_P_const[i], expected_zero_deriv_const, msg=f"dP/dx{i} for constant P mismatch")
+
+    # Test Case 3: Zero polynomial (max_deg = 2 for test purposes)
+    original_max_deg_zero = 2
+    p_coeffs_zero = polynomial_zero_list(original_max_deg_zero, PSI)
+
+    jacobian_P_zero = polynomial_jacobian(p_coeffs_zero, original_max_deg_zero, PSI, CLMO)
+    assert len(jacobian_P_zero) == N_VARS
+    # Derivative max_deg will be original_max_deg_zero - 1
+    deriv_max_deg_zero = original_max_deg_zero -1 if original_max_deg_zero >0 else 0 
+
+    expected_zero_deriv_for_zero_poly = polynomial_zero_list(deriv_max_deg_zero, PSI)
+    for i in range(N_VARS):
+        assert len(jacobian_P_zero[i]) == deriv_max_deg_zero + 1
+        assert_poly_lists_almost_equal(jacobian_P_zero[i], expected_zero_deriv_for_zero_poly, msg=f"dP/dx{i} for zero P mismatch")

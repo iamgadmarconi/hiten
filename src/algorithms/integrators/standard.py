@@ -3,7 +3,7 @@ from scipy.integrate import solve_ivp
 from scipy.integrate._ivp.ivp import OdeResult
 from typing import Any, Dict, Sequence, Union, List, Optional, Tuple, Callable
 
-from .dynamics import crtbp_accel
+from ..dynamics import crtbp_accel
 from log_config import logger
 
 
