@@ -8,6 +8,7 @@ from algorithms.center.polynomial.operations import (polynomial_poisson_bracket,
                                                      polynomial_zero_list,
                                                      polynomial_clean)
 
+from log_config import logger
 
 
 def lie_transform(point, H_init_coeffs: list[np.ndarray], psi: np.ndarray, clmo: np.ndarray, max_degree: int, tol: float = 1e-15) -> tuple[list[np.ndarray], list[np.ndarray]]:
@@ -18,6 +19,7 @@ def lie_transform(point, H_init_coeffs: list[np.ndarray], psi: np.ndarray, clmo:
     G_total = polynomial_zero_list(max_degree, psi)
 
     for n in range(3, max_degree+1):
+        logger.info(f"Normalizing at order: {n}")
         Hn = H_trans[n]
         if not Hn.any():
             continue

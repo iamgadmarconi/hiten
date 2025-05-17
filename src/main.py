@@ -10,7 +10,7 @@ from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
 
-MAX_DEG = 8
+MAX_DEG = 32
 TOL     = 1e-14
 
 
