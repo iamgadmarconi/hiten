@@ -1,10 +1,12 @@
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+
 import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.integrate._ivp.ivp import OdeResult
-from typing import Any, Dict, Sequence, Union, List, Optional, Tuple, Callable
+
+from log_config import logger
 
 from ..dynamics import crtbp_accel
-from log_config import logger
 
 
 def propagate_orbit(
