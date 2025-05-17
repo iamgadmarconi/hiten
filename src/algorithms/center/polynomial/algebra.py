@@ -139,3 +139,55 @@ def _poly_clean(p: np.ndarray, tol: float, out: np.ndarray) -> None:
             out[i] = 0
         else:
             out[i] = p[i]
+
+@njit(fastmath=True, cache=True)
+def _poly_evaluate(
+    coeffs: np.ndarray, 
+    degree: int, 
+    point: np.ndarray, 
+    clmo: List[np.ndarray]
+) -> np.complex128:
+    """
+    Evaluate a single homogeneous polynomial at a given point.
+
+    Parameters
+    ----------
+    coeffs : np.ndarray
+        Coefficient array of the homogeneous polynomial.
+    degree : int
+        Degree of the homogeneous polynomial.
+    point : np.ndarray
+        The point (array of N_VARS values) at which to evaluate.
+        It is assumed that point.shape[0] == N_VARS.
+    clmo : numba.typed.List
+        Packed multi-indices lookup table.
+
+    Returns
+    -------
+    np.complex128
+        The value of the homogeneous polynomial at the point.
+    """
+    current_sum = 0.0 + 0.0j
+    if coeffs.shape[0] == 0: # Empty polynomial part
+        return current_sum
+
+    for i in range(coeffs.shape[0]):
+        coeff_val = coeffs[i]
+        if coeff_val == 0.0 + 0.0j:
+            continue
+
+        exponents = decode_multiindex(i, degree, clmo)
+        
+        term_val = 1.0 + 0.0j
+        for var_idx in range(N_VARS): # N_VARS should be in scope
+            exp = exponents[var_idx]
+            if exp == 0:
+                continue
+            elif exp == 1:
+                term_val *= point[var_idx]
+            else:
+                # Using ** operator handles complex base and integer exponent
+                term_val *= point[var_idx] ** exp
+        
+        current_sum += coeff_val * term_val
+    return current_sum

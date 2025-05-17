@@ -2,9 +2,16 @@ import numpy as np
 import pytest
 import symengine as se
 
-from algorithms.center.polynomial.base import init_index_tables, make_poly, encode_multiindex
-from algorithms.center.polynomial.algebra import _poly_mul, _poly_add, _poly_scale, _poly_mul, _poly_diff, _poly_poisson, _get_degree, _poly_clean_inplace, _poly_clean
-from algorithms.variables import N_VARS, q1, q2, q3, p1, p2, p3
+from algorithms.center.polynomial.algebra import (_get_degree, _poly_add,
+                                                  _poly_clean,
+                                                  _poly_clean_inplace,
+                                                  _poly_diff, _poly_evaluate,
+                                                  _poly_mul, _poly_poisson,
+                                                  _poly_scale)
+from algorithms.center.polynomial.base import (decode_multiindex,
+                                               encode_multiindex,
+                                               init_index_tables, make_poly)
+from algorithms.variables import N_VARS, p1, p2, p3, q1, q2, q3
 
 # Initialize tables for tests
 MAX_DEGREE = 5
@@ -1565,3 +1572,172 @@ def test_poly_clean():
     # All values should be copied exactly
     for i in range(poly.shape[0]):
         assert zero_tol_result[i] == poly[i]
+
+
+# -----------------------------------------------------------------------------
+# Tests for _poly_evaluate (homogeneous polynomial evaluation)
+# -----------------------------------------------------------------------------
+
+def create_symengine_poly(coeffs: np.ndarray, degree: int, sym_vars: list, psi, clmo) -> se.Expr:
+    """Helper to create a Symengine polynomial from our coefficient array."""
+    sym_poly = se.sympify(0)
+    if coeffs.shape[0] == 0:
+        return sym_poly
+    for i in range(coeffs.shape[0]):
+        coeff_val = coeffs[i]
+        if coeff_val == 0:
+            continue
+        
+        exponents = decode_multiindex(i, degree, clmo)
+        term = se.sympify(coeff_val)
+        for var_idx in range(N_VARS):
+            if exponents[var_idx] > 0:
+                term *= (sym_vars[var_idx] ** exponents[var_idx])
+        sym_poly += term
+    return sym_poly
+
+def evaluate_symengine_poly(sym_poly: se.Expr, point_map: dict) -> complex:
+    """Helper to evaluate a Symengine polynomial."""
+    return complex(sym_poly.subs(point_map).evalf())
+
+@pytest.mark.parametrize("degree", range(MAX_DEGREE + 1))
+def test_poly_evaluate_zero_polynomial(degree):
+    """Test evaluation of a zero homogeneous polynomial."""
+    coeffs = make_poly(degree, PSI) # all zeros
+    point_vals = np.random.rand(N_VARS) + 1j * np.random.rand(N_VARS)
+    
+    numeric_eval = _poly_evaluate(coeffs, degree, point_vals, CLMO)
+    assert np.isclose(numeric_eval, 0.0 + 0.0j)
+
+@pytest.mark.parametrize("degree", range(1, MAX_DEGREE + 1)) # Skip degree 0 for monomial test
+def test_poly_evaluate_single_monomial(degree):
+    """Test evaluation of a single monomial vs Symengine."""
+    coeffs = make_poly(degree, PSI)
+    
+    # Create a single monomial, e.g., 2.5 * x_0^degree (if degree > 0)
+    # or 2.5 * x_0^{d_0} * x_1^{d_1} ... such that sum(d_i) = degree
+    # For simplicity, let's use x_0^degree if possible, or the first available monomial.
+    
+    test_coeff_val = 2.5 - 1.5j
+    
+    # Create a specific monomial k_test (e.g., x0^d)
+    k_test = np.zeros(N_VARS, dtype=np.int64)
+    # Distribute degree among first few vars if possible
+    vars_to_use = min(N_VARS, degree)
+    if vars_to_use > 0:
+        deg_per_var = degree // vars_to_use
+        remainder = degree % vars_to_use
+        for i in range(vars_to_use):
+            k_test[i] = deg_per_var
+            if i < remainder:
+                k_test[i] +=1
+    else: # degree is 0, this case is not hit by parametrize
+        pass
+
+    idx = encode_multiindex(k_test, degree, PSI, CLMO)
+    if idx != -1 and idx < coeffs.shape[0]:
+        coeffs[idx] = test_coeff_val
+    else: # Fallback if the specific k_test is not found (should not happen for valid k)
+        if coeffs.shape[0] > 0:
+            coeffs[0] = test_coeff_val # Assign to the first available coefficient slot
+            k_test = decode_multiindex(0, degree, CLMO) # And use its exponents
+        else: # No coefficients for this degree (e.g. PSI[N_VARS, degree] is 0)
+             pytest.skip(f"No monomials for degree {degree} with N_VARS={N_VARS}")
+
+
+    point_vals_np = np.random.rand(N_VARS) * 2 - 1 + 1j * (np.random.rand(N_VARS) * 2 - 1) # Random values in [-1,1] + j*[-1,1]
+    
+    # Symengine evaluation
+    sym_poly_expr = create_symengine_poly(coeffs, degree, s_vars, PSI, CLMO)
+    point_map_sym = {s_vars[i]: point_vals_np[i] for i in range(N_VARS)}
+    symengine_eval = evaluate_symengine_poly(sym_poly_expr, point_map_sym)
+    
+    # Numeric evaluation
+    numeric_eval = _poly_evaluate(coeffs, degree, point_vals_np, CLMO)
+    
+    assert np.isclose(numeric_eval, symengine_eval, atol=1e-9, rtol=1e-9)
+
+@pytest.mark.parametrize("degree", range(MAX_DEGREE + 1))
+def test_poly_evaluate_multiple_terms(degree):
+    """Test evaluation of a homogeneous polynomial with multiple terms vs Symengine."""
+    coeffs = make_poly(degree, PSI)
+    
+    # Assign some random complex coefficients
+    num_coeffs_to_set = min(coeffs.shape[0], 5) # Set up to 5 random coeffs
+    indices_to_set = np.random.choice(coeffs.shape[0], num_coeffs_to_set, replace=False)
+    
+    for i in indices_to_set:
+        coeffs[i] = np.random.rand() - 0.5 + 1j*(np.random.rand() - 0.5)
+
+    point_vals_np = np.random.rand(N_VARS) + 1j*np.random.rand(N_VARS)
+        
+    sym_poly_expr = create_symengine_poly(coeffs, degree, s_vars, PSI, CLMO)
+    point_map_sym = {s_vars[i]: point_vals_np[i] for i in range(N_VARS)}
+    symengine_eval = evaluate_symengine_poly(sym_poly_expr, point_map_sym)
+    
+    numeric_eval = _poly_evaluate(coeffs, degree, point_vals_np, CLMO)
+    
+    # For degree 0, symengine creates just the number, ensure it's complex for comparison
+    if degree == 0 and coeffs.shape[0] > 0:
+        expected_val_deg0 = coeffs[0]
+        assert np.isclose(numeric_eval, expected_val_deg0)
+        assert np.isclose(symengine_eval, expected_val_deg0) # Symengine should also match
+    elif coeffs.shape[0] == 0: # No terms for this degree
+        assert np.isclose(numeric_eval, 0.0 + 0.0j)
+        assert np.isclose(symengine_eval, 0.0 + 0.0j)
+    else:
+        assert np.isclose(numeric_eval, symengine_eval, atol=1e-9, rtol=1e-9)
+
+def test_poly_evaluate_at_origin():
+    """Test evaluation at the origin point."""
+    for degree in range(MAX_DEGREE + 1):
+        coeffs = make_poly(degree, PSI)
+        if coeffs.shape[0] > 0:
+            coeffs[np.random.randint(0, coeffs.shape[0])] = 1.0 + 1.0j # Make it non-zero
+
+        point_at_origin = np.zeros(N_VARS, dtype=np.complex128)
+        numeric_eval = _poly_evaluate(coeffs, degree, point_at_origin, CLMO)
+
+        if degree == 0:
+            if coeffs.shape[0] > 0:
+                assert np.isclose(numeric_eval, coeffs[0])
+            else: # Should not happen if PSI[N_VARS,0] is 1
+                assert np.isclose(numeric_eval, 0.0 + 0.0j)
+        else:
+            assert np.isclose(numeric_eval, 0.0 + 0.0j)
+
+def test_poly_evaluate_point_with_zeros():
+    """Test evaluation at a point with some zero components."""
+    degree = 2
+    if PSI[N_VARS, degree] == 0: pytest.skip("Not enough terms for degree 2 test")
+
+    coeffs = make_poly(degree, PSI)
+    # Example: P = x0^2 + x0*x1 + x1^2
+    k_x0sq = np.array([2,0,0,0,0,0], dtype=np.int64)
+    k_x0x1 = np.array([1,1,0,0,0,0], dtype=np.int64)
+    k_x1sq = np.array([0,2,0,0,0,0], dtype=np.int64)
+
+    idx_x0sq = encode_multiindex(k_x0sq, degree, PSI, CLMO)
+    idx_x0x1 = encode_multiindex(k_x0x1, degree, PSI, CLMO)
+    idx_x1sq = encode_multiindex(k_x1sq, degree, PSI, CLMO)
+
+    if idx_x0sq != -1: coeffs[idx_x0sq] = 1.0
+    if idx_x0x1 != -1: coeffs[idx_x0x1] = 1.0
+    if idx_x1sq != -1: coeffs[idx_x1sq] = 1.0
+    
+    point_vals_np = np.zeros(N_VARS, dtype=np.complex128)
+    point_vals_np[0] = 2.0 + 1j # x0 = 2+j
+    # x1 and others are 0
+    
+    # Expected: (2+j)^2 + (2+j)*0 + 0^2 = (2+j)^2 = 4 + 4j - 1 = 3 + 4j
+    expected_eval = (2.0+1j)**2
+
+    sym_poly_expr = create_symengine_poly(coeffs, degree, s_vars, PSI, CLMO)
+    point_map_sym = {s_vars[i]: point_vals_np[i] for i in range(N_VARS)}
+    symengine_eval = evaluate_symengine_poly(sym_poly_expr, point_map_sym)
+    
+    numeric_eval = _poly_evaluate(coeffs, degree, point_vals_np, CLMO)
+    
+    assert np.isclose(numeric_eval, expected_eval)
+    assert np.isclose(symengine_eval, expected_eval)
+    assert np.isclose(numeric_eval, symengine_eval)

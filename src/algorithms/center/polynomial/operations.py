@@ -4,7 +4,7 @@ from numba.typed import List
 
 from algorithms.center.polynomial.algebra import (_poly_clean, _poly_diff,
                                                   _poly_mul, _poly_poisson,
-                                                  _poly_scale)
+                                                  _poly_scale, _poly_evaluate)
 from algorithms.center.polynomial.base import (CLMO_GLOBAL, PSI_GLOBAL,
                                                encode_multiindex,
                                                init_index_tables, make_poly)
@@ -225,3 +225,34 @@ def polynomial_differentiate(
                     derivative_coeffs_list[d_res] = term_diff_coeffs
 
     return derivative_coeffs_list, derivative_max_deg
+
+@njit(fastmath=True, cache=True)
+def polynomial_evaluate(
+    polys: List[np.ndarray], 
+    point: np.ndarray, 
+    clmo: List[np.ndarray] # Typically CLMO_GLOBAL
+) -> np.complex128:
+    """
+    Evaluate a polynomial (represented as a list of homogeneous parts) at a point.
+
+    Parameters
+    ----------
+    polys : List[np.ndarray]
+        A list where polys[d] is the coefficient array for the homogeneous part of degree d.
+    point : np.ndarray
+        The point (array of N_VARS values) at which to evaluate.
+        It is assumed that point.shape[0] == N_VARS.
+    clmo : numba.typed.List
+        Packed multi-indices lookup table.
+
+    Returns
+    -------
+    np.complex128
+        The total value of the polynomial at the point.
+    """
+    total_value = 0.0 + 0.0j
+    for degree in range(len(polys)):
+        coeffs_d = polys[degree]
+        if coeffs_d.shape[0] > 0: # Check if there are coefficients for this degree
+            total_value += _poly_evaluate(coeffs_d, degree, point, clmo)
+    return total_value

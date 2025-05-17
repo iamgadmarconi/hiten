@@ -1,20 +1,16 @@
 import numpy as np
 import pytest
+import sympy as se
 from numba.typed import List
 
-from algorithms.center.polynomial.base import init_index_tables, encode_multiindex
+from algorithms.center.polynomial.base import (decode_multiindex,
+                                               encode_multiindex,
+                                               init_index_tables)
 from algorithms.center.polynomial.operations import (
-    polynomial_zero_list,
-    polynomial_variable,
-    polynomial_variables_list,
-    polynomial_add_inplace,
-    polynomial_multiply,
-    polynomial_power,
-    polynomial_poisson_bracket,
-    polynomial_clean,
-    polynomial_degree,
-    polynomial_differentiate
-)
+    polynomial_add_inplace, polynomial_clean, polynomial_degree,
+    polynomial_differentiate, polynomial_evaluate, polynomial_multiply,
+    polynomial_poisson_bracket, polynomial_power, polynomial_variable,
+    polynomial_variables_list, polynomial_zero_list)
 from algorithms.variables import N_VARS
 
 # Initialize tables for tests
@@ -1086,3 +1082,191 @@ def test_polynomial_differentiate_multiple_vars_complex():
     idx_x1x2_deriv = encode_multiindex(k_x1x2, 2, deriv_psi_x2, deriv_clmo_x2)
     if idx_x1x2_deriv != -1: expected_coeffs_x2[2][idx_x1x2_deriv] = complex(4.0, -2.0)
     assert_poly_lists_almost_equal(deriv_coeffs_x2, expected_coeffs_x2, msg="Complex dP/dx2")
+
+
+# -----------------------------------------------------------------------------
+# Tests for polynomial_evaluate
+# -----------------------------------------------------------------------------
+
+def symengine_poly_from_list(poly_list: List[np.ndarray], sym_vars_list, psi_table, clmo_table):
+    """Helper to create a full SymEngine polynomial from a list of homogeneous parts."""
+    full_sym_poly = se.sympify(0)
+    for degree, coeffs_arr in enumerate(poly_list):
+        if coeffs_arr.shape[0] == 0 or not np.any(coeffs_arr):
+            continue
+        hom_sym_poly = se.sympify(0)
+        for i in range(coeffs_arr.shape[0]):
+            coeff_val = coeffs_arr[i]
+            if coeff_val == 0:
+                continue
+            exponents = decode_multiindex(i, degree, clmo_table)
+            term = se.sympify(coeff_val)
+            for var_idx in range(N_VARS):
+                if exponents[var_idx] > 0:
+                    term *= (sym_vars_list[var_idx] ** exponents[var_idx])
+            hom_sym_poly += term
+        full_sym_poly += hom_sym_poly
+    return full_sym_poly
+
+@pytest.mark.parametrize("max_poly_deg", range(MAX_DEGREE + 1))
+def test_polynomial_evaluate_zero_poly_list(max_poly_deg):
+    """Test evaluation of a zero polynomial list."""
+    psi_local, clmo_local = init_index_tables(max_poly_deg)
+    zero_p_list = polynomial_zero_list(max_poly_deg, psi_local)
+    point = np.random.rand(N_VARS) + 1j * np.random.rand(N_VARS)
+    
+    result = polynomial_evaluate(zero_p_list, point, clmo_local)
+    assert np.isclose(result, 0.0 + 0.0j)
+
+def test_polynomial_evaluate_constant_poly():
+    """Test evaluation of a constant polynomial: P(x) = 5.0 - 2.0j."""
+    max_poly_deg = 2 # Does not matter much for constant
+    psi_local, clmo_local = init_index_tables(max_poly_deg)
+    const_val = 5.0 - 2.0j
+    
+    p_list = polynomial_zero_list(max_poly_deg, psi_local)
+    if len(p_list) > 0 and p_list[0].size > 0:
+        p_list[0][0] = const_val
+    
+    point = np.random.rand(N_VARS) * 10 # Random point
+    numeric_eval = polynomial_evaluate(p_list, point, clmo_local)
+    assert np.isclose(numeric_eval, const_val)
+
+    # Compare with Symengine
+    if N_VARS > 0:
+        s_vars_local = se.symbols(f'x0:{N_VARS}') 
+        sym_poly = symengine_poly_from_list(p_list, s_vars_local, psi_local, clmo_local)
+        point_map = {s_vars_local[i]: point[i] for i in range(N_VARS)}
+        sym_eval = complex(sym_poly.subs(point_map).evalf())
+        assert np.isclose(sym_eval, const_val)
+        assert np.isclose(numeric_eval, sym_eval)
+
+def test_polynomial_evaluate_linear_poly():
+    """Test P(x) = (1+1j)*x0 + (2-0.5j)*x1."""
+    max_poly_deg = 3 
+    psi_local, clmo_local = init_index_tables(max_poly_deg)
+    s_vars_local = se.symbols(f'x0:{N_VARS}') 
+
+    p_list = polynomial_zero_list(max_poly_deg, psi_local)
+    coeff_x0 = 1.0 + 1.0j
+    coeff_x1 = 2.0 - 0.5j
+
+    # Set (1+1j)*x0
+    k_x0 = np.zeros(N_VARS, dtype=np.int64)
+    k_x0[0] = 1
+    idx_x0 = encode_multiindex(k_x0, 1, psi_local, clmo_local)
+    if idx_x0 != -1 and len(p_list) > 1 and idx_x0 < p_list[1].shape[0]:
+        p_list[1][idx_x0] = coeff_x0
+
+    # Set (2-0.5j)*x1
+    k_x1 = np.zeros(N_VARS, dtype=np.int64)
+    k_x1[1] = 1
+    idx_x1 = encode_multiindex(k_x1, 1, psi_local, clmo_local)
+    if idx_x1 != -1 and len(p_list) > 1 and idx_x1 < p_list[1].shape[0]:
+        p_list[1][idx_x1] = coeff_x1
+
+    point = np.array([0.5 - 0.1j, 1.0 + 0.2j] + [0.0]*(N_VARS-2), dtype=np.complex128)
+    
+    numeric_eval = polynomial_evaluate(p_list, point, clmo_local)
+    
+    # Manual expected value
+    expected_val = coeff_x0 * point[0] + coeff_x1 * point[1]
+    assert np.isclose(numeric_eval, expected_val)
+
+    # Symengine comparison
+    sym_poly = symengine_poly_from_list(p_list, s_vars_local, psi_local, clmo_local)
+    point_map = {s_vars_local[i]: point[i] for i in range(N_VARS)}
+    sym_eval = complex(sym_poly.subs(point_map).evalf())
+    assert np.isclose(sym_eval, expected_val)
+    assert np.isclose(numeric_eval, sym_eval)
+
+def test_polynomial_evaluate_mixed_degree_poly():
+    """Test P(x) = 2.0 + (1+1j)*x0 + 0.5*x1^2 - (1-0.5j)*x0*x1*x2."""
+    max_poly_deg = 3
+    psi_local, clmo_local = init_index_tables(max_poly_deg)
+    s_vars_local = se.symbols(f'x0:{N_VARS}')
+
+    p_list = polynomial_zero_list(max_poly_deg, psi_local)
+
+    # Constant term: 2.0
+    if len(p_list) > 0 and p_list[0].size > 0: p_list[0][0] = 2.0
+    # Linear term: (1+1j)*x0
+    coeff_x0 = 1.0 + 1.0j
+    k_x0 = np.array([1,0,0,0,0,0], dtype=np.int64)
+    idx_x0 = encode_multiindex(k_x0, 1, psi_local, clmo_local)
+    if idx_x0 != -1 and len(p_list) > 1: p_list[1][idx_x0] = coeff_x0
+    # Quadratic term: 0.5*x1^2
+    coeff_x1sq = 0.5
+    k_x1sq = np.array([0,2,0,0,0,0], dtype=np.int64)
+    idx_x1sq = encode_multiindex(k_x1sq, 2, psi_local, clmo_local)
+    if idx_x1sq != -1 and len(p_list) > 2: p_list[2][idx_x1sq] = coeff_x1sq
+    # Cubic term: -(1-0.5j)*x0*x1*x2
+    coeff_x0x1x2 = -(1.0 - 0.5j)
+    k_x0x1x2 = np.array([1,1,1,0,0,0], dtype=np.int64)
+    idx_x0x1x2 = encode_multiindex(k_x0x1x2, 3, psi_local, clmo_local)
+    if idx_x0x1x2 != -1 and len(p_list) > 3: p_list[3][idx_x0x1x2] = coeff_x0x1x2
+
+    point = np.array([0.5, -0.2, 1.0] + [0.0]*(N_VARS-3), dtype=np.complex128)
+    point += 1j * np.array([0.1, 0.3, -0.1] + [0.0]*(N_VARS-3), dtype=np.complex128)
+
+    numeric_eval = polynomial_evaluate(p_list, point, clmo_local)
+
+    # Symengine evaluation
+    sym_poly = symengine_poly_from_list(p_list, s_vars_local, psi_local, clmo_local)
+    point_map = {s_vars_local[i]: point[i] for i in range(N_VARS)}
+    sym_eval = complex(sym_poly.subs(point_map).evalf())
+    
+    assert np.isclose(numeric_eval, sym_eval, atol=1e-9, rtol=1e-9)
+
+def test_polynomial_evaluate_at_origin_list():
+    """Test evaluation of a polynomial list at the origin."""
+    max_poly_deg = MAX_DEGREE
+    psi_local, clmo_local = init_index_tables(max_poly_deg)
+    p_list = polynomial_zero_list(max_poly_deg, psi_local)
+
+    const_term = 3.14 - 2.71j
+    if len(p_list) > 0 and p_list[0].size > 0:
+        p_list[0][0] = const_term # Set a constant term
+    
+    # Add some higher order term to make it non-trivial
+    if max_poly_deg >= 1 and len(p_list) > 1 and p_list[1].size > 0:
+        k_x0 = np.array([1,0,0,0,0,0], dtype=np.int64)
+        idx_x0 = encode_multiindex(k_x0,1,psi_local, clmo_local)
+        if idx_x0 !=-1: p_list[1][idx_x0] = 1.0
+
+    point_at_origin = np.zeros(N_VARS, dtype=np.complex128)
+    numeric_eval = polynomial_evaluate(p_list, point_at_origin, clmo_local)
+
+    assert np.isclose(numeric_eval, const_term) # Only const term should remain
+
+def test_polynomial_evaluate_empty_parts():
+    """Test evaluation where some homogeneous parts are empty/zero but list has them."""
+    max_poly_deg = 3
+    psi_local, clmo_local = init_index_tables(max_poly_deg)
+    s_vars_local = se.symbols(f'x0:{N_VARS}')
+    
+    p_list = polynomial_zero_list(max_poly_deg, psi_local)
+    # P(x) = 5.0 (deg 0) + 0*x (deg 1) + 2*x0^2 (deg 2) + 0*x^3 (deg 3)
+
+    const_val = 5.0
+    if len(p_list) > 0 and p_list[0].size > 0: p_list[0][0] = const_val
+    # p_list[1] is all zeros
+    
+    coeff_x0sq = 2.0
+    k_x0sq = np.array([2,0,0,0,0,0], dtype=np.int64)
+    idx_x0sq = encode_multiindex(k_x0sq, 2, psi_local, clmo_local)
+    if idx_x0sq != -1 and len(p_list) > 2: p_list[2][idx_x0sq] = coeff_x0sq
+    # p_list[3] is all zeros
+
+    point = np.array([0.5+0.1j] + [0.0]*(N_VARS-1), dtype=np.complex128)
+    numeric_eval = polynomial_evaluate(p_list, point, clmo_local)
+
+    expected_val = const_val + coeff_x0sq * (point[0]**2)
+    assert np.isclose(numeric_eval, expected_val)
+
+    # Symengine comparison
+    sym_poly = symengine_poly_from_list(p_list, s_vars_local, psi_local, clmo_local)
+    point_map = {s_vars_local[i]: point[i] for i in range(N_VARS)}
+    sym_eval = complex(sym_poly.subs(point_map).evalf())
+    assert np.isclose(sym_eval, expected_val)
+    assert np.isclose(numeric_eval, sym_eval)
