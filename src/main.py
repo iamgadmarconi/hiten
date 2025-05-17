@@ -1,6 +1,7 @@
 import cProfile
 import io
 import pstats
+import numpy as np
 
 from algorithms.center.manifold import center_manifold_cn, center_manifold_rn
 from algorithms.center.polynomial.base import init_index_tables
@@ -9,6 +10,9 @@ from log_config import logger
 from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
+
+# Import the new flow generation function
+from algorithms.center.poincare.flow import generate_hamiltonian_flow
 
 MAX_DEG = 8
 TOL     = 1e-14
@@ -50,6 +54,38 @@ def main() -> None:
     print("Centre-manifold Hamiltonian (deg 2 to 5) in real NF variables (q2, p2, q3, p3)\n")
     print(format_cm_table(H_cm_rn_full, clmo))
     print("\n")
+
+    # ---------------- Integrate Hamiltonian Flow ----------------------
+    # Define initial conditions for the center manifold dynamics
+    # Example: Q_cm1, Q_cm2, P_cm1, P_cm2
+    # These values would typically be chosen based on a specific energy level
+    # or a starting point for a Poincare section.
+    initial_cm_state_4d = np.array([0.1, 0.0, 0.05, 0.0], dtype=np.float64)
+
+    # Define time points for integration
+    t_start = 0.0
+    t_end = 10.0
+    num_points = 1001
+    t_values = np.linspace(t_start, t_end, num_points)
+
+    # Integrator order (e.g., 4th order)
+    integrator_order = 4 # Must be even and positive
+
+    logger.info("Starting Hamiltonian flow integration...")
+    trajectory = generate_hamiltonian_flow(
+        hamiltonian_poly_coeffs=H_cm_rn_full,
+        max_deg_hamiltonian=MAX_DEG,
+        psi_table=psi,
+        clmo_table=clmo,
+        initial_cm_state_4d=initial_cm_state_4d,
+        t_values=t_values,
+        integrator_order=integrator_order
+    )
+    logger.info(f"Hamiltonian flow integration complete. Trajectory shape: {trajectory.shape}")
+    # For example, print the first few points of the trajectory
+    logger.info("First 5 points of the trajectory:\n" + str(trajectory[:5]))
+    
+    # Further processing of the trajectory (e.g., for Poincare map) would go here.
 
 if __name__ == "__main__":
     # Use cProfile to profile the main function execution
