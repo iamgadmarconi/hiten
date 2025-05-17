@@ -114,8 +114,11 @@ def _apply_lie_transform(H_coeffs_py: List[np.ndarray], G_n: np.ndarray, deg_G: 
              H_new_py[i] = H_coeffs_py[i].copy().reshape(H_new_py[i].shape)
 
 
-    K = max(1, deg_G - 1)
-    factorials = [_factorial(k) for k in range(K+1)]
+    if deg_G > 2:
+        K = (N_max - deg_G) // (deg_G - 2) + 1
+    else:  # quadratic generator –very rare here–
+        K = 1
+    factorials = [_factorial(k) for k in range(K + 1)]
 
     PB_term_list_typed = List()
     for d in range(N_max + 1):
