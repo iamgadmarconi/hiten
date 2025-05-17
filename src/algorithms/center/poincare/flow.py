@@ -24,7 +24,7 @@ def generate_hamiltonian_flow(
 
     Args:
         hamiltonian_poly_coeffs (List[np.ndarray]): The Hamiltonian represented as a list
-                                                   of coefficient arrays by degree.
+                                                    of coefficient arrays by degree.
         max_deg_hamiltonian (int): The maximum degree of the Hamiltonian polynomial.
         psi_table (np.ndarray): The PSI table corresponding to the Hamiltonian's structure.
         clmo_table (List[np.ndarray]): The CLMO table corresponding to the Hamiltonian's structure.
