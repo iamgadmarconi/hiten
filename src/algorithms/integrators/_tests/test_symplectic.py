@@ -9,22 +9,13 @@ from algorithms.center.polynomial.base import (encode_multiindex,
                                                _create_encode_dict_from_clmo)
 from algorithms.center.polynomial.operations import (polynomial_evaluate,
                                                      polynomial_jacobian)
-from algorithms.integrators.symplectic import (CM_P_POLY_INDICES,
-                                               CM_Q_POLY_INDICES)
-from algorithms.integrators.symplectic import N_CM_DOF as INTEGRATOR_N_CM_DOF
+from algorithms.integrators.symplectic import (P_POLY_INDICES,
+                                               Q_POLY_INDICES)
+from algorithms.integrators.symplectic import N_SYMPLECTIC_DOF
 from algorithms.integrators.symplectic import N_VARS_POLY, integrate_symplectic
 
 # --- Test Configuration ---
 MAX_DEG_TEST_HAM = 6  # Max degree for Taylor expansion of test Hamiltonians
-# For 1 DOF system, N_CM_DOF in integrator must be 1
-# We need to ensure the integrator's N_CM_DOF is consistent with our 1-DOF test case.
-# This might require a mechanism to set N_CM_DOF for the test, or the test adapts.
-# For now, let's assume the integrator is compiled with N_CM_DOF=1 for these tests,
-# or we focus on one pair of Q,P from a 2-DOF system and ensure other parts are zero.
-
-# For a 1-DOF system (Q, P):
-# Q_cm1 maps to poly_idx CM_Q_POLY_INDICES[0]
-# P_cm1 maps to poly_idx CM_P_POLY_INDICES[0]
 
 # Helper to create Numba typed list of lists for Jacobian
 def _numbafy_jacobian(jac_py_list_of_lists: list[list[np.ndarray]]) -> List[List[np.ndarray]]:
@@ -37,58 +28,52 @@ def _numbafy_jacobian(jac_py_list_of_lists: list[list[np.ndarray]]) -> List[List
     return jac_numba_typed
 
 # Helper to evaluate H(Q,P) given its polynomial representation
-def evaluate_hamiltonian_cm(
+def evaluate_hamiltonian_test_system(
     H_poly_list: List[np.ndarray],
-    cm_state_2dof: np.ndarray, # [Q1, P1] or [Q1,Q2,P1,P2] depending on N_CM_DOF
-    psi_tables: np.ndarray,
+    state_6d: np.ndarray, # Expects [q1,q2,q3,p1,p2,p3]
+    psi_tables: np.ndarray, # This argument might be unused if clmo is sufficient
     clmo_tables: List[np.ndarray]
     ) -> float:
     """
-    Evaluates the Hamiltonian for a given CM state.
-    Adapts to N_CM_DOF used by the integrator module.
+    Evaluates the Hamiltonian for a given 6D state.
+    The Hamiltonian polynomial itself is defined over 6 variables.
     """
-    if cm_state_2dof.shape[0] == 2: # Assuming 1-DOF for this specific helper context
-        q_cm_actual = np.array([cm_state_2dof[0]])
-        p_cm_actual = np.array([cm_state_2dof[1]])
-    elif cm_state_2dof.shape[0] == 4 and INTEGRATOR_N_CM_DOF == 2:
-        q_cm_actual = cm_state_2dof[0:INTEGRATOR_N_CM_DOF]
-        p_cm_actual = cm_state_2dof[INTEGRATOR_N_CM_DOF : 2*INTEGRATOR_N_CM_DOF]
-    else:
-        # Fallback or error for mismatched dimensions
-        # This part needs to be robust based on how N_CM_DOF is handled
-        raise ValueError(f"State dimension {cm_state_2dof.shape[0]} not compatible with N_CM_DOF {INTEGRATOR_N_CM_DOF}")
+    if state_6d.shape[0] != 2 * N_SYMPLECTIC_DOF:
+        raise ValueError(f"State dimension {state_6d.shape[0]} not compatible with N_SYMPLECTIC_DOF {N_SYMPLECTIC_DOF}")
 
-    point_6d = np.zeros(N_VARS_POLY, dtype=np.complex128)
-    for i in range(INTEGRATOR_N_CM_DOF):
-        point_6d[CM_Q_POLY_INDICES[i]] = q_cm_actual[i]
-        point_6d[CM_P_POLY_INDICES[i]] = p_cm_actual[i]
-
-    return polynomial_evaluate(H_poly_list, point_6d, clmo_tables).real
+    # The polynomial_evaluate function expects a 6D complex vector where variables
+    # are ordered according to their definition (q1,q2,q3,p1,p2,p3)
+    # Q_POLY_INDICES are [0,1,2], P_POLY_INDICES are [3,4,5]
+    eval_point_6d = np.zeros(N_VARS_POLY, dtype=np.complex128)
+    eval_point_6d[Q_POLY_INDICES] = state_6d[0:N_SYMPLECTIC_DOF] # q1,q2,q3
+    eval_point_6d[P_POLY_INDICES] = state_6d[N_SYMPLECTIC_DOF : 2*N_SYMPLECTIC_DOF] # p1,p2,p3
+    
+    return polynomial_evaluate(H_poly_list, eval_point_6d, clmo_tables).real
 
 
 @pytest.fixture(scope="module")
 def pendulum_hamiltonian_data():
     """
-    Prepares data for H = P^2/2 - cos(Q) ~ P^2/2 - (1 - Q^2/2! + Q^4/4! - Q^6/6!)
-    This is a 1-DOF system. We'll use the first CM DoF (Q_cm1, P_cm1).
-    Assumes INTEGRATOR_N_CM_DOF is 1 or adaptable.
-    If INTEGRATOR_N_CM_DOF = 2, we set Q2,P2 terms to zero.
+    Prepares data for H = P1^2/2 - cos(Q1) ~ P1^2/2 - (1 - Q1^2/2! + Q1^4/4! - Q1^6/6!)
+    This is a 1-DOF system, now embedded in the 3-DOF integrator framework.
+    Q1 corresponds to q1 (poly_idx 0), P1 to p1 (poly_idx 3).
+    Other DOFs (Q2,P2, Q3,P3) will have zero coefficients in this Hamiltonian.
     """
-    if INTEGRATOR_N_CM_DOF != 1 and INTEGRATOR_N_CM_DOF != 2:
-        pytest.skip("Pendulum test requires integrator N_CM_DOF to be 1 or adaptable to 1-DOF from 2-DOF.")
+    # N_SYMPLECTIC_DOF is now 3, this test adapts to it by focusing on the first DOF.
 
     psi_tables, clmo_tables_numba = init_index_tables(MAX_DEG_TEST_HAM)
     encode_dict_list = _create_encode_dict_from_clmo(clmo_tables_numba)
 
     H_poly = [np.zeros(psi_tables[N_VARS_POLY, d], dtype=np.complex128) for d in range(MAX_DEG_TEST_HAM + 1)]
 
-    # P_cm1 corresponds to poly_var index CM_P_POLY_INDICES[0]
-    # Q_cm1 corresponds to poly_var index CM_Q_POLY_INDICES[0]
-    idx_P_var = CM_P_POLY_INDICES[0]
-    idx_Q_var = CM_Q_POLY_INDICES[0]
+    # P1 corresponds to poly_var index Q_POLY_INDICES[0] for Q part, P_POLY_INDICES[0] for P part
+    # P1 is p1, maps to polynomial variable index 3
+    # Q1 is q1, maps to polynomial variable index 0
+    idx_P_var = P_POLY_INDICES[0] # Should be 3
+    idx_Q_var = Q_POLY_INDICES[0] # Should be 0
 
-    # H = P^2/2 - (1 - Q^2/2 + Q^4/24 - Q^6/720)
-    # P^2/2 term (degree 2)
+    # H = P1^2/2 - (1 - Q1^2/2 + Q1^4/24 - Q1^6/720)
+    # P1^2/2 term (degree 2)
     k_Psq = np.zeros(N_VARS_POLY, dtype=np.int64); k_Psq[idx_P_var] = 2
     idx_Psq_encoded = encode_multiindex(k_Psq, 2, encode_dict_list)
     if idx_Psq_encoded != -1: H_poly[2][idx_Psq_encoded] = 0.5
@@ -98,18 +83,18 @@ def pendulum_hamiltonian_data():
     idx_const_encoded = encode_multiindex(k_const, 0, encode_dict_list)
     if idx_const_encoded != -1: H_poly[0][idx_const_encoded] = -1.0
 
-    # +Q^2/2 term (degree 2)
+    # +Q1^2/2 term (degree 2)
     k_Qsq = np.zeros(N_VARS_POLY, dtype=np.int64); k_Qsq[idx_Q_var] = 2
     idx_Qsq_encoded = encode_multiindex(k_Qsq, 2, encode_dict_list)
-    if idx_Qsq_encoded != -1: H_poly[2][idx_Qsq_encoded] += 0.5 # Add to existing P^2/2 degree 2 array
+    if idx_Qsq_encoded != -1: H_poly[2][idx_Qsq_encoded] += 0.5 # Add to existing P1^2/2 degree 2 array
 
-    # -Q^4/24 term (degree 4)
+    # -Q1^4/24 term (degree 4)
     if MAX_DEG_TEST_HAM >= 4:
         k_Q4 = np.zeros(N_VARS_POLY, dtype=np.int64); k_Q4[idx_Q_var] = 4
         idx_Q4_encoded = encode_multiindex(k_Q4, 4, encode_dict_list)
         if idx_Q4_encoded != -1: H_poly[4][idx_Q4_encoded] = -1.0 / 24.0
 
-    # +Q^6/720 term (degree 6)
+    # +Q1^6/720 term (degree 6)
     if MAX_DEG_TEST_HAM >= 6:
         k_Q6 = np.zeros(N_VARS_POLY, dtype=np.int64); k_Q6[idx_Q_var] = 6
         idx_Q6_encoded = encode_multiindex(k_Q6, 6, encode_dict_list)
@@ -135,14 +120,10 @@ def pendulum_hamiltonian_data():
 def test_energy_conservation_pendulum(pendulum_hamiltonian_data):
     H_poly, jac_H, psi, clmo = pendulum_hamiltonian_data
 
-    # Ensure we use 1-DOF slice of CM variables for a 1-DOF Hamiltonian
-    if INTEGRATOR_N_CM_DOF == 1:
-        initial_state = np.array([np.pi/2, 0.0], dtype=np.float64) # Q0, P0
-    elif INTEGRATOR_N_CM_DOF == 2:
-        # Use Q1,P1 for pendulum, Q2,P2 are zero and should remain so
-        initial_state = np.array([np.pi/2, 0.0, 0.0, 0.0], dtype=np.float64) # Q1,Q2,P1,P2
-    else:
-        pytest.skip(f"Integrator N_CM_DOF {INTEGRATOR_N_CM_DOF} not directly testable with 1-DOF pendulum like this.")
+    # Pendulum is 1-DOF (q1, p1). Initial state is 6D [q1,q2,q3,p1,p2,p3]
+    initial_q1 = np.pi/2
+    initial_p1 = 0.0
+    initial_state = np.array([initial_q1, 0.0, 0.0, initial_p1, 0.0, 0.0], dtype=np.float64)
 
     t_final = 20.0
     num_steps = 2000
@@ -151,16 +132,16 @@ def test_energy_conservation_pendulum(pendulum_hamiltonian_data):
     omega_tao = 20.0 # Increased from 5.0 for better energy conservation
 
     trajectory = integrate_symplectic(
-        initial_cm_state_4d=initial_state, # Adapt based on INTEGRATOR_N_CM_DOF
+        initial_state_6d=initial_state, # Changed name
         t_values=times,
-        jac_H_cm_rn_typed=jac_H,
+        jac_H_rn_typed=jac_H, # Changed name
         clmo_H_typed=clmo,
         order=order,
         c_omega_heuristic=omega_tao
     )
 
-    initial_energy = evaluate_hamiltonian_cm(H_poly, trajectory[0], psi, clmo)
-    final_energy = evaluate_hamiltonian_cm(H_poly, trajectory[-1], psi, clmo)
+    initial_energy = evaluate_hamiltonian_test_system(H_poly, trajectory[0], psi, clmo)
+    final_energy = evaluate_hamiltonian_test_system(H_poly, trajectory[-1], psi, clmo)
     
     # Energy error for symplectic integrators should ideally not grow linearly
     # For a 4th order method, expect good conservation. The tolerance here is indicative.
@@ -173,12 +154,10 @@ def test_energy_conservation_pendulum(pendulum_hamiltonian_data):
 def test_reversibility_pendulum(pendulum_hamiltonian_data):
     H_poly, jac_H, psi, clmo = pendulum_hamiltonian_data
 
-    if INTEGRATOR_N_CM_DOF == 1:
-        initial_state = np.array([0.5, 0.3], dtype=np.float64)
-    elif INTEGRATOR_N_CM_DOF == 2:
-        initial_state = np.array([0.5, 0.0, 0.3, 0.0], dtype=np.float64)
-    else:
-        pytest.skip("Integrator N_CM_DOF not suitable for this 1-DOF pendulum reversibility test.")
+    # Pendulum is 1-DOF (q1, p1). Initial state is 6D [q1,q2,q3,p1,p2,p3]
+    initial_q1 = 0.5
+    initial_p1 = 0.3
+    initial_state = np.array([initial_q1, 0.0, 0.0, initial_p1, 0.0, 0.0], dtype=np.float64)
 
     t_final = 1.5
     num_steps = 150
@@ -208,18 +187,11 @@ def test_reversibility_pendulum(pendulum_hamiltonian_data):
 
 def test_final_state_error_pendulum(pendulum_hamiltonian_data):
     H_poly, jac_H, psi, clmo = pendulum_hamiltonian_data
-
-    if INTEGRATOR_N_CM_DOF == 1:
-        initial_state = np.array([np.pi/4, 0.0], dtype=np.float64)
-        # For H = P^2/2 - cos(Q), period is approx 2*pi for small Q0, P0=0.
-        # For Q0=pi/4, period is T = 4K(sin^2(Q0/2)) where K is elliptic integral.
-        # Let's use a time where we expect a certain state for a simpler reference if possible,
-        # or compare against a very high-accuracy solve_ivp.
-        # For simplicity, let's just check against a smaller number of steps to see convergence.
-    elif INTEGRATOR_N_CM_DOF == 2:
-        initial_state = np.array([np.pi/4, 0.0, 0.0, 0.0], dtype=np.float64)
-    else:
-        pytest.skip("Integrator N_CM_DOF not suitable for this 1-DOF pendulum final state test.")
+    
+    # Pendulum is 1-DOF (q1, p1). Initial state is 6D [q1,q2,q3,p1,p2,p3]
+    initial_q1 = np.pi/4
+    initial_p1 = 0.0
+    initial_state = np.array([initial_q1, 0.0, 0.0, initial_p1, 0.0, 0.0], dtype=np.float64)
 
     t_final = np.pi # Integrate for roughly half a period for Q0=pi/4, P0=0 (small angle)
     order = 6
@@ -261,16 +233,15 @@ def test_comparison_with_solve_ivp(pendulum_hamiltonian_data):
     
     H_poly, jac_H, psi, clmo = pendulum_hamiltonian_data
 
-    # Use very small initial displacement to stay firmly in region where Taylor series is accurate
-    if INTEGRATOR_N_CM_DOF == 1:
-        initial_state = np.array([0.1, 0.0], dtype=np.float64)  # Q0, P0
-    elif INTEGRATOR_N_CM_DOF == 2:
-        initial_state = np.array([0.1, 0.0, 0.0, 0.0], dtype=np.float64)  # Q1, Q2, P1, P2
-    else:
-        pytest.skip("Integrator N_CM_DOF not suitable for this solve_ivp comparison test")
+    # Pendulum is 1-DOF (q1, p1). Initial state for solve_ivp is [q1, p1]
+    # Symplectic integrator needs the full 6D state.
+    initial_q1 = 0.1
+    initial_p1 = 0.0
+    initial_state_scipy = np.array([initial_q1, initial_p1], dtype=np.float64)
+    initial_state_symplectic = np.array([initial_q1, 0.0, 0.0, initial_p1, 0.0, 0.0], dtype=np.float64)
 
     # Use shorter integration time and more points for accurate comparison
-    t_final = 100.0  # Just a couple of periods for a small oscillation
+    t_final = 100.0  
     num_points = int(t_final * 1000.0)
     t_eval = np.linspace(0, t_final, num_points)
     
@@ -282,6 +253,7 @@ def test_comparison_with_solve_ivp(pendulum_hamiltonian_data):
     def taylor_pendulum_ode(t, y):
         """
         The pendulum ODE system with Taylor expanded sin(Q)
+        y[0] is q1, y[1] is p1
         """
         Q, P = y[0], y[1]  # Extract from state vector
         # Use the same order of expansion as in the pendulum_hamiltonian_data fixture
@@ -293,7 +265,7 @@ def test_comparison_with_solve_ivp(pendulum_hamiltonian_data):
     scipy_solution = solve_ivp(
         taylor_pendulum_ode,
         [0, t_final],
-        initial_state[:2],  # Only use first 2 components for 1-DOF pendulum
+        initial_state_scipy,  # Use 2D state for solve_ivp on 1-DOF ODE
         method='RK45',
         rtol=1e-13,  # Very tight tolerance
         atol=1e-13,
@@ -308,7 +280,7 @@ def test_comparison_with_solve_ivp(pendulum_hamiltonian_data):
     omega_tao = 20.0
     
     symplectic_traj = integrate_symplectic(
-        initial_state,
+        initial_state_symplectic, # Use 6D state
         actual_times,
         jac_H,
         clmo,
@@ -316,13 +288,9 @@ def test_comparison_with_solve_ivp(pendulum_hamiltonian_data):
         c_omega_heuristic=omega_tao
     )
     
-    # Extract relevant DOF for comparison
-    if INTEGRATOR_N_CM_DOF == 1:
-        symplectic_Q = symplectic_traj[:, 0]
-        symplectic_P = symplectic_traj[:, 1]
-    else:  # 2-DOF case, use first DOF (assuming pendulum is in first DOF)
-        symplectic_Q = symplectic_traj[:, 0]
-        symplectic_P = symplectic_traj[:, INTEGRATOR_N_CM_DOF]
+    # Extract relevant DOF for comparison (q1, p1)
+    symplectic_Q = symplectic_traj[:, Q_POLY_INDICES[0]] # q1 is at index 0
+    symplectic_P = symplectic_traj[:, P_POLY_INDICES[0]] # p1 is at index N_SYMPLECTIC_DOF (which is 3)
     
     # Get reference solutions
     scipy_Q = scipy_solution.y[0]
@@ -332,8 +300,8 @@ def test_comparison_with_solve_ivp(pendulum_hamiltonian_data):
     # For a harmonic oscillator (which approximates pendulum for small angles):
     # Q(t) = Q₀cos(t) + P₀sin(t)
     # P(t) = P₀cos(t) - Q₀sin(t)
-    analytical_Q = initial_state[0] * np.cos(actual_times)
-    analytical_P = -initial_state[0] * np.sin(actual_times)
+    analytical_Q = initial_state_scipy[0] * np.cos(actual_times)
+    analytical_P = -initial_state_scipy[0] * np.sin(actual_times)
     
     # Calculate energies using the same Taylor expanded Hamiltonian
     # H = P^2/2 - (1 - Q^2/2 + Q^4/24 - Q^6/720)
@@ -342,28 +310,20 @@ def test_comparison_with_solve_ivp(pendulum_hamiltonian_data):
     
     for i in range(len(actual_times)):
         # Calculate energy for scipy solution using H_poly
-        if INTEGRATOR_N_CM_DOF == 1:
-            current_scipy_state = np.array([scipy_Q[i], scipy_P[i]])
-        else: # INTEGRATOR_N_CM_DOF == 2
-            # Pendulum motion is on Q1, P1. Scipy evolved only these.
-            current_scipy_state = np.array([scipy_Q[i], 0.0, scipy_P[i], 0.0])
-        scipy_energy.append(evaluate_hamiltonian_cm(H_poly, current_scipy_state, psi, clmo))
+        # Construct 6D state for evaluate_hamiltonian_test_system: [q1_scipy, 0,0, p1_scipy,0,0]
+        current_scipy_state_6d = np.array([scipy_Q[i], 0.0, 0.0, scipy_P[i], 0.0, 0.0])
+        scipy_energy.append(evaluate_hamiltonian_test_system(H_poly, current_scipy_state_6d, psi, clmo))
 
         # Calculate energy for analytical solution using H_poly
-        if INTEGRATOR_N_CM_DOF == 1:
-            current_analytical_state = np.array([analytical_Q[i], analytical_P[i]])
-        else: # INTEGRATOR_N_CM_DOF == 2
-            current_analytical_state = np.array([analytical_Q[i], 0.0, analytical_P[i], 0.0])
-        analytical_energy.append(evaluate_hamiltonian_cm(H_poly, current_analytical_state, psi, clmo))
+        # Construct 6D state: [q1_analytical, 0,0, p1_analytical,0,0]
+        current_analytical_state_6d = np.array([analytical_Q[i], 0.0, 0.0, analytical_P[i], 0.0, 0.0])
+        analytical_energy.append(evaluate_hamiltonian_test_system(H_poly, current_analytical_state_6d, psi, clmo))
     
-    # For symplectic, use our polynomial approximation evaluator
+    # For symplectic, the trajectory is already 6D
     symplectic_energy = []
     for i in range(len(actual_times)):
-        if INTEGRATOR_N_CM_DOF == 1:
-            state = np.array([symplectic_Q[i], symplectic_P[i]])
-        else:
-            state = symplectic_traj[i]
-        symplectic_energy.append(evaluate_hamiltonian_cm(H_poly, state, psi, clmo))
+        state_6d = symplectic_traj[i]
+        symplectic_energy.append(evaluate_hamiltonian_test_system(H_poly, state_6d, psi, clmo))
     
     # Convert to numpy arrays
     scipy_energy = np.array(scipy_energy)
