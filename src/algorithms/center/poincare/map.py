@@ -11,34 +11,6 @@ from algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
 from log_config import logger
 
 
-def _embed_cm_state(q2: float, q3: float, p2: float, p3: float) -> np.ndarray:
-    """
-    Embed a center-manifold state into a 6-vector.
-    
-    Parameters
-    ----------
-    q2 : float
-        Second position coordinate
-    q3 : float
-        Third position coordinate
-    p2 : float
-        Second momentum coordinate
-    p3 : float
-        Third momentum coordinate
-        
-    Returns
-    -------
-    np.ndarray
-        A 6-vector [0,q2,q3,0,p2,p3] with dtype float64
-    """
-    vec = np.zeros(2 * N_SYMPLECTIC_DOF, dtype=np.float64)
-    vec[1] = q2
-    vec[2] = q3
-    vec[N_SYMPLECTIC_DOF + 1] = p2
-    vec[N_SYMPLECTIC_DOF + 2] = p3
-    return vec
-
-
 def find_turning(
     q_or_p: str,
     h0: float,
@@ -202,8 +174,6 @@ def _hamiltonian_rhs(
     n_dof: int,
 ) -> np.ndarray:
     """Compute time derivative (Qdot, Pdot) for the 2*n_dof Hamiltonian system."""
-    Q = state6[:n_dof]
-    P = state6[n_dof : 2 * n_dof]
 
     dH_dQ = np.empty(n_dof)
     dH_dP = np.empty(n_dof)
@@ -234,6 +204,76 @@ def _rk4_step(
     return state6 + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
 
 
+@njit(fastmath=True, cache=True)
+def _embed_cm_state_jit(q2: float, q3: float, p2: float, p3: float, n_dof: int) -> np.ndarray:
+    vec = np.zeros(2 * n_dof, dtype=np.float64)
+    vec[1] = q2
+    vec[2] = q3
+    vec[n_dof + 1] = p2
+    vec[n_dof + 2] = p3
+    return vec
+
+
+@njit(cache=True)
+def _rk4_step(
+    state6: np.ndarray,
+    dt: float,
+    jac_H: List[List[np.ndarray]],
+    clmo: List[np.ndarray],
+    n_dof: int,
+) -> np.ndarray:
+    """Single RK4 step for the Hamiltonian ODE."""
+    k1 = _hamiltonian_rhs(state6, jac_H, clmo, n_dof)
+    k2 = _hamiltonian_rhs(state6 + 0.5 * dt * k1, jac_H, clmo, n_dof)
+    k3 = _hamiltonian_rhs(state6 + 0.5 * dt * k2, jac_H, clmo, n_dof)
+    k4 = _hamiltonian_rhs(state6 + dt * k3, jac_H, clmo, n_dof)
+    return state6 + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+
+
+@njit(cache=True)
+def _poincare_step_jit(
+    q2: float,
+    p2: float,
+    p3: float,
+    dt: float,
+    jac_H: List[List[np.ndarray]],
+    clmo: List[np.ndarray],
+    order: int,
+    max_steps: int,
+    use_symplectic: bool,
+    n_dof: int,
+) -> Tuple[int, float, float]:
+    """Return (flag, q2', p2').  flag=1 if success, 0 otherwise."""
+    state_old = _embed_cm_state_jit(q2, 0.0, p2, p3, n_dof)
+
+    for _ in range(max_steps):
+        if use_symplectic:
+            traj = integrate_symplectic(
+                initial_state_6d=state_old,
+                t_values=np.array([0.0, dt]),
+                jac_H_rn_typed=jac_H,
+                clmo_H_typed=clmo,
+                order=order,
+            )
+            state_new = traj[1]
+        else:
+            state_new = _rk4_step(state_old, dt, jac_H, clmo, n_dof)
+
+        q3_old = state_old[2]
+        q3_new = state_new[2]
+        p3_new = state_new[n_dof + 2]
+
+        if (q3_old * q3_new < 0.0) and (p3_new > 0.0):
+            alpha = q3_old / (q3_old - q3_new)
+            q2p = state_old[1] + alpha * (state_new[1] - state_old[1])
+            p2p = state_old[n_dof + 1] + alpha * (state_new[n_dof + 1] - state_old[n_dof + 1])
+            return 1, q2p, p2p
+
+        state_old = state_new
+
+    return 0, 0.0, 0.0
+
+
 def poincare_step(
     seed4: Tuple[float, float, float, float],
     dt: float,
@@ -243,85 +283,28 @@ def poincare_step(
     max_steps: int = 20_000,
     use_symplectic: bool = False,
 ) -> Tuple[float, float]:
-    """
-    Advance one Poincaré return of the seed using either the high-order
-    symplectic integrator or a simple RK4 integrator (faster for short epochs).
-
-    Parameters
-    ----------
-    seed4 : Tuple[float, float, float, float]
-        (q2, p2, q3=0, p3>0) on the section
-    dt : float
-        Small integration timestep
-    jac_H : List[List[np.ndarray]]
-        Jacobian of the Hamiltonian
-    clmo : List[np.ndarray]
-        CLMO index table
-    order : int, optional
-        Even order of Yoshida composition, by default 6
-    max_steps : int, optional
-        Safety cap on the number of sub-steps, by default 20_000
-    use_symplectic : bool, optional
-        If True, use the extended-phase symplectic integrator; otherwise use
-        an explicit RK4 step.  Default is False.
-
-    Returns
-    -------
-    Tuple[float, float]
-        (q2', p2') coordinates at the next intersection with q3=0, p3>0
-        
-    Raises
-    ------
-    ValueError
-        If seed is not on q3=0 section
-    RuntimeError
-        If Poincaré return is not detected within max_steps
-    """
+    """Python wrapper around fully JIT-compiled step loop."""
     q2, p2, q3, p3 = seed4
-    logger.debug(f"Starting Poincaré step from (q2,p2,q3,p3)=({q2:.4e},{p2:.4e},{q3:.4e},{p3:.4e})")
-    
+
     if not np.isclose(q3, 0.0):
-        logger.warning(f"Seed q3={q3:.4e} is not on section q3=0")
         raise ValueError("Seed must lie on q3=0 section.")
 
-    state_old = _embed_cm_state(q2, q3, p2, p3)
-    step_count = 0
-    
-    for step_count in range(max_steps):
-        # Progress log every 1000 steps
-        if step_count > 0 and step_count % 1000 == 0:
-            logger.info(f"Poincaré step in progress: {step_count}/{max_steps} iterations")
-            
-        # Integrate one step using chosen scheme
-        if use_symplectic:
-            traj = integrate_symplectic(
-                initial_state_6d=state_old,
-                t_values=np.array([0.0, dt]),
-                jac_H_rn_typed=jac_H,
-                clmo_H_typed=clmo,
-                order=order,
-            )
-            state_new = traj[-1]
-        else:
-            state_new = _rk4_step(state_old, dt, jac_H, clmo, N_SYMPLECTIC_DOF)
+    flag, q2p, p2p = _poincare_step_jit(
+        q2,
+        p2,
+        p3,
+        dt,
+        jac_H,
+        clmo,
+        order,
+        max_steps,
+        use_symplectic,
+        N_SYMPLECTIC_DOF,
+    )
 
-        q3_old = state_old[2]
-        q3_new = state_new[2]
-        p3_new = state_new[N_SYMPLECTIC_DOF + 2]
+    if flag == 1:
+        return float(q2p), float(p2p)
 
-        # Detect crossing q3=0 with positive p3.
-        if (q3_old * q3_new < 0.0) and (p3_new > 0.0):
-            alpha = q3_old / (q3_old - q3_new)
-            cross_state = state_old + alpha * (state_new - state_old)
-            q2p = cross_state[1]
-            p2p = cross_state[N_SYMPLECTIC_DOF + 1]
-            logger.debug(f"Found Poincaré return at step {step_count+1}: (q2',p2')=({q2p:.4e},{p2p:.4e})")
-            return float(q2p), float(p2p)
-
-        # Otherwise continue stepping.
-        state_old = state_new
-
-    logger.warning(f"Poincaré return not detected within {max_steps} steps")
     raise RuntimeError("Poincaré return not detected within max_steps.")
 
 
