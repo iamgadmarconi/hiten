@@ -1,15 +1,18 @@
+import os
+
 import numpy as np
 import pytest
-import os
 from numba.typed import List
 
-from algorithms.center.polynomial.base import init_index_tables, encode_multiindex
-from algorithms.center.polynomial.operations import polynomial_evaluate, polynomial_jacobian
-from algorithms.integrators.symplectic import (
-    integrate_symplectic,
-    N_CM_DOF as INTEGRATOR_N_CM_DOF, # Get N_CM_DOF used by integrator
-    N_VARS_POLY, CM_Q_POLY_INDICES, CM_P_POLY_INDICES
-)
+from algorithms.center.polynomial.base import (encode_multiindex,
+                                               init_index_tables,
+                                               _create_encode_dict_from_clmo)
+from algorithms.center.polynomial.operations import (polynomial_evaluate,
+                                                     polynomial_jacobian)
+from algorithms.integrators.symplectic import (CM_P_POLY_INDICES,
+                                               CM_Q_POLY_INDICES)
+from algorithms.integrators.symplectic import N_CM_DOF as INTEGRATOR_N_CM_DOF
+from algorithms.integrators.symplectic import N_VARS_POLY, integrate_symplectic
 
 # --- Test Configuration ---
 MAX_DEG_TEST_HAM = 6  # Max degree for Taylor expansion of test Hamiltonians
@@ -75,6 +78,8 @@ def pendulum_hamiltonian_data():
         pytest.skip("Pendulum test requires integrator N_CM_DOF to be 1 or adaptable to 1-DOF from 2-DOF.")
 
     psi_tables, clmo_tables_numba = init_index_tables(MAX_DEG_TEST_HAM)
+    encode_dict_list = _create_encode_dict_from_clmo(clmo_tables_numba)
+
     H_poly = [np.zeros(psi_tables[N_VARS_POLY, d], dtype=np.complex128) for d in range(MAX_DEG_TEST_HAM + 1)]
 
     # P_cm1 corresponds to poly_var index CM_P_POLY_INDICES[0]
@@ -85,29 +90,29 @@ def pendulum_hamiltonian_data():
     # H = P^2/2 - (1 - Q^2/2 + Q^4/24 - Q^6/720)
     # P^2/2 term (degree 2)
     k_Psq = np.zeros(N_VARS_POLY, dtype=np.int64); k_Psq[idx_P_var] = 2
-    idx_Psq_encoded = encode_multiindex(k_Psq, 2, psi_tables, clmo_tables_numba)
+    idx_Psq_encoded = encode_multiindex(k_Psq, 2, encode_dict_list)
     if idx_Psq_encoded != -1: H_poly[2][idx_Psq_encoded] = 0.5
 
     # -1 term (degree 0)
     k_const = np.zeros(N_VARS_POLY, dtype=np.int64)
-    idx_const_encoded = encode_multiindex(k_const, 0, psi_tables, clmo_tables_numba)
+    idx_const_encoded = encode_multiindex(k_const, 0, encode_dict_list)
     if idx_const_encoded != -1: H_poly[0][idx_const_encoded] = -1.0
 
     # +Q^2/2 term (degree 2)
     k_Qsq = np.zeros(N_VARS_POLY, dtype=np.int64); k_Qsq[idx_Q_var] = 2
-    idx_Qsq_encoded = encode_multiindex(k_Qsq, 2, psi_tables, clmo_tables_numba)
+    idx_Qsq_encoded = encode_multiindex(k_Qsq, 2, encode_dict_list)
     if idx_Qsq_encoded != -1: H_poly[2][idx_Qsq_encoded] += 0.5 # Add to existing P^2/2 degree 2 array
 
     # -Q^4/24 term (degree 4)
     if MAX_DEG_TEST_HAM >= 4:
         k_Q4 = np.zeros(N_VARS_POLY, dtype=np.int64); k_Q4[idx_Q_var] = 4
-        idx_Q4_encoded = encode_multiindex(k_Q4, 4, psi_tables, clmo_tables_numba)
+        idx_Q4_encoded = encode_multiindex(k_Q4, 4, encode_dict_list)
         if idx_Q4_encoded != -1: H_poly[4][idx_Q4_encoded] = -1.0 / 24.0
 
     # +Q^6/720 term (degree 6)
     if MAX_DEG_TEST_HAM >= 6:
         k_Q6 = np.zeros(N_VARS_POLY, dtype=np.int64); k_Q6[idx_Q_var] = 6
-        idx_Q6_encoded = encode_multiindex(k_Q6, 6, psi_tables, clmo_tables_numba)
+        idx_Q6_encoded = encode_multiindex(k_Q6, 6, encode_dict_list)
         if idx_Q6_encoded != -1: H_poly[6][idx_Q6_encoded] = 1.0 / 720.0
     
     # Convert H_poly to Numba typed list for internal consistency if polynomial_jacobian needs it
@@ -115,7 +120,13 @@ def pendulum_hamiltonian_data():
     for arr in H_poly:
         H_poly_numba.append(arr.copy())
 
-    jac_H_py = polynomial_jacobian(H_poly_numba, MAX_DEG_TEST_HAM, psi_tables, clmo_tables_numba)
+    jac_H_py = polynomial_jacobian(
+        H_poly_numba, 
+        MAX_DEG_TEST_HAM, 
+        psi_tables, 
+        clmo_tables_numba, 
+        encode_dict_list
+    )
     jac_H_numba = _numbafy_jacobian(jac_H_py)
 
     return H_poly_numba, jac_H_numba, psi_tables, clmo_tables_numba

@@ -1,18 +1,18 @@
 import cProfile
 import io
 import pstats
+
 import numpy as np
 
-from algorithms.center.manifold import center_manifold_cn, center_manifold_rn
-from algorithms.center.polynomial.base import init_index_tables
+from algorithms.center.manifold import center_manifold_rn
+from algorithms.center.poincare.flow import generate_hamiltonian_flow
+from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
+                                               init_index_tables)
 from algorithms.center.utils import format_cm_table
 from log_config import logger
 from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
-
-# Import the new flow generation function
-from algorithms.center.poincare.flow import generate_hamiltonian_flow
 
 MAX_DEG = 8
 TOL     = 1e-14
@@ -35,6 +35,7 @@ def build_three_body_system():
 def main() -> None:
     # ---------------- lookup tables for polynomial indexing --------------
     psi, clmo = init_index_tables(MAX_DEG)
+    encode_dict_list = _create_encode_dict_from_clmo(clmo)
 
     # ---------------- choose equilibrium point --------------------------
     system_EM, system_SE = build_three_body_system()
@@ -77,6 +78,7 @@ def main() -> None:
         max_deg_hamiltonian=MAX_DEG,
         psi_table=psi,
         clmo_table=clmo,
+        encode_dict_list=encode_dict_list,
         initial_cm_state_4d=initial_cm_state_4d,
         t_values=t_values,
         integrator_order=integrator_order

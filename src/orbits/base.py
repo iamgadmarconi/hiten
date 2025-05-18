@@ -13,7 +13,7 @@ import numpy.typing as npt
 
 from system import System
 from algorithms.energy import crtbp_energy, energy_to_jacobi
-from src.algorithms.integrators.standard import propagate_orbit
+from algorithms.integrators.standard import propagate_orbit
 from algorithms.dynamics import stability_indices, compute_stm
 from plots.plots import plot_orbit_rotating_frame, plot_orbit_inertial_frame
 from log_config import logger

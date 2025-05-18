@@ -3,7 +3,6 @@ from numba.typed import List
 
 from algorithms.center.polynomial.operations import polynomial_jacobian
 from algorithms.integrators.symplectic import integrate_symplectic
-from algorithms.center.polynomial.base import init_index_tables # For MAX_DEG if passed directly for jacobian's psi/clmo
 
 # It might be cleaner to pass psi and clmo directly if they are already computed
 # instead of MAX_DEG and recomputing them, but let's stick to the core logic first.
@@ -13,6 +12,7 @@ def generate_hamiltonian_flow(
     max_deg_hamiltonian: int,
     psi_table: np.ndarray,
     clmo_table: List[np.ndarray],
+    encode_dict_list: List,
     initial_cm_state_4d: np.ndarray,
     t_values: np.ndarray,
     integrator_order: int,
@@ -28,6 +28,7 @@ def generate_hamiltonian_flow(
         max_deg_hamiltonian (int): The maximum degree of the Hamiltonian polynomial.
         psi_table (np.ndarray): The PSI table corresponding to the Hamiltonian's structure.
         clmo_table (List[np.ndarray]): The CLMO table corresponding to the Hamiltonian's structure.
+        encode_dict_list (List[np.ndarray]): The list of encode dictionaries.
         initial_cm_state_4d (np.ndarray): Initial state [Q_cm1, Q_cm2, P_cm1, P_cm2].
         t_values (np.ndarray): Array of time points at which to output the state.
         integrator_order (int): Order of the symplectic integrator (must be even and positive).
@@ -48,7 +49,8 @@ def generate_hamiltonian_flow(
         poly_coeffs=hamiltonian_poly_coeffs,
         original_max_deg=max_deg_hamiltonian,
         psi_table=psi_table,
-        clmo_table=clmo_table
+        clmo_table=clmo_table,
+        encode_dict_list=encode_dict_list
     )
 
     # 2. Call the symplectic integrator

@@ -2,18 +2,19 @@ import numpy as np
 from numba import njit
 from numba.typed import List
 
-from algorithms.center.polynomial.base import (_factorial, decode_multiindex,
+from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
+                                               _factorial, decode_multiindex,
                                                make_poly)
-from algorithms.center.polynomial.operations import (polynomial_poisson_bracket,
-                                                     polynomial_zero_list,
-                                                     polynomial_clean)
-
+from algorithms.center.polynomial.operations import (
+    polynomial_clean, polynomial_poisson_bracket, polynomial_zero_list)
 from log_config import logger
 
 
 def lie_transform(point, H_init_coeffs: list[np.ndarray], psi: np.ndarray, clmo: np.ndarray, max_degree: int, tol: float = 1e-15) -> tuple[list[np.ndarray], list[np.ndarray]]:
     lam, om1, om2 = point.linear_modes()
     eta = np.array([lam, 1j*om1, 1j*om2], dtype=np.complex128)
+
+    encode_dict_list = _create_encode_dict_from_clmo(clmo)
 
     H_trans = [h.copy() for h in H_init_coeffs]
     G_total = polynomial_zero_list(max_degree, psi)
@@ -41,7 +42,7 @@ def lie_transform(point, H_init_coeffs: list[np.ndarray], psi: np.ndarray, clmo:
         for item_arr in H_trans:
             h_trans_typed.append(item_arr)
         # _apply_lie_transform expects a Numba List for H_coeffs_py and returns a Python list
-        H_trans = _apply_lie_transform(h_trans_typed, Gn, n, max_degree, psi, clmo, tol)
+        H_trans = _apply_lie_transform(h_trans_typed, Gn, n, max_degree, psi, clmo, encode_dict_list, tol)
         
         if n < len(G_total) and G_total[n].shape == Gn.shape:
              G_total[n] += Gn
@@ -106,7 +107,7 @@ def _solve_homological_equation(Hn_bad: np.ndarray, n: int, eta: np.ndarray, clm
 
 
 @njit(fastmath=True, cache=True)
-def _apply_lie_transform(H_coeffs_py: List[np.ndarray], G_n: np.ndarray, deg_G: int, N_max: int, psi: np.ndarray, clmo, tol: float) -> list[np.ndarray]:
+def _apply_lie_transform(H_coeffs_py: List[np.ndarray], G_n: np.ndarray, deg_G: int, N_max: int, psi: np.ndarray, clmo, encode_dict_list, tol: float) -> list[np.ndarray]:
 
     H_new_py = polynomial_zero_list(N_max, psi) # Use helper for clarity
     for i in range(min(len(H_coeffs_py), N_max + 1)):
@@ -143,7 +144,8 @@ def _apply_lie_transform(H_coeffs_py: List[np.ndarray], G_n: np.ndarray, deg_G: 
             G_n_as_list,
             N_max,
             psi,
-            clmo
+            clmo,
+            encode_dict_list
         )
         PB_term_list_typed = polynomial_clean(PB_term_list_typed, tol)
 

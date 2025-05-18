@@ -3,7 +3,8 @@ import math
 import numpy as np
 import symengine as se
 from numba import njit
-from numba.typed import List
+from numba.typed import List, Dict
+from numba import types
 
 from algorithms.variables import N_VARS
 
@@ -101,6 +102,42 @@ def init_index_tables(max_degree: int):
 # -----------------------------------------------------------------------------
 PSI_GLOBAL, CLMO_GLOBAL = init_index_tables(30)  # default; will be overwritten
 
+# -----------------------------------------------------------------------------
+# Build a Numba‐typed lookup: for each degree d, a dict mapping
+# packed_exponent → index in CLMO_GLOBAL[d]
+# -----------------------------------------------------------------------------
+ENCODE_DICT_GLOBAL = List.empty_list(
+    types.DictType(types.int64, types.int32)
+)
+for clmo_arr in CLMO_GLOBAL:
+    d = Dict.empty(
+        key_type=types.int64,
+        value_type=types.int32,
+    )
+    # populate the dict once
+    for idx, packed_val in enumerate(clmo_arr):
+        # Explicitly cast key to int64 and value to int32 for the dictionary
+        d[np.int64(packed_val)] = np.int32(idx)
+    ENCODE_DICT_GLOBAL.append(d)
+
+# -----------------------------------------------------------------------------
+
+@njit(fastmath=True, cache=True)
+def pack_multiindex(k: np.ndarray) -> np.uint32: # Changed exp_tuple to k and added type hints
+    """
+    Packs the exponents k_1 through k_5 into a 32-bit integer.
+    k_0 is not included in the packed value.
+    """
+    # This logic is derived from the original encode_multiindex and init_index_tables
+    packed = (
+        (k[1] & 0x3F)
+        | ((k[2] & 0x3F) << 6)
+        | ((k[3] & 0x3F) << 12)
+        | ((k[4] & 0x3F) << 18)
+        | ((k[5] & 0x3F) << 24)
+    )
+    return np.uint32(packed) # Ensure it returns uint32 as in init_index_tables
+
 @njit(fastmath=True, cache=True)
 def decode_multiindex(pos: int, degree: int, clmo) -> np.ndarray:
     """
@@ -144,7 +181,7 @@ def decode_multiindex(pos: int, degree: int, clmo) -> np.ndarray:
     return k
 
 @njit(fastmath=True, cache=True)
-def encode_multiindex(k: np.ndarray, degree: int, psi, clmo) -> int:
+def encode_multiindex(k: np.ndarray, degree: int, encode_dict_list: List) -> int:
     """
     Encode a multi-index to find its position in the coefficient array.
     
@@ -154,34 +191,36 @@ def encode_multiindex(k: np.ndarray, degree: int, psi, clmo) -> int:
         Array of length N_VARS containing the exponents [k_0, k_1, k_2, k_3, k_4, k_5]
     degree : int
         Degree of the monomial (should equal sum of elements in k)
-    psi : numpy.ndarray
-        Combinatorial table from init_index_tables
-    clmo : numba.typed.List
-        List of arrays containing packed multi-indices from init_index_tables
+    encode_dict_list : numba.typed.List
+        The precomputed list of dictionaries (e.g., ENCODE_DICT_GLOBAL)
+        mapping packed exponents (int64) to indices (int32).
         
     Returns
     -------
     int
         The position of the multi-index in the coefficient array for the given degree,
-        or -1 if the multi-index is not found
+        or -1 if the multi-index is not found.
         
     Notes
     -----
-    This function is the inverse of decode_multiindex. It packs the exponents
-    k_1 through k_5 into a 32-bit integer and searches for this value in clmo[degree].
+    This function uses a precomputed dictionary list for O(1) lookup.
+    It packs the exponents k_1 through k_5 into a 32-bit integer (uint32),
+    casts it to int64 for lookup, and expects an int32 index.
     """
-    packed = (
-        (k[1] & 0x3F)
-        | ((k[2] & 0x3F) << 6)
-        | ((k[3] & 0x3F) << 12)
-        | ((k[4] & 0x3F) << 18)
-        | ((k[5] & 0x3F) << 24)
-    )
-    arr = clmo[degree]
-    for idx in range(arr.shape[0]):
-        if arr[idx] == packed:
-            return idx
-    return -1
+    packed_val = pack_multiindex(k) # pack_multiindex returns uint32
+    packed_key = np.int64(packed_val) # Explicitly cast to int64 for dict key type
+
+    # Ensure degree is within the bounds of encode_dict_list
+    if degree < 0 or degree >= len(encode_dict_list):
+        return -1 # Degree out of bounds for the lookup table
+
+    current_dict = encode_dict_list[degree]
+    
+    # Check if key exists, then get it. This helps Numba with type stability.
+    if packed_key in current_dict:
+        return current_dict[packed_key]  # This should be int32, returned as int
+    else:
+        return -1 # Key not found
 
 @njit(fastmath=True, cache=True)
 def make_poly(degree: int, psi) -> np.ndarray:
@@ -209,3 +248,16 @@ def make_poly(degree: int, psi) -> np.ndarray:
     """
     size = psi[N_VARS, degree]
     return np.zeros(size, dtype=np.complex128)
+
+
+# Helper to create encode_dict_list from clmo_table
+@njit(fastmath=True, cache=True)
+def _create_encode_dict_from_clmo(clmo_table_local: List) -> List:
+    # Create an empty list that will hold dictionaries
+    encode_dict_list_local = List()
+    for clmo_arr in clmo_table_local:
+        d_map = Dict()
+        for i, packed_val in enumerate(clmo_arr):
+            d_map[np.int64(packed_val)] = np.int32(i)
+        encode_dict_list_local.append(d_map)
+    return encode_dict_list_local

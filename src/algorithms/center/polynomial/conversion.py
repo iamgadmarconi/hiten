@@ -6,7 +6,8 @@ from numba.typed import List
 
 from algorithms.center.polynomial.algebra import _get_degree
 from algorithms.center.polynomial.base import (decode_multiindex,
-                                               encode_multiindex, make_poly)
+                                               encode_multiindex, make_poly,
+                                               PSI_GLOBAL, CLMO_GLOBAL, ENCODE_DICT_GLOBAL)
 from algorithms.variables import N_VARS
 
 
@@ -17,6 +18,7 @@ def poly2sympy(poly_list: List[np.ndarray], vars_list: typing.List[sp.Symbol], p
     Each element in poly_list is an np.ndarray of coefficients for a specific degree,
     starting from degree 0.
     vars_list must contain N_VARS sympy symbols.
+    clmo is passed to decode_multiindex.
     """
     if len(vars_list) != N_VARS:
         raise ValueError(f"Expected {N_VARS} symbols in vars_list, but got {len(vars_list)}.")
@@ -24,17 +26,21 @@ def poly2sympy(poly_list: List[np.ndarray], vars_list: typing.List[sp.Symbol], p
     total_sympy_expr = sp.Integer(0)
     for degree, coeffs_for_degree in enumerate(poly_list):
         if coeffs_for_degree is not None and coeffs_for_degree.size > 0:
+            # hpoly2sympy needs clmo for decode_multiindex
             homogeneous_expr = hpoly2sympy(coeffs_for_degree, vars_list, psi, clmo)
             total_sympy_expr += homogeneous_expr
     return total_sympy_expr
 
 
-def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray, clmo: np.ndarray) -> List[np.ndarray]:
+def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray, clmo: np.ndarray, encode_dict_list: List) -> List[np.ndarray]:
     """
     Convert a sympy expression to a list of numpy arrays (custom polynomial representation)
     using the provided list of sympy variables.
     vars_list must contain N_VARS sympy symbols.
     The expression is assumed to be a polynomial in vars_list with numeric coefficients.
+    psi is used for make_poly and degree checks.
+    encode_dict_list is used for encode_multiindex.
+    clmo is not directly used by sympy2poly itself but often passed alongside psi.
     """
     if len(vars_list) != N_VARS:
         raise ValueError(f"Expected {N_VARS} symbols in vars_list, but got {len(vars_list)}.")
@@ -92,7 +98,7 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray
         term_degree = int(sum(k_np))
 
         # Get position in our coefficient array using encode_multiindex
-        pos = encode_multiindex(k_np, term_degree, psi, clmo)
+        pos = encode_multiindex(k_np, term_degree, encode_dict_list)
 
         if pos == -1:
             # This can happen if term_degree > max_degree for clmo or other encoding issues
@@ -140,6 +146,7 @@ def hpoly2sympy(poly_coeffs: np.ndarray, vars_list: typing.List[sp.Symbol], psi:
     Convert a homogeneous polynomial from numpy array of coefficients to sympy expression
     using the provided list of sympy variables.
     vars_list must contain N_VARS sympy symbols (checked by caller or implicitly here).
+    clmo is used for decode_multiindex.
     """
     if poly_coeffs is None or poly_coeffs.size == 0:
         return sp.Integer(0)

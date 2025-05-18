@@ -4,6 +4,7 @@ import sympy as sp
 from numba.typed import List
 
 from algorithms.center.polynomial.base import (CLMO_GLOBAL, PSI_GLOBAL,
+                                               ENCODE_DICT_GLOBAL,
                                                encode_multiindex, make_poly)
 from algorithms.center.polynomial.conversion import poly2sympy, sympy2poly
 from algorithms.variables import N_VARS
@@ -40,7 +41,7 @@ def create_custom_poly_list(max_deg: int, terms: dict) -> List[np.ndarray]:
         if deg >= len(py_list_of_coeffs):
              raise IndexError(f"Degree {deg} out of bounds for allocated list (max_deg {max_deg})")
 
-        pos = encode_multiindex(k_np, deg, PSI_GLOBAL, CLMO_GLOBAL)
+        pos = encode_multiindex(k_np, deg, ENCODE_DICT_GLOBAL)
         if pos != -1:
             # Ensure pos is within bounds for the specific degree's coefficient array
             if pos >= py_list_of_coeffs[deg].shape[0]:
@@ -87,7 +88,7 @@ def test_poly2sympy_zero():
 
 def test_sympy2poly_zero():
     expr = sp.Integer(0)
-    poly_list = sympy2poly(expr, s_vars, PSI_GLOBAL, CLMO_GLOBAL)
+    poly_list = sympy2poly(expr, s_vars, PSI_GLOBAL, CLMO_GLOBAL, ENCODE_DICT_GLOBAL)
     
     expected_coeffs = make_poly(0, PSI_GLOBAL) # array for degree 0, all zero
     expected_list = List()
@@ -104,10 +105,10 @@ def test_poly2sympy_constant():
 def test_sympy2poly_constant():
     const_val = 7.0
     expr = sp.Float(const_val)
-    poly_list = sympy2poly(expr, s_vars, PSI_GLOBAL, CLMO_GLOBAL)
+    poly_list = sympy2poly(expr, s_vars, PSI_GLOBAL, CLMO_GLOBAL, ENCODE_DICT_GLOBAL)
     
     expected_coeffs = make_poly(0, PSI_GLOBAL)
-    expected_coeffs[encode_multiindex(np.zeros(N_VARS, dtype=np.int64), 0, PSI_GLOBAL, CLMO_GLOBAL)] = const_val
+    expected_coeffs[encode_multiindex(np.zeros(N_VARS, dtype=np.int64), 0, ENCODE_DICT_GLOBAL)] = const_val
     expected_list = List()
     expected_list.append(expected_coeffs)
     
@@ -128,7 +129,7 @@ def test_poly2sympy_single_variable():
 def test_sympy2poly_single_variable():
     target_var_idx = 2 # s_vars[2] (x_2)
     expr = s_vars[target_var_idx]
-    poly_list = sympy2poly(expr, s_vars, PSI_GLOBAL, CLMO_GLOBAL)
+    poly_list = sympy2poly(expr, s_vars, PSI_GLOBAL, CLMO_GLOBAL, ENCODE_DICT_GLOBAL)
 
     k_tuple = [0]*N_VARS
     k_tuple[target_var_idx] = 1
@@ -143,7 +144,7 @@ def test_round_trip_simple_expression():
     expr_original = 2.0 * s_vars[0] + 3.0 * s_vars[1]**2
     
     # Sympy -> Custom Poly
-    poly_list_intermediate = sympy2poly(expr_original, s_vars, PSI_GLOBAL, CLMO_GLOBAL)
+    poly_list_intermediate = sympy2poly(expr_original, s_vars, PSI_GLOBAL, CLMO_GLOBAL, ENCODE_DICT_GLOBAL)
     
     # Custom Poly -> Sympy
     expr_reconstructed = poly2sympy(poly_list_intermediate, s_vars, PSI_GLOBAL, CLMO_GLOBAL)
@@ -151,7 +152,7 @@ def test_round_trip_simple_expression():
     assert sp.simplify(expr_original - expr_reconstructed) == 0
 
     # Custom Poly (from previous step) -> Sympy -> Custom Poly
-    poly_list_final = sympy2poly(expr_reconstructed, s_vars, PSI_GLOBAL, CLMO_GLOBAL)
+    poly_list_final = sympy2poly(expr_reconstructed, s_vars, PSI_GLOBAL, CLMO_GLOBAL, ENCODE_DICT_GLOBAL)
     assert compare_poly_lists(poly_list_intermediate, poly_list_final)
 
 
@@ -159,9 +160,9 @@ def test_round_trip_complex_coeffs():
     # P(x) = (1+2j)*x_0*x_1 + (3-1j)*x_2^3
     expr_original = (1+2j)*s_vars[0]*s_vars[1] + (3-1j)*s_vars[2]**3
     
-    poly_list_intermediate = sympy2poly(expr_original, s_vars, PSI_GLOBAL, CLMO_GLOBAL)
+    poly_list_intermediate = sympy2poly(expr_original, s_vars, PSI_GLOBAL, CLMO_GLOBAL, ENCODE_DICT_GLOBAL)
     expr_reconstructed = poly2sympy(poly_list_intermediate, s_vars, PSI_GLOBAL, CLMO_GLOBAL)
-    poly_list_final = sympy2poly(expr_reconstructed, s_vars, PSI_GLOBAL, CLMO_GLOBAL)
+    poly_list_final = sympy2poly(expr_reconstructed, s_vars, PSI_GLOBAL, CLMO_GLOBAL, ENCODE_DICT_GLOBAL)
 
     assert sp.simplify(expr_original - expr_reconstructed) == 0
     assert compare_poly_lists(poly_list_intermediate, poly_list_final)
@@ -198,7 +199,7 @@ def test_heterogeneous_polynomial_conversion():
     assert sp.simplify(generated_sympy_expr - expected_sympy_expr) == 0
     
     # Test sympy2poly using the expected Sympy expression
-    generated_custom_poly = sympy2poly(expected_sympy_expr, s_vars, PSI_GLOBAL, CLMO_GLOBAL)
+    generated_custom_poly = sympy2poly(expected_sympy_expr, s_vars, PSI_GLOBAL, CLMO_GLOBAL, ENCODE_DICT_GLOBAL)
     assert compare_poly_lists(custom_poly, generated_custom_poly)
 
 
@@ -214,7 +215,7 @@ def test_sympy2poly_vars_list_length_mismatch():
     wrong_vars = s_vars + [sp.Symbol('extra_var')] # N_VARS+1 symbols
     
     with pytest.raises(ValueError, match=f"Expected {N_VARS} symbols"):
-        sympy2poly(expr_dummy, wrong_vars, PSI_GLOBAL, CLMO_GLOBAL)
+        sympy2poly(expr_dummy, wrong_vars, PSI_GLOBAL, CLMO_GLOBAL, ENCODE_DICT_GLOBAL)
 
 def test_sympy2poly_degree_exceeds_psi_limit():
     # PSI_GLOBAL default max_degree is 30. Test with degree 31.
@@ -222,7 +223,7 @@ def test_sympy2poly_degree_exceeds_psi_limit():
     if MAX_DEGREE_FOR_PSI < 35: # Arbitrary check to ensure MAX_DEGREE_FOR_PSI is around 30
         expr_high_degree = s_vars[0]**(MAX_DEGREE_FOR_PSI + 1)
         with pytest.raises(ValueError, match="Expression degree .* exceeds precomputed table limit"):
-            sympy2poly(expr_high_degree, s_vars, PSI_GLOBAL, CLMO_GLOBAL)
+            sympy2poly(expr_high_degree, s_vars, PSI_GLOBAL, CLMO_GLOBAL, ENCODE_DICT_GLOBAL)
     else:
         pytest.skip("PSI_GLOBAL max_degree too high to reliably test exceeding limit.")
 
@@ -230,18 +231,18 @@ def test_sympy2poly_degree_exceeds_psi_limit():
 def test_sympy2poly_non_polynomial_expression():
     expr_non_poly = sp.sin(s_vars[0])
     with pytest.raises(TypeError, match="Could not convert expr to Sympy Poly object"):
-        sympy2poly(expr_non_poly, s_vars, PSI_GLOBAL, CLMO_GLOBAL)
+        sympy2poly(expr_non_poly, s_vars, PSI_GLOBAL, CLMO_GLOBAL, ENCODE_DICT_GLOBAL)
 
 def test_sympy2poly_non_numeric_coefficients():
     a = sp.Symbol('a') # Symbolic coefficient
     expr_symbolic_coeff = a * s_vars[0]
     with pytest.raises(TypeError, match="could not be converted to a Python numeric type"):
-        sympy2poly(expr_symbolic_coeff, s_vars, PSI_GLOBAL, CLMO_GLOBAL)
+        sympy2poly(expr_symbolic_coeff, s_vars, PSI_GLOBAL, CLMO_GLOBAL, ENCODE_DICT_GLOBAL)
 
 
 def test_round_trip():
     q1, q2, q3, p1, p2, p3 = sp.symbols('q1 q2 q3 p1 p2 p3')
     expr = q1**2 + q2**2 + q3**2 + p1**2 + p2**2 + p3**2 + p1*p2*p3 - 1j*p1
-    poly_list = sympy2poly(expr, [q1, q2, q3, p1, p2, p3], PSI_GLOBAL, CLMO_GLOBAL)
+    poly_list = sympy2poly(expr, [q1, q2, q3, p1, p2, p3], PSI_GLOBAL, CLMO_GLOBAL, ENCODE_DICT_GLOBAL)
     expr_reconstructed = poly2sympy(poly_list, [q1, q2, q3, p1, p2, p3], PSI_GLOBAL, CLMO_GLOBAL)
     assert sp.simplify(expr - expr_reconstructed) == 0
