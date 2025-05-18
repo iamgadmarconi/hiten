@@ -11,7 +11,7 @@ from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
 
-MAX_DEG = 8
+MAX_DEG = 12
 TOL     = 1e-14
 
 
@@ -42,7 +42,7 @@ def main() -> None:
     L2_SE        = system_SE.get_libration_point(2)   # Sun‑Earth L₂
 
     # ---------------- centre‑manifold reduction -------------------------
-    H_cm_rn_full = center_manifold_rn(L1_SE, psi, clmo, MAX_DEG)
+    H_cm_rn_full = center_manifold_rn(L2_EM, psi, clmo, MAX_DEG)
     print("\n")
     print("Centre-manifold Hamiltonian (deg 2 to 5) in real NF variables (q2, p2, q3, p3)\n")
     print(format_cm_table(H_cm_rn_full, clmo))
@@ -52,12 +52,16 @@ def main() -> None:
 
     H0_LEVELS = [0.20, 0.40, 0.60, 1.00]  # Example energy levels from literature
 
-    dt = 1e-1
-    USE_SYMPLECTIC = False  # Set True to enforce Yoshida integrator
-    Nq = 150  # grid resolution in q2
-    Np = 150  # grid resolution in p2
+    dt = 1e-2
+    USE_SYMPLECTIC = False  # Set True to enforce symplectic integrator
+    Nq = 200  # grid resolution in q2
+    Np = 200  # grid resolution in p2
 
-    for h0 in H0_LEVELS:
+    # Create a figure with 2x2 subplots
+    fig, axs = plt.subplots(2, 2, figsize=(8, 8))
+    axs = axs.flatten()  # Flatten to easily index
+
+    for i, h0 in enumerate(H0_LEVELS):
         logger.info("Computing Poincaré map for h0=%.3f", h0)
         pts = compute_poincare_map_for_energy(
             h0=h0,
@@ -75,15 +79,21 @@ def main() -> None:
 
         logger.info("Obtained %d section points (h0=%.3f)", pts.shape[0], h0)
 
-        plt.figure(figsize=(4, 4))
-        plt.scatter(pts[:, 0], pts[:, 1], s=1)
-        plt.gca().set_aspect("equal", adjustable="box")
-        plt.xlabel(r"$q_2'$")
-        plt.ylabel(r"$p_2'$")
-        plt.title(f"Poincaré section, h0={h0}")
-        plt.tight_layout()
+        # Plot in the corresponding subplot
+        axs[i].scatter(pts[:, 0], pts[:, 1], s=1)
+        axs[i].set_aspect("equal", adjustable="box")
+        axs[i].set_xlabel(r"$q_2'$")
+        axs[i].set_ylabel(r"$p_2'$")
+        axs[i].set_title(f"h={h0}")
+        
+        # Set axis limits based on data
+        max_abs_val = max(abs(pts[:, 0].max()), abs(pts[:, 0].min()), 
+                            abs(pts[:, 1].max()), abs(pts[:, 1].min()))
+        axs[i].set_xlim(-max_abs_val, max_abs_val)
+        axs[i].set_ylim(-max_abs_val, max_abs_val)
 
-        plt.show()
+    plt.tight_layout()
+    plt.show()
 
 
 if __name__ == "__main__":

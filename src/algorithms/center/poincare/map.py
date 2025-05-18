@@ -1,7 +1,7 @@
 from typing import List, Optional, Tuple
 
 import numpy as np
-from numba import njit
+from numba import njit, prange
 from scipy.optimize import root_scalar
 
 from algorithms.center.polynomial.operations import (polynomial_evaluate,
@@ -215,22 +215,6 @@ def _embed_cm_state_jit(q2: float, q3: float, p2: float, p3: float, n_dof: int) 
 
 
 @njit(cache=True)
-def _rk4_step(
-    state6: np.ndarray,
-    dt: float,
-    jac_H: List[List[np.ndarray]],
-    clmo: List[np.ndarray],
-    n_dof: int,
-) -> np.ndarray:
-    """Single RK4 step for the Hamiltonian ODE."""
-    k1 = _hamiltonian_rhs(state6, jac_H, clmo, n_dof)
-    k2 = _hamiltonian_rhs(state6 + 0.5 * dt * k1, jac_H, clmo, n_dof)
-    k3 = _hamiltonian_rhs(state6 + 0.5 * dt * k2, jac_H, clmo, n_dof)
-    k4 = _hamiltonian_rhs(state6 + dt * k3, jac_H, clmo, n_dof)
-    return state6 + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
-
-
-@njit(cache=True)
 def _poincare_step_jit(
     q2: float,
     p2: float,
@@ -399,33 +383,77 @@ def compute_poincare_map_for_energy(
     
     logger.info(f"Found {len(seeds)} valid seeds out of {total_points} grid points")
 
-    # 3.  Iterate each seed once through the section.
-    logger.info("Computing Poincaré map points")
-    map_pts: list[Tuple[float, float]] = []
-    successful_iterations = 0
-    failed_iterations = 0
-    
-    for i, seed in enumerate(seeds):
-        if i % max(1, len(seeds) // 10) == 0:
-            percentage = int(100 * i / len(seeds))
-            logger.info(f"Poincaré iteration progress: {percentage}%, mapped {successful_iterations}/{i} seeds")
-            
-        try:
-            map_pt = poincare_step(
-                seed4=seed,
-                dt=dt,
-                jac_H=jac_H,
-                clmo=clmo_table,
-                order=integrator_order,
-                max_steps=max_steps,
-                use_symplectic=use_symplectic,
-            )
-            map_pts.append(map_pt)
-            successful_iterations += 1
-        except RuntimeError:
-            # Skip seeds that fail to return within max_steps.
-            failed_iterations += 1
-            continue
+    # 3.  Iterate all seeds in a parallel JIT kernel.
+    logger.info("Computing Poincaré map points in parallel")
 
-    logger.info(f"Completed Poincaré map with {successful_iterations} points, {failed_iterations} failed iterations")
-    return np.asarray(map_pts, dtype=np.float64)
+    if len(seeds) == 0:
+        return np.empty((0, 2), dtype=np.float64)
+
+    seeds_arr = np.asarray(seeds, dtype=np.float64)
+
+    success_flags, q2p_arr, p2p_arr = _poincare_map_parallel(
+        seeds_arr,
+        dt,
+        jac_H,
+        clmo_table,
+        integrator_order,
+        max_steps,
+        use_symplectic,
+        N_SYMPLECTIC_DOF,
+    )
+
+    n_success = int(np.sum(success_flags))
+    logger.info(f"Completed Poincaré map: {n_success} successful seeds out of {len(seeds)}")
+
+    map_pts = np.empty((n_success, 2), dtype=np.float64)
+    idx = 0
+    for i in range(success_flags.shape[0]):
+        if success_flags[i]:
+            map_pts[idx, 0] = q2p_arr[i]
+            map_pts[idx, 1] = p2p_arr[i]
+            idx += 1
+
+    return map_pts
+
+
+@njit(parallel=True, cache=True)
+def _poincare_map_parallel(
+    seeds: np.ndarray,  # (N,4) float64
+    dt: float,
+    jac_H: List[List[np.ndarray]],
+    clmo: List[np.ndarray],
+    order: int,
+    max_steps: int,
+    use_symplectic: bool,
+    n_dof: int,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return (success flags, q2p array, p2p array) processed in parallel."""
+    n_seeds = seeds.shape[0]
+    success = np.zeros(n_seeds, dtype=np.int64)
+    q2p_out = np.empty(n_seeds, dtype=np.float64)
+    p2p_out = np.empty(n_seeds, dtype=np.float64)
+
+    for i in prange(n_seeds):
+        q2 = seeds[i, 0]
+        p2 = seeds[i, 1]
+        p3 = seeds[i, 3]  # q3 column is seeds[:,2] which is zero
+
+        flag, q2_new, p2_new = _poincare_step_jit(
+            q2,
+            p2,
+            p3,
+            dt,
+            jac_H,
+            clmo,
+            order,
+            max_steps,
+            use_symplectic,
+            n_dof,
+        )
+
+        if flag == 1:
+            success[i] = 1
+            q2p_out[i] = q2_new
+            p2p_out[i] = p2_new
+
+    return success, q2p_out, p2p_out
