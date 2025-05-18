@@ -2,7 +2,8 @@ import numpy as np
 from numba.typed import List
 
 from algorithms.center.polynomial.operations import polynomial_jacobian
-from algorithms.integrators.symplectic import integrate_symplectic, N_SYMPLECTIC_DOF
+from algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
+                                               integrate_symplectic)
 
 
 def generate_hamiltonian_flow(
@@ -58,8 +59,8 @@ def generate_hamiltonian_flow(
     # 1. Compute Jacobian of the restricted Hamiltonian
     # This jacobian is for the 6-variable polynomial representation
     jacobian_H_cm_rn = polynomial_jacobian(
-        poly_coeffs=hamiltonian_poly_coeffs,
-        original_max_deg=max_deg_hamiltonian,
+        poly_p=hamiltonian_poly_coeffs,
+        max_deg=max_deg_hamiltonian,
         psi_table=psi_table,
         clmo_table=clmo_table,
         encode_dict_list=encode_dict_list
