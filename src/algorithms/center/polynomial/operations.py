@@ -3,13 +3,10 @@ from numba import njit, prange
 from numba.typed import List
 
 from algorithms.center.polynomial.algebra import (_poly_clean, _poly_diff,
-                                                  _poly_mul, _poly_poisson,
-                                                  _poly_scale, _poly_evaluate,
-                                                  _poly_integrate)
-from algorithms.center.polynomial.base import (CLMO_GLOBAL, PSI_GLOBAL,
-                                               ENCODE_DICT_GLOBAL,
-                                               encode_multiindex,
-                                               init_index_tables, make_poly)
+                                                  _poly_evaluate,
+                                                  _poly_integrate, _poly_mul,
+                                                  _poly_poisson)
+from algorithms.center.polynomial.base import encode_multiindex, make_poly
 from algorithms.variables import N_VARS
 
 

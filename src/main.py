@@ -14,7 +14,7 @@ from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
 
-MAX_DEG = 8
+MAX_DEG = 18
 TOL     = 1e-14
 
 
@@ -49,8 +49,6 @@ def main() -> None:
     # H_cm_cn_full = center_manifold_cn(L1_SE, psi, clmo, MAX_DEG)
     H_cm_rn_full = center_manifold_rn(L1_SE, psi, clmo, MAX_DEG)
     # ---------------- pretty print (Table 1 style) ----------------------
-    # print("Centre-manifold Hamiltonian (deg 2 to 5) in complex NF variables\n")
-    # print(format_cm_table(H_cm_cn_full, clmo))
     print("\n")
     print("Centre-manifold Hamiltonian (deg 2 to 5) in real NF variables (q2, p2, q3, p3)\n")
     print(format_cm_table(H_cm_rn_full, clmo))
