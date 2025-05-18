@@ -53,6 +53,7 @@ def main() -> None:
     H0_LEVELS = [0.20, 0.40, 0.60, 1.00]  # Example energy levels from literature
 
     dt = 1e-3
+    USE_SYMPLECTIC = False  # Set True to enforce Yoshida integrator
     Nq = 151  # grid resolution in q2
     Np = 151  # grid resolution in p2
 
@@ -69,6 +70,7 @@ def main() -> None:
             Nq=Nq,
             Np=Np,
             integrator_order=6,
+            use_symplectic=USE_SYMPLECTIC,
         )
 
         logger.info("Obtained %d section points (h0=%.3f)", pts.shape[0], h0)

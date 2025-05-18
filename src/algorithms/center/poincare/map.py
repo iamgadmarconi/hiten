@@ -1,6 +1,7 @@
 from typing import List, Optional, Tuple
 
 import numpy as np
+from numba import njit
 from scipy.optimize import root_scalar
 
 from algorithms.center.polynomial.operations import (polynomial_evaluate,
@@ -193,6 +194,46 @@ def solve_p3(
     return None
 
 
+@njit(cache=True)
+def _hamiltonian_rhs(
+    state6: np.ndarray,
+    jac_H: List[List[np.ndarray]],
+    clmo: List[np.ndarray],
+    n_dof: int,
+) -> np.ndarray:
+    """Compute time derivative (Qdot, Pdot) for the 2*n_dof Hamiltonian system."""
+    Q = state6[:n_dof]
+    P = state6[n_dof : 2 * n_dof]
+
+    dH_dQ = np.empty(n_dof)
+    dH_dP = np.empty(n_dof)
+
+    for i in range(n_dof):
+        dH_dQ[i] = polynomial_evaluate(jac_H[i], state6.astype(np.complex128), clmo).real
+        dH_dP[i] = polynomial_evaluate(jac_H[n_dof + i], state6.astype(np.complex128), clmo).real
+
+    rhs = np.empty_like(state6)
+    rhs[:n_dof] = dH_dP  # dq/dt
+    rhs[n_dof : 2 * n_dof] = -dH_dQ  # dp/dt
+    return rhs
+
+
+@njit(fastmath=True, cache=True)
+def _rk4_step(
+    state6: np.ndarray,
+    dt: float,
+    jac_H: List[List[np.ndarray]],
+    clmo: List[np.ndarray],
+    n_dof: int,
+) -> np.ndarray:
+    """Single RK4 step for the Hamiltonian ODE."""
+    k1 = _hamiltonian_rhs(state6, jac_H, clmo, n_dof)
+    k2 = _hamiltonian_rhs(state6 + 0.5 * dt * k1, jac_H, clmo, n_dof)
+    k3 = _hamiltonian_rhs(state6 + 0.5 * dt * k2, jac_H, clmo, n_dof)
+    k4 = _hamiltonian_rhs(state6 + dt * k3, jac_H, clmo, n_dof)
+    return state6 + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
+
+
 def poincare_step(
     seed4: Tuple[float, float, float, float],
     dt: float,
@@ -200,9 +241,11 @@ def poincare_step(
     clmo: List[np.ndarray],
     order: int = 6,
     max_steps: int = 20_000,
+    use_symplectic: bool = False,
 ) -> Tuple[float, float]:
     """
-    Advance one Poincaré return of the seed using the symplectic integrator.
+    Advance one Poincaré return of the seed using either the high-order
+    symplectic integrator or a simple RK4 integrator (faster for short epochs).
 
     Parameters
     ----------
@@ -218,6 +261,9 @@ def poincare_step(
         Even order of Yoshida composition, by default 6
     max_steps : int, optional
         Safety cap on the number of sub-steps, by default 20_000
+    use_symplectic : bool, optional
+        If True, use the extended-phase symplectic integrator; otherwise use
+        an explicit RK4 step.  Default is False.
 
     Returns
     -------
@@ -246,15 +292,18 @@ def poincare_step(
         if step_count > 0 and step_count % 1000 == 0:
             logger.info(f"Poincaré step in progress: {step_count}/{max_steps} iterations")
             
-        # Integrate by a single step dt using the high-order integrator.
-        traj = integrate_symplectic(
-            initial_state_6d=state_old,
-            t_values=np.array([0.0, dt]),
-            jac_H_rn_typed=jac_H,
-            clmo_H_typed=clmo,
-            order=order,
-        )
-        state_new = traj[-1]
+        # Integrate one step using chosen scheme
+        if use_symplectic:
+            traj = integrate_symplectic(
+                initial_state_6d=state_old,
+                t_values=np.array([0.0, dt]),
+                jac_H_rn_typed=jac_H,
+                clmo_H_typed=clmo,
+                order=order,
+            )
+            state_new = traj[-1]
+        else:
+            state_new = _rk4_step(state_old, dt, jac_H, clmo, N_SYMPLECTIC_DOF)
 
         q3_old = state_old[2]
         q3_new = state_new[2]
@@ -288,6 +337,7 @@ def compute_poincare_map_for_energy(
     Nq: int = 201,
     Np: int = 201,
     integrator_order: int = 6,
+    use_symplectic: bool = False,
 ) -> np.ndarray:
     """
     Compute Poincaré map points at a given energy level.
@@ -316,6 +366,9 @@ def compute_poincare_map_for_energy(
         Number of p2 values, by default 201
     integrator_order : int, optional
         Order of symplectic integrator, by default 6
+    use_symplectic : bool, optional
+        If True, use the extended-phase symplectic integrator; otherwise use
+        an explicit RK4 step.  Default is False.
 
     Returns
     -------
@@ -382,6 +435,7 @@ def compute_poincare_map_for_energy(
                 clmo=clmo_table,
                 order=integrator_order,
                 max_steps=max_steps,
+                use_symplectic=use_symplectic,
             )
             map_pts.append(map_pt)
             successful_iterations += 1
