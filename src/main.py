@@ -11,7 +11,7 @@ from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
 
-MAX_DEG = 12
+MAX_DEG = 8
 TOL     = 1e-14
 
 
@@ -52,10 +52,10 @@ def main() -> None:
 
     H0_LEVELS = [0.20, 0.40, 0.60, 1.00]  # Example energy levels from literature
 
-    dt = 1e-3
+    dt = 1e-1
     USE_SYMPLECTIC = False  # Set True to enforce Yoshida integrator
-    Nq = 151  # grid resolution in q2
-    Np = 151  # grid resolution in p2
+    Nq = 150  # grid resolution in q2
+    Np = 150  # grid resolution in p2
 
     for h0 in H0_LEVELS:
         logger.info("Computing Poincaré map for h0=%.3f", h0)
