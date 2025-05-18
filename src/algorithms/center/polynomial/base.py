@@ -1,16 +1,29 @@
-import math
-
 import numpy as np
-import symengine as se
-from numba import njit
-from numba.typed import List, Dict
-from numba import types
+from numba import njit, types
+from numba.typed import Dict, List
 
 from algorithms.variables import N_VARS
 
 
 @njit(fastmath=True,cache=True)
 def _factorial(n: int) -> int:
+    """
+    Calculate the factorial of a non-negative integer.
+    
+    Parameters
+    ----------
+    n : int
+        Non-negative integer to calculate factorial for
+        
+    Returns
+    -------
+    int
+        The factorial n! = n * (n-1) * ... * 2 * 1
+        
+    Notes
+    -----
+    Optimized for Numba with fastmath and caching
+    """
     if n < 0:
         pass
     res = 1
@@ -20,6 +33,27 @@ def _factorial(n: int) -> int:
 
 @njit(fastmath=True, cache=True)
 def _combinations(n: int, k: int) -> int:
+    """
+    Calculate the binomial coefficient C(n,k) = n! / (k! * (n-k)!).
+    
+    Parameters
+    ----------
+    n : int
+        Total number of items
+    k : int
+        Number of items to choose
+        
+    Returns
+    -------
+    int
+        The number of ways to choose k items from n items,
+        which equals n! / (k! * (n-k)!)
+        
+    Notes
+    -----
+    Implementation uses an optimized approach to avoid calculating
+    full factorials, which could cause numeric overflow for large values.
+    """
     if k < 0 or k > n:
         return 0
     if k == 0 or k == n:
@@ -123,10 +157,29 @@ for clmo_arr in CLMO_GLOBAL:
 # -----------------------------------------------------------------------------
 
 @njit(fastmath=True, cache=True)
-def pack_multiindex(k: np.ndarray) -> np.uint32: # Changed exp_tuple to k and added type hints
+def pack_multiindex(k: np.ndarray) -> np.uint32:
     """
-    Packs the exponents k_1 through k_5 into a 32-bit integer.
-    k_0 is not included in the packed value.
+    Pack the exponents k_1 through k_5 into a 32-bit integer.
+    
+    Parameters
+    ----------
+    k : numpy.ndarray
+        Array of length N_VARS containing the exponents [k_0, k_1, k_2, k_3, k_4, k_5]
+        
+    Returns
+    -------
+    numpy.uint32
+        A packed 32-bit integer where:
+        - k[1] uses bits 0-5
+        - k[2] uses bits 6-11
+        - k[3] uses bits 12-17
+        - k[4] uses bits 18-23
+        - k[5] uses bits 24-29
+        
+    Notes
+    -----
+    k[0] is not included in the packed value. Each exponent uses 6 bits,
+    limiting its maximum value to 63.
     """
     # This logic is derived from the original encode_multiindex and init_index_tables
     packed = (
@@ -252,12 +305,32 @@ def make_poly(degree: int, psi) -> np.ndarray:
 
 # Helper to create encode_dict_list from clmo_table
 @njit(fastmath=True, cache=True)
-def _create_encode_dict_from_clmo(clmo_table_local: List) -> List:
+def _create_encode_dict_from_clmo(clmo_table: List) -> List:
+    """
+    Create a list of dictionaries mapping packed multi-indices to their positions.
+    
+    Parameters
+    ----------
+    clmo_table : numba.typed.List
+        List of arrays where each array contains packed multi-indices for a specific degree
+        
+    Returns
+    -------
+    numba.typed.List
+        List of dictionaries where each dictionary maps a packed multi-index (int64)
+        to its position (int32) in the corresponding clmo_table array
+        
+    Notes
+    -----
+    This is a helper function used to build the ENCODE_DICT_GLOBAL structure.
+    Each dictionary provides O(1) lookup time for finding the position
+    of a multi-index in the coefficient array.
+    """
     # Create an empty list that will hold dictionaries
-    encode_dict_list_local = List()
-    for clmo_arr in clmo_table_local:
+    encode_dict_list = List()
+    for clmo_arr in clmo_table:
         d_map = Dict()
         for i, packed_val in enumerate(clmo_arr):
             d_map[np.int64(packed_val)] = np.int32(i)
-        encode_dict_list_local.append(d_map)
-    return encode_dict_list_local
+        encode_dict_list.append(d_map)
+    return encode_dict_list

@@ -13,15 +13,26 @@ CM_P_POLY_INDICES = np.array([4, 5], dtype=np.int64)
 @njit(fastmath=True, cache=True)
 def _get_tao_omega (delta: float, order: int, c: float = 10.0) -> float:
     """
-    Uses a heuristic to give an estimate for the binding coefficient omega 
-    in the nonseparable Hamiltonian integrator.
-    The rule from the Tao paper is that the timestep `delta` must be much
-    smaller than `omega**(-1/order)`.  If we define `x is much smaller than y` 
-    to be `c*x <= y` for a large positive constant c, then the condition is equivalent to
-
-        omega <= (c*delta)**(-order),
-
-    and we will use that bound as the heuristic assignment.
+    Calculate the frequency parameter for the symplectic integrator.
+    
+    Parameters
+    ----------
+    delta : float
+        Time step size
+    order : int
+        Order of the symplectic integrator
+    c : float, optional
+        Scaling parameter, default is 10.0
+        
+    Returns
+    -------
+    float
+        Frequency parameter tau*omega for the symplectic scheme
+        
+    Notes
+    -----
+    The calculated value scales with (c*delta)^(-order) to ensure 
+    numerical stability for larger time steps.
     """
     return (c * delta)**(-float(order))
 
@@ -29,18 +40,27 @@ def _get_tao_omega (delta: float, order: int, c: float = 10.0) -> float:
 @njit(cache=True)
 def _construct_6d_eval_point(Q_cm_current_ndof: np.ndarray, P_cm_current_ndof: np.ndarray) -> np.ndarray:
     """
-    Constructs the 6D point for polynomial evaluation from CM Q-variables and CM P-variables.
-    The CM Hamiltonian H_cm_rn, while effectively a function of 2*N_CM_DOF variables,
-    is still formally represented as a polynomial in N_VARS_POLY variables where
-    coefficients for q1_cn and p1_cn related terms are zero.
-
-    Args:
-        Q_cm_current_ndof (np.ndarray): Current CM Q-variables [Q_cm1, Q_cm2, ... N_CM_DOF terms].
-        P_cm_current_ndof (np.ndarray): Current CM P-variables [P_cm1, P_cm2, ... N_CM_DOF terms].
-
-    Returns:
-        np.ndarray: 6D point (q1,q2,q3,p1,p2,p3)_cn with q1_cn=0, p1_cn=0,
-                    and other components filled from CM variables.
+    Construct a 6D evaluation point from center manifold position and momentum vectors.
+    
+    Parameters
+    ----------
+    Q_cm_current_ndof : numpy.ndarray
+        Position vector in center manifold coordinates (dimension N_CM_DOF)
+    P_cm_current_ndof : numpy.ndarray
+        Momentum vector in center manifold coordinates (dimension N_CM_DOF)
+        
+    Returns
+    -------
+    numpy.ndarray
+        6D evaluation point for polynomial evaluation
+        
+    Notes
+    -----
+    Maps the reduced center manifold coordinates (Q,P) to their 
+    corresponding positions in the full 6D state vector, where:
+    - Center manifold Q variables map to indices 1,2 (q2,q3)
+    - Center manifold P variables map to indices 4,5 (p2,p3)
+    - Indices 0,3 (q1,p1) remain zero (not in center manifold)
     """
     if Q_cm_current_ndof.shape[0] != N_CM_DOF or P_cm_current_ndof.shape[0] != N_CM_DOF:
         # This check is more for Numba's type inference and AOT compilation,
@@ -64,23 +84,31 @@ def _eval_dH_dQ_cm(
     P_cm_eval_ndof: np.ndarray,
     jac_H_cm_rn_typed: List[List[np.ndarray]], # List of (List of np.ndarray(complex128))
     clmo_H_typed: List[np.ndarray] # Numba typed List of np.ndarray(uint32)
-    # polynomial_evaluate_func: Callable # Pass the actual function if not globally visible
 ) -> np.ndarray:
     """
-    Evaluates [dH/dQ_cm1, dH/dQ_cm2, ...] at the given CM state.
-    The order of derivatives corresponds to the order in CM_Q_POLY_INDICES.
-
-    Args:
-        Q_cm_eval_ndof (np.ndarray): CM Q-variables for evaluation.
-        P_cm_eval_ndof (np.ndarray): CM P-variables for evaluation.
-        jac_H_cm_rn_typed: Numba-typed Jacobian of H_cm_rn. jac_H_cm_rn_typed[k] is dH/d(poly_var_k).
-        clmo_H_typed: Numba-typed CLMO table for H_cm_rn.
-        # polynomial_evaluate_func: The actual polynomial_evaluate function.
-
-    Returns:
-        np.ndarray: Real parts of [dH/dQ_cm1, dH/dQ_cm2, ...].
+    Evaluate derivatives of Hamiltonian with respect to position variables.
+    
+    Parameters
+    ----------
+    Q_cm_eval_ndof : numpy.ndarray
+        Position vector at which to evaluate derivatives
+    P_cm_eval_ndof : numpy.ndarray
+        Momentum vector at which to evaluate derivatives
+    jac_H_cm_rn_typed : List[List[numpy.ndarray]]
+        Jacobian of Hamiltonian as list of polynomial coefficients
+    clmo_H_typed : List[numpy.ndarray]
+        List of coefficient layout mapping objects for the polynomials
+        
+    Returns
+    -------
+    numpy.ndarray
+        Vector of partial derivatives ∂H/∂Q at the evaluation point
+        
+    Notes
+    -----
+    Computes the gradient of the Hamiltonian with respect to position variables
+    by evaluating the appropriate polynomials in the Jacobian at the given point.
     """
-
     eval_point_6d = _construct_6d_eval_point(Q_cm_eval_ndof, P_cm_eval_ndof)
     
     derivatives_Q_cm = np.empty(N_CM_DOF, dtype=np.float64)
@@ -99,15 +127,30 @@ def _eval_dH_dP_cm(
     P_cm_eval_ndof: np.ndarray,
     jac_H_cm_rn_typed: List[List[np.ndarray]],
     clmo_H_typed: List[np.ndarray]
-    # polynomial_evaluate_func: Callable
 ) -> np.ndarray:
     """
-    Evaluates [dH/dP_cm1, dH/dP_cm2, ...] at the given CM state.
-    The order of derivatives corresponds to the order in CM_P_POLY_INDICES.
-    (Structurally similar to _eval_dH_dQ_cm)
-
-    Returns:
-        np.ndarray: Real parts of [dH/dP_cm1, dH/dP_cm2, ...].
+    Evaluate derivatives of Hamiltonian with respect to momentum variables.
+    
+    Parameters
+    ----------
+    Q_cm_eval_ndof : numpy.ndarray
+        Position vector at which to evaluate derivatives
+    P_cm_eval_ndof : numpy.ndarray
+        Momentum vector at which to evaluate derivatives
+    jac_H_cm_rn_typed : List[List[numpy.ndarray]]
+        Jacobian of Hamiltonian as list of polynomial coefficients
+    clmo_H_typed : List[numpy.ndarray]
+        List of coefficient layout mapping objects for the polynomials
+        
+    Returns
+    -------
+    numpy.ndarray
+        Vector of partial derivatives ∂H/∂P at the evaluation point
+        
+    Notes
+    -----
+    Computes the gradient of the Hamiltonian with respect to momentum variables
+    by evaluating the appropriate polynomials in the Jacobian at the given point.
     """
     eval_point_6d = _construct_6d_eval_point(Q_cm_eval_ndof, P_cm_eval_ndof)
     
@@ -129,17 +172,27 @@ def _phi_H_a_update_poly(
     clmo_H_typed: List[np.ndarray]
     ):
     """
-    Implements the phi_H_a update step for Tao's integrator.
-    p -= delta * dH/dq(q,y)
-    x += delta * dH/dp(q,y)
-
-    Args:
-        q_ext (np.ndarray): The 8D extended phase space state.
-        delta (float): The time step for this update part.
-        jac_H_cm_rn_typed: Typed Jacobian of H_cm_rn.
-        clmo_H_typed: Typed CLMO table for H_cm_rn.
+    Apply the first Hamiltonian splitting operator (φₐ) in the symplectic scheme.
+    
+    Parameters
+    ----------
+    q_ext : numpy.ndarray
+        Extended state vector [Q, P, X, Y] to be updated in-place
+    delta : float
+        Time step size
+    jac_H_cm_rn_typed : List[List[numpy.ndarray]]
+        Jacobian of Hamiltonian as list of polynomial coefficients
+    clmo_H_typed : List[numpy.ndarray]
+        List of coefficient layout mapping objects for the polynomials
+        
+    Notes
+    -----
+    Implements the symplectic update step:
+    - P ← P - δ·∂H/∂Q(Q,Y)
+    - X ← X + δ·∂H/∂P(Q,Y)
+    
+    This modifies q_ext in-place through views/slices.
     """
-    # Extract current Q, P, X, Y views (these are N_CM_DOF dimensional)
     Q_current = q_ext[0:N_CM_DOF]
     P_current = q_ext[N_CM_DOF : 2*N_CM_DOF]
     X_current = q_ext[2*N_CM_DOF : 3*N_CM_DOF]
@@ -162,15 +215,26 @@ def _phi_H_b_update_poly(
     clmo_H_typed: List[np.ndarray]
     ):
     """
-    Implements the phi_H_b update step for Tao's integrator.
-    q += delta * dH/dp(x,p)
-    y -= delta * dH/dq(x,p)
-
-    Args:
-        q_ext (np.ndarray): The 8D extended phase space state.
-        delta (float): The time step for this update part.
-        jac_H_cm_rn_typed: Typed Jacobian of H_cm_rn.
-        clmo_H_typed: Typed CLMO table for H_cm_rn.
+    Apply the second Hamiltonian splitting operator (φᵦ) in the symplectic scheme.
+    
+    Parameters
+    ----------
+    q_ext : numpy.ndarray
+        Extended state vector [Q, P, X, Y] to be updated in-place
+    delta : float
+        Time step size
+    jac_H_cm_rn_typed : List[List[numpy.ndarray]]
+        Jacobian of Hamiltonian as list of polynomial coefficients
+    clmo_H_typed : List[numpy.ndarray]
+        List of coefficient layout mapping objects for the polynomials
+        
+    Notes
+    -----
+    Implements the symplectic update step:
+    - Q ← Q + δ·∂H/∂P(X,P)
+    - Y ← Y - δ·∂H/∂Q(X,P)
+    
+    This modifies q_ext in-place through views/slices.
     """
     Q_current = q_ext[0:N_CM_DOF]
     P_current = q_ext[N_CM_DOF : 2*N_CM_DOF]
@@ -189,14 +253,26 @@ def _phi_H_b_update_poly(
 @njit(cache=True)
 def _phi_omega_H_c_update_poly(q_ext: np.ndarray, delta: float, omega: float):
     """
-    Implements the phi_omega_H_c update step (linear rotation).
-
-    Args:
-        q_ext (np.ndarray): The 8D extended phase space state.
-        delta (float): The time step for this update part.
-        omega (float): The coupling constant.
+    Apply the rotation operator (φᶜ) in the symplectic scheme.
+    
+    Parameters
+    ----------
+    q_ext : numpy.ndarray
+        Extended state vector [Q, P, X, Y] to be updated in-place
+    delta : float
+        Time step size
+    omega : float
+        Frequency parameter for the rotation
+        
+    Notes
+    -----
+    Implements a rotation in the extended phase space with mixing of coordinates.
+    The transformation is implemented using trigonometric functions and temporary
+    variables to ensure numerical stability.
+    
+    This step is crucial for high-order symplectic integration methods
+    with the extended phase-space technique.
     """
-    # Create views for Q, P, X, Y for clarity
     Q = q_ext[0:N_CM_DOF]
     P = q_ext[N_CM_DOF : 2*N_CM_DOF]
     X = q_ext[2*N_CM_DOF : 3*N_CM_DOF]
@@ -234,8 +310,32 @@ def _recursive_update_poly(
     clmo_H_typed: List[np.ndarray]
     ):
     """
-    Recursively constructs the integrator step.
-    Base case is order 2.
+    Apply recursive symplectic update of specified order.
+    
+    Parameters
+    ----------
+    q_ext : numpy.ndarray
+        Extended state vector [Q, P, X, Y] to be updated in-place
+    timestep : float
+        Time step size
+    order : int
+        Order of the symplectic integrator (must be even and >= 2)
+    omega : float
+        Frequency parameter for the rotation
+    jac_H_cm_rn_typed : List[List[numpy.ndarray]]
+        Jacobian of Hamiltonian as list of polynomial coefficients
+    clmo_H_typed : List[numpy.ndarray]
+        List of coefficient layout mapping objects for the polynomials
+        
+    Notes
+    -----
+    For order=2, applies the basic second-order symplectic scheme:
+        φₐ(δ/2) ∘ φᵦ(δ/2) ∘ φᶜ(δ) ∘ φᵦ(δ/2) ∘ φₐ(δ/2)
+    
+    For higher orders, applies a recursive composition method with
+    carefully chosen substeps to achieve the desired order of accuracy.
+    The composition follows Yoshida's technique for constructing higher-order
+    symplectic integrators.
     """
     if order == 2:
         _phi_H_a_update_poly(q_ext, 0.5 * timestep, jac_H_cm_rn_typed, clmo_H_typed)
@@ -267,22 +367,43 @@ def integrate_symplectic(
     c_omega_heuristic: float = 20.0 # Increased from 10.0 to 20.0 for better energy conservation
     ) -> np.ndarray:
     """
-    Integrates Hamiltonian dynamics on the center manifold using Tao's method
-    for non-separable polynomial Hamiltonians.
-
-    Args:
-        initial_cm_state_4d (np.ndarray): Initial state [Q_cm1, Q_cm2, P_cm1, P_cm2].
-                                          Shape (2 * N_CM_DOF,).
-        t_values (np.ndarray): Array of time points at which to output the state.
-        jac_H_cm_rn_typed: Numba-typed Jacobian of H_cm_rn.
-                           It's a List of N_VARS_POLY items,
-                           where each item is a polynomial (List of np.ndarray coeffs).
-        clmo_H_typed: Numba-typed CLMO table compatible with H_cm_rn and its Jacobian.
-        order (int): Order of the integrator (must be a positive, even integer).
-        c_omega_heuristic (float, optional): Factor 'c' for Tao's omega heuristic. Defaults to 20.0.
-
-    Returns:
-        np.ndarray: Trajectory array of shape (len(t_values), 2 * N_CM_DOF).
+    Integrate Hamilton's equations using a high-order symplectic integrator.
+    
+    Parameters
+    ----------
+    initial_cm_state_4d : numpy.ndarray
+        Initial state vector [Q, P] in center manifold coordinates (shape: 2*N_CM_DOF)
+    t_values : numpy.ndarray
+        Array of time points at which to compute the solution
+    jac_H_cm_rn_typed : List[List[numpy.ndarray]]
+        Jacobian of Hamiltonian as a list of polynomial coefficients
+    clmo_H_typed : List[numpy.ndarray]
+        List of coefficient layout mapping objects for the polynomials
+    order : int
+        Order of the symplectic integrator (must be even and >= 2)
+    c_omega_heuristic : float, optional
+        Scaling parameter for the frequency calculation, default is 20.0
+        
+    Returns
+    -------
+    numpy.ndarray
+        Trajectory array of shape (len(t_values), 2*N_CM_DOF)
+        
+    Notes
+    -----
+    Uses an extended phase-space technique to implement a high-order
+    symplectic integration method for the polynomial Hamiltonian.
+    
+    The method is particularly suitable for center manifold dynamics where
+    energy conservation over long time integration is crucial.
+    
+    The algorithm:
+    1. Creates an extended phase space with auxiliary variables [Q, P, X, Y]
+    2. Recursively applies composition of basic symplectic steps
+    3. Returns trajectory only for the physical variables [Q, P]
+    
+    For optimal energy conservation, higher c_omega_heuristic values may be used
+    at the cost of potentially smaller effective timesteps.
     """
     # Input validation (basic checks, more robust checks ideally in Python caller)
     valid_input = True
