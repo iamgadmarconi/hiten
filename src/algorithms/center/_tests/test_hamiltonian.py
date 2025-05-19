@@ -7,6 +7,7 @@ from numba import types
 from numba.typed import Dict, List
 
 from algorithms.center.hamiltonian import (_build_T_polynomials,
+                                           _build_R_polynomials,
                                            build_physical_hamiltonian)
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables)
@@ -132,6 +133,73 @@ def test_legendre_recursion(point, max_deg, psi_clmo):
 
         for d in range(max_deg + 1):
             assert np.array_equal(lhs[d], rhs[d]), f"Legendre recursion failed at n={n}, degree slice d={d}"
+
+@pytest.mark.parametrize("max_deg", [4, 6, 8])
+def test_R_polynomial_recursion(point, max_deg, psi_clmo):
+    """Internal `R[n]` sequence must satisfy its three-term recursion."""
+
+    psi, clmo, encode_dict = psi_clmo
+    x_poly, y_poly, z_poly, *_ = [
+        polynomial_variable(i, max_deg, psi, clmo, encode_dict) for i in range(3) # Only x,y,z needed
+    ]
+
+    # Generate T_n polynomials (needed for R_n recurrence)
+    T_n_list = _build_T_polynomials(x_poly, y_poly, z_poly, max_deg, psi, clmo, encode_dict)
+    
+    # Generate R_n polynomials
+    R_n_list = _build_R_polynomials(x_poly, y_poly, z_poly, T_n_list, max_deg, psi, clmo, encode_dict)
+
+    # Calculate rho_sq = x^2 + y^2 + z^2 polynomial
+    rho_sq_poly = polynomial_zero_list(max_deg, psi)
+    x_sq = polynomial_multiply(x_poly, x_poly, max_deg, psi, clmo, encode_dict)
+    y_sq = polynomial_multiply(y_poly, y_poly, max_deg, psi, clmo, encode_dict)
+    z_sq = polynomial_multiply(z_poly, z_poly, max_deg, psi, clmo, encode_dict)
+    polynomial_add_inplace(rho_sq_poly, x_sq, 1.0)
+    polynomial_add_inplace(rho_sq_poly, y_sq, 1.0)
+    polynomial_add_inplace(rho_sq_poly, z_sq, 1.0)
+
+    # The recurrence for R_n starts from n=2, using R_0 and R_1 as base cases.
+    for n in range(2, max_deg + 1):
+        n_ = float(n)
+
+        # LHS: R_n from the generated list
+        lhs = R_n_list[n]
+
+        # RHS terms calculation based on the recurrence relation:
+        # R_n = coeff1 * x * R_{n-1} + coeff2 * T_n + coeff3 * rho^2 * R_{n-2}
+        
+        # Term 1: ((2n+3)/(n+2)) * x * R_{n-1}
+        coeff1 = (2.0 * n_ + 3.0) / (n_ + 2.0)
+        term1_mult_x_Rnm1 = polynomial_multiply(x_poly, R_n_list[n - 1], max_deg, psi, clmo, encode_dict)
+        term1_poly = polynomial_zero_list(max_deg, psi)
+        polynomial_add_inplace(term1_poly, term1_mult_x_Rnm1, coeff1)
+
+        # Term 2: -((2n+2)/(n+2)) * T_n
+        coeff2 = - (2.0 * n_ + 2.0) / (n_ + 2.0) # Note the negative sign here
+        term2_poly = polynomial_zero_list(max_deg, psi)
+        polynomial_add_inplace(term2_poly, T_n_list[n], coeff2) # T_n_list[n] is T_n
+
+        # Term 3: -((n+1)/(n+2)) * rho^2 * R_{n-2}
+        coeff3 = - (n_ + 1.0) / (n_ + 2.0) # Note the negative sign here
+        term3_mult_rhosq_Rnm2 = polynomial_multiply(rho_sq_poly, R_n_list[n - 2], max_deg, psi, clmo, encode_dict)
+        term3_poly = polynomial_zero_list(max_deg, psi)
+        polynomial_add_inplace(term3_poly, term3_mult_rhosq_Rnm2, coeff3)
+        
+        # RHS: Sum of the three terms
+        rhs = polynomial_zero_list(max_deg, psi)
+        polynomial_add_inplace(rhs, term1_poly, 1.0)
+        polynomial_add_inplace(rhs, term2_poly, 1.0)
+        polynomial_add_inplace(rhs, term3_poly, 1.0)
+
+        for d in range(max_deg + 1):
+            assert np.array_equal(lhs[d], rhs[d]), (
+                f"R_n recursion failed at n={n}, degree slice d={d}.\n"
+                f"LHS ({R_n_list[n][d].shape}):\n{lhs[d]}\n"
+                f"RHS ({rhs[d].shape}):\n{rhs[d]}\n"
+                f"Term1 ({term1_poly[d].shape}):\n{term1_poly[d]}\n"
+                f"Term2 ({term2_poly[d].shape}):\n{term2_poly[d]}\n"
+                f"Term3 ({term3_poly[d].shape}):\n{term3_poly[d]}"
+            )
 
 @pytest.mark.parametrize("max_deg", [4, 6, 8])
 def test_numerical_evaluation(point, max_deg, psi_clmo):

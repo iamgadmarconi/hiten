@@ -1,6 +1,7 @@
 import numpy as np
 from numba import njit
 from numba.typed import List
+from numba import types
 
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables)
@@ -11,7 +12,7 @@ from algorithms.center.polynomial.operations import (polynomial_add_inplace,
 
 
 @njit(fastmath=True, cache=False)
-def _build_T_polynomials(poly_x, poly_y, poly_z, max_deg: int, psi_table, clmo_table, encode_dict_list) -> list:
+def _build_T_polynomials(poly_x, poly_y, poly_z, max_deg: int, psi_table, clmo_table, encode_dict_list) -> types.ListType:
     """
     Build Chebyshev polynomials of the first kind up to the specified maximum degree.
     
@@ -35,7 +36,7 @@ def _build_T_polynomials(poly_x, poly_y, poly_z, max_deg: int, psi_table, clmo_t
     Returns
     -------
     list[List[numpy.ndarray]]
-        List of Chebyshev polynomials T_0 through T_{max_deg}
+        Numba typed list of Chebyshev polynomials T_0 through T_{max_deg}
         
     Notes
     -----
@@ -48,18 +49,21 @@ def _build_T_polynomials(poly_x, poly_y, poly_z, max_deg: int, psi_table, clmo_t
     This leads to the modified recurrence relation:
     T_n = (2n-1)/n * x * T_{n-1} - (n-1)/n * (x² + y² + z²) * T_{n-2}
     """
-    poly_T = [polynomial_zero_list(max_deg, psi_table) for _ in range(max_deg + 1)]
-    if max_deg >= 0 and len(poly_T[0]) > 0 and len(poly_T[0][0]) > 0:
-        poly_T[0][0][0] = 1.0
+    poly_T_list_of_polys = List()
+    for _ in range(max_deg + 1):
+        poly_T_list_of_polys.append(polynomial_zero_list(max_deg, psi_table))
+
+    if max_deg >= 0 and len(poly_T_list_of_polys[0]) > 0 and len(poly_T_list_of_polys[0][0]) > 0:
+        poly_T_list_of_polys[0][0][0] = 1.0
     if max_deg >= 1:
-        poly_T[1] = poly_x # type: ignore
+        poly_T_list_of_polys[1] = poly_x # type: ignore 
 
     for n in range(2, max_deg + 1):
         n_ = float(n)
         a = (2 * n_ - 1) / n_
         b = (n_ - 1) / n_
 
-        term1_mult = polynomial_multiply(poly_x, poly_T[n - 1], max_deg, psi_table, clmo_table, encode_dict_list)
+        term1_mult = polynomial_multiply(poly_x, poly_T_list_of_polys[n - 1], max_deg, psi_table, clmo_table, encode_dict_list)
         term1 = polynomial_zero_list(max_deg, psi_table)
         polynomial_add_inplace(term1, term1_mult, a)
 
@@ -72,15 +76,115 @@ def _build_T_polynomials(poly_x, poly_y, poly_z, max_deg: int, psi_table, clmo_t
         polynomial_add_inplace(poly_sum_sq, poly_y_sq, 1.0)
         polynomial_add_inplace(poly_sum_sq, poly_z_sq, 1.0)
 
-        term2_mult = polynomial_multiply(poly_sum_sq, poly_T[n - 2], max_deg, psi_table, clmo_table, encode_dict_list)
+        term2_mult = polynomial_multiply(poly_sum_sq, poly_T_list_of_polys[n - 2], max_deg, psi_table, clmo_table, encode_dict_list)
         term2 = polynomial_zero_list(max_deg, psi_table)
         polynomial_add_inplace(term2, term2_mult, -b)
 
         poly_Tn = polynomial_zero_list(max_deg, psi_table)
         polynomial_add_inplace(poly_Tn, term1, 1.0)
         polynomial_add_inplace(poly_Tn, term2, 1.0)
-        poly_T[n] = poly_Tn
-    return poly_T
+        poly_T_list_of_polys[n] = poly_Tn
+    return poly_T_list_of_polys
+
+
+@njit(fastmath=True, cache=False)
+def _build_R_polynomials(poly_x, poly_y, poly_z, poly_T: types.ListType, max_deg: int, psi_table, clmo_table, encode_dict_list) -> types.ListType:
+    """
+    Build R_n polynomials up to the specified maximum degree.
+    
+    Parameters
+    ----------
+    poly_x : List[numpy.ndarray]
+        Polynomial representation of x coordinate
+    poly_y : List[numpy.ndarray]
+        Polynomial representation of y coordinate
+    poly_z : List[numpy.ndarray]
+        Polynomial representation of z coordinate
+    poly_T : types.ListType
+        List of T_n Chebyshev polynomials (output from _build_T_polynomials)
+    max_deg : int
+        Maximum degree of R_n polynomials to generate
+    psi_table : numpy.ndarray
+        Combinatorial table from init_index_tables
+    clmo_table : List[numpy.ndarray]
+        List of arrays containing packed multi-indices
+    encode_dict_list : List
+        List of dictionaries mapping packed multi-indices to their positions
+        
+    Returns
+    -------
+    list[List[numpy.ndarray]]
+        Numba typed list of R_n polynomials R_0 through R_{max_deg}
+        
+    Notes
+    -----
+    This function implements the recurrence relation:
+    R_0 = -1
+    R_1 = -3x
+    R_n = ((2n+3)/(n+2)) * x * R_{n-1} - ((2n+2)/(n+2)) * T_n - ((n+1)/(n+2)) * (x^2 + y^2 + z^2) * R_{n-2}
+    """
+    poly_R_list_of_polys = List()
+    for _ in range(max_deg + 1):
+        poly_R_list_of_polys.append(polynomial_zero_list(max_deg, psi_table))
+
+    if max_deg >= 0:
+        # R_0 = -1
+        if len(poly_R_list_of_polys[0]) > 0 and len(poly_R_list_of_polys[0][0]) > 0:
+            poly_R_list_of_polys[0][0][0] = -1.0
+    
+    if max_deg >= 1:
+        # R_1 = -3x
+        r1_poly = polynomial_zero_list(max_deg, psi_table)
+        polynomial_add_inplace(r1_poly, poly_x, -3.0)
+        poly_R_list_of_polys[1] = r1_poly
+
+    # Pre-calculate x^2, y^2, z^2, and x^2 + y^2 + z^2 as they are used in the loop
+    poly_x_sq = None # Represents x^2
+    poly_y_sq = None # Represents y^2
+    poly_z_sq = None # Represents z^2
+    poly_rho_sq = None # Represents x^2 + y^2 + z^2
+
+    if max_deg >=2: # Only needed if the loop runs
+        poly_x_sq = polynomial_multiply(poly_x, poly_x, max_deg, psi_table, clmo_table, encode_dict_list)
+        poly_y_sq = polynomial_multiply(poly_y, poly_y, max_deg, psi_table, clmo_table, encode_dict_list)
+        poly_z_sq = polynomial_multiply(poly_z, poly_z, max_deg, psi_table, clmo_table, encode_dict_list)
+        
+        poly_rho_sq = polynomial_zero_list(max_deg, psi_table)
+        polynomial_add_inplace(poly_rho_sq, poly_x_sq, 1.0)
+        polynomial_add_inplace(poly_rho_sq, poly_y_sq, 1.0)
+        polynomial_add_inplace(poly_rho_sq, poly_z_sq, 1.0)
+
+    for n in range(2, max_deg + 1):
+        n_ = float(n)
+        
+        coeff1 = (2.0 * n_ + 3.0) / (n_ + 2.0)
+        coeff2 = (2.0 * n_ + 2.0) / (n_ + 2.0)
+        coeff3 = (n_ + 1.0) / (n_ + 2.0)
+
+        # Term 1: coeff1 * x * R_{n-1}
+        term1_mult_x_Rnm1 = polynomial_multiply(poly_x, poly_R_list_of_polys[n - 1], max_deg, psi_table, clmo_table, encode_dict_list)
+        term1_poly = polynomial_zero_list(max_deg, psi_table)
+        polynomial_add_inplace(term1_poly, term1_mult_x_Rnm1, coeff1)
+
+        # Term 2: -coeff2 * T_n
+        term2_poly = polynomial_zero_list(max_deg, psi_table)
+        # poly_T[n] is T_n
+        polynomial_add_inplace(term2_poly, poly_T[n], -coeff2)
+        
+        # Term 3: -coeff3 * (x^2 + y^2 + z^2) * R_{n-2}
+        # poly_rho_sq is already computed if needed
+        term3_mult_rhosq_Rnm2 = polynomial_multiply(poly_rho_sq, poly_R_list_of_polys[n - 2], max_deg, psi_table, clmo_table, encode_dict_list)
+        term3_poly = polynomial_zero_list(max_deg, psi_table)
+        polynomial_add_inplace(term3_poly, term3_mult_rhosq_Rnm2, -coeff3)
+        
+        # Combine terms for R_n
+        poly_Rn = polynomial_zero_list(max_deg, psi_table)
+        polynomial_add_inplace(poly_Rn, term1_poly, 1.0)
+        polynomial_add_inplace(poly_Rn, term2_poly, 1.0)
+        polynomial_add_inplace(poly_Rn, term3_poly, 1.0)
+        poly_R_list_of_polys[n] = poly_Rn
+        
+    return poly_R_list_of_polys
 
 
 def _build_potential_U(poly_T, point, max_deg: int, psi_table) -> List[np.ndarray]:
