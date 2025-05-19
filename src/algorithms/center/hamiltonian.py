@@ -2,6 +2,7 @@ import numpy as np
 from numba import njit
 from numba.typed import List
 from numba import types
+from typing import Tuple
 
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables)
@@ -355,4 +356,59 @@ def build_physical_hamiltonian(point, max_deg: int) -> List[np.ndarray]:
     polynomial_add_inplace(poly_H, poly_U, 1.0)
 
     return poly_H
+
+
+def build_lindstedt_poincare_rhs_polynomials(point, max_deg: int) -> Tuple[List, List, List]:
+    """
+    Build the polynomial representations of the right-hand sides (RHS)
+    of the Lindstedt-Poincaré equations of motion (as in equation (14) of the reference image).
+
+    The equations are:
+    RHS_x = sum_{n>=2} c_{n+1} * (n+1) * T_n
+    RHS_y = y * sum_{n>=2} c_{n+1} * R_{n-1}
+    RHS_z = z * sum_{n>=2} c_{n+1} * R_{n-1}
+
+    Parameters
+    ----------
+    point : object
+        Object representing a collinear point, with a `_cn` method that returns
+        the k-th coefficient c_k in the potential expansion.
+    max_deg : int
+        Maximum degree for the polynomial representation of the RHS terms.
+        
+    Returns
+    -------
+    Tuple[List, List, List]
+        A tuple containing three polynomial lists (Numba typed lists of NumPy arrays):
+        (rhs_x_poly, rhs_y_poly, rhs_z_poly)
+    """
+    psi_table, clmo_table = init_index_tables(max_deg)
+    encode_dict_list = _create_encode_dict_from_clmo(clmo_table)
+
+    poly_x, poly_y, poly_z = [
+        polynomial_variable(i, max_deg, psi_table, clmo_table, encode_dict_list) for i in range(3)
+    ]
+
+    poly_T_list = _build_T_polynomials(poly_x, poly_y, poly_z, max_deg, psi_table, clmo_table, encode_dict_list)
+    poly_R_list = _build_R_polynomials(poly_x, poly_y, poly_z, poly_T_list, max_deg, psi_table, clmo_table, encode_dict_list)
+
+    rhs_x_poly = polynomial_zero_list(max_deg, psi_table)
+
+    sum_term_for_y_z_eqs = polynomial_zero_list(max_deg, psi_table)
+
+    for n in range(2, max_deg + 1):
+        cn_plus_1 = point._cn(n + 1)
+        coeff = cn_plus_1 * float(n + 1)
+        polynomial_add_inplace(rhs_x_poly, poly_T_list[n], coeff)
+
+    for n in range(2, max_deg + 1):
+        cn_plus_1 = point._cn(n + 1)
+        if (n - 1) < len(poly_R_list):
+            polynomial_add_inplace(sum_term_for_y_z_eqs, poly_R_list[n - 1], cn_plus_1)
+
+    rhs_y_poly = polynomial_multiply(poly_y, sum_term_for_y_z_eqs, max_deg, psi_table, clmo_table, encode_dict_list)
+
+    rhs_z_poly = polynomial_multiply(poly_z, sum_term_for_y_z_eqs, max_deg, psi_table, clmo_table, encode_dict_list)
+    
+    return rhs_x_poly, rhs_y_poly, rhs_z_poly
 
