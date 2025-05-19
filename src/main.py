@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from algorithms.center.manifold import center_manifold_rn
-from algorithms.center.poincare.map import compute_poincare_map_for_energy
+from algorithms.center.poincare.map import generate_iterated_poincare_map
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables)
 from algorithms.center.utils import format_cm_table
@@ -11,7 +11,7 @@ from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
 
-MAX_DEG = 12
+MAX_DEG = 8
 TOL     = 1e-14
 
 
@@ -52,32 +52,33 @@ def main() -> None:
 
     H0_LEVELS = [0.20, 0.40, 0.60, 1.00]  # Example energy levels from literature
 
-    dt = 1e-2
-    USE_SYMPLECTIC = False  # Set True to enforce symplectic integrator
-    Nq = 200  # grid resolution in q2
-    Np = 200  # grid resolution in p2
+    dt = 1e-1
+    USE_SYMPLECTIC = False   # Symplectic highly recommended for many iterates
+    N_SEEDS = 10            # seeds along q2-axis
+    N_ITER = 500          # iterations per seed
 
     # Create a figure with 2x2 subplots
     fig, axs = plt.subplots(2, 2, figsize=(8, 8))
     axs = axs.flatten()  # Flatten to easily index
 
     for i, h0 in enumerate(H0_LEVELS):
-        logger.info("Computing Poincaré map for h0=%.3f", h0)
-        pts = compute_poincare_map_for_energy(
+        logger.info("Generating iterated Poincaré map for h0=%.3f", h0)
+        pts = generate_iterated_poincare_map(
             h0=h0,
             H_blocks=H_cm_rn_full,
             max_degree=MAX_DEG,
             psi_table=psi,
             clmo_table=clmo,
             encode_dict_list=encode_dict_list,
+            n_seeds=N_SEEDS,
+            n_iter=N_ITER,
             dt=dt,
-            Nq=Nq,
-            Np=Np,
-            integrator_order=6,
             use_symplectic=USE_SYMPLECTIC,
+            integrator_order=6,
+            seed_axis="q2",
         )
 
-        logger.info("Obtained %d section points (h0=%.3f)", pts.shape[0], h0)
+        logger.info("Accumulated %d iterated points (h0=%.3f)", pts.shape[0], h0)
 
         # Plot in the corresponding subplot
         axs[i].scatter(pts[:, 0], pts[:, 1], s=1)

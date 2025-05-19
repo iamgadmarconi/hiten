@@ -457,3 +457,97 @@ def _poincare_map_parallel(
             p2p_out[i] = p2_new
 
     return success, q2p_out, p2p_out
+
+
+def generate_iterated_poincare_map(
+    h0: float,
+    H_blocks: List[np.ndarray],
+    max_degree: int,
+    psi_table: np.ndarray,
+    clmo_table: List[np.ndarray],
+    encode_dict_list: List,
+    n_seeds: int = 20,
+    n_iter: int = 1500,
+    dt: float = 1e-2,
+    use_symplectic: bool = True,
+    integrator_order: int = 6,
+    seed_axis: str = "q2",  # "q2" or "p2"
+) -> np.ndarray:
+    """Generate a Poincaré map by iterating each seed many times.
+
+    Parameters
+    ----------
+    h0 : float
+        Energy level.
+    H_blocks, max_degree, psi_table, clmo_table, encode_dict_list
+        Same polynomial data as `compute_poincare_map_for_energy`.
+    n_seeds : int, optional
+        Number of initial seeds to distribute along the chosen axis.
+    n_iter : int, optional
+        How many Poincaré iterates to compute for each seed.
+    dt : float, optional
+        Timestep for the integrator.
+    use_symplectic : bool, optional
+        True → Yoshida-6 step (recommended); False → RK4.
+    seed_axis : {"q2", "p2"}
+        Place seeds on this axis with the other momentum/position set to zero.
+
+    Returns
+    -------
+    np.ndarray, shape (n_success * n_iter, 2)
+        Collected (q2, p2) points of all iterates.
+    """
+    # 1. Build Jacobian once.
+    jac_H = polynomial_jacobian(
+        poly_p=H_blocks,
+        max_deg=max_degree,
+        psi_table=psi_table,
+        clmo_table=clmo_table,
+        encode_dict_list=encode_dict_list,
+    )
+
+    # 2. Turning points for seed placement.
+    q2_max = find_turning("q2", h0, H_blocks, clmo_table)
+    p2_max = find_turning("p2", h0, H_blocks, clmo_table)
+
+    seeds: list[Tuple[float, float, float, float]] = []
+
+    if seed_axis == "q2":
+        q2_vals = np.linspace(-0.9 * q2_max, 0.9 * q2_max, n_seeds)
+        for q2 in q2_vals:
+            p2 = 0.0
+            p3 = solve_p3(q2, p2, h0, H_blocks, clmo_table)
+            if p3 is not None:
+                seeds.append((q2, p2, 0.0, p3))
+    elif seed_axis == "p2":
+        p2_vals = np.linspace(-0.9 * p2_max, 0.9 * p2_max, n_seeds)
+        for p2 in p2_vals:
+            q2 = 0.0
+            p3 = solve_p3(q2, p2, h0, H_blocks, clmo_table)
+            if p3 is not None:
+                seeds.append((q2, p2, 0.0, p3))
+    else:
+        raise ValueError("seed_axis must be 'q2' or 'p2'.")
+
+    logger.info("Iterating %d seeds (%s-axis) for %d crossings each", len(seeds), seed_axis, n_iter)
+
+    # 3. Iterate.
+    pts_accum: list[Tuple[float, float]] = []
+
+    for seed in seeds:
+        state = seed
+        for _ in range(n_iter):
+            q2p, p2p = poincare_step(
+                seed4=state,
+                dt=dt,
+                jac_H=jac_H,
+                clmo=clmo_table,
+                order=integrator_order,
+                max_steps=20000,
+                use_symplectic=use_symplectic,
+            )
+            pts_accum.append((q2p, p2p))
+            # set up next iterate – keep the same positive p3 as in seed
+            state = (q2p, p2p, 0.0, seed[3])
+
+    return np.asarray(pts_accum, dtype=np.float64)
