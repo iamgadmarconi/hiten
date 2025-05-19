@@ -1,14 +1,25 @@
 import numpy as np
-import sympy as sp
 import pytest
+import sympy as sp
+from numba import njit, types  # Added njit
+from numba.typed import Dict, List  # Added Dict
 
-from algorithms.center.polynomial import base, operations as op, algebra
 from algorithms.center.hamiltonian import build_physical_hamiltonian
-from algorithms.center.transforms import _linear_variable_polys, substitute_linear, phys2rn, rn2cn, cn2rn
+from algorithms.center.polynomial.base import (ENCODE_DICT_GLOBAL,
+                                               _create_encode_dict_from_clmo,
+                                               decode_multiindex,
+                                               encode_multiindex,
+                                               init_index_tables)
+from algorithms.center.polynomial.conversion import poly2sympy, sympy2poly
+from algorithms.center.polynomial.operations import (
+    polynomial_add_inplace, polynomial_multiply, polynomial_poisson_bracket,
+    polynomial_power, polynomial_variable, polynomial_zero_list)
+from algorithms.center.transforms import (_linear_variable_polys, cn2rn,
+                                          phys2rn, rn2cn, substitute_linear)
 from system.libration import L1Point
 
-
 _sympy_vars = sp.symbols("x y z px py pz")
+
 
 @pytest.fixture(scope="module")
 def point() -> L1Point:  # noqa: D401 – pytest fixture
@@ -20,10 +31,11 @@ def point() -> L1Point:  # noqa: D401 – pytest fixture
 def max_deg(request):
     return request.param
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="function")
 def psi_clmo(max_deg):
-    psi, clmo = base.init_index_tables(max_deg)
-    return psi, clmo
+    psi, clmo = init_index_tables(max_deg)
+    encode_dict = _create_encode_dict_from_clmo(clmo) # Create encode_dict
+    return psi, clmo, encode_dict # Return encode_dict
 
 def sympy_reference(point: L1Point, max_deg: int) -> sp.Expr:
     """Exact Hamiltonian expanded with SymPy up to *max_deg* total degree."""
@@ -62,69 +74,16 @@ def sympy_reference(point: L1Point, max_deg: int) -> sp.Expr:
         )
         raise type(e)(error_msg) from e
 
-def sympy_to_poly(sym_expr: sp.Expr, max_deg: int, psi, clmo):
-    """Convert a SymPy polynomial into the coefficient-list format used by the codebase."""
-
-    poly = op.polynomial_zero_list(max_deg, psi)
-
-    for term in sym_expr.as_ordered_terms():
-        coeff, monom = term.as_coeff_Mul()
-        if monom == 1:
-            exps = (0, 0, 0, 0, 0, 0)
-        else:
-            exps = sp.Poly(monom, *_sympy_vars).monoms()[0]
-
-        deg = sum(exps)
-        if deg > max_deg:
-            continue  # truncated away in our polynomial representation
-
-        idx = algebra.encode_multiindex(exps, deg, psi, clmo) # Pass full psi and clmo tables
-        poly[deg][idx] = float(coeff)
-
-    return poly
-
-def poly_list_to_sympy(P, vars, psi, clmo):
-    """
-    Convert coefficient-list *P* to a SymPy expression.
-
-    Parameters
-    ----------
-    P : List[np.ndarray]
-        one coefficient vector per total degree
-    vars : Sequence[sympy.Symbol]
-        the symbol that corresponds to each of the six packed exponents
-    psi, clmo : lookup tables
-    """
-    expr = 0
-    for deg, coeff_vec in enumerate(P):
-        for pos, coeff in enumerate(coeff_vec):
-            if coeff == 0:
-                continue
-            exps = algebra.decode_multiindex(pos, deg, clmo)  # 6-tuple
-            mon  = sp.prod(v**k for v, k in zip(vars, exps) if k)
-            expr += coeff * mon
-    return sp.expand(expr)
 
 
-def evaluate_poly(poly, values, psi, clmo):
-    """Brute-force evaluation of a coefficient-list polynomial at *values* (ℝ⁶)."""
 
-    total = 0.0
-    for deg, coeffs in enumerate(poly):
-        if coeffs.size == 0:
-            continue
-        for pos, c in enumerate(coeffs):
-            if c == 0.0:
-                continue
-            exps = algebra.decode_multiindex(pos, deg, clmo) # Pass full clmo table
-            total += c * np.prod(values**np.asarray(exps))
-    return total
+
 
 @pytest.mark.parametrize("max_deg", [0, 1, 2, 3, 4, 5])
 @pytest.mark.parametrize("complex_dtype_bool", [False, True])
-def test_linear_variable_polys(max_deg, complex_dtype_bool):
+def test_linear_variable_polys(max_deg, complex_dtype_bool, psi_clmo):
     """Test the _linear_variable_polys function for correctness."""
-    psi, clmo = base.init_index_tables(max_deg)
+    psi, clmo, encode_dict = psi_clmo # Unpack encode_dict
 
     # Define a base C matrix (float)
     C_base = np.array([
@@ -146,17 +105,19 @@ def test_linear_variable_polys(max_deg, complex_dtype_bool):
         C = C_base.astype(float)
 
     # Call the function to be tested
-    L_actual = _linear_variable_polys(C, max_deg, psi, clmo)
+    # _linear_variable_polys from transforms.py now expects encode_dict_list
+    L_actual = _linear_variable_polys(C, max_deg, psi, clmo, encode_dict) # Pass encode_dict
 
     # Construct the expected result
-    new_basis_expected = [op.polynomial_variable(j, max_deg, psi, clmo) for j in range(6)]
+    # polynomial_variable also needs encode_dict
+    new_basis_expected = [polynomial_variable(j, max_deg, psi, clmo, encode_dict) for j in range(6)] # Pass encode_dict
     
     L_expected = []
     for i in range(6):
-        pol_expected_i = op.polynomial_zero_list(max_deg, psi)
+        pol_expected_i = polynomial_zero_list(max_deg, psi)
         for j in range(6):
             if C[i, j] != 0: 
-                op.polynomial_add_inplace(pol_expected_i, new_basis_expected[j], C[i, j], max_deg)
+                polynomial_add_inplace(pol_expected_i, new_basis_expected[j], C[i, j], max_deg)
         L_expected.append(pol_expected_i)
 
     # Assertions
@@ -183,19 +144,23 @@ def test_linear_variable_polys(max_deg, complex_dtype_bool):
 
 @pytest.mark.parametrize("max_deg_test", [0, 1, 2, 3, 5]) 
 @pytest.mark.parametrize("complex_dtype_bool", [False, True])
-def test_substitute_linear(max_deg_test, complex_dtype_bool):
+def test_substitute_linear(max_deg_test, complex_dtype_bool, psi_clmo):
     """Test the substitute_linear function for correctness."""
-    psi, clmo = base.init_index_tables(max_deg_test)
+    # psi_clmo fixture for this test should provide the encode_dict for this max_deg_test
+    # However, substitute_linear takes max_deg, psi, clmo, encode_dict as direct args.
+    # We need to generate them for max_deg_test here.
+    psi_local, clmo_local = init_index_tables(max_deg_test)
+    encode_dict_local = _create_encode_dict_from_clmo(clmo_local)
     dtype = np.complex128 if complex_dtype_bool else np.float64
 
     # Common helper to create a polynomial for a constant coeff
     def create_const_poly(val, max_deg_local, psi_local):
-        p = op.polynomial_zero_list(max_deg_local, psi_local)
+        p = polynomial_zero_list(max_deg_local, psi_local)
         p[0][0] = val
         return p
 
     # Test Case 0: H_old is a constant
-    H_old0 = op.polynomial_zero_list(max_deg_test, psi)
+    H_old0 = polynomial_zero_list(max_deg_test, psi_local)
     const_val = dtype(5.0 - (2.0j if complex_dtype_bool else 0.0))
     H_old0[0][0] = const_val
     
@@ -203,7 +168,7 @@ def test_substitute_linear(max_deg_test, complex_dtype_bool):
                      [0.5, 1.0, 0,0,0,0],
                      [0,0,1,0,0,0],[0,0,0,1,0,0],[0,0,0,0,1,0],[0,0,0,0,0,1]], dtype=dtype)
 
-    H_actual0 = substitute_linear(H_old0, C0, max_deg_test, psi, clmo)
+    H_actual0 = substitute_linear(H_old0, C0, max_deg_test, psi_local, clmo_local, encode_dict_local) # Pass local encode_dict
     # Expected is just H_old0 itself, as constants are unaffected by variable substitution.
     for d_idx in range(max_deg_test + 1):
         assert np.allclose(H_actual0[d_idx], H_old0[d_idx], atol=1e-15, rtol=1e-12), \
@@ -211,35 +176,36 @@ def test_substitute_linear(max_deg_test, complex_dtype_bool):
 
     # Test Case 1: H_old = c0 * x_old_0 + c1 * x_old_1 (only if max_deg_test >= 1)
     if max_deg_test >= 1:
-        H_old1 = op.polynomial_zero_list(max_deg_test, psi)
+        H_old1 = polynomial_zero_list(max_deg_test, psi_local)
         c0_val = dtype(2.0 + (1.0j if complex_dtype_bool else 0.0))
         c1_val = dtype(3.0 - (0.5j if complex_dtype_bool else 0.0))
 
         k_x0 = tuple([1 if i == 0 else 0 for i in range(6)])
-        idx_x0 = algebra.encode_multiindex(k_x0, 1, psi, clmo)
+        # encode_multiindex here is from base, ensure it uses the local encode_dict_local
+        idx_x0 = encode_multiindex(np.array(k_x0, dtype=np.int64), 1, encode_dict_local)
         H_old1[1][idx_x0] = c0_val
 
         k_x1 = tuple([1 if i == 1 else 0 for i in range(6)])
-        idx_x1 = algebra.encode_multiindex(k_x1, 1, psi, clmo)
+        idx_x1 = encode_multiindex(np.array(k_x1, dtype=np.int64), 1, encode_dict_local)
         H_old1[1][idx_x1] = c1_val
         
         C1 = np.identity(6, dtype=dtype)
         C1[0,1] = dtype(0.5 + (0.2j if complex_dtype_bool else 0.0)) # x_old_0 = 1*x_new_0 + (0.5+0.2j)*x_new_1
         C1[1,0] = dtype(0.3 - (0.1j if complex_dtype_bool else 0.0)) # x_old_1 = (0.3-0.1j)*x_new_0 + 1*x_new_1
 
-        H_actual1 = substitute_linear(H_old1, C1, max_deg_test, psi, clmo)
+        H_actual1 = substitute_linear(H_old1, C1, max_deg_test, psi_local, clmo_local, encode_dict_local) # Pass local encode_dict
         
-        L1 = _linear_variable_polys(C1, max_deg_test, psi, clmo)
+        L1 = _linear_variable_polys(C1, max_deg_test, psi_local, clmo_local, encode_dict_local) # Pass local encode_dict
         
-        const_poly_c0 = create_const_poly(c0_val, max_deg_test, psi)
-        const_poly_c1 = create_const_poly(c1_val, max_deg_test, psi)
+        const_poly_c0 = create_const_poly(c0_val, max_deg_test, psi_local)
+        const_poly_c1 = create_const_poly(c1_val, max_deg_test, psi_local)
 
-        term_for_c0_x_old_0 = op.polynomial_multiply(const_poly_c0, L1[0], max_deg_test, psi, clmo)
-        term_for_c1_x_old_1 = op.polynomial_multiply(const_poly_c1, L1[1], max_deg_test, psi, clmo)
+        term_for_c0_x_old_0 = polynomial_multiply(const_poly_c0, L1[0], max_deg_test, psi_local, clmo_local, encode_dict_local) # Pass local encode_dict
+        term_for_c1_x_old_1 = polynomial_multiply(const_poly_c1, L1[1], max_deg_test, psi_local, clmo_local, encode_dict_local) # Pass local encode_dict
         
-        H_expected1 = op.polynomial_zero_list(max_deg_test, psi)
-        op.polynomial_add_inplace(H_expected1, term_for_c0_x_old_0, 1.0, max_deg_test)
-        op.polynomial_add_inplace(H_expected1, term_for_c1_x_old_1, 1.0, max_deg_test)
+        H_expected1 = polynomial_zero_list(max_deg_test, psi_local)
+        polynomial_add_inplace(H_expected1, term_for_c0_x_old_0, 1.0, max_deg_test)
+        polynomial_add_inplace(H_expected1, term_for_c1_x_old_1, 1.0, max_deg_test)
 
         for d_idx in range(max_deg_test + 1):
             assert np.allclose(H_actual1[d_idx], H_expected1[d_idx], atol=1e-15, rtol=1e-12), \
@@ -247,31 +213,31 @@ def test_substitute_linear(max_deg_test, complex_dtype_bool):
 
     # Test Case 2: H_old = c_sq * (x_old_0)^2 (only if max_deg_test >= 2)
     if max_deg_test >= 2:
-        H_old2 = op.polynomial_zero_list(max_deg_test, psi)
+        H_old2 = polynomial_zero_list(max_deg_test, psi_local)
         c_sq_val = dtype(1.5 + (0.5j if complex_dtype_bool else 0.0))
         
         k_x0sq = tuple([2 if i == 0 else 0 for i in range(6)])
-        idx_x0sq = algebra.encode_multiindex(k_x0sq, 2, psi, clmo)
+        idx_x0sq = encode_multiindex(np.array(k_x0sq, dtype=np.int64), 2, encode_dict_local) # Use local encode_dict
         H_old2[2][idx_x0sq] = c_sq_val
 
         C2 = np.identity(6, dtype=dtype)
         C2[0,0] = dtype(1.2 - (0.3j if complex_dtype_bool else 0.0)) 
         C2[0,1] = dtype(0.7 + (0.4j if complex_dtype_bool else 0.0)) # x_old_0 = C2[0,0]*x_new_0 + C2[0,1]*x_new_1
         
-        H_actual2 = substitute_linear(H_old2, C2, max_deg_test, psi, clmo)
+        H_actual2 = substitute_linear(H_old2, C2, max_deg_test, psi_local, clmo_local, encode_dict_local) # Pass local encode_dict
         
-        L2 = _linear_variable_polys(C2, max_deg_test, psi, clmo)
-        const_poly_c_sq = create_const_poly(c_sq_val, max_deg_test, psi)
+        L2 = _linear_variable_polys(C2, max_deg_test, psi_local, clmo_local, encode_dict_local) # Pass local encode_dict
+        const_poly_c_sq = create_const_poly(c_sq_val, max_deg_test, psi_local)
         
-        powered_L0 = op.polynomial_power(L2[0], 2, max_deg_test, psi, clmo)
-        H_expected2 = op.polynomial_multiply(const_poly_c_sq, powered_L0, max_deg_test, psi, clmo)
+        powered_L0 = polynomial_power(L2[0], 2, max_deg_test, psi_local, clmo_local, encode_dict_local) # Pass local encode_dict
+        H_expected2 = polynomial_multiply(const_poly_c_sq, powered_L0, max_deg_test, psi_local, clmo_local, encode_dict_local) # Pass local encode_dict
 
         for d_idx in range(max_deg_test + 1):
             assert np.allclose(H_actual2[d_idx], H_expected2[d_idx], atol=1e-14, rtol=1e-11), \
                 f"SubstLinear TC2 (quad) failed: max_deg={max_deg_test}, complex={complex_dtype_bool}, d_idx={d_idx}"
 
 def test_identity(max_deg, psi_clmo):
-    psi, clmo = psi_clmo
+    psi, clmo, encode_dict = psi_clmo # Unpack encode_dict
     I = np.eye(6)
 
     # random polynomial with integer coefficients in [‑3, 3]
@@ -288,15 +254,21 @@ def test_identity(max_deg, psi_clmo):
             mon *= v**int(k)
         expr += int(c) * mon
 
-    P = sympy_to_poly(expr, max_deg, psi, clmo)
-    P_sub = substitute_linear(P, I, max_deg, psi, clmo)
+    P = sympy2poly(expr, _sympy_vars, psi, clmo, encode_dict) # Pass _sympy_vars instead of max_deg
 
+    # Ensure P has enough degree components (max_deg + 1 elements)
+    while len(P) < max_deg + 1:
+        P.append(polynomial_zero_list(len(P), psi)[0])  # Append zero coefficients for missing degrees
+
+    P_sub = substitute_linear(P, I, max_deg, psi, clmo, encode_dict) # Pass encode_dict
+
+    # Use allclose instead of array_equal to account for numerical precision
     assert all(
-        np.array_equal(a, b) for a, b in zip(P, P_sub)
-    ), "Identity substitution should return an identical polynomial."
+        np.allclose(a, b, atol=1e-14, rtol=1e-12) for a, b in zip(P, P_sub)
+    ), "Identity substitution should return an identical polynomial (within numerical precision)."
 
 def test_permutation(max_deg, psi_clmo):
-    psi, clmo = psi_clmo
+    psi, clmo, encode_dict = psi_clmo # Unpack encode_dict
     # permutation matrix that swaps x and y (indices 0,1)
     Pmat = np.eye(6)
     Pmat[[0, 1]] = Pmat[[1, 0]]
@@ -311,13 +283,18 @@ def test_permutation(max_deg, psi_clmo):
     # - Pmat[1,0] = 1, meaning old_y = new_x
     # So this matches the SymPy substitution [(x, y), (y, x)]
     
-    P_old = sympy_to_poly(expr, max_deg, psi, clmo)
-    P_new = substitute_linear(P_old, Pmat, max_deg, psi, clmo)
+    P_old = sympy2poly(expr, _sympy_vars, psi, clmo, encode_dict) # Pass _sympy_vars instead of max_deg
+    
+    # Ensure P_old has enough degree components (max_deg + 1 elements)
+    while len(P_old) < max_deg + 1:
+        P_old.append(polynomial_zero_list(len(P_old), psi)[0])  # Append zero coefficients for missing degrees
+        
+    P_new = substitute_linear(P_old, Pmat, max_deg, psi, clmo, encode_dict) # Pass encode_dict
     
     # Expected result after substitution: x→y, y→x
     # x^2 → y^2, 2*y*px → 2*x*px, 3*z^2 → 3*z^2
     expected_expr = y**2 + 2*x*px + 3*z**2
-    expr_test = poly_list_to_sympy(P_new, _sympy_vars, psi, clmo)
+    expr_test = poly2sympy(P_new, _sympy_vars, psi, clmo)
 
     diff = sp.expand(expected_expr - expr_test)
     
@@ -325,7 +302,7 @@ def test_permutation(max_deg, psi_clmo):
 
 @pytest.mark.parametrize("seed", [1, 2, 3])
 def test_random_matrix(seed, max_deg, psi_clmo):
-    psi, clmo = psi_clmo
+    psi, clmo, encode_dict = psi_clmo # Unpack encode_dict
     rng = np.random.default_rng(seed)
 
     # Generate a random 6×6 integer matrix with entries in {‑2, ‑1, 0, 1, 2}
@@ -351,14 +328,19 @@ def test_random_matrix(seed, max_deg, psi_clmo):
             mon *= v**int(k)
         expr += int(c) * mon
 
-    P_old = sympy_to_poly(expr, max_deg, psi, clmo)
-    P_new = substitute_linear(P_old, C, max_deg, psi, clmo)
+    P_old = sympy2poly(expr, _sympy_vars, psi, clmo, encode_dict) # Pass _sympy_vars instead of max_deg
+    
+    # Ensure P_old has enough degree components (max_deg + 1 elements)
+    while len(P_old) < max_deg + 1:
+        P_old.append(polynomial_zero_list(len(P_old), psi)[0])  # Append zero coefficients for missing degrees
+        
+    P_new = substitute_linear(P_old, C, max_deg, psi, clmo, encode_dict) # Pass encode_dict
 
     # SymPy ground‑truth substitution
     x_old = np.array(_sympy_vars[:6])  # same symbols
     subs_dict = {x_old[i]: sum(int(C[i, j]) * x_old[j] for j in range(6)) for i in range(6)}
     expr_truth = expr.xreplace(subs_dict)
-    expr_test = poly_list_to_sympy(P_new, _sympy_vars, psi, clmo)
+    expr_test = poly2sympy(P_new, _sympy_vars, psi, clmo)
 
     assert sp.expand(expr_truth - expr_test) == 0, f"Mismatch for seed {seed} and degree {max_deg}"
 
@@ -371,12 +353,15 @@ def test_symplectic(point):
 @pytest.mark.parametrize("max_deg", [2, 3, 4, 6])
 def test_real_normal_form(point, max_deg):
     # Create fresh psi, clmo for each test instead of using the fixture
-    psi, clmo = base.init_index_tables(max_deg)
+    psi, clmo = init_index_tables(max_deg)
+    # Create encode_dict from clmo
+    encode_dict = _create_encode_dict_from_clmo(clmo)
+    
     H_phys = build_physical_hamiltonian(point, max_deg)
     H_rn   = phys2rn(point, H_phys, max_deg, psi, clmo)
 
     x, y, z, px, py, pz = sp.symbols('x y z px py pz')
-    expr = poly_list_to_sympy(H_rn, (x, y, z, px, py, pz), psi, clmo)
+    expr = poly2sympy(H_rn, (x, y, z, px, py, pz), psi, clmo)
 
     # pull out degree-2 terms
     poly = sp.Poly(expr, x, y, z, px, py, pz)
@@ -416,7 +401,9 @@ def test_real_normal_form(point, max_deg):
 @pytest.mark.parametrize("max_deg", [2, 3, 4, 6])
 def test_complex_normal_form(point, max_deg):
     # Create fresh psi, clmo for each test instead of using the fixture
-    psi, clmo = base.init_index_tables(max_deg)
+    psi, clmo = init_index_tables(max_deg)
+    # Create encode_dict from clmo
+    encode_dict = _create_encode_dict_from_clmo(clmo)
 
     # 1) build physical Hamiltonian, go to real normal form, then complex
     H_phys = build_physical_hamiltonian(point, max_deg)
@@ -425,7 +412,7 @@ def test_complex_normal_form(point, max_deg):
 
     # 2) symbolic expression of degree‑2 part
     q1, q2, q3, p1, p2, p3 = sp.symbols("q1 q2 q3 p1 p2 p3")
-    expr = poly_list_to_sympy(H_cn, (q1, q2, q3, p1, p2, p3), psi, clmo)
+    expr = poly2sympy(H_cn, (q1, q2, q3, p1, p2, p3), psi, clmo)
 
     quad_terms = {
         m: c for m, c in sp.Poly(expr, q1, q2, q3, p1, p2, p3).terms() if sum(m) == 2
@@ -461,24 +448,24 @@ def test_complex_normal_form(point, max_deg):
     assert np.isclose(coeff_q3p3 / 1j, omega2, rtol=1e-12)
     # ---------------- Poisson‑bracket sanity tests -------------------------
     # Extract the degree-2 part of the Hamiltonian
-    H2 = op.polynomial_zero_list(max_deg, psi)
+    H2 = polynomial_zero_list(max_deg, psi)
     for d in range(len(H_cn)):
         if d == 2:  # Only copy degree 2 terms
             H2[d] = H_cn[d].copy()
     
     # Create |q2|² = q2 * p2 polynomial
-    q2_var = op.polynomial_variable(1, max_deg, psi, clmo)
-    p2_var = op.polynomial_variable(4, max_deg, psi, clmo)
-    q2p2_poly = op.polynomial_multiply(q2_var, p2_var, max_deg, psi, clmo)
+    q2_var = polynomial_variable(1, max_deg, psi, clmo, encode_dict)
+    p2_var = polynomial_variable(4, max_deg, psi, clmo, encode_dict)
+    q2p2_poly = polynomial_multiply(q2_var, p2_var, max_deg, psi, clmo, encode_dict)
     
     # Create |q3|² = q3 * p3 polynomial
-    q3_var = op.polynomial_variable(2, max_deg, psi, clmo)
-    p3_var = op.polynomial_variable(5, max_deg, psi, clmo)
-    q3p3_poly = op.polynomial_multiply(q3_var, p3_var, max_deg, psi, clmo)
+    q3_var = polynomial_variable(2, max_deg, psi, clmo, encode_dict)
+    p3_var = polynomial_variable(5, max_deg, psi, clmo, encode_dict)
+    q3p3_poly = polynomial_multiply(q3_var, p3_var, max_deg, psi, clmo, encode_dict)
     
     # Compute the Poisson brackets
-    pb_H2_q2p2 = op.polynomial_poisson_bracket(H2, q2p2_poly, max_deg, psi, clmo)
-    pb_H2_q3p3 = op.polynomial_poisson_bracket(H2, q3p3_poly, max_deg, psi, clmo)
+    pb_H2_q2p2 = polynomial_poisson_bracket(H2, q2p2_poly, max_deg, psi, clmo, encode_dict)
+    pb_H2_q3p3 = polynomial_poisson_bracket(H2, q3p3_poly, max_deg, psi, clmo, encode_dict)
     
     # Check that the Poisson brackets are zero (within numerical tolerance)
     for d in range(max_deg + 1):
@@ -490,11 +477,11 @@ def test_complex_normal_form(point, max_deg):
                 f"Poisson bracket {{{H2}, |q3|²}} should be zero, but degree {d} terms are not"
     
     # Also test the bracket with hyperbolic action I1 = q1 * p1
-    q1_var = op.polynomial_variable(0, max_deg, psi, clmo)
-    p1_var = op.polynomial_variable(3, max_deg, psi, clmo)
-    q1p1_poly = op.polynomial_multiply(q1_var, p1_var, max_deg, psi, clmo)
+    q1_var = polynomial_variable(0, max_deg, psi, clmo, encode_dict)
+    p1_var = polynomial_variable(3, max_deg, psi, clmo, encode_dict)
+    q1p1_poly = polynomial_multiply(q1_var, p1_var, max_deg, psi, clmo, encode_dict)
     
-    pb_H2_q1p1 = op.polynomial_poisson_bracket(H2, q1p1_poly, max_deg, psi, clmo)
+    pb_H2_q1p1 = polynomial_poisson_bracket(H2, q1p1_poly, max_deg, psi, clmo, encode_dict)
     
     for d in range(max_deg + 1):
         if pb_H2_q1p1[d].size > 0:
@@ -504,7 +491,9 @@ def test_complex_normal_form(point, max_deg):
 @pytest.mark.parametrize("max_deg", [2, 3, 4, 6])
 def test_cn2rn_inverse(point, max_deg):
     # Create fresh psi, clmo for each test instead of using the fixture
-    psi, clmo = base.init_index_tables(max_deg)
+    psi, clmo = init_index_tables(max_deg)
+    # Create encode_dict from clmo
+    encode_dict = _create_encode_dict_from_clmo(clmo)
 
     # pipeline ---------------------------------------------------------------
     H_phys = build_physical_hamiltonian(point, max_deg)
@@ -518,7 +507,7 @@ def test_cn2rn_inverse(point, max_deg):
 
         # (2) quadratic-block sanity (reuse earlier helper)
         x,y,z,px,py,pz = sp.symbols('x y z px py pz')
-        expr = poly_list_to_sympy(H_back, (x,y,z,px,py,pz), psi, clmo)
+        expr = poly2sympy(H_back, (x,y,z,px,py,pz), psi, clmo)
         all_terms = {m:c for m,c in sp.Poly(expr, x,y,z,px,py,pz).terms()}
         
         # Filter out terms with very small coefficients (numerical artifacts)

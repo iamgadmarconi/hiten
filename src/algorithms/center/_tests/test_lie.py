@@ -10,9 +10,10 @@ from algorithms.center.lie import (_apply_lie_transform,
                                    _select_terms_for_elimination,
                                    _solve_homological_equation, lie_transform)
 from algorithms.center.polynomial.algebra import _poly_poisson
-from algorithms.center.polynomial.base import (decode_multiindex,
+from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
+                                               decode_multiindex,
                                                encode_multiindex,
-                                               init_index_tables)
+                                               init_index_tables, make_poly)
 from algorithms.center.polynomial.conversion import sympy2poly
 from algorithms.center.polynomial.operations import polynomial_zero_list
 from algorithms.center.transforms import phys2rn, rn2cn
@@ -27,6 +28,7 @@ def cn_hamiltonian_data(request):
     # psi table needs to be large enough for n_missing in _get_homogeneous_terms tests
     psi_init_deg = max_deg + 2
     psi, clmo = init_index_tables(psi_init_deg)
+    encode_dict = _create_encode_dict_from_clmo(clmo)
 
     # Use a standard mu value (e.g., Earth-Moon L1)
     mu_earth_moon = 0.012150585609624
@@ -38,12 +40,12 @@ def cn_hamiltonian_data(request):
     H_rn = phys2rn(point, H_phys, max_deg, psi, clmo)
     H_coeffs = rn2cn(H_rn, max_deg, psi, clmo)
 
-    return H_coeffs, psi, clmo, max_deg
+    return H_coeffs, psi, clmo, encode_dict, max_deg
 
 
 @pytest.mark.parametrize("cn_hamiltonian_data", [2, 3, 4, 6], indirect=True)
 def test_get_homogeneous_terms_when_n_is_within_H_coeffs(cn_hamiltonian_data):
-    H_coeffs, psi, clmo, max_deg = cn_hamiltonian_data
+    H_coeffs, psi, clmo, encode_dict, max_deg = cn_hamiltonian_data
 
     n = 3  # Test for degree 3 terms
     if n > max_deg:
@@ -70,7 +72,7 @@ def test_get_homogeneous_terms_when_n_is_within_H_coeffs(cn_hamiltonian_data):
 
 @pytest.mark.parametrize("cn_hamiltonian_data", [2, 3, 4, 6], indirect=True)
 def test_get_homogeneous_terms_when_n_is_beyond_H_coeffs_degree(cn_hamiltonian_data):
-    H_coeffs, psi, clmo, max_deg = cn_hamiltonian_data
+    H_coeffs, psi, clmo, encode_dict, max_deg = cn_hamiltonian_data
 
     # H_coeffs extends up to max_deg. We test for a degree n_missing > max_deg.
     # but still within psi_init_deg (max_deg + 2)
@@ -84,7 +86,7 @@ def test_get_homogeneous_terms_when_n_is_beyond_H_coeffs_degree(cn_hamiltonian_d
 
 @pytest.mark.parametrize("cn_hamiltonian_data", [2, 3, 4, 6], indirect=True)
 def test_get_homogeneous_terms_when_n_is_at_psi_table_edge(cn_hamiltonian_data):
-    H_coeffs, psi, clmo, max_deg = cn_hamiltonian_data
+    H_coeffs, psi, clmo, encode_dict, max_deg = cn_hamiltonian_data
 
     # This case tests access at psi_init_deg = max_deg + 2.
     n_at_psi_edge = max_deg + 2
@@ -150,6 +152,7 @@ def test_select_terms_for_elimination(n):
 def test_homological_property(n):
     max_deg = n
     psi, clmo = init_index_tables(max_deg)
+    encode_dict = _create_encode_dict_from_clmo(clmo)
 
     # pick arbitrary non-resonant frequencies
     lam, w1, w2 = 3.1, 2.4, 2.2
@@ -169,20 +172,20 @@ def test_homological_property(n):
 
     # ---- compute {H2,Gn} using Poisson bracket code -----------------------
     # Build H2 in coefficient-list format (degree 2)
-    H2 = polynomial_zero_list(max_deg, psi)
-    idx = encode_multiindex((1,0,0,1,0,0), 2, psi, clmo)   # q1 p1
-    H2[2][idx] = lam
-    idx = encode_multiindex((0,1,0,0,1,0), 2, psi, clmo)   # q2 p2
-    H2[2][idx] = 1j*w1
-    idx = encode_multiindex((0,0,1,0,0,1), 2, psi, clmo)   # q3 p3
-    H2[2][idx] = 1j*w2
+    H2_list = polynomial_zero_list(max_deg, psi)
+    idx = encode_multiindex((1,0,0,1,0,0), 2, encode_dict)   # q1 p1
+    H2_list[2][idx] = lam
+    idx = encode_multiindex((0,1,0,0,1,0), 2, encode_dict)   # q2 p2
+    H2_list[2][idx] = 1j*w1
+    idx = encode_multiindex((0,0,1,0,0,1), 2, encode_dict)   # q3 p3
+    H2_list[2][idx] = 1j*w2
 
     # bracket restricted to degree n because both inputs are homogeneous
     # PB = poisson_bracket_degree2(H2[2], Gn, n, psi, clmo) # Old line
     
-    # Use _poly_poisson for homogeneous inputs H2[2] (degree 2) and Gn (degree n)
+    # Use _poly_poisson for homogeneous inputs H2_list[2] (degree 2) and Gn (degree n)
     # Result is homogeneous of degree 2 + n - 2 = n
-    PB_coeffs = _poly_poisson(H2[2], 2, Gn, n, psi, clmo)
+    PB_coeffs = _poly_poisson(H2_list[2], 2, Gn, n, psi, clmo, encode_dict)
 
     # ---- identity check ----------------------------------------------------
     # PB_coeffs must equal -Hn_bad *exactly* (same vector)
@@ -210,13 +213,15 @@ test_params = [
 )
 def test_apply_lie_transform(test_name, G_deg_actual, G_exps, G_coeff_val, H_coeff_val, N_max_test):
     psi, clmo = init_index_tables(N_max_test)
+    encode_dict = _create_encode_dict_from_clmo(clmo)
 
     # --- Setup H_coeffs_list ---
     # H is always c_H * q2*p2 (degree 2)
     H_deg_actual = 2
-    H_exps = (0,1,0,0,1,0) 
+    H_exps_tuple = (0,1,0,0,1,0)
+    H_exps_np = np.array(H_exps_tuple, dtype=np.int64)
     H_coeffs_list = polynomial_zero_list(N_max_test, psi)
-    idx_H = encode_multiindex(H_exps, H_deg_actual, psi, clmo)
+    idx_H = encode_multiindex(H_exps_np, H_deg_actual, encode_dict)
     if H_deg_actual <= N_max_test: # Ensure degree is within bounds of the list
         H_coeffs_list[H_deg_actual][idx_H] = H_coeff_val
 
@@ -225,13 +230,14 @@ def test_apply_lie_transform(test_name, G_deg_actual, G_exps, G_coeff_val, H_coe
     G_coeffs_list = polynomial_zero_list(N_max_test, psi) # G_n is just one component
     # The G_n passed to _apply_lie_transform is a single ndarray, not a list.
     # So, G_coeffs_list itself is not directly used but helps create G_n_array.
-    G_n_array = polynomial_zero_list(G_deg_actual, psi)[G_deg_actual] # Get a correctly sized array for G_deg_actual
-    
-    idx_G = encode_multiindex(G_exps, G_deg_actual, psi, clmo)
+    G_n_array = make_poly(G_deg_actual, psi)
+
+    G_exps_np = np.array(G_exps, dtype=np.int64)
+    idx_G = encode_multiindex(G_exps_np, G_deg_actual, encode_dict)
     G_n_array[idx_G] = G_coeff_val
     
     # Call the function under test
-    H1_transformed_coeffs = _apply_lie_transform(H_coeffs_list, G_n_array, G_deg_actual, N_max_test, psi, clmo, tol=1e-15)
+    H1_transformed_coeffs = _apply_lie_transform(H_coeffs_list, G_n_array, G_deg_actual, N_max_test, psi, clmo, encode_dict, tol=1e-15)
 
     # --- SymPy Reference Calculation ---
     q1,q2,q3,p1,p2,p3 = sp.symbols('q1 q2 q3 p1 p2 p3')
@@ -239,7 +245,7 @@ def test_apply_lie_transform(test_name, G_deg_actual, G_exps, G_coeff_val, H_coe
 
     # Construct Hsym
     Hsym = sp.sympify(H_coeff_val) # Handles complex numbers correctly
-    for i, exp_val in enumerate(H_exps):
+    for i, exp_val in enumerate(H_exps_tuple):
         if exp_val > 0:
             Hsym *= coords[i]**exp_val
 
@@ -273,7 +279,7 @@ def test_apply_lie_transform(test_name, G_deg_actual, G_exps, G_coeff_val, H_coe
     # Convert the SymPy reference Href_sym_calc to our polynomial coefficient list format
     # The list(coords) is important as sympy2poly expects a Python list of symbols.
     # psi and clmo should be the ones initialized with N_max_test.
-    Href_poly = sympy2poly(Href_sym_calc, list(coords), psi, clmo)
+    Href_poly = sympy2poly(Href_sym_calc, list(coords), psi, clmo, encode_dict)
 
     # --- Comparison ---
     length_error_msg = f"Test '{test_name}': Output H1_transformed_coeffs has unexpected length {len(H1_transformed_coeffs)}, expected {N_max_test + 1}"
@@ -308,7 +314,7 @@ def test_apply_lie_transform(test_name, G_deg_actual, G_exps, G_coeff_val, H_coe
 
 @pytest.mark.parametrize("cn_hamiltonian_data", [2, 3, 4, 6], indirect=True)
 def test_lie_transform_removes_bad_terms(cn_hamiltonian_data):
-    H_coeffs, psi, clmo, max_deg = cn_hamiltonian_data
+    H_coeffs, psi, clmo, encode_dict, max_deg = cn_hamiltonian_data
     mu_earth_moon = 0.012150585609624
     point = L1Point(mu=mu_earth_moon)
     H_out, G_total = lie_transform(point, H_coeffs, psi, clmo, max_deg)

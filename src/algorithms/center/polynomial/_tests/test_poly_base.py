@@ -1,15 +1,22 @@
-import numpy as np
-import pytest
-from numba.typed import List
-import symengine as se
 import random
 
-from algorithms.center.polynomial.base import init_index_tables, make_poly, encode_multiindex, decode_multiindex
-from algorithms.variables import N_VARS
+import numpy as np
+import pytest
+import symengine as se
+from numba import njit, types
+from numba.typed import Dict, List
 
+from algorithms.center.polynomial.base import (CLMO_GLOBAL, ENCODE_DICT_GLOBAL,
+                                               PSI_GLOBAL, decode_multiindex,
+                                               encode_multiindex,
+                                               init_index_tables, make_poly,
+                                               _create_encode_dict_from_clmo)
+from algorithms.variables import N_VARS
 
 MAX_DEGREE = 5
 PSI, CLMO = init_index_tables(MAX_DEGREE)
+# Corresponding ENCODE_DICT for the global PSI, CLMO used in some tests
+ENCODE_DICT = _create_encode_dict_from_clmo(CLMO)
 
 if N_VARS == 6:
     s_vars = se.symbols(f'x0:{N_VARS}') 
@@ -99,7 +106,7 @@ def test_encode_multiindex():
             k = decode_multiindex(pos, degree, CLMO)
             
             # Encode it and verify it matches the original position
-            idx = encode_multiindex(k, degree, PSI, CLMO)
+            idx = encode_multiindex(k, degree, ENCODE_DICT)
             assert idx == pos
             
             # Test invalid encoding behavior by modifying the multiindex
@@ -113,7 +120,7 @@ def test_encode_multiindex():
                         k_invalid[(i+1) % N_VARS] += 1
                         # If this creates a valid but different multiindex, it will encode
                         # to a different position. If it's invalid pattern, it should return -1
-                        idx_invalid = encode_multiindex(k_invalid, degree, PSI, CLMO)
+                        idx_invalid = encode_multiindex(k_invalid, degree, ENCODE_DICT)
                         assert idx_invalid != pos  # Should be different or -1
                         break
 
@@ -140,7 +147,7 @@ def test_multi_index_roundtrip():
         # Test decode -> encode -> decode consistency
         for pos in test_positions:
             k1 = decode_multiindex(pos, degree, CLMO)
-            idx = encode_multiindex(k1, degree, PSI, CLMO)
+            idx = encode_multiindex(k1, degree, ENCODE_DICT)
             k2 = decode_multiindex(idx, degree, CLMO)
             
             # Verify positions match
@@ -152,7 +159,8 @@ def test_multi_index_roundtrip():
 
 @pytest.mark.parametrize("deg", [0, 1, 2, 3, 4, 5, 6])
 def test_encode_decode_roundtrip(deg):
-    psi, clmo = init_index_tables(6)
+    psi, clmo = init_index_tables(6) # Max degree for these tables is 6
+    encode_dict_for_deg6 = _create_encode_dict_from_clmo(clmo) # Create corresponding encode_dict
     # draw 10 random exponent vectors of total degree = deg
     for _ in range(10):
         k = np.zeros(N_VARS, dtype=np.int64)
@@ -161,7 +169,21 @@ def test_encode_decode_roundtrip(deg):
             k[i] = random.randint(0, remaining)
             remaining -= k[i]
         k[-1] = remaining
-        idx = encode_multiindex(k, deg, psi, clmo)
+        idx = encode_multiindex(k, deg, encode_dict_for_deg6) # Use the created encode_dict
         assert idx >= 0
         k_back = decode_multiindex(idx, deg, clmo)
         assert np.array_equal(k_back, k)
+
+    k = np.array([0,0,0,0,0,0], dtype=np.int64)
+    deg = 0
+    psi, clmo = init_index_tables(deg) # Local psi, clmo for this specific test setup
+    # Need to build a local encode_dict_list for this specific psi, clmo
+    local_encode_dict_list = List.empty_list(types.DictType(types.int64, types.int32))
+    for d_arr in clmo:
+        d_map = Dict.empty(key_type=types.int64, value_type=types.int32)
+        for i, p_val in enumerate(d_arr):
+            d_map[np.int64(p_val)] = np.int32(i)
+        local_encode_dict_list.append(d_map)
+
+    idx = encode_multiindex(k, deg, local_encode_dict_list) # Changed arguments
+    assert idx == 0 # (0,0,0,0,0,0) is the first entry for degree 0

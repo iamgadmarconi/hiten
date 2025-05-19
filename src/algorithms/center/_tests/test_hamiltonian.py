@@ -1,32 +1,45 @@
 from __future__ import annotations
 
 import numpy as np
-import sympy as sp
 import pytest
+import sympy as sp
+from numba import types
+from numba.typed import Dict, List
 
-from algorithms.center.polynomial import base, operations as op, algebra
-from algorithms.center.hamiltonian import (
-    build_physical_hamiltonian, 
-    _build_T_polynomials, 
-)
-from system.libration import L1Point  # noqa: F401 – used in fixture
+from algorithms.center.hamiltonian import (_build_T_polynomials,
+                                           build_physical_hamiltonian)
+from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
+                                               init_index_tables)
+from algorithms.center.polynomial.conversion import sympy2poly
+from algorithms.center.polynomial.operations import (polynomial_add_inplace,
+                                                     polynomial_evaluate,
+                                                     polynomial_multiply,
+                                                     polynomial_variable,
+                                                     polynomial_zero_list)
+from system.libration import L1Point
 
 _sympy_vars = sp.symbols("x y z px py pz")
 
-@pytest.fixture(scope="module")
-def point() -> L1Point:  # noqa: D401 – pytest fixture
+@pytest.fixture()
+def point() -> L1Point:
     """Return an Earth-Moon L1 point (mu value taken from JPL DE-430)."""
     mu_earth_moon = 0.012150585609624
     return L1Point(mu=mu_earth_moon)
 
-@pytest.fixture(scope="module", params=[4, 6])
+@pytest.fixture(params=[4, 6])
 def max_deg(request):
     return request.param
 
-@pytest.fixture(scope="module")
+@pytest.fixture()
 def psi_clmo(max_deg):
-    psi, clmo = base.init_index_tables(max_deg)
-    return psi, clmo
+    psi, clmo = init_index_tables(max_deg)
+    encode_dict = List.empty_list(types.DictType(types.int64, types.int32))
+    for clmo_arr in clmo:
+        d_map = Dict.empty(key_type=types.int64, value_type=types.int32)
+        for i, packed_val in enumerate(clmo_arr):
+            d_map[np.int64(packed_val)] = np.int32(i)
+        encode_dict.append(d_map)
+    return psi, clmo, encode_dict
 
 def sympy_reference(point: L1Point, max_deg: int) -> sp.Expr:
     """Exact Hamiltonian expanded with SymPy up to *max_deg* total degree."""
@@ -65,76 +78,18 @@ def sympy_reference(point: L1Point, max_deg: int) -> sp.Expr:
         )
         raise type(e)(error_msg) from e
 
-def sympy_to_poly(sym_expr: sp.Expr, max_deg: int, psi, clmo):
-    """Convert a SymPy polynomial into the coefficient-list format used by the codebase."""
-
-    poly = op.polynomial_zero_list(max_deg, psi)
-
-    for term in sym_expr.as_ordered_terms():
-        coeff, monom = term.as_coeff_Mul()
-        if monom == 1:
-            exps = (0, 0, 0, 0, 0, 0)
-        else:
-            exps = sp.Poly(monom, *_sympy_vars).monoms()[0]
-
-        deg = sum(exps)
-        if deg > max_deg:
-            continue  # truncated away in our polynomial representation
-
-        idx = algebra.encode_multiindex(exps, deg, psi, clmo) # Pass full psi and clmo tables
-        poly[deg][idx] = float(coeff)
-
-    return poly
-
-def poly_list_to_sympy(P, vars, psi, clmo):
-    """
-    Convert coefficient-list *P* to a SymPy expression.
-
-    Parameters
-    ----------
-    P : List[np.ndarray]
-        one coefficient vector per total degree
-    vars : Sequence[sympy.Symbol]
-        the symbol that corresponds to each of the six packed exponents
-    psi, clmo : lookup tables
-    """
-    expr = 0
-    for deg, coeff_vec in enumerate(P):
-        for pos, coeff in enumerate(coeff_vec):
-            if coeff == 0:
-                continue
-            exps = algebra.decode_multiindex(pos, deg, clmo)  # 6-tuple
-            mon  = sp.prod(v**k for v, k in zip(vars, exps) if k)
-            expr += coeff * mon
-    return sp.expand(expr)
-
-
-def evaluate_poly(poly, values, psi, clmo):
-    """Brute-force evaluation of a coefficient-list polynomial at *values* (ℝ⁶)."""
-
-    total = 0.0
-    for deg, coeffs in enumerate(poly):
-        if coeffs.size == 0:
-            continue
-        for pos, c in enumerate(coeffs):
-            if c == 0.0:
-                continue
-            exps = algebra.decode_multiindex(pos, deg, clmo) # Pass full clmo table
-            total += c * np.prod(values**np.asarray(exps))
-    return total
-
 
 @pytest.mark.parametrize("max_deg", [4, 6, 8])
 def test_symbolic_identity(point, max_deg):
     """Coefficient arrays must match a SymPy ground-truth for small degrees."""
 
-    psi, clmo = base.init_index_tables(max_deg)
-    bph_psi_config = (None, False)
-    bph_clmo_deg = max_deg
+    psi, clmo = init_index_tables(max_deg)
+    encode_dict = _create_encode_dict_from_clmo(clmo)
+    
     H_build = build_physical_hamiltonian(point, max_deg)
 
     H_sympy = sympy_reference(point, max_deg)
-    H_ref = sympy_to_poly(H_sympy, max_deg, psi, clmo)
+    H_ref = sympy2poly(H_sympy, _sympy_vars, psi, clmo, encode_dict)
 
     for d in range(max_deg + 1):
         assert np.allclose(
@@ -142,55 +97,47 @@ def test_symbolic_identity(point, max_deg):
         ), f"Mismatch found in degree slice {d}.\nBuild: {H_build[d]}\nRef:   {H_ref[d]}"
 
 @pytest.mark.parametrize("max_deg", [4, 6, 8])
-def test_legendre_recursion(point, max_deg):
+def test_legendre_recursion(point, max_deg, psi_clmo):
     """Internal `T[n]` sequence must satisfy Legendre three-term recursion."""
 
-    psi, clmo = base.init_index_tables(max_deg)
+    psi, clmo, encode_dict = psi_clmo
     x_poly, y_poly, z_poly, *_ = [
-        op.polynomial_variable(i, max_deg, psi, clmo) for i in range(6)
+        polynomial_variable(i, max_deg, psi, clmo, encode_dict) for i in range(6)
     ]
 
-    # Call the refactored helper function directly
-    T = _build_T_polynomials(x_poly, y_poly, z_poly, max_deg, psi, clmo)
+    T = _build_T_polynomials(x_poly, y_poly, z_poly, max_deg, psi, clmo, encode_dict)
 
-    # The rest of the test logic for verification remains largely the same,
-    # but it uses the T computed above.
-    # We still need sum_sq for the RHS of the recursion check.
-    sum_sq = op.polynomial_zero_list(max_deg, psi)
-    for var in (x_poly, y_poly, z_poly): # Use polynomial variables
-        op.polynomial_add_inplace(sum_sq, op.polynomial_multiply(var, var, max_deg, psi, clmo), 1.0)
+    sum_sq = polynomial_zero_list(max_deg, psi)
+    for var in (x_poly, y_poly, z_poly):
+        polynomial_add_inplace(sum_sq, polynomial_multiply(var, var, max_deg, psi, clmo, encode_dict), 1.0)
     
     for n in range(2, max_deg + 1):
         n_ = float(n)
         a = (2 * n_ - 1) / n_
         b = (n_ - 1) / n_
 
-        # LHS is T[n] from the function call
         lhs = T[n]
 
-        # RHS is constructed using the recursion formula
-        # (a * x * T[n-1] - b * sum_sq * T[n-2])
+        term1_mult = polynomial_multiply(x_poly, T[n - 1], max_deg, psi, clmo, encode_dict)
+        term1 = polynomial_zero_list(max_deg, psi)
+        polynomial_add_inplace(term1, term1_mult, a)
         
-        term1_mult = op.polynomial_multiply(x_poly, T[n - 1], max_deg, psi, clmo)
-        term1 = op.polynomial_zero_list(max_deg, psi)
-        op.polynomial_add_inplace(term1, term1_mult, a)
-        
-        term2_mult = op.polynomial_multiply(sum_sq, T[n - 2], max_deg, psi, clmo)
-        term2 = op.polynomial_zero_list(max_deg, psi)
-        op.polynomial_add_inplace(term2, term2_mult, -b) # -b factor
+        term2_mult = polynomial_multiply(sum_sq, T[n - 2], max_deg, psi, clmo, encode_dict)
+        term2 = polynomial_zero_list(max_deg, psi)
+        polynomial_add_inplace(term2, term2_mult, -b)
 
-        rhs = op.polynomial_zero_list(max_deg, psi)
-        op.polynomial_add_inplace(rhs, term1, 1.0)
-        op.polynomial_add_inplace(rhs, term2, 1.0)
+        rhs = polynomial_zero_list(max_deg, psi)
+        polynomial_add_inplace(rhs, term1, 1.0)
+        polynomial_add_inplace(rhs, term2, 1.0)
 
         for d in range(max_deg + 1):
             assert np.array_equal(lhs[d], rhs[d]), f"Legendre recursion failed at n={n}, degree slice d={d}"
 
 @pytest.mark.parametrize("max_deg", [4, 6, 8])
-def test_numerical_evaluation(point, max_deg):
+def test_numerical_evaluation(point, max_deg, psi_clmo):
     """Evaluate both Hamiltonians at random points and compare numerically."""
 
-    psi, clmo = base.init_index_tables(max_deg)
+    psi, clmo, _ = psi_clmo
     H_poly = build_physical_hamiltonian(point, max_deg) 
     H_sym = sympy_reference(point, max_deg)
 
@@ -199,7 +146,7 @@ def test_numerical_evaluation(point, max_deg):
 
     for _ in range(50):
         vals = rng.uniform(-0.1, 0.1, 6)
-        H_num_poly = evaluate_poly(H_poly, vals, psi, clmo)
+        H_num_poly = polynomial_evaluate(H_poly, vals, clmo)
         H_num_sym = float(H_sym.subs(dict(zip(vars_syms, vals))))
         assert np.isclose(
             H_num_poly, H_num_sym, atol=1e-12

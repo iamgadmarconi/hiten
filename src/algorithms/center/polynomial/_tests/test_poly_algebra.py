@@ -1,10 +1,19 @@
 import numpy as np
 import pytest
 import symengine as se
+from numba.typed import List
 
-from algorithms.center.polynomial.base import init_index_tables, make_poly, encode_multiindex
-from algorithms.center.polynomial.algebra import _poly_mul, _poly_add, _poly_scale, _poly_mul, _poly_diff, _poly_poisson, _get_degree, _poly_clean_inplace, _poly_clean
-from algorithms.variables import N_VARS, q1, q2, q3, p1, p2, p3
+from algorithms.center.polynomial.algebra import (_get_degree, _poly_add,
+                                                  _poly_clean,
+                                                  _poly_clean_inplace,
+                                                  _poly_diff, _poly_evaluate,
+                                                  _poly_mul, _poly_poisson,
+                                                  _poly_scale, _poly_integrate)
+from algorithms.center.polynomial.base import (decode_multiindex,
+                                               encode_multiindex,
+                                               init_index_tables, make_poly,
+                                               PSI_GLOBAL, CLMO_GLOBAL, ENCODE_DICT_GLOBAL)
+from algorithms.variables import N_VARS, p1, p2, p3, q1, q2, q3
 
 # Initialize tables for tests
 MAX_DEGREE = 5
@@ -475,22 +484,22 @@ def test_poly_mul_monomials():
     
     # Set p to represent x0
     # Find the index for the monomial x0
-    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), deg_p, PSI, CLMO)
+    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), deg_p, ENCODE_DICT_GLOBAL)
     p[idx_x0] = 2.0  # p = 2*x0
     
     # Set q to represent x0*x1
     # Find the index for the monomial x0*x1
-    idx_x0x1 = encode_multiindex(np.array([1, 1, 0, 0, 0, 0], dtype=np.int64), deg_q, PSI, CLMO)
+    idx_x0x1 = encode_multiindex(np.array([1, 1, 0, 0, 0, 0], dtype=np.int64), deg_q, ENCODE_DICT_GLOBAL)
     q[idx_x0x1] = 3.0  # q = 3*x0*x1
     
     # Multiply the polynomials
-    result = _poly_mul(p, deg_p, q, deg_q, PSI, CLMO)
+    result = _poly_mul(p, deg_p, q, deg_q, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
     # Verify the degree of the result
     assert result.shape[0] == PSI[N_VARS, deg_p + deg_q]
     
     # The result should be 6*x0^2*x1
-    idx_x0x0x1 = encode_multiindex(np.array([2, 1, 0, 0, 0, 0], dtype=np.int64), deg_p + deg_q, PSI, CLMO)
+    idx_x0x0x1 = encode_multiindex(np.array([2, 1, 0, 0, 0, 0], dtype=np.int64), deg_p + deg_q, ENCODE_DICT_GLOBAL)
     assert abs(result[idx_x0x0x1] - 6.0) < 1e-10
     
     # Verify all other terms are zero
@@ -502,18 +511,18 @@ def test_poly_mul_monomials():
     q = make_poly(deg_q, PSI)
     
     # p = 4*x1
-    idx_x1 = encode_multiindex(np.array([0, 1, 0, 0, 0, 0], dtype=np.int64), deg_p, PSI, CLMO)
+    idx_x1 = encode_multiindex(np.array([0, 1, 0, 0, 0, 0], dtype=np.int64), deg_p, ENCODE_DICT_GLOBAL)
     p[idx_x1] = 4.0
     
     # q = 5*x2^2
-    idx_x2sq = encode_multiindex(np.array([0, 0, 2, 0, 0, 0], dtype=np.int64), deg_q, PSI, CLMO)
+    idx_x2sq = encode_multiindex(np.array([0, 0, 2, 0, 0, 0], dtype=np.int64), deg_q, ENCODE_DICT_GLOBAL)
     q[idx_x2sq] = 5.0
     
     # Multiply
-    result = _poly_mul(p, deg_p, q, deg_q, PSI, CLMO)
+    result = _poly_mul(p, deg_p, q, deg_q, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
     # Result should be 20*x1*x2^2
-    idx_result = encode_multiindex(np.array([0, 1, 2, 0, 0, 0], dtype=np.int64), deg_p + deg_q, PSI, CLMO)
+    idx_result = encode_multiindex(np.array([0, 1, 2, 0, 0, 0], dtype=np.int64), deg_p + deg_q, ENCODE_DICT_GLOBAL)
     assert abs(result[idx_result] - 20.0) < 1e-10
     
     # Verify all other terms are zero
@@ -526,38 +535,34 @@ def test_poly_mul_basic():
     deg_p = 1
     deg_q = 1
     
-    p = make_poly(deg_p, PSI)
+    p = make_poly(deg_p, PSI) # PSI is the global from base.py via this file's init
     q = make_poly(deg_q, PSI)
     
-    # Set p = 1 + 2*x0 + 3*x1
-    idx_const = encode_multiindex(np.array([0, 0, 0, 0, 0, 0], dtype=np.int64), 0, PSI, CLMO)
-    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), deg_p, PSI, CLMO)
-    idx_x1 = encode_multiindex(np.array([0, 1, 0, 0, 0, 0], dtype=np.int64), deg_p, PSI, CLMO)
+    # Set p = 2*x0 + 3*x1 (Homogeneous degree 1)
+    # encode_multiindex calls should use ENCODE_DICT_GLOBAL as PSI, CLMO are the global ones here.
+    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), deg_p, ENCODE_DICT_GLOBAL)
+    idx_x1 = encode_multiindex(np.array([0, 1, 0, 0, 0, 0], dtype=np.int64), deg_p, ENCODE_DICT_GLOBAL)
     
-    # Note: constant term (degree 0) is not part of the degree 1 polynomial p
-    # So we work with the linear terms only
     p[idx_x0] = 2.0
     p[idx_x1] = 3.0
     
-    # Set q = 4 + 5*x0 + 6*x1
-    idx_x0q = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), deg_q, PSI, CLMO)
-    idx_x1q = encode_multiindex(np.array([0, 1, 0, 0, 0, 0], dtype=np.int64), deg_q, PSI, CLMO)
-    
-    q[idx_x0q] = 5.0
-    q[idx_x1q] = 6.0
+    # Set q = 5*x0 + 6*x1 (Homogeneous degree 1)
+    # idx_x0q should be same as idx_x0, idx_x1q same as idx_x1 as degrees are same.
+    q[idx_x0] = 5.0 
+    q[idx_x1] = 6.0
     
     # Multiply the polynomials
-    result = _poly_mul(p, deg_p, q, deg_q, PSI, CLMO)
+    result = _poly_mul(p, deg_p, q, deg_q, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
-    # Expected terms in the result:
+    # Expected terms in the result for (2x0+3x1)*(5x0+6x1):
     # 2*x0 * 5*x0 = 10*x0^2
     # 2*x0 * 6*x1 = 12*x0*x1
     # 3*x1 * 5*x0 = 15*x0*x1
     # 3*x1 * 6*x1 = 18*x1^2
     
-    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), deg_p + deg_q, PSI, CLMO)
-    idx_x0x1 = encode_multiindex(np.array([1, 1, 0, 0, 0, 0], dtype=np.int64), deg_p + deg_q, PSI, CLMO)
-    idx_x1sq = encode_multiindex(np.array([0, 2, 0, 0, 0, 0], dtype=np.int64), deg_p + deg_q, PSI, CLMO)
+    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), deg_p + deg_q, ENCODE_DICT_GLOBAL)
+    idx_x0x1 = encode_multiindex(np.array([1, 1, 0, 0, 0, 0], dtype=np.int64), deg_p + deg_q, ENCODE_DICT_GLOBAL)
+    idx_x1sq = encode_multiindex(np.array([0, 2, 0, 0, 0, 0], dtype=np.int64), deg_p + deg_q, ENCODE_DICT_GLOBAL)
     
     assert abs(result[idx_x0sq] - 10.0) < 1e-10
     assert abs(result[idx_x0x1] - 27.0) < 1e-10  # 12 + 15
@@ -580,8 +585,8 @@ def test_poly_mul_commutativity():
         q[i] = i * 0.75
     
     # Compute p * q and q * p
-    result1 = _poly_mul(p, deg_p, q, deg_q, PSI, CLMO)
-    result2 = _poly_mul(q, deg_q, p, deg_p, PSI, CLMO)
+    result1 = _poly_mul(p, deg_p, q, deg_q, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
+    result2 = _poly_mul(q, deg_q, p, deg_p, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
     # They should be equal
     np.testing.assert_array_almost_equal(result1, result2)
@@ -600,13 +605,13 @@ def test_poly_mul_zero():
         p[i] = i * 2.0
     
     # Multiply by zero
-    result = _poly_mul(p, deg_p, zero_poly, deg_q, PSI, CLMO)
+    result = _poly_mul(p, deg_p, zero_poly, deg_q, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
     # Result should be all zeros
     assert np.all(result == 0.0)
     
     # Also test zero times anything is zero
-    result = _poly_mul(zero_poly, deg_q, p, deg_p, PSI, CLMO)
+    result = _poly_mul(zero_poly, deg_q, p, deg_p, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     assert np.all(result == 0.0)
 
 def test_poly_mul_identity():
@@ -628,7 +633,7 @@ def test_poly_mul_identity():
         p[i] = i * 1.5
     
     # p * 1 should equal p
-    result = _poly_mul(p, deg_p, const_one, deg_const, PSI, CLMO)
+    result = _poly_mul(p, deg_p, const_one, deg_const, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
     # The result should have the same degree as p
     assert result.shape[0] == PSI[N_VARS, deg_p]
@@ -637,7 +642,7 @@ def test_poly_mul_identity():
     np.testing.assert_array_almost_equal(result, p)
     
     # 1 * p should also equal p
-    result = _poly_mul(const_one, deg_const, p, deg_p, PSI, CLMO)
+    result = _poly_mul(const_one, deg_const, p, deg_p, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     np.testing.assert_array_almost_equal(result, p)
 
 def test_poly_mul_complex():
@@ -651,21 +656,19 @@ def test_poly_mul_complex():
     
     # Set values in p and q
     # p = (1+i)*x0 + (2+2i)*x1
-    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), deg_p, PSI, CLMO)
-    idx_x1 = encode_multiindex(np.array([0, 1, 0, 0, 0, 0], dtype=np.int64), deg_p, PSI, CLMO)
+    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), deg_p, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
+    idx_x1 = encode_multiindex(np.array([0, 1, 0, 0, 0, 0], dtype=np.int64), deg_p, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     
     p[idx_x0] = complex(1.0, 1.0)
     p[idx_x1] = complex(2.0, 2.0)
     
     # q = (3-i)*x0 + (1-i)*x1
-    idx_x0q = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), deg_q, PSI, CLMO)
-    idx_x1q = encode_multiindex(np.array([0, 1, 0, 0, 0, 0], dtype=np.int64), deg_q, PSI, CLMO)
-    
-    q[idx_x0q] = complex(3.0, -1.0)
-    q[idx_x1q] = complex(1.0, -1.0)
+    # idx_x0q and idx_x1q will be the same as idx_x0 and idx_x1 as deg_q = deg_p = 1
+    q[idx_x0] = complex(3.0, -1.0) # Use idx_x0
+    q[idx_x1] = complex(1.0, -1.0) # Use idx_x1
     
     # Multiply
-    result = _poly_mul(p, deg_p, q, deg_q, PSI, CLMO)
+    result = _poly_mul(p, deg_p, q, deg_q, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
     # Expected result:
     # (1+i)*(3-i)*x0^2 = (3-i+3i-i^2)*x0^2 = (3-i+3i+1)*x0^2 = (4+2i)*x0^2
@@ -676,9 +679,9 @@ def test_poly_mul_complex():
     # So combined terms:
     # (4+2i)*x0^2 + (10+4i)*x0*x1 + (4+0i)*x1^2
     
-    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), deg_p + deg_q, PSI, CLMO)
-    idx_x0x1 = encode_multiindex(np.array([1, 1, 0, 0, 0, 0], dtype=np.int64), deg_p + deg_q, PSI, CLMO)
-    idx_x1sq = encode_multiindex(np.array([0, 2, 0, 0, 0, 0], dtype=np.int64), deg_p + deg_q, PSI, CLMO)
+    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), deg_p + deg_q, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
+    idx_x0x1 = encode_multiindex(np.array([1, 1, 0, 0, 0, 0], dtype=np.int64), deg_p + deg_q, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
+    idx_x1sq = encode_multiindex(np.array([0, 2, 0, 0, 0, 0], dtype=np.int64), deg_p + deg_q, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     
     # Check results
     assert abs(result[idx_x0sq].real - 4.0) < 1e-10
@@ -697,14 +700,14 @@ def test_differentiate_monomial():
     p = make_poly(degree, PSI)
     
     # Set p = 3*x0^2
-    idx = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), degree, PSI, CLMO)
+    idx = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), degree, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     p[idx] = 3.0
     
     # Differentiate with respect to x0
-    dp = _poly_diff(p, 0, degree, PSI, CLMO)
+    dp = _poly_diff(p, 0, degree, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
     # Result should be 6*x0 (d/dx0(3*x0^2) = 6*x0)
-    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
+    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     assert dp[idx_x0] == 6.0
     
     # All other terms should be zero
@@ -712,7 +715,7 @@ def test_differentiate_monomial():
     assert np.all(dp == 0.0)
     
     # Differentiate with respect to a variable that doesn't appear in the term
-    dp2 = _poly_diff(p, 1, degree, PSI, CLMO)
+    dp2 = _poly_diff(p, 1, degree, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
     # Result should be all zeros
     assert np.all(dp2 == 0.0)
@@ -723,20 +726,20 @@ def test_differentiate_mixed_terms():
     degree = 2
     p = make_poly(degree, PSI)
     
-    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), degree, PSI, CLMO)
-    idx_x0x1 = encode_multiindex(np.array([1, 1, 0, 0, 0, 0], dtype=np.int64), degree, PSI, CLMO)
-    idx_x1sq = encode_multiindex(np.array([0, 2, 0, 0, 0, 0], dtype=np.int64), degree, PSI, CLMO)
+    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), degree, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
+    idx_x0x1 = encode_multiindex(np.array([1, 1, 0, 0, 0, 0], dtype=np.int64), degree, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
+    idx_x1sq = encode_multiindex(np.array([0, 2, 0, 0, 0, 0], dtype=np.int64), degree, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     
     p[idx_x0sq] = 2.0
     p[idx_x0x1] = 3.0
     p[idx_x1sq] = 4.0
     
     # Differentiate with respect to x0
-    dp = _poly_diff(p, 0, degree, PSI, CLMO)
+    dp = _poly_diff(p, 0, degree, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
     # d/dx0(2*x0^2 + 3*x0*x1 + 4*x1^2) = 4*x0 + 3*x1
-    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
-    idx_x1 = encode_multiindex(np.array([0, 1, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
+    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
+    idx_x1 = encode_multiindex(np.array([0, 1, 0, 0, 0, 0], dtype=np.int64), degree-1, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     
     assert dp[idx_x0] == 4.0
     assert dp[idx_x1] == 3.0
@@ -747,11 +750,11 @@ def test_differentiate_mixed_terms():
     assert np.all(dp == 0.0)
     
     # Differentiate with respect to x1
-    dp2 = _poly_diff(p, 1, degree, PSI, CLMO)
+    dp2 = _poly_diff(p, 1, degree, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
     # d/dx1(2*x0^2 + 3*x0*x1 + 4*x1^2) = 3*x0 + 8*x1
-    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
-    idx_x1 = encode_multiindex(np.array([0, 1, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
+    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
+    idx_x1 = encode_multiindex(np.array([0, 1, 0, 0, 0, 0], dtype=np.int64), degree-1, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     
     assert dp2[idx_x0] == 3.0
     assert dp2[idx_x1] == 8.0
@@ -767,10 +770,10 @@ def test_differentiate_higher_degree():
     degree = 3
     p = make_poly(degree, PSI)
     
-    idx_x0_3 = encode_multiindex(np.array([3, 0, 0, 0, 0, 0], dtype=np.int64), degree, PSI, CLMO)
-    idx_x0_2_x1 = encode_multiindex(np.array([2, 1, 0, 0, 0, 0], dtype=np.int64), degree, PSI, CLMO)
-    idx_x0_x1_2 = encode_multiindex(np.array([1, 2, 0, 0, 0, 0], dtype=np.int64), degree, PSI, CLMO)
-    idx_x1_3 = encode_multiindex(np.array([0, 3, 0, 0, 0, 0], dtype=np.int64), degree, PSI, CLMO)
+    idx_x0_3 = encode_multiindex(np.array([3, 0, 0, 0, 0, 0], dtype=np.int64), degree, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
+    idx_x0_2_x1 = encode_multiindex(np.array([2, 1, 0, 0, 0, 0], dtype=np.int64), degree, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
+    idx_x0_x1_2 = encode_multiindex(np.array([1, 2, 0, 0, 0, 0], dtype=np.int64), degree, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
+    idx_x1_3 = encode_multiindex(np.array([0, 3, 0, 0, 0, 0], dtype=np.int64), degree, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     
     p[idx_x0_3] = 1.0
     p[idx_x0_2_x1] = 1.0
@@ -778,12 +781,12 @@ def test_differentiate_higher_degree():
     p[idx_x1_3] = 1.0
     
     # Differentiate with respect to x0
-    dp = _poly_diff(p, 0, degree, PSI, CLMO)
+    dp = _poly_diff(p, 0, degree, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
     # d/dx0(x0^3 + x0^2*x1 + x0*x1^2 + x1^3) = 3*x0^2 + 2*x0*x1 + x1^2
-    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
-    idx_x0x1 = encode_multiindex(np.array([1, 1, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
-    idx_x1sq = encode_multiindex(np.array([0, 2, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
+    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
+    idx_x0x1 = encode_multiindex(np.array([1, 1, 0, 0, 0, 0], dtype=np.int64), degree-1, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
+    idx_x1sq = encode_multiindex(np.array([0, 2, 0, 0, 0, 0], dtype=np.int64), degree-1, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     
     assert dp[idx_x0sq] == 3.0
     assert dp[idx_x0x1] == 2.0
@@ -801,7 +804,7 @@ def test_differentiate_zero_polynomial():
     p = make_poly(degree, PSI)  # All zeros by default
     
     # Differentiate zero polynomial
-    dp = _poly_diff(p, 0, degree, PSI, CLMO)
+    dp = _poly_diff(p, 0, degree, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
     # Result should be a zero polynomial of degree-1
     assert np.all(dp == 0.0)
@@ -816,7 +819,7 @@ def test_differentiate_constant():
     # For a Numba JIT function, trying to _poly_diff a constant will not raise an exception
     # but should return an appropriate result (likely an empty array or zeros)
     for var in range(N_VARS):
-        dp = _poly_diff(p, var, degree, PSI, CLMO)
+        dp = _poly_diff(p, var, degree, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
         
         # The size should be PSI[N_VARS, -1] which should be 0 or a very small array
         # Just verify that the result doesn't contain any non-zero values
@@ -829,32 +832,32 @@ def test_differentiate_multi_variable():
     degree = 3
     p = make_poly(degree, PSI)
     
-    idx = encode_multiindex(np.array([1, 1, 1, 0, 0, 0], dtype=np.int64), degree, PSI, CLMO)
+    idx = encode_multiindex(np.array([1, 1, 1, 0, 0, 0], dtype=np.int64), degree, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     p[idx] = 2.0
     
     # Differentiate with respect to x0
-    dp0 = _poly_diff(p, 0, degree, PSI, CLMO)
+    dp0 = _poly_diff(p, 0, degree, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
     # d/dx0(2*x0*x1*x2) = 2*x1*x2
-    idx_x1x2 = encode_multiindex(np.array([0, 1, 1, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
+    idx_x1x2 = encode_multiindex(np.array([0, 1, 1, 0, 0, 0], dtype=np.int64), degree-1, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     assert dp0[idx_x1x2] == 2.0
     
     # Differentiate with respect to x1
-    dp1 = _poly_diff(p, 1, degree, PSI, CLMO)
+    dp1 = _poly_diff(p, 1, degree, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
     # d/dx1(2*x0*x1*x2) = 2*x0*x2
-    idx_x0x2 = encode_multiindex(np.array([1, 0, 1, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
+    idx_x0x2 = encode_multiindex(np.array([1, 0, 1, 0, 0, 0], dtype=np.int64), degree-1, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     assert dp1[idx_x0x2] == 2.0
     
     # Differentiate with respect to x2
-    dp2 = _poly_diff(p, 2, degree, PSI, CLMO)
+    dp2 = _poly_diff(p, 2, degree, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
     # d/dx2(2*x0*x1*x2) = 2*x0*x1
-    idx_x0x1 = encode_multiindex(np.array([1, 1, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
+    idx_x0x1 = encode_multiindex(np.array([1, 1, 0, 0, 0, 0], dtype=np.int64), degree-1, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     assert dp2[idx_x0x1] == 2.0
     
     # Differentiate with respect to x3 (not in the polynomial)
-    dp3 = _poly_diff(p, 3, degree, PSI, CLMO)
+    dp3 = _poly_diff(p, 3, degree, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
     # d/dx3(2*x0*x1*x2) = 0
     assert np.all(dp3 == 0.0)
@@ -865,35 +868,35 @@ def test_differentiate_high_exponent():
     degree = 4
     p = make_poly(degree, PSI)
     
-    idx = encode_multiindex(np.array([4, 0, 0, 0, 0, 0], dtype=np.int64), degree, PSI, CLMO)
+    idx = encode_multiindex(np.array([4, 0, 0, 0, 0, 0], dtype=np.int64), degree, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     p[idx] = 1.0
     
     # Differentiate with respect to x0
-    dp = _poly_diff(p, 0, degree, PSI, CLMO)
+    dp = _poly_diff(p, 0, degree, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
     # d/dx0(x0^4) = 4*x0^3
-    idx_x0_3 = encode_multiindex(np.array([3, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
+    idx_x0_3 = encode_multiindex(np.array([3, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     assert dp[idx_x0_3] == 4.0
     
     # Differentiate again
-    dp2 = _poly_diff(dp, 0, degree-1, PSI, CLMO)
+    dp2 = _poly_diff(dp, 0, degree-1, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
     # d/dx0(4*x0^3) = 12*x0^2
-    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), degree-2, PSI, CLMO)
+    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), degree-2, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     assert dp2[idx_x0sq] == 12.0
     
     # Differentiate a third time
-    dp3 = _poly_diff(dp2, 0, degree-2, PSI, CLMO)
+    dp3 = _poly_diff(dp2, 0, degree-2, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
     # d/dx0(12*x0^2) = 24*x0
-    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), degree-3, PSI, CLMO)
+    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), degree-3, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     assert dp3[idx_x0] == 24.0
     
     # Differentiate a fourth time
-    dp4 = _poly_diff(dp3, 0, degree-3, PSI, CLMO)
+    dp4 = _poly_diff(dp3, 0, degree-3, PSI, CLMO, ENCODE_DICT_GLOBAL) # Pass ENCODE_DICT_GLOBAL
     
     # d/dx0(24*x0) = 24
-    idx_const = encode_multiindex(np.array([0, 0, 0, 0, 0, 0], dtype=np.int64), degree-4, PSI, CLMO)
+    idx_const = encode_multiindex(np.array([0, 0, 0, 0, 0, 0], dtype=np.int64), degree-4, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     assert dp4[idx_const] == 24.0
 
 def test_differentiate_complex():
@@ -903,20 +906,20 @@ def test_differentiate_complex():
     p = make_poly(degree, PSI)
     
     # Set p = (1+2i)*x0^2 + (3+4i)*x0*x1 + (5+6i)*x1^2
-    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), degree, PSI, CLMO)
-    idx_x0x1 = encode_multiindex(np.array([1, 1, 0, 0, 0, 0], dtype=np.int64), degree, PSI, CLMO)
-    idx_x1sq = encode_multiindex(np.array([0, 2, 0, 0, 0, 0], dtype=np.int64), degree, PSI, CLMO)
+    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), degree, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
+    idx_x0x1 = encode_multiindex(np.array([1, 1, 0, 0, 0, 0], dtype=np.int64), degree, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
+    idx_x1sq = encode_multiindex(np.array([0, 2, 0, 0, 0, 0], dtype=np.int64), degree, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     
     p[idx_x0sq] = complex(1.0, 2.0)
     p[idx_x0x1] = complex(3.0, 4.0)
     p[idx_x1sq] = complex(5.0, 6.0)
     
     # Differentiate with respect to x0
-    dp = _poly_diff(p, 0, degree, PSI, CLMO)
+    dp = _poly_diff(p, 0, degree, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # d/dx0((1+2i)*x0^2 + (3+4i)*x0*x1 + (5+6i)*x1^2) = (2+4i)*x0 + (3+4i)*x1
-    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
-    idx_x1 = encode_multiindex(np.array([0, 1, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
+    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
+    idx_x1 = encode_multiindex(np.array([0, 1, 0, 0, 0, 0], dtype=np.int64), degree-1, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     
     assert dp[idx_x0].real == 2.0
     assert dp[idx_x0].imag == 4.0
@@ -924,11 +927,11 @@ def test_differentiate_complex():
     assert dp[idx_x1].imag == 4.0
     
     # Differentiate with respect to x1
-    dp2 = _poly_diff(p, 1, degree, PSI, CLMO)
+    dp2 = _poly_diff(p, 1, degree, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # d/dx1((1+2i)*x0^2 + (3+4i)*x0*x1 + (5+6i)*x1^2) = (3+4i)*x0 + (10+12i)*x1
-    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
-    idx_x1 = encode_multiindex(np.array([0, 1, 0, 0, 0, 0], dtype=np.int64), degree-1, PSI, CLMO)
+    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), degree-1, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
+    idx_x1 = encode_multiindex(np.array([0, 1, 0, 0, 0, 0], dtype=np.int64), degree-1, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     
     assert dp2[idx_x0].real == 3.0
     assert dp2[idx_x0].imag == 4.0
@@ -946,22 +949,22 @@ def test__poly_poisson_antisymmetry():
     
     # Set values in p and q
     # p = x0^2 + x0*x1
-    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), deg_p, PSI, CLMO)
-    idx_x0x1 = encode_multiindex(np.array([1, 1, 0, 0, 0, 0], dtype=np.int64), deg_p, PSI, CLMO)
+    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), deg_p, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
+    idx_x0x1 = encode_multiindex(np.array([1, 1, 0, 0, 0, 0], dtype=np.int64), deg_p, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     
     p[idx_x0sq] = 1.0
     p[idx_x0x1] = 1.0
     
     # q = p0^2 + p0*p1
-    idx_p0sq = encode_multiindex(np.array([0, 0, 0, 2, 0, 0], dtype=np.int64), deg_q, PSI, CLMO)
-    idx_p0p1 = encode_multiindex(np.array([0, 0, 0, 1, 1, 0], dtype=np.int64), deg_q, PSI, CLMO)
+    idx_p0sq = encode_multiindex(np.array([0, 0, 0, 2, 0, 0], dtype=np.int64), deg_q, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
+    idx_p0p1 = encode_multiindex(np.array([0, 0, 0, 1, 1, 0], dtype=np.int64), deg_q, ENCODE_DICT_GLOBAL) # Use ENCODE_DICT_GLOBAL
     
     q[idx_p0sq] = 1.0
     q[idx_p0p1] = 1.0
     
     # Compute {P, Q} and {Q, P}
-    pq = _poly_poisson(p, deg_p, q, deg_q, PSI, CLMO)
-    qp = _poly_poisson(q, deg_q, p, deg_p, PSI, CLMO)
+    pq = _poly_poisson(p, deg_p, q, deg_q, PSI, CLMO, ENCODE_DICT_GLOBAL)
+    qp = _poly_poisson(q, deg_q, p, deg_p, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # Compute -{Q, P} (scale qp by -1)
     neg_qp = np.zeros_like(qp)
@@ -983,15 +986,15 @@ def test__poly_poisson_first_argument_linearity():
     
     # Set values
     # p = x0^2
-    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), deg_p, PSI, CLMO)
+    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), deg_p, ENCODE_DICT_GLOBAL)
     p[idx_x0sq] = 1.0
     
     # q = x1^2
-    idx_x1sq = encode_multiindex(np.array([0, 2, 0, 0, 0, 0], dtype=np.int64), deg_q, PSI, CLMO)
+    idx_x1sq = encode_multiindex(np.array([0, 2, 0, 0, 0, 0], dtype=np.int64), deg_q, ENCODE_DICT_GLOBAL)
     q[idx_x1sq] = 1.0
     
     # r = p0^2
-    idx_p0sq = encode_multiindex(np.array([0, 0, 0, 2, 0, 0], dtype=np.int64), deg_r, PSI, CLMO)
+    idx_p0sq = encode_multiindex(np.array([0, 0, 0, 2, 0, 0], dtype=np.int64), deg_r, ENCODE_DICT_GLOBAL)
     r[idx_p0sq] = 1.0
     
     # Define coefficients a and b
@@ -1008,11 +1011,11 @@ def test__poly_poisson_first_argument_linearity():
     _poly_add(ap, bq, apbq)
     
     # Compute {aP+bQ, R}
-    apbq_r = _poly_poisson(apbq, deg_p, r, deg_r, PSI, CLMO)
+    apbq_r = _poly_poisson(apbq, deg_p, r, deg_r, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # Compute a{P,R} + b{Q,R}
-    pr = _poly_poisson(p, deg_p, r, deg_r, PSI, CLMO)
-    qr = _poly_poisson(q, deg_q, r, deg_r, PSI, CLMO)
+    pr = _poly_poisson(p, deg_p, r, deg_r, PSI, CLMO, ENCODE_DICT_GLOBAL)
+    qr = _poly_poisson(q, deg_q, r, deg_r, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     apr = make_poly(deg_p + deg_r - 2, PSI)
     bqr = make_poly(deg_q + deg_r - 2, PSI)
@@ -1038,15 +1041,15 @@ def test__poly_poisson_second_argument_linearity():
     
     # Set values
     # p = x0^2
-    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), deg_p, PSI, CLMO)
+    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), deg_p, ENCODE_DICT_GLOBAL)
     p[idx_x0sq] = 1.0
     
     # q = x1^2
-    idx_x1sq = encode_multiindex(np.array([0, 2, 0, 0, 0, 0], dtype=np.int64), deg_q, PSI, CLMO)
+    idx_x1sq = encode_multiindex(np.array([0, 2, 0, 0, 0, 0], dtype=np.int64), deg_q, ENCODE_DICT_GLOBAL)
     q[idx_x1sq] = 1.0
     
     # r = p0^2
-    idx_p0sq = encode_multiindex(np.array([0, 0, 0, 2, 0, 0], dtype=np.int64), deg_r, PSI, CLMO)
+    idx_p0sq = encode_multiindex(np.array([0, 0, 0, 2, 0, 0], dtype=np.int64), deg_r, ENCODE_DICT_GLOBAL)
     r[idx_p0sq] = 1.0
     
     # Define coefficients a and b
@@ -1063,11 +1066,11 @@ def test__poly_poisson_second_argument_linearity():
     _poly_add(aq, br, aqbr)
     
     # Compute {P, aQ+bR}
-    p_aqbr = _poly_poisson(p, deg_p, aqbr, deg_q, PSI, CLMO)
+    p_aqbr = _poly_poisson(p, deg_p, aqbr, deg_q, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # Compute a{P,Q} + b{P,R}
-    pq = _poly_poisson(p, deg_p, q, deg_q, PSI, CLMO)
-    pr = _poly_poisson(p, deg_p, r, deg_r, PSI, CLMO)
+    pq = _poly_poisson(p, deg_p, q, deg_q, PSI, CLMO, ENCODE_DICT_GLOBAL)
+    pr = _poly_poisson(p, deg_p, r, deg_r, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     apq = make_poly(deg_p + deg_q - 2, PSI)
     bpr = make_poly(deg_p + deg_r - 2, PSI)
@@ -1093,40 +1096,40 @@ def test__poly_poisson_jacobi_identity():
     
     # Set values - simple polynomials to test the identity
     # p = x0^2
-    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), deg_p, PSI, CLMO)
+    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), deg_p, ENCODE_DICT_GLOBAL)
     p[idx_x0sq] = 1.0
     
     # q = p0^2
-    idx_p0sq = encode_multiindex(np.array([0, 0, 0, 2, 0, 0], dtype=np.int64), deg_q, PSI, CLMO)
+    idx_p0sq = encode_multiindex(np.array([0, 0, 0, 2, 0, 0], dtype=np.int64), deg_q, ENCODE_DICT_GLOBAL)
     q[idx_p0sq] = 1.0
     
     # r = x0*p0
-    idx_x0p0 = encode_multiindex(np.array([1, 0, 0, 1, 0, 0], dtype=np.int64), deg_r, PSI, CLMO)
+    idx_x0p0 = encode_multiindex(np.array([1, 0, 0, 1, 0, 0], dtype=np.int64), deg_r, ENCODE_DICT_GLOBAL)
     r[idx_x0p0] = 1.0
     
     # Compute {Q, R}
     qr_deg = deg_q + deg_r - 2
-    qr = _poly_poisson(q, deg_q, r, deg_r, PSI, CLMO)
+    qr = _poly_poisson(q, deg_q, r, deg_r, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # Compute {P, {Q, R}}
     p_qr_deg = deg_p + qr_deg - 2
-    p_qr = _poly_poisson(p, deg_p, qr, qr_deg, PSI, CLMO)
+    p_qr = _poly_poisson(p, deg_p, qr, qr_deg, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # Compute {R, P}
     rp_deg = deg_r + deg_p - 2
-    rp = _poly_poisson(r, deg_r, p, deg_p, PSI, CLMO)
+    rp = _poly_poisson(r, deg_r, p, deg_p, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # Compute {Q, {R, P}}
     q_rp_deg = deg_q + rp_deg - 2
-    q_rp = _poly_poisson(q, deg_q, rp, rp_deg, PSI, CLMO)
+    q_rp = _poly_poisson(q, deg_q, rp, rp_deg, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # Compute {P, Q}
     pq_deg = deg_p + deg_q - 2
-    pq = _poly_poisson(p, deg_p, q, deg_q, PSI, CLMO)
+    pq = _poly_poisson(p, deg_p, q, deg_q, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # Compute {R, {P, Q}}
     r_pq_deg = deg_r + pq_deg - 2
-    r_pq = _poly_poisson(r, deg_r, pq, pq_deg, PSI, CLMO)
+    r_pq = _poly_poisson(r, deg_r, pq, pq_deg, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # Compute the sum: {P, {Q, R}} + {Q, {R, P}} + {R, {P, Q}}
     sum_deg = max(p_qr_deg, q_rp_deg, r_pq_deg)
@@ -1147,15 +1150,15 @@ def test__poly_poisson_hamiltonian():
     h = make_poly(deg_h, PSI)
     
     # 0.5*p0^2 term
-    idx_p0sq = encode_multiindex(np.array([0, 0, 0, 2, 0, 0], dtype=np.int64), deg_h, PSI, CLMO)
+    idx_p0sq = encode_multiindex(np.array([0, 0, 0, 2, 0, 0], dtype=np.int64), deg_h, ENCODE_DICT_GLOBAL)
     h[idx_p0sq] = 0.5
     
     # q0^2 term (x0^2)
-    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), deg_h, PSI, CLMO)
+    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), deg_h, ENCODE_DICT_GLOBAL)
     h[idx_x0sq] = 1.0
     
     # Test 1: {H, H} = 0
-    hh = _poly_poisson(h, deg_h, h, deg_h, PSI, CLMO)
+    hh = _poly_poisson(h, deg_h, h, deg_h, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # {H, H} should be zero
     for i in range(hh.shape[0]):
@@ -1165,14 +1168,14 @@ def test__poly_poisson_hamiltonian():
     # Create q0 polynomial (x0)
     deg_q0 = 1
     q0 = make_poly(deg_q0, PSI)
-    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), deg_q0, PSI, CLMO)
+    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), deg_q0, ENCODE_DICT_GLOBAL)
     q0[idx_x0] = 1.0
     
     # Compute {H, q0}
-    h_q0 = _poly_poisson(h, deg_h, q0, deg_q0, PSI, CLMO)
+    h_q0 = _poly_poisson(h, deg_h, q0, deg_q0, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # Expected result: -p0
-    idx_p0 = encode_multiindex(np.array([0, 0, 0, 1, 0, 0], dtype=np.int64), 1, PSI, CLMO)
+    idx_p0 = encode_multiindex(np.array([0, 0, 0, 1, 0, 0], dtype=np.int64), 1, ENCODE_DICT_GLOBAL)
     expected_h_q0 = make_poly(1, PSI)
     expected_h_q0[idx_p0] = -1.0
     
@@ -1183,14 +1186,14 @@ def test__poly_poisson_hamiltonian():
     # Create p0 polynomial
     deg_p0 = 1
     p0 = make_poly(deg_p0, PSI)
-    idx_p0 = encode_multiindex(np.array([0, 0, 0, 1, 0, 0], dtype=np.int64), deg_p0, PSI, CLMO)
+    idx_p0 = encode_multiindex(np.array([0, 0, 0, 1, 0, 0], dtype=np.int64), deg_p0, ENCODE_DICT_GLOBAL)
     p0[idx_p0] = 1.0
     
     # Compute {H, p0}
-    h_p0 = _poly_poisson(h, deg_h, p0, deg_p0, PSI, CLMO)
+    h_p0 = _poly_poisson(h, deg_h, p0, deg_p0, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # Expected result: 2*q0 (2*x0)
-    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), 1, PSI, CLMO)
+    idx_x0 = encode_multiindex(np.array([1, 0, 0, 0, 0, 0], dtype=np.int64), 1, ENCODE_DICT_GLOBAL)
     expected_h_p0 = make_poly(1, PSI)
     expected_h_p0[idx_x0] = 2.0
     
@@ -1208,19 +1211,19 @@ def test__poly_poisson_complex():
     
     # Set values in p and q
     # p = (1+i)*x0^2 + (2+2i)*p0^2
-    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), deg_p, PSI, CLMO)
-    idx_p0sq = encode_multiindex(np.array([0, 0, 0, 2, 0, 0], dtype=np.int64), deg_p, PSI, CLMO)
+    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), deg_p, ENCODE_DICT_GLOBAL)
+    idx_p0sq = encode_multiindex(np.array([0, 0, 0, 2, 0, 0], dtype=np.int64), deg_p, ENCODE_DICT_GLOBAL)
     
     p[idx_x0sq] = complex(1.0, 1.0)
     p[idx_p0sq] = complex(2.0, 2.0)
     
     # q = (3-i)*x0*p0
-    idx_x0p0 = encode_multiindex(np.array([1, 0, 0, 1, 0, 0], dtype=np.int64), deg_q, PSI, CLMO)
+    idx_x0p0 = encode_multiindex(np.array([1, 0, 0, 1, 0, 0], dtype=np.int64), deg_q, ENCODE_DICT_GLOBAL)
     q[idx_x0p0] = complex(3.0, -1.0)
     
     # Compute {P, Q} and {Q, P}
-    pq = _poly_poisson(p, deg_p, q, deg_q, PSI, CLMO)
-    qp = _poly_poisson(q, deg_q, p, deg_p, PSI, CLMO)
+    pq = _poly_poisson(p, deg_p, q, deg_q, PSI, CLMO, ENCODE_DICT_GLOBAL)
+    qp = _poly_poisson(q, deg_q, p, deg_p, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # Test antisymmetry with complex polynomials
     neg_qp = make_poly(deg_p + deg_q - 2, PSI)
@@ -1245,35 +1248,35 @@ def test__poly_poisson_leibniz_rule():
     
     # Set values for simple test case
     # p = x0^2
-    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), deg_p, PSI, CLMO)
+    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), deg_p, ENCODE_DICT_GLOBAL)
     p[idx_x0sq] = 1.0
     
     # q = x1
-    idx_x1 = encode_multiindex(np.array([0, 1, 0, 0, 0, 0], dtype=np.int64), deg_q, PSI, CLMO)
+    idx_x1 = encode_multiindex(np.array([0, 1, 0, 0, 0, 0], dtype=np.int64), deg_q, ENCODE_DICT_GLOBAL)
     q[idx_x1] = 1.0
     
     # r = p0
-    idx_p0 = encode_multiindex(np.array([0, 0, 0, 1, 0, 0], dtype=np.int64), deg_r, PSI, CLMO)
+    idx_p0 = encode_multiindex(np.array([0, 0, 0, 1, 0, 0], dtype=np.int64), deg_r, ENCODE_DICT_GLOBAL)
     r[idx_p0] = 1.0
     
     # Compute Q*R
-    qr = _poly_mul(q, deg_q, r, deg_r, PSI, CLMO)
+    qr = _poly_mul(q, deg_q, r, deg_r, PSI, CLMO, ENCODE_DICT_GLOBAL)
     deg_qr = deg_q + deg_r
     
     # Compute {P, Q*R}
-    p_qr = _poly_poisson(p, deg_p, qr, deg_qr, PSI, CLMO)
+    p_qr = _poly_poisson(p, deg_p, qr, deg_qr, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # Compute {P, Q}
-    pq = _poly_poisson(p, deg_p, q, deg_q, PSI, CLMO)
+    pq = _poly_poisson(p, deg_p, q, deg_q, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # Compute {P, Q}*R
-    pq_r = _poly_mul(pq, deg_p + deg_q - 2, r, deg_r, PSI, CLMO)
+    pq_r = _poly_mul(pq, deg_p + deg_q - 2, r, deg_r, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # Compute {P, R}
-    pr = _poly_poisson(p, deg_p, r, deg_r, PSI, CLMO)
+    pr = _poly_poisson(p, deg_p, r, deg_r, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # Compute Q*{P, R}
-    q_pr = _poly_mul(q, deg_q, pr, deg_p + deg_r - 2, PSI, CLMO)
+    q_pr = _poly_mul(q, deg_q, pr, deg_p + deg_r - 2, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # Compute {P, Q}*R + Q*{P, R}
     result = make_poly(deg_p + deg_qr - 2, PSI)
@@ -1294,21 +1297,21 @@ def test__poly_poisson_constant():
     f = make_poly(deg_f, PSI)
     
     # Set f = x0^2 + p0^2
-    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), deg_f, PSI, CLMO)
-    idx_p0sq = encode_multiindex(np.array([0, 0, 0, 2, 0, 0], dtype=np.int64), deg_f, PSI, CLMO)
+    idx_x0sq = encode_multiindex(np.array([2, 0, 0, 0, 0, 0], dtype=np.int64), deg_f, ENCODE_DICT_GLOBAL)
+    idx_p0sq = encode_multiindex(np.array([0, 0, 0, 2, 0, 0], dtype=np.int64), deg_f, ENCODE_DICT_GLOBAL)
     
     f[idx_x0sq] = 1.0
     f[idx_p0sq] = 1.0
     
     # Compute {1, F}
-    one_f = _poly_poisson(const_one, deg_const, f, deg_f, PSI, CLMO)
+    one_f = _poly_poisson(const_one, deg_const, f, deg_f, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # {1, F} should be zero
     for i in range(one_f.shape[0]):
         assert abs(one_f[i]) < 1e-10
     
     # Test the other way: {F, 1}
-    f_one = _poly_poisson(f, deg_f, const_one, deg_const, PSI, CLMO)
+    f_one = _poly_poisson(f, deg_f, const_one, deg_const, PSI, CLMO, ENCODE_DICT_GLOBAL)
     
     # {F, 1} should also be zero
     for i in range(f_one.shape[0]):
@@ -1331,8 +1334,8 @@ def test__poly_poisson_canonical_relations():
             idx_qj_array = np.array([0, 0, 0, 0, 0, 0], dtype=np.int64)
             idx_qj_array[j] = 1  # Set exponent for variable j
             
-            qi_idx = encode_multiindex(idx_qi_array, deg_q, PSI, CLMO)
-            qj_idx = encode_multiindex(idx_qj_array, deg_q, PSI, CLMO)
+            qi_idx = encode_multiindex(idx_qi_array, deg_q, ENCODE_DICT_GLOBAL)
+            qj_idx = encode_multiindex(idx_qj_array, deg_q, ENCODE_DICT_GLOBAL)
             
             qi[qi_idx] = 1.0
             qj[qj_idx] = 1.0
@@ -1348,28 +1351,28 @@ def test__poly_poisson_canonical_relations():
             idx_pj_array = np.array([0, 0, 0, 0, 0, 0], dtype=np.int64)
             idx_pj_array[j+3] = 1  # p0,p1,p2 are at indices 3,4,5
             
-            pi_idx = encode_multiindex(idx_pi_array, deg_q, PSI, CLMO)
-            pj_idx = encode_multiindex(idx_pj_array, deg_q, PSI, CLMO)
+            pi_idx = encode_multiindex(idx_pi_array, deg_q, ENCODE_DICT_GLOBAL)
+            pj_idx = encode_multiindex(idx_pj_array, deg_q, ENCODE_DICT_GLOBAL)
             
             pi[pi_idx] = 1.0
             pj[pj_idx] = 1.0
             
             # Test {q_i, q_j} = 0
-            qi_qj = _poly_poisson(qi, deg_q, qj, deg_q, PSI, CLMO)
+            qi_qj = _poly_poisson(qi, deg_q, qj, deg_q, PSI, CLMO, ENCODE_DICT_GLOBAL)
             
             # Should be zero (positions _poly_poisson-commute)
             for k in range(qi_qj.shape[0]):
                 assert abs(qi_qj[k]) < 1e-10
             
             # Test {p_i, p_j} = 0
-            pi_pj = _poly_poisson(pi, deg_q, pj, deg_q, PSI, CLMO)
+            pi_pj = _poly_poisson(pi, deg_q, pj, deg_q, PSI, CLMO, ENCODE_DICT_GLOBAL)
             
             # Should be zero (momenta _poly_poisson-commute)
             for k in range(pi_pj.shape[0]):
                 assert abs(pi_pj[k]) < 1e-10
             
             # Test {q_i, p_j} = δ_ij (Kronecker delta)
-            qi_pj = _poly_poisson(qi, deg_q, pj, deg_q, PSI, CLMO)
+            qi_pj = _poly_poisson(qi, deg_q, pj, deg_q, PSI, CLMO, ENCODE_DICT_GLOBAL)
             
             if i == j:
                 # {q_i, p_i} should be 1
@@ -1402,7 +1405,7 @@ def test_get_degree():
     # Test with a polynomial that has coefficients (values don't matter for _get_degree)
     poly_deg3 = make_poly(3, PSI)
     k_x0_cubed = np.array([3, 0, 0, 0, 0, 0], dtype=np.int64)
-    idx_x0_cubed = encode_multiindex(k_x0_cubed, 3, PSI, CLMO)
+    idx_x0_cubed = encode_multiindex(k_x0_cubed, 3, ENCODE_DICT_GLOBAL)
     if idx_x0_cubed != -1 and idx_x0_cubed < poly_deg3.shape[0]:
         poly_deg3[idx_x0_cubed] = 1.0 # Assign a dummy value
     assert _get_degree(poly_deg3, PSI) == 3
@@ -1565,3 +1568,172 @@ def test_poly_clean():
     # All values should be copied exactly
     for i in range(poly.shape[0]):
         assert zero_tol_result[i] == poly[i]
+
+
+# -----------------------------------------------------------------------------
+# Tests for _poly_evaluate (homogeneous polynomial evaluation)
+# -----------------------------------------------------------------------------
+
+def create_symengine_poly(coeffs: np.ndarray, degree: int, sym_vars: list, psi, clmo) -> se.Expr:
+    """Helper to create a Symengine polynomial from our coefficient array."""
+    sym_poly = se.sympify(0)
+    if coeffs.shape[0] == 0:
+        return sym_poly
+    for i in range(coeffs.shape[0]):
+        coeff_val = coeffs[i]
+        if coeff_val == 0:
+            continue
+        
+        exponents = decode_multiindex(i, degree, clmo)
+        term = se.sympify(coeff_val)
+        for var_idx in range(N_VARS):
+            if exponents[var_idx] > 0:
+                term *= (sym_vars[var_idx] ** exponents[var_idx])
+        sym_poly += term
+    return sym_poly
+
+def evaluate_symengine_poly(sym_poly: se.Expr, point_map: dict) -> complex:
+    """Helper to evaluate a Symengine polynomial."""
+    return complex(sym_poly.subs(point_map).evalf())
+
+@pytest.mark.parametrize("degree", range(MAX_DEGREE + 1))
+def test_poly_evaluate_zero_polynomial(degree):
+    """Test evaluation of a zero homogeneous polynomial."""
+    coeffs = make_poly(degree, PSI) # all zeros
+    point_vals = np.random.rand(N_VARS) + 1j * np.random.rand(N_VARS)
+    
+    numeric_eval = _poly_evaluate(coeffs, degree, point_vals, CLMO)
+    assert np.isclose(numeric_eval, 0.0 + 0.0j)
+
+@pytest.mark.parametrize("degree", range(1, MAX_DEGREE + 1)) # Skip degree 0 for monomial test
+def test_poly_evaluate_single_monomial(degree):
+    """Test evaluation of a single monomial vs Symengine."""
+    coeffs = make_poly(degree, PSI)
+    
+    # Create a single monomial, e.g., 2.5 * x_0^degree (if degree > 0)
+    # or 2.5 * x_0^{d_0} * x_1^{d_1} ... such that sum(d_i) = degree
+    # For simplicity, let's use x_0^degree if possible, or the first available monomial.
+    
+    test_coeff_val = 2.5 - 1.5j
+    
+    # Create a specific monomial k_test (e.g., x0^d)
+    k_test = np.zeros(N_VARS, dtype=np.int64)
+    # Distribute degree among first few vars if possible
+    vars_to_use = min(N_VARS, degree)
+    if vars_to_use > 0:
+        deg_per_var = degree // vars_to_use
+        remainder = degree % vars_to_use
+        for i in range(vars_to_use):
+            k_test[i] = deg_per_var
+            if i < remainder:
+                k_test[i] +=1
+    else: # degree is 0, this case is not hit by parametrize
+        pass
+
+    idx = encode_multiindex(k_test, degree, ENCODE_DICT_GLOBAL)
+    if idx != -1 and idx < coeffs.shape[0]:
+        coeffs[idx] = test_coeff_val
+    else: # Fallback if the specific k_test is not found (should not happen for valid k)
+        if coeffs.shape[0] > 0:
+            coeffs[0] = test_coeff_val # Assign to the first available coefficient slot
+            k_test = decode_multiindex(0, degree, CLMO) # And use its exponents
+        else: # No coefficients for this degree (e.g. PSI[N_VARS, degree] is 0)
+             pytest.skip(f"No monomials for degree {degree} with N_VARS={N_VARS}")
+
+
+    point_vals_np = np.random.rand(N_VARS) * 2 - 1 + 1j * (np.random.rand(N_VARS) * 2 - 1) # Random values in [-1,1] + j*[-1,1]
+    
+    # Symengine evaluation
+    sym_poly_expr = create_symengine_poly(coeffs, degree, s_vars, PSI, CLMO)
+    point_map_sym = {s_vars[i]: point_vals_np[i] for i in range(N_VARS)}
+    symengine_eval = evaluate_symengine_poly(sym_poly_expr, point_map_sym)
+    
+    # Numeric evaluation
+    numeric_eval = _poly_evaluate(coeffs, degree, point_vals_np, CLMO)
+    
+    assert np.isclose(numeric_eval, symengine_eval, atol=1e-9, rtol=1e-9)
+
+@pytest.mark.parametrize("degree", range(MAX_DEGREE + 1))
+def test_poly_evaluate_multiple_terms(degree):
+    """Test evaluation of a homogeneous polynomial with multiple terms vs Symengine."""
+    coeffs = make_poly(degree, PSI)
+    
+    # Assign some random complex coefficients
+    num_coeffs_to_set = min(coeffs.shape[0], 5) # Set up to 5 random coeffs
+    indices_to_set = np.random.choice(coeffs.shape[0], num_coeffs_to_set, replace=False)
+    
+    for i in indices_to_set:
+        coeffs[i] = np.random.rand() - 0.5 + 1j*(np.random.rand() - 0.5)
+
+    point_vals_np = np.random.rand(N_VARS) + 1j*np.random.rand(N_VARS)
+        
+    sym_poly_expr = create_symengine_poly(coeffs, degree, s_vars, PSI, CLMO)
+    point_map_sym = {s_vars[i]: point_vals_np[i] for i in range(N_VARS)}
+    symengine_eval = evaluate_symengine_poly(sym_poly_expr, point_map_sym)
+    
+    numeric_eval = _poly_evaluate(coeffs, degree, point_vals_np, CLMO)
+    
+    # For degree 0, symengine creates just the number, ensure it's complex for comparison
+    if degree == 0 and coeffs.shape[0] > 0:
+        expected_val_deg0 = coeffs[0]
+        assert np.isclose(numeric_eval, expected_val_deg0)
+        assert np.isclose(symengine_eval, expected_val_deg0) # Symengine should also match
+    elif coeffs.shape[0] == 0: # No terms for this degree
+        assert np.isclose(numeric_eval, 0.0 + 0.0j)
+        assert np.isclose(symengine_eval, 0.0 + 0.0j)
+    else:
+        assert np.isclose(numeric_eval, symengine_eval, atol=1e-9, rtol=1e-9)
+
+def test_poly_evaluate_at_origin():
+    """Test evaluation at the origin point."""
+    for degree in range(MAX_DEGREE + 1):
+        coeffs = make_poly(degree, PSI)
+        if coeffs.shape[0] > 0:
+            coeffs[np.random.randint(0, coeffs.shape[0])] = 1.0 + 1.0j # Make it non-zero
+
+        point_at_origin = np.zeros(N_VARS, dtype=np.complex128)
+        numeric_eval = _poly_evaluate(coeffs, degree, point_at_origin, CLMO)
+
+        if degree == 0:
+            if coeffs.shape[0] > 0:
+                assert np.isclose(numeric_eval, coeffs[0])
+            else: # Should not happen if PSI[N_VARS,0] is 1
+                assert np.isclose(numeric_eval, 0.0 + 0.0j)
+        else:
+            assert np.isclose(numeric_eval, 0.0 + 0.0j)
+
+def test_poly_evaluate_point_with_zeros():
+    """Test evaluation at a point with some zero components."""
+    degree = 2
+    if PSI[N_VARS, degree] == 0: pytest.skip("Not enough terms for degree 2 test")
+
+    coeffs = make_poly(degree, PSI)
+    # Example: P = x0^2 + x0*x1 + x1^2
+    k_x0sq = np.array([2,0,0,0,0,0], dtype=np.int64)
+    k_x0x1 = np.array([1,1,0,0,0,0], dtype=np.int64)
+    k_x1sq = np.array([0,2,0,0,0,0], dtype=np.int64)
+
+    idx_x0sq = encode_multiindex(k_x0sq, degree, ENCODE_DICT_GLOBAL)
+    idx_x0x1 = encode_multiindex(k_x0x1, degree, ENCODE_DICT_GLOBAL)
+    idx_x1sq = encode_multiindex(k_x1sq, degree, ENCODE_DICT_GLOBAL)
+
+    if idx_x0sq != -1: coeffs[idx_x0sq] = 1.0
+    if idx_x0x1 != -1: coeffs[idx_x0x1] = 1.0
+    if idx_x1sq != -1: coeffs[idx_x1sq] = 1.0
+    
+    point_vals_np = np.zeros(N_VARS, dtype=np.complex128)
+    point_vals_np[0] = 2.0 + 1j # x0 = 2+j
+    # x1 and others are 0
+    
+    # Expected: (2+j)^2 + (2+j)*0 + 0^2 = (2+j)^2 = 4 + 4j - 1 = 3 + 4j
+    expected_eval = (2.0+1j)**2
+
+    sym_poly_expr = create_symengine_poly(coeffs, degree, s_vars, PSI, CLMO)
+    point_map_sym = {s_vars[i]: point_vals_np[i] for i in range(N_VARS)}
+    symengine_eval = evaluate_symengine_poly(sym_poly_expr, point_map_sym)
+    
+    numeric_eval = _poly_evaluate(coeffs, degree, point_vals_np, CLMO)
+    
+    assert np.isclose(numeric_eval, expected_eval)
+    assert np.isclose(symengine_eval, expected_eval)
+    assert np.isclose(numeric_eval, symengine_eval)

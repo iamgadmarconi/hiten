@@ -4,15 +4,31 @@ import numpy as np
 
 from algorithms.center.polynomial.base import decode_multiindex
 
-_VAR_NAMES = ("q2", "p2", "q3", "p3")  # order in packed index (skip q1,p1)
-
-
-# ---------------------------------------------------------------------
-# helpers
-# ---------------------------------------------------------------------
 
 def _monomial_to_string(exps: tuple[int, ...]) -> str:
-    """Return `q2 p2^2 q3` … compact string for the given 6-tuple exponents."""
+    """
+    Convert a tuple of exponents to a formatted monomial string.
+    
+    Parameters
+    ----------
+    exps : tuple[int, ...]
+        Tuple of exponents for each variable (q1, q2, q3, p1, p2, p3)
+        
+    Returns
+    -------
+    str
+        Formatted string representation of the monomial
+        
+    Notes
+    -----
+    For each variable with non-zero exponent:
+    - If exponent is 1, only the variable name is included
+    - If exponent is greater than 1, the variable and exponent are included
+    - Variables are separated by spaces
+    - If all exponents are zero, returns "1"
+    
+    Example: (1, 2, 0, 0, 0, 3) becomes "q1 q2^2 p3^3"
+    """
     out: list[str] = []
     names = ("q1", "q2", "q3", "p1", "p2", "p3")
     for e, name in zip(exps, names):
@@ -27,9 +43,29 @@ def _monomial_to_string(exps: tuple[int, ...]) -> str:
 
 def _fmt_coeff(c: complex, width: int = 25) -> str:
     """
-    Formats a complex number in engineering-style.
-    For real numbers, it aims to match the paper's table format (e.g., " 1.23...e+00").
-    The width parameter ensures consistent spacing for alignment in tables.
+    Format a complex coefficient as a right-justified string.
+    
+    Parameters
+    ----------
+    c : complex
+        Complex coefficient to format
+    width : int, optional
+        Width of the resulting string, default is 25
+        
+    Returns
+    -------
+    str
+        Formatted string representation of the complex coefficient
+        
+    Notes
+    -----
+    Three different formats are used:
+    - Real numbers (|imag| < 1e-14): " <real>"
+    - Pure imaginary (|real| < 1e-14): " <imag>i"
+    - Complex: " <real>+<imag>i"
+    
+    All numbers use scientific notation with 16 digits of precision.
+    The result is right-justified to the specified width.
     """
     s: str
     if abs(c.imag) < 1e-14:  # Effectively real
@@ -46,18 +82,36 @@ def _fmt_coeff(c: complex, width: int = 25) -> str:
     return s.rjust(width)
 
 
-# ---------------------------------------------------------------------
-# public
-# ---------------------------------------------------------------------
-
-def format_cm_table(H_cm_cn_full: List[np.ndarray], clmo: np.ndarray) -> str:
+def format_cm_table(poly_cm_cn: List[np.ndarray], clmo: np.ndarray) -> str:
     """
-    Return a string formatted as a two-column table mimicking Table 1 from the paper.
-    The table shows exponents (k1,k2,k3,k4) for (q2,p2,q3,p3) and coefficient hk.
-    Processes degrees from MIN_DEG_TO_DISPLAY to MAX_DEG_TO_DISPLAY and sorts according to image order.
+    Create a formatted table of center manifold Hamiltonian coefficients.
+    
+    Parameters
+    ----------
+    poly_cm_cn : List[numpy.ndarray]
+        List of coefficient arrays for center manifold Hamiltonian in complex normal form
+    clmo : numpy.ndarray
+        List of arrays containing packed multi-indices
+        
+    Returns
+    -------
+    str
+        Formatted string table of Hamiltonian coefficients
+        
+    Notes
+    -----
+    The table displays coefficients of the center manifold Hamiltonian organized by:
+    - Exponents of q2, p2, q3, p3 (k1, k2, k3, k4)
+    - Terms with q1 or p1 are excluded
+    - Terms with coefficients smaller than 1e-14 are excluded
+    - Terms are sorted by degree and within each degree by a predefined order
+    
+    The table has a two-column layout, with headers:
+    "k1  k2  k3  k4  hk    k1  k2  k3  k4  hk"
+    
+    Each row shows the exponents (k1, k2, k3, k4) and the corresponding coefficient (hk)
+    in scientific notation.
     """
-    from algorithms.center.polynomial.base import decode_multiindex
-
     structured_terms: list[tuple[int, tuple[int, int, int, int], complex]] = []
     
     k_col_width = 2
@@ -68,10 +122,10 @@ def format_cm_table(H_cm_cn_full: List[np.ndarray], clmo: np.ndarray) -> str:
     MAX_DEG_TO_DISPLAY = 5 # As per original image and previous MAX_DEG usage
 
     for deg in range(MIN_DEG_TO_DISPLAY, MAX_DEG_TO_DISPLAY + 1):
-        if deg >= len(H_cm_cn_full) or not H_cm_cn_full[deg].any():
+        if deg >= len(poly_cm_cn) or not poly_cm_cn[deg].any():
             continue
         
-        coeff_vec = H_cm_cn_full[deg]
+        coeff_vec = poly_cm_cn[deg]
 
         for pos, c_val_complex in enumerate(coeff_vec):
             # Ensure c_val is treated as a number; np.isscalar checks for single numpy values

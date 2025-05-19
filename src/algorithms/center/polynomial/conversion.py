@@ -10,31 +10,87 @@ from algorithms.center.polynomial.base import (decode_multiindex,
 from algorithms.variables import N_VARS
 
 
-def poly2sympy(poly_list: List[np.ndarray], vars_list: typing.List[sp.Symbol], psi: np.ndarray, clmo: np.ndarray) -> sp.Expr:
+def poly2sympy(poly_p: List[np.ndarray], vars_list: typing.List[sp.Symbol], psi: np.ndarray, clmo: np.ndarray) -> sp.Expr:
     """
-    Convert a polynomial, represented as a list of homogeneous component coefficient arrays,
-    from numpy array to sympy expression using the provided list of sympy variables.
-    Each element in poly_list is an np.ndarray of coefficients for a specific degree,
-    starting from degree 0.
-    vars_list must contain N_VARS sympy symbols.
+    Convert a polynomial represented as a list of coefficient arrays to a SymPy expression.
+    
+    Parameters
+    ----------
+    poly_p : List[numpy.ndarray]
+        List of coefficient arrays, where poly_p[d] contains coefficients for degree d
+    vars_list : typing.List[sympy.Symbol]
+        List of SymPy symbols used as variables in the expression
+    psi : numpy.ndarray
+        Combinatorial table from init_index_tables
+    clmo : numpy.ndarray
+        List of arrays containing packed multi-indices
+        
+    Returns
+    -------
+    sympy.Expr
+        SymPy expression equivalent to the input polynomial
+        
+    Raises
+    ------
+    ValueError
+        If vars_list does not have exactly N_VARS elements
+        
+    Notes
+    -----
+    This function converts each homogeneous part of the polynomial separately 
+    using hpoly2sympy, then combines them into a single SymPy expression.
     """
     if len(vars_list) != N_VARS:
         raise ValueError(f"Expected {N_VARS} symbols in vars_list, but got {len(vars_list)}.")
 
     total_sympy_expr = sp.Integer(0)
-    for degree, coeffs_for_degree in enumerate(poly_list):
-        if coeffs_for_degree is not None and coeffs_for_degree.size > 0:
-            homogeneous_expr = hpoly2sympy(coeffs_for_degree, vars_list, psi, clmo)
+    for degree, p in enumerate(poly_p):
+        if p is not None and p.size > 0:
+            # hpoly2sympy needs clmo for decode_multiindex
+            homogeneous_expr = hpoly2sympy(p, vars_list, psi, clmo)
             total_sympy_expr += homogeneous_expr
     return total_sympy_expr
 
 
-def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray, clmo: np.ndarray) -> List[np.ndarray]:
+def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray, clmo: np.ndarray, encode_dict_list: List) -> List[np.ndarray]:
     """
-    Convert a sympy expression to a list of numpy arrays (custom polynomial representation)
-    using the provided list of sympy variables.
-    vars_list must contain N_VARS sympy symbols.
-    The expression is assumed to be a polynomial in vars_list with numeric coefficients.
+    Convert a SymPy expression to a polynomial represented as a list of coefficient arrays.
+    
+    Parameters
+    ----------
+    expr : sympy.Expr
+        SymPy expression to convert
+    vars_list : typing.List[sympy.Symbol]
+        List of SymPy symbols used as variables in the expression
+    psi : numpy.ndarray
+        Combinatorial table from init_index_tables
+    clmo : numpy.ndarray
+        List of arrays containing packed multi-indices
+    encode_dict_list : List
+        List of dictionaries mapping packed multi-indices to their positions
+        
+    Returns
+    -------
+    List[numpy.ndarray]
+        List of coefficient arrays, where the d-th element contains 
+        coefficients for the homogeneous part of degree d
+        
+    Raises
+    ------
+    ValueError
+        If vars_list does not have exactly N_VARS elements or if the expression's
+        degree exceeds the precomputed table limits
+    TypeError
+        If the expression cannot be converted to a Sympy Poly object or if
+        conversion of coefficients to numeric types fails
+    IndexError
+        If the encoded position for a term is out of bounds
+        
+    Notes
+    -----
+    The function works by converting the SymPy expression to a Poly object,
+    then extracting terms and mapping them to the appropriate positions in
+    the coefficient arrays.
     """
     if len(vars_list) != N_VARS:
         raise ValueError(f"Expected {N_VARS} symbols in vars_list, but got {len(vars_list)}.")
@@ -76,7 +132,7 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray
         )
 
     # Initialize list of coefficient arrays (one for each degree up to max_deg_expr)
-    coeffs_list = [make_poly(d, psi) for d in range(max_deg_expr + 1)]
+    poly_p = [make_poly(d, psi) for d in range(max_deg_expr + 1)]
 
     # Populate coefficient arrays
     for monom_exp_tuple, coeff_val_sympy in sp_poly.terms():
@@ -92,7 +148,7 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray
         term_degree = int(sum(k_np))
 
         # Get position in our coefficient array using encode_multiindex
-        pos = encode_multiindex(k_np, term_degree, psi, clmo)
+        pos = encode_multiindex(k_np, term_degree, encode_dict_list)
 
         if pos == -1:
             # This can happen if term_degree > max_degree for clmo or other encoding issues
@@ -101,15 +157,15 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray
                 "This may indicate an unsupported monomial, a degree outside clmo table range, or an internal error."
             )
         
-        if term_degree >= len(coeffs_list):
+        if term_degree >= len(poly_p):
              raise IndexError(
                  f"Calculated term degree {term_degree} is out of bounds for pre-allocated "
-                 f"coeffs_list (len {len(coeffs_list)}, max_deg_expr {max_deg_expr}). This indicates an internal logic error."
+                 f"coeffs_list (len {len(poly_p)}, max_deg_expr {max_deg_expr}). This indicates an internal logic error."
             )
-        if pos >= coeffs_list[term_degree].shape[0]:
+        if pos >= poly_p[term_degree].shape[0]:
             raise IndexError(
                 f"Encoded position {pos} is out of bounds for coefficient array of degree {term_degree} "
-                f"(size {coeffs_list[term_degree].shape[0]}). This indicates an internal logic error or table inconsistency."
+                f"(size {poly_p[term_degree].shape[0]}). This indicates an internal logic error or table inconsistency."
             )
 
         # Convert Sympy coefficient to a Python complex number and store it
@@ -123,7 +179,7 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray
             else: # Fallback, attempt complex, or could be an int if is_integer
                  numeric_coeff = complex(coeff_val_sympy) # Default attempt complex for safety for other numeric types
 
-            coeffs_list[term_degree][pos] = numeric_coeff
+            poly_p[term_degree][pos] = numeric_coeff
         except TypeError: # Catch if conversion fails (e.g., contains symbols)
             raise TypeError(
                 f"Coefficient '{coeff_val_sympy}' (type: {type(coeff_val_sympy)}) could not be converted to a Python numeric type. "
@@ -132,37 +188,63 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray
         except Exception as e: # Catch any other unexpected errors during conversion
             raise TypeError(f"Failed to process Sympy coefficient '{coeff_val_sympy}': {e}")
             
-    return coeffs_list
+    return poly_p
 
 
-def hpoly2sympy(poly_coeffs: np.ndarray, vars_list: typing.List[sp.Symbol], psi: np.ndarray, clmo: np.ndarray) -> sp.Expr:
+def hpoly2sympy(p: np.ndarray, vars_list: typing.List[sp.Symbol], psi: np.ndarray, clmo: np.ndarray) -> sp.Expr:
     """
-    Convert a homogeneous polynomial from numpy array of coefficients to sympy expression
-    using the provided list of sympy variables.
-    vars_list must contain N_VARS sympy symbols (checked by caller or implicitly here).
+    Convert a homogeneous polynomial coefficient array to a SymPy expression.
+    
+    Parameters
+    ----------
+    p : numpy.ndarray
+        Coefficient array for a homogeneous polynomial part of a specific degree
+    vars_list : typing.List[sympy.Symbol]
+        List of SymPy symbols used as variables in the expression
+    psi : numpy.ndarray
+        Combinatorial table from init_index_tables
+    clmo : numpy.ndarray
+        List of arrays containing packed multi-indices
+        
+    Returns
+    -------
+    sympy.Expr
+        SymPy expression equivalent to the input homogeneous polynomial
+        
+    Raises
+    ------
+    ValueError
+        If the degree cannot be determined from the coefficient array size
+        or if the coefficient array length is inconsistent with the expected size
+        
+    Notes
+    -----
+    This function converts each term of the homogeneous polynomial by decoding
+    the multi-index to determine the exponents, constructing the corresponding
+    monomial, and multiplying it by the coefficient.
     """
-    if poly_coeffs is None or poly_coeffs.size == 0:
+    if p is None or p.size == 0:
         return sp.Integer(0)
 
-    degree = _get_degree(poly_coeffs, psi)
+    degree = _get_degree(p, psi)
 
     if degree == -1:
-        if poly_coeffs.size > 0:
+        if p.size > 0:
              raise ValueError(
-                f"Cannot determine degree for homogeneous polynomial with {poly_coeffs.size} coefficients."
+                f"Cannot determine degree for homogeneous polynomial with {p.size} coefficients."
             )
         return sp.Integer(0)
 
     sympy_expr = sp.Integer(0)
     num_coefficients = psi[N_VARS, degree]
 
-    if len(poly_coeffs) != num_coefficients:
+    if len(p) != num_coefficients:
         raise ValueError(
-            f"Inconsistent coefficient array length. Expected {num_coefficients} for degree {degree}, got {len(poly_coeffs)}."
+            f"Inconsistent coefficient array length. Expected {num_coefficients} for degree {degree}, got {len(p)}."
         )
 
-    for pos in range(len(poly_coeffs)):
-        coeff = poly_coeffs[pos]
+    for pos in range(len(p)):
+        coeff = p[pos]
 
         if isinstance(coeff, float) and np.isclose(coeff, 0.0):
             continue

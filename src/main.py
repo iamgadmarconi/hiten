@@ -1,16 +1,17 @@
-import cProfile
-import io
-import pstats
+import matplotlib.pyplot as plt
+import numpy as np
 
-from algorithms.center.manifold import center_manifold_cn, center_manifold_rn
-from algorithms.center.polynomial.base import init_index_tables
+from algorithms.center.manifold import center_manifold_rn
+from algorithms.center.poincare.map import generate_iterated_poincare_map
+from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
+                                               init_index_tables)
 from algorithms.center.utils import format_cm_table
 from log_config import logger
 from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
 
-MAX_DEG = 32
+MAX_DEG = 8
 TOL     = 1e-14
 
 
@@ -31,6 +32,7 @@ def build_three_body_system():
 def main() -> None:
     # ---------------- lookup tables for polynomial indexing --------------
     psi, clmo = init_index_tables(MAX_DEG)
+    encode_dict_list = _create_encode_dict_from_clmo(clmo)
 
     # ---------------- choose equilibrium point --------------------------
     system_EM, system_SE = build_three_body_system()
@@ -40,29 +42,60 @@ def main() -> None:
     L2_SE        = system_SE.get_libration_point(2)   # Sun‑Earth L₂
 
     # ---------------- centre‑manifold reduction -------------------------
-    # H_cm_cn_full is the full list of coefficient arrays, indexed by degree
-    # H_cm_cn_full = center_manifold_cn(L1_SE, psi, clmo, MAX_DEG)
-    H_cm_rn_full = center_manifold_rn(L1_SE, psi, clmo, MAX_DEG)
-
-    # ---------------- pretty print (Table 1 style) ----------------------
-    # print("Centre-manifold Hamiltonian (deg 2 to 5) in complex NF variables\n")
-    # print(format_cm_table(H_cm_cn_full, clmo))
+    H_cm_rn_full = center_manifold_rn(L2_EM, psi, clmo, MAX_DEG)
     print("\n")
-    print("Centre-manifold Hamiltonian (deg 2 to 5) in real NF variables\n")
+    print("Centre-manifold Hamiltonian (deg 2 to 5) in real NF variables (q2, p2, q3, p3)\n")
     print(format_cm_table(H_cm_rn_full, clmo))
     print("\n")
+    # ---------------- Generate Poincaré Map Points ------------------
+    logger.info("Starting Poincaré map generation process…")
+
+    H0_LEVELS = [0.20, 0.40, 0.60, 1.00]  # Example energy levels from literature
+
+    dt = 1e-1
+    USE_SYMPLECTIC = False   # Symplectic highly recommended for many iterates
+    N_SEEDS = 10            # seeds along q2-axis
+    N_ITER = 500          # iterations per seed
+
+    # Create a figure with 2x2 subplots
+    fig, axs = plt.subplots(2, 2, figsize=(8, 8))
+    axs = axs.flatten()  # Flatten to easily index
+
+    for i, h0 in enumerate(H0_LEVELS):
+        logger.info("Generating iterated Poincaré map for h0=%.3f", h0)
+        pts = generate_iterated_poincare_map(
+            h0=h0,
+            H_blocks=H_cm_rn_full,
+            max_degree=MAX_DEG,
+            psi_table=psi,
+            clmo_table=clmo,
+            encode_dict_list=encode_dict_list,
+            n_seeds=N_SEEDS,
+            n_iter=N_ITER,
+            dt=dt,
+            use_symplectic=USE_SYMPLECTIC,
+            integrator_order=6,
+            seed_axis="q2",
+        )
+
+        logger.info("Accumulated %d iterated points (h0=%.3f)", pts.shape[0], h0)
+
+        # Plot in the corresponding subplot
+        axs[i].scatter(pts[:, 0], pts[:, 1], s=1)
+        axs[i].set_aspect("equal", adjustable="box")
+        axs[i].set_xlabel(r"$q_2'$")
+        axs[i].set_ylabel(r"$p_2'$")
+        axs[i].set_title(f"h={h0}")
+        
+        # Set axis limits based on data
+        max_abs_val = max(abs(pts[:, 0].max()), abs(pts[:, 0].min()), 
+                            abs(pts[:, 1].max()), abs(pts[:, 1].min()))
+        axs[i].set_xlim(-max_abs_val, max_abs_val)
+        axs[i].set_ylim(-max_abs_val, max_abs_val)
+
+    plt.tight_layout()
+    plt.show()
+
 
 if __name__ == "__main__":
-    # Use cProfile to profile the main function execution
-    profiler = cProfile.Profile()
-    profiler.enable()
-    
     main()
-    
-    profiler.disable()
-    
-    # Print the profiling results sorted by cumulative time
-    s = io.StringIO()
-    ps = pstats.Stats(profiler, stream=s).sort_stats('cumtime')
-    ps.print_stats(20)  # Print top 20 functions by cumulative time
-    logger.info("Profiling Statistics:\n" + s.getvalue())
