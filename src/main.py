@@ -2,17 +2,30 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from algorithms.center.manifold import center_manifold_rn
+from algorithms.center.poincare.generation.lindstedt_poincare import (build_LP,
+                                                                      eval_lp)
 from algorithms.center.poincare.map import generate_iterated_poincare_map
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables)
 from algorithms.center.utils import format_cm_table
 from log_config import logger
+from plots.plots import plot_poincare_map
 from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
 
+
+# System configuration
+SYSTEM = "SE"  # "EM" for Earth-Moon or "SE" for Sun-Earth
+L_POINT = 1    # Libration point number (1 or 2)
+
+# Algorithm parameters
 MAX_DEG = 8
 TOL     = 1e-14
+# -------- LP parameters ----------------------------------------------------
+LP_MAX_ORDER = 15          # i+j ≤ 15  (good compromise between speed & accuracy)
+ALPHA        = 0.03        # in-plane amplitude
+BETA         = 0.00        # out-of-plane amplitude = 0 → Lyapunov family
 
 
 def build_three_body_system():
@@ -36,32 +49,52 @@ def main() -> None:
 
     # ---------------- choose equilibrium point --------------------------
     system_EM, system_SE = build_three_body_system()
-    L1_EM        = system_EM.get_libration_point(1)   # Earth‑Moon L₁
-    L2_EM        = system_EM.get_libration_point(2)   # Earth‑Moon L₂
-    L1_SE        = system_SE.get_libration_point(1)   # Sun‑Earth L₁
-    L2_SE        = system_SE.get_libration_point(2)   # Sun‑Earth L₂
+    
+    # Select system based on global configuration
+    if SYSTEM == "EM":
+        selected_system = system_EM
+    elif SYSTEM == "SE":
+        selected_system = system_SE
+    else:
+        raise ValueError(f"Unknown system: {SYSTEM}. Should be 'EM' or 'SE'")
+    
+    # Get the selected libration point
+    selected_l_point = selected_system.get_libration_point(L_POINT)
+    logger.info(f"Using {SYSTEM} system with L{L_POINT} point")
 
     # ---------------- centre‑manifold reduction -------------------------
-    H_cm_rn_full = center_manifold_rn(L2_EM, psi, clmo, MAX_DEG)
+    H_cm_rn_full = center_manifold_rn(selected_l_point, psi, clmo, MAX_DEG)
     print("\n")
     print("Centre-manifold Hamiltonian (deg 2 to 5) in real NF variables (q2, p2, q3, p3)\n")
     print(format_cm_table(H_cm_rn_full, clmo))
     print("\n")
-    # ---------------- Generate Poincaré Map Points ------------------
+
+    logger.info("Computing Lindstedt-Poincaré expansion (order ≤ %d)…",
+                LP_MAX_ORDER)
+
+    c_series = [selected_l_point._cn(2)] + [
+        selected_l_point._cn(n) for n in range(3, LP_MAX_ORDER + 3 + 1)
+    ]
+
+    X_arr, Y_arr, Z_arr, Omega_w, Omega_n = build_LP(c_series, LP_MAX_ORDER)
+    logger.info("ω₀ = %.15g,  ν₀ = %.15g", Omega_w[0, 0], Omega_n[0, 0])
+
+    x0, y0, z0 = eval_lp(ALPHA, BETA, X_arr, Y_arr, Z_arr, LP_MAX_ORDER)
+    logger.info("LP initial position (alpha=%.3g, beta=%.3g)  =>  (x,y,z) = "
+                "(%.6e, %.6e, %.6e)", ALPHA, BETA, x0, y0, z0)
+
     logger.info("Starting Poincaré map generation process…")
 
-    H0_LEVELS = [0.20, 0.40, 0.60, 1.00]  # Example energy levels from literature
+    H0_LEVELS = [0.20, 0.40, 0.60, 1.00]
 
     dt = 1e-1
-    USE_SYMPLECTIC = False   # Symplectic highly recommended for many iterates
-    N_SEEDS = 10            # seeds along q2-axis
-    N_ITER = 500          # iterations per seed
+    USE_SYMPLECTIC = False
+    N_SEEDS = 10 # seeds along q2-axis
+    N_ITER = 500 # iterations per seed
 
-    # Create a figure with 2x2 subplots
-    fig, axs = plt.subplots(2, 2, figsize=(8, 8))
-    axs = axs.flatten()  # Flatten to easily index
+    all_pts = []
 
-    for i, h0 in enumerate(H0_LEVELS):
+    for h0 in H0_LEVELS:
         logger.info("Generating iterated Poincaré map for h0=%.3f", h0)
         pts = generate_iterated_poincare_map(
             h0=h0,
@@ -77,24 +110,9 @@ def main() -> None:
             integrator_order=6,
             seed_axis="q2",
         )
+        all_pts.append(pts)  # Store points for this energy level
 
-        logger.info("Accumulated %d iterated points (h0=%.3f)", pts.shape[0], h0)
-
-        # Plot in the corresponding subplot
-        axs[i].scatter(pts[:, 0], pts[:, 1], s=1)
-        axs[i].set_aspect("equal", adjustable="box")
-        axs[i].set_xlabel(r"$q_2'$")
-        axs[i].set_ylabel(r"$p_2'$")
-        axs[i].set_title(f"h={h0}")
-        
-        # Set axis limits based on data
-        max_abs_val = max(abs(pts[:, 0].max()), abs(pts[:, 0].min()), 
-                            abs(pts[:, 1].max()), abs(pts[:, 1].min()))
-        axs[i].set_xlim(-max_abs_val, max_abs_val)
-        axs[i].set_ylim(-max_abs_val, max_abs_val)
-
-    plt.tight_layout()
-    plt.show()
+    plot_poincare_map(all_pts, H0_LEVELS)
 
 
 if __name__ == "__main__":

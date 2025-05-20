@@ -933,7 +933,7 @@ class L2Point(CollinearPoint):
             except ValueError as e2:
                 logger.error(f"Failed to find L2 root even in wider interval: {e2}")
                 raise RuntimeError(f"L2 position calculation failed.") from e2
- 
+
     def _get_gamma_poly_coeffs(self) -> list[float]:
         mu = self.mu
         return [1, (3-mu), (3-2*mu), -mu, -2*mu, -mu]

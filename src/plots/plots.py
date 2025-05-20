@@ -47,10 +47,7 @@ def plot_orbit_rotating_frame(trajectory: np.ndarray,
     tuple
         (fig, ax) containing the figure and axis objects for further customization
     """
-    if trajectory is None:
-        logger.warning("No trajectory to plot")
-        return None, None
-    
+
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection='3d')
     
@@ -135,10 +132,6 @@ def plot_orbit_inertial_frame(trajectory: np.ndarray,
     tuple
         (fig, ax) containing the figure and axis objects for further customization
     """
-    if trajectory is None or times is None:
-        logger.warning("No trajectory or times data to plot")
-        return None, None
-    
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection='3d')
     
@@ -319,3 +312,49 @@ def set_dark_mode(fig, ax, title=None):
             text.set_color('white')
 
 
+def plot_poincare_map(pts_list: list, h0_levels: Sequence[float], dark_mode: bool = True) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot the Poincaré map for multiple energy levels.
+    
+    Parameters
+    ----------
+    pts_list : list
+        List of numpy arrays containing points for each energy level.
+        Each array should have shape (n_points, 2) with columns [q2, p2].
+    h0_levels : Sequence[float]
+        Energy levels corresponding to each set of points.
+    dark_mode : bool, optional
+        Whether to use dark mode styling. Default is True.
+        
+    Returns
+    -------
+    tuple
+        (fig, axs) containing the figure and axis objects
+    """
+    
+    fig, axs = plt.subplots(2, 2, figsize=(8, 8))
+    axs = axs.flatten()  # Flatten to easily index
+
+    for i, (pts, h0) in enumerate(zip(pts_list, h0_levels)):
+        # Plot in the corresponding subplot
+        axs[i].scatter(pts[:, 0], pts[:, 1], s=1)
+        axs[i].set_aspect("equal", adjustable="box")
+        axs[i].set_xlabel(r"$q_2'$")
+        axs[i].set_ylabel(r"$p_2'$")
+        
+        # Set axis limits based on data
+        max_abs_val = max(abs(pts[:, 0].max()), abs(pts[:, 0].min()), 
+                          abs(pts[:, 1].max()), abs(pts[:, 1].min()))
+        axs[i].set_xlim(-max_abs_val, max_abs_val)
+        axs[i].set_ylim(-max_abs_val, max_abs_val)
+
+        # Apply styling based on dark mode preference
+        if dark_mode:
+            set_dark_mode(fig, axs[i], title=f"Poincaré Map h={h0}")
+        else:
+            axs[i].set_title(f"Poincaré Map h={h0}")
+
+    plt.tight_layout()
+    plt.show()
+    
+    return fig, axs
