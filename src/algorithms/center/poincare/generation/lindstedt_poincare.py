@@ -1,5 +1,6 @@
 import numpy as np
-from numba import njit, prange
+from numba import njit
+from numba.typed import Dict, List
 
 
 @njit(fastmath=True, cache=True)
@@ -110,11 +111,11 @@ def zero_coeff(i, j, k, m):
 def build_mode_tables(N_max):
     offset_ij = np.zeros((N_max+1, N_max+1), dtype=np.int64)
     total = 0
-    mode_list = {}
+    mode_list = Dict()
     for i in range(N_max+1):
         for j in range(N_max+1):
             offset_ij[i, j] = total
-            modes = []
+            modes = List()
             for k in range(-i, i+1):
                 for m in range(-j, j+1):
                     if not zero_coeff(i, j, k, m):
@@ -122,7 +123,20 @@ def build_mode_tables(N_max):
                         m_idx = _m_to_idx(j, m)
                         modes.append((i, j, k_idx, m_idx, k, m))
                         total += 1
-            mode_list[(i, j)] = np.array(modes, dtype=np.int64)
+            # Manually create and populate the NumPy array
+            if len(modes) > 0:
+                arr = np.empty((len(modes), 6), dtype=np.int64)
+                for idx, val_tuple in enumerate(modes):
+                    arr[idx, 0] = val_tuple[0]
+                    arr[idx, 1] = val_tuple[1]
+                    arr[idx, 2] = val_tuple[2]
+                    arr[idx, 3] = val_tuple[3]
+                    arr[idx, 4] = val_tuple[4]
+                    arr[idx, 5] = val_tuple[5]
+                mode_list[(i, j)] = arr
+            else:
+                # Handle cases where modes list might be empty for some (i,j)
+                mode_list[(i, j)] = np.empty((0, 6), dtype=np.int64)
     
     total_coeffs = offset_ij[N_max, N_max] + len(mode_list[(N_max, N_max)])
     return offset_ij, mode_list, total_coeffs
@@ -244,10 +258,8 @@ def compute_forcing_terms(i, j, c, Tn, Tn1, Tn2, Rn, Rn1, Rn2, Rn3, X_arr, Y_arr
         convolve_series(X_arr, Rn2, i, j, offset_ij, mode_list, tmp)
         scale_series(tmp, scaleR1, Rn1)
         
-        tmp.fill(0.0)
-        convolve_series(Tn1, np.ones_like(X_arr), i, j, offset_ij, mode_list, tmp)
-        scale_series(tmp, -(2.0*n)/(n+1), tmp)
-        Rn1 += tmp
+        scale_series(Tn1, -(2.0*n)/(n+1), tmp) # tmp = -(2n/(n+1)) * Tn1
+        Rn1 += tmp # Rn1 = ... + tmp
         
         tmp.fill(0.0)
         convolve_series(rho2, Rn3, i, j, offset_ij, mode_list, tmp)
@@ -262,7 +274,7 @@ def compute_forcing_terms(i, j, c, Tn, Tn1, Tn2, Rn, Rn1, Rn2, Rn3, X_arr, Y_arr
         scale_series(tmp, scalar, r)
 
 
-@njit(parallel=True, fastmath=True, cache=True)
+@njit(fastmath=True, cache=True)
 def compute_LHS_contrib(i, j, c2, omega0, nu0, X_arr, Y_arr, Z_arr, offset_ij, mode_list, pbar, qbar, rbar, Omega_w, Omega_n):
     modes = mode_list[(i, j)]
     off = offset_ij[i, j]
@@ -281,7 +293,7 @@ def compute_LHS_contrib(i, j, c2, omega0, nu0, X_arr, Y_arr, Z_arr, offset_ij, m
             omega_eff +=   Omega_w[a, b]
             nu_eff    +=   Omega_n[a, b]
 
-    for m_idx in prange(modes.shape[0]):
+    for m_idx in range(modes.shape[0]):
         k, m = modes[m_idx, 4], modes[m_idx, 5]
         idx = off + m_idx
         # For the two resonant fundamentals we MUST exclude the yet-unknown
@@ -342,29 +354,54 @@ def solve_order(i, j, c2, omega0, nu0, X_arr, Y_arr, Z_arr, offset_ij, mode_list
 @njit(fastmath=True, cache=True)
 def compute_LP_series(N_max, c2, c, omega0, nu0, kappa, X_arr, Y_arr, Z_arr, offset_ij, mode_list, Omega_w, Omega_n,
                      Tn, Tn1, Tn2, Rn, Rn1, Rn2, Rn3, p, q, r, pbar, qbar, rbar, tmp):
-    # Always pre-factor matrices for performance
     matrix_cache = precompute_matrices(c2, omega0, nu0, N_max, mode_list, offset_ij)
     
     seed_series(omega0, nu0, kappa, X_arr, Y_arr, Z_arr, offset_ij, mode_list, Omega_w, Omega_n)
+
+    # Seed T0, T1, R0, R1 polynomials
+    # These coefficients are set in the buffers before the loop starts.
+    # Tn1 will hold T0, Tn will hold T1. After rotation in compute_forcing_terms for n=2,
+    # Tn2 will have T0, and Tn1 will have T1.
+    # Rn1 will hold R0, Rn will hold R1. After rotation for n=2,
+    # Rn2 will have R0, and Rn1 will have R1.
+
+    # Find index for constant term (i=0,j=0,k=0,m=0)
+    idx_const_00 = -1  # Numba requires definite assignment or type inference
+    modes00 = mode_list[(0,0)]
+    base00 = offset_ij[0,0]
+    for m_idx_loop in range(modes00.shape[0]):
+        if modes00[m_idx_loop, 4] == 0 and modes00[m_idx_loop, 5] == 0: # k=0, m=0
+            idx_const_00 = base00 + m_idx_loop
+            break
     
-    # We cannot parallelize the outer loop because orders must be computed sequentially
-    for total in range(1, N_max+1):
-        # ---- keep the outer iteration serial: the scratch buffers are shared ----
-        if total > 10:  
-            for i in range(total+1):
-                j = total - i
-                compute_forcing_terms(i, j, c, Tn, Tn1, Tn2, Rn, Rn1, Rn2, Rn3, X_arr, Y_arr, Z_arr, offset_ij, mode_list, p, q, r, tmp)
-                compute_LHS_contrib(i, j, c2, omega0, nu0, X_arr, Y_arr, Z_arr, offset_ij, mode_list, pbar, qbar, rbar, Omega_w, Omega_n)
-                solve_order(i, j, c2, omega0, nu0, X_arr, Y_arr, Z_arr, offset_ij, mode_list, Omega_w, Omega_n, 
-                           p, q, r, pbar, qbar, rbar, matrix_cache)
-        else:
-            for i in range(total+1):
-                j = total - i
-                compute_forcing_terms(i, j, c, Tn, Tn1, Tn2, Rn, Rn1, Rn2, Rn3, X_arr, Y_arr, Z_arr, offset_ij, mode_list, p, q, r, tmp)
-                compute_LHS_contrib(i, j, c2, omega0, nu0, X_arr, Y_arr, Z_arr, offset_ij, mode_list, pbar, qbar, rbar, Omega_w, Omega_n)
-                solve_order(i, j, c2, omega0, nu0, X_arr, Y_arr, Z_arr, offset_ij, mode_list, Omega_w, Omega_n, 
-                           p, q, r, pbar, qbar, rbar, matrix_cache)
-                
+    # Find index for x-term (i=1,j=0,k=1,m=0)
+    idx_x_1010 = -1 # Numba requires definite assignment or type inference
+    modes10 = mode_list[(1,0)]
+    base10 = offset_ij[1,0]
+    for m_idx_loop in range(modes10.shape[0]):
+        if modes10[m_idx_loop, 4] == 1 and modes10[m_idx_loop, 5] == 0: # k=1, m=0
+            idx_x_1010 = base10 + m_idx_loop
+            break
+
+    # Seed initial polynomial coefficients. These modes (0,0,0,0) and (1,0,1,0) should always exist.
+    if idx_const_00 != -1:
+        Tn1[idx_const_00] = 1.0      # T0 = 1
+        Rn1[idx_const_00] = -1.0     # R0 = -1
+    # else: error, (0,0,0,0) mode not found - this should not happen
+
+    if idx_x_1010 != -1:
+        Tn[idx_x_1010] = 1.0         # T1 = x
+        Rn[idx_x_1010] = -3.0        # R1 = -3x
+    # else: error, (1,0,1,0) mode not found - this should not happen
+    
+    for total in range(2, N_max+1):
+        for i in range(total+1):
+            j = total - i
+            compute_forcing_terms(i, j, c, Tn, Tn1, Tn2, Rn, Rn1, Rn2, Rn3, X_arr, Y_arr, Z_arr, offset_ij, mode_list, p, q, r, tmp)
+            compute_LHS_contrib(i, j, c2, omega0, nu0, X_arr, Y_arr, Z_arr, offset_ij, mode_list, pbar, qbar, rbar, Omega_w, Omega_n)
+            solve_order(i, j, c2, omega0, nu0, X_arr, Y_arr, Z_arr, offset_ij, mode_list, Omega_w, Omega_n, 
+                        p, q, r, pbar, qbar, rbar, matrix_cache)
+
     return X_arr, Y_arr, Z_arr, Omega_w, Omega_n
 
 
@@ -424,3 +461,11 @@ def eval_lp(alpha, beta, X_arr, Y_arr, Z_arr, max_order):
             zp += np.sum(Z_arr[idx:idx+modes]) * amp
             idx += modes
     return xp, yp, zp
+
+
+@njit(fastmath=True, cache=True)
+def coeff(arr: np.ndarray, i: int, j: int, k: int, m: int, offset_ij: np.ndarray) -> float:
+    """Return x_{ij}^{km}, y_{ij}^{km} or z_{ij}^{km}."""
+    k_idx = _k_to_idx(i, k)
+    m_idx = _m_to_idx(j, m)
+    return arr[linear_index(i, j, k_idx, m_idx, offset_ij)]
