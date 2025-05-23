@@ -3,13 +3,13 @@ from algorithms.center.poincare.map import generate_iterated_poincare_map
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables)
 from algorithms.center.utils import format_cm_table
-from utils.log_config import logger
+from config import (C_OMEGA_HEURISTIC, DT, H0_LEVELS, INTEGRATOR_ORDER,
+                    L_POINT, MAX_DEG, N_ITER, N_SEEDS, SYSTEM, USE_SYMPLECTIC)
 from plots.plots import plot_poincare_map
-from config import (DT, H0_LEVELS, L_POINT, MAX_DEG, N_ITER, N_SEEDS, SYSTEM,
-                        USE_SYMPLECTIC, INTEGRATOR_ORDER, C_OMEGA_HEURISTIC)
 from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
+from utils.log_config import logger
 
 
 def main() -> None:
