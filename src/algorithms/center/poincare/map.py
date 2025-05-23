@@ -217,10 +217,51 @@ def _poincare_step_jit(
         p3_new = state_new[n_dof + 2]
 
         if (q3_old * q3_new < 0.0) and (p3_new > 0.0):
+
+            # 1) linear first guess
             alpha = q3_old / (q3_old - q3_new)
-            q2p = state_old[1] + alpha * (state_new[1] - state_old[1])
-            p2p = state_old[n_dof + 1] + alpha * (state_new[n_dof + 1] - state_old[n_dof + 1])
-            p3p = p3_old + alpha * (p3_new - p3_old)
+
+            # 2) endpoint derivatives for Hermite poly (need dt-scaled slopes)
+            rhs_old = _hamiltonian_rhs(state_old, jac_H, clmo, n_dof)
+            rhs_new = _hamiltonian_rhs(state_new, jac_H, clmo, n_dof)
+            m0 = rhs_old[2] * dt          # dq3/dt at t=0  → slope * dt
+            m1 = rhs_new[2] * dt          # dq3/dt at t=dt
+
+            # 3) cubic Hermite coefficients  H(t) = a t³ + b t² + c t + d   ( 0 ≤ t ≤ 1 )
+            d  = q3_old
+            c  = m0
+            b  = 3.0*(q3_new - q3_old) - (2.0*m0 +   m1)
+            a  = 2.0*(q3_old - q3_new) + (   m0 +   m1)
+
+            # 4) one Newton iteration on H(t)=0  (enough because linear guess is very close)
+            f  = ((a*alpha + b)*alpha + c)*alpha + d
+            fp = (3.0*a*alpha + 2.0*b)*alpha + c        # derivative
+            alpha -= f / fp
+            # clamp in case numerical noise pushed it slightly outside
+            if alpha < 0.0:
+                alpha = 0.0
+            elif alpha > 1.0:
+                alpha = 1.0
+
+            # 5) use *the same* cubic basis to interpolate q₂, p₂, p₃
+            h00 = (1.0 + 2.0*alpha) * (1.0 - alpha)**2
+            h10 = alpha * (1.0 - alpha)**2
+            h01 = alpha**2 * (3.0 - 2.0*alpha)
+            h11 = alpha**2 * (alpha - 1.0)
+
+            def hermite(y0, y1, dy0, dy1):
+                return (
+                    h00 * y0 +
+                    h10 * dy0 * dt +
+                    h01 * y1 +
+                    h11 * dy1 * dt
+                )
+
+            q2p = hermite(state_old[1], state_new[1], rhs_old[1], rhs_new[1])
+            p2p = hermite(state_old[n_dof+1], state_new[n_dof+1],
+                          rhs_old[n_dof+1],    rhs_new[n_dof+1])
+            p3p = hermite(p3_old, p3_new, rhs_old[n_dof+2], rhs_new[n_dof+2])
+
             return 1, q2p, p2p, p3p
 
         state_old = state_new
@@ -511,7 +552,6 @@ def generate_iterated_poincare_map(
                     break
             except RuntimeError as e:
                 logger.warning(f"Failed to find Poincaré crossing for seed {seed} at iteration {i+1}/{n_iter}: {e}")
-                # Optionally, break from this seed's iteration or handle as needed
                 break # Stop iterating this seed if a crossing is not found
 
     return np.asarray(pts_accum, dtype=np.float64)
