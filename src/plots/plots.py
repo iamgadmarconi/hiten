@@ -256,47 +256,58 @@ def set_axes_equal(ax):
     ax.set_zlim3d([origin[2] - radius, origin[2] + radius])
 
 
-def set_dark_mode(fig, ax, title=None):
+def set_dark_mode(fig: plt.Figure, ax: plt.Axes, title: Optional[str] = None):
     """
-    Apply dark mode styling to the figure and axes to resemble space.
+    Apply dark mode styling to the figure and axes.
+    Handles both 2D and 3D axes.
     
     Parameters
     ----------
     fig : matplotlib.figure.Figure
         The figure to apply dark mode styling to.
     ax : matplotlib.axes.Axes
-        The 3D axes to apply dark mode styling to.
+        The 2D or 3D axes to apply dark mode styling to.
     title : str, optional
         The title to set with appropriate dark mode styling.
     """
-    # Set dark background
-    fig.patch.set_facecolor('black')
-    ax.set_facecolor('black')
-    ax.grid(False)
-    
-    # Make sure all panes are black (remove gray background)
-    ax.xaxis.pane.fill = False
-    ax.yaxis.pane.fill = False
-    ax.zaxis.pane.fill = False
-    
-    # Make pane edges black or invisible
-    ax.xaxis.pane.set_edgecolor('black')
-    ax.yaxis.pane.set_edgecolor('black')
-    ax.zaxis.pane.set_edgecolor('black')
-    
-    # Remove grid lines
-    ax.grid(True)
-    
-    # Set text and axis colors to light
     text_color = 'white'
+    grid_color = '#555555'  # A medium-dark gray for grid lines
+
+    # Set dark background for the entire figure
+    fig.patch.set_facecolor('black')
+
+    # Set dark background for the specific axes object
+    ax.set_facecolor('black')
+
+    # Common text and tick color settings
     ax.xaxis.label.set_color(text_color)
     ax.yaxis.label.set_color(text_color)
-    ax.zaxis.label.set_color(text_color)
-    ax.tick_params(axis='x', colors=text_color)
-    ax.tick_params(axis='y', colors=text_color)
-    ax.tick_params(axis='z', colors=text_color)
-    
-    # Set title if provided
+    ax.tick_params(axis='x', colors=text_color, which='both') # Apply to major and minor ticks
+    ax.tick_params(axis='y', colors=text_color, which='both')
+
+    if isinstance(ax, Axes3D):
+        # 3D specific settings
+        ax.zaxis.label.set_color(text_color)
+        ax.tick_params(axis='z', colors=text_color, which='both')
+
+        # Make panes transparent and set edge color
+        for axis_obj in [ax.xaxis, ax.yaxis, ax.zaxis]:
+            axis_obj.pane.fill = False
+            axis_obj.pane.set_edgecolor('black') 
+
+        # Style grid for 3D plots
+        ax.grid(True, color=grid_color, linestyle=':', linewidth=0.5)
+    else:
+        # 2D specific settings
+        # Style grid for 2D plots
+        ax.grid(True, color=grid_color, linestyle=':', linewidth=0.5)
+        
+        # Set spine colors for 2D plots to make them visible
+        for spine_key in ['top', 'bottom', 'left', 'right']:
+            ax.spines[spine_key].set_color(text_color)
+            ax.spines[spine_key].set_linewidth(0.5)
+
+    # Set title if provided, with dark mode color
     if title:
         ax.set_title(title, color=text_color)
     
@@ -304,12 +315,11 @@ def set_dark_mode(fig, ax, title=None):
     if ax.get_legend():
         legend = ax.get_legend()
         frame = legend.get_frame()
-        frame.set_facecolor('black')
-        frame.set_edgecolor('white')
+        frame.set_facecolor('#111111')  # Dark background for legend
+        frame.set_edgecolor(text_color)   # White border for legend
         
-        # Set legend text color
-        for text in legend.get_texts():
-            text.set_color('white')
+        for text_obj in legend.get_texts():
+            text_obj.set_color(text_color) # White text for legend
 
 
 def plot_poincare_map(pts_list: list, h0_levels: Sequence[float], dark_mode: bool = True) -> Tuple[plt.Figure, plt.Axes]:

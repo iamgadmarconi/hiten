@@ -9,7 +9,6 @@ from algorithms.center.polynomial.algebra import (_poly_clean, _poly_diff,
 from algorithms.center.polynomial.base import encode_multiindex, make_poly
 from algorithms.variables import N_VARS
 
-
 @njit(fastmath=True, cache=True)
 def polynomial_zero_list(max_deg: int, psi) -> List[np.ndarray]:
     """

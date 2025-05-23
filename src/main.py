@@ -1,6 +1,3 @@
-import matplotlib.pyplot as plt
-import numpy as np
-
 from algorithms.center.manifold import center_manifold_rn
 from algorithms.center.poincare.generation.lindstedt_poincare import (build_LP,
                                                                       eval_lp)
@@ -14,16 +11,15 @@ from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
 
-
 # System configuration
 SYSTEM = "SE"  # "EM" for Earth-Moon or "SE" for Sun-Earth
 L_POINT = 1    # Libration point number (1 or 2)
 
 # Algorithm parameters
-MAX_DEG = 8
+MAX_DEG = 5
 TOL     = 1e-14
 # -------- LP parameters ----------------------------------------------------
-LP_MAX_ORDER = 15          # i+j ≤ 15  (good compromise between speed & accuracy)
+LP_MAX_ORDER = 3          # i+j ≤ 15  (good compromise between speed & accuracy)
 ALPHA        = 0.03        # in-plane amplitude
 BETA         = 0.00        # out-of-plane amplitude = 0 → Lyapunov family
 
@@ -69,28 +65,14 @@ def main() -> None:
     print(format_cm_table(H_cm_rn_full, clmo))
     print("\n")
 
-    logger.info("Computing Lindstedt-Poincaré expansion (order ≤ %d)…",
-                LP_MAX_ORDER)
-
-    c_series = [selected_l_point._cn(2)] + [
-        selected_l_point._cn(n) for n in range(3, LP_MAX_ORDER + 3 + 1)
-    ]
-
-    X_arr, Y_arr, Z_arr, Omega_w, Omega_n = build_LP(c_series, LP_MAX_ORDER)
-    logger.info("ω₀ = %.15g,  ν₀ = %.15g", Omega_w[0, 0], Omega_n[0, 0])
-
-    x0, y0, z0 = eval_lp(ALPHA, BETA, X_arr, Y_arr, Z_arr, LP_MAX_ORDER)
-    logger.info("LP initial position (alpha=%.3g, beta=%.3g)  =>  (x,y,z) = "
-                "(%.6e, %.6e, %.6e)", ALPHA, BETA, x0, y0, z0)
-
     logger.info("Starting Poincaré map generation process…")
 
-    H0_LEVELS = [0.20, 0.40, 0.60, 1.00]
+    H0_LEVELS = [0.6] # [0.20, 0.40, 0.60, 1.00]
 
     dt = 1e-1
-    USE_SYMPLECTIC = False
-    N_SEEDS = 10 # seeds along q2-axis
-    N_ITER = 500 # iterations per seed
+    USE_SYMPLECTIC = True
+    N_SEEDS = 1 # seeds along q2-axis
+    N_ITER = 10 # iterations per seed
 
     all_pts = []
 

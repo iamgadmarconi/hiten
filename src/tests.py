@@ -56,7 +56,12 @@ def main():
         print(f"  - {os.path.relpath(path)}")
     
     # Add pytest options
-    pytest_args = ["-xvs"] + test_paths
+    pytest_args = [
+        "-xv",  # -s removed as pytest's logging capture will handle output
+        "--log-cli-level=DEBUG",
+        "--log-cli-format=%(asctime)s | %(levelname)7s | %(name)s: %(message)s",
+        "--log-cli-date-format=%Y-%m-%d %H:%M:%S"
+    ] + test_paths
     
     # Run the tests
     pytest.main(pytest_args)
