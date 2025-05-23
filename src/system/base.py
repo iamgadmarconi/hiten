@@ -4,7 +4,8 @@ from typing import Dict
 
 from .body import Body
 from .libration import LibrationPoint, L1Point, L2Point, L3Point, L4Point, L5Point
-from log_config import logger
+from utils.precision import log_precision_info, hp
+from utils.log_config import logger
 
 
 @dataclass
@@ -24,6 +25,9 @@ class System(object):
         """Initializes the CR3BP system based on the provided configuration."""
 
         logger.info(f"Initializing System with primary='{config.primary.name}', secondary='{config.secondary.name}', distance={config.distance:.4e}")
+        
+        # Log precision settings
+        log_precision_info()
 
         self.primary = config.primary
         self.secondary = config.secondary
@@ -42,8 +46,18 @@ class System(object):
         return f"System(config=systemConfig(primary={self.primary!r}, secondary={self.secondary!r}, distance={self.distance}))"
 
     def _get_mu(self) -> float:
-        """Calculates the mass parameter mu."""
-        return self.secondary.mass / (self.primary.mass + self.secondary.mass)
+        """Calculates the mass parameter mu with high precision if enabled."""
+        logger.debug(f"Calculating mu: {self.secondary.mass} / ({self.primary.mass} + {self.secondary.mass})")
+
+        # Use HighPrecisionNumber for critical mu calculation
+        primary_mass_hp = hp(self.primary.mass)
+        secondary_mass_hp = hp(self.secondary.mass)
+        total_mass_hp = primary_mass_hp + secondary_mass_hp
+        mu_hp = secondary_mass_hp / total_mass_hp
+
+        mu = float(mu_hp) # Convert back to float for storage
+        logger.debug(f"Calculated mu with high precision: {mu}")
+        return mu
 
     def _compute_libration_points(self, mu: float) -> Dict[int, LibrationPoint]:
         """Computes all five Libration points for the given mass parameter."""

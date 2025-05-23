@@ -1,10 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from typing import Tuple, Optional, Any, Dict, Sequence
+from typing import Tuple, Optional, Any, Dict, Sequence, List
 import matplotlib.patheffects as patheffects
+import os
 
-from log_config import logger
+from utils.log_config import logger
 
 from utils.coordinates import rotating_to_inertial
 
@@ -47,10 +48,7 @@ def plot_orbit_rotating_frame(trajectory: np.ndarray,
     tuple
         (fig, ax) containing the figure and axis objects for further customization
     """
-    if trajectory is None:
-        logger.warning("No trajectory to plot")
-        return None, None
-    
+
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection='3d')
     
@@ -135,10 +133,6 @@ def plot_orbit_inertial_frame(trajectory: np.ndarray,
     tuple
         (fig, ax) containing the figure and axis objects for further customization
     """
-    if trajectory is None or times is None:
-        logger.warning("No trajectory or times data to plot")
-        return None, None
-    
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection='3d')
     
@@ -263,47 +257,58 @@ def set_axes_equal(ax):
     ax.set_zlim3d([origin[2] - radius, origin[2] + radius])
 
 
-def set_dark_mode(fig, ax, title=None):
+def set_dark_mode(fig: plt.Figure, ax: plt.Axes, title: Optional[str] = None):
     """
-    Apply dark mode styling to the figure and axes to resemble space.
+    Apply dark mode styling to the figure and axes.
+    Handles both 2D and 3D axes.
     
     Parameters
     ----------
     fig : matplotlib.figure.Figure
         The figure to apply dark mode styling to.
     ax : matplotlib.axes.Axes
-        The 3D axes to apply dark mode styling to.
+        The 2D or 3D axes to apply dark mode styling to.
     title : str, optional
         The title to set with appropriate dark mode styling.
     """
-    # Set dark background
-    fig.patch.set_facecolor('black')
-    ax.set_facecolor('black')
-    ax.grid(False)
-    
-    # Make sure all panes are black (remove gray background)
-    ax.xaxis.pane.fill = False
-    ax.yaxis.pane.fill = False
-    ax.zaxis.pane.fill = False
-    
-    # Make pane edges black or invisible
-    ax.xaxis.pane.set_edgecolor('black')
-    ax.yaxis.pane.set_edgecolor('black')
-    ax.zaxis.pane.set_edgecolor('black')
-    
-    # Remove grid lines
-    ax.grid(True)
-    
-    # Set text and axis colors to light
     text_color = 'white'
+    grid_color = '#555555'  # A medium-dark gray for grid lines
+
+    # Set dark background for the entire figure
+    fig.patch.set_facecolor('black')
+
+    # Set dark background for the specific axes object
+    ax.set_facecolor('black')
+
+    # Common text and tick color settings
     ax.xaxis.label.set_color(text_color)
     ax.yaxis.label.set_color(text_color)
-    ax.zaxis.label.set_color(text_color)
-    ax.tick_params(axis='x', colors=text_color)
-    ax.tick_params(axis='y', colors=text_color)
-    ax.tick_params(axis='z', colors=text_color)
-    
-    # Set title if provided
+    ax.tick_params(axis='x', colors=text_color, which='both') # Apply to major and minor ticks
+    ax.tick_params(axis='y', colors=text_color, which='both')
+
+    if isinstance(ax, Axes3D):
+        # 3D specific settings
+        ax.zaxis.label.set_color(text_color)
+        ax.tick_params(axis='z', colors=text_color, which='both')
+
+        # Make panes transparent and set edge color
+        for axis_obj in [ax.xaxis, ax.yaxis, ax.zaxis]:
+            axis_obj.pane.fill = False
+            axis_obj.pane.set_edgecolor('black') 
+
+        # Style grid for 3D plots
+        ax.grid(True, color=grid_color, linestyle=':', linewidth=0.5)
+    else:
+        # 2D specific settings
+        # Style grid for 2D plots
+        ax.grid(True, color=grid_color, linestyle=':', linewidth=0.5)
+        
+        # Set spine colors for 2D plots to make them visible
+        for spine_key in ['top', 'bottom', 'left', 'right']:
+            ax.spines[spine_key].set_color(text_color)
+            ax.spines[spine_key].set_linewidth(0.5)
+
+    # Set title if provided, with dark mode color
     if title:
         ax.set_title(title, color=text_color)
     
@@ -311,11 +316,114 @@ def set_dark_mode(fig, ax, title=None):
     if ax.get_legend():
         legend = ax.get_legend()
         frame = legend.get_frame()
-        frame.set_facecolor('black')
-        frame.set_edgecolor('white')
+        frame.set_facecolor('#111111')  # Dark background for legend
+        frame.set_edgecolor(text_color)   # White border for legend
         
-        # Set legend text color
-        for text in legend.get_texts():
-            text.set_color('white')
+        for text_obj in legend.get_texts():
+            text_obj.set_color(text_color) # White text for legend
 
 
+def plot_poincare_map(pts_list: list, h0_levels: Sequence[float], dark_mode: bool = True, output_dir: Optional[str] = None, filename: Optional[str] = None) -> Tuple[plt.Figure, List[plt.Axes]]:
+    """
+    Plot the Poincaré map for multiple energy levels.
+    Dynamically adjusts the number of subplots based on the number of energy levels.
+    
+    Parameters
+    ----------
+    pts_list : list
+        List of numpy arrays containing points for each energy level.
+        Each array should have shape (n_points, 2) with columns [q2, p2].
+    h0_levels : Sequence[float]
+        Energy levels corresponding to each set of points.
+    dark_mode : bool, optional
+        Whether to use dark mode styling. Default is True.
+    output_dir : str, optional
+        Directory to save the plot. If None, plot is not saved.
+    filename : str, optional
+        Filename for the saved plot. If None, plot is not saved.
+        
+    Returns
+    -------
+    tuple
+        (fig, active_axs) containing the figure and a list of actively used axis objects.
+    """
+    
+    num_levels = len(h0_levels)
+
+    if num_levels == 0:
+        logger.info("No H0 levels to plot for Poincaré map.")
+        fig, ax = plt.subplots(figsize=(5,5)) 
+        ax.text(0.5, 0.5, "No data to plot", ha='center', va='center', color='red' if not dark_mode else 'white')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        title_text = "Poincaré Map (No Data)"
+        if dark_mode:
+            set_dark_mode(fig, ax, title=title_text)
+        else:
+            ax.set_title(title_text)
+        plt.show()
+        return fig, [ax]
+
+    # Determine layout for subplots
+    if num_levels == 1:
+        nrows, ncols = 1, 1
+    elif num_levels == 2:
+        nrows, ncols = 1, 2
+    elif num_levels == 3:
+        nrows, ncols = 1, 3
+    else:  # num_levels >= 4
+        ncols = int(np.ceil(np.sqrt(num_levels)))
+        nrows = int(np.ceil(num_levels / float(ncols)))
+
+    # squeeze=False ensures ax_or_axs_array is always a 2D numpy array.
+    fig, ax_or_axs_array = plt.subplots(nrows, ncols, figsize=(ncols * 4.5, nrows * 4.5), squeeze=False)
+    axs_list = list(ax_or_axs_array.flatten())
+
+    for i, (pts, h0) in enumerate(zip(pts_list, h0_levels)):
+        current_ax = axs_list[i]
+        
+        if pts.shape[0] == 0: 
+            logger.info(f"No points to plot for h0={h0:.3f}. Plotting empty subplot.")
+            current_ax.text(0.5, 0.5, "No data", ha='center', va='center', fontsize=9,
+                            color='gray' if not dark_mode else '#aaaaaa')
+            current_ax.set_xlim(-1, 1) 
+            current_ax.set_ylim(-1, 1)
+        else:
+            current_ax.scatter(pts[:, 0], pts[:, 1], s=1)
+            max_val_q2 = max(abs(pts[:, 0].max()), abs(pts[:, 0].min())) if pts.shape[0] > 0 else 1e-9
+            max_val_p2 = max(abs(pts[:, 1].max()), abs(pts[:, 1].min())) if pts.shape[0] > 0 else 1e-9
+            max_abs_val = max(max_val_q2, max_val_p2, 1e-9) # Ensure not zero for limits
+            
+            current_ax.set_xlim(-max_abs_val * 1.1, max_abs_val * 1.1)
+            current_ax.set_ylim(-max_abs_val * 1.1, max_abs_val * 1.1)
+
+        current_ax.set_aspect("equal", adjustable="box")
+        current_ax.set_xlabel(r"$q_2'$")
+        current_ax.set_ylabel(r"$p_2'$")
+        
+        title_text = f"Poincaré Map h={h0:.3f}"
+        if dark_mode:
+            set_dark_mode(fig, current_ax, title=title_text)
+        else:
+            current_ax.set_title(title_text)
+
+    # Hide unused subplots
+    for i in range(num_levels, nrows * ncols):
+        fig.delaxes(axs_list[i])
+
+    plt.tight_layout()
+
+    if output_dir and filename:
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        filepath = os.path.join(output_dir, filename)
+        try:
+            fig.savefig(filepath)
+            logger.info(f"Poincaré map saved to {filepath}")
+        except Exception as e:
+            logger.error(f"Error saving Poincaré map to {filepath}: {e}")
+
+    plt.show()
+    
+    active_axs = axs_list[:num_levels]
+    return fig, active_axs

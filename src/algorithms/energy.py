@@ -14,7 +14,7 @@ import numpy as np
 from typing import Tuple, Union, List, Optional, Sequence
 
 # Import logger
-from log_config import logger
+from utils.log_config import logger
 
 
 def crtbp_energy(state: Sequence[float], mu: float) -> float:

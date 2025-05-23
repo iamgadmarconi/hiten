@@ -3,9 +3,10 @@ from numba import njit, types
 from numba.typed import Dict, List
 
 from algorithms.variables import N_VARS
+from config import FASTMATH
 
 
-@njit(fastmath=True,cache=True)
+@njit(fastmath=FASTMATH,cache=True)
 def _factorial(n: int) -> int:
     """
     Calculate the factorial of a non-negative integer.
@@ -31,7 +32,7 @@ def _factorial(n: int) -> int:
         res *= i
     return res
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def _combinations(n: int, k: int) -> int:
     """
     Calculate the binomial coefficient C(n,k) = n! / (k! * (n-k)!).
@@ -68,7 +69,7 @@ def _combinations(n: int, k: int) -> int:
         res = res * (n - i + 1) // i
     return res
 
-@njit(fastmath=True,cache=True)
+@njit(fastmath=FASTMATH,cache=True)
 def init_index_tables(max_degree: int):
     """
     Initialize lookup tables for polynomial multi-index encoding and decoding.
@@ -156,7 +157,7 @@ for clmo_arr in CLMO_GLOBAL:
 
 # -----------------------------------------------------------------------------
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def pack_multiindex(k: np.ndarray) -> np.uint32:
     """
     Pack the exponents k_1 through k_5 into a 32-bit integer.
@@ -191,7 +192,7 @@ def pack_multiindex(k: np.ndarray) -> np.uint32:
     )
     return np.uint32(packed) # Ensure it returns uint32 as in init_index_tables
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def decode_multiindex(pos: int, degree: int, clmo) -> np.ndarray:
     """
     Decode a packed multi-index from its position in the lookup table.
@@ -233,7 +234,7 @@ def decode_multiindex(pos: int, degree: int, clmo) -> np.ndarray:
     k[0] = degree - s
     return k
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def encode_multiindex(k: np.ndarray, degree: int, encode_dict_list: List) -> int:
     """
     Encode a multi-index to find its position in the coefficient array.
@@ -275,7 +276,7 @@ def encode_multiindex(k: np.ndarray, degree: int, encode_dict_list: List) -> int
     else:
         return -1 # Key not found
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def make_poly(degree: int, psi) -> np.ndarray:
     """
     Create a new polynomial coefficient array of specified degree with complex128 dtype.
@@ -304,7 +305,7 @@ def make_poly(degree: int, psi) -> np.ndarray:
 
 
 # Helper to create encode_dict_list from clmo_table
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def _create_encode_dict_from_clmo(clmo_table: List) -> List:
     """
     Create a list of dictionaries mapping packed multi-indices to their positions.

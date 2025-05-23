@@ -7,9 +7,14 @@ from pathlib import Path
 
 def find_test_files():
     """Find all test_*.py files in the project."""
-    # Get the directory of the main.py file
-    src_dir = Path(os.path.dirname(os.path.abspath(__file__)))
+    # Get the src directory (go up from utils to src)
+    src_dir = Path(os.path.dirname(os.path.abspath(__file__))).parent
     project_root = src_dir.parent
+    
+    # Add src directory to Python path so imports work correctly
+    if str(src_dir) not in sys.path:
+        sys.path.insert(0, str(src_dir))
+    
     test_files = []
     
     # Walk the directory structure to find all test_*.py files
@@ -56,7 +61,12 @@ def main():
         print(f"  - {os.path.relpath(path)}")
     
     # Add pytest options
-    pytest_args = ["-xvs"] + test_paths
+    pytest_args = [
+        "-xv",  # -s removed as pytest's logging capture will handle output
+        "--log-cli-level=INFO",
+        "--log-cli-format=%(asctime)s | %(levelname)7s | %(name)s: %(message)s",
+        "--log-cli-date-format=%Y-%m-%d %H:%M:%S"
+    ] + test_paths
     
     # Run the tests
     pytest.main(pytest_args)

@@ -18,8 +18,10 @@ import numba
 import numpy as np
 from scipy.integrate import solve_ivp
 
+from config import FASTMATH
 
-@numba.njit(fastmath=True, cache=True)
+
+@numba.njit(fastmath=FASTMATH, cache=True)
 def crtbp_accel(state, mu):
     """
     Calculate the state derivative (acceleration) for the CR3BP.
@@ -60,7 +62,7 @@ def crtbp_accel(state, mu):
 
     return np.array([vx, vy, vz, ax, ay, az], dtype=np.float64)
 
-@numba.njit(fastmath=True, cache=True)
+@numba.njit(fastmath=FASTMATH, cache=True)
 def jacobian_crtbp(x, y, z, mu):
     """
     Compute the Jacobian matrix for the CR3BP equations of motion.
@@ -160,7 +162,7 @@ def jacobian_crtbp(x, y, z, mu):
 
     return F
 
-@numba.njit(fastmath=True, cache=True)
+@numba.njit(fastmath=FASTMATH, cache=True)
 def variational_equations(t, PHI_vec, mu, forward=1):
     """
     Compute the variational equations for the CR3BP.

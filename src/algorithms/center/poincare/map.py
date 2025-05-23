@@ -1,14 +1,17 @@
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Callable
+import math
 
 import numpy as np
 from numba import njit, prange
+from numba.typed import List
 from scipy.optimize import root_scalar
 
 from algorithms.center.polynomial.operations import (polynomial_evaluate,
                                                      polynomial_jacobian)
 from algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
                                                integrate_symplectic)
-from log_config import logger
+from config import FASTMATH
+from utils.log_config import logger
 
 
 def find_turning(
@@ -65,37 +68,19 @@ def find_turning(
             state[4] = x  # p2 (index 4 in (q1,q2,q3,p1,p2,p3))
         return polynomial_evaluate(H_blocks, state, clmo).real - h0
 
-    f0 = f(0.0)
-    if f0 > 0:
-        logger.warning(f"H(0)-h0 = {f0:.6e} > 0 along Hill boundary")
-        raise RuntimeError(
-            "Expected H(0)-h0 <= 0 along Hill boundary, got positive value."
-        )
+    root = _bracketed_root(
+        f,
+        initial=initial_guess,
+        factor=expand_factor,
+        max_expand=max_expand,
+    )
 
-    # Bracket the root
-    x_hi = initial_guess
-    expansion_count = 0
-    for expansion_count in range(max_expand):
-        if f(x_hi) > 0.0:
-            break
-        x_hi *= expand_factor
-    else:
-        logger.warning(f"Failed to bracket root after {max_expand} expansions up to {x_hi:.6e}")
-        raise RuntimeError(
-            "Failed to bracket root for turning point after expansions up to "
-            f"{x_hi}."
-        )
-    
-    logger.debug(f"Bracketed {q_or_p} root in [0, {x_hi:.6e}] after {expansion_count+1} expansions")
-
-    # Find the root
-    sol = root_scalar(f, bracket=(0.0, x_hi), method="brentq", xtol=1e-12)
-    if not sol.converged:
-        logger.warning("Root finding for Hill boundary did not converge")
+    if root is None:
+        logger.warning("Failed to locate %s turning point within search limits", q_or_p)
         raise RuntimeError("Root finding for Hill boundary did not converge.")
-    
-    logger.info(f"Found {q_or_p} turning point: {sol.root:.6e}")
-    return float(sol.root)
+
+    logger.info("Found %s turning point: %.6e", q_or_p, root)
+    return root
 
 
 def solve_p3(
@@ -144,29 +129,15 @@ def solve_p3(
         state[5] = p3
         return polynomial_evaluate(H_blocks, state, clmo).real - h0
 
-    f0 = f(0.0)
-    if f0 > 0:
-        # Already above energy level at p3=0 ⇒ no positive root.
-        logger.debug(f"No p3 solution at (q2,p2)=({q2:.4e},{p2:.4e}): f(0)={f0:.4e} > 0")
-        return None
-
-    p3_hi = initial_guess
-    for _ in range(max_expand):
-        if f(p3_hi) > 0.0:
-            break
-        p3_hi *= expand_factor
-    else:
-        logger.debug(f"No sign change for p3 up to {p3_hi:.4e} at (q2,p2)=({q2:.4e},{p2:.4e})")
-        # Could not find sign change – no solution.
-        return None
-
-    sol = root_scalar(f, bracket=(0.0, p3_hi), method="brentq", xtol=1e-12)
-    if sol.converged and sol.root > 0.0:
-        return float(sol.root)
-    return None
+    return _bracketed_root(
+        f,
+        initial=initial_guess,
+        factor=expand_factor,
+        max_expand=max_expand,
+    )
 
 
-@njit(cache=True)
+@njit(cache=True, fastmath=FASTMATH)
 def _hamiltonian_rhs(
     state6: np.ndarray,
     jac_H: List[List[np.ndarray]],
@@ -188,7 +159,7 @@ def _hamiltonian_rhs(
     return rhs
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def _rk4_step(
     state6: np.ndarray,
     dt: float,
@@ -204,17 +175,7 @@ def _rk4_step(
     return state6 + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
 
 
-@njit(fastmath=True, cache=True)
-def _embed_cm_state_jit(q2: float, q3: float, p2: float, p3: float, n_dof: int) -> np.ndarray:
-    vec = np.zeros(2 * n_dof, dtype=np.float64)
-    vec[1] = q2
-    vec[2] = q3
-    vec[n_dof + 1] = p2
-    vec[n_dof + 2] = p3
-    return vec
-
-
-@njit(cache=True)
+@njit(cache=True, fastmath=FASTMATH)
 def _poincare_step_jit(
     q2: float,
     p2: float,
@@ -226,9 +187,15 @@ def _poincare_step_jit(
     max_steps: int,
     use_symplectic: bool,
     n_dof: int,
-) -> Tuple[int, float, float]:
-    """Return (flag, q2', p2').  flag=1 if success, 0 otherwise."""
-    state_old = _embed_cm_state_jit(q2, 0.0, p2, p3, n_dof)
+    c_omega_heuristic: float=20.0,
+) -> Tuple[int, float, float, float]:
+    """Return (flag, q2', p2', p3').  flag=1 if success, 0 otherwise."""
+    # Build the centre-manifold state directly (replaces _embed_cm_state_jit)
+    state_old = np.zeros(2 * n_dof, dtype=np.float64)
+    state_old[1] = q2
+    state_old[2] = 0.0  # q3 always zero on the section
+    state_old[n_dof + 1] = p2
+    state_old[n_dof + 2] = p3
 
     for _ in range(max_steps):
         if use_symplectic:
@@ -238,6 +205,7 @@ def _poincare_step_jit(
                 jac_H_rn_typed=jac_H,
                 clmo_H_typed=clmo,
                 order=order,
+                c_omega_heuristic=c_omega_heuristic,
             )
             state_new = traj[1]
         else:
@@ -245,51 +213,60 @@ def _poincare_step_jit(
 
         q3_old = state_old[2]
         q3_new = state_new[2]
+        p3_old = state_old[n_dof + 2]
         p3_new = state_new[n_dof + 2]
 
         if (q3_old * q3_new < 0.0) and (p3_new > 0.0):
+
+            # 1) linear first guess
             alpha = q3_old / (q3_old - q3_new)
-            q2p = state_old[1] + alpha * (state_new[1] - state_old[1])
-            p2p = state_old[n_dof + 1] + alpha * (state_new[n_dof + 1] - state_old[n_dof + 1])
-            return 1, q2p, p2p
+
+            # 2) endpoint derivatives for Hermite poly (need dt-scaled slopes)
+            rhs_old = _hamiltonian_rhs(state_old, jac_H, clmo, n_dof)
+            rhs_new = _hamiltonian_rhs(state_new, jac_H, clmo, n_dof)
+            m0 = rhs_old[2] * dt          # dq3/dt at t=0  → slope * dt
+            m1 = rhs_new[2] * dt          # dq3/dt at t=dt
+
+            # 3) cubic Hermite coefficients  H(t) = a t³ + b t² + c t + d   ( 0 ≤ t ≤ 1 )
+            d  = q3_old
+            c  = m0
+            b  = 3.0*(q3_new - q3_old) - (2.0*m0 +   m1)
+            a  = 2.0*(q3_old - q3_new) + (   m0 +   m1)
+
+            # 4) one Newton iteration on H(t)=0  (enough because linear guess is very close)
+            f  = ((a*alpha + b)*alpha + c)*alpha + d
+            fp = (3.0*a*alpha + 2.0*b)*alpha + c        # derivative
+            alpha -= f / fp
+            # clamp in case numerical noise pushed it slightly outside
+            if alpha < 0.0:
+                alpha = 0.0
+            elif alpha > 1.0:
+                alpha = 1.0
+
+            # 5) use *the same* cubic basis to interpolate q₂, p₂, p₃
+            h00 = (1.0 + 2.0*alpha) * (1.0 - alpha)**2
+            h10 = alpha * (1.0 - alpha)**2
+            h01 = alpha**2 * (3.0 - 2.0*alpha)
+            h11 = alpha**2 * (alpha - 1.0)
+
+            def hermite(y0, y1, dy0, dy1):
+                return (
+                    h00 * y0 +
+                    h10 * dy0 * dt +
+                    h01 * y1 +
+                    h11 * dy1 * dt
+                )
+
+            q2p = hermite(state_old[1], state_new[1], rhs_old[1], rhs_new[1])
+            p2p = hermite(state_old[n_dof+1], state_new[n_dof+1],
+                          rhs_old[n_dof+1],    rhs_new[n_dof+1])
+            p3p = hermite(p3_old, p3_new, rhs_old[n_dof+2], rhs_new[n_dof+2])
+
+            return 1, q2p, p2p, p3p
 
         state_old = state_new
 
-    return 0, 0.0, 0.0
-
-
-def poincare_step(
-    seed4: Tuple[float, float, float, float],
-    dt: float,
-    jac_H: List[List[np.ndarray]],
-    clmo: List[np.ndarray],
-    order: int = 6,
-    max_steps: int = 20_000,
-    use_symplectic: bool = False,
-) -> Tuple[float, float]:
-    """Python wrapper around fully JIT-compiled step loop."""
-    q2, p2, q3, p3 = seed4
-
-    if not np.isclose(q3, 0.0):
-        raise ValueError("Seed must lie on q3=0 section.")
-
-    flag, q2p, p2p = _poincare_step_jit(
-        q2,
-        p2,
-        p3,
-        dt,
-        jac_H,
-        clmo,
-        order,
-        max_steps,
-        use_symplectic,
-        N_SYMPLECTIC_DOF,
-    )
-
-    if flag == 1:
-        return float(q2p), float(p2p)
-
-    raise RuntimeError("Poincaré return not detected within max_steps.")
+    return 0, 0.0, 0.0, 0.0
 
 
 def compute_poincare_map_for_energy(
@@ -391,7 +368,7 @@ def compute_poincare_map_for_energy(
 
     seeds_arr = np.asarray(seeds, dtype=np.float64)
 
-    success_flags, q2p_arr, p2p_arr = _poincare_map_parallel(
+    success_flags, q2p_arr, p2p_arr, p3p_arr = _poincare_map_parallel(
         seeds_arr,
         dt,
         jac_H,
@@ -426,19 +403,20 @@ def _poincare_map_parallel(
     max_steps: int,
     use_symplectic: bool,
     n_dof: int,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Return (success flags, q2p array, p2p array) processed in parallel."""
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Return (success flags, q2p array, p2p array, p3p array) processed in parallel."""
     n_seeds = seeds.shape[0]
     success = np.zeros(n_seeds, dtype=np.int64)
     q2p_out = np.empty(n_seeds, dtype=np.float64)
     p2p_out = np.empty(n_seeds, dtype=np.float64)
+    p3p_out = np.empty(n_seeds, dtype=np.float64)
 
     for i in prange(n_seeds):
         q2 = seeds[i, 0]
         p2 = seeds[i, 1]
         p3 = seeds[i, 3]  # q3 column is seeds[:,2] which is zero
 
-        flag, q2_new, p2_new = _poincare_step_jit(
+        flag, q2_new, p2_new, p3_new = _poincare_step_jit(
             q2,
             p2,
             p3,
@@ -455,8 +433,9 @@ def _poincare_map_parallel(
             success[i] = 1
             q2p_out[i] = q2_new
             p2p_out[i] = p2_new
+            p3p_out[i] = p3_new
 
-    return success, q2p_out, p2p_out
+    return success, q2p_out, p2p_out, p3p_out
 
 
 def generate_iterated_poincare_map(
@@ -471,6 +450,7 @@ def generate_iterated_poincare_map(
     dt: float = 1e-2,
     use_symplectic: bool = True,
     integrator_order: int = 6,
+    c_omega_heuristic: float=20.0,
     seed_axis: str = "q2",  # "q2" or "p2"
 ) -> np.ndarray:
     """Generate a Poincaré map by iterating each seed many times.
@@ -534,20 +514,72 @@ def generate_iterated_poincare_map(
     # 3. Iterate.
     pts_accum: list[Tuple[float, float]] = []
 
+    # Dynamically adjust max_steps based on dt to allow a consistent total integration time for finding a crossing.
+    # The original implicit max integration time (when dt=1e-3 and max_steps=20000) was 20.0.
+    target_max_integration_time_per_crossing = 20.0
+    calculated_max_steps = int(math.ceil(target_max_integration_time_per_crossing / dt))
+    logger.info(f"Using dt={dt:.1e}, calculated max_steps per crossing: {calculated_max_steps}")
+
     for seed in seeds:
         state = seed
-        for _ in range(n_iter):
-            q2p, p2p = poincare_step(
-                seed4=state,
-                dt=dt,
-                jac_H=jac_H,
-                clmo=clmo_table,
-                order=integrator_order,
-                max_steps=20000,
-                use_symplectic=use_symplectic,
-            )
-            pts_accum.append((q2p, p2p))
-            # set up next iterate – keep the same positive p3 as in seed
-            state = (q2p, p2p, 0.0, seed[3])
+        for i in range(n_iter): # Use a different loop variable, e.g., i
+            try:
+                flag, q2p, p2p, p3p = _poincare_step_jit(
+                    state[0],  # q2
+                    state[1],  # p2
+                    state[3],  # p3 (q3 is always 0)
+                    dt,
+                    jac_H,
+                    clmo_table,
+                    integrator_order,
+                    calculated_max_steps,
+                    use_symplectic,
+                    N_SYMPLECTIC_DOF,
+                    c_omega_heuristic,
+                )
+
+                if flag == 1:
+                    pts_accum.append((q2p, p2p))
+                    # fixed: restart with the p3 belonging to this crossing
+                    state = (q2p, p2p, 0.0, p3p)
+                else:
+                    logger.warning(
+                        "Failed to find Poincaré crossing for seed %s at iteration %d/%d",
+                        seed,
+                        i + 1,
+                        n_iter,
+                    )
+                    break
+            except RuntimeError as e:
+                logger.warning(f"Failed to find Poincaré crossing for seed {seed} at iteration {i+1}/{n_iter}: {e}")
+                break # Stop iterating this seed if a crossing is not found
 
     return np.asarray(pts_accum, dtype=np.float64)
+
+
+def _bracketed_root(
+    f: Callable[[float], float],
+    initial: float = 1e-3,
+    factor: float = 2.0,
+    max_expand: int = 40,
+    xtol: float = 1e-12,
+) -> Optional[float]:
+    """Return a positive root of *f* if a sign change can be bracketed.
+
+    The routine starts from ``x=0`` and expands the upper bracket until the
+    function changes sign.  If no sign change occurs within
+    ``initial * factor**max_expand`` it returns ``None``.
+    """
+    # Early exit if already above root at x=0 ⇒ no positive solution.
+    if f(0.0) > 0.0:
+        return None
+
+    x_hi = initial
+    for _ in range(max_expand):
+        if f(x_hi) > 0.0:
+            sol = root_scalar(f, bracket=(0.0, x_hi), method="brentq", xtol=xtol)
+            return float(sol.root) if sol.converged else None
+        x_hi *= factor
+
+    # No sign change detected within the expansion range
+    return None

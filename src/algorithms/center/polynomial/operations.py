@@ -8,9 +8,10 @@ from algorithms.center.polynomial.algebra import (_poly_clean, _poly_diff,
                                                   _poly_poisson)
 from algorithms.center.polynomial.base import encode_multiindex, make_poly
 from algorithms.variables import N_VARS
+from config import FASTMATH
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def polynomial_zero_list(max_deg: int, psi) -> List[np.ndarray]:
     """
     Create a list of zero polynomial coefficient arrays up to a maximum degree.
@@ -40,7 +41,7 @@ def polynomial_zero_list(max_deg: int, psi) -> List[np.ndarray]:
         lst.append(make_poly(d, psi))
     return lst
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def polynomial_variable(idx: int, max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
     """
     Create a polynomial representing a single variable.
@@ -78,7 +79,7 @@ def polynomial_variable(idx: int, max_deg: int, psi, clmo, encode_dict_list) -> 
             poly_result[1][encoded_idx] = 1.0
     return poly_result
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def polynomial_variables_list(max_deg: int, psi, clmo, encode_dict_list) -> List[List[np.ndarray]]:
     """
     Create a list of polynomials for each variable in the system.
@@ -110,7 +111,7 @@ def polynomial_variables_list(max_deg: int, psi, clmo, encode_dict_list) -> List
         var_polys.append(polynomial_variable(var_idx, max_deg, psi, clmo, encode_dict_list))
     return var_polys
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def polynomial_add_inplace(poly_p: List[np.ndarray], poly_q: List[np.ndarray], scale=1.0, max_deg: int = -1):
     """
     Add or subtract one polynomial to/from another in-place.
@@ -154,7 +155,7 @@ def polynomial_add_inplace(poly_p: List[np.ndarray], poly_q: List[np.ndarray], s
         else:
             poly_p[d] += scale * poly_q[d]
 
-@njit(fastmath=True, cache=False)
+@njit(fastmath=FASTMATH, cache=False)
 def polynomial_multiply(poly_p: List[np.ndarray], poly_q: List[np.ndarray], max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
     """
     Multiply two polynomials.
@@ -200,7 +201,7 @@ def polynomial_multiply(poly_p: List[np.ndarray], poly_q: List[np.ndarray], max_
                 poly_r[res_deg] += prod.reshape(poly_r[res_deg].shape)
     return poly_r
 
-@njit(fastmath=True, cache=False)
+@njit(fastmath=FASTMATH, cache=False)
 def polynomial_power(poly_p: List[np.ndarray], k: int, max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
     """
     Raise a polynomial to a power using binary exponentiation.
@@ -256,7 +257,7 @@ def polynomial_power(poly_p: List[np.ndarray], k: int, max_deg: int, psi, clmo, 
         exponent //= 2
     return poly_result
 
-@njit(fastmath=True, cache=False)
+@njit(fastmath=FASTMATH, cache=False)
 def polynomial_poisson_bracket(poly_p: List[np.ndarray], poly_q: List[np.ndarray], max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
     """
     Compute the Poisson bracket of two polynomials.
@@ -309,7 +310,7 @@ def polynomial_poisson_bracket(poly_p: List[np.ndarray], poly_q: List[np.ndarray
                 poly_r[res_deg] += term_coeffs.reshape(poly_r[res_deg].shape)
     return poly_r
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def polynomial_clean(poly_p: List[np.ndarray], tol: float) -> List[np.ndarray]:
     """
     Create a new polynomial with small coefficients set to zero.
@@ -340,7 +341,7 @@ def polynomial_clean(poly_p: List[np.ndarray], tol: float) -> List[np.ndarray]:
         cleaned_list.append(out_arr)
     return cleaned_list
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def polynomial_degree(poly_p: List[np.ndarray]) -> int:
     """
     Get the degree of a polynomial represented as a list of homogeneous parts.
@@ -364,7 +365,7 @@ def polynomial_degree(poly_p: List[np.ndarray]) -> int:
             return d
     return -1 # All parts are zero or poly_p is empty
 
-@njit(fastmath=True, cache=False)
+@njit(fastmath=FASTMATH, cache=False)
 def polynomial_differentiate(
     poly_p: List[np.ndarray], 
     var_idx: int, 
@@ -434,7 +435,7 @@ def polynomial_differentiate(
 
     return derivative_coeffs_list, derivative_max_deg
 
-@njit(fastmath=True, cache=False)
+@njit(fastmath=FASTMATH, cache=False)
 def polynomial_jacobian(
     poly_p: List[np.ndarray],
     max_deg: int,
@@ -486,7 +487,7 @@ def polynomial_jacobian(
     
     return jacobian_list
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def polynomial_evaluate(
     poly_p: List[np.ndarray], 
     point: np.ndarray, 
@@ -522,7 +523,7 @@ def polynomial_evaluate(
             total_value += _poly_evaluate(coeffs_d, degree, point, clmo)
     return total_value
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def polynomial_integrate(
     poly_p: List[np.ndarray],
     var_idx: int,

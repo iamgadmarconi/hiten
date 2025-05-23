@@ -1,0 +1,467 @@
+"""
+Precision utilities for arbitrary precision arithmetic.
+
+This module provides utilities for handling high precision calculations
+using mpmath when needed, with fallback to standard precision.
+"""
+
+import numpy as np
+import mpmath as mp
+from typing import Union, Callable, Any
+from config import USE_ARBITRARY_PRECISION, MPMATH_DPS, NUMPY_DTYPE_REAL, NUMPY_DTYPE_COMPLEX
+from utils.log_config import logger
+
+
+class HighPrecisionNumber:
+    """
+    A number class that supports high-precision arithmetic operations.
+    
+    This class wraps numeric values and provides operator overloading for
+    natural mathematical syntax while maintaining high precision when enabled.
+    """
+    
+    def __init__(self, value: Union[float, int, str, 'HighPrecisionNumber'], precision: int = None):
+        """
+        Initialize a high precision number.
+        
+        Parameters
+        ----------
+        value : float, int, str, or HighPrecisionNumber
+            The numeric value to wrap
+        precision : int, optional
+            Number of decimal places. If None, uses MPMATH_DPS from config.
+        """
+        self.precision = precision if precision is not None else MPMATH_DPS
+        
+        if isinstance(value, HighPrecisionNumber):
+            self.value = value.value
+            self.precision = max(self.precision, value.precision)
+        elif USE_ARBITRARY_PRECISION:
+            with mp.workdps(self.precision):
+                self.value = mp.mpf(value)
+        else:
+            self.value = float(value)
+    
+    def _ensure_precision_number(self, other) -> 'HighPrecisionNumber':
+        """Convert other operand to HighPrecisionNumber if needed."""
+        if not isinstance(other, HighPrecisionNumber):
+            return HighPrecisionNumber(other, self.precision)
+        return other
+    
+    def _binary_operation(self, other, operation):
+        """Perform a binary operation with proper precision handling."""
+        other = self._ensure_precision_number(other)
+        max_precision = max(self.precision, other.precision)
+        
+        if USE_ARBITRARY_PRECISION:
+            with mp.workdps(max_precision):
+                if operation == 'add':
+                    result_value = self.value + other.value
+                elif operation == 'sub':
+                    result_value = self.value - other.value
+                elif operation == 'mul':
+                    result_value = self.value * other.value
+                elif operation == 'truediv':
+                    result_value = self.value / other.value
+                elif operation == 'pow':
+                    result_value = self.value ** other.value
+                elif operation == 'mod':
+                    result_value = self.value % other.value
+                else:
+                    raise ValueError(f"Unsupported operation: {operation}")
+        else:
+            # Standard precision fallback
+            if operation == 'add':
+                result_value = float(self.value) + float(other.value)
+            elif operation == 'sub':
+                result_value = float(self.value) - float(other.value)
+            elif operation == 'mul':
+                result_value = float(self.value) * float(other.value)
+            elif operation == 'truediv':
+                result_value = float(self.value) / float(other.value)
+            elif operation == 'pow':
+                result_value = float(self.value) ** float(other.value)
+            elif operation == 'mod':
+                result_value = float(self.value) % float(other.value)
+            else:
+                raise ValueError(f"Unsupported operation: {operation}")
+        
+        return HighPrecisionNumber(result_value, max_precision)
+    
+    # Arithmetic operators
+    def __add__(self, other):
+        return self._binary_operation(other, 'add')
+    
+    def __radd__(self, other):
+        return HighPrecisionNumber(other, self.precision).__add__(self)
+    
+    def __sub__(self, other):
+        return self._binary_operation(other, 'sub')
+    
+    def __rsub__(self, other):
+        return HighPrecisionNumber(other, self.precision).__sub__(self)
+    
+    def __mul__(self, other):
+        return self._binary_operation(other, 'mul')
+    
+    def __rmul__(self, other):
+        return HighPrecisionNumber(other, self.precision).__mul__(self)
+    
+    def __truediv__(self, other):
+        return self._binary_operation(other, 'truediv')
+    
+    def __rtruediv__(self, other):
+        return HighPrecisionNumber(other, self.precision).__truediv__(self)
+    
+    def __pow__(self, other):
+        return self._binary_operation(other, 'pow')
+    
+    def __rpow__(self, other):
+        return HighPrecisionNumber(other, self.precision).__pow__(self)
+    
+    def __mod__(self, other):
+        return self._binary_operation(other, 'mod')
+    
+    def __rmod__(self, other):
+        return HighPrecisionNumber(other, self.precision).__mod__(self)
+    
+    # Unary operators
+    def __neg__(self):
+        if USE_ARBITRARY_PRECISION:
+            with mp.workdps(self.precision):
+                result_value = -self.value
+        else:
+            result_value = -float(self.value)
+        return HighPrecisionNumber(result_value, self.precision)
+    
+    def __abs__(self):
+        if USE_ARBITRARY_PRECISION:
+            with mp.workdps(self.precision):
+                result_value = abs(self.value)
+        else:
+            result_value = abs(float(self.value))
+        return HighPrecisionNumber(result_value, self.precision)
+    
+    # Comparison operators
+    def __eq__(self, other):
+        other = self._ensure_precision_number(other)
+        return float(self.value) == float(other.value)
+    
+    def __ne__(self, other):
+        return not self.__eq__(other)
+    
+    def __lt__(self, other):
+        other = self._ensure_precision_number(other)
+        return float(self.value) < float(other.value)
+    
+    def __le__(self, other):
+        other = self._ensure_precision_number(other)
+        return float(self.value) <= float(other.value)
+    
+    def __gt__(self, other):
+        other = self._ensure_precision_number(other)
+        return float(self.value) > float(other.value)
+    
+    def __ge__(self, other):
+        other = self._ensure_precision_number(other)
+        return float(self.value) >= float(other.value)
+    
+    # Mathematical functions
+    def sqrt(self):
+        """Compute square root with high precision."""
+        if USE_ARBITRARY_PRECISION:
+            with mp.workdps(self.precision):
+                result_value = mp.sqrt(self.value)
+        else:
+            result_value = np.sqrt(float(self.value))
+        return HighPrecisionNumber(result_value, self.precision)
+    
+    def sin(self):
+        """Compute sine with high precision."""
+        if USE_ARBITRARY_PRECISION:
+            with mp.workdps(self.precision):
+                result_value = mp.sin(self.value)
+        else:
+            result_value = np.sin(float(self.value))
+        return HighPrecisionNumber(result_value, self.precision)
+    
+    def cos(self):
+        """Compute cosine with high precision."""
+        if USE_ARBITRARY_PRECISION:
+            with mp.workdps(self.precision):
+                result_value = mp.cos(self.value)
+        else:
+            result_value = np.cos(float(self.value))
+        return HighPrecisionNumber(result_value, self.precision)
+    
+    def exp(self):
+        """Compute exponential with high precision."""
+        if USE_ARBITRARY_PRECISION:
+            with mp.workdps(self.precision):
+                result_value = mp.exp(self.value)
+        else:
+            result_value = np.exp(float(self.value))
+        return HighPrecisionNumber(result_value, self.precision)
+    
+    def log(self, base=None):
+        """Compute logarithm with high precision."""
+        if USE_ARBITRARY_PRECISION:
+            with mp.workdps(self.precision):
+                if base is None:
+                    result_value = mp.log(self.value)
+                else:
+                    result_value = mp.log(self.value) / mp.log(base)
+        else:
+            if base is None:
+                result_value = np.log(float(self.value))
+            else:
+                result_value = np.log(float(self.value)) / np.log(float(base))
+        return HighPrecisionNumber(result_value, self.precision)
+    
+    # Conversion methods
+    def __float__(self):
+        """Convert to standard Python float."""
+        return float(self.value)
+    
+    def __int__(self):
+        """Convert to standard Python int."""
+        return int(float(self.value))
+    
+    def __str__(self):
+        """String representation."""
+        return str(float(self.value))
+    
+    def __repr__(self):
+        """Detailed string representation."""
+        return f"HighPrecisionNumber({float(self.value)}, precision={self.precision})"
+
+
+# Factory function for convenience
+def hp(value: Union[float, int, str], precision: int = None) -> HighPrecisionNumber:
+    """
+    Create a HighPrecisionNumber instance.
+    
+    Convenience factory function for creating high precision numbers.
+    
+    Parameters
+    ----------
+    value : float, int, or str
+        The numeric value
+    precision : int, optional
+        Number of decimal places. If None, uses MPMATH_DPS from config.
+        
+    Returns
+    -------
+    HighPrecisionNumber
+        High precision number instance
+        
+    Examples
+    --------
+    >>> a = hp(2.5)
+    >>> b = hp(3.0)
+    >>> result = (a ** b) / hp(7.0)
+    """
+    return HighPrecisionNumber(value, precision)
+
+
+def with_precision(precision: int = None):
+    """
+    Context manager for setting mpmath precision.
+    
+    Parameters
+    ----------
+    precision : int, optional
+        Number of decimal places. If None, uses MPMATH_DPS from config.
+    """
+    if precision is None:
+        precision = MPMATH_DPS
+    return mp.workdps(precision)
+
+
+def high_precision_division(numerator: float, denominator: float, precision: int = None) -> float:
+    """
+    Perform high precision division if enabled, otherwise standard division.
+    
+    Parameters
+    ----------
+    numerator : float
+        Numerator value
+    denominator : float  
+        Denominator value
+    precision : int, optional
+        Number of decimal places. If None, uses MPMATH_DPS from config.
+        
+    Returns
+    -------
+    float
+        Result of division with appropriate precision
+    """
+    if not USE_ARBITRARY_PRECISION:
+        return numerator / denominator
+        
+    if precision is None:
+        precision = MPMATH_DPS
+        
+    with mp.workdps(precision):
+        mp_num = mp.mpf(numerator)
+        mp_den = mp.mpf(denominator)
+        result = mp_num / mp_den
+        return float(result)
+
+
+def high_precision_sqrt(value: float, precision: int = None) -> float:
+    """
+    Compute square root with high precision if enabled.
+    
+    Parameters
+    ----------
+    value : float
+        Value to take square root of
+    precision : int, optional
+        Number of decimal places. If None, uses MPMATH_DPS from config.
+        
+    Returns
+    -------
+    float
+        Square root with appropriate precision
+    """
+    if not USE_ARBITRARY_PRECISION:
+        return np.sqrt(value)
+        
+    if precision is None:
+        precision = MPMATH_DPS
+        
+    with mp.workdps(precision):
+        mp_val = mp.mpf(value)
+        result = mp.sqrt(mp_val)
+        return float(result)
+
+
+def high_precision_power(base: float, exponent: float, precision: int = None) -> float:
+    """
+    Compute power with high precision if enabled.
+    
+    Parameters
+    ----------
+    base : float
+        Base value
+    exponent : float
+        Exponent value
+    precision : int, optional
+        Number of decimal places. If None, uses MPMATH_DPS from config.
+        
+    Returns
+    -------
+    float
+        Result with appropriate precision
+    """
+    if not USE_ARBITRARY_PRECISION:
+        return base ** exponent
+        
+    if precision is None:
+        precision = MPMATH_DPS
+        
+    with mp.workdps(precision):
+        mp_base = mp.mpf(base)
+        mp_exp = mp.mpf(exponent)
+        result = mp_base ** mp_exp
+        return float(result)
+
+
+def high_precision_arithmetic(operations: str, *args, precision: int = None) -> float:
+    """
+    Perform complex arithmetic expressions with high precision.
+    
+    DEPRECATED: Use HighPrecisionNumber class for better syntax.
+    
+    Parameters
+    ----------
+    operations : str
+        String containing the operations to perform
+        Available operations: 'pow', 'div', 'mul', 'add', 'sub'
+    *args : float
+        Values to use in the operations
+    precision : int, optional
+        Number of decimal places. If None, uses MPMATH_DPS from config.
+        
+    Returns
+    -------
+    float
+        Result with appropriate precision
+        
+    Examples
+    --------
+    >>> high_precision_arithmetic('pow_div', base, exp, divisor)  # (base^exp) / divisor
+    >>> high_precision_arithmetic('mul_add', a, b, c)  # (a * b) + c
+    """
+    if not USE_ARBITRARY_PRECISION:
+        # Fallback to standard precision operations
+        if operations == 'pow_div' and len(args) == 3:
+            return (args[0] ** args[1]) / args[2]
+        elif operations == 'mul_add' and len(args) == 3:
+            return (args[0] * args[1]) + args[2]
+        elif operations == 'mul_div' and len(args) == 3:
+            return (args[0] * args[1]) / args[2]
+        else:
+            raise ValueError(f"Unsupported operation pattern: {operations}")
+        
+    if precision is None:
+        precision = MPMATH_DPS
+        
+    with mp.workdps(precision):
+        mp_args = [mp.mpf(arg) for arg in args]
+        
+        if operations == 'pow_div' and len(mp_args) == 3:
+            result = (mp_args[0] ** mp_args[1]) / mp_args[2]
+        elif operations == 'mul_add' and len(mp_args) == 3:
+            result = (mp_args[0] * mp_args[1]) + mp_args[2]
+        elif operations == 'mul_div' and len(mp_args) == 3:
+            result = (mp_args[0] * mp_args[1]) / mp_args[2]
+        else:
+            raise ValueError(f"Unsupported operation pattern: {operations}")
+            
+        return float(result)
+
+
+def high_precision_findroot(func: Callable, x0: Union[float, list], precision: int = None) -> float:
+    """
+    Find root with high precision using mpmath.
+    
+    Parameters
+    ----------
+    func : callable
+        Function to find root of
+    x0 : float or list
+        Initial guess or bracket
+    precision : int, optional
+        Number of decimal places. If None, uses MPMATH_DPS from config.
+        
+    Returns
+    -------
+    float
+        Root with high precision
+    """
+    if precision is None:
+        precision = MPMATH_DPS
+        
+    with mp.workdps(precision):
+        root = mp.findroot(func, x0)
+        return float(root)
+
+
+def get_numpy_dtype_real() -> np.dtype:
+    """Get the configured numpy real dtype."""
+    return np.dtype(NUMPY_DTYPE_REAL)
+
+
+def get_numpy_dtype_complex() -> np.dtype:
+    """Get the configured numpy complex dtype.""" 
+    return np.dtype(NUMPY_DTYPE_COMPLEX)
+
+
+def log_precision_info():
+    """Log current precision settings."""
+    if USE_ARBITRARY_PRECISION:
+        logger.info(f"Using arbitrary precision with {MPMATH_DPS} decimal places")
+    else:
+        logger.info(f"Using standard precision (real: {NUMPY_DTYPE_REAL}, complex: {NUMPY_DTYPE_COMPLEX})") 

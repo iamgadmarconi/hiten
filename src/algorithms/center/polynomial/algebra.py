@@ -5,9 +5,10 @@ from numba.typed import List
 from algorithms.center.polynomial.base import (decode_multiindex,
                                                encode_multiindex)
 from algorithms.variables import N_VARS
+from config import FASTMATH
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def _poly_add(p: np.ndarray, q: np.ndarray, out: np.ndarray) -> None:
     """
     Add two polynomial coefficient arrays element-wise.
@@ -34,7 +35,7 @@ def _poly_add(p: np.ndarray, q: np.ndarray, out: np.ndarray) -> None:
     for i in range(p.shape[0]):
         out[i] = p[i] + q[i]
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def _poly_scale(p: np.ndarray, alpha, out: np.ndarray) -> None:
     """
     Scale a polynomial coefficient array by a constant factor.
@@ -61,7 +62,7 @@ def _poly_scale(p: np.ndarray, alpha, out: np.ndarray) -> None:
     for i in range(p.shape[0]):
         out[i] = alpha * p[i]
 
-@njit(fastmath=True, cache=False, parallel=True)
+@njit(fastmath=FASTMATH, cache=False, parallel=True)
 def _poly_mul(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clmo, encode_dict_list) -> np.ndarray:
     """
     Multiply two polynomials using their coefficient arrays.
@@ -128,7 +129,7 @@ def _poly_mul(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clmo, e
 
     return r
 
-@njit(fastmath=True, cache=False, parallel=True)
+@njit(fastmath=FASTMATH, cache=False, parallel=True)
 def _poly_diff(p: np.ndarray, var: int, degree: int, psi, clmo, encode_dict_list) -> np.ndarray:
     """
     Compute the partial derivative of a polynomial with respect to a variable.
@@ -195,7 +196,7 @@ def _poly_diff(p: np.ndarray, var: int, degree: int, psi, clmo, encode_dict_list
 
     return dp
 
-@njit(fastmath=True, cache=False)
+@njit(fastmath=FASTMATH, cache=False)
 def _poly_poisson(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clmo, encode_dict_list) -> np.ndarray:
     """
     Compute the Poisson bracket of two polynomials.
@@ -281,7 +282,7 @@ def _poly_poisson(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clm
             r -= term2
     return r
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def _get_degree(p: np.ndarray, psi) -> int:
     """
     Determine the degree of a polynomial from its coefficient array length.
@@ -315,7 +316,7 @@ def _get_degree(p: np.ndarray, psi) -> int:
             return d
     return -1 # Should not be reached if poly and psi are consistent
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def _poly_clean_inplace(p: np.ndarray, tol: float) -> None:
     """
     Set coefficients with absolute value below tolerance to zero (in-place).
@@ -342,7 +343,7 @@ def _poly_clean_inplace(p: np.ndarray, tol: float) -> None:
         if np.abs(p[i]) <= tol:
             p[i] = 0
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def _poly_clean(p: np.ndarray, tol: float, out: np.ndarray) -> None:
     """
     Set coefficients with absolute value below tolerance to zero (out-of-place).
@@ -372,7 +373,7 @@ def _poly_clean(p: np.ndarray, tol: float, out: np.ndarray) -> None:
         else:
             out[i] = p[i]
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def _poly_evaluate(
     p: np.ndarray, 
     degree: int, 
@@ -431,7 +432,7 @@ def _poly_evaluate(
         current_sum += coeff_val * term_val
     return current_sum
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def _poly_integrate(p: np.ndarray, var: int, degree: int, psi, clmo, encode_dict_list) -> np.ndarray:
     """
     Integrate a polynomial with respect to one variable.
