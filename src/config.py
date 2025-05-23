@@ -9,8 +9,10 @@ TOL = 1e-14
 FASTMATH = False  # Global flag for Numba's fastmath option 
 
 H0_LEVELS = [0.6] # [0.20, 0.40, 0.60, 1.00]
-DT = 1e-3
-USE_SYMPLECTIC = False
+DT = 1e-2
+USE_SYMPLECTIC = True
+INTEGRATOR_ORDER = 6
+C_OMEGA_HEURISTIC = 100.0
 N_SEEDS = 1 # seeds along q2-axis
 N_ITER = 100 # iterations per seed
 

@@ -229,6 +229,7 @@ def _poincare_step_jit(
     max_steps: int,
     use_symplectic: bool,
     n_dof: int,
+    c_omega_heuristic: float=20.0,
 ) -> Tuple[int, float, float]:
     """Return (flag, q2', p2').  flag=1 if success, 0 otherwise."""
     state_old = _embed_cm_state_jit(q2, 0.0, p2, p3, n_dof)
@@ -241,6 +242,7 @@ def _poincare_step_jit(
                 jac_H_rn_typed=jac_H,
                 clmo_H_typed=clmo,
                 order=order,
+                c_omega_heuristic=c_omega_heuristic,
             )
             state_new = traj[1]
         else:
@@ -267,6 +269,7 @@ def poincare_step(
     jac_H: List[List[np.ndarray]],
     clmo: List[np.ndarray],
     order: int = 6,
+    c_omega_heuristic: float=20.0,
     max_steps: int = 20_000,
     use_symplectic: bool = False,
 ) -> Tuple[float, float]:
@@ -287,6 +290,7 @@ def poincare_step(
         max_steps,
         use_symplectic,
         N_SYMPLECTIC_DOF,
+        c_omega_heuristic,
     )
 
     if flag == 1:
@@ -474,6 +478,7 @@ def generate_iterated_poincare_map(
     dt: float = 1e-2,
     use_symplectic: bool = True,
     integrator_order: int = 6,
+    c_omega_heuristic: float=20.0,
     seed_axis: str = "q2",  # "q2" or "p2"
 ) -> np.ndarray:
     """Generate a Poincaré map by iterating each seed many times.
@@ -553,6 +558,7 @@ def generate_iterated_poincare_map(
                     jac_H=jac_H,
                     clmo=clmo_table,
                     order=integrator_order,
+                    c_omega_heuristic=c_omega_heuristic,
                     max_steps=calculated_max_steps, # Use calculated_max_steps
                     use_symplectic=use_symplectic,
                 )

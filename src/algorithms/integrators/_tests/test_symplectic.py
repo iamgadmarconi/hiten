@@ -126,10 +126,10 @@ def test_energy_conservation_pendulum(pendulum_hamiltonian_data):
     initial_state = np.array([initial_q1, 0.0, 0.0, initial_p1, 0.0, 0.0], dtype=np.float64)
 
     t_final = 20.0
-    num_steps = 2000
+    num_steps = 20000
     times = np.linspace(0, t_final, num_steps, dtype=np.float64)
-    order = 6 # Test with 6th order
-    omega_tao = 20.0 # Increased from 5.0 for better energy conservation
+    order = 8 # Test with 6th order
+    omega_tao = 200.0 # Increased from 5.0 for better energy conservation
 
     trajectory = integrate_symplectic(
         initial_state_6d=initial_state, # Changed name
@@ -242,7 +242,7 @@ def test_comparison_with_solve_ivp(pendulum_hamiltonian_data):
 
     # Use shorter integration time and more points for accurate comparison
     t_final = 100.0  
-    num_points = int(t_final * 1000.0)
+    num_points = int(t_final * 10000.0)
     t_eval = np.linspace(0, t_final, num_points)
     
     # For small oscillations, the period is approximately 2π

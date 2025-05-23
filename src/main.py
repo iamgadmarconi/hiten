@@ -6,7 +6,7 @@ from algorithms.center.utils import format_cm_table
 from utils.log_config import logger
 from plots.plots import plot_poincare_map
 from config import (DT, H0_LEVELS, L_POINT, MAX_DEG, N_ITER, N_SEEDS, SYSTEM,
-                        USE_SYMPLECTIC)
+                        USE_SYMPLECTIC, INTEGRATOR_ORDER, C_OMEGA_HEURISTIC)
 from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
@@ -67,7 +67,8 @@ def main() -> None:
             n_iter=N_ITER,
             dt=dt,
             use_symplectic=USE_SYMPLECTIC,
-            integrator_order=6,
+            integrator_order=INTEGRATOR_ORDER,
+            c_omega_heuristic=C_OMEGA_HEURISTIC,
             seed_axis="q2",
         )
         all_pts.append(pts)  # Store points for this energy level
