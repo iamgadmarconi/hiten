@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Callable
 import math
 
 import numpy as np
@@ -68,37 +68,19 @@ def find_turning(
             state[4] = x  # p2 (index 4 in (q1,q2,q3,p1,p2,p3))
         return polynomial_evaluate(H_blocks, state, clmo).real - h0
 
-    f0 = f(0.0)
-    if f0 > 0:
-        logger.warning(f"H(0)-h0 = {f0:.6e} > 0 along Hill boundary")
-        raise RuntimeError(
-            "Expected H(0)-h0 <= 0 along Hill boundary, got positive value."
-        )
+    root = _bracketed_root(
+        f,
+        initial=initial_guess,
+        factor=expand_factor,
+        max_expand=max_expand,
+    )
 
-    # Bracket the root
-    x_hi = initial_guess
-    expansion_count = 0
-    for expansion_count in range(max_expand):
-        if f(x_hi) > 0.0:
-            break
-        x_hi *= expand_factor
-    else:
-        logger.warning(f"Failed to bracket root after {max_expand} expansions up to {x_hi:.6e}")
-        raise RuntimeError(
-            "Failed to bracket root for turning point after expansions up to "
-            f"{x_hi}."
-        )
-    
-    logger.debug(f"Bracketed {q_or_p} root in [0, {x_hi:.6e}] after {expansion_count+1} expansions")
-
-    # Find the root
-    sol = root_scalar(f, bracket=(0.0, x_hi), method="brentq", xtol=1e-12)
-    if not sol.converged:
-        logger.warning("Root finding for Hill boundary did not converge")
+    if root is None:
+        logger.warning("Failed to locate %s turning point within search limits", q_or_p)
         raise RuntimeError("Root finding for Hill boundary did not converge.")
-    
-    logger.info(f"Found {q_or_p} turning point: {sol.root:.6e}")
-    return float(sol.root)
+
+    logger.info("Found %s turning point: %.6e", q_or_p, root)
+    return root
 
 
 def solve_p3(
@@ -147,26 +129,12 @@ def solve_p3(
         state[5] = p3
         return polynomial_evaluate(H_blocks, state, clmo).real - h0
 
-    f0 = f(0.0)
-    if f0 > 0:
-        # Already above energy level at p3=0 ⇒ no positive root.
-        logger.debug(f"No p3 solution at (q2,p2)=({q2:.4e},{p2:.4e}): f(0)={f0:.4e} > 0")
-        return None
-
-    p3_hi = initial_guess
-    for _ in range(max_expand):
-        if f(p3_hi) > 0.0:
-            break
-        p3_hi *= expand_factor
-    else:
-        logger.debug(f"No sign change for p3 up to {p3_hi:.4e} at (q2,p2)=({q2:.4e},{p2:.4e})")
-        # Could not find sign change – no solution.
-        return None
-
-    sol = root_scalar(f, bracket=(0.0, p3_hi), method="brentq", xtol=1e-12)
-    if sol.converged and sol.root > 0.0:
-        return float(sol.root)
-    return None
+    return _bracketed_root(
+        f,
+        initial=initial_guess,
+        factor=expand_factor,
+        max_expand=max_expand,
+    )
 
 
 @njit(cache=True, fastmath=FASTMATH)
@@ -207,16 +175,6 @@ def _rk4_step(
     return state6 + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
 
 
-@njit(fastmath=FASTMATH, cache=True)
-def _embed_cm_state_jit(q2: float, q3: float, p2: float, p3: float, n_dof: int) -> np.ndarray:
-    vec = np.zeros(2 * n_dof, dtype=np.float64)
-    vec[1] = q2
-    vec[2] = q3
-    vec[n_dof + 1] = p2
-    vec[n_dof + 2] = p3
-    return vec
-
-
 @njit(cache=True, fastmath=FASTMATH)
 def _poincare_step_jit(
     q2: float,
@@ -232,7 +190,12 @@ def _poincare_step_jit(
     c_omega_heuristic: float=20.0,
 ) -> Tuple[int, float, float]:
     """Return (flag, q2', p2').  flag=1 if success, 0 otherwise."""
-    state_old = _embed_cm_state_jit(q2, 0.0, p2, p3, n_dof)
+    # Build the centre-manifold state directly (replaces _embed_cm_state_jit)
+    state_old = np.zeros(2 * n_dof, dtype=np.float64)
+    state_old[1] = q2
+    state_old[2] = 0.0  # q3 always zero on the section
+    state_old[n_dof + 1] = p2
+    state_old[n_dof + 2] = p3
 
     for _ in range(max_steps):
         if use_symplectic:
@@ -261,42 +224,6 @@ def _poincare_step_jit(
         state_old = state_new
 
     return 0, 0.0, 0.0
-
-
-def poincare_step(
-    seed4: Tuple[float, float, float, float],
-    dt: float,
-    jac_H: List[List[np.ndarray]],
-    clmo: List[np.ndarray],
-    order: int = 6,
-    c_omega_heuristic: float=20.0,
-    max_steps: int = 20_000,
-    use_symplectic: bool = False,
-) -> Tuple[float, float]:
-    """Python wrapper around fully JIT-compiled step loop."""
-    q2, p2, q3, p3 = seed4
-
-    if not np.isclose(q3, 0.0):
-        raise ValueError("Seed must lie on q3=0 section.")
-
-    flag, q2p, p2p = _poincare_step_jit(
-        q2,
-        p2,
-        p3,
-        dt,
-        jac_H,
-        clmo,
-        order,
-        max_steps,
-        use_symplectic,
-        N_SYMPLECTIC_DOF,
-        c_omega_heuristic,
-    )
-
-    if flag == 1:
-        return float(q2p), float(p2p)
-
-    raise RuntimeError("Poincaré return not detected within max_steps.")
 
 
 def compute_poincare_map_for_energy(
@@ -552,22 +479,63 @@ def generate_iterated_poincare_map(
         state = seed
         for i in range(n_iter): # Use a different loop variable, e.g., i
             try:
-                q2p, p2p = poincare_step(
-                    seed4=state,
-                    dt=dt,
-                    jac_H=jac_H,
-                    clmo=clmo_table,
-                    order=integrator_order,
-                    c_omega_heuristic=c_omega_heuristic,
-                    max_steps=calculated_max_steps, # Use calculated_max_steps
-                    use_symplectic=use_symplectic,
+                flag, q2p, p2p = _poincare_step_jit(
+                    state[0],  # q2
+                    state[1],  # p2
+                    state[3],  # p3 (q3 is always 0)
+                    dt,
+                    jac_H,
+                    clmo_table,
+                    integrator_order,
+                    calculated_max_steps,
+                    use_symplectic,
+                    N_SYMPLECTIC_DOF,
+                    c_omega_heuristic,
                 )
-                pts_accum.append((q2p, p2p))
-                # set up next iterate – keep the same positive p3 as in seed
-                state = (q2p, p2p, 0.0, seed[3])
+
+                if flag == 1:
+                    pts_accum.append((q2p, p2p))
+                    # set up next iterate – keep the same positive p3 as in seed
+                    state = (q2p, p2p, 0.0, seed[3])
+                else:
+                    logger.warning(
+                        "Failed to find Poincaré crossing for seed %s at iteration %d/%d",
+                        seed,
+                        i + 1,
+                        n_iter,
+                    )
+                    break
             except RuntimeError as e:
                 logger.warning(f"Failed to find Poincaré crossing for seed {seed} at iteration {i+1}/{n_iter}: {e}")
                 # Optionally, break from this seed's iteration or handle as needed
                 break # Stop iterating this seed if a crossing is not found
 
     return np.asarray(pts_accum, dtype=np.float64)
+
+
+def _bracketed_root(
+    f: Callable[[float], float],
+    initial: float = 1e-3,
+    factor: float = 2.0,
+    max_expand: int = 40,
+    xtol: float = 1e-12,
+) -> Optional[float]:
+    """Return a positive root of *f* if a sign change can be bracketed.
+
+    The routine starts from ``x=0`` and expands the upper bracket until the
+    function changes sign.  If no sign change occurs within
+    ``initial * factor**max_expand`` it returns ``None``.
+    """
+    # Early exit if already above root at x=0 ⇒ no positive solution.
+    if f(0.0) > 0.0:
+        return None
+
+    x_hi = initial
+    for _ in range(max_expand):
+        if f(x_hi) > 0.0:
+            sol = root_scalar(f, bracket=(0.0, x_hi), method="brentq", xtol=xtol)
+            return float(sol.root) if sol.converged else None
+        x_hi *= factor
+
+    # No sign change detected within the expansion range
+    return None
