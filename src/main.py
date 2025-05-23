@@ -1,27 +1,15 @@
 from algorithms.center.manifold import center_manifold_rn
-from algorithms.center.poincare.generation.lindstedt_poincare import (build_LP,
-                                                                      eval_lp)
 from algorithms.center.poincare.map import generate_iterated_poincare_map
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables)
 from algorithms.center.utils import format_cm_table
 from log_config import logger
 from plots.plots import plot_poincare_map
+from config import (DT, H0_LEVELS, L_POINT, MAX_DEG, N_ITER, N_SEEDS, SYSTEM,
+                        USE_SYMPLECTIC)
 from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
-
-# System configuration
-SYSTEM = "SE"  # "EM" for Earth-Moon or "SE" for Sun-Earth
-L_POINT = 1    # Libration point number (1 or 2)
-
-# Algorithm parameters
-MAX_DEG = 5
-TOL     = 1e-14
-# -------- LP parameters ----------------------------------------------------
-LP_MAX_ORDER = 3          # i+j ≤ 15  (good compromise between speed & accuracy)
-ALPHA        = 0.03        # in-plane amplitude
-BETA         = 0.00        # out-of-plane amplitude = 0 → Lyapunov family
 
 
 def build_three_body_system():
@@ -67,14 +55,10 @@ def main() -> None:
 
     logger.info("Starting Poincaré map generation process…")
 
-    H0_LEVELS = [0.6] # [0.20, 0.40, 0.60, 1.00]
-
-    dt = 1e-1
-    USE_SYMPLECTIC = True
-    N_SEEDS = 1 # seeds along q2-axis
-    N_ITER = 10 # iterations per seed
+    dt = DT
 
     all_pts = []
+    output_directory = "results"
 
     for h0 in H0_LEVELS:
         logger.info("Generating iterated Poincaré map for h0=%.3f", h0)
@@ -94,7 +78,19 @@ def main() -> None:
         )
         all_pts.append(pts)  # Store points for this energy level
 
-    plot_poincare_map(all_pts, H0_LEVELS)
+    # Construct filename
+    if len(H0_LEVELS) == 1:
+        energy_level_str = f"{H0_LEVELS[0]:.2f}".replace('.', 'p')
+    else:
+        min_h0 = min(H0_LEVELS)
+        max_h0 = max(H0_LEVELS)
+        energy_level_str = f"{min_h0:.2f}to{max_h0:.2f}".replace('.', 'p')
+
+    symplectic_str = "symplectic" if USE_SYMPLECTIC else "nonsymplectic"
+    
+    filename = f"PM_{MAX_DEG}_{energy_level_str}_{dt}_{symplectic_str}_{N_ITER}.svg"
+
+    plot_poincare_map(all_pts, H0_LEVELS, output_dir=output_directory, filename=filename)
 
 
 if __name__ == "__main__":

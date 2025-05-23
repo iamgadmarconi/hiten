@@ -1,8 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
-from typing import Tuple, Optional, Any, Dict, Sequence
+from typing import Tuple, Optional, Any, Dict, Sequence, List
 import matplotlib.patheffects as patheffects
+import os
 
 from log_config import logger
 
@@ -322,9 +323,10 @@ def set_dark_mode(fig: plt.Figure, ax: plt.Axes, title: Optional[str] = None):
             text_obj.set_color(text_color) # White text for legend
 
 
-def plot_poincare_map(pts_list: list, h0_levels: Sequence[float], dark_mode: bool = True) -> Tuple[plt.Figure, plt.Axes]:
+def plot_poincare_map(pts_list: list, h0_levels: Sequence[float], dark_mode: bool = True, output_dir: Optional[str] = None, filename: Optional[str] = None) -> Tuple[plt.Figure, List[plt.Axes]]:
     """
     Plot the Poincaré map for multiple energy levels.
+    Dynamically adjusts the number of subplots based on the number of energy levels.
     
     Parameters
     ----------
@@ -335,36 +337,93 @@ def plot_poincare_map(pts_list: list, h0_levels: Sequence[float], dark_mode: boo
         Energy levels corresponding to each set of points.
     dark_mode : bool, optional
         Whether to use dark mode styling. Default is True.
+    output_dir : str, optional
+        Directory to save the plot. If None, plot is not saved.
+    filename : str, optional
+        Filename for the saved plot. If None, plot is not saved.
         
     Returns
     -------
     tuple
-        (fig, axs) containing the figure and axis objects
+        (fig, active_axs) containing the figure and a list of actively used axis objects.
     """
     
-    fig, axs = plt.subplots(2, 2, figsize=(8, 8))
-    axs = axs.flatten()  # Flatten to easily index
+    num_levels = len(h0_levels)
+
+    if num_levels == 0:
+        logger.info("No H0 levels to plot for Poincaré map.")
+        fig, ax = plt.subplots(figsize=(5,5)) 
+        ax.text(0.5, 0.5, "No data to plot", ha='center', va='center', color='red' if not dark_mode else 'white')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        title_text = "Poincaré Map (No Data)"
+        if dark_mode:
+            set_dark_mode(fig, ax, title=title_text)
+        else:
+            ax.set_title(title_text)
+        plt.show()
+        return fig, [ax]
+
+    # Determine layout for subplots
+    if num_levels == 1:
+        nrows, ncols = 1, 1
+    elif num_levels == 2:
+        nrows, ncols = 1, 2
+    elif num_levels == 3:
+        nrows, ncols = 1, 3
+    else:  # num_levels >= 4
+        ncols = int(np.ceil(np.sqrt(num_levels)))
+        nrows = int(np.ceil(num_levels / float(ncols)))
+
+    # squeeze=False ensures ax_or_axs_array is always a 2D numpy array.
+    fig, ax_or_axs_array = plt.subplots(nrows, ncols, figsize=(ncols * 4.5, nrows * 4.5), squeeze=False)
+    axs_list = list(ax_or_axs_array.flatten())
 
     for i, (pts, h0) in enumerate(zip(pts_list, h0_levels)):
-        # Plot in the corresponding subplot
-        axs[i].scatter(pts[:, 0], pts[:, 1], s=1)
-        axs[i].set_aspect("equal", adjustable="box")
-        axs[i].set_xlabel(r"$q_2'$")
-        axs[i].set_ylabel(r"$p_2'$")
+        current_ax = axs_list[i]
         
-        # Set axis limits based on data
-        max_abs_val = max(abs(pts[:, 0].max()), abs(pts[:, 0].min()), 
-                          abs(pts[:, 1].max()), abs(pts[:, 1].min()))
-        axs[i].set_xlim(-max_abs_val, max_abs_val)
-        axs[i].set_ylim(-max_abs_val, max_abs_val)
-
-        # Apply styling based on dark mode preference
-        if dark_mode:
-            set_dark_mode(fig, axs[i], title=f"Poincaré Map h={h0}")
+        if pts.shape[0] == 0: 
+            logger.info(f"No points to plot for h0={h0:.3f}. Plotting empty subplot.")
+            current_ax.text(0.5, 0.5, "No data", ha='center', va='center', fontsize=9,
+                            color='gray' if not dark_mode else '#aaaaaa')
+            current_ax.set_xlim(-1, 1) 
+            current_ax.set_ylim(-1, 1)
         else:
-            axs[i].set_title(f"Poincaré Map h={h0}")
+            current_ax.scatter(pts[:, 0], pts[:, 1], s=1)
+            max_val_q2 = max(abs(pts[:, 0].max()), abs(pts[:, 0].min())) if pts.shape[0] > 0 else 1e-9
+            max_val_p2 = max(abs(pts[:, 1].max()), abs(pts[:, 1].min())) if pts.shape[0] > 0 else 1e-9
+            max_abs_val = max(max_val_q2, max_val_p2, 1e-9) # Ensure not zero for limits
+            
+            current_ax.set_xlim(-max_abs_val * 1.1, max_abs_val * 1.1)
+            current_ax.set_ylim(-max_abs_val * 1.1, max_abs_val * 1.1)
+
+        current_ax.set_aspect("equal", adjustable="box")
+        current_ax.set_xlabel(r"$q_2'$")
+        current_ax.set_ylabel(r"$p_2'$")
+        
+        title_text = f"Poincaré Map h={h0:.3f}"
+        if dark_mode:
+            set_dark_mode(fig, current_ax, title=title_text)
+        else:
+            current_ax.set_title(title_text)
+
+    # Hide unused subplots
+    for i in range(num_levels, nrows * ncols):
+        fig.delaxes(axs_list[i])
 
     plt.tight_layout()
+
+    if output_dir and filename:
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir)
+        filepath = os.path.join(output_dir, filename)
+        try:
+            fig.savefig(filepath)
+            logger.info(f"Poincaré map saved to {filepath}")
+        except Exception as e:
+            logger.error(f"Error saving Poincaré map to {filepath}: {e}")
+
     plt.show()
     
-    return fig, axs
+    active_axs = axs_list[:num_levels]
+    return fig, active_axs

@@ -7,6 +7,7 @@ from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                make_poly)
 from algorithms.center.polynomial.operations import (
     polynomial_clean, polynomial_poisson_bracket, polynomial_zero_list)
+from config import FASTMATH
 from log_config import logger
 
 
@@ -94,7 +95,7 @@ def lie_transform(point, poly_init: list[np.ndarray], psi: np.ndarray, clmo: np.
     return poly_trans, poly_G_total
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def _get_homogeneous_terms(poly_H: List[np.ndarray], n: int, psi: np.ndarray) -> np.ndarray:
     """
     Extract the homogeneous terms of degree n from a polynomial.
@@ -125,7 +126,7 @@ def _get_homogeneous_terms(poly_H: List[np.ndarray], n: int, psi: np.ndarray) ->
     return result
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def _select_terms_for_elimination(p_n: np.ndarray, n: int, clmo: np.ndarray) -> np.ndarray:
     """
     Select non-resonant terms to be eliminated by the Lie transform.
@@ -159,7 +160,7 @@ def _select_terms_for_elimination(p_n: np.ndarray, n: int, clmo: np.ndarray) -> 
     return p_elim
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def _solve_homological_equation(p_elim: np.ndarray, n: int, eta: np.ndarray, clmo: np.ndarray) -> np.ndarray:
     """
     Solve the homological equation to find the generating function.
@@ -201,7 +202,7 @@ def _solve_homological_equation(p_elim: np.ndarray, n: int, eta: np.ndarray, clm
     return p_G
 
 
-@njit(fastmath=True, cache=False)
+@njit(fastmath=FASTMATH, cache=False)
 def _apply_lie_transform(poly_H: List[np.ndarray], p_G_n: np.ndarray, deg_G: int, N_max: int, psi: np.ndarray, clmo, encode_dict_list, tol: float) -> list[np.ndarray]:
     """
     Apply a Lie transform with generating function G to a Hamiltonian.

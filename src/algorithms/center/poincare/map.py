@@ -1,13 +1,16 @@
 from typing import List, Optional, Tuple
+import math
 
 import numpy as np
 from numba import njit, prange
+from numba.typed import List
 from scipy.optimize import root_scalar
 
 from algorithms.center.polynomial.operations import (polynomial_evaluate,
                                                      polynomial_jacobian)
 from algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
                                                integrate_symplectic)
+from config import FASTMATH
 from log_config import logger
 
 
@@ -166,7 +169,7 @@ def solve_p3(
     return None
 
 
-@njit(cache=True)
+@njit(cache=True, fastmath=FASTMATH)
 def _hamiltonian_rhs(
     state6: np.ndarray,
     jac_H: List[List[np.ndarray]],
@@ -188,7 +191,7 @@ def _hamiltonian_rhs(
     return rhs
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def _rk4_step(
     state6: np.ndarray,
     dt: float,
@@ -204,7 +207,7 @@ def _rk4_step(
     return state6 + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
 
 
-@njit(fastmath=True, cache=True)
+@njit(fastmath=FASTMATH, cache=True)
 def _embed_cm_state_jit(q2: float, q3: float, p2: float, p3: float, n_dof: int) -> np.ndarray:
     vec = np.zeros(2 * n_dof, dtype=np.float64)
     vec[1] = q2
@@ -214,7 +217,7 @@ def _embed_cm_state_jit(q2: float, q3: float, p2: float, p3: float, n_dof: int) 
     return vec
 
 
-@njit(cache=True)
+@njit(cache=True, fastmath=FASTMATH)
 def _poincare_step_jit(
     q2: float,
     p2: float,
@@ -534,20 +537,31 @@ def generate_iterated_poincare_map(
     # 3. Iterate.
     pts_accum: list[Tuple[float, float]] = []
 
+    # Dynamically adjust max_steps based on dt to allow a consistent total integration time for finding a crossing.
+    # The original implicit max integration time (when dt=1e-3 and max_steps=20000) was 20.0.
+    target_max_integration_time_per_crossing = 20.0
+    calculated_max_steps = int(math.ceil(target_max_integration_time_per_crossing / dt))
+    logger.info(f"Using dt={dt:.1e}, calculated max_steps per crossing: {calculated_max_steps}")
+
     for seed in seeds:
         state = seed
-        for _ in range(n_iter):
-            q2p, p2p = poincare_step(
-                seed4=state,
-                dt=dt,
-                jac_H=jac_H,
-                clmo=clmo_table,
-                order=integrator_order,
-                max_steps=20000,
-                use_symplectic=use_symplectic,
-            )
-            pts_accum.append((q2p, p2p))
-            # set up next iterate – keep the same positive p3 as in seed
-            state = (q2p, p2p, 0.0, seed[3])
+        for i in range(n_iter): # Use a different loop variable, e.g., i
+            try:
+                q2p, p2p = poincare_step(
+                    seed4=state,
+                    dt=dt,
+                    jac_H=jac_H,
+                    clmo=clmo_table,
+                    order=integrator_order,
+                    max_steps=calculated_max_steps, # Use calculated_max_steps
+                    use_symplectic=use_symplectic,
+                )
+                pts_accum.append((q2p, p2p))
+                # set up next iterate – keep the same positive p3 as in seed
+                state = (q2p, p2p, 0.0, seed[3])
+            except RuntimeError as e:
+                logger.warning(f"Failed to find Poincaré crossing for seed {seed} at iteration {i+1}/{n_iter}: {e}")
+                # Optionally, break from this seed's iteration or handle as needed
+                break # Stop iterating this seed if a crossing is not found
 
     return np.asarray(pts_accum, dtype=np.float64)

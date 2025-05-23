@@ -10,9 +10,10 @@ from algorithms.center.polynomial.operations import (polynomial_add_inplace,
                                                      polynomial_multiply,
                                                      polynomial_variable,
                                                      polynomial_zero_list)
+from config import FASTMATH
 
 
-@njit(fastmath=True, cache=False)
+@njit(fastmath=FASTMATH, cache=False)
 def _build_T_polynomials(poly_x, poly_y, poly_z, max_deg: int, psi_table, clmo_table, encode_dict_list) -> types.ListType:
     """
     Build Chebyshev polynomials of the first kind up to the specified maximum degree.
@@ -88,7 +89,7 @@ def _build_T_polynomials(poly_x, poly_y, poly_z, max_deg: int, psi_table, clmo_t
     return poly_T_list_of_polys
 
 
-@njit(fastmath=True, cache=False)
+@njit(fastmath=FASTMATH, cache=False)
 def _build_R_polynomials(poly_x, poly_y, poly_z, poly_T: types.ListType, max_deg: int, psi_table, clmo_table, encode_dict_list) -> types.ListType:
     """
     Build R_n polynomials up to the specified maximum degree.
