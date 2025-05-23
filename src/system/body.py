@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Optional
 
 # Import custom logger
-from log_config import logger
+from utils.log_config import logger
 
 
 class Body(object):

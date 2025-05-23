@@ -8,7 +8,7 @@ from orbits.base import PeriodicOrbit, orbitConfig
 from system.libration import CollinearPoint, L1Point, L2Point, L3Point
 from algorithms.geometry import _find_y_zero_crossing
 from algorithms.dynamics import compute_stm
-from log_config import logger
+from utils.log_config import logger
 
 
 class HaloOrbit(PeriodicOrbit):
@@ -53,7 +53,7 @@ class HaloOrbit(PeriodicOrbit):
             won = +1
             primary = -mu
         else:
-            raise ValueError(f"Halo orbits only supported for L1, L2, L3 (got L{L_i})")
+            raise ValueError(f"Halo orbits only supported for L1, L2, L3 (got L{self.libration_point})")
         
         # Set n for northern/southern family
         n = 1 if self.zenith == "northern" else -1

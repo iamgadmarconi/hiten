@@ -6,7 +6,7 @@ from typing import Callable, Any, Tuple
 
 from system.libration import LibrationPoint, CollinearPoint, L1Point, L2Point, L3Point
 from algorithms.integrators.standard import propagate_crtbp
-from log_config import logger
+from utils.log_config import logger
 
 
 def _find_y_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1, **solver_kwargs: Any) -> Tuple[float, NDArray[np.float64]]:

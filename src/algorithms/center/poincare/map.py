@@ -11,7 +11,7 @@ from algorithms.center.polynomial.operations import (polynomial_evaluate,
 from algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
                                                integrate_symplectic)
 from config import FASTMATH
-from log_config import logger
+from utils.log_config import logger
 
 
 def find_turning(

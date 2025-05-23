@@ -8,7 +8,7 @@ from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
 from algorithms.center.polynomial.operations import (
     polynomial_clean, polynomial_poisson_bracket, polynomial_zero_list)
 from config import FASTMATH
-from log_config import logger
+from utils.log_config import logger
 
 
 def lie_transform(point, poly_init: list[np.ndarray], psi: np.ndarray, clmo: np.ndarray, max_degree: int, tol: float = 1e-15) -> tuple[list[np.ndarray], list[np.ndarray]]:

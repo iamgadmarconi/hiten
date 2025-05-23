@@ -3,7 +3,7 @@ from algorithms.center.poincare.map import generate_iterated_poincare_map
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables)
 from algorithms.center.utils import format_cm_table
-from log_config import logger
+from utils.log_config import logger
 from plots.plots import plot_poincare_map
 from config import (DT, H0_LEVELS, L_POINT, MAX_DEG, N_ITER, N_SEEDS, SYSTEM,
                         USE_SYMPLECTIC)

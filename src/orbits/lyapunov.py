@@ -8,7 +8,7 @@ from algorithms.geometry import _find_y_zero_crossing
 from algorithms.dynamics import variational_equations, compute_stm
 from orbits.base import PeriodicOrbit, orbitConfig
 
-from log_config import logger
+from utils.log_config import logger
 
 
 class LyapunovOrbit(PeriodicOrbit):

@@ -5,7 +5,7 @@ from typing import Tuple, Optional, Any, Dict, Sequence, List
 import matplotlib.patheffects as patheffects
 import os
 
-from log_config import logger
+from utils.log_config import logger
 
 from utils.coordinates import rotating_to_inertial
 

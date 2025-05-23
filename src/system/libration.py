@@ -19,23 +19,20 @@ eigenvalue decomposition appropriate to the specific dynamics of that point type
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Tuple, Union
+from typing import Tuple
 
 import mpmath as mp
 import numpy as np
 import symengine as se
 
 from algorithms.dynamics import jacobian_crtbp
-# Import existing dynamics functionality
 from algorithms.energy import crtbp_energy, energy_to_jacobi
 from algorithms.linalg import eigenvalue_decomposition
 from algorithms.variables import (get_vars, linear_modes_vars,
                                   scale_factors_vars)
-# Import custom logger
-from log_config import logger
-
-# Set mpmath precision to 50 digits for root finding
-# mp.mp.dps = 50 # Removed global setting
+from utils.log_config import logger
+from utils.precision import (MPMATH_DPS, high_precision_findroot,
+                             high_precision_sqrt, with_precision)
 
 # Constants for stability analysis mode
 CONTINUOUS_SYSTEM = 0
@@ -290,7 +287,7 @@ class CollinearPoint(LibrationPoint):
         self._linear_modes_cache = None  # Cache for linear modes
 
     @property
-    def gamma(self, precision: int = 50) -> float:
+    def gamma(self, precision: int = None) -> float:
         """
         Get the distance ratio gamma for the libration point, calculated
         with high precision.
@@ -304,7 +301,8 @@ class CollinearPoint(LibrationPoint):
         Parameters
         ----------
         precision : int, optional
-            Number of decimal places for high precision calculation. Default is 50.
+            Number of decimal places for high precision calculation. 
+            If None, uses MPMATH_DPS from config.
 
         Returns
         -------
@@ -312,6 +310,9 @@ class CollinearPoint(LibrationPoint):
             The gamma value calculated with high precision.
         """
         if self._gamma is None:
+            if precision is None:
+                precision = MPMATH_DPS
+                
             logger.debug(f"Calculating gamma for {type(self).__name__} (mu={self.mu}) with {precision} dps.")
             
             # Step 1: Get initial approximation using np.roots()
@@ -327,14 +328,11 @@ class CollinearPoint(LibrationPoint):
             
             logger.debug(f"Initial estimate for {type(self).__name__} gamma: x0 = {x0}")
 
-            # Step 2: Refine using high precision mp.findroot()
-            with mp.workdps(precision):
-                # The polynomial function is defined by the subclass
-                poly_func = lambda x_val: self._gamma_poly(x_val)
-                gamma_val = mp.findroot(poly_func, x0)
-                self._gamma = float(gamma_val)
+            # Step 2: Refine using high precision findroot
+            poly_func = lambda x_val: self._gamma_poly(x_val)
+            self._gamma = high_precision_findroot(poly_func, x0, precision)
 
-            logger.info(f"Gamma for {type(self).__name__} calculated: gamma = {self._gamma}")
+            logger.info(f"Gamma for {type(self).__name__} calculated with high precision: gamma = {self._gamma}")
             
         return self._gamma
 
@@ -465,7 +463,7 @@ class CollinearPoint(LibrationPoint):
             (lambda1, omega1, omega2) values for the libration point
         """
         try:
-            with mp.workdps(50):
+            with with_precision():
                 c2 = self._cn(2)
                 a = 1.0  # coefficient of x²
                 b = 2.0 - c2  # coefficient of x
@@ -487,13 +485,13 @@ class CollinearPoint(LibrationPoint):
                 eta1_float = float(eta1)
                 eta2_float = float(eta2)
                 
-                # Calculate the required values
+                # Calculate the required values using high precision sqrt
                 lambda1 = float(mp.sqrt(max(eta1_float, eta2_float))) if max(eta1_float, eta2_float) > 0 else 0.0
                 omega1 = float(mp.sqrt(-min(eta1_float, eta2_float))) if min(eta1_float, eta2_float) < 0 else 0.0
-                omega2 = float(mp.sqrt(c2))
+                omega2 = high_precision_sqrt(c2)
                 
             logger.info(f"Quadratic roots: eta1={eta1_float}, eta2={eta2_float}")
-            logger.info(f"Calculated: lambda1={lambda1}, omega1={omega1}, omega2={omega2}")
+            logger.info(f"Calculated with high precision: lambda1={lambda1}, omega1={omega1}, omega2={omega2}")
             return lambda1, omega1, omega2
         except Exception as e:
             # Handle errors more appropriately
@@ -535,11 +533,11 @@ class CollinearPoint(LibrationPoint):
             logger.error(err)
             raise RuntimeError(err)
         
-        # Calculate scale factors
-        s1 = np.sqrt(expr1)
-        s2 = np.sqrt(expr2)
+        # Calculate scale factors using high precision square root
+        s1 = high_precision_sqrt(expr1)
+        s2 = high_precision_sqrt(expr2)
         
-        logger.debug(f"Normalization factors calculated: s1={s1}, s2={s2}")
+        logger.debug(f"Normalization factors calculated with high precision: s1={s1}, s2={s2}")
         return s1, s2
 
     def _symbolic_normal_form_transform(self) -> Tuple[se.Matrix, se.Matrix]:

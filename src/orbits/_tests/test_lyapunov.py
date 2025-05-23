@@ -6,7 +6,7 @@ from utils.constants import Constants
 import numpy as np
 import pytest
 
-from log_config import logger
+from utils.log_config import logger
 
 @pytest.fixture
 def system():

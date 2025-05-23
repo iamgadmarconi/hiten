@@ -2,7 +2,7 @@ import numpy as np
 import warnings
 from typing import Tuple, List, Union, Set
 
-from log_config import logger
+from utils.log_config import logger
 
 
 def eigenvalue_decomposition(A: np.ndarray, discrete: int = 0, delta: float = 1e-4) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
