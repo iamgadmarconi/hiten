@@ -188,8 +188,8 @@ def _poincare_step_jit(
     use_symplectic: bool,
     n_dof: int,
     c_omega_heuristic: float=20.0,
-) -> Tuple[int, float, float]:
-    """Return (flag, q2', p2').  flag=1 if success, 0 otherwise."""
+) -> Tuple[int, float, float, float]:
+    """Return (flag, q2', p2', p3').  flag=1 if success, 0 otherwise."""
     # Build the centre-manifold state directly (replaces _embed_cm_state_jit)
     state_old = np.zeros(2 * n_dof, dtype=np.float64)
     state_old[1] = q2
@@ -213,17 +213,19 @@ def _poincare_step_jit(
 
         q3_old = state_old[2]
         q3_new = state_new[2]
+        p3_old = state_old[n_dof + 2]
         p3_new = state_new[n_dof + 2]
 
         if (q3_old * q3_new < 0.0) and (p3_new > 0.0):
             alpha = q3_old / (q3_old - q3_new)
             q2p = state_old[1] + alpha * (state_new[1] - state_old[1])
             p2p = state_old[n_dof + 1] + alpha * (state_new[n_dof + 1] - state_old[n_dof + 1])
-            return 1, q2p, p2p
+            p3p = p3_old + alpha * (p3_new - p3_old)
+            return 1, q2p, p2p, p3p
 
         state_old = state_new
 
-    return 0, 0.0, 0.0
+    return 0, 0.0, 0.0, 0.0
 
 
 def compute_poincare_map_for_energy(
@@ -325,7 +327,7 @@ def compute_poincare_map_for_energy(
 
     seeds_arr = np.asarray(seeds, dtype=np.float64)
 
-    success_flags, q2p_arr, p2p_arr = _poincare_map_parallel(
+    success_flags, q2p_arr, p2p_arr, p3p_arr = _poincare_map_parallel(
         seeds_arr,
         dt,
         jac_H,
@@ -360,19 +362,20 @@ def _poincare_map_parallel(
     max_steps: int,
     use_symplectic: bool,
     n_dof: int,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Return (success flags, q2p array, p2p array) processed in parallel."""
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Return (success flags, q2p array, p2p array, p3p array) processed in parallel."""
     n_seeds = seeds.shape[0]
     success = np.zeros(n_seeds, dtype=np.int64)
     q2p_out = np.empty(n_seeds, dtype=np.float64)
     p2p_out = np.empty(n_seeds, dtype=np.float64)
+    p3p_out = np.empty(n_seeds, dtype=np.float64)
 
     for i in prange(n_seeds):
         q2 = seeds[i, 0]
         p2 = seeds[i, 1]
         p3 = seeds[i, 3]  # q3 column is seeds[:,2] which is zero
 
-        flag, q2_new, p2_new = _poincare_step_jit(
+        flag, q2_new, p2_new, p3_new = _poincare_step_jit(
             q2,
             p2,
             p3,
@@ -389,8 +392,9 @@ def _poincare_map_parallel(
             success[i] = 1
             q2p_out[i] = q2_new
             p2p_out[i] = p2_new
+            p3p_out[i] = p3_new
 
-    return success, q2p_out, p2p_out
+    return success, q2p_out, p2p_out, p3p_out
 
 
 def generate_iterated_poincare_map(
@@ -479,7 +483,7 @@ def generate_iterated_poincare_map(
         state = seed
         for i in range(n_iter): # Use a different loop variable, e.g., i
             try:
-                flag, q2p, p2p = _poincare_step_jit(
+                flag, q2p, p2p, p3p = _poincare_step_jit(
                     state[0],  # q2
                     state[1],  # p2
                     state[3],  # p3 (q3 is always 0)
@@ -495,8 +499,8 @@ def generate_iterated_poincare_map(
 
                 if flag == 1:
                     pts_accum.append((q2p, p2p))
-                    # set up next iterate – keep the same positive p3 as in seed
-                    state = (q2p, p2p, 0.0, seed[3])
+                    # fixed: restart with the p3 belonging to this crossing
+                    state = (q2p, p2p, 0.0, p3p)
                 else:
                     logger.warning(
                         "Failed to find Poincaré crossing for seed %s at iteration %d/%d",

@@ -10,7 +10,7 @@ FASTMATH = False  # Global flag for Numba's fastmath option
 
 H0_LEVELS = [0.6] # [0.20, 0.40, 0.60, 1.00]
 DT = 1e-2
-USE_SYMPLECTIC = True
+USE_SYMPLECTIC = False
 INTEGRATOR_ORDER = 6
 C_OMEGA_HEURISTIC = 100.0
 N_SEEDS = 1 # seeds along q2-axis
