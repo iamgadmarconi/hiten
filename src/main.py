@@ -12,8 +12,12 @@ from system.body import Body
 from utils.constants import Constants
 
 
-def build_three_body_system():
-    """Return (System EM, System SE)."""
+def main() -> None:
+    # ---------------- lookup tables for polynomial indexing --------------
+    psi, clmo = init_index_tables(MAX_DEG)
+    encode_dict_list = _create_encode_dict_from_clmo(clmo)
+
+    # ---------------- choose equilibrium point --------------------------
     Sun   = Body("Sun",   Constants.bodies["sun"  ]["mass"],   Constants.bodies["sun"  ]["radius"],   "yellow")
     Earth = Body("Earth", Constants.bodies["earth"]["mass"],   Constants.bodies["earth"]["radius"], "blue", Sun)
     Moon  = Body("Moon",  Constants.bodies["moon" ]["mass"],   Constants.bodies["moon" ]["radius"],  "gray",  Earth)
@@ -23,17 +27,7 @@ def build_three_body_system():
 
     system_EM = System(systemConfig(Earth, Moon,  d_EM))
     system_SE = System(systemConfig(Sun,   Earth, d_SE))
-    return system_EM, system_SE
 
-
-def main() -> None:
-    # ---------------- lookup tables for polynomial indexing --------------
-    psi, clmo = init_index_tables(MAX_DEG)
-    encode_dict_list = _create_encode_dict_from_clmo(clmo)
-
-    # ---------------- choose equilibrium point --------------------------
-    system_EM, system_SE = build_three_body_system()
-    
     # Select system based on global configuration
     if SYSTEM == "EM":
         selected_system = system_EM

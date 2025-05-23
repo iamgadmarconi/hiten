@@ -4,7 +4,7 @@ from typing import Dict
 
 from .body import Body
 from .libration import LibrationPoint, L1Point, L2Point, L3Point, L4Point, L5Point
-from utils.precision import high_precision_division, log_precision_info
+from utils.precision import log_precision_info, hp
 from utils.log_config import logger
 
 
@@ -48,11 +48,14 @@ class System(object):
     def _get_mu(self) -> float:
         """Calculates the mass parameter mu with high precision if enabled."""
         logger.debug(f"Calculating mu: {self.secondary.mass} / ({self.primary.mass} + {self.secondary.mass})")
-        
-        # Use high precision division for critical mu calculation
-        total_mass = self.primary.mass + self.secondary.mass
-        mu = high_precision_division(self.secondary.mass, total_mass)
-        
+
+        # Use HighPrecisionNumber for critical mu calculation
+        primary_mass_hp = hp(self.primary.mass)
+        secondary_mass_hp = hp(self.secondary.mass)
+        total_mass_hp = primary_mass_hp + secondary_mass_hp
+        mu_hp = secondary_mass_hp / total_mass_hp
+
+        mu = float(mu_hp) # Convert back to float for storage
         logger.debug(f"Calculated mu with high precision: {mu}")
         return mu
 

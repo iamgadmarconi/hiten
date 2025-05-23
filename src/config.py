@@ -8,14 +8,14 @@ TOL = 1e-14
 
 FASTMATH = False  # Global flag for Numba's fastmath option 
 
+H0_LEVELS = [0.6] # [0.20, 0.40, 0.60, 1.00]
+DT = 1e-3
+USE_SYMPLECTIC = False
+N_SEEDS = 1 # seeds along q2-axis
+N_ITER = 100 # iterations per seed
+
 # Precision control
-USE_ARBITRARY_PRECISION = False  # Set to True to enable mpmath for critical computations
+USE_ARBITRARY_PRECISION = True  # Set to True to enable mpmath for critical computations
 MPMATH_DPS = 50  # Decimal places for mpmath (default 50, standard float64 ≈ 15-17)
 NUMPY_DTYPE_REAL = "float64"  # "float32" or "float64" 
 NUMPY_DTYPE_COMPLEX = "complex128"  # "complex64" or "complex128"
-
-H0_LEVELS = [0.6] # [0.20, 0.40, 0.60, 1.00]
-DT = 1e-3
-USE_SYMPLECTIC = True
-N_SEEDS = 1 # seeds along q2-axis
-N_ITER = 100 # iterations per seed

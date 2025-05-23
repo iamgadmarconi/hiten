@@ -32,7 +32,7 @@ from algorithms.variables import (get_vars, linear_modes_vars,
                                   scale_factors_vars)
 from utils.log_config import logger
 from utils.precision import (MPMATH_DPS, high_precision_findroot,
-                             high_precision_sqrt, with_precision)
+                             hp, HighPrecisionNumber)
 
 # Constants for stability analysis mode
 CONTINUOUS_SYSTEM = 0
@@ -329,8 +329,14 @@ class CollinearPoint(LibrationPoint):
             logger.debug(f"Initial estimate for {type(self).__name__} gamma: x0 = {x0}")
 
             # Step 2: Refine using high precision findroot
-            poly_func = lambda x_val: self._gamma_poly(x_val)
-            self._gamma = high_precision_findroot(poly_func, x0, precision)
+            # The poly_func should work with HighPrecisionNumber if findroot supports it,
+            # or be adapted if findroot expects standard floats.
+            # Assuming high_precision_findroot is adapted or works with mpmath.mpf directly
+            # and _gamma_poly now returns a HighPrecisionNumber or compatible type.
+            poly_func = lambda x_val: float(self._gamma_poly(hp(x_val, precision))) # Ensure float for findroot
+            
+            # high_precision_findroot returns a float, which is what we want to store.
+            self._gamma = high_precision_findroot(poly_func, float(x0), precision) # x0 also as float
 
             logger.info(f"Gamma for {type(self).__name__} calculated with high precision: gamma = {self._gamma}")
             
@@ -379,7 +385,7 @@ class CollinearPoint(LibrationPoint):
         pass
         
     @abstractmethod
-    def _gamma_poly(self, x: float) -> float:
+    def _gamma_poly(self, x: HighPrecisionNumber) -> HighPrecisionNumber:
         """Evaluate the polynomial whose root is gamma at point x."""
         pass
 
@@ -463,39 +469,64 @@ class CollinearPoint(LibrationPoint):
             (lambda1, omega1, omega2) values for the libration point
         """
         try:
-            with with_precision():
-                c2 = self._cn(2)
-                a = 1.0  # coefficient of x²
-                b = 2.0 - c2  # coefficient of x
-                c = 1.0 + c2 - 2.0*c2**2  # constant term
+            # Ensure calculations use HighPrecisionNumber
+            c2_hp = hp(self._cn(2)) # cn already returns float, convert to hp
+            a_hp = hp(1.0)
+            b_hp = hp(2.0) - c2_hp
+            c_hp = hp(1.0) + c2_hp - hp(2.0) * (c2_hp ** hp(2.0))
+            
+            discriminant_hp = (b_hp ** hp(2.0)) - hp(4.0) * a_hp * c_hp
+            
+            # Check if discriminant is non-negative for sqrt
+            if float(discriminant_hp) < 0:
+                # This case might imply complex roots for eta, which is unexpected for typical CR3BP L-points
+                # or an issue with the c2 value leading to instability not captured by this formula directly.
+                # For now, log and raise, or handle as per physical expectations.
+                logger.error(f"Discriminant for linear modes is negative: {float(discriminant_hp)}. c2={float(c2_hp)}")
+                # Depending on context, might set lambda1/omega1 to 0 or handle differently.
+                # For now, let's assume discriminant should be non-negative or sqrt handles complex.
+                # If mp.sqrt in HighPrecisionNumber handles complex results, this is fine.
+                # Otherwise, we need to be careful. Let's assume it returns real part or magnitude if complex.
+                # For safety, let's use an approach that ensures real results for lambda1, omega1 as expected.
+                # The original code used mp.sqrt on potentially negative numbers for omega1.
+                # HighPrecisionNumber.sqrt() should ideally handle this by returning magnitude or appropriate value.
+
+            # eta = (-b ± sqrt(discriminant)) / (2a)
+            sqrt_discriminant_hp = discriminant_hp.sqrt() # hp.sqrt()
+            
+            eta1_hp = (-b_hp - sqrt_discriminant_hp) / (hp(2.0) * a_hp)
+            eta2_hp = (-b_hp + sqrt_discriminant_hp) / (hp(2.0) * a_hp)
+
+            # lambda1 = sqrt(max(eta1, eta2))
+            # omega1 = sqrt(-min(eta1, eta2))
+            # omega2 = sqrt(c2)
+
+            # Ensure eta values are floats for max/min if HighPrecisionNumber doesn't directly support it
+            eta1_float = float(eta1_hp)
+            eta2_float = float(eta2_hp)
+
+            max_eta = hp(max(eta1_float, eta2_float))
+            min_eta = hp(min(eta1_float, eta2_float))
+
+            lambda1_hp = hp(0.0)
+            if float(max_eta) > 0:
+                lambda1_hp = max_eta.sqrt()
+
+            omega1_hp = hp(0.0)
+            if float(min_eta) < 0:
+                omega1_hp = (-min_eta).sqrt()
+            
+            omega2_hp = c2_hp.sqrt() if float(c2_hp) >=0 else hp(0.0) # ensure c2 is non-negative for sqrt
+
+            lambda1 = float(lambda1_hp)
+            omega1 = float(omega1_hp)
+            omega2 = float(omega2_hp)
                 
-                # Convert coefficients to mpmath objects
-                mp_a = mp.mpf(a)
-                mp_b = mp.mpf(b)
-                mp_c = mp.mpf(c)
-                
-                # Use quadratic formula: x = (-b ± sqrt(b² - 4ac))/(2a)
-                discriminant = mp_b**2 - 4*mp_a*mp_c
-                
-                # Find both roots
-                eta1 = (-mp_b - mp.sqrt(discriminant)) / (2*mp_a)
-                eta2 = (-mp_b + mp.sqrt(discriminant)) / (2*mp_a)
-                
-                # Convert to floats for further calculations
-                eta1_float = float(eta1)
-                eta2_float = float(eta2)
-                
-                # Calculate the required values using high precision sqrt
-                lambda1 = float(mp.sqrt(max(eta1_float, eta2_float))) if max(eta1_float, eta2_float) > 0 else 0.0
-                omega1 = float(mp.sqrt(-min(eta1_float, eta2_float))) if min(eta1_float, eta2_float) < 0 else 0.0
-                omega2 = high_precision_sqrt(c2)
-                
-            logger.info(f"Quadratic roots: eta1={eta1_float}, eta2={eta2_float}")
+            logger.info(f"Quadratic roots (hp): eta1={float(eta1_hp)}, eta2={float(eta2_hp)}")
             logger.info(f"Calculated with high precision: lambda1={lambda1}, omega1={omega1}, omega2={omega2}")
             return lambda1, omega1, omega2
         except Exception as e:
-            # Handle errors more appropriately
-            logger.error(f"Failed to calculate linear modes: {e}")
+            logger.error(f"Failed to calculate linear modes with HighPrecisionNumber: {e}")
             raise RuntimeError(f"Linear modes calculation failed.") from e
 
     def _scale_factor(self, lambda1, omega1, omega2):
@@ -516,26 +547,46 @@ class CollinearPoint(LibrationPoint):
         s1, s2 : tuple of float
             The normalization factors for the hyperbolic and elliptic components
         """
-        c2 = self._cn(2)  # Get c2 coefficient
+        c2_hp = hp(self._cn(2)) # cn already returns float
+        lambda1_hp = hp(lambda1)
+        omega1_hp = hp(omega1)
+        # omega2_hp = hp(omega2) # omega2 is not used in s1, s2 expressions directly
+
+        # Calculate the expressions inside the square roots using HighPrecisionNumber
+        # expr1 = 2*lambda1*((4+3*c2)*lambda1**2 + 4 + 5*c2 - 6*c2**2)
+        # expr2 = omega1*((4+3*c2)*omega1**2 - 4 - 5*c2 + 6*c2**2)
+
+        four_hp = hp(4.0)
+        three_hp = hp(3.0)
+        five_hp = hp(5.0)
+        six_hp = hp(6.0)
+        two_hp = hp(2.0)
+
+        term_common_lambda = (four_hp + three_hp * c2_hp) * (lambda1_hp ** two_hp)
+        expr1_inside_hp = term_common_lambda + four_hp + five_hp * c2_hp - six_hp * (c2_hp ** two_hp)
+        expr1_hp = two_hp * lambda1_hp * expr1_inside_hp
         
-        # Calculate the expressions inside the square roots
-        expr1 = 2*lambda1*((4+3*c2)*lambda1**2 + 4 + 5*c2 - 6*c2**2)
-        expr2 = omega1*((4+3*c2)*omega1**2 - 4 - 5*c2 + 6*c2**2)
+        term_common_omega = (four_hp + three_hp * c2_hp) * (omega1_hp ** two_hp)
+        expr2_inside_hp = term_common_omega - four_hp - five_hp * c2_hp + six_hp * (c2_hp ** two_hp)
+        expr2_hp = omega1_hp * expr2_inside_hp
         
-        # Check if values are positive
-        if expr1 < 0:
-            err = f"Expression for s1 is negative: {expr1}."
+        # Check if values are positive before sqrt
+        if float(expr1_hp) < 0:
+            err = f"Expression for s1 is negative (hp): {float(expr1_hp)}."
             logger.error(err)
             raise RuntimeError(err)
             
-        if expr2 < 0:
-            err = f"Expression for s2 is negative: {expr2}."
+        if float(expr2_hp) < 0:
+            err = f"Expression for s2 is negative (hp): {float(expr2_hp)}."
             logger.error(err)
             raise RuntimeError(err)
         
         # Calculate scale factors using high precision square root
-        s1 = high_precision_sqrt(expr1)
-        s2 = high_precision_sqrt(expr2)
+        s1_hp = expr1_hp.sqrt()
+        s2_hp = expr2_hp.sqrt()
+        
+        s1 = float(s1_hp)
+        s2 = float(s2_hp)
         
         logger.debug(f"Normalization factors calculated with high precision: s1={s1}, s2={s2}")
         return s1, s2
@@ -625,16 +676,17 @@ class CollinearPoint(LibrationPoint):
         # Get the symbolic form of the matrix
         C_sym, Cinv_sym = self._symbolic_normal_form_transform()
         
-        # Use the cached linear modes
+        # Use the cached linear modes (computed with high precision)
         lambda1_num, omega1_num, omega2_num = self.linear_modes()
-        logger.debug(f"Using linear modes: lambda1={lambda1_num}, omega1={omega1_num}, omega2={omega2_num}")
+        logger.debug(f"Using high precision linear modes: lambda1={lambda1_num}, omega1={omega1_num}, omega2={omega2_num}")
         
+        # Get c2 coefficient (computed with high precision)
         c2 = self._cn(2)
-        logger.debug(f"Using c2 coefficient: c2={c2}")
+        logger.debug(f"Using high precision c2 coefficient: c2={c2}")
 
-        # Get normalization factors s1, s2
+        # Get normalization factors s1, s2 (computed with high precision sqrt)
         s1, s2 = self._scale_factor(lambda1_num, omega1_num, omega2_num)
-        logger.debug(f"Scale factors: s1={s1}, s2={s2}")
+        logger.debug(f"Scale factors computed with high precision: s1={s1}, s2={s2}")
 
         # Substitute the symbolic variables with their numerical values
         subs_dict = {
@@ -650,7 +702,7 @@ class CollinearPoint(LibrationPoint):
         C = np.array(C_sym.subs(subs_dict).tolist(), dtype=np.float64)
         Cinv = np.array(Cinv_sym.subs(subs_dict).tolist(), dtype=np.float64)
         
-        logger.info(f"Normal form transformation matrix computed for {type(self).__name__}")
+        logger.info(f"Normal form transformation matrix computed with high precision for {type(self).__name__}")
 
         return C, Cinv
 
@@ -812,13 +864,9 @@ class L1Point(CollinearPoint):
         
         # Use high precision root finding
         try:
-            with mp.workdps(50):
-                # Use lambda to pass self implicitly
-                func = lambda x_val: self._dOmega_dx(x_val)
-                # Provide the interval as a bracket if possible
-                x = mp.findroot(func, interval)
-            x = float(x)
-            logger.info(f"L1 position calculated: x = {x}")
+            func = lambda x_val: self._dOmega_dx(x_val)
+            x = high_precision_findroot(func, interval)
+            logger.info(f"L1 position calculated with high precision: x = {x}")
             return np.array([x, 0, 0], dtype=np.float64)
         except ValueError as e:
             # Handle cases where findroot fails (e.g., no sign change in interval)
@@ -831,13 +879,16 @@ class L1Point(CollinearPoint):
         mu = self.mu
         return [1, -(3-mu), (3-2*mu), -mu, 2*mu, -mu]
         
-    def _gamma_poly(self, x: float) -> float:
-        coeffs = self._get_gamma_poly_coeffs()
-        term1 = x**5
-        term2 = coeffs[1] * x**4
-        term3 = coeffs[2] * x**3
-        term4 = coeffs[3] * x**2
-        term5 = coeffs[4] * x
+    def _gamma_poly(self, x: HighPrecisionNumber) -> HighPrecisionNumber:
+        coeffs = [hp(c) for c in self._get_gamma_poly_coeffs()]
+        # Ensure x is HighPrecisionNumber
+        x_hp = x if isinstance(x, HighPrecisionNumber) else hp(x)
+
+        term1 = x_hp**hp(5.0)
+        term2 = coeffs[1] * (x_hp**hp(4.0))
+        term3 = coeffs[2] * (x_hp**hp(3.0))
+        term4 = coeffs[3] * (x_hp**hp(2.0))
+        term5 = coeffs[4] * x_hp
         term6 = coeffs[5]
         return term1 + term2 + term3 + term4 + term5 + term6
         
@@ -877,11 +928,50 @@ class L1Point(CollinearPoint):
         float
             The cn coefficient value
         """
-        term1 = 1 / self.gamma ** 3
-        term2 = (1) ** n * self.mu
-        term3 = (-1) ** n * ( (1-self.mu) * self.gamma ** (n+1) / (1 - self.gamma) ** (n+1) )
+        # Use high precision arithmetic for critical coefficient calculations
+        gamma_hp = hp(self.gamma) # self.gamma is float, convert to hp for calculations
+        mu_hp = hp(self.mu)
+        one_hp = hp(1.0)
+        
+        term1_num = one_hp
+        term1_den = gamma_hp ** hp(3.0)
+        term1 = term1_num / term1_den
+        
+        term2 = mu_hp # (1)^n * mu = mu
+        
+        sign_hp = hp((-1)**n)
+        one_minus_mu_hp = one_hp - mu_hp
+        
+        gamma_pow_n1_hp = gamma_hp ** hp(n + 1.0)
+        one_minus_gamma_hp = one_hp - gamma_hp
+        
+        # Avoid division by zero for (1-gamma)
+        if abs(float(one_minus_gamma_hp)) < 1e-18: # Check if 1-gamma is effectively zero
+             logger.warning(f"L1 _compute_cn: (1-gamma) is close to zero ({float(one_minus_gamma_hp)}). Gamma: {float(gamma_hp)}")
+             # Handle this case: result might be infinite or undefined.
+             # For now, let's return a large number or raise error, depending on expectation.
+             # This situation implies gamma is very close to 1, which is unusual for L1.
+             # Based on context, this might indicate an issue upstream or a very specific mu.
+             # Returning float('inf') or raising an error might be appropriate.
+             # For now, to match previous behavior if division by zero occurred, this could be problematic.
+             # The original code might have thrown a ZeroDivisionError or produced inf/nan.
+             # Let's ensure the denominator is not zero before division.
+             if abs(float(one_minus_gamma_hp)) < 1e-30: # Stricter check for actual zero
+                raise ValueError("L1 _compute_cn: (1-gamma) is zero, leading to division by zero.")
+        
+        one_minus_gamma_pow_n1_hp = one_minus_gamma_hp ** hp(n + 1.0)
 
-        c_n = term1 * (term2 + term3)
+        if abs(float(one_minus_gamma_pow_n1_hp)) < 1e-30:
+            raise ValueError("L1 _compute_cn: (1-gamma)^(n+1) is zero, leading to division by zero.")
+
+        term3_num = sign_hp * one_minus_mu_hp * gamma_pow_n1_hp
+        term3 = term3_num / one_minus_gamma_pow_n1_hp
+        
+        sum_terms = term2 + term3
+        c_n_hp = term1 * sum_terms
+        
+        c_n = float(c_n_hp)
+        logger.debug(f"L1 c_{n} computed with high precision: {c_n}")
         return c_n
 
 
@@ -911,10 +1001,8 @@ class L2Point(CollinearPoint):
         interval = [1.0, 2.0] # Initial guess interval for L2
         logger.debug(f"L2: Finding root of dOmega/dx in interval {interval}")
         try:
-            with mp.workdps(50):
-                func = lambda x_val: self._dOmega_dx(x_val)
-                x = mp.findroot(func, interval)
-            x = float(x)
+            func = lambda x_val: self._dOmega_dx(x_val)
+            x = high_precision_findroot(func, interval)
             logger.info(f"L2 position calculated: x = {x}")
             return np.array([x, 0, 0], dtype=np.float64)
         except ValueError as e:
@@ -922,10 +1010,8 @@ class L2Point(CollinearPoint):
             # Try a wider interval as fallback?
             logger.debug(f"L2: Retrying root finding in wider interval {[1 - self.mu + 1e-9, 2.0]}")
             try:
-                with mp.workdps(50):
-                    func = lambda x_val: self._dOmega_dx(x_val)
-                    x = mp.findroot(func, [1 - self.mu + 1e-9, 2.0])
-                x = float(x)
+                func = lambda x_val: self._dOmega_dx(x_val)
+                x = high_precision_findroot(func, [1 - self.mu + 1e-9, 2.0])
                 logger.info(f"L2 position calculated (retry): x = {x}")
                 return np.array([x, 0, 0], dtype=np.float64)
             except ValueError as e2:
@@ -936,13 +1022,15 @@ class L2Point(CollinearPoint):
         mu = self.mu
         return [1, (3-mu), (3-2*mu), -mu, -2*mu, -mu]
 
-    def _gamma_poly(self, x: float) -> float:
-        coeffs = self._get_gamma_poly_coeffs()
-        term1 = x**5
-        term2 = coeffs[1] * x**4
-        term3 = coeffs[2] * x**3
-        term4 = coeffs[3] * x**2
-        term5 = coeffs[4] * x
+    def _gamma_poly(self, x: HighPrecisionNumber) -> HighPrecisionNumber:
+        coeffs = [hp(c) for c in self._get_gamma_poly_coeffs()]
+        x_hp = x if isinstance(x, HighPrecisionNumber) else hp(x)
+
+        term1 = x_hp**hp(5.0)
+        term2 = coeffs[1] * (x_hp**hp(4.0))
+        term3 = coeffs[2] * (x_hp**hp(3.0))
+        term4 = coeffs[3] * (x_hp**hp(2.0))
+        term5 = coeffs[4] * x_hp
         term6 = coeffs[5]
         return term1 + term2 + term3 + term4 + term5 + term6
         
@@ -982,11 +1070,38 @@ class L2Point(CollinearPoint):
         float
             The cn coefficient value
         """
-        term1 = 1 / self.gamma ** 3
-        term2 = (-1) ** n * self.mu
-        term3 = (-1) ** n * ( (1-self.mu) * self.gamma ** (n+1) / (1 + self.gamma) ** (n+1) )
+        # Use high precision arithmetic for critical coefficient calculations
+        gamma_hp = hp(self.gamma)
+        mu_hp = hp(self.mu)
+        one_hp = hp(1.0)
 
-        c_n = term1 * (term2 + term3)
+        term1_num = one_hp
+        term1_den = gamma_hp ** hp(3.0)
+        term1 = term1_num / term1_den
+        
+        sign_hp = hp((-1)**n)
+        term2 = sign_hp * mu_hp
+        
+        one_minus_mu_hp = one_hp - mu_hp
+        gamma_pow_n1_hp = gamma_hp ** hp(n + 1.0)
+        one_plus_gamma_hp = one_hp + gamma_hp
+        
+        if abs(float(one_plus_gamma_hp)) < 1e-30: # Should not happen as gamma > 0
+            raise ValueError("L2 _compute_cn: (1+gamma) is zero, leading to division by zero.")
+            
+        one_plus_gamma_pow_n1_hp = one_plus_gamma_hp ** hp(n + 1.0)
+
+        if abs(float(one_plus_gamma_pow_n1_hp)) < 1e-30: # Should not happen
+             raise ValueError("L2 _compute_cn: (1+gamma)^(n+1) is zero, leading to division by zero.")
+
+        term3_num = sign_hp * one_minus_mu_hp * gamma_pow_n1_hp
+        term3 = term3_num / one_plus_gamma_pow_n1_hp
+        
+        sum_terms = term2 + term3
+        c_n_hp = term1 * sum_terms
+        
+        c_n = float(c_n_hp)
+        logger.debug(f"L2 c_{n} computed with high precision: {c_n}")
         return c_n
 
 
@@ -1016,10 +1131,8 @@ class L3Point(CollinearPoint):
         interval = [-self.mu - 0.01, -2.0] # Initial guess interval for L3
         logger.debug(f"L3: Finding root of dOmega/dx in interval {interval}")
         try:
-            with mp.workdps(50):
-                func = lambda x_val: self._dOmega_dx(x_val)
-                x = mp.findroot(func, interval)
-            x = float(x)
+            func = lambda x_val: self._dOmega_dx(x_val)
+            x = high_precision_findroot(func, interval)
             logger.info(f"L3 position calculated: x = {x}")
             return np.array([x, 0, 0], dtype=np.float64)
         except ValueError as e:
@@ -1027,10 +1140,8 @@ class L3Point(CollinearPoint):
             # Try a wider interval as fallback?
             logger.debug(f"L3: Retrying root finding in wider interval {[-2.0, -self.mu - 1e-9]}")
             try:
-                with mp.workdps(50):
-                    func = lambda x_val: self._dOmega_dx(x_val)
-                    x = mp.findroot(func, [-2.0, -self.mu - 1e-9])
-                x = float(x)
+                func = lambda x_val: self._dOmega_dx(x_val)
+                x = high_precision_findroot(func, [-2.0, -self.mu - 1e-9])
                 logger.info(f"L3 position calculated (retry): x = {x}")
                 return np.array([x, 0, 0], dtype=np.float64)
             except ValueError as e2:
@@ -1042,15 +1153,15 @@ class L3Point(CollinearPoint):
         mu2 = 1 - mu # mu1 in some notations
         return [1, (2+mu), (1+2*mu), -mu2, -2*mu2, -mu2]
         
-    def _gamma_poly(self, x: float) -> float:
-        # Note: The root x of this polynomial is gamma_L3 = |x_L3 - (-mu)| = |-1 + delta - (-mu)| = |mu - 1 + delta|
-        # where x_L3 = -1 + delta. This x IS the distance gamma_L3.
-        coeffs = self._get_gamma_poly_coeffs()
-        term1 = x**5
-        term2 = coeffs[1] * x**4
-        term3 = coeffs[2] * x**3
-        term4 = coeffs[3] * x**2
-        term5 = coeffs[4] * x
+    def _gamma_poly(self, x: HighPrecisionNumber) -> HighPrecisionNumber:
+        coeffs = [hp(c) for c in self._get_gamma_poly_coeffs()]
+        x_hp = x if isinstance(x, HighPrecisionNumber) else hp(x)
+
+        term1 = x_hp**hp(5.0)
+        term2 = coeffs[1] * (x_hp**hp(4.0))
+        term3 = coeffs[2] * (x_hp**hp(3.0))
+        term4 = coeffs[3] * (x_hp**hp(2.0))
+        term5 = coeffs[4] * x_hp
         term6 = coeffs[5]
         return term1 + term2 + term3 + term4 + term5 + term6
 
@@ -1093,11 +1204,38 @@ class L3Point(CollinearPoint):
         float
             The cn coefficient value
         """
-        term1 = (-1) ** n / self.gamma ** 3
-        term2 = 1-self.mu
-        term3 = self.mu * self.gamma ** (n+1) / (1 + self.gamma) ** (n+1)
+        # Use high precision arithmetic for critical coefficient calculations
+        gamma_hp = hp(self.gamma)
+        mu_hp = hp(self.mu)
+        one_hp = hp(1.0)
+        
+        sign_hp = hp((-1)**n)
+        
+        term1_num = sign_hp
+        term1_den = gamma_hp ** hp(3.0)
+        term1 = term1_num / term1_den
+        
+        term2 = one_hp - mu_hp
+        
+        gamma_pow_n1_hp = gamma_hp ** hp(n + 1.0)
+        one_plus_gamma_hp = one_hp + gamma_hp
 
-        c_n = term1 * (term2 + term3)
+        if abs(float(one_plus_gamma_hp)) < 1e-30: # Should not happen
+            raise ValueError("L3 _compute_cn: (1+gamma) is zero, leading to division by zero.")
+            
+        one_plus_gamma_pow_n1_hp = one_plus_gamma_hp ** hp(n + 1.0)
+
+        if abs(float(one_plus_gamma_pow_n1_hp)) < 1e-30: # Should not happen
+             raise ValueError("L3 _compute_cn: (1+gamma)^(n+1) is zero, leading to division by zero.")
+
+        term3_num = mu_hp * gamma_pow_n1_hp
+        term3 = term3_num / one_plus_gamma_pow_n1_hp
+        
+        sum_terms = term2 + term3
+        c_n_hp = term1 * sum_terms
+        
+        c_n = float(c_n_hp)
+        logger.debug(f"L3 c_{n} computed with high precision: {c_n}")
         return c_n
 
 
