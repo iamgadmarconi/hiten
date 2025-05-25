@@ -468,7 +468,7 @@ def generate_iterated_poincare_map(
     dt : float, optional
         Timestep for the integrator.
     use_symplectic : bool, optional
-        True → Yoshida-6 step (recommended); False → RK4.
+        True → Symplectic (recommended); False → RK4.
     seed_axis : {"q2", "p2"}
         Place seeds on this axis with the other momentum/position set to zero.
 

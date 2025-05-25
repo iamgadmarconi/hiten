@@ -1,5 +1,5 @@
 import numpy as np
-from numba import njit, prange, get_num_threads, get_thread_id
+from numba import cuda, get_num_threads, get_thread_id, njit, prange
 from numba.typed import List
 
 from algorithms.center.polynomial.base import (decode_multiindex,
