@@ -13,8 +13,8 @@ DT = 1e-2
 USE_SYMPLECTIC = False
 INTEGRATOR_ORDER = 6
 C_OMEGA_HEURISTIC = 100.0
-N_SEEDS = 75 # seeds along q2-axis
-N_ITER = 250 # iterations per seed
+N_SEEDS = 1 # seeds along q2-axis
+N_ITER = 50 # iterations per seed
 
 # Precision control
 USE_ARBITRARY_PRECISION = True  # Set to True to enable mpmath for critical computations

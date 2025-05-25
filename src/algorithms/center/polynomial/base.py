@@ -224,15 +224,24 @@ def decode_multiindex(pos: int, degree: int, clmo) -> np.ndarray:
     k_0 is calculated as (degree - sum of other exponents)
     """
     packed = clmo[degree][pos]
-    k = np.empty(N_VARS, dtype=np.int64)
-    k[1] = packed & 0x3F
-    k[2] = (packed >> 6) & 0x3F
-    k[3] = (packed >> 12) & 0x3F
-    k[4] = (packed >> 18) & 0x3F
-    k[5] = (packed >> 24) & 0x3F
-    s = k[1] + k[2] + k[3] + k[4] + k[5]
-    k[0] = degree - s
-    return k
+    k1 =  packed        & 0x3F
+    k2 = (packed >>  6) & 0x3F
+    k3 = (packed >> 12) & 0x3F
+    k4 = (packed >> 18) & 0x3F
+    k5 = (packed >> 24) & 0x3F
+    k0 = degree - (k1+k2+k3+k4+k5)
+    return k0, k1, k2, k3, k4, k5
+
+@njit(fastmath=FASTMATH, inline='always', cache=True)
+def fill_exponents(pos, degree, clmo, out):
+    packed = clmo[degree][pos]
+    out[1] =  packed        & 0x3F
+    out[2] = (packed >>  6) & 0x3F
+    out[3] = (packed >> 12) & 0x3F
+    out[4] = (packed >> 18) & 0x3F
+    out[5] = (packed >> 24) & 0x3F
+    out[0] = degree - (out[1]+out[2]+out[3]+out[4]+out[5])
+
 
 @njit(fastmath=FASTMATH, cache=True)
 def encode_multiindex(k: np.ndarray, degree: int, encode_dict_list: List) -> int:

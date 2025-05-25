@@ -77,6 +77,7 @@ def test_decode_multiindex():
             k = decode_multiindex(pos, degree, CLMO)
             
             # Verify array shape
+            k = np.asarray(k)
             assert k.shape == (N_VARS,)
             
             # Verify sum of exponents equals degree
@@ -104,6 +105,7 @@ def test_encode_multiindex():
         for pos in positions:
             # Get a known valid multiindex
             k = decode_multiindex(pos, degree, CLMO)
+            k = np.asarray(k)
             
             # Encode it and verify it matches the original position
             idx = encode_multiindex(k, degree, ENCODE_DICT)
