@@ -359,3 +359,15 @@ class PolynomialEvaluatorCUDA:
         )
         
         return d_results.copy_to_host()
+
+
+def polynomial_evaluate_cuda(poly_p, points, clmo):
+    """
+    Evaluate polynomial at multiple points using CUDA.
+    
+    This is a convenience wrapper that creates a temporary evaluator.
+    For better performance with repeated evaluations, create a 
+    PolynomialEvaluatorCUDA instance and reuse it.
+    """
+    evaluator = PolynomialEvaluatorCUDA([poly_p], clmo)
+    return evaluator.evaluate_single(0, points)
