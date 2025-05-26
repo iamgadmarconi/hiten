@@ -250,3 +250,30 @@ def cn2rn(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray
 
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
     return substitute_linear(poly_cn, Cinv, max_deg, psi, clmo, encode_dict_list)
+
+def cm2rn(poly_cm: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
+    """
+    Transform a polynomial from the center manifold to real normal form.
+    
+    Parameters
+    ----------
+    poly_cm : List[numpy.ndarray]
+        Polynomial in center manifold coordinates
+    max_deg : int
+        Maximum degree for polynomial representations
+    psi : numpy.ndarray
+        Combinatorial table from init_index_tables
+    clmo : numba.typed.List
+        List of arrays containing packed multi-indices
+        
+    Returns
+    -------
+    List[numpy.ndarray]
+        Polynomial in real normal form coordinates
+        
+    Notes
+    -----
+    This function transforms a polynomial from center manifold coordinates
+    (q1', q2', q3', p1', p2', p3') to real normal form coordinates (q1, q2, q3, p1, p2, p3)
+    """
+    pass

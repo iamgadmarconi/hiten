@@ -1,9 +1,10 @@
 import numpy as np
-from numba import njit, prange, get_num_threads, get_thread_id
+from numba import cuda, get_num_threads, get_thread_id, njit, prange
 from numba.typed import List
 
 from algorithms.center.polynomial.base import (decode_multiindex,
-                                               encode_multiindex)
+                                               encode_multiindex,
+                                               fill_exponents)
 from algorithms.variables import N_VARS
 from config import FASTMATH
 
@@ -172,6 +173,7 @@ def _poly_diff(p: np.ndarray, var: int, degree: int, psi, clmo, encode_dict_list
     nT = get_num_threads()
     scratch = np.zeros((nT, out_size), dtype=p.dtype)
 
+    scratch_exp = np.empty(6, dtype=np.int64)           # ← NEW  (one per thread chunk)
     for i in prange(p.shape[0]):
         tid = get_thread_id()
 
@@ -179,15 +181,18 @@ def _poly_diff(p: np.ndarray, var: int, degree: int, psi, clmo, encode_dict_list
         if coeff == 0:
             continue
 
-        k = decode_multiindex(i, degree, clmo)
-        exp = k[var]
+        k_vec = np.empty(6, dtype=np.int64)
+        fill_exponents(i, degree, clmo, k_vec)   # mutable view
+
+        exp = k_vec[var]
         if exp == 0:
             continue
 
-        k[var] = exp - 1  # lower the exponent for the differentiated variable
-        idx = encode_multiindex(k, degree - 1, encode_dict_list)
+        k_vec[var] = exp - 1                     # safe mutation
+        idx = encode_multiindex(k_vec, degree - 1, encode_dict_list)
         if idx != -1:
             scratch[tid, idx] += coeff * exp  # race-free write
+        scratch_exp[var] = exp                # restore for next iteration
 
     # Reduction: sum the thread-local arrays into the final output
     dp = np.zeros(out_size, dtype=p.dtype)
@@ -407,29 +412,31 @@ def _poly_evaluate(
     the result. The output is always complex to handle both real and complex
     polynomials.
     """
-    current_sum = 0.0 + 0.0j
-    if p.shape[0] == 0: # Empty polynomial part
-        return current_sum
 
+    if p.shape[0] == 0:
+        return 0.0 + 0.0j
+
+    pow_table = np.empty((N_VARS, degree + 1), dtype=point.dtype)
+    for v in range(N_VARS):
+        pow_table[v, 0] = 1.0 + 0.0j
+        base = point[v]
+        for e in range(1, degree + 1):
+            pow_table[v, e] = pow_table[v, e - 1] * base
+
+    current_sum = 0.0 + 0.0j
     for i in range(p.shape[0]):
         coeff_val = p[i]
         if coeff_val == 0.0 + 0.0j:
             continue
 
-        exponents = decode_multiindex(i, degree, clmo)
-        
+        exps = decode_multiindex(i, degree, clmo)   # immutable 6-tuple
+
         term_val = 1.0 + 0.0j
-        for var_idx in range(N_VARS): # N_VARS should be in scope
-            exp = exponents[var_idx]
-            if exp == 0:
-                continue
-            elif exp == 1:
-                term_val *= point[var_idx]
-            else:
-                # Using ** operator handles complex base and integer exponent
-                term_val *= point[var_idx] ** exp
-        
+        for v in range(N_VARS):
+            term_val *= pow_table[v, exps[v]]
+
         current_sum += coeff_val * term_val
+
     return current_sum
 
 @njit(fastmath=FASTMATH, cache=True)
@@ -470,14 +477,15 @@ def _poly_integrate(p: np.ndarray, var: int, degree: int, psi, clmo, encode_dict
         coeff = p[i]
         if coeff == 0:
             continue
-        
-        k = decode_multiindex(i, degree, clmo)
-        
-        k_integrated = k.copy()
+
+        k_vec = np.empty(6, dtype=np.int64)
+        fill_exponents(i, degree, clmo, k_vec)
+
+        k_integrated = k_vec.copy()
         k_integrated[var] += 1
-        
-        new_coeff = coeff / (k[var] + 1)
-        
+
+        new_coeff = coeff / (k_vec[var] + 1)
+
         idx = encode_multiindex(k_integrated, out_degree, encode_dict_list)
         if idx != -1:
             ip[idx] += new_coeff

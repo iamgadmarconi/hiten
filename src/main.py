@@ -1,15 +1,25 @@
+from numba import cuda
+
 from algorithms.center.manifold import center_manifold_rn
 from algorithms.center.poincare.map import generate_iterated_poincare_map
+from algorithms.center.poincare.cuda.map import generate_iterated_poincare_map_gpu
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables)
 from algorithms.center.utils import format_cm_table
-from utils.log_config import logger
+from config import (C_OMEGA_HEURISTIC, DT, H0_LEVELS, INTEGRATOR_ORDER,
+                    L_POINT, MAX_DEG, N_ITER, N_SEEDS, SYSTEM, USE_SYMPLECTIC,
+                    USE_GPU)
 from plots.plots import plot_poincare_map
-from config import (DT, H0_LEVELS, L_POINT, MAX_DEG, N_ITER, N_SEEDS, SYSTEM,
-                        USE_SYMPLECTIC, INTEGRATOR_ORDER, C_OMEGA_HEURISTIC)
 from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
+from utils.log_config import logger
+
+
+if cuda.is_available() and USE_GPU:
+    generate_poincare_map = generate_iterated_poincare_map_gpu
+else:
+    generate_poincare_map = generate_iterated_poincare_map
 
 
 def main() -> None:
@@ -56,7 +66,7 @@ def main() -> None:
 
     for h0 in H0_LEVELS:
         logger.info("Generating iterated Poincaré map for h0=%.3f", h0)
-        pts = generate_iterated_poincare_map(
+        pts = generate_poincare_map(
             h0=h0,
             H_blocks=H_cm_rn_full,
             max_degree=MAX_DEG,
