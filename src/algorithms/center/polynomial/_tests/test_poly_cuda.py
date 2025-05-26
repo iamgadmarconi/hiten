@@ -7,7 +7,7 @@ from algorithms.center.polynomial.base import (
     decode_multiindex, encode_multiindex, init_index_tables, make_poly,
     PSI_GLOBAL, CLMO_GLOBAL, ENCODE_DICT_GLOBAL
 )
-from algorithms.center.polynomial.cuda import PolynomialEvaluatorCUDA
+from algorithms.center.polynomial.cuda.evaluate import PolynomialEvaluatorCUDA
 from algorithms.variables import N_VARS
 
 # Initialize tables for tests

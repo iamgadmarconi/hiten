@@ -1,13 +1,10 @@
-import math
-
 import numpy as np
-from numba import cuda, float64, int32
+from numba import cuda, float64
 
 from algorithms.center.poincare.cuda.hrhs import (HamiltonianRHSEvaluatorCUDA,
                                                   hamiltonian_rhs_device)
 
-# Constants
-N_DOF = 3
+
 THREADS_PER_BLOCK = 256
 
 @cuda.jit(device=True)

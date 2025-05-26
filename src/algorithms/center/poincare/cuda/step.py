@@ -1,7 +1,5 @@
-import math
-
 import numpy as np
-from numba import boolean, cuda, float64, int32
+from numba import cuda, float64
 
 from algorithms.center.poincare.cuda.hrhs import hamiltonian_rhs_device
 from algorithms.center.poincare.cuda.rk4 import (RK4IntegratorCUDA,

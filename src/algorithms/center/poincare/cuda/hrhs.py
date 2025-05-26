@@ -1,12 +1,11 @@
-import math
 
 import numpy as np
-from numba import complex128, cuda, float64, int32
+from numba import complex128, cuda, float64
 
-from algorithms.center.polynomial.cuda import (PolynomialEvaluatorCUDA,
-                                               poly_evaluate_degree_device)
+from algorithms.center.polynomial.cuda.evaluate import (
+    PolynomialEvaluatorCUDA, poly_evaluate_degree_device)
 
-# Assuming N_VARS = 6 and n_dof = 3 for the restricted 3-body problem
+
 N_VARS = 6
 N_DOF = 3
 THREADS_PER_BLOCK = 256
