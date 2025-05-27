@@ -52,22 +52,18 @@ def main() -> None:
 
     # ---------------- centre‑manifold reduction -------------------------
     H_cm_rn_full = center_manifold_rn(selected_l_point, psi, clmo, MAX_DEG)
-    print("\n")
-    print("Centre-manifold Hamiltonian (deg 2 to 5) in real NF variables (q2, p2, q3, p3)\n")
-    print(format_cm_table(H_cm_rn_full, clmo))
-    print("\n")
+    logger.info("\nCentre-manifold Hamiltonian (deg 2 to 5) in real NF variables (q2, p2, q3, p3)\n")
+    logger.info(f"\n\n{format_cm_table(H_cm_rn_full, clmo)}\n\n")
 
     logger.info("Starting Poincaré map generation process…")
-
-    dt = DT
 
     all_pts = []
     output_directory = "results"
 
-    for h0 in H0_LEVELS:
-        logger.info("Generating iterated Poincaré map for h0=%.3f", h0)
+    for H0 in H0_LEVELS:
+        logger.info("Generating iterated Poincaré map for h0=%.3f", H0)
         pts = generate_poincare_map(
-            h0=h0,
+            h0=H0,
             H_blocks=H_cm_rn_full,
             max_degree=MAX_DEG,
             psi_table=psi,
@@ -75,7 +71,7 @@ def main() -> None:
             encode_dict_list=encode_dict_list,
             n_seeds=N_SEEDS,
             n_iter=N_ITER,
-            dt=dt,
+            dt=DT,
             use_symplectic=USE_SYMPLECTIC,
             integrator_order=INTEGRATOR_ORDER,
             c_omega_heuristic=C_OMEGA_HEURISTIC,
@@ -93,7 +89,7 @@ def main() -> None:
 
     symplectic_str = "symplectic" if USE_SYMPLECTIC else "nonsymplectic"
     
-    filename = f"PM_{MAX_DEG}_{energy_level_str}_{dt}_{symplectic_str}_{N_ITER}.svg"
+    filename = f"PM_{MAX_DEG}_{energy_level_str}_{DT}_{symplectic_str}_{N_ITER}.svg"
 
     plot_poincare_map(all_pts, H0_LEVELS, output_dir=output_directory, filename=filename)
 
