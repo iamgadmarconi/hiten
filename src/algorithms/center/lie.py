@@ -2,6 +2,7 @@ import numpy as np
 from numba import njit
 from numba.typed import List
 
+from algorithms.center.polynomial.algebra import _evaluate_reduced_monomial
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                _factorial, decode_multiindex,
                                                make_poly)
@@ -293,3 +294,109 @@ def _apply_lie_transform(poly_H: List[np.ndarray], p_G_n: np.ndarray, deg_G: int
 
     poly_new = polynomial_clean(poly_new, tol)
     return poly_new
+
+
+@njit(fastmath=FASTMATH, cache=True)
+def _compute_pb_coord(
+    G_coeffs: np.ndarray,
+    degree: int,
+    coord_idx: int,
+    coords: np.ndarray,
+    clmo: np.ndarray,
+    encode_dict_list: List
+) -> np.complex128:
+    """
+    Compute {G, x_coord_idx} evaluated at the given coordinates.
+    
+    For a monomial G_term = coeff * q^a * p^b:
+    {G_term, q_i} = -coeff * b_i * q^a * p^(b with p_i reduced by 1)  
+    {G_term, p_i} = +coeff * a_i * q^(a with q_i reduced by 1) * p^b
+    """
+
+    result = 0.0 + 0.0j
+    
+    for pos in range(G_coeffs.shape[0]):
+        coeff = G_coeffs[pos]
+        if abs(coeff) < 1e-15:
+            continue
+            
+        # Decode the multi-index for this monomial
+        k = decode_multiindex(pos, degree, clmo)
+        
+        if coord_idx < 3:  # Position coordinate q_i
+            # {G_term, q_i} = -k[i+3] * G_term with p_i exponent reduced by 1
+            p_idx = coord_idx + 3
+            if k[p_idx] > 0:
+                # Evaluate monomial with p_i exponent reduced by 1
+                monomial_val = _evaluate_reduced_monomial(k, coords, p_idx, -1)
+                result -= coeff * k[p_idx] * monomial_val
+        else:  # Momentum coordinate p_i  
+            # {G_term, p_i} = +k[i] * G_term with q_i exponent reduced by 1
+            q_idx = coord_idx - 3
+            if k[q_idx] > 0:
+                # Evaluate monomial with q_i exponent reduced by 1
+                monomial_val = _evaluate_reduced_monomial(k, coords, q_idx, -1)
+                result += coeff * k[q_idx] * monomial_val
+                
+    return result
+
+
+@njit(fastmath=FASTMATH, cache=True)
+def _apply_single_inverse_generator(
+    coords: np.ndarray,
+    G_n: np.ndarray,
+    degree: int,
+    psi: np.ndarray,
+    clmo: np.ndarray,
+    encode_dict_list: List
+) -> np.ndarray:
+    """
+    Apply inverse of a single generating function using first-order approximation.
+    
+    For the inverse transformation, we use:
+    x_new = x_old - {G, x_old} + O(G^2)
+    
+    This is the first-order approximation of exp(-L_G).
+    """
+    new_coords = coords.copy()
+    
+    # Compute Poisson brackets {G, x_i} for each coordinate
+    for i in range(6):
+        pb_term = _compute_pb_coord(
+            G_n, degree, i, coords, clmo, encode_dict_list
+        )
+        new_coords[i] -= pb_term  # Negative sign for inverse transform
+    
+    return new_coords
+
+
+@njit(fastmath=FASTMATH, cache=True)
+def _apply_inverse_lie_transforms(
+    cm_coords: np.ndarray,
+    poly_G_total: List[np.ndarray],
+    psi: np.ndarray,
+    clmo: np.ndarray,
+    max_degree: int,
+    tol: float
+) -> np.ndarray:
+    """Apply inverse Lie transforms to go from center manifold to complex normal coordinates."""
+    encode_dict_list = _create_encode_dict_from_clmo(clmo)
+    
+    # Start with 6D coordinates: [q1=0, q2, q3, p1=0, p2, p3]
+    coords = np.zeros(6, dtype=np.complex128)
+    coords[1] = cm_coords[0]  # q2
+    coords[2] = cm_coords[2]  # q3
+    coords[4] = cm_coords[1]  # p2  
+    coords[5] = cm_coords[3]  # p3
+    # q1=0, p1=0 remain zero (center manifold constraint)
+    
+    # Apply inverse generating functions in reverse order
+    # The generating functions were applied in order G3, G4, ..., GN
+    # So we apply them in reverse: -GN, -G(N-1), ..., -G3
+    for degree in range(max_degree, 2, -1):
+        if degree < len(poly_G_total) and np.any(poly_G_total[degree]):
+            coords = _apply_single_inverse_generator(
+                coords, poly_G_total[degree], degree, psi, clmo, encode_dict_list
+            )
+    
+    return coords

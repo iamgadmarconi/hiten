@@ -440,6 +440,30 @@ def _poly_evaluate(
     return current_sum
 
 @njit(fastmath=FASTMATH, cache=True)
+def _evaluate_reduced_monomial(
+    k: np.ndarray,
+    coords: np.ndarray, 
+    var_idx: int,
+    exp_change: int
+) -> np.complex128:
+    """Evaluate monomial x^k at coords with exponent of var_idx changed by exp_change."""
+    result = 1.0 + 0.0j
+    
+    for i in range(6):
+        exp = k[i]
+        if i == var_idx:
+            exp += exp_change
+            
+        if exp > 0:
+            if abs(coords[i]) > 1e-15:
+                result *= coords[i] ** exp
+            else:
+                return 0.0 + 0.0j  # Zero coordinate with positive exponent
+        # exp == 0: multiply by 1 (no-op)
+                
+    return result
+
+@njit(fastmath=FASTMATH, cache=True)
 def _poly_integrate(p: np.ndarray, var: int, degree: int, psi, clmo, encode_dict_list) -> np.ndarray:
     """
     Integrate a polynomial with respect to one variable.

@@ -25,14 +25,15 @@ import mpmath as mp
 import numpy as np
 import symengine as se
 
+from algorithms.center.manifold import center_manifold_cn, center_manifold_rn
 from algorithms.dynamics import jacobian_crtbp
 from algorithms.energy import crtbp_energy, energy_to_jacobi
 from algorithms.linalg import eigenvalue_decomposition
 from algorithms.variables import (get_vars, linear_modes_vars,
                                   scale_factors_vars)
 from utils.log_config import logger
-from utils.precision import (MPMATH_DPS, high_precision_findroot,
-                             hp, HighPrecisionNumber)
+from utils.precision import (MPMATH_DPS, HighPrecisionNumber,
+                             high_precision_findroot, hp)
 
 # Constants for stability analysis mode
 CONTINUOUS_SYSTEM = 0
@@ -75,8 +76,11 @@ class LibrationPoint(ABC):
         self._linear_data = None
         self._energy = None
         self._jacobi_constant = None
+
+        self._hamiltonian_cache = {}  # Cache for different representations  
+        self._generating_functions_cache = {}  # Cache for generating functions
+        self._cache_metadata = {}  # Store metadata about cached computations
         
-        # Log initialization - using type(self).__name__ to get the specific subclass name
         logger.debug(f"Initialized {type(self).__name__} with mu = {self.mu}")
     
     def __str__(self) -> str:
@@ -149,6 +153,140 @@ class LibrationPoint(ABC):
         if self._linear_data is None:
             self._linear_data = self._get_linear_data()
         return self._linear_data
+
+    def _get_cache_key(self, max_deg: int) -> str:
+        """Generate cache key based on parameters that affect computation."""
+        return f"deg_{max_deg}_mu_{self.mu:.12e}"
+    
+    def _invalidate_cache(self):
+        """Clear all cached data."""
+        self._hamiltonian_cache.clear()
+        self._generating_functions_cache.clear() 
+        self._cache_metadata.clear()
+        logger.debug(f"Cache invalidated for {type(self).__name__}")
+
+    def get_cached_hamiltonian(self, max_deg: int, representation: str):
+        """
+        Get cached Hamiltonian in specified representation.
+        
+        Parameters
+        ----------
+        max_deg : int
+            Maximum degree
+        representation : str
+            One of: 'physical', 'real_normal', 'complex_normal', 
+                   'normalized', 'center_manifold_cn', 'center_manifold_rn'
+                   
+        Returns
+        -------
+        List[np.ndarray] or None
+            Cached polynomial if available, None otherwise
+        """
+        cache_key = self._get_cache_key(max_deg)
+        if cache_key in self._hamiltonian_cache:
+            return self._hamiltonian_cache[cache_key].get(representation)
+        return None
+    
+    def get_cached_generating_functions(self, max_deg: int):
+        """Get cached generating functions."""
+        cache_key = self._get_cache_key(max_deg)
+        return self._generating_functions_cache.get(cache_key)
+
+    def _store_hamiltonian_cache(self, max_deg: int, representation: str, poly_data):
+        """Store Hamiltonian in cache."""
+        cache_key = self._get_cache_key(max_deg)
+        if cache_key not in self._hamiltonian_cache:
+            self._hamiltonian_cache[cache_key] = {}
+        
+        # Deep copy to avoid modifications affecting cache
+        self._hamiltonian_cache[cache_key][representation] = [h.copy() for h in poly_data]
+        
+        logger.debug(f"Cached {representation} Hamiltonian for {type(self).__name__}, max_deg={max_deg}")
+
+    def _store_generating_functions_cache(self, max_deg: int, poly_G_total):
+        """Store generating functions in cache."""
+        cache_key = self._get_cache_key(max_deg)
+        self._generating_functions_cache[cache_key] = [g.copy() for g in poly_G_total]
+        logger.debug(f"Cached generating functions for {type(self).__name__}, max_deg={max_deg}")
+
+    def get_cache_info(self) -> dict:
+        """Get information about cached data."""
+        info = {
+            'cached_degrees': [],
+            'cached_representations': {},
+            'has_generating_functions': []
+        }
+        
+        for cache_key in self._hamiltonian_cache:
+            degree = int(cache_key.split('_')[1])
+            info['cached_degrees'].append(degree)
+            info['cached_representations'][degree] = list(self._hamiltonian_cache[cache_key].keys())
+            
+        for cache_key in self._generating_functions_cache:
+            degree = int(cache_key.split('_')[1])
+            info['has_generating_functions'].append(degree)
+            
+        return info
+    
+    def get_hamiltonian_representations(self, max_deg: int, psi, clmo) -> dict:
+        """
+        Get all Hamiltonian representations, computing and caching as needed.
+        
+        Returns
+        -------
+        dict
+            Dictionary with keys: 'physical', 'real_normal', 'complex_normal',
+            'normalized', 'center_manifold_cn', 'center_manifold_rn'
+        """
+        # Trigger computation of center manifold (which computes all intermediate forms)
+        _ = center_manifold_cn(self, psi, clmo, max_deg)
+        _ = center_manifold_rn(self, psi, clmo, max_deg)
+        
+        cache_key = self._get_cache_key(max_deg)
+        return self._hamiltonian_cache.get(cache_key, {}).copy()
+
+    def get_complete_transformation_data(self, max_deg: int, psi, clmo) -> dict:
+        """
+        Get complete transformation data including all Hamiltonians and generating functions.
+        
+        Returns
+        -------
+        dict
+            Dictionary containing all cached representations and generating functions
+        """
+        hamiltonians = self.get_hamiltonian_representations(max_deg, psi, clmo)
+        generating_functions = self.get_cached_generating_functions(max_deg)
+        
+        return {
+            'hamiltonians': hamiltonians,
+            'generating_functions': generating_functions,
+            'max_degree': max_deg,
+            'point_type': type(self).__name__,
+            'mu': self.mu
+        }
+
+    def precompute_cache(self, max_degrees: list[int], psi_dict: dict, clmo_dict: dict):
+        """
+        Precompute and cache data for multiple degrees.
+        
+        Parameters
+        ----------
+        max_degrees : list[int]
+            List of maximum degrees to precompute
+        psi_dict : dict
+            Dictionary mapping max_deg to psi arrays
+        clmo_dict : dict  
+            Dictionary mapping max_deg to clmo arrays
+        """
+        logger.info(f"Precomputing cache for {type(self).__name__} at degrees {max_degrees}")
+        
+        for max_deg in max_degrees:
+            if max_deg in psi_dict and max_deg in clmo_dict:
+                # This will compute and cache all representations
+                _ = self.get_complete_transformation_data(max_deg, psi_dict[max_deg], clmo_dict[max_deg])
+                logger.debug(f"Precomputed data for degree {max_deg}")
+            else:
+                logger.warning(f"Missing psi/clmo data for degree {max_deg}")
 
     def _compute_energy(self) -> float:
         """
