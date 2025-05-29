@@ -617,17 +617,9 @@ class CollinearPoint(LibrationPoint):
             
             # Check if discriminant is non-negative for sqrt
             if float(discriminant_hp) < 0:
-                # This case might imply complex roots for eta, which is unexpected for typical CR3BP L-points
-                # or an issue with the c2 value leading to instability not captured by this formula directly.
-                # For now, log and raise, or handle as per physical expectations.
-                logger.error(f"Discriminant for linear modes is negative: {float(discriminant_hp)}. c2={float(c2_hp)}")
-                # Depending on context, might set lambda1/omega1 to 0 or handle differently.
-                # For now, let's assume discriminant should be non-negative or sqrt handles complex.
-                # If mp.sqrt in HighPrecisionNumber handles complex results, this is fine.
-                # Otherwise, we need to be careful. Let's assume it returns real part or magnitude if complex.
-                # For safety, let's use an approach that ensures real results for lambda1, omega1 as expected.
-                # The original code used mp.sqrt on potentially negative numbers for omega1.
-                # HighPrecisionNumber.sqrt() should ideally handle this by returning magnitude or appropriate value.
+                err = f"Discriminant for linear modes is negative: {float(discriminant_hp)}. c2={float(c2_hp)}"
+                logger.error(err)
+                raise RuntimeError(err)
 
             # eta = (-b ± sqrt(discriminant)) / (2a)
             sqrt_discriminant_hp = discriminant_hp.sqrt() # hp.sqrt()
@@ -1007,12 +999,10 @@ class L1Point(CollinearPoint):
             logger.info(f"L1 position calculated with high precision: x = {x}")
             return np.array([x, 0, 0], dtype=np.float64)
         except ValueError as e:
-            # Handle cases where findroot fails (e.g., no sign change in interval)
-            logger.error(f"Failed to find L1 root in interval {interval}: {e}")
-            # Optionally, could try a different solver or wider interval
-            # For now, re-raise or return NaN/error indicator
-            raise RuntimeError(f"L1 position calculation failed.") from e
-            
+            err = f"Failed to find L1 root in interval {interval}: {e}"
+            logger.error(err)
+            raise RuntimeError(err) from e
+
     def _get_gamma_poly_coeffs(self) -> list[float]:
         mu = self.mu
         return [1, -(3-mu), (3-2*mu), -mu, 2*mu, -mu]

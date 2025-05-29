@@ -1,20 +1,21 @@
 from numba import cuda
 
+from algorithms.center.coordinates import poincare2ic
 from algorithms.center.manifold import center_manifold_rn
+from algorithms.center.poincare.cuda.map import \
+    generate_iterated_poincare_map_gpu
 from algorithms.center.poincare.map import generate_iterated_poincare_map
-from algorithms.center.poincare.cuda.map import generate_iterated_poincare_map_gpu
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables)
 from algorithms.center.utils import format_cm_table
 from config import (C_OMEGA_HEURISTIC, DT, H0_LEVELS, INTEGRATOR_ORDER,
-                    L_POINT, MAX_DEG, N_ITER, N_SEEDS, SYSTEM, USE_SYMPLECTIC,
-                    USE_GPU)
+                    L_POINT, MAX_DEG, N_ITER, N_SEEDS, SYSTEM, USE_GPU,
+                    USE_SYMPLECTIC)
 from plots.plots import plot_poincare_map
 from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
 from utils.log_config import logger
-
 
 if cuda.is_available() and USE_GPU:
     generate_poincare_map = generate_iterated_poincare_map_gpu
@@ -77,6 +78,11 @@ def main() -> None:
             c_omega_heuristic=C_OMEGA_HEURISTIC,
             seed_axis="q2",
         )
+
+        # Convert Poincaré points to initial conditions
+        logger.info("Converting Poincaré points to initial conditions")
+        ics = poincare2ic(pts, selected_l_point, psi, clmo, MAX_DEG, H0)
+        logger.info(f"\n\nInitial conditions:\n\n{ics}\n\n")
         all_pts.append(pts)  # Store points for this energy level
 
     # Construct filename
@@ -92,6 +98,8 @@ def main() -> None:
     filename = f"PM_{MAX_DEG}_{energy_level_str}_{DT}_{symplectic_str}_{N_ITER}.svg"
 
     plot_poincare_map(all_pts, H0_LEVELS, output_dir=output_directory, filename=filename)
+
+    
 
 
 if __name__ == "__main__":

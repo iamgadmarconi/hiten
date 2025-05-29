@@ -1,12 +1,11 @@
 import numpy as np
 from numba.typed import List
 
-from algorithms.center.lie import _apply_inverse_lie_transforms
-from algorithms.center.manifold import center_manifold_cn
+from algorithms.center.lie import _apply_inverse_lie_transforms, lie_transform
 from algorithms.center.poincare.map import solve_p3
 from algorithms.center.polynomial.base import _create_encode_dict_from_clmo
 from algorithms.center.polynomial.operations import polynomial_zero_list
-from algorithms.center.transforms import cn2rn, rn2phys
+from algorithms.center.transforms import cn2rn, phys2rn, rn2cn, rn2phys
 from utils.log_config import logger
 
 
@@ -90,10 +89,7 @@ def _complete_cm_coordinates(
     poly_cm: List[np.ndarray],
     cm_coords: np.ndarray,
     energy: float,
-    point,
-    psi: np.ndarray,
     clmo: np.ndarray,
-    max_degree: int
 ) -> np.ndarray:
     """Complete center manifold coordinates using energy constraint."""
     if len(cm_coords) == 4:
@@ -117,11 +113,14 @@ def _complete_cm_coordinates(
             
         return np.array([q2, p2, q3, p3], dtype=np.complex128)
     else:
-        raise
+        err = f"Invalid CM coordinates length: {len(cm_coords)}, expected 2 or 4. Shape: {cm_coords.shape}, Contents: {cm_coords}"
+        logger.error(err)
+        raise ValueError(err)
 
 
 def _cm2phys_coordinates(
     point,
+    poly_cm: List[np.ndarray],
     cm_coords: np.ndarray,
     poly_G_total: List[np.ndarray],
     psi: np.ndarray,
@@ -161,23 +160,9 @@ def _cm2phys_coordinates(
     numpy.ndarray
         Physical coordinates [X, Y, Z, PX, PY, PZ]
     """
-
-    poly_G_total = point.get_cached_generating_functions(max_degree)
-    
-    if poly_G_total is None:
-        logger.info("Generating functions not cached, computing...")
-        # Trigger computation which will cache everything
-        _ = center_manifold_cn(point, psi, clmo, max_degree)
-        poly_G_total = point.get_cached_generating_functions(max_degree)
-        
-        if poly_G_total is None:
-            raise RuntimeError("Failed to compute generating functions")
-    else:
-        logger.debug("Using cached generating functions")
-
     # Step 1: Complete center manifold coordinates if needed
     full_cm_coords = _complete_cm_coordinates(
-        cm_coords, energy, point, psi, clmo, max_degree
+        poly_cm, cm_coords, energy, clmo,
     )
     
     # Step 2: Apply inverse Lie transforms to get complex normal form
@@ -190,3 +175,61 @@ def _cm2phys_coordinates(
     physical_coords = _rn2phys_coordinates(rn_coords, point, max_degree, psi, clmo)
     
     return physical_coords
+
+
+def poincare2ic(
+    poincare_points: np.ndarray,
+    point,
+    psi: np.ndarray,
+    clmo: np.ndarray,
+    max_degree: int = 8,
+    energy: float = 0.0,
+) -> np.ndarray:
+    """
+    Convert Poincaré section points to initial conditions in physical coordinates.
+    
+    Parameters
+    ----------
+    poincare_points : numpy.ndarray
+        Array of shape (N, 2) containing [q2, p2] coordinates from Poincaré section
+    point : object
+        Point object containing equilibrium point information
+    psi, clmo : arrays
+        Polynomial index tables  
+    max_degree : int, optional
+        Maximum degree for polynomial computations, default is 8
+    energy : float, optional
+        Energy level for the orbits, default is 0.0
+    Returns
+    -------
+    numpy.ndarray
+        Array of shape (N, 6) containing initial conditions [X, Y, Z, PX, PY, PZ]
+    """
+    logger.info(f"Converting {len(poincare_points)} Poincaré points to initial conditions")
+    
+    poly_G_total = point.get_cached_generating_functions(max_degree)
+    poly_cm = point.get_cached_hamiltonian(max_degree, "center_manifold_cn")
+    # Transform each Poincaré point
+    initial_conditions = np.zeros((len(poincare_points), 6))
+    
+    for i, poincare_point in enumerate(poincare_points):
+        try:
+            ic = _cm2phys_coordinates(
+                point=point,
+                poly_cm=poly_cm,
+                cm_coords=poincare_point,
+                poly_G_total=poly_G_total,
+                psi=psi,
+                clmo=clmo,
+                max_degree=max_degree,
+                energy=energy
+            )
+            initial_conditions[i] = ic
+            
+        except Exception as e:
+            err = f"Failed to transform point {i}: {poincare_point}, error: {e}"
+            logger.error(err)
+            raise RuntimeError(err)
+    
+    logger.info("Completed transformation to initial conditions")
+    return initial_conditions
