@@ -1,3 +1,6 @@
+import random
+
+import numpy as np
 from numba import cuda
 
 from algorithms.center.coordinates import poincare2ic
@@ -8,10 +11,11 @@ from algorithms.center.poincare.map import generate_iterated_poincare_map
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables)
 from algorithms.center.utils import format_cm_table
+from algorithms.integrators.standard import propagate_crtbp
 from config import (C_OMEGA_HEURISTIC, DT, H0_LEVELS, INTEGRATOR_ORDER,
                     L_POINT, MAX_DEG, N_ITER, N_SEEDS, SYSTEM, USE_GPU,
                     USE_SYMPLECTIC)
-from plots.plots import plot_poincare_map
+from plots.plots import plot_orbit_rotating_frame, plot_poincare_map
 from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
@@ -85,21 +89,25 @@ def main() -> None:
         logger.info(f"\n\nInitial conditions:\n\n{ics}\n\n")
         all_pts.append(pts)  # Store points for this energy level
 
+    # Propagate the initial conditions
+    ic = random.choice(ics)
+    logger.info("Propagating initial conditions")
+    traj = propagate_crtbp(ic, 0, 2*np.pi, selected_system.mu).y.T
+
+    # Plot the orbit
+    plot_orbit_rotating_frame(traj, selected_system.mu, selected_system, selected_l_point, "PM", show=True)
+
     # Construct filename
     if len(H0_LEVELS) == 1:
         energy_level_str = f"{H0_LEVELS[0]:.2f}".replace('.', 'p')
     else:
-        min_h0 = min(H0_LEVELS)
-        max_h0 = max(H0_LEVELS)
-        energy_level_str = f"{min_h0:.2f}to{max_h0:.2f}".replace('.', 'p')
+        energy_level_str = f"{min(H0_LEVELS):.2f}to{max(H0_LEVELS):.2f}".replace('.', 'p')
 
     symplectic_str = "symplectic" if USE_SYMPLECTIC else "nonsymplectic"
     
     filename = f"PM_{MAX_DEG}_{energy_level_str}_{DT}_{symplectic_str}_{N_ITER}.svg"
 
     plot_poincare_map(all_pts, H0_LEVELS, output_dir=output_directory, filename=filename)
-
-    
 
 
 if __name__ == "__main__":

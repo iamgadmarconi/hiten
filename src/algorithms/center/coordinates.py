@@ -1,11 +1,12 @@
 import numpy as np
 from numba.typed import List
 
-from algorithms.center.lie import _apply_inverse_lie_transforms, lie_transform
+from algorithms.center.lie import _apply_inverse_lie_transforms
 from algorithms.center.poincare.map import solve_p3
-from algorithms.center.polynomial.base import _create_encode_dict_from_clmo
+from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
+                                               encode_multiindex)
 from algorithms.center.polynomial.operations import polynomial_zero_list
-from algorithms.center.transforms import cn2rn, phys2rn, rn2cn, rn2phys
+from algorithms.center.transforms import cn2rn, rn2phys
 from utils.log_config import logger
 
 
@@ -27,7 +28,6 @@ def _cn2rn_coordinates(
                 # Find position of x_i monomial in degree-1 polynomial
                 k = np.zeros(6, dtype=np.int64)
                 k[i] = 1
-                from algorithms.center.polynomial.base import encode_multiindex
                 pos = encode_multiindex(k, 1, encode_dict_list)
                 if 0 <= pos < cn_polys[1].shape[0]:
                     cn_polys[1][pos] = cn_coords[i]
@@ -66,7 +66,6 @@ def _rn2phys_coordinates(
             if abs(rn_coords[i]) > 1e-15:
                 k = np.zeros(6, dtype=np.int64)
                 k[i] = 1
-                from algorithms.center.polynomial.base import encode_multiindex
                 pos = encode_multiindex(k, 1, encode_dict_list)
                 if 0 <= pos < rn_polys[1].shape[0]:
                     rn_polys[1][pos] = rn_coords[i]

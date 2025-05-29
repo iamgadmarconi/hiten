@@ -1,21 +1,18 @@
 import numpy as np
 import pytest
+from numba.typed import List
 
-from system.libration import L1Point 
-from algorithms.center.coordinates import (
-    _cn2rn_coordinates,
-    _rn2phys_coordinates,
-    _complete_cm_coordinates,
-    _cm2phys_coordinates,
-)
-from algorithms.center.lie import _apply_inverse_lie_transforms
-from algorithms.center.polynomial.base import (
-    init_index_tables, 
-    _create_encode_dict_from_clmo,
-    encode_multiindex
-)
-from algorithms.center.polynomial.operations import polynomial_zero_list, polynomial_evaluate
-from algorithms.center.transforms import cn2rn, rn2cn, phys2rn, rn2phys
+from algorithms.center.coordinates import (_cn2rn_coordinates,
+                                           _complete_cm_coordinates,
+                                           _rn2phys_coordinates)
+from algorithms.center.lie import (_apply_inverse_lie_transforms,
+                                   _apply_single_inverse_generator)
+from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
+                                               encode_multiindex,
+                                               init_index_tables)
+from algorithms.center.polynomial.operations import polynomial_zero_list
+from algorithms.center.transforms import cn2rn, phys2rn, rn2cn
+from system.libration import L1Point
 
 # Constants for tests
 MU_EM = 0.0121505816  # Earth-Moon mass parameter (example)
@@ -64,7 +61,7 @@ def cr3bp_data_fixture():
 def _rn2cn_coordinates(rn_coords: np.ndarray, max_degree: int, psi: np.ndarray, clmo: list) -> np.ndarray:
     """Helper: Converts real normal vector to complex normal vector using rn2cn transform."""
     rn_polys = polynomial_zero_list(max_degree, psi)
-    encode_dict_list = _create_encode_dict_from_clmo(clmo)
+    encode_dict_list = _create_encode_dict_from_clmo(List(clmo))
     if len(rn_polys) > 1:
         for i in range(6):
             if abs(rn_coords[i]) > 1e-15:
@@ -83,7 +80,7 @@ def _rn2cn_coordinates(rn_coords: np.ndarray, max_degree: int, psi: np.ndarray, 
 def _phys2rn_coordinates(phys_coords: np.ndarray, point: L1Point, max_degree: int, psi: np.ndarray, clmo: list) -> np.ndarray:
     """Helper: Converts physical vector to real normal vector using phys2rn transform."""
     phys_polys = polynomial_zero_list(max_degree, psi)
-    encode_dict_list = _create_encode_dict_from_clmo(clmo)
+    encode_dict_list = _create_encode_dict_from_clmo(List(clmo))
     if len(phys_polys) > 1:
         for i in range(6):
             if abs(phys_coords[i]) > 1e-15:
@@ -103,7 +100,7 @@ def test_coordinate_round_trip_rn_to_cn(cr3bp_data_fixture):
     """Test RN → CN → RN round trip (this should work)."""
     data = cr3bp_data_fixture
     psi = data["psi"]
-    clmo = data["clmo"]
+    clmo = List(data["clmo"])
     max_degree = data["max_degree"]
     
     rn_coords_real = np.array([0.1, 0.05, 0.02, 0.01, 0.03, 0.01], dtype=np.float64)
@@ -120,7 +117,7 @@ def test_coordinate_round_trip_physical(cr3bp_data_fixture):
     data = cr3bp_data_fixture
     point = data["point"]
     psi = data["psi"]
-    clmo = data["clmo"]
+    clmo = List(data["clmo"])
     max_degree = data["max_degree"]
     
     phys_coords = np.array([0.01, 0.005, 0.002, 0.001, 0.003, 0.001], dtype=np.float64)
@@ -137,7 +134,7 @@ def test_transformation_matrices_are_inverses(cr3bp_data_fixture):
     """Test that the CN↔RN transformation matrices are proper inverses at polynomial level."""
     data = cr3bp_data_fixture
     psi = data["psi"]
-    clmo = data["clmo"]
+    clmo = List(data["clmo"])
     max_degree = data["max_degree"]
     
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
@@ -148,21 +145,162 @@ def test_transformation_matrices_are_inverses(cr3bp_data_fixture):
             k = np.zeros(6, dtype=np.int64)
             k[coord_idx] = 1
             pos = encode_multiindex(k, 1, encode_dict_list)
-            # Initialize with complex 1.0 for rn2cn if poly_coord represents CN initially
-            # or float 1.0 if poly_coord represents RN initially.
-            # Assuming poly_coord represents RN here as per test name rn2cn(poly_coord...)
             poly_coord[1][pos] = 1.0 
         
-        # Transform RN poly → CN poly → RN poly
-        # Here, poly_coord is an RN polynomial by construction of its coefficient.
         poly_cn = rn2cn(poly_coord, max_degree, psi, clmo) # rn_poly to cn_poly
         poly_rn_back = cn2rn(poly_cn, max_degree, psi, clmo) # cn_poly to rn_poly
         
-        # Check up to degree 1, as higher degrees might have more complex interactions
-        # not necessarily cancelling out if the input is just a single coord term.
         for deg in range(min(2, max_degree + 1)): 
             np.testing.assert_allclose(
                 poly_coord[deg], poly_rn_back[deg], 
                 rtol=1e-12, atol=1e-15,
                 err_msg=f"Polynomial RN→CN→RN round trip failed for coord {coord_idx}, degree {deg}"
             )
+
+def test_coordinate_mapping():
+    """Debug the coordinate mapping in inverse Lie transforms."""
+    
+    # Test input - this should be [q2, p2, q3, p3]
+    cm_coords_4d = np.array([0.01, 0.005, 0.0, 0.02], dtype=np.complex128)
+    
+    # How it's mapped to 6D
+    coords_6d = np.zeros(6, dtype=np.complex128)
+    coords_6d[1] = cm_coords_4d[0]  # q2
+    coords_6d[2] = cm_coords_4d[2]  # q3  
+    coords_6d[4] = cm_coords_4d[1]  # p2
+    coords_6d[5] = cm_coords_4d[3]  # p3
+    
+    print(f"CM coords [q2,p2,q3,p3]: {cm_coords_4d}")
+    print(f"6D coords [q1,q2,q3,p1,p2,p3]: {coords_6d}")
+    
+    # Key question: Does p3 (index 3 in cm_coords) map to coords_6d[5]?
+    print(f"p3 value: {cm_coords_4d[3]} → coords_6d[5]: {coords_6d[5]}")
+    
+    return coords_6d
+
+def test_inverse_lie_preserve_p3(cr3bp_data_fixture):
+    """Check if inverse Lie transforms are preserving the p3 coordinate."""
+    
+    data = cr3bp_data_fixture
+    point = data["point"]
+    psi = data["psi"]
+    clmo = List(data["clmo"])
+    max_degree = data["max_degree"]
+
+    # Start with simple test case
+    cm_coords_4d = np.array([0.01, 0.005, 0.0, 0.02], dtype=np.complex128)
+    
+    coords_6d = np.zeros(6, dtype=np.complex128)
+    coords_6d[1] = cm_coords_4d[0]  # q2
+    coords_6d[2] = cm_coords_4d[2]  # q3
+    coords_6d[4] = cm_coords_4d[1]  # p2  
+    coords_6d[5] = cm_coords_4d[3]  # p3
+    
+    print(f"Before inverse Lie: coords_6d[5] (p3) = {coords_6d[5]}")
+    
+    # Apply inverse Lie transforms step by step
+    poly_G = point.get_cached_generating_functions(max_degree)
+    
+    for degree in range(max_degree, 2, -1):
+        if degree < len(poly_G) and np.any(poly_G[degree]):
+            print(f"\nApplying inverse G{degree}")
+            print(f"  Before: coords_6d[5] = {coords_6d[5]}")
+            
+            coords_6d = _apply_single_inverse_generator(
+                coords_6d, poly_G[degree], degree, psi, clmo, 
+                _create_encode_dict_from_clmo(clmo)
+            )
+            
+            print(f"  After: coords_6d[5] = {coords_6d[5]}")
+    
+    print(f"\nFinal coords after all inverse Lie: {coords_6d}")
+    return coords_6d
+
+
+def test_coordinate_polynomial_conversion(cr3bp_data_fixture):
+    """Debug the coordinate ↔ polynomial conversion."""
+    
+    # Test with known coordinates
+    test_coords = np.array([0.01, 0.02, 0.03, 0.04, 0.05, 0.06], dtype=np.complex128)
+    
+    print(f"Original coords: {test_coords}")
+    
+    data = cr3bp_data_fixture
+    point = data["point"]
+    psi = data["psi"]
+    clmo = List(data["clmo"])
+    max_degree = data["max_degree"]
+
+    # Convert to polynomial
+    poly = polynomial_zero_list(max_degree, psi)
+    encode_dict_list = _create_encode_dict_from_clmo(clmo)
+    
+    if len(poly) > 1:
+        for i in range(6):
+            if abs(test_coords[i]) > 1e-15:
+                k = np.zeros(6, dtype=np.int64)
+                k[i] = 1
+                pos = encode_multiindex(k, 1, encode_dict_list)
+                if 0 <= pos < poly[1].shape[0]:
+                    poly[1][pos] = test_coords[i]
+                    print(f"Set poly[1][{pos}] = coords[{i}] = {test_coords[i]}")
+    
+    # Convert back to coordinates
+    recovered_coords = np.zeros(6, dtype=np.complex128)
+    if len(poly) > 1:
+        for i in range(6):
+            k = np.zeros(6, dtype=np.int64)
+            k[i] = 1
+            pos = encode_multiindex(k, 1, encode_dict_list)
+            if 0 <= pos < poly[1].shape[0]:
+                recovered_coords[i] = poly[1][pos]
+                print(f"Got coords[{i}] = poly[1][{pos}] = {recovered_coords[i]}")
+    
+    print(f"Recovered coords: {recovered_coords}")
+    print(f"Match: {np.allclose(test_coords, recovered_coords)}")
+
+def test_track_p3_through_pipeline(cr3bp_data_fixture):
+    """Track where the p3 coordinate goes through the entire pipeline."""
+    
+    # Start with test data
+    poincare_point = np.array([0.01, 0.005])
+    energy = 0.1
+    
+    data = cr3bp_data_fixture
+    point = data["point"]
+    psi = data["psi"]
+    clmo = List(data["clmo"])
+    max_degree = data["max_degree"]
+    
+    print("=== Tracking p3 through pipeline ===")
+    
+    # Step 1: Complete coordinates
+    poly_cm_cn = point.get_cached_hamiltonian(max_degree, "center_manifold_cn")
+    cm_coords_4d = _complete_cm_coordinates(poly_cm_cn, poincare_point, energy, clmo)
+    print(f"1. After completion: p3 = {cm_coords_4d[3]}")
+    
+    # Step 2: Map to 6D
+    coords_6d = np.zeros(6, dtype=np.complex128)
+    coords_6d[1] = cm_coords_4d[0]  # q2
+    coords_6d[2] = cm_coords_4d[2]  # q3
+    coords_6d[4] = cm_coords_4d[1]  # p2
+    coords_6d[5] = cm_coords_4d[3]  # p3
+    print(f"2. After 6D mapping: coords_6d[5] (p3) = {coords_6d[5]}")
+    
+    # Step 3: Apply inverse Lie transforms
+    poly_G = point.get_cached_generating_functions(max_degree)
+    cn_coords = _apply_inverse_lie_transforms(cm_coords_4d, poly_G, psi, clmo, max_degree, 1e-15)
+    print(f"3. After inverse Lie: cn_coords[5] (p3) = {cn_coords[5]}")
+    
+    # Step 4: CN → RN conversion
+    rn_coords = _cn2rn_coordinates(cn_coords, max_degree, psi, clmo)
+    print(f"4. After CN→RN: rn_coords[5] (pz_rn) = {rn_coords[5]}")
+    
+    # Step 5: RN → Physical conversion  
+    phys_coords = _rn2phys_coordinates(rn_coords, point, max_degree, psi, clmo)
+    print(f"5. After RN→Phys: phys_coords[5] (PZ) = {phys_coords[5]}")
+    
+    print("\n=== Summary ===")
+    print(f"Started with p3 = {cm_coords_4d[3]}")
+    print(f"Ended with PZ = {phys_coords[5]}")
+    print(f"Ratio: {phys_coords[5] / cm_coords_4d[3] if cm_coords_4d[3] != 0 else 'inf'}")
