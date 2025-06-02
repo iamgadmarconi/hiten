@@ -80,6 +80,7 @@ class LibrationPoint(ABC):
         self._hamiltonian_cache = {}  # Cache for different representations  
         self._generating_functions_cache = {}  # Cache for generating functions
         self._cache_metadata = {}  # Store metadata about cached computations
+        self._transform_cache = None  # Cache for normal form transformation matrix
         
         logger.debug(f"Initialized {type(self).__name__} with mu = {self.mu}")
     
@@ -163,6 +164,7 @@ class LibrationPoint(ABC):
         self._hamiltonian_cache.clear()
         self._generating_functions_cache.clear() 
         self._cache_metadata.clear()
+        self._transform_cache = None
         logger.debug(f"Cache invalidated for {type(self).__name__}")
 
     def get_cached_hamiltonian(self, max_deg: int, representation: str):
@@ -214,7 +216,8 @@ class LibrationPoint(ABC):
         info = {
             'cached_degrees': [],
             'cached_representations': {},
-            'has_generating_functions': []
+            'has_generating_functions': [],
+            'has_transform_cache': self._transform_cache is not None
         }
         
         for cache_key in self._hamiltonian_cache:
@@ -801,6 +804,11 @@ class CollinearPoint(LibrationPoint):
         tuple
             (C, Cinv) where C is the symplectic transformation matrix and Cinv is its inverse
         """
+        # Check cache first
+        if self._transform_cache is not None:
+            logger.debug(f"Using cached normal form transformation matrix for {type(self).__name__}")
+            return self._transform_cache
+            
         logger.debug(f"Computing normal form transform for {type(self).__name__} with mu={self.mu}")
         
         # Get the symbolic form of the matrix
@@ -832,7 +840,9 @@ class CollinearPoint(LibrationPoint):
         C = np.array(C_sym.subs(subs_dict).tolist(), dtype=np.float64)
         Cinv = np.array(Cinv_sym.subs(subs_dict).tolist(), dtype=np.float64)
         
-        logger.info(f"Normal form transformation matrix computed with high precision for {type(self).__name__}")
+        # Cache the result
+        self._transform_cache = (C, Cinv)
+        logger.info(f"Normal form transformation matrix computed and cached for {type(self).__name__}")
 
         return C, Cinv
 
@@ -851,25 +861,8 @@ class CollinearPoint(LibrationPoint):
         lambda1, omega1, omega2 = self.linear_modes()
         c2 = self._cn(2)
         
-        # Get normalization factors s1, s2
-        s1, s2 = self._scale_factor(lambda1, omega1, omega2)
-        
-        # Get symbolic transformation matrices
-        C_sym, Cinv_sym = self._symbolic_normal_form_transform()
-        
-        # Substitute the symbolic variables with their numerical values
-        subs_dict = {
-            lambda1_sym: float(lambda1),
-            omega1_sym: float(omega1),
-            omega2_sym: float(omega2),
-            s1_sym: float(s1),
-            s2_sym: float(s2),
-            c2_sym: float(c2)
-        }
-        
-        # Convert to numerical matrices
-        C = np.array(C_sym.subs(subs_dict).tolist(), dtype=np.float64)
-        Cinv = np.array(Cinv_sym.subs(subs_dict).tolist(), dtype=np.float64)
+        # Get transformation matrices (this will use cache if available)
+        C, Cinv = self.normal_form_transform()
         
         # Create and return the LinearData object
         return LinearData(

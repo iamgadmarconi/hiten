@@ -84,6 +84,7 @@ def main() -> None:
         )
 
         # Convert Poincaré points to initial conditions
+        logger.info(f"Poincaré points: {pts}")
         logger.info("Converting Poincaré points to initial conditions")
         ics = poincare2ic(pts, selected_l_point, psi, clmo, MAX_DEG, H0)
         logger.info(f"\n\nInitial conditions:\n\n{ics}\n\n")

@@ -4,6 +4,7 @@ from numba.typed import List
 
 from algorithms.center.coordinates import (_cn2rn_coordinates,
                                            _complete_cm_coordinates,
+                                           _cm_rn2phys_coordinates,
                                            _rn2phys_coordinates)
 from algorithms.center.lie import (_apply_inverse_lie_transforms,
                                    _apply_single_inverse_generator)
@@ -11,6 +12,7 @@ from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                encode_multiindex,
                                                init_index_tables)
 from algorithms.center.polynomial.operations import polynomial_zero_list
+from algorithms.center.poincare.map import solve_p3
 from algorithms.center.transforms import cn2rn, phys2rn, rn2cn
 from system.libration import L1Point
 
@@ -263,21 +265,20 @@ def test_track_p3_through_pipeline(cr3bp_data_fixture):
     """Track where the p3 coordinate goes through the entire pipeline."""
     
     # Start with test data
-    poincare_point = np.array([0.01, 0.005])
-    energy = 0.1
+    poincare_point = np.array([0.02, 0.0])
+    energy = 0.6
     
     data = cr3bp_data_fixture
     point = data["point"]
     psi = data["psi"]
     clmo = List(data["clmo"])
     max_degree = data["max_degree"]
-    
     print("=== Tracking p3 through pipeline ===")
-    
+
     # Step 1: Complete coordinates
     poly_cm_cn = point.get_cached_hamiltonian(max_degree, "center_manifold_cn")
     cm_coords_4d = _complete_cm_coordinates(poly_cm_cn, poincare_point, energy, clmo)
-    print(f"1. After completion: p3 = {cm_coords_4d[3]}")
+    print(f"1.     After completion: p3 = {cm_coords_4d[3]}")
     
     # Step 2: Map to 6D
     coords_6d = np.zeros(6, dtype=np.complex128)
@@ -304,3 +305,127 @@ def test_track_p3_through_pipeline(cr3bp_data_fixture):
     print(f"Started with p3 = {cm_coords_4d[3]}")
     print(f"Ended with PZ = {phys_coords[5]}")
     print(f"Ratio: {phys_coords[5] / cm_coords_4d[3] if cm_coords_4d[3] != 0 else 'inf'}")
+
+
+def test_transformation_step_by_step(cr3bp_data_fixture):
+    """Debug each step to see where coordinates go wrong."""
+    
+    data = cr3bp_data_fixture
+    point = data["point"]
+    psi = data["psi"]
+    clmo = List(data["clmo"])
+    max_degree = data["max_degree"]
+    poincare_point = np.array([0.02, 0.0])
+    energy = 0.6
+
+    print(f"=== Debugging transformation for point {poincare_point} ===")
+    
+    # Step 1: Complete RN coordinates
+    poly_cm_rn = point.get_cached_hamiltonian(max_degree, "center_manifold_rn")
+    q2, p2 = poincare_point
+    p3 = solve_p3(q2=float(q2), p2=float(p2), h0=energy, H_blocks=poly_cm_rn, clmo=clmo)
+    
+    full_cm_coords_rn = np.array([q2, p2, 0.0, p3], dtype=np.float64)
+    print(f"Step 1 - Completed RN CM coords: {full_cm_coords_rn}")
+    
+    # Step 2: Map to 6D RN coordinates
+    rn_coords_6d = np.zeros(6, dtype=np.float64)
+    rn_coords_6d[1] = full_cm_coords_rn[0]  # q2
+    rn_coords_6d[2] = full_cm_coords_rn[2]  # q3
+    rn_coords_6d[4] = full_cm_coords_rn[1]  # p2
+    rn_coords_6d[5] = full_cm_coords_rn[3]  # p3
+    print(f"Step 2 - 6D RN coords: {rn_coords_6d}")
+    
+    # Step 3: Convert to CN coordinates
+    cn_coords_6d = _rn2cn_coordinates(rn_coords_6d, max_degree, psi, clmo)
+    print(f"Step 3 - 6D CN coords: {cn_coords_6d}")
+    
+    # Step 4: Extract CN center manifold coordinates
+    full_cm_coords_cn = np.array([
+        cn_coords_6d[1],  # q2
+        cn_coords_6d[4],  # p2
+        cn_coords_6d[2],  # q3
+        cn_coords_6d[5]   # p3
+    ], dtype=np.complex128)
+    print(f"Step 4 - CN CM coords: {full_cm_coords_cn}")
+    
+    # Step 5: Apply inverse Lie transforms
+    poly_G_total = point.get_cached_generating_functions(max_degree)
+    cn_coords_after_lie = _apply_inverse_lie_transforms(
+        full_cm_coords_cn, poly_G_total, psi, clmo, max_degree, 1e-15
+    )
+    print(f"Step 5 - CN after Lie: {cn_coords_after_lie}")
+    
+    # Step 6: CN → RN
+    rn_coords_final = _cn2rn_coordinates(cn_coords_after_lie, max_degree, psi, clmo)
+    print(f"Step 6 - Final RN coords: {rn_coords_final}")
+    
+    # Step 7: RN → Physical
+    physical_coords = _rn2phys_coordinates(rn_coords_final, point, max_degree, psi, clmo)
+    print(f"Step 7 - Physical coords: {physical_coords}")
+    
+    # Analysis
+    print("\n=== Analysis ===")
+    print(f"Y coordinate magnitude: {abs(physical_coords[1])}")
+    if abs(physical_coords[1]) > 0.5:
+        print("WARNING: Y coordinate is suspiciously large!")
+    
+    # Check if the issue appears in a specific step
+    coordinate_magnitudes = [
+        np.max(np.abs(full_cm_coords_rn)),
+        np.max(np.abs(rn_coords_6d)), 
+        np.max(np.abs(cn_coords_6d)),
+        np.max(np.abs(cn_coords_after_lie)),
+        np.max(np.abs(rn_coords_final)),
+        np.max(np.abs(physical_coords))
+    ]
+    
+    step_names = ["CM_RN", "6D_RN", "6D_CN", "CN_after_Lie", "Final_RN", "Physical"]
+    
+    print("\nCoordinate magnitude progression:")
+    for i, (name, mag) in enumerate(zip(step_names, coordinate_magnitudes)):
+        print(f"{name}: {mag:.6f}")
+        if i > 0 and mag > coordinate_magnitudes[i-1] * 10:
+            print(f"  *** BIG JUMP from {step_names[i-1]} to {name}! ***")
+
+
+def test_direct_rn_to_physical(cr3bp_data_fixture):
+    """Test direct RN → Physical transformation (skip CN and Lie transforms)."""
+
+    data = cr3bp_data_fixture
+    point = data["point"]
+    psi = data["psi"]
+    clmo = List(data["clmo"])
+    max_degree = data["max_degree"]
+    poincare_point = np.array([0.02, 0.0])
+    energy = 0.6
+
+    # Complete RN coordinates
+    poly_cm_rn = point.get_cached_hamiltonian(max_degree, "center_manifold_rn")
+    q2, p2 = poincare_point
+    p3 = solve_p3(q2=float(q2), p2=float(p2), h0=energy, H_blocks=poly_cm_rn, clmo=clmo)
+    
+    # Direct mapping: RN CM → RN 6D → Physical
+    rn_coords_6d = np.zeros(6, dtype=np.float64)
+    rn_coords_6d[1] = q2    # q2
+    rn_coords_6d[2] = 0.0   # q3
+    rn_coords_6d[4] = p2    # p2
+    rn_coords_6d[5] = p3    # p3
+    
+    # Skip CN conversion and Lie transforms, go directly to Physical
+    physical_coords_direct = _rn2phys_coordinates(rn_coords_6d, point, max_degree, psi, clmo)
+    
+    print(f"Direct RN→Physical: {physical_coords_direct}")
+    
+    # Compare with full pipeline
+    physical_coords_full = _cm_rn2phys_coordinates(
+        point,
+        point.get_cached_hamiltonian(max_degree, "center_manifold_rn"),
+        point.get_cached_hamiltonian(max_degree, "center_manifold_cn"),
+        poincare_point,
+        point.get_cached_generating_functions(max_degree),
+        psi, clmo, max_degree, energy
+    )
+    
+    print(f"Full pipeline:      {physical_coords_full}")
+    print(f"Difference:         {physical_coords_full - physical_coords_direct}")
