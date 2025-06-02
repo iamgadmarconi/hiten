@@ -389,10 +389,7 @@ def _apply_inverse_lie_transforms(
     coords[4] = cm_coords[1]  # p2  
     coords[5] = cm_coords[3]  # p3
     # q1=0, p1=0 remain zero (center manifold constraint)
-    
-    # Apply inverse generating functions in reverse order
-    # The generating functions were applied in order G3, G4, ..., GN
-    # So we apply them in reverse: -GN, -G(N-1), ..., -G3
+
     for degree in range(max_degree, 2, -1):
         if degree < len(poly_G_total) and np.any(poly_G_total[degree]):
             coords = _apply_single_inverse_generator(
