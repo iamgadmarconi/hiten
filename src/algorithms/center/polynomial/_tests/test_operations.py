@@ -1152,6 +1152,7 @@ def test_polynomial_evaluate_constant_poly():
         p_list[0][0] = const_val
     
     point = np.random.rand(N_VARS) * 10 # Random point
+    point = point.astype(np.complex128)  # Ensure point is complex
     numeric_eval = polynomial_evaluate(p_list, point, clmo_local)
     assert np.isclose(numeric_eval, const_val)
 
@@ -1374,3 +1375,48 @@ def test_polynomial_jacobian():
     for i in range(N_VARS):
         assert len(jacobian_P_zero[i]) == deriv_max_deg_zero + 1
         assert_poly_lists_almost_equal(jacobian_P_zero[i], expected_zero_deriv_for_zero_poly, msg=f"dP/dx{i} for zero P mismatch")
+
+def test_coordinate_poisson_bracket():
+    """Test that {q_i, G} = ∂G/∂p_i for coordinate transformations."""
+    max_deg = 5
+    
+    # Create G3 = q2^2 * p2 (where q2 is x1 and p2 is x4 in our 6-variable system)
+    # This corresponds to G3 = x1^2 * x4 (degree 3)
+    G3 = polynomial_zero_list(max_deg, PSI)
+    k_q2sq_p2 = np.array([0, 2, 0, 0, 1, 0], dtype=np.int64)  # x1^2 * x4
+    idx_q2sq_p2 = encode_multiindex(k_q2sq_p2, 3, ENCODE_DICT_GLOBAL)
+    if idx_q2sq_p2 != -1 and len(G3) > 3:
+        G3[3][idx_q2sq_p2] = 1.0
+    
+    # Create polynomial for q2 (which is x1 in our system)
+    poly_q2 = polynomial_variable(1, max_deg, PSI, CLMO, ENCODE_DICT_GLOBAL)  # x1
+    
+    # Method 1: Compute Poisson bracket {q2, G3}
+    result1 = polynomial_poisson_bracket(poly_q2, G3, max_deg, PSI, CLMO, ENCODE_DICT_GLOBAL)
+    
+    # Method 2: Compute ∂G3/∂p2 (derivative with respect to x4)
+    # Set up tables for derivative computation
+    deriv_max_deg = max_deg - 1 if max_deg > 0 else 0
+    deriv_psi, deriv_clmo = init_index_tables(deriv_max_deg)
+    
+    result2, _ = polynomial_differentiate(G3, 4, max_deg, PSI, CLMO, deriv_psi, deriv_clmo, ENCODE_DICT_GLOBAL)  # ∂/∂x4
+    
+    # Pad result2 to match result1's length for comparison
+    if len(result2) < len(result1):
+        result2_padded = polynomial_zero_list(max_deg, PSI)
+        for i in range(len(result2)):
+            if i < len(result2_padded) and result2[i].shape[0] == result2_padded[i].shape[0]:
+                result2_padded[i] = result2[i].copy()
+        result2 = result2_padded
+    
+    # They should be equal: {q2, G3} = ∂G3/∂p2
+    # Expected: ∂G3/∂p2 = ∂(x1^2 * x4)/∂x4 = x1^2
+    expected = polynomial_zero_list(max_deg, PSI)
+    k_q2sq = np.array([0, 2, 0, 0, 0, 0], dtype=np.int64)  # x1^2
+    idx_q2sq = encode_multiindex(k_q2sq, 2, ENCODE_DICT_GLOBAL)
+    if idx_q2sq != -1 and len(expected) > 2:
+        expected[2][idx_q2sq] = 1.0
+    
+    assert_poly_lists_almost_equal(result1, expected, msg="{q2, G3} should equal ∂G3/∂p2")
+    assert_poly_lists_almost_equal(result2, expected, msg="∂G3/∂p2 computation mismatch")
+    assert_poly_lists_almost_equal(result1, result2, msg="{q2, G3} should equal ∂G3/∂p2")
