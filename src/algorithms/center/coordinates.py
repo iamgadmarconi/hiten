@@ -1,7 +1,7 @@
 import numpy as np
 from numba.typed import List
 
-from algorithms.center.lie import _apply_inverse_lie_transforms
+from algorithms.center.lie import inverse_lie_transform
 from algorithms.center.poincare.map import solve_p3
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                encode_multiindex)
@@ -202,7 +202,7 @@ def _cm_cn2phys_coordinates(
     )
     
     # Step 2: Apply inverse Lie transforms to get complex normal form
-    cn_coords = _apply_inverse_lie_transforms(
+    cn_coords = inverse_lie_transform(
         full_cm_coords, poly_G_total, psi, clmo, max_degree, tol
     )
     
@@ -235,7 +235,6 @@ def _cm_rn2phys_coordinates(
         q2, p2 = cm_coords_rn
         q3 = 0.0
         
-        # Use RN Hamiltonian for solve_p3 (this should work!)
         p3 = solve_p3(
             q2=float(q2),
             p2=float(p2), 
@@ -271,7 +270,7 @@ def _cm_rn2phys_coordinates(
     ], dtype=np.complex128)
     
     # Step 3: Apply inverse Lie transforms (existing function)
-    cn_coords = _apply_inverse_lie_transforms(
+    cn_coords = inverse_lie_transform(
         full_cm_coords_cn, poly_G_total, psi, clmo, max_degree, tol
     )
     

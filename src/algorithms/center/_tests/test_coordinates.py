@@ -6,8 +6,8 @@ from algorithms.center.coordinates import (_cn2rn_coordinates,
                                            _complete_cm_coordinates,
                                            _cm_rn2phys_coordinates,
                                            _rn2phys_coordinates)
-from algorithms.center.lie import (_apply_inverse_lie_transforms,
-                                   _apply_single_inverse_generator)
+from algorithms.center.lie import (inverse_lie_transform,
+                                     lie_transform)
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                encode_multiindex,
                                                init_index_tables)
@@ -208,7 +208,7 @@ def test_inverse_lie_preserve_p3(cr3bp_data_fixture):
             print(f"\nApplying inverse G{degree}")
             print(f"  Before: coords_6d[5] = {coords_6d[5]}")
             
-            coords_6d = _apply_single_inverse_generator(
+            coords_6d = inverse_lie_transform(
                 coords_6d, poly_G[degree], degree, psi, clmo, 
                 _create_encode_dict_from_clmo(clmo)
             )
@@ -290,7 +290,7 @@ def test_track_p3_through_pipeline(cr3bp_data_fixture):
     
     # Step 3: Apply inverse Lie transforms
     poly_G = point.get_cached_generating_functions(max_degree)
-    cn_coords = _apply_inverse_lie_transforms(cm_coords_4d, poly_G, psi, clmo, max_degree, 1e-15)
+    cn_coords = inverse_lie_transform(cm_coords_4d, poly_G, psi, clmo, max_degree, 1e-15)
     print(f"3. After inverse Lie: cn_coords[5] (p3) = {cn_coords[5]}")
     
     # Step 4: CN → RN conversion
@@ -351,7 +351,7 @@ def test_transformation_step_by_step(cr3bp_data_fixture):
     
     # Step 5: Apply inverse Lie transforms
     poly_G_total = point.get_cached_generating_functions(max_degree)
-    cn_coords_after_lie = _apply_inverse_lie_transforms(
+    cn_coords_after_lie = inverse_lie_transform(
         full_cm_coords_cn, poly_G_total, psi, clmo, max_degree, 1e-15
     )
     print(f"Step 5 - CN after Lie: {cn_coords_after_lie}")

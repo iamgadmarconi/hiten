@@ -2,12 +2,11 @@ import numpy as np
 from numba import njit
 from numba.typed import List
 
-from algorithms.center.polynomial.algebra import _evaluate_reduced_monomial
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                _factorial, decode_multiindex,
                                                encode_multiindex, make_poly)
 from algorithms.center.polynomial.operations import (
-    polynomial_clean, polynomial_poisson_bracket, polynomial_zero_list)
+    polynomial_clean, polynomial_poisson_bracket, polynomial_zero_list, polynomial_evaluate)
 from config import FASTMATH
 from utils.log_config import logger
 
@@ -243,112 +242,165 @@ def _apply_lie_transform(poly_H: List[np.ndarray], p_G_n: np.ndarray, deg_G: int
     The sum is truncated based on the maximum achievable degree from repeated
     Poisson brackets and the specified N_max.
     """
-    poly_new = polynomial_zero_list(N_max, psi) # Use helper for clarity
-    for i in range(min(len(poly_H), N_max + 1)):
-        if i < len(poly_H) and poly_H[i].shape == poly_new[i].shape:
-            poly_new[i] = poly_H[i].copy()
-        elif i < len(poly_H) and poly_H[i].size == poly_new[i].size: # check for size if shape is different but compatible
-            poly_new[i] = poly_H[i].copy().reshape(poly_new[i].shape)
-
-
+    # Initialize result by copying input polynomial
+    poly_result = List()
+    for i in range(N_max + 1):
+        if i < len(poly_H):
+            poly_result.append(poly_H[i].copy())
+        else:
+            poly_result.append(make_poly(i, psi))
+    
+    # Build complete generator polynomial from single degree
+    poly_G = polynomial_zero_list(N_max, psi)
+    if deg_G < len(poly_G):
+        poly_G[deg_G] = p_G_n.copy()
+    
+    # Determine number of terms in Lie series
     if deg_G > 2:
         K = (N_max - deg_G) // (deg_G - 2) + 1
-    else:  # quadratic generator –very rare here–
+    else:
         K = 1
+    
+    # Precompute factorials
     factorials = [_factorial(k) for k in range(K + 1)]
-
-    poly_PB_term = List()
-    for d in range(N_max + 1):
-        if d < len(poly_H):
-            poly_PB_term.append(poly_H[d].copy())
-        else:
-            poly_PB_term.append(make_poly(d, psi))
-
-    poly_G = polynomial_zero_list(N_max, psi) # Ensure poly_G can go up to N_max if deg_G is high
-    if deg_G <= N_max and deg_G < len(poly_G): # Check if deg_G is a valid index for poly_G
-        if poly_G[deg_G].shape == p_G_n.shape:
-            poly_G[deg_G] = p_G_n.copy()
-        elif poly_G[deg_G].size == p_G_n.size : # check for size if shape is different but compatible
-            poly_G[deg_G] = p_G_n.copy().reshape(poly_G[deg_G].shape)
-
-
+    
+    # Initialize with H for Poisson bracket iteration
+    poly_bracket = List()
+    for i in range(len(poly_H)):
+        poly_bracket.append(poly_H[i].copy())
+    
+    # Apply Lie series: H + {H,G} + (1/2!){{H,G},G} + ...
     for k in range(1, K + 1):
-        poly_PB_term = polynomial_poisson_bracket(
-            poly_PB_term,
+        # Compute next Poisson bracket
+        poly_bracket = polynomial_poisson_bracket(
+            poly_bracket,
             poly_G,
             N_max,
             psi,
             clmo,
             encode_dict_list
         )
-        poly_PB_term = polynomial_clean(poly_PB_term, tol)
-
-        inv_fact = 1.0 / factorials[k]
-        for d in range(N_max + 1):
-            if d < len(poly_PB_term) and d < len(poly_new) and \
-                poly_new[d].shape == poly_PB_term[d].shape:
-                poly_new[d] += poly_PB_term[d] * inv_fact
-            elif d < len(poly_PB_term) and d < len(poly_new) and \
-                poly_new[d].size == poly_PB_term[d].size: # check for size if shape is different but compatible
-                poly_new[d] += poly_PB_term[d].reshape(poly_new[d].shape) * inv_fact
-
-    poly_new = polynomial_clean(poly_new, tol)
-    return poly_new
+        poly_bracket = polynomial_clean(poly_bracket, tol)
+        
+        # Add to result with factorial coefficient
+        coeff = 1.0 / factorials[k]
+        for d in range(min(len(poly_bracket), len(poly_result))):
+            poly_result[d] += coeff * poly_bracket[d]
+    
+    return polynomial_clean(poly_result, tol)
 
 
 @njit(fastmath=FASTMATH, cache=False)
-def _apply_inverse_lie_transforms(
+def _apply_inverse_lie_transform(
+    coords: np.ndarray,
+    G_n: np.ndarray,
+    deg_G: int,
+    psi: np.ndarray,
+    clmo: np.ndarray,
+    encode_dict_list,
+    max_degree: int,
+    tol: float
+) -> np.ndarray:
+    """
+    Apply inverse Lie transform with -G_n to coordinates.
+    
+    This transforms coordinates according to:
+    q_new = exp(L_{-G}) q_old = q_old - {q_old, G} - (1/2!){{q_old, G}, G} - ...
+    """
+    new_coords = coords.copy()
+    
+    # Process each coordinate that needs transformation
+    for coord_idx in [1, 2, 4, 5]:  # q2, q3, p2, p3
+        # Build polynomial representing the coordinate transformation
+        # Start with: q_i = current_value + delta_q_i
+        poly_coord = polynomial_zero_list(max_degree, psi)
+        
+        # Constant term: current coordinate value
+        if len(poly_coord) > 0:
+            poly_coord[0][0] = coords[coord_idx]
+        
+        # Linear term: identity for this coordinate
+        if len(poly_coord) > 1:
+            k = np.zeros(6, dtype=np.int64)
+            k[coord_idx] = 1
+            pos = encode_multiindex(k, 1, encode_dict_list)
+            poly_coord[1][pos] = 1.0
+        
+        # Apply the Lie series transformation with -G_n
+        # Pass the negative of the generating function directly
+        poly_transformed = _apply_lie_transform(
+            poly_coord,
+            -G_n,  # Pass the negative array directly, not a polynomial list
+            deg_G,
+            max_degree,
+            psi,
+            clmo,
+            encode_dict_list,
+            tol
+        )
+        
+        # Evaluate at origin (because we embedded current value as constant)
+        origin = np.zeros(6, dtype=np.complex128)
+        new_coords[coord_idx] = polynomial_evaluate(poly_transformed, origin, clmo)
+    
+    return new_coords
+
+
+def inverse_lie_transform(
     cm_coords: np.ndarray,
     poly_G_total: List[np.ndarray],
     psi: np.ndarray,
     clmo: np.ndarray,
     max_degree: int,
-    tol: float
+    tol: float = 1e-15
 ) -> np.ndarray:
+    """
+    Apply inverse Lie transformation to coordinates.
+    
+    This is the coordinate transformation analogue of lie_transform.
+    It applies -G_n, -G_{n-1}, ..., -G_3 sequentially to transform
+    from center manifold coordinates back to original coordinates.
+    
+    Parameters
+    ----------
+    cm_coords : numpy.ndarray
+        Center manifold coordinates [q2, p2, q3, p3]
+    poly_G_total : List[numpy.ndarray]
+        List of generating functions from the forward normalization
+    psi, clmo : numpy.ndarray
+        Index tables
+    max_degree : int
+        Maximum degree of transformation
+    tol : float
+        Tolerance for cleaning
+        
+    Returns
+    -------
+    numpy.ndarray
+        Original coordinates (6D complex vector)
+    """
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
     
-    # Initialize result coordinates
+    # Initialize 6D coordinate vector from 4D CM coordinates
     coords = np.zeros(6, dtype=np.complex128)
     coords[1] = cm_coords[0]  # q2
     coords[2] = cm_coords[2]  # q3
     coords[4] = cm_coords[1]  # p2
     coords[5] = cm_coords[3]  # p3
     
-    # Process each coordinate that needs transformation (skip q1, p1)
-    for coord_idx in [1, 2, 4, 5]:
-        # Create polynomial representation for this coordinate
-        poly_coord = polynomial_zero_list(max_degree, psi)
-        k = np.zeros(6, dtype=np.int64)
-        k[coord_idx] = 1
-        pos = encode_multiindex(k, 1, encode_dict_list)
-        if len(poly_coord) > 1:
-            poly_coord[1][pos] = coords[coord_idx]
+    # Apply inverse transformations degree by degree (reverse order)
+    for deg_G in range(max_degree, 2, -1):
+        if deg_G >= len(poly_G_total) or not np.any(poly_G_total[deg_G]):
+            continue
+            
+        logger.info(f"Applying inverse transform at degree: {deg_G}")
         
-        # Apply inverse generators from high to low degree
-        for deg_G in range(max_degree, 2, -1):
-            if deg_G < len(poly_G_total) and np.any(poly_G_total[deg_G]):
-                # Create polynomial for -G (negative for inverse)
-                poly_minus_G = polynomial_zero_list(max_degree, psi)
-                poly_minus_G[deg_G] = -poly_G_total[deg_G].copy()
-                
-                # Apply the Lie transform using existing function
-                poly_coord = _apply_lie_transform(
-                    poly_coord,          # The coordinate polynomial
-                    poly_minus_G[deg_G], # -G_n
-                    deg_G,               # degree of G
-                    max_degree,          # max degree to compute
-                    psi,
-                    clmo,
-                    encode_dict_list,
-                    tol
-                )
+        # Get the generating function for this degree
+        G_n = poly_G_total[deg_G]
         
-        # Extract the transformed coordinate value
-        # After all transformations, the coordinate is still in the linear term
-        if len(poly_coord) > 1:
-            k_extract = np.zeros(6, dtype=np.int64)
-            k_extract[coord_idx] = 1
-            pos_extract = encode_multiindex(k_extract, 1, encode_dict_list)
-            coords[coord_idx] = poly_coord[1][pos_extract]
+        # Apply -G_n to current coordinates
+        coords = _apply_inverse_lie_transform(
+            coords, G_n, deg_G, psi, clmo, encode_dict_list, max_degree, tol
+        )
     
     return coords
