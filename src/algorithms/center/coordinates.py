@@ -4,7 +4,7 @@ from numba.typed import List
 from algorithms.center.lie import inverse_lie_transform
 from algorithms.center.poincare.map import solve_p3
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
-                                               encode_multiindex)
+                                                encode_multiindex)
 from algorithms.center.polynomial.operations import polynomial_zero_list
 from algorithms.center.transforms import cn2rn, rn2cn, rn2phys
 from utils.log_config import logger
@@ -281,6 +281,53 @@ def _cm_rn2phys_coordinates(
     return physical_coords
 
 
+def _local2synodic(point, coords: np.ndarray) -> np.ndarray:
+    """Convert local equilibrium point coordinates to synodic coordinates.
+
+    Parameters
+    ----------
+    point : LibrationPoint
+        Instance of ``L1Point``, ``L2Point`` or ``L3Point`` providing ``gamma``,
+        ``sign`` and ``a`` parameters.
+    coords : ndarray
+        Local-frame coordinates of shape ``(6,)`` or ``(N, 6)`` with ordering
+        ``[x, y, z, px, py, pz]`` where px, py, pz are canonical momenta.
+    """
+
+    gamma = point.gamma
+    mu = point.mu
+    sign = point.sign
+    a = point.a
+
+    # Ensure 2-D shape for vectorised arithmetic
+    coords = np.asarray(coords, dtype=np.float64)
+    if coords.ndim == 1:
+        coords_2d = coords.reshape(1, -1)
+        squeeze_back = True
+    else:
+        coords_2d = coords
+        squeeze_back = False
+
+    synodic_coords = np.zeros_like(coords_2d)
+
+    # Position transformation
+    synodic_coords[:, 0] = (sign * gamma * coords_2d[:, 0] + mu + a)  # X
+    synodic_coords[:, 1] = (sign * gamma * coords_2d[:, 1])           # Y
+    synodic_coords[:, 2] = (gamma * coords_2d[:, 2])                  # Z
+
+    # First recover velocities from canonical momenta
+    vx = coords_2d[:, 3] + coords_2d[:, 1]  # ẋ = px + y
+    vy = coords_2d[:, 4] - coords_2d[:, 0]  # ẏ = py - x
+    vz = coords_2d[:, 5]                     # ż = pz
+
+    # Then apply velocity scaling transformation
+    synodic_coords[:, 3] = sign * gamma * vx  # VX = s γ ẋ
+    synodic_coords[:, 4] = sign * gamma * vy  # VY = s γ ẏ
+    synodic_coords[:, 5] = gamma * vz         # VZ = γ ż
+
+    return synodic_coords.squeeze() if squeeze_back else synodic_coords
+
+
 def poincare2ic(
     poincare_points: np.ndarray,
     point,
@@ -312,7 +359,7 @@ def poincare2ic(
                 max_degree=max_degree,
                 energy=energy
             )
-            initial_conditions[i] = ic
+            initial_conditions[i] = _local2synodic(point, ic)
             
         except Exception as e:
             err = f"Failed to transform point {i}: {poincare_point}, error: {e}"

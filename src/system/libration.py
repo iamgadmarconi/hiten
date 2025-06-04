@@ -483,6 +483,43 @@ class CollinearPoint(LibrationPoint):
             
         return self._gamma
 
+    # ------------------------------------------------------------------
+    #  Local ↔ Synodic frame helper properties (sign and a)
+    # ------------------------------------------------------------------
+
+    @property
+    def sign(self) -> int:
+        """Sign convention (±1) used for local ↔ synodic transformations.
+
+        Following the convention adopted in Gómez et al. (2001):
+
+        * L1, L2  →  -1 ("lower" sign)
+        * L3      →  +1 ("upper" sign)
+        """
+        return 1 if isinstance(self, L3Point) else -1
+
+    @property
+    def a(self) -> float:
+        """Offset *a* along the x axis used in frame changes.
+
+        The relation x_L = μ + a links the equilibrium x coordinate in
+        synodic coordinates (x_L) with the mass parameter μ.  Using the
+        distance gamma (``self.gamma``) to the closest primary we obtain:
+
+            a = -1 + gamma   (L1)
+            a = -1 - gamma   (L2)
+            a =  gamma       (L3)
+        """
+        if isinstance(self, L1Point):
+            return -1 + self.gamma
+        elif isinstance(self, L2Point):
+            return -1 - self.gamma
+        elif isinstance(self, L3Point):
+            return self.gamma
+        else:
+            # Should never happen for CollinearPoint subclasses
+            raise AttributeError("Offset 'a' undefined for this point type.")
+
     def _cn_cached(self, n: int) -> float:
         """
         Get the cached value of cn(mu) or compute it if not available.
@@ -1069,14 +1106,7 @@ class L1Point(CollinearPoint):
         # Avoid division by zero for (1-gamma)
         if abs(float(one_minus_gamma_hp)) < 1e-18: # Check if 1-gamma is effectively zero
              logger.warning(f"L1 _compute_cn: (1-gamma) is close to zero ({float(one_minus_gamma_hp)}). Gamma: {float(gamma_hp)}")
-             # Handle this case: result might be infinite or undefined.
-             # For now, let's return a large number or raise error, depending on expectation.
-             # This situation implies gamma is very close to 1, which is unusual for L1.
-             # Based on context, this might indicate an issue upstream or a very specific mu.
-             # Returning float('inf') or raising an error might be appropriate.
-             # For now, to match previous behavior if division by zero occurred, this could be problematic.
-             # The original code might have thrown a ZeroDivisionError or produced inf/nan.
-             # Let's ensure the denominator is not zero before division.
+
              if abs(float(one_minus_gamma_hp)) < 1e-30: # Stricter check for actual zero
                 raise ValueError("L1 _compute_cn: (1-gamma) is zero, leading to division by zero.")
         

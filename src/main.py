@@ -46,8 +46,10 @@ def main() -> None:
     # Select system based on global configuration
     if SYSTEM == "EM":
         selected_system = system_EM
+        system_name = "EM"
     elif SYSTEM == "SE":
         selected_system = system_SE
+        system_name = "SE"
     else:
         raise ValueError(f"Unknown system: {SYSTEM}. Should be 'EM' or 'SE'")
     
@@ -106,7 +108,7 @@ def main() -> None:
 
     symplectic_str = "symplectic" if USE_SYMPLECTIC else "nonsymplectic"
     
-    filename = f"PM_{MAX_DEG}_{energy_level_str}_{DT}_{symplectic_str}_{N_ITER}.svg"
+    filename = f"{system_name}_{L_POINT}_PM_{MAX_DEG}_{energy_level_str}_{DT}_{symplectic_str}_{N_ITER}.svg"
 
     plot_poincare_map(all_pts, H0_LEVELS, output_dir=output_directory, filename=filename)
 
