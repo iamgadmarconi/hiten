@@ -291,7 +291,7 @@ def _apply_lie_transform(poly_H: List[np.ndarray], p_G_n: np.ndarray, deg_G: int
 
 
 @njit(fastmath=FASTMATH, cache=False)
-def _apply_inverse_lie_transform(
+def _apply_coordinate_lie_transform(
     coords: np.ndarray,
     G_n: np.ndarray,
     deg_G: int,
@@ -299,10 +299,11 @@ def _apply_inverse_lie_transform(
     clmo: np.ndarray,
     encode_dict_list,
     max_degree: int,
-    tol: float
+    tol: float,
+    forward: bool = True
 ) -> np.ndarray:
     """
-    Apply inverse Lie transform with -G_n to coordinates.
+    Apply Lie transform with -G_n to coordinates.
     
     This transforms coordinates according to:
     q_new = exp(L_{-G}) q_old = q_old - {q_old, G} - (1/2!){{q_old, G}, G} - ...
@@ -326,11 +327,9 @@ def _apply_inverse_lie_transform(
             pos = encode_multiindex(k, 1, encode_dict_list)
             poly_coord[1][pos] = 1.0
         
-        # Apply the Lie series transformation with -G_n
-        # Pass the negative of the generating function directly
         poly_transformed = _apply_lie_transform(
             poly_coord,
-            -G_n,  # Pass the negative array directly, not a polynomial list
+            G_n if forward else -G_n,
             deg_G,
             max_degree,
             psi,
@@ -392,15 +391,69 @@ def inverse_lie_transform(
     for deg_G in range(max_degree, 2, -1):
         if deg_G >= len(poly_G_total) or not np.any(poly_G_total[deg_G]):
             continue
-            
-        logger.info(f"Applying inverse transform at degree: {deg_G}")
         
         # Get the generating function for this degree
         G_n = poly_G_total[deg_G]
         
         # Apply -G_n to current coordinates
-        coords = _apply_inverse_lie_transform(
-            coords, G_n, deg_G, psi, clmo, encode_dict_list, max_degree, tol
+        coords = _apply_coordinate_lie_transform(
+            coords, G_n, deg_G, psi, clmo, encode_dict_list, max_degree, tol, forward=False
         )
     
     return coords
+
+def forward_lie_transform(
+    coords_phys: np.ndarray,
+    poly_G_total: List[np.ndarray],
+    psi: np.ndarray,
+    clmo: np.ndarray,
+    max_degree: int,
+    tol: float = 1e-15
+) -> np.ndarray:
+    """
+    Apply forward Lie transformation to coordinates.
+    
+    This is the coordinate transformation analogue of inverse_lie_transform.
+    It applies G_n, G_{n-1}, ..., G_3 sequentially to transform
+    from original coordinates to center manifold coordinates.
+    
+    Parameters
+    ----------
+    coords_phys : numpy.ndarray
+        Original physical coordinates (6D complex vector) [q1, q2, q3, p1, p2, p3]
+    poly_G_total : List[numpy.ndarray]
+        List of generating functions from the forward normalization
+    psi, clmo : numpy.ndarray
+        Index tables
+    max_degree : int
+        Maximum degree of transformation
+    tol : float
+        Tolerance for cleaning
+        
+    Returns
+    -------
+    numpy.ndarray
+        Center manifold coordinates (4D complex vector) [q2, p2, q3, p3]
+    """
+    encode_dict_list = _create_encode_dict_from_clmo(clmo)
+    # Initialize 6D coordinate vector from full 6D physical coordinates
+    coords = coords_phys.copy()
+
+    # +Gₙ applied in ascending order 3 … N
+    for deg_G in range(3, max_degree + 1):
+        if deg_G >= len(poly_G_total) or not np.any(poly_G_total[deg_G]):
+            continue
+
+        G_n = poly_G_total[deg_G]
+
+        coords = _apply_coordinate_lie_transform(
+            coords, G_n, deg_G, psi, clmo, encode_dict_list, max_degree, tol, forward=True)
+
+    # Extract center manifold coordinates from 6D coordinate vector
+    cm_coords = np.zeros(4, dtype=np.complex128)
+    cm_coords[0] = coords[1]  # q2
+    cm_coords[1] = coords[4]  # p2
+    cm_coords[2] = coords[2]  # q3
+    cm_coords[3] = coords[5]  # p3
+    
+    return cm_coords

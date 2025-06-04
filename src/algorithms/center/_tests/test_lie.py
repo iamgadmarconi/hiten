@@ -3,12 +3,14 @@ import math
 import numpy as np
 import pytest
 import sympy as sp
+from numpy.linalg import norm
 
 from algorithms.center.hamiltonian import build_physical_hamiltonian
 from algorithms.center.lie import (_apply_lie_transform,
                                    _get_homogeneous_terms,
                                    _select_terms_for_elimination,
-                                   _solve_homological_equation, lie_transform)
+                                   _solve_homological_equation, lie_transform,
+                                   inverse_lie_transform, forward_lie_transform)
 from algorithms.center.polynomial.algebra import _poly_poisson
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                decode_multiindex,
@@ -327,3 +329,32 @@ def test_lie_transform_removes_bad_terms(cn_hamiltonian_data):
 
     # quadratic part should be exactly what we started with
     assert np.allclose(H_out[2], H_coeffs[2], atol=0, rtol=0)
+
+
+@pytest.mark.parametrize("cn_hamiltonian_data", [6, 8, 10], indirect=True)  
+def test_roundtrip(cn_hamiltonian_data):
+    """Test roundtrip accuracy: CM coordinates → physical → CM coordinates."""
+    H_coeffs, psi, clmo, encode_dict, max_deg = cn_hamiltonian_data
+    
+    # Use a standard mu value (Earth-Moon L1) and create point
+    mu_earth_moon = 0.012150585609624
+    point = L1Point(mu=mu_earth_moon)
+
+    # 1. normalise Hamiltonian → get generating functions
+    _, Gseq = lie_transform(point, H_coeffs, psi, clmo, max_deg)
+    amp = 1e-4            # small CM amplitude
+    reps = 20
+
+    for _ in range(reps):
+        # 2. sample CM point (realified Poincaré variables live in ℝ⁴)
+        cm = amp * (np.random.randn(4) + 1j*np.random.randn(4))
+
+        # 3. CM → physical (6D coordinates)
+        phys = inverse_lie_transform(cm, Gseq, psi, clmo, max_deg)
+
+        # 4. physical → CM (forward map expects 6D physical coordinates)
+        cm_back = forward_lie_transform(phys, Gseq, psi, clmo, max_deg)
+
+        # 5. truncation error should be O(amp^(max_deg-1))
+        err = norm(cm_back - cm)
+        assert err < 5.0 * amp**(max_deg-1), f"round-trip failed: |δ|={err:.2e}"
