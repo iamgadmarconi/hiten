@@ -13,7 +13,6 @@ from algorithms.center.polynomial.operations import (polynomial_add_inplace,
                                                      polynomial_variable,
                                                      polynomial_zero_list)
 from config import FASTMATH
-from utils.log_config import logger
 
 
 @njit(fastmath=FASTMATH, cache=True)

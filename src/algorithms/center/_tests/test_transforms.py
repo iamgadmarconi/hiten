@@ -580,3 +580,87 @@ def test_phys2rn_rn2phys_roundtrip(point, max_deg):
             for point_vals in test_points:
                 diff_val = complex(diff.subs(point_vals))
                 assert abs(diff_val) < 1e-12, f"Symbolic difference at {point_vals}: {diff_val}"
+
+@pytest.mark.parametrize("max_deg", [2, 3, 4, 6])
+def test_full_roundtrip(point, max_deg):
+    """Test the complete transformation pipeline: Phys → RN → CN → RN → Phys."""
+    # Create fresh psi, clmo for each test instead of using the fixture
+    psi, clmo = init_index_tables(max_deg)
+    # Create encode_dict from clmo
+    encode_dict = _create_encode_dict_from_clmo(clmo)
+
+    # Build the original physical Hamiltonian
+    H_phys_original = build_physical_hamiltonian(point, max_deg)
+    
+    # Forward pipeline: Phys → RN → CN
+    H_rn_forward = phys2rn(point, H_phys_original, max_deg, psi, clmo)
+    H_cn = rn2cn(H_rn_forward, max_deg, psi, clmo)
+    
+    # Backward pipeline: CN → RN → Phys
+    H_rn_backward = cn2rn(H_cn, max_deg, psi, clmo)
+    H_phys_final = rn2phys(point, H_rn_backward, max_deg, psi, clmo)
+
+    # Verify full roundtrip: coefficient-by-coefficient equality
+    for d in range(max_deg + 1):
+        assert np.allclose(
+            H_phys_final[d], H_phys_original[d], 
+            atol=1e-12, rtol=1e-12
+        ), f"Full roundtrip failed for degree {d} terms: max absolute error = {np.max(np.abs(H_phys_final[d] - H_phys_original[d]))}"
+
+    # Verify intermediate RN forms match (RN forward vs RN backward)
+    for d in range(max_deg + 1):
+        assert np.allclose(
+            H_rn_backward[d], H_rn_forward[d], 
+            atol=1e-12, rtol=1e-12
+        ), f"RN roundtrip (via CN) failed for degree {d} terms: max absolute error = {np.max(np.abs(H_rn_backward[d] - H_rn_forward[d]))}"
+
+    # Additional symbolic verification for low-degree terms
+    x, y, z, px, py, pz = sp.symbols('x y z px py pz')
+    vars_tuple = (x, y, z, px, py, pz)
+    
+    expr_original = poly2sympy(H_phys_original, vars_tuple, psi, clmo)
+    expr_final = poly2sympy(H_phys_final, vars_tuple, psi, clmo)
+    
+    # Compute the difference and verify it's essentially zero
+    diff = sp.expand(expr_original - expr_final)
+    
+    # Check symbolic difference
+    if isinstance(diff, (int, float, complex)):
+        assert abs(complex(diff)) < 1e-11, f"Symbolic difference is not zero: {diff}"
+    else:
+        try:
+            poly_diff = sp.Poly(diff, *vars_tuple)
+            if poly_diff.all_coeffs():
+                max_coeff = max(abs(complex(c)) for c in poly_diff.all_coeffs())
+                assert max_coeff < 1e-11, f"Maximum coefficient in symbolic difference: {max_coeff}"
+        except sp.PolynomialError:
+            # If we can't convert to polynomial, evaluate at test points
+            test_points = [
+                {x: 0.1, y: 0.2, z: 0.1, px: 0.15, py: 0.1, pz: 0.05},
+                {x: -0.1, y: 0.1, z: -0.05, px: -0.1, py: 0.2, pz: -0.1},
+                {x: 0.05, y: -0.15, z: 0.2, px: 0.1, py: -0.05, pz: 0.15}
+            ]
+            for point_vals in test_points:
+                diff_val = complex(diff.subs(point_vals))
+                assert abs(diff_val) < 1e-11, f"Full roundtrip symbolic difference at {point_vals}: {diff_val}"
+
+    # Test that the quadratic structure is preserved through the full pipeline
+    # Extract quadratic terms from both original and final Hamiltonians
+    poly_original = sp.Poly(expr_original, *vars_tuple)
+    poly_final = sp.Poly(expr_final, *vars_tuple)
+    
+    quad_original = {m: c for m, c in poly_original.terms() if sum(m) == 2}
+    quad_final = {m: c for m, c in poly_final.terms() if sum(m) == 2}
+    
+    # Filter out numerical noise
+    quad_original = {m: c for m, c in quad_original.items() if abs(complex(c)) > 1e-12}
+    quad_final = {m: c for m, c in quad_final.items() if abs(complex(c)) > 1e-12}
+    
+    # Verify that the quadratic terms match
+    assert set(quad_original.keys()) == set(quad_final.keys()), \
+        f"Quadratic term structure changed: original has {set(quad_original.keys())}, final has {set(quad_final.keys())}"
+    
+    for monomial in quad_original:
+        coeff_diff = abs(complex(quad_original[monomial]) - complex(quad_final[monomial]))
+        assert coeff_diff < 1e-11, \
+            f"Quadratic coefficient mismatch for {monomial}: |{quad_original[monomial]} - {quad_final[monomial]}| = {coeff_diff}"
