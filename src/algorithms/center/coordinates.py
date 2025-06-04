@@ -281,51 +281,44 @@ def _cm_rn2phys_coordinates(
     return physical_coords
 
 
-def _local2synodic(point, coords: np.ndarray) -> np.ndarray:
-    """Convert local equilibrium point coordinates to synodic coordinates.
+def _local2synodic(point, coords):
+    """
+    Convert local-frame state(s) to synodic coordinates using NASA / Szebehely convention.
 
     Parameters
     ----------
     point : LibrationPoint
-        Instance of ``L1Point``, ``L2Point`` or ``L3Point`` providing ``gamma``,
-        ``sign`` and ``a`` parameters.
-    coords : ndarray
-        Local-frame coordinates of shape ``(6,)`` or ``(N, 6)`` with ordering
-        ``[x, y, z, px, py, pz]`` where px, py, pz are canonical momenta.
+        Provides ``gamma``, ``sign``, ``a`` and ``mu``.
+    coords : ndarray (6,) or (N,6)
+        Local state(s) [x, y, z, px, py, pz].
     """
+    gamma, mu, sgn, a = point.gamma, point.mu, point.sign, point.a
 
-    gamma = point.gamma
-    mu = point.mu
-    sign = point.sign
-    a = point.a
+    c = np.asarray(coords, dtype=np.float64)
+    single = c.ndim == 1
+    if single:
+        c = c.reshape(1, -1)
 
-    # Ensure 2-D shape for vectorised arithmetic
-    coords = np.asarray(coords, dtype=np.float64)
-    if coords.ndim == 1:
-        coords_2d = coords.reshape(1, -1)
-        squeeze_back = True
-    else:
-        coords_2d = coords
-        squeeze_back = False
+    out = np.empty_like(c)
 
-    synodic_coords = np.zeros_like(coords_2d)
+    # 1. POSITION (JM frame)
+    out[:, 0] =  sgn * gamma * c[:, 0] + mu + a      # X
+    out[:, 1] =  sgn * gamma * c[:, 1]               # Y
+    out[:, 2] =         gamma * c[:, 2]              # Z
 
-    # Position transformation
-    synodic_coords[:, 0] = (sign * gamma * coords_2d[:, 0] + mu + a)  # X
-    synodic_coords[:, 1] = (sign * gamma * coords_2d[:, 1])           # Y
-    synodic_coords[:, 2] = (gamma * coords_2d[:, 2])                  # Z
+    # 2. VELOCITIES
+    vx = c[:, 3] + c[:, 1]        # ẋ  = px + y
+    vy = c[:, 4] - c[:, 0]        # ẏ  = py − x
+    vz = c[:, 5]                  # ż  = pz
 
-    # First recover velocities from canonical momenta
-    vx = coords_2d[:, 3] + coords_2d[:, 1]  # ẋ = px + y
-    vy = coords_2d[:, 4] - coords_2d[:, 0]  # ẏ = py - x
-    vz = coords_2d[:, 5]                     # ż = pz
+    out[:, 3] =  sgn * gamma * vx  # Vx
+    out[:, 4] =  sgn * gamma * vy  # Vy
+    out[:, 5] =        gamma * vz  # Vz
 
-    # Then apply velocity scaling transformation
-    synodic_coords[:, 3] = sign * gamma * vx  # VX = s γ ẋ
-    synodic_coords[:, 4] = sign * gamma * vy  # VY = s γ ẏ
-    synodic_coords[:, 5] = gamma * vz         # VZ = γ ż
+    # 3. Apply NASA/Szebehely convention
+    out[:, (0, 3)] *= -1.0     # flip X and Vx only
 
-    return synodic_coords.squeeze() if squeeze_back else synodic_coords
+    return out.squeeze() if single else out
 
 
 def poincare2ic(
