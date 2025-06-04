@@ -451,12 +451,7 @@ class CollinearPoint(LibrationPoint):
             The gamma value calculated with high precision.
         """
         if self._gamma is None:
-            if precision is None:
-                precision = MPMATH_DPS
-                
             logger.debug(f"Calculating gamma for {type(self).__name__} (mu={self.mu}) with {precision} dps.")
-            
-            # Step 1: Get initial approximation using np.roots()
             poly_coeffs = self._get_gamma_poly_coeffs()
             roots = np.roots(poly_coeffs)
             
@@ -469,23 +464,12 @@ class CollinearPoint(LibrationPoint):
             
             logger.debug(f"Initial estimate for {type(self).__name__} gamma: x0 = {x0}")
 
-            # Step 2: Refine using high precision findroot
-            # The poly_func should work with HighPrecisionNumber if findroot supports it,
-            # or be adapted if findroot expects standard floats.
-            # Assuming high_precision_findroot is adapted or works with mpmath.mpf directly
-            # and _gamma_poly now returns a HighPrecisionNumber or compatible type.
-            poly_func = lambda x_val: float(self._gamma_poly(hp(x_val, precision))) # Ensure float for findroot
-            
-            # high_precision_findroot returns a float, which is what we want to store.
-            self._gamma = high_precision_findroot(poly_func, float(x0), precision) # x0 also as float
+            poly_func = lambda x_val: float(self._gamma_poly(hp(x_val, precision)))
+            self._gamma = high_precision_findroot(poly_func, float(x0), precision)
 
             logger.info(f"Gamma for {type(self).__name__} calculated with high precision: gamma = {self._gamma}")
             
         return self._gamma
-
-    # ------------------------------------------------------------------
-    #  Local ↔ Synodic frame helper properties (sign and a)
-    # ------------------------------------------------------------------
 
     @property
     def sign(self) -> int:
@@ -517,7 +501,6 @@ class CollinearPoint(LibrationPoint):
         elif isinstance(self, L3Point):
             return self.gamma
         else:
-            # Should never happen for CollinearPoint subclasses
             raise AttributeError("Offset 'a' undefined for this point type.")
 
     def _cn_cached(self, n: int) -> float:

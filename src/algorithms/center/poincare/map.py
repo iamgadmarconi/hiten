@@ -120,7 +120,7 @@ def solve_p3(
     Optional[float]
         Positive p3 solution if exists, None otherwise
     """
-    logger.debug(f"Solving for p3 at (q2,p2)=({q2:.4e},{p2:.4e}), h0={h0:.6e}")
+    logger.info(f"Solving for p3 at (q2,p2)=({q2:.4e},{p2:.4e}), h0={h0:.6e}")
     
     def f(p3: float) -> float:
         state = np.zeros(6, dtype=np.complex128)
@@ -129,12 +129,18 @@ def solve_p3(
         state[5] = p3
         return polynomial_evaluate(H_blocks, state, clmo).real - h0
 
-    return _bracketed_root(
-        f,
-        initial=initial_guess,
-        factor=expand_factor,
-        max_expand=max_expand,
-    )
+    root = _bracketed_root(f, initial=initial_guess, factor=expand_factor, max_expand=max_expand)
+
+    if root is None:
+        logger.warning("Failed to locate p3 turning point within search limits")
+        raise RuntimeError("Root finding for Hill boundary did not converge.")
+
+    if root < 0.0:
+        logger.warning("Found negative p3 solution: %.6e", root)
+        return None
+
+    logger.info("Found p3 turning point: %.6e", root)
+    return root
 
 
 @njit(cache=True, fastmath=FASTMATH)

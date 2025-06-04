@@ -300,33 +300,30 @@ def _apply_coordinate_lie_transform(
     encode_dict_list,
     max_degree: int,
     tol: float,
-    forward: bool = True
+    forward: bool = True,
 ) -> np.ndarray:
     """
-    Apply Lie transform with -G_n to coordinates.
-    
-    This transforms coordinates according to:
-    q_new = exp(L_{-G}) q_old = q_old - {q_old, G} - (1/2!){{q_old, G}, G} - ...
+    Apply a Lie pull-back  exp(±L_G)  to the *whole* 6-vector of coordinates.
+
+    The algorithm follows eqs. (12)-(13) of the paper: every coordinate is first
+    considered as the polynomial “identity” map qᵢ↦qᵢ, pᵢ↦pᵢ, the Lie series is
+    applied, and the resulting polynomial is then **evaluated at the current
+    point**.  This keeps all cross-couplings and guarantees a symplectic map of
+    the correct order.
     """
     new_coords = coords.copy()
-    
-    # Process each coordinate that needs transformation
-    for coord_idx in [1, 2, 4, 5]:  # q2, q3, p2, p3
-        # Build polynomial representing the coordinate transformation
-        # Start with: q_i = current_value + delta_q_i
+
+    for coord_idx in range(6):
+        # polynomial representing the variable itself (no constant term)
         poly_coord = polynomial_zero_list(max_degree, psi)
-        
-        # Constant term: current coordinate value
-        if len(poly_coord) > 0:
-            poly_coord[0][0] = coords[coord_idx]
-        
-        # Linear term: identity for this coordinate
-        if len(poly_coord) > 1:
-            k = np.zeros(6, dtype=np.int64)
-            k[coord_idx] = 1
-            pos = encode_multiindex(k, 1, encode_dict_list)
-            poly_coord[1][pos] = 1.0
-        
+
+        # linear term  “… + 1·u_i”
+        k = np.zeros(6, dtype=np.int64)
+        k[coord_idx] = 1
+        pos = encode_multiindex(k, 1, encode_dict_list)
+        poly_coord[1][pos] = 1.0
+
+        # Lie pull-back with ±G_n
         poly_transformed = _apply_lie_transform(
             poly_coord,
             G_n if forward else -G_n,
@@ -335,13 +332,14 @@ def _apply_coordinate_lie_transform(
             psi,
             clmo,
             encode_dict_list,
-            tol
+            tol,
         )
-        
-        # Evaluate at origin (because we embedded current value as constant)
-        origin = np.zeros(6, dtype=np.complex128)
-        new_coords[coord_idx] = polynomial_evaluate(poly_transformed, origin, clmo)
-    
+
+        # evaluate at the *current* coordinates
+        new_coords[coord_idx] = polynomial_evaluate(
+            poly_transformed, coords, clmo
+        )
+
     return new_coords
 
 
@@ -439,7 +437,6 @@ def forward_lie_transform(
     # Initialize 6D coordinate vector from full 6D physical coordinates
     coords = coords_phys.copy()
 
-    # +Gₙ applied in ascending order 3 … N
     for deg_G in range(3, max_degree + 1):
         if deg_G >= len(poly_G_total) or not np.any(poly_G_total[deg_G]):
             continue

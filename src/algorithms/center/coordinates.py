@@ -73,7 +73,7 @@ def _rn2cn_coordinates(
     cn_polys = rn2cn(rn_polys, max_degree, psi, clmo)
     
     # Extract coordinate values (degree-1 terms)
-    cn_coords = np.zeros(6, dtype=np.complex128)
+    cn_coords = np.zeros(6, dtype=np.complex128) # [q1, q2, q3, p1, p2, p3]
     if len(cn_polys) > 1:
         for i in range(6):
             k = np.zeros(6, dtype=np.int64)
@@ -127,31 +127,22 @@ def _complete_cm_coordinates(
     energy: float,
     clmo: np.ndarray,
 ) -> np.ndarray:
-    """Complete center manifold coordinates using energy constraint."""
-    if len(cm_coords) == 4:
-        return cm_coords.astype(np.complex128)
-    elif len(cm_coords) == 2:
-        # Poincaré section case: solve for p3 using existing infrastructure
-        q2, p2 = cm_coords
-        q3 = 0.0
-        
-        # Use existing solve_p3 function from map.py
-        p3 = solve_p3(
-            q2=float(q2), 
-            p2=float(p2), 
-            h0=energy, 
-            H_blocks=poly_cm, 
-            clmo=clmo
-        )
-        
-        if p3 is None:
-            p3 = 0.0
-            
-        return np.array([q2, p2, q3, p3], dtype=np.complex128)
-    else:
-        err = f"Invalid CM coordinates length: {len(cm_coords)}, expected 2 or 4. Shape: {cm_coords.shape}, Contents: {cm_coords}"
+    q2, p2 = cm_coords
+
+    p3 = solve_p3(
+        q2=float(q2), 
+        p2=float(p2), 
+        h0=energy, 
+        H_blocks=poly_cm, 
+        clmo=clmo
+    )
+    
+    if p3 is None or p3 < 0:
+        err = f"solve_p3 failed for q2={q2}, p2={p2}, energy={energy}"
         logger.error(err)
         raise ValueError(err)
+
+    return np.array([q2, p2, 0.0, p3], dtype=np.complex128)
 
 
 def _cm_cn2phys_coordinates(
@@ -165,48 +156,17 @@ def _cm_cn2phys_coordinates(
     energy: float = 0.0,
     tol: float = 1e-15
 ) -> np.ndarray:
-    """
-    Transform coordinates from center manifold back to physical (rotating) frame.
+    if len(cm_coords) == 2:
+        full_cm_coords = _complete_cm_coordinates(
+            poly_cm, cm_coords, energy, clmo,
+        ) # [q2, p2, q3, p3]
+    else:
+        full_cm_coords = cm_coords
     
-    This reverses the transformation pipeline used in center_manifold_cn:
-    Physical → RN → CN → Normalized CN → Center Manifold
-    
-    We apply the inverse: Center Manifold → CN → RN → Physical
-    
-    Parameters
-    ----------
-    point : object
-        Point object containing equilibrium point information and transformations
-    cm_coords : numpy.ndarray
-        Center manifold coordinates, either [q2, p2] for Poincaré section 
-        or [q2, p2, q3, p3] for full 4D coordinates
-    poly_G_total : List[numpy.ndarray]
-        Generating functions from lie_transform normalization
-    psi, clmo : arrays
-        Polynomial index tables
-    max_degree : int
-        Maximum degree used in normalization
-    energy : float, optional
-        Energy level for completing missing coordinates
-    tol : float, optional
-        Tolerance for cleaning small coefficients
-        
-    Returns
-    -------
-    numpy.ndarray
-        Physical coordinates [X, Y, Z, PX, PY, PZ]
-    """
-    # Step 1: Complete center manifold coordinates if needed
-    full_cm_coords = _complete_cm_coordinates(
-        poly_cm, cm_coords, energy, clmo,
-    )
-    
-    # Step 2: Apply inverse Lie transforms to get complex normal form
     cn_coords = inverse_lie_transform(
         full_cm_coords, poly_G_total, psi, clmo, max_degree, tol
     )
     
-    # Step 3: Transform CN → RN → Physical using existing infrastructure
     rn_coords = _cn2rn_coordinates(cn_coords, max_degree, psi, clmo)
     physical_coords = _rn2phys_coordinates(rn_coords, point, max_degree, psi, clmo)
     
@@ -215,9 +175,8 @@ def _cm_cn2phys_coordinates(
 
 def _cm_rn2phys_coordinates(
     point,
-    poly_cm_rn: List[np.ndarray],  # RN Hamiltonian for solve_p3
-    poly_cm_cn: List[np.ndarray],  # CN Hamiltonian for Lie transforms
-    cm_coords_rn: np.ndarray,      # RN center manifold coordinates [q2, p2]
+    poly_cm: List[np.ndarray],  # RN Hamiltonian for solve_p3
+    cm_coords: np.ndarray,      # RN center manifold coordinates [q2, p2]
     poly_G_total: List[np.ndarray],
     psi: np.ndarray,
     clmo: np.ndarray,
@@ -225,43 +184,21 @@ def _cm_rn2phys_coordinates(
     energy: float = 0.0,
     tol: float = 1e-15
 ) -> np.ndarray:
-    """
-    Transform from RN center manifold coordinates to physical coordinates.
-    
-    Pipeline: CM(RN) → CM(CN) → CN → RN → Physical
-    """
-    # Step 1: Complete RN center manifold coordinates using RN Hamiltonian
-    if len(cm_coords_rn) == 2:
-        q2, p2 = cm_coords_rn
-        q3 = 0.0
-        
-        p3 = solve_p3(
-            q2=float(q2),
-            p2=float(p2), 
-            h0=energy,
-            H_blocks=poly_cm_rn,  # Use RN Hamiltonian
-            clmo=clmo
-        )
-        
-        if p3 is None:
-            raise ValueError(f"solve_p3 failed for q2={q2}, p2={p2}, energy={energy}")
-            
-        full_cm_coords_rn = np.array([q2, p2, q3, p3], dtype=np.float64)
+    if len(cm_coords) == 2:
+        full_cm_coords_rn = _complete_cm_coordinates(
+            poly_cm, cm_coords, energy, clmo
+        ) # [q2, p2, q3, p3]
     else:
-        full_cm_coords_rn = cm_coords_rn.astype(np.float64)
-    
-    # Step 2: Convert RN center manifold coordinates to CN center manifold coordinates
-    # Map 4D CM coords to 6D RN coords: [0, q2, q3, 0, p2, p3]
-    rn_coords_6d = np.zeros(6, dtype=np.float64)
+        full_cm_coords_rn = cm_coords
+
+    rn_coords_6d = np.zeros(6, dtype=np.complex128) # [0, q2, q3, 0, p2, p3]
     rn_coords_6d[1] = full_cm_coords_rn[0]  # q2
     rn_coords_6d[2] = full_cm_coords_rn[2]  # q3
     rn_coords_6d[4] = full_cm_coords_rn[1]  # p2
     rn_coords_6d[5] = full_cm_coords_rn[3]  # p3
     
-    # Convert to CN coordinates
     cn_coords_6d = _rn2cn_coordinates(rn_coords_6d, max_degree, psi, clmo)
     
-    # Extract CN center manifold coordinates: [q2, p2, q3, p3]
     full_cm_coords_cn = np.array([
         cn_coords_6d[1],  # q2
         cn_coords_6d[4],  # p2
@@ -269,12 +206,10 @@ def _cm_rn2phys_coordinates(
         cn_coords_6d[5]   # p3
     ], dtype=np.complex128)
     
-    # Step 3: Apply inverse Lie transforms (existing function)
     cn_coords = inverse_lie_transform(
         full_cm_coords_cn, poly_G_total, psi, clmo, max_degree, tol
     )
     
-    # Step 4: CN → RN → Physical (existing functions)
     rn_coords = _cn2rn_coordinates(cn_coords, max_degree, psi, clmo)
     physical_coords = _rn2phys_coordinates(rn_coords, point, max_degree, psi, clmo)
     
@@ -282,16 +217,6 @@ def _cm_rn2phys_coordinates(
 
 
 def _local2synodic(point, coords):
-    """
-    Convert local-frame state(s) to synodic coordinates using NASA / Szebehely convention.
-
-    Parameters
-    ----------
-    point : LibrationPoint
-        Provides ``gamma``, ``sign``, ``a`` and ``mu``.
-    coords : ndarray (6,) or (N,6)
-        Local state(s) [x, y, z, px, py, pz].
-    """
     gamma, mu, sgn, a = point.gamma, point.mu, point.sign, point.a
 
     c = np.asarray(coords, dtype=np.float64)
@@ -301,22 +226,19 @@ def _local2synodic(point, coords):
 
     out = np.empty_like(c)
 
-    # 1. POSITION (JM frame)
     out[:, 0] =  sgn * gamma * c[:, 0] + mu + a      # X
     out[:, 1] =  sgn * gamma * c[:, 1]               # Y
     out[:, 2] =         gamma * c[:, 2]              # Z
 
-    # 2. VELOCITIES
-    vx = c[:, 3] + c[:, 1]        # ẋ  = px + y
-    vy = c[:, 4] - c[:, 0]        # ẏ  = py − x
-    vz = c[:, 5]                  # ż  = pz
+    vx = c[:, 3] + c[:, 1] 
+    vy = c[:, 4] - c[:, 0]
+    vz = c[:, 5]
 
     out[:, 3] =  sgn * gamma * vx  # Vx
     out[:, 4] =  sgn * gamma * vy  # Vy
     out[:, 5] =        gamma * vz  # Vz
 
-    # 3. Apply NASA/Szebehely convention
-    out[:, (0, 3)] *= -1.0     # flip X and Vx only
+    out[:, (0, 3)] *= -1.0     # flip X and Vx only (NASA/Szebehely convention)
 
     return out.squeeze() if single else out
 
@@ -334,7 +256,6 @@ def poincare2ic(
     
     # Get both RN and CN Hamiltonians
     poly_cm_rn = point.get_cached_hamiltonian(max_degree, "center_manifold_rn")
-    poly_cm_cn = point.get_cached_hamiltonian(max_degree, "center_manifold_cn") 
     poly_G_total = point.get_cached_generating_functions(max_degree)
     
     initial_conditions = np.zeros((len(poincare_points), 6))
@@ -343,9 +264,8 @@ def poincare2ic(
         try:
             ic = _cm_rn2phys_coordinates(
                 point=point,
-                poly_cm_rn=poly_cm_rn,     # For solve_p3
-                poly_cm_cn=poly_cm_cn,     # For Lie transforms
-                cm_coords_rn=poincare_point,  # RN coordinates from Poincaré map
+                poly_cm=poly_cm_rn,     # For solve_p3
+                cm_coords=poincare_point,  # RN coordinates from Poincaré map
                 poly_G_total=poly_G_total,
                 psi=psi,
                 clmo=clmo,
