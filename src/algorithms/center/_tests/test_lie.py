@@ -711,3 +711,62 @@ def test_symplecticity_analytical_jacobian(cr3bp_data_fixture):
         
     except NotImplementedError:
         pytest.skip("Analytical Jacobian computation not yet fully implemented")
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_inverse_lie_transform_is_symplectic(cr3bp_data_fixture, seed):
+    """Test symplecticity of the inverse Lie transform (4D → 6D).
+    
+    The inverse transform maps center manifold coordinates to full coordinates.
+    We test that the 4×4 restriction of the symplectic structure is preserved.
+    """
+    data = cr3bp_data_fixture
+    psi = data["psi"]
+    clmo = data["clmo"]
+    max_degree = data["max_degree"]
+    point = data["point"]
+    
+    poly_G_total = point.cache_get(("generating_functions", max_degree))
+    assert poly_G_total is not None, "Generating functions not found in point cache."
+    
+    def inverse_map_4d_to_6d(cm_coords: np.ndarray) -> np.ndarray:
+        """Apply inverse Lie transform: 4D CM coordinates → 6D full coordinates."""
+        full_coords = inverse_lie_transform(
+            cm_coords.astype(np.complex128), poly_G_total, psi, clmo, max_degree
+        )
+        return full_coords.real
+    
+    # Random test point in CM coordinates (small amplitude)
+    rng = np.random.default_rng(seed)
+    cm0 = rng.uniform(-1e-4, 1e-4, 4)
+    
+    # Compute 6×4 Jacobian numerically
+    eps = 1e-6
+    Dx = np.zeros((6, 4))
+    
+    for j in range(4):  # for each CM coordinate
+        cm_plus = cm0.copy()
+        cm_minus = cm0.copy()
+        cm_plus[j] += eps
+        cm_minus[j] -= eps
+        
+        # Central difference
+        Dx[:, j] = (inverse_map_4d_to_6d(cm_plus) - inverse_map_4d_to_6d(cm_minus)) / (2*eps)
+    
+    # Test symplecticity on the 4D center manifold subspace
+    # Center manifold uses coordinates [q2, p2, q3, p3] which correspond to indices [1, 4, 2, 5] in 6D
+    cm_indices = np.array([1, 4, 2, 5])  # [q2, p2, q3, p3]
+    
+    # Extract the 4×4 submatrix corresponding to CM coordinates
+    Dx_cm = Dx[cm_indices, :]  # 4×4 matrix
+    
+    # 4D symplectic matrix for 2 degrees of freedom
+    J_4d = _symplectic_matrix(2)  # 4×4 matrix for 2 DOF
+    
+    # Test symplecticity: DΦᵀ J DΦ = J for the 4D restriction
+    err = Dx_cm.T @ J_4d @ Dx_cm - J_4d
+    error_norm = np.linalg.norm(err, ord="fro")
+    
+    print(f"Seed {seed}: Inverse transform 4D symplecticity error: {error_norm:.2e}")
+    
+    # Should preserve symplectic structure on center manifold
+    assert error_norm < 1e-6, f"Inverse transform not symplectic: |Δ|={error_norm:.2e}"
