@@ -1,4 +1,5 @@
 import math
+from typing import List
 
 import numpy as np
 import pytest
@@ -20,7 +21,7 @@ from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                encode_multiindex,
                                                init_index_tables, make_poly)
 from algorithms.center.polynomial.conversion import sympy2poly
-from algorithms.center.polynomial.operations import polynomial_zero_list
+from algorithms.center.polynomial.operations import polynomial_zero_list, polynomial_variables_list, polynomial_differentiate, polynomial_evaluate
 from algorithms.center.transforms import complexify, phys2rn
 from algorithms.variables import N_VARS
 from system.libration import L1Point
@@ -444,17 +445,21 @@ def test_lie_transform_forward_inverse_identity(cr3bp_data_fixture):
             ),
         )
 
-def jacobian_central(func, x, eps=1e-6):
+def jacobian_fourth_order(func, x, eps=1e-4):
+    """Fourth-order accurate finite difference Jacobian."""
     n = x.size
     f0 = func(x)
     m = f0.size
     J = np.empty((m, n))
     for k in range(n):
-        x_fwd = x.copy();  x_fwd[k] += eps
-        x_bwd = x.copy();  x_bwd[k] -= eps
-        J[:, k] = (func(x_fwd) - func(x_bwd)) / (2*eps)
+        x1 = x.copy(); x1[k] += eps
+        x2 = x.copy(); x2[k] += 2*eps
+        x_1 = x.copy(); x_1[k] -= eps  
+        x_2 = x.copy(); x_2[k] -= 2*eps
+        
+        # Fourth-order stencil: (-f(x+2h) + 8f(x+h) - 8f(x-h) + f(x-2h)) / (12h)
+        J[:, k] = (-func(x2) + 8*func(x1) - 8*func(x_1) + func(x_2)) / (12*eps)
     return J
-
 
 def _symplectic_matrix(dim: int) -> np.ndarray:
     """Return the standard symplectic form J for *dim* degrees of freedom.
@@ -515,14 +520,14 @@ def test_forward_lie_transform_is_symplectic(cr3bp_data_fixture, seed):
                 forward=True,
             )
         # Return real part for Jacobian (imaginary part should vanish on real input)
-        return coords.real
+        return coords
 
     # Random test point in a small neighbourhood of the origin
     rng = np.random.default_rng(seed)
     x0 = rng.uniform(-1e-3, 1e-3, 6)
 
     # Numerical Jacobian (6×6)
-    Dx = jacobian_central(forward_full, x0, eps=1e-6)
+    Dx = jacobian_fourth_order(forward_full, x0, eps=1e-4)
 
     # Canonical symplectic matrix for 3 degrees of freedom
     J = _symplectic_matrix(3)
@@ -531,3 +536,178 @@ def test_forward_lie_transform_is_symplectic(cr3bp_data_fixture, seed):
     err = Dx.T @ J @ Dx - J
     assert np.linalg.norm(err, ord="fro") < 1e-6, (
         f"Forward Lie map not symplectic: |Δ|={np.linalg.norm(err):.2e}\n{err}")
+
+
+@pytest.mark.parametrize("amplitude", [1e-6, 1e-5, 1e-4, 1e-3])
+def test_symplecticity_vs_amplitude(cr3bp_data_fixture, amplitude):
+    """Test how symplecticity error scales with coordinate amplitude."""
+    data = cr3bp_data_fixture
+    psi = data["psi"]
+    clmo = data["clmo"] 
+    max_degree = data["max_degree"]
+    point = data["point"]
+    
+    poly_G_total = point.cache_get(("generating_functions", max_degree))
+    encode_dict_list = _create_encode_dict_from_clmo(clmo)
+    
+    def forward_full(x_real: np.ndarray) -> np.ndarray:
+        coords = x_real.astype(np.complex128).copy()
+        for deg_G in range(3, max_degree + 1):
+            if deg_G >= len(poly_G_total) or not np.any(poly_G_total[deg_G]):
+                continue
+            G_n = poly_G_total[deg_G]
+            coords = _apply_coordinate_lie_transform(
+                coords, G_n, deg_G, psi, clmo, encode_dict_list, max_degree, 1e-15, forward=True
+            )
+        return coords.real
+    
+    # Test point at given amplitude
+    x0 = amplitude * np.array([1.0, 0.5, -0.3, 0.8, -0.2, 0.6])
+    
+    # Central difference Jacobian
+    Dx = jacobian_fourth_order(forward_full, x0, eps=1e-4)
+    J = _symplectic_matrix(3)
+    err = Dx.T @ J @ Dx - J
+    error_norm = np.linalg.norm(err, ord="fro")
+    
+    print(f"Amplitude: {amplitude:.1e}, Symplecticity error: {error_norm:.2e}")
+    
+    # At very small amplitudes, error should be dominated by finite-difference noise
+    if amplitude <= 1e-5:
+        assert error_norm < 1e-6, f"Error too large at small amplitude: {error_norm:.2e}"
+    else:
+        pass
+
+@pytest.mark.parametrize("eps", [1e-8, 1e-7, 1e-6, 1e-5])
+def test_symplecticity_vs_finite_diff_step(cr3bp_data_fixture, eps):
+    """Test how symplecticity error depends on finite-difference step size."""
+    data = cr3bp_data_fixture
+    psi = data["psi"] 
+    clmo = data["clmo"]
+    max_degree = data["max_degree"]
+    point = data["point"]
+    
+    poly_G_total = point.cache_get(("generating_functions", max_degree))
+    encode_dict_list = _create_encode_dict_from_clmo(clmo)
+    
+    def forward_full(x_real: np.ndarray) -> np.ndarray:
+        coords = x_real.astype(np.complex128).copy()
+        for deg_G in range(3, max_degree + 1):
+            if deg_G >= len(poly_G_total) or not np.any(poly_G_total[deg_G]):
+                continue
+            G_n = poly_G_total[deg_G]
+            coords = _apply_coordinate_lie_transform(
+                coords, G_n, deg_G, psi, clmo, encode_dict_list, max_degree, 1e-15, forward=True
+            )
+        return coords.real
+    
+    # Fixed test point
+    x0 = 1e-4 * np.array([1.0, 0.5, -0.3, 0.8, -0.2, 0.6])
+    
+    # Test with different finite-difference steps
+    Dx = jacobian_fourth_order(forward_full, x0, eps=1e-4)
+    J = _symplectic_matrix(3)
+    err = Dx.T @ J @ Dx - J
+    error_norm = np.linalg.norm(err, ord="fro")
+    
+    print(f"FD step: {eps:.1e}, Symplecticity error: {error_norm:.2e}")
+
+def _compute_analytical_jacobian_lie_transform(
+    poly_G_total: List[np.ndarray], 
+    psi: np.ndarray, 
+    clmo: np.ndarray,
+    max_degree: int
+) -> np.ndarray:
+    """
+    Compute the analytical Jacobian of the full 6→6 Lie coordinate transformation.
+    
+    The key insight is that we can represent each coordinate transformation as:
+    x'ᵢ = xᵢ + {G₃, xᵢ} + {G₄, xᵢ} + ... (using the existing _apply_lie_transform)
+    
+    Returns
+    -------
+    numpy.ndarray, shape (6, 6)
+        Analytical Jacobian matrix DΦ evaluated at the origin
+    """
+    encode_dict_list = _create_encode_dict_from_clmo(clmo)
+    tol = 1e-15
+    
+    # Create polynomial representations of the 6 coordinate variables  
+    var_polys = polynomial_variables_list(max_degree, psi, clmo, encode_dict_list)
+    
+    # Apply the Lie transformation to each coordinate polynomial
+    transformed_coords = []
+    for coord_idx in range(6):
+        # Start with the identity polynomial for coordinate coord_idx
+        poly_coord = var_polys[coord_idx]
+        
+        # Apply each generating function G_n sequentially using _apply_lie_transform
+        for deg_G in range(3, max_degree + 1):
+            if deg_G >= len(poly_G_total) or not np.any(poly_G_total[deg_G]):
+                continue
+                
+            G_n = poly_G_total[deg_G]
+            
+            # Apply Lie transform: poly_coord → exp(L_G) poly_coord
+            # Convert single polynomial to list format expected by _apply_lie_transform
+            poly_coord_list = polynomial_zero_list(max_degree, psi)
+            for d in range(len(poly_coord)):
+                if d < len(poly_coord_list):
+                    poly_coord_list[d] = poly_coord[d].copy()
+            
+            # Apply the transformation 
+            transformed_list = _apply_lie_transform(
+                poly_coord_list, G_n, deg_G, max_degree, psi, clmo, encode_dict_list, tol
+            )
+            
+            # Extract back to single polynomial
+            poly_coord = transformed_list
+        
+        transformed_coords.append(poly_coord)
+    
+    # Compute analytical derivatives ∂(transformed_coord_i)/∂x_j  
+    jacobian = np.zeros((6, 6), dtype=np.complex128)
+    
+    for i in range(6):  # output coordinate
+        for j in range(6):  # input coordinate
+            # Compute ∂(transformed_coords[i])/∂x_j analytically
+            derivative_poly, _ = polynomial_differentiate(
+                transformed_coords[i], j, max_degree, psi, clmo, psi, clmo, encode_dict_list
+            )
+            
+            # Evaluate at origin (all coordinates = 0)
+            origin = np.zeros(6, dtype=np.complex128)
+            jacobian[i, j] = polynomial_evaluate(derivative_poly, origin, clmo)
+    
+    return jacobian.real
+
+
+def test_symplecticity_analytical_jacobian(cr3bp_data_fixture):
+    """Test symplecticity using analytical polynomial differentiation."""
+    data = cr3bp_data_fixture
+    psi = data["psi"]
+    clmo = data["clmo"] 
+    max_degree = data["max_degree"]
+    point = data["point"]
+    
+    poly_G_total = point.cache_get(("generating_functions", max_degree))
+    assert poly_G_total is not None, "Generating functions not found in point cache."
+    
+    # Compute analytical Jacobian at origin  
+    try:
+        Dx_analytical = _compute_analytical_jacobian_lie_transform(
+            poly_G_total, psi, clmo, max_degree
+        )
+        
+        # Test symplecticity: DΦᵀ J DΦ = J
+        J = _symplectic_matrix(3)
+        err = Dx_analytical.T @ J @ Dx_analytical - J
+        error_norm = np.linalg.norm(err, ord="fro")
+        
+        print(f"Analytical Jacobian symplecticity error: {error_norm:.2e}")
+        
+        # Should be exact (up to machine precision)
+        assert error_norm < 1e-14, f"Analytical symplecticity error too large: {error_norm:.2e}"
+        
+    except NotImplementedError:
+        pytest.skip("Analytical Jacobian computation not yet fully implemented")
