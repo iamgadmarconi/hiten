@@ -158,7 +158,7 @@ def _cmreal2phys_coordinates(
     else:
         real_4d_cm = cm_coords
 
-    real_6d_cm = np.zeros(6, dtype=np.complex128) # [0, q2, q3, 0, p2, p3]
+    real_6d_cm = np.zeros(6, dtype=np.float64) # [0, q2, q3, 0, p2, p3]
     real_6d_cm[1] = real_4d_cm[0]  # q2
     real_6d_cm[2] = real_4d_cm[2]  # q3
     real_6d_cm[4] = real_4d_cm[1]  # p2
@@ -214,8 +214,8 @@ def poincare2ic(
     point,
     psi: np.ndarray,
     clmo: np.ndarray,
-    max_degree: int = 8,
-    energy: float = 0.0,
+    max_degree: int,
+    energy: float,
 ) -> np.ndarray:
     """Convert Poincaré section points to initial conditions in physical coordinates."""
     logger.info(f"Converting {len(poincare_points)} Poincaré points to initial conditions\n\nPoint: {point}\nEnergy: {energy}\nSystem mu: {point.mu}\nMax degree: {max_degree}\n")
@@ -234,7 +234,6 @@ def poincare2ic(
         logger.error(err)
         raise ValueError(err)
     
-    # Make copies to avoid modifying cached data
     poly_cm_real = [h.copy() for h in poly_cm_real]
     poly_G_total = [g.copy() for g in poly_G_total]
     

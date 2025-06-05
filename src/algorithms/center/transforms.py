@@ -205,7 +205,7 @@ def complexify(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.nd
     C[5, 5] = 1/sqrt2
 
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return substitute_linear(poly_rn, C, max_deg, psi, clmo, encode_dict_list)
+    return polynomial_clean(substitute_linear(poly_rn, C, max_deg, psi, clmo, encode_dict_list), 1e-14)
 
 
 @njit(fastmath=FASTMATH)
@@ -259,7 +259,7 @@ def realify(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarr
     Cinv[5, 5] = 1/sqrt2
 
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return substitute_linear(poly_cn, Cinv, max_deg, psi, clmo, encode_dict_list)
+    return polynomial_clean(substitute_linear(poly_cn, Cinv, max_deg, psi, clmo, encode_dict_list), 1e-14)
 
 
 def rn2phys(point, poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
