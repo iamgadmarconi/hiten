@@ -1,6 +1,7 @@
 from algorithms.center.lie import lie_transform
 from algorithms.center.polynomial.base import decode_multiindex
-from algorithms.center.transforms import realify, phys2rn, complexify
+from algorithms.center.transforms import complexify, phys2rn, realify
+from src.algorithms.center.hamiltonian import build_physical_hamiltonian
 from utils.log_config import logger
 
 
@@ -9,17 +10,14 @@ def center_manifold_real(point, psi, clmo, max_deg=5):
     Compute the realified Hamiltonian restricted to the center manifold.
     Uses caching to avoid recomputation.
     """
-    # Check cache first
     cached_cm_real = point.cache_get(('hamiltonian', max_deg, 'center_manifold_real'))
+
     if cached_cm_real is not None:
-        logger.debug(f"Using cached center manifold real for {type(point).__name__}, max_deg={max_deg}")
         return [h.copy() for h in cached_cm_real]
 
-    # Compute if not cached
     poly_cm_complex = center_manifold_complex(point, psi, clmo, max_deg)
     poly_cm_real = realify(poly_cm_complex, max_deg, psi, clmo)
 
-    # Cache the result
     point.cache_set(('hamiltonian', max_deg, 'center_manifold_real'), [h.copy() for h in poly_cm_real])
     
     return poly_cm_real
@@ -30,41 +28,42 @@ def center_manifold_complex(point, psi, clmo, max_deg=5):
     Compute the Hamiltonian restricted to the center manifold in complex normal form.
     Uses caching to avoid recomputation and caches all intermediate representations.
     """
-    # Check cache first
+
     cached_cm_complex = point.cache_get(('hamiltonian', max_deg, 'center_manifold_complex'))
+
     if cached_cm_complex is not None:
-        logger.debug(f"Using cached center manifold complex for {type(point).__name__}, max_deg={max_deg}")
         return [h.copy() for h in cached_cm_complex]
 
     logger.info(f"Computing center manifold for {type(point).__name__}, max_deg={max_deg}")
 
-    # Check for cached intermediate representations
     poly_phys = point.cache_get(('hamiltonian', max_deg, 'physical'))
+
     if poly_phys is None:
-        from algorithms.center.hamiltonian import build_physical_hamiltonian
+
         poly_phys = build_physical_hamiltonian(point, max_deg)
         point.cache_set(('hamiltonian', max_deg, 'physical'), [h.copy() for h in poly_phys])
-        logger.debug("Computed and cached physical Hamiltonian")
+
     else:
         poly_phys = [h.copy() for h in poly_phys]
 
     poly_rn = point.cache_get(('hamiltonian', max_deg, 'real_normal'))
+
     if poly_rn is None:
         poly_rn = phys2rn(point, poly_phys, max_deg, psi, clmo)
         point.cache_set(('hamiltonian', max_deg, 'real_normal'), [h.copy() for h in poly_rn])
-        logger.debug("Computed and cached real normal Hamiltonian")
+
     else:
         poly_rn = [h.copy() for h in poly_rn]
 
     poly_cn = point.cache_get(('hamiltonian', max_deg, 'complex_normal'))
+
     if poly_cn is None:
         poly_cn = complexify(poly_rn, max_deg, psi, clmo)
         point.cache_set(('hamiltonian', max_deg, 'complex_normal'), [h.copy() for h in poly_cn])
-        logger.debug("Computed and cached complex normal Hamiltonian")
+
     else:
         poly_cn = [h.copy() for h in poly_cn]
 
-    # Check for cached normalized Hamiltonian and generating functions
     poly_trans = point.cache_get(('hamiltonian', max_deg, 'normalized'))
     poly_G_total = point.cache_get(('generating_functions', max_deg))
     
@@ -72,14 +71,13 @@ def center_manifold_complex(point, psi, clmo, max_deg=5):
         poly_trans, poly_G_total = lie_transform(point, poly_cn, psi, clmo, max_deg)
         point.cache_set(('hamiltonian', max_deg, 'normalized'), [h.copy() for h in poly_trans])
         point.cache_set(('generating_functions', max_deg), [g.copy() for g in poly_G_total])
-        logger.debug("Computed and cached normalized Hamiltonian and generating functions")
+    
     else:
         if poly_trans is not None:
             poly_trans = [h.copy() for h in poly_trans]
         if poly_G_total is not None:
             poly_G_total = [g.copy() for g in poly_G_total]
 
-    # Compute and cache center manifold restriction
     poly_cm_complex = restrict_to_center_manifold(poly_trans, clmo, tol=1e-14)
     point.cache_set(('hamiltonian', max_deg, 'center_manifold_complex'), [h.copy() for h in poly_cm_complex])
 
