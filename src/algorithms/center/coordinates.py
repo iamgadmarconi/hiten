@@ -106,14 +106,14 @@ def _rn2phys_coordinates(
     phys_polys = rn2phys(point, rn_polys, max_degree, psi, clmo)
     
     # Extract physical coordinates
-    phys_coords = np.zeros(6, dtype=np.float64)
+    phys_coords = np.zeros(6, dtype=np.complex128)
     if len(phys_polys) > 1:
         for i in range(6):
             k = np.zeros(6, dtype=np.int64)
             k[i] = 1
             pos = encode_multiindex(k, 1, encode_dict_list)
             if 0 <= pos < phys_polys[1].shape[0]:
-                phys_coords[i] = phys_polys[1][pos].real
+                phys_coords[i] = phys_polys[1][pos]
                 
     return phys_coords
 

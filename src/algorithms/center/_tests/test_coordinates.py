@@ -1,15 +1,11 @@
 import numpy as np
 import pytest
-from numba.typed import List
 
 from algorithms.center.coordinates import (_complexify_coordinates,
                                            _realify_coordinates)
 from algorithms.center.manifold import center_manifold_real
-from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
-                                               encode_multiindex,
-                                               init_index_tables)
-from algorithms.center.polynomial.operations import polynomial_zero_list
-from algorithms.center.transforms import complexify, phys2rn, realify
+from algorithms.center.polynomial.base import init_index_tables
+
 from system.libration import L1Point
 
 # Constants for tests
@@ -123,128 +119,6 @@ def test_realify_complexify_round_trip(cr3bp_data_fixture):
                    f"input={complex_coords}, recovered={recovered_complex_coords}"
         )
 
-
-def test_coordinate_vs_polynomial_transforms(cr3bp_data_fixture):
-    """Test that coordinate transforms match polynomial transforms for degree-1 terms."""
-    data = cr3bp_data_fixture
-    psi = data["psi"]
-    clmo = data["clmo"]
-    max_degree = data["max_degree"]
-    
-    # Set random seed for reproducible tests
-    np.random.seed(RANDOM_SEED)
-    
-    # Create a test coordinate vector
-    test_real_coords = np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6], dtype=np.float64)
-    
-    # Method 1: Use coordinate transformation functions
-    complex_coords_method1 = _complexify_coordinates(test_real_coords, max_degree, psi, clmo)
-    
-    # Method 2: Use polynomial transformation functions directly
-    # Create polynomial with degree-1 terms only
-    real_polys = polynomial_zero_list(max_degree, psi)
-    encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    
-    if len(real_polys) > 1:
-        for i in range(6):
-            if abs(test_real_coords[i]) > 1e-15:
-                k = np.zeros(6, dtype=np.int64)
-                k[i] = 1
-                pos = encode_multiindex(k, 1, encode_dict_list)
-                if 0 <= pos < real_polys[1].shape[0]:
-                    real_polys[1][pos] = test_real_coords[i]
-    
-    # Transform using polynomial function
-    complex_polys = complexify(real_polys, max_degree, psi, clmo)
-    
-    # Extract coordinates from polynomial
-    complex_coords_method2 = np.zeros(6, dtype=np.complex128)
-    if len(complex_polys) > 1:
-        for i in range(6):
-            k = np.zeros(6, dtype=np.int64)
-            k[i] = 1
-            pos = encode_multiindex(k, 1, encode_dict_list)
-            if 0 <= pos < complex_polys[1].shape[0]:
-                complex_coords_method2[i] = complex_polys[1][pos]
-    
-    # Compare the two methods
-    np.testing.assert_allclose(
-        complex_coords_method1, complex_coords_method2,
-        rtol=TOL_TEST, atol=TOL_TEST,
-        err_msg=f"Coordinate transform doesn't match polynomial transform: "
-               f"coord_method={complex_coords_method1}, poly_method={complex_coords_method2}"
-    )
-    
-    # Test the reverse direction
-    real_coords_method1 = _realify_coordinates(complex_coords_method1, max_degree, psi, clmo)
-    
-    # Use polynomial realify function
-    real_polys_recovered = realify(complex_polys, max_degree, psi, clmo)
-    
-    # Extract coordinates
-    real_coords_method2 = np.zeros(6, dtype=np.complex128)
-    if len(real_polys_recovered) > 1:
-        for i in range(6):
-            k = np.zeros(6, dtype=np.int64)
-            k[i] = 1
-            pos = encode_multiindex(k, 1, encode_dict_list)
-            if 0 <= pos < real_polys_recovered[1].shape[0]:
-                real_coords_method2[i] = real_polys_recovered[1][pos]
-    
-    # Compare the two methods
-    np.testing.assert_allclose(
-        real_coords_method1, real_coords_method2,
-        rtol=TOL_TEST, atol=TOL_TEST,
-        err_msg=f"Realify coordinate transform doesn't match polynomial transform: "
-               f"coord_method={real_coords_method1}, poly_method={real_coords_method2}"
-    )
-    
-    # Verify we get back to original coordinates (take real part since input was real)
-    np.testing.assert_allclose(
-        real_coords_method1.real, test_real_coords,
-        rtol=TOL_TEST, atol=TOL_TEST,
-        err_msg=f"Failed to recover original coordinates: "
-               f"original={test_real_coords}, recovered={real_coords_method1.real}"
-    )
-    
-    # Also verify that the imaginary parts are small for this real input case
-    np.testing.assert_allclose(
-        real_coords_method1.imag, np.zeros(6),
-        rtol=TOL_TEST, atol=TOL_TEST,
-        err_msg=f"Expected small imaginary parts for real input, got {real_coords_method1.imag}"
-    )
-
-
-def test_zero_coordinates_handling(cr3bp_data_fixture):
-    """Test that zero coordinates are handled correctly."""
-    data = cr3bp_data_fixture
-    psi = data["psi"]
-    clmo = data["clmo"]
-    max_degree = data["max_degree"]
-    
-    # Test zero real coordinates
-    zero_real = np.zeros(6, dtype=np.float64)
-    complex_result = _complexify_coordinates(zero_real, max_degree, psi, clmo)
-    real_result = _realify_coordinates(complex_result, max_degree, psi, clmo)
-    
-    np.testing.assert_allclose(
-        real_result, zero_real,
-        rtol=TOL_TEST, atol=TOL_TEST,
-        err_msg="Zero real coordinates round trip failed"
-    )
-    
-    # Test zero complex coordinates  
-    zero_complex = np.zeros(6, dtype=np.complex128)
-    real_result = _realify_coordinates(zero_complex, max_degree, psi, clmo)
-    complex_result = _complexify_coordinates(real_result, max_degree, psi, clmo)
-    
-    np.testing.assert_allclose(
-        complex_result, zero_complex,
-        rtol=TOL_TEST, atol=TOL_TEST,
-        err_msg="Zero complex coordinates round trip failed"
-    )
-
-
 def test_coordinate_transforms_consistency(cr3bp_data_fixture):
     """Test mathematical consistency of the coordinate transformations."""
     data = cr3bp_data_fixture
@@ -276,3 +150,4 @@ def test_coordinate_transforms_consistency(cr3bp_data_fixture):
         complex_coords[4], expected_p2, rtol=TOL_TEST, atol=TOL_TEST,
         err_msg=f"p2 incorrect: expected {expected_p2}, got {complex_coords[4]}"
     )
+

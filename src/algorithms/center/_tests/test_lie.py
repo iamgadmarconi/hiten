@@ -9,8 +9,10 @@ from algorithms.center.hamiltonian import build_physical_hamiltonian
 from algorithms.center.lie import (_apply_lie_transform,
                                    _get_homogeneous_terms,
                                    _select_terms_for_elimination,
-                                   _solve_homological_equation, lie_transform,
-                                   inverse_lie_transform, forward_lie_transform)
+                                   _solve_homological_equation,
+                                   forward_lie_transform,
+                                   inverse_lie_transform, lie_transform)
+from algorithms.center.manifold import center_manifold_real
 from algorithms.center.polynomial.algebra import _poly_poisson
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                decode_multiindex,
@@ -18,10 +20,47 @@ from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables, make_poly)
 from algorithms.center.polynomial.conversion import sympy2poly
 from algorithms.center.polynomial.operations import polynomial_zero_list
-from algorithms.center.transforms import phys2rn, complexify
+from algorithms.center.transforms import complexify, phys2rn
 from algorithms.variables import N_VARS
 from system.libration import L1Point
 
+MU_EM = 0.0121505816  # Earth-Moon mass parameter (example)
+MAX_DEGREE_TEST = 6   
+TOL_TEST = 1e-15      
+RANDOM_SEED = 42 # For reproducible random numbers
+
+
+@pytest.fixture(scope="module")
+def cr3bp_data_fixture():
+    """
+    Provides a real L1 point, psi, clmo, max_degree, and energy.
+    """
+    point = L1Point(mu=MU_EM)
+    _ = point.position  # Ensures L1 position is calculated
+    energy_val = point.energy 
+    psi_arr, clmo_arr = init_index_tables(MAX_DEGREE_TEST)
+    _ = center_manifold_real(point, psi_arr, clmo_arr, MAX_DEGREE_TEST)
+    # Check that essential data was cached by precompute_cache
+    poly_cm_cn_val = point.cache_get(('hamiltonian', MAX_DEGREE_TEST, 'center_manifold_complex'))
+    if poly_cm_cn_val is None:
+        pytest.fail("poly_cm ('center_manifold_complex') is None after precomputation.")
+    
+    poly_cm_rn_val = point.cache_get(('hamiltonian', MAX_DEGREE_TEST, 'center_manifold_real'))
+    if poly_cm_rn_val is None:
+        pytest.fail("poly_cm ('center_manifold_real') is None after precomputation.")
+
+    poly_G_val = point.cache_get(('generating_functions', MAX_DEGREE_TEST))
+    if poly_G_val is None:
+        pytest.fail("Generating functions (poly_G_total) are None after precomputation.")
+
+    return {
+        "point": point,
+        "psi": psi_arr,
+        "clmo": clmo_arr,
+        "max_degree": MAX_DEGREE_TEST,
+        "energy_l1": energy_val, # Energy of the L1 point itself
+        # Specific Hamiltonians are not returned here, tests will get them from point object
+    }
 
 @pytest.fixture
 def cn_hamiltonian_data(request):
@@ -358,3 +397,60 @@ def test_roundtrip(cn_hamiltonian_data):
         # 5. truncation error should be O(amp^(max_deg-1))
         err = norm(cm_back - cm)
         assert err < 5.0 * amp**(max_deg-1), f"round-trip failed: |δ|={err:.2e}"
+
+
+def test_lie_transform_forward_inverse_identity(cr3bp_data_fixture):
+    """Ensure that inverse_lie_transform followed by forward_lie_transform
+    acts as an identity on center manifold coordinates.
+    
+    Starting from a random point on the center manifold (represented by
+    coordinates [q2, p2, q3, p3]), we:
+    1. Map it to the full 6-dimensional modal/physical coordinates using
+       inverse_lie_transform.
+    2. Map those coordinates back to the center manifold using
+       forward_lie_transform.
+    
+    The recovered center-manifold coordinates should match the original
+    ones within numerical tolerance.
+    """
+    # Retrieve pre-computed data from the fixture
+    data = cr3bp_data_fixture
+    point = data["point"]
+    psi = data["psi"]
+    clmo = data["clmo"]
+    max_degree = data["max_degree"]
+
+    # Obtain the list of generating functions produced by lie_transform
+    poly_G_total = point.cache_get(("generating_functions", max_degree))
+    assert poly_G_total is not None, "poly_G_total (generating functions) not found in point cache."
+
+    # Seed RNG for reproducibility
+    np.random.seed(42)
+
+    # Test several random CM coordinates (small amplitude for validity of truncation)
+    for _ in range(10):
+        # Random real coordinates in the range [-1e-3, 1e-3]
+        cm_coords_real = np.random.uniform(-1e-3, 1e-3, 4)
+        cm_coords = cm_coords_real.astype(np.complex128)  # promote to complex type
+
+        # CM → full 6D coordinates
+        modal_coords = inverse_lie_transform(
+            cm_coords, poly_G_total, psi, clmo, max_degree
+        )
+
+        # Full 6D → CM (again)
+        cm_coords_recovered = forward_lie_transform(
+            modal_coords, poly_G_total, psi, clmo, max_degree
+        )
+
+        # Verify identity within tolerance
+        np.testing.assert_allclose(
+            cm_coords_recovered,
+            cm_coords,
+            rtol=1e-14,
+            atol=1e-14,
+            err_msg=(
+                "Forward and inverse Lie coordinate transforms are not "
+                "identity within tolerance."
+            ),
+        )
