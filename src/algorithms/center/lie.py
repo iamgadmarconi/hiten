@@ -50,7 +50,7 @@ def lie_transform(point, poly_init: list[np.ndarray], psi: np.ndarray, clmo: np.
     The transformation preserves the dynamical structure while simplifying
     the equations of motion.
     """
-    lam, om1, om2 = point.linear_modes()
+    lam, om1, om2 = point.linear_modes
     eta = np.array([lam, 1j*om1, 1j*om2], dtype=np.complex128)
 
     encode_dict_list = _create_encode_dict_from_clmo(clmo)

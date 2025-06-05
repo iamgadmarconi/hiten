@@ -4,7 +4,7 @@ import numpy as np
 from numba import cuda
 
 from algorithms.center.coordinates import poincare2ic
-from algorithms.center.manifold import center_manifold_rn
+from algorithms.center.manifold import center_manifold_real
 from algorithms.center.poincare.cuda.map import \
     generate_iterated_poincare_map_gpu
 from algorithms.center.poincare.map import generate_iterated_poincare_map
@@ -58,9 +58,9 @@ def main() -> None:
     logger.info(f"Using {SYSTEM} system with L{L_POINT} point")
 
     # ---------------- centre‑manifold reduction -------------------------
-    H_cm_rn_full = center_manifold_rn(selected_l_point, psi, clmo, MAX_DEG)
+    H_cm_real_full = center_manifold_real(selected_l_point, psi, clmo, MAX_DEG)
     logger.info("\nCentre-manifold Hamiltonian (deg 2 to 5) in real NF variables (q2, p2, q3, p3)\n")
-    logger.info(f"\n\n{format_cm_table(H_cm_rn_full, clmo)}\n\n")
+    logger.info(f"\n\n{format_cm_table(H_cm_real_full, clmo)}\n\n")
 
     logger.info("Starting Poincaré map generation process…")
 
@@ -71,7 +71,7 @@ def main() -> None:
         logger.info("Generating iterated Poincaré map for h0=%.3f", H0)
         pts = generate_poincare_map(
             h0=H0,
-            H_blocks=H_cm_rn_full,
+            H_blocks=H_cm_real_full,
             max_degree=MAX_DEG,
             psi_table=psi,
             clmo_table=clmo,

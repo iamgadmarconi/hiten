@@ -13,7 +13,7 @@ from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables)
 from algorithms.center.polynomial.operations import polynomial_zero_list
 from algorithms.center.poincare.map import solve_p3
-from algorithms.center.transforms import cn2rn, phys2rn, rn2cn
+from algorithms.center.transforms import realify, phys2rn, complexify
 from system.libration import L1Point
 
 # Constants for tests
@@ -39,13 +39,13 @@ def cr3bp_data_fixture():
         pytest.fail(f"Failed during point.precompute_cache in fixture: {e}")
     
     # Check that essential data was cached by precompute_cache
-    poly_cm_cn_val = point.get_cached_hamiltonian(MAX_DEGREE_TEST, "center_manifold_cn")
+    poly_cm_cn_val = point.get_cached_hamiltonian(MAX_DEGREE_TEST, "center_manifold_complex")
     if poly_cm_cn_val is None:
-        pytest.fail("poly_cm ('center_manifold_cn') is None after precomputation.")
+        pytest.fail("poly_cm ('center_manifold_complex') is None after precomputation.")
     
-    poly_cm_rn_val = point.get_cached_hamiltonian(MAX_DEGREE_TEST, "center_manifold_rn")
+    poly_cm_rn_val = point.get_cached_hamiltonian(MAX_DEGREE_TEST, "center_manifold_real")
     if poly_cm_rn_val is None:
-        pytest.fail("poly_cm ('center_manifold_rn') is None after precomputation.")
+        pytest.fail("poly_cm ('center_manifold_real') is None after precomputation.")
 
     poly_G_val = point.get_cached_generating_functions(MAX_DEGREE_TEST)
     if poly_G_val is None:
@@ -61,7 +61,7 @@ def cr3bp_data_fixture():
     }
 
 def _rn2cn_coordinates(rn_coords: np.ndarray, max_degree: int, psi: np.ndarray, clmo: list) -> np.ndarray:
-    """Helper: Converts real normal vector to complex normal vector using rn2cn transform."""
+    """Helper: Converts real normal vector to complex normal vector using complexify transform."""
     rn_polys = polynomial_zero_list(max_degree, psi)
     encode_dict_list = _create_encode_dict_from_clmo(List(clmo))
     if len(rn_polys) > 1:
@@ -70,7 +70,7 @@ def _rn2cn_coordinates(rn_coords: np.ndarray, max_degree: int, psi: np.ndarray, 
                 k = np.zeros(6, dtype=np.int64); k[i] = 1
                 pos = encode_multiindex(k, 1, encode_dict_list)
                 if 0 <= pos < rn_polys[1].shape[0]: rn_polys[1][pos] = rn_coords[i]
-    cn_polys = rn2cn(rn_polys, max_degree, psi, clmo)
+    cn_polys = complexify(rn_polys, max_degree, psi, clmo)
     cn_coords_rt = np.zeros(6, dtype=np.complex128)
     if len(cn_polys) > 1:
         for i in range(6):
@@ -149,8 +149,8 @@ def test_transformation_matrices_are_inverses(cr3bp_data_fixture):
             pos = encode_multiindex(k, 1, encode_dict_list)
             poly_coord[1][pos] = 1.0 
         
-        poly_cn = rn2cn(poly_coord, max_degree, psi, clmo) # rn_poly to cn_poly
-        poly_rn_back = cn2rn(poly_cn, max_degree, psi, clmo) # cn_poly to rn_poly
+        poly_cn = complexify(poly_coord, max_degree, psi, clmo) # rn_poly to cn_poly
+        poly_rn_back = realify(poly_cn, max_degree, psi, clmo) # cn_poly to rn_poly
         
         for deg in range(min(2, max_degree + 1)): 
             np.testing.assert_allclose(
@@ -276,7 +276,7 @@ def test_track_p3_through_pipeline(cr3bp_data_fixture):
     print("=== Tracking p3 through pipeline ===")
 
     # Step 1: Complete coordinates
-    poly_cm_cn = point.get_cached_hamiltonian(max_degree, "center_manifold_cn")
+    poly_cm_cn = point.get_cached_hamiltonian(max_degree, "center_manifold_complex")
     cm_coords_4d = _complete_cm_coordinates(poly_cm_cn, poincare_point, energy, clmo)
     print(f"1.     After completion: p3 = {cm_coords_4d[3]}")
     
@@ -321,7 +321,7 @@ def test_transformation_step_by_step(cr3bp_data_fixture):
     print(f"=== Debugging transformation for point {poincare_point} ===")
     
     # Step 1: Complete RN coordinates
-    poly_cm_rn = point.get_cached_hamiltonian(max_degree, "center_manifold_rn")
+    poly_cm_rn = point.get_cached_hamiltonian(max_degree, "center_manifold_real")
     q2, p2 = poincare_point
     p3 = solve_p3(q2=float(q2), p2=float(p2), h0=energy, H_blocks=poly_cm_rn, clmo=clmo)
     
@@ -401,7 +401,7 @@ def test_direct_rn_to_physical(cr3bp_data_fixture):
     energy = 0.6
 
     # Complete RN coordinates
-    poly_cm_rn = point.get_cached_hamiltonian(max_degree, "center_manifold_rn")
+    poly_cm_rn = point.get_cached_hamiltonian(max_degree, "center_manifold_real")
     q2, p2 = poincare_point
     p3 = solve_p3(q2=float(q2), p2=float(p2), h0=energy, H_blocks=poly_cm_rn, clmo=clmo)
     
@@ -420,8 +420,8 @@ def test_direct_rn_to_physical(cr3bp_data_fixture):
     # Compare with full pipeline
     physical_coords_full = _cm_rn2phys_coordinates(
         point,
-        point.get_cached_hamiltonian(max_degree, "center_manifold_rn"),
-        point.get_cached_hamiltonian(max_degree, "center_manifold_cn"),
+        point.get_cached_hamiltonian(max_degree, "center_manifold_real"),
+        point.get_cached_hamiltonian(max_degree, "center_manifold_complex"),
         poincare_point,
         point.get_cached_generating_functions(max_degree),
         psi, clmo, max_degree, energy

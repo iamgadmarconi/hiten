@@ -14,8 +14,8 @@ from algorithms.center.polynomial.conversion import poly2sympy, sympy2poly
 from algorithms.center.polynomial.operations import (
     polynomial_add_inplace, polynomial_multiply, polynomial_poisson_bracket,
     polynomial_power, polynomial_variable, polynomial_zero_list)
-from algorithms.center.transforms import (_linear_variable_polys, cn2rn,
-                                          phys2rn, rn2cn, rn2phys,
+from algorithms.center.transforms import (_linear_variable_polys, realify,
+                                          phys2rn, complexify, rn2phys,
                                           substitute_linear)
 from system.libration import L1Point
 
@@ -409,7 +409,7 @@ def test_complex_normal_form(point, max_deg):
     # 1) build physical Hamiltonian, go to real normal form, then complex
     H_phys = build_physical_hamiltonian(point, max_deg)
     H_rn   = phys2rn(point, H_phys, max_deg, psi, clmo)
-    H_cn   = rn2cn(       H_rn,   max_deg, psi, clmo)
+    H_cn   = complexify(       H_rn,   max_deg, psi, clmo)
 
     # 2) symbolic expression of degree‑2 part
     q1, q2, q3, p1, p2, p3 = sp.symbols("q1 q2 q3 p1 p2 p3")
@@ -499,8 +499,8 @@ def test_cn2rn_inverse(point, max_deg):
     # pipeline ---------------------------------------------------------------
     H_phys = build_physical_hamiltonian(point, max_deg)
     H_rn   = phys2rn(point, H_phys, max_deg, psi, clmo)
-    H_cn   = rn2cn(       H_rn,   max_deg, psi, clmo)
-    H_back = cn2rn(       H_cn,   max_deg, psi, clmo)
+    H_cn   = complexify(       H_rn,   max_deg, psi, clmo)
+    H_back = realify(       H_cn,   max_deg, psi, clmo)
 
     # (1) coefficient-by-coefficient equality with appropriate tolerance
     for d in range(max_deg+1):
@@ -594,10 +594,10 @@ def test_full_roundtrip(point, max_deg):
     
     # Forward pipeline: Phys → RN → CN
     H_rn_forward = phys2rn(point, H_phys_original, max_deg, psi, clmo)
-    H_cn = rn2cn(H_rn_forward, max_deg, psi, clmo)
+    H_cn = complexify(H_rn_forward, max_deg, psi, clmo)
     
     # Backward pipeline: CN → RN → Phys
-    H_rn_backward = cn2rn(H_cn, max_deg, psi, clmo)
+    H_rn_backward = realify(H_cn, max_deg, psi, clmo)
     H_phys_final = rn2phys(point, H_rn_backward, max_deg, psi, clmo)
 
     # Verify full roundtrip: coefficient-by-coefficient equality

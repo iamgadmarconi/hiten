@@ -155,7 +155,7 @@ def phys2rn(point, poly_phys: List[np.ndarray], max_deg: int, psi, clmo) -> List
 
 
 @njit(fastmath=FASTMATH)
-def rn2cn(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
+def complexify(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
     """
     Transform a polynomial from real normal form to complex normal form.
     
@@ -209,7 +209,7 @@ def rn2cn(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray
 
 
 @njit(fastmath=FASTMATH)
-def cn2rn(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
+def realify(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
     """
     Transform a polynomial from complex normal form to real normal form.
     
@@ -233,7 +233,7 @@ def cn2rn(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray
     -----
     This function transforms a polynomial from complex normal form coordinates
     (q1, q2, q3, p1, p2, p3) to real normal form coordinates (x, y, z, px, py, pz)
-    using the inverse of the transformation used in rn2cn.
+    using the inverse of the transformation used in complexify.
     
     The transformation is:
     q2 = (y_rn + i*py_rn)/√2

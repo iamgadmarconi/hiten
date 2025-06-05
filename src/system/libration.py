@@ -21,26 +21,18 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Tuple
 
-import mpmath as mp
 import numpy as np
-import symengine as se
 
-from algorithms.center.manifold import center_manifold_cn, center_manifold_rn
+from algorithms.center.manifold import center_manifold_complex, center_manifold_real
 from algorithms.dynamics import jacobian_crtbp
 from algorithms.energy import crtbp_energy, energy_to_jacobi
 from algorithms.linalg import eigenvalue_decomposition
-from algorithms.variables import (get_vars, linear_modes_vars,
-                                  scale_factors_vars)
 from utils.log_config import logger
-from utils.precision import (MPMATH_DPS, HighPrecisionNumber,
-                             high_precision_findroot, hp)
+from utils.precision import high_precision_findroot, hp
 
 # Constants for stability analysis mode
 CONTINUOUS_SYSTEM = 0
 DISCRETE_SYSTEM = 1
-
-omega1_sym, omega2_sym, lambda1_sym, c2_sym = get_vars(linear_modes_vars)
-s1_sym, s2_sym = get_vars(scale_factors_vars)
 
 
 @dataclass(slots=True)
@@ -76,13 +68,7 @@ class LibrationPoint(ABC):
         self._linear_data = None
         self._energy = None
         self._jacobi_constant = None
-
-        self._hamiltonian_cache = {}  # Cache for different representations  
-        self._generating_functions_cache = {}  # Cache for generating functions
-        self._cache_metadata = {}  # Store metadata about cached computations
-        self._transform_cache = None  # Cache for normal form transformation matrix
-        
-        logger.debug(f"Initialized {type(self).__name__} with mu = {self.mu}")
+        self._cache = {}
     
     def __str__(self) -> str:
         return f"{type(self).__name__}(mu={self.mu:.6e})"
@@ -101,7 +87,6 @@ class LibrationPoint(ABC):
             3D vector [x, y, z] representing the position
         """
         if self._position is None:
-            logger.debug(f"Calculating position for {type(self).__name__} (mu={self.mu}).")
             self._position = self._calculate_position()
         return self._position
     
@@ -128,23 +113,11 @@ class LibrationPoint(ABC):
         """
         Check if the Libration point is stable.
         """
-        # Analyze stability if not already done
         if self._stability_info is None:
             self.analyze_stability() 
         
-        # Access stability indices (nu values)
         indices = self._stability_info[0] 
-        
-        # An orbit is stable if all stability indices have magnitude <= 1
-        # Use a small tolerance for floating point comparisons
         return np.all(np.abs(indices) <= 1.0 + 1e-9)
-
-    @property
-    def is_unstable(self) -> bool:
-        """
-        Check if the Libration point is unstable.
-        """
-        return not self.is_stable
 
     @property
     def linear_data(self) -> LinearData:
@@ -154,142 +127,6 @@ class LibrationPoint(ABC):
         if self._linear_data is None:
             self._linear_data = self._get_linear_data()
         return self._linear_data
-
-    def _get_cache_key(self, max_deg: int) -> str:
-        """Generate cache key based on parameters that affect computation."""
-        return f"deg_{max_deg}_mu_{self.mu:.12e}"
-    
-    def _invalidate_cache(self):
-        """Clear all cached data."""
-        self._hamiltonian_cache.clear()
-        self._generating_functions_cache.clear() 
-        self._cache_metadata.clear()
-        self._transform_cache = None
-        logger.debug(f"Cache invalidated for {type(self).__name__}")
-
-    def get_cached_hamiltonian(self, max_deg: int, representation: str):
-        """
-        Get cached Hamiltonian in specified representation.
-        
-        Parameters
-        ----------
-        max_deg : int
-            Maximum degree
-        representation : str
-            One of: 'physical', 'real_normal', 'complex_normal', 
-                   'normalized', 'center_manifold_cn', 'center_manifold_rn'
-                   
-        Returns
-        -------
-        List[np.ndarray] or None
-            Cached polynomial if available, None otherwise
-        """
-        cache_key = self._get_cache_key(max_deg)
-        if cache_key in self._hamiltonian_cache:
-            return self._hamiltonian_cache[cache_key].get(representation)
-        return None
-    
-    def get_cached_generating_functions(self, max_deg: int):
-        """Get cached generating functions."""
-        cache_key = self._get_cache_key(max_deg)
-        return self._generating_functions_cache.get(cache_key)
-
-    def _store_hamiltonian_cache(self, max_deg: int, representation: str, poly_data):
-        """Store Hamiltonian in cache."""
-        cache_key = self._get_cache_key(max_deg)
-        if cache_key not in self._hamiltonian_cache:
-            self._hamiltonian_cache[cache_key] = {}
-        
-        # Deep copy to avoid modifications affecting cache
-        self._hamiltonian_cache[cache_key][representation] = [h.copy() for h in poly_data]
-        
-        logger.debug(f"Cached {representation} Hamiltonian for {type(self).__name__}, max_deg={max_deg}")
-
-    def _store_generating_functions_cache(self, max_deg: int, poly_G_total):
-        """Store generating functions in cache."""
-        cache_key = self._get_cache_key(max_deg)
-        self._generating_functions_cache[cache_key] = [g.copy() for g in poly_G_total]
-        logger.debug(f"Cached generating functions for {type(self).__name__}, max_deg={max_deg}")
-
-    def get_cache_info(self) -> dict:
-        """Get information about cached data."""
-        info = {
-            'cached_degrees': [],
-            'cached_representations': {},
-            'has_generating_functions': [],
-            'has_transform_cache': self._transform_cache is not None
-        }
-        
-        for cache_key in self._hamiltonian_cache:
-            degree = int(cache_key.split('_')[1])
-            info['cached_degrees'].append(degree)
-            info['cached_representations'][degree] = list(self._hamiltonian_cache[cache_key].keys())
-            
-        for cache_key in self._generating_functions_cache:
-            degree = int(cache_key.split('_')[1])
-            info['has_generating_functions'].append(degree)
-            
-        return info
-    
-    def get_hamiltonian_representations(self, max_deg: int, psi, clmo) -> dict:
-        """
-        Get all Hamiltonian representations, computing and caching as needed.
-        
-        Returns
-        -------
-        dict
-            Dictionary with keys: 'physical', 'real_normal', 'complex_normal',
-            'normalized', 'center_manifold_cn', 'center_manifold_rn'
-        """
-        # Trigger computation of center manifold (which computes all intermediate forms)
-        _ = center_manifold_cn(self, psi, clmo, max_deg)
-        _ = center_manifold_rn(self, psi, clmo, max_deg)
-        
-        cache_key = self._get_cache_key(max_deg)
-        return self._hamiltonian_cache.get(cache_key, {}).copy()
-
-    def get_complete_transformation_data(self, max_deg: int, psi, clmo) -> dict:
-        """
-        Get complete transformation data including all Hamiltonians and generating functions.
-        
-        Returns
-        -------
-        dict
-            Dictionary containing all cached representations and generating functions
-        """
-        hamiltonians = self.get_hamiltonian_representations(max_deg, psi, clmo)
-        generating_functions = self.get_cached_generating_functions(max_deg)
-        
-        return {
-            'hamiltonians': hamiltonians,
-            'generating_functions': generating_functions,
-            'max_degree': max_deg,
-            'point_type': type(self).__name__,
-            'mu': self.mu
-        }
-
-    def precompute_cache(self, max_degrees: list[int], psi_dict: dict, clmo_dict: dict):
-        """
-        Precompute and cache data for multiple degrees.
-        
-        Parameters
-        ----------
-        max_degrees : list[int]
-            List of maximum degrees to precompute
-        psi_dict : dict
-            Dictionary mapping max_deg to psi arrays
-        clmo_dict : dict  
-            Dictionary mapping max_deg to clmo arrays
-        """
-        logger.info(f"Precomputing cache for {type(self).__name__} at degrees {max_degrees}")
-        
-        for max_deg in max_degrees:
-            if max_deg in psi_dict and max_deg in clmo_dict:
-                # This will compute and cache all representations
-                _ = self.get_complete_transformation_data(max_deg, psi_dict[max_deg], clmo_dict[max_deg])
-                logger.debug(f"Precomputed data for degree {max_deg}")
-            else:
-                logger.warning(f"Missing psi/clmo data for degree {max_deg}")
 
     def _compute_energy(self) -> float:
         """
@@ -328,25 +165,90 @@ class LibrationPoint(ABC):
             - Wu: eigenvectors spanning unstable subspace
             - Wc: eigenvectors spanning center subspace
         """
-        # Only recalculate if stability info is not cached OR if parameters change
-        # Simple approach: always recalculate if called explicitly
-        # A more complex cache could check if discrete/delta match cached values
-        # For now, let's keep it simple: explicit call recalculates.
+        # Check cache first
+        cache_key = ('stability_analysis', discrete, delta)
+        cached = self.cache_get(cache_key)
+        if cached is not None:
+            logger.debug(f"Using cached stability analysis for {type(self).__name__}")
+            self._stability_info = cached  # Update instance variable for property access
+            return cached
+        
         mode_str = "Continuous" if discrete == CONTINUOUS_SYSTEM else "Discrete"
         logger.info(f"Analyzing stability for {type(self).__name__} (mu={self.mu}), mode={mode_str}, delta={delta}.")
-        # Compute the system Jacobian at the Libration point
-        pos = self.position # Ensures position is calculated first
+        pos = self.position
         A = jacobian_crtbp(pos[0], pos[1], pos[2], self.mu)
         
         logger.debug(f"Jacobian calculated at position {pos}:\n{A}")
 
         # Perform eigenvalue decomposition and classification
-        self._stability_info = eigenvalue_decomposition(A, discrete, delta)
+        stability_info = eigenvalue_decomposition(A, discrete, delta)
         
-        sn, un, cn, _, _, _ = self._stability_info
+        # Cache and store in instance variable
+        self._stability_info = stability_info
+        self.cache_set(cache_key, stability_info)
+        
+        sn, un, cn, _, _, _ = stability_info
         logger.info(f"Stability analysis complete: {len(sn)} stable, {len(un)} unstable, {len(cn)} center eigenvalues.")
         
-        return self._stability_info
+        return stability_info
+
+    def cache_get(self, key) -> any:
+        """Get item from cache."""
+        return self._cache.get(key)
+    
+    def cache_set(self, key, value) -> any:
+        """Set item in cache and return the value."""
+        self._cache[key] = value
+        return value
+    
+    def cache_clear(self) -> None:
+        """Clear all cached data."""
+        self._cache.clear()
+        logger.debug(f"Cache cleared for {type(self).__name__}")
+
+    def cache_info(self) -> dict:
+        """Get information about cached data."""
+        info = {
+            'total_cached_items': len(self._cache),
+            'cached_keys': list(self._cache.keys())
+        }
+        return info
+
+    def hamiltonian(self, max_deg: int, psi, clmo) -> dict:
+        """
+        Get all Hamiltonian representations, computing and caching as needed.
+        
+        Returns
+        -------
+        dict
+            Dictionary with keys: 'physical', 'real_normal', 'complex_normal',
+            'normalized', 'center_manifold_complex', 'center_manifold_real'
+        """
+        # Trigger computation of center manifold (which computes all intermediate forms)
+        _ = center_manifold_complex(self, psi, clmo, max_deg)
+        _ = center_manifold_real(self, psi, clmo, max_deg)
+        
+        # Collect all cached representations for this degree
+        representations = {}
+        for key in self._cache:
+            if key[0] == 'hamiltonian' and key[1] == max_deg:
+                representations[key[2]] = [h.copy() for h in self._cache[key]]
+                
+        return representations
+
+    def generating_functions(self, max_deg: int):
+        """
+        Get generating functions for the given degree.
+        
+        Returns
+        -------
+        list
+            List of generating function polynomials, or empty list if not cached
+        """
+        cached = self.cache_get(('generating_functions', max_deg))
+        if cached is not None:
+            return [g.copy() for g in cached]
+        return []
     
     @property
     def eigenvalues(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -422,13 +324,89 @@ class CollinearPoint(LibrationPoint):
     """
     def __init__(self, mu: float):
         """Initialize a collinear Libration point."""
+        if not 0 < mu < 0.5:
+            raise ValueError(f"Mass parameter mu must be in range (0, 0.5), got {mu}")
         super().__init__(mu)
-        self._gamma = None # Cache for gamma value
-        self._cn_cache = {}  # Cache for cn values
-        self._linear_modes_cache = None  # Cache for linear modes
+
+    def _find_position(self, primary_interval: list) -> float:
+        """
+        Find the x-coordinate of a collinear point using retry logic.
+        
+        Parameters
+        ----------
+        primary_interval : list
+            Initial interval [a, b] to search for the root
+            
+        Returns
+        -------
+        float
+            x-coordinate of the libration point
+            
+        Raises
+        ------
+        RuntimeError
+            If both primary and fallback searches fail
+        """
+        func = lambda x_val: self._dOmega_dx(x_val)
+        
+        # Try primary interval first
+        logger.debug(f"{self.__class__.__name__}: Finding root of dOmega/dx in primary interval {primary_interval}")
+        try:
+            x = high_precision_findroot(func, primary_interval)
+            logger.info(f"{self.__class__.__name__} position calculated with primary interval: x = {x}")
+            return x
+        except ValueError as e:
+            err = f"{self.__class__.__name__}: Primary interval {primary_interval} failed: {e}"
+            logger.error(err)
+            raise RuntimeError(err) from e
+
+    def _solve_gamma_polynomial(self, coeffs: list, gamma_range: tuple) -> float:
+        """
+        Solve the quintic polynomial for gamma with validation and fallback.
+        
+        Parameters
+        ----------
+        coeffs : list
+            Polynomial coefficients from highest to lowest degree
+        gamma_range : tuple
+            (min_gamma, max_gamma) valid range for this point type
+        fallback_approx : float
+            Fallback approximation if polynomial solving fails
+            
+        Returns
+        -------
+        float
+            The gamma value for this libration point
+        """
+        try:
+            roots = np.roots(coeffs)
+        except Exception as e:
+            err = f"{self.__class__.__name__}: Polynomial root finding failed: {e}"
+            logger.error(err)
+            raise RuntimeError(err) from e
+        
+        min_gamma, max_gamma = gamma_range
+        point_name = self.__class__.__name__[:2]  # 'L1', 'L2', 'L3'
+        
+        # Find the valid real root
+        for root in roots:
+            if not np.isreal(root):
+                continue
+                
+            gamma_val = float(root.real)
+            
+            # Check if it's in the valid range
+            if not (min_gamma < gamma_val < max_gamma):
+                continue
+
+            return gamma_val
+        
+        err = f"No valid polynomial root found for {point_name}"
+        logger.error(err)
+        raise RuntimeError(err)
 
     @property
-    def gamma(self, precision: int = None) -> float:
+    def gamma(self) -> float:
         """
         Get the distance ratio gamma for the libration point, calculated
         with high precision.
@@ -439,37 +417,19 @@ class CollinearPoint(LibrationPoint):
         - For L3, gamma = |x_L - (-mu)| 
         (Note: This is equivalent to the root of the specific polynomial for each point).
 
-        Parameters
-        ----------
-        precision : int, optional
-            Number of decimal places for high precision calculation. 
-            If None, uses MPMATH_DPS from config.
-
         Returns
         -------
         float
             The gamma value calculated with high precision.
         """
-        if self._gamma is None:
-            logger.debug(f"Calculating gamma for {type(self).__name__} (mu={self.mu}) with {precision} dps.")
-            poly_coeffs = self._get_gamma_poly_coeffs()
-            roots = np.roots(poly_coeffs)
-            
-            # Find the physically relevant real root for initial guess
-            x0 = self._find_relevant_real_root(roots)
-            
-            if x0 is None:
-                logger.warning(f"np.roots failed to find a suitable real root for {type(self).__name__}. Falling back to rough estimate.")
-                x0 = self._get_fallback_gamma_estimate()
-            
-            logger.debug(f"Initial estimate for {type(self).__name__} gamma: x0 = {x0}")
+        cached = self.cache_get(('gamma',))
+        if cached is not None:
+            return cached
 
-            poly_func = lambda x_val: float(self._gamma_poly(hp(x_val, precision)))
-            self._gamma = high_precision_findroot(poly_func, float(x0), precision)
-
-            logger.info(f"Gamma for {type(self).__name__} calculated with high precision: gamma = {self._gamma}")
-            
-        return self._gamma
+        gamma = self._compute_gamma()
+        logger.info(f"Gamma for {type(self).__name__} = {gamma}")
+        
+        return self.cache_set(('gamma',), gamma)
 
     @property
     def sign(self) -> int:
@@ -503,29 +463,18 @@ class CollinearPoint(LibrationPoint):
         else:
             raise AttributeError("Offset 'a' undefined for this point type.")
 
-    def _cn_cached(self, n: int) -> float:
+    @abstractmethod
+    def _compute_gamma(self) -> float:
         """
-        Get the cached value of cn(mu) or compute it if not available.
+        Compute the gamma value for this specific libration point.
         
-        Parameters
-        ----------
-        n : int
-            The index for the cn coefficient
-            
         Returns
         -------
         float
-            The value of cn(mu)
+            The gamma value calculated with high precision
         """
-        if n not in self._cn_cache:
-            # Compute and cache the value
-            self._cn_cache[n] = self._compute_cn(n)
-            logger.info(f"c{n}(mu) = {self._cn_cache[n]}")
-        else:
-            logger.debug(f"Using cached value for c{n}(mu) = {self._cn_cache[n]}")
-            
-        return self._cn_cache[n]
-        
+        pass
+
     @abstractmethod
     def _compute_cn(self, n: int) -> float:
         """
@@ -536,30 +485,21 @@ class CollinearPoint(LibrationPoint):
 
     def _cn(self, n: int) -> float:
         """
-        Get the cn coefficient. This is a wrapper that uses caching.
+        Get the cn coefficient with caching.
         """
-        return self._cn_cached(n)
+        if n < 0:
+            raise ValueError(f"Coefficient index n must be non-negative, got {n}")
+            
+        cached = self.cache_get(('cn', n))
+        if cached is not None:
+            logger.debug(f"Using cached value for c{n}(mu) = {cached}")
+            return cached
+            
+        # Compute and cache the value
+        value = self._compute_cn(n)
+        logger.info(f"c{n}(mu) = {value}")
+        return self.cache_set(('cn', n), value)
 
-    @abstractmethod
-    def _get_gamma_poly_coeffs(self) -> list[float]:
-        """Return the coefficients of the polynomial whose root is gamma."""
-        pass
-        
-    @abstractmethod
-    def _gamma_poly(self, x: HighPrecisionNumber) -> HighPrecisionNumber:
-        """Evaluate the polynomial whose root is gamma at point x."""
-        pass
-
-    @abstractmethod
-    def _find_relevant_real_root(self, roots: np.ndarray) -> float | None:
-        """From the roots of the polynomial, find the one relevant to this point."""
-        pass
-        
-    @abstractmethod
-    def _get_fallback_gamma_estimate(self) -> float:
-        """Provide a rough estimate for gamma if np.roots fails."""
-        pass
-        
     def _dOmega_dx(self, x: float) -> float:
         """
         Compute the derivative of the effective potential with respect to x.
@@ -580,29 +520,22 @@ class CollinearPoint(LibrationPoint):
         r1_sq = (x + mu)**2
         r2_sq = (x - (1 - mu))**2
         
-        # Avoid division by zero, though unlikely for L-points
-        r1_3 = r1_sq**1.5 if r1_sq > 1e-16 else 0
-        r2_3 = r2_sq**1.5 if r2_sq > 1e-16 else 0
+        # Avoid division by zero (though unlikely for libration points)
+        if r1_sq < 1e-16 or r2_sq < 1e-16:
+            err = f"x-coordinate too close to primary masses: x={x}"
+            logger.error(err)
+            raise ValueError(err)
+
+        r1_3 = r1_sq**1.5
+        r2_3 = r2_sq**1.5
 
         term1 = x
-        term2 = -(1 - mu) * (x + mu) / r1_3 if r1_3 > 0 else 0
-        term3 = -mu * (x - (1 - mu)) / r2_3 if r2_3 > 0 else 0
+        term2 = -(1 - mu) * (x + mu) / r1_3
+        term3 = -mu * (x - (1 - mu)) / r2_3
         
-        expr = term1 + term2 + term3
+        return term1 + term2 + term3
 
-        return expr
-
-    def _planar_matrix(self) -> np.ndarray:
-        """
-        Return the 4x4 matrix M of eq. (9) restricted to (x,y,px,py) coordinates.
-        We are not using the full 6x6 matrix since the z direction is decoupled.
-        """
-        c2 = self._cn(2)
-        return np.array([[0, 1, 1, 0],
-                        [-1, 0, 0, 1],
-                        [2*c2, 0, 0, 1],
-                        [0, -c2, -1, 0]], dtype=np.float64)
-
+    @property
     def linear_modes(self):
         """
         Get the linear modes for the Libration point.
@@ -612,14 +545,13 @@ class CollinearPoint(LibrationPoint):
         tuple
             (lambda1, omega1, omega2) values
         """
-        if self._linear_modes_cache is None:
-            logger.debug(f"Computing linear modes for {type(self).__name__}")
-            self._linear_modes_cache = self._compute_linear_modes()
-        else:
-            logger.debug(f"Using cached linear modes for {type(self).__name__}")
+        cached = self.cache_get(('linear_modes',))
+        if cached is not None:
+            return cached
             
-        return self._linear_modes_cache
-            
+        result = self._compute_linear_modes()
+        return self.cache_set(('linear_modes',), result)
+
     def _compute_linear_modes(self):
         """
         Compute the linear modes for the Libration point.
@@ -630,59 +562,42 @@ class CollinearPoint(LibrationPoint):
             (lambda1, omega1, omega2) values for the libration point
         """
         try:
-            # Ensure calculations use HighPrecisionNumber
-            c2_hp = hp(self._cn(2)) # cn already returns float, convert to hp
+            c2_hp = hp(self._cn(2))
             a_hp = hp(1.0)
             b_hp = hp(2.0) - c2_hp
             c_hp = hp(1.0) + c2_hp - hp(2.0) * (c2_hp ** hp(2.0))
             
             discriminant_hp = (b_hp ** hp(2.0)) - hp(4.0) * a_hp * c_hp
             
-            # Check if discriminant is non-negative for sqrt
             if float(discriminant_hp) < 0:
                 err = f"Discriminant for linear modes is negative: {float(discriminant_hp)}. c2={float(c2_hp)}"
                 logger.error(err)
                 raise RuntimeError(err)
 
-            # eta = (-b ± sqrt(discriminant)) / (2a)
-            sqrt_discriminant_hp = discriminant_hp.sqrt() # hp.sqrt()
+            sqrt_discriminant_hp = discriminant_hp.sqrt()
             
             eta1_hp = (-b_hp - sqrt_discriminant_hp) / (hp(2.0) * a_hp)
             eta2_hp = (-b_hp + sqrt_discriminant_hp) / (hp(2.0) * a_hp)
 
-            # lambda1 = sqrt(max(eta1, eta2))
-            # omega1 = sqrt(-min(eta1, eta2))
-            # omega2 = sqrt(c2)
-
-            # Ensure eta values are floats for max/min if HighPrecisionNumber doesn't directly support it
-            eta1_float = float(eta1_hp)
-            eta2_float = float(eta2_hp)
-
-            max_eta = hp(max(eta1_float, eta2_float))
-            min_eta = hp(min(eta1_float, eta2_float))
-
-            lambda1_hp = hp(0.0)
-            if float(max_eta) > 0:
-                lambda1_hp = max_eta.sqrt()
-
-            omega1_hp = hp(0.0)
-            if float(min_eta) < 0:
-                omega1_hp = (-min_eta).sqrt()
+            # Determine which eta is positive (for lambda1) and which is negative (for omega1)
+            if float(eta1_hp) > float(eta2_hp):
+                lambda1_hp = eta1_hp.sqrt() if float(eta1_hp) > 0 else hp(0.0)
+                omega1_hp = (-eta2_hp).sqrt() if float(eta2_hp) < 0 else hp(0.0)
+            else:
+                lambda1_hp = eta2_hp.sqrt() if float(eta2_hp) > 0 else hp(0.0)
+                omega1_hp = (-eta1_hp).sqrt() if float(eta1_hp) < 0 else hp(0.0)
             
-            omega2_hp = c2_hp.sqrt() if float(c2_hp) >=0 else hp(0.0) # ensure c2 is non-negative for sqrt
+            # Vertical frequency
+            omega2_hp = c2_hp.sqrt() if float(c2_hp) >= 0 else hp(0.0)
 
-            lambda1 = float(lambda1_hp)
-            omega1 = float(omega1_hp)
-            omega2 = float(omega2_hp)
-                
-            logger.info(f"Quadratic roots (hp): eta1={float(eta1_hp)}, eta2={float(eta2_hp)}")
-            logger.info(f"Calculated with high precision: lambda1={lambda1}, omega1={omega1}, omega2={omega2}")
-            return lambda1, omega1, omega2
+            return (float(lambda1_hp), float(omega1_hp), float(omega2_hp))
+            
         except Exception as e:
-            logger.error(f"Failed to calculate linear modes with HighPrecisionNumber: {e}")
-            raise RuntimeError(f"Linear modes calculation failed.") from e
+            err = f"Failed to calculate linear modes with HighPrecisionNumber: {e}"
+            logger.error(err)
+            raise RuntimeError(err) from e
 
-    def _scale_factor(self, lambda1, omega1, omega2):
+    def _scale_factor(self, lambda1, omega1):
         """
         Calculate the normalization factors s1 and s2 used in the normal form transformation.
         
@@ -692,38 +607,26 @@ class CollinearPoint(LibrationPoint):
             The hyperbolic mode value
         omega1 : float
             The elliptic mode value
-        omega2 : float
-            The vertical oscillation frequency
             
         Returns
         -------
         s1, s2 : tuple of float
             The normalization factors for the hyperbolic and elliptic components
         """
-        c2_hp = hp(self._cn(2)) # cn already returns float
+        c2_hp = hp(self._cn(2))
         lambda1_hp = hp(lambda1)
         omega1_hp = hp(omega1)
-        # omega2_hp = hp(omega2) # omega2 is not used in s1, s2 expressions directly
 
-        # Calculate the expressions inside the square roots using HighPrecisionNumber
-        # expr1 = 2*lambda1*((4+3*c2)*lambda1**2 + 4 + 5*c2 - 6*c2**2)
-        # expr2 = omega1*((4+3*c2)*omega1**2 - 4 - 5*c2 + 6*c2**2)
+        # Common terms
+        term_lambda = (hp(4.0) + hp(3.0) * c2_hp) * (lambda1_hp ** hp(2.0))
+        term_omega = (hp(4.0) + hp(3.0) * c2_hp) * (omega1_hp ** hp(2.0))
+        base_term = hp(4.0) + hp(5.0) * c2_hp - hp(6.0) * (c2_hp ** hp(2.0))
 
-        four_hp = hp(4.0)
-        three_hp = hp(3.0)
-        five_hp = hp(5.0)
-        six_hp = hp(6.0)
-        two_hp = hp(2.0)
-
-        term_common_lambda = (four_hp + three_hp * c2_hp) * (lambda1_hp ** two_hp)
-        expr1_inside_hp = term_common_lambda + four_hp + five_hp * c2_hp - six_hp * (c2_hp ** two_hp)
-        expr1_hp = two_hp * lambda1_hp * expr1_inside_hp
+        # Calculate expressions under square root
+        expr1_hp = hp(2.0) * lambda1_hp * (term_lambda + base_term)
+        expr2_hp = omega1_hp * (term_omega - base_term)
         
-        term_common_omega = (four_hp + three_hp * c2_hp) * (omega1_hp ** two_hp)
-        expr2_inside_hp = term_common_omega - four_hp - five_hp * c2_hp + six_hp * (c2_hp ** two_hp)
-        expr2_hp = omega1_hp * expr2_inside_hp
-        
-        # Check if values are positive before sqrt
+        # Validate expressions are positive
         if float(expr1_hp) < 0:
             err = f"Expression for s1 is negative (hp): {float(expr1_hp)}."
             logger.error(err)
@@ -734,85 +637,7 @@ class CollinearPoint(LibrationPoint):
             logger.error(err)
             raise RuntimeError(err)
         
-        # Calculate scale factors using high precision square root
-        s1_hp = expr1_hp.sqrt()
-        s2_hp = expr2_hp.sqrt()
-        
-        s1 = float(s1_hp)
-        s2 = float(s2_hp)
-        
-        logger.debug(f"Normalization factors calculated with high precision: s1={s1}, s2={s2}")
-        return s1, s2
-
-    def _symbolic_normal_form_transform(self) -> Tuple[se.Matrix, se.Matrix]:
-        """
-        Build the 6x6 symplectic matrix C symbolically as in eq. (10) that sends H_2 to
-        lambda_1 x px + (omega_1/2)(y²+p_y²) + (omega_2/2)(z²+p_z²).
-
-        Returns
-        -------
-        tuple
-            (C, Cinv) where C is the symbolic symplectic transformation matrix and Cinv is its inverse
-        """
-        logger.debug(f"Computing symbolic normal form transform for {type(self).__name__}")
-
-        # Create the symbolic matrix C based on the mathematical expression in the image (eq. 10)
-        # Create a zero matrix (symengine doesn't have Matrix.zeros like numpy)
-        C = se.Matrix([[0 for _ in range(6)] for _ in range(6)])
-        
-        # First row
-        C[0, 0] = se.Integer(2) * lambda1_sym / s1_sym
-        C[0, 1] = se.Integer(0)
-        C[0, 2] = se.Integer(0)
-        C[0, 3] = -se.Integer(2) * lambda1_sym / s1_sym
-        C[0, 4] = se.Integer(2) * omega1_sym / s2_sym
-        C[0, 5] = se.Integer(0)
-        
-        # Second row
-        C[1, 0] = (lambda1_sym**se.Integer(2) - se.Integer(2)*c2_sym - se.Integer(1)) / s1_sym
-        C[1, 1] = (-omega1_sym**se.Integer(2) - se.Integer(2)*c2_sym - se.Integer(1)) / s2_sym
-        C[1, 2] = se.Integer(0)
-        C[1, 3] = (lambda1_sym**se.Integer(2) - se.Integer(2)*c2_sym - se.Integer(1)) / s1_sym
-        C[1, 4] = se.Integer(0)
-        C[1, 5] = se.Integer(0)
-        
-        # Third row
-        C[2, 0] = se.Integer(0)
-        C[2, 1] = se.Integer(0)
-        C[2, 2] = se.Integer(1) / se.sqrt(omega2_sym)
-        C[2, 3] = se.Integer(0)
-        C[2, 4] = se.Integer(0)
-        C[2, 5] = se.Integer(0)
-        
-        # Fourth row
-        C[3, 0] = (lambda1_sym**se.Integer(2) + se.Integer(2)*c2_sym + se.Integer(1)) / s1_sym
-        C[3, 1] = (-omega1_sym**se.Integer(2) + se.Integer(2)*c2_sym + se.Integer(1)) / s2_sym
-        C[3, 2] = se.Integer(0)
-        C[3, 3] = (lambda1_sym**se.Integer(2) + se.Integer(2)*c2_sym + se.Integer(1)) / s1_sym
-        C[3, 4] = se.Integer(0)
-        C[3, 5] = se.Integer(0)
-        
-        # Fifth row
-        C[4, 0] = (lambda1_sym**se.Integer(3) + (se.Integer(1) - se.Integer(2)*c2_sym)*lambda1_sym) / s1_sym
-        C[4, 1] = se.Integer(0)
-        C[4, 2] = se.Integer(0)
-        C[4, 3] = (-lambda1_sym**se.Integer(3) - (se.Integer(1) - se.Integer(2)*c2_sym)*lambda1_sym) / s1_sym
-        C[4, 4] = (-omega1_sym**se.Integer(3) + (se.Integer(1) - se.Integer(2)*c2_sym)*omega1_sym) / s2_sym
-        C[4, 5] = se.Integer(0)
-        
-        # Sixth row
-        C[5, 0] = se.Integer(0)
-        C[5, 1] = se.Integer(0)
-        C[5, 2] = se.Integer(0)
-        C[5, 3] = se.Integer(0)
-        C[5, 4] = se.Integer(0)
-        C[5, 5] = se.sqrt(omega2_sym)
-        
-        # Compute the symbolic inverse
-        Cinv = C.inv()
-        
-        logger.debug(f"Symbolic normal form transformation matrix computed")
-        return C, Cinv
+        return float(expr1_hp.sqrt()), float(expr2_hp.sqrt())
 
     def normal_form_transform(self):
         """
@@ -825,46 +650,53 @@ class CollinearPoint(LibrationPoint):
             (C, Cinv) where C is the symplectic transformation matrix and Cinv is its inverse
         """
         # Check cache first
-        if self._transform_cache is not None:
-            logger.debug(f"Using cached normal form transformation matrix for {type(self).__name__}")
-            return self._transform_cache
+        cache_key = ('normal_form_transform',)
+        cached = self.cache_get(cache_key)
+        if cached is not None:
+            return cached
             
-        logger.debug(f"Computing normal form transform for {type(self).__name__} with mu={self.mu}")
-        
-        # Get the symbolic form of the matrix
-        C_sym, Cinv_sym = self._symbolic_normal_form_transform()
-        
-        # Use the cached linear modes (computed with high precision)
-        lambda1_num, omega1_num, omega2_num = self.linear_modes()
-        logger.debug(f"Using high precision linear modes: lambda1={lambda1_num}, omega1={omega1_num}, omega2={omega2_num}")
-        
-        # Get c2 coefficient (computed with high precision)
+        # Get the numerical parameters
+        lambda1, omega1, omega2 = self.linear_modes
         c2 = self._cn(2)
-        logger.debug(f"Using high precision c2 coefficient: c2={c2}")
-
-        # Get normalization factors s1, s2 (computed with high precision sqrt)
-        s1, s2 = self._scale_factor(lambda1_num, omega1_num, omega2_num)
-        logger.debug(f"Scale factors computed with high precision: s1={s1}, s2={s2}")
-
-        # Substitute the symbolic variables with their numerical values
-        subs_dict = {
-            lambda1_sym: float(lambda1_num),
-            omega1_sym: float(omega1_num),
-            omega2_sym: float(omega2_num),
-            s1_sym: float(s1),
-            s2_sym: float(s2),
-            c2_sym: float(c2)
-        }
+        s1, s2 = self._scale_factor(lambda1, omega1)
         
-        # Convert to numerical matrices
-        C = np.array(C_sym.subs(subs_dict).tolist(), dtype=np.float64)
-        Cinv = np.array(Cinv_sym.subs(subs_dict).tolist(), dtype=np.float64)
+        # Build the 6x6 transformation matrix C numerically
+        C = np.zeros((6, 6))
+        
+        # First row
+        C[0, 0] = 2 * lambda1 / s1
+        C[0, 3] = -2 * lambda1 / s1
+        C[0, 4] = 2 * omega1 / s2
+        
+        # Second row
+        C[1, 0] = (lambda1**2 - 2*c2 - 1) / s1
+        C[1, 1] = (-omega1**2 - 2*c2 - 1) / s2
+        C[1, 3] = (lambda1**2 - 2*c2 - 1) / s1
+        
+        # Third row
+        C[2, 2] = 1 / np.sqrt(omega2)
+        
+        # Fourth row
+        C[3, 0] = (lambda1**2 + 2*c2 + 1) / s1
+        C[3, 1] = (-omega1**2 + 2*c2 + 1) / s2
+        C[3, 3] = (lambda1**2 + 2*c2 + 1) / s1
+        
+        # Fifth row
+        C[4, 0] = (lambda1**3 + (1 - 2*c2)*lambda1) / s1
+        C[4, 3] = (-lambda1**3 - (1 - 2*c2)*lambda1) / s1
+        C[4, 4] = (-omega1**3 + (1 - 2*c2)*omega1) / s2
+        
+        # Sixth row
+        C[5, 5] = np.sqrt(omega2)
+        
+        # Compute the inverse
+        Cinv = np.linalg.inv(C)
         
         # Cache the result
-        self._transform_cache = (C, Cinv)
-        logger.info(f"Normal form transformation matrix computed and cached for {type(self).__name__}")
-
-        return C, Cinv
+        result = (C, Cinv)
+        self.cache_set(cache_key, result)
+        
+        return result
 
     def _get_linear_data(self):
         """
@@ -875,13 +707,8 @@ class CollinearPoint(LibrationPoint):
         LinearData
             Object containing the linear data for the Libration point
         """
-        logger.debug(f"Getting linear data for {type(self).__name__}")
-        
-        # Use cached linear modes
-        lambda1, omega1, omega2 = self.linear_modes()
-        c2 = self._cn(2)
-        
-        # Get transformation matrices (this will use cache if available)
+        # Get cached values
+        lambda1, omega1, omega2 = self.linear_modes
         C, Cinv = self.normal_form_transform()
         
         # Create and return the LinearData object
@@ -894,89 +721,6 @@ class CollinearPoint(LibrationPoint):
             C=C, 
             Cinv=Cinv
         )
-
-    def get_symbolic_transform(self) -> Tuple[se.Matrix, se.Matrix, dict]:
-        """
-        Get the symbolic normal form transformation matrices and the parameters.
-        
-        Returns
-        -------
-        tuple
-            (C_sym, Cinv_sym, params) where:
-            - C_sym is the symbolic transformation matrix
-            - Cinv_sym is its symbolic inverse
-            - params is a dictionary mapping symbolic parameters to their names
-        """
-        # Get the symbolic matrices
-        C_sym, Cinv_sym = self._symbolic_normal_form_transform()
-        
-        # Create a dictionary to map symbolic variables to their descriptions
-        params = {
-            lambda1_sym: 'Hyperbolic eigenvalue',
-            omega1_sym: 'Planar oscillation frequency',
-            omega2_sym: 'Vertical oscillation frequency',
-            s1_sym: 'Hyperbolic normalization factor',
-            s2_sym: 'Elliptic normalization factor',
-            c2_sym: 'Second-order coefficient in the potential'
-        }
-        
-        return C_sym, Cinv_sym, params
-
-    def get_normal_form_parameters(self) -> dict:
-        """
-        Get the numerical values of the parameters used in the normal form transformation.
-        
-        Returns
-        -------
-        dict
-            A dictionary mapping parameter names to their numerical values
-        """
-        # Calculate the values if not already cached
-        lambda1, omega1, omega2 = self.linear_modes()
-        c2 = self._cn(2)
-        s1, s2 = self._scale_factor(lambda1, omega1, omega2)
-        
-        # Create a dictionary with parameter names and values
-        params = {
-            'lambda1': lambda1,
-            'omega1': omega1,
-            'omega2': omega2,
-            's1': s1,
-            's2': s2,
-            'c2': c2
-        }
-        
-        return params
-
-    def substitute_parameters(self, expression: se.Basic) -> se.Basic:
-        """
-        Substitute the numerical parameter values into a symbolic expression.
-        
-        Parameters
-        ----------
-        expression : se.Basic
-            The symbolic expression with parameters like lambda1, omega1, etc.
-            
-        Returns
-        -------
-        se.Basic
-            The expression with numerical values substituted
-        """
-        # Get parameter values
-        params = self.get_normal_form_parameters()
-        
-        # Create substitution dictionary for symengine
-        subs_dict = {
-            lambda1_sym: float(params['lambda1']),
-            omega1_sym: float(params['omega1']),
-            omega2_sym: float(params['omega2']),
-            s1_sym: float(params['s1']),
-            s2_sym: float(params['s2']),
-            c2_sym: float(params['c2'])
-        }
-        
-        # Apply substitution
-        return expression.subs(subs_dict)
 
 
 class L1Point(CollinearPoint):
@@ -1002,111 +746,35 @@ class L1Point(CollinearPoint):
         ndarray
             3D vector [x, 0, 0] giving the position of L1
         """
-        interval = [-self.mu + 0.01, 1 - self.mu - 0.01]
-        logger.debug(f"L1: Finding root of dOmega/dx in interval {interval}")
-        
-        # Use high precision root finding
-        try:
-            func = lambda x_val: self._dOmega_dx(x_val)
-            x = high_precision_findroot(func, interval)
-            logger.info(f"L1 position calculated with high precision: x = {x}")
-            return np.array([x, 0, 0], dtype=np.float64)
-        except ValueError as e:
-            err = f"Failed to find L1 root in interval {interval}: {e}"
-            logger.error(err)
-            raise RuntimeError(err) from e
+        # L1 is between the primaries: -mu < x < 1-mu
+        primary_interval = [-self.mu + 0.01, 1 - self.mu - 0.01]
 
-    def _get_gamma_poly_coeffs(self) -> list[float]:
-        mu = self.mu
-        return [1, -(3-mu), (3-2*mu), -mu, 2*mu, -mu]
-        
-    def _gamma_poly(self, x: HighPrecisionNumber) -> HighPrecisionNumber:
-        coeffs = [hp(c) for c in self._get_gamma_poly_coeffs()]
-        # Ensure x is HighPrecisionNumber
-        x_hp = x if isinstance(x, HighPrecisionNumber) else hp(x)
+        x = self._find_position(primary_interval)
+        return np.array([x, 0, 0], dtype=np.float64)
 
-        term1 = x_hp**hp(5.0)
-        term2 = coeffs[1] * (x_hp**hp(4.0))
-        term3 = coeffs[2] * (x_hp**hp(3.0))
-        term4 = coeffs[3] * (x_hp**hp(2.0))
-        term5 = coeffs[4] * x_hp
-        term6 = coeffs[5]
-        return term1 + term2 + term3 + term4 + term5 + term6
-        
-    def _find_relevant_real_root(self, roots: np.ndarray) -> float | None:
-        # For L1, gamma should be positive and small (distance from m2)
-        # Position x is 1 - mu - gamma. Gamma = 1 - mu - x
-        # Since -mu < x < 1-mu, we expect 0 < gamma < 1.
-        # The polynomial root *is* gamma directly.
+    def _compute_gamma(self) -> float:
+        """
+        Compute gamma for L1 point by solving the quintic polynomial equation.
+        For L1, gamma is the distance from the second primary (smaller mass).
+        """
         mu = self.mu
-        for r in roots:
-            if np.isreal(r):
-                real_r = float(r.real)
-                # Gamma for L1 should be positive and typically less than 1
-                if 0 < real_r < 1.0:
-                    # Further check: is it physically plausible?
-                    # L1 position x = 1 - mu - real_r. Check if -mu < x < 1-mu
-                    x_pos = 1 - mu - real_r
-                    if -mu < x_pos < (1-mu):
-                        return real_r
-        return None
         
-    def _get_fallback_gamma_estimate(self) -> float:
-        # Rough estimate for gamma_L1 (distance from m2)
-        return (self.mu / 3)**(1/3)
+        # Coefficients for L1 quintic: x^5 - (3-μ)x^4 + (3-2μ)x^3 - μx^2 + 2μx - μ = 0
+        coeffs = [1, -(3-mu), (3-2*mu), -mu, 2*mu, -mu]
+        return self._solve_gamma_polynomial(coeffs, [0, 1])
 
     def _compute_cn(self, n: int) -> float:
         """
-        Compute cn(mu) as in Jorba & Masdemont (1999), eq. (3) using self.gamma for L1.
-        
-        Parameters
-        ----------
-        n : int
-            Index of the coefficient to compute
-            
-        Returns
-        -------
-        float
-            The cn coefficient value
+        Compute cn coefficient for L1 using Jorba & Masdemont (1999), eq. (3).
         """
-        # Use high precision arithmetic for critical coefficient calculations
-        gamma_hp = hp(self.gamma) # self.gamma is float, convert to hp for calculations
-        mu_hp = hp(self.mu)
-        one_hp = hp(1.0)
+        gamma = self.gamma
+        mu = self.mu
         
-        term1_num = one_hp
-        term1_den = gamma_hp ** hp(3.0)
-        term1 = term1_num / term1_den
+        term1 = 1 / (gamma**3)
+        term2 = mu
+        term3 = ((-1)**n) * (1 - mu) * (gamma**(n+1)) / ((1 - gamma)**(n+1))
         
-        term2 = mu_hp # (1)^n * mu = mu
-        
-        sign_hp = hp((-1)**n)
-        one_minus_mu_hp = one_hp - mu_hp
-        
-        gamma_pow_n1_hp = gamma_hp ** hp(n + 1.0)
-        one_minus_gamma_hp = one_hp - gamma_hp
-        
-        # Avoid division by zero for (1-gamma)
-        if abs(float(one_minus_gamma_hp)) < 1e-18: # Check if 1-gamma is effectively zero
-             logger.warning(f"L1 _compute_cn: (1-gamma) is close to zero ({float(one_minus_gamma_hp)}). Gamma: {float(gamma_hp)}")
-
-             if abs(float(one_minus_gamma_hp)) < 1e-30: # Stricter check for actual zero
-                raise ValueError("L1 _compute_cn: (1-gamma) is zero, leading to division by zero.")
-        
-        one_minus_gamma_pow_n1_hp = one_minus_gamma_hp ** hp(n + 1.0)
-
-        if abs(float(one_minus_gamma_pow_n1_hp)) < 1e-30:
-            raise ValueError("L1 _compute_cn: (1-gamma)^(n+1) is zero, leading to division by zero.")
-
-        term3_num = sign_hp * one_minus_mu_hp * gamma_pow_n1_hp
-        term3 = term3_num / one_minus_gamma_pow_n1_hp
-        
-        sum_terms = term2 + term3
-        c_n_hp = term1 * sum_terms
-        
-        c_n = float(c_n_hp)
-        logger.debug(f"L1 c_{n} computed with high precision: {c_n}")
-        return c_n
+        return term1 * (term2 + term3)
 
 
 class L2Point(CollinearPoint):
@@ -1132,111 +800,36 @@ class L2Point(CollinearPoint):
         ndarray
             3D vector [x, 0, 0] giving the position of L2
         """
-        interval = [1.0, 2.0] # Initial guess interval for L2
-        logger.debug(f"L2: Finding root of dOmega/dx in interval {interval}")
-        try:
-            func = lambda x_val: self._dOmega_dx(x_val)
-            x = high_precision_findroot(func, interval)
-            logger.info(f"L2 position calculated: x = {x}")
-            return np.array([x, 0, 0], dtype=np.float64)
-        except ValueError as e:
-            logger.error(f"Failed to find L2 root in interval {interval}: {e}")
-            # Try a wider interval as fallback?
-            logger.debug(f"L2: Retrying root finding in wider interval {[1 - self.mu + 1e-9, 2.0]}")
-            try:
-                func = lambda x_val: self._dOmega_dx(x_val)
-                x = high_precision_findroot(func, [1 - self.mu + 1e-9, 2.0])
-                logger.info(f"L2 position calculated (retry): x = {x}")
-                return np.array([x, 0, 0], dtype=np.float64)
-            except ValueError as e2:
-                logger.error(f"Failed to find L2 root even in wider interval: {e2}")
-                raise RuntimeError(f"L2 position calculation failed.") from e2
+        # L2 is beyond the smaller primary: x > 1-mu
+        primary_interval = [1 - self.mu + 0.001, 2.0]
 
-    def _get_gamma_poly_coeffs(self) -> list[float]:
+        x = self._find_position(primary_interval)
+        return np.array([x, 0, 0], dtype=np.float64)
+
+    def _compute_gamma(self) -> float:
+        """
+        Compute gamma for L2 point by solving the quintic polynomial equation.
+        For L2, gamma is the distance from the second primary (smaller mass).
+        """
         mu = self.mu
-        return [1, (3-mu), (3-2*mu), -mu, -2*mu, -mu]
-
-    def _gamma_poly(self, x: HighPrecisionNumber) -> HighPrecisionNumber:
-        coeffs = [hp(c) for c in self._get_gamma_poly_coeffs()]
-        x_hp = x if isinstance(x, HighPrecisionNumber) else hp(x)
-
-        term1 = x_hp**hp(5.0)
-        term2 = coeffs[1] * (x_hp**hp(4.0))
-        term3 = coeffs[2] * (x_hp**hp(3.0))
-        term4 = coeffs[3] * (x_hp**hp(2.0))
-        term5 = coeffs[4] * x_hp
-        term6 = coeffs[5]
-        return term1 + term2 + term3 + term4 + term5 + term6
         
-    def _find_relevant_real_root(self, roots: np.ndarray) -> float | None:
-        # For L2, gamma should be positive and small (distance from m2)
-        # Position x = 1 - mu + gamma. Gamma = x - (1 - mu)
-        # Since x > 1-mu, we expect gamma > 0.
-        # The polynomial root *is* gamma directly.
-        mu = self.mu
-        for r in roots:
-            if np.isreal(r):
-                real_r = float(r.real)
-                # Gamma for L2 should be positive and typically less than 1
-                if 0 < real_r < 1.0:
-                    # Further check: is it physically plausible?
-                    # L2 position x = 1 - mu + real_r. Check if x > 1-mu
-                    x_pos = 1 - mu + real_r
-                    if x_pos > (1-mu):
-                        return real_r
-        return None
-        
-    def _get_fallback_gamma_estimate(self) -> float:
-        # Rough estimate for gamma_L2 (distance from m2)
-        return (self.mu / 3)**(1/3)
+        # Coefficients for L2 quintic: x^5 + (3-μ)x^4 + (3-2μ)x^3 - μx^2 - 2μx - μ = 0
+        coeffs = [1, (3-mu), (3-2*mu), -mu, -2*mu, -mu]
+
+        return self._solve_gamma_polynomial(coeffs, [0, 1])
 
     def _compute_cn(self, n: int) -> float:
         """
-        Compute cn(mu) as in Jorba & Masdemont (1999), eq. (3) using self.gamma for L2.
-        
-        Parameters
-        ----------
-        n : int
-            Index of the coefficient to compute
-            
-        Returns
-        -------
-        float
-            The cn coefficient value
+        Compute cn coefficient for L2 using Jorba & Masdemont (1999), eq. (3).
         """
-        # Use high precision arithmetic for critical coefficient calculations
-        gamma_hp = hp(self.gamma)
-        mu_hp = hp(self.mu)
-        one_hp = hp(1.0)
-
-        term1_num = one_hp
-        term1_den = gamma_hp ** hp(3.0)
-        term1 = term1_num / term1_den
+        gamma = self.gamma
+        mu = self.mu
         
-        sign_hp = hp((-1)**n)
-        term2 = sign_hp * mu_hp
+        term1 = 1 / (gamma**3)
+        term2 = ((-1)**n) * mu
+        term3 = ((-1)**n) * (1 - mu) * (gamma**(n+1)) / ((1 + gamma)**(n+1))
         
-        one_minus_mu_hp = one_hp - mu_hp
-        gamma_pow_n1_hp = gamma_hp ** hp(n + 1.0)
-        one_plus_gamma_hp = one_hp + gamma_hp
-        
-        if abs(float(one_plus_gamma_hp)) < 1e-30: # Should not happen as gamma > 0
-            raise ValueError("L2 _compute_cn: (1+gamma) is zero, leading to division by zero.")
-            
-        one_plus_gamma_pow_n1_hp = one_plus_gamma_hp ** hp(n + 1.0)
-
-        if abs(float(one_plus_gamma_pow_n1_hp)) < 1e-30: # Should not happen
-             raise ValueError("L2 _compute_cn: (1+gamma)^(n+1) is zero, leading to division by zero.")
-
-        term3_num = sign_hp * one_minus_mu_hp * gamma_pow_n1_hp
-        term3 = term3_num / one_plus_gamma_pow_n1_hp
-        
-        sum_terms = term2 + term3
-        c_n_hp = term1 * sum_terms
-        
-        c_n = float(c_n_hp)
-        logger.debug(f"L2 c_{n} computed with high precision: {c_n}")
-        return c_n
+        return term1 * (term2 + term3)
 
 
 class L3Point(CollinearPoint):
@@ -1262,115 +855,37 @@ class L3Point(CollinearPoint):
         ndarray
             3D vector [x, 0, 0] giving the position of L3
         """
-        interval = [-self.mu - 0.01, -2.0] # Initial guess interval for L3
-        logger.debug(f"L3: Finding root of dOmega/dx in interval {interval}")
-        try:
-            func = lambda x_val: self._dOmega_dx(x_val)
-            x = high_precision_findroot(func, interval)
-            logger.info(f"L3 position calculated: x = {x}")
-            return np.array([x, 0, 0], dtype=np.float64)
-        except ValueError as e:
-            logger.error(f"Failed to find L3 root in interval {interval}: {e}")
-            # Try a wider interval as fallback?
-            logger.debug(f"L3: Retrying root finding in wider interval {[-2.0, -self.mu - 1e-9]}")
-            try:
-                func = lambda x_val: self._dOmega_dx(x_val)
-                x = high_precision_findroot(func, [-2.0, -self.mu - 1e-9])
-                logger.info(f"L3 position calculated (retry): x = {x}")
-                return np.array([x, 0, 0], dtype=np.float64)
-            except ValueError as e2:
-                logger.error(f"Failed to find L3 root even in wider interval: {e2}")
-                raise RuntimeError(f"L3 position calculation failed.") from e2
+        # L3 is beyond the larger primary: x < -mu
+        primary_interval = [-1.5, -self.mu - 0.001]
 
-    def _get_gamma_poly_coeffs(self) -> list[float]:
+        x = self._find_position(primary_interval)
+        return np.array([x, 0, 0], dtype=np.float64)
+
+    def _compute_gamma(self) -> float:
+        """
+        Compute gamma for L3 point by solving the quintic polynomial equation.
+        For L3, gamma is the distance from the first primary (larger mass).
+        """
         mu = self.mu
-        mu2 = 1 - mu # mu1 in some notations
-        return [1, (2+mu), (1+2*mu), -mu2, -2*mu2, -mu2]
+        mu1 = 1 - mu  # mass of larger primary
         
-    def _gamma_poly(self, x: HighPrecisionNumber) -> HighPrecisionNumber:
-        coeffs = [hp(c) for c in self._get_gamma_poly_coeffs()]
-        x_hp = x if isinstance(x, HighPrecisionNumber) else hp(x)
+        # Coefficients for L3 quintic: x^5 + (2+μ)x^4 + (1+2μ)x^3 - μ₁x^2 - 2μ₁x - μ₁ = 0
+        coeffs = [1, (2+mu), (1+2*mu), -mu1, -2*mu1, -mu1]
 
-        term1 = x_hp**hp(5.0)
-        term2 = coeffs[1] * (x_hp**hp(4.0))
-        term3 = coeffs[2] * (x_hp**hp(3.0))
-        term4 = coeffs[3] * (x_hp**hp(2.0))
-        term5 = coeffs[4] * x_hp
-        term6 = coeffs[5]
-        return term1 + term2 + term3 + term4 + term5 + term6
-
-    def _find_relevant_real_root(self, roots: np.ndarray) -> float | None:
-        # For L3, gamma is the distance from m1: gamma = |x_L3 - (-mu)|.
-        # Since x_L3 is approx -1, gamma_L3 is approx |-1 - (-mu)| = |mu-1| which is approx 1.
-        # The polynomial root *is* gamma directly.
-        mu = self.mu
-        for r in roots:
-            if np.isreal(r):
-                real_r = float(r.real)
-                # Gamma for L3 should be positive and close to 1
-                if 0.5 < real_r < 1.5: # Fairly wide check around 1
-                    # Further check: is it physically plausible?
-                    # L3 position x = -mu - real_r. Check if x < -mu
-                    x_pos = -mu - real_r
-                    if x_pos < -mu:
-                        # Need to be careful: L3 poly root is gamma, distance from m1
-                        return real_r 
-        return None
-
-    def _get_fallback_gamma_estimate(self) -> float:
-        # Rough estimate for gamma_L3 (distance from m1)
-        # x_L3 approx -(1 - 7/12*mu). gamma = |x_L3 - (-mu)| = |-1 + 7/12*mu + mu| = |mu*19/12 - 1|
-        # A simpler estimate is often just 1.
-        # Or using the relation from Szebehely, gamma_L3 approx 1 - (7/12)mu
-        return 1.0 - (7.0 / 12.0) * self.mu
+        return self._solve_gamma_polynomial(coeffs, [0.5, 1.5])
 
     def _compute_cn(self, n: int) -> float:
         """
-        Compute cn(mu) as in Jorba & Masdemont (1999), eq. (3) using self.gamma for L3.
-        
-        Parameters
-        ----------
-        n : int
-            Index of the coefficient to compute
-            
-        Returns
-        -------
-        float
-            The cn coefficient value
+        Compute cn coefficient for L3 using Jorba & Masdemont (1999), eq. (3).
         """
-        # Use high precision arithmetic for critical coefficient calculations
-        gamma_hp = hp(self.gamma)
-        mu_hp = hp(self.mu)
-        one_hp = hp(1.0)
+        gamma = self.gamma
+        mu = self.mu
         
-        sign_hp = hp((-1)**n)
+        term1 = ((-1)**n) / (gamma**3)
+        term2 = (1 - mu)
+        term3 = mu * (gamma**(n+1)) / ((1 + gamma)**(n+1))
         
-        term1_num = sign_hp
-        term1_den = gamma_hp ** hp(3.0)
-        term1 = term1_num / term1_den
-        
-        term2 = one_hp - mu_hp
-        
-        gamma_pow_n1_hp = gamma_hp ** hp(n + 1.0)
-        one_plus_gamma_hp = one_hp + gamma_hp
-
-        if abs(float(one_plus_gamma_hp)) < 1e-30: # Should not happen
-            raise ValueError("L3 _compute_cn: (1+gamma) is zero, leading to division by zero.")
-            
-        one_plus_gamma_pow_n1_hp = one_plus_gamma_hp ** hp(n + 1.0)
-
-        if abs(float(one_plus_gamma_pow_n1_hp)) < 1e-30: # Should not happen
-             raise ValueError("L3 _compute_cn: (1+gamma)^(n+1) is zero, leading to division by zero.")
-
-        term3_num = mu_hp * gamma_pow_n1_hp
-        term3 = term3_num / one_plus_gamma_pow_n1_hp
-        
-        sum_terms = term2 + term3
-        c_n_hp = term1 * sum_terms
-        
-        c_n = float(c_n_hp)
-        logger.debug(f"L3 c_{n} computed with high precision: {c_n}")
-        return c_n
+        return term1 * (term2 + term3)
 
 
 class TriangularPoint(LibrationPoint):
@@ -1395,6 +910,29 @@ class TriangularPoint(LibrationPoint):
         # Log stability warning based on mu
         if mu > self.ROUTH_CRITICAL_MU:
             logger.warning(f"Triangular points are potentially unstable for mu > {self.ROUTH_CRITICAL_MU:.6f} (current mu = {mu})")
+
+    def _find_position(self, y_sign: int) -> np.ndarray:
+        """
+        Calculate the position of a triangular point (L4 or L5).
+        
+        Parameters
+        ----------
+        y_sign : int
+            Sign for y-coordinate: +1 for L4, -1 for L5
+            
+        Returns
+        -------
+        ndarray
+            3D vector [x, y, 0] giving the position
+        """
+        point_name = self.__class__.__name__
+        logger.debug(f"Calculating {point_name} position directly.")
+        
+        x = 0.5 - self.mu
+        y = y_sign * np.sqrt(3) / 2.0
+        
+        logger.info(f"{point_name} position calculated: x = {x:.6f}, y = {y:.6f}")
+        return np.array([x, y, 0], dtype=np.float64)
 
     def _get_linear_data(self):
         raise NotImplementedError("Not implemented for triangular points.")
@@ -1427,11 +965,7 @@ class L4Point(TriangularPoint):
         ndarray
             3D vector [x, y, 0] giving the position of L4
         """
-        logger.debug(f"Calculating L4 position directly.")
-        x = 0.5 - self.mu
-        y = np.sqrt(3) / 2.0
-        logger.info(f"L4 position calculated: x = {x}, y = {y}")
-        return np.array([x, y, 0], dtype=np.float64)
+        return self._find_position(y_sign=+1)
 
 
 class L5Point(TriangularPoint):
@@ -1458,8 +992,4 @@ class L5Point(TriangularPoint):
         ndarray
             3D vector [x, y, 0] giving the position of L5
         """
-        logger.debug(f"Calculating L5 position directly.")
-        x = 0.5 - self.mu
-        y = -np.sqrt(3) / 2.0
-        logger.info(f"L5 position calculated: x = {x}, y = {y}")
-        return np.array([x, y, 0], dtype=np.float64)
+        return self._find_position(y_sign=-1)

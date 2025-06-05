@@ -4,7 +4,7 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 
-from algorithms.center.manifold import center_manifold_rn
+from algorithms.center.manifold import center_manifold_real
 from algorithms.center.polynomial.base import init_index_tables
 from system.base import System, systemConfig
 from system.body import Body
@@ -43,7 +43,7 @@ def get_hamiltonian_coefficients(
     
     # H_cm_coeffs[k] are coefficients for degree k. Starts from H_0, typically H_0, H_1 are zero/not used.
     # Useful terms H_n start from n=2.
-    H_cm_coeffs = center_manifold_rn(l_point_obj, psi, clmo, max_deg_coeffs)
+    H_cm_coeffs = center_manifold_real(l_point_obj, psi, clmo, max_deg_coeffs)
     return H_cm_coeffs
 
 
@@ -178,7 +178,7 @@ if __name__ == '__main__':
             if 'algorithms.center.manifold' in sys.modules: importlib.reload(sys.modules['algorithms.center.manifold'])
             if 'algorithms.center.polynomial.base' in sys.modules: importlib.reload(sys.modules['algorithms.center.polynomial.base'])
             
-            from algorithms.center.manifold import center_manifold_rn
+            from algorithms.center.manifold import center_manifold_real
             from algorithms.center.polynomial.base import init_index_tables
             from system.base import System, systemConfig
             from system.body import Body

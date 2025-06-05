@@ -1,12 +1,11 @@
-import pytest
 import numpy as np
+import pytest
 import symengine as se
 
-from system.libration import (
-    LibrationPoint, CollinearPoint, TriangularPoint,
-    L1Point, L2Point, L3Point, L4Point, L5Point,
-    LinearData, CONTINUOUS_SYSTEM, DISCRETE_SYSTEM
-)
+from system.libration import (CONTINUOUS_SYSTEM, DISCRETE_SYSTEM,
+                              CollinearPoint, L1Point, L2Point, L3Point,
+                              L4Point, L5Point, LibrationPoint, LinearData,
+                              TriangularPoint)
 
 # --- Constants for testing ---
 TEST_MU_EARTH_MOON = 0.01215  # Earth-Moon system
@@ -162,7 +161,7 @@ def test_linear_modes(l1_earth_moon, l2_earth_moon, l3_earth_moon):
     """Test calculation of linear modes for collinear points.
     """
     # Test for L1 Point
-    lambda1, omega1, omega2 = l1_earth_moon.linear_modes()
+    lambda1, omega1, omega2 = l1_earth_moon.linear_modes
 
     assert lambda1 > 0
     assert omega1 > 0
@@ -190,7 +189,7 @@ def test_linear_modes(l1_earth_moon, l2_earth_moon, l3_earth_moon):
     assert np.isclose(omega2, expected_omega2, rtol=1e-5), f"omega2 should be {expected_omega2}, got {omega2}"
     
     # Test for L2 Point
-    lambda1_l2, omega1_l2, omega2_l2 = l2_earth_moon.linear_modes()
+    lambda1_l2, omega1_l2, omega2_l2 = l2_earth_moon.linear_modes
 
     assert lambda1 > 0
     assert omega1 > 0
@@ -214,7 +213,7 @@ def test_linear_modes(l1_earth_moon, l2_earth_moon, l3_earth_moon):
     assert np.isclose(omega2_l2, expected_omega2_l2, rtol=1e-5)
     
     # Test for L3 Point
-    lambda1_l3, omega1_l3, omega2_l3 = l3_earth_moon.linear_modes()
+    lambda1_l3, omega1_l3, omega2_l3 = l3_earth_moon.linear_modes
 
     assert lambda1 > 0
     assert omega1 > 0
@@ -240,22 +239,22 @@ def test_linear_modes(l1_earth_moon, l2_earth_moon, l3_earth_moon):
 def test_scale_factors(l1_earth_moon, l2_earth_moon, l3_earth_moon):
     """Test that scale factors s1 and s2 are always positive."""
     # Test for L1 Point
-    lambda1, omega1, omega2 = l1_earth_moon.linear_modes()
-    s1, s2 = l1_earth_moon._scale_factor(lambda1, omega1, omega2)
+    lambda1, omega1, omega2 = l1_earth_moon.linear_modes
+    s1, s2 = l1_earth_moon._scale_factor(lambda1, omega1)
     
     assert s1 > 0, "s1 scale factor should be positive"
     assert s2 > 0, "s2 scale factor should be positive"
     
     # Test for L2 Point
-    lambda1_l2, omega1_l2, omega2_l2 = l2_earth_moon.linear_modes()
-    s1_l2, s2_l2 = l2_earth_moon._scale_factor(lambda1_l2, omega1_l2, omega2_l2)
+    lambda1_l2, omega1_l2, omega2_l2 = l2_earth_moon.linear_modes
+    s1_l2, s2_l2 = l2_earth_moon._scale_factor(lambda1_l2, omega1_l2)
     
     assert s1_l2 > 0, "s1 scale factor should be positive for L2"
     assert s2_l2 > 0, "s2 scale factor should be positive for L2"
     
     # Test for L3 Point
-    lambda1_l3, omega1_l3, omega2_l3 = l3_earth_moon.linear_modes()
-    s1_l3, s2_l3 = l3_earth_moon._scale_factor(lambda1_l3, omega1_l3, omega2_l3)
+    lambda1_l3, omega1_l3, omega2_l3 = l3_earth_moon.linear_modes
+    s1_l3, s2_l3 = l3_earth_moon._scale_factor(lambda1_l3, omega1_l3)
     
     assert s1_l3 > 0, "s1 scale factor should be positive for L3"
     assert s2_l3 > 0, "s2 scale factor should be positive for L3"

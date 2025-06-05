@@ -18,7 +18,7 @@ from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables, make_poly)
 from algorithms.center.polynomial.conversion import sympy2poly
 from algorithms.center.polynomial.operations import polynomial_zero_list
-from algorithms.center.transforms import phys2rn, rn2cn
+from algorithms.center.transforms import phys2rn, complexify
 from algorithms.variables import N_VARS
 from system.libration import L1Point
 
@@ -40,7 +40,7 @@ def cn_hamiltonian_data(request):
     # The psi and clmo (initialized for psi_init_deg) are suitable as psi_init_deg >= max_deg.
     H_phys = build_physical_hamiltonian(point, max_deg)
     H_rn = phys2rn(point, H_phys, max_deg, psi, clmo)
-    H_coeffs = rn2cn(H_rn, max_deg, psi, clmo)
+    H_coeffs = complexify(H_rn, max_deg, psi, clmo)
 
     return H_coeffs, psi, clmo, encode_dict, max_deg
 
