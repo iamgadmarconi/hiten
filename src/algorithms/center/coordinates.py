@@ -33,14 +33,15 @@ def _realify_coordinates(
     real_polys = realify(complex_polys, max_degree, psi, clmo)
     
     # Extract coordinate values (degree-1 terms)
-    real_coords = np.zeros(6, dtype=np.float64)
+    # Note: real normal coordinates can have complex coefficients!
+    real_coords = np.zeros(6, dtype=np.complex128)
     if len(real_polys) > 1:
         for i in range(6):
             k = np.zeros(6, dtype=np.int64)
             k[i] = 1
             pos = encode_multiindex(k, 1, encode_dict_list)
             if 0 <= pos < real_polys[1].shape[0]:
-                real_coords[i] = real_polys[1][pos].real
+                real_coords[i] = real_polys[1][pos]
                 
     return real_coords
 

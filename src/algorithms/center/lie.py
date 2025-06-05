@@ -358,27 +358,32 @@ def inverse_lie_transform(
     It applies -G_n, -G_{n-1}, ..., -G_3 sequentially to transform
     from center manifold coordinates back to original coordinates.
     
+    The generating functions are applied in reverse order with negative signs:
+    exp(-L_{G_n}) ∘ exp(-L_{G_{n-1}}) ∘ ... ∘ exp(-L_{G_3})
+    
     Parameters
     ----------
     cm_coords : numpy.ndarray
-        Center manifold coordinates [q2, p2, q3, p3]
+        Center manifold coordinates [q2, p2, q3, p3] (4D complex vector)
     poly_G_total : List[numpy.ndarray]
         List of generating functions from the forward normalization
+        G_total[k] contains the generating function of degree k
     psi, clmo : numpy.ndarray
-        Index tables
+        Index tables for polynomial operations
     max_degree : int
         Maximum degree of transformation
     tol : float
-        Tolerance for cleaning
+        Tolerance for cleaning small coefficients
         
     Returns
     -------
     numpy.ndarray
-        Original coordinates (6D complex vector)
+        Original coordinates (6D complex vector) [q1, q2, q3, p1, p2, p3]
     """
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
     
     # Initialize 6D coordinate vector from 4D CM coordinates
+    # cm_coords format: [q2, p2, q3, p3]
     coords = np.zeros(6, dtype=np.complex128)
     coords[1] = cm_coords[0]  # q2
     coords[2] = cm_coords[2]  # q3
