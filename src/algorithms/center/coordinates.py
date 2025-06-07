@@ -1,7 +1,8 @@
 import numpy as np
 from numba.typed import List
 
-from algorithms.center.lie import inverse_lie_transform
+from algorithms.center.lie import (evaluate_inverse_transform,
+                                   inverse_lie_transform)
 from algorithms.center.poincare.map import solve_p3
 from utils.log_config import logger
 
@@ -17,9 +18,9 @@ def _clean_coordinates(coords: np.ndarray, tol: float = 1e-14) -> np.ndarray:
     return after
 
 def _realify_coordinates(complex_coords: np.ndarray) -> np.ndarray:
-    c = np.asarray(complex_coords, dtype=np.complex128)
+    c = np.asarray(complex_coords, dtype=np.complex128) # [q1, q2, q3, p1, p2, p3]
 
-    q1c, q2c, q3c, p1c, p2c, p3c = c
+    q1c, q2c, q3c, p1c, p2c, p3c = c # [q1, q2, q3, p1, p2, p3]
 
     q1r = q1c
     q2r = (q2c - 1j * p2c) / np.sqrt(2)
@@ -28,13 +29,12 @@ def _realify_coordinates(complex_coords: np.ndarray) -> np.ndarray:
     p2r = (-1j * q2c + p2c) / np.sqrt(2)
     p3r = (-1j * q3c + p3c) / np.sqrt(2)
 
-    return _clean_coordinates(np.array([q1r, q2r, q3r, p1r, p2r, p3r], dtype=np.complex128))
-
+    return _clean_coordinates(np.array([q1r, q2r, q3r, p1r, p2r, p3r], dtype=np.complex128)) # [q1, q2, q3, p1, p2, p3]
 
 def _complexify_coordinates(real_coords: np.ndarray) -> np.ndarray:
-    r = np.asarray(real_coords, dtype=np.complex128)
+    r = np.asarray(real_coords, dtype=np.complex128) # [q1, q2, q3, p1, p2, p3]
 
-    q1r, q2r, q3r, p1r, p2r, p3r = r
+    q1r, q2r, q3r, p1r, p2r, p3r = r # [q1, q2, q3, p1, p2, p3]
 
     q1c = q1r
     q2c = (q2r + 1j * p2r) / np.sqrt(2)
@@ -43,13 +43,15 @@ def _complexify_coordinates(real_coords: np.ndarray) -> np.ndarray:
     p2c = (1j * q2r + p2r) / np.sqrt(2)
     p3c = (1j * q3r + p3r) / np.sqrt(2)
 
-    return _clean_coordinates(np.array([q1c, q2c, q3c, p1c, p2c, p3c], dtype=np.complex128))
+    return _clean_coordinates(np.array([q1c, q2c, q3c, p1c, p2c, p3c], dtype=np.complex128)) # [q1, q2, q3, p1, p2, p3]
 
 def _realmodal2local_coordinates(point, modal_coords: np.ndarray) -> np.ndarray:
+    # modal_coords: [q1, q2, q3, p1, p2, p3]
     _, Cinv = point.normal_form_transform()
-    return _clean_coordinates(modal_coords @ Cinv.T)
+    return _clean_coordinates(modal_coords @ Cinv.T) # [x1, x2, x3, px1, px2, px3]
 
 def _local2synodic(point, coords: np.ndarray) -> np.ndarray:
+    # coords: [x1, x2, x3, px1, px2, px3] - local coordinates
     gamma, mu, sgn, a = point.gamma, point.mu, point.sign, point.a
 
     c = np.asarray(coords, dtype=np.float64)
@@ -58,7 +60,7 @@ def _local2synodic(point, coords: np.ndarray) -> np.ndarray:
             f"coords must be a flat array of 6 elements, got shape {c.shape}"
         )
 
-    syn = np.empty(6, dtype=np.float64)
+    syn = np.empty(6, dtype=np.float64) # [X, Y, Z, Vx, Vy, Vz]
 
     # Positions
     syn[0] =  sgn * gamma * c[0] + mu + a      # X
@@ -77,15 +79,15 @@ def _local2synodic(point, coords: np.ndarray) -> np.ndarray:
     # Flip X and Vx according to NASA/Szebehely convention
     syn[[0, 3]] *= -1.0
 
-    return syn
+    return syn # [X, Y, Z, Vx, Vy, Vz]
 
 def _complete_cm_coordinates(
     poly_cm: List[np.ndarray],
-    cm_coords: np.ndarray,
+    cm_coords: np.ndarray, # [q2, p2]
     energy: float,
     clmo: np.ndarray,
 ) -> np.ndarray:
-    q2, p2 = cm_coords
+    q2, p2 = cm_coords # [q2, p2]
 
     p3 = solve_p3(
         q2=float(q2), 
@@ -100,7 +102,7 @@ def _complete_cm_coordinates(
         logger.error(err)
         raise ValueError(err)
 
-    return np.array([q2, p2, 0.0, p3], dtype=np.complex128)
+    return np.array([q2, p2, 0.0, p3], dtype=np.complex128) # [q2, p2, q3, p3]
 
 def _cmreal2synodic_coordinates(
     point,
@@ -111,7 +113,7 @@ def _cmreal2synodic_coordinates(
     clmo: np.ndarray,
     max_degree: int,
     energy: float = 0.0,
-    tol: float = 1e-15
+    tol: float = 1e-30
 ) -> np.ndarray:
     logger.info(f"Converting points {cm_coords} to synodic coordinates")
 
@@ -119,42 +121,36 @@ def _cmreal2synodic_coordinates(
 
     logger.info(f"real_4d_cm: \n{real_4d_cm}")
 
-    real_6d_cm = np.zeros(6, dtype=np.complex128) # [0, q2, q3, 0, p2, p3]
-    real_6d_cm[1] = real_4d_cm[0]  # q2
-    real_6d_cm[2] = real_4d_cm[2]  # q3
-    real_6d_cm[4] = real_4d_cm[1]  # p2
-    real_6d_cm[5] = real_4d_cm[3]  # p3
+    real_6d_cm = np.zeros(6, dtype=np.complex128) # [q1, q2, q3, p1, p2, p3]
+    real_6d_cm[1] = real_4d_cm[0] # q2 = q2
+    real_6d_cm[2] = real_4d_cm[2] # q3 = 0.0 (q3 is zero on center manifold)
+    real_6d_cm[4] = real_4d_cm[1] # p2 = p2
+    real_6d_cm[5] = real_4d_cm[3] # p3 = p3
 
     logger.info(f"real_6d_cm: \n{real_6d_cm}")
-    
-    complex_6d_cm = _complexify_coordinates(real_6d_cm)
+
+    complex_6d_cm = _complexify_coordinates(real_6d_cm) # [q1, q2, q3, p1, p2, p3]
 
     logger.info(f"complex_6d_cm: \n{complex_6d_cm}")
 
-    complex_4d_cm = np.array([
-        complex_6d_cm[1],  # q2
-        complex_6d_cm[4],  # p2
-        complex_6d_cm[2],  # q3
-        complex_6d_cm[5]   # p3
-    ], dtype=np.complex128)
-
-    logger.info(f"complex_4d_cm: \n{complex_4d_cm}")
-
-    complex_6d = inverse_lie_transform(
-        complex_4d_cm, poly_G_total, psi, clmo, max_degree, tol
+    expansions = inverse_lie_transform(
+        poly_G_total, max_degree, psi, clmo, tol
     )
+    # logger.info(f"expansions: \n\n{expansions}\n\n") # Verbose
+
+    complex_6d = evaluate_inverse_transform(expansions, complex_6d_cm, clmo) # [q1, q2, q3, p1, p2, p3]
 
     logger.info(f"complex_6d: \n{complex_6d}")
 
-    real_6d = _realify_coordinates(complex_6d)
+    real_6d = _realify_coordinates(complex_6d) # [q1, q2, q3, p1, p2, p3]
 
     logger.info(f"real_6d: \n{real_6d}")
 
-    local_6d = _realmodal2local_coordinates(point, real_6d)
+    local_6d = _realmodal2local_coordinates(point, real_6d) # [x1, x2, x3, px1, px2, px3]
 
     logger.info(f"local_6d: \n{local_6d}")
 
-    synodic_6d = _local2synodic(point, local_6d)
+    synodic_6d = _local2synodic(point, local_6d) # [X, Y, Z, Vx, Vy, Vz]
 
     logger.info(f"synodic_6d: \n{synodic_6d}")
     return synodic_6d

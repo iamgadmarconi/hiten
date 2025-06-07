@@ -11,7 +11,13 @@ from config import FASTMATH
 from utils.log_config import logger
 
 
-def lie_transform(point, poly_init: list[np.ndarray], psi: np.ndarray, clmo: np.ndarray, max_degree: int, tol: float = 1e-15) -> tuple[list[np.ndarray], list[np.ndarray]]:
+def lie_transform(
+point, 
+poly_init: List[np.ndarray], 
+psi: np.ndarray, 
+clmo: np.ndarray, 
+max_degree: int, 
+tol: float = 1e-30) -> tuple[List[np.ndarray], List[np.ndarray]]:
     """
     Perform a Lie transformation to normalize a Hamiltonian.
     
@@ -20,7 +26,7 @@ def lie_transform(point, poly_init: list[np.ndarray], psi: np.ndarray, clmo: np.
     point : object
         Object containing information about the linearized dynamics
         (eigenvalues and frequencies)
-    poly_init : list[numpy.ndarray]
+    poly_init : List[np.ndarray]
         Initial polynomial Hamiltonian to normalize
     psi : numpy.ndarray
         Combinatorial table from init_index_tables
@@ -33,7 +39,7 @@ def lie_transform(point, poly_init: list[np.ndarray], psi: np.ndarray, clmo: np.
         
     Returns
     -------
-    tuple[list[numpy.ndarray], list[numpy.ndarray]]
+    tuple[List[np.ndarray], List[np.ndarray]]
         A tuple containing:
         - The normalized Hamiltonian
         - The generating function for the normalization
@@ -96,7 +102,10 @@ def lie_transform(point, poly_init: list[np.ndarray], psi: np.ndarray, clmo: np.
 
 
 @njit(fastmath=FASTMATH, cache=True)
-def _get_homogeneous_terms(poly_H: List[np.ndarray], n: int, psi: np.ndarray) -> np.ndarray:
+def _get_homogeneous_terms(
+poly_H: List[np.ndarray],
+n: int, 
+psi: np.ndarray) -> np.ndarray:
     """
     Extract the homogeneous terms of degree n from a polynomial.
     
@@ -127,7 +136,10 @@ def _get_homogeneous_terms(poly_H: List[np.ndarray], n: int, psi: np.ndarray) ->
 
 
 @njit(fastmath=FASTMATH, cache=True)
-def _select_terms_for_elimination(p_n: np.ndarray, n: int, clmo: np.ndarray) -> np.ndarray:
+def _select_terms_for_elimination(
+p_n: np.ndarray, 
+n: int, 
+clmo: np.ndarray) -> np.ndarray:
     """
     Select non-resonant terms to be eliminated by the Lie transform.
     
@@ -161,7 +173,11 @@ def _select_terms_for_elimination(p_n: np.ndarray, n: int, clmo: np.ndarray) -> 
 
 
 @njit(fastmath=FASTMATH, cache=True)
-def _solve_homological_equation(p_elim: np.ndarray, n: int, eta: np.ndarray, clmo: np.ndarray) -> np.ndarray:
+def _solve_homological_equation(
+p_elim: np.ndarray, 
+n: int, 
+eta: np.ndarray, 
+clmo: np.ndarray) -> np.ndarray:
     """
     Solve the homological equation to find the generating function.
     
@@ -203,7 +219,15 @@ def _solve_homological_equation(p_elim: np.ndarray, n: int, eta: np.ndarray, clm
 
 
 @njit(fastmath=FASTMATH, cache=False)
-def _apply_lie_transform(poly_H: List[np.ndarray], p_G_n: np.ndarray, deg_G: int, N_max: int, psi: np.ndarray, clmo, encode_dict_list, tol: float) -> list[np.ndarray]:
+def _apply_lie_transform(
+poly_H: List[np.ndarray], 
+p_G_n: np.ndarray, 
+deg_G: int, 
+N_max: int, 
+psi: np.ndarray, 
+clmo: np.ndarray, 
+encode_dict_list: List[dict], 
+tol: float) -> List[np.ndarray]:
     """
     Apply a Lie transform with generating function G to a Hamiltonian.
     
@@ -290,173 +314,202 @@ def _apply_lie_transform(poly_H: List[np.ndarray], p_G_n: np.ndarray, deg_G: int
     return polynomial_clean(poly_result, tol)
 
 
-@njit(fastmath=FASTMATH, cache=False)
-def _apply_coordinate_lie_transform(
-    coords: np.ndarray,
-    G_n: np.ndarray,
-    deg_G: int,
-    psi: np.ndarray,
-    clmo: np.ndarray,
-    encode_dict_list,
-    max_degree: int,
-    tol: float,
-    forward: bool = True,
-) -> np.ndarray:
-    """
-    Apply a Lie pull-back  exp(±L_G)  to the *whole* 6-vector of coordinates.
-
-    The algorithm follows eqs. (12)-(13) of the paper: every coordinate is first
-    considered as the polynomial “identity” map qᵢ↦qᵢ, pᵢ↦pᵢ, the Lie series is
-    applied, and the resulting polynomial is then **evaluated at the current
-    point**.  This keeps all cross-couplings and guarantees a symplectic map of
-    the correct order.
-    """
-    new_coords = coords.copy()
-
-    for coord_idx in range(6):
-        # polynomial representing the variable itself (no constant term)
-        poly_coord = polynomial_zero_list(max_degree, psi)
-
-        # linear term  “… + 1·u_i”
-        k = np.zeros(6, dtype=np.int64)
-        k[coord_idx] = 1
-        pos = encode_multiindex(k, 1, encode_dict_list)
-        poly_coord[1][pos] = 1.0
-
-        # Lie pull-back with ±G_n
-        poly_transformed = _apply_lie_transform(
-            poly_coord,
-            G_n if forward else -G_n,
-            deg_G,
-            max_degree,
-            psi,
-            clmo,
-            encode_dict_list,
-            tol,
-        )
-
-        # evaluate at the *current* coordinates
-        new_coords[coord_idx] = polynomial_evaluate(
-            poly_transformed, coords, clmo
-        )
-
-    return new_coords
-
-
 def inverse_lie_transform(
-    cm_coords: np.ndarray,
-    poly_G_total: List[np.ndarray],
-    psi: np.ndarray,
-    clmo: np.ndarray,
-    max_degree: int,
-    tol: float = 1e-15
-) -> np.ndarray:
+poly_G_total: List[np.ndarray], 
+max_degree: int, psi: np.ndarray, 
+clmo: np.ndarray, 
+tol: float = 1e-30) -> List[List[np.ndarray]]:
     """
-    Apply inverse Lie transformation to coordinates.
-    
-    This is the coordinate transformation analogue of lie_transform.
-    It applies -G_n, -G_{n-1}, ..., -G_3 sequentially to transform
-    from center manifold coordinates back to original coordinates.
-    
-    The generating functions are applied in reverse order with negative signs:
-    exp(-L_{G_n}) ∘ exp(-L_{G_{n-1}}) ∘ ... ∘ exp(-L_{G_3})
+    Perform inverse Lie transformation from center manifold coordinates to complex-diagonalized coordinates.
     
     Parameters
     ----------
-    cm_coords : numpy.ndarray
-        Center manifold coordinates [q2, p2, q3, p3] (4D complex vector)
-    poly_G_total : List[numpy.ndarray]
-        List of generating functions from the forward normalization
-        G_total[k] contains the generating function of degree k
-    psi, clmo : numpy.ndarray
-        Index tables for polynomial operations
+    poly_G_total : List[np.ndarray]
+        List of generating functions for the Lie transformation
     max_degree : int
-        Maximum degree of transformation
-    tol : float
+        Maximum polynomial degree for the transformation
+    psi : np.ndarray
+        Combinatorial table from init_index_tables
+    clmo : np.ndarray
+        List of arrays containing packed multi-indices
+    tol : float, optional
         Tolerance for cleaning small coefficients
         
     Returns
     -------
-    numpy.ndarray
-        Original coordinates (6D complex vector) [q1, q2, q3, p1, p2, p3]
+    List[List[np.ndarray]]
+        Six polynomial expansions for [q1, q2, q3, p1, p2, p3]
     """
+    # Create encode_dict_list from clmo
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    
-    # Initialize 6D coordinate vector from 4D CM coordinates
-    # cm_coords format: [q2, p2, q3, p3]
-    coords = np.zeros(6, dtype=np.complex128)
-    coords[1] = cm_coords[0]  # q2
-    coords[2] = cm_coords[2]  # q3
-    coords[4] = cm_coords[1]  # p2
-    coords[5] = cm_coords[3]  # p3
-    
-    # Apply inverse transformations degree by degree (reverse order)
-    for deg_G in range(max_degree, 2, -1):
-        if deg_G >= len(poly_G_total) or not np.any(poly_G_total[deg_G]):
-            continue
-        
-        # Get the generating function for this degree
-        G_n = poly_G_total[deg_G]
-        
-        # Apply -G_n to current coordinates
-        coords = _apply_coordinate_lie_transform(
-            coords, G_n, deg_G, psi, clmo, encode_dict_list, max_degree, tol, forward=False
-        )
-    
-    return coords
 
-def forward_lie_transform(
-    coords_phys: np.ndarray,
-    poly_G_total: List[np.ndarray],
-    psi: np.ndarray,
-    clmo: np.ndarray,
-    max_degree: int,
-    tol: float = 1e-15
-) -> np.ndarray:
-    """
-    Apply forward Lie transformation to coordinates.
+    current_coords = []
+    for i in range(6):
+        poly = polynomial_zero_list(max_degree, psi)
+        if i == 0 or i == 3:
+            # q₁ and p₁ are center directions, start as zero
+            pass
+        else:
+            # q₂, q₃, p₂, p₃ are center manifold coordinates
+            poly[1] = np.zeros(6, dtype=np.complex128)
+            poly[1][i] = 1.0 + 0j
+                
+        current_coords.append(poly)
     
-    This is the coordinate transformation analogue of inverse_lie_transform.
-    It applies G_n, G_{n-1}, ..., G_3 sequentially to transform
-    from original coordinates to center manifold coordinates.
+    for n in range(3, max_degree+1):
+        if n >= len(poly_G_total) or not poly_G_total[n].any():
+            continue
+
+        G_n = poly_G_total[n]
+        poly_G = polynomial_zero_list(max_degree, psi)
+        poly_G[n] = G_n.copy()
+        
+        new_coords = []
+        for i in range(6):
+            current_poly_typed = List()
+            for arr in current_coords[i]:
+                current_poly_typed.append(arr)
+            
+            # Apply inverse Lie transform: X_new = X + {X, G} + (1/2!){{X, G}, G} + ...
+            new_poly = _apply_inverse_lie_series(
+                current_poly_typed, poly_G, max_degree, psi, clmo, encode_dict_list, tol
+            )
+            new_coords.append(new_poly)
+        
+        # Update all coordinates for next iteration
+        current_coords = new_coords
+    
+    return current_coords
+
+
+@njit(fastmath=FASTMATH, cache=False)
+def _apply_inverse_lie_series(
+poly_X: List[np.ndarray], 
+poly_G: List[np.ndarray], 
+N_max: int, 
+psi: np.ndarray, 
+clmo: np.ndarray, 
+encode_dict_list: List[dict], 
+tol: float) -> List[np.ndarray]:
+    """
+    Apply inverse Lie series transformation to a coordinate polynomial.
     
     Parameters
     ----------
-    coords_phys : numpy.ndarray
-        Original physical coordinates (6D complex vector) [q1, q2, q3, p1, p2, p3]
-    poly_G_total : List[numpy.ndarray]
-        List of generating functions from the forward normalization
-    psi, clmo : numpy.ndarray
-        Index tables
-    max_degree : int
-        Maximum degree of transformation
+    poly_X : List[np.ndarray]
+        Current coordinate polynomial
+    poly_G : List[np.ndarray]
+        Generating function polynomial
+    N_max : int
+        Maximum degree for the result
+    psi, clmo, encode_dict_list : arrays
+        Polynomial indexing structures
     tol : float
         Tolerance for cleaning
         
     Returns
     -------
-    numpy.ndarray
-        Center manifold coordinates (4D complex vector) [q2, p2, q3, p3]
+    list[np.ndarray]
+        Transformed coordinate polynomial
     """
-    encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    # Initialize 6D coordinate vector from full 6D physical coordinates
-    coords = coords_phys.copy()
-
-    for deg_G in range(3, max_degree + 1):
-        if deg_G >= len(poly_G_total) or not np.any(poly_G_total[deg_G]):
-            continue
-
-        G_n = poly_G_total[deg_G]
-
-        coords = _apply_coordinate_lie_transform(
-            coords, G_n, deg_G, psi, clmo, encode_dict_list, max_degree, tol, forward=True)
-
-    # Extract center manifold coordinates from 6D coordinate vector
-    cm_coords = np.zeros(4, dtype=np.complex128)
-    cm_coords[0] = coords[1]  # q2
-    cm_coords[1] = coords[4]  # p2
-    cm_coords[2] = coords[2]  # q3
-    cm_coords[3] = coords[5]  # p3
+    # Initialize result with copy of input
+    poly_result = List()
+    for i in range(N_max + 1):
+        if i < len(poly_X):
+            poly_result.append(poly_X[i].copy())
+        else:
+            poly_result.append(make_poly(i, psi))
     
-    return cm_coords
+    # Find degree of generating function
+    deg_G = 0
+    for i in range(len(poly_G)):
+        if poly_G[i].size > 0 and poly_G[i].any():
+            deg_G = i
+    
+    # Determine maximum degree of current polynomial
+    deg_X = 0
+    for i in range(len(poly_X)):
+        if poly_X[i].size > 0 and poly_X[i].any():
+            deg_X = i
+    
+    # Compute number of Lie series terms needed
+    # Each Poisson bracket increases degree by (deg_G - 2)
+    if deg_G > 2:
+        K_max = (N_max - deg_X) // (deg_G - 2) + 1
+    else:
+        K_max = 1
+    
+    # Precompute factorials
+    factorials = [_factorial(k) for k in range(K_max + 1)]
+    
+    # Initialize bracket with X for iteration
+    poly_bracket = List()
+    for i in range(len(poly_X)):
+        poly_bracket.append(poly_X[i].copy())
+    
+    # Apply Lie series: X + {X,G} + (1/2!){{X,G},G} + ...
+    for k in range(1, K_max + 1):
 
+        # Compute next Poisson bracket
+        poly_bracket = polynomial_poisson_bracket(
+            poly_bracket,
+            poly_G,
+            N_max,
+            psi,
+            clmo,
+            encode_dict_list
+        )
+        
+        # Check if bracket exceeds maximum degree
+        exceeds_degree = True
+        for d in range(min(N_max + 1, len(poly_bracket))):
+            if poly_bracket[d].size > 0 and poly_bracket[d].any():
+                exceeds_degree = False
+                break
+        
+        if exceeds_degree:
+            break
+            
+        # Clean intermediate result
+        poly_bracket = polynomial_clean(poly_bracket, tol)
+        
+        # Add to result with factorial coefficient
+        coeff = 1.0 / factorials[k]
+        for d in range(min(len(poly_bracket), len(poly_result))):
+            if poly_bracket[d].size > 0:
+                poly_result[d] = poly_result[d] + coeff * poly_bracket[d]
+    
+    # Final cleaning
+    return polynomial_clean(poly_result, tol)
+
+
+@njit(fastmath=FASTMATH, cache=True)
+def evaluate_inverse_transform(
+expansions: List[List[np.ndarray]], 
+coords_cm_complex: np.ndarray, 
+clmo: np.ndarray) -> np.ndarray:
+    """
+    Evaluate the six polynomial expansions at given center manifold values.
+    
+    Parameters
+    ----------
+    expansions : List[List[np.ndarray]]
+        Six polynomial expansions from inverse_lie_transform
+    coords_cm_complex : np.ndarray
+        Center manifold coordinates [q1, q2, q3, p1, p2, p3]
+    clmo : np.ndarray
+        List of arrays containing packed multi-indices
+        
+    Returns
+    -------
+    np.ndarray
+        Complex array of shape (6,) containing [q̃1, q̃2, q̃3, p̃1, p̃2, p̃3]
+    """
+
+    result = np.zeros(6, dtype=np.complex128) # [q1, q2, q3, p1, p2, p3]
+    
+    for i in range(6):
+        # Evaluate each polynomial at the given point
+        result[i] = polynomial_evaluate(expansions[i], coords_cm_complex, clmo)
+    
+    return result # [q̃1, q̃2, q̃3, p̃1, p̃2, p̃3]

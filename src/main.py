@@ -1,5 +1,3 @@
-import random
-
 import numpy as np
 from numba import cuda
 
@@ -85,7 +83,7 @@ def main() -> None:
             seed_axis="q2",
         )
         # Convert Poincaré points to initial conditions
-        logger.info(f"Poincaré points: {pts}")
+        logger.info(f"Poincaré points:\n{pts}")
         all_pts.append(pts)  # Store points for this energy level
 
     logger.info("Converting Poincaré points to initial conditions")
