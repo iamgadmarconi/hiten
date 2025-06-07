@@ -84,18 +84,16 @@ def main() -> None:
             c_omega_heuristic=C_OMEGA_HEURISTIC,
             seed_axis="q2",
         )
-
         # Convert Poincaré points to initial conditions
         logger.info(f"Poincaré points: {pts}")
-        logger.info("Converting Poincaré points to initial conditions")
-        ics = poincare2ic(pts, selected_l_point, psi, clmo, MAX_DEG, H0)
-        logger.info(f"Initial conditions:\n\n{ics}\n\n")
         all_pts.append(pts)  # Store points for this energy level
 
-    # Propagate the initial conditions
-    ic = random.choice(ics)
+    logger.info("Converting Poincaré points to initial conditions")
+    ic = poincare2ic([pts[0]], selected_l_point, psi, clmo, MAX_DEG, H0_LEVELS[0])
+    logger.info(f"Initial conditions:\n\n{ic}\n\n")
+
     logger.info("Propagating initial conditions")
-    traj = propagate_crtbp(ic, 0, 2*np.pi, selected_system.mu).y.T
+    traj = propagate_crtbp(ic[0], 0, 2*np.pi, selected_system.mu).y.T
 
     # Plot the orbit
     plot_orbit_rotating_frame(traj, selected_system.mu, selected_system, selected_l_point, "PM", show=True)

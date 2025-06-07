@@ -1,6 +1,6 @@
 # System configuration
-SYSTEM = "EM"  # "EM" for Earth-Moon or "SE" for Sun-Earth
-L_POINT = 2    # Libration point number (1 or 2)
+SYSTEM = "SE"  # "EM" for Earth-Moon or "SE" for Sun-Earth
+L_POINT = 1    # Libration point number (1 or 2)
 
 # Algorithm parameters
 MAX_DEG = 12

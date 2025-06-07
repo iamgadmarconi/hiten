@@ -3,119 +3,81 @@ from numba.typed import List
 
 from algorithms.center.lie import inverse_lie_transform
 from algorithms.center.poincare.map import solve_p3
-from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
-                                                encode_multiindex)
-from algorithms.center.polynomial.operations import polynomial_zero_list
-from algorithms.center.transforms import realify, complexify, rn2phys
 from utils.log_config import logger
 
 
-def _realify_coordinates(
-    complex_coords: np.ndarray,
-    max_degree: int,
-    psi: np.ndarray,
-    clmo: np.ndarray
-) -> np.ndarray:
-    complex_polys = polynomial_zero_list(max_degree, psi)
-    encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    
-    if len(complex_polys) > 1:
-        for i in range(6):
-            if abs(complex_coords[i]) > 1e-15:
-                # Find position of x_i monomial in degree-1 polynomial
-                k = np.zeros(6, dtype=np.int64)
-                k[i] = 1
-                pos = encode_multiindex(k, 1, encode_dict_list)
-                if 0 <= pos < complex_polys[1].shape[0]:
-                    complex_polys[1][pos] = complex_coords[i]
-    
-    # Use existing transformation function
-    real_polys = realify(complex_polys, max_degree, psi, clmo)
-    
-    # Extract coordinate values (degree-1 terms)
-    # Note: real normal coordinates can have complex coefficients!
-    real_coords = np.zeros(6, dtype=np.complex128)
-    if len(real_polys) > 1:
-        for i in range(6):
-            k = np.zeros(6, dtype=np.int64)
-            k[i] = 1
-            pos = encode_multiindex(k, 1, encode_dict_list)
-            if 0 <= pos < real_polys[1].shape[0]:
-                real_coords[i] = real_polys[1][pos]
-                
-    return real_coords
+def _clean_coordinates(coords: np.ndarray, tol: float = 1e-14) -> np.ndarray:
+    """Clean tiny numerical artifacts from complex coordinates."""
+    before = np.asarray(coords, dtype=np.complex128)
+    after = np.where(np.abs(before) <= tol, 0.0, before)
+
+    if np.any(before != after):
+        logger.warning(f"Cleaned {np.sum(before != after)} coordinates. \nBefore: {before}\nAfter: {after}")
+
+    return after
+
+def _realify_coordinates(complex_coords: np.ndarray) -> np.ndarray:
+    c = np.asarray(complex_coords, dtype=np.complex128)
+
+    q1c, q2c, q3c, p1c, p2c, p3c = c
+
+    q1r = q1c
+    q2r = (q2c - 1j * p2c) / np.sqrt(2)
+    q3r = (q3c - 1j * p3c) / np.sqrt(2)
+    p1r = p1c
+    p2r = (-1j * q2c + p2c) / np.sqrt(2)
+    p3r = (-1j * q3c + p3c) / np.sqrt(2)
+
+    return _clean_coordinates(np.array([q1r, q2r, q3r, p1r, p2r, p3r], dtype=np.complex128))
 
 
-def _complexify_coordinates(
-    real_coords: np.ndarray,
-    max_degree: int,
-    psi: np.ndarray,
-    clmo: np.ndarray
-) -> np.ndarray:
-    # Create polynomial representation of RN coordinates
-    real_polys = polynomial_zero_list(max_degree, psi)
-    encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    
-    if len(real_polys) > 1:
-        for i in range(6):
-            if abs(real_coords[i]) > 1e-15:
-                k = np.zeros(6, dtype=np.int64)
-                k[i] = 1
-                pos = encode_multiindex(k, 1, encode_dict_list)
-                if 0 <= pos < real_polys[1].shape[0]:
-                    real_polys[1][pos] = real_coords[i]
-    
-    # Use existing transformation function
-    complex_polys = complexify(real_polys, max_degree, psi, clmo)
-    
-    # Extract coordinate values (degree-1 terms)
-    complex_coords = np.zeros(6, dtype=np.complex128) # [q1, q2, q3, p1, p2, p3]
-    if len(complex_polys) > 1:
-        for i in range(6):
-            k = np.zeros(6, dtype=np.int64)
-            k[i] = 1
-            pos = encode_multiindex(k, 1, encode_dict_list)
-            if 0 <= pos < complex_polys[1].shape[0]:
-                complex_coords[i] = complex_polys[1][pos]
-    
-    return complex_coords
+def _complexify_coordinates(real_coords: np.ndarray) -> np.ndarray:
+    r = np.asarray(real_coords, dtype=np.complex128)
 
+    q1r, q2r, q3r, p1r, p2r, p3r = r
 
-def _rn2phys_coordinates(
-    rn_coords: np.ndarray,
-    point,
-    max_degree: int,
-    psi: np.ndarray,
-    clmo: np.ndarray
-) -> np.ndarray:
-    """Convert real normal coordinates to physical coordinates."""
-    # Create polynomial representation
-    rn_polys = polynomial_zero_list(max_degree, psi)
-    encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    
-    # Set degree-1 terms
-    if len(rn_polys) > 1:
-        for i in range(6):
-            if abs(rn_coords[i]) > 1e-15:
-                k = np.zeros(6, dtype=np.int64)
-                k[i] = 1
-                pos = encode_multiindex(k, 1, encode_dict_list)
-                if 0 <= pos < rn_polys[1].shape[0]:
-                    rn_polys[1][pos] = rn_coords[i]
-    
-    phys_polys = rn2phys(point, rn_polys, max_degree, psi, clmo)
-    
-    # Extract physical coordinates
-    phys_coords = np.zeros(6, dtype=np.complex128)
-    if len(phys_polys) > 1:
-        for i in range(6):
-            k = np.zeros(6, dtype=np.int64)
-            k[i] = 1
-            pos = encode_multiindex(k, 1, encode_dict_list)
-            if 0 <= pos < phys_polys[1].shape[0]:
-                phys_coords[i] = phys_polys[1][pos]
-                
-    return phys_coords
+    q1c = q1r
+    q2c = (q2r + 1j * p2r) / np.sqrt(2)
+    q3c = (q3r + 1j * p3r) / np.sqrt(2)
+    p1c = p1r
+    p2c = (1j * q2r + p2r) / np.sqrt(2)
+    p3c = (1j * q3r + p3r) / np.sqrt(2)
+
+    return _clean_coordinates(np.array([q1c, q2c, q3c, p1c, p2c, p3c], dtype=np.complex128))
+
+def _realmodal2local_coordinates(point, modal_coords: np.ndarray) -> np.ndarray:
+    _, Cinv = point.normal_form_transform()
+    return _clean_coordinates(modal_coords @ Cinv.T)
+
+def _local2synodic(point, coords: np.ndarray) -> np.ndarray:
+    gamma, mu, sgn, a = point.gamma, point.mu, point.sign, point.a
+
+    c = np.asarray(coords, dtype=np.float64)
+    if c.ndim != 1 or c.size != 6:
+        raise ValueError(
+            f"coords must be a flat array of 6 elements, got shape {c.shape}"
+        )
+
+    syn = np.empty(6, dtype=np.float64)
+
+    # Positions
+    syn[0] =  sgn * gamma * c[0] + mu + a      # X
+    syn[1] =  sgn * gamma * c[1]               # Y
+    syn[2] =        gamma * c[2]               # Z
+
+    # Local momenta to synodic velocities (see standard relations)
+    vx = c[3] + c[1]
+    vy = c[4] - c[0]
+    vz = c[5]
+
+    syn[3] = sgn * gamma * vx  # Vx
+    syn[4] = sgn * gamma * vy  # Vy
+    syn[5] =       gamma * vz  # Vz
+
+    # Flip X and Vx according to NASA/Szebehely convention
+    syn[[0, 3]] *= -1.0
+
+    return syn
 
 def _complete_cm_coordinates(
     poly_cm: List[np.ndarray],
@@ -140,7 +102,7 @@ def _complete_cm_coordinates(
 
     return np.array([q2, p2, 0.0, p3], dtype=np.complex128)
 
-def _cmreal2phys_coordinates(
+def _cmreal2synodic_coordinates(
     point,
     poly_cm: List[np.ndarray],  # RN Hamiltonian for solve_p3
     cm_coords: np.ndarray,      # RN center manifold coordinates [q2, p2]
@@ -151,62 +113,51 @@ def _cmreal2phys_coordinates(
     energy: float = 0.0,
     tol: float = 1e-15
 ) -> np.ndarray:
-    if len(cm_coords) == 2:
-        real_4d_cm = _complete_cm_coordinates(
-            poly_cm, cm_coords, energy, clmo
-        ) # [q2, p2, q3, p3]
-    else:
-        real_4d_cm = cm_coords
+    logger.info(f"Converting points {cm_coords} to synodic coordinates")
 
-    real_6d_cm = np.zeros(6, dtype=np.float64) # [0, q2, q3, 0, p2, p3]
+    real_4d_cm = _complete_cm_coordinates(poly_cm, cm_coords, energy, clmo) # [q2, p2, q3, p3]
+
+    logger.info(f"real_4d_cm: \n{real_4d_cm}")
+
+    real_6d_cm = np.zeros(6, dtype=np.complex128) # [0, q2, q3, 0, p2, p3]
     real_6d_cm[1] = real_4d_cm[0]  # q2
     real_6d_cm[2] = real_4d_cm[2]  # q3
     real_6d_cm[4] = real_4d_cm[1]  # p2
     real_6d_cm[5] = real_4d_cm[3]  # p3
+
+    logger.info(f"real_6d_cm: \n{real_6d_cm}")
     
-    complex_6d_cm = _complexify_coordinates(real_6d_cm, max_degree, psi, clmo)
-    complex_6d_cm = np.array([
+    complex_6d_cm = _complexify_coordinates(real_6d_cm)
+
+    logger.info(f"complex_6d_cm: \n{complex_6d_cm}")
+
+    complex_4d_cm = np.array([
         complex_6d_cm[1],  # q2
         complex_6d_cm[4],  # p2
         complex_6d_cm[2],  # q3
         complex_6d_cm[5]   # p3
     ], dtype=np.complex128)
-    
+
+    logger.info(f"complex_4d_cm: \n{complex_4d_cm}")
+
     complex_6d = inverse_lie_transform(
-        complex_6d_cm, poly_G_total, psi, clmo, max_degree, tol
+        complex_4d_cm, poly_G_total, psi, clmo, max_degree, tol
     )
-    
-    real_6d = _realify_coordinates(complex_6d, max_degree, psi, clmo)
-    local_6d = _rn2phys_coordinates(real_6d, point, max_degree, psi, clmo)
-    
-    return local_6d
 
+    logger.info(f"complex_6d: \n{complex_6d}")
 
-def _local2synodic(point, coords):
-    gamma, mu, sgn, a = point.gamma, point.mu, point.sign, point.a
+    real_6d = _realify_coordinates(complex_6d)
 
-    c = np.asarray(coords, dtype=np.float64)
-    single = c.ndim == 1
-    if single:
-        c = c.reshape(1, -1)
+    logger.info(f"real_6d: \n{real_6d}")
 
-    synodic_6d = np.empty_like(c)
+    local_6d = _realmodal2local_coordinates(point, real_6d)
 
-    synodic_6d[:, 0] =  sgn * gamma * c[:, 0] + mu + a      # X
-    synodic_6d[:, 1] =  sgn * gamma * c[:, 1]               # Y
-    synodic_6d[:, 2] =         gamma * c[:, 2]              # Z
+    logger.info(f"local_6d: \n{local_6d}")
 
-    vx = c[:, 3] + c[:, 1] 
-    vy = c[:, 4] - c[:, 0]
-    vz = c[:, 5]
+    synodic_6d = _local2synodic(point, local_6d)
 
-    synodic_6d[:, 3] =  sgn * gamma * vx # Vx
-    synodic_6d[:, 4] =  sgn * gamma * vy # Vy
-    synodic_6d[:, 5] =        gamma * vz # Vz
-
-    synodic_6d[:, (0, 3)] *= -1.0 # flip X and Vx only (NASA/Szebehely convention)
-
-    return synodic_6d.squeeze() if single else synodic_6d
+    logger.info(f"synodic_6d: \n{synodic_6d}")
+    return synodic_6d
 
 
 def poincare2ic(
@@ -241,7 +192,7 @@ def poincare2ic(
     
     for i, poincare_point in enumerate(poincare_points):
         try:
-            ic = _cmreal2phys_coordinates(
+            ic = _cmreal2synodic_coordinates(
                 point=point,
                 poly_cm=poly_cm_real,     # For solve_p3
                 cm_coords=poincare_point,  # RN coordinates from Poincaré map
@@ -251,7 +202,7 @@ def poincare2ic(
                 max_degree=max_degree,
                 energy=energy
             )
-            initial_conditions[i] = _local2synodic(point, ic)
+            initial_conditions[i] = ic
             
         except Exception as e:
             err = f"Failed to transform point {i}: {poincare_point}, error: {e}"

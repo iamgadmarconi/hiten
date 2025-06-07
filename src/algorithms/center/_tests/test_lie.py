@@ -22,7 +22,7 @@ from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables, make_poly)
 from algorithms.center.polynomial.conversion import sympy2poly
 from algorithms.center.polynomial.operations import polynomial_zero_list, polynomial_variables_list, polynomial_differentiate, polynomial_evaluate
-from algorithms.center.transforms import complexify, phys2rn
+from algorithms.center.transforms import complexify, local2realmodal
 from algorithms.variables import N_VARS
 from system.libration import L1Point
 
@@ -80,7 +80,7 @@ def cn_hamiltonian_data(request):
     # The Hamiltonian itself is constructed up to max_deg.
     # The psi and clmo (initialized for psi_init_deg) are suitable as psi_init_deg >= max_deg.
     H_phys = build_physical_hamiltonian(point, max_deg)
-    H_rn = phys2rn(point, H_phys, max_deg, psi, clmo)
+    H_rn = local2realmodal(point, H_phys, max_deg, psi, clmo)
     H_coeffs = complexify(H_rn, max_deg, psi, clmo)
 
     return H_coeffs, psi, clmo, encode_dict, max_deg
@@ -559,7 +559,7 @@ def test_symplecticity_vs_amplitude(cr3bp_data_fixture, amplitude):
             coords = _apply_coordinate_lie_transform(
                 coords, G_n, deg_G, psi, clmo, encode_dict_list, max_degree, 1e-15, forward=True
             )
-        return coords.real
+        return coords
     
     # Test point at given amplitude
     x0 = amplitude * np.array([1.0, 0.5, -0.3, 0.8, -0.2, 0.6])
@@ -599,7 +599,7 @@ def test_symplecticity_vs_finite_diff_step(cr3bp_data_fixture, eps):
             coords = _apply_coordinate_lie_transform(
                 coords, G_n, deg_G, psi, clmo, encode_dict_list, max_degree, 1e-15, forward=True
             )
-        return coords.real
+        return coords
     
     # Fixed test point
     x0 = 1e-4 * np.array([1.0, 0.5, -0.3, 0.8, -0.2, 0.6])
@@ -692,32 +692,28 @@ def test_symplecticity_analytical_jacobian(cr3bp_data_fixture):
     
     poly_G_total = point.cache_get(("generating_functions", max_degree))
     assert poly_G_total is not None, "Generating functions not found in point cache."
+
+    Dx_analytical = _compute_analytical_jacobian_lie_transform(
+        poly_G_total, psi, clmo, max_degree
+    )
     
-    # Compute analytical Jacobian at origin  
-    try:
-        Dx_analytical = _compute_analytical_jacobian_lie_transform(
-            poly_G_total, psi, clmo, max_degree
-        )
-        
-        # Test symplecticity: DΦᵀ J DΦ = J
-        J = _symplectic_matrix(3)
-        err = Dx_analytical.T @ J @ Dx_analytical - J
-        error_norm = np.linalg.norm(err, ord="fro")
-        
-        print(f"Analytical Jacobian symplecticity error: {error_norm:.2e}")
-        
-        # Should be exact (up to machine precision)
-        assert error_norm < 1e-14, f"Analytical symplecticity error too large: {error_norm:.2e}"
-        
-    except NotImplementedError:
-        pytest.skip("Analytical Jacobian computation not yet fully implemented")
+    # Test symplecticity: DΦᵀ J DΦ = J
+    J = _symplectic_matrix(3)
+    err = Dx_analytical.T @ J @ Dx_analytical - J
+    error_norm = np.linalg.norm(err, ord="fro")
+    
+    print(f"Analytical Jacobian symplecticity error: {error_norm:.2e}")
+    
+    # Should be exact (up to machine precision)
+    assert error_norm < 1e-14, f"Analytical symplecticity error too large: {error_norm:.2e}"
+    
 
 @pytest.mark.parametrize("seed", [0, 1, 2])
 def test_inverse_lie_transform_is_symplectic(cr3bp_data_fixture, seed):
     """Test symplecticity of the inverse Lie transform (4D → 6D).
     
     The inverse transform maps center manifold coordinates to full coordinates.
-    We test that the 4×4 restriction of the symplectic structure is preserved.
+    We test that the 4x4 restriction of the symplectic structure is preserved.
     """
     data = cr3bp_data_fixture
     psi = data["psi"]
@@ -733,7 +729,7 @@ def test_inverse_lie_transform_is_symplectic(cr3bp_data_fixture, seed):
         full_coords = inverse_lie_transform(
             cm_coords.astype(np.complex128), poly_G_total, psi, clmo, max_degree
         )
-        return full_coords.real
+        return full_coords
     
     # Random test point in CM coordinates (small amplitude)
     rng = np.random.default_rng(seed)

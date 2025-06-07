@@ -121,9 +121,9 @@ def substitute_linear(poly_old: List[np.ndarray], C: np.ndarray, max_deg: int, p
     return polynomial_clean(poly_new, 1e-14)
 
 
-def phys2rn(point, poly_phys: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
+def local2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
     """
-    Transform a polynomial from physical coordinates to real normal form.
+    Transform a polynomial from local coordinates to real modal coordinates.
     
     Parameters
     ----------
@@ -141,17 +141,17 @@ def phys2rn(point, poly_phys: List[np.ndarray], max_deg: int, psi, clmo) -> List
     Returns
     -------
     List[numpy.ndarray]
-        Polynomial in resonant normal form coordinates
+        Polynomial in real modal coordinates
         
     Notes
     -----
-    This function transforms a polynomial from physical space coordinates to
-    resonant normal form coordinates using the transformation matrix obtained
+    This function transforms a polynomial from local coordinates to
+    real modal coordinates using the transformation matrix obtained
     from the point object.
     """
     C, _ = point.normal_form_transform()
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return substitute_linear(poly_phys, C, max_deg, psi, clmo, encode_dict_list)
+    return substitute_linear(poly_local, C, max_deg, psi, clmo, encode_dict_list)
 
 
 @njit(fastmath=FASTMATH)
@@ -194,7 +194,7 @@ def complexify(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.nd
     # columns: [q1 q2 q3 p1 p2 p3]
     # rows old: [x  y  z  px py pz]_rn
     C[0, 0] = 1.0                              # x_rn = q1
-    C[1, 1] = 1/sqrt2                          # y_rn
+    C[1, 1] = 1/sqrt2                          # y_rn = q2 + 
     C[1, 4] = 1j/sqrt2
     C[2, 2] = 1/sqrt2                          # z_rn
     C[2, 5] = 1j/sqrt2
@@ -262,7 +262,7 @@ def realify(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarr
     return polynomial_clean(substitute_linear(poly_cn, Cinv, max_deg, psi, clmo, encode_dict_list), 1e-14)
 
 
-def rn2phys(point, poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
+def realmodal2local(point, poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
     """
     Transform a polynomial from real normal form to physical coordinates.
     """
