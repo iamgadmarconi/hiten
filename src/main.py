@@ -13,7 +13,8 @@ from algorithms.integrators.standard import propagate_crtbp
 from config import (C_OMEGA_HEURISTIC, DT, H0_LEVELS, INTEGRATOR_ORDER,
                     L_POINT, MAX_DEG, N_ITER, N_SEEDS, SYSTEM, USE_GPU,
                     USE_SYMPLECTIC)
-from plots.plots import plot_orbit_rotating_frame, plot_poincare_map
+from plots.plots import (plot_orbit_inertial_frame, plot_orbit_rotating_frame,
+                         plot_poincare_map)
 from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
@@ -95,6 +96,7 @@ def main() -> None:
 
     # Plot the orbit
     plot_orbit_rotating_frame(traj, selected_system.mu, selected_system, selected_l_point, "PM", show=True)
+    plot_orbit_inertial_frame(traj, selected_system.mu, selected_system, selected_l_point, "PM", show=True)
 
     # Construct filename
     if len(H0_LEVELS) == 1:

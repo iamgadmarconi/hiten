@@ -320,7 +320,8 @@ poly_G_total: List[np.ndarray],
 max_degree: int, psi: np.ndarray, 
 clmo: np.ndarray, 
 tol: float = 1e-15,
-inverse: bool = False) -> List[List[np.ndarray]]:
+inverse: bool = False,
+sign: int = 1) -> List[List[np.ndarray]]:
     """
     Perform inverse Lie transformation from center manifold coordinates to complex-diagonalized coordinates.
     
@@ -361,18 +362,16 @@ inverse: bool = False) -> List[List[np.ndarray]]:
         start = max_degree
         stop = 2
         step = -1
-        sgn = -1
     else:
         start = 3
         stop = max_degree + 1
         step = 1
-        sgn = 1
 
     for n in range(start, stop, step):
         if n >= len(poly_G_total) or not poly_G_total[n].any():
             continue
 
-        G_n = sgn * poly_G_total[n]
+        G_n = sign * poly_G_total[n]
         poly_G = polynomial_zero_list(max_degree, psi)
         poly_G[n] = G_n.copy()
         
