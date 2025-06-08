@@ -6,7 +6,8 @@ from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                _factorial, decode_multiindex,
                                                encode_multiindex, make_poly)
 from algorithms.center.polynomial.operations import (
-    polynomial_clean, polynomial_poisson_bracket, polynomial_zero_list, polynomial_evaluate)
+    polynomial_clean, polynomial_total_degree, polynomial_evaluate,
+    polynomial_poisson_bracket, polynomial_zero_list)
 from config import FASTMATH
 from utils.log_config import logger
 
@@ -17,7 +18,7 @@ poly_init: List[np.ndarray],
 psi: np.ndarray, 
 clmo: np.ndarray, 
 max_degree: int, 
-tol: float = 1e-30) -> tuple[List[np.ndarray], List[np.ndarray]]:
+tol: float = 1e-15) -> tuple[List[np.ndarray], List[np.ndarray]]:
     """
     Perform a Lie transformation to normalize a Hamiltonian.
     
@@ -314,11 +315,12 @@ tol: float) -> List[np.ndarray]:
     return polynomial_clean(poly_result, tol)
 
 
-def inverse_lie_transform(
+def _center2modal(
 poly_G_total: List[np.ndarray], 
 max_degree: int, psi: np.ndarray, 
 clmo: np.ndarray, 
-tol: float = 1e-30) -> List[List[np.ndarray]]:
+tol: float = 1e-15,
+inverse: bool = False) -> List[List[np.ndarray]]:
     """
     Perform inverse Lie transformation from center manifold coordinates to complex-diagonalized coordinates.
     
@@ -334,7 +336,7 @@ tol: float = 1e-30) -> List[List[np.ndarray]]:
         List of arrays containing packed multi-indices
     tol : float, optional
         Tolerance for cleaning small coefficients
-        
+
     Returns
     -------
     List[List[np.ndarray]]
@@ -346,21 +348,31 @@ tol: float = 1e-30) -> List[List[np.ndarray]]:
     current_coords = []
     for i in range(6):
         poly = polynomial_zero_list(max_degree, psi)
-        if i == 0 or i == 3:
-            # q₁ and p₁ are center directions, start as zero
-            pass
-        else:
-            # q₂, q₃, p₂, p₃ are center manifold coordinates
-            poly[1] = np.zeros(6, dtype=np.complex128)
-            poly[1][i] = 1.0 + 0j
-                
-        current_coords.append(poly)
+
+        # if i == 0 or i == 3:
+        #     # q₁ and p₁ are center directions, start as zero
+        #     pass
+
+        poly[1] = np.zeros(6, dtype=np.complex128)
+        poly[1][i] = 1.0 + 0j       # identity for q₁,q₂,q₃,p₁,p₂,p₃
+        current_coords.append(poly) # [q1, q2, q3, p1, p2, p3]
     
-    for n in range(3, max_degree+1):
+    if inverse:
+        start = max_degree
+        stop = 2
+        step = -1
+        sgn = -1
+    else:
+        start = 3
+        stop = max_degree + 1
+        step = 1
+        sgn = 1
+
+    for n in range(start, stop, step):
         if n >= len(poly_G_total) or not poly_G_total[n].any():
             continue
 
-        G_n = poly_G_total[n]
+        G_n = sgn * poly_G_total[n]
         poly_G = polynomial_zero_list(max_degree, psi)
         poly_G[n] = G_n.copy()
         
@@ -369,9 +381,8 @@ tol: float = 1e-30) -> List[List[np.ndarray]]:
             current_poly_typed = List()
             for arr in current_coords[i]:
                 current_poly_typed.append(arr)
-            
-            # Apply inverse Lie transform: X_new = X + {X, G} + (1/2!){{X, G}, G} + ...
-            new_poly = _apply_inverse_lie_series(
+
+            new_poly = _apply_series(
                 current_poly_typed, poly_G, max_degree, psi, clmo, encode_dict_list, tol
             )
             new_coords.append(new_poly)
@@ -379,11 +390,16 @@ tol: float = 1e-30) -> List[List[np.ndarray]]:
         # Update all coordinates for next iteration
         current_coords = new_coords
     
-    return current_coords
+    # Convert to proper Numba List[List[np.ndarray]] before returning
+    result = List()
+    for coord_expansion in current_coords:
+        result.append(coord_expansion)
+        
+    return result
 
 
 @njit(fastmath=FASTMATH, cache=False)
-def _apply_inverse_lie_series(
+def _apply_series(
 poly_X: List[np.ndarray], 
 poly_G: List[np.ndarray], 
 N_max: int, 
@@ -412,28 +428,20 @@ tol: float) -> List[np.ndarray]:
     list[np.ndarray]
         Transformed coordinate polynomial
     """
-    # Initialize result with copy of input
+
     poly_result = List()
     for i in range(N_max + 1):
         if i < len(poly_X):
             poly_result.append(poly_X[i].copy())
         else:
             poly_result.append(make_poly(i, psi))
-    
+
     # Find degree of generating function
-    deg_G = 0
-    for i in range(len(poly_G)):
-        if poly_G[i].size > 0 and poly_G[i].any():
-            deg_G = i
+    deg_G = polynomial_total_degree(poly_G, psi)
     
     # Determine maximum degree of current polynomial
-    deg_X = 0
-    for i in range(len(poly_X)):
-        if poly_X[i].size > 0 and poly_X[i].any():
-            deg_X = i
-    
-    # Compute number of Lie series terms needed
-    # Each Poisson bracket increases degree by (deg_G - 2)
+    deg_X = polynomial_total_degree(poly_X, psi)
+
     if deg_G > 2:
         K_max = (N_max - deg_X) // (deg_G - 2) + 1
     else:
@@ -459,32 +467,18 @@ tol: float) -> List[np.ndarray]:
             clmo,
             encode_dict_list
         )
-        
-        # Check if bracket exceeds maximum degree
-        exceeds_degree = True
-        for d in range(min(N_max + 1, len(poly_bracket))):
-            if poly_bracket[d].size > 0 and poly_bracket[d].any():
-                exceeds_degree = False
-                break
-        
-        if exceeds_degree:
-            break
-            
-        # Clean intermediate result
+
         poly_bracket = polynomial_clean(poly_bracket, tol)
-        
-        # Add to result with factorial coefficient
+
         coeff = 1.0 / factorials[k]
         for d in range(min(len(poly_bracket), len(poly_result))):
-            if poly_bracket[d].size > 0:
-                poly_result[d] = poly_result[d] + coeff * poly_bracket[d]
-    
-    # Final cleaning
+            poly_result[d] += coeff * poly_bracket[d]
+
     return polynomial_clean(poly_result, tol)
 
 
 @njit(fastmath=FASTMATH, cache=True)
-def evaluate_inverse_transform(
+def evaluate_transform(
 expansions: List[List[np.ndarray]], 
 coords_cm_complex: np.ndarray, 
 clmo: np.ndarray) -> np.ndarray:
@@ -513,3 +507,38 @@ clmo: np.ndarray) -> np.ndarray:
         result[i] = polynomial_evaluate(expansions[i], coords_cm_complex, clmo)
     
     return result # [q̃1, q̃2, q̃3, p̃1, p̃2, p̃3]
+
+
+def restrict_expansions_to_center_manifold(
+    expansions: List[List[np.ndarray]], 
+    clmo: np.ndarray, 
+    tol: float = 1e-14
+) -> List[List[np.ndarray]]:
+    """
+    Restrict coordinate expansions to the center manifold by eliminating 
+    terms containing q1 or p1.
+    
+    After this restriction, all 6 coordinate expansions will depend only 
+    on the 4 center manifold variables (q2, p2, q3, p3).
+    """
+    restricted_expansions = List()
+    
+    for expansion in expansions:
+        # Create a new Numba List to maintain type consistency
+        restricted_poly = List()
+        for h in expansion:
+            restricted_poly.append(h.copy())
+            
+        for deg, coeff_vec in enumerate(restricted_poly):
+            if coeff_vec.size == 0:
+                continue
+            for pos, c in enumerate(coeff_vec):
+                if abs(c) <= tol:
+                    coeff_vec[pos] = 0.0
+                    continue
+                k = decode_multiindex(pos, deg, clmo)
+                if k[0] != 0 or k[3] != 0:  # q1 or p1 exponent non-zero
+                    coeff_vec[pos] = 0.0
+        restricted_expansions.append(restricted_poly)
+    
+    return restricted_expansions

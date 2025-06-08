@@ -13,7 +13,7 @@ from algorithms.center.polynomial.operations import (
     polynomial_add_inplace, polynomial_clean, polynomial_degree,
     polynomial_differentiate, polynomial_evaluate, polynomial_integrate,
     polynomial_jacobian, polynomial_multiply, polynomial_poisson_bracket,
-    polynomial_power, polynomial_variable, polynomial_variables_list,
+    polynomial_power, polynomial_total_degree, polynomial_variable, polynomial_variables_list,
     polynomial_zero_list)
 from algorithms.variables import N_VARS
 
@@ -1375,6 +1375,147 @@ def test_polynomial_jacobian():
     for i in range(N_VARS):
         assert len(jacobian_P_zero[i]) == deriv_max_deg_zero + 1
         assert_poly_lists_almost_equal(jacobian_P_zero[i], expected_zero_deriv_for_zero_poly, msg=f"dP/dx{i} for zero P mismatch")
+
+def test_polynomial_total_degree():
+    """Test the polynomial_total_degree function using the _get_degree kernel."""
+    
+    # Test case 1: Zero polynomial (list of zero arrays up to MAX_DEGREE)
+    zero_p = polynomial_zero_list(MAX_DEGREE, PSI)
+    assert polynomial_total_degree(zero_p, PSI) == -1, "Test Case 1 Failed: Zero polynomial"
+    
+    # Should match existing polynomial_degree function for zero polynomial
+    assert polynomial_total_degree(zero_p, PSI) == polynomial_degree(zero_p), \
+        "polynomial_total_degree and polynomial_degree should agree for zero polynomial"
+
+    # Test case 2: Constant polynomial (e.g., P(x) = 5)
+    const_p = polynomial_zero_list(MAX_DEGREE, PSI)
+    if len(const_p) > 0 and const_p[0].size > 0:
+        const_p[0][0] = 5.0
+    assert polynomial_total_degree(const_p, PSI) == 0, "Test Case 2 Failed: Constant polynomial"
+    
+    # Should match existing polynomial_degree function
+    assert polynomial_total_degree(const_p, PSI) == polynomial_degree(const_p), \
+        "polynomial_total_degree and polynomial_degree should agree for constant polynomial"
+
+    # Test case 3: Linear polynomial (e.g., P(x) = 2x0)
+    linear_p = polynomial_zero_list(MAX_DEGREE, PSI)
+    if MAX_DEGREE >= 1 and len(linear_p) > 1 and linear_p[1].size > 0:
+        k_x0 = np.array([1,0,0,0,0,0], dtype=np.int64)
+        idx_x0 = encode_multiindex(k_x0, 1, ENCODE_DICT_GLOBAL)
+        if idx_x0 != -1 and idx_x0 < linear_p[1].shape[0]:
+             linear_p[1][idx_x0] = 2.0
+    assert polynomial_total_degree(linear_p, PSI) == 1, "Test Case 3 Failed: Linear polynomial"
+    
+    # Should match existing polynomial_degree function
+    assert polynomial_total_degree(linear_p, PSI) == polynomial_degree(linear_p), \
+        "polynomial_total_degree and polynomial_degree should agree for linear polynomial"
+
+    # Test case 4: Quadratic polynomial with leading zero terms
+    # P(x) = 0*x^3 + 3x^2 + ... (degree should be 2)
+    quad_p = polynomial_zero_list(3, PSI) # Max degree 3
+    if len(quad_p) > 2 and quad_p[2].size > 0:
+        k_x1_sq = np.array([0,2,0,0,0,0], dtype=np.int64)
+        idx_x1_sq = encode_multiindex(k_x1_sq, 2, ENCODE_DICT_GLOBAL)
+        if idx_x1_sq != -1 and idx_x1_sq < quad_p[2].shape[0]:
+            quad_p[2][idx_x1_sq] = 3.0 
+    # quad_p[3] is all zeros
+    assert polynomial_total_degree(quad_p, PSI) == 2, "Test Case 4 Failed: Quadratic with leading zeros"
+    
+    # Should match existing polynomial_degree function
+    assert polynomial_total_degree(quad_p, PSI) == polynomial_degree(quad_p), \
+        "polynomial_total_degree and polynomial_degree should agree for quadratic polynomial"
+
+    # Test case 5: Complex polynomial with multiple degrees
+    multi_deg_p = polynomial_zero_list(MAX_DEGREE, PSI)
+    
+    # Add constant term
+    if len(multi_deg_p) > 0 and multi_deg_p[0].size > 0:
+        multi_deg_p[0][0] = 1.0
+    
+    # Add degree 1 term  
+    if MAX_DEGREE >= 1 and len(multi_deg_p) > 1 and multi_deg_p[1].size > 0:
+        k_x0 = np.array([1,0,0,0,0,0], dtype=np.int64)
+        idx_x0 = encode_multiindex(k_x0, 1, ENCODE_DICT_GLOBAL)
+        if idx_x0 != -1 and idx_x0 < multi_deg_p[1].shape[0]:
+            multi_deg_p[1][idx_x0] = 2.0
+    
+    # Add degree 3 term (highest non-zero degree)
+    if MAX_DEGREE >= 3 and len(multi_deg_p) > 3 and multi_deg_p[3].size > 0:
+        k_x0_x1_x2 = np.array([1,1,1,0,0,0], dtype=np.int64)
+        idx_x0_x1_x2 = encode_multiindex(k_x0_x1_x2, 3, ENCODE_DICT_GLOBAL)
+        if idx_x0_x1_x2 != -1 and idx_x0_x1_x2 < multi_deg_p[3].shape[0]:
+            multi_deg_p[3][idx_x0_x1_x2] = 4.0
+    
+    # Degree should be 3 if MAX_DEGREE >= 3, else the highest degree with non-zero terms
+    expected_degree = min(3, MAX_DEGREE) if MAX_DEGREE >= 1 else 0
+    assert polynomial_total_degree(multi_deg_p, PSI) == expected_degree, \
+        "Test Case 5 Failed: Multi-degree polynomial"
+    
+    # Should match existing polynomial_degree function
+    assert polynomial_total_degree(multi_deg_p, PSI) == polynomial_degree(multi_deg_p), \
+        "polynomial_total_degree and polynomial_degree should agree for multi-degree polynomial"
+
+    # Test case 6: Polynomial with only highest degree term non-zero
+    if MAX_DEGREE > 0:
+        high_deg_p = polynomial_zero_list(MAX_DEGREE, PSI)
+        if len(high_deg_p) > MAX_DEGREE and high_deg_p[MAX_DEGREE].size > 0:
+            # Set the first coefficient of the highest degree part to be non-zero
+            high_deg_p[MAX_DEGREE][0] = 1.0 
+        assert polynomial_total_degree(high_deg_p, PSI) == MAX_DEGREE, \
+            "Test Case 6 Failed: Highest degree non-zero"
+        
+        # Should match existing polynomial_degree function
+        assert polynomial_total_degree(high_deg_p, PSI) == polynomial_degree(high_deg_p), \
+            "polynomial_total_degree and polynomial_degree should agree for highest degree polynomial"
+
+    # Test case 7: Polynomial created using polynomial_variable (should have degree 1)
+    max_deg_local = PSI_GLOBAL.shape[1]-1
+    for var_idx in range(min(N_VARS, 3)):  # Test first few variables
+        var_poly = polynomial_variable(var_idx, max_deg_local, PSI_GLOBAL, CLMO_GLOBAL, ENCODE_DICT_GLOBAL)
+        assert polynomial_total_degree(var_poly, PSI_GLOBAL) == 1, \
+            f"Test Case 7 Failed: Variable x{var_idx} polynomial should have degree 1"
+        
+        # Should match existing polynomial_degree function
+        assert polynomial_total_degree(var_poly, PSI_GLOBAL) == polynomial_degree(var_poly), \
+            f"polynomial_total_degree and polynomial_degree should agree for variable x{var_idx}"
+
+    # Test case 8: Complex coefficients polynomial
+    complex_p = polynomial_zero_list(MAX_DEGREE, PSI)
+    if len(complex_p) > 0 and complex_p[0].size > 0:
+        complex_p[0][0] = complex(1.0, 2.0)  # Complex constant
+    
+    if MAX_DEGREE >= 2 and len(complex_p) > 2 and complex_p[2].size > 0:
+        k_x0_sq = np.array([2,0,0,0,0,0], dtype=np.int64)
+        idx_x0_sq = encode_multiindex(k_x0_sq, 2, ENCODE_DICT_GLOBAL)
+        if idx_x0_sq != -1 and idx_x0_sq < complex_p[2].shape[0]:
+            complex_p[2][idx_x0_sq] = complex(3.0, -1.0)  # Complex quadratic term
+    
+    expected_complex_degree = min(2, MAX_DEGREE) if MAX_DEGREE >= 2 else 0
+    assert polynomial_total_degree(complex_p, PSI) == expected_complex_degree, \
+        "Test Case 8 Failed: Complex polynomial"
+    
+    # Should match existing polynomial_degree function
+    assert polynomial_total_degree(complex_p, PSI) == polynomial_degree(complex_p), \
+        "polynomial_total_degree and polynomial_degree should agree for complex polynomial"
+
+    # Test case 9: Small coefficient polynomial (should still count if non-zero)
+    small_coeff_p = polynomial_zero_list(MAX_DEGREE, PSI)
+    if MAX_DEGREE >= 1 and len(small_coeff_p) > 1 and small_coeff_p[1].size > 0:
+        k_x0 = np.array([1,0,0,0,0,0], dtype=np.int64)
+        idx_x0 = encode_multiindex(k_x0, 1, ENCODE_DICT_GLOBAL)
+        if idx_x0 != -1 and idx_x0 < small_coeff_p[1].shape[0]:
+            small_coeff_p[1][idx_x0] = 1e-15  # Very small but non-zero
+    
+    if MAX_DEGREE >= 1:
+        assert polynomial_total_degree(small_coeff_p, PSI) == 1, \
+            "Test Case 9 Failed: Small coefficient polynomial"
+        
+        # Should match existing polynomial_degree function  
+        assert polynomial_total_degree(small_coeff_p, PSI) == polynomial_degree(small_coeff_p), \
+            "polynomial_total_degree and polynomial_degree should agree for small coefficient polynomial"
+    else:
+        assert polynomial_total_degree(small_coeff_p, PSI) == -1, \
+            "Test Case 9 Failed: Zero polynomial when MAX_DEGREE < 1"
 
 def test_coordinate_poisson_bracket():
     """Test that {q_i, G} = ∂G/∂p_i for coordinate transformations."""

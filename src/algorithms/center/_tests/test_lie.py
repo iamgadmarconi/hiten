@@ -8,10 +8,12 @@ from numpy.linalg import norm
 
 from algorithms.center.hamiltonian import build_physical_hamiltonian
 from algorithms.center.lie import (_apply_lie_transform,
+                                   _center2modal, 
                                    _get_homogeneous_terms,
                                    _select_terms_for_elimination,
                                    _solve_homological_equation,
-                                   inverse_lie_transform, lie_transform)
+                                   evaluate_transform,
+                                   lie_transform)
 from algorithms.center.manifold import center_manifold_real
 from algorithms.center.polynomial.algebra import _poly_poisson
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
@@ -21,6 +23,7 @@ from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
 from algorithms.center.polynomial.conversion import sympy2poly
 from algorithms.center.polynomial.operations import (polynomial_differentiate,
                                                      polynomial_evaluate,
+                                                     polynomial_poisson_bracket,
                                                      polynomial_variables_list,
                                                      polynomial_zero_list)
 from algorithms.center.transforms import complexify, local2realmodal
@@ -351,10 +354,361 @@ def test_lie_transform_removes_bad_terms(cn_hamiltonian_data):
     point = L1Point(mu=mu_earth_moon)
     H_out, _ = lie_transform(point, H_coeffs, psi, clmo, max_deg)
 
+    # Use a tolerance appropriate for accumulated floating-point errors
+    tolerance = 1e-15
+    
     for n in range(3, max_deg + 1):
         bad = _select_terms_for_elimination(H_out[n], n, clmo)
-        assert not bad.any(), (
-            f"Bad monomials not eliminated at degree {n}: {np.where(bad!=0)}")
+        max_bad_coeff = np.max(np.abs(bad)) if bad.size > 0 else 0.0
+        assert max_bad_coeff < tolerance, (
+            f"Bad monomials not sufficiently eliminated at degree {n}. "
+            f"Max coefficient: {max_bad_coeff:.2e}, tolerance: {tolerance:.2e}. "
+            f"Non-zero positions: {np.where(np.abs(bad) >= tolerance)}")
 
     assert np.allclose(H_out[2], H_coeffs[2], atol=0, rtol=0)
+
+
+def test_center2modal_simple_symplectic_check(cr3bp_data_fixture):
+    """
+    Simple diagnostic test to understand the symplectic failure.
+    """
+    point = cr3bp_data_fixture["point"]
+    psi = cr3bp_data_fixture["psi"]
+    clmo = cr3bp_data_fixture["clmo"]
+    max_deg = 3  # Use low degree for debugging
+    
+    # Get generating functions
+    poly_G_total = point.cache_get(('generating_functions', max_deg))
+    if poly_G_total is None:
+        psi, clmo = init_index_tables(max_deg)
+        _ = center_manifold_real(point, psi, clmo, max_deg)
+        poly_G_total = point.cache_get(('generating_functions', max_deg))
+    
+    encode_dict_list = _create_encode_dict_from_clmo(clmo)
+    
+    # Get expansions
+    expansions = _center2modal(poly_G_total, max_deg, psi, clmo, inverse=True)
+    
+    # Test a simple case: {q0, p0} should be 1
+    q0_poly = expansions[0]  # q0 expansion
+    p0_poly = expansions[3]  # p0 expansion
+    
+    bracket_result = polynomial_poisson_bracket(
+        q0_poly, p0_poly, max_deg, psi, clmo, encode_dict_list
+    )
+    
+    # This should be the constant polynomial 1
+    print(f"Q0-P0 bracket degree 0 coeffs: {bracket_result[0] if len(bracket_result) > 0 else 'empty'}")
+    if len(bracket_result) > 1:
+        print(f"Q0-P0 bracket degree 1 coeffs: {bracket_result[1]}")
+    if len(bracket_result) > 2:
+        print(f"Q0-P0 bracket degree 2 coeffs: {bracket_result[2]}")
+    if len(bracket_result) > 3:
+        print(f"Q0-P0 bracket degree 3 coeffs: {bracket_result[3]}")
+    
+    # Test a simple case: {q0, q1} should be 0
+    q1_poly = expansions[1]  # q1 expansion
+    
+    bracket_result_qq = polynomial_poisson_bracket(
+        q0_poly, q1_poly, max_deg, psi, clmo, encode_dict_list
+    )
+    
+    print(f"Q0-Q1 bracket degree 0 coeffs: {bracket_result_qq[0] if len(bracket_result_qq) > 0 else 'empty'}")
+    if len(bracket_result_qq) > 1:
+        print(f"Q0-Q1 bracket degree 1 coeffs: {bracket_result_qq[1]}")
+    if len(bracket_result_qq) > 2:
+        print(f"Q0-Q1 bracket degree 2 coeffs: {bracket_result_qq[2]}")
+    if len(bracket_result_qq) > 3:
+        print(f"Q0-Q1 bracket degree 3 coeffs: {bracket_result_qq[3]}")
+    
+    # Let's also check what the q0 and q1 expansions look like
+    print("Q0 expansion:")
+    for deg in range(len(q0_poly)):
+        if q0_poly[deg].size > 0 and np.any(q0_poly[deg] != 0):
+            print(f"  Degree {deg}: {q0_poly[deg]}")
+    
+    print("Q1 expansion:")
+    for deg in range(len(q1_poly)):
+        if q1_poly[deg].size > 0 and np.any(q1_poly[deg] != 0):
+            print(f"  Degree {deg}: {q1_poly[deg]}")
+
+
+@pytest.mark.parametrize("max_deg", [3, 4, 5])
+def test_center2modal_symplectic_property(cr3bp_data_fixture, max_deg):
+    """
+    Test that the _center2modal transformation is symplectic by verifying
+    that it preserves canonical Poisson bracket relations.
+    
+    A transformation is symplectic if the transformed coordinates satisfy:
+    {Q_i, Q_j} = 0, {P_i, P_j} = 0, {Q_i, P_j} = δ_ij
+    where {,} denotes the Poisson bracket and δ_ij is the Kronecker delta.
+    """
+    point = cr3bp_data_fixture["point"]
+    psi = cr3bp_data_fixture["psi"]
+    clmo = cr3bp_data_fixture["clmo"]
+    
+    # Initialize tables for this test's max_deg if different from fixture
+    if max_deg != cr3bp_data_fixture["max_degree"]:
+        psi, clmo = init_index_tables(max_deg)
+        _ = center_manifold_real(point, psi, clmo, max_deg)
+    
+    # Get the generating functions from the point's cache
+    poly_G_total = point.cache_get(('generating_functions', max_deg))
+    if poly_G_total is None:
+        pytest.fail("Generating functions not found in cache")
+    
+    encode_dict_list = _create_encode_dict_from_clmo(clmo)
+    
+    # Apply the inverse Lie transformation to get coordinate expansions
+    # These represent the transformation from center manifold coords to modal coords
+    expansions = _center2modal(poly_G_total, max_deg, psi, clmo, inverse=True)
+    
+    # Create zero and identity polynomials for comparison
+    zero_poly = polynomial_zero_list(max_deg, psi)
+    identity_poly = polynomial_zero_list(max_deg, psi)
+    if len(identity_poly) > 0 and identity_poly[0].size > 0:
+        identity_poly[0][0] = 1.0  # Constant polynomial equal to 1
+    
+    tolerance = 1e-10
+    
+    # Test canonical Poisson bracket relations
+    for i in range(6):
+        for j in range(6):
+            # Compute Poisson bracket of transformed coordinates
+            bracket_result = polynomial_poisson_bracket(
+                expansions[i], expansions[j], max_deg, psi, clmo, encode_dict_list
+            )
+            
+            if i < 3 and j < 3:
+                # {Q_i, Q_j} should be 0 (position-position brackets)
+                _assert_polynomial_close_to_zero(
+                    bracket_result, tolerance,
+                    f"Position-position bracket {{Q{i}, Q{j}}} should be zero"
+                )
+            elif i >= 3 and j >= 3:
+                # {P_i, P_j} should be 0 (momentum-momentum brackets)
+                _assert_polynomial_close_to_zero(
+                    bracket_result, tolerance,
+                    f"Momentum-momentum bracket {{P{i-3}, P{j-3}}} should be zero"
+                )
+            elif i < 3 and j >= 3:
+                # {Q_i, P_j} should be δ_ij (mixed brackets)
+                if i == j - 3:
+                    # Should be 1 (Kronecker delta = 1)
+                    _assert_polynomial_close_to_constant(
+                        bracket_result, identity_poly, tolerance,
+                        f"Mixed bracket {{Q{i}, P{j-3}}} should be 1"
+                    )
+                else:
+                    # Should be 0 (Kronecker delta = 0)
+                    _assert_polynomial_close_to_zero(
+                        bracket_result, tolerance,
+                        f"Mixed bracket {{Q{i}, P{j-3}}} should be zero"
+                    )
+            elif i >= 3 and j < 3:
+                # {P_i, Q_j} should be -δ_ij (antisymmetry of Poisson bracket)
+                if i - 3 == j:
+                    # Should be -1
+                    minus_identity_poly = polynomial_zero_list(max_deg, psi)
+                    if len(minus_identity_poly) > 0 and minus_identity_poly[0].size > 0:
+                        minus_identity_poly[0][0] = -1.0
+                    _assert_polynomial_close_to_constant(
+                        bracket_result, minus_identity_poly, tolerance,
+                        f"Mixed bracket {{P{i-3}, Q{j}}} should be -1"
+                    )
+                else:
+                    # Should be 0
+                    _assert_polynomial_close_to_zero(
+                        bracket_result, tolerance,
+                        f"Mixed bracket {{P{i-3}, Q{j}}} should be zero"
+                    )
+
+
+def test_center2modal_jacobian_symplectic_property(cr3bp_data_fixture):
+    """
+    Test that the Jacobian of the _center2modal transformation is symplectic
+    by evaluating it at specific points and checking the matrix condition M^T J M = J.
+    """
+    point = cr3bp_data_fixture["point"]
+    psi = cr3bp_data_fixture["psi"]
+    clmo = cr3bp_data_fixture["clmo"]
+    max_deg = cr3bp_data_fixture["max_degree"]
+    
+    # Get generating functions
+    poly_G_total = point.cache_get(('generating_functions', max_deg))
+    if poly_G_total is None:
+        pytest.fail("Generating functions not found in cache")
+    
+    encode_dict_list = _create_encode_dict_from_clmo(clmo)
+    
+    # Get coordinate expansions
+    expansions = _center2modal(poly_G_total, max_deg, psi, clmo, inverse=True)
+    
+    # Test at several points in the center manifold
+    np.random.seed(RANDOM_SEED)
+    test_points = [
+        np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.complex128),  # Origin
+        np.array([0.1, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.complex128),  # Small displacement in q1
+        np.array([0.0, 0.1, 0.0, 0.0, 0.0, 0.0], dtype=np.complex128),  # Small displacement in q2
+        np.array([0.0, 0.0, 0.1, 0.0, 0.0, 0.0], dtype=np.complex128),  # Small displacement in q3
+    ]
+    
+    # Add some random test points with small magnitudes
+    for _ in range(3):
+        random_point = 0.05 * (np.random.randn(6) + 1j * np.random.randn(6))
+        test_points.append(random_point.astype(np.complex128))
+    
+    for k, test_point in enumerate(test_points):
+        # Compute Jacobian matrix numerically
+        jacobian_matrix = _compute_transformation_jacobian(
+            expansions, test_point, psi, clmo, encode_dict_list
+        )
+        
+        # Check if Jacobian is symplectic
+        is_symplectic_result = _is_complex_symplectic(jacobian_matrix)
+        
+        assert is_symplectic_result, (
+            f"Jacobian matrix at test point {k} is not symplectic. "
+            f"Point: {test_point}, Max eigenvalue of M^T J M - J: "
+            f"{_symplectic_error(jacobian_matrix):.2e}"
+        )
+
+
+def _assert_polynomial_close_to_zero(poly_p: List[np.ndarray], tol: float, msg: str):
+    """Assert that all coefficients of a polynomial are close to zero."""
+    for deg in range(len(poly_p)):
+        if poly_p[deg].size > 0:
+            max_coeff = np.max(np.abs(poly_p[deg]))
+            assert max_coeff < tol, f"{msg}. Max coefficient at degree {deg}: {max_coeff:.2e}"
+
+
+def _assert_polynomial_close_to_constant(
+    poly_p: List[np.ndarray], 
+    expected_poly: List[np.ndarray], 
+    tol: float, 
+    msg: str
+):
+    """Assert that a polynomial is close to an expected constant polynomial."""
+    assert len(poly_p) == len(expected_poly), f"{msg}. Length mismatch."
+    
+    for deg in range(len(poly_p)):
+        if poly_p[deg].size > 0 or expected_poly[deg].size > 0:
+            if poly_p[deg].shape != expected_poly[deg].shape:
+                # Handle shape mismatch by reshaping if sizes match
+                if poly_p[deg].size == expected_poly[deg].size:
+                    poly_p_reshaped = poly_p[deg].reshape(expected_poly[deg].shape)
+                    diff = np.abs(poly_p_reshaped - expected_poly[deg])
+                else:
+                    assert False, f"{msg}. Shape/size mismatch at degree {deg}"
+            else:
+                diff = np.abs(poly_p[deg] - expected_poly[deg])
+            
+            max_diff = np.max(diff)
+            assert max_diff < tol, f"{msg}. Max difference at degree {deg}: {max_diff:.2e}"
+
+
+def _compute_transformation_jacobian(
+    expansions: List[List[np.ndarray]], 
+    point: np.ndarray, 
+    psi: np.ndarray, 
+    clmo: List[np.ndarray],
+    encode_dict_list: List[dict],
+    h: float = 1e-8
+) -> np.ndarray:
+    """
+    Compute the Jacobian matrix of the transformation numerically using finite differences.
+    
+    Parameters
+    ----------
+    expansions : List[List[np.ndarray]]
+        Six polynomial expansions from _center2modal
+    point : np.ndarray
+        Point at which to evaluate the Jacobian
+    psi, clmo, encode_dict_list : arrays
+        Polynomial indexing structures
+    h : float
+        Step size for finite differences
+        
+    Returns
+    -------
+    np.ndarray
+        6x6 complex Jacobian matrix
+    """
+    jacobian = np.zeros((6, 6), dtype=np.complex128)
+    
+    # Evaluate transformation at the base point
+    base_result = evaluate_transform(expansions, point, clmo)
+    
+    # Compute partial derivatives using finite differences
+    for j in range(6):
+        # Create perturbed point
+        point_plus = point.copy()
+        point_plus[j] += h
+        
+        # Evaluate transformation at perturbed point
+        perturbed_result = evaluate_transform(expansions, point_plus, clmo)
+        
+        # Compute finite difference approximation
+        jacobian[:, j] = (perturbed_result - base_result) / h
+    
+    return jacobian
+
+
+def _is_complex_symplectic(matrix: np.ndarray, tol: float = 1e-10) -> bool:
+    """
+    Check if a complex 6x6 matrix is symplectic by verifying M^T J M = J.
+    
+    Parameters
+    ----------
+    matrix : np.ndarray
+        6x6 complex matrix to test
+    tol : float
+        Tolerance for the test
+        
+    Returns
+    -------
+    bool
+        True if the matrix is symplectic within the given tolerance
+    """
+    # Standard symplectic matrix J
+    J = np.zeros((6, 6), dtype=np.complex128)
+    n = 3  # 3 degrees of freedom
+    for i in range(n):
+        J[i, i+n] = 1.0 + 0j
+        J[i+n, i] = -1.0 + 0j
+    
+    # Calculate M^T J M
+    M_T_J_M = matrix.conj().T @ J @ matrix
+    
+    # Check if M^T J M = J
+    return np.allclose(M_T_J_M, J, atol=tol)
+
+
+def _symplectic_error(matrix: np.ndarray) -> float:
+    """
+    Compute the symplectic error ||M^T J M - J||_∞ for a matrix M.
+    
+    Parameters
+    ----------
+    matrix : np.ndarray
+        6x6 matrix to test
+        
+    Returns
+    -------
+    float
+        Maximum absolute value of the elements of M^T J M - J
+    """
+    # Standard symplectic matrix J
+    J = np.zeros((6, 6), dtype=np.complex128)
+    n = 3  # 3 degrees of freedom
+    for i in range(n):
+        J[i, i+n] = 1.0 + 0j
+        J[i+n, i] = -1.0 + 0j
+    
+    # Calculate M^T J M - J
+    M_T_J_M = matrix.conj().T @ J @ matrix
+    error_matrix = M_T_J_M - J
+    
+    return np.max(np.abs(error_matrix))
+
 
