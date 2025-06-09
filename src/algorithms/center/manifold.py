@@ -66,17 +66,20 @@ def center_manifold_complex(point, psi, clmo, max_deg=5):
 
     poly_trans = point.cache_get(('hamiltonian', max_deg, 'normalized'))
     poly_G_total = point.cache_get(('generating_functions', max_deg))
+    poly_elim_total = point.cache_get(('terms_to_eliminate', max_deg))
     
-    if poly_trans is None or poly_G_total is None:
-        poly_trans, poly_G_total = lie_transform(point, poly_cn, psi, clmo, max_deg)
+    if poly_trans is None or poly_G_total is None or poly_elim_total is None:
+        poly_trans, poly_G_total, poly_elim_total = lie_transform(point, poly_cn, psi, clmo, max_deg)
         point.cache_set(('hamiltonian', max_deg, 'normalized'), [h.copy() for h in poly_trans])
         point.cache_set(('generating_functions', max_deg), [g.copy() for g in poly_G_total])
-    
+        point.cache_set(('terms_to_eliminate', max_deg), [e.copy() for e in poly_elim_total])
     else:
         if poly_trans is not None:
             poly_trans = [h.copy() for h in poly_trans]
         if poly_G_total is not None:
             poly_G_total = [g.copy() for g in poly_G_total]
+        if poly_elim_total is not None:
+            poly_elim_total = [e.copy() for e in poly_elim_total]
 
     poly_cm_complex = restrict_to_center_manifold(poly_trans, clmo, tol=1e-14)
     point.cache_set(('hamiltonian', max_deg, 'center_manifold_complex'), [h.copy() for h in poly_cm_complex])

@@ -92,11 +92,13 @@ def main() -> None:
     logger.info(f"Initial conditions:\n\n{ic}\n\n")
 
     logger.info("Propagating initial conditions")
-    traj = propagate_crtbp(ic[0], 0, 2*np.pi, selected_system.mu).y.T
+    sol = propagate_crtbp(ic[0], 0, 2*np.pi, selected_system.mu)
+    traj = sol.y.T
+    times = sol.t
 
     # Plot the orbit
     plot_orbit_rotating_frame(traj, selected_system.mu, selected_system, selected_l_point, "PM", show=True)
-    plot_orbit_inertial_frame(traj, selected_system.mu, selected_system, selected_l_point, "PM", show=True)
+    plot_orbit_inertial_frame(traj, times, selected_system.mu, selected_system, "PM", show=True)
 
     # Construct filename
     if len(H0_LEVELS) == 1:

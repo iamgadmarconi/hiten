@@ -1,8 +1,7 @@
 import numpy as np
 from numba.typed import List
 
-from algorithms.center.lie import (_center2modal, evaluate_transform,
-                                   restrict_expansions_to_center_manifold)
+from algorithms.center.lie import _center2modal, evaluate_transform
 from algorithms.center.poincare.map import solve_p3
 from utils.log_config import logger
 
@@ -136,7 +135,6 @@ def _cmreal2synodic_coordinates(
     expansions = _center2modal(
         poly_G_total, max_degree, psi, clmo, tol
     )
-    expansions = restrict_expansions_to_center_manifold(expansions, clmo)
 
     complex_6d = evaluate_transform(expansions, complex_6d_cm, clmo) # [q1, q2, q3, p1, p2, p3]
 

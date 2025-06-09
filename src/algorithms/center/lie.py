@@ -18,7 +18,7 @@ poly_init: List[np.ndarray],
 psi: np.ndarray, 
 clmo: np.ndarray, 
 max_degree: int, 
-tol: float = 1e-15) -> tuple[List[np.ndarray], List[np.ndarray]]:
+tol: float = 1e-15) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
     """
     Perform a Lie transformation to normalize a Hamiltonian.
     
@@ -40,10 +40,11 @@ tol: float = 1e-15) -> tuple[List[np.ndarray], List[np.ndarray]]:
         
     Returns
     -------
-    tuple[List[np.ndarray], List[np.ndarray]]
+    tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]
         A tuple containing:
         - The normalized Hamiltonian
         - The generating function for the normalization
+        - The eliminated terms at each degree (for testing homological equation)
         
     Notes
     -----
@@ -64,6 +65,7 @@ tol: float = 1e-15) -> tuple[List[np.ndarray], List[np.ndarray]]:
 
     poly_trans = [h.copy() for h in poly_init]
     poly_G_total = polynomial_zero_list(max_degree, psi)
+    poly_elim_total = polynomial_zero_list(max_degree, psi)  # Store eliminated terms
 
     for n in range(3, max_degree+1):
         logger.info(f"Normalizing at order: {n}")
@@ -73,6 +75,11 @@ tol: float = 1e-15) -> tuple[List[np.ndarray], List[np.ndarray]]:
         p_elim = _select_terms_for_elimination(p_n, n, clmo)
         if not p_elim.any():
             continue
+            
+        # Store the eliminated terms for this degree
+        if n < len(poly_elim_total):
+            poly_elim_total[n] = p_elim.copy()
+            
         p_G_n = _solve_homological_equation(p_elim, n, eta, clmo)
         
         # Clean Gn using a Numba typed list for compatibility with polynomial_clean
@@ -99,7 +106,8 @@ tol: float = 1e-15) -> tuple[List[np.ndarray], List[np.ndarray]]:
             continue
             
     poly_G_total = polynomial_clean(poly_G_total, tol)
-    return poly_trans, poly_G_total
+    poly_elim_total = polynomial_clean(poly_elim_total, tol)
+    return poly_trans, poly_G_total, poly_elim_total
 
 
 @njit(fastmath=FASTMATH, cache=True)
@@ -320,8 +328,9 @@ poly_G_total: List[np.ndarray],
 max_degree: int, psi: np.ndarray, 
 clmo: np.ndarray, 
 tol: float = 1e-15,
-inverse: bool = False,
-sign: int = 1) -> List[List[np.ndarray]]:
+inverse: bool = False, # If False, Generators are applied in ascending order. If True, Generators are applied in descending order.
+sign: int = None, # If None, the sign is determined by the inverse flag. If not None, the sign is used to determine sign of the generator.
+restrict: bool = True) -> List[List[np.ndarray]]:
     """
     Perform inverse Lie transformation from center manifold coordinates to complex-diagonalized coordinates.
     
@@ -362,10 +371,12 @@ sign: int = 1) -> List[List[np.ndarray]]:
         start = max_degree
         stop = 2
         step = -1
+        sign = -1 if sign is None else sign
     else:
         start = 3
         stop = max_degree + 1
         step = 1
+        sign = 1 if sign is None else sign
 
     for n in range(start, stop, step):
         if n >= len(poly_G_total) or not poly_G_total[n].any():
@@ -393,7 +404,10 @@ sign: int = 1) -> List[List[np.ndarray]]:
     result = List()
     for coord_expansion in current_coords:
         result.append(coord_expansion)
-        
+    
+    if restrict:
+        result = _zero_q1p1(result, clmo, tol)
+
     return result
 
 
@@ -442,7 +456,7 @@ tol: float) -> List[np.ndarray]:
     deg_X = polynomial_total_degree(poly_X, psi)
 
     if deg_G > 2:
-        K_max = (N_max - deg_X) // (deg_G - 2) + 1
+        K_max = (N_max - 1) // (deg_G - 2) + 1
     else:
         K_max = 1
     
@@ -508,7 +522,7 @@ clmo: np.ndarray) -> np.ndarray:
     return result # [q̃1, q̃2, q̃3, p̃1, p̃2, p̃3]
 
 
-def restrict_expansions_to_center_manifold(
+def _zero_q1p1(
     expansions: List[List[np.ndarray]], 
     clmo: np.ndarray, 
     tol: float = 1e-14
