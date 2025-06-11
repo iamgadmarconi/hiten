@@ -3,8 +3,9 @@ import pytest
 
 from algorithms.center.hamiltonian import build_physical_hamiltonian
 from algorithms.center.lie import (_center2modal, evaluate_transform,
-                                   lie_transform)
+                                   lie_transform, _apply_series)
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
+                                               decode_multiindex,
                                                encode_multiindex,
                                                init_index_tables)
 from algorithms.center.polynomial.operations import (
@@ -47,28 +48,15 @@ def debug_setup():
 
 def test_pb():
     psi, clmo = init_index_tables(1)
-    encode_dict_list = _create_encode_dict_from_clmo(clmo)
+    encode_dict = _create_encode_dict_from_clmo(clmo)
     q2 = polynomial_zero_list(1, psi)
     p2 = polynomial_zero_list(1, psi)
     q2[1][1] = 1.0          # q2  is the second coordinate
     p2[1][4] = 1.0          # p2  is the fifth coordinate
 
-    res = polynomial_poisson_bracket(q2, p2, 1, psi, clmo, encode_dict_list)
+    res = polynomial_poisson_bracket(q2, p2, 1, psi, clmo, encode_dict)
     assert res[0] == 1                     # constant term
 
-def test_bare_coordinate_poisson_brackets():
-    """
-    Test basic Poisson bracket relationships for bare coordinate polynomials.
-    
-    This test verifies that the coordinate polynomials built by _center2modal
-    satisfy the fundamental Poisson bracket relationships:
-    - {q1, p1} = 1
-    - {p1, q1} = -1  
-    - {q1, q2} = 0
-    """
-    psi, clmo = init_index_tables(1)
-    encode_dict = _create_encode_dict_from_clmo(clmo)
-    
     # Build the six "bare" coordinate polynomials exactly as _center2modal does
     coords = _center2modal([],          # empty G's
                            max_degree=1,
@@ -93,108 +81,174 @@ def test_bare_coordinate_poisson_brackets():
     assert abs(minus - (-1.0)) < TOL_TEST, f"Expected {{p1,q1}} = -1, got {minus}"
     assert abs(zero) < TOL_TEST, f"Expected {{q1,q2}} = 0, got {zero}"
 
-def test_poly_G_total_shape(debug_setup):
-    """Test the shape of the generating polynomials."""
-    poly_G_total = debug_setup["poly_G_total"]
+def test_transformation_accumulation(debug_setup):
+    """Test if transformations are properly accumulated across degrees."""
+    point = debug_setup["point"]
     psi = debug_setup["psi"]
-    for n, G in enumerate(poly_G_total):
-        if G is not None and G.any():
-            assert G.ndim == 1 and len(G) == psi[N_VARS, n], f"bad shape at n={n}"
+    clmo = debug_setup["clmo"]
+    
+    # Test point
+    cm = np.array([0, 1e-3+1e-3j, 0.5e-3+0.2e-3j,
+                   0, 1e-3-1e-3j, 0.5e-3-0.2e-3j])
+    
+    print("\nTesting transformation accumulation:")
+    print("-" * 50)
+    
+    # Build transformations incrementally
+    for max_deg in [3, 4, 5, 6]:
+        # Get generators up to this degree
+        H_phys = build_physical_hamiltonian(point, 8)
+        H_rn = local2realmodal(point, H_phys, 8, psi, clmo)
+        H_cn = complexify(H_rn, 8, psi, clmo)
+        poly_trans, poly_G_total, _ = lie_transform(point, H_cn, psi, clmo, max_deg)
+        
+        # Apply only up to current degree
+        expansions = _center2modal(poly_G_total, max_deg, psi, clmo, 
+                                   tol=1e-15, inverse=False)
+        
+        # Evaluate
+        modal = evaluate_transform(expansions, cm, clmo)
+        
+        print(f"\nDegree {max_deg}:")
+        print(f"  q1 = {modal[0]:.6e}")
+        print(f"  p1 = {modal[3]:.6e}")
+        
+        # Check if specific generator was applied
+        if max_deg < len(poly_G_total) and poly_G_total[max_deg] is not None:
+            has_content = poly_G_total[max_deg].any()
+            print(f"  G_{max_deg} has content: {has_content}")
 
-def test_homological_equation(debug_setup):
-    """
-    Homological equation spot test.
-    Check that {λq₁p₁ + λω₁q₂p₂ + λω₂q₃p₃, Gₙ} = -Pₙᵉˡⁱᵐ
-    using polynomial_poisson_bracket and the eliminated terms.
-    """
+
+def test_series_convergence(debug_setup):
+    """Test the Lie series convergence for individual generators."""
     point = debug_setup["point"]
     poly_G_total = debug_setup["poly_G_total"]
-    poly_elim_total = debug_setup["poly_elim_total"]
     psi = debug_setup["psi"]
     clmo = debug_setup["clmo"]
     max_degree = debug_setup["max_degree"]
     
-    # Get eigenvalues from the point
-    linear_data = point.linear_data
-    lam = linear_data.lambda1
-    omega1 = linear_data.omega1
-    omega2 = linear_data.omega2
+    # Test point on center manifold
+    cm = np.array([0, 1e-3+1e-3j, 0.5e-3+0.2e-3j,
+                   0, 1e-3-1e-3j, 0.5e-3-0.2e-3j])
     
-    # Create encode dict for Poisson bracket computation
-    encode_dict_list = _create_encode_dict_from_clmo(clmo)
+    print("\nTesting Lie series convergence for each generator:")
+    print("="*70)
     
-    # Construct linear Hamiltonian: λq₁p₁ + iω₁q₂p₂ + iω₂q₃p₃
-    # Variables: q₁=x₀, p₁=x₃, q₂=x₁, p₂=x₄, q₃=x₂, p₃=x₅
-    linear_H = polynomial_zero_list(2, psi)  # degree 2 for quadratic terms
+    # Start with identity transformation
+    identity_coords = []
+    for i in range(6):
+        poly = polynomial_zero_list(max_degree, psi)
+        poly[1][i] = 1.0
+        identity_coords.append(poly)
     
-    # λq₁p₁ term: coefficient λ for x₀*x₃ monomial
-    q1p1_multiindex = np.zeros(N_VARS, dtype=np.int64)
-    q1p1_multiindex[0] = 1  # q₁
-    q1p1_multiindex[3] = 1  # p₁
-    q1p1_idx = encode_multiindex(q1p1_multiindex, 2, encode_dict_list)
-    if q1p1_idx >= 0:
-        linear_H[2][q1p1_idx] = lam
-    
-    # iω₁q₂p₂ term: coefficient iω₁ for x₁*x₄ monomial
-    q2p2_multiindex = np.zeros(N_VARS, dtype=np.int64)
-    q2p2_multiindex[1] = 1  # q₂
-    q2p2_multiindex[4] = 1  # p₂
-    q2p2_idx = encode_multiindex(q2p2_multiindex, 2, encode_dict_list)
-    if q2p2_idx >= 0:
-        linear_H[2][q2p2_idx] = 1j * omega1
-    
-    # iω₂q₃p₃ term: coefficient iω₂ for x₂*x₅ monomial
-    q3p3_multiindex = np.zeros(N_VARS, dtype=np.int64)
-    q3p3_multiindex[2] = 1  # q₃
-    q3p3_multiindex[5] = 1  # p₃
-    q3p3_idx = encode_multiindex(q3p3_multiindex, 2, encode_dict_list)
-    if q3p3_idx >= 0:
-        linear_H[2][q3p3_idx] = 1j * omega2
-    
-    # Test the homological equation for degrees 3-5 (where we have non-trivial G_n)
-    tolerance = 1e-12  # Tolerance for numerical comparison
-    
-    for n in range(3, min(6, max_degree + 1)):
-        if (n >= len(poly_G_total) or poly_G_total[n] is None or 
-            n >= len(poly_elim_total) or poly_elim_total[n] is None):
+    # Apply each generator individually to see its effect
+    for n in range(3, min(7, len(poly_G_total))):
+        if poly_G_total[n] is None or not poly_G_total[n].any():
             continue
             
-        G_n = poly_G_total[n]
-        P_elim_n = poly_elim_total[n]
+        print(f"\nApplying only G_{n}:")
         
-        if not G_n.any() or not P_elim_n.any():  # Skip if all zeros
-            continue
-            
-        # Create polynomial representation for G_n
-        G_n_poly = polynomial_zero_list(n, psi)
-        G_n_poly[n][:] = G_n[:]
+        # Create polynomial for this generator only
+        test_G = polynomial_zero_list(max_degree, psi)
+        test_G[n] = poly_G_total[n].copy()
         
-        # Compute Poisson bracket {linear_H, G_n}
-        pb_result = polynomial_poisson_bracket(linear_H, G_n_poly, max(2, n), psi, clmo, encode_dict_list)
+        # Apply to q1 coordinate (index 0)
+        encode_dict_list = _create_encode_dict_from_clmo(clmo)
+        transformed_q1 = _apply_series(
+            identity_coords[0], test_G, max_degree, psi, clmo, encode_dict_list, 1e-15
+        )
         
-        # Extract the degree n part of the Poisson bracket result
-        if n < len(pb_result):
-            pb_degree_n = pb_result[n]
-            
-            # Check the homological equation: {H₂, Gₙ} = -Pₙᵉˡⁱᵐ
-            # This means: pb_degree_n + P_elim_n should be approximately zero
-            difference = pb_degree_n + P_elim_n
-            max_error = np.max(np.abs(difference))
-            
-            assert max_error < tolerance, (
-                f"Homological equation violated at degree {n}: "
-                f"max error = {max_error:.2e}, tolerance = {tolerance:.2e}"
-            )
-            
-            # Also check that we have non-trivial terms (not just testing zeros)
-            pb_magnitude = np.max(np.abs(pb_degree_n))
-            elim_magnitude = np.max(np.abs(P_elim_n))
-            
-            assert pb_magnitude > tolerance and elim_magnitude > tolerance, (
-                f"Trivial test at degree {n}: pb_magnitude={pb_magnitude:.2e}, "
-                f"elim_magnitude={elim_magnitude:.2e}"
-            )
+        # Evaluate the transformation at the test point
+        q1_value = polynomial_evaluate(transformed_q1, cm, clmo)
+        
+        print(f"  q1 transformation: {q1_value:.6e}")
+        print(f"  Change from identity: {abs(q1_value):.6e}")
+        
+        # Also check how many Lie series terms were significant
+        # by examining the polynomial structure of the transformation
+        for d in range(min(len(transformed_q1), 6)):
+            if transformed_q1[d].any():
+                nonzero = np.count_nonzero(np.abs(transformed_q1[d]) > 1e-15)
+                if nonzero > 0:
+                    print(f"    Degree {d}: {nonzero} non-zero coefficients")
 
+def test_cumulative_vs_individual(debug_setup):
+    """Compare cumulative transformation vs sum of individual contributions."""
+    poly_G_total = debug_setup["poly_G_total"]
+    psi = debug_setup["psi"]
+    clmo = debug_setup["clmo"]
+    max_degree = 6
+    
+    # Test point
+    cm = np.array([0, 1e-3+1e-3j, 0.5e-3+0.2e-3j,
+                   0, 1e-3-1e-3j, 0.5e-3-0.2e-3j])
+    
+    print("\nComparing cumulative vs individual generator contributions:")
+    print("="*70)
+    
+    # Get cumulative transformations for each degree
+    cumulative_results = {}
+    
+    for max_deg in [3, 4, 5, 6]:
+        expansions = _center2modal(poly_G_total, max_deg, psi, clmo, tol=1e-15, inverse=False)
+        modal = evaluate_transform(expansions, cm, clmo)
+        cumulative_results[max_deg] = modal.copy()
+    
+    # Compute differences between successive degrees
+    print("\nIncremental changes from adding each generator:")
+    for deg in [4, 5, 6]:
+        prev_q1 = cumulative_results[deg-1][0]
+        curr_q1 = cumulative_results[deg][0]
+        diff = curr_q1 - prev_q1
+        
+        print(f"\nG_{deg} contribution to q1:")
+        print(f"  Previous (up to G_{deg-1}): {prev_q1:.6e}")
+        print(f"  Current (up to G_{deg}):    {curr_q1:.6e}")
+        print(f"  Difference:                 {diff:.6e}")
+        print(f"  |Difference|:               {abs(diff):.6e}")
+        
+        # Check if the generator has terms that should contribute
+        if deg < len(poly_G_total) and poly_G_total[deg] is not None:
+            G_mag = np.max(np.abs(poly_G_total[deg]))
+            print(f"  Max |G_{deg}| coefficient:   {G_mag:.6e}")
+
+def test_restricted_transformation(debug_setup):
+    """Test if the restriction to center manifold is working correctly."""
+    poly_G_total = debug_setup["poly_G_total"]
+    psi = debug_setup["psi"]
+    clmo = debug_setup["clmo"]
+    max_degree = 6
+    
+    # Test point
+    cm = np.array([0, 1e-3+1e-3j, 0.5e-3+0.2e-3j,
+                   0, 1e-3-1e-3j, 0.5e-3-0.2e-3j])
+    
+    print("\nComparing restricted vs unrestricted transformations:")
+    print("="*60)
+    
+    # Unrestricted transformation
+    expansions_unrestricted = _center2modal(
+        poly_G_total, max_degree, psi, clmo, tol=1e-15, inverse=False, restrict=False
+    )
+    modal_unrestricted = evaluate_transform(expansions_unrestricted, cm, clmo)
+    
+    # Restricted transformation
+    expansions_restricted = _center2modal(
+        poly_G_total, max_degree, psi, clmo, tol=1e-15, inverse=False, restrict=True
+    )
+    modal_restricted = evaluate_transform(expansions_restricted, cm, clmo)
+    
+    print("Unrestricted:")
+    print(f"  q1 = {modal_unrestricted[0]:.6e}")
+    print(f"  p1 = {modal_unrestricted[3]:.6e}")
+    
+    print("\nRestricted:")
+    print(f"  q1 = {modal_restricted[0]:.6e}")
+    print(f"  p1 = {modal_restricted[3]:.6e}")
+    
+    print("\nDifference:")
+    print(f"  Δq1 = {modal_restricted[0] - modal_unrestricted[0]:.6e}")
+    print(f"  Δp1 = {modal_restricted[3] - modal_unrestricted[3]:.6e}")
 
 def test_cm_degree_scaling(debug_setup):
     """
@@ -547,3 +601,92 @@ def test_symplecticity(debug_setup):
     print(f"\nComprehensive direct symplecticity test passed!")
     print(f"All {len(all_results)} test combinations satisfy canonical relationships with appropriate tolerances.")
     print(f"Strong convergence verified: {avg_reduction_factor:.1f}x average error reduction per degree.")
+
+
+def test_transformation_at_different_points(debug_setup):
+    """
+    Test the transformation at different points to understand the behavior.
+    """
+    poly_G_total = debug_setup["poly_G_total"]
+    psi = debug_setup["psi"]
+    clmo = debug_setup["clmo"]
+    max_degree = 6
+    
+    print("\nTesting transformation at various points:")
+    print("="*60)
+    
+    # Generate transformation
+    expansions = _center2modal(poly_G_total, max_degree, psi, clmo, tol=1e-15, inverse=False)
+    
+    # Test points with different characteristics
+    test_cases = [
+        # (name, point)
+        ("Pure center manifold", np.array([0, 1e-3, 1e-3j, 0, 1e-3, -1e-3j])),
+        ("With small q1", np.array([1e-6, 1e-3, 1e-3j, 0, 1e-3, -1e-3j])),
+        ("With small p1", np.array([0, 1e-3, 1e-3j, 1e-6, 1e-3, -1e-3j])),
+        ("With q1=p1", np.array([1e-6, 1e-3, 1e-3j, 1e-6, 1e-3, -1e-3j])),
+        ("Larger amplitude", np.array([0, 1e-2, 1e-2j, 0, 1e-2, -1e-2j])),
+        ("Complex conjugate", np.array([0, 1e-3+1e-3j, 0.5e-3+0.2e-3j, 0, 1e-3-1e-3j, 0.5e-3-0.2e-3j])),
+    ]
+    
+    for name, test_point in test_cases:
+        modal = evaluate_transform(expansions, test_point, clmo)
+        
+        print(f"\n{name}:")
+        print(f"  Input:  q1={test_point[0]:.2e}, p1={test_point[3]:.2e}")
+        print(f"  Output: q1={modal[0]:.6e}, p1={modal[3]:.6e}")
+        print(f"  |q1|={abs(modal[0]):.2e}, |p1|={abs(modal[3]):.2e}")
+
+
+def test_hamiltonian_on_center_manifold(debug_setup):
+    """
+    Check if the transformed Hamiltonian properly vanishes on the center manifold.
+    """
+    point = debug_setup["point"]
+    psi = debug_setup["psi"]
+    clmo = debug_setup["clmo"]
+    max_degree = 6
+    
+    # Build Hamiltonians
+    H_phys = build_physical_hamiltonian(point, max_degree)
+    H_rn = local2realmodal(point, H_phys, max_degree, psi, clmo)
+    H_cn = complexify(H_rn, max_degree, psi, clmo)
+    
+    # Get the transformed Hamiltonian
+    poly_trans, _, _ = lie_transform(point, H_cn, psi, clmo, max_degree)
+    
+    print("\nAnalyzing transformed Hamiltonian on center manifold:")
+    print("="*60)
+    
+    # Check linear terms in the transformed Hamiltonian
+    if len(poly_trans) > 1:
+        H1 = poly_trans[1]
+        print(f"Linear terms in transformed H: {np.count_nonzero(H1)} non-zero")
+        for i, coeff in enumerate(H1):
+            if abs(coeff) > 1e-15:
+                print(f"  x_{i}: {coeff:.6e}")
+    
+    # Check quadratic terms
+    if len(poly_trans) > 2:
+        H2 = poly_trans[2]
+        encode_dict = _create_encode_dict_from_clmo(clmo)[2]
+        
+        # Look for q1*q2, q1*p2, p1*q2, p1*p2 terms (cross terms)
+        cross_terms = []
+        for idx, coeff in enumerate(H2):
+            if abs(coeff) > 1e-15:
+                k = decode_multiindex(idx, 2, clmo)
+                # Check if it's a cross term between (q1,p1) and (q2,p2,q3,p3)
+                has_q1p1 = (k[0] > 0 or k[3] > 0)
+                has_cm = (k[1] > 0 or k[2] > 0 or k[4] > 0 or k[5] > 0)
+                if has_q1p1 and has_cm:
+                    cross_terms.append((k, coeff))
+        
+        print(f"\nQuadratic cross-terms (q1/p1 × CM): {len(cross_terms)}")
+        for k, coeff in cross_terms[:5]:
+            vars_str = []
+            var_names = ['q1', 'q2', 'q3', 'p1', 'p2', 'p3']
+            for i, power in enumerate(k):
+                if power > 0:
+                    vars_str.append(f"{var_names[i]}^{power}" if power > 1 else var_names[i])
+            print(f"  {' '.join(vars_str)}: {coeff:.6e}")

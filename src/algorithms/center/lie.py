@@ -18,7 +18,7 @@ poly_init: List[np.ndarray],
 psi: np.ndarray, 
 clmo: np.ndarray, 
 max_degree: int, 
-tol: float = 1e-15) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
+tol: float = 1e-30) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
     """
     Perform a Lie transformation to normalize a Hamiltonian.
     
@@ -36,7 +36,7 @@ tol: float = 1e-15) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray
     max_degree : int
         Maximum degree to include in the normalized Hamiltonian
     tol : float, optional
-        Tolerance for cleaning small coefficients, default is 1e-15
+        Tolerance for cleaning small coefficients, default is 1e-30
         
     Returns
     -------
@@ -81,6 +81,7 @@ tol: float = 1e-15) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray
             poly_elim_total[n] = p_elim.copy()
             
         p_G_n = _solve_homological_equation(p_elim, n, eta, clmo)
+
         
         # Clean Gn using a Numba typed list for compatibility with polynomial_clean
         if p_G_n.any(): # Only clean if there's something to clean
@@ -214,6 +215,9 @@ clmo: np.ndarray) -> np.ndarray:
     g_k = -h_k / ((k₃-k₀)λ + (k₄-k₁)iω₁ + (k₅-k₂)iω₂)
     
     where k = [k₀, k₁, k₂, k₃, k₄, k₅] are the exponents of the monomial.
+    
+    This version includes a resonance check to avoid division by zero
+    for nearly resonant terms.
     """
     p_G = np.zeros_like(p_elim)
     for i in range(p_elim.shape[0]):
@@ -223,6 +227,9 @@ clmo: np.ndarray) -> np.ndarray:
             denom = ((k[3]-k[0]) * eta[0] +
                      (k[4]-k[1]) * eta[1] +
                      (k[5]-k[2]) * eta[2])
+            # Check for resonance (near-zero denominator)
+            if abs(denom) < 1e-14:
+                continue  # Skip resonant terms - keep in normal form
             p_G[i] = -c / denom
     return p_G
 
@@ -290,7 +297,7 @@ tol: float) -> List[np.ndarray]:
     
     # Determine number of terms in Lie series
     if deg_G > 2:
-        K = (N_max - deg_G) // (deg_G - 2) + 1
+        K = max(N_max, (N_max - deg_G) // (deg_G - 2) + 1)
     else:
         K = 1
     
@@ -327,7 +334,7 @@ def _center2modal(
 poly_G_total: List[np.ndarray], 
 max_degree: int, psi: np.ndarray, 
 clmo: np.ndarray, 
-tol: float = 1e-15,
+tol: float = 1e-30,
 inverse: bool = False, # If False, Generators are applied in ascending order. If True, Generators are applied in descending order.
 sign: int = None, # If None, the sign is determined by the inverse flag. If not None, the sign is used to determine sign of the generator.
 restrict: bool = True) -> List[List[np.ndarray]]:
@@ -358,11 +365,6 @@ restrict: bool = True) -> List[List[np.ndarray]]:
     current_coords = []
     for i in range(6):
         poly = polynomial_zero_list(max_degree, psi)
-
-        # if i == 0 or i == 3:
-        #     # q₁ and p₁ are center directions, start as zero
-        #     pass
-
         poly[1] = np.zeros(6, dtype=np.complex128)
         poly[1][i] = 1.0 + 0j       # identity for q₁,q₂,q₃,p₁,p₂,p₃
         current_coords.append(poly) # [q1, q2, q3, p1, p2, p3]
@@ -451,12 +453,9 @@ tol: float) -> List[np.ndarray]:
 
     # Find degree of generating function
     deg_G = polynomial_total_degree(poly_G, psi)
-    
-    # Determine maximum degree of current polynomial
-    deg_X = polynomial_total_degree(poly_X, psi)
 
     if deg_G > 2:
-        K_max = (N_max - 1) // (deg_G - 2) + 1
+        K_max = max(N_max, (N_max - 1) // (deg_G - 2) + 1)
     else:
         K_max = 1
     
@@ -525,7 +524,7 @@ clmo: np.ndarray) -> np.ndarray:
 def _zero_q1p1(
     expansions: List[List[np.ndarray]], 
     clmo: np.ndarray, 
-    tol: float = 1e-14
+    tol: float = 1e-30
 ) -> List[List[np.ndarray]]:
     """
     Restrict coordinate expansions to the center manifold by eliminating 

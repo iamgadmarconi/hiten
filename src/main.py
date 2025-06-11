@@ -87,8 +87,9 @@ def main() -> None:
         logger.info(f"Poincaré points:\n{pts}")
         all_pts.append(pts)  # Store points for this energy level
 
+    test_pt = [[0.0, 0.0]]
     logger.info("Converting Poincaré points to initial conditions")
-    ic = poincare2ic([pts[0]], selected_l_point, psi, clmo, MAX_DEG, H0_LEVELS[0])
+    ic = poincare2ic(test_pt, selected_l_point, psi, clmo, MAX_DEG, H0_LEVELS[0])
     logger.info(f"Initial conditions:\n\n{ic}\n\n")
 
     logger.info("Propagating initial conditions")

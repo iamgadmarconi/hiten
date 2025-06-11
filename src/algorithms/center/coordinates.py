@@ -6,10 +6,17 @@ from algorithms.center.poincare.map import solve_p3
 from utils.log_config import logger
 
 
-def _clean_coordinates(coords: np.ndarray, tol: float = 1e-15) -> np.ndarray:
+def _clean_coordinates(coords: np.ndarray, tol: float = 1e-30) -> np.ndarray:
     """Clean tiny numerical artifacts from complex coordinates."""
     before = np.asarray(coords, dtype=np.complex128)
-    after = np.where(np.abs(before) <= tol, 0.0, before)
+    
+    real_part = np.real(before)
+    imag_part = np.imag(before)
+
+    cleaned_real = np.where(np.abs(real_part) < tol, 0.0, real_part)
+    cleaned_imag = np.where(np.abs(imag_part) < tol, 0.0, imag_part)
+
+    after = cleaned_real + 1j * cleaned_imag
 
     if np.any(before != after):
         logger.warning(f"Cleaned {np.sum(before != after)} coordinates. \nBefore: {before}\nAfter: {after}")
@@ -112,7 +119,7 @@ def _cmreal2synodic_coordinates(
     clmo: np.ndarray,
     max_degree: int,
     energy: float = 0.0,
-    tol: float = 1e-15
+    tol: float = 1e-30
 ) -> np.ndarray:
     logger.info(f"Converting points {cm_coords} to synodic coordinates")
 
@@ -132,9 +139,7 @@ def _cmreal2synodic_coordinates(
 
     logger.info(f"complex_6d_cm: \n{complex_6d_cm}")
 
-    expansions = _center2modal(
-        poly_G_total, max_degree, psi, clmo, tol
-    )
+    expansions = _center2modal(poly_G_total, max_degree, psi, clmo, tol)
 
     complex_6d = evaluate_transform(expansions, complex_6d_cm, clmo) # [q1, q2, q3, p1, p2, p3]
 
