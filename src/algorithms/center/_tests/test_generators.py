@@ -47,7 +47,6 @@ def debug_setup():
     }
 
 def test_poly_G_total_shape(debug_setup):
-    """Test the shape of the generating polynomials."""
     poly_G_total = debug_setup["poly_G_total"]
     psi = debug_setup["psi"]
     for n, G in enumerate(poly_G_total):
@@ -55,7 +54,6 @@ def test_poly_G_total_shape(debug_setup):
             assert G.ndim == 1 and len(G) == psi[N_VARS, n], f"bad shape at n={n}"
 
 def test_poly_G_content(debug_setup):
-    """Check which degrees have non-zero generating functions."""
     poly_G_total = debug_setup["poly_G_total"]
     max_degree = debug_setup["max_degree"]
     
@@ -93,7 +91,6 @@ def test_poly_G_content(debug_setup):
         print(f"  Total degrees applied: {applied_degrees}")
 
 def test_generator_structure(debug_setup):
-    """Analyze the structure of generating functions to understand their contributions."""
     poly_G_total = debug_setup["poly_G_total"]
     psi = debug_setup["psi"]
     clmo = debug_setup["clmo"]
@@ -147,11 +144,6 @@ def test_generator_structure(debug_setup):
 
 
 def test_homological_equation(debug_setup):
-    """
-    Homological equation spot test.
-    Check that {λq₁p₁ + λω₁q₂p₂ + λω₂q₃p₃, Gₙ} = -Pₙᵉˡⁱᵐ
-    using polynomial_poisson_bracket and the eliminated terms.
-    """
     point = debug_setup["point"]
     poly_G_total = debug_setup["poly_G_total"]
     poly_elim_total = debug_setup["poly_elim_total"]
@@ -241,12 +233,6 @@ def test_homological_equation(debug_setup):
             )
 
 def test_generator_cm_property(debug_setup):
-    """
-    Test if generators preserve the center manifold constraint.
-    
-    For a proper center manifold reduction, the transformed Hamiltonian
-    should have no linear terms in q1, p1 when restricted to the center manifold.
-    """
     poly_G_total = debug_setup["poly_G_total"]
     poly_elim_total = debug_setup["poly_elim_total"]
     psi = debug_setup["psi"]
@@ -312,22 +298,6 @@ def test_generator_cm_property(debug_setup):
 
 
 def check_real_generator(G, degree, clmo, encode_dict_list, var_pairs):
-    """
-    Checks if a polynomial, represented by its coefficients G, is real-valued
-    given pairs of variables that are complex conjugates.
-
-    var_pairs = [(0,3), (1,4), (2,5)]  # example index pairs (z, z̄)
-
-    For a polynomial P to be real-valued, the coefficient of a monomial term
-    must be the complex conjugate of the coefficient of the term with swapped
-    conjugate variables. This function computes the maximum violation of this property.
-
-    Returns
-    -------
-    float
-        The maximum absolute difference |c_α - conj(c_β)| over all pairs of
-        coefficients (c_α, c_β) that should be conjugates.
-    """
     if not G.any():
         return 0.0
 
@@ -375,12 +345,6 @@ def check_real_generator(G, degree, clmo, encode_dict_list, var_pairs):
 
 
 def test_poly_G_is_real(debug_setup):
-    """
-    Test that the generating functions G_n correspond to real-valued polynomials.
-    This is a critical property for the transformation to be valid, as the
-    generating functions must be real to generate a canonical transformation
-    that preserves the real-valued nature of the Hamiltonian.
-    """
     poly_G_total = debug_setup["poly_G_total"]
     clmo = debug_setup["clmo"]
     max_degree = debug_setup["max_degree"]
@@ -407,7 +371,6 @@ def test_poly_G_is_real(debug_setup):
 
 
 def dump_non_real(poly, degree, clmo, thresh=1e-12, tag="H"):
-    """List every monomial of total degree `degree` whose coefficient is not real."""
     bad = []
     arr = poly[degree]
     for idx, c in enumerate(arr):
@@ -423,10 +386,6 @@ def dump_non_real(poly, degree, clmo, thresh=1e-12, tag="H"):
 
 
 def test_dump_non_real_coefficients(debug_setup):
-    """
-    Test function that dumps non-real coefficients for inspection.
-    This helps identify which monomials have significant imaginary parts.
-    """
     poly_G_total = debug_setup["poly_G_total"]
     poly_elim_total = debug_setup["poly_elim_total"]
     clmo = debug_setup["clmo"]

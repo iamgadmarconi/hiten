@@ -82,7 +82,6 @@ def test_pb():
     assert abs(zero) < TOL_TEST, f"Expected {{q1,q2}} = 0, got {zero}"
 
 def test_transformation_accumulation(debug_setup):
-    """Test if transformations are properly accumulated across degrees."""
     point = debug_setup["point"]
     psi = debug_setup["psi"]
     clmo = debug_setup["clmo"]
@@ -120,7 +119,6 @@ def test_transformation_accumulation(debug_setup):
 
 
 def test_series_convergence(debug_setup):
-    """Test the Lie series convergence for individual generators."""
     point = debug_setup["point"]
     poly_G_total = debug_setup["poly_G_total"]
     psi = debug_setup["psi"]
@@ -173,7 +171,6 @@ def test_series_convergence(debug_setup):
                     print(f"    Degree {d}: {nonzero} non-zero coefficients")
 
 def test_cumulative_vs_individual(debug_setup):
-    """Compare cumulative transformation vs sum of individual contributions."""
     poly_G_total = debug_setup["poly_G_total"]
     psi = debug_setup["psi"]
     clmo = debug_setup["clmo"]
@@ -213,7 +210,6 @@ def test_cumulative_vs_individual(debug_setup):
             print(f"  Max |G_{deg}| coefficient:   {G_mag:.6e}")
 
 def test_restricted_transformation(debug_setup):
-    """Test if the restriction to center manifold is working correctly."""
     poly_G_total = debug_setup["poly_G_total"]
     psi = debug_setup["psi"]
     clmo = debug_setup["clmo"]
@@ -251,12 +247,6 @@ def test_restricted_transformation(debug_setup):
     print(f"  Δp1 = {modal_restricted[3] - modal_unrestricted[3]:.6e}")
 
 def test_cm_degree_scaling(debug_setup):
-    """
-    Test that the center manifold approximation converges as polynomial degree increases.
-    
-    This test verifies that the q1/p1 leak decreases as we include higher-order terms
-    in the polynomial approximation.
-    """
     point = debug_setup["point"]
     psi = debug_setup["psi"]
     clmo = debug_setup["clmo"]
@@ -312,12 +302,6 @@ def test_cm_degree_scaling(debug_setup):
 
 
 def test_cm_amplitude_scaling(debug_setup):
-    """
-    Test that the center manifold error scales quadratically with input amplitude.
-    
-    This test verifies that q1/p1 leak ~ amplitude^2, which is expected since
-    linear terms are eliminated by the center manifold restriction.
-    """
     point = debug_setup["point"]
     poly_G_total = debug_setup["poly_G_total"]
     psi = debug_setup["psi"]
@@ -404,13 +388,6 @@ def test_cm_amplitude_scaling(debug_setup):
         )
 
 def test_symplecticity(debug_setup):
-    """
-    Comprehensive test of symplecticity using direct Poisson bracket computation.
-    
-    This test verifies that coordinate transformations from _center2modal satisfy 
-    canonical Poisson bracket relationships across multiple polynomial degrees,
-    amplitudes, and test points.
-    """
     def poisson_matrix(expansions, clmo, psi, max_degree, test_point):
         """Return the 6x6 matrix M_ij = {Phi_i, Phi_j}(point)."""
         encode_dict_list = _create_encode_dict_from_clmo(clmo)
@@ -604,9 +581,6 @@ def test_symplecticity(debug_setup):
 
 
 def test_transformation_at_different_points(debug_setup):
-    """
-    Test the transformation at different points to understand the behavior.
-    """
     poly_G_total = debug_setup["poly_G_total"]
     psi = debug_setup["psi"]
     clmo = debug_setup["clmo"]
@@ -639,9 +613,6 @@ def test_transformation_at_different_points(debug_setup):
 
 
 def test_hamiltonian_on_center_manifold(debug_setup):
-    """
-    Check if the transformed Hamiltonian properly vanishes on the center manifold.
-    """
     point = debug_setup["point"]
     psi = debug_setup["psi"]
     clmo = debug_setup["clmo"]
