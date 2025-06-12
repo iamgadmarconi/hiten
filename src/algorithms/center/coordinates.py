@@ -3,6 +3,7 @@ from numba.typed import List
 
 from algorithms.center.lie import _center2modal, evaluate_transform
 from algorithms.center.poincare.map import solve_p3
+from algorithms.center.transforms import M, M_inv
 from utils.log_config import logger
 
 
@@ -23,33 +24,11 @@ def _clean_coordinates(coords: np.ndarray, tol: float = 1e-30) -> np.ndarray:
 
     return after
 
-def _realify_coordinates(complex_coords: np.ndarray) -> np.ndarray:
-    c = np.asarray(complex_coords, dtype=np.complex128) # [q1, q2, q3, p1, p2, p3]
+def _complexify_coordinates(complex_coords: np.ndarray) -> np.ndarray:
+    return _clean_coordinates(M() @ complex_coords) # [q1, q2, q3, p1, p2, p3]
 
-    q1c, q2c, q3c, p1c, p2c, p3c = c # [q1, q2, q3, p1, p2, p3]
-
-    q1r = q1c
-    q2r = (q2c - 1j * p2c) / np.sqrt(2)
-    q3r = (q3c - 1j * p3c) / np.sqrt(2)
-    p1r = p1c
-    p2r = (-1j * q2c + p2c) / np.sqrt(2)
-    p3r = (-1j * q3c + p3c) / np.sqrt(2)
-
-    return _clean_coordinates(np.array([q1r, q2r, q3r, p1r, p2r, p3r], dtype=np.complex128)) # [q1, q2, q3, p1, p2, p3]
-
-def _complexify_coordinates(real_coords: np.ndarray) -> np.ndarray:
-    r = np.asarray(real_coords, dtype=np.complex128) # [q1, q2, q3, p1, p2, p3]
-
-    q1r, q2r, q3r, p1r, p2r, p3r = r # [q1, q2, q3, p1, p2, p3]
-
-    q1c = q1r
-    q2c = (q2r + 1j * p2r) / np.sqrt(2)
-    q3c = (q3r + 1j * p3r) / np.sqrt(2)
-    p1c = p1r
-    p2c = (1j * q2r + p2r) / np.sqrt(2)
-    p3c = (1j * q3r + p3r) / np.sqrt(2)
-
-    return _clean_coordinates(np.array([q1c, q2c, q3c, p1c, p2c, p3c], dtype=np.complex128)) # [q1, q2, q3, p1, p2, p3]
+def _realify_coordinates(real_coords: np.ndarray) -> np.ndarray:
+    return _clean_coordinates(M_inv() @ real_coords) # [q1, q2, q3, p1, p2, p3]
 
 def _realmodal2local_coordinates(point, modal_coords: np.ndarray) -> np.ndarray:
     # modal_coords: [q1, q2, q3, p1, p2, p3]

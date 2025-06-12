@@ -51,7 +51,7 @@ def main() -> None:
         system_name = "SE"
     else:
         raise ValueError(f"Unknown system: {SYSTEM}. Should be 'EM' or 'SE'")
-    
+
     # Get the selected libration point
     selected_l_point = selected_system.get_libration_point(L_POINT)
     logger.info(f"Using {SYSTEM} system with L{L_POINT} point")
@@ -87,9 +87,8 @@ def main() -> None:
         logger.info(f"Poincaré points:\n{pts}")
         all_pts.append(pts)  # Store points for this energy level
 
-    test_pt = [[0.0, 0.0]]
     logger.info("Converting Poincaré points to initial conditions")
-    ic = poincare2ic(test_pt, selected_l_point, psi, clmo, MAX_DEG, H0_LEVELS[0])
+    ic = poincare2ic([all_pts[0][0]], selected_l_point, psi, clmo, MAX_DEG, H0_LEVELS[0])
     logger.info(f"Initial conditions:\n\n{ic}\n\n")
 
     logger.info("Propagating initial conditions")
@@ -108,7 +107,7 @@ def main() -> None:
         energy_level_str = f"{min(H0_LEVELS):.2f}to{max(H0_LEVELS):.2f}".replace('.', 'p')
 
     symplectic_str = "symplectic" if USE_SYMPLECTIC else "nonsymplectic"
-    
+
     filename = f"{system_name}_{L_POINT}_PM_{MAX_DEG}_{energy_level_str}_{DT}_{symplectic_str}_{N_ITER}.svg"
 
     plot_poincare_map(all_pts, H0_LEVELS, output_dir=output_directory, filename=filename)

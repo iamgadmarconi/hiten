@@ -154,7 +154,19 @@ def local2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi, clmo
     return substitute_linear(poly_local, C, max_deg, psi, clmo, encode_dict_list)
 
 
-@njit(fastmath=FASTMATH)
+def M() -> np.ndarray:
+    return np.array([[1, 0, 0, 0, 0, 0],
+        [0, 1/np.sqrt(2), 0, 0, 1j/np.sqrt(2), 0],
+        [0, 0, 1/np.sqrt(2), 0, 0, 1j/np.sqrt(2)],
+        [0, 0, 0, 1, 0, 0],
+        [0, 1j/np.sqrt(2), 0, 0, 1/np.sqrt(2), 0],
+        [0, 0, 1j/np.sqrt(2), 0, 0, 1/np.sqrt(2)]], dtype=np.complex128) #  real = M @ complex
+
+
+def M_inv() -> np.ndarray:
+    return np.linalg.inv(M()) # complex = M_inv @ real
+
+
 def complexify(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
     """
     Transform a polynomial from real normal form to complex normal form.
@@ -178,37 +190,13 @@ def complexify(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.nd
     Notes
     -----
     This function transforms a polynomial from real normal form coordinates
-    (x, y, z, px, py, pz) to complex normal form coordinates (q1, q2, q3, p1, p2, p3)
-    using a specific transformation matrix.
-    
-    The transformation is:
-    y_rn = (q2 + i*p2)/√2
-    z_rn = (q3 + i*p3)/√2
-    py_rn = (i*q2 + p2)/√2
-    pz_rn = (i*q3 + p3)/√2
-    with x_rn = q1 and px_rn = p1 unchanged.
+    to complex normal form coordinates using the predefined transformation matrix M_inv().
+    Since complex = M_inv @ real, we use M_inv() for the transformation.
     """
-    sqrt2 = math.sqrt(2.0)
-    C = np.zeros((6, 6), dtype=np.complex128)
-
-    # columns: [q1 q2 q3 p1 p2 p3]
-    # rows old: [x  y  z  px py pz]_rn
-    C[0, 0] = 1.0                              # x_rn = q1
-    C[1, 1] = 1/sqrt2                          # y_rn = q2 + 
-    C[1, 4] = 1j/sqrt2
-    C[2, 2] = 1/sqrt2                          # z_rn
-    C[2, 5] = 1j/sqrt2
-    C[3, 3] = 1.0                              # px_rn = p1
-    C[4, 1] = 1j/sqrt2                         # py_rn
-    C[4, 4] = 1/sqrt2
-    C[5, 2] = 1j/sqrt2                         # pz_rn
-    C[5, 5] = 1/sqrt2
-
+    C = M()
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
     return polynomial_clean(substitute_linear(poly_rn, C, max_deg, psi, clmo, encode_dict_list), 1e-14)
 
-
-@njit(fastmath=FASTMATH)
 def realify(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
     """
     Transform a polynomial from complex normal form to real normal form.
@@ -232,35 +220,12 @@ def realify(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarr
     Notes
     -----
     This function transforms a polynomial from complex normal form coordinates
-    (q1, q2, q3, p1, p2, p3) to real normal form coordinates (x, y, z, px, py, pz)
-    using the inverse of the transformation used in complexify.
-    
-    The transformation is:
-    q2 = (y_rn + i*py_rn)/√2
-    q3 = (z_rn + i*pz_rn)/√2
-    p2 = (py_rn - i*y_rn)/√2  
-    p3 = (pz_rn - i*z_rn)/√2
-    with q1 = x_rn and p1 = px_rn unchanged.
+    to real normal form coordinates using the predefined transformation matrix M().
+    Since real = M @ complex, we use M() for the transformation.
     """
-    sqrt2 = math.sqrt(2.0)
-    Cinv = np.zeros((6, 6), dtype=np.complex128)
-
-    # columns: [q1 q2 q3 p1 p2 p3]
-    # rows   : [x y z px py pz]_rn   expressed in complex vars
-    Cinv[0, 0] = 1.0                             # x = q1
-    Cinv[1, 1] = 1/sqrt2                         # y   = (q2 - i p2)/√2
-    Cinv[1, 4] = -1j/sqrt2
-    Cinv[2, 2] = 1/sqrt2                         # z
-    Cinv[2, 5] = -1j/sqrt2
-    Cinv[3, 3] = 1.0                             # px
-    Cinv[4, 1] = -1j/sqrt2                       # py
-    Cinv[4, 4] = 1/sqrt2
-    Cinv[5, 2] = -1j/sqrt2                       # pz
-    Cinv[5, 5] = 1/sqrt2
-
+    C = M_inv()
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return polynomial_clean(substitute_linear(poly_cn, Cinv, max_deg, psi, clmo, encode_dict_list), 1e-14)
-
+    return polynomial_clean(substitute_linear(poly_cn, C, max_deg, psi, clmo, encode_dict_list), 1e-14)
 
 def realmodal2local(point, poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
     """
