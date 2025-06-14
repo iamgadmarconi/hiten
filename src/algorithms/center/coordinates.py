@@ -99,18 +99,18 @@ def _local2synodic(point, coords: np.ndarray) -> np.ndarray:
     syn = np.empty(6, dtype=np.float64) # [X, Y, Z, Vx, Vy, Vz]
 
     # Positions
-    syn[0] =  sgn * gamma * c[0] + mu + a      # X
-    syn[1] =  sgn * gamma * c[1]               # Y
-    syn[2] =        gamma * c[2]               # Z
+    syn[0] = sgn * gamma * c[0] + mu + a # X
+    syn[1] = sgn * gamma * c[1] # Y
+    syn[2] = gamma * c[2]  # Z
 
     # Local momenta to synodic velocities (see standard relations)
     vx = c[3] + c[1]
     vy = c[4] - c[0]
     vz = c[5]
 
-    syn[3] = sgn * gamma * vx  # Vx
-    syn[4] = sgn * gamma * vy  # Vy
-    syn[5] =       gamma * vz  # Vz
+    syn[3] = gamma * vx  # Vx
+    syn[4] = gamma * vy  # Vy
+    syn[5] = gamma * vz  # Vz
 
     # Flip X and Vx according to NASA/Szebehely convention
     syn[[0, 3]] *= -1.0

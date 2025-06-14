@@ -92,7 +92,7 @@ def main() -> None:
     logger.info(f"Initial conditions:\n\n{ic}\n\n")
 
     logger.info("Propagating initial conditions")
-    sol = propagate_crtbp(ic[0], 0, 2*np.pi, selected_system.mu)
+    sol = propagate_crtbp(ic[0], 0, 1.8*np.pi, selected_system.mu)
     traj = sol.y.T
     times = sol.t
 
