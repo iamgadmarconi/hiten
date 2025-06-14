@@ -62,10 +62,11 @@ def main():
     
     # Add pytest options
     pytest_args = [
-        "-xv",  # -s removed as pytest's logging capture will handle output
-        "--log-cli-level=INFO",
-        "--log-cli-format=%(asctime)s | %(levelname)7s | %(name)s: %(message)s",
-        "--log-cli-date-format=%Y-%m-%d %H:%M:%S"
+        "-xv",
+        "-s",
+        # "--log-cli-level=INFO",
+        # "--log-cli-format=%(asctime)s | %(levelname)7s | %(name)s: %(message)s",
+        # "--log-cli-date-format=%Y-%m-%d %H:%M:%S"
     ] + test_paths
     
     # Run the tests

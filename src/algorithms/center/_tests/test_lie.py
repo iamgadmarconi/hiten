@@ -1,25 +1,72 @@
 import math
+from typing import List
 
 import numpy as np
 import pytest
 import sympy as sp
+from numpy.linalg import norm
 
 from algorithms.center.hamiltonian import build_physical_hamiltonian
 from algorithms.center.lie import (_apply_lie_transform,
+                                   _center2modal, 
                                    _get_homogeneous_terms,
                                    _select_terms_for_elimination,
-                                   _solve_homological_equation, lie_transform)
+                                   _solve_homological_equation,
+                                   evaluate_transform,
+                                   lie_transform)
+from algorithms.center.manifold import center_manifold_real
 from algorithms.center.polynomial.algebra import _poly_poisson
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                decode_multiindex,
                                                encode_multiindex,
                                                init_index_tables, make_poly)
 from algorithms.center.polynomial.conversion import sympy2poly
-from algorithms.center.polynomial.operations import polynomial_zero_list
-from algorithms.center.transforms import phys2rn, rn2cn
+from algorithms.center.polynomial.operations import (polynomial_differentiate,
+                                                     polynomial_evaluate,
+                                                     polynomial_poisson_bracket,
+                                                     polynomial_variables_list,
+                                                     polynomial_zero_list)
+from algorithms.center.transforms import substitute_complex, local2realmodal
 from algorithms.variables import N_VARS
 from system.libration import L1Point
 
+MU_EM = 0.0121505816  # Earth-Moon mass parameter (example)
+MAX_DEGREE_TEST = 6   
+TOL_TEST = 1e-15      
+RANDOM_SEED = 42 # For reproducible random numbers
+
+
+@pytest.fixture(scope="module")
+def cr3bp_data_fixture():
+    """
+    Provides a real L1 point, psi, clmo, max_degree, and energy.
+    """
+    point = L1Point(mu=MU_EM)
+    _ = point.position  # Ensures L1 position is calculated
+    energy_val = point.energy 
+    psi_arr, clmo_arr = init_index_tables(MAX_DEGREE_TEST)
+    _ = center_manifold_real(point, psi_arr, clmo_arr, MAX_DEGREE_TEST)
+    # Check that essential data was cached by precompute_cache
+    poly_cm_cn_val = point.cache_get(('hamiltonian', MAX_DEGREE_TEST, 'center_manifold_complex'))
+    if poly_cm_cn_val is None:
+        pytest.fail("poly_cm ('center_manifold_complex') is None after precomputation.")
+    
+    poly_cm_rn_val = point.cache_get(('hamiltonian', MAX_DEGREE_TEST, 'center_manifold_real'))
+    if poly_cm_rn_val is None:
+        pytest.fail("poly_cm ('center_manifold_real') is None after precomputation.")
+
+    poly_G_val = point.cache_get(('generating_functions', MAX_DEGREE_TEST))
+    if poly_G_val is None:
+        pytest.fail("Generating functions (poly_G_total) are None after precomputation.")
+
+    return {
+        "point": point,
+        "psi": psi_arr,
+        "clmo": clmo_arr,
+        "max_degree": MAX_DEGREE_TEST,
+        "energy_l1": energy_val, # Energy of the L1 point itself
+        # Specific Hamiltonians are not returned here, tests will get them from point object
+    }
 
 @pytest.fixture
 def cn_hamiltonian_data(request):
@@ -37,8 +84,8 @@ def cn_hamiltonian_data(request):
     # The Hamiltonian itself is constructed up to max_deg.
     # The psi and clmo (initialized for psi_init_deg) are suitable as psi_init_deg >= max_deg.
     H_phys = build_physical_hamiltonian(point, max_deg)
-    H_rn = phys2rn(point, H_phys, max_deg, psi, clmo)
-    H_coeffs = rn2cn(H_rn, max_deg, psi, clmo)
+    H_rn = local2realmodal(point, H_phys, max_deg, psi, clmo)
+    H_coeffs = substitute_complex(H_rn, max_deg, psi, clmo)
 
     return H_coeffs, psi, clmo, encode_dict, max_deg
 
@@ -215,8 +262,6 @@ def test_apply_lie_transform(test_name, G_deg_actual, G_exps, G_coeff_val, H_coe
     psi, clmo = init_index_tables(N_max_test)
     encode_dict = _create_encode_dict_from_clmo(clmo)
 
-    # --- Setup H_coeffs_list ---
-    # H is always c_H * q2*p2 (degree 2)
     H_deg_actual = 2
     H_exps_tuple = (0,1,0,0,1,0)
     H_exps_np = np.array(H_exps_tuple, dtype=np.int64)
@@ -225,11 +270,8 @@ def test_apply_lie_transform(test_name, G_deg_actual, G_exps, G_coeff_val, H_coe
     if H_deg_actual <= N_max_test: # Ensure degree is within bounds of the list
         H_coeffs_list[H_deg_actual][idx_H] = H_coeff_val
 
-    # --- Setup G_coeffs_list ---
-    # G is c_G * q1^A * p2 (or similar based on G_exps)
-    G_coeffs_list = polynomial_zero_list(N_max_test, psi) # G_n is just one component
-    # The G_n passed to _apply_lie_transform is a single ndarray, not a list.
-    # So, G_coeffs_list itself is not directly used but helps create G_n_array.
+    _ = polynomial_zero_list(N_max_test, psi) # G_n is just one component
+
     G_n_array = make_poly(G_deg_actual, psi)
 
     G_exps_np = np.array(G_exps, dtype=np.int64)
@@ -244,7 +286,7 @@ def test_apply_lie_transform(test_name, G_deg_actual, G_exps, G_coeff_val, H_coe
     coords = (q1,q2,q3,p1,p2,p3)
 
     # Construct Hsym
-    Hsym = sp.sympify(H_coeff_val) # Handles complex numbers correctly
+    Hsym = sp.sympify(H_coeff_val) 
     for i, exp_val in enumerate(H_exps_tuple):
         if exp_val > 0:
             Hsym *= coords[i]**exp_val
@@ -264,21 +306,16 @@ def test_apply_lie_transform(test_name, G_deg_actual, G_exps, G_coeff_val, H_coe
                         sp.diff(f, p_vars[i_pb]) * sp.diff(g, q_vars[i_pb]))
         return sp.expand(bracket)
 
-    # Calculate Lie series: H_ref = sum_{k=0 to K_series} Ad_G^k(H) / k!
-    # K_series matches K = max(1, deg_G - 1) from _apply_lie_transform
     K_series = max(1, G_deg_actual - 1)
     
     current_ad_term_sym = Hsym 
-    Href_sym_calc = Hsym # Term for k=0
+    Href_sym_calc = Hsym
 
-    if K_series > 0 : # Only proceed if there are bracket terms to add
+    if K_series > 0 :
         for k_val in range(1, K_series + 1):
             current_ad_term_sym = sympy_poisson_bracket(current_ad_term_sym, Gsym, coords)
             Href_sym_calc += current_ad_term_sym / math.factorial(k_val)
-    
-    # Convert the SymPy reference Href_sym_calc to our polynomial coefficient list format
-    # The list(coords) is important as sympy2poly expects a Python list of symbols.
-    # psi and clmo should be the ones initialized with N_max_test.
+
     Href_poly = sympy2poly(Href_sym_calc, list(coords), psi, clmo, encode_dict)
 
     # --- Comparison ---
@@ -291,12 +328,10 @@ def test_apply_lie_transform(test_name, G_deg_actual, G_exps, G_coeff_val, H_coe
         if d < len(Href_poly):
             coeffs_from_sympy_ref = Href_poly[d]
         else:
-            # If Href_poly doesn't have this degree, all coeffs are zero.
             expected_size = psi[N_VARS, d] if d < psi.shape[1] else 0 
             if expected_size < 0: expected_size = 0 
             coeffs_from_sympy_ref = np.zeros(expected_size, dtype=np.complex128)
 
-        # Reshape scalar-like 0-dim arrays that might come from make_poly for degree 0 if not careful
         if coeffs_from_lie_transform.ndim == 0 and coeffs_from_lie_transform.size == 1:
              coeffs_from_lie_transform = coeffs_from_lie_transform.reshape(1)
         if coeffs_from_sympy_ref.ndim == 0 and coeffs_from_sympy_ref.size == 1:
@@ -314,16 +349,20 @@ def test_apply_lie_transform(test_name, G_deg_actual, G_exps, G_coeff_val, H_coe
 
 @pytest.mark.parametrize("cn_hamiltonian_data", [2, 3, 4, 6], indirect=True)
 def test_lie_transform_removes_bad_terms(cn_hamiltonian_data):
-    H_coeffs, psi, clmo, encode_dict, max_deg = cn_hamiltonian_data
+    H_coeffs, psi, clmo, _, max_deg = cn_hamiltonian_data
     mu_earth_moon = 0.012150585609624
     point = L1Point(mu=mu_earth_moon)
-    H_out, G_total = lie_transform(point, H_coeffs, psi, clmo, max_deg)
+    H_out, _, _ = lie_transform(point, H_coeffs, psi, clmo, max_deg)
 
-    # property: no bad monomials remain in any degree ≥3
+    # Use a tolerance appropriate for accumulated floating-point errors
+    tolerance = 1e-15
+    
     for n in range(3, max_deg + 1):
         bad = _select_terms_for_elimination(H_out[n], n, clmo)
-        assert not bad.any(), (
-            f"Bad monomials not eliminated at degree {n}: {np.where(bad!=0)}")
+        max_bad_coeff = np.max(np.abs(bad)) if bad.size > 0 else 0.0
+        assert max_bad_coeff < tolerance, (
+            f"Bad monomials not sufficiently eliminated at degree {n}. "
+            f"Max coefficient: {max_bad_coeff:.2e}, tolerance: {tolerance:.2e}. "
+            f"Non-zero positions: {np.where(np.abs(bad) >= tolerance)}")
 
-    # quadratic part should be exactly what we started with
     assert np.allclose(H_out[2], H_coeffs[2], atol=0, rtol=0)

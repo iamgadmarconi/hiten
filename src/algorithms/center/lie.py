@@ -4,14 +4,21 @@ from numba.typed import List
 
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                _factorial, decode_multiindex,
-                                               make_poly)
+                                               encode_multiindex, make_poly)
 from algorithms.center.polynomial.operations import (
-    polynomial_clean, polynomial_poisson_bracket, polynomial_zero_list)
+    polynomial_clean, polynomial_total_degree, polynomial_evaluate,
+    polynomial_poisson_bracket, polynomial_zero_list)
 from config import FASTMATH
 from utils.log_config import logger
 
 
-def lie_transform(point, poly_init: list[np.ndarray], psi: np.ndarray, clmo: np.ndarray, max_degree: int, tol: float = 1e-15) -> tuple[list[np.ndarray], list[np.ndarray]]:
+def lie_transform(
+point, 
+poly_init: List[np.ndarray], 
+psi: np.ndarray, 
+clmo: np.ndarray, 
+max_degree: int, 
+tol: float = 1e-30) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
     """
     Perform a Lie transformation to normalize a Hamiltonian.
     
@@ -20,7 +27,7 @@ def lie_transform(point, poly_init: list[np.ndarray], psi: np.ndarray, clmo: np.
     point : object
         Object containing information about the linearized dynamics
         (eigenvalues and frequencies)
-    poly_init : list[numpy.ndarray]
+    poly_init : List[np.ndarray]
         Initial polynomial Hamiltonian to normalize
     psi : numpy.ndarray
         Combinatorial table from init_index_tables
@@ -29,14 +36,15 @@ def lie_transform(point, poly_init: list[np.ndarray], psi: np.ndarray, clmo: np.
     max_degree : int
         Maximum degree to include in the normalized Hamiltonian
     tol : float, optional
-        Tolerance for cleaning small coefficients, default is 1e-15
+        Tolerance for cleaning small coefficients, default is 1e-30
         
     Returns
     -------
-    tuple[list[numpy.ndarray], list[numpy.ndarray]]
+    tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]
         A tuple containing:
         - The normalized Hamiltonian
         - The generating function for the normalization
+        - The eliminated terms at each degree (for testing homological equation)
         
     Notes
     -----
@@ -50,13 +58,14 @@ def lie_transform(point, poly_init: list[np.ndarray], psi: np.ndarray, clmo: np.
     The transformation preserves the dynamical structure while simplifying
     the equations of motion.
     """
-    lam, om1, om2 = point.linear_modes()
+    lam, om1, om2 = point.linear_modes
     eta = np.array([lam, 1j*om1, 1j*om2], dtype=np.complex128)
 
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
 
     poly_trans = [h.copy() for h in poly_init]
     poly_G_total = polynomial_zero_list(max_degree, psi)
+    poly_elim_total = polynomial_zero_list(max_degree, psi)  # Store eliminated terms
 
     for n in range(3, max_degree+1):
         logger.info(f"Normalizing at order: {n}")
@@ -66,7 +75,13 @@ def lie_transform(point, poly_init: list[np.ndarray], psi: np.ndarray, clmo: np.
         p_elim = _select_terms_for_elimination(p_n, n, clmo)
         if not p_elim.any():
             continue
+            
+        # Store the eliminated terms for this degree
+        if n < len(poly_elim_total):
+            poly_elim_total[n] = p_elim.copy()
+            
         p_G_n = _solve_homological_equation(p_elim, n, eta, clmo)
+
         
         # Clean Gn using a Numba typed list for compatibility with polynomial_clean
         if p_G_n.any(): # Only clean if there's something to clean
@@ -92,11 +107,15 @@ def lie_transform(point, poly_init: list[np.ndarray], psi: np.ndarray, clmo: np.
             continue
             
     poly_G_total = polynomial_clean(poly_G_total, tol)
-    return poly_trans, poly_G_total
+    poly_elim_total = polynomial_clean(poly_elim_total, tol)
+    return poly_trans, poly_G_total, poly_elim_total
 
 
 @njit(fastmath=FASTMATH, cache=True)
-def _get_homogeneous_terms(poly_H: List[np.ndarray], n: int, psi: np.ndarray) -> np.ndarray:
+def _get_homogeneous_terms(
+poly_H: List[np.ndarray],
+n: int, 
+psi: np.ndarray) -> np.ndarray:
     """
     Extract the homogeneous terms of degree n from a polynomial.
     
@@ -127,7 +146,10 @@ def _get_homogeneous_terms(poly_H: List[np.ndarray], n: int, psi: np.ndarray) ->
 
 
 @njit(fastmath=FASTMATH, cache=True)
-def _select_terms_for_elimination(p_n: np.ndarray, n: int, clmo: np.ndarray) -> np.ndarray:
+def _select_terms_for_elimination(
+p_n: np.ndarray, 
+n: int, 
+clmo: np.ndarray) -> np.ndarray:
     """
     Select non-resonant terms to be eliminated by the Lie transform.
     
@@ -161,7 +183,11 @@ def _select_terms_for_elimination(p_n: np.ndarray, n: int, clmo: np.ndarray) -> 
 
 
 @njit(fastmath=FASTMATH, cache=True)
-def _solve_homological_equation(p_elim: np.ndarray, n: int, eta: np.ndarray, clmo: np.ndarray) -> np.ndarray:
+def _solve_homological_equation(
+p_elim: np.ndarray, 
+n: int, 
+eta: np.ndarray, 
+clmo: np.ndarray) -> np.ndarray:
     """
     Solve the homological equation to find the generating function.
     
@@ -189,6 +215,9 @@ def _solve_homological_equation(p_elim: np.ndarray, n: int, eta: np.ndarray, clm
     g_k = -h_k / ((k₃-k₀)λ + (k₄-k₁)iω₁ + (k₅-k₂)iω₂)
     
     where k = [k₀, k₁, k₂, k₃, k₄, k₅] are the exponents of the monomial.
+    
+    This version includes a resonance check to avoid division by zero
+    for nearly resonant terms.
     """
     p_G = np.zeros_like(p_elim)
     for i in range(p_elim.shape[0]):
@@ -198,12 +227,23 @@ def _solve_homological_equation(p_elim: np.ndarray, n: int, eta: np.ndarray, clm
             denom = ((k[3]-k[0]) * eta[0] +
                      (k[4]-k[1]) * eta[1] +
                      (k[5]-k[2]) * eta[2])
+            # Check for resonance (near-zero denominator)
+            if abs(denom) < 1e-14:
+                continue  # Skip resonant terms - keep in normal form, should not occur.
             p_G[i] = -c / denom
     return p_G
 
 
 @njit(fastmath=FASTMATH, cache=False)
-def _apply_lie_transform(poly_H: List[np.ndarray], p_G_n: np.ndarray, deg_G: int, N_max: int, psi: np.ndarray, clmo, encode_dict_list, tol: float) -> list[np.ndarray]:
+def _apply_lie_transform(
+poly_H: List[np.ndarray], 
+p_G_n: np.ndarray, 
+deg_G: int, 
+N_max: int, 
+psi: np.ndarray, 
+clmo: np.ndarray, 
+encode_dict_list: List[dict], 
+tol: float) -> List[np.ndarray]:
     """
     Apply a Lie transform with generating function G to a Hamiltonian.
     
@@ -242,54 +282,275 @@ def _apply_lie_transform(poly_H: List[np.ndarray], p_G_n: np.ndarray, deg_G: int
     The sum is truncated based on the maximum achievable degree from repeated
     Poisson brackets and the specified N_max.
     """
-    poly_new = polynomial_zero_list(N_max, psi) # Use helper for clarity
-    for i in range(min(len(poly_H), N_max + 1)):
-        if i < len(poly_H) and poly_H[i].shape == poly_new[i].shape:
-            poly_new[i] = poly_H[i].copy()
-        elif i < len(poly_H) and poly_H[i].size == poly_new[i].size: # check for size if shape is different but compatible
-            poly_new[i] = poly_H[i].copy().reshape(poly_new[i].shape)
-
-
-    if deg_G > 2:
-        K = (N_max - deg_G) // (deg_G - 2) + 1
-    else:  # quadratic generator –very rare here–
-        K = 1
-    factorials = [_factorial(k) for k in range(K + 1)]
-
-    poly_PB_term = List()
-    for d in range(N_max + 1):
-        if d < len(poly_H):
-            poly_PB_term.append(poly_H[d].copy())
+    # Initialize result by copying input polynomial
+    poly_result = List()
+    for i in range(N_max + 1):
+        if i < len(poly_H):
+            poly_result.append(poly_H[i].copy())
         else:
-            poly_PB_term.append(make_poly(d, psi))
-
-    poly_G = polynomial_zero_list(N_max, psi) # Ensure poly_G can go up to N_max if deg_G is high
-    if deg_G <= N_max and deg_G < len(poly_G): # Check if deg_G is a valid index for poly_G
-        if poly_G[deg_G].shape == p_G_n.shape:
-            poly_G[deg_G] = p_G_n.copy()
-        elif poly_G[deg_G].size == p_G_n.size : # check for size if shape is different but compatible
-            poly_G[deg_G] = p_G_n.copy().reshape(poly_G[deg_G].shape)
-
-
+            poly_result.append(make_poly(i, psi))
+    
+    # Build complete generator polynomial from single degree
+    poly_G = polynomial_zero_list(N_max, psi)
+    if deg_G < len(poly_G):
+        poly_G[deg_G] = p_G_n.copy()
+    
+    # Determine number of terms in Lie series
+    if deg_G > 2:
+        K = max(N_max, (N_max - deg_G) // (deg_G - 2) + 1)
+    else:
+        K = 1
+    
+    # Precompute factorials
+    factorials = [_factorial(k) for k in range(K + 1)]
+    
+    # Initialize with H for Poisson bracket iteration
+    poly_bracket = List()
+    for i in range(len(poly_H)):
+        poly_bracket.append(poly_H[i].copy())
+    
+    # Apply Lie series: H + {H,G} + (1/2!){{H,G},G} + ...
     for k in range(1, K + 1):
-        poly_PB_term = polynomial_poisson_bracket(
-            poly_PB_term,
+        # Compute next Poisson bracket
+        poly_bracket = polynomial_poisson_bracket(
+            poly_bracket,
             poly_G,
             N_max,
             psi,
             clmo,
             encode_dict_list
         )
-        poly_PB_term = polynomial_clean(poly_PB_term, tol)
+        poly_bracket = polynomial_clean(poly_bracket, tol)
+        
+        # Add to result with factorial coefficient
+        coeff = 1.0 / factorials[k]
+        for d in range(min(len(poly_bracket), len(poly_result))):
+            poly_result[d] += coeff * poly_bracket[d]
+    
+    return polynomial_clean(poly_result, tol)
 
-        inv_fact = 1.0 / factorials[k]
-        for d in range(N_max + 1):
-            if d < len(poly_PB_term) and d < len(poly_new) and \
-                poly_new[d].shape == poly_PB_term[d].shape:
-                poly_new[d] += poly_PB_term[d] * inv_fact
-            elif d < len(poly_PB_term) and d < len(poly_new) and \
-                poly_new[d].size == poly_PB_term[d].size: # check for size if shape is different but compatible
-                poly_new[d] += poly_PB_term[d].reshape(poly_new[d].shape) * inv_fact
 
-    poly_new = polynomial_clean(poly_new, tol)
-    return poly_new
+def _center2modal(
+poly_G_total: List[np.ndarray], 
+max_degree: int, psi: np.ndarray, 
+clmo: np.ndarray, 
+tol: float = 1e-30,
+inverse: bool = False, # If False, Generators are applied in ascending order. If True, Generators are applied in descending order.
+sign: int = None, # If None, the sign is determined by the inverse flag. If not None, the sign is used to determine sign of the generator.
+restrict: bool = True) -> List[List[np.ndarray]]:
+    """
+    Perform inverse Lie transformation from center manifold coordinates to complex-diagonalized coordinates.
+    
+    Parameters
+    ----------
+    poly_G_total : List[np.ndarray]
+        List of generating functions for the Lie transformation
+    max_degree : int
+        Maximum polynomial degree for the transformation
+    psi : np.ndarray
+        Combinatorial table from init_index_tables
+    clmo : np.ndarray
+        List of arrays containing packed multi-indices
+    tol : float, optional
+        Tolerance for cleaning small coefficients
+
+    Returns
+    -------
+    List[List[np.ndarray]]
+        Six polynomial expansions for [q1, q2, q3, p1, p2, p3]
+    """
+    # Create encode_dict_list from clmo
+    encode_dict_list = _create_encode_dict_from_clmo(clmo)
+
+    current_coords = []
+    for i in range(6):
+        poly = polynomial_zero_list(max_degree, psi)
+        poly[1] = np.zeros(6, dtype=np.complex128)
+        poly[1][i] = 1.0 + 0j       # identity for q₁,q₂,q₃,p₁,p₂,p₃
+        current_coords.append(poly) # [q1, q2, q3, p1, p2, p3]
+    
+    if inverse:
+        start = max_degree
+        stop = 2
+        step = -1
+        sign = -1 if sign is None else sign
+    else:
+        start = 3
+        stop = max_degree + 1
+        step = 1
+        sign = 1 if sign is None else sign
+
+    for n in range(start, stop, step):
+        if n >= len(poly_G_total) or not poly_G_total[n].any():
+            continue
+
+        G_n = sign * poly_G_total[n]
+        poly_G = polynomial_zero_list(max_degree, psi)
+        poly_G[n] = G_n.copy()
+        
+        new_coords = []
+        for i in range(6):
+            current_poly_typed = List()
+            for arr in current_coords[i]:
+                current_poly_typed.append(arr)
+
+            new_poly = _apply_series(
+                current_poly_typed, poly_G, max_degree, psi, clmo, encode_dict_list, tol
+            )
+            new_coords.append(new_poly)
+        
+        # Update all coordinates for next iteration
+        current_coords = new_coords
+    
+    # Convert to proper Numba List[List[np.ndarray]] before returning
+    result = List()
+    for coord_expansion in current_coords:
+        result.append(coord_expansion)
+    
+    if restrict:
+        result = _zero_q1p1(result, clmo, tol)
+
+    return result
+
+
+@njit(fastmath=FASTMATH, cache=False)
+def _apply_series(
+poly_X: List[np.ndarray], 
+poly_G: List[np.ndarray], 
+N_max: int, 
+psi: np.ndarray, 
+clmo: np.ndarray, 
+encode_dict_list: List[dict], 
+tol: float) -> List[np.ndarray]:
+    """
+    Apply inverse Lie series transformation to a coordinate polynomial.
+    
+    Parameters
+    ----------
+    poly_X : List[np.ndarray]
+        Current coordinate polynomial
+    poly_G : List[np.ndarray]
+        Generating function polynomial
+    N_max : int
+        Maximum degree for the result
+    psi, clmo, encode_dict_list : arrays
+        Polynomial indexing structures
+    tol : float
+        Tolerance for cleaning
+        
+    Returns
+    -------
+    list[np.ndarray]
+        Transformed coordinate polynomial
+    """
+
+    poly_result = List()
+    for i in range(N_max + 1):
+        if i < len(poly_X):
+            poly_result.append(poly_X[i].copy())
+        else:
+            poly_result.append(make_poly(i, psi))
+
+    # Find degree of generating function
+    deg_G = polynomial_total_degree(poly_G, psi)
+
+    if deg_G > 2:
+        K_max = max(N_max, (N_max - 1) // (deg_G - 2) + 1)
+    else:
+        K_max = 1
+    
+    # Precompute factorials
+    factorials = [_factorial(k) for k in range(K_max + 1)]
+    
+    # Initialize bracket with X for iteration
+    poly_bracket = List()
+    for i in range(len(poly_X)):
+        poly_bracket.append(poly_X[i].copy())
+    
+    # Apply Lie series: X + {X,G} + (1/2!){{X,G},G} + ...
+    for k in range(1, K_max + 1):
+
+        # Compute next Poisson bracket
+        poly_bracket = polynomial_poisson_bracket(
+            poly_bracket,
+            poly_G,
+            N_max,
+            psi,
+            clmo,
+            encode_dict_list
+        )
+
+        poly_bracket = polynomial_clean(poly_bracket, tol)
+
+        coeff = 1.0 / factorials[k]
+        for d in range(min(len(poly_bracket), len(poly_result))):
+            poly_result[d] += coeff * poly_bracket[d]
+
+    return polynomial_clean(poly_result, tol)
+
+
+@njit(fastmath=FASTMATH, cache=True)
+def evaluate_transform(
+expansions: List[List[np.ndarray]], 
+coords_cm_complex: np.ndarray, 
+clmo: np.ndarray) -> np.ndarray:
+    """
+    Evaluate the six polynomial expansions at given center manifold values.
+    
+    Parameters
+    ----------
+    expansions : List[List[np.ndarray]]
+        Six polynomial expansions from inverse_lie_transform
+    coords_cm_complex : np.ndarray
+        Center manifold coordinates [q1, q2, q3, p1, p2, p3]
+    clmo : np.ndarray
+        List of arrays containing packed multi-indices
+        
+    Returns
+    -------
+    np.ndarray
+        Complex array of shape (6,) containing [q̃1, q̃2, q̃3, p̃1, p̃2, p̃3]
+    """
+
+    result = np.zeros(6, dtype=np.complex128) # [q1, q2, q3, p1, p2, p3]
+    
+    for i in range(6):
+        # Evaluate each polynomial at the given point
+        result[i] = polynomial_evaluate(expansions[i], coords_cm_complex, clmo)
+    
+    return result # [q̃1, q̃2, q̃3, p̃1, p̃2, p̃3]
+
+
+def _zero_q1p1(
+    expansions: List[List[np.ndarray]], 
+    clmo: np.ndarray, 
+    tol: float = 1e-30
+) -> List[List[np.ndarray]]:
+    """
+    Restrict coordinate expansions to the center manifold by eliminating 
+    terms containing q1 or p1.
+    
+    After this restriction, all 6 coordinate expansions will depend only 
+    on the 4 center manifold variables (q2, p2, q3, p3).
+    """
+    restricted_expansions = List()
+    
+    for expansion in expansions:
+        # Create a new Numba List to maintain type consistency
+        restricted_poly = List()
+        for h in expansion:
+            restricted_poly.append(h.copy())
+            
+        for deg, coeff_vec in enumerate(restricted_poly):
+            if coeff_vec.size == 0:
+                continue
+            for pos, c in enumerate(coeff_vec):
+                if abs(c) <= tol:
+                    coeff_vec[pos] = 0.0
+                    continue
+                k = decode_multiindex(pos, deg, clmo)
+                if k[0] != 0 or k[3] != 0:  # q1 or p1 exponent non-zero
+                    coeff_vec[pos] = 0.0
+        restricted_expansions.append(restricted_poly)
+    
+    return restricted_expansions

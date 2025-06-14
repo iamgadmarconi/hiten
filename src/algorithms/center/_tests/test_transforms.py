@@ -14,8 +14,9 @@ from algorithms.center.polynomial.conversion import poly2sympy, sympy2poly
 from algorithms.center.polynomial.operations import (
     polynomial_add_inplace, polynomial_multiply, polynomial_poisson_bracket,
     polynomial_power, polynomial_variable, polynomial_zero_list)
-from algorithms.center.transforms import (_linear_variable_polys, cn2rn,
-                                          phys2rn, rn2cn, substitute_linear)
+from algorithms.center.transforms import (_linear_variable_polys, substitute_real,
+                                          local2realmodal, substitute_complex, realmodal2local,
+                                          substitute_linear)
 from system.libration import L1Point
 
 _sympy_vars = sp.symbols("x y z px py pz")
@@ -358,7 +359,7 @@ def test_real_normal_form(point, max_deg):
     encode_dict = _create_encode_dict_from_clmo(clmo)
     
     H_phys = build_physical_hamiltonian(point, max_deg)
-    H_rn   = phys2rn(point, H_phys, max_deg, psi, clmo)
+    H_rn   = local2realmodal(point, H_phys, max_deg, psi, clmo)
 
     x, y, z, px, py, pz = sp.symbols('x y z px py pz')
     expr = poly2sympy(H_rn, (x, y, z, px, py, pz), psi, clmo)
@@ -407,8 +408,8 @@ def test_complex_normal_form(point, max_deg):
 
     # 1) build physical Hamiltonian, go to real normal form, then complex
     H_phys = build_physical_hamiltonian(point, max_deg)
-    H_rn   = phys2rn(point, H_phys, max_deg, psi, clmo)
-    H_cn   = rn2cn(       H_rn,   max_deg, psi, clmo)
+    H_rn   = local2realmodal(point, H_phys, max_deg, psi, clmo)
+    H_cn   = substitute_complex(       H_rn,   max_deg, psi, clmo)
 
     # 2) symbolic expression of degree‑2 part
     q1, q2, q3, p1, p2, p3 = sp.symbols("q1 q2 q3 p1 p2 p3")
@@ -497,9 +498,9 @@ def test_cn2rn_inverse(point, max_deg):
 
     # pipeline ---------------------------------------------------------------
     H_phys = build_physical_hamiltonian(point, max_deg)
-    H_rn   = phys2rn(point, H_phys, max_deg, psi, clmo)
-    H_cn   = rn2cn(       H_rn,   max_deg, psi, clmo)
-    H_back = cn2rn(       H_cn,   max_deg, psi, clmo)
+    H_rn   = local2realmodal(point, H_phys, max_deg, psi, clmo)
+    H_cn   = substitute_complex(       H_rn,   max_deg, psi, clmo)
+    H_back = substitute_real(       H_cn,   max_deg, psi, clmo)
 
     # (1) coefficient-by-coefficient equality with appropriate tolerance
     for d in range(max_deg+1):
@@ -524,3 +525,142 @@ def test_cn2rn_inverse(point, max_deg):
         assert set(quad.keys()) == set(expected.keys()), "Quadratic terms have different monomials"
         for k in expected:
             assert np.isclose(abs(complex(quad[k])), abs(complex(expected[k])), atol=1e-12, rtol=1e-12), f"Value mismatch for term {k}"
+
+@pytest.mark.parametrize("max_deg", [2, 3, 4, 6])
+def test_phys2rn_rn2phys_roundtrip(point, max_deg):
+    """Test that realmodal2local is the inverse of local2realmodal: realmodal2local(local2realmodal(H_phys)) ≈ H_phys."""
+    # Create fresh psi, clmo for each test instead of using the fixture
+    psi, clmo = init_index_tables(max_deg)
+    # Create encode_dict from clmo
+    encode_dict = _create_encode_dict_from_clmo(clmo)
+
+    # Build the physical Hamiltonian
+    H_phys_original = build_physical_hamiltonian(point, max_deg)
+    
+    # Forward transformation: physical → real normal form
+    H_rn = local2realmodal(point, H_phys_original, max_deg, psi, clmo)
+    
+    # Backward transformation: real normal form → physical
+    H_phys_roundtrip = realmodal2local(point, H_rn, max_deg, psi, clmo)
+
+    # Verify roundtrip: coefficient-by-coefficient equality with appropriate tolerance
+    for d in range(max_deg + 1):
+        assert np.allclose(
+            H_phys_roundtrip[d], H_phys_original[d], 
+            atol=1e-13, rtol=1e-13
+        ), f"Roundtrip failed for degree {d} terms: max relative error = {np.max(np.abs((H_phys_roundtrip[d] - H_phys_original[d]) / (H_phys_original[d] + 1e-16)))}"
+
+    # Additional verification: check that the symbolic expressions match
+    x, y, z, px, py, pz = sp.symbols('x y z px py pz')
+    vars_tuple = (x, y, z, px, py, pz)
+    
+    expr_original = poly2sympy(H_phys_original, vars_tuple, psi, clmo)
+    expr_roundtrip = poly2sympy(H_phys_roundtrip, vars_tuple, psi, clmo)
+    
+    # Compute the difference and verify it's essentially zero
+    diff = sp.expand(expr_original - expr_roundtrip)
+    
+    # For symbolic verification, we'll check that all coefficients are below tolerance
+    if isinstance(diff, (int, float, complex)):
+        # If diff is a scalar, check it directly
+        assert abs(complex(diff)) < 1e-12, f"Symbolic difference is not zero: {diff}"
+    else:
+        # If diff is a polynomial expression, check all coefficients
+        try:
+            poly_diff = sp.Poly(diff, *vars_tuple)
+            max_coeff = max(abs(complex(c)) for c in poly_diff.all_coeffs()) if poly_diff.all_coeffs() else 0
+            assert max_coeff < 1e-12, f"Maximum coefficient in symbolic difference: {max_coeff}"
+        except sp.PolynomialError:
+            # If we can't convert to polynomial, evaluate at several points
+            test_points = [
+                {x: 0.1, y: 0.2, z: 0.1, px: 0.15, py: 0.1, pz: 0.05},
+                {x: -0.1, y: 0.1, z: -0.05, px: -0.1, py: 0.2, pz: -0.1},
+                {x: 0.05, y: -0.15, z: 0.2, px: 0.1, py: -0.05, pz: 0.15}
+            ]
+            for point_vals in test_points:
+                diff_val = complex(diff.subs(point_vals))
+                assert abs(diff_val) < 1e-12, f"Symbolic difference at {point_vals}: {diff_val}"
+
+@pytest.mark.parametrize("max_deg", [2, 3, 4, 6])
+def test_full_roundtrip(point, max_deg):
+    """Test the complete transformation pipeline: Phys → RN → CN → RN → Phys."""
+    # Create fresh psi, clmo for each test instead of using the fixture
+    psi, clmo = init_index_tables(max_deg)
+    # Create encode_dict from clmo
+    encode_dict = _create_encode_dict_from_clmo(clmo)
+
+    # Build the original physical Hamiltonian
+    H_phys_original = build_physical_hamiltonian(point, max_deg)
+    
+    # Forward pipeline: Phys → RN → CN
+    H_rn_forward = local2realmodal(point, H_phys_original, max_deg, psi, clmo)
+    H_cn = substitute_complex(H_rn_forward, max_deg, psi, clmo)
+    
+    # Backward pipeline: CN → RN → Phys
+    H_rn_backward = substitute_real(H_cn, max_deg, psi, clmo)
+    H_phys_final = realmodal2local(point, H_rn_backward, max_deg, psi, clmo)
+
+    # Verify full roundtrip: coefficient-by-coefficient equality
+    for d in range(max_deg + 1):
+        assert np.allclose(
+            H_phys_final[d], H_phys_original[d], 
+            atol=1e-12, rtol=1e-12
+        ), f"Full roundtrip failed for degree {d} terms: max absolute error = {np.max(np.abs(H_phys_final[d] - H_phys_original[d]))}"
+
+    # Verify intermediate RN forms match (RN forward vs RN backward)
+    for d in range(max_deg + 1):
+        assert np.allclose(
+            H_rn_backward[d], H_rn_forward[d], 
+            atol=1e-12, rtol=1e-12
+        ), f"RN roundtrip (via CN) failed for degree {d} terms: max absolute error = {np.max(np.abs(H_rn_backward[d] - H_rn_forward[d]))}"
+
+    # Additional symbolic verification for low-degree terms
+    x, y, z, px, py, pz = sp.symbols('x y z px py pz')
+    vars_tuple = (x, y, z, px, py, pz)
+    
+    expr_original = poly2sympy(H_phys_original, vars_tuple, psi, clmo)
+    expr_final = poly2sympy(H_phys_final, vars_tuple, psi, clmo)
+    
+    # Compute the difference and verify it's essentially zero
+    diff = sp.expand(expr_original - expr_final)
+    
+    # Check symbolic difference
+    if isinstance(diff, (int, float, complex)):
+        assert abs(complex(diff)) < 1e-11, f"Symbolic difference is not zero: {diff}"
+    else:
+        try:
+            poly_diff = sp.Poly(diff, *vars_tuple)
+            if poly_diff.all_coeffs():
+                max_coeff = max(abs(complex(c)) for c in poly_diff.all_coeffs())
+                assert max_coeff < 1e-11, f"Maximum coefficient in symbolic difference: {max_coeff}"
+        except sp.PolynomialError:
+            # If we can't convert to polynomial, evaluate at test points
+            test_points = [
+                {x: 0.1, y: 0.2, z: 0.1, px: 0.15, py: 0.1, pz: 0.05},
+                {x: -0.1, y: 0.1, z: -0.05, px: -0.1, py: 0.2, pz: -0.1},
+                {x: 0.05, y: -0.15, z: 0.2, px: 0.1, py: -0.05, pz: 0.15}
+            ]
+            for point_vals in test_points:
+                diff_val = complex(diff.subs(point_vals))
+                assert abs(diff_val) < 1e-11, f"Full roundtrip symbolic difference at {point_vals}: {diff_val}"
+
+    # Test that the quadratic structure is preserved through the full pipeline
+    # Extract quadratic terms from both original and final Hamiltonians
+    poly_original = sp.Poly(expr_original, *vars_tuple)
+    poly_final = sp.Poly(expr_final, *vars_tuple)
+    
+    quad_original = {m: c for m, c in poly_original.terms() if sum(m) == 2}
+    quad_final = {m: c for m, c in poly_final.terms() if sum(m) == 2}
+    
+    # Filter out numerical noise
+    quad_original = {m: c for m, c in quad_original.items() if abs(complex(c)) > 1e-12}
+    quad_final = {m: c for m, c in quad_final.items() if abs(complex(c)) > 1e-12}
+    
+    # Verify that the quadratic terms match
+    assert set(quad_original.keys()) == set(quad_final.keys()), \
+        f"Quadratic term structure changed: original has {set(quad_original.keys())}, final has {set(quad_final.keys())}"
+    
+    for monomial in quad_original:
+        coeff_diff = abs(complex(quad_original[monomial]) - complex(quad_final[monomial]))
+        assert coeff_diff < 1e-11, \
+            f"Quadratic coefficient mismatch for {monomial}: |{quad_original[monomial]} - {quad_final[monomial]}| = {coeff_diff}"

@@ -7,7 +7,7 @@ from system.body import Body
 from utils.constants import Constants
 
 # Center manifold reduction
-from algorithms.center.manifold import center_manifold_rn
+from algorithms.center.manifold import center_manifold_real
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables)
 
@@ -52,7 +52,7 @@ def poincare_test_setup():
 
     # 3. Perform centre-manifold reduction
     # This can be time-consuming, hence TEST_MAX_DEG is kept low.
-    H_cm_rn_full = center_manifold_rn(selected_l_point, psi, clmo, TEST_MAX_DEG)
+    H_cm_rn_full = center_manifold_real(selected_l_point, psi, clmo, TEST_MAX_DEG)
 
     return {
         "H_blocks": H_cm_rn_full,

@@ -2,8 +2,8 @@ import numpy as np
 from numba import njit, prange
 from numba.typed import List
 
-from algorithms.center.polynomial.algebra import (_poly_clean, _poly_diff,
-                                                  _poly_evaluate,
+from algorithms.center.polynomial.algebra import (_get_degree, _poly_clean,
+                                                  _poly_diff, _poly_evaluate,
                                                   _poly_integrate, _poly_mul,
                                                   _poly_poisson)
 from algorithms.center.polynomial.base import encode_multiindex, make_poly
@@ -364,6 +364,57 @@ def polynomial_degree(poly_p: List[np.ndarray]) -> int:
         if np.any(poly_p[d]):
             return d
     return -1 # All parts are zero or poly_p is empty
+
+@njit(fastmath=FASTMATH, cache=True)
+def polynomial_total_degree(poly_p: List[np.ndarray], psi) -> int:
+    """
+    Get the total degree of a polynomial using the _get_degree kernel function.
+    
+    This function uses the _get_degree kernel to verify the degree of each 
+    homogeneous part by checking the coefficient array size, then finds 
+    the highest degree with non-zero coefficients.
+    
+    Parameters
+    ----------
+    poly_p : List[numpy.ndarray]
+        A list where poly_p[d] is a NumPy array of coefficients for the
+        homogeneous part of degree d.
+    psi : numpy.ndarray
+        Combinatorial table from init_index_tables
+        
+    Returns
+    -------
+    int
+        The total degree of the polynomial. Returns -1 if the polynomial is zero.
+        
+    Notes
+    -----
+    This function provides an alternative to polynomial_degree() by using the 
+    _get_degree kernel function to determine the degree of each homogeneous part
+    based on coefficient array size rather than relying on array indexing.
+    """
+    max_degree_found = -1
+    
+    for d in range(len(poly_p)):
+        coeffs_d = poly_p[d]
+        
+        # Skip empty coefficient arrays
+        if coeffs_d.size == 0:
+            continue
+            
+        # Use _get_degree to verify this array represents degree d
+        actual_degree = _get_degree(coeffs_d, psi)
+        
+        # Check consistency: the degree determined by _get_degree should match the index
+        if actual_degree != d:
+            # If inconsistent, we might have a malformed polynomial structure
+            continue
+            
+        # Check if this degree has non-zero coefficients
+        if np.any(coeffs_d):
+            max_degree_found = max(max_degree_found, actual_degree)
+    
+    return max_degree_found
 
 @njit(fastmath=FASTMATH, cache=False)
 def polynomial_differentiate(
