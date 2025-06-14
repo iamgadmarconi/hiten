@@ -26,7 +26,7 @@ from algorithms.center.polynomial.operations import (polynomial_differentiate,
                                                      polynomial_poisson_bracket,
                                                      polynomial_variables_list,
                                                      polynomial_zero_list)
-from algorithms.center.transforms import complexify, local2realmodal
+from algorithms.center.transforms import substitute_complex, local2realmodal
 from algorithms.variables import N_VARS
 from system.libration import L1Point
 
@@ -85,7 +85,7 @@ def cn_hamiltonian_data(request):
     # The psi and clmo (initialized for psi_init_deg) are suitable as psi_init_deg >= max_deg.
     H_phys = build_physical_hamiltonian(point, max_deg)
     H_rn = local2realmodal(point, H_phys, max_deg, psi, clmo)
-    H_coeffs = complexify(H_rn, max_deg, psi, clmo)
+    H_coeffs = substitute_complex(H_rn, max_deg, psi, clmo)
 
     return H_coeffs, psi, clmo, encode_dict, max_deg
 

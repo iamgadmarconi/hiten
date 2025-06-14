@@ -1,7 +1,7 @@
 from algorithms.center.hamiltonian import build_physical_hamiltonian
 from algorithms.center.lie import lie_transform
 from algorithms.center.polynomial.base import decode_multiindex
-from algorithms.center.transforms import complexify, local2realmodal, realify
+from algorithms.center.transforms import substitute_complex, local2realmodal, substitute_real
 from utils.log_config import logger
 
 
@@ -16,7 +16,7 @@ def center_manifold_real(point, psi, clmo, max_deg=5):
         return [h.copy() for h in cached_cm_real]
 
     poly_cm_complex = center_manifold_complex(point, psi, clmo, max_deg)
-    poly_cm_real = realify(poly_cm_complex, max_deg, psi, clmo)
+    poly_cm_real = substitute_real(poly_cm_complex, max_deg, psi, clmo)
 
     point.cache_set(('hamiltonian', max_deg, 'center_manifold_real'), [h.copy() for h in poly_cm_real])
     
@@ -58,7 +58,7 @@ def center_manifold_complex(point, psi, clmo, max_deg=5):
     poly_cn = point.cache_get(('hamiltonian', max_deg, 'complex_normal'))
 
     if poly_cn is None:
-        poly_cn = complexify(poly_rn, max_deg, psi, clmo)
+        poly_cn = substitute_complex(poly_rn, max_deg, psi, clmo)
         point.cache_set(('hamiltonian', max_deg, 'complex_normal'), [h.copy() for h in poly_cn])
 
     else:

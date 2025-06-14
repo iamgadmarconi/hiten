@@ -24,14 +24,65 @@ def _clean_coordinates(coords: np.ndarray, tol: float = 1e-30) -> np.ndarray:
 
     return after
 
-def _complexify_coordinates(complex_coords: np.ndarray) -> np.ndarray:
-    return _clean_coordinates(M() @ complex_coords) # [q1, q2, q3, p1, p2, p3]
+def _substitute_coordinates(coords: np.ndarray, matrix: np.ndarray) -> np.ndarray:
+    """
+    Apply a coordinate transformation using a matrix as coordinate substitution.
+    
+    Parameters
+    ----------
+    coords : np.ndarray
+        Input coordinates to transform
+    matrix : np.ndarray
+        Transformation matrix (6x6)
+        
+    Returns
+    -------
+    np.ndarray
+        Transformed coordinates where result[i] = Σ_j matrix[i,j] * coords[j]
+    """
+    transformed_coords = np.zeros(6, dtype=np.complex128)
+    
+    for i in range(6):
+        for j in range(6):
+            if matrix[i, j] != 0:
+                transformed_coords[i] += matrix[i, j] * coords[j]
+    
+    return transformed_coords
 
-def _realify_coordinates(real_coords: np.ndarray) -> np.ndarray:
-    return _clean_coordinates(M_inv() @ real_coords) # [q1, q2, q3, p1, p2, p3]
+def solve_real(real_coords: np.ndarray) -> np.ndarray:
+    """
+    Return real coordinates given complex coordinates using the map `M`.
+
+    Parameters
+    ----------
+    real_coords : np.ndarray
+        Real coordinates [q1, q2, q3, p1, p2, p3]
+
+    Returns
+    -------
+    np.ndarray
+        Real coordinates [q1r, q2r, q3r, p1r, p2r, p3r]
+    """
+    return _clean_coordinates(_substitute_coordinates(real_coords, M())) # [q1r, q2r, q3r, p1r, p2r, p3r]
+
+def solve_complex(real_coords: np.ndarray) -> np.ndarray:
+    """
+    Return complex coordinates given real coordinates using the map `M_inv`.
+
+    Parameters
+    ----------
+    real_coords : np.ndarray
+        Real coordinates [q1, q2, q3, p1, p2, p3]
+
+    Returns
+    -------
+    np.ndarray
+        Complex coordinates [q1c, q2c, q3c, p1c, p2c, p3c]
+    """
+    return _clean_coordinates(_substitute_coordinates(real_coords, M_inv())) # [q1c, q2c, q3c, p1c, p2c, p3c]
 
 def _realmodal2local_coordinates(point, modal_coords: np.ndarray) -> np.ndarray:
-    # modal_coords: [q1, q2, q3, p1, p2, p3]
+    # modal_coords: [q1, q2, q3, px1, px2, px3]
     _, Cinv = point.normal_form_transform()
     return _clean_coordinates(modal_coords @ Cinv.T) # [x1, x2, x3, px1, px2, px3]
 
@@ -114,17 +165,17 @@ def _cmreal2synodic_coordinates(
 
     logger.info(f"real_6d_cm: \n{real_6d_cm}")
 
-    complex_6d_cm = _complexify_coordinates(real_6d_cm) # [q1, q2, q3, p1, p2, p3]
+    complex_6d_cm = solve_complex(real_6d_cm) # [q1, q2, q3, p1, p2, p3]
 
     logger.info(f"complex_6d_cm: \n{complex_6d_cm}")
 
-    expansions = _center2modal(poly_G_total, max_degree, psi, clmo, tol)
+    expansions = _center2modal(poly_G_total, max_degree, psi, clmo, tol, restrict=False)
 
     complex_6d = evaluate_transform(expansions, complex_6d_cm, clmo) # [q1, q2, q3, p1, p2, p3]
 
     logger.info(f"complex_6d: \n{complex_6d}")
 
-    real_6d = _realify_coordinates(complex_6d) # [q1, q2, q3, p1, p2, p3]
+    real_6d = solve_real(complex_6d) # [q1, q2, q3, p1, p2, p3]
 
     logger.info(f"real_6d: \n{real_6d}")
 

@@ -10,9 +10,9 @@ from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables)
 from algorithms.center.polynomial.operations import (
     polynomial_evaluate, polynomial_poisson_bracket, polynomial_zero_list)
-from algorithms.center.transforms import complexify, local2realmodal
+from algorithms.center.transforms import substitute_complex, local2realmodal
 from algorithms.variables import N_VARS
-from system.libration import L1Point
+from system.libration import L1Point, L2Point
 
 # Test parameters
 MU_EM = 0.0121505816  # Earth-Moon mass parameter
@@ -31,7 +31,7 @@ def debug_setup():
     # Build and normalize Hamiltonian
     H_phys = build_physical_hamiltonian(point, max_degree)
     H_rn = local2realmodal(point, H_phys, max_degree, psi, clmo)
-    H_cn = complexify(H_rn, max_degree, psi, clmo)
+    H_cn = substitute_complex(H_rn, max_degree, psi, clmo)
     
     # Perform Lie transformation
     poly_trans, poly_G_total, poly_elim_total = lie_transform(point, H_cn, psi, clmo, max_degree)
@@ -89,59 +89,6 @@ def test_poly_G_content(debug_setup):
                 applied_degrees.append(n)
         
         print(f"  Total degrees applied: {applied_degrees}")
-
-def test_generator_structure(debug_setup):
-    poly_G_total = debug_setup["poly_G_total"]
-    psi = debug_setup["psi"]
-    clmo = debug_setup["clmo"]
-    
-    print("\nAnalyzing generator structure and potential contributions:")
-    print("="*70)
-    
-    # Check which variables appear in each generator
-    for n in range(3, min(9, len(poly_G_total))):
-        if poly_G_total[n] is None or not poly_G_total[n].any():
-            continue
-            
-        G_n = poly_G_total[n]
-        print(f"\nGenerator G_{n}:")
-        print(f"  Total coefficients: {len(G_n)}")
-        print(f"  Non-zero coefficients: {np.count_nonzero(G_n)}")
-        print(f"  Max magnitude: {np.max(np.abs(G_n)):.3e}")
-        
-        # Analyze which types of terms are present
-        # Look for terms that could affect q1/p1 when starting from center manifold
-        encode_dict = _create_encode_dict_from_clmo(clmo)[n]
-        
-        # Categories of terms
-        has_q1_linear = False  # Terms with q1^1 * (other vars)
-        has_p1_linear = False  # Terms with p1^1 * (other vars)
-        has_q1p1_only = False  # Terms with only q1 and/or p1
-        pure_cm_terms = 0      # Terms with only q2,p2,q3,p3
-        
-        for idx, coeff in enumerate(G_n):
-            if abs(coeff) < 1e-15:
-                continue
-                
-            # Decode the multi-index
-            k = decode_multiindex(idx, n, clmo)
-            k0, k1, k2, k3, k4, k5 = k  # q1, q2, q3, p1, p2, p3
-            
-            # Check categories
-            if k0 == 1 and k3 == 0:  # q1^1 without p1
-                has_q1_linear = True
-            if k3 == 1 and k0 == 0:  # p1^1 without q1
-                has_p1_linear = True
-            if k1 == 0 and k2 == 0 and k4 == 0 and k5 == 0:  # Only q1/p1
-                has_q1p1_only = True
-            if k0 == 0 and k3 == 0:  # No q1 or p1
-                pure_cm_terms += 1
-        
-        print(f"  Has q1-linear terms: {has_q1_linear}")
-        print(f"  Has p1-linear terms: {has_p1_linear}")
-        print(f"  Has q1/p1-only terms: {has_q1p1_only}")
-        print(f"  Pure CM terms (no q1/p1): {pure_cm_terms}")
-
 
 def test_homological_equation(debug_setup):
     point = debug_setup["point"]
@@ -231,193 +178,3 @@ def test_homological_equation(debug_setup):
                 f"Trivial test at degree {n}: pb_magnitude={pb_magnitude:.2e}, "
                 f"elim_magnitude={elim_magnitude:.2e}"
             )
-
-def test_generator_cm_property(debug_setup):
-    poly_G_total = debug_setup["poly_G_total"]
-    poly_elim_total = debug_setup["poly_elim_total"]
-    psi = debug_setup["psi"]
-    clmo = debug_setup["clmo"]
-    
-    print("\nAnalyzing generator terms for center manifold compatibility:")
-    print("="*70)
-    
-    # For each generator, check what types of terms it contains
-    for n in range(3, min(7, len(poly_G_total))):
-        if poly_G_total[n] is None or not poly_G_total[n].any():
-            continue
-            
-        G_n = poly_G_total[n]
-        encode_dict = _create_encode_dict_from_clmo(clmo)[n]
-        
-        print(f"\nGenerator G_{n}:")
-        
-        # Categorize terms by their dependence on q1, p1
-        term_categories = {
-            'pure_cm': [],        # Only q2,p2,q3,p3
-            'linear_q1': [],      # q1 * (cm vars)^(n-1)
-            'linear_p1': [],      # p1 * (cm vars)^(n-1)
-            'q1p1_mixed': [],     # Contains both q1 and p1
-            'high_order_q1p1': [] # Higher powers of q1 or p1
-        }
-        
-        for idx, coeff in enumerate(G_n):
-            if abs(coeff) < 1e-15:
-                continue
-                
-            k = decode_multiindex(idx, n, clmo)
-            k0, k1, k2, k3, k4, k5 = k  # q1, q2, q3, p1, p2, p3
-            
-            # Categorize
-            if k0 == 0 and k3 == 0:
-                term_categories['pure_cm'].append((k, coeff))
-            elif k0 == 1 and k3 == 0:
-                term_categories['linear_q1'].append((k, coeff))
-            elif k0 == 0 and k3 == 1:
-                term_categories['linear_p1'].append((k, coeff))
-            elif k0 >= 1 and k3 >= 1:
-                term_categories['q1p1_mixed'].append((k, coeff))
-            else:
-                term_categories['high_order_q1p1'].append((k, coeff))
-        
-        # Report findings
-        for category, terms in term_categories.items():
-            if terms:
-                print(f"  {category}: {len(terms)} terms")
-                # Show a few examples
-                for i, (k, coeff) in enumerate(terms[:3]):
-                    print(f"    k={k}, coeff={coeff:.6e}")
-                if len(terms) > 3:
-                    print(f"    ... and {len(terms)-3} more")
-        
-        # Also check eliminated terms
-        if n < len(poly_elim_total) and poly_elim_total[n] is not None:
-            P_elim = poly_elim_total[n]
-            elim_nonzero = np.count_nonzero(P_elim)
-            if elim_nonzero > 0:
-                print(f"  Eliminated terms: {elim_nonzero}")
-
-
-def check_real_generator(G, degree, clmo, encode_dict_list, var_pairs):
-    if not G.any():
-        return 0.0
-
-    max_error = 0.0
-    
-    visited_indices = np.zeros(len(G), dtype=bool)
-
-    for idx, coeff in enumerate(G):
-        if visited_indices[idx]:
-            continue
-
-        # Decode the 1D-array index to a multi-index k
-        k = decode_multiindex(idx, degree, clmo)
-
-        # Create the multi-index for the conjugate term by swapping exponents
-        k_swapped = np.copy(k)
-        for v_idx_from, v_idx_to in var_pairs:
-            k_swapped[v_idx_from] = k[v_idx_to]
-            k_swapped[v_idx_to] = k[v_idx_from]
-
-        # Encode the swapped multi-index back to a 1D-array index
-        idx_conj = encode_multiindex(k_swapped, degree, encode_dict_list)
-
-        if idx_conj < 0:
-            # This case means the conjugate monomial does not exist in the basis.
-            # If the original coefficient is non-zero, this implies the polynomial
-            # is not real, and the error is the magnitude of the coefficient.
-            if abs(coeff) > 1e-15:
-                max_error = max(max_error, abs(coeff))
-            continue
-
-        coeff_conj = G[idx_conj]
-        
-        # The reality condition is c_k = conj(c_{k_swapped})
-        error = abs(coeff - np.conj(coeff_conj))
-        if error > max_error:
-            max_error = error
-
-        # Mark both this index and its conjugate as visited to avoid re-checking
-        visited_indices[idx] = True
-        if idx_conj < len(G) and idx_conj >= 0:
-            visited_indices[idx_conj] = True
-
-    return max_error
-
-
-def test_poly_G_is_real(debug_setup):
-    poly_G_total = debug_setup["poly_G_total"]
-    clmo = debug_setup["clmo"]
-    max_degree = debug_setup["max_degree"]
-    
-    encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    
-    # Define pairs of variable indices that are complex conjugates of each other.
-    # In our coordinate system (q1, q2, q3, p1, p2, p3), if p_i = conj(q_i),
-    # the pairs of indices are (0, 3), (1, 4), and (2, 5).
-    var_pairs = [(0, 3), (1, 4), (2, 5)]
-
-    print("\nVerifying G_n reality:")
-    for n in range(3, max_degree + 1):
-        if n >= len(poly_G_total) or poly_G_total[n] is None:
-            continue
-        
-        G_n = poly_G_total[n]
-        if not G_n.any():
-            continue
-            
-        error = check_real_generator(G_n, n, clmo, encode_dict_list, var_pairs)
-        
-        print(f"G_{n}: Max reality error = {error:.2e}")
-
-
-def dump_non_real(poly, degree, clmo, thresh=1e-12, tag="H"):
-    bad = []
-    arr = poly[degree]
-    for idx, c in enumerate(arr):
-        if abs(c.imag) > thresh:          # adjust threshold if needed
-            exp = decode_multiindex(idx, degree, clmo)  # decode to get multi-index
-            bad.append((exp, c))
-    if bad:
-        print(f"{tag}[{degree}]: {len(bad)} non-real terms")
-        for exp, c in bad[:10]:           # print at most 10 per degree
-            kq, kp = exp[:3], exp[3:]
-            print(f"  {kq}|{kp} : {c.real:+.3e} {c.imag:+.3e} i")
-    return len(bad)
-
-
-def test_dump_non_real_coefficients(debug_setup):
-    poly_G_total = debug_setup["poly_G_total"]
-    poly_elim_total = debug_setup["poly_elim_total"]
-    clmo = debug_setup["clmo"]
-    max_degree = debug_setup["max_degree"]
-    
-    print("\nAnalyzing non-real coefficients in polynomials:")
-    print("="*70)
-    
-    # Check generating functions
-    print("\nGenerating functions G_n:")
-    total_non_real_G = 0
-    for n in range(3, max_degree + 1):
-        if n >= len(poly_G_total) or poly_G_total[n] is None or not poly_G_total[n].any():
-            continue
-        count = dump_non_real(poly_G_total, n, clmo, tag="G")
-        total_non_real_G += count
-    
-    print(f"\nTotal non-real terms in G_n: {total_non_real_G}")
-    
-    # Check eliminated terms
-    print("\nEliminated terms P_elim_n:")
-    total_non_real_elim = 0
-    for n in range(3, max_degree + 1):
-        if n >= len(poly_elim_total) or poly_elim_total[n] is None or not poly_elim_total[n].any():
-            continue
-        count = dump_non_real(poly_elim_total, n, clmo, tag="P_elim")
-        total_non_real_elim += count
-    
-    print(f"\nTotal non-real terms in P_elim_n: {total_non_real_elim}")
-    
-    # Summary
-    if total_non_real_G == 0 and total_non_real_elim == 0:
-        print("\n✓ All coefficients are real (within threshold)")
-    else:
-        print(f"\n⚠ Found {total_non_real_G + total_non_real_elim} total non-real coefficients")

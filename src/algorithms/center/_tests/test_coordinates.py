@@ -1,8 +1,8 @@
 import numpy as np
 import pytest
 
-from algorithms.center.coordinates import (_complexify_coordinates,
-                                           _realify_coordinates)
+from algorithms.center.coordinates import (solve_real,
+                                           solve_complex)
 from algorithms.center.manifold import center_manifold_real
 from algorithms.center.polynomial.base import init_index_tables
 
@@ -66,8 +66,8 @@ def test_complexify_realify_round_trip():
     
     for i, real_coords in enumerate(test_real_coords):
         # Real -> Complex -> Real round trip
-        complex_coords = _complexify_coordinates(real_coords)
-        recovered_real_coords = _realify_coordinates(complex_coords)
+        complex_coords = solve_real(real_coords)
+        recovered_real_coords = solve_complex(complex_coords)
         
         # Check that we recover the original coordinates within tolerance
         np.testing.assert_allclose(
@@ -96,8 +96,8 @@ def test_realify_complexify_round_trip():
     
     for i, complex_coords in enumerate(test_complex_coords):
         # Complex -> Real -> Complex round trip
-        real_coords = _realify_coordinates(complex_coords)
-        recovered_complex_coords = _complexify_coordinates(real_coords)
+        real_coords = solve_complex(complex_coords)
+        recovered_complex_coords = solve_real(real_coords)
         
         # Check that we recover the original coordinates within tolerance
         np.testing.assert_allclose(
@@ -114,11 +114,11 @@ def test_coordinate_transforms_consistency():
     
     # Test case: set y_rn = 1.0, all others = 0
     real_coords = np.array([0.0, 1.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float64)
-    complex_coords = _complexify_coordinates(real_coords)
+    complex_coords = solve_real(real_coords)
     
     # Expected: q2 = 1/√2, p2 = -i/√2 (from inverse transformation)
     expected_q2 = 1.0/sqrt2
-    expected_p2 = 1j/sqrt2  # This matches the realify transformation
+    expected_p2 = 1j/sqrt2  # This matches the substitute_real transformation
     
     np.testing.assert_allclose(
         complex_coords[1].real, expected_q2, rtol=TOL_TEST, atol=TOL_TEST,

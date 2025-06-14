@@ -167,7 +167,7 @@ def M_inv() -> np.ndarray:
     return np.linalg.inv(M()) # complex = M_inv @ real
 
 
-def complexify(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
+def substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
     """
     Transform a polynomial from real normal form to complex normal form.
     
@@ -193,11 +193,10 @@ def complexify(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.nd
     to complex normal form coordinates using the predefined transformation matrix M_inv().
     Since complex = M_inv @ real, we use M_inv() for the transformation.
     """
-    C = M()
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return polynomial_clean(substitute_linear(poly_rn, C, max_deg, psi, clmo, encode_dict_list), 1e-14)
+    return polynomial_clean(substitute_linear(poly_rn, M(), max_deg, psi, clmo, encode_dict_list), 1e-14)
 
-def realify(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
+def substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
     """
     Transform a polynomial from complex normal form to real normal form.
     
@@ -223,9 +222,8 @@ def realify(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarr
     to real normal form coordinates using the predefined transformation matrix M().
     Since real = M @ complex, we use M() for the transformation.
     """
-    C = M_inv()
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return polynomial_clean(substitute_linear(poly_cn, C, max_deg, psi, clmo, encode_dict_list), 1e-14)
+    return polynomial_clean(substitute_linear(poly_cn, M_inv(), max_deg, psi, clmo, encode_dict_list), 1e-14)
 
 def realmodal2local(point, poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
     """

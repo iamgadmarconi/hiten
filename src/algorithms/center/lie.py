@@ -229,7 +229,7 @@ clmo: np.ndarray) -> np.ndarray:
                      (k[5]-k[2]) * eta[2])
             # Check for resonance (near-zero denominator)
             if abs(denom) < 1e-14:
-                continue  # Skip resonant terms - keep in normal form
+                continue  # Skip resonant terms - keep in normal form, should not occur.
             p_G[i] = -c / denom
     return p_G
 
