@@ -81,10 +81,10 @@ def solve_complex(real_coords: np.ndarray) -> np.ndarray:
     """
     return _clean_coordinates(_substitute_coordinates(real_coords, M_inv())) # [q1c, q2c, q3c, p1c, p2c, p3c]
 
-def _realmodal2local_coordinates(point, modal_coords: np.ndarray) -> np.ndarray:
+def _realmodal2local(point, modal_coords: np.ndarray) -> np.ndarray:
     # modal_coords: [q1, q2, q3, px1, px2, px3]
-    _, Cinv = point.normal_form_transform()
-    return _clean_coordinates(modal_coords @ Cinv.T) # [x1, x2, x3, px1, px2, px3]
+    C, _ = point.normal_form_transform()
+    return _clean_coordinates(C.dot(modal_coords)) # [x1, x2, x3, px1, px2, px3]
 
 def _local2synodic(point, coords: np.ndarray) -> np.ndarray:
     # coords: [x1, x2, x3, px1, px2, px3] - local coordinates
@@ -140,7 +140,7 @@ def _complete_cm_coordinates(
 
     return np.array([q2, p2, 0.0, p3], dtype=np.complex128) # [q2, p2, q3, p3]
 
-def _cmreal2synodic_coordinates(
+def _cmreal2synodic(
     point,
     poly_cm: List[np.ndarray],  # RN Hamiltonian for solve_p3
     cm_coords: np.ndarray,      # RN center manifold coordinates [q2, p2]
@@ -169,7 +169,7 @@ def _cmreal2synodic_coordinates(
 
     logger.info(f"complex_6d_cm: \n{complex_6d_cm}")
 
-    expansions = _center2modal(poly_G_total, max_degree, psi, clmo, tol, restrict=False)
+    expansions = _center2modal(poly_G_total, max_degree, psi, clmo, tol, inverse=False, sign=1, restrict=False)
 
     complex_6d = evaluate_transform(expansions, complex_6d_cm, clmo) # [q1, q2, q3, p1, p2, p3]
 
@@ -179,7 +179,7 @@ def _cmreal2synodic_coordinates(
 
     logger.info(f"real_6d: \n{real_6d}")
 
-    local_6d = _realmodal2local_coordinates(point, real_6d) # [x1, x2, x3, px1, px2, px3]
+    local_6d = _realmodal2local(point, real_6d) # [x1, x2, x3, px1, px2, px3]
 
     logger.info(f"local_6d: \n{local_6d}")
 
@@ -221,7 +221,7 @@ def poincare2ic(
     
     for i, poincare_point in enumerate(poincare_points):
         try:
-            ic = _cmreal2synodic_coordinates(
+            ic = _cmreal2synodic(
                 point=point,
                 poly_cm=poly_cm_real,     # For solve_p3
                 cm_coords=poincare_point,  # RN coordinates from Poincaré map
