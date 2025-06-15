@@ -1,13 +1,13 @@
+from typing import Any, Optional, Sequence, Tuple
+
 import numpy as np
 from numpy.typing import NDArray
-from typing import Optional, Sequence, Tuple, Any
 from scipy.integrate import solve_ivp
 
-
+from algorithms.dynamics import compute_stm
+from algorithms.geometry import _find_y_zero_crossing, _gamma_L
 from orbits.base import PeriodicOrbit, orbitConfig
 from system.libration import CollinearPoint, L1Point, L2Point, L3Point
-from algorithms.geometry import _gamma_L, _find_y_zero_crossing
-from algorithms.dynamics import compute_stm
 from utils.log_config import logger
 
 
@@ -27,7 +27,11 @@ class LissajousOrbit(PeriodicOrbit):
             raise NotImplementedError(msg)
 
     def _initial_guess(self):
-        pass
+        if self._initial_state is not None:
+            logger.info(f"Using provided initial state: {self._initial_state} for {str(self)}")
+            return self._initial_state
+        
+        raise NotImplementedError("Lissajous orbits do not have an initial guess.")
 
     def differential_correction(self):
         pass

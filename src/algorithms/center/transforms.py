@@ -2,10 +2,11 @@ import numpy as np
 from numba.typed import List
 
 from algorithms.center.polynomial.base import _create_encode_dict_from_clmo
-from algorithms.center.polynomial.coordinates import _clean_coordinates, _substitute_coordinates
+from algorithms.center.polynomial.coordinates import (_clean_coordinates,
+                                                      _substitute_coordinates)
 from algorithms.center.polynomial.operations import (polynomial_clean,
                                                      substitute_linear)
-
+from utils.log_config import logger
 
 
 def M() -> np.ndarray:
@@ -151,7 +152,16 @@ def _local2synodic(point, coords: np.ndarray) -> np.ndarray:
     # coords: [x1, x2, x3, px1, px2, px3] - local coordinates
     gamma, mu, sgn, a = point.gamma, point.mu, point.sign, point.a
 
-    c = np.asarray(coords, dtype=np.float64)
+    tol = 1e-16
+    c_complex = np.asarray(coords, dtype=np.complex128)
+    if np.any(np.abs(np.imag(c_complex)) > tol):
+        err = f"_local2synodic received coords with non-negligible imaginary part; max |Im(coords)| = {np.max(np.abs(np.imag(c_complex))):.3e} > {tol}."
+        logger.error(err)
+        raise ValueError(err)
+
+    # From here on we work with the real part only.
+    c = c_complex.real.astype(np.float64)
+
     if c.ndim != 1 or c.size != 6:
         raise ValueError(
             f"coords must be a flat array of 6 elements, got shape {c.shape}"

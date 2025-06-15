@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from dataclasses import asdict
 from typing import List, Optional, Sequence
 
 import numpy as np
@@ -7,6 +8,11 @@ from algorithms.center.base import CenterManifold
 from algorithms.center.poincare.map import (compute_poincare_map_for_energy,
                                             generate_iterated_poincare_map)
 from utils.log_config import logger
+from plots.plots import plot_poincare_map
+
+# Standard-library helpers for serialisation
+import os
+import pickle
 
 
 @dataclass
@@ -161,3 +167,78 @@ class PoincareMap:
         self._points = pts
         logger.info("Dense-grid Poincaré map computation complete: %d points", len(self))
         return pts
+
+    def plot(self, dark_mode: bool = True, output_dir: Optional[str] = None, filename: Optional[str] = None, **kwargs):
+
+        if self._points is None:
+            logger.debug("No cached Poincaré-map points found - computing now …")
+            self.compute()
+
+        # Call the shared plotting utility.  The helper expects *lists* of
+        # point arrays/levels, so we wrap our single dataset accordingly.
+        fig, axs = plot_poincare_map(
+            pts_list=[self._points],
+            h0_levels=[self.energy],
+            dark_mode=dark_mode,
+            output_dir=output_dir,
+            filename=filename,
+            **kwargs,
+        )
+
+        ax = axs[0] if isinstance(axs, list) and len(axs) > 0 else axs
+
+        return fig, ax
+
+    def save(self, filepath: str, **kwargs) -> None:
+
+        data = {
+            "map_type": self.__class__.__name__,
+            "energy": self.energy,
+            "config": asdict(self.config),
+        }
+
+        if self._points is not None:
+            data["points"] = self._points.tolist()
+
+        # Ensure directory exists.
+        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
+
+        with open(filepath, "wb") as fh:
+            pickle.dump(data, fh)
+
+        logger.info("Poincaré map saved to %s", filepath)
+
+    def load(self, filepath: str, **kwargs) -> None:
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"Poincaré-map file not found: {filepath}")
+
+        with open(filepath, "rb") as fh:
+            data = pickle.load(fh)
+
+        if data.get("map_type") != self.__class__.__name__:
+            logger.warning(
+                "Loading %s data into %s instance",
+                data.get("map_type", "<unknown>"),
+                self.__class__.__name__,
+            )
+
+        # Update simple attributes.
+        self.energy = data["energy"]
+
+        # Reconstruct config dataclass (fall back to defaults if missing).
+        cfg_dict = data.get("config", {})
+        try:
+            self.config = PoincareMapConfig(**cfg_dict)
+        except TypeError:
+            logger.error("Saved configuration is incompatible with current PoincareMapConfig schema; using defaults.")
+            self.config = PoincareMapConfig()
+
+        # Refresh derived flags dependent on config.
+        self._use_symplectic = self.config.method.lower() == "symplectic"
+
+        # Load points (if present).
+        if "points" in data and data["points"] is not None:
+            self._points = np.array(data["points"])
+        else:
+            self._points = None
+        logger.info("Poincaré map loaded from %s", filepath)

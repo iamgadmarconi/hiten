@@ -36,37 +36,6 @@ class orbitConfig:
         if self.libration_point_idx not in [1, 2, 3, 4, 5]:
             raise ValueError(f"Libration point index must be 1, 2, 3, 4, or 5. Got {self.libration_point_idx}.")
 
-        # --- Family-specific parameter validation ---
-        if self.orbit_family == "halo":
-            if 'Zenith' not in self.extra_params:
-                raise ValueError("Halo orbits require a 'Zenith' parameter ('northern' or 'southern').")
-            zenith = self.extra_params['Zenith'].lower()
-
-            if zenith not in ['northern', 'southern']:
-                raise ValueError(f"Invalid Zenith '{self.extra_params['Zenith']}'. Must be 'northern' or 'southern'.")
-
-            self.extra_params['Zenith'] = zenith
-
-            if 'Az' not in self.extra_params:
-                raise ValueError("Halo orbits require an 'Az' (z-amplitude) parameter.")
-
-            if not isinstance(self.extra_params['Az'], (int, float)) or self.extra_params['Az'] <= 0:
-                raise ValueError("'Az' must be a positive number.")
-
-        elif self.orbit_family == "lyapunov":
-            if 'Ax' not in self.extra_params:
-                raise ValueError("Lyapunov orbits require an 'Ax' (x-amplitude) parameter.")
-
-        elif self.orbit_family == "lissajous":
-            if 'Ax' not in self.extra_params:
-                raise ValueError("Lissajous orbits require an 'Ax' (x-amplitude) parameter.")
-
-            if 'Az' not in self.extra_params:
-                raise ValueError("Lissajous orbits require an 'Az' (z-amplitude) parameter.")
-
-        if self.extra_params:
-            logger.info(f"Extra parameters: {self.extra_params}")
-
 
 class PeriodicOrbit(ABC):
 
@@ -76,12 +45,29 @@ class PeriodicOrbit(ABC):
         self.family = config.orbit_family
         self.libration_point = self._system.get_libration_point(config.libration_point_idx)
 
-        self._initial_state = initial_state if initial_state else self._initial_guess()
+        # Determine how the initial state will be obtained and log accordingly
+        if initial_state is not None:
+            logger.info(
+                "Using provided initial conditions for %s orbit around L%d: %s",
+                self.family,
+                config.libration_point_idx,
+                np.array2string(np.asarray(initial_state, dtype=np.float64), precision=12, suppress_small=True),
+            )
+            self._initial_state = np.asarray(initial_state, dtype=np.float64)
+        else:
+            logger.info(
+                "No initial conditions provided; computing analytical approximation for %s orbit around L%d.",
+                self.family,
+                config.libration_point_idx,
+            )
+            self._initial_state = self._initial_guess()
+
         self.period = None
         self._trajectory = None
         self._times = None
         self._stability_info = None
         
+        # General initialization log
         logger.info(f"Initialized {self.family} orbit around L{config.libration_point_idx}")
 
     def __str__(self):

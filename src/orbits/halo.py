@@ -16,8 +16,19 @@ class HaloOrbit(PeriodicOrbit):
 
     def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):
         self.config = config
-        self.Az = config.extra_params['Az']
-        self.zenith = config.extra_params['Zenith']
+        if initial_state is None:
+            try:
+                self.Az = config.extra_params['Az']
+                self.zenith = config.extra_params['Zenith']
+            except KeyError:
+                err = "Halo orbits require an 'Az' (z-amplitude) parameter and a 'Zenith' parameter ('northern' or 'southern') OR an initial state."
+                logger.error(err)
+                raise ValueError(err)
+        else:
+            self._initial_state = np.array(initial_state, dtype=np.float64)
+            self.Az = self._initial_state[2]
+            self.zenith = "northern" if self._initial_state[2] > 0 else "southern"
+
         super().__init__(config, initial_state)
 
         if not isinstance(self.libration_point, CollinearPoint):
@@ -26,7 +37,7 @@ class HaloOrbit(PeriodicOrbit):
             raise TypeError(msg)
 
         if isinstance(self.libration_point, L3Point):
-            raise NotImplementedError("Halo orbits not supported for L3.")
+            logger.warning("Must supply initial state for L3 halo orbits.")
 
     def _initial_guess(self) -> NDArray[np.float64]:
         """
@@ -38,6 +49,11 @@ class HaloOrbit(PeriodicOrbit):
             6D state vector [x, y, z, vx, vy, vz] in the rotating frame
         """
         # Determine sign (won) and which "primary" to use
+
+        if self._initial_state is not None:
+            logger.info(f"Using provided initial state: {self._initial_state} for {str(self)}")
+            return self._initial_state
+
         mu = self.mu
         Az = self.Az
         # Get gamma from the libration point instance property

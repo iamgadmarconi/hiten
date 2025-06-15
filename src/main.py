@@ -3,11 +3,11 @@ import numpy as np
 from algorithms.center.base import CenterManifold
 from algorithms.center.poincare.base import PoincareMap, PoincareMapConfig
 from algorithms.center.utils import format_cm_table
-from algorithms.integrators.standard import propagate_crtbp
 from config import (C_OMEGA_HEURISTIC, DT, H0_LEVELS, INTEGRATOR_ORDER,
                     L_POINT, MAX_DEG, N_ITER, N_SEEDS, SYSTEM, USE_SYMPLECTIC)
-from plots.plots import (plot_orbit_inertial_frame, plot_orbit_rotating_frame,
-                         plot_poincare_map)
+from orbits.base import orbitConfig
+from orbits.halo import HaloOrbit
+from plots.plots import plot_poincare_map
 from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
@@ -52,9 +52,6 @@ def main() -> None:
 
     logger.info("Starting Poincaré map generation process…")
 
-    all_pts = []
-    output_directory = "results"
-
     for H0 in H0_LEVELS:
         logger.info("Generating iterated Poincaré map for h0=%.3f", H0)
         pm_cfg = PoincareMapConfig(
@@ -68,36 +65,18 @@ def main() -> None:
 
         pm = PoincareMap(cm, energy=H0, config=pm_cfg)
         logger.info("Poincaré points:\n%s", pm.points)
-        all_pts.append(pm.points)
+        pm.plot()
 
     logger.info("Converting Poincaré points to initial conditions")
-    first_pm_point = all_pts[0][0]
-    ic = cm.cm2ic(first_pm_point, energy=H0_LEVELS[0])
+    ic = cm.cm2ic(pm.points[0], energy=H0_LEVELS[0])
     logger.info(f"Initial conditions:\n\n{ic}\n\n")
 
-    logger.info("Propagating initial conditions")
-    sol = propagate_crtbp(ic, 0, 1.4*np.pi, selected_system.mu)
-    traj = sol.y.T
-    times = sol.t
+    orbit_config = orbitConfig(selected_system, "halo", L_POINT)
+    orbit = HaloOrbit(orbit_config, ic)
+    orbit.differential_correction()
+    orbit.propagate(steps=1000, rtol=1e-12, atol=1e-12)
+    orbit.plot()
 
-    # Plot the orbit
-    plot_orbit_rotating_frame(traj, selected_system.mu, selected_system, selected_l_point, "PM", show=True)
-    plot_orbit_inertial_frame(traj, times, selected_system.mu, selected_system, "PM", show=True)
-
-    # Construct filename
-    if len(H0_LEVELS) == 1:
-        energy_level_str = f"{H0_LEVELS[0]:.2f}".replace('.', 'p')
-    else:
-        energy_level_str = f"{min(H0_LEVELS):.2f}to{max(H0_LEVELS):.2f}".replace('.', 'p')
-
-    symplectic_str = "symplectic" if USE_SYMPLECTIC else "nonsymplectic"
-
-    filename = (
-        f"{system_name}_{L_POINT}_PM_{MAX_DEG}_{energy_level_str}_{DT}_"
-        f"{symplectic_str}_{N_ITER}.svg"
-    )
-
-    plot_poincare_map(all_pts, H0_LEVELS, output_dir=output_directory, filename=filename)
 
 
 if __name__ == "__main__":
