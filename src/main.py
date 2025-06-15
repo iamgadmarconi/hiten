@@ -4,18 +4,8 @@ from algorithms.center.base import CenterManifold
 from algorithms.center.poincare.base import PoincareMap, PoincareMapConfig
 from algorithms.center.utils import format_cm_table
 from algorithms.integrators.standard import propagate_crtbp
-from config import (
-    C_OMEGA_HEURISTIC,
-    DT,
-    H0_LEVELS,
-    INTEGRATOR_ORDER,
-    L_POINT,
-    MAX_DEG,
-    N_ITER,
-    N_SEEDS,
-    SYSTEM,
-    USE_SYMPLECTIC,
-)
+from config import (C_OMEGA_HEURISTIC, DT, H0_LEVELS, INTEGRATOR_ORDER,
+                    L_POINT, MAX_DEG, N_ITER, N_SEEDS, SYSTEM, USE_SYMPLECTIC)
 from plots.plots import (plot_orbit_inertial_frame, plot_orbit_rotating_frame,
                          plot_poincare_map)
 from system.base import System, systemConfig
@@ -70,7 +60,6 @@ def main() -> None:
         pm_cfg = PoincareMapConfig(
             dt=DT,
             method="symplectic" if USE_SYMPLECTIC else "rk4",
-            use_iterated=True,
             n_seeds=N_SEEDS,
             n_iter=N_ITER,
             integrator_order=INTEGRATOR_ORDER,

@@ -19,15 +19,6 @@ class PoincareMapConfig:
     integrator_order: int = 6
     c_omega_heuristic: float = 20.0  # Only used by the extended-phase symplectic scheme
 
-    # Seed / iteration control
-    use_iterated: bool = False  # True → iterate seeds many crossings, False → dense grid scan
-
-    # Dense grid parameters (use_iterated == False)
-    Nq: int = 201
-    Np: int = 201
-    max_steps: int = 20_000
-
-    # Iterated-seed parameters (use_iterated == True)
     n_seeds: int = 20
     n_iter: int = 1500
     seed_axis: str = "q2"  # "q2" or "p2"
@@ -70,6 +61,22 @@ class PoincareMap:
         if self.config.compute_on_init:
             self.compute()
 
+    def __repr__(self) -> str:
+        return (
+            f"PoincareMap(cm={self.cm!r}, energy={self.energy:.3e}, "
+            f"points={len(self) if self._points is not None else '∅'})"
+        )
+
+    def __str__(self) -> str:
+        return (
+            f"Poincaré map at h0={self.energy:.3e} with {len(self)} points"
+            if self._points is not None
+            else f"Poincaré map (uncomputed) at h0={self.energy:.3e}"
+        )
+
+    def __len__(self) -> int:  # Convenient len() support
+        return 0 if self._points is None else self._points.shape[0]
+
     @property
     def points(self) -> np.ndarray:
         """Return the computed Poincaré-map points (q2, p2)."""
@@ -79,92 +86,36 @@ class PoincareMap:
             )
         return self._points
 
-    def __len__(self) -> int:  # Convenient len() support
-        return 0 if self._points is None else self._points.shape[0]
-
     def compute(self) -> np.ndarray:
-        """(Re-)compute the Poincaré map and store the resulting points.
-
-        Returns
-        -------
-        numpy.ndarray
-            Array of shape (M,2) containing the (q2, p2) coordinates of
-            successful section crossings.
-        """
         logger.info(
             "Generating Poincaré map at energy h0=%.6e (method=%s)",
             self.energy,
             self.config.method,
         )
 
-        # Ensure that the centre manifold is up-to-date (builds & caches poly).
         poly_cm_real = self.cm.compute()
 
-        # Choose which back-end to call.
-        if self.config.use_iterated:
-            logger.info(
-                "Using seed-iteration algorithm: %d seeds, %d crossings",
-                self.config.n_seeds,
-                self.config.n_iter,
-            )
-            pts = generate_iterated_poincare_map(
-                h0=self.energy,
-                H_blocks=poly_cm_real,
-                max_degree=self.cm.max_degree,
-                psi_table=self.cm.psi,
-                clmo_table=self.cm.clmo,
-                encode_dict_list=self.cm.encode_dict_list,
-                n_seeds=self.config.n_seeds,
-                n_iter=self.config.n_iter,
-                dt=self.config.dt,
-                use_symplectic=self._use_symplectic,
-                integrator_order=self.config.integrator_order,
-                c_omega_heuristic=self.config.c_omega_heuristic,
-                seed_axis=self.config.seed_axis,
-            )
-        else:
-            logger.info(
-                "Using dense grid algorithm: Nq=%d, Np=%d",
-                self.config.Nq,
-                self.config.Np,
-            )
-            pts = compute_poincare_map_for_energy(
-                h0=self.energy,
-                H_blocks=poly_cm_real,
-                max_degree=self.cm.max_degree,
-                psi_table=self.cm.psi,
-                clmo_table=self.cm.clmo,
-                encode_dict_list=self.cm.encode_dict_list,
-                dt=self.config.dt,
-                max_steps=self.config.max_steps,
-                Nq=self.config.Nq,
-                Np=self.config.Np,
-                integrator_order=self.config.integrator_order,
-                use_symplectic=self._use_symplectic,
-            )
+        pts = generate_iterated_poincare_map(
+            h0=self.energy,
+            H_blocks=poly_cm_real,
+            max_degree=self.cm.max_degree,
+            psi_table=self.cm.psi,
+            clmo_table=self.cm.clmo,
+            encode_dict_list=self.cm.encode_dict_list,
+            n_seeds=self.config.n_seeds,
+            n_iter=self.config.n_iter,
+            dt=self.config.dt,
+            use_symplectic=self._use_symplectic,
+            integrator_order=self.config.integrator_order,
+            c_omega_heuristic=self.config.c_omega_heuristic,
+            seed_axis=self.config.seed_axis,
+        )
 
         self._points = pts
         logger.info("Poincaré map computation complete: %d points", len(self))
         return pts
 
-    def pm2ic(
-        self,
-        indices: Optional[Sequence[int]] = None,
-    ) -> np.ndarray:
-        """Convert selected Poincaré points to 6-D synodic initial conditions.
-
-        Parameters
-        ----------
-        indices : sequence of int or None, optional
-            Indices of the map points to convert.  *None* (default) converts all
-            points.
-
-        Returns
-        -------
-        numpy.ndarray, shape (K,6)
-            The 6-dimensional synodic initial conditions corresponding to the
-            chosen Poincaré-section points.
-        """
+    def pm2ic(self, indices: Optional[Sequence[int]] = None) -> np.ndarray:
         if self._points is None:
             raise RuntimeError(
                 "Poincaré map has not been computed yet - cannot convert.")
@@ -181,15 +132,32 @@ class PoincareMap:
 
         return np.stack(ic_list, axis=0)
 
-    def __repr__(self) -> str:
-        return (
-            f"PoincareMap(cm={self.cm!r}, energy={self.energy:.3e}, "
-            f"points={len(self) if self._points is not None else '∅'})"
+    def grid(self, Nq: int = 201, Np: int = 201, max_steps: int = 20_000) -> np.ndarray:
+        logger.info(
+            "Generating *dense-grid* Poincaré map at energy h0=%.6e (Nq=%d, Np=%d)",
+            self.energy,
+            Nq,
+            Np,
         )
 
-    def __str__(self) -> str:
-        return (
-            f"Poincaré map at h0={self.energy:.3e} with {len(self)} points"
-            if self._points is not None
-            else f"Poincaré map (uncomputed) at h0={self.energy:.3e}"
+        # Ensure that the centre manifold polynomial is current.
+        poly_cm_real = self.cm.compute()
+
+        pts = compute_poincare_map_for_energy(
+            h0=self.energy,
+            H_blocks=poly_cm_real,
+            max_degree=self.cm.max_degree,
+            psi_table=self.cm.psi,
+            clmo_table=self.cm.clmo,
+            encode_dict_list=self.cm.encode_dict_list,
+            dt=self.config.dt,
+            max_steps=max_steps,
+            Nq=Nq,
+            Np=Np,
+            integrator_order=self.config.integrator_order,
+            use_symplectic=self._use_symplectic,
         )
+
+        self._points = pts
+        logger.info("Dense-grid Poincaré map computation complete: %d points", len(self))
+        return pts
