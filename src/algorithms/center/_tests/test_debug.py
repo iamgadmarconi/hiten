@@ -9,7 +9,7 @@ from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                decode_multiindex,
                                                init_index_tables)
 from algorithms.center.polynomial.operations import polynomial_variable
-from algorithms.center.transforms import substitute_complex, local2realmodal, substitute_real
+from algorithms.center.transforms import substitute_complex, _local2realmodal, substitute_real
 from system.libration import L1Point
 
 MAX_DEG = 1  # We only need degree-1 polynomials for linear-consistency checks
@@ -34,7 +34,7 @@ def debug_setup():
     
     # Build and normalize Hamiltonian
     H_phys = build_physical_hamiltonian(point, max_degree)
-    H_rn = local2realmodal(point, H_phys, max_degree, psi, clmo)
+    H_rn = _local2realmodal(point, H_phys, max_degree, psi, clmo)
     H_cn = substitute_complex(H_rn, max_degree, psi, clmo)
     
     # Perform Lie transformation

@@ -10,7 +10,7 @@ from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables)
 from algorithms.center.polynomial.operations import (
     polynomial_evaluate, polynomial_poisson_bracket, polynomial_zero_list)
-from algorithms.center.transforms import substitute_complex, local2realmodal
+from algorithms.center.transforms import substitute_complex, _local2realmodal
 from system.libration import L1Point
 
 # Test parameters
@@ -29,7 +29,7 @@ def debug_setup():
     
     # Build and normalize Hamiltonian
     H_phys = build_physical_hamiltonian(point, max_degree)
-    H_rn = local2realmodal(point, H_phys, max_degree, psi, clmo)
+    H_rn = _local2realmodal(point, H_phys, max_degree, psi, clmo)
     H_cn = substitute_complex(H_rn, max_degree, psi, clmo)
     
     # Perform Lie transformation
@@ -96,7 +96,7 @@ def test_transformation_accumulation(debug_setup):
     for max_deg in [3, 4, 5, 6]:
         # Get generators up to this degree
         H_phys = build_physical_hamiltonian(point, 8)
-        H_rn = local2realmodal(point, H_phys, 8, psi, clmo)
+        H_rn = _local2realmodal(point, H_phys, 8, psi, clmo)
         H_cn = substitute_complex(H_rn, 8, psi, clmo)
         poly_trans, poly_G_total, _ = lie_transform(point, H_cn, psi, clmo, max_deg)
         
@@ -252,7 +252,7 @@ def test_cm_degree_scaling(debug_setup):
     
     # Build and normalize Hamiltonian for different degrees
     H_phys = build_physical_hamiltonian(point, 8)  # Use max degree 8 for building
-    H_rn = local2realmodal(point, H_phys, 8, psi, clmo)
+    H_rn = _local2realmodal(point, H_phys, 8, psi, clmo)
     H_cn = substitute_complex(H_rn, 8, psi, clmo)
     
     # Test point on center manifold
@@ -427,7 +427,7 @@ def test_symplecticity(debug_setup):
     
     # Build Hamiltonian for different degrees
     H_phys = build_physical_hamiltonian(point, 8)
-    H_rn = local2realmodal(point, H_phys, 8, psi, clmo)
+    H_rn = _local2realmodal(point, H_phys, 8, psi, clmo)
     H_cn = substitute_complex(H_rn, 8, psi, clmo)
     
     # Canonical symplectic matrix
@@ -619,7 +619,7 @@ def test_hamiltonian_on_center_manifold(debug_setup):
     
     # Build Hamiltonians
     H_phys = build_physical_hamiltonian(point, max_degree)
-    H_rn = local2realmodal(point, H_phys, max_degree, psi, clmo)
+    H_rn = _local2realmodal(point, H_phys, max_degree, psi, clmo)
     H_cn = substitute_complex(H_rn, max_degree, psi, clmo)
     
     # Get the transformed Hamiltonian

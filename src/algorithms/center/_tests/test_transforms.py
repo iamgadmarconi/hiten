@@ -15,7 +15,7 @@ from algorithms.center.polynomial.operations import (
     polynomial_add_inplace, polynomial_multiply, polynomial_poisson_bracket,
     polynomial_power, polynomial_variable, polynomial_zero_list)
 from algorithms.center.transforms import (_linear_variable_polys, substitute_real,
-                                          local2realmodal, substitute_complex, realmodal2local,
+                                          _local2realmodal, substitute_complex, realmodal2local,
                                           substitute_linear)
 from system.libration import L1Point
 
@@ -359,7 +359,7 @@ def test_real_normal_form(point, max_deg):
     encode_dict = _create_encode_dict_from_clmo(clmo)
     
     H_phys = build_physical_hamiltonian(point, max_deg)
-    H_rn   = local2realmodal(point, H_phys, max_deg, psi, clmo)
+    H_rn   = _local2realmodal(point, H_phys, max_deg, psi, clmo)
 
     x, y, z, px, py, pz = sp.symbols('x y z px py pz')
     expr = poly2sympy(H_rn, (x, y, z, px, py, pz), psi, clmo)
@@ -408,7 +408,7 @@ def test_complex_normal_form(point, max_deg):
 
     # 1) build physical Hamiltonian, go to real normal form, then complex
     H_phys = build_physical_hamiltonian(point, max_deg)
-    H_rn   = local2realmodal(point, H_phys, max_deg, psi, clmo)
+    H_rn   = _local2realmodal(point, H_phys, max_deg, psi, clmo)
     H_cn   = substitute_complex(       H_rn,   max_deg, psi, clmo)
 
     # 2) symbolic expression of degree‑2 part
@@ -498,7 +498,7 @@ def test_cn2rn_inverse(point, max_deg):
 
     # pipeline ---------------------------------------------------------------
     H_phys = build_physical_hamiltonian(point, max_deg)
-    H_rn   = local2realmodal(point, H_phys, max_deg, psi, clmo)
+    H_rn   = _local2realmodal(point, H_phys, max_deg, psi, clmo)
     H_cn   = substitute_complex(       H_rn,   max_deg, psi, clmo)
     H_back = substitute_real(       H_cn,   max_deg, psi, clmo)
 
@@ -528,7 +528,7 @@ def test_cn2rn_inverse(point, max_deg):
 
 @pytest.mark.parametrize("max_deg", [2, 3, 4, 6])
 def test_phys2rn_rn2phys_roundtrip(point, max_deg):
-    """Test that realmodal2local is the inverse of local2realmodal: realmodal2local(local2realmodal(H_phys)) ≈ H_phys."""
+    """Test that realmodal2local is the inverse of _local2realmodal: realmodal2local(_local2realmodal(H_phys)) ≈ H_phys."""
     # Create fresh psi, clmo for each test instead of using the fixture
     psi, clmo = init_index_tables(max_deg)
     # Create encode_dict from clmo
@@ -538,7 +538,7 @@ def test_phys2rn_rn2phys_roundtrip(point, max_deg):
     H_phys_original = build_physical_hamiltonian(point, max_deg)
     
     # Forward transformation: physical → real normal form
-    H_rn = local2realmodal(point, H_phys_original, max_deg, psi, clmo)
+    H_rn = _local2realmodal(point, H_phys_original, max_deg, psi, clmo)
     
     # Backward transformation: real normal form → physical
     H_phys_roundtrip = realmodal2local(point, H_rn, max_deg, psi, clmo)
@@ -593,7 +593,7 @@ def test_full_roundtrip(point, max_deg):
     H_phys_original = build_physical_hamiltonian(point, max_deg)
     
     # Forward pipeline: Phys → RN → CN
-    H_rn_forward = local2realmodal(point, H_phys_original, max_deg, psi, clmo)
+    H_rn_forward = _local2realmodal(point, H_phys_original, max_deg, psi, clmo)
     H_cn = substitute_complex(H_rn_forward, max_deg, psi, clmo)
     
     # Backward pipeline: CN → RN → Phys

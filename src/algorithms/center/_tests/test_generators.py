@@ -10,7 +10,7 @@ from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables)
 from algorithms.center.polynomial.operations import (
     polynomial_evaluate, polynomial_poisson_bracket, polynomial_zero_list)
-from algorithms.center.transforms import substitute_complex, local2realmodal
+from algorithms.center.transforms import substitute_complex, _local2realmodal
 from algorithms.variables import N_VARS
 from system.libration import L1Point, L2Point
 
@@ -30,7 +30,7 @@ def debug_setup():
     
     # Build and normalize Hamiltonian
     H_phys = build_physical_hamiltonian(point, max_degree)
-    H_rn = local2realmodal(point, H_phys, max_degree, psi, clmo)
+    H_rn = _local2realmodal(point, H_phys, max_degree, psi, clmo)
     H_cn = substitute_complex(H_rn, max_degree, psi, clmo)
     
     # Perform Lie transformation

@@ -23,7 +23,6 @@ from typing import Tuple
 
 import numpy as np
 
-from algorithms.center.manifold import center_manifold_complex, center_manifold_real
 from algorithms.dynamics import jacobian_crtbp
 from algorithms.energy import crtbp_energy, energy_to_jacobi
 from algorithms.linalg import eigenvalue_decomposition
@@ -206,50 +205,49 @@ class LibrationPoint(ABC):
         self._cache.clear()
         logger.debug(f"Cache cleared for {type(self).__name__}")
 
-    def cache_info(self) -> dict:
-        """Get information about cached data."""
-        info = {
-            'total_cached_items': len(self._cache),
-            'cached_keys': list(self._cache.keys())
-        }
-        return info
+    def get_center_manifold(self, max_degree: int):
+        """Return (and lazily construct) a CenterManifold of given degree.
 
-    def hamiltonian(self, max_deg: int, psi, clmo) -> dict:
+        Heavy polynomial data (Hamiltonians in multiple coordinate systems,
+        Lie generators, etc.) are cached *inside* the returned CenterManifold,
+        not in the LibrationPoint itself.
         """
-        Get all Hamiltonian representations, computing and caching as needed.
-        
-        Returns
-        -------
-        dict
-            Dictionary with keys: 'physical', 'real_normal', 'complex_normal',
-            'normalized', 'center_manifold_complex', 'center_manifold_real'
+        from algorithms.center.base import CenterManifold
+
+        if max_degree not in self._cm_registry:
+            self._cm_registry[max_degree] = CenterManifold(self, max_degree)
+        return self._cm_registry[max_degree]
+
+    def hamiltonian(self, max_deg: int) -> dict:
+        """Return all Hamiltonian representations from the associated CenterManifold.
+
+        Keys: 'physical', 'real_normal', 'complex_normal', 'normalized',
+        'center_manifold_complex', 'center_manifold_real'.
         """
-        # Trigger computation of center manifold (which computes all intermediate forms)
-        _ = center_manifold_complex(self, psi, clmo, max_deg)
-        _ = center_manifold_real(self, psi, clmo, max_deg)
-        
-        # Collect all cached representations for this degree
-        representations = {}
-        for key in self._cache:
-            if key[0] == 'hamiltonian' and key[1] == max_deg:
-                representations[key[2]] = [h.copy() for h in self._cache[key]]
-                
-        return representations
+        cm = self.get_center_manifold(max_deg)
+        cm.compute()  # ensures all representations are cached
+
+        reprs = {}
+        for label in (
+            'physical',
+            'real_normal',
+            'complex_normal',
+            'normalized',
+            'center_manifold_complex',
+            'center_manifold_real',
+        ):
+            data = cm.cache_get(('hamiltonian', max_deg, label))
+            if data is not None:
+                reprs[label] = [arr.copy() for arr in data]
+        return reprs
 
     def generating_functions(self, max_deg: int):
-        """
-        Get generating functions for the given degree.
-        
-        Returns
-        -------
-        list
-            List of generating function polynomials, or empty list if not cached
-        """
-        cached = self.cache_get(('generating_functions', max_deg))
-        if cached is not None:
-            return [g.copy() for g in cached]
-        return []
-    
+        """Return the Lie-series generating functions from CenterManifold."""
+        cm = self.get_center_manifold(max_deg)
+        cm.compute()  # ensure they exist
+        data = cm.cache_get(('generating_functions', max_deg))
+        return [] if data is None else [g.copy() for g in data]
+
     @property
     def eigenvalues(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """

@@ -1,5 +1,5 @@
 import numpy as np
-from numba import cuda, get_num_threads, get_thread_id, njit, prange
+from numba import get_num_threads, get_thread_id, njit, prange
 from numba.typed import List
 
 from algorithms.center.polynomial.base import (decode_multiindex,
@@ -446,7 +446,49 @@ def _evaluate_reduced_monomial(
     var_idx: int,
     exp_change: int
 ) -> np.complex128:
-    """Evaluate monomial x^k at coords with exponent of var_idx changed by exp_change."""
+    """
+    Evaluate a monomial with modified exponent at specified coordinates.
+    
+    This function computes the value of a monomial x^k at given coordinates,
+    but with the exponent of one specified variable modified by a given amount.
+    This is particularly useful for computing derivatives or integrals of 
+    polynomials where individual monomial terms need to be evaluated with
+    adjusted exponents.
+    
+    Parameters
+    ----------
+    k : numpy.ndarray
+        Multi-index array of shape (6,) containing the exponents for each 
+        variable in the monomial. The array represents exponents for 
+        variables [q1, q2, q3, p1, p2, p3] corresponding to the 6-dimensional
+        phase space of the restricted three-body problem.
+    coords : numpy.ndarray
+        Array of shape (6,) containing the coordinate values where the monomial
+        should be evaluated. Must correspond to the same variable ordering as k.
+    var_idx : int
+        Index of the variable (0 ≤ var_idx < 6) whose exponent should be modified.
+        - 0, 1, 2 correspond to position variables q1, q2, q3
+        - 3, 4, 5 correspond to momentum variables p1, p2, p3
+    exp_change : int
+        Amount by which to change the exponent of the variable at var_idx.
+        Can be positive (increase exponent), negative (decrease exponent), 
+        or zero (no change).
+        
+    Returns
+    -------
+    numpy.complex128
+        The value of the modified monomial evaluated at the given coordinates.
+        Returns complex zero if any coordinate is effectively zero (|coord| ≤ 1e-15)
+        but has a positive exponent in the monomial.
+        
+    Notes
+    -----
+    The function computes the product:
+    
+    ∏_{i=0}^{5} coords[i]^{exp_i}
+    
+    where exp_i = k[i] for i ≠ var_idx, and exp_{var_idx} = k[var_idx] + exp_change.
+    """
     result = 1.0 + 0.0j
     
     for i in range(6):

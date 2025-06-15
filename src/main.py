@@ -1,18 +1,21 @@
 import numpy as np
-from numba import cuda
 
-from algorithms.center.coordinates import poincare2ic
-from algorithms.center.manifold import center_manifold_real
-from algorithms.center.poincare.cuda.map import \
-    generate_iterated_poincare_map_gpu
-from algorithms.center.poincare.map import generate_iterated_poincare_map
-from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
-                                               init_index_tables)
+from algorithms.center.base import CenterManifold
+from algorithms.center.poincare.base import PoincareMap, PoincareMapConfig
 from algorithms.center.utils import format_cm_table
 from algorithms.integrators.standard import propagate_crtbp
-from config import (C_OMEGA_HEURISTIC, DT, H0_LEVELS, INTEGRATOR_ORDER,
-                    L_POINT, MAX_DEG, N_ITER, N_SEEDS, SYSTEM, USE_GPU,
-                    USE_SYMPLECTIC)
+from config import (
+    C_OMEGA_HEURISTIC,
+    DT,
+    H0_LEVELS,
+    INTEGRATOR_ORDER,
+    L_POINT,
+    MAX_DEG,
+    N_ITER,
+    N_SEEDS,
+    SYSTEM,
+    USE_SYMPLECTIC,
+)
 from plots.plots import (plot_orbit_inertial_frame, plot_orbit_rotating_frame,
                          plot_poincare_map)
 from system.base import System, systemConfig
@@ -20,17 +23,8 @@ from system.body import Body
 from utils.constants import Constants
 from utils.log_config import logger
 
-if cuda.is_available() and USE_GPU:
-    generate_poincare_map = generate_iterated_poincare_map_gpu
-else:
-    generate_poincare_map = generate_iterated_poincare_map
-
 
 def main() -> None:
-    # ---------------- lookup tables for polynomial indexing --------------
-    psi, clmo = init_index_tables(MAX_DEG)
-    encode_dict_list = _create_encode_dict_from_clmo(clmo)
-
     # ---------------- choose equilibrium point --------------------------
     Sun   = Body("Sun",   Constants.bodies["sun"  ]["mass"],   Constants.bodies["sun"  ]["radius"],   "yellow")
     Earth = Body("Earth", Constants.bodies["earth"]["mass"],   Constants.bodies["earth"]["radius"], "blue", Sun)
@@ -56,10 +50,15 @@ def main() -> None:
     selected_l_point = selected_system.get_libration_point(L_POINT)
     logger.info(f"Using {SYSTEM} system with L{L_POINT} point")
 
-    # ---------------- centre‑manifold reduction -------------------------
-    H_cm_real_full = center_manifold_real(selected_l_point, psi, clmo, MAX_DEG)
-    logger.info("\nCentre-manifold Hamiltonian (deg 2 to 5) in real NF variables (q2, p2, q3, p3)\n")
-    logger.info(f"\n\n{format_cm_table(H_cm_real_full, clmo)}\n\n")
+    # ---------------- centre-manifold (object) --------------------------
+    cm = CenterManifold(selected_l_point, MAX_DEG)
+    cm_H = cm.compute()  # triggers all internal caches
+
+    logger.info(
+        "\nCentre-manifold Hamiltonian (deg 2 to %d) in real NF variables (q2, p2, q3, p3)\n",
+        MAX_DEG,
+    )
+    logger.info("\n\n%s\n\n", format_cm_table(cm_H, cm.clmo))
 
     logger.info("Starting Poincaré map generation process…")
 
@@ -68,31 +67,27 @@ def main() -> None:
 
     for H0 in H0_LEVELS:
         logger.info("Generating iterated Poincaré map for h0=%.3f", H0)
-        pts = generate_poincare_map(
-            h0=H0,
-            H_blocks=H_cm_real_full,
-            max_degree=MAX_DEG,
-            psi_table=psi,
-            clmo_table=clmo,
-            encode_dict_list=encode_dict_list,
+        pm_cfg = PoincareMapConfig(
+            dt=DT,
+            method="symplectic" if USE_SYMPLECTIC else "rk4",
+            use_iterated=True,
             n_seeds=N_SEEDS,
             n_iter=N_ITER,
-            dt=DT,
-            use_symplectic=USE_SYMPLECTIC,
             integrator_order=INTEGRATOR_ORDER,
             c_omega_heuristic=C_OMEGA_HEURISTIC,
-            seed_axis="q2",
         )
-        # Convert Poincaré points to initial conditions
-        logger.info(f"Poincaré points:\n{pts}")
-        all_pts.append(pts)  # Store points for this energy level
+
+        pm = PoincareMap(cm, energy=H0, config=pm_cfg)
+        logger.info("Poincaré points:\n%s", pm.points)
+        all_pts.append(pm.points)
 
     logger.info("Converting Poincaré points to initial conditions")
-    ic = poincare2ic([all_pts[0][0]], selected_l_point, psi, clmo, MAX_DEG, H0_LEVELS[0])
+    first_pm_point = all_pts[0][0]
+    ic = cm.cm2ic(first_pm_point, energy=H0_LEVELS[0])
     logger.info(f"Initial conditions:\n\n{ic}\n\n")
 
     logger.info("Propagating initial conditions")
-    sol = propagate_crtbp(ic[0], 0, 1.4*np.pi, selected_system.mu)
+    sol = propagate_crtbp(ic, 0, 1.4*np.pi, selected_system.mu)
     traj = sol.y.T
     times = sol.t
 
@@ -108,7 +103,10 @@ def main() -> None:
 
     symplectic_str = "symplectic" if USE_SYMPLECTIC else "nonsymplectic"
 
-    filename = f"{system_name}_{L_POINT}_PM_{MAX_DEG}_{energy_level_str}_{DT}_{symplectic_str}_{N_ITER}.svg"
+    filename = (
+        f"{system_name}_{L_POINT}_PM_{MAX_DEG}_{energy_level_str}_{DT}_"
+        f"{symplectic_str}_{N_ITER}.svg"
+    )
 
     plot_poincare_map(all_pts, H0_LEVELS, output_dir=output_directory, filename=filename)
 

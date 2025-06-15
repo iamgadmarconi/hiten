@@ -3,7 +3,7 @@ SYSTEM = "EM"  # "EM" for Earth-Moon or "SE" for Sun-Earth
 L_POINT = 1    # Libration point number (1 or 2)
 
 # Algorithm parameters
-MAX_DEG = 16
+MAX_DEG = 8
 TOL = 1e-14
 
 FASTMATH = False  # Global flag for Numba's fastmath option 
