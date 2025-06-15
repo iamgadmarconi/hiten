@@ -1,5 +1,5 @@
-# System configuration
-SYSTEM = "EM"  # "EM" for Earth-Moon or "SE" for Sun-Earth
+PRIMARY = "Earth"
+SECONDARY = "Moon"
 L_POINT = 1    # Libration point number (1 or 2)
 
 # Algorithm parameters
