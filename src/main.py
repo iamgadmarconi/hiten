@@ -14,8 +14,8 @@ from utils.log_config import logger
 
 def main() -> None:
     # ---------------- choose equilibrium point --------------------------
-    primary = Body(PRIMARY, Constants.bodies[PRIMARY]["mass"], Constants.bodies[PRIMARY]["radius"], "blue")
-    secondary = Body(SECONDARY, Constants.bodies[SECONDARY]["mass"], Constants.bodies[SECONDARY]["radius"], "gray", primary)
+    primary = Body(PRIMARY, Constants.bodies[PRIMARY.lower()]["mass"], Constants.bodies[PRIMARY.lower()]["radius"], "blue")
+    secondary = Body(SECONDARY, Constants.bodies[SECONDARY.lower()]["mass"], Constants.bodies[SECONDARY.lower()]["radius"], "gray", primary)
     system = System(systemConfig(primary, secondary, Constants.get_orbital_distance(PRIMARY, SECONDARY)))
 
     # Get the selected libration point
