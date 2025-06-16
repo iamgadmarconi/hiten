@@ -1,9 +1,6 @@
 import numpy as np
-from numba import cuda, complex128, int32, int64
-from numba.types import UniTuple
-import math
+from numba import complex128, cuda
 
-# Constants - adjust as needed
 N_VARS = 6
 THREADS_PER_BLOCK = 256
 
@@ -205,7 +202,7 @@ def polynomial_evaluate_batch_kernel(points, poly_indices, coeffs_data, coeffs_m
     results[tid] = total
 
 
-class PolynomialEvaluatorCUDA:
+class CUDAEvaluate:
     """
     Helper class to manage polynomial evaluation on GPU.
     """
@@ -362,12 +359,5 @@ class PolynomialEvaluatorCUDA:
 
 
 def polynomial_evaluate_cuda(poly_p, points, clmo):
-    """
-    Evaluate polynomial at multiple points using CUDA.
-    
-    This is a convenience wrapper that creates a temporary evaluator.
-    For better performance with repeated evaluations, create a 
-    PolynomialEvaluatorCUDA instance and reuse it.
-    """
-    evaluator = PolynomialEvaluatorCUDA([poly_p], clmo)
+    evaluator = CUDAEvaluate([poly_p], clmo)
     return evaluator.evaluate_single(0, points)
