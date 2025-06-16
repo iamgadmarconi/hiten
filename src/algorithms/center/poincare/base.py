@@ -10,7 +10,7 @@ from algorithms.center.base import CenterManifold
 from algorithms.center.poincare.cuda.map import _generate_map_gpu
 from algorithms.center.poincare.map import _generate_grid
 from algorithms.center.poincare.map import _generate_map as _generate_map_cpu
-from plots.plots import set_dark_mode
+from plots.plots import _set_dark_mode
 from utils.log_config import logger
 
 
@@ -211,7 +211,7 @@ class PoincareMap:
         ax.grid(True, alpha=0.3)
         
         if dark_mode:
-            set_dark_mode(fig, ax, title=title_text)
+            _set_dark_mode(fig, ax, title=title_text)
         else:
             ax.set_title(title_text)
 

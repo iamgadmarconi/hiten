@@ -59,7 +59,8 @@ def main() -> None:
     orbit = HaloOrbit(orbit_config, ic)
     orbit.differential_correction()
     orbit.propagate(steps=1000, rtol=1e-12, atol=1e-12)
-    orbit.plot()
+    orbit.plot("rotating")
+    orbit.plot("inertial")
 
 
 if __name__ == "__main__":
