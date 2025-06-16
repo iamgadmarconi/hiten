@@ -1,5 +1,5 @@
-from typing import List, Optional, Tuple, Callable
 import math
+from typing import Callable, List, Optional, Tuple
 
 import numpy as np
 from numba import njit, prange
@@ -14,7 +14,34 @@ from config import FASTMATH
 from utils.log_config import logger
 
 
-def find_turning(
+def _bracketed_root(
+    f: Callable[[float], float],
+    initial: float = 1e-3,
+    factor: float = 2.0,
+    max_expand: int = 40,
+    xtol: float = 1e-12,
+) -> Optional[float]:
+    """Return a positive root of *f* if a sign change can be bracketed.
+
+    The routine starts from ``x=0`` and expands the upper bracket until the
+    function changes sign.  If no sign change occurs within
+    ``initial * factor**max_expand`` it returns ``None``.
+    """
+    # Early exit if already above root at x=0 ⇒ no positive solution.
+    if f(0.0) > 0.0:
+        return None
+
+    x_hi = initial
+    for _ in range(max_expand):
+        if f(x_hi) > 0.0:
+            sol = root_scalar(f, bracket=(0.0, x_hi), method="brentq", xtol=xtol)
+            return float(sol.root) if sol.converged else None
+        x_hi *= factor
+
+    # No sign change detected within the expansion range
+    return None
+
+def _find_turning(
     q_or_p: str,
     h0: float,
     H_blocks: List[np.ndarray],
@@ -82,8 +109,7 @@ def find_turning(
     logger.info("Found %s turning point: %.6e", q_or_p, root)
     return root
 
-
-def solve_p3(
+def _solve_p3(
     q2: float,
     p2: float,
     h0: float,
@@ -142,7 +168,6 @@ def solve_p3(
     logger.info("Found p3 turning point: %.6e", root)
     return root
 
-
 @njit(cache=True, fastmath=FASTMATH)
 def _hamiltonian_rhs(
     state6: np.ndarray,
@@ -164,7 +189,6 @@ def _hamiltonian_rhs(
     rhs[n_dof : 2 * n_dof] = -dH_dQ  # dp/dt
     return rhs
 
-
 @njit(fastmath=FASTMATH, cache=True)
 def _rk4_step(
     state6: np.ndarray,
@@ -179,7 +203,6 @@ def _rk4_step(
     k3 = _hamiltonian_rhs(state6 + 0.5 * dt * k2, jac_H, clmo, n_dof)
     k4 = _hamiltonian_rhs(state6 + dt * k3, jac_H, clmo, n_dof)
     return state6 + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
-
 
 @njit(cache=True, fastmath=FASTMATH)
 def _poincare_step_jit(
@@ -274,8 +297,169 @@ def _poincare_step_jit(
 
     return 0, 0.0, 0.0, 0.0
 
+@njit(parallel=True, cache=True)
+def _poincare_map_parallel(
+    seeds: np.ndarray,  # (N,4) float64
+    dt: float,
+    jac_H: List[List[np.ndarray]],
+    clmo: List[np.ndarray],
+    order: int,
+    max_steps: int,
+    use_symplectic: bool,
+    n_dof: int,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    """Return (success flags, q2p array, p2p array, p3p array) processed in parallel."""
+    n_seeds = seeds.shape[0]
+    success = np.zeros(n_seeds, dtype=np.int64)
+    q2p_out = np.empty(n_seeds, dtype=np.float64)
+    p2p_out = np.empty(n_seeds, dtype=np.float64)
+    p3p_out = np.empty(n_seeds, dtype=np.float64)
 
-def compute_poincare_map_for_energy(
+    for i in prange(n_seeds):
+        q2 = seeds[i, 0]
+        p2 = seeds[i, 1]
+        p3 = seeds[i, 3]  # q3 column is seeds[:,2] which is zero
+
+        flag, q2_new, p2_new, p3_new = _poincare_step_jit(
+            q2,
+            p2,
+            p3,
+            dt,
+            jac_H,
+            clmo,
+            order,
+            max_steps,
+            use_symplectic,
+            n_dof,
+        )
+
+        if flag == 1:
+            success[i] = 1
+            q2p_out[i] = q2_new
+            p2p_out[i] = p2_new
+            p3p_out[i] = p3_new
+
+    return success, q2p_out, p2p_out, p3p_out
+
+def _generate_map(
+    h0: float,
+    H_blocks: List[np.ndarray],
+    max_degree: int,
+    psi_table: np.ndarray,
+    clmo_table: List[np.ndarray],
+    encode_dict_list: List,
+    n_seeds: int = 20,
+    n_iter: int = 1500,
+    dt: float = 1e-2,
+    use_symplectic: bool = True,
+    integrator_order: int = 6,
+    c_omega_heuristic: float=20.0,
+    seed_axis: str = "q2",  # "q2" or "p2"
+) -> np.ndarray:
+    """Generate a Poincaré map by iterating each seed many times.
+
+    Parameters
+    ----------
+    h0 : float
+        Energy level.
+    H_blocks, max_degree, psi_table, clmo_table, encode_dict_list
+        Same polynomial data as `_generate_grid`.
+    n_seeds : int, optional
+        Number of initial seeds to distribute along the chosen axis.
+    n_iter : int, optional
+        How many Poincaré iterates to compute for each seed.
+    dt : float, optional
+        Timestep for the integrator.
+    use_symplectic : bool, optional
+        True → Symplectic (recommended); False → RK4.
+    seed_axis : {"q2", "p2"}
+        Place seeds on this axis with the other momentum/position set to zero.
+
+    Returns
+    -------
+    np.ndarray, shape (n_success * n_iter, 2)
+        Collected (q2, p2) points of all iterates.
+    """
+    # 1. Build Jacobian once.
+    jac_H = polynomial_jacobian(
+        poly_p=H_blocks,
+        max_deg=max_degree,
+        psi_table=psi_table,
+        clmo_table=clmo_table,
+        encode_dict_list=encode_dict_list,
+    )
+
+    # 2. Turning points for seed placement.
+    q2_max = _find_turning("q2", h0, H_blocks, clmo_table)
+    p2_max = _find_turning("p2", h0, H_blocks, clmo_table)
+
+    seeds: list[Tuple[float, float, float, float]] = []
+
+    if seed_axis == "q2":
+        q2_vals = np.linspace(-0.9 * q2_max, 0.9 * q2_max, n_seeds)
+        for q2 in q2_vals:
+            p2 = 0.0
+            p3 = _solve_p3(q2, p2, h0, H_blocks, clmo_table)
+            if p3 is not None:
+                seeds.append((q2, p2, 0.0, p3))
+    elif seed_axis == "p2":
+        p2_vals = np.linspace(-0.9 * p2_max, 0.9 * p2_max, n_seeds)
+        for p2 in p2_vals:
+            q2 = 0.0
+            p3 = _solve_p3(q2, p2, h0, H_blocks, clmo_table)
+            if p3 is not None:
+                seeds.append((q2, p2, 0.0, p3))
+    else:
+        raise ValueError("seed_axis must be 'q2' or 'p2'.")
+
+    logger.info("Iterating %d seeds (%s-axis) for %d crossings each", len(seeds), seed_axis, n_iter)
+
+    # 3. Iterate.
+    pts_accum: list[Tuple[float, float]] = []
+
+    # Dynamically adjust max_steps based on dt to allow a consistent total integration time for finding a crossing.
+    # The original implicit max integration time (when dt=1e-3 and max_steps=20000) was 20.0.
+    target_max_integration_time_per_crossing = 20.0
+    calculated_max_steps = int(math.ceil(target_max_integration_time_per_crossing / dt))
+    logger.info(f"Using dt={dt:.1e}, calculated max_steps per crossing: {calculated_max_steps}")
+
+    for seed in seeds:
+        state = seed
+        for i in range(n_iter): # Use a different loop variable, e.g., i
+            try:
+                flag, q2p, p2p, p3p = _poincare_step_jit(
+                    state[0],  # q2
+                    state[1],  # p2
+                    state[3],  # p3 (q3 is always 0)
+                    dt,
+                    jac_H,
+                    clmo_table,
+                    integrator_order,
+                    calculated_max_steps,
+                    use_symplectic,
+                    N_SYMPLECTIC_DOF,
+                    c_omega_heuristic,
+                )
+
+                if flag == 1:
+                    pts_accum.append((q2p, p2p))
+                    # fixed: restart with the p3 belonging to this crossing
+                    state = (q2p, p2p, 0.0, p3p)
+                else:
+                    logger.warning(
+                        "Failed to find Poincaré crossing for seed %s at iteration %d/%d",
+                        seed,
+                        i + 1,
+                        n_iter,
+                    )
+                    break
+            except RuntimeError as e:
+                logger.warning(f"Failed to find Poincaré crossing for seed {seed} at iteration {i+1}/{n_iter}: {e}")
+                break # Stop iterating this seed if a crossing is not found
+
+    return np.asarray(pts_accum, dtype=np.float64)
+
+def _generate_grid(
     h0: float,
     H_blocks: List[np.ndarray],
     max_degree: int,
@@ -338,8 +522,8 @@ def compute_poincare_map_for_energy(
     )
 
     # 2.  Hill-boundary turning points.
-    q2_max = find_turning("q2", h0, H_blocks, clmo_table)
-    p2_max = find_turning("p2", h0, H_blocks, clmo_table)
+    q2_max = _find_turning("q2", h0, H_blocks, clmo_table)
+    p2_max = _find_turning("p2", h0, H_blocks, clmo_table)
     logger.info(f"Hill boundary turning points: q2_max={q2_max:.6e}, p2_max={p2_max:.6e}")
 
     q2_vals = np.linspace(-q2_max, q2_max, Nq)
@@ -359,7 +543,7 @@ def compute_poincare_map_for_energy(
                 percentage = int(100 * points_checked / total_points)
                 logger.info(f"Seed search progress: {percentage}%, found {valid_seeds_found} valid seeds")
                 
-            p3 = solve_p3(q2, p2, h0, H_blocks, clmo_table)
+            p3 = _solve_p3(q2, p2, h0, H_blocks, clmo_table)
             if p3 is not None:
                 seeds.append((q2, p2, 0.0, p3))
                 valid_seeds_found += 1
@@ -397,195 +581,3 @@ def compute_poincare_map_for_energy(
             idx += 1
 
     return map_pts
-
-
-@njit(parallel=True, cache=True)
-def _poincare_map_parallel(
-    seeds: np.ndarray,  # (N,4) float64
-    dt: float,
-    jac_H: List[List[np.ndarray]],
-    clmo: List[np.ndarray],
-    order: int,
-    max_steps: int,
-    use_symplectic: bool,
-    n_dof: int,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Return (success flags, q2p array, p2p array, p3p array) processed in parallel."""
-    n_seeds = seeds.shape[0]
-    success = np.zeros(n_seeds, dtype=np.int64)
-    q2p_out = np.empty(n_seeds, dtype=np.float64)
-    p2p_out = np.empty(n_seeds, dtype=np.float64)
-    p3p_out = np.empty(n_seeds, dtype=np.float64)
-
-    for i in prange(n_seeds):
-        q2 = seeds[i, 0]
-        p2 = seeds[i, 1]
-        p3 = seeds[i, 3]  # q3 column is seeds[:,2] which is zero
-
-        flag, q2_new, p2_new, p3_new = _poincare_step_jit(
-            q2,
-            p2,
-            p3,
-            dt,
-            jac_H,
-            clmo,
-            order,
-            max_steps,
-            use_symplectic,
-            n_dof,
-        )
-
-        if flag == 1:
-            success[i] = 1
-            q2p_out[i] = q2_new
-            p2p_out[i] = p2_new
-            p3p_out[i] = p3_new
-
-    return success, q2p_out, p2p_out, p3p_out
-
-
-def generate_iterated_poincare_map(
-    h0: float,
-    H_blocks: List[np.ndarray],
-    max_degree: int,
-    psi_table: np.ndarray,
-    clmo_table: List[np.ndarray],
-    encode_dict_list: List,
-    n_seeds: int = 20,
-    n_iter: int = 1500,
-    dt: float = 1e-2,
-    use_symplectic: bool = True,
-    integrator_order: int = 6,
-    c_omega_heuristic: float=20.0,
-    seed_axis: str = "q2",  # "q2" or "p2"
-) -> np.ndarray:
-    """Generate a Poincaré map by iterating each seed many times.
-
-    Parameters
-    ----------
-    h0 : float
-        Energy level.
-    H_blocks, max_degree, psi_table, clmo_table, encode_dict_list
-        Same polynomial data as `compute_poincare_map_for_energy`.
-    n_seeds : int, optional
-        Number of initial seeds to distribute along the chosen axis.
-    n_iter : int, optional
-        How many Poincaré iterates to compute for each seed.
-    dt : float, optional
-        Timestep for the integrator.
-    use_symplectic : bool, optional
-        True → Symplectic (recommended); False → RK4.
-    seed_axis : {"q2", "p2"}
-        Place seeds on this axis with the other momentum/position set to zero.
-
-    Returns
-    -------
-    np.ndarray, shape (n_success * n_iter, 2)
-        Collected (q2, p2) points of all iterates.
-    """
-    # 1. Build Jacobian once.
-    jac_H = polynomial_jacobian(
-        poly_p=H_blocks,
-        max_deg=max_degree,
-        psi_table=psi_table,
-        clmo_table=clmo_table,
-        encode_dict_list=encode_dict_list,
-    )
-
-    # 2. Turning points for seed placement.
-    q2_max = find_turning("q2", h0, H_blocks, clmo_table)
-    p2_max = find_turning("p2", h0, H_blocks, clmo_table)
-
-    seeds: list[Tuple[float, float, float, float]] = []
-
-    if seed_axis == "q2":
-        q2_vals = np.linspace(-0.9 * q2_max, 0.9 * q2_max, n_seeds)
-        for q2 in q2_vals:
-            p2 = 0.0
-            p3 = solve_p3(q2, p2, h0, H_blocks, clmo_table)
-            if p3 is not None:
-                seeds.append((q2, p2, 0.0, p3))
-    elif seed_axis == "p2":
-        p2_vals = np.linspace(-0.9 * p2_max, 0.9 * p2_max, n_seeds)
-        for p2 in p2_vals:
-            q2 = 0.0
-            p3 = solve_p3(q2, p2, h0, H_blocks, clmo_table)
-            if p3 is not None:
-                seeds.append((q2, p2, 0.0, p3))
-    else:
-        raise ValueError("seed_axis must be 'q2' or 'p2'.")
-
-    logger.info("Iterating %d seeds (%s-axis) for %d crossings each", len(seeds), seed_axis, n_iter)
-
-    # 3. Iterate.
-    pts_accum: list[Tuple[float, float]] = []
-
-    # Dynamically adjust max_steps based on dt to allow a consistent total integration time for finding a crossing.
-    # The original implicit max integration time (when dt=1e-3 and max_steps=20000) was 20.0.
-    target_max_integration_time_per_crossing = 20.0
-    calculated_max_steps = int(math.ceil(target_max_integration_time_per_crossing / dt))
-    logger.info(f"Using dt={dt:.1e}, calculated max_steps per crossing: {calculated_max_steps}")
-
-    for seed in seeds:
-        state = seed
-        for i in range(n_iter): # Use a different loop variable, e.g., i
-            try:
-                flag, q2p, p2p, p3p = _poincare_step_jit(
-                    state[0],  # q2
-                    state[1],  # p2
-                    state[3],  # p3 (q3 is always 0)
-                    dt,
-                    jac_H,
-                    clmo_table,
-                    integrator_order,
-                    calculated_max_steps,
-                    use_symplectic,
-                    N_SYMPLECTIC_DOF,
-                    c_omega_heuristic,
-                )
-
-                if flag == 1:
-                    pts_accum.append((q2p, p2p))
-                    # fixed: restart with the p3 belonging to this crossing
-                    state = (q2p, p2p, 0.0, p3p)
-                else:
-                    logger.warning(
-                        "Failed to find Poincaré crossing for seed %s at iteration %d/%d",
-                        seed,
-                        i + 1,
-                        n_iter,
-                    )
-                    break
-            except RuntimeError as e:
-                logger.warning(f"Failed to find Poincaré crossing for seed {seed} at iteration {i+1}/{n_iter}: {e}")
-                break # Stop iterating this seed if a crossing is not found
-
-    return np.asarray(pts_accum, dtype=np.float64)
-
-
-def _bracketed_root(
-    f: Callable[[float], float],
-    initial: float = 1e-3,
-    factor: float = 2.0,
-    max_expand: int = 40,
-    xtol: float = 1e-12,
-) -> Optional[float]:
-    """Return a positive root of *f* if a sign change can be bracketed.
-
-    The routine starts from ``x=0`` and expands the upper bracket until the
-    function changes sign.  If no sign change occurs within
-    ``initial * factor**max_expand`` it returns ``None``.
-    """
-    # Early exit if already above root at x=0 ⇒ no positive solution.
-    if f(0.0) > 0.0:
-        return None
-
-    x_hi = initial
-    for _ in range(max_expand):
-        if f(x_hi) > 0.0:
-            sol = root_scalar(f, bracket=(0.0, x_hi), method="brentq", xtol=xtol)
-            return float(sol.root) if sol.converged else None
-        x_hi *= factor
-
-    # No sign change detected within the expansion range
-    return None

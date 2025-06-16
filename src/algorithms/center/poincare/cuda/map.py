@@ -4,12 +4,12 @@ from typing import List, Tuple
 import numpy as np
 
 from algorithms.center.poincare.cuda.step import PoincareMapCUDA
-from algorithms.center.poincare.map import find_turning, solve_p3
+from algorithms.center.poincare.map import _find_turning, _solve_p3
 from algorithms.center.polynomial.operations import polynomial_jacobian
 from utils.log_config import logger
 
 
-def generate_iterated_poincare_map_gpu(
+def _generate_map_gpu(
     h0: float,
     H_blocks: List[np.ndarray],
     max_degree: int,
@@ -25,7 +25,7 @@ def generate_iterated_poincare_map_gpu(
     seed_axis: str = "q2",  # "q2" or "p2"
 ) -> np.ndarray:
     """
-    GPU-accelerated version of generate_iterated_poincare_map.
+    GPU-accelerated version of _generate_map.
     
     Parameters
     ----------
@@ -65,8 +65,8 @@ def generate_iterated_poincare_map_gpu(
 
     # 2. Turning points for seed placement (CPU)
     logger.info("Finding Hill boundary turning points")
-    q2_max = find_turning("q2", h0, H_blocks, clmo_table)
-    p2_max = find_turning("p2", h0, H_blocks, clmo_table)
+    q2_max = _find_turning("q2", h0, H_blocks, clmo_table)
+    p2_max = _find_turning("p2", h0, H_blocks, clmo_table)
 
     # 3. Generate seeds (CPU)
     seeds: List[Tuple[float, float, float]] = []
@@ -75,14 +75,14 @@ def generate_iterated_poincare_map_gpu(
         q2_vals = np.linspace(-0.9 * q2_max, 0.9 * q2_max, n_seeds)
         for q2 in q2_vals:
             p2 = 0.0
-            p3 = solve_p3(q2, p2, h0, H_blocks, clmo_table)
+            p3 = _solve_p3(q2, p2, h0, H_blocks, clmo_table)
             if p3 is not None:
                 seeds.append((q2, p2, p3))
     elif seed_axis == "p2":
         p2_vals = np.linspace(-0.9 * p2_max, 0.9 * p2_max, n_seeds)
         for p2 in p2_vals:
             q2 = 0.0
-            p3 = solve_p3(q2, p2, h0, H_blocks, clmo_table)
+            p3 = _solve_p3(q2, p2, h0, H_blocks, clmo_table)
             if p3 is not None:
                 seeds.append((q2, p2, p3))
     else:

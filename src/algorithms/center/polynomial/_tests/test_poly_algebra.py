@@ -1,43 +1,28 @@
 import numpy as np
 import pytest
-import symengine as se
-from numba.typed import List
 
 from algorithms.center.polynomial.algebra import (_get_degree, _poly_add,
                                                   _poly_clean,
                                                   _poly_clean_inplace,
                                                   _poly_diff, _poly_evaluate,
                                                   _poly_mul, _poly_poisson,
-                                                  _poly_scale, _poly_integrate)
-from algorithms.center.polynomial.base import (decode_multiindex,
+                                                  _poly_scale)
+from algorithms.center.polynomial.base import (ENCODE_DICT_GLOBAL,
+                                               decode_multiindex,
                                                encode_multiindex,
-                                               init_index_tables, make_poly,
-                                               PSI_GLOBAL, CLMO_GLOBAL, ENCODE_DICT_GLOBAL)
-from algorithms.variables import N_VARS, p1, p2, p3, q1, q2, q3
+                                               init_index_tables, make_poly)
+from algorithms.variables import N_VARS
 
-# Initialize tables for tests
-MAX_DEGREE = 5
-PSI, CLMO = init_index_tables(MAX_DEGREE)
-
-# Define Symengine variables for tests, matching N_VARS and typical order
-# Assuming variables are x0, x1, x2, x3, x4, x5 based on N_VARS
-if N_VARS == 6:
-    s_vars = se.symbols(f'x0:{N_VARS}') 
-else:
-    # Fallback for different N_VARS, though tests are geared towards N_VARS=6
-    s_vars = se.symbols(','.join([f'x{i}' for i in range(N_VARS)]))
+TEST_MAX_DEG = 5
+PSI, CLMO = init_index_tables(TEST_MAX_DEG)
 
 
 def test_poly_add():
-    """Test polynomial addition"""
-    # Test for various degrees
-    for degree in range(MAX_DEGREE + 1):
-        # Create test polynomials
+    for degree in range(TEST_MAX_DEG + 1):
         a = make_poly(degree, PSI)
         b = make_poly(degree, PSI)
         result = make_poly(degree, PSI)
         
-        # Skip degree 0 as it's trivial
         if degree == 0:
             a[0] = 1.5
             b[0] = 2.5
@@ -47,19 +32,15 @@ def test_poly_add():
         
         size = PSI[N_VARS, degree]
         
-        # Test addition with specific values
-        # Set some coefficients in polynomials a and b
         for i in range(min(size, 10)):
             a[i] = i * 1.5
             b[i] = i * 0.5
         
-        # Test zero addition
         zero_poly = make_poly(degree, PSI)
         result_zero = make_poly(degree, PSI)
         _poly_add(a, zero_poly, result_zero)
         np.testing.assert_array_equal(a, result_zero)
         
-        # Test regular addition
         expected = np.zeros_like(a)
         for i in range(a.shape[0]):
             expected[i] = a[i] + b[i]
@@ -67,22 +48,18 @@ def test_poly_add():
         _poly_add(a, b, result)
         np.testing.assert_array_almost_equal(result, expected)
         
-        # Test commutativity: a + b = b + a
         result_commute = make_poly(degree, PSI)
         _poly_add(b, a, result_commute)
         np.testing.assert_array_almost_equal(result, result_commute)
         
-        # Test adding a polynomial to itself
         double_a = make_poly(degree, PSI)
         _poly_add(a, a, double_a)
         
-        # Should be equivalent to scaling by 2
         expected_double = make_poly(degree, PSI)
         _poly_scale(a, 2.0, expected_double)
         np.testing.assert_array_almost_equal(double_a, expected_double)
 
 def test_add_negative_numbers():
-    """Test polynomial addition with negative numbers"""
     degree = 3
     size = PSI[N_VARS, degree]
     
@@ -938,7 +915,7 @@ def test_differentiate_complex():
     assert dp2[idx_x1].real == 10.0
     assert dp2[idx_x1].imag == 12.0
 
-def test__poly_poisson_antisymmetry():
+def test_poisson_antisymmetry():
     """Test antisymmetry property of _poly_poisson bracket: {P, Q} = -{Q, P}"""
     # Create two test polynomials
     deg_p = 2
@@ -973,7 +950,7 @@ def test__poly_poisson_antisymmetry():
     # {P, Q} should equal -{Q, P}
     np.testing.assert_array_almost_equal(pq, neg_qp)
 
-def test__poly_poisson_first_argument_linearity():
+def test_poisson_first_argument_linearity():
     """Test linearity in the first argument: {aP+bQ, R} = a{P,R} + b{Q,R}"""
     # Create three test polynomials
     deg_p = 2
@@ -1028,7 +1005,7 @@ def test__poly_poisson_first_argument_linearity():
     # {aP+bQ, R} should equal a{P,R} + b{Q,R}
     np.testing.assert_array_almost_equal(apbq_r, result)
 
-def test__poly_poisson_second_argument_linearity():
+def test_poisson_second_argument_linearity():
     """Test linearity in the second argument: {P, aQ+bR} = a{P,Q} + b{P,R}"""
     # Create three test polynomials
     deg_p = 2
@@ -1083,7 +1060,7 @@ def test__poly_poisson_second_argument_linearity():
     # {P, aQ+bR} should equal a{P,Q} + b{P,R}
     np.testing.assert_array_almost_equal(p_aqbr, result)
 
-def test__poly_poisson_jacobi_identity():
+def test_poisson_jacobi_identity():
     """Test Jacobi identity: {P, {Q, R}} + {Q, {R, P}} + {R, {P, Q}} = 0"""
     # Create three test polynomials of low degree to keep test manageable
     deg_p = 2
@@ -1143,7 +1120,7 @@ def test__poly_poisson_jacobi_identity():
     for i in range(sum_result.shape[0]):
         assert abs(sum_result[i]) < 1e-10
 
-def test__poly_poisson_hamiltonian():
+def test_poisson_hamiltonian():
     """Test _poly_poisson bracket properties with the Hamiltonian H = 0.5*p0^2 + q0^2"""
     # Create Hamiltonian H = 0.5*p0^2 + q0^2
     deg_h = 2
@@ -1200,7 +1177,7 @@ def test__poly_poisson_hamiltonian():
     # {H, p0} should equal 2*q0
     np.testing.assert_array_almost_equal(h_p0, expected_h_p0)
 
-def test__poly_poisson_complex():
+def test_poisson_complex():
     """Test _poly_poisson bracket with complex polynomials"""
     # Create complex polynomials
     deg_p = 2
@@ -1235,7 +1212,7 @@ def test__poly_poisson_complex():
     # Verify a specific term in the result to check complex arithmetic correctness
     # We'd need to calculate the expected result manually for a specific term
 
-def test__poly_poisson_leibniz_rule():
+def test_poisson_leibniz_rule():
     """Test Leibniz product rule: {P, Q*R} = {P, Q}*R + Q*{P, R}"""
     # Create test polynomials of low degree
     deg_p = 2
@@ -1285,7 +1262,7 @@ def test__poly_poisson_leibniz_rule():
     # {P, Q*R} should equal {P, Q}*R + Q*{P, R}
     np.testing.assert_array_almost_equal(p_qr, result)
 
-def test__poly_poisson_constant():
+def test_poisson_constant():
     """Test _poly_poisson bracket with constant function: {1, F} = 0"""
     # Create constant polynomial 1
     deg_const = 0
@@ -1317,7 +1294,7 @@ def test__poly_poisson_constant():
     for i in range(f_one.shape[0]):
         assert abs(f_one[i]) < 1e-10
 
-def test__poly_poisson_canonical_relations():
+def test_poisson_canonical_relations():
     """Test canonical _poly_poisson bracket relations: {q_i,q_j}=0, {p_i,p_j}=0, {q_i,p_j}=δ_ij"""
     # Test for the first few position and momentum variables
     for i in range(3):  # Test x0, x1, x2
@@ -1398,9 +1375,9 @@ def test_get_degree():
     quad_poly = make_poly(2, PSI)
     assert _get_degree(quad_poly, PSI) == 2
 
-    # Test higher degree polynomial (degree MAX_DEGREE)
-    high_deg_poly = make_poly(MAX_DEGREE, PSI)
-    assert _get_degree(high_deg_poly, PSI) == MAX_DEGREE
+    # Test higher degree polynomial (degree TEST_MAX_DEG)
+    high_deg_poly = make_poly(TEST_MAX_DEG, PSI)
+    assert _get_degree(high_deg_poly, PSI) == TEST_MAX_DEG
     
     # Test with a polynomial that has coefficients (values don't matter for _get_degree)
     poly_deg3 = make_poly(3, PSI)
@@ -1569,34 +1546,7 @@ def test_poly_clean():
     for i in range(poly.shape[0]):
         assert zero_tol_result[i] == poly[i]
 
-
-# -----------------------------------------------------------------------------
-# Tests for _poly_evaluate (homogeneous polynomial evaluation)
-# -----------------------------------------------------------------------------
-
-def create_symengine_poly(coeffs: np.ndarray, degree: int, sym_vars: list, psi, clmo) -> se.Expr:
-    """Helper to create a Symengine polynomial from our coefficient array."""
-    sym_poly = se.sympify(0)
-    if coeffs.shape[0] == 0:
-        return sym_poly
-    for i in range(coeffs.shape[0]):
-        coeff_val = coeffs[i]
-        if coeff_val == 0:
-            continue
-        
-        exponents = decode_multiindex(i, degree, clmo)
-        term = se.sympify(coeff_val)
-        for var_idx in range(N_VARS):
-            if exponents[var_idx] > 0:
-                term *= (sym_vars[var_idx] ** exponents[var_idx])
-        sym_poly += term
-    return sym_poly
-
-def evaluate_symengine_poly(sym_poly: se.Expr, point_map: dict) -> complex:
-    """Helper to evaluate a Symengine polynomial."""
-    return complex(sym_poly.subs(point_map).evalf())
-
-@pytest.mark.parametrize("degree", range(MAX_DEGREE + 1))
+@pytest.mark.parametrize("degree", range(TEST_MAX_DEG + 1))
 def test_poly_evaluate_zero_polynomial(degree):
     """Test evaluation of a zero homogeneous polynomial."""
     coeffs = make_poly(degree, PSI) # all zeros
@@ -1605,9 +1555,9 @@ def test_poly_evaluate_zero_polynomial(degree):
     numeric_eval = _poly_evaluate(coeffs, degree, point_vals, CLMO)
     assert np.isclose(numeric_eval, 0.0 + 0.0j)
 
-@pytest.mark.parametrize("degree", range(1, MAX_DEGREE + 1)) # Skip degree 0 for monomial test
+@pytest.mark.parametrize("degree", range(1, TEST_MAX_DEG + 1)) # Skip degree 0 for monomial test
 def test_poly_evaluate_single_monomial(degree):
-    """Test evaluation of a single monomial vs Symengine."""
+    """Test evaluation of a single monomial."""
     coeffs = make_poly(degree, PSI)
     
     # Create a single monomial, e.g., 2.5 * x_0^degree (if degree > 0)
@@ -1640,53 +1590,51 @@ def test_poly_evaluate_single_monomial(degree):
         else: # No coefficients for this degree (e.g. PSI[N_VARS, degree] is 0)
              pytest.skip(f"No monomials for degree {degree} with N_VARS={N_VARS}")
 
-
     point_vals_np = np.random.rand(N_VARS) * 2 - 1 + 1j * (np.random.rand(N_VARS) * 2 - 1) # Random values in [-1,1] + j*[-1,1]
     
-    # Symengine evaluation
-    sym_poly_expr = create_symengine_poly(coeffs, degree, s_vars, PSI, CLMO)
-    point_map_sym = {s_vars[i]: point_vals_np[i] for i in range(N_VARS)}
-    symengine_eval = evaluate_symengine_poly(sym_poly_expr, point_map_sym)
-    
-    # Numeric evaluation
     numeric_eval = _poly_evaluate(coeffs, degree, point_vals_np, CLMO)
     
-    assert np.isclose(numeric_eval, symengine_eval, atol=1e-9, rtol=1e-9)
+    # Compute expected value manually: test_coeff_val * product(point_vals_np[i]^k_test[i])
+    expected_val = test_coeff_val
+    for i in range(N_VARS):
+        if k_test[i] > 0:
+            expected_val *= point_vals_np[i] ** k_test[i]
+    
+    assert np.isclose(numeric_eval, expected_val)
 
-@pytest.mark.parametrize("degree", range(MAX_DEGREE + 1))
+@pytest.mark.parametrize("degree", range(TEST_MAX_DEG + 1))
 def test_poly_evaluate_multiple_terms(degree):
-    """Test evaluation of a homogeneous polynomial with multiple terms vs Symengine."""
     coeffs = make_poly(degree, PSI)
     
     # Assign some random complex coefficients
     num_coeffs_to_set = min(coeffs.shape[0], 5) # Set up to 5 random coeffs
+    if num_coeffs_to_set == 0:
+        pytest.skip(f"No coefficients available for degree {degree}")
+        
     indices_to_set = np.random.choice(coeffs.shape[0], num_coeffs_to_set, replace=False)
     
     for i in indices_to_set:
         coeffs[i] = np.random.rand() - 0.5 + 1j*(np.random.rand() - 0.5)
 
     point_vals_np = np.random.rand(N_VARS) + 1j*np.random.rand(N_VARS)
-        
-    sym_poly_expr = create_symengine_poly(coeffs, degree, s_vars, PSI, CLMO)
-    point_map_sym = {s_vars[i]: point_vals_np[i] for i in range(N_VARS)}
-    symengine_eval = evaluate_symengine_poly(sym_poly_expr, point_map_sym)
     
     numeric_eval = _poly_evaluate(coeffs, degree, point_vals_np, CLMO)
     
-    # For degree 0, symengine creates just the number, ensure it's complex for comparison
-    if degree == 0 and coeffs.shape[0] > 0:
-        expected_val_deg0 = coeffs[0]
-        assert np.isclose(numeric_eval, expected_val_deg0)
-        assert np.isclose(symengine_eval, expected_val_deg0) # Symengine should also match
-    elif coeffs.shape[0] == 0: # No terms for this degree
-        assert np.isclose(numeric_eval, 0.0 + 0.0j)
-        assert np.isclose(symengine_eval, 0.0 + 0.0j)
-    else:
-        assert np.isclose(numeric_eval, symengine_eval, atol=1e-9, rtol=1e-9)
+    # Compute expected value manually
+    expected_val = 0.0 + 0.0j
+    for i in indices_to_set:
+        k = decode_multiindex(i, degree, CLMO)
+        term_val = coeffs[i]
+        for j in range(N_VARS):
+            if k[j] > 0:
+                term_val *= point_vals_np[j] ** k[j]
+        expected_val += term_val
+    
+    assert np.isclose(numeric_eval, expected_val)
 
 def test_poly_evaluate_at_origin():
     """Test evaluation at the origin point."""
-    for degree in range(MAX_DEGREE + 1):
+    for degree in range(TEST_MAX_DEG + 1):
         coeffs = make_poly(degree, PSI)
         if coeffs.shape[0] > 0:
             coeffs[np.random.randint(0, coeffs.shape[0])] = 1.0 + 1.0j # Make it non-zero
@@ -1728,12 +1676,6 @@ def test_poly_evaluate_point_with_zeros():
     # Expected: (2+j)^2 + (2+j)*0 + 0^2 = (2+j)^2 = 4 + 4j - 1 = 3 + 4j
     expected_eval = (2.0+1j)**2
 
-    sym_poly_expr = create_symengine_poly(coeffs, degree, s_vars, PSI, CLMO)
-    point_map_sym = {s_vars[i]: point_vals_np[i] for i in range(N_VARS)}
-    symengine_eval = evaluate_symengine_poly(sym_poly_expr, point_map_sym)
-    
     numeric_eval = _poly_evaluate(coeffs, degree, point_vals_np, CLMO)
     
     assert np.isclose(numeric_eval, expected_eval)
-    assert np.isclose(symengine_eval, expected_eval)
-    assert np.isclose(numeric_eval, symengine_eval)

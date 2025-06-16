@@ -3,7 +3,7 @@ import numpy as np
 from numba import complex128, cuda, float64
 
 from algorithms.center.polynomial.cuda.evaluate import (
-    PolynomialEvaluatorCUDA, poly_evaluate_degree_device)
+    CUDAEvaluate, poly_evaluate_degree_device)
 
 
 N_VARS = 6
@@ -156,7 +156,7 @@ class HamiltonianRHSEvaluatorCUDA:
         """
         # Use the polynomial evaluator to handle data flattening
 
-        self.poly_evaluator = PolynomialEvaluatorCUDA(jac_H, clmo)
+        self.poly_evaluator = CUDAEvaluate(jac_H, clmo)
         self.n_components = len(jac_H)
         self.n_dof = self.n_components // 2
         

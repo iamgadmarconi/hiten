@@ -1,13 +1,12 @@
+from typing import Any, Optional, Sequence, Tuple
+
 import numpy as np
 from numpy.typing import NDArray
-from typing import Optional, Sequence, Tuple, Any
-from scipy.integrate import solve_ivp
 
-from system.libration import CollinearPoint, L3Point
+from algorithms.dynamics import compute_stm
 from algorithms.geometry import _find_y_zero_crossing
-from algorithms.dynamics import variational_equations, compute_stm
 from orbits.base import PeriodicOrbit, orbitConfig
-
+from system.libration import CollinearPoint, L3Point
 from utils.log_config import logger
 
 
@@ -29,6 +28,11 @@ class LyapunovOrbit(PeriodicOrbit):
             raise NotImplementedError(msg)
 
     def _initial_guess(self) -> NDArray[np.float64]:
+
+        if self._initial_state is not None:
+            logger.info(f"Using provided initial state: {self._initial_state} for {str(self)}")
+            return self._initial_state
+
         L_i = self.libration_point.position
         mu = self.mu
         x_L_i: float = L_i[0]

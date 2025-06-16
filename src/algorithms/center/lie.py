@@ -4,15 +4,15 @@ from numba.typed import List
 
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                _factorial, decode_multiindex,
-                                               encode_multiindex, make_poly)
+                                               make_poly)
 from algorithms.center.polynomial.operations import (
-    polynomial_clean, polynomial_total_degree, polynomial_evaluate,
-    polynomial_poisson_bracket, polynomial_zero_list)
+    polynomial_clean, polynomial_evaluate, polynomial_poisson_bracket,
+    polynomial_total_degree, polynomial_zero_list)
 from config import FASTMATH
 from utils.log_config import logger
 
 
-def lie_transform(
+def _lie_transform(
 point, 
 poly_init: List[np.ndarray], 
 psi: np.ndarray, 
@@ -90,13 +90,13 @@ tol: float = 1e-30) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray
             cleaned_G_n_list = polynomial_clean(temp_G_n_list, tol)
             p_G_n = cleaned_G_n_list[0]
 
-        # Pass the cleaned Gn to _apply_lie_transform
-        # Convert poly_trans to Numba typed list for _apply_lie_transform
+        # Pass the cleaned Gn to _apply_poly_transform
+        # Convert poly_trans to Numba typed list for _apply_poly_transform
         poly_trans_typed = List()
         for item_arr in poly_trans:
             poly_trans_typed.append(item_arr)
-        # _apply_lie_transform expects a Numba List for poly_H and returns a Python list
-        poly_trans = _apply_lie_transform(poly_trans_typed, p_G_n, n, max_degree, psi, clmo, encode_dict_list, tol)
+        # _apply_poly_transform expects a Numba List for poly_H and returns a Python list
+        poly_trans = _apply_poly_transform(poly_trans_typed, p_G_n, n, max_degree, psi, clmo, encode_dict_list, tol)
         
         if n < len(poly_G_total) and poly_G_total[n].shape == p_G_n.shape:
             poly_G_total[n] += p_G_n
@@ -235,7 +235,7 @@ clmo: np.ndarray) -> np.ndarray:
 
 
 @njit(fastmath=FASTMATH, cache=False)
-def _apply_lie_transform(
+def _apply_poly_transform(
 poly_H: List[np.ndarray], 
 p_G_n: np.ndarray, 
 deg_G: int, 
@@ -330,7 +330,7 @@ tol: float) -> List[np.ndarray]:
     return polynomial_clean(poly_result, tol)
 
 
-def _center2modal(
+def _lie_expansion(
 poly_G_total: List[np.ndarray], 
 max_degree: int, psi: np.ndarray, 
 clmo: np.ndarray, 
@@ -394,7 +394,7 @@ restrict: bool = True) -> List[List[np.ndarray]]:
             for arr in current_coords[i]:
                 current_poly_typed.append(arr)
 
-            new_poly = _apply_series(
+            new_poly = _apply_coord_transform(
                 current_poly_typed, poly_G, max_degree, psi, clmo, encode_dict_list, tol
             )
             new_coords.append(new_poly)
@@ -414,7 +414,7 @@ restrict: bool = True) -> List[List[np.ndarray]]:
 
 
 @njit(fastmath=FASTMATH, cache=False)
-def _apply_series(
+def _apply_coord_transform(
 poly_X: List[np.ndarray], 
 poly_G: List[np.ndarray], 
 N_max: int, 
@@ -490,7 +490,7 @@ tol: float) -> List[np.ndarray]:
 
 
 @njit(fastmath=FASTMATH, cache=True)
-def evaluate_transform(
+def _evaluate_transform(
 expansions: List[List[np.ndarray]], 
 coords_cm_complex: np.ndarray, 
 clmo: np.ndarray) -> np.ndarray:
