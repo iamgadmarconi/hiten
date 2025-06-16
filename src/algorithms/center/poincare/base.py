@@ -1,22 +1,21 @@
-from dataclasses import dataclass
-from dataclasses import asdict
+import os
+import pickle
+from dataclasses import asdict, dataclass
 from typing import List, Optional, Sequence
 
+import matplotlib.pyplot as plt
 import numpy as np
 
 from algorithms.center.base import CenterManifold
-from algorithms.center.poincare.map import (compute_poincare_map_for_energy,
-                                            generate_iterated_poincare_map)
+from algorithms.center.poincare.cuda.map import _generate_map_gpu
+from algorithms.center.poincare.map import _generate_grid
+from algorithms.center.poincare.map import _generate_map as _generate_map_cpu
+from plots.plots import set_dark_mode
 from utils.log_config import logger
-from plots.plots import plot_poincare_map
-
-# Standard-library helpers for serialisation
-import os
-import pickle
 
 
 @dataclass
-class PoincareMapConfig:
+class poincareMapConfig:
     """Configuration parameters for the Poincaré map generation."""
 
     # Numerical / integration
@@ -30,7 +29,8 @@ class PoincareMapConfig:
     seed_axis: str = "q2"  # "q2" or "p2"
 
     # Misc
-    compute_on_init: bool = True
+    compute_on_init: bool = False
+    use_gpu: bool = False
 
 
 class PoincareMap:
@@ -42,8 +42,8 @@ class PoincareMap:
         The centre-manifold object to operate on.  Its polynomial representation is
         used for the reduced Hamiltonian flow.
     energy : float
-        Energy level (same convention as `solve_p3`, *not* the Jacobi constant).
-    config : PoincareMapConfig, optional
+        Energy level (same convention as `_solve_p3`, *not* the Jacobi constant).
+    config : poincareMapConfig, optional
         Numerical parameters controlling the map generation.  A sensible default
         configuration is used if none is supplied.
     """
@@ -52,17 +52,18 @@ class PoincareMap:
         self,
         cm: CenterManifold,
         energy: float,
-        config: Optional[PoincareMapConfig] = None,
+        config: Optional[poincareMapConfig] = None,
     ) -> None:
         self.cm: CenterManifold = cm
         self.energy: float = float(energy)
-        self.config: PoincareMapConfig = config or PoincareMapConfig()
+        self.config: poincareMapConfig = config or poincareMapConfig()
 
         # Derived flags
         self._use_symplectic: bool = self.config.method.lower() == "symplectic"
 
         # Storage for computed points
         self._points: Optional[np.ndarray] = None  # shape (M,2)
+        self._backend: str = "cpu" if not self.config.use_gpu else "gpu"
 
         if self.config.compute_on_init:
             self.compute()
@@ -101,7 +102,9 @@ class PoincareMap:
 
         poly_cm_real = self.cm.compute()
 
-        pts = generate_iterated_poincare_map(
+        kernel = _generate_map_gpu if self._backend == "gpu" else _generate_map_cpu
+
+        pts = kernel(
             h0=self.energy,
             H_blocks=poly_cm_real,
             max_degree=self.cm.max_degree,
@@ -149,44 +152,82 @@ class PoincareMap:
         # Ensure that the centre manifold polynomial is current.
         poly_cm_real = self.cm.compute()
 
-        pts = compute_poincare_map_for_energy(
-            h0=self.energy,
-            H_blocks=poly_cm_real,
-            max_degree=self.cm.max_degree,
-            psi_table=self.cm.psi,
-            clmo_table=self.cm.clmo,
-            encode_dict_list=self.cm.encode_dict_list,
-            dt=self.config.dt,
-            max_steps=max_steps,
-            Nq=Nq,
-            Np=Np,
-            integrator_order=self.config.integrator_order,
-            use_symplectic=self._use_symplectic,
-        )
+        if self._backend == "cpu":
+            pts = _generate_grid(
+                h0=self.energy,
+                H_blocks=poly_cm_real,
+                max_degree=self.cm.max_degree,
+                psi_table=self.cm.psi,
+                clmo_table=self.cm.clmo,
+                encode_dict_list=self.cm.encode_dict_list,
+                dt=self.config.dt,
+                max_steps=max_steps,
+                Nq=Nq,
+                Np=Np,
+                integrator_order=self.config.integrator_order,
+                    use_symplectic=self._use_symplectic,
+                )
+        else:
+            raise ValueError(f"Unsupported backend: {self._backend}")
 
         self._points = pts
         logger.info("Dense-grid Poincaré map computation complete: %d points", len(self))
         return pts
 
     def plot(self, dark_mode: bool = True, output_dir: Optional[str] = None, filename: Optional[str] = None, **kwargs):
-
         if self._points is None:
             logger.debug("No cached Poincaré-map points found - computing now …")
             self.compute()
 
-        # Call the shared plotting utility.  The helper expects *lists* of
-        # point arrays/levels, so we wrap our single dataset accordingly.
-        fig, axs = plot_poincare_map(
-            pts_list=[self._points],
-            h0_levels=[self.energy],
-            dark_mode=dark_mode,
-            output_dir=output_dir,
-            filename=filename,
-            **kwargs,
-        )
+        # Create a single plot for this energy level
+        fig, ax = plt.subplots(figsize=(6, 6))
+        
+        if self._points.shape[0] == 0:
+            logger.info(f"No points to plot for h0={self.energy:.6e}.")
+            ax.text(0.5, 0.5, "No data to plot", ha='center', va='center', 
+                    color='red' if not dark_mode else 'white', fontsize=12)
+            ax.set_xlim(-1, 1)
+            ax.set_ylim(-1, 1)
+            ax.set_xticks([])
+            ax.set_yticks([])
+            title_text = "Poincaré Map (No Data)"
+        else:
+            # Plot the points
+            ax.scatter(self._points[:, 0], self._points[:, 1], s=1, alpha=0.7)
+            
+            # Set axis limits based on data range
+            max_val_q2 = max(abs(self._points[:, 0].max()), abs(self._points[:, 0].min()))
+            max_val_p2 = max(abs(self._points[:, 1].max()), abs(self._points[:, 1].min()))
+            max_abs_val = max(max_val_q2, max_val_p2, 1e-9)  # Ensure not zero
+            
+            ax.set_xlim(-max_abs_val * 1.1, max_abs_val * 1.1)
+            ax.set_ylim(-max_abs_val * 1.1, max_abs_val * 1.1)
+            
+            ax.set_xlabel(r"$q_2'$")
+            ax.set_ylabel(r"$p_2'$")
+            title_text = f"Poincaré Map (h={self.energy:.6e})"
 
-        ax = axs[0] if isinstance(axs, list) and len(axs) > 0 else axs
+        ax.set_aspect("equal", adjustable="box")
+        ax.grid(True, alpha=0.3)
+        
+        if dark_mode:
+            set_dark_mode(fig, ax, title=title_text)
+        else:
+            ax.set_title(title_text)
 
+        plt.tight_layout()
+
+        if output_dir and filename:
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+            filepath = os.path.join(output_dir, filename)
+            try:
+                fig.savefig(filepath, dpi=300, bbox_inches='tight')
+                logger.info(f"Poincaré map saved to {filepath}")
+            except Exception as e:
+                logger.error(f"Error saving Poincaré map to {filepath}: {e}")
+
+        plt.show()
         return fig, ax
 
     def save(self, filepath: str, **kwargs) -> None:
@@ -228,10 +269,10 @@ class PoincareMap:
         # Reconstruct config dataclass (fall back to defaults if missing).
         cfg_dict = data.get("config", {})
         try:
-            self.config = PoincareMapConfig(**cfg_dict)
+            self.config = poincareMapConfig(**cfg_dict)
         except TypeError:
-            logger.error("Saved configuration is incompatible with current PoincareMapConfig schema; using defaults.")
-            self.config = PoincareMapConfig()
+            logger.error("Saved configuration is incompatible with current poincareMapConfig schema; using defaults.")
+            self.config = poincareMapConfig()
 
         # Refresh derived flags dependent on config.
         self._use_symplectic = self.config.method.lower() == "symplectic"

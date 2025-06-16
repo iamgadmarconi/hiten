@@ -1,15 +1,12 @@
-from __future__ import annotations
-
 import numpy as np
 import pytest
 import sympy as sp
 from numba import types
 from numba.typed import Dict, List
 
-from algorithms.center.hamiltonian import (_build_T_polynomials,
-                                           _build_R_polynomials,
-                                           build_physical_hamiltonian,
-                                           build_lindstedt_poincare_rhs_polynomials)
+from algorithms.center.hamiltonian import (
+    _build_R_polynomials, _build_T_polynomials,
+    build_lindstedt_poincare_rhs_polynomials, build_physical_hamiltonian)
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables)
 from algorithms.center.polynomial.conversion import sympy2poly

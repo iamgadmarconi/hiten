@@ -3,9 +3,9 @@ import pytest
 import sympy as sp
 from numba.typed import List
 
-from algorithms.center.polynomial.base import (CLMO_GLOBAL, PSI_GLOBAL,
-                                               ENCODE_DICT_GLOBAL,
-                                               encode_multiindex, make_poly)
+from algorithms.center.polynomial.base import (CLMO_GLOBAL, ENCODE_DICT_GLOBAL,
+                                               PSI_GLOBAL, encode_multiindex,
+                                               make_poly)
 from algorithms.center.polynomial.conversion import poly2sympy, sympy2poly
 from algorithms.variables import N_VARS
 

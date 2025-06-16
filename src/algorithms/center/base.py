@@ -3,9 +3,9 @@ from typing import Any
 import numpy as np
 
 from algorithms.center.hamiltonian import build_physical_hamiltonian
-from algorithms.center.lie import (_center2modal, evaluate_transform,
-                                   lie_transform)
-from algorithms.center.poincare.map import solve_p3
+from algorithms.center.lie import (_lie_expansion, _evaluate_transform,
+                                   _lie_transform)
+from algorithms.center.poincare.map import _solve_p3
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                decode_multiindex,
                                                init_index_tables)
@@ -107,7 +107,7 @@ class CenterManifold:
         poly_elim_total = self.cache_get(('terms_to_eliminate', self.max_degree))
         
         if poly_trans is None or poly_G_total is None or poly_elim_total is None:
-            poly_trans, poly_G_total, poly_elim_total = lie_transform(self.point, poly_cn, self.psi, self.clmo, self.max_degree)
+            poly_trans, poly_G_total, poly_elim_total = _lie_transform(self.point, poly_cn, self.psi, self.clmo, self.max_degree)
             self.cache_set(('hamiltonian', self.max_degree, 'normalized'), [h.copy() for h in poly_trans])
             self.cache_set(('generating_functions', self.max_degree), [g.copy() for g in poly_G_total])
             self.cache_set(('terms_to_eliminate', self.max_degree), [e.copy() for e in poly_elim_total])
@@ -215,7 +215,7 @@ class CenterManifold:
         try:
             q2, p2 = poincare_point
             
-            p3 = solve_p3(
+            p3 = _solve_p3(
                 q2=float(q2), 
                 p2=float(p2), 
                 h0=energy, 
@@ -224,7 +224,7 @@ class CenterManifold:
             )
             
             if p3 is None or p3 < 0:
-                err = f"solve_p3 failed for q2={q2}, p2={p2}, energy={energy}"
+                err = f"_solve_p3 failed for q2={q2}, p2={p2}, energy={energy}"
                 logger.error(err)
                 raise ValueError(err)
 
@@ -239,8 +239,8 @@ class CenterManifold:
             
             # Transform through coordinate systems
             complex_6d_cm = solve_complex(real_6d_cm)
-            expansions = _center2modal(poly_G_total, self.max_degree, self.psi, self.clmo, 1e-30, inverse=False, sign=1, restrict=False)
-            complex_6d = evaluate_transform(expansions, complex_6d_cm, self.clmo)
+            expansions = _lie_expansion(poly_G_total, self.max_degree, self.psi, self.clmo, 1e-30, inverse=False, sign=1, restrict=False)
+            complex_6d = _evaluate_transform(expansions, complex_6d_cm, self.clmo)
             real_6d = solve_real(complex_6d)
             local_6d = _realmodal2local(self.point, real_6d)
             synodic_6d = _local2synodic(self.point, local_6d)

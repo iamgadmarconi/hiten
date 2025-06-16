@@ -416,7 +416,7 @@ def _poly_evaluate(
     if p.shape[0] == 0:
         return 0.0 + 0.0j
 
-    pow_table = np.empty((N_VARS, degree + 1), dtype=point.dtype)
+    pow_table = np.empty((N_VARS, degree + 1), dtype=np.complex128)
     for v in range(N_VARS):
         pow_table[v, 0] = 1.0 + 0.0j
         base = point[v]

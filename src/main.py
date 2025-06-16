@@ -1,5 +1,5 @@
 from algorithms.center.base import CenterManifold
-from algorithms.center.poincare.base import PoincareMap, PoincareMapConfig
+from algorithms.center.poincare.base import PoincareMap, poincareMapConfig
 from algorithms.center.utils import format_cm_table
 from config import (C_OMEGA_HEURISTIC, DT, H0_LEVELS, INTEGRATOR_ORDER,
                     L_POINT, MAX_DEG, N_ITER, N_SEEDS, PRIMARY, SECONDARY,
@@ -36,13 +36,15 @@ def main() -> None:
 
     for H0 in H0_LEVELS:
         logger.info("Generating iterated Poincaré map for h0=%.3f", H0)
-        pm_cfg = PoincareMapConfig(
+        pm_cfg = poincareMapConfig(
             dt=DT,
             method="symplectic" if USE_SYMPLECTIC else "rk4",
             n_seeds=N_SEEDS,
             n_iter=N_ITER,
             integrator_order=INTEGRATOR_ORDER,
             c_omega_heuristic=C_OMEGA_HEURISTIC,
+            compute_on_init=True,
+            use_gpu=False
         )
 
         pm = PoincareMap(cm, energy=H0, config=pm_cfg)
