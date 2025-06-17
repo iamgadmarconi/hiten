@@ -13,18 +13,14 @@ from utils.log_config import logger
 
 
 def main() -> None:
-    # ---------------- choose equilibrium point --------------------------
     primary = Body(PRIMARY, Constants.bodies[PRIMARY.lower()]["mass"], Constants.bodies[PRIMARY.lower()]["radius"], "blue")
     secondary = Body(SECONDARY, Constants.bodies[SECONDARY.lower()]["mass"], Constants.bodies[SECONDARY.lower()]["radius"], "gray", primary)
     system = System(systemConfig(primary, secondary, Constants.get_orbital_distance(PRIMARY, SECONDARY)))
-
-    # Get the selected libration point
     l_point = system.get_libration_point(L_POINT)
     logger.info(f"Using {PRIMARY}-{SECONDARY} system with L{L_POINT} point")
 
-    # ---------------- centre-manifold (object) --------------------------
     cm = CenterManifold(l_point, MAX_DEG)
-    cm_H = cm.compute()  # triggers all internal caches
+    cm_H = cm.compute()
 
     logger.info(
         "\nCentre-manifold Hamiltonian (deg 2 to %d) in real NF variables (q2, p2, q3, p3)\n",

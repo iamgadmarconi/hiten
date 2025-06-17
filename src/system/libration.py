@@ -26,8 +26,9 @@ import numpy as np
 from algorithms.dynamics import jacobian_crtbp
 from algorithms.energy import crtbp_energy, energy_to_jacobi
 from algorithms.linalg import eigenvalue_decomposition
+from config import MPMATH_DPS
 from utils.log_config import logger
-from utils.precision import high_precision_findroot, hp
+from utils.precision import find_root, hp
 
 # Constants for stability analysis mode
 CONTINUOUS_SYSTEM = 0
@@ -350,7 +351,7 @@ class CollinearPoint(LibrationPoint):
         # Try primary interval first
         logger.debug(f"{self.__class__.__name__}: Finding root of dOmega/dx in primary interval {primary_interval}")
         try:
-            x = high_precision_findroot(func, primary_interval)
+            x = find_root(func, primary_interval, precision=MPMATH_DPS)
             logger.info(f"{self.__class__.__name__} position calculated with primary interval: x = {x}")
             return x
         except ValueError as e:
@@ -591,7 +592,7 @@ class CollinearPoint(LibrationPoint):
             return (float(lambda1_hp), float(omega1_hp), float(omega2_hp))
             
         except Exception as e:
-            err = f"Failed to calculate linear modes with HighPrecisionNumber: {e}"
+            err = f"Failed to calculate linear modes with Number: {e}"
             logger.error(err)
             raise RuntimeError(err) from e
 

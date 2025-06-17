@@ -4,7 +4,7 @@ from typing import Dict
 
 from .body import Body
 from .libration import LibrationPoint, L1Point, L2Point, L3Point, L4Point, L5Point
-from utils.precision import log_precision_info, hp
+from utils.precision import hp
 from utils.log_config import logger
 
 
@@ -26,9 +26,6 @@ class System(object):
 
         logger.info(f"Initializing System with primary='{config.primary.name}', secondary='{config.secondary.name}', distance={config.distance:.4e}")
         
-        # Log precision settings
-        log_precision_info()
-
         self.primary = config.primary
         self.secondary = config.secondary
         self.distance = config.distance
@@ -49,7 +46,7 @@ class System(object):
         """Calculates the mass parameter mu with high precision if enabled."""
         logger.debug(f"Calculating mu: {self.secondary.mass} / ({self.primary.mass} + {self.secondary.mass})")
 
-        # Use HighPrecisionNumber for critical mu calculation
+        # Use Number for critical mu calculation
         primary_mass_hp = hp(self.primary.mass)
         secondary_mass_hp = hp(self.secondary.mass)
         total_mass_hp = primary_mass_hp + secondary_mass_hp
