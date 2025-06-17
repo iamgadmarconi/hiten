@@ -8,27 +8,19 @@ from scipy.optimize import root_scalar
 
 from algorithms.center.polynomial.operations import (polynomial_evaluate,
                                                      polynomial_jacobian)
-from algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
-                                               integrate_symplectic)
+from algorithms.integrators.symplectic import (
+    N_SYMPLECTIC_DOF,
+    integrate_symplectic,
+)
+from algorithms.integrators.rk import (
+    _integrate_rk_ham, RK4_A, RK4_B, RK4_C,
+    RK6_A, RK6_B, RK6_C,
+    RK8_A, RK8_B, RK8_C,
+)
 from algorithms.dynamics.hamiltonian import _hamiltonian_rhs
 from config import FASTMATH
 from utils.log_config import logger
 
-
-@njit(fastmath=FASTMATH, cache=True)
-def _rk4_step(
-    state6: np.ndarray,
-    dt: float,
-    jac_H: List[List[np.ndarray]],
-    clmo: List[np.ndarray],
-    n_dof: int,
-) -> np.ndarray:
-    """Single RK4 step for the Hamiltonian ODE."""
-    k1 = _hamiltonian_rhs(state6, jac_H, clmo, n_dof)
-    k2 = _hamiltonian_rhs(state6 + 0.5 * dt * k1, jac_H, clmo, n_dof)
-    k3 = _hamiltonian_rhs(state6 + 0.5 * dt * k2, jac_H, clmo, n_dof)
-    k4 = _hamiltonian_rhs(state6 + dt * k3, jac_H, clmo, n_dof)
-    return state6 + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
 
 
 def _bracketed_root(
@@ -187,7 +179,17 @@ def _solve_p3(
 
 
 @njit(cache=True, fastmath=FASTMATH)
-def _poincare_step_jit(
+def _get_rk_coefficients(order: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    if order == 4:
+        return RK4_A, RK4_B, RK4_C
+    elif order == 6:
+        return RK6_A, RK6_B, RK6_C
+    elif order == 8:
+        return RK8_A, RK8_B, RK8_C
+
+
+@njit(cache=True, fastmath=FASTMATH)
+def _poincare_step(
     q2: float,
     p2: float,
     p3: float,
@@ -220,7 +222,17 @@ def _poincare_step_jit(
             )
             state_new = traj[1]
         else:
-            state_new = _rk4_step(state_old, dt, jac_H, clmo, n_dof)
+            c_A, c_B, c_C = _get_rk_coefficients(order)
+            traj = _integrate_rk_ham(
+                y0=state_old,
+                t_vals=np.array([0.0, dt]),
+                A=c_A,
+                B=c_B,
+                C=c_C,
+                jac_H=jac_H,
+                clmo_H=clmo,
+            )
+            state_new = traj[1]
 
         q3_old = state_old[2]
         q3_new = state_new[2]
@@ -280,7 +292,7 @@ def _poincare_step_jit(
     return 0, 0.0, 0.0, 0.0
 
 @njit(parallel=True, cache=True)
-def _poincare_map_parallel(
+def _poincare_map(
     seeds: np.ndarray,  # (N,4) float64
     dt: float,
     jac_H: List[List[np.ndarray]],
@@ -302,7 +314,7 @@ def _poincare_map_parallel(
         p2 = seeds[i, 1]
         p3 = seeds[i, 3]  # q3 column is seeds[:,2] which is zero
 
-        flag, q2_new, p2_new, p3_new = _poincare_step_jit(
+        flag, q2_new, p2_new, p3_new = _poincare_step(
             q2,
             p2,
             p3,
@@ -409,7 +421,7 @@ def _generate_map(
         state = seed
         for i in range(n_iter): # Use a different loop variable, e.g., i
             try:
-                flag, q2p, p2p, p3p = _poincare_step_jit(
+                flag, q2p, p2p, p3p = _poincare_step(
                     state[0],  # q2
                     state[1],  # p2
                     state[3],  # p3 (q3 is always 0)
@@ -540,7 +552,7 @@ def _generate_grid(
 
     seeds_arr = np.asarray(seeds, dtype=np.float64)
 
-    success_flags, q2p_arr, p2p_arr, p3p_arr = _poincare_map_parallel(
+    success_flags, q2p_arr, p2p_arr, p3p_arr = _poincare_map(
         seeds_arr,
         dt,
         jac_H,
