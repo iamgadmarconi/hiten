@@ -23,7 +23,7 @@ from typing import Tuple
 
 import numpy as np
 
-from algorithms.dynamics import jacobian_crtbp
+from algorithms.dynamics.rtbp import jacobian_crtbp
 from algorithms.energy import crtbp_energy, energy_to_jacobi
 from algorithms.linalg import eigenvalue_decomposition
 from config import MPMATH_DPS

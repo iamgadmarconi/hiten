@@ -20,7 +20,7 @@ from algorithms.center.polynomial.conversion import sympy2poly
 from algorithms.center.polynomial.operations import (
     polynomial_evaluate, polynomial_poisson_bracket, polynomial_zero_list)
 from algorithms.center.transforms import _local2realmodal, substitute_complex
-from algorithms.variables import N_VARS
+from config import N_VARS
 from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants

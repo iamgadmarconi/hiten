@@ -24,3 +24,4 @@ NUMPY_DTYPE_COMPLEX = "complex128"  # "complex64" or "complex128"
 
 # GPU configuration
 USE_GPU = False
+N_VARS = 6

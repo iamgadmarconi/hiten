@@ -11,7 +11,7 @@ from algorithms.center.polynomial.base import (ENCODE_DICT_GLOBAL,
                                                decode_multiindex,
                                                encode_multiindex,
                                                init_index_tables, make_poly)
-from algorithms.variables import N_VARS
+from config import N_VARS
 
 TEST_MAX_DEG = 5
 PSI, CLMO = init_index_tables(TEST_MAX_DEG)

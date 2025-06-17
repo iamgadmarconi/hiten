@@ -4,9 +4,8 @@ import numpy as np
 from scipy.integrate import solve_ivp
 from scipy.integrate._ivp.ivp import OdeResult
 
+from algorithms.dynamics.rtbp import crtbp_accel
 from utils.log_config import logger
-
-from ..dynamics import crtbp_accel
 
 
 def propagate_orbit(

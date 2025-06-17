@@ -1,23 +1,10 @@
-"""
-Dynamical equations for the Circular Restricted Three-Body Problem (CR3BP).
-
-This module provides the core differential equations and their derivatives for 
-the CR3BP, including:
-
-1. Acceleration equations for state propagation
-2. Jacobian matrices for stability analysis
-3. Variational equations for state transition matrix computation
-
-These components are essential for numerical integration, stability analysis,
-and differential correction in the CR3BP. The implementation uses Numba for
-performance optimization, making these computations suitable for intensive
-numerical simulations.
-"""
+from typing import Callable
 
 import numba
 import numpy as np
 from scipy.integrate import solve_ivp
 
+from algorithms.dynamics.base import DynamicalSystem
 from config import FASTMATH
 
 
@@ -399,11 +386,45 @@ def stability_indices(monodromy):
     
     # Sort eigenvalues by magnitude
     eigs = sorted(eigs, key=abs, reverse=True)
-    
-    # Stability indices (skip the first two which should be close to 1)
-    # Use the second pair (index 2 and 3) for in-plane stability
-    # Use the third pair (index 4 and 5) for out-of-plane stability
+
     nu1 = 0.5 * (eigs[2] + 1/eigs[2])
     nu2 = 0.5 * (eigs[4] + 1/eigs[4])
     
     return (nu1, nu2), eigs
+
+
+class RTBPSystem(DynamicalSystem):
+    """Dynamical system wrapper for the Circular Restricted Three-Body Problem."""
+
+    def __init__(self, mu: float, name: str = "RTBP"):
+        super().__init__(dim=6)
+        self.name = name
+        self.mu = float(mu)
+
+        mu_val = self.mu
+
+        @numba.njit(fastmath=FASTMATH, cache=True)
+        def _crtbp_rhs(t: float, state: np.ndarray, _mu=mu_val) -> np.ndarray:  # type: ignore[missing-return-type]
+            return crtbp_accel(state, _mu)
+
+        self._rhs = _crtbp_rhs
+
+    @property
+    def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
+        return self._rhs
+
+    @property
+    def jacobian(self) -> Callable:
+        return jacobian_crtbp
+
+    @property
+    def stm(self) -> Callable[[np.ndarray, float, int, dict], tuple]:
+        return compute_stm
+
+    def __repr__(self) -> str:
+        return f"RTBPSystem(name='{self.name}', mu={self.mu})"
+
+
+def create_rtbp_system(mu: float, name: str = "RTBP") -> RTBPSystem:
+    """Factory matching the signature used in the test-suite."""
+    return RTBPSystem(mu=mu, name=name)

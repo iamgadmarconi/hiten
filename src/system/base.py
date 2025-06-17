@@ -1,11 +1,11 @@
-import warnings
 from dataclasses import dataclass
 from typing import Dict
 
-from .body import Body
-from .libration import LibrationPoint, L1Point, L2Point, L3Point, L4Point, L5Point
-from utils.precision import hp
+from system.body import Body
+from system.libration import (L1Point, L2Point, L3Point, L4Point, L5Point,
+                              LibrationPoint)
 from utils.log_config import logger
+from utils.precision import hp
 
 
 @dataclass

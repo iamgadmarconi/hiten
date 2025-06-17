@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 
-from algorithms.dynamics import compute_stm, stability_indices
+from algorithms.dynamics.rtbp import compute_stm, stability_indices
 from algorithms.energy import crtbp_energy, energy_to_jacobi
 from algorithms.integrators.standard import propagate_orbit
 from plots.plots import _plot_body, _set_axes_equal, _set_dark_mode

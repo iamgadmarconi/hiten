@@ -10,8 +10,25 @@ from algorithms.center.polynomial.operations import (polynomial_evaluate,
                                                      polynomial_jacobian)
 from algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
                                                integrate_symplectic)
+from algorithms.dynamics.hamiltonian import _hamiltonian_rhs
 from config import FASTMATH
 from utils.log_config import logger
+
+
+@njit(fastmath=FASTMATH, cache=True)
+def _rk4_step(
+    state6: np.ndarray,
+    dt: float,
+    jac_H: List[List[np.ndarray]],
+    clmo: List[np.ndarray],
+    n_dof: int,
+) -> np.ndarray:
+    """Single RK4 step for the Hamiltonian ODE."""
+    k1 = _hamiltonian_rhs(state6, jac_H, clmo, n_dof)
+    k2 = _hamiltonian_rhs(state6 + 0.5 * dt * k1, jac_H, clmo, n_dof)
+    k3 = _hamiltonian_rhs(state6 + 0.5 * dt * k2, jac_H, clmo, n_dof)
+    k4 = _hamiltonian_rhs(state6 + dt * k3, jac_H, clmo, n_dof)
+    return state6 + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
 
 
 def _bracketed_root(
@@ -168,41 +185,6 @@ def _solve_p3(
     logger.info("Found p3 turning point: %.6e", root)
     return root
 
-@njit(cache=True, fastmath=FASTMATH)
-def _hamiltonian_rhs(
-    state6: np.ndarray,
-    jac_H: List[List[np.ndarray]],
-    clmo: List[np.ndarray],
-    n_dof: int,
-) -> np.ndarray:
-    """Compute time derivative (Qdot, Pdot) for the 2*n_dof Hamiltonian system."""
-
-    dH_dQ = np.empty(n_dof)
-    dH_dP = np.empty(n_dof)
-
-    for i in range(n_dof):
-        dH_dQ[i] = polynomial_evaluate(jac_H[i], state6.astype(np.complex128), clmo).real
-        dH_dP[i] = polynomial_evaluate(jac_H[n_dof + i], state6.astype(np.complex128), clmo).real
-
-    rhs = np.empty_like(state6)
-    rhs[:n_dof] = dH_dP  # dq/dt
-    rhs[n_dof : 2 * n_dof] = -dH_dQ  # dp/dt
-    return rhs
-
-@njit(fastmath=FASTMATH, cache=True)
-def _rk4_step(
-    state6: np.ndarray,
-    dt: float,
-    jac_H: List[List[np.ndarray]],
-    clmo: List[np.ndarray],
-    n_dof: int,
-) -> np.ndarray:
-    """Single RK4 step for the Hamiltonian ODE."""
-    k1 = _hamiltonian_rhs(state6, jac_H, clmo, n_dof)
-    k2 = _hamiltonian_rhs(state6 + 0.5 * dt * k1, jac_H, clmo, n_dof)
-    k3 = _hamiltonian_rhs(state6 + 0.5 * dt * k2, jac_H, clmo, n_dof)
-    k4 = _hamiltonian_rhs(state6 + dt * k3, jac_H, clmo, n_dof)
-    return state6 + (dt / 6.0) * (k1 + 2.0 * k2 + 2.0 * k3 + k4)
 
 @njit(cache=True, fastmath=FASTMATH)
 def _poincare_step_jit(
@@ -219,7 +201,7 @@ def _poincare_step_jit(
     c_omega_heuristic: float=20.0,
 ) -> Tuple[int, float, float, float]:
     """Return (flag, q2', p2', p3').  flag=1 if success, 0 otherwise."""
-    # Build the centre-manifold state directly (replaces _embed_cm_state_jit)
+
     state_old = np.zeros(2 * n_dof, dtype=np.float64)
     state_old[1] = q2
     state_old[2] = 0.0  # q3 always zero on the section
@@ -231,8 +213,8 @@ def _poincare_step_jit(
             traj = integrate_symplectic(
                 initial_state_6d=state_old,
                 t_values=np.array([0.0, dt]),
-                jac_H_rn_typed=jac_H,
-                clmo_H_typed=clmo,
+                jac_H=jac_H,
+                clmo_H=clmo,
                 order=order,
                 c_omega_heuristic=c_omega_heuristic,
             )
@@ -256,7 +238,7 @@ def _poincare_step_jit(
             m0 = rhs_old[2] * dt          # dq3/dt at t=0  → slope * dt
             m1 = rhs_new[2] * dt          # dq3/dt at t=dt
 
-            # 3) cubic Hermite coefficients  H(t) = a t³ + b t² + c t + d   ( 0 ≤ t ≤ 1 )
+            # 3) cubic Hermite coefficients H(t) = a t³ + b t² + c t + d   ( 0 ≤ t ≤ 1 )
             d  = q3_old
             c  = m0
             b  = 3.0*(q3_new - q3_old) - (2.0*m0 +   m1)

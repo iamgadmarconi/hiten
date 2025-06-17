@@ -7,7 +7,7 @@ from numba.typed import List
 from algorithms.center.polynomial.algebra import _get_degree
 from algorithms.center.polynomial.base import (decode_multiindex,
                                                encode_multiindex, make_poly)
-from algorithms.variables import N_VARS
+from config import N_VARS
 
 
 def poly2sympy(poly_p: List[np.ndarray], vars_list: typing.List[sp.Symbol], psi: np.ndarray, clmo: np.ndarray) -> sp.Expr:

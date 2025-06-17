@@ -4,6 +4,8 @@ from numba.typed import List
 
 from algorithms.center.polynomial.operations import polynomial_evaluate
 from config import FASTMATH
+from algorithms.integrators.base import Integrator, Solution
+from algorithms.dynamics.base import DynamicalSystem
 
 N_SYMPLECTIC_DOF = 3
 N_VARS_POLY = 6
@@ -82,8 +84,8 @@ def _construct_6d_eval_point(Q_current_ndof: np.ndarray, P_current_ndof: np.ndar
 def _eval_dH_dQ(
     Q_eval_ndof: np.ndarray,
     P_eval_ndof: np.ndarray,
-    jac_H_rn_typed: List[List[np.ndarray]],
-    clmo_H_typed: List[np.ndarray]
+    jac_H: List[List[np.ndarray]],
+    clmo_H: List[np.ndarray]
 ) -> np.ndarray:
     """
     Evaluate derivatives of Hamiltonian with respect to generalized position variables.
@@ -94,9 +96,9 @@ def _eval_dH_dQ(
         Position vector ([q1,q2,q3]) at which to evaluate derivatives
     P_eval_ndof : numpy.ndarray
         Momentum vector ([p1,p2,p3]) at which to evaluate derivatives
-    jac_H_rn_typed : List[List[numpy.ndarray]]
+    jac_H : List[List[numpy.ndarray]]
         Jacobian of Hamiltonian as list of polynomial coefficients for 6 variables
-    clmo_H_typed : List[numpy.ndarray]
+    clmo_H : List[numpy.ndarray]
         List of coefficient layout mapping objects for the polynomials
         
     Returns
@@ -110,8 +112,8 @@ def _eval_dH_dQ(
 
     for i in range(N_SYMPLECTIC_DOF):
         poly_var_index = Q_POLY_INDICES[i]
-        dH_dQi_poly = jac_H_rn_typed[poly_var_index]
-        val_dH_dQi = polynomial_evaluate(dH_dQi_poly, eval_point_6d, clmo_H_typed)
+        dH_dQi_poly = jac_H[poly_var_index]
+        val_dH_dQi = polynomial_evaluate(dH_dQi_poly, eval_point_6d, clmo_H)
         derivatives_Q[i] = val_dH_dQi.real
     
     return derivatives_Q
@@ -120,8 +122,8 @@ def _eval_dH_dQ(
 def _eval_dH_dP(
     Q_eval_ndof: np.ndarray,
     P_eval_ndof: np.ndarray,
-    jac_H_rn_typed: List[List[np.ndarray]],
-    clmo_H_typed: List[np.ndarray]
+    jac_H: List[List[np.ndarray]],
+    clmo_H: List[np.ndarray]
 ) -> np.ndarray:
     """
     Evaluate derivatives of Hamiltonian with respect to generalized momentum variables.
@@ -132,9 +134,9 @@ def _eval_dH_dP(
         Position vector ([q1,q2,q3]) at which to evaluate derivatives
     P_eval_ndof : numpy.ndarray
         Momentum vector ([p1,p2,p3]) at which to evaluate derivatives
-    jac_H_rn_typed : List[List[numpy.ndarray]]
+    jac_H : List[List[numpy.ndarray]]
         Jacobian of Hamiltonian as list of polynomial coefficients for 6 variables
-    clmo_H_typed : List[numpy.ndarray]
+    clmo_H : List[numpy.ndarray]
         List of coefficient layout mapping objects for the polynomials
         
     Returns
@@ -148,8 +150,8 @@ def _eval_dH_dP(
 
     for i in range(N_SYMPLECTIC_DOF):
         poly_var_index = P_POLY_INDICES[i]
-        dH_dPi_poly = jac_H_rn_typed[poly_var_index]
-        val_dH_dPi = polynomial_evaluate(dH_dPi_poly, eval_point_6d, clmo_H_typed)
+        dH_dPi_poly = jac_H[poly_var_index]
+        val_dH_dPi = polynomial_evaluate(dH_dPi_poly, eval_point_6d, clmo_H)
         derivatives_P[i] = val_dH_dPi.real
         
     return derivatives_P
@@ -158,8 +160,8 @@ def _eval_dH_dP(
 def _phi_H_a_update_poly(
     q_ext: np.ndarray, 
     delta: float, 
-    jac_H_rn_typed: List[List[np.ndarray]], 
-    clmo_H_typed: List[np.ndarray]
+    jac_H: List[List[np.ndarray]], 
+    clmo_H: List[np.ndarray]
     ):
     """
     Apply the first Hamiltonian splitting operator (φₐ) in the symplectic scheme.
@@ -170,9 +172,9 @@ def _phi_H_a_update_poly(
         Extended state vector [Q, P, X, Y] to be updated in-place
     delta : float
         Time step size
-    jac_H_rn_typed : List[List[numpy.ndarray]]
+    jac_H : List[List[numpy.ndarray]]
         Jacobian of Hamiltonian as list of polynomial coefficients
-    clmo_H_typed : List[numpy.ndarray]
+    clmo_H : List[numpy.ndarray]
         List of coefficient layout mapping objects for the polynomials
         
     Notes
@@ -190,9 +192,9 @@ def _phi_H_a_update_poly(
     Y_current = q_ext[3*N_SYMPLECTIC_DOF : 4*N_SYMPLECTIC_DOF]
 
     # dH/dq(q,y) means evaluate dH/dQ at (Q_current, Y_current)
-    dH_dQ_at_QY = _eval_dH_dQ(Q_current, Y_current, jac_H_rn_typed, clmo_H_typed)
+    dH_dQ_at_QY = _eval_dH_dQ(Q_current, Y_current, jac_H, clmo_H)
     # dH/dp(q,y) means evaluate dH/dP at (Q_current, Y_current)
-    dH_dP_at_QY = _eval_dH_dP(Q_current, Y_current, jac_H_rn_typed, clmo_H_typed)
+    dH_dP_at_QY = _eval_dH_dP(Q_current, Y_current, jac_H, clmo_H)
 
     # Update P and X (modifies q_ext in place via views)
     P_current -= delta * dH_dQ_at_QY
@@ -202,8 +204,8 @@ def _phi_H_a_update_poly(
 def _phi_H_b_update_poly(
     q_ext: np.ndarray, 
     delta: float, 
-    jac_H_rn_typed: List[List[np.ndarray]], 
-    clmo_H_typed: List[np.ndarray]
+    jac_H: List[List[np.ndarray]], 
+    clmo_H: List[np.ndarray]
     ):
     """
     Apply the second Hamiltonian splitting operator (φᵦ) in the symplectic scheme.
@@ -214,9 +216,9 @@ def _phi_H_b_update_poly(
         Extended state vector [Q, P, X, Y] to be updated in-place
     delta : float
         Time step size
-    jac_H_rn_typed : List[List[numpy.ndarray]]
+    jac_H : List[List[numpy.ndarray]]
         Jacobian of Hamiltonian as list of polynomial coefficients
-    clmo_H_typed : List[numpy.ndarray]
+    clmo_H : List[numpy.ndarray]
         List of coefficient layout mapping objects for the polynomials
         
     Notes
@@ -234,9 +236,9 @@ def _phi_H_b_update_poly(
     Y_current = q_ext[3*N_SYMPLECTIC_DOF : 4*N_SYMPLECTIC_DOF]
 
     # dH/dp(x,p) means evaluate dH/dP at (X_current, P_current)
-    dH_dP_at_XP = _eval_dH_dP(X_current, P_current, jac_H_rn_typed, clmo_H_typed)
+    dH_dP_at_XP = _eval_dH_dP(X_current, P_current, jac_H, clmo_H)
     # dH/dq(x,p) means evaluate dH/dQ at (X_current, P_current)
-    dH_dQ_at_XP = _eval_dH_dQ(X_current, P_current, jac_H_rn_typed, clmo_H_typed)
+    dH_dQ_at_XP = _eval_dH_dQ(X_current, P_current, jac_H, clmo_H)
     
     # Update Q and Y (modifies q_ext in place via views)
     Q_current += delta * dH_dP_at_XP
@@ -299,8 +301,8 @@ def _recursive_update_poly(
     timestep: float, 
     order: int, 
     omega: float, 
-    jac_H_rn_typed: List[List[np.ndarray]], 
-    clmo_H_typed: List[np.ndarray]
+    jac_H: List[List[np.ndarray]], 
+    clmo_H: List[np.ndarray]
     ):
     """
     Apply recursive symplectic update of specified order.
@@ -315,9 +317,9 @@ def _recursive_update_poly(
         Order of the symplectic integrator (must be even and >= 2)
     omega : float
         Frequency parameter for the rotation
-    jac_H_rn_typed : List[List[numpy.ndarray]]
+    jac_H : List[List[numpy.ndarray]]
         Jacobian of Hamiltonian as list of polynomial coefficients
-    clmo_H_typed : List[numpy.ndarray]
+    clmo_H : List[numpy.ndarray]
         List of coefficient layout mapping objects for the polynomials
         
     Notes
@@ -327,15 +329,13 @@ def _recursive_update_poly(
     
     For higher orders, applies a recursive composition method with
     carefully chosen substeps to achieve the desired order of accuracy.
-    The composition follows Yoshida's technique for constructing higher-order
-    symplectic integrators.
     """
     if order == 2:
-        _phi_H_a_update_poly(q_ext, 0.5 * timestep, jac_H_rn_typed, clmo_H_typed)
-        _phi_H_b_update_poly(q_ext, 0.5 * timestep, jac_H_rn_typed, clmo_H_typed)
+        _phi_H_a_update_poly(q_ext, 0.5 * timestep, jac_H, clmo_H)
+        _phi_H_b_update_poly(q_ext, 0.5 * timestep, jac_H, clmo_H)
         _phi_omega_H_c_update_poly(q_ext, timestep, omega)
-        _phi_H_b_update_poly(q_ext, 0.5 * timestep, jac_H_rn_typed, clmo_H_typed)
-        _phi_H_a_update_poly(q_ext, 0.5 * timestep, jac_H_rn_typed, clmo_H_typed)
+        _phi_H_b_update_poly(q_ext, 0.5 * timestep, jac_H, clmo_H)
+        _phi_H_a_update_poly(q_ext, 0.5 * timestep, jac_H, clmo_H)
     else:
         # Ensure float division for the exponent if order is large
         gamma = 1.0 / (2.0 - 2.0**(1.0 / (float(order) + 1.0)))
@@ -345,17 +345,17 @@ def _recursive_update_poly(
             # Or, handle error appropriately.
             pass 
 
-        _recursive_update_poly(q_ext, gamma * timestep, lower_order, omega, jac_H_rn_typed, clmo_H_typed)
-        _recursive_update_poly(q_ext, (1.0 - 2.0 * gamma) * timestep, lower_order, omega, jac_H_rn_typed, clmo_H_typed)
-        _recursive_update_poly(q_ext, gamma * timestep, lower_order, omega, jac_H_rn_typed, clmo_H_typed)
+        _recursive_update_poly(q_ext, gamma * timestep, lower_order, omega, jac_H, clmo_H)
+        _recursive_update_poly(q_ext, (1.0 - 2.0 * gamma) * timestep, lower_order, omega, jac_H, clmo_H)
+        _recursive_update_poly(q_ext, gamma * timestep, lower_order, omega, jac_H, clmo_H)
 
 
 @njit(cache=True, fastmath=FASTMATH)
 def integrate_symplectic(
     initial_state_6d: np.ndarray,
     t_values: np.ndarray,
-    jac_H_rn_typed: List[List[np.ndarray]],
-    clmo_H_typed: List[np.ndarray],
+    jac_H: List[List[np.ndarray]],
+    clmo_H: List[np.ndarray],
     order: int,
     c_omega_heuristic: float = 20.0
     ) -> np.ndarray:
@@ -370,9 +370,9 @@ def integrate_symplectic(
         (shape: 2*N_SYMPLECTIC_DOF)
     t_values : numpy.ndarray
         Array of time points at which to compute the solution
-    jac_H_rn_typed : List[List[np.ndarray]]
+    jac_H : List[List[np.ndarray]]
         Jacobian of Hamiltonian as a list of polynomial coefficients (for 6 variables)
-    clmo_H_typed : List[numpy.ndarray]
+    clmo_H : List[numpy.ndarray]
         List of coefficient layout mapping objects for the polynomials
     order : int
         Order of the symplectic integrator (must be even and >= 2)
@@ -436,8 +436,156 @@ def integrate_symplectic(
     
         omega = _get_tao_omega(dt, order, c_omega_heuristic)
         
-        _recursive_update_poly(q_ext, dt, order, omega, jac_H_rn_typed, clmo_H_typed)
+        _recursive_update_poly(q_ext, dt, order, omega, jac_H, clmo_H)
         trajectory[i + 1, 0:N_SYMPLECTIC_DOF] = q_ext[0:N_SYMPLECTIC_DOF].copy()
         trajectory[i + 1, N_SYMPLECTIC_DOF : 2*N_SYMPLECTIC_DOF] = q_ext[N_SYMPLECTIC_DOF : 2*N_SYMPLECTIC_DOF].copy()
 
     return trajectory
+
+
+class TaoSymplectic(Integrator):
+    """
+    High-order symplectic integrator for Hamiltonian systems.
+    
+    This integrator wraps the existing extended phase-space symplectic method
+    specifically designed for polynomial Hamiltonian systems. It preserves
+    the symplectic structure and provides excellent long-term energy conservation.
+    
+    Parameters
+    ----------
+    order : int, optional
+        Order of the symplectic integrator (must be even and >= 2). Default is 6.
+    c_omega_heuristic : float, optional
+        Scaling parameter for frequency calculation. Default is 20.0.
+        Higher values may improve energy conservation at the cost of smaller effective timesteps.
+    **options
+        Additional options (currently unused but reserved for future extensions)
+        
+    Examples
+    --------
+    >>> from algorithms.integrators.symplectic import SymplecticIntegrator
+    >>> integrator = SymplecticIntegrator(order=8, c_omega_heuristic=25.0)
+    >>> solution = integrator.integrate(hamiltonian_system, y0, t_vals)
+        
+    Notes
+    -----
+    This integrator requires the system to be a HamiltonianSystem that provides:
+    - jac_H: List of polynomial coefficient arrays for Jacobian
+    - clmo_H: List of coefficient layout mapping objects
+    - n_dof: Number of degrees of freedom
+    
+    The method uses an extended phase-space technique with auxiliary variables
+    and recursive composition to achieve high-order accuracy while maintaining
+    the symplectic property.
+    """
+    
+    def __init__(self, order: int = 6, c_omega_heuristic: float = 20.0, **options):
+        if order < 2 or order % 2 != 0:
+            raise ValueError(f"Symplectic integrator order must be even and >= 2, got {order}")
+        
+        super().__init__(f"Symplectic{order}", **options)
+        self._order = order
+        self.c_omega_heuristic = c_omega_heuristic
+    
+    @property
+    def order(self) -> int:
+        """Order of accuracy of the symplectic method."""
+        return self._order
+    
+    def validate_system(self, system: DynamicalSystem) -> None:
+        """
+        Validate that the system is compatible with symplectic integration.
+        
+        Parameters
+        ----------
+        system : DynamicalSystem
+            The system to validate
+            
+        Raises
+        ------
+        ValueError
+            If the system doesn't provide the required Hamiltonian structure
+        """
+        super().validate_system(system)
+        
+        # Check for required Hamiltonian system attributes
+        required_attrs = ['jac_H', 'clmo_H', 'n_dof']
+        missing_attrs = [attr for attr in required_attrs if not hasattr(system, attr)]
+        
+        if missing_attrs:
+            raise ValueError(
+                f"System must provide Hamiltonian structure for symplectic integration. "
+                f"Missing attributes: {missing_attrs}"
+            )
+        
+        # Validate dimensions
+        if hasattr(system, 'dim') and system.dim != 2 * system.n_dof:
+            raise ValueError(
+                f"System dimension {system.dim} must equal 2 * n_dof = {2 * system.n_dof}"
+            )
+    
+    def integrate(
+        self,
+        system: DynamicalSystem,
+        y0: np.ndarray,
+        t_vals: np.ndarray,
+        **kwargs
+    ) -> Solution:
+        """
+        Integrate the Hamiltonian system using symplectic method.
+        
+        Parameters
+        ----------
+        system : DynamicalSystem
+            The Hamiltonian system to integrate (must provide polynomial structure)
+        y0 : numpy.ndarray
+            Initial state vector [Q, P], shape (2*n_dof,)
+        t_vals : numpy.ndarray
+            Array of time points at which to evaluate the solution
+        **kwargs
+            Additional integration options (currently unused)
+            
+        Returns
+        -------
+        Solution
+            Integration results containing times and states
+            
+        Notes
+        -----
+        This method delegates to the existing integrate_symplectic function,
+        which expects the system to provide:
+        - jac_H: Jacobian polynomial coefficients
+        - clmo_H: Coefficient layout mapping objects  
+        - n_dof: Number of degrees of freedom
+        
+        The integration preserves the symplectic structure exactly, making it
+        ideal for long-term integration of Hamiltonian systems where energy
+        conservation is critical.
+        """
+        # Validate inputs and system compatibility
+        self.validate_inputs(system, y0, t_vals)
+        
+        # Extract required data from the Hamiltonian system
+        jac_H_typed = system.jac_H
+        clmo_H = system.clmo_H
+        n_dof = system.n_dof
+        
+        # Validate state vector dimension
+        expected_dim = 2 * n_dof
+        if len(y0) != expected_dim:
+            raise ValueError(
+                f"Initial state dimension {len(y0)} != expected {expected_dim} (2*n_dof)"
+            )
+        
+        # Call the existing symplectic integration function
+        # This function expects 6D states but works with n_dof degrees of freedom
+        trajectory_array = integrate_symplectic(
+            initial_state_6d=y0,
+            t_values=t_vals,
+            jac_H=jac_H_typed,
+            clmo_H=clmo_H,
+            order=self._order,
+            c_omega_heuristic=self.c_omega_heuristic
+        )
+        
+        return Solution(times=t_vals.copy(), states=trajectory_array)

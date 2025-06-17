@@ -1,13 +1,11 @@
 from __future__ import annotations
+
 from typing import Optional
 
-# Import custom logger
 from utils.log_config import logger
 
 
 class Body(object):
-
-    # Type hints for instance attributes
     name: str
     mass: float
     radius: float
@@ -18,10 +16,9 @@ class Body(object):
         self.name = name
         self.mass = mass
         self.radius = radius
-        self.color = color if color else "#000000" # Default color if none provided
-        self.parent = parent if parent else self # If no parent, it orbits itself (primary body)
+        self.color = color if color else "#000000"
+        self.parent = parent if parent else self
 
-        # Log the creation of the body
         parent_name = self.parent.name if self.parent is not self else "None"
         logger.info(f"Created Body: name='{self.name}', mass={self.mass}, radius={self.radius}, color='{self.color}', parent='{parent_name}'")
 

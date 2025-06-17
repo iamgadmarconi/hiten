@@ -1,19 +1,19 @@
 import numpy as np
 import pytest
-import sympy as sp
 from numba.typed import List
 
 from algorithms.center.polynomial.base import (CLMO_GLOBAL, ENCODE_DICT_GLOBAL,
-                                               PSI_GLOBAL, decode_multiindex,
+                                               PSI_GLOBAL,
+                                               _create_encode_dict_from_clmo,
                                                encode_multiindex,
-                                               init_index_tables, _create_encode_dict_from_clmo)
+                                               init_index_tables)
 from algorithms.center.polynomial.operations import (
     polynomial_add_inplace, polynomial_clean, polynomial_degree,
     polynomial_differentiate, polynomial_evaluate, polynomial_jacobian,
     polynomial_multiply, polynomial_poisson_bracket, polynomial_power,
     polynomial_total_degree, polynomial_variable, polynomial_variables_list,
     polynomial_zero_list)
-from algorithms.variables import N_VARS
+from config import N_VARS
 
 TEST_MAX_DEG = 5
 PSI, CLMO = init_index_tables(TEST_MAX_DEG)

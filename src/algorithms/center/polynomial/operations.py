@@ -8,8 +8,7 @@ from algorithms.center.polynomial.algebra import (_get_degree, _poly_clean,
                                                   _poly_poisson)
 from algorithms.center.polynomial.base import (decode_multiindex,
                                                encode_multiindex, make_poly)
-from algorithms.variables import N_VARS
-from config import FASTMATH
+from config import FASTMATH, N_VARS
 
 
 @njit(fastmath=FASTMATH, cache=True)
