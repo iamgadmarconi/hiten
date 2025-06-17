@@ -2,7 +2,8 @@ from typing import Callable
 
 import numba
 import numpy as np
-from scipy.integrate import solve_ivp
+from algorithms.dynamics.rhs import create_rhs_system
+from algorithms.integrators.rk import RungeKutta
 
 from algorithms.dynamics.base import DynamicalSystem
 from config import FASTMATH
@@ -264,8 +265,7 @@ def compute_stm(x0, mu, tf, forward=1, **solve_kwargs):
     forward : int, optional
         Direction of integration (1 for forward, -1 for backward). Default is 1.
     **solve_kwargs
-        Additional keyword arguments passed to scipy.integrate.solve_ivp,
-        such as 'rtol', 'atol', or 'method'
+        Additional keyword arguments
     
     Returns
     -------
@@ -296,32 +296,31 @@ def compute_stm(x0, mu, tf, forward=1, **solve_kwargs):
 
     # Build initial 42-vector in MATLAB ordering: [flattened STM, state]
     PHI0 = np.zeros(42, dtype=np.float64)
-    # The first 36 = identity matrix
     PHI0[:36] = np.eye(6, dtype=np.float64).ravel()
-    # The last 6 = x0
     PHI0[36:] = x0
 
-    # Set default solver tolerances if not provided
-    if 'rtol' not in solve_kwargs:
-        solve_kwargs['rtol'] = 3e-14
-    if 'atol' not in solve_kwargs:
-        solve_kwargs['atol'] = 1e-14
+    # Determine fixed-step grid.  If caller supplies 'steps' use it; else dt.
+    steps = solve_kwargs.pop('steps', 4000)
+    times = np.linspace(0.0, tf, steps, dtype=np.float64)
 
-    def ode_fun(t, y):
-        # Calls our Numba-accelerated function
+    # Create DynamicalSystem wrapper for the 42-dim variational equations
+    def _var_eq(t, y):  # noqa: D401 (simple func)
         return variational_equations(t, y, mu, forward)
 
-    # Integrate from 0 to tf
-    t_span = (0.0, tf)
-    sol = solve_ivp(ode_fun, t_span, PHI0, **solve_kwargs)
+    rhs_system = create_rhs_system(_var_eq, dim=42, name="CR3BP STM")
 
-    # Possibly flip time if forward==-1, to mirror MATLAB's t=FORWARD*t
+    # Use high-order RK8 for accuracy unless caller overrides
+    order = solve_kwargs.pop('rk_order', 8)
+    integrator = RungeKutta(order=order)
+
+    sol_obj = integrator.integrate(rhs_system, PHI0, times)
+
+    # If backward integration requested, flip sign of t for consistency
+    t = sol_obj.times.copy()
     if forward == -1:
-        sol.t = -sol.t  # so we see times from 0 down to -tf
+        t = -t
 
-    # Reformat outputs
-    t = sol.t
-    PHI = sol.y.T      # shape (n_times, 42)
+    PHI = sol_obj.states  # shape (n_times, 42)
     
     # The state is in columns [36..41] of PHI
     x = PHI[:, 36:42]   # shape (n_times, 6)

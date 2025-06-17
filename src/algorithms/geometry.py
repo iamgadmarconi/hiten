@@ -1,11 +1,13 @@
-import numpy as np
-import mpmath as mp
-from numpy.typing import NDArray
-from scipy.optimize import root_scalar
-from typing import Callable, Any, Tuple
+from typing import Any, Callable, Dict, Sequence, Tuple
 
-from system.libration import LibrationPoint, CollinearPoint, L1Point, L2Point, L3Point
-from algorithms.integrators.standard import propagate_crtbp
+import numpy as np
+from numpy.typing import NDArray
+from scipy.integrate import solve_ivp
+from scipy.optimize import root_scalar
+
+from algorithms.dynamics.rtbp import create_rtbp_system
+from algorithms.integrators.base import Solution
+from algorithms.integrators.rk import RungeKutta
 from utils.log_config import logger
 
 
@@ -48,16 +50,14 @@ def _find_y_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1, 
     time step, especially for orbits with long periods.
     """
     logger.debug(f"Entering _find_y_zero_crossing with x0={x0}, mu={mu}, forward={forward}")
-    tolzero = 1.e-10
-    # Initial guess for the time
     t0_z = np.pi/2 - 0.15
     logger.debug(f"Initial time guess t0_z = {t0_z}")
 
     # 1) Integrate from t=0 up to t0_z.
     logger.debug(f"Propagating from t=0 to t={t0_z}")
     sol = propagate_crtbp(x0, 0.0, t0_z, mu, forward=forward, **solver_kwargs)
-    xx = sol.y.T  # assume sol.y is (state_dim, time_points)
-    x0_z: NDArray[np.float64] = xx[-1]  # final state after integration
+    xx = sol.states
+    x0_z: NDArray[np.float64] = xx[-1]
     logger.debug(f"State after initial propagation x0_z = {x0_z}")
 
     # 2) Define a local function that depends on time t.
@@ -88,7 +88,7 @@ def _find_y_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1, 
     # 4) Integrate from t0_z to t1_z to get the final state.
     logger.debug(f"Propagating from t={t0_z} to t={t1_z} to get final state")
     sol = propagate_crtbp(x0_z, t0_z, t1_z, mu, forward=forward, **solver_kwargs)
-    xx_final = sol.y.T
+    xx_final = sol.states
     x1_z: NDArray[np.float64] = xx_final[-1]
     logger.debug(f"Final state at crossing x1_z = {x1_z}")
 
@@ -217,9 +217,119 @@ def _y_component(t1: float, t0_z: float, x0_z: NDArray[np.float64], mu: float, f
     else:
         logger.debug(f"Propagating from t={t0_z} to t={t1}")
         sol = propagate_crtbp(x0_z, t0_z, t1, mu, forward=forward, steps=steps, rtol=3*tol, atol=tol)
-        xx = sol.y.T
+        xx = sol.states
         # The final state is the last row of xx
         x1_zgl: NDArray[np.float64] = xx[-1, :]
         logger.debug(f"Propagation finished. Final state x1_zgl = {x1_zgl}. Returning y-component: {x1_zgl[1]}")
 
     return float(x1_zgl[1]) # Explicitly cast to float
+
+
+def propagate_crtbp(
+    state0: Sequence[float],
+    t0: float,
+    tf: float,
+    mu: float,
+    forward: int = 1,
+    steps: int = 1000,
+    **solve_kwargs: Dict[str, Any]
+) -> Solution:
+    """
+    Propagate a state in the CR3BP from initial to final time.
+    
+    This function numerically integrates the CR3BP equations of motion,
+    providing a trajectory from an initial state at time t0 to a final
+    time tf. It handles both forward and backward propagation and is
+    designed to replicate MATLAB-style integration conventions.
+    
+    Parameters
+    ----------
+    state0 : array_like
+        Initial state vector [x, y, z, vx, vy, vz]
+    t0 : float
+        Initial time
+    tf : float
+        Final time
+    mu : float
+        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+    forward : int, optional
+        Direction of integration (1 for forward, -1 for backward). Default is 1.
+    steps : int, optional
+        Number of time steps for output. Default is 1000.
+    **solve_kwargs
+        Additional keyword arguments passed to scipy.integrate.solve_ivp
+    
+    Returns
+    -------
+    sol : OdeResult
+        Solution object from scipy.integrate.solve_ivp containing:
+        - t: array of time points
+        - y: array of solution values (shape: (6, len(t)))
+        - Additional integration metadata
+    
+    Notes
+    -----
+    This function adopts MATLAB's 'FORWARD' convention where:
+    1. Integration always occurs over a positive time span [|t0|, |tf|]
+    2. The derivative is multiplied by 'forward' to control direction
+    3. The output time array is scaled by 'forward' to reflect actual times
+    
+    Default integration tolerances are set to high precision (rtol=3e-14, 
+    atol=1e-14) but can be overridden through solve_kwargs.
+    """
+    # Type check and convert initial_state if needed
+    state0_np = _validate_initial_state(state0)
+
+    system = create_rtbp_system(mu)
+
+    logger.debug(f"Initial state: {np.array2string(state0_np, precision=8, suppress_small=True)}")
+    logger.debug(f"Time span: [{t0}, {tf}] (raw), mu={mu}, steps={steps}")
+
+    direction = "forward" if forward == 1 else "backward"
+    logger.debug(f"Starting CR3BP {direction} propagation.")
+
+    # 1) Always make the integration span positive, even if tf is negative
+    t0_abs = abs(t0)
+    tf_abs = abs(tf)
+    t_span = [t0_abs, tf_abs]
+    t_eval = np.linspace(t0_abs, tf_abs, steps)
+    logger.debug(f" Integration span (abs): {t_span}")
+    
+    # 2) ODE function includes the forward sign, exactly like 'xdot = FORWARD * xdot'
+    def ode_func(t, y):
+        return forward * system.rhs(t, y)
+
+    # 4) Default tolerances, or user can override via solve_kwargs
+    rtol = solve_kwargs.setdefault('rtol', 3e-14)
+    atol = solve_kwargs.setdefault('atol', 1e-14)
+    logger.debug(f" Using integration tolerances: rtol={rtol}, atol={atol}")
+    logger.debug(f" Additional solve_ivp args: { {k: v for k, v in solve_kwargs.items() if k not in ['rtol', 'atol']} }")
+
+    # 5) Integrate
+    logger.debug("Calling scipy.integrate.solve_ivp...")
+    sol = solve_ivp(
+        ode_func,
+        t_span,
+        state0_np,
+        t_eval=t_eval,
+        **solve_kwargs
+    )
+    logger.debug(f"Integration finished. Status: {sol.status} ('{sol.message}'), nfev: {sol.nfev}, njev: {sol.njev}, nlu: {sol.nlu}")
+
+    if not sol.success:
+        logger.error(f"Integration failed: {sol.message}")
+
+    # 6) Finally, flip the reported times so that if forward = -1,
+    #    the time array goes from 0 down to -T (like MATLAB's t=FORWARD*t)
+    t = forward * sol.t
+    logger.debug(f"Final time array adjusted for direction: [{t[0]:.4f}, ..., {t[-1]:.4f}] ({len(t)} points)")
+
+    return Solution(t, sol.y.T)
+
+def _validate_initial_state(state):
+    state_np = np.asarray(state, dtype=np.float64)
+    if state_np.shape != (6,):
+        msg = f"Initial state vector must have 6 elements, but got shape {state_np.shape}"
+        logger.error(msg)
+        raise ValueError(msg)
+    return state_np

@@ -54,7 +54,7 @@ def main() -> None:
     orbit_config = orbitConfig(system, "halo", L_POINT)
     orbit = HaloOrbit(orbit_config, ic)
     orbit.differential_correction()
-    orbit.propagate(steps=1000, rtol=1e-12, atol=1e-12)
+    orbit.propagate(steps=1000, method="rk8")
     orbit.plot("rotating")
     orbit.plot("inertial")
 

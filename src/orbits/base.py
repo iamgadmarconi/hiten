@@ -10,7 +10,9 @@ import numpy.typing as npt
 
 from algorithms.dynamics.rtbp import compute_stm, stability_indices
 from algorithms.energy import crtbp_energy, energy_to_jacobi
-from algorithms.integrators.standard import propagate_orbit
+from algorithms.dynamics.rtbp import create_rtbp_system
+from algorithms.integrators.rk import RungeKutta
+from algorithms.integrators.symplectic import TaoSymplectic
 from plots.plots import _plot_body, _set_axes_equal, _set_dark_mode
 from system import System
 from utils.coordinates import rotating_to_inertial
@@ -191,8 +193,18 @@ class PeriodicOrbit(ABC):
         """
         return energy_to_jacobi(self.energy)
 
-    def propagate(self, steps: int = 1000, rtol: float = 1e-12, atol: float = 1e-12, 
-                  **kwargs) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    def _cr3bp_system(self):
+        """Create (or reuse) a DynamicalSystem wrapper for the CR3BP."""
+        if not hasattr(self, "_cached_dynsys"):
+            self._cached_dynsys = create_rtbp_system(mu=self.mu, name=str(self))
+        return self._cached_dynsys
+
+    def propagate(
+        self,
+        steps: int = 1000,
+        method: str = "rk8",
+        **options,
+    ) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         """
         Propagate the orbit for one period.
         
@@ -200,12 +212,10 @@ class PeriodicOrbit(ABC):
         ----------
         steps : int, optional
             Number of time steps. Default is 1000.
-        rtol : float, optional
-            Relative tolerance for integration. Default is 1e-12.
-        atol : float, optional
-            Absolute tolerance for integration. Default is 1e-12.
-        **kwargs
-            Additional keyword arguments passed to the integrator
+        method : str, optional
+            Integration method. Default is "rk8".
+        **options
+            Additional keyword arguments for the integration method
             
         Returns
         -------
@@ -213,22 +223,34 @@ class PeriodicOrbit(ABC):
             (t, trajectory) containing the time and state arrays
         """
         if self.period is None:
-            msg = "Period must be set before propagation"
-            logger.error(msg)
-            raise ValueError(msg)
-        
-        logger.info(f"Propagating orbit for period {self.period} with {steps} steps")
-        tspan = np.linspace(0, self.period, steps)
-        
-        sol = propagate_orbit(
-            self.initial_state, self.mu, tspan, 
-            rtol=rtol, atol=atol, **kwargs
+            raise ValueError("Period must be set before propagation")
+
+        # Build time grid
+        t_vals = np.linspace(0.0, self.period, steps, dtype=np.float64)
+
+        method_lc = method.lower()
+        if method_lc.startswith("rk"):
+            order = int(method_lc[2:])
+            integrator = RungeKutta(order=order, **options)
+        elif method_lc.startswith("symp"):
+            order = int(method_lc[4:])
+            integrator = TaoSymplectic(order=order, **options)
+        else:
+            raise ValueError(f"Unknown integration method '{method}'.")
+
+        dynsys = self._cr3bp_system()
+        sol = integrator.integrate(dynsys, self.initial_state, t_vals)
+
+        self._trajectory = sol.states
+        self._times = sol.times
+
+        logger.info(
+            "Propagation complete using %s (order=%s). Trajectory shape: %s",
+            integrator.name,
+            integrator.order,
+            self._trajectory.shape,
         )
-        
-        self._trajectory = sol.y.T  # Shape (steps, 6)
-        self._times = sol.t
-        logger.info(f"Propagation complete. Trajectory shape: {self._trajectory.shape}")
-        
+
         return self._times, self._trajectory
 
     def compute_stability(self, **kwargs) -> Tuple:
