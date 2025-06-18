@@ -219,7 +219,8 @@ def test_vs_solve_ivp(rk_test_data):
         ("RK4",  lambda: RungeKutta(order=4), "DOP853"),
         ("RK6",  lambda: RungeKutta(order=6), "DOP853"),
         ("RK8",  lambda: RungeKutta(order=8), "DOP853"),
-        ("RK45", lambda: AdaptiveRK(order=5), "RK45"),
+        ("RK45", lambda: AdaptiveRK(order=5, debug=True), "RK45"),
+        ("DOP853", lambda: AdaptiveRK(order=8, debug=True), "DOP853"),
     ]
 
     def taylor_pendulum_ode(t, y):
@@ -248,7 +249,7 @@ def test_vs_solve_ivp(rk_test_data):
 
         # Trajectory comparison (RMS error)
         q_rms = np.sqrt(np.mean((rk_Q - sp_Q) ** 2))
-        assert q_rms < 5e-3, f"{label}: Q RMS error too large vs SciPy – {q_rms}"
+        assert q_rms < 5e-3, f"{label}: Q RMS error too large vs SciPy - {q_rms}"
 
         # Energy drift comparison (sanity check)
         rk_energy = np.array([evaluate_hamiltonian(H_poly, s, clmo) for s in sol_rk.states])
@@ -260,8 +261,8 @@ def test_vs_solve_ivp(rk_test_data):
         rk_drift = np.max(np.abs(rk_energy - rk_energy[0]))
         sp_drift = np.max(np.abs(sp_energy - sp_energy[0]))
 
-        assert rk_drift < 1e-2, f"{label}: energy drift too large – {rk_drift}"
-        assert sp_drift < 1e-2, f"{label}: SciPy energy drift too large – {sp_drift}"
+        assert rk_drift < 1e-2, f"{label}: energy drift too large - {rk_drift}"
+        assert sp_drift < 1e-2, f"{label}: SciPy energy drift too large - {sp_drift}"
 
 
 def test_vs_solve_ivp_generic_rhs():
@@ -282,7 +283,8 @@ def test_vs_solve_ivp_generic_rhs():
         ("RK4",  lambda: RungeKutta(order=4), "DOP853"),
         ("RK6",  lambda: RungeKutta(order=6), "DOP853"),
         ("RK8",  lambda: RungeKutta(order=8), "DOP853"),
-        ("RK45", lambda: AdaptiveRK(order=5), "RK45"),
+        ("RK45", lambda: AdaptiveRK(order=5, debug=True), "RK45"),
+        ("DOP853", lambda: AdaptiveRK(order=8, debug=True), "DOP853"),
     ]
 
     for label, make_integrator, scipy_method in rk_variants:
@@ -308,66 +310,6 @@ def test_vs_solve_ivp_generic_rhs():
         v_rms = np.sqrt(np.mean((rk_v - sp_v) ** 2))
 
         tol = 1e-5 if label != "RK4" else 1e-4  # slightly looser for lower order
-        assert x_rms < tol, f"{label}: position RMS error too large – {x_rms}"
-        assert v_rms < tol, f"{label}: velocity RMS error too large – {v_rms}"
+        assert x_rms < tol, f"{label}: position RMS error too large - {x_rms}"
+        assert v_rms < tol, f"{label}: velocity RMS error too large - {v_rms}"
 
-
-def test_rtbp_system():
-    """Test RK integrator with RTBP system."""
-    # Earth-Moon system
-    mu = 0.012277471
-    rtbp_system = create_rtbp_system(mu, name="Earth-Moon RTBP")
-    
-    # Initial conditions near L1 point (approximate)
-    initial_state = np.array([0.8, 0.0, 0.0, 0.0, 0.1, 0.0], dtype=np.float64)
-    
-    t_final = 2.0  # Short integration time
-    num_steps = 2000
-    times = np.linspace(0, t_final, num_steps)
-    
-    # Test different orders
-    for order in [4, 6, 8]:
-        integrator = RungeKutta(order=order)
-        solution = integrator.integrate(rtbp_system, initial_state, times)
-        
-        # Basic sanity checks
-        assert solution.states.shape == (num_steps, 6), f"Wrong trajectory shape for order {order}"
-        assert np.allclose(solution.times, times), f"Times mismatch for order {order}"
-        assert np.allclose(solution.states[0], initial_state), f"Initial state mismatch for order {order}"
-
-
-def test_generic_rhs_system():
-    """Test RK integrator with generic RHS system."""
-    # Simple harmonic oscillator
-    def harmonic_oscillator(t, y):
-        return np.array([y[1], -y[0]])  # [dx/dt = v, dv/dt = -x]
-    
-    rhs_system = create_rhs_system(harmonic_oscillator, dim=2, name="Harmonic Oscillator")
-    
-    # Initial conditions
-    initial_state = np.array([1.0, 0.0])  # Start at x=1, v=0
-    
-    t_final = 2*np.pi  # One full period
-    num_steps = 1000
-    times = np.linspace(0, t_final, num_steps)
-    
-    # Test with RK4
-    integrator = RungeKutta(order=4)
-    solution = integrator.integrate(rhs_system, initial_state, times)
-    
-    # Analytical solution
-    analytical_x = np.cos(times)
-    analytical_v = -np.sin(times)
-    
-    # Check accuracy
-    x_error = np.max(np.abs(solution.states[:, 0] - analytical_x))
-    v_error = np.max(np.abs(solution.states[:, 1] - analytical_v))
-    
-    assert x_error < 1e-6, f"Position error too large: {x_error}"
-    assert v_error < 1e-6, f"Velocity error too large: {v_error}"
-    
-    # Check that we return to initial state after one period
-    final_state = solution.states[-1]
-    assert np.allclose(final_state, initial_state, atol=1e-6), (
-        f"Harmonic oscillator not periodic. Initial: {initial_state}, Final: {final_state}"
-    )

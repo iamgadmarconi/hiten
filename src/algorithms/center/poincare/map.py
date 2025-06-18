@@ -8,20 +8,69 @@ from scipy.optimize import root_scalar
 
 from algorithms.center.polynomial.operations import (polynomial_evaluate,
                                                      polynomial_jacobian)
-from algorithms.integrators.symplectic import (
-    N_SYMPLECTIC_DOF,
-    integrate_symplectic,
-)
-from algorithms.integrators.rk import (
-    _integrate_rk_ham, RK4_A, RK4_B, RK4_C,
-    RK6_A, RK6_B, RK6_C,
-    RK8_A, RK8_B, RK8_C,
-)
-from algorithms.dynamics.hamiltonian import _hamiltonian_rhs
+from algorithms.dynamics.hamiltonian import (_eval_dH_dP, _eval_dH_dQ,
+                                             _hamiltonian_rhs)
+from algorithms.integrators.rk import (RK4_A, RK4_B, RK4_C, RK6_A, RK6_B,
+                                       RK6_C, RK8_A, RK8_B, RK8_C)
+from algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
+                                               integrate_symplectic)
 from config import FASTMATH
 from utils.log_config import logger
 
 
+@njit(cache=False, fastmath=FASTMATH)
+def _integrate_rk_ham(
+    y0: np.ndarray,
+    t_vals: np.ndarray,
+    A: np.ndarray,
+    B: np.ndarray,
+    C: np.ndarray,
+    jac_H,
+    clmo_H,
+) -> np.ndarray:
+    """Explicit RK integrator specialised for `HamiltonianSystem`."""
+
+    n_steps = t_vals.shape[0]
+    dim = y0.shape[0]
+    n_stages = B.shape[0]
+    traj = np.empty((n_steps, dim), dtype=np.float64)
+    traj[0, :] = y0.copy()
+
+    k = np.empty((n_stages, dim), dtype=np.float64)
+
+    n_dof = dim // 2
+
+    for step in range(n_steps - 1):
+        t_n = t_vals[step]
+        h = t_vals[step + 1] - t_n
+
+        y_n = traj[step].copy()
+
+        for s in range(n_stages):
+            y_stage = y_n.copy()
+            for j in range(s):
+                a_sj = A[s, j]
+                if a_sj != 0.0:
+                    y_stage += h * a_sj * k[j]
+
+            Q = y_stage[0:n_dof]
+            P = y_stage[n_dof: 2 * n_dof]
+
+            dQ = _eval_dH_dP(Q, P, jac_H, clmo_H)
+            dP = -_eval_dH_dQ(Q, P, jac_H, clmo_H)
+
+            k[s, 0:n_dof] = dQ
+            k[s, n_dof: 2 * n_dof] = dP
+
+        y_np1 = y_n.copy()
+        for s in range(n_stages):
+            b_s = B[s]
+            if b_s != 0.0:
+                y_np1 += h * b_s * k[s]
+
+        traj[step + 1] = y_np1
+
+    return traj
 
 def _bracketed_root(
     f: Callable[[float], float],

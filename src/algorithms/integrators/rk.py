@@ -9,8 +9,7 @@ from algorithms.dynamics.hamiltonian import HamiltonianSystem
 from algorithms.integrators.base import Integrator, Solution
 from algorithms.integrators.coefficients.dop853 import E3 as DOP853_E3
 from algorithms.integrators.coefficients.dop853 import E5 as DOP853_E5
-from algorithms.integrators.coefficients.dop853 import \
-    N_STAGES as DOP853_N_STAGES
+from algorithms.integrators.coefficients.dop853 import N_STAGES as DOP853_N_STAGES
 from algorithms.integrators.coefficients.dop853 import A as DOP853_A
 from algorithms.integrators.coefficients.dop853 import B as DOP853_B
 from algorithms.integrators.coefficients.dop853 import C as DOP853_C
@@ -27,6 +26,7 @@ from algorithms.integrators.coefficients.rk45 import B_HIGH as RK45_B_HIGH
 from algorithms.integrators.coefficients.rk45 import B_LOW as RK45_B_LOW
 from algorithms.integrators.coefficients.rk45 import A as RK45_A
 from algorithms.integrators.coefficients.rk45 import C as RK45_C
+from algorithms.integrators.coefficients.rk45 import E as RK45_E
 from algorithms.integrators.symplectic import _eval_dH_dP, _eval_dH_dQ
 from config import FASTMATH
 
@@ -113,13 +113,25 @@ class _FixedStepRK(_RungeKuttaBase):
 class _AdaptiveStepRK(_RungeKuttaBase):
     """Embedded adaptive Runge-Kutta using PI step-size control."""
 
-    def __init__(self, name: str = "AdaptiveRK", rtol: float = 1e-10, atol: float = 1e-12,
-                 max_step: float = np.inf, min_step: float = 0.0, **options):
+    SAFETY = 0.9
+    MIN_FACTOR = 0.2
+    MAX_FACTOR = 10.0
+
+    def __init__(self,
+                 name: str = "AdaptiveRK",
+                 rtol: float = 1e-10,
+                 atol: float = 1e-12,
+                 max_step: float = np.inf,
+                 min_step: Optional[float] = None,
+                 **options):
         super().__init__(name, **options)
         self._rtol = rtol
         self._atol = atol
         self._max_step = max_step
-        self._min_step = min_step
+        if min_step is None:
+            self._min_step = 10.0 * np.finfo(float).eps
+        else:
+            self._min_step = min_step
         if not hasattr(self, "_err_exp") or self._err_exp == 0:
             self._err_exp = 1.0 / (self._p)
 
@@ -136,6 +148,8 @@ class _AdaptiveStepRK(_RungeKuttaBase):
     ) -> Solution:
         self.validate_inputs(system, y0, t_vals)
 
+        debug = self.options.get("debug", False)
+
         rhs_wrapped = _build_rhs_wrapper(system)
 
         forward = np.sign(t_vals[-1] - t_vals[0])
@@ -151,9 +165,19 @@ class _AdaptiveStepRK(_RungeKuttaBase):
         ts, ys, dys = [t], [y.copy()], [f(t, y)]
 
         h = self._select_initial_step(f, t, y, t_span[1])
+        # Ensure the initial step is not pathologically small (never below 0.01% of span)
+        h = max(h, 1e-4 * abs(t_span[1] - t_span[0]))
+
+        # PI controller state: previous error norm
+        err_prev = None
         idx_eval = 0
 
+        accepted_steps = 0  # debug statistics
+        step_rejected = False  # flag for PI controller
+
         while (t - t_span[1]) * forward < 0:
+            # Floating min_step as in SciPy
+            min_step = 10 * abs(np.nextafter(t, t + forward) - t)
             if h > self._max_step:
                 h = self._max_step
             if t + forward * h > t_span[1]:
@@ -161,15 +185,36 @@ class _AdaptiveStepRK(_RungeKuttaBase):
 
             y_high, y_low, err_vec = self._rk_embedded_step(f, t, y, h)
             scale = self._atol + self._rtol * np.maximum(np.abs(y), np.abs(y_high))
-            err_norm = np.sqrt(np.mean((err_vec / scale) ** 2))
+            # Use RMS norm of the scaled error (SciPy's strategy)
+            err_norm = np.linalg.norm(err_vec / scale) / np.sqrt(err_vec.size)
 
             if err_norm <= 1.0:
-                t_new = t + h
+                t_new = t + forward * h
                 y_new = y_high
 
+                # Derivatives at step endpoints for Hermite interpolation
+                f_start = f(t, y)
+                f_end = f(t_new, y_new)
+
                 while idx_eval < t_eval.size and (t_eval[idx_eval] - t_new) * forward <= 0:
-                    tau = (t_eval[idx_eval] - t) / (t_new - t)
-                    y_eval = y + tau * (y_new - y)
+                    tau = (t_eval[idx_eval] - t) / (t_new - t)  # 0 <= tau <= 1
+
+                    tau2 = tau * tau
+                    tau3 = tau2 * tau
+
+                    h_step = t_new - t
+                    h00 = 2 * tau3 - 3 * tau2 + 1
+                    h10 = tau3 - 2 * tau2 + tau
+                    h01 = -2 * tau3 + 3 * tau2
+                    h11 = tau3 - tau2
+
+                    y_eval = (
+                        h00 * y +
+                        h10 * h_step * f_start +
+                        h01 * y_new +
+                        h11 * h_step * f_end
+                    )
+
                     ys.append(y_eval)
                     ts.append(t_eval[idx_eval])
                     dys.append(f(t_eval[idx_eval], y_eval))
@@ -179,24 +224,97 @@ class _AdaptiveStepRK(_RungeKuttaBase):
                 ys.append(y_new.copy())
                 dys.append(f(t_new, y_new))
                 t, y = t_new, y_new
-                h *= self._update_factor(err_norm)
+                # Full PI controller (Hairer–Wanner §II.4)
+                beta = 1.0 / (self._p + 1)
+                alpha = 0.4 * beta
+                if err_prev is None:
+                    factor = self.SAFETY * err_norm ** (-beta)
+                else:
+                    factor = self.SAFETY * err_norm ** (-beta) * err_prev ** alpha
+                factor = np.clip(factor, self.MIN_FACTOR, self.MAX_FACTOR)
+                if step_rejected:
+                    factor = min(1.0, factor)
+
+                h *= factor
+                step_rejected = False
+                err_prev = err_norm
+
+                accepted_steps += 1
+                if debug and accepted_steps % 1000 == 0:
+                    print(f"[AdaptiveRK] step {accepted_steps:7d}: t={t:.6g} h={h:.3g} err={err_norm:.3g}")
             else:
-                h *= max(0.2, 0.9 * err_norm ** (-self._err_exp))
-                if h < self._min_step:
+                # Step rejected – shrink step aggressively.
+                factor = max(self.MIN_FACTOR, self.SAFETY * err_norm ** (-self._err_exp))
+                h *= factor
+                step_rejected = True
+                if abs(h) < min_step:
                     raise RuntimeError("Step size underflow in adaptive RK integrator.")
 
-        return Solution(times=np.asarray(ts), states=np.asarray(ys), derivatives=np.asarray(dys))
+        # Filter to keep only user-requested sampling points (t_vals)
+        out_times = np.asarray(t_vals)
+
+        # Build mapping from recorded times to index for quick lookup.
+        recorded_times = np.asarray(ts)
+        recorded_states = np.asarray(ys)
+        recorded_dys = np.asarray(dys)
+
+        states_out = np.empty((out_times.size, y0.size), dtype=recorded_states.dtype)
+        derivs_out = np.empty_like(states_out)
+
+        rec_idx = 0
+        for k, t_req in enumerate(out_times):
+            # recorded_times is sorted, advance until we match t_req.
+            while rec_idx < recorded_times.size and not np.isclose(recorded_times[rec_idx], t_req, rtol=0, atol=1e-12):
+                rec_idx += 1
+            if rec_idx == recorded_times.size:
+                raise RuntimeError(f"Requested time {t_req} not found in integration output; internal recording logic error.")
+            states_out[k] = recorded_states[rec_idx]
+            derivs_out[k] = recorded_dys[rec_idx]
+
+        return Solution(times=out_times, states=states_out, derivatives=derivs_out)
 
     def _select_initial_step(self, f, t0, y0, tf):
+        """Choose an initial step size following Hairer et al. / SciPy heuristics.
+
+        The strategy tries to obtain a first step that keeps the truncation
+        error around the requested tolerance.  A too-small *h* makes the
+        adaptive solver crawl, while a too-large *h* triggers many rejected
+        steps.  This implementation closely mirrors SciPy's `_initial_step`.
+        """
+        # Compute derivative at the initial point.
         dy0 = f(t0, y0)
+
+        # Weighted norms used by the error control.
         scale = self._atol + self._rtol * np.abs(y0)
-        d0 = np.sqrt(np.mean((y0 / scale) ** 2))
-        d1 = np.sqrt(np.mean((dy0 / scale) ** 2))
-        h0 = 1e-6 if (d0 < 1e-5 or d1 < 1e-5) else 0.01 * d0 / d1
-        return min(max(self._min_step, h0), abs(tf - t0))
+        d0 = np.linalg.norm(y0 / scale) / np.sqrt(y0.size)
+        d1 = np.linalg.norm(dy0 / scale) / np.sqrt(y0.size)
+
+        if d0 < 1e-5 or d1 < 1e-5:
+            h0 = 1e-6
+        else:
+            h0 = 0.01 * d0 / d1
+
+        # Try a tentative first step and look at the curvature.
+        y1 = y0 + h0 * dy0
+        dy1 = f(t0 + h0, y1)
+
+        d2 = np.linalg.norm((dy1 - dy0) / scale) / np.sqrt(y0.size) / h0
+
+        if max(d1, d2) <= 1e-15:
+            h1 = max(1e-6, 0.1 * abs(tf - t0))
+        else:
+            h1 = (0.01 / max(d1, d2)) ** (1.0 / (self._p + 1))
+
+        h = min(100 * h0, h1)
+
+        # Respect user-supplied step limits.
+        h = min(h, abs(tf - t0), self._max_step)
+        h = max(h, self._min_step)
+
+        return h
 
     def _update_factor(self, err_norm):
-        return np.clip(0.9 * err_norm ** (-self._err_exp), 0.2, 5.0)
+        return np.clip(self.SAFETY * err_norm ** (-self._err_exp), self.MIN_FACTOR, self.MAX_FACTOR)
 
 class RK4(_FixedStepRK):
     def __init__(self, **opts):
@@ -213,13 +331,28 @@ class RK8(_FixedStepRK):
 class RK45(_AdaptiveStepRK):
     _A = RK45_A
     _B_HIGH = RK45_B_HIGH
-    _B_LOW = RK45_B_LOW
+    _B_LOW = None
     _C = RK45_C
     _p = 5
     _err_exp = 1.0 / 5.0
+    _E = RK45_E
 
     def __init__(self, **opts):
         super().__init__("RK45", **opts)
+
+    def _rk_embedded_step(self, f, t, y, h):
+        # SciPy-style: 6 internal stages + 1 extra for error, 7-coefficient E
+        s = 6
+        k = np.empty((s + 1, y.size))
+        k[0] = f(t, y)
+        for i in range(1, s):
+            y_stage = y + h * (self._A[i, :i] @ k[:i])
+            k[i] = f(t + self._C[i] * h, y_stage)
+        y_high = y + h * (self._B_HIGH @ k[:s])
+        k[s] = f(t + h, y_high)
+        err_vec = h * (k.T @ self._E)
+        y_low = y_high - err_vec
+        return y_high, y_low, err_vec
 
 class DOP853(_AdaptiveStepRK):
     _A = DOP853_A[:DOP853_N_STAGES, :DOP853_N_STAGES]
@@ -238,38 +371,9 @@ class DOP853(_AdaptiveStepRK):
         super().__init__("DOP853", **opts)
 
     def _rk_embedded_step(self, f, t, y, h):
-        """Perform one adaptive DOP853 step.
-
-        Parameters
-        ----------
-        f : callable
-            RHS function of the ODE system (already wrapped for sign and
-            numba-compiled by the driver).
-        t : float
-            Current time.
-        y : ndarray
-            Current solution vector.
-        h : float
-            Proposed step size (may be adjusted by the caller).
-
-        Returns
-        -------
-        y_high : ndarray
-            8th-order accepted solution at *t + h*.
-        y_low : ndarray
-            A pseudo low-order solution constructed so that the difference
-            ``y_high - y_low`` equals the local error estimate.  This enables
-            reuse of the generic adaptive RK controller implemented in
-            :class:`_AdaptiveStepRK`.
-        err_vec : ndarray
-            Local truncation error estimate.
-        """
         s = self._N_STAGES
-
         k = np.empty((s + 1, y.size), dtype=np.float64)
-
         k[0] = f(t, y)
-
         for i in range(1, s):
             y_stage = y.copy()
             for j in range(i):
@@ -277,26 +381,34 @@ class DOP853(_AdaptiveStepRK):
                 if a_ij != 0.0:
                     y_stage += h * a_ij * k[j]
             k[i] = f(t + self._C[i] * h, y_stage)
-
         y_high = y.copy()
         for j in range(s):
             b_j = self._B_HIGH[j]
             if b_j != 0.0:
                 y_high += h * b_j * k[j]
-
         k[s] = f(t + h, y_high)
+        err_vec = self._estimate_error(k, h)
+        y_low = y_high - err_vec
+        return y_high, y_low, err_vec
 
-        err5 = np.dot(k.T, self._E5)  # 5th-order error component
-        err3 = np.dot(k.T, self._E3)  # 3rd-order error component
+    def _estimate_error(self, K, h):
+        err5 = np.dot(K.T, self._E5)
+        err3 = np.dot(K.T, self._E3)
         denom = np.hypot(np.abs(err5), 0.1 * np.abs(err3))
         correction_factor = np.ones_like(err5)
-        mask = denom > 0.0
+        mask = denom > 0
         correction_factor[mask] = np.abs(err5[mask]) / denom[mask]
-        err_vec = h * err5 * correction_factor
+        return h * err5 * correction_factor
 
-        y_low = y_high - err_vec
-
-        return y_high, y_low, err_vec
+    def _estimate_error_norm(self, K, h, scale):
+        err5 = np.dot(K.T, self._E5) / scale
+        err3 = np.dot(K.T, self._E3) / scale
+        err5_norm_2 = np.linalg.norm(err5) ** 2
+        err3_norm_2 = np.linalg.norm(err3) ** 2
+        if err5_norm_2 == 0 and err3_norm_2 == 0:
+            return 0.0
+        denom = err5_norm_2 + 0.01 * err3_norm_2
+        return np.abs(h) * err5_norm_2 / np.sqrt(denom * len(scale))
 
 class RungeKutta:
     _map = {4: RK4, 6: RK6, 8: RK8}
