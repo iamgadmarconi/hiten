@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 
 def setup_logging(level=logging.INFO, format_string='%(asctime)s - %(name)s - %(levelname)s - %(message)s', 
-                  save_to_file=True, log_dir='results'):
+                  save_to_file=True, log_dir=r'results/logs'):
     """
     Configures logging to stdout and optionally to a file.
     

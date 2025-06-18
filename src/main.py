@@ -10,6 +10,7 @@ from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
 from utils.log_config import logger
+import os
 
 
 def main() -> None:
@@ -34,16 +35,25 @@ def main() -> None:
         logger.info("Generating iterated Poincaré map for h0=%.3f", H0)
         pm_cfg = poincareMapConfig(
             dt=DT,
-            method="symplectic" if USE_SYMPLECTIC else "rk4",
+            method="symplectic" if USE_SYMPLECTIC else "rk",
             n_seeds=N_SEEDS,
             n_iter=N_ITER,
             integrator_order=INTEGRATOR_ORDER,
             c_omega_heuristic=C_OMEGA_HEURISTIC,
-            compute_on_init=True,
+            compute_on_init=False,
             use_gpu=False
         )
 
+        filepath = f"results/maps/poincare_map_{H0}.pkl"
         pm = PoincareMap(cm, energy=H0, config=pm_cfg)
+        if os.path.exists(filepath):
+            logger.info(f"Loading existing Poincaré map from {filepath}")
+            pm.load(filepath)
+        else:
+            logger.info("Computing new Poincaré map")
+            pm.compute()
+            pm.save(filepath)
+
         logger.info("Poincaré points:\n%s", pm.points)
         pm.plot()
 

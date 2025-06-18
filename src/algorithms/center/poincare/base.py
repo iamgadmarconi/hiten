@@ -20,7 +20,7 @@ class poincareMapConfig:
 
     # Numerical / integration
     dt: float = 1e-3
-    method: str = "symplectic"  # "symplectic" or "rk4"
+    method: str = "symplectic"  # "symplectic" or "rk"
     integrator_order: int = 6
     c_omega_heuristic: float = 20.0  # Only used by the extended-phase symplectic scheme
 
