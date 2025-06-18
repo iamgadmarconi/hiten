@@ -9,7 +9,8 @@ from algorithms.dynamics.hamiltonian import HamiltonianSystem
 from algorithms.integrators.base import Integrator, Solution
 from algorithms.integrators.coefficients.dop853 import E3 as DOP853_E3
 from algorithms.integrators.coefficients.dop853 import E5 as DOP853_E5
-from algorithms.integrators.coefficients.dop853 import N_STAGES as DOP853_N_STAGES
+from algorithms.integrators.coefficients.dop853 import \
+    N_STAGES as DOP853_N_STAGES
 from algorithms.integrators.coefficients.dop853 import A as DOP853_A
 from algorithms.integrators.coefficients.dop853 import B as DOP853_B
 from algorithms.integrators.coefficients.dop853 import C as DOP853_C
@@ -29,6 +30,7 @@ from algorithms.integrators.coefficients.rk45 import C as RK45_C
 from algorithms.integrators.coefficients.rk45 import E as RK45_E
 from algorithms.integrators.symplectic import _eval_dH_dP, _eval_dH_dQ
 from config import FASTMATH
+from utils.log_config import logger
 
 
 class _RungeKuttaBase(Integrator):
@@ -59,6 +61,7 @@ class _RungeKuttaBase(Integrator):
             y_low = y_high.copy()
         err_vec = y_high - y_low
         return y_high, y_low, err_vec
+
 
 class _FixedStepRK(_RungeKuttaBase):
     """Explicit fixed-step Runge-Kutta scheme (RK4/RK6/RK8)."""
@@ -110,6 +113,22 @@ class _FixedStepRK(_RungeKuttaBase):
 
         return Solution(times=t_vals.copy(), states=traj, derivatives=derivs)
 
+
+class RK4(_FixedStepRK):
+    def __init__(self, **opts):
+        super().__init__("RK4", RK4_A, RK4_B, RK4_C, 4, **opts)
+
+
+class RK6(_FixedStepRK):
+    def __init__(self, **opts):
+        super().__init__("RK6", RK6_A, RK6_B, RK6_C, 6, **opts)
+
+
+class RK8(_FixedStepRK):
+    def __init__(self, **opts):
+        super().__init__("RK8", RK8_A, RK8_B, RK8_C, 8, **opts)
+
+
 class _AdaptiveStepRK(_RungeKuttaBase):
     """Embedded adaptive Runge-Kutta using PI step-size control."""
 
@@ -139,13 +158,23 @@ class _AdaptiveStepRK(_RungeKuttaBase):
     def order(self) -> int:
         return self._p
 
-    def integrate(
-        self,
-        system: DynamicalSystem,
-        y0: np.ndarray,
-        t_vals: np.ndarray,
-        **kwargs,
-    ) -> Solution:
+    def integrate(self, system: DynamicalSystem, y0: np.ndarray, t_vals: np.ndarray, **kwargs) -> Solution:
+        """
+        Integrate a dynamical system using an adaptive Runge-Kutta method.
+
+        Parameters
+        ----------
+        system : DynamicalSystem
+            The dynamical system to integrate.
+        y0 : np.ndarray
+            The initial state of the system.
+        t_vals : np.ndarray
+            The times at which to evaluate the solution.
+        **kwargs
+            Additional keyword arguments for the integrator.
+
+        Returns
+        """
         self.validate_inputs(system, y0, t_vals)
 
         debug = self.options.get("debug", False)
@@ -241,7 +270,7 @@ class _AdaptiveStepRK(_RungeKuttaBase):
 
                 accepted_steps += 1
                 if debug and accepted_steps % 1000 == 0:
-                    print(f"[AdaptiveRK] step {accepted_steps:7d}: t={t:.6g} h={h:.3g} err={err_norm:.3g}")
+                    logger.info(f"[AdaptiveRK] step {accepted_steps:7d}: t={t:.6g} h={h:.3g} err={err_norm:.3g}")
             else:
                 # Step rejected – shrink step aggressively.
                 factor = max(self.MIN_FACTOR, self.SAFETY * err_norm ** (-self._err_exp))
@@ -316,17 +345,6 @@ class _AdaptiveStepRK(_RungeKuttaBase):
     def _update_factor(self, err_norm):
         return np.clip(self.SAFETY * err_norm ** (-self._err_exp), self.MIN_FACTOR, self.MAX_FACTOR)
 
-class RK4(_FixedStepRK):
-    def __init__(self, **opts):
-        super().__init__("RK4", RK4_A, RK4_B, RK4_C, 4, **opts)
-
-class RK6(_FixedStepRK):
-    def __init__(self, **opts):
-        super().__init__("RK6", RK6_A, RK6_B, RK6_C, 6, **opts)
-
-class RK8(_FixedStepRK):
-    def __init__(self, **opts):
-        super().__init__("RK8", RK8_A, RK8_B, RK8_C, 8, **opts)
 
 class RK45(_AdaptiveStepRK):
     _A = RK45_A
@@ -341,7 +359,6 @@ class RK45(_AdaptiveStepRK):
         super().__init__("RK45", **opts)
 
     def _rk_embedded_step(self, f, t, y, h):
-        # SciPy-style: 6 internal stages + 1 extra for error, 7-coefficient E
         s = 6
         k = np.empty((s + 1, y.size))
         k[0] = f(t, y)
@@ -353,6 +370,7 @@ class RK45(_AdaptiveStepRK):
         err_vec = h * (k.T @ self._E)
         y_low = y_high - err_vec
         return y_high, y_low, err_vec
+
 
 class DOP853(_AdaptiveStepRK):
     _A = DOP853_A[:DOP853_N_STAGES, :DOP853_N_STAGES]
@@ -409,6 +427,7 @@ class DOP853(_AdaptiveStepRK):
             return 0.0
         denom = err5_norm_2 + 0.01 * err3_norm_2
         return np.abs(h) * err5_norm_2 / np.sqrt(denom * len(scale))
+
 
 class RungeKutta:
     _map = {4: RK4, 6: RK6, 8: RK8}
