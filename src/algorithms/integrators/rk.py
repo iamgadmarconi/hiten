@@ -161,19 +161,6 @@ class _AdaptiveStepRK(_RungeKuttaBase):
     def integrate(self, system: DynamicalSystem, y0: np.ndarray, t_vals: np.ndarray, **kwargs) -> Solution:
         """
         Integrate a dynamical system using an adaptive Runge-Kutta method.
-
-        Parameters
-        ----------
-        system : DynamicalSystem
-            The dynamical system to integrate.
-        y0 : np.ndarray
-            The initial state of the system.
-        t_vals : np.ndarray
-            The times at which to evaluate the solution.
-        **kwargs
-            Additional keyword arguments for the integrator.
-
-        Returns
         """
         self.validate_inputs(system, y0, t_vals)
 
@@ -187,25 +174,19 @@ class _AdaptiveStepRK(_RungeKuttaBase):
             return forward * rhs_wrapped(t, y)
 
         t_span = (t_vals[0], t_vals[-1])
-        t_eval = t_vals[1:-1] if t_vals.size > 2 else np.empty(0, dtype=np.float64)
 
         t = t_span[0]
         y = np.ascontiguousarray(y0, dtype=np.float64)
         ts, ys, dys = [t], [y.copy()], [f(t, y)]
 
         h = self._select_initial_step(f, t, y, t_span[1])
-        # Ensure the initial step is not pathologically small (never below 0.01% of span)
         h = max(h, 1e-4 * abs(t_span[1] - t_span[0]))
 
-        # PI controller state: previous error norm
         err_prev = None
-        idx_eval = 0
-
-        accepted_steps = 0  # debug statistics
-        step_rejected = False  # flag for PI controller
+        accepted_steps = 0
+        step_rejected = False
 
         while (t - t_span[1]) * forward < 0:
-            # Floating min_step as in SciPy
             min_step = 10 * abs(np.nextafter(t, t + forward) - t)
             if h > self._max_step:
                 h = self._max_step
@@ -214,46 +195,17 @@ class _AdaptiveStepRK(_RungeKuttaBase):
 
             y_high, y_low, err_vec = self._rk_embedded_step(f, t, y, h)
             scale = self._atol + self._rtol * np.maximum(np.abs(y), np.abs(y_high))
-            # Use RMS norm of the scaled error (SciPy's strategy)
             err_norm = np.linalg.norm(err_vec / scale) / np.sqrt(err_vec.size)
 
             if err_norm <= 1.0:
                 t_new = t + forward * h
                 y_new = y_high
 
-                # Derivatives at step endpoints for Hermite interpolation
-                f_start = f(t, y)
-                f_end = f(t_new, y_new)
-
-                while idx_eval < t_eval.size and (t_eval[idx_eval] - t_new) * forward <= 0:
-                    tau = (t_eval[idx_eval] - t) / (t_new - t)  # 0 <= tau <= 1
-
-                    tau2 = tau * tau
-                    tau3 = tau2 * tau
-
-                    h_step = t_new - t
-                    h00 = 2 * tau3 - 3 * tau2 + 1
-                    h10 = tau3 - 2 * tau2 + tau
-                    h01 = -2 * tau3 + 3 * tau2
-                    h11 = tau3 - tau2
-
-                    y_eval = (
-                        h00 * y +
-                        h10 * h_step * f_start +
-                        h01 * y_new +
-                        h11 * h_step * f_end
-                    )
-
-                    ys.append(y_eval)
-                    ts.append(t_eval[idx_eval])
-                    dys.append(f(t_eval[idx_eval], y_eval))
-                    idx_eval += 1
-
                 ts.append(t_new)
                 ys.append(y_new.copy())
                 dys.append(f(t_new, y_new))
                 t, y = t_new, y_new
-                # Full PI controller (Hairer–Wanner §II.4)
+
                 beta = 1.0 / (self._p + 1)
                 alpha = 0.4 * beta
                 if err_prev is None:
@@ -272,35 +224,50 @@ class _AdaptiveStepRK(_RungeKuttaBase):
                 if debug and accepted_steps % 1000 == 0:
                     logger.info(f"[AdaptiveRK] step {accepted_steps:7d}: t={t:.6g} h={h:.3g} err={err_norm:.3g}")
             else:
-                # Step rejected – shrink step aggressively.
                 factor = max(self.MIN_FACTOR, self.SAFETY * err_norm ** (-self._err_exp))
                 h *= factor
                 step_rejected = True
                 if abs(h) < min_step:
                     raise RuntimeError("Step size underflow in adaptive RK integrator.")
 
-        # Filter to keep only user-requested sampling points (t_vals)
-        out_times = np.asarray(t_vals)
+        # Convert lists to arrays for vectorized interpolation
+        ts = np.array(ts)
+        ys = np.array(ys)
+        dys = np.array(dys)
+        t_eval = np.asarray(t_vals)
 
-        # Build mapping from recorded times to index for quick lookup.
-        recorded_times = np.asarray(ts)
-        recorded_states = np.asarray(ys)
-        recorded_dys = np.asarray(dys)
+        # Vectorized Hermite interpolation for all t_eval
+        indices = np.searchsorted(ts, t_eval, side='right') - 1
+        indices = np.clip(indices, 0, len(ts) - 2)
 
-        states_out = np.empty((out_times.size, y0.size), dtype=recorded_states.dtype)
-        derivs_out = np.empty_like(states_out)
+        t0s = ts[indices]
+        t1s = ts[indices + 1]
+        y0s = ys[indices]
+        y1s = ys[indices + 1]
+        dy0s = dys[indices]
+        dy1s = dys[indices + 1]
+        taus = (t_eval - t0s) / (t1s - t0s)
 
-        rec_idx = 0
-        for k, t_req in enumerate(out_times):
-            # recorded_times is sorted, advance until we match t_req.
-            while rec_idx < recorded_times.size and not np.isclose(recorded_times[rec_idx], t_req, rtol=0, atol=1e-12):
-                rec_idx += 1
-            if rec_idx == recorded_times.size:
-                raise RuntimeError(f"Requested time {t_req} not found in integration output; internal recording logic error.")
-            states_out[k] = recorded_states[rec_idx]
-            derivs_out[k] = recorded_dys[rec_idx]
+        tau2 = taus ** 2
+        tau3 = tau2 * taus
+        h = t1s - t0s
+        h00 = 2 * tau3 - 3 * tau2 + 1
+        h10 = tau3 - 2 * tau2 + taus
+        h01 = -2 * tau3 + 3 * tau2
+        h11 = tau3 - tau2
 
-        return Solution(times=out_times, states=states_out, derivatives=derivs_out)
+        y_eval = (
+            h00[:, None] * y0s +
+            h10[:, None] * h[:, None] * dy0s +
+            h01[:, None] * y1s +
+            h11[:, None] * h[:, None] * dy1s
+        )
+
+        # Also compute derivatives at t_eval if needed
+        # For now, use f(t_eval, y_eval) for derivatives
+        derivs_out = np.array([f(t, y) for t, y in zip(t_eval, y_eval)])
+
+        return Solution(times=t_eval.copy(), states=y_eval, derivatives=derivs_out)
 
     def _select_initial_step(self, f, t0, y0, tf):
         """Choose an initial step size following Hairer et al. / SciPy heuristics.

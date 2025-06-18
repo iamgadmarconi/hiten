@@ -1,4 +1,4 @@
-from typing import Any, Optional, Sequence, Tuple
+from typing import Optional, Sequence, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
@@ -70,21 +70,7 @@ class LyapunovOrbit(PeriodicOrbit):
         logger.debug(f"Generated initial guess for Lyapunov orbit around {self.libration_point} with Ax={self.Ax}: {state_6d}")
         return state_6d
 
-    def differential_correction(self, 
-                                tol: float = 1e-10, 
-                                max_attempts: int = 25,
-                                forward: int = 1,
-                                # Args for _find_y_zero_crossing's propagator
-                                crossing_steps: int = 500, 
-                                crossing_rtol: float = 1e-12, 
-                                crossing_atol: float = 1e-12, 
-                                crossing_method: str = 'DOP853',
-                                # Args for STM integration (solve_ivp)
-                                stm_rtol: float = 1e-12, 
-                                stm_atol: float = 1e-12, 
-                                stm_method: str = 'DOP853',
-                                **kwargs: Any # Allow unused kwargs
-                                ) -> Tuple[NDArray[np.float64], float]:
+    def differential_correction(self, tol: float = 1e-10, max_attempts: int = 25, forward: int = 1) -> Tuple[NDArray[np.float64], float]:
         """
         Performs single-shooting differential correction for a planar Lyapunov orbit.
 
@@ -98,23 +84,6 @@ class LyapunovOrbit(PeriodicOrbit):
             Maximum correction iterations, by default 25
         forward : int, optional
             Time integration direction (1 for forward, -1 for backward), by default 1
-        crossing_steps : int, optional
-            Number of steps hint for _find_y_zero_crossing, by default 500
-        crossing_rtol : float, optional
-            Relative tolerance for _find_y_zero_crossing's propagator, by default 1e-12
-        crossing_atol : float, optional
-            Absolute tolerance for _find_y_zero_crossing's propagator, by default 1e-12
-        crossing_method : str, optional
-            Integration method for _find_y_zero_crossing's propagator, by default 'DOP853'
-        stm_rtol : float, optional
-            Relative tolerance for STM integration (solve_ivp), by default 1e-12
-        stm_atol : float, optional
-            Absolute tolerance for STM integration (solve_ivp), by default 1e-12
-        stm_method : str, optional
-            Integration method for STM integration (solve_ivp), by default 'DOP853'
-        **kwargs : Any
-            Allows for additional unused keyword arguments.
-
         Returns
         -------
         Tuple[NDArray[np.float64], float]
@@ -128,17 +97,10 @@ class LyapunovOrbit(PeriodicOrbit):
         X0: NDArray[np.float64] = np.copy(self.initial_state)
         logger.info(f"Starting differential correction for Lyapunov orbit around {self.libration_point} with Ax={self.Ax}.")
         logger.debug(f"Initial guess: {X0}")
-        logger.debug(f"Correction params: tol={tol}, max_attempts={max_attempts}, forward={forward}, crossing_method='{crossing_method}', stm_method='{stm_method}'")
+        logger.debug(f"Correction params: tol={tol}, max_attempts={max_attempts}, forward={forward}")
 
         attempt = 0
-        t_cross, X_cross = _find_y_zero_crossing(X0, 
-                                                self.mu, 
-                                                forward=forward, 
-                                                steps=crossing_steps, # Hint for initial propagation
-                                                # Pass solver args for internal root-finding propagation
-                                                rtol=crossing_rtol, 
-                                                atol=crossing_atol, 
-                                                method=crossing_method)
+        t_cross, X_cross = _find_y_zero_crossing(X0, self.mu, forward=forward)
         vx_cross = X_cross[3]
 
         if abs(vx_cross) < tol:
@@ -161,19 +123,12 @@ class LyapunovOrbit(PeriodicOrbit):
             
             # 1. Find the time and state of the next x-z plane crossing (y=0)
             try:
-                t_cross, X_cross = _find_y_zero_crossing(X0, 
-                                                        self.mu, 
-                                                        forward=forward, 
-                                                        steps=crossing_steps, # Hint for initial propagation
-                                                        # Pass solver args for internal root-finding propagation
-                                                        rtol=crossing_rtol, 
-                                                        atol=crossing_atol, 
-                                                        method=crossing_method)
+                t_cross, X_cross = _find_y_zero_crossing(X0, self.mu, forward=forward)
                 logger.debug(f"Found y=0 crossing at t={t_cross:.6f}, state={X_cross}")
             except Exception as e:
-                 msg = f"Error in _find_y_zero_crossing during attempt {attempt}: {e}. Last state: {X0}"
-                 logger.error(msg)
-                 raise RuntimeError(msg) from e
+                msg = f"Error in _find_y_zero_crossing during attempt {attempt}: {e}. Last state: {X0}"
+                logger.error(msg)
+                raise RuntimeError(msg) from e
 
             # Extract relevant components at crossing
             # x_cross, y_cross, z_cross, vx_cross, vy_cross, vz_cross = X_cross
@@ -195,15 +150,7 @@ class LyapunovOrbit(PeriodicOrbit):
             # 3. Integrate variational equations (state + STM) from t=0 to t_cross
             try:
                 # Call compute_stm with solver parameters similar to _find_y_zero_crossing
-                _, _, phi_final, _ = compute_stm(X0, 
-                                                self.mu, 
-                                                t_cross, 
-                                                forward=forward,
-                                                # Pass solver kwargs
-                                                method=stm_method,
-                                                rtol=stm_rtol,
-                                                atol=stm_atol,
-                                                dense_output=True)
+                _, _, phi_final, _ = compute_stm(X0, self.mu, t_cross, forward=forward)
                 logger.debug(f"Computed STM at t={t_cross:.6f}")
             except Exception as e:
                 msg = f"Error during STM integration (compute_stm) attempt {attempt}: {e}. Last state: {X0}"

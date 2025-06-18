@@ -1,17 +1,16 @@
-from typing import Any, Callable, Dict, Sequence, Tuple
+from typing import Callable, Sequence, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.integrate import solve_ivp
 from scipy.optimize import root_scalar
 
 from algorithms.dynamics.rtbp import create_rtbp_system
 from algorithms.integrators.base import Solution
-from algorithms.integrators.rk import AdaptiveRK, RungeKutta
+from algorithms.integrators.rk import AdaptiveRK
 from utils.log_config import logger
 
 
-def _find_y_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1, **solver_kwargs: Any) -> Tuple[float, NDArray[np.float64]]:
+def _find_y_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1) -> Tuple[float, NDArray[np.float64]]:
     """
     Find the time and state at which an orbit next crosses the y=0 plane.
     
@@ -30,8 +29,6 @@ def _find_y_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1, 
         Direction of time integration:
         * 1: forward in time (default)
         * -1: backward in time
-    **solver_kwargs : Any
-        Additional keyword arguments passed to the propagator.
     
     Returns
     -------
@@ -55,7 +52,7 @@ def _find_y_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1, 
 
     # 1) Integrate from t=0 up to t0_z.
     logger.debug(f"Propagating from t=0 to t={t0_z}")
-    sol = _propagate_crtbp(x0, 0.0, t0_z, mu, forward=forward, **solver_kwargs)
+    sol = _propagate_crtbp(x0, 0.0, t0_z, mu, forward=forward)
     xx = sol.states
     x0_z: NDArray[np.float64] = xx[-1]
     logger.debug(f"State after initial propagation x0_z = {x0_z}")
@@ -87,7 +84,7 @@ def _find_y_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1, 
 
     # 4) Integrate from t0_z to t1_z to get the final state.
     logger.debug(f"Propagating from t={t0_z} to t={t1_z} to get final state")
-    sol = _propagate_crtbp(x0_z, t0_z, t1_z, mu, forward=forward, **solver_kwargs)
+    sol = _propagate_crtbp(x0_z, t0_z, t1_z, mu, forward=forward)
     xx_final = sol.states
     x1_z: NDArray[np.float64] = xx_final[-1]
     logger.debug(f"Final state at crossing x1_z = {x1_z}")
@@ -216,7 +213,7 @@ def _y_component(t1: float, t0_z: float, x0_z: NDArray[np.float64], mu: float, f
         logger.debug(f"t1 ({t1}) is close to t0_z ({t0_z}). Returning y-component from x0_z: {x1_zgl[1]}")
     else:
         logger.debug(f"Propagating from t={t0_z} to t={t1}")
-        sol = _propagate_crtbp(x0_z, t0_z, t1, mu, forward=forward, steps=steps, rtol=3*tol, atol=tol)
+        sol = _propagate_crtbp(x0_z, t0_z, t1, mu, forward=forward, steps=steps)
         xx = sol.states
         # The final state is the last row of xx
         x1_zgl: NDArray[np.float64] = xx[-1, :]
@@ -239,7 +236,7 @@ def _propagate_crtbp(
     tf_abs = abs(tf)
     t_eval = np.linspace(t0_abs, tf_abs, steps)
 
-    integrator = AdaptiveRK(order=8, rtol=1e-7, atol=1e-9)
+    integrator = AdaptiveRK(order=8, max_step=1e4, rtol=1e-3, atol=1e-6)
     sol = integrator.integrate(system, state0_np, t_eval)
     t = forward * sol.times
     return Solution(t, sol.states)
