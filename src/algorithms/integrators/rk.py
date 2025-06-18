@@ -10,10 +10,15 @@ from algorithms.integrators.base import Integrator, Solution
 from algorithms.integrators.coefficients.dop853 import E3 as DOP853_E3
 from algorithms.integrators.coefficients.dop853 import E5 as DOP853_E5
 from algorithms.integrators.coefficients.dop853 import \
+    INTERPOLATOR_POWER as DOP853_INTERPOLATOR_POWER
+from algorithms.integrators.coefficients.dop853 import \
     N_STAGES as DOP853_N_STAGES
+from algorithms.integrators.coefficients.dop853 import \
+    N_STAGES_EXTENDED as DOP853_N_STAGES_EXTENDED
 from algorithms.integrators.coefficients.dop853 import A as DOP853_A
 from algorithms.integrators.coefficients.dop853 import B as DOP853_B
 from algorithms.integrators.coefficients.dop853 import C as DOP853_C
+from algorithms.integrators.coefficients.dop853 import D as DOP853_D
 from algorithms.integrators.coefficients.rk4 import A as RK4_A
 from algorithms.integrators.coefficients.rk4 import B as RK4_B
 from algorithms.integrators.coefficients.rk4 import C as RK4_C

@@ -1,16 +1,17 @@
+import os
+
 from algorithms.center.base import CenterManifold
 from algorithms.center.poincare.base import PoincareMap, poincareMapConfig
 from algorithms.center.utils import format_cm_table
 from config import (C_OMEGA_HEURISTIC, DT, H0_LEVELS, INTEGRATOR_ORDER,
                     L_POINT, MAX_DEG, N_ITER, N_SEEDS, PRIMARY, SECONDARY,
-                    USE_SYMPLECTIC)
+                    USE_GPU, USE_SYMPLECTIC)
 from orbits.base import orbitConfig
 from orbits.halo import HaloOrbit
 from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
 from utils.log_config import logger
-import os
 
 
 def main() -> None:
@@ -41,7 +42,7 @@ def main() -> None:
             integrator_order=INTEGRATOR_ORDER,
             c_omega_heuristic=C_OMEGA_HEURISTIC,
             compute_on_init=False,
-            use_gpu=False
+            use_gpu=USE_GPU
         )
 
         filepath = f"results/maps/poincare_map_{H0}.pkl"
@@ -56,6 +57,8 @@ def main() -> None:
 
         logger.info("Poincaré points:\n%s", pm.points)
         pm.plot()
+
+    pm.plot_interactive(system)
 
     logger.info("Converting Poincaré points to initial conditions")
     ic = cm.cm2ic(pm.points[0], energy=H0_LEVELS[0])

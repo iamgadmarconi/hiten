@@ -30,7 +30,7 @@ class orbitConfig:
         # Validate that distance is positive.
         self.orbit_family = self.orbit_family.lower() # Normalize to lowercase
 
-        if self.orbit_family not in ["halo", "lyapunov", "vertical_lyapunov"]:
+        if self.orbit_family not in ["halo", "lyapunov", "generic"]:
             raise NotImplementedError(f"Orbit family {self.orbit_family} not implemented.")
 
         if self.libration_point_idx not in [1, 2, 3, 4, 5]:
@@ -613,5 +613,28 @@ class PeriodicOrbit(ABC):
             True if correction was successful, False otherwise
         """
         pass
+
+
+class GenericOrbit(PeriodicOrbit):
+    """
+    A minimal concrete orbit class for arbitrary initial conditions, with no correction or special guess logic.
+    """
+    def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):
+        super().__init__(config, initial_state)
+        # For generic orbits, period must be set externally if propagation is desired
+        if self.period is None:
+            self.period = 2 * np.pi  # Default to 1 canonical period if not set
+
+    @property
+    def eccentricity(self):
+        return np.nan  # Not defined for generic orbits
+
+    def _initial_guess(self, **kwargs):
+        if hasattr(self, '_initial_state') and self._initial_state is not None:
+            return self._initial_state
+        raise ValueError("No initial state provided for GenericOrbit.")
+
+    def differential_correction(self, **kwargs):
+        raise NotImplementedError("Differential correction is not implemented for GenericOrbit.")
 
 

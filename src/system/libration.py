@@ -77,6 +77,10 @@ class LibrationPoint(ABC):
         return f"{type(self).__name__}(mu={self.mu:.6e})"
 
     @property
+    def idx(self) -> int:
+        pass
+
+    @property
     def position(self) -> np.ndarray:
         """
         Get the position of the Libration point in the rotating frame.
@@ -638,7 +642,7 @@ class CollinearPoint(LibrationPoint):
         
         return float(expr1_hp.sqrt()), float(expr2_hp.sqrt())
 
-    def normal_form_transform(self):
+    def normal_form_transform(self) -> Tuple[np.ndarray, np.ndarray]:
         """
         Build the 6x6 symplectic matrix C of eq. (10) that sends H_2 to
         lambda_1 x px + (omega_1/2)(y²+p_y²) + (omega_2/2)(z²+p_z²).
@@ -697,7 +701,7 @@ class CollinearPoint(LibrationPoint):
         
         return result
 
-    def _get_linear_data(self):
+    def _get_linear_data(self) -> LinearData:
         """
         Get the linear data for the Libration point.
         
@@ -775,6 +779,10 @@ class L1Point(CollinearPoint):
         
         return term1 * (term2 + term3)
 
+    @property
+    def idx(self) -> int:
+        return 1
+
 
 class L2Point(CollinearPoint):
     """
@@ -829,6 +837,10 @@ class L2Point(CollinearPoint):
         term3 = ((-1)**n) * (1 - mu) * (gamma**(n+1)) / ((1 + gamma)**(n+1))
         
         return term1 * (term2 + term3)
+
+    @property
+    def idx(self) -> int:
+        return 2
 
 
 class L3Point(CollinearPoint):
@@ -885,6 +897,10 @@ class L3Point(CollinearPoint):
         term3 = mu * (gamma**(n+1)) / ((1 + gamma)**(n+1))
         
         return term1 * (term2 + term3)
+
+    @property
+    def idx(self) -> int:
+        return 3
 
 
 class TriangularPoint(LibrationPoint):
@@ -966,6 +982,10 @@ class L4Point(TriangularPoint):
         """
         return self._find_position(y_sign=+1)
 
+    @property
+    def idx(self) -> int:
+        return 4
+
 
 class L5Point(TriangularPoint):
     """
@@ -992,3 +1012,7 @@ class L5Point(TriangularPoint):
             3D vector [x, y, 0] giving the position of L5
         """
         return self._find_position(y_sign=-1)
+
+    @property
+    def idx(self) -> int:
+        return 5

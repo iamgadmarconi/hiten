@@ -12,6 +12,7 @@ from algorithms.center.poincare.map import _generate_grid
 from algorithms.center.poincare.map import _generate_map as _generate_map_cpu
 from plots.plots import _set_dark_mode
 from utils.log_config import logger
+from orbits.base import orbitConfig, GenericOrbit
 
 
 @dataclass
@@ -174,6 +175,73 @@ class PoincareMap:
         logger.info("Dense-grid Poincaré map computation complete: %d points", len(self))
         return pts
 
+    def _propagate_from_point(self, cm_point, energy, system, steps=1000, method="rk8"):
+        """
+        Convert a Poincaré map point to initial conditions, create a GenericOrbit, propagate, and return the orbit.
+        """
+        ic = self.cm.cm2ic(cm_point, energy)
+        logger.info(f"Initial conditions: {ic}")
+        cfg = orbitConfig(system=system, orbit_family="generic", libration_point_idx=self.cm.point.idx)
+        orbit = GenericOrbit(cfg, ic)
+        if orbit.period is None:
+            orbit.period = 2 * np.pi
+        orbit.propagate(steps=steps, method=method)
+        return orbit
+
+    def save(self, filepath: str, **kwargs) -> None:
+
+        data = {
+            "map_type": self.__class__.__name__,
+            "energy": self.energy,
+            "config": asdict(self.config),
+        }
+
+        if self._points is not None:
+            data["points"] = self._points.tolist()
+
+        # Ensure directory exists.
+        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
+
+        with open(filepath, "wb") as fh:
+            pickle.dump(data, fh)
+
+        logger.info("Poincaré map saved to %s", filepath)
+
+    def load(self, filepath: str, **kwargs) -> None:
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"Poincaré-map file not found: {filepath}")
+
+        with open(filepath, "rb") as fh:
+            data = pickle.load(fh)
+
+        if data.get("map_type") != self.__class__.__name__:
+            logger.warning(
+                "Loading %s data into %s instance",
+                data.get("map_type", "<unknown>"),
+                self.__class__.__name__,
+            )
+
+        # Update simple attributes.
+        self.energy = data["energy"]
+
+        # Reconstruct config dataclass (fall back to defaults if missing).
+        cfg_dict = data.get("config", {})
+        try:
+            self.config = poincareMapConfig(**cfg_dict)
+        except TypeError:
+            logger.error("Saved configuration is incompatible with current poincareMapConfig schema; using defaults.")
+            self.config = poincareMapConfig()
+
+        # Refresh derived flags dependent on config.
+        self._use_symplectic = self.config.method.lower() == "symplectic"
+
+        # Load points (if present).
+        if "points" in data and data["points"] is not None:
+            self._points = np.array(data["points"])
+        else:
+            self._points = None
+        logger.info("Poincaré map loaded from %s", filepath)
+
     def plot(self, dark_mode: bool = True, output_dir: Optional[str] = None, filename: Optional[str] = None, **kwargs):
         if self._points is None:
             logger.debug("No cached Poincaré-map points found - computing now …")
@@ -230,56 +298,42 @@ class PoincareMap:
         plt.show()
         return fig, ax
 
-    def save(self, filepath: str, **kwargs) -> None:
-
-        data = {
-            "map_type": self.__class__.__name__,
-            "energy": self.energy,
-            "config": asdict(self.config),
-        }
-
-        if self._points is not None:
-            data["points"] = self._points.tolist()
-
-        # Ensure directory exists.
-        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
-
-        with open(filepath, "wb") as fh:
-            pickle.dump(data, fh)
-
-        logger.info("Poincaré map saved to %s", filepath)
-
-    def load(self, filepath: str, **kwargs) -> None:
-        if not os.path.exists(filepath):
-            raise FileNotFoundError(f"Poincaré-map file not found: {filepath}")
-
-        with open(filepath, "rb") as fh:
-            data = pickle.load(fh)
-
-        if data.get("map_type") != self.__class__.__name__:
-            logger.warning(
-                "Loading %s data into %s instance",
-                data.get("map_type", "<unknown>"),
-                self.__class__.__name__,
-            )
-
-        # Update simple attributes.
-        self.energy = data["energy"]
-
-        # Reconstruct config dataclass (fall back to defaults if missing).
-        cfg_dict = data.get("config", {})
-        try:
-            self.config = poincareMapConfig(**cfg_dict)
-        except TypeError:
-            logger.error("Saved configuration is incompatible with current poincareMapConfig schema; using defaults.")
-            self.config = poincareMapConfig()
-
-        # Refresh derived flags dependent on config.
-        self._use_symplectic = self.config.method.lower() == "symplectic"
-
-        # Load points (if present).
-        if "points" in data and data["points"] is not None:
-            self._points = np.array(data["points"])
-        else:
-            self._points = None
-        logger.info("Poincaré map loaded from %s", filepath)
+    def plot_interactive(self, system, steps=1000, method="rk8", frame="rotating"):
+        """
+        Interactively select a point from the Poincaré map, generate initial conditions, create a GenericOrbit, propagate, and plot.
+        You can select as many points as you want. Press 'q' to quit the selection window.
+        """
+        if self._points is None:
+            self.compute()
+        fig, ax = plt.subplots(figsize=(6, 6))
+        pts = self._points
+        scatter = ax.scatter(pts[:, 0], pts[:, 1], s=10, alpha=0.7)
+        ax.set_xlabel(r"$q_2'$")
+        ax.set_ylabel(r"$p_2'$")
+        ax.set_title(f"Select a point on the Poincaré Map (h={self.energy:.6e})\n(Press 'q' to quit)")
+        ax.set_aspect("equal", adjustable="box")
+        ax.grid(True, alpha=0.3)
+        selected_marker = ax.scatter([], [], s=60, c='red', marker='x')
+        selected_orbit = {'orbit': None}
+        def onclick(event):
+            if event.inaxes != ax:
+                return
+            x, y = event.xdata, event.ydata
+            dists = np.linalg.norm(pts - np.array([x, y]), axis=1)
+            idx = np.argmin(dists)
+            pt = pts[idx]
+            ax.scatter([pt[0]], [pt[1]], s=60, c='red', marker='x')
+            fig.canvas.draw()
+            print(f"Selected Poincaré point: {pt}")
+            orbit = self._propagate_from_point(pt, self.energy, system, steps=steps, method=method)
+            orbit.plot(frame=frame, show=True)
+            selected_orbit['orbit'] = orbit
+            print("Orbit propagation and plot complete.")
+        def onkey(event):
+            if event.key == 'q':
+                print("Quitting Poincaré map selection window.")
+                plt.close(fig)
+        cid_click = fig.canvas.mpl_connect('button_press_event', onclick)
+        cid_key = fig.canvas.mpl_connect('key_press_event', onkey)
+        plt.show()
+        return selected_orbit['orbit']
