@@ -13,7 +13,7 @@ from algorithms.center.polynomial.operations import polynomial_evaluate
 from algorithms.dynamics.rhs import create_rhs_system
 from algorithms.dynamics.rtbp import create_rtbp_system
 from algorithms.dynamics.hamiltonian import create_hamiltonian_system
-from algorithms.integrators.rk import RungeKutta
+from algorithms.integrators.rk import RungeKutta, AdaptiveRK
 from algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF, N_VARS_POLY,
                                                P_POLY_INDICES, Q_POLY_INDICES)
 
@@ -198,134 +198,118 @@ def test_final_state_error(rk_test_data):
 
 
 def test_vs_solve_ivp(rk_test_data):
-    """Test RK integrator against scipy's solve_ivp."""
-    H_poly, hamiltonian_system, psi, clmo = rk_test_data
+    """Compare every RK implementation (fixed-step and adaptive) with SciPy's reference solvers on a Hamiltonian system."""
 
+    H_poly, hamiltonian_system, _, clmo = rk_test_data
+
+    # Initial conditions (small amplitude pendulum)
     initial_q1 = 0.1
     initial_p1 = 0.0
-    initial_state_scipy = np.array([initial_q1, initial_p1], dtype=np.float64)
-    initial_state_rk = np.array([initial_q1, 0.0, 0.0, initial_p1, 0.0, 0.0], dtype=np.float64)
 
-    t_final = 50.0  # Moderate time for comparison
-    num_points = int(t_final * 1000.0)  # 1000 points per unit time
-    t_eval = np.linspace(0, t_final, num_points)
+    # 2-D state for SciPy, 6-D state for our code (extra zeros)
+    state_scipy = np.array([initial_q1, initial_p1], dtype=np.float64)
+    state_rk = np.array([initial_q1, 0.0, 0.0, initial_p1, 0.0, 0.0], dtype=np.float64)
+
+    t_final = 20.0
+    n_samples = int(t_final * 200.0)  # 200 samples per unit time
+    t_eval = np.linspace(0.0, t_final, n_samples, dtype=np.float64)
+
+    # (label, factory, scipy_method)
+    rk_variants = [
+        ("RK4",  lambda: RungeKutta(order=4), "DOP853"),
+        ("RK6",  lambda: RungeKutta(order=6), "DOP853"),
+        ("RK8",  lambda: RungeKutta(order=8), "DOP853"),
+        ("RK45", lambda: AdaptiveRK(order=5), "RK45"),
+    ]
 
     def taylor_pendulum_ode(t, y):
-        Q, P = y[0], y[1]
-        taylor_sin_Q = Q - (Q**3)/6.0 + (Q**5)/120.0  # 5th order Taylor expansion for sin(Q)
-        return [P, -taylor_sin_Q]  # [dQ/dt, dP/dt = -sin(Q)]
-    
-    scipy_solution = solve_ivp(
-        taylor_pendulum_ode,
-        [0, t_final],
-        initial_state_scipy,
-        method='RK45',
-        rtol=1e-10,
-        atol=1e-10,
-        t_eval=t_eval
-    )
-    
-    actual_times = t_eval
-    
-    order = 8  # High order for comparison
-    
-    # Use the new integrator API
-    integrator = RungeKutta(order=order)
-    solution = integrator.integrate(hamiltonian_system, initial_state_rk, actual_times)
-    rk_traj = solution.states
-    
-    rk_Q = rk_traj[:, Q_POLY_INDICES[0]]
-    rk_P = rk_traj[:, P_POLY_INDICES[0]]
-    
-    scipy_Q = scipy_solution.y[0]
-    scipy_P = scipy_solution.y[1]
-    
-    analytical_Q = initial_state_scipy[0] * np.cos(actual_times)
-    analytical_P = -initial_state_scipy[0] * np.sin(actual_times)
-    
-    # Compute energies
-    scipy_energy = []
-    analytical_energy = []
-    
-    for i in range(len(actual_times)):
-        current_scipy_state_6d = np.array([scipy_Q[i], 0.0, 0.0, scipy_P[i], 0.0, 0.0])
-        scipy_energy.append(evaluate_hamiltonian(H_poly, current_scipy_state_6d, clmo))
+        Q, P = y
+        sin_taylor = Q - (Q ** 3) / 6.0 + (Q ** 5) / 120.0  # 5th-order expansion
+        return [P, -sin_taylor]
 
-        current_analytical_state_6d = np.array([analytical_Q[i], 0.0, 0.0, analytical_P[i], 0.0, 0.0])
-        analytical_energy.append(evaluate_hamiltonian(H_poly, current_analytical_state_6d, clmo))
-    
-    rk_energy = []
-    for i in range(len(actual_times)):
-        state_6d = rk_traj[i]
-        rk_energy.append(evaluate_hamiltonian(H_poly, state_6d, clmo))
-    
-    scipy_energy = np.array(scipy_energy)
-    rk_energy = np.array(rk_energy)
-    analytical_energy = np.array(analytical_energy)
-    
-    # Compare trajectory accuracy
-    q_rms_error_rk = np.sqrt(np.mean((rk_Q - analytical_Q)**2))
-    q_rms_error_scipy = np.sqrt(np.mean((scipy_Q - analytical_Q)**2))
-    
-    print(f"\nRMS Q error vs analytical: RK{order}: {q_rms_error_rk}, solve_ivp: {q_rms_error_scipy}")
-    
-    max_rms_error = 0.01
-    assert q_rms_error_rk < max_rms_error, f"RK Q error too large: {q_rms_error_rk}"
-    assert q_rms_error_scipy < max_rms_error, f"solve_ivp Q error too large: {q_rms_error_scipy}"
-    
-    # Compare energy conservation
-    scipy_energy_drift = np.max(np.abs(scipy_energy - scipy_energy[0]))
-    rk_energy_drift = np.max(np.abs(rk_energy - rk_energy[0]))
-    analytical_energy_drift = np.max(np.abs(analytical_energy - analytical_energy[0]))
-    
-    print(f"Energy drift: RK{order}: {rk_energy_drift}, solve_ivp: {scipy_energy_drift}, analytical: {analytical_energy_drift}")
-    
-    # Both should have reasonable energy conservation for this test
-    assert rk_energy_drift < 1e-2, f"RK energy drift too large: {rk_energy_drift}"
-    assert scipy_energy_drift < 1e-2, f"solve_ivp energy drift too large: {scipy_energy_drift}"
-    
-    # Create comparison plot
-    plt.figure(figsize=(15, 10))
-    
-    # Plot Q trajectories
-    plt.subplot(2, 2, 1)
-    plt.plot(actual_times, rk_Q, 'b-', label=f'RK{order}')
-    plt.plot(actual_times, scipy_Q, 'r--', label='solve_ivp')
-    plt.plot(actual_times, analytical_Q, 'g-.', label='Analytical')
-    plt.title('Position (Q)')
-    plt.legend()
-    
-    # Plot P trajectories
-    plt.subplot(2, 2, 2)
-    plt.plot(actual_times, rk_P, 'b-', label=f'RK{order}')
-    plt.plot(actual_times, scipy_P, 'r--', label='solve_ivp')
-    plt.plot(actual_times, analytical_P, 'g-.', label='Analytical')
-    plt.title('Momentum (P)')
-    plt.legend()
-    
-    # Plot phase space
-    plt.subplot(2, 2, 3)
-    plt.plot(rk_Q, rk_P, 'b-', label=f'RK{order}')
-    plt.plot(scipy_Q, scipy_P, 'r--', label='solve_ivp')
-    plt.plot(analytical_Q, analytical_P, 'g-.', label='Analytical')
-    plt.title('Phase Space')
-    plt.xlabel('Q')
-    plt.ylabel('P')
-    plt.legend()
-    
-    # Plot energy error
-    plt.subplot(2, 2, 4)
-    plt.plot(actual_times, rk_energy - rk_energy[0], 'b-', label=f'RK{order}')
-    plt.plot(actual_times, scipy_energy - scipy_energy[0], 'r--', label='solve_ivp')
-    plt.plot(actual_times, analytical_energy - analytical_energy[0], 'g-.', label='Analytical')
-    plt.title('Energy Error')
-    plt.yscale('symlog', linthresh=1e-15)  # Log scale to see small differences
-    plt.legend()
-    
-    plt.tight_layout()
-    plt.savefig(os.path.join(os.path.dirname(__file__), 'rk_vs_scipy.png'))
-    plt.close()
-    print("Saved comparison plot to '{}' in test directory".format(os.path.join(os.path.dirname(__file__), 'rk_vs_scipy.png')))
+    for label, make_integrator, scipy_method in rk_variants:
+        integrator = make_integrator()
+
+        # Integrate with our RK implementation
+        sol_rk = integrator.integrate(hamiltonian_system, state_rk, t_eval)
+        rk_Q = sol_rk.states[:, 0]
+
+        # Reference solution from SciPy
+        sol_sp = solve_ivp(
+            taylor_pendulum_ode,
+            [0.0, t_final],
+            state_scipy,
+            method=scipy_method,
+            t_eval=t_eval,
+            rtol=1e-12,
+            atol=1e-12,
+        )
+        sp_Q = sol_sp.y[0]
+
+        # Trajectory comparison (RMS error)
+        q_rms = np.sqrt(np.mean((rk_Q - sp_Q) ** 2))
+        assert q_rms < 5e-3, f"{label}: Q RMS error too large vs SciPy – {q_rms}"
+
+        # Energy drift comparison (sanity check)
+        rk_energy = np.array([evaluate_hamiltonian(H_poly, s, clmo) for s in sol_rk.states])
+        sp_energy = np.array([
+            evaluate_hamiltonian(H_poly, np.array([sp_Q[i], 0.0, 0.0, sol_sp.y[1][i], 0.0, 0.0]), clmo)
+            for i in range(len(t_eval))
+        ])
+
+        rk_drift = np.max(np.abs(rk_energy - rk_energy[0]))
+        sp_drift = np.max(np.abs(sp_energy - sp_energy[0]))
+
+        assert rk_drift < 1e-2, f"{label}: energy drift too large – {rk_drift}"
+        assert sp_drift < 1e-2, f"{label}: SciPy energy drift too large – {sp_drift}"
+
+
+def test_vs_solve_ivp_generic_rhs():
+    """Compare every RK implementation with SciPy on a generic RHS (harmonic oscillator)."""
+
+    # Harmonic oscillator: x'' + x = 0  ->  [x', v'; v' = -x]
+    def harmonic_oscillator(t, y):
+        return np.array([y[1], -y[0]])
+
+    rhs_system = create_rhs_system(harmonic_oscillator, dim=2, name="Harmonic Oscillator")
+
+    initial_state = np.array([1.0, 0.0], dtype=np.float64)
+    t_final = 2 * np.pi  # one period
+    n_samples = 2000
+    t_eval = np.linspace(0.0, t_final, n_samples, dtype=np.float64)
+
+    rk_variants = [
+        ("RK4",  lambda: RungeKutta(order=4), "DOP853"),
+        ("RK6",  lambda: RungeKutta(order=6), "DOP853"),
+        ("RK8",  lambda: RungeKutta(order=8), "DOP853"),
+        ("RK45", lambda: AdaptiveRK(order=5), "RK45"),
+    ]
+
+    for label, make_integrator, scipy_method in rk_variants:
+        integrator = make_integrator()
+
+        sol_rk = integrator.integrate(rhs_system, initial_state, t_eval)
+        rk_x = sol_rk.states[:, 0]
+        rk_v = sol_rk.states[:, 1]
+
+        sol_sp = solve_ivp(
+            harmonic_oscillator,
+            [0.0, t_final],
+            initial_state,
+            method=scipy_method,
+            t_eval=t_eval,
+            rtol=1e-12,
+            atol=1e-12,
+        )
+        sp_x = sol_sp.y[0]
+        sp_v = sol_sp.y[1]
+
+        x_rms = np.sqrt(np.mean((rk_x - sp_x) ** 2))
+        v_rms = np.sqrt(np.mean((rk_v - sp_v) ** 2))
+
+        tol = 1e-5 if label != "RK4" else 1e-4  # slightly looser for lower order
+        assert x_rms < tol, f"{label}: position RMS error too large – {x_rms}"
+        assert v_rms < tol, f"{label}: velocity RMS error too large – {v_rms}"
 
 
 def test_rtbp_system():

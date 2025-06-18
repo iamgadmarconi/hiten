@@ -1,5 +1,5 @@
 import inspect
-from typing import Callable
+from typing import Callable, Optional
 
 import numpy as np
 from numba import njit
@@ -7,180 +7,347 @@ from numba import njit
 from algorithms.dynamics.base import DynamicalSystem
 from algorithms.dynamics.hamiltonian import HamiltonianSystem
 from algorithms.integrators.base import Integrator, Solution
+from algorithms.integrators.coefficients.dop853 import E3 as DOP853_E3
+from algorithms.integrators.coefficients.dop853 import E5 as DOP853_E5
+from algorithms.integrators.coefficients.dop853 import \
+    N_STAGES as DOP853_N_STAGES
+from algorithms.integrators.coefficients.dop853 import A as DOP853_A
+from algorithms.integrators.coefficients.dop853 import B as DOP853_B
+from algorithms.integrators.coefficients.dop853 import C as DOP853_C
+from algorithms.integrators.coefficients.rk4 import A as RK4_A
+from algorithms.integrators.coefficients.rk4 import B as RK4_B
+from algorithms.integrators.coefficients.rk4 import C as RK4_C
+from algorithms.integrators.coefficients.rk6 import A as RK6_A
+from algorithms.integrators.coefficients.rk6 import B as RK6_B
+from algorithms.integrators.coefficients.rk6 import C as RK6_C
+from algorithms.integrators.coefficients.rk8 import A as RK8_A
+from algorithms.integrators.coefficients.rk8 import B as RK8_B
+from algorithms.integrators.coefficients.rk8 import C as RK8_C
+from algorithms.integrators.coefficients.rk45 import B_HIGH as RK45_B_HIGH
+from algorithms.integrators.coefficients.rk45 import B_LOW as RK45_B_LOW
+from algorithms.integrators.coefficients.rk45 import A as RK45_A
+from algorithms.integrators.coefficients.rk45 import C as RK45_C
 from algorithms.integrators.symplectic import _eval_dH_dP, _eval_dH_dQ
 from config import FASTMATH
 
-# RK4 (Classic 4th order)
-RK4_A = np.array([
-    [0.0, 0.0, 0.0, 0.0],
-    [0.5, 0.0, 0.0, 0.0],
-    [0.0, 0.5, 0.0, 0.0],
-    [0.0, 0.0, 1.0, 0.0]
-], dtype=np.float64)
 
-RK4_B = np.array([1.0/6.0, 1.0/3.0, 1.0/3.0, 1.0/6.0], dtype=np.float64)
-RK4_C = np.array([0.0, 0.5, 0.5, 1.0], dtype=np.float64)
+class _RungeKuttaBase(Integrator):
+    _A: np.ndarray = None
+    _B_HIGH: np.ndarray = None
+    _B_LOW: Optional[np.ndarray] = None
+    _C: np.ndarray = None
+    _p: int = 0
 
-# RK6 (Dormand-Prince 6th order method)
-RK6_A = np.array([
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    [1.0/5.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    [3.0/40.0, 9.0/40.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    [44.0/45.0, -56.0/15.0, 32.0/9.0, 0.0, 0.0, 0.0, 0.0],
-    [19372.0/6561.0, -25360.0/2187.0, 64448.0/6561.0, -212.0/729.0, 0.0, 0.0, 0.0],
-    [9017.0/3168.0, -355.0/33.0, 46732.0/5247.0, 49.0/176.0, -5103.0/18656.0, 0.0, 0.0],
-    [35.0/384.0, 0.0, 500.0/1113.0, 125.0/192.0, -2187.0/6784.0, 11.0/84.0, 0.0]
-], dtype=np.float64)
+    def _rk_embedded_step(self, f, t, y, h):
+        s = self._B_HIGH.size
+        k = np.empty((s, y.size), dtype=np.float64)
 
-RK6_B = np.array([35.0/384.0, 0.0, 500.0/1113.0, 125.0/192.0, -2187.0/6784.0, 11.0/84.0, 0.0], dtype=np.float64)
-RK6_C = np.array([0.0, 1.0/5.0, 3.0/10.0, 4.0/5.0, 8.0/9.0, 1.0, 1.0], dtype=np.float64)
+        k[0] = f(t, y)
+        for i in range(1, s):
+            y_stage = y.copy()
+            for j in range(i):
+                a_ij = self._A[i, j]
+                if a_ij != 0.0:
+                    y_stage += h * a_ij * k[j]
+            k[i] = f(t + self._C[i] * h, y_stage)
 
-# RK8 (Dormand-Prince 8th order method)
-RK8_A = np.array([
-    [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    [1.0/18.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    [1.0/48.0, 1.0/16.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    [1.0/32.0, 0.0, 3.0/32.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    [5.0/16.0, 0.0, -75.0/64.0, 75.0/64.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    [3.0/80.0, 0.0, 0.0, 3.0/16.0, 3.0/20.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    [29443841.0/614563906.0, 0.0, 0.0, 77736538.0/692538347.0, -28693883.0/1125000000.0, 23124283.0/1800000000.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    [16016141.0/946692911.0, 0.0, 0.0, 61564180.0/158732637.0, 22789713.0/633445777.0, 545815736.0/2771057229.0, -180193667.0/1043307555.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    [39632708.0/573591083.0, 0.0, 0.0, -433636366.0/683701615.0, -421739975.0/2616292301.0, 100302831.0/723423059.0, 790204164.0/839813087.0, 800635310.0/3783071287.0, 0.0, 0.0, 0.0, 0.0, 0.0],
-    [246121993.0/1340847787.0, 0.0, 0.0, -37695042795.0/15268766246.0, -309121744.0/1061227803.0, -12992083.0/490766935.0, 6005943493.0/2108947869.0, 393006217.0/1396673457.0, 123872331.0/1001029789.0, 0.0, 0.0, 0.0, 0.0],
-    [-1028468189.0/846180014.0, 0.0, 0.0, 8478235783.0/508512852.0, 1311729495.0/1432422823.0, -10304129995.0/1701304382.0, -48777925059.0/3047939560.0, 15336726248.0/1032824649.0, -45442868181.0/3398467696.0, 3065993473.0/597172653.0, 0.0, 0.0, 0.0],
-    [185892177.0/718116043.0, 0.0, 0.0, -3185094517.0/667107341.0, -477755414.0/1098053517.0, -703635378.0/230739211.0, 5731566787.0/1027545527.0, 5232866602.0/850066563.0, -4093664535.0/808688257.0, 3962137247.0/1805957418.0, 65686358.0/487910083.0, 0.0, 0.0],
-    [403863854.0/491063109.0, 0.0, 0.0, -5068492393.0/434740067.0, -411421997.0/543043805.0, 652783627.0/914296604.0, 11173962825.0/925320556.0, -13158990841.0/6184727034.0, 3936647629.0/1978049680.0, -160528059.0/685178525.0, 248638103.0/1413531060.0, 0.0, 0.0]
-], dtype=np.float64)
+        y_high = y + h * np.dot(self._B_HIGH, k)
 
-RK8_B = np.array([14005451.0/335480064.0, 0.0, 0.0, 0.0, 0.0, -59238493.0/1068277825.0, 181606767.0/758867731.0, 561292985.0/797845732.0, -1041891430.0/1371343529.0, 760417239.0/1151165299.0, 118820643.0/751138087.0, -528747749.0/2220607170.0, 1.0/4.0], dtype=np.float64)
-RK8_C = np.array([0.0, 1.0/18.0, 1.0/12.0, 1.0/8.0, 5.0/16.0, 3.0/8.0, 59.0/400.0, 93.0/200.0, 5490023248.0/9719169821.0, 13.0/20.0, 1201146811.0/1299019798.0, 1.0, 1.0], dtype=np.float64)
+        if self._B_LOW is not None:
+            y_low = y + h * np.dot(self._B_LOW, k)
+        else:
+            y_low = y_high.copy()
+        err_vec = y_high - y_low
+        return y_high, y_low, err_vec
+
+class _FixedStepRK(_RungeKuttaBase):
+    """Explicit fixed-step Runge-Kutta scheme (RK4/RK6/RK8)."""
+
+    def __init__(self, name: str, A: np.ndarray, B: np.ndarray, C: np.ndarray, order: int, **options):
+        self._A = A
+        self._B_HIGH = B
+        self._B_LOW = None
+        self._C = C
+        self._p = order
+        super().__init__(name, **options)
+
+    @property
+    def order(self) -> int:
+        return self._p
+
+    def integrate(
+        self,
+        system: DynamicalSystem,
+        y0: np.ndarray,
+        t_vals: np.ndarray,
+        **kwargs,
+    ) -> Solution:
+        self.validate_inputs(system, y0, t_vals)
+
+        rhs_wrapped = _build_rhs_wrapper(system)
+
+        def f(t, y):
+            return rhs_wrapped(t, y)
+
+        traj = np.empty((t_vals.size, y0.size), dtype=np.float64)
+        derivs = np.empty_like(traj)
+
+        # Initial state and derivative
+        traj[0] = y0.copy()
+        derivs[0] = f(t_vals[0], y0)
+
+        for idx in range(t_vals.size - 1):
+            t_n = t_vals[idx]
+            h = t_vals[idx + 1] - t_n
+            y_n = traj[idx]
+
+            # Perform RK step and obtain high-order solution
+            y_high, _, _ = self._rk_embedded_step(f, t_n, y_n, h)
+            traj[idx + 1] = y_high
+
+            # Derivative at the new time point (needed for Hermite interpolation)
+            derivs[idx + 1] = f(t_vals[idx + 1], y_high)
+
+        return Solution(times=t_vals.copy(), states=traj, derivatives=derivs)
+
+class _AdaptiveStepRK(_RungeKuttaBase):
+    """Embedded adaptive Runge-Kutta using PI step-size control."""
+
+    def __init__(self, name: str = "AdaptiveRK", rtol: float = 1e-10, atol: float = 1e-12,
+                 max_step: float = np.inf, min_step: float = 0.0, **options):
+        super().__init__(name, **options)
+        self._rtol = rtol
+        self._atol = atol
+        self._max_step = max_step
+        self._min_step = min_step
+        if not hasattr(self, "_err_exp") or self._err_exp == 0:
+            self._err_exp = 1.0 / (self._p)
+
+    @property
+    def order(self) -> int:
+        return self._p
+
+    def integrate(
+        self,
+        system: DynamicalSystem,
+        y0: np.ndarray,
+        t_vals: np.ndarray,
+        **kwargs,
+    ) -> Solution:
+        self.validate_inputs(system, y0, t_vals)
+
+        rhs_wrapped = _build_rhs_wrapper(system)
+
+        forward = np.sign(t_vals[-1] - t_vals[0])
+
+        def f(t, y):
+            return forward * rhs_wrapped(t, y)
+
+        t_span = (t_vals[0], t_vals[-1])
+        t_eval = t_vals[1:-1] if t_vals.size > 2 else np.empty(0, dtype=np.float64)
+
+        t = t_span[0]
+        y = np.ascontiguousarray(y0, dtype=np.float64)
+        ts, ys, dys = [t], [y.copy()], [f(t, y)]
+
+        h = self._select_initial_step(f, t, y, t_span[1])
+        idx_eval = 0
+
+        while (t - t_span[1]) * forward < 0:
+            if h > self._max_step:
+                h = self._max_step
+            if t + forward * h > t_span[1]:
+                h = abs(t_span[1] - t)
+
+            y_high, y_low, err_vec = self._rk_embedded_step(f, t, y, h)
+            scale = self._atol + self._rtol * np.maximum(np.abs(y), np.abs(y_high))
+            err_norm = np.sqrt(np.mean((err_vec / scale) ** 2))
+
+            if err_norm <= 1.0:
+                t_new = t + h
+                y_new = y_high
+
+                while idx_eval < t_eval.size and (t_eval[idx_eval] - t_new) * forward <= 0:
+                    tau = (t_eval[idx_eval] - t) / (t_new - t)
+                    y_eval = y + tau * (y_new - y)
+                    ys.append(y_eval)
+                    ts.append(t_eval[idx_eval])
+                    dys.append(f(t_eval[idx_eval], y_eval))
+                    idx_eval += 1
+
+                ts.append(t_new)
+                ys.append(y_new.copy())
+                dys.append(f(t_new, y_new))
+                t, y = t_new, y_new
+                h *= self._update_factor(err_norm)
+            else:
+                h *= max(0.2, 0.9 * err_norm ** (-self._err_exp))
+                if h < self._min_step:
+                    raise RuntimeError("Step size underflow in adaptive RK integrator.")
+
+        return Solution(times=np.asarray(ts), states=np.asarray(ys), derivatives=np.asarray(dys))
+
+    def _select_initial_step(self, f, t0, y0, tf):
+        dy0 = f(t0, y0)
+        scale = self._atol + self._rtol * np.abs(y0)
+        d0 = np.sqrt(np.mean((y0 / scale) ** 2))
+        d1 = np.sqrt(np.mean((dy0 / scale) ** 2))
+        h0 = 1e-6 if (d0 < 1e-5 or d1 < 1e-5) else 0.01 * d0 / d1
+        return min(max(self._min_step, h0), abs(tf - t0))
+
+    def _update_factor(self, err_norm):
+        return np.clip(0.9 * err_norm ** (-self._err_exp), 0.2, 5.0)
+
+class RK4(_FixedStepRK):
+    def __init__(self, **opts):
+        super().__init__("RK4", RK4_A, RK4_B, RK4_C, 4, **opts)
+
+class RK6(_FixedStepRK):
+    def __init__(self, **opts):
+        super().__init__("RK6", RK6_A, RK6_B, RK6_C, 6, **opts)
+
+class RK8(_FixedStepRK):
+    def __init__(self, **opts):
+        super().__init__("RK8", RK8_A, RK8_B, RK8_C, 8, **opts)
+
+class RK45(_AdaptiveStepRK):
+    _A = RK45_A
+    _B_HIGH = RK45_B_HIGH
+    _B_LOW = RK45_B_LOW
+    _C = RK45_C
+    _p = 5
+    _err_exp = 1.0 / 5.0
+
+    def __init__(self, **opts):
+        super().__init__("RK45", **opts)
+
+class DOP853(_AdaptiveStepRK):
+    _A = DOP853_A[:DOP853_N_STAGES, :DOP853_N_STAGES]
+    _B_HIGH = DOP853_B[:DOP853_N_STAGES]
+    _B_LOW = None
+    _C = DOP853_C[:DOP853_N_STAGES]
+
+    _p = 8
+    _err_exp = 1.0 / _p
+
+    _E3 = DOP853_E3
+    _E5 = DOP853_E5
+    _N_STAGES = DOP853_N_STAGES
+
+    def __init__(self, **opts):
+        super().__init__("DOP853", **opts)
+
+    def _rk_embedded_step(self, f, t, y, h):
+        """Perform one adaptive DOP853 step.
+
+        Parameters
+        ----------
+        f : callable
+            RHS function of the ODE system (already wrapped for sign and
+            numba-compiled by the driver).
+        t : float
+            Current time.
+        y : ndarray
+            Current solution vector.
+        h : float
+            Proposed step size (may be adjusted by the caller).
+
+        Returns
+        -------
+        y_high : ndarray
+            8th-order accepted solution at *t + h*.
+        y_low : ndarray
+            A pseudo low-order solution constructed so that the difference
+            ``y_high - y_low`` equals the local error estimate.  This enables
+            reuse of the generic adaptive RK controller implemented in
+            :class:`_AdaptiveStepRK`.
+        err_vec : ndarray
+            Local truncation error estimate.
+        """
+        s = self._N_STAGES
+
+        k = np.empty((s + 1, y.size), dtype=np.float64)
+
+        k[0] = f(t, y)
+
+        for i in range(1, s):
+            y_stage = y.copy()
+            for j in range(i):
+                a_ij = self._A[i, j]
+                if a_ij != 0.0:
+                    y_stage += h * a_ij * k[j]
+            k[i] = f(t + self._C[i] * h, y_stage)
+
+        y_high = y.copy()
+        for j in range(s):
+            b_j = self._B_HIGH[j]
+            if b_j != 0.0:
+                y_high += h * b_j * k[j]
+
+        k[s] = f(t + h, y_high)
+
+        err5 = np.dot(k.T, self._E5)  # 5th-order error component
+        err3 = np.dot(k.T, self._E3)  # 3rd-order error component
+        denom = np.hypot(np.abs(err5), 0.1 * np.abs(err3))
+        correction_factor = np.ones_like(err5)
+        mask = denom > 0.0
+        correction_factor[mask] = np.abs(err5[mask]) / denom[mask]
+        err_vec = h * err5 * correction_factor
+
+        y_low = y_high - err_vec
+
+        return y_high, y_low, err_vec
+
+class RungeKutta:
+    _map = {4: RK4, 6: RK6, 8: RK8}
+    def __new__(cls, order=4, **opts):
+        if order not in cls._map:
+            raise ValueError("RK order must be 4, 6, or 8")
+        return cls._map[order](**opts)
+
+class AdaptiveRK:
+    _map = {5: RK45, 8: DOP853}
+    def __new__(cls, order=5, **opts):
+        if order not in cls._map:
+            raise ValueError("Adaptive RK order not supported")
+        return cls._map[order](**opts)
 
 
-@njit(cache=False, fastmath=FASTMATH)
-def _integrate_rk_generic(
-    rhs_func: Callable[[float, np.ndarray], np.ndarray],
-    y0: np.ndarray,
-    t_vals: np.ndarray,
-    A: np.ndarray,
-    B: np.ndarray,
-    C: np.ndarray,
-) -> np.ndarray:
+@njit(cache=True, fastmath=FASTMATH)
+def _hamiltonian_rhs(y: np.ndarray, jac_H, clmo_H, n_dof: int) -> np.ndarray:  # type: ignore[valid-type]
+    """Numba-compiled core that evaluates (dQ, dP) for a Hamiltonian system.
 
-    n_steps = t_vals.shape[0]
-    dim = y0.shape[0]
+    Parameters
+    ----------
+    y : ndarray
+        2*n_dof phase-space vector [Q, P].
+    jac_H, clmo_H : numba.typed.List
+        Polynomial Jacobian and coefficient-layout objects coming from the
+        center-manifold build.  They are passed as *arguments* so that Numba
+        does not need to embed them as compile-time constants.
+    n_dof : int
+        Number of degrees of freedom.
+    """
+    Q = y[:n_dof]
+    P = y[n_dof : 2 * n_dof]
 
-    n_stages = B.shape[0]
+    dQ = _eval_dH_dP(Q, P, jac_H, clmo_H)
+    dP = -_eval_dH_dQ(Q, P, jac_H, clmo_H)
 
-    traj = np.empty((n_steps, dim), dtype=np.float64)
-    traj[0, :] = y0.copy()
-
-    k = np.empty((n_stages, dim), dtype=np.float64)
-
-    for step in range(n_steps - 1):
-        t_n = t_vals[step]
-        h = t_vals[step + 1] - t_n
-
-        y_n = traj[step].copy()
-
-        for s in range(n_stages):
-            y_stage = y_n.copy()
-            for j in range(s):
-                a_sj = A[s, j]
-                if a_sj != 0.0:
-                    y_stage += h * a_sj * k[j]
-
-            k[s] = rhs_func(t_n + C[s] * h, y_stage)
-
-        y_np1 = y_n.copy()
-        for s in range(n_stages):
-            b_s = B[s]
-            if b_s != 0.0:
-                y_np1 += h * b_s * k[s]
-
-        traj[step + 1] = y_np1
-
-    return traj
-
-
-@njit(cache=False, fastmath=FASTMATH)
-def _integrate_rk_ham(
-    y0: np.ndarray,
-    t_vals: np.ndarray,
-    A: np.ndarray,
-    B: np.ndarray,
-    C: np.ndarray,
-    jac_H,
-    clmo_H,
-) -> np.ndarray:
-    """Explicit RK integrator specialised for `HamiltonianSystem`."""
-
-    n_steps = t_vals.shape[0]
-    dim = y0.shape[0]
-    n_stages = B.shape[0]
-    traj = np.empty((n_steps, dim), dtype=np.float64)
-    traj[0, :] = y0.copy()
-
-    k = np.empty((n_stages, dim), dtype=np.float64)
-
-    n_dof = dim // 2
-
-    for step in range(n_steps - 1):
-        t_n = t_vals[step]
-        h = t_vals[step + 1] - t_n
-
-        y_n = traj[step].copy()
-
-        for s in range(n_stages):
-            y_stage = y_n.copy()
-            for j in range(s):
-                a_sj = A[s, j]
-                if a_sj != 0.0:
-                    y_stage += h * a_sj * k[j]
-
-            Q = y_stage[0:n_dof]
-            P = y_stage[n_dof: 2 * n_dof]
-
-            dQ = _eval_dH_dP(Q, P, jac_H, clmo_H)
-            dP = -_eval_dH_dQ(Q, P, jac_H, clmo_H)
-
-            k[s, 0:n_dof] = dQ
-            k[s, n_dof: 2 * n_dof] = dP
-
-        y_np1 = y_n.copy()
-        for s in range(n_stages):
-            b_s = B[s]
-            if b_s != 0.0:
-                y_np1 += h * b_s * k[s]
-
-        traj[step + 1] = y_np1
-
-    return traj
-
+    out = np.empty_like(y)
+    out[:n_dof] = dQ
+    out[n_dof : 2 * n_dof] = dP
+    return out
 
 def _build_rhs_wrapper(system: DynamicalSystem) -> Callable[[float, np.ndarray], np.ndarray]:
-    """Return a jit-compiled wrapper with signature ``f(t, y)``.
-
-    The function inspects *system* and creates a suitable wrapper so that the
-    underlying RHS regardless of its original argument list can be called
-    from the Numba kernel using the uniform 2-argument signature expected by
-    _integrate_rk.
-    """
 
     if isinstance(system, HamiltonianSystem):
         n_dof = system.n_dof
         jac_H = system.jac_H
         clmo_H = system.clmo_H
 
-        @njit(cache=False, fastmath=FASTMATH)
         def _ham_rhs(t, y):
-            Q = y[:n_dof]
-            P = y[n_dof:2 * n_dof]
-            dQ = _eval_dH_dP(Q, P, jac_H, clmo_H)
-            dP = - _eval_dH_dQ(Q, P, jac_H, clmo_H)
-            out = np.empty_like(y)
-            out[:n_dof] = dQ
-            out[n_dof:2 * n_dof] = dP
-            return out
+            return _hamiltonian_rhs(y, jac_H, clmo_H, n_dof)
 
         return _ham_rhs
 
@@ -214,69 +381,3 @@ def _build_rhs_wrapper(system: DynamicalSystem) -> Callable[[float, np.ndarray],
             f"Unsupported rhs signature with {n_params} parameters. "
             "Only (t, y) or (y,) are currently supported."
         )
-
-
-def integrate_rk(
-    system: DynamicalSystem,
-    initial_state: np.ndarray,
-    t_values: np.ndarray,
-    A: np.ndarray,
-    B: np.ndarray,
-    C: np.ndarray,
-) -> np.ndarray:
-    y0 = np.ascontiguousarray(initial_state, dtype=np.float64)
-    t_vals = np.ascontiguousarray(t_values, dtype=np.float64)
-
-    if isinstance(system, HamiltonianSystem):
-        jac_H = system.jac_H
-        clmo_H = system.clmo_H
-        return _integrate_rk_ham(y0, t_vals, A, B, C, jac_H, clmo_H)
-
-    # Generic system path
-    rhs_wrapped = _build_rhs_wrapper(system)
-
-    return _integrate_rk_generic(rhs_wrapped, y0, t_vals, A, B, C)
-
-
-class RungeKutta(Integrator):
-
-    def __init__(self, order: int = 4, **options):
-        if order not in [4, 6, 8]:
-            raise ValueError(f"RK order must be 4, 6, or 8, got {order}")
-        
-        super().__init__(f"RK{order}", **options)
-        self._order = order
-        
-        # Select coefficients based on order
-        if order == 4:
-            self._A, self._B, self._C = RK4_A, RK4_B, RK4_C
-        elif order == 6:
-            self._A, self._B, self._C = RK6_A, RK6_B, RK6_C
-        elif order == 8:
-            self._A, self._B, self._C = RK8_A, RK8_B, RK8_C
-    
-    @property
-    def order(self) -> int:
-        """Order of accuracy of the RK method."""
-        return self._order
-    
-    def integrate(
-        self,
-        system: DynamicalSystem,
-        y0: np.ndarray,
-        t_vals: np.ndarray,
-        **kwargs
-) -> Solution:
-
-        self.validate_inputs(system, y0, t_vals)
-
-        trajectory_array = integrate_rk(
-            system=system,
-            initial_state=y0,
-            t_values=t_vals,
-            A=self._A,
-            B=self._B,
-            C=self._C,
-        )
-
-        return Solution(times=t_vals.copy(), states=trajectory_array)
