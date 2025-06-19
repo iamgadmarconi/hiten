@@ -2,15 +2,17 @@ import os
 import pickle
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Sequence, Tuple
+from enum import IntEnum
+from typing import Any, Callable, Dict, NamedTuple, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 
-from algorithms.dynamics.rtbp import compute_stm, stability_indices
+from algorithms.dynamics.rtbp import (compute_stm, create_rtbp_system,
+                                      stability_indices)
 from algorithms.energy import crtbp_energy, energy_to_jacobi
-from algorithms.dynamics.rtbp import create_rtbp_system
+from algorithms.geometry import _find_y_zero_crossing
 from algorithms.integrators.rk import RungeKutta
 from algorithms.integrators.symplectic import TaoSymplectic
 from plots.plots import _plot_body, _set_axes_equal, _set_dark_mode
@@ -35,6 +37,18 @@ class orbitConfig:
 
         if self.libration_point_idx not in [1, 2, 3, 4, 5]:
             raise ValueError(f"Libration point index must be 1, 2, 3, 4, or 5. Got {self.libration_point_idx}.")
+
+
+class S(IntEnum): X=0; Y=1; Z=2; VX=3; VY=4; VZ=5
+
+
+class correctionConfig(NamedTuple):
+    residual_indices: tuple[int, ...]
+    control_indices: tuple[int, ...]
+    extra_jacobian: Callable[[np.ndarray,np.ndarray], np.ndarray] | None = None
+    target: tuple[float, ...] = (0.0,)
+    event_func: Callable[...,tuple[float,np.ndarray]] = _find_y_zero_crossing
+
 
 
 class PeriodicOrbit(ABC):
@@ -594,26 +608,35 @@ class PeriodicOrbit(ABC):
     def _initial_guess(self, **kwargs):
         pass
 
-    @abstractmethod
-    def differential_correction(self, **kwargs):
-        """
-        Perform differential correction to refine the orbit initial conditions.
-        
-        This method should update self._initial_state and self.period, then call
-        self._reset_computed_properties() to ensure consistency.
-        
-        Parameters
-        ----------
-        **kwargs
-            Algorithm-specific parameters for the differential correction process
-            
-        Returns
-        -------
-        bool
-            True if correction was successful, False otherwise
-        """
-        pass
+    def differential_correction(
+            self,
+            cfg: correctionConfig,
+            *,
+            tol: float = 1e-10,
+            max_attempts: int = 25,
+            forward: int = 1
+        ) -> tuple[np.ndarray, float]:
 
+        X0 = self.initial_state.copy()
+        for k in range(max_attempts+1):
+            t_ev, X_ev = cfg.event_func(X0, self.mu, forward=forward)
+            R = X_ev[list(cfg.residual_indices)] - np.array(cfg.target)
+
+            if np.linalg.norm(R, ord=np.inf) < tol:
+                self._reset();  self._initial_state = X0
+                self.period = 2*t_ev
+                return X0, t_ev
+
+            _, _, Phi, _ = compute_stm(X0, self.mu, t_ev, forward=forward)
+            J = Phi[np.ix_(cfg.residual_indices, cfg.control_indices)]
+
+            if cfg.extra_jacobian is not None:
+                J -= cfg.extra_jacobian(X_ev, Phi)
+
+            delta = np.linalg.solve(J, -R)
+            X0[list(cfg.control_indices)] += delta
+
+        raise RuntimeError("did not converge")
 
 class GenericOrbit(PeriodicOrbit):
     """
@@ -633,8 +656,3 @@ class GenericOrbit(PeriodicOrbit):
         if hasattr(self, '_initial_state') and self._initial_state is not None:
             return self._initial_state
         raise ValueError("No initial state provided for GenericOrbit.")
-
-    def differential_correction(self, **kwargs):
-        raise NotImplementedError("Differential correction is not implemented for GenericOrbit.")
-
-

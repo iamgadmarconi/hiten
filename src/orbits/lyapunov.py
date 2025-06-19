@@ -1,11 +1,9 @@
-from typing import Optional, Sequence, Tuple
+from typing import Optional, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
 
-from algorithms.dynamics.rtbp import compute_stm
-from algorithms.geometry import _find_y_zero_crossing
-from orbits.base import PeriodicOrbit, orbitConfig
+from orbits.base import PeriodicOrbit, S, correctionConfig, orbitConfig
 from system.libration import CollinearPoint, L3Point
 from utils.log_config import logger
 
@@ -70,117 +68,12 @@ class LyapunovOrbit(PeriodicOrbit):
         logger.debug(f"Generated initial guess for Lyapunov orbit around {self.libration_point} with Ax={self.Ax}: {state_6d}")
         return state_6d
 
-    def differential_correction(self, tol: float = 1e-10, max_attempts: int = 25, forward: int = 1) -> Tuple[NDArray[np.float64], float]:
-        """
-        Performs single-shooting differential correction for a planar Lyapunov orbit.
-
-        Adjusts the initial vy component to achieve vx = 0 at the x-z plane crossing.
-
-        Parameters
-        ----------
-        tol : float, optional
-            Convergence tolerance for vx at crossing, by default 1e-10
-        max_attempts : int, optional
-            Maximum correction iterations, by default 25
-        forward : int, optional
-            Time integration direction (1 for forward, -1 for backward), by default 1
-        Returns
-        -------
-        Tuple[NDArray[np.float64], float]
-            Converged initial state vector and half-period.
-        
-        Raises
-        ------
-        RuntimeError
-            If convergence is not achieved within max_attempts.
-        """
-        X0: NDArray[np.float64] = np.copy(self.initial_state)
-        logger.info(f"Starting differential correction for Lyapunov orbit around {self.libration_point} with Ax={self.Ax}.")
-        logger.debug(f"Initial guess: {X0}")
-        logger.debug(f"Correction params: tol={tol}, max_attempts={max_attempts}, forward={forward}")
-
-        attempt = 0
-        t_cross, X_cross = _find_y_zero_crossing(X0, self.mu, forward=forward)
-        vx_cross = X_cross[3]
-
-        if abs(vx_cross) < tol:
-            half_period = t_cross
-            self._reset()
-            self._initial_state = X0
-            self.period = 2 * half_period
-            logger.info(f"Converged successfully after {attempt} attempts.")
-            logger.info(f"Converged Initial State: {np.array2string(self.initial_state, precision=12, suppress_small=True)}")
-            logger.info(f"Period: {self.period:.6f} (Half period: {half_period:.6f})")
-            return self.initial_state, half_period
-
-        while True:
-            attempt += 1
-            logger.debug(f"Correction attempt {attempt}")
-            if attempt > max_attempts:
-                msg = f"Failed to converge Lyapunov orbit after {max_attempts} attempts. Last state: {X0}"
-                logger.error(msg)
-                raise RuntimeError(msg)
-            
-            # 1. Find the time and state of the next x-z plane crossing (y=0)
-            try:
-                t_cross, X_cross = _find_y_zero_crossing(X0, self.mu, forward=forward)
-                logger.debug(f"Found y=0 crossing at t={t_cross:.6f}, state={X_cross}")
-            except Exception as e:
-                msg = f"Error in _find_y_zero_crossing during attempt {attempt}: {e}. Last state: {X0}"
-                logger.error(msg)
-                raise RuntimeError(msg) from e
-
-            # Extract relevant components at crossing
-            # x_cross, y_cross, z_cross, vx_cross, vy_cross, vz_cross = X_cross
-            vx_cross = X_cross[3] # Indexing for performance
-
-            # 2. Check convergence: Is vx sufficiently close to zero?
-            if abs(vx_cross) < tol:
-                half_period = t_cross
-                self._reset() # Clear any intermediate data if needed
-                self._initial_state = X0
-                self.period = 2 * half_period
-                logger.info(f"Converged successfully after {attempt} attempts.")
-                logger.info(f"Converged Initial State: {np.array2string(self.initial_state, precision=12, suppress_small=True)}")
-                logger.info(f"Period: {self.period:.6f} (Half period: {half_period:.6f})")
-                return self.initial_state, half_period
-            
-            logger.debug(f"Attempt {attempt}: vx_cross={vx_cross:.3e} (target=0), tolerance={tol}. Applying correction.")
-
-            # 3. Integrate variational equations (state + STM) from t=0 to t_cross
-            try:
-                # Call compute_stm with solver parameters similar to _find_y_zero_crossing
-                _, _, phi_final, _ = compute_stm(X0, self.mu, t_cross, forward=forward)
-                logger.debug(f"Computed STM at t={t_cross:.6f}")
-            except Exception as e:
-                msg = f"Error during STM integration (compute_stm) attempt {attempt}: {e}. Last state: {X0}"
-                logger.error(msg)
-                raise RuntimeError(msg) from e
-
-            # Extract final STM and state (though state isn't used for correction itself)
-            # phi_final is already the 6x6 matrix from compute_stm
-
-            # 4. Calculate the required correction in initial vy (dvy0)
-            # We need the partial derivative d(vx_cross) / d(vy0)
-            # From the STM: phi_final[row, col] = d(state_row(t_cross)) / d(state_col(0))
-            # So we need phi_final[3, 4] = d(vx(t_cross)) / d(vy(0))
-            dvx_dvy0: float = phi_final[3, 4]
-            logger.debug(f"STM element phi[3,4] (dvx_cross/dvy0) = {dvx_dvy0:.4e}")
-            
-            if abs(dvx_dvy0) < 1e-12: # Avoid division by zero/very small number
-                msg = f"STM element dvx/dvy0 ({dvx_dvy0:.3e}) is too small; correction unstable. Attempt {attempt}. Last state: {X0}"
-                logger.error(msg)
-                raise RuntimeError(msg)
-
-            # Linear correction: target_vx - current_vx = (dvx/dvy0) * dvy0
-            # 0 - vx_cross = dvx_dvy0 * dvy0
-            dvy0: float = -vx_cross / dvx_dvy0
-            logger.debug(f"Calculated correction dvy0 = {dvy0:.3e}")
-
-            # 5. Apply the correction to the initial state guess
-            X0[4] += dvy0 # Update initial vy
-            logger.debug(f"Updated initial state guess for next attempt: {X0}")
-
+    def differential_correction(self, **kw):
+        cfg = correctionConfig(
+            residual_indices=(S.VX,),
+            control_indices=(S.VY,)
+        )
+        return super().differential_correction(cfg, **kw)
 
     def eccentricity(self) -> float:
         """Eccentricity is not typically defined for Lyapunov orbits.

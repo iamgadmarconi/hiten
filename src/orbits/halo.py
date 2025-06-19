@@ -1,11 +1,9 @@
-from typing import Optional, Sequence, Tuple
+from typing import Optional, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
 
-from algorithms.dynamics.rtbp import compute_stm
-from algorithms.geometry import _find_y_zero_crossing
-from orbits.base import PeriodicOrbit, orbitConfig
+from orbits.base import PeriodicOrbit, S, correctionConfig, orbitConfig
 from system.libration import CollinearPoint, L1Point, L2Point, L3Point
 from utils.log_config import logger
 
@@ -255,129 +253,23 @@ class HaloOrbit(PeriodicOrbit):
         logger.debug(f"Generated initial guess for Halo orbit around {self.libration_point} with Az={self.Az}: {np.array([rx, ry, rz, vx, vy, vz], dtype=np.float64)}")
         return np.array([rx, ry, rz, vx, vy, vz], dtype=np.float64)
 
-    def differential_correction(self, tol: float = 1e-10, max_attempts: int = 25, forward: int = 1) -> Tuple[NDArray[np.float64], float]:
-        """
-        Parameters
-        ----------
-        tol : float, optional
-            Convergence tolerance for vx at crossing, by default 1e-10
-        max_attempts : int, optional
-            Maximum correction iterations, by default 25
-        forward : int, optional
-            Time integration direction (1 for forward, -1 for backward), by default 1
-        """
-        mu = self.mu
-        X0: NDArray[np.float64] = np.copy(self.initial_state)
-        logger.info(f"Starting differential correction for Halo orbit around {self.libration_point} with Az={self.Az}.")
-        logger.debug(f"Initial guess: {X0}")
-        logger.debug(f"Correction params: tol={tol}, max_attempts={max_attempts}, forward={forward}")
+    def _halo_quadratic_term(self, X_ev, Phi):
+            x, y, z, vx, vy, vz = X_ev
+            mu2 = 1 - self.mu
+            rho_1 = 1/(((x+self.mu)**2 + y**2 + z**2)**1.5)
+            rho_2 = 1/(((x-mu2 )**2 + y**2 + z**2)**1.5)
+            omega_x  = -(mu2*(x+self.mu)*rho_1) - (self.mu*(x-mu2)*rho_2) + x
+            DDx = 2*vy + omega_x
+            DDz = -(mu2*z*rho_1) - (self.mu*z*rho_2)
+            return np.array([[DDx],[DDz]]) @ Phi[[S.Y],:][:, (S.X,S.VY)] / vy
 
-        attempt = 0
-
-        t_cross, X_cross = _find_y_zero_crossing(X0, self.mu, forward=forward)
-        
-        vx_cross, vz_cross = X_cross[3], X_cross[5]
-        
-        if abs(vx_cross) <= tol and abs(vz_cross) <= tol:
-            half_period = t_cross
-            self._reset()
-            self._initial_state = X0
-            self.period = 2 * half_period
-            logger.info(f"Converged successfully after {attempt} attempts.")
-            logger.info(f"Converged Initial State: {np.array2string(self.initial_state, precision=12, suppress_small=True)}")
-            logger.info(f"Period: {self.period:.6f} (Half period: {half_period:.6f})")
-            return self.initial_state, half_period
-
-        # We will iterate until vx_cross is small enough
-        vx_cross = 1.0
-
-        # For convenience:
-        mu2 = 1.0 - mu
-
-        while True:
-            attempt += 1
-            logger.debug(f"Correction attempt {attempt}")
-            if attempt > max_attempts:
-                msg = f"Failed to converge Halo orbit after {max_attempts} attempts. Last state: {X0}"
-                logger.error(msg)
-                raise RuntimeError(msg)
-
-            try:
-                t_cross, X_cross = _find_y_zero_crossing(X0, self.mu, forward=forward)
-                logger.debug(f"Found y=0 crossing at t={t_cross:.6f}, state={X_cross}")
-            except Exception as e:
-                msg = f"Error in _find_y_zero_crossing during attempt {attempt}: {e}. Last state: {X0}"
-                logger.error(msg)
-                raise RuntimeError(msg) from e
-
-            # Extract relevant components at crossing
-            x_cross, y_cross, z_cross, vx_cross, vy_cross, vz_cross = X_cross
-
-            if abs(vx_cross) <= tol:
-                half_period = t_cross
-                self._reset()
-                self._initial_state = X0
-                self.period = 2 * half_period
-                logger.info(f"Converged successfully after {attempt} attempts.")
-                logger.info(f"Converged Initial State: {np.array2string(self.initial_state, precision=12, suppress_small=True)}")
-                logger.info(f"Period: {self.period:.6f} (Half period: {half_period:.6f})")
-                return self.initial_state, half_period
-
-            try:
-                _, _, phi_final, _ = compute_stm(X0, self.mu, t_cross, forward=forward)
-                logger.debug(f"Computed STM at t={t_cross:.6f}")
-            except Exception as e:
-                msg = f"Error during STM integration (compute_stm) attempt {attempt}: {e}. Last state: {X0}"
-                logger.error(msg)
-                raise RuntimeError(msg) from e
-
-            # 3) Compute partial derivatives for correction
-            #    (these replicate the CR3BP equations used in the Matlab code)
-            rho1 = 1.0 / ((x_cross + mu)**2 + y_cross**2 + z_cross**2)**1.5
-            rho2 = 1.0 / ((x_cross - mu2)**2 + y_cross**2 + z_cross**2)**1.5
-
-            # second-derivatives
-            omgx1 = -(mu2 * (x_cross + mu) * rho1) - (mu * (x_cross - mu2) * rho2) + x_cross
-            DDz1  = -(mu2 * z_cross * rho1) - (mu * z_cross * rho2)
-            DDx1  = 2.0 * vy_cross + omgx1
-
-            # 4) CASE=1 Correction: fix z0
-            #    We want to kill Dx1 and Dz1 by adjusting x0 and Dy0.
-            #    In the Matlab code:
-            #
-            #    C1 = [phi(4,1) phi(4,5);
-            #          phi(6,1) phi(6,5)];
-            #    C2 = C1 - (1/Dy1)*[DDx1 DDz1]'*[phi(2,1) phi(2,5)];
-            #    C3 = inv(C2)*[-Dx1 -Dz1]';
-            #    dx0  = C3(1);
-            #    dDy0 = C3(2);
-
-            C1 = np.array([[phi_final[3, 0], phi_final[3, 4]],
-                        [phi_final[5, 0], phi_final[5, 4]]])
-
-            # Vector for partial derivative in the (Dx, Dz) direction
-            # [DDx1, DDz1]^T (2x1) times [phi(2,1), phi(2,5)] (1x2)
-            dd_vec = np.array([[DDx1], [DDz1]])  # Shape (2,1)
-            phi_2 = np.array([[phi_final[1, 0], phi_final[1, 4]]])  # Shape (1,2)
-            partial = dd_vec @ phi_2  # Result is (2,2)
-
-            # Subtract the partial derivative term, scaled by 1/Dy1
-            C2 = C1 - (1/vy_cross) * partial
-            
-            # Add regularization if matrix is nearly singular
-            if np.linalg.det(C2) < 1e-10:
-                C2 += np.eye(2) * 1e-10
-
-            # Compute the correction
-            C3 = np.linalg.solve(C2, np.array([[-vx_cross], [-vz_cross]]))
-
-            # Apply the correction
-            dx0 = C3[0, 0]
-            dDy0 = C3[1, 0]
-
-            # Update the initial guess
-            X0[0] += dx0
-            X0[4] += dDy0
+    def differential_correction(self, **kw):
+        cfg = correctionConfig(
+            residual_indices=(S.VX, S.VZ),
+            control_indices=(S.X,  S.VY),
+            extra_jacobian=self._halo_quadratic_term
+        )
+        return super().differential_correction(cfg, **kw)
 
 
     def eccentricity(self) -> float:
