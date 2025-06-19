@@ -2,6 +2,7 @@ from typing import Callable, Sequence, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.integrate import solve_ivp
 from scipy.optimize import root_scalar
 
 from algorithms.dynamics.rtbp import create_rtbp_system
@@ -229,6 +230,7 @@ def _propagate_crtbp(
     mu: float,
     forward: int = 1,
     steps: int = 1000,
+    use_scipy: bool = True,
 ) -> Solution:
     state0_np = _validate_initial_state(state0)
     system = create_rtbp_system(mu)
@@ -236,10 +238,18 @@ def _propagate_crtbp(
     tf_abs = abs(tf)
     t_eval = np.linspace(t0_abs, tf_abs, steps)
 
-    integrator = AdaptiveRK(order=8, max_step=1e4, rtol=1e-3, atol=1e-6)
-    sol = integrator.integrate(system, state0_np, t_eval)
-    t = forward * sol.times
-    return Solution(t, sol.states)
+    if use_scipy:
+        sol = solve_ivp(system.rhs, (t0_abs, tf_abs), state0_np, t_eval=t_eval, method='DOP853', dense_output=True)
+        times = sol.t
+        states = sol.y.T
+    else:
+        integrator = AdaptiveRK(order=8, max_step=1e4, rtol=1e-3, atol=1e-6)
+        sol = integrator.integrate(system, state0_np, t_eval)
+        times = sol.times
+        states = sol.states
+
+    t = forward * times
+    return Solution(t, states)
 
 
 def _validate_initial_state(state):

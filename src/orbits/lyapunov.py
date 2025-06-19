@@ -3,6 +3,7 @@ from typing import Optional, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
+from algorithms.geometry import _find_y_zero_crossing
 from orbits.base import PeriodicOrbit, S, correctionConfig, orbitConfig
 from system.libration import CollinearPoint, L3Point
 from utils.log_config import logger
@@ -83,3 +84,42 @@ class LyapunovOrbit(PeriodicOrbit):
         NotImplementedError
         """
         raise NotImplementedError("Eccentricity is not implemented for Lyapunov orbits.")
+
+
+class VerticalLyapunovOrbit(PeriodicOrbit):
+
+    def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):
+        super().__init__(config, initial_state)
+
+    def _initial_guess(self) -> NDArray[np.float64]:
+        raise NotImplementedError("Initial guess is not implemented for Vertical Lyapunov orbits.")
+
+    @staticmethod
+    def _identity_shift(_: np.ndarray, __: np.ndarray) -> np.ndarray:  # noqa: D401
+        """Return the correction matrix *E* for the augmented Jacobian."""
+        E = np.zeros((2, 2))
+        E[1, 0] = 1.0
+        return E
+
+    def differential_correction(
+        self,
+        *,
+        tol: float = 1e-10,
+        max_attempts: int = 25,
+        forward: int = 1,
+    ):
+        cfg = correctionConfig(
+            residual_indices=(S.VX, S.Z),
+            control_indices=(S.VZ, S.VY),
+            target=(0.0, 0.0), 
+            extra_jacobian=self._identity_shift,
+            event_func=_find_y_zero_crossing,
+        )
+
+        return super().differential_correction(
+            cfg, tol=tol, max_attempts=max_attempts, forward=forward
+        )
+
+    def eccentricity(self) -> float:
+        """Eccentricity is not defined for Vertical Lyapunov orbits."""
+        return np.nan

@@ -32,9 +32,6 @@ class orbitConfig:
         # Validate that distance is positive.
         self.orbit_family = self.orbit_family.lower() # Normalize to lowercase
 
-        if self.orbit_family not in ["halo", "lyapunov", "generic"]:
-            raise NotImplementedError(f"Orbit family {self.orbit_family} not implemented.")
-
         if self.libration_point_idx not in [1, 2, 3, 4, 5]:
             raise ValueError(f"Libration point index must be 1, 2, 3, 4, or 5. Got {self.libration_point_idx}.")
 
@@ -616,27 +613,33 @@ class PeriodicOrbit(ABC):
             max_attempts: int = 25,
             forward: int = 1
         ) -> tuple[np.ndarray, float]:
-
         X0 = self.initial_state.copy()
-        for k in range(max_attempts+1):
+        for k in range(max_attempts + 1):
+            logger.debug(f"Differential correction iteration {k}")
             t_ev, X_ev = cfg.event_func(X0, self.mu, forward=forward)
+            logger.debug(f"called event_func: t_ev: {t_ev}, X_ev: {X_ev}")
             R = X_ev[list(cfg.residual_indices)] - np.array(cfg.target)
 
             if np.linalg.norm(R, ord=np.inf) < tol:
-                self._reset();  self._initial_state = X0
-                self.period = 2*t_ev
+                self._reset(); self._initial_state = X0
+                self.period = 2 * t_ev
                 return X0, t_ev
 
             _, _, Phi, _ = compute_stm(X0, self.mu, t_ev, forward=forward)
+            logger.debug(f"Called compute_stm: Phi: {Phi}")
             J = Phi[np.ix_(cfg.residual_indices, cfg.control_indices)]
 
             if cfg.extra_jacobian is not None:
                 J -= cfg.extra_jacobian(X_ev, Phi)
 
             delta = np.linalg.solve(J, -R)
+            logger.info(f"Differential correction delta: {delta} at iteration {k}")
             X0[list(cfg.control_indices)] += delta
+        
+            logger.info(f"X0: {X0}")
 
         raise RuntimeError("did not converge")
+
 
 class GenericOrbit(PeriodicOrbit):
     """
@@ -644,13 +647,12 @@ class GenericOrbit(PeriodicOrbit):
     """
     def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):
         super().__init__(config, initial_state)
-        # For generic orbits, period must be set externally if propagation is desired
         if self.period is None:
-            self.period = 2 * np.pi  # Default to 1 canonical period if not set
+            self.period = np.pi
 
     @property
     def eccentricity(self):
-        return np.nan  # Not defined for generic orbits
+        return np.nan
 
     def _initial_guess(self, **kwargs):
         if hasattr(self, '_initial_state') and self._initial_state is not None:
