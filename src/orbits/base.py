@@ -15,7 +15,7 @@ from algorithms.energy import crtbp_energy, energy_to_jacobi
 from algorithms.geometry import _find_y_zero_crossing
 from algorithms.integrators.rk import RungeKutta
 from algorithms.integrators.symplectic import TaoSymplectic
-from plots.plots import _plot_body, _set_axes_equal, _set_dark_mode
+from plots.plots import _plot_body, _set_axes_equal, _set_dark_mode, animate_trajectories
 from system import System
 from utils.coordinates import rotating_to_inertial
 from utils.log_config import logger
@@ -45,7 +45,6 @@ class correctionConfig(NamedTuple):
     extra_jacobian: Callable[[np.ndarray,np.ndarray], np.ndarray] | None = None
     target: tuple[float, ...] = (0.0,)
     event_func: Callable[...,tuple[float,np.ndarray]] = _find_y_zero_crossing
-
 
 
 class PeriodicOrbit(ABC):
@@ -337,6 +336,13 @@ class PeriodicOrbit(ABC):
             msg = f"Invalid frame '{frame}'. Must be 'rotating' or 'inertial'."
             logger.error(msg)
             raise ValueError(msg)
+        
+    def animate(self, **kwargs):
+        if self._trajectory is None:
+            logger.warning("No trajectory to animate. Call propagate() first.")
+            return None, None
+        
+        return animate_trajectories(self._trajectory, self._times, [self._system.primary, self._system.secondary], self._system.distance, **kwargs)
 
     def plot_rotating_frame(self, show=True, figsize=(10, 8), dark_mode=True, **kwargs):
         """
@@ -631,6 +637,10 @@ class PeriodicOrbit(ABC):
 
             if cfg.extra_jacobian is not None:
                 J -= cfg.extra_jacobian(X_ev, Phi)
+
+            if np.linalg.det(J) < 1e-12:
+                logger.warning(f"Jacobian determinant is small ({np.linalg.det(J):.2e}), adding regularization.")
+                J += np.eye(J.shape[0]) * 1e-12
 
             delta = np.linalg.solve(J, -R)
             logger.info(f"Differential correction delta: {delta} at iteration {k}")

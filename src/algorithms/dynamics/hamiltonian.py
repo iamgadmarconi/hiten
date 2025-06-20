@@ -121,7 +121,16 @@ class HamiltonianSystem(DynamicalSystem):
 
     @property
     def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        return _hamiltonian_rhs
+        # Capture instance-specific data in a closure for the RHS function.
+        jac_H, clmo_H, n_dof = self.jac_H, self.clmo_H, self.n_dof
+
+        @njit(cache=True, fastmath=FASTMATH)
+        def _rhs_closure(t: float, state: np.ndarray) -> np.ndarray:
+            # The 't' argument is unused in this autonomous system but required
+            # by the standard ODE solver interface.
+            return _hamiltonian_rhs(state, jac_H, clmo_H, n_dof)
+        
+        return _rhs_closure
     
     def dH_dQ(self, Q: np.ndarray, P: np.ndarray) -> np.ndarray:
         self._validate_coordinates(Q, P)

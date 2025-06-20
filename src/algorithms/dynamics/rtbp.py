@@ -245,7 +245,7 @@ def variational_equations(t, PHI_vec, mu, forward=1):
     return dPHI_vec
 
 
-def compute_stm(x0, mu, tf, forward=1, **solve_kwargs):
+def compute_stm(x0, mu, tf, **solve_kwargs):
     """
     Compute the State Transition Matrix (STM) for the CR3BP.
     
@@ -305,7 +305,7 @@ def compute_stm(x0, mu, tf, forward=1, **solve_kwargs):
 
     # Create DynamicalSystem wrapper for the 42-dim variational equations
     def _var_eq(t, y):  # noqa: D401 (simple func)
-        return variational_equations(t, y, mu, forward)
+        return variational_equations(t, y, mu, 1)
 
     rhs_system = create_rhs_system(_var_eq, dim=42, name="CR3BP STM")
 
@@ -314,11 +314,6 @@ def compute_stm(x0, mu, tf, forward=1, **solve_kwargs):
     integrator = RungeKutta(order=order)
 
     sol_obj = integrator.integrate(rhs_system, PHI0, times)
-
-    # If backward integration requested, flip sign of t for consistency
-    t = sol_obj.times.copy()
-    if forward == -1:
-        t = -t
 
     PHI = sol_obj.states  # shape (n_times, 42)
     
@@ -329,7 +324,7 @@ def compute_stm(x0, mu, tf, forward=1, **solve_kwargs):
     phi_tf_flat = PHI[-1, :36]
     phi_T = phi_tf_flat.reshape((6, 6))
 
-    return x, t, phi_T, PHI
+    return x, sol_obj.times, phi_T, PHI
 
 
 def monodromy_matrix(x0, mu, period, **solve_kwargs):

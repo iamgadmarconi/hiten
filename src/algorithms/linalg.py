@@ -1,6 +1,6 @@
+from typing import Set, Tuple
+
 import numpy as np
-import warnings
-from typing import Tuple, List, Union, Set
 
 from utils.log_config import logger
 
@@ -123,7 +123,7 @@ def eigenvalue_decomposition(A: np.ndarray, discrete: int = 0, delta: float = 1e
     Wu = np.column_stack(Wu_list) if Wu_list else np.zeros((A.shape[0], 0), dtype=np.complex128)
     Wc = np.column_stack(Wc_list) if Wc_list else np.zeros((A.shape[0], 0), dtype=np.complex128)
 
-    logger.info(f"Eigenvalue decomposition finished. Subspace dimensions: stable={len(sn)}, unstable={len(un)}, center={len(cn)}")
+    logger.debug(f"Eigenvalue decomposition finished. Subspace dimensions: stable={len(sn)}, unstable={len(un)}, center={len(cn)}")
     logger.debug(f"Stable eigenvalues: {sn}")
     logger.debug(f"Unstable eigenvalues: {un}")
     logger.debug(f"Center eigenvalues: {cn}")
@@ -155,8 +155,8 @@ def stability_indices(M: np.ndarray, tol: float = 1e-8) -> Tuple[np.ndarray, np.
 
     Notes
     -----
-    - The stability indices are computed as ν = (λ + 1/λ)/2. 
-    - For a stable orbit, all indices must satisfy |ν| ≤ 1.
+    - The stability indices are computed as nu = (λ + 1/λ)/2. 
+    - For a stable orbit, all indices must satisfy |nu| ≤ 1.
     - Assumes the input matrix `M` is symplectic or nearly so, meaning 
       eigenvalues should come in reciprocal pairs (λ, 1/λ).
     - Issues `RuntimeWarning` if expected pairing structure is not found 
@@ -164,9 +164,7 @@ def stability_indices(M: np.ndarray, tol: float = 1e-8) -> Tuple[np.ndarray, np.
       or a non-symplectic matrix.
     """
     logger.info(f"Calculating stability indices for matrix M with shape {M.shape}, tolerance={tol}")
-    if not isinstance(M, np.ndarray):
-        logger.debug("Input M is not ndarray, converting.")
-        M = np.asarray(M)
+
     if M.shape != (6, 6):
         logger.error(f"Input matrix M has incorrect shape {M.shape}, expected (6, 6).")
         raise ValueError("Input matrix M must be 6x6.")
@@ -409,3 +407,48 @@ def _zero_small_imag_part(eig_val: complex, tol: float = 1e-12) -> complex:
     if abs(eig_val.imag) < tol:
         return complex(eig_val.real, 0.0)
     return eig_val
+
+
+def _totime(t, tf):
+    """
+    Find indices in a time array that are closest to specified target times.
+    
+    This function searches through a time array and finds the indices where
+    the time values are closest to the specified target times.
+    
+    Parameters
+    ----------
+    t : array_like
+        Array of time values to search through
+    tf : float or array_like
+        Target time value(s) to find in the array
+    
+    Returns
+    -------
+    ndarray
+        Array of indices where the values in 't' are closest to the
+        corresponding values in 'tf'
+    
+    Notes
+    -----
+    This function is particularly useful when trying to find the point in a
+    trajectory closest to a specific time, such as when identifying positions
+    at specific fractions of a periodic orbit.
+    
+    The function works with absolute time values, so the sign of the input times
+    does not affect the results.
+    """
+    # Convert t to its absolute values.
+    t = np.abs(t)
+    # Ensure tf is an array (handles scalar input as well).
+    tf = np.atleast_1d(tf)
+    
+    # Preallocate an array to hold the indices.
+    I = np.empty(tf.shape, dtype=int)
+    
+    # For each target value in tf, find the index in t closest to it.
+    for k, target in enumerate(tf):
+        diff = np.abs(target - t)
+        I[k] = np.argmin(diff)
+    
+    return I
