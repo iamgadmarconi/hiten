@@ -246,12 +246,12 @@ class Manifold:
         mu = self.mu
 
         primary_center = np.array([-mu, 0, 0])
-        primary_radius = self.generating_orbit._system.bodies[0].radius
-        _plot_body(ax, primary_center, primary_radius / self.generating_orbit._system.distance, 'blue', self.generating_orbit._system.bodies[0].name)
+        primary_radius = self.generating_orbit._system.primary.radius
+        _plot_body(ax, primary_center, primary_radius / self.generating_orbit._system.distance, 'blue', self.generating_orbit._system.primary.name)
 
         secondary_center = np.array([(1 - mu), 0, 0])
-        secondary_radius = self.generating_orbit._system.bodies[1].radius
-        _plot_body(ax, secondary_center, secondary_radius / self.generating_orbit._system.distance, 'grey', self.generating_orbit._system.bodies[1].name)
+        secondary_radius = self.generating_orbit._system.secondary.radius
+        _plot_body(ax, secondary_center, secondary_radius / self.generating_orbit._system.distance, 'grey', self.generating_orbit._system.secondary.name)
         
         ax.set_xlabel('x')
         ax.set_ylabel('y')

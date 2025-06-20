@@ -638,6 +638,10 @@ class PeriodicOrbit(ABC):
             if cfg.extra_jacobian is not None:
                 J -= cfg.extra_jacobian(X_ev, Phi)
 
+            if np.linalg.det(J) < 1e-12:
+                logger.warning(f"Jacobian determinant is small ({np.linalg.det(J):.2e}), adding regularization.")
+                J += np.eye(J.shape[0]) * 1e-12
+
             delta = np.linalg.solve(J, -R)
             logger.info(f"Differential correction delta: {delta} at iteration {k}")
             X0[list(cfg.control_indices)] += delta
