@@ -91,7 +91,6 @@ class Manifold:
         if forward is None:
             forward = -1 if self.stable == 1 else 1
         else:
-            # Accept Python ``bool`` or explicit ±1
             forward = 1 if forward in [True, 1] else -1
 
         if forward * self.stable != -1:
@@ -160,20 +159,20 @@ class Manifold:
         self.manifold_result = ManifoldResult(ysos, dysos, states_list, times_list, self._successes, self._attempts)
         return self.manifold_result
 
-    def _compute_manifold_section(self, state: np.ndarray, period: float, fraction: float, forward: int = 1, NN: int = 1):
-        xx, tt, phi_T, PHI = compute_stm(state, self.mu, period, forward=forward)
+    def _compute_manifold_section(self, state: np.ndarray, period: float, fraction: float, NN: int = 1):
+        xx, tt, phi_T, PHI = compute_stm(state, self.mu, period)
 
         sn, un, _, Ws, Wu, _ = eigenvalue_decomposition(phi_T, discrete=1)
 
         # Filter for real stable eigenvalues and their corresponding eigenvectors
         stable_real_indices = np.where(np.isreal(sn))[0]
         snreal_vals = np.real(sn[stable_real_indices])
-        snreal_vecs = np.real(Ws[:, stable_real_indices])
+        snreal_vecs = Ws[:, stable_real_indices]
         
         # Filter for real unstable eigenvalues and their corresponding eigenvectors
         unstable_real_indices = np.where(np.isreal(un))[0]
         unreal_vals = np.real(un[unstable_real_indices])
-        unreal_vecs = np.real(Wu[:, unstable_real_indices])
+        unreal_vecs = Wu[:, unstable_real_indices]
 
         col_idx = NN - 1
 
@@ -198,11 +197,11 @@ class Manifold:
 
         if self.stable == 1:
             MAN = self.direction * (phi_frac @ WS)
-            logger.debug(f"Using stable manifold direction with eigenvalue {snreal_vals[col_idx]:.6f} for {NN}th eigenvector")
+            logger.debug(f"Using stable manifold direction with eigenvalue {np.real(snreal_vals[col_idx]):.6f} for {NN}th eigenvector")
 
         if self.stable == -1:
             MAN = self.direction * (phi_frac @ WU)
-            logger.debug(f"Using unstable manifold direction with eigenvalue {unreal_vals[col_idx]:.6f} for {NN}th eigenvector")
+            logger.debug(f"Using unstable manifold direction with eigenvalue {np.real(unreal_vals[col_idx]):.6f} for {NN}th eigenvector")
 
         disp_magnitude = np.linalg.norm(MAN[0:3])
 

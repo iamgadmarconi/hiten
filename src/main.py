@@ -69,7 +69,7 @@ def main() -> None:
     vertical_orbit.propagate(steps=1000, method="rk8")
     vertical_orbit.plot("rotating")
 
-    halo_orbit = HaloOrbit(orbitConfig(system, "Halo", L_POINT, extra_params={"Az": 1e-1, "Zenith": "Southern"}))
+    halo_orbit = HaloOrbit(orbitConfig(system, "Halo", L_POINT, extra_params={"Az": 0.2, "Zenith": "Southern"}))
     halo_orbit.differential_correction(max_attempts=25)
     halo_orbit.propagate(steps=1000, method="rk8")
     halo_orbit.plot("rotating")
