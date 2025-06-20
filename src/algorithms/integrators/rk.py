@@ -444,20 +444,10 @@ def _hamiltonian_rhs(y: np.ndarray, jac_H, clmo_H, n_dof: int) -> np.ndarray:  #
 
 def _build_rhs_wrapper(system: DynamicalSystem) -> Callable[[float, np.ndarray], np.ndarray]:
 
-    if isinstance(system, HamiltonianSystem):
-        n_dof = system.n_dof
-        jac_H = system.jac_H
-        clmo_H = system.clmo_H
-
-        def _ham_rhs(t, y):
-            return _hamiltonian_rhs(y, jac_H, clmo_H, n_dof)
-
-        return _ham_rhs
-
     rhs_func = system.rhs
 
     try:
-        sig = inspect.signature(rhs_func.py_func)
+        sig = inspect.signature(rhs_func)
     except AttributeError:
         sig = inspect.signature(rhs_func)
 

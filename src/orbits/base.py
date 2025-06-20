@@ -47,7 +47,6 @@ class correctionConfig(NamedTuple):
     event_func: Callable[...,tuple[float,np.ndarray]] = _find_y_zero_crossing
 
 
-
 class PeriodicOrbit(ABC):
 
     def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):

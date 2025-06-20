@@ -1,10 +1,211 @@
 from typing import Optional
 
+import matplotlib.animation as animation
 import matplotlib.patheffects as patheffects
 import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 
+from utils.coordinates import (_get_angular_velocity, rotating_to_inertial,
+                               si_time, to_si_units)
+
+
+def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14, 6), save=False):
+    """
+    Create an animated comparison of trajectories in rotating and inertial frames.
+    
+    Parameters
+    ----------
+    sol : scipy.integrate.OdeSolution
+        Solution object from the ODE solver containing trajectory data.
+    bodies : list
+        List of celestial body objects with properties like mass, radius, and name.
+    system_distance : float
+        Characteristic distance of the system in meters.
+    interval : int, default=20
+        Time interval between animation frames in milliseconds.
+    figsize : tuple, default=(14, 6)
+        Figure size in inches (width, height).
+    save : bool, default=False
+        Whether to save the animation as an MP4 file.
+        
+    Returns
+    -------
+    matplotlib.animation.FuncAnimation
+        The animation object.
+        
+    Notes
+    -----
+    This function creates a side-by-side animation showing the trajectory in both
+    rotating and inertial frames, with consistent axis scaling to maintain proper
+    proportions. The animation shows the motion of celestial bodies and the particle
+    over time, with time displayed in days.
+    """
+    fig = plt.figure(figsize=figsize)
+    ax_rot = fig.add_subplot(121, projection='3d')
+    ax_inert = fig.add_subplot(122, projection='3d')
+
+    mu = bodies[1].mass / (bodies[0].mass + bodies[1].mass)
+    omega_real = _get_angular_velocity(bodies[0].mass, bodies[1].mass, system_distance)
+    t_si = si_time(sol.t, bodies[0].mass, bodies[1].mass, system_distance)
+
+    traj_rot = np.array([
+        to_si_units(s, bodies[0].mass, bodies[1].mass, system_distance)[:3]
+        for s in sol.y.T
+    ])
+    
+    traj_inert = []
+    for s_dimless, t_dimless in zip(sol.y.T, sol.t):
+        t_current_si = si_time(t_dimless, bodies[0].mass, bodies[1].mass, system_distance)
+        s_inert_dimless = rotating_to_inertial(s_dimless, t_current_si, omega_real, mu)
+        s_inert_si = to_si_units(s_inert_dimless, bodies[0].mass, bodies[1].mass, system_distance)
+        traj_inert.append(s_inert_si[:3])
+    traj_inert = np.array(traj_inert)
+    
+    secondary_x = system_distance * np.cos(omega_real * t_si)
+    secondary_y = system_distance * np.sin(omega_real * t_si)
+    secondary_z = np.zeros_like(secondary_x)
+
+    primary_rot_center = np.array([-mu*system_distance, 0, 0])
+    secondary_rot_center = np.array([(1.0 - mu)*system_distance, 0, 0])
+    
+    primary_inert_center = np.array([0, 0, 0])
+
+    all_x = np.concatenate([
+        traj_rot[:,0],
+        traj_inert[:,0],
+        secondary_x,
+        [primary_rot_center[0], secondary_rot_center[0], primary_inert_center[0]]
+    ])
+    all_y = np.concatenate([
+        traj_rot[:,1],
+        traj_inert[:,1],
+        secondary_y,
+        [primary_rot_center[1], secondary_rot_center[1], primary_inert_center[1]]
+    ])
+    all_z = np.concatenate([
+        traj_rot[:,2],
+        traj_inert[:,2],
+        secondary_z,
+        [primary_rot_center[2], secondary_rot_center[2], primary_inert_center[2]]
+    ])
+    
+    max_sphere = max(bodies[0].radius, bodies[1].radius)
+    margin = 1.2 * max_sphere
+    
+    x_min, x_max = all_x.min() - margin, all_x.max() + margin
+    y_min, y_max = all_y.min() - margin, all_y.max() + margin
+    z_min, z_max = all_z.min() - margin, all_z.max() + margin
+    
+    x_range = x_max - x_min
+    y_range = y_max - y_min
+    z_range = z_max - z_min
+    max_range = max(x_range, y_range, z_range)
+    
+    x_mid = 0.5*(x_min + x_max)
+    y_mid = 0.5*(y_min + y_max)
+    z_mid = 0.5*(z_min + z_max)
+    half_extent = 0.5 * max_range
+
+    def init():
+        """
+        Initialize the animation.
+        
+        Returns
+        -------
+        tuple
+            A tuple containing the figure and the axes.
+            
+        Notes
+        -----
+        Clears the axes and sets up the labels and limits.
+        """
+        for ax in (ax_rot, ax_inert):
+            ax.clear()
+            ax.set_xlabel("X [m]")
+            ax.set_ylabel("Y [m]")
+            ax.set_zlabel("Z [m]")
+            _set_axes_equal(ax)
+        
+        ax_rot.set_title("Rotating Frame (SI Distances)")
+        ax_inert.set_title("Inertial Frame (Real Time, Real Ω)")
+        return fig,
+    
+    def update(frame):
+        """
+        Update the animation for each frame.
+        
+        Parameters
+        ----------
+        frame : int
+            The current frame number.
+            
+        Returns
+        -------
+        tuple
+            A tuple containing the figure and the axes.
+
+        Notes
+        -----
+        Updates the plot for the current frame, clearing the axes and
+        setting the title and labels.
+        """
+        ax_rot.clear()
+        ax_inert.clear()
+        
+        for ax in (ax_rot, ax_inert):
+            ax.set_xlabel("X [m]")
+            ax.set_ylabel("Y [m]")
+            ax.set_zlabel("Z [m]")
+        
+        current_t_days = t_si[frame] / 86400.0
+        fig.suptitle(f"Time = {current_t_days:.2f} days")
+        
+        ax_rot.plot(traj_rot[:frame+1, 0],
+                    traj_rot[:frame+1, 1],
+                    traj_rot[:frame+1, 2],
+                    color='red', label='Particle')
+        
+        _plot_body(ax_rot, primary_rot_center, bodies[0].radius, 'blue', bodies[0].name)
+        _plot_body(ax_rot, secondary_rot_center, bodies[1].radius, 'gray', bodies[1].name)
+        
+        ax_rot.set_title("Rotating Frame (SI Distances)")
+        ax_rot.legend()
+        _set_axes_equal(ax_rot)
+        
+        ax_inert.plot(traj_inert[:frame+1, 0],
+                      traj_inert[:frame+1, 1],
+                      traj_inert[:frame+1, 2],
+                      color='red', label='Particle')
+        
+        _plot_body(ax_inert, primary_inert_center, bodies[0].radius, 'blue', bodies[0].name)
+        
+        ax_inert.plot(secondary_x[:frame+1], secondary_y[:frame+1], secondary_z[:frame+1],
+                      '--', color='gray', alpha=0.5, label=f'{bodies[1].name} orbit')
+        secondary_center_now = np.array([secondary_x[frame], secondary_y[frame], secondary_z[frame]])
+        _plot_body(ax_inert, secondary_center_now, bodies[1].radius, 'gray', bodies[1].name)
+        
+        ax_inert.set_title("Inertial Frame (Real Time, Real Ω)")
+        ax_inert.legend()
+        _set_axes_equal(ax_inert)
+        
+        return fig,
+    
+    total_frames = len(sol.t)
+    frames_to_use = range(0, total_frames, 30)  # e.g. step by 5
+
+    ani = animation.FuncAnimation(
+        fig, update,
+        frames=frames_to_use,
+        init_func=init,
+        interval=interval,
+        blit=False
+    )
+    if save:
+        ani.save('trajectory.mp4', fps=60, dpi=500)
+    plt.show()
+    plt.close()
+    return ani
 
 def _plot_body(ax, center, radius, color, name, u_res=40, v_res=15):
     """
@@ -33,17 +234,14 @@ def _plot_body(ax, center, radius, color, name, u_res=40, v_res=15):
     z = center[2] + radius * np.cos(v)
     ax.plot_surface(x, y, z, color=color, alpha=0.9)
     
-    # Add a small marker for the center of the body
     ax.scatter(center[0], center[1], center[2], color=color, s=20)
     
-    # Add high contrast text label
     text_obj = ax.text(center[0], center[1], center[2] + 1.5*radius, name, 
                        color='white',
                        fontweight='bold',
                        fontsize=12,
                        ha='center')
     
-    # Add a subtle outline for even better contrast
     text_obj.set_path_effects([
         patheffects.withStroke(linewidth=1.5, foreground='black')
     ])

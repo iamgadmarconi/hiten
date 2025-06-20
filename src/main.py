@@ -6,11 +6,12 @@ from algorithms.center.utils import format_cm_table
 from config import (C_OMEGA_HEURISTIC, DT, H0_LEVELS, INTEGRATOR_ORDER,
                     L_POINT, MAX_DEG, N_ITER, N_SEEDS, PRIMARY, SECONDARY,
                     USE_GPU, USE_SYMPLECTIC)
-from orbits.base import GenericOrbit, S, correctionConfig, orbitConfig
+from orbits.base import orbitConfig
 from orbits.halo import HaloOrbit
 from orbits.lyapunov import LyapunovOrbit, VerticalLyapunovOrbit
 from system.base import System, systemConfig
 from system.body import Body
+from system.manifold import Manifold, manifoldConfig
 from utils.constants import Constants
 from utils.log_config import logger
 
@@ -62,13 +63,16 @@ def main() -> None:
     ic = cm.cm2ic([0.0, 0.0], energy=H0_LEVELS[0])
     logger.info(f"Initial conditions:\n\n{ic}\n\n")
 
-    orbit_config = orbitConfig(system, "Vertical Lyapunov", L_POINT)
-    orbit = VerticalLyapunovOrbit(orbit_config, ic)
+    orbit = VerticalLyapunovOrbit(orbitConfig(system, "Vertical Lyapunov", L_POINT), ic)
 
     orbit.differential_correction(max_attempts=100)
     orbit.propagate(steps=1000, method="rk8")
     orbit.plot("rotating")
     orbit.plot("inertial")
+
+    manifold = Manifold(manifoldConfig(orbit, stable=True, direction="Positive", method="rk8"))
+    manifold.compute()
+    manifold.plot()
 
 
 if __name__ == "__main__":

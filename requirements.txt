@@ -6,3 +6,4 @@ h5py==3.13.0
 sympy==1.14.0
 profila==0.3.2
 matplotlib==3.10.3
+tqdm==4.67.1

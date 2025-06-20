@@ -9,11 +9,10 @@ related quantities in the CR3BP, including:
 - Computing the potential and effective potential
 """
 
-import math
-import numpy as np
-from typing import Tuple, Union, List, Optional, Sequence
+from typing import Sequence, Tuple
 
-# Import logger
+import numpy as np
+
 from utils.log_config import logger
 
 
