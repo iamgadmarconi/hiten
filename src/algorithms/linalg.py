@@ -123,7 +123,7 @@ def eigenvalue_decomposition(A: np.ndarray, discrete: int = 0, delta: float = 1e
     Wu = np.column_stack(Wu_list) if Wu_list else np.zeros((A.shape[0], 0), dtype=np.complex128)
     Wc = np.column_stack(Wc_list) if Wc_list else np.zeros((A.shape[0], 0), dtype=np.complex128)
 
-    logger.info(f"Eigenvalue decomposition finished. Subspace dimensions: stable={len(sn)}, unstable={len(un)}, center={len(cn)}")
+    logger.debug(f"Eigenvalue decomposition finished. Subspace dimensions: stable={len(sn)}, unstable={len(un)}, center={len(cn)}")
     logger.debug(f"Stable eigenvalues: {sn}")
     logger.debug(f"Unstable eigenvalues: {un}")
     logger.debug(f"Center eigenvalues: {cn}")

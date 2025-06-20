@@ -126,24 +126,17 @@ class Manifold:
     def _compute_manifold_section(self, state: np.ndarray, period: float, fraction: float, forward: int = 1, NN: int = 1):
         xx, tt, phi_T, PHI = compute_stm(state, self.mu, period, forward=forward)
 
-        _, eig_vals, eig_vecs = eigenvalue_decomposition(phi_T, discrete=1)
+        sn, un, _, Ws, Wu, _ = eigenvalue_decomposition(phi_T, discrete=1)
 
-        stable_eig_vals, stable_eig_vecs = [], []
-        unstable_eig_vals, unstable_eig_vecs = [], []
-
-        for val, vec in zip(eig_vals, eig_vecs.T):
-            if np.isreal(val) and not np.isclose(np.abs(val), 1.0):
-                if np.abs(val) < 1.0:
-                    stable_eig_vals.append(np.real(val))
-                    stable_eig_vecs.append(np.real(vec))
-                elif np.abs(val) > 1.0:
-                    unstable_eig_vals.append(np.real(val))
-                    unstable_eig_vecs.append(np.real(vec))
-
-        snreal_vals = np.array(stable_eig_vals)
-        unreal_vals = np.array(unstable_eig_vals)
-        snreal_vecs = np.column_stack(stable_eig_vecs) if stable_eig_vecs else np.zeros((6, 0))
-        unreal_vecs = np.column_stack(unstable_eig_vecs) if unstable_eig_vecs else np.zeros((6, 0))
+        # Filter for real stable eigenvalues and their corresponding eigenvectors
+        stable_real_indices = np.where(np.isreal(sn))[0]
+        snreal_vals = np.real(sn[stable_real_indices])
+        snreal_vecs = np.real(Ws[:, stable_real_indices])
+        
+        # Filter for real unstable eigenvalues and their corresponding eigenvectors
+        unstable_real_indices = np.where(np.isreal(un))[0]
+        unreal_vals = np.real(un[unstable_real_indices])
+        unreal_vecs = np.real(Wu[:, unstable_real_indices])
 
         col_idx = NN - 1
 

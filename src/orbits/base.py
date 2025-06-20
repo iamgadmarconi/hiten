@@ -15,7 +15,7 @@ from algorithms.energy import crtbp_energy, energy_to_jacobi
 from algorithms.geometry import _find_y_zero_crossing
 from algorithms.integrators.rk import RungeKutta
 from algorithms.integrators.symplectic import TaoSymplectic
-from plots.plots import _plot_body, _set_axes_equal, _set_dark_mode
+from plots.plots import _plot_body, _set_axes_equal, _set_dark_mode, animate_trajectories
 from system import System
 from utils.coordinates import rotating_to_inertial
 from utils.log_config import logger
@@ -336,6 +336,13 @@ class PeriodicOrbit(ABC):
             msg = f"Invalid frame '{frame}'. Must be 'rotating' or 'inertial'."
             logger.error(msg)
             raise ValueError(msg)
+        
+    def animate(self, **kwargs):
+        if self._trajectory is None:
+            logger.warning("No trajectory to animate. Call propagate() first.")
+            return None, None
+        
+        return animate_trajectories(self._trajectory, self._times, [self._system.primary, self._system.secondary], self._system.distance, **kwargs)
 
     def plot_rotating_frame(self, show=True, figsize=(10, 8), dark_mode=True, **kwargs):
         """

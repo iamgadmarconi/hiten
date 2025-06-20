@@ -10,14 +10,13 @@ from utils.coordinates import (_get_angular_velocity, rotating_to_inertial,
                                si_time, to_si_units)
 
 
-def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14, 6), save=False):
+def animate_trajectories(states, times, bodies, system_distance, interval=20, figsize=(14, 6), save=False):
     """
     Create an animated comparison of trajectories in rotating and inertial frames.
     
     Parameters
     ----------
-    sol : scipy.integrate.OdeSolution
-        Solution object from the ODE solver containing trajectory data.
+    sol : integration result
     bodies : list
         List of celestial body objects with properties like mass, radius, and name.
     system_distance : float
@@ -41,21 +40,22 @@ def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14,
     proportions. The animation shows the motion of celestial bodies and the particle
     over time, with time displayed in days.
     """
+
     fig = plt.figure(figsize=figsize)
     ax_rot = fig.add_subplot(121, projection='3d')
     ax_inert = fig.add_subplot(122, projection='3d')
 
     mu = bodies[1].mass / (bodies[0].mass + bodies[1].mass)
     omega_real = _get_angular_velocity(bodies[0].mass, bodies[1].mass, system_distance)
-    t_si = si_time(sol.t, bodies[0].mass, bodies[1].mass, system_distance)
+    t_si = si_time(times, bodies[0].mass, bodies[1].mass, system_distance)
 
     traj_rot = np.array([
         to_si_units(s, bodies[0].mass, bodies[1].mass, system_distance)[:3]
-        for s in sol.y.T
+        for s in states
     ])
     
     traj_inert = []
-    for s_dimless, t_dimless in zip(sol.y.T, sol.t):
+    for s_dimless, t_dimless in zip(states, times):
         t_current_si = si_time(t_dimless, bodies[0].mass, bodies[1].mass, system_distance)
         s_inert_dimless = rotating_to_inertial(s_dimless, t_current_si, omega_real, mu)
         s_inert_si = to_si_units(s_inert_dimless, bodies[0].mass, bodies[1].mass, system_distance)
@@ -70,42 +70,6 @@ def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14,
     secondary_rot_center = np.array([(1.0 - mu)*system_distance, 0, 0])
     
     primary_inert_center = np.array([0, 0, 0])
-
-    all_x = np.concatenate([
-        traj_rot[:,0],
-        traj_inert[:,0],
-        secondary_x,
-        [primary_rot_center[0], secondary_rot_center[0], primary_inert_center[0]]
-    ])
-    all_y = np.concatenate([
-        traj_rot[:,1],
-        traj_inert[:,1],
-        secondary_y,
-        [primary_rot_center[1], secondary_rot_center[1], primary_inert_center[1]]
-    ])
-    all_z = np.concatenate([
-        traj_rot[:,2],
-        traj_inert[:,2],
-        secondary_z,
-        [primary_rot_center[2], secondary_rot_center[2], primary_inert_center[2]]
-    ])
-    
-    max_sphere = max(bodies[0].radius, bodies[1].radius)
-    margin = 1.2 * max_sphere
-    
-    x_min, x_max = all_x.min() - margin, all_x.max() + margin
-    y_min, y_max = all_y.min() - margin, all_y.max() + margin
-    z_min, z_max = all_z.min() - margin, all_z.max() + margin
-    
-    x_range = x_max - x_min
-    y_range = y_max - y_min
-    z_range = z_max - z_min
-    max_range = max(x_range, y_range, z_range)
-    
-    x_mid = 0.5*(x_min + x_max)
-    y_mid = 0.5*(y_min + y_max)
-    z_mid = 0.5*(z_min + z_max)
-    half_extent = 0.5 * max_range
 
     def init():
         """
@@ -191,7 +155,7 @@ def animate_trajectories(sol, bodies, system_distance, interval=20, figsize=(14,
         
         return fig,
     
-    total_frames = len(sol.t)
+    total_frames = len(times)
     frames_to_use = range(0, total_frames, 30)  # e.g. step by 5
 
     ani = animation.FuncAnimation(
