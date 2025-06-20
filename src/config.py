@@ -3,7 +3,7 @@ SECONDARY = "Moon"
 L_POINT = 1    # Libration point number (1 or 2)
 
 # Algorithm parameters
-MAX_DEG = 10
+MAX_DEG = 12
 TOL = 1e-14
 
 FASTMATH = False  # Global flag for Numba's fastmath option 

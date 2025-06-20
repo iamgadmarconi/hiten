@@ -92,6 +92,170 @@ def _find_y_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1) 
 
     return t1_z, x1_z
 
+
+def _find_x_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1) -> Tuple[float, NDArray[np.float64]]:
+    """
+    Find the time and state at which an orbit next crosses the x=0 plane.
+    
+    This function propagates a trajectory from an initial state and determines
+    when it next crosses the x=0 plane (i.e., the y-z plane). This is particularly
+    useful for periodic orbit computations where the orbit is symmetric about the
+    y-z plane.
+    
+    Parameters
+    ----------
+    x0 : npt.NDArray[np.float64]
+        Initial state vector [x, y, z, vx, vy, vz] in the rotating frame
+    mu : float
+        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+    forward : {1, -1}, optional
+        Direction of time integration:
+        * 1: forward in time (default)
+        * -1: backward in time
+    
+    Returns
+    -------
+    t1_z : float
+        Time at which the orbit crosses the x=0 plane
+    x1_z : npt.NDArray[np.float64]
+        State vector [x, y, z, vx, vy, vz] at the crossing
+    
+    Notes
+    -----
+    The function uses a two-step approach:
+    1. First integrating to an approximate time where the crossing is expected (π/2 - 0.15)
+    2. Then using a root-finding method to precisely locate the crossing time
+    
+    This hybrid approach is more efficient than using a very fine integration
+    time step, especially for orbits with long periods.
+    """
+    logger.debug(f"Entering _find_x_zero_crossing with x0={x0}, mu={mu}, forward={forward}")
+    t0_z = np.pi/2 - 0.15
+    logger.debug(f"Initial time guess t0_z = {t0_z}")
+
+    # 1) Integrate from t=0 up to t0_z.
+    logger.debug(f"Propagating from t=0 to t={t0_z}")
+    sol = _propagate_crtbp(x0, 0.0, t0_z, mu, forward=forward)
+    xx = sol.states
+    x0_z: NDArray[np.float64] = xx[-1]
+    logger.debug(f"State after initial propagation x0_z = {x0_z}")
+
+    # 2) Define a local function that depends on time t.
+    def x_component_wrapper(t: float) -> float:
+        """
+        Wrapper function that returns the x-coordinate of the orbit at time t.
+        
+        This function is used as the target for root-finding, since we want to
+        find where x=0 (i.e., when the orbit crosses the y-z plane).
+        
+        Parameters
+        ----------
+        t : float
+            Time to evaluate the orbit
+        
+        Returns
+        -------
+        float
+            The x-coordinate of the orbit at time t
+        """
+        return _x_component(t, t0_z, x0_z, mu, forward=forward, steps=500)
+
+    # 3) Find the time at which x=0 by bracketing the root.
+    logger.debug(f"Finding root bracket starting from t0_z = {t0_z}")
+    t1_z = _find_bracket(x_component_wrapper, t0_z)
+    logger.debug(f"Found crossing time t1_z = {t1_z}")
+
+    # 4) Integrate from t0_z to t1_z to get the final state.
+    logger.debug(f"Propagating from t={t0_z} to t={t1_z} to get final state")
+    sol = _propagate_crtbp(x0_z, t0_z, t1_z, mu, forward=forward)
+    xx_final = sol.states
+    x1_z: NDArray[np.float64] = xx_final[-1]
+    logger.debug(f"Final state at crossing x1_z = {x1_z}")
+
+    return t1_z, x1_z
+
+
+def _find_z_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1) -> Tuple[float, NDArray[np.float64]]:
+    """
+    Find the time and state at which an orbit next crosses the z=0 plane.
+    
+    This function propagates a trajectory from an initial state and determines
+    when it next crosses the z=0 plane (i.e., the x-y plane). This is particularly
+    useful for periodic orbit computations where the orbit is symmetric about the
+    x-y plane.
+    
+    Parameters
+    ----------
+    x0 : npt.NDArray[np.float64]
+        Initial state vector [x, y, z, vx, vy, vz] in the rotating frame
+    mu : float
+        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+    forward : {1, -1}, optional
+        Direction of time integration:
+        * 1: forward in time (default)
+        * -1: backward in time
+    
+    Returns
+    -------
+    t1_z : float
+        Time at which the orbit crosses the z=0 plane
+    x1_z : npt.NDArray[np.float64]
+        State vector [x, y, z, vx, vy, vz] at the crossing
+    
+    Notes
+    -----
+    The function uses a two-step approach:
+    1. First integrating to an approximate time where the crossing is expected (π/2 - 0.15)
+    2. Then using a root-finding method to precisely locate the crossing time
+    
+    This hybrid approach is more efficient than using a very fine integration
+    time step, especially for orbits with long periods.
+    """
+    logger.debug(f"Entering _find_z_zero_crossing with x0={x0}, mu={mu}, forward={forward}")
+    t0_z = np.pi/2 - 0.15
+    logger.debug(f"Initial time guess t0_z = {t0_z}")
+
+    # 1) Integrate from t=0 up to t0_z.
+    logger.debug(f"Propagating from t=0 to t={t0_z}")
+    sol = _propagate_crtbp(x0, 0.0, t0_z, mu, forward=forward)
+    xx = sol.states
+    x0_z: NDArray[np.float64] = xx[-1]
+    logger.debug(f"State after initial propagation x0_z = {x0_z}")
+
+    # 2) Define a local function that depends on time t.
+    def z_component_wrapper(t: float) -> float:
+        """
+        Wrapper function that returns the z-coordinate of the orbit at time t.
+        
+        This function is used as the target for root-finding, since we want to
+        find where z=0 (i.e., when the orbit crosses the x-y plane).
+        
+        Parameters
+        ----------
+        t : float
+            Time to evaluate the orbit
+        
+        Returns
+        -------
+        float
+            The z-coordinate of the orbit at time t
+        """
+        return _z_component(t, t0_z, x0_z, mu, forward=forward, steps=500)
+
+    # 3) Find the time at which z=0 by bracketing the root.
+    logger.debug(f"Finding root bracket starting from t0_z = {t0_z}")
+    t1_z = _find_bracket(z_component_wrapper, t0_z)
+    logger.debug(f"Found crossing time t1_z = {t1_z}")
+
+    # 4) Integrate from t0_z to t1_z to get the final state.
+    logger.debug(f"Propagating from t={t0_z} to t={t1_z} to get final state")
+    sol = _propagate_crtbp(x0_z, t0_z, t1_z, mu, forward=forward)
+    xx_final = sol.states
+    x1_z: NDArray[np.float64] = xx_final[-1]
+    logger.debug(f"Final state at crossing x1_z = {x1_z}")
+
+    return t1_z, x1_z
+
 def _find_bracket(f: Callable[[float], float], x0: float, max_expand: int = 500) -> float:
     """
     Find a bracketing interval for a root and solve using Brent's method.
@@ -221,6 +385,116 @@ def _y_component(t1: float, t0_z: float, x0_z: NDArray[np.float64], mu: float, f
         logger.debug(f"Propagation finished. Final state x1_zgl = {x1_zgl}. Returning y-component: {x1_zgl[1]}")
 
     return float(x1_zgl[1]) # Explicitly cast to float
+
+
+def _x_component(t1: float, t0_z: float, x0_z: NDArray[np.float64], mu: float, forward: int = 1, steps: int = 3000, tol: float = 1e-10) -> float:
+    """
+    Compute the x-component of an orbit at a specified time.
+    
+    This function propagates an orbit from a reference state and time to a
+    target time, and returns the x-component of the resulting state. It is
+    designed to be used for finding orbital plane crossings.
+    
+    Parameters
+    ----------
+    t1 : float
+        Target time at which to evaluate the x-component
+    t0_z : float
+        Reference time corresponding to the reference state x0_z
+    x0_z : npt.NDArray[np.float64]
+        Reference state vector [x, y, z, vx, vy, vz] at time t0_z
+    mu : float
+        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+    forward : {1, -1}, optional
+        Direction of time integration:
+        * 1: forward in time (default)
+        * -1: backward in time
+    steps : int, optional
+        Number of integration steps to use. Default is 3000.
+    tol : float, optional
+        Tolerance for the numerical integrator. Default is 1e-10.
+    
+    Returns
+    -------
+    float
+        The x-component of the orbit state at time t1
+    
+    Notes
+    -----
+    This function is primarily used within root-finding algorithms to locate
+    precise times when the orbit crosses the x=0 plane. It avoids unnecessary
+    computation when t1 is very close to t0_z by simply returning the x-component
+    of the reference state in that case.
+    """
+    logger.debug(f"Entering _x_component: t1={t1}, t0_z={t0_z}, x0_z={x0_z}, mu={mu}, forward={forward}")
+    # If t1 == t0_z, no integration is done.  Just take the initial condition.
+    if np.isclose(t1, t0_z, rtol=3e-10, atol=1e-10):
+        x1_zgl = x0_z
+        logger.debug(f"t1 ({t1}) is close to t0_z ({t0_z}). Returning x-component from x0_z: {x1_zgl[0]}")
+    else:
+        logger.debug(f"Propagating from t={t0_z} to t={t1}")
+        sol = _propagate_crtbp(x0_z, t0_z, t1, mu, forward=forward, steps=steps)
+        xx = sol.states
+        # The final state is the last row of xx
+        x1_zgl: NDArray[np.float64] = xx[-1, :]
+        logger.debug(f"Propagation finished. Final state x1_zgl = {x1_zgl}. Returning x-component: {x1_zgl[0]}")
+
+    return float(x1_zgl[0]) # Explicitly cast to float
+
+
+def _z_component(t1: float, t0_z: float, x0_z: NDArray[np.float64], mu: float, forward: int = 1, steps: int = 3000, tol: float = 1e-10) -> float:
+    """
+    Compute the z-component of an orbit at a specified time.
+    
+    This function propagates an orbit from a reference state and time to a
+    target time, and returns the z-component of the resulting state. It is
+    designed to be used for finding orbital plane crossings.
+    
+    Parameters
+    ----------
+    t1 : float
+        Target time at which to evaluate the z-component
+    t0_z : float
+        Reference time corresponding to the reference state x0_z
+    x0_z : npt.NDArray[np.float64]
+        Reference state vector [x, y, z, vx, vy, vz] at time t0_z
+    mu : float
+        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+    forward : {1, -1}, optional
+        Direction of time integration:
+        * 1: forward in time (default)
+        * -1: backward in time
+    steps : int, optional
+        Number of integration steps to use. Default is 3000.
+    tol : float, optional
+        Tolerance for the numerical integrator. Default is 1e-10.
+    
+    Returns
+    -------
+    float
+        The z-component of the orbit state at time t1
+    
+    Notes
+    -----
+    This function is primarily used within root-finding algorithms to locate
+    precise times when the orbit crosses the z=0 plane. It avoids unnecessary
+    computation when t1 is very close to t0_z by simply returning the z-component
+    of the reference state in that case.
+    """
+    logger.debug(f"Entering _z_component: t1={t1}, t0_z={t0_z}, x0_z={x0_z}, mu={mu}, forward={forward}")
+    # If t1 == t0_z, no integration is done.  Just take the initial condition.
+    if np.isclose(t1, t0_z, rtol=3e-10, atol=1e-10):
+        x1_zgl = x0_z
+        logger.debug(f"t1 ({t1}) is close to t0_z ({t0_z}). Returning z-component from x0_z: {x1_zgl[2]}")
+    else:
+        logger.debug(f"Propagating from t={t0_z} to t={t1}")
+        sol = _propagate_crtbp(x0_z, t0_z, t1, mu, forward=forward, steps=steps)
+        xx = sol.states
+        # The final state is the last row of xx
+        x1_zgl: NDArray[np.float64] = xx[-1, :]
+        logger.debug(f"Propagation finished. Final state x1_zgl = {x1_zgl}. Returning z-component: {x1_zgl[2]}")
+
+    return float(x1_zgl[2]) # Explicitly cast to float
 
 
 def _propagate_crtbp(

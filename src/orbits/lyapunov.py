@@ -3,7 +3,7 @@ from typing import Optional, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
-from algorithms.geometry import _find_y_zero_crossing
+from algorithms.geometry import _find_y_zero_crossing, _find_z_zero_crossing
 from orbits.base import PeriodicOrbit, S, correctionConfig, orbitConfig
 from system.libration import CollinearPoint, L3Point
 from utils.log_config import logger
@@ -71,8 +71,11 @@ class LyapunovOrbit(PeriodicOrbit):
 
     def differential_correction(self, **kw):
         cfg = correctionConfig(
-            residual_indices=(S.VX,),
-            control_indices=(S.VY,)
+            residual_indices=(S.VX, S.Y),     # Want VX=0 and Y=0
+            control_indices=(S.VZ, S.VY),     # Adjust initial VZ and VY
+            target=(0.0, 0.0),
+            extra_jacobian=None,
+            event_func=_find_z_zero_crossing,
         )
         return super().differential_correction(cfg, **kw)
 
@@ -95,11 +98,8 @@ class VerticalLyapunovOrbit(PeriodicOrbit):
         raise NotImplementedError("Initial guess is not implemented for Vertical Lyapunov orbits.")
 
     @staticmethod
-    def _identity_shift(_: np.ndarray, __: np.ndarray) -> np.ndarray:  # noqa: D401
-        """Return the correction matrix *E* for the augmented Jacobian."""
-        E = np.zeros((2, 2))
-        E[1, 0] = 1.0
-        return E
+    def _extra_jacobian(_: np.ndarray, __: np.ndarray) -> np.ndarray:
+        pass
 
     def differential_correction(
         self,
@@ -109,11 +109,11 @@ class VerticalLyapunovOrbit(PeriodicOrbit):
         forward: int = 1,
     ):
         cfg = correctionConfig(
-            residual_indices=(S.VX, S.Z),
-            control_indices=(S.VZ, S.VY),
-            target=(0.0, 0.0), 
-            extra_jacobian=self._identity_shift,
-            event_func=_find_y_zero_crossing,
+            residual_indices=(S.VX, S.Y),     # Want VX=0 and Y=0
+            control_indices=(S.VZ, S.VY),     # Adjust initial VZ and VY
+            target=(0.0, 0.0),
+            extra_jacobian=None,
+            event_func=_find_z_zero_crossing,
         )
 
         return super().differential_correction(
