@@ -3,7 +3,7 @@ import os
 from algorithms.center.base import CenterManifold
 from algorithms.center.poincare.base import PoincareMap, poincareMapConfig
 from algorithms.center.utils import format_cm_table
-from config import (C_OMEGA_HEURISTIC, DT, H0_LEVELS, INTEGRATOR_ORDER,
+from config import (C_OMEGA_HEURISTIC, DT, H0, INTEGRATOR_ORDER,
                     L_POINT, MAX_DEG, N_ITER, N_SEEDS, PRIMARY, SECONDARY,
                     USE_GPU, USE_SYMPLECTIC)
 from orbits.base import orbitConfig
@@ -34,33 +34,29 @@ def main() -> None:
 
     logger.info("Starting Poincaré map generation process…")
 
-    for H0 in H0_LEVELS:
-        logger.info("Generating iterated Poincaré map for h0=%.3f", H0)
-        pm_cfg = poincareMapConfig(
-            dt=DT,
-            method="symplectic" if USE_SYMPLECTIC else "rk",
-            n_seeds=N_SEEDS,
-            n_iter=N_ITER,
-            integrator_order=INTEGRATOR_ORDER,
-            c_omega_heuristic=C_OMEGA_HEURISTIC,
-            compute_on_init=False,
-            use_gpu=USE_GPU
-        )
+    logger.info("Generating iterated Poincaré map for h0=%.3f", H0)
+    pm_cfg = poincareMapConfig(dt=DT, method="symplectic" if USE_SYMPLECTIC else "rk", 
+                                n_seeds=N_SEEDS, n_iter=N_ITER, 
+                                integrator_order=INTEGRATOR_ORDER, 
+                                c_omega_heuristic=C_OMEGA_HEURISTIC,
+                                compute_on_init=False, use_gpu=USE_GPU)
 
-        filepath = f"results/maps/poincare_map_{H0}.pkl"
-        pm = PoincareMap(cm, energy=H0, config=pm_cfg)
-        if os.path.exists(filepath):
-            logger.info(f"Loading existing Poincaré map from {filepath}")
-            pm.load(filepath)
-        else:
-            logger.info("Computing new Poincaré map")
-            pm.compute()
-            pm.save(filepath)
+    filepath = f"results/maps/poincare_map_{H0}.pkl"
+
+    pm = PoincareMap(cm, energy=H0, config=pm_cfg)
+
+    if os.path.exists(filepath):
+        logger.info(f"Loading existing Poincaré map from {filepath}")
+        pm.load(filepath)
+    else:
+        logger.info("Computing new Poincaré map")
+        pm.compute()
+        pm.save(filepath)
 
     pm.plot_interactive(system)
 
     logger.info("Converting Poincaré points to initial conditions")
-    ic = cm.cm2ic([0.0, 0.0], energy=H0_LEVELS[0])
+    ic = cm.cm2ic([0.0, 0.0], energy=H0)
     logger.info(f"Initial conditions:\n\n{ic}\n\n")
 
     vertical_orbit = VerticalLyapunovOrbit(orbitConfig(system, "Vertical Lyapunov", L_POINT), ic)
@@ -68,16 +64,22 @@ def main() -> None:
     vertical_orbit.differential_correction(max_attempts=100)
     vertical_orbit.propagate(steps=1000, method="rk8")
     vertical_orbit.plot("rotating")
+    vertical_orbit.animate()
+
+    vertical_manifold = Manifold(manifoldConfig(vertical_orbit, stable=True, direction="Positive", method="rk6"))
+    vertical_manifold.compute()
+    vertical_manifold.plot()
+    vertical_manifold.save("results/manifolds/vertical_orbit_manifold.pkl")
 
     halo_orbit = HaloOrbit(orbitConfig(system, "Halo", L_POINT, extra_params={"Az": 0.2, "Zenith": "Southern"}))
     halo_orbit.differential_correction(max_attempts=25)
     halo_orbit.propagate(steps=1000, method="rk8")
     halo_orbit.plot("rotating")
 
-    manifold = Manifold(manifoldConfig(halo_orbit, stable=True, direction="Positive", method="rk6"))
-    manifold.compute()
-    manifold.plot()
-    manifold.save("results/manifolds/halo_orbit_manifold.pkl")
+    halo_manifold = Manifold(manifoldConfig(halo_orbit, stable=True, direction="Positive", method="rk6"))
+    halo_manifold.compute()
+    halo_manifold.plot()
+    halo_manifold.save("results/manifolds/halo_orbit_manifold.pkl")
 
 
 if __name__ == "__main__":
