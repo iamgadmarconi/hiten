@@ -56,8 +56,7 @@ def animate_trajectories(states, times, bodies, system_distance, interval=20, fi
     
     traj_inert = []
     for s_dimless, t_dimless in zip(states, times):
-        t_current_si = si_time(t_dimless, bodies[0].mass, bodies[1].mass, system_distance)
-        s_inert_dimless = rotating_to_inertial(s_dimless, t_current_si, omega_real, mu)
+        s_inert_dimless = rotating_to_inertial(s_dimless, t_dimless, mu)
         s_inert_si = to_si_units(s_inert_dimless, bodies[0].mass, bodies[1].mass, system_distance)
         traj_inert.append(s_inert_si[:3])
     traj_inert = np.array(traj_inert)

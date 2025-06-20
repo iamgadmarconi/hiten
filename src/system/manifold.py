@@ -74,31 +74,66 @@ class Manifold:
     def __repr__(self):
         return self.__str__()
     
-    def compute(self, step: float=0.02, integration_fraction: float=0.75, forward: bool = True, **kwargs):
+    def compute(
+        self,
+        step: float = 0.02,
+        integration_fraction: float = 0.75,
+        forward: int | None = None,
+        **kwargs,
+    ):
 
         if self.manifold_result is not None:
             return self.manifold_result
 
-        kwargs.setdefault('show_progress', True)
-        kwargs.setdefault('dt', 1e-5)
+        kwargs.setdefault("show_progress", True)
+        kwargs.setdefault("dt", 1e-5)
+
+        if forward is None:
+            forward = -1 if self.stable == 1 else 1
+        else:
+            # Accept Python ``bool`` or explicit ±1
+            forward = 1 if forward in [True, 1] else -1
+
+        if forward * self.stable != -1:
+            raise ValueError(
+                "Inconsistent forward/stable choice: stable manifolds must be "
+                "integrated backward (forward = -1) and unstable manifolds "
+                "forward (forward = +1)."
+            )
 
         initial_state = self.generating_orbit._initial_state
 
         ysos, dysos, states_list, times_list = [], [], [], []
 
-        fractions = np.arange(0, 1 + step, step)
+        # Sample the generating orbit *excluding* frac == 1.0 to avoid indexing
+        # the STM at its last element which can raise.
+        fractions = np.arange(0.0, 1.0, step)
 
-        iterator = tqdm(fractions, desc="Computing manifold") if kwargs['show_progress'] else fractions
+        iterator = (
+            tqdm(fractions, desc="Computing manifold")
+            if kwargs["show_progress"]
+            else fractions
+        )
 
         for fraction in iterator:
             self._attempts += 1
 
             try:
-                x0W = self._compute_manifold_section(initial_state, self.generating_orbit.period, fraction, forward=forward)
+                x0W = self._compute_manifold_section(
+                    initial_state,
+                    self.generating_orbit.period,
+                    fraction,
+                    forward=forward,
+                )
                 x0W = x0W.flatten().astype(np.float64)
                 tf = integration_fraction * 2 * np.pi
 
-                sol = self._integrator.integrate(self._dynsys, x0W, np.arange(0, tf, kwargs['dt']))
+                # Build signed time grid for the chosen integration direction
+                dt = abs(kwargs["dt"])
+                dt_signed = dt * forward
+                t_vals = np.arange(0.0, forward * tf, dt_signed)
+
+                sol = self._integrator.integrate(self._dynsys, x0W, t_vals)
                 states, times = sol.states, sol.times
 
                 states_list.append(states)

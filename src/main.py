@@ -68,16 +68,16 @@ def main() -> None:
     vertical_orbit.differential_correction(max_attempts=100)
     vertical_orbit.propagate(steps=1000, method="rk8")
     vertical_orbit.plot("rotating")
-    vertical_orbit.plot("inertial")
 
     halo_orbit = HaloOrbit(orbitConfig(system, "Halo", L_POINT, extra_params={"Az": 1e-3, "Zenith": "northern"}))
     halo_orbit.differential_correction(max_attempts=25)
     halo_orbit.propagate(steps=1000, method="rk8")
-    halo_orbit.animate()
+    halo_orbit.plot("rotating")
 
     manifold = Manifold(manifoldConfig(halo_orbit, stable=True, direction="Positive", method="rk6"))
     manifold.compute()
     manifold.plot()
+    manifold.save("results/manifolds/halo_orbit_manifold.pkl")
 
 
 if __name__ == "__main__":

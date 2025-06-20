@@ -14,6 +14,8 @@ class HaloOrbit(PeriodicOrbit):
 
     def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):
         self.config = config
+
+        self._initial_state = None
         if initial_state is None:
             try:
                 self.Az = config.extra_params['Az']
