@@ -57,30 +57,63 @@ def main() -> None:
 
     logger.info("Converting Poincaré points to initial conditions")
     ic = cm.cm2ic([0.0, 0.0], energy=H0)
-    logger.info(f"Initial conditions:\n\n{ic}\n\n")
+    logger.info(f"Initial conditions (CM→IC):\n\n{ic}\n\n")
 
-    vertical_orbit = VerticalLyapunovOrbit(orbitConfig(system, "Vertical Lyapunov", L_POINT), ic)
+    orbit_specs = [
+        {
+            "cls": VerticalLyapunovOrbit,
+            "name": "Vertical Lyapunov",
+            "extra_params": {},
+            "initial_state": ic,               # Use CM seed
+            "diff_corr_attempts": 100,
+            "manifold_file": "results/manifolds/vertical_orbit_manifold.pkl",
+        },
+        {
+            "cls": HaloOrbit,
+            "name": "Halo",
+            "extra_params": {"Az": 0.2, "Zenith": "Southern"},
+            "initial_state": None,             # Let class build analytical guess
+            "diff_corr_attempts": 25,
+            "manifold_file": "results/manifolds/halo_orbit_manifold.pkl",
+        },
+        {
+            "cls": LyapunovOrbit,
+            "name": "Lyapunov",
+            "extra_params": {"Ax": 1e-3},
+            "initial_state": None,
+            "diff_corr_attempts": 25,
+            "manifold_file": "results/manifolds/lyapunov_orbit_manifold.pkl",
+        },
+    ]
 
-    vertical_orbit.differential_correction(max_attempts=100)
-    vertical_orbit.propagate(steps=1000, method="rk8")
-    vertical_orbit.plot("rotating")
-    vertical_orbit.animate()
+    for spec in orbit_specs:
+        logger.info("\n================  Generating %s orbit  ================", spec["name"])
 
-    vertical_manifold = Manifold(manifoldConfig(vertical_orbit, stable=True, direction="Positive", method="rk6"))
-    vertical_manifold.compute()
-    vertical_manifold.plot()
-    vertical_manifold.save("results/manifolds/vertical_orbit_manifold.pkl")
+        # Build orbit
+        cfg = orbitConfig(system, spec["name"], L_POINT, extra_params=spec["extra_params"])
+        orbit = spec["cls"](cfg, spec["initial_state"])
 
-    halo_orbit = HaloOrbit(orbitConfig(system, "Halo", L_POINT, extra_params={"Az": 0.2, "Zenith": "Southern"}))
-    halo_orbit.differential_correction(max_attempts=25)
-    halo_orbit.propagate(steps=1000, method="rk8")
-    halo_orbit.plot("rotating")
+        # Differential correction & propagation
+        orbit.differential_correction(max_attempts=spec["diff_corr_attempts"])
+        orbit.propagate(steps=1000, method="rk8")
+        orbit.plot("rotating")
+        orbit.animate()
 
-    halo_manifold = Manifold(manifoldConfig(halo_orbit, stable=True, direction="Positive", method="rk6"))
-    halo_manifold.compute()
-    halo_manifold.plot()
-    halo_manifold.save("results/manifolds/halo_orbit_manifold.pkl")
+        # Build manifold configuration
+        manifold_cfg = manifoldConfig(orbit, stable=True, direction="Positive", method="rk6")
+        manifold = Manifold(manifold_cfg)
+        m_filepath = spec["manifold_file"]
 
+        # Load if available, else compute & save
+        if os.path.exists(m_filepath):
+            logger.info("Loading existing manifold from %s", m_filepath)
+            manifold.load(m_filepath)
+        else:
+            logger.info("Computing manifold for %s orbit", spec["name"])
+            manifold.compute()
+            manifold.save(m_filepath)
+
+        manifold.plot()
 
 if __name__ == "__main__":
     main()
