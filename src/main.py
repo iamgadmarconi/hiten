@@ -63,14 +63,19 @@ def main() -> None:
     ic = cm.cm2ic([0.0, 0.0], energy=H0_LEVELS[0])
     logger.info(f"Initial conditions:\n\n{ic}\n\n")
 
-    orbit = VerticalLyapunovOrbit(orbitConfig(system, "Vertical Lyapunov", L_POINT), ic)
+    vertical_orbit = VerticalLyapunovOrbit(orbitConfig(system, "Vertical Lyapunov", L_POINT), ic)
 
-    orbit.differential_correction(max_attempts=100)
-    orbit.propagate(steps=1000, method="rk8")
-    orbit.plot("rotating")
-    orbit.plot("inertial")
+    vertical_orbit.differential_correction(max_attempts=100)
+    vertical_orbit.propagate(steps=1000, method="rk8")
+    vertical_orbit.plot("rotating")
+    vertical_orbit.plot("inertial")
 
-    manifold = Manifold(manifoldConfig(orbit, stable=True, direction="Positive", method="rk8"))
+    halo_orbit = HaloOrbit(orbitConfig(system, "Halo", L_POINT, extra_params={"Az": 1e-3, "Zenith": "northern"}))
+    halo_orbit.differential_correction(max_attempts=25)
+    halo_orbit.propagate(steps=1000, method="rk8")
+    halo_orbit.animate()
+
+    manifold = Manifold(manifoldConfig(halo_orbit, stable=True, direction="Positive", method="rk6"))
     manifold.compute()
     manifold.plot()
 

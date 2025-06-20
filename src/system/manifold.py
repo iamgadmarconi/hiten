@@ -1,3 +1,5 @@
+import os
+import pickle
 from dataclasses import dataclass
 from typing import List, Literal
 
@@ -222,3 +224,81 @@ class Manifold:
         _set_axes_equal(ax)
         ax.set_title('Manifold')
         plt.show()
+
+    def save(self, filepath: str, **kwargs) -> None:
+        # Construct a serialisation dictionary – avoid non-pickle-friendly objects when possible.
+        data = {
+            "manifold_type": self.__class__.__name__,
+            "stable": bool(self.stable == 1),
+            "direction": "Positive" if self.direction == 1 else "Negative",
+            "integrator_method": self._integrator.__class__.__name__,
+        }
+
+        # Lightweight generating-orbit info (if available)
+        try:
+            data["generating_orbit"] = {
+                "family": getattr(self.generating_orbit, "orbit_family", self.generating_orbit.__class__.__name__),
+                "period": getattr(self.generating_orbit, "period", None),
+                "initial_state": self.generating_orbit._initial_state.tolist(),
+            }
+        except Exception:
+            # In case the attributes do not exist / are inaccessible just skip.
+            pass
+
+        # Store manifold Result if it exists
+        if self.manifold_result is not None:
+            mr = self.manifold_result
+            data["manifold_result"] = {
+                "ysos": mr.ysos,
+                "dysos": mr.dysos,
+                # numpy arrays need to be converted to (nested) lists for portability
+                "states_list": [s.tolist() for s in mr.states_list],
+                "times_list": [t.tolist() for t in mr.times_list],
+                "_successes": mr._successes,
+                "_attempts": mr._attempts,
+            }
+        else:
+            data["manifold_result"] = None
+
+        # Ensure output directory exists
+        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
+
+        with open(filepath, "wb") as fh:
+            pickle.dump(data, fh)
+
+        logger.info("Manifold saved to %s", filepath)
+
+    def load(self, filepath: str, **kwargs) -> None:
+
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"Manifold file not found: {filepath}")
+
+        with open(filepath, "rb") as fh:
+            data = pickle.load(fh)
+
+        if data.get("manifold_type") != self.__class__.__name__:
+            logger.warning(
+                "Loading %s data into %s instance", data.get("manifold_type", "<unknown>"), self.__class__.__name__
+            )
+
+        # Update basic properties (do *not* overwrite integrator instance – keep what user supplied)
+        self.stable = 1 if data.get("stable", True) else -1
+        self.direction = 1 if data.get("direction", "Positive") == "Positive" else -1
+
+        # Store generating-orbit metadata for reference
+        self._loaded_generating_orbit_info = data.get("generating_orbit", {})
+
+        # Re-create manifold_result if present
+        mr_data = data.get("manifold_result")
+        if mr_data is not None:
+            ysos = mr_data["ysos"]
+            dysos = mr_data["dysos"]
+            states_list = [np.array(s, dtype=float) for s in mr_data["states_list"]]
+            times_list = [np.array(t, dtype=float) for t in mr_data["times_list"]]
+            _successes = mr_data.get("_successes", 0)
+            _attempts = mr_data.get("_attempts", 0)
+            self.manifold_result = ManifoldResult(ysos, dysos, states_list, times_list, _successes, _attempts)
+        else:
+            self.manifold_result = None
+
+        logger.info("Manifold loaded from %s", filepath)

@@ -1,4 +1,4 @@
-from typing import Optional, Sequence
+from typing import Literal, Optional, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
@@ -9,14 +9,15 @@ from utils.log_config import logger
 
 
 class HaloOrbit(PeriodicOrbit):
-    Az: float # Amplitude of the halo orbit
+    Az: Optional[float] # Amplitude of the halo orbit
+    Zenith: Optional[Literal["northern", "southern"]]
 
     def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):
         self.config = config
         if initial_state is None:
             try:
                 self.Az = config.extra_params['Az']
-                self.zenith = config.extra_params['Zenith']
+                self.Zenith = config.extra_params['Zenith']
             except KeyError:
                 err = "Halo orbits require an 'Az' (z-amplitude) parameter and a 'Zenith' parameter ('northern' or 'southern') OR an initial state."
                 logger.error(err)
@@ -24,7 +25,11 @@ class HaloOrbit(PeriodicOrbit):
         else:
             self._initial_state = np.array(initial_state, dtype=np.float64)
             self.Az = self._initial_state[2]
-            self.zenith = "northern" if self._initial_state[2] > 0 else "southern"
+            self.Zenith = "northern" if self._initial_state[2] > 0 else "southern"
+        if self.Az is None:
+            self.Az = self._initial_state[2]
+        if self.Zenith is None:
+            self.Zenith = "northern" if self._initial_state[2] > 0 else "southern"
 
         super().__init__(config, initial_state)
 
@@ -69,7 +74,7 @@ class HaloOrbit(PeriodicOrbit):
             raise ValueError(f"Halo orbits only supported for L1, L2, L3 (got L{self.libration_point})")
         
         # Set n for northern/southern family
-        n = 1 if self.zenith == "northern" else -1
+        n = 1 if self.Zenith == "northern" else -1
         
         # Coefficients c(2), c(3), c(4)
         c = [0.0, 0.0, 0.0, 0.0, 0.0]  # just to keep 5 slots: c[2], c[3], c[4]
