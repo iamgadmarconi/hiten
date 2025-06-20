@@ -86,7 +86,7 @@ class Manifold:
             return self.manifold_result
 
         kwargs.setdefault("show_progress", True)
-        kwargs.setdefault("dt", 1e-5)
+        kwargs.setdefault("dt", 1e-3)
 
         if forward is None:
             forward = -1 if self.stable == 1 else 1
@@ -122,7 +122,6 @@ class Manifold:
                     initial_state,
                     self.generating_orbit.period,
                     fraction,
-                    forward=forward,
                 )
                 x0W = x0W.flatten().astype(np.float64)
                 tf = integration_fraction * 2 * np.pi

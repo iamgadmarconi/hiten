@@ -310,7 +310,7 @@ def compute_stm(x0, mu, tf, **solve_kwargs):
     rhs_system = create_rhs_system(_var_eq, dim=42, name="CR3BP STM")
 
     # Use high-order RK8 for accuracy unless caller overrides
-    order = solve_kwargs.pop('rk_order', 6)
+    order = solve_kwargs.pop('rk_order', 8)
     integrator = RungeKutta(order=order)
 
     sol_obj = integrator.integrate(rhs_system, PHI0, times)
