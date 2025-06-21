@@ -1,18 +1,18 @@
 import os
 import pickle
 from dataclasses import asdict, dataclass
-from typing import List, Optional, Sequence
+from typing import List, Literal, Optional, Sequence
 
 import matplotlib.pyplot as plt
 import numpy as np
 
 from algorithms.center.base import CenterManifold
 from algorithms.center.poincare.cuda.map import _generate_map_gpu
-from algorithms.center.poincare.map import _generate_grid
+from algorithms.center.poincare.map import _generate_grid, PoincareSection
 from algorithms.center.poincare.map import _generate_map as _generate_map_cpu
+from orbits.base import GenericOrbit, orbitConfig
 from plots.plots import _set_dark_mode
 from utils.log_config import logger
-from orbits.base import orbitConfig, GenericOrbit
 
 
 @dataclass
@@ -28,6 +28,7 @@ class poincareMapConfig:
     n_seeds: int = 20
     n_iter: int = 1500
     seed_axis: str = "q2"  # "q2" or "p2"
+    section_coord: Literal["q2", "p2", "q3", "p3"] = "q3"  # Default keeps existing behavior
 
     # Misc
     compute_on_init: bool = False
@@ -63,7 +64,7 @@ class PoincareMap:
         self._use_symplectic: bool = self.config.method.lower() == "symplectic"
 
         # Storage for computed points
-        self._points: Optional[np.ndarray] = None  # shape (M,2)
+        self._section: Optional[PoincareSection] = None
         self._backend: str = "cpu" if not self.config.use_gpu else "gpu"
 
         if self.config.compute_on_init:
@@ -72,27 +73,36 @@ class PoincareMap:
     def __repr__(self) -> str:
         return (
             f"PoincareMap(cm={self.cm!r}, energy={self.energy:.3e}, "
-            f"points={len(self) if self._points is not None else '∅'})"
+            f"points={len(self) if self._section is not None else '∅'})"
         )
 
     def __str__(self) -> str:
         return (
             f"Poincaré map at h0={self.energy:.3e} with {len(self)} points"
-            if self._points is not None
+            if self._section is not None
             else f"Poincaré map (uncomputed) at h0={self.energy:.3e}"
         )
 
     def __len__(self) -> int:  # Convenient len() support
-        return 0 if self._points is None else self._points.shape[0]
+        return 0 if self._section is None else self._section.points.shape[0]
 
     @property
     def points(self) -> np.ndarray:
-        """Return the computed Poincaré-map points (q2, p2)."""
-        if self._points is None:
+        """Return the computed Poincaré-map points (backward compatibility)."""
+        if self._section is None:
             raise RuntimeError(
                 "Poincaré map has not been computed yet.  Call compute() first."
             )
-        return self._points
+        return self._section.points
+
+    @property
+    def section(self) -> PoincareSection:
+        """Return the computed Poincaré section with labels."""
+        if self._section is None:
+            raise RuntimeError(
+                "Poincaré map has not been computed yet.  Call compute() first."
+            )
+        return self._section
 
     def compute(self) -> np.ndarray:
         logger.info(
@@ -105,7 +115,7 @@ class PoincareMap:
 
         kernel = _generate_map_gpu if self._backend == "gpu" else _generate_map_cpu
 
-        pts = kernel(
+        section = kernel(
             h0=self.energy,
             H_blocks=poly_cm_real,
             max_degree=self.cm.max_degree,
@@ -119,25 +129,26 @@ class PoincareMap:
             integrator_order=self.config.integrator_order,
             c_omega_heuristic=self.config.c_omega_heuristic,
             seed_axis=self.config.seed_axis,
+            section_coord=self.config.section_coord,
         )
 
-        self._points = pts
+        self._section = section
         logger.info("Poincaré map computation complete: %d points", len(self))
-        return pts
+        return section.points  # Return raw points for backward compatibility
 
     def pm2ic(self, indices: Optional[Sequence[int]] = None) -> np.ndarray:
-        if self._points is None:
+        if self._section is None:
             raise RuntimeError(
                 "Poincaré map has not been computed yet - cannot convert.")
 
         if indices is None:
-            sel_pts = self._points
+            sel_pts = self._section.points
         else:
-            sel_pts = self._points[np.asarray(indices, dtype=int)]
+            sel_pts = self._section.points[np.asarray(indices, dtype=int)]
 
         ic_list: List[np.ndarray] = []
         for pt in sel_pts:
-            ic = self.cm.cm2ic(pt, self.energy)
+            ic = self.cm.cm2ic(pt, self.energy, section_coord=self.config.section_coord)
             ic_list.append(ic)
 
         return np.stack(ic_list, axis=0)
@@ -166,20 +177,21 @@ class PoincareMap:
                 Nq=Nq,
                 Np=Np,
                 integrator_order=self.config.integrator_order,
-                    use_symplectic=self._use_symplectic,
+                use_symplectic=self._use_symplectic,
+                section_coord=self.config.section_coord,
                 )
         else:
             raise ValueError(f"Unsupported backend: {self._backend}")
 
-        self._points = pts
+        self._section = pts  # _generate_grid will be updated to return PoincareSection
         logger.info("Dense-grid Poincaré map computation complete: %d points", len(self))
-        return pts
+        return pts.points if hasattr(pts, 'points') else pts
 
     def _propagate_from_point(self, cm_point, energy, system, steps=1000, method="rk8"):
         """
         Convert a Poincaré map point to initial conditions, create a GenericOrbit, propagate, and return the orbit.
         """
-        ic = self.cm.cm2ic(cm_point, energy)
+        ic = self.cm.cm2ic(cm_point, energy, section_coord=self.config.section_coord)
         logger.info(f"Initial conditions: {ic}")
         cfg = orbitConfig(system=system, orbit_family="generic", libration_point_idx=self.cm.point.idx)
         orbit = GenericOrbit(cfg, ic)
@@ -196,8 +208,9 @@ class PoincareMap:
             "config": asdict(self.config),
         }
 
-        if self._points is not None:
-            data["points"] = self._points.tolist()
+        if self._section is not None:
+            data["points"] = self._section.points.tolist()
+            data["labels"] = self._section.labels
 
         # Ensure directory exists.
         os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
@@ -237,20 +250,26 @@ class PoincareMap:
 
         # Load points (if present).
         if "points" in data and data["points"] is not None:
-            self._points = np.array(data["points"])
+            points_array = np.array(data["points"])
+            # Try to load labels, fall back to default q3 section labels for backward compatibility
+            labels = data.get("labels", ("q2", "p2"))
+            self._section = PoincareSection(points_array, labels)
         else:
-            self._points = None
+            self._section = None
         logger.info("Poincaré map loaded from %s", filepath)
 
     def plot(self, dark_mode: bool = True, output_dir: Optional[str] = None, filename: Optional[str] = None, **kwargs):
-        if self._points is None:
+        if self._section is None:
             logger.debug("No cached Poincaré-map points found - computing now …")
             self.compute()
 
         # Create a single plot for this energy level
         fig, ax = plt.subplots(figsize=(6, 6))
         
-        if self._points.shape[0] == 0:
+        points = self._section.points
+        labels = self._section.labels
+        
+        if points.shape[0] == 0:
             logger.info(f"No points to plot for h0={self.energy:.6e}.")
             ax.text(0.5, 0.5, "No data to plot", ha='center', va='center', 
                     color='red' if not dark_mode else 'white', fontsize=12)
@@ -261,18 +280,19 @@ class PoincareMap:
             title_text = "Poincaré Map (No Data)"
         else:
             # Plot the points
-            ax.scatter(self._points[:, 0], self._points[:, 1], s=1, alpha=0.7)
+            ax.scatter(points[:, 0], points[:, 1], s=1, alpha=0.7)
             
             # Set axis limits based on data range
-            max_val_q2 = max(abs(self._points[:, 0].max()), abs(self._points[:, 0].min()))
-            max_val_p2 = max(abs(self._points[:, 1].max()), abs(self._points[:, 1].min()))
-            max_abs_val = max(max_val_q2, max_val_p2, 1e-9)  # Ensure not zero
+            max_val_0 = max(abs(points[:, 0].max()), abs(points[:, 0].min()))
+            max_val_1 = max(abs(points[:, 1].max()), abs(points[:, 1].min()))
+            max_abs_val = max(max_val_0, max_val_1, 1e-9)  # Ensure not zero
             
             ax.set_xlim(-max_abs_val * 1.1, max_abs_val * 1.1)
             ax.set_ylim(-max_abs_val * 1.1, max_abs_val * 1.1)
             
-            ax.set_xlabel(r"$q_2'$")
-            ax.set_ylabel(r"$p_2'$")
+            # Use dynamic labels from section
+            ax.set_xlabel(f"${labels[0]}'$")
+            ax.set_ylabel(f"${labels[1]}'$")
             title_text = f"Poincaré Map (h={self.energy:.6e})"
 
         ax.set_aspect("equal", adjustable="box")
@@ -303,13 +323,14 @@ class PoincareMap:
         Interactively select a point from the Poincaré map, generate initial conditions, create a GenericOrbit, propagate, and plot.
         You can select as many points as you want. Press 'q' to quit the selection window.
         """
-        if self._points is None:
+        if self._section is None:
             self.compute()
         fig, ax = plt.subplots(figsize=(6, 6))
-        pts = self._points
+        pts = self._section.points
+        labels = self._section.labels
         scatter = ax.scatter(pts[:, 0], pts[:, 1], s=10, alpha=0.7)
-        ax.set_xlabel(r"$q_2'$")
-        ax.set_ylabel(r"$p_2'$")
+        ax.set_xlabel(f"${labels[0]}'$")
+        ax.set_ylabel(f"${labels[1]}'$")
         ax.set_title(f"Select a point on the Poincaré Map (h={self.energy:.6e})\n(Press 'q' to quit)")
         ax.set_aspect("equal", adjustable="box")
         ax.grid(True, alpha=0.3)

@@ -3,7 +3,7 @@ SECONDARY = "Moon"
 L_POINT = 1    # Libration point number (1 or 2)
 
 # Algorithm parameters
-MAX_DEG = 12
+MAX_DEG = 9
 TOL = 1e-14
 
 FASTMATH = False  # Global flag for Numba's fastmath option 
@@ -13,8 +13,8 @@ DT = 1e-2
 USE_SYMPLECTIC = False
 INTEGRATOR_ORDER = 6
 C_OMEGA_HEURISTIC = 100.0
-N_SEEDS = 1 # seeds along q2-axis
-N_ITER = 15 # iterations per seed
+N_SEEDS = 20 # seeds along q2-axis
+N_ITER = 25 # iterations per seed
 
 # Precision control
 USE_ARBITRARY_PRECISION = True  # Set to True to enable mpmath for critical computations

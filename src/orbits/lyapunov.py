@@ -14,6 +14,11 @@ class LyapunovOrbit(PeriodicOrbit):
 
     def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):
         self.Ax = config.extra_params['Ax']
+        
+        self._initial_state = None
+        if initial_state is not None:
+            self._initial_state = np.array(initial_state, dtype=np.float64)
+            
         super().__init__(config, initial_state)
 
         if not isinstance(self.libration_point, CollinearPoint):
@@ -71,11 +76,11 @@ class LyapunovOrbit(PeriodicOrbit):
 
     def differential_correction(self, **kw):
         cfg = correctionConfig(
-            residual_indices=(S.VX, S.Y),     # Want VX=0 and Y=0
-            control_indices=(S.VZ, S.VY),     # Adjust initial VZ and VY
+            residual_indices=(S.VX, S.Z),
+            control_indices=(S.VZ, S.VY),
             target=(0.0, 0.0),
             extra_jacobian=None,
-            event_func=_find_z_zero_crossing,
+            event_func=_find_y_zero_crossing,
         )
         return super().differential_correction(cfg, **kw)
 

@@ -36,7 +36,7 @@ def main() -> None:
 
     logger.info("Generating iterated Poincaré map for h0=%.3f", H0)
     pm_cfg = poincareMapConfig(dt=DT, method="symplectic" if USE_SYMPLECTIC else "rk", 
-                                n_seeds=N_SEEDS, n_iter=N_ITER, 
+                                n_seeds=N_SEEDS, n_iter=N_ITER, seed_axis="q2", section_coord="q3",
                                 integrator_order=INTEGRATOR_ORDER, 
                                 c_omega_heuristic=C_OMEGA_HEURISTIC,
                                 compute_on_init=False, use_gpu=USE_GPU)
