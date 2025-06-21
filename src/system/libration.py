@@ -23,7 +23,7 @@ from typing import TYPE_CHECKING, Tuple
 
 import numpy as np
 
-from algorithms.dynamics.rtbp import _jacobian_crtbp, create_var_eq_system
+from algorithms.dynamics.rtbp import _jacobian_crtbp, variational_dynsys
 from algorithms.energy import crtbp_energy, energy_to_jacobi
 from algorithms.linalg import eigenvalue_decomposition
 from config import MPMATH_DPS
@@ -73,7 +73,7 @@ class LibrationPoint(ABC):
         self._energy = None
         self._jacobi_constant = None
         self._cache = {}
-        self._var_eq_system = create_var_eq_system(self.mu, name=f"CR3BP Variational Equations for {self.__class__.__name__}")
+        self._var_eq_system = variational_dynsys(self.mu, name=f"CR3BP Variational Equations for {self.__class__.__name__}")
     
     def __str__(self) -> str:
         return f"{type(self).__name__}(mu={self.mu:.6e})"

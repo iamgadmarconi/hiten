@@ -11,7 +11,7 @@ import numpy as np
 import numpy.typing as npt
 
 from algorithms.dynamics.rtbp import (_propagate_dynsys, compute_stm,
-                                      create_rtbp_system, stability_indices)
+                                      rtbp_dynsys, stability_indices)
 from algorithms.energy import crtbp_energy, energy_to_jacobi
 from algorithms.geometry import _find_y_zero_crossing
 from plots.plots import (_plot_body, _set_axes_equal, _set_dark_mode,
@@ -206,7 +206,7 @@ class PeriodicOrbit(ABC):
     def _cr3bp_system(self):
         """Create (or reuse) a _DynamicalSystem wrapper for the CR3BP."""
         if not hasattr(self, "_cached_dynsys"):
-            self._cached_dynsys = create_rtbp_system(mu=self.mu, name=str(self))
+            self._cached_dynsys = rtbp_dynsys(mu=self.mu, name=str(self))
         return self._cached_dynsys
 
     def propagate(self, steps: int = 1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 8) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:

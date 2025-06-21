@@ -216,7 +216,7 @@ class VariationalEquationsRHS(_DynamicalSystem):
         return f"VariationalEquationsRHS(name='{self.name}', mu={self.mu})"
 
 
-class RTBPSystem(_DynamicalSystem):
+class RTBPRHS(_DynamicalSystem):
     def __init__(self, mu: float, name: str = "RTBP"):
         super().__init__(dim=6)
         self.name = name
@@ -235,16 +235,16 @@ class RTBPSystem(_DynamicalSystem):
         return self._rhs
 
     def __repr__(self) -> str:
-        return f"RTBPSystem(name='{self.name}', mu={self.mu})"
+        return f"RTBPRHS(name='{self.name}', mu={self.mu})"
 
 
-def create_rtbp_system(mu: float, name: str = "RTBP") -> RTBPSystem:
-    return RTBPSystem(mu=mu, name=name)
+def rtbp_dynsys(mu: float, name: str = "RTBP") -> RTBPRHS:
+    return RTBPRHS(mu=mu, name=name)
 
-def create_jacobian_system(mu: float, name: str="Jacobian") -> JacobianRHS:
+def jacobian_dynsys(mu: float, name: str="Jacobian") -> JacobianRHS:
     return JacobianRHS(mu=mu, name=name)
 
-def create_var_eq_system(mu: float, name: str = "VarEq") -> VariationalEquationsRHS:
+def variational_dynsys(mu: float, name: str = "VarEq") -> VariationalEquationsRHS:
     return VariationalEquationsRHS(mu=mu, name=name)
 
 

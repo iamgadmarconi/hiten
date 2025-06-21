@@ -11,7 +11,7 @@ from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables)
 from algorithms.center.polynomial.operations import polynomial_evaluate
 from algorithms.dynamics.rhs import create_rhs_system
-from algorithms.dynamics.rtbp import create_rtbp_system
+from algorithms.dynamics.rtbp import rtbp_dynsys
 from algorithms.dynamics.hamiltonian import create_hamiltonian_system
 from algorithms.integrators.rk import RungeKutta, AdaptiveRK
 from algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF, N_VARS_POLY,

@@ -6,7 +6,7 @@ from typing import Dict
 from system.body import Body
 from system.libration import (L1Point, L2Point, L3Point, L4Point, L5Point,
                               LibrationPoint)
-from algorithms.dynamics.rtbp import create_rtbp_system
+from algorithms.dynamics.rtbp import rtbp_dynsys
 from utils.log_config import logger
 from utils.precision import hp
 
@@ -39,7 +39,7 @@ class System(object):
         self.libration_points: Dict[int, LibrationPoint] = self._compute_libration_points()
         logger.info(f"Computed {len(self.libration_points)} Libration points.")
 
-        self._dynsys = create_rtbp_system(self.mu, name=self.primary.name + "_" + self.secondary.name)
+        self._dynsys = rtbp_dynsys(self.mu, name=self.primary.name + "_" + self.secondary.name)
 
     def __str__(self) -> str:
         return f"System(primary='{self.primary.name}', secondary='{self.secondary.name}', mu={self.mu:.4e})"
