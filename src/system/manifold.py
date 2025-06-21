@@ -69,17 +69,12 @@ class Manifold:
             return self.manifold_result
 
         kwargs.setdefault("show_progress", True)
-        kwargs.setdefault("dt", 1e-2)
-
-        # Stable manifolds (self.stable == 1) use backward integration (forward = -1)
-        # Unstable manifolds (self.stable == -1) use forward integration (forward = 1)
+        kwargs.setdefault("dt", 1e-3)
 
         initial_state = self.generating_orbit._initial_state
 
         ysos, dysos, states_list, times_list = [], [], [], []
 
-        # Sample the generating orbit *excluding* frac == 1.0 to avoid indexing
-        # the STM at its last element which can raise.
         fractions = np.arange(0.0, 1.0, step)
 
         iterator = (
@@ -101,15 +96,10 @@ class Manifold:
                 x0W = x0W.flatten().astype(np.float64)
                 tf = integration_fraction * 2 * np.pi
 
-                # Build signed time grid for the chosen integration direction
                 dt = abs(kwargs["dt"])
-                dt_signed = dt * self._forward
-                t_vals = np.arange(0.0, self._forward * tf, dt_signed)
-                
-                # Calculate steps from the desired dt and integration time
-                steps = max(int(abs(tf) / dt) + 1, 100)  # Ensure minimum steps
 
-                # Integrate using the pre-configured dynamical system
+                steps = max(int(abs(tf) / dt) + 1, 100)
+
                 sol = _propagate_crtbp(
                     dynsys=self.generating_orbit.system._dynsys,
                     state0=x0W, 
@@ -126,10 +116,9 @@ class Manifold:
                 states_list.append(states)
                 times_list.append(times)
 
-                Xy0, Ty0 = surface_of_section(states, times, self.mu, M=2, C=0)
+                Xy0, _ = surface_of_section(states, times, self.mu, M=2, C=0)
 
                 if len(Xy0) > 0:
-                    # If intersection found, extract coordinates
                     Xy0 = Xy0.flatten()
                     ysos.append(Xy0[1])
                     dysos.append(Xy0[4])
@@ -141,7 +130,6 @@ class Manifold:
                 logger.error(err)
                 continue
         
-        # Show summary warning if there were failed crossings
         if self._attempts > 0 and self._successes < self._attempts:
             failed_attempts = self._attempts - self._successes
             failure_rate = (failed_attempts / self._attempts) * 100
@@ -162,7 +150,6 @@ class Manifold:
                 snreal_vals.append(sn[k])
                 snreal_vecs.append(Ws[:, k])
 
-        # 4) Collect real eigen-directions for unstable set
         unreal_vals = []
         unreal_vecs = []
         for k in range(len(un)):
@@ -237,11 +224,9 @@ class Manifold:
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
         
-        # Use a colormap to assign each trajectory a unique color
         num_traj = len(states_list)
         cmap = plt.get_cmap('plasma')
         for i, (xW, _) in enumerate(zip(states_list, times_list)):
-            # Normalize index to range 0-1 for the colormap
             color = cmap(i / (num_traj - 1)) if num_traj > 1 else cmap(0.5)
             ax.plot(xW[:, 0], xW[:, 1], xW[:, 2], color=color, lw=2)
 
@@ -263,7 +248,6 @@ class Manifold:
         plt.show()
 
     def save(self, filepath: str, **kwargs) -> None:
-        # Construct a serialisation dictionary – avoid non-pickle-friendly objects when possible.
         data = {
             "manifold_type": self.__class__.__name__,
             "stable": bool(self.stable == 1),
@@ -272,7 +256,6 @@ class Manifold:
             "order": self.order,
         }
 
-        # Lightweight generating-orbit info (if available)
         try:
             data["generating_orbit"] = {
                 "family": getattr(self.generating_orbit, "orbit_family", self.generating_orbit.__class__.__name__),
@@ -280,16 +263,13 @@ class Manifold:
                 "initial_state": self.generating_orbit._initial_state.tolist(),
             }
         except Exception:
-            # In case the attributes do not exist / are inaccessible just skip.
             pass
 
-        # Store manifold Result if it exists
         if self.manifold_result is not None:
             mr = self.manifold_result
             data["manifold_result"] = {
                 "ysos": mr.ysos,
                 "dysos": mr.dysos,
-                # numpy arrays need to be converted to (nested) lists for portability
                 "states_list": [s.tolist() for s in mr.states_list],
                 "times_list": [t.tolist() for t in mr.times_list],
                 "_successes": mr._successes,
@@ -298,7 +278,6 @@ class Manifold:
         else:
             data["manifold_result"] = None
 
-        # Ensure output directory exists
         os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
 
         with open(filepath, "wb") as fh:
@@ -319,14 +298,11 @@ class Manifold:
                 "Loading %s data into %s instance", data.get("manifold_type", "<unknown>"), self.__class__.__name__
             )
 
-        # Update basic properties (do *not* overwrite integrator instance – keep what user supplied)
         self.stable = 1 if data.get("stable", True) else -1
         self.direction = 1 if data.get("direction", "Positive") == "Positive" else -1
 
-        # Store generating-orbit metadata for reference
         self._loaded_generating_orbit_info = data.get("generating_orbit", {})
 
-        # Re-create manifold_result if present
         mr_data = data.get("manifold_result")
         if mr_data is not None:
             ysos = mr_data["ysos"]
