@@ -5,7 +5,7 @@ from numba.typed import List
 from algorithms.center.polynomial.operations import polynomial_evaluate
 from config import FASTMATH
 from algorithms.integrators.base import Integrator, Solution
-from algorithms.dynamics.base import DynamicalSystem
+from algorithms.dynamics.base import _DynamicalSystem
 
 N_SYMPLECTIC_DOF = 3
 N_VARS_POLY = 6
@@ -492,13 +492,13 @@ class TaoSymplectic(Integrator):
         """Order of accuracy of the symplectic method."""
         return self._order
     
-    def validate_system(self, system: DynamicalSystem) -> None:
+    def validate_system(self, system: _DynamicalSystem) -> None:
         """
         Validate that the system is compatible with symplectic integration.
         
         Parameters
         ----------
-        system : DynamicalSystem
+        system : _DynamicalSystem
             The system to validate
             
         Raises
@@ -526,7 +526,7 @@ class TaoSymplectic(Integrator):
     
     def integrate(
         self,
-        system: DynamicalSystem,
+        system: _DynamicalSystem,
         y0: np.ndarray,
         t_vals: np.ndarray,
         **kwargs
@@ -536,7 +536,7 @@ class TaoSymplectic(Integrator):
         
         Parameters
         ----------
-        system : DynamicalSystem
+        system : _DynamicalSystem
             The Hamiltonian system to integrate (must provide polynomial structure)
         y0 : numpy.ndarray
             Initial state vector [Q, P], shape (2*n_dof,)
@@ -576,19 +576,28 @@ class TaoSymplectic(Integrator):
             raise ValueError(
                 f"Initial state dimension {len(y0)} != expected {expected_dim} (2*n_dof)"
             )
-        
-        # Call the existing symplectic integration function
-        # This function naturally handles direction through np.diff(t_vals):
-        # - Forward: t_vals=[0,1,2] → dt=[1,1] → positive timesteps
-        # - Backward: t_vals=[2,1,0] → dt=[-1,-1] → negative timesteps
-        # The symplectic updates automatically reverse when dt < 0
+
+        # The sign of time direction is carried by the *system* wrapper via
+        # attribute ``_fwd`` (set to ±1 in _DirectedSystem).  We keep the
+        # user-supplied time grid strictly ascending and inject the sign into
+        # the integration through a transformed copy that the low-level
+        # integrator sees.  This avoids forcing callers to reverse the grid.
+
+        fwd = getattr(system, "_fwd", 1)
+
+        # Provide a signed version of the time array for the low-level routine.
+        t_vals_int = t_vals if fwd == 1 else t_vals * (-1.0)
+
         trajectory_array = integrate_symplectic(
             initial_state_6d=y0,
-            t_values=t_vals,
+            t_values=t_vals_int,
             jac_H=jac_H_typed,
             clmo_H=clmo_H,
             order=self._order,
-            c_omega_heuristic=self.c_omega_heuristic
+            c_omega_heuristic=self.c_omega_heuristic,
         )
-        
-        return Solution(times=t_vals.copy(), states=trajectory_array)
+
+        # Return times with the intended sign convention (multiplying back).
+        times_out = t_vals.copy() * fwd
+
+        return Solution(times=times_out, states=trajectory_array)

@@ -4,7 +4,7 @@ from typing import Callable, Optional
 import numpy as np
 from numba import njit
 
-from algorithms.dynamics.base import DynamicalSystem
+from algorithms.dynamics.base import _DynamicalSystem
 from algorithms.dynamics.hamiltonian import HamiltonianSystem
 from algorithms.integrators.base import Integrator, Solution
 from algorithms.integrators.coefficients.dop853 import E3 as DOP853_E3
@@ -85,7 +85,7 @@ class _FixedStepRK(_RungeKuttaBase):
 
     def integrate(
         self,
-        system: DynamicalSystem,
+        system: _DynamicalSystem,
         y0: np.ndarray,
         t_vals: np.ndarray,
         **kwargs,
@@ -94,12 +94,11 @@ class _FixedStepRK(_RungeKuttaBase):
 
         rhs_wrapped = _build_rhs_wrapper(system)
 
-        # STANDARDIZED TIME DIRECTION HANDLING: Detect direction from time array
-        # This matches the approach used in adaptive integrators
-        forward = np.sign(t_vals[-1] - t_vals[0])
-
+        # The RHS that comes in may already embed the intended time direction.
+        # Therefore do *not* apply any additional sign here – simply forward
+        # the call to the wrapped system RHS.
         def f(t, y):
-            return forward * rhs_wrapped(t, y)
+            return rhs_wrapped(t, y)
 
         traj = np.empty((t_vals.size, y0.size), dtype=np.float64)
         derivs = np.empty_like(traj)
@@ -167,7 +166,7 @@ class _AdaptiveStepRK(_RungeKuttaBase):
     def order(self) -> int:
         return self._p
 
-    def integrate(self, system: DynamicalSystem, y0: np.ndarray, t_vals: np.ndarray, **kwargs) -> Solution:
+    def integrate(self, system: _DynamicalSystem, y0: np.ndarray, t_vals: np.ndarray, **kwargs) -> Solution:
         """
         Integrate a dynamical system using an adaptive Runge-Kutta method.
         """
@@ -177,10 +176,11 @@ class _AdaptiveStepRK(_RungeKuttaBase):
 
         rhs_wrapped = _build_rhs_wrapper(system)
 
-        forward = np.sign(t_vals[-1] - t_vals[0])
-
+        # The RHS that comes in may already embed the intended time direction.
+        # Therefore do *not* apply any additional sign here – simply forward
+        # the call to the wrapped system RHS.
         def f(t, y):
-            return forward * rhs_wrapped(t, y)
+            return rhs_wrapped(t, y)
 
         t_span = (t_vals[0], t_vals[-1])
 
@@ -195,11 +195,11 @@ class _AdaptiveStepRK(_RungeKuttaBase):
         accepted_steps = 0
         step_rejected = False
 
-        while (t - t_span[1]) * forward < 0:
-            min_step = 10 * abs(np.nextafter(t, t + forward) - t)
+        while (t - t_span[1]) * 1 < 0:
+            min_step = 10 * abs(np.nextafter(t, t + 1) - t)
             if h > self._max_step:
                 h = self._max_step
-            if t + forward * h > t_span[1]:
+            if t + 1 * h > t_span[1]:
                 h = abs(t_span[1] - t)
 
             y_high, y_low, err_vec = self._rk_embedded_step(f, t, y, h)
@@ -207,7 +207,7 @@ class _AdaptiveStepRK(_RungeKuttaBase):
             err_norm = np.linalg.norm(err_vec / scale) / np.sqrt(err_vec.size)
 
             if err_norm <= 1.0:
-                t_new = t + forward * h
+                t_new = t + 1 * h
                 y_new = y_high
 
                 ts.append(t_new)
@@ -446,7 +446,7 @@ def _hamiltonian_rhs(y: np.ndarray, jac_H, clmo_H, n_dof: int) -> np.ndarray:  #
     out[n_dof : 2 * n_dof] = dP
     return out
 
-def _build_rhs_wrapper(system: DynamicalSystem) -> Callable[[float, np.ndarray], np.ndarray]:
+def _build_rhs_wrapper(system: _DynamicalSystem) -> Callable[[float, np.ndarray], np.ndarray]:
 
     rhs_func = system.rhs
 

@@ -4,7 +4,7 @@ import numba
 import numpy as np
 from scipy.integrate import solve_ivp
 
-from algorithms.dynamics.base import DynamicalSystem
+from algorithms.dynamics.base import _DirectedSystem, _DynamicalSystem
 from algorithms.integrators.base import Solution
 from algorithms.integrators.rk import AdaptiveRK, RungeKutta
 from algorithms.integrators.symplectic import TaoSymplectic
@@ -143,6 +143,7 @@ def compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["scipy", 
         steps=steps,
         method=method,
         order=order,
+        flip_indices=slice(36, 42),
     )
 
     PHI = sol_obj.states
@@ -171,9 +172,9 @@ def stability_indices(monodromy):
     return (nu1, nu2), eigs
 
 
-class JacobianRHS(DynamicalSystem):
+class JacobianRHS(_DynamicalSystem):
     def __init__(self, mu: float, name: str = "CR3BP Jacobian"):
-        super().__init__(dim=3)
+        super().__init__(3)
         self.name = name
         self.mu = float(mu)
         
@@ -193,9 +194,9 @@ class JacobianRHS(DynamicalSystem):
         return f"JacobianRHS(name='{self.name}', mu={self.mu})"
 
 
-class VariationalEquationsRHS(DynamicalSystem):
+class VariationalEquationsRHS(_DynamicalSystem):
     def __init__(self, mu: float, name: str = "CR3BP Variational Equations"):
-        super().__init__(dim=42)
+        super().__init__(42)
         self.name = name
         self.mu = float(mu)
 
@@ -215,7 +216,7 @@ class VariationalEquationsRHS(DynamicalSystem):
         return f"VariationalEquationsRHS(name='{self.name}', mu={self.mu})"
 
 
-class RTBPSystem(DynamicalSystem):
+class RTBPSystem(_DynamicalSystem):
     def __init__(self, mu: float, name: str = "RTBP"):
         super().__init__(dim=6)
         self.name = name
@@ -248,7 +249,7 @@ def create_var_eq_system(mu: float, name: str = "VarEq") -> VariationalEquations
 
 
 def _propagate_crtbp(
-    dynsys: DynamicalSystem,
+    dynsys: _DynamicalSystem,
     state0: Sequence[float],
     t0: float,
     tf: float,
@@ -256,50 +257,49 @@ def _propagate_crtbp(
     steps: int = 1000,
     method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
     order: int = 6,
+    flip_indices: Sequence[int] | None = None,
 ) -> Solution:
     state0_np = _validate_initial_state(state0, dynsys.dim)
 
-    if forward == 1:
-        t_eval = np.linspace(t0, tf, steps)
-    else:
-        t_eval = np.linspace(tf, t0, steps)
+    dynsys_dir = _DirectedSystem(dynsys, forward, flip_indices=flip_indices)
+
+    t_eval = np.linspace(t0, tf, steps)
 
     if method == "scipy":
         t_span = (t_eval[0], t_eval[-1])
 
-        def directional_rhs(t, y):
-            return forward * dynsys.rhs(t, y)
-
         sol = solve_ivp(
-            directional_rhs, 
-            t_span, 
-            state0_np, 
-            t_eval=t_eval, 
-            method='DOP853', 
-            dense_output=True
+            dynsys_dir.rhs,
+            t_span,
+            state0_np,
+            t_eval=t_eval,
+            method='DOP853',
+            dense_output=True,
         )
         times = sol.t
         states = sol.y.T
         
     elif method == "rk":
         integrator = RungeKutta(order=order)
-        sol = integrator.integrate(dynsys, state0_np, t_eval)
+        sol = integrator.integrate(dynsys_dir, state0_np, t_eval)
         times = sol.times
         states = sol.states
         
     elif method == "symplectic":
         integrator = TaoSymplectic(order=order)
-        sol = integrator.integrate(dynsys, state0_np, t_eval)
+        sol = integrator.integrate(dynsys_dir, state0_np, t_eval)
         times = sol.times
         states = sol.states
         
     elif method == "adaptive":
         integrator = AdaptiveRK(order=order, max_step=1e4, rtol=1e-3, atol=1e-6)
-        sol = integrator.integrate(dynsys, state0_np, t_eval)
+        sol = integrator.integrate(dynsys_dir, state0_np, t_eval)
         times = sol.times
         states = sol.states
 
-    return Solution(times, states)
+    times_signed = forward * times
+
+    return Solution(times_signed, states)
 
 
 def _validate_initial_state(state, expected_dim=6): 

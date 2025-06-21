@@ -3,12 +3,12 @@ from typing import Callable
 import numpy as np
 from config import FASTMATH
 
-from algorithms.dynamics.base import DynamicalSystem
+from algorithms.dynamics.base import _DynamicalSystem
 
 
-class RHSSystem(DynamicalSystem):
+class RHSSystem(_DynamicalSystem):
     def __init__(self, rhs_func: Callable[[float, np.ndarray], np.ndarray], dim: int, name: str = "Generic RHS"):
-        """Wrap an arbitrary RHS into a DynamicalSystem instance.
+        """Wrap an arbitrary RHS into a _DynamicalSystem instance.
 
         The supplied *rhs_func* is automatically JIT-compiled (if it is not a
         Numba dispatcher already) so that it can be called from inside

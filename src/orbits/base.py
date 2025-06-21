@@ -204,18 +204,12 @@ class PeriodicOrbit(ABC):
         return energy_to_jacobi(self.energy)
 
     def _cr3bp_system(self):
-        """Create (or reuse) a DynamicalSystem wrapper for the CR3BP."""
+        """Create (or reuse) a _DynamicalSystem wrapper for the CR3BP."""
         if not hasattr(self, "_cached_dynsys"):
             self._cached_dynsys = create_rtbp_system(mu=self.mu, name=str(self))
         return self._cached_dynsys
 
-    def propagate(
-        self,
-        steps: int = 1000,
-        method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy",
-        order: int = 8,
-        **options,
-    ) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    def propagate(self, steps: int = 1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 8) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         """
         Propagate the orbit for one period.
         
@@ -245,7 +239,6 @@ class PeriodicOrbit(ABC):
             steps=steps,
             method=method,
             order=order,
-            **options
         )
 
         self._trajectory = sol.states

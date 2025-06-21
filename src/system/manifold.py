@@ -115,10 +115,11 @@ class Manifold:
                     state0=x0W, 
                     t0=0.0, 
                     tf=tf,
-                    forward=self._forward,  # Handle integration direction properly
+                    forward=self._forward,
                     steps=steps,
                     method=self.method, 
-                    order=self.order
+                    order=self.order,
+                    flip_indices=slice(0, 6)
                 )
                 states, times = sol.states, sol.times
 

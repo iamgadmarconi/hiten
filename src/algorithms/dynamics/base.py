@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Protocol, runtime_checkable
+from typing import Callable, Protocol, Sequence, runtime_checkable
 
 import numpy as np
 
@@ -23,7 +23,7 @@ class DynamicalSystemProtocol(Protocol):
         ...
             
 
-class DynamicalSystem(ABC):
+class _DynamicalSystem(ABC):
     """
     Abstract base class for dynamical systems.
     
@@ -70,3 +70,55 @@ class DynamicalSystem(ABC):
         """
         if len(y) != self.dim:
             raise ValueError(f"State vector dimension {len(y)} != system dimension {self.dim}")
+
+
+class _DirectedSystem(_DynamicalSystem):
+    def __init__(self,
+                 base_or_dim: "_DynamicalSystem | int",
+                 fwd: int = 1,
+                 flip_indices: "slice | Sequence[int] | None" = None):
+
+        if isinstance(base_or_dim, _DynamicalSystem):
+            self._base: "_DynamicalSystem | None" = base_or_dim
+            dim = base_or_dim.dim
+        else:
+            self._base = None
+            dim = int(base_or_dim)
+
+        super().__init__(dim=dim)
+
+        self._fwd: int = 1 if fwd >= 0 else -1
+        self._flip_idx = flip_indices
+
+    @property
+    def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
+
+        if self._base is None:
+            raise AttributeError("`rhs` not implemented: subclass must provide "
+                                 "its own implementation when no base system "
+                                 "is wrapped.")
+
+        base_rhs = self._base.rhs
+        flip_idx = self._flip_idx
+
+        def _rhs(t: float, y: np.ndarray) -> np.ndarray:
+            dy = base_rhs(t, y)
+
+            if self._fwd == -1:
+                if flip_idx is None:
+                    dy = -dy
+                else:
+                    dy = dy.copy()
+                    dy[flip_idx] *= -1
+            return dy
+
+        return _rhs
+
+    def __repr__(self):
+        return (f"DirectedSystem(dim={self.dim}, fwd={self._fwd}, "
+                f"flip_idx={self._flip_idx})")
+
+    def __getattr__(self, item):
+        if self._base is None:
+            raise AttributeError(item)
+        return getattr(self._base, item)

@@ -5,12 +5,12 @@ from numpy.typing import NDArray
 from scipy.interpolate import CubicSpline
 from scipy.optimize import root_scalar
 
-from algorithms.dynamics.base import DynamicalSystem
+from algorithms.dynamics.base import _DynamicalSystem
 from algorithms.dynamics.rtbp import _propagate_crtbp
 from utils.log_config import logger
 
 
-def _find_y_zero_crossing(dynsys: DynamicalSystem, x0: NDArray[np.float64], forward: int = 1) -> Tuple[float, NDArray[np.float64]]:
+def _find_y_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], forward: int = 1) -> Tuple[float, NDArray[np.float64]]:
     """
     Find the time and state at which an orbit next crosses the y=0 plane.
     
@@ -92,7 +92,7 @@ def _find_y_zero_crossing(dynsys: DynamicalSystem, x0: NDArray[np.float64], forw
     return t1_z, x1_z
 
 
-def _find_x_zero_crossing(dynsys: DynamicalSystem, x0: NDArray[np.float64], forward: int = 1) -> Tuple[float, NDArray[np.float64]]:
+def _find_x_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], forward: int = 1) -> Tuple[float, NDArray[np.float64]]:
     """
     Find the time and state at which an orbit next crosses the x=0 plane.
     
@@ -174,7 +174,7 @@ def _find_x_zero_crossing(dynsys: DynamicalSystem, x0: NDArray[np.float64], forw
     return t1_z, x1_z
 
 
-def _find_z_zero_crossing(dynsys: DynamicalSystem, x0: NDArray[np.float64], forward: int = 1) -> Tuple[float, NDArray[np.float64]]:
+def _find_z_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], forward: int = 1) -> Tuple[float, NDArray[np.float64]]:
     """
     Find the time and state at which an orbit next crosses the z=0 plane.
     
@@ -331,7 +331,7 @@ def _find_bracket(f: Callable[[float], float], x0: float, max_expand: int = 500)
     raise RuntimeError(f"Could not find bracket for root near {x0} within {max_expand} iterations")
 
 
-def _y_component(dynsys: DynamicalSystem, t1: float, t0_z: float, x0_z: NDArray[np.float64], forward: int = 1, steps: int = 3000) -> float:
+def _y_component(dynsys: _DynamicalSystem, t1: float, t0_z: float, x0_z: NDArray[np.float64], forward: int = 1, steps: int = 3000) -> float:
     """
     Compute the y-component of an orbit at a specified time.
     
@@ -386,7 +386,7 @@ def _y_component(dynsys: DynamicalSystem, t1: float, t0_z: float, x0_z: NDArray[
     return float(x1_zgl[1]) # Explicitly cast to float
 
 
-def _x_component(dynsys: DynamicalSystem, t1: float, t0_z: float, x0_z: NDArray[np.float64], forward: int = 1, steps: int = 3000) -> float:
+def _x_component(dynsys: _DynamicalSystem, t1: float, t0_z: float, x0_z: NDArray[np.float64], forward: int = 1, steps: int = 3000) -> float:
     """
     Compute the x-component of an orbit at a specified time.
     
@@ -441,7 +441,7 @@ def _x_component(dynsys: DynamicalSystem, t1: float, t0_z: float, x0_z: NDArray[
     return float(x1_zgl[0]) # Explicitly cast to float
 
 
-def _z_component(dynsys: DynamicalSystem, t1: float, t0_z: float, x0_z: NDArray[np.float64], forward: int = 1, steps: int = 3000, tol: float = 1e-10) -> float:
+def _z_component(dynsys: _DynamicalSystem, t1: float, t0_z: float, x0_z: NDArray[np.float64], forward: int = 1, steps: int = 3000, tol: float = 1e-10) -> float:
     """
     Compute the z-component of an orbit at a specified time.
     

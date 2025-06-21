@@ -6,7 +6,7 @@ from numba.typed import List
 
 from algorithms.center.polynomial.operations import (polynomial_evaluate,
                                                      polynomial_jacobian)
-from algorithms.dynamics.base import DynamicalSystem, DynamicalSystemProtocol
+from algorithms.dynamics.base import _DynamicalSystem, DynamicalSystemProtocol
 from algorithms.integrators.symplectic import _eval_dH_dP, _eval_dH_dQ
 from config import FASTMATH
 
@@ -83,7 +83,7 @@ class HamiltonianSystemProtocol(DynamicalSystemProtocol, Protocol):
         ...
 
 
-class HamiltonianSystem(DynamicalSystem):
+class HamiltonianSystem(_DynamicalSystem):
 
     def __init__(
         self,
