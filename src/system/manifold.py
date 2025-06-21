@@ -150,7 +150,7 @@ class Manifold:
         return self.manifold_result
 
     def _compute_manifold_section(self, state: np.ndarray, period: float, fraction: float, NN: int = 1, forward: int = 1):
-        xx, tt, phi_T, PHI = compute_stm(state, self.mu, period, forward=forward)
+        xx, tt, phi_T, PHI = compute_stm(self.libration_point._var_eq_system, state, period, steps=1000, forward=forward, method=self.method, order=self.order)
 
         sn, un, _, Ws, Wu, _ = eigenvalue_decomposition(phi_T, discrete=1)
 

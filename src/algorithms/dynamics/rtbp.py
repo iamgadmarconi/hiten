@@ -14,7 +14,7 @@ from utils.log_config import logger
 
 
 @numba.njit(fastmath=FASTMATH, cache=True)
-def crtbp_accel(state, mu):
+def _crtbp_accel(state, mu):
     """
     Calculate the state derivative (acceleration) for the CR3BP.
     
@@ -55,7 +55,7 @@ def crtbp_accel(state, mu):
     return np.array([vx, vy, vz, ax, ay, az], dtype=np.float64)
 
 @numba.njit(fastmath=FASTMATH, cache=True)
-def jacobian_crtbp(x, y, z, mu):
+def _jacobian_crtbp(x, y, z, mu):
     """
     Compute the Jacobian matrix for the CR3BP equations of motion.
     
@@ -155,14 +155,13 @@ def jacobian_crtbp(x, y, z, mu):
     return F
 
 @numba.njit(fastmath=FASTMATH, cache=True)
-def variational_equations(t, PHI_vec, mu, forward=1):
+def _var_equations(t, PHI_vec, mu):
     """
-    Compute the variational equations for the CR3BP.
+    Compute the core variational equations for the CR3BP without direction handling.
     
     This function implements the 3D variational equations for the CR3BP,
     calculating the time derivatives of both the state transition matrix (STM)
-    and the state vector simultaneously. It's used for sensitivity analysis,
-    differential correction, and stability analysis.
+    and the state vector simultaneously. Direction handling is done externally.
     
     Parameters
     ----------
@@ -174,8 +173,6 @@ def variational_equations(t, PHI_vec, mu, forward=1):
         - Last 6 elements: state vector [x, y, z, vx, vy, vz]
     mu : float
         Mass parameter of the CR3BP system (ratio of smaller to total mass)
-    forward : int, optional
-        Direction of integration (1 for forward, -1 for backward). Default is 1.
     
     Returns
     -------
@@ -202,7 +199,7 @@ def variational_equations(t, PHI_vec, mu, forward=1):
     x, y, z, vx, vy, vz = x_vec
 
     # 2) Build the 6x6 matrix F from the partial derivatives
-    F = jacobian_crtbp(x, y, z, mu)
+    F = _jacobian_crtbp(x, y, z, mu)
 
     # 3) dPhi/dt = F * Phi  (manually done to keep numba happy)
     phidot = np.zeros((6, 6), dtype=np.float64)
@@ -238,128 +235,46 @@ def variational_equations(t, PHI_vec, mu, forward=1):
     # First 36 = flattened phidot
     dPHI_vec[:36] = phidot.ravel()
 
-    # Last 6 = [vx, vy, vz, ax, ay, az], each multiplied by 'forward'
-    dPHI_vec[36] = forward * vx
-    dPHI_vec[37] = forward * vy
-    dPHI_vec[38] = forward * vz
-    dPHI_vec[39] = forward * ax
-    dPHI_vec[40] = forward * ay
-    dPHI_vec[41] = forward * az
+    # Last 6 = [vx, vy, vz, ax, ay, az] - no forward multiplication here
+    dPHI_vec[36] = vx
+    dPHI_vec[37] = vy
+    dPHI_vec[38] = vz
+    dPHI_vec[39] = ax
+    dPHI_vec[40] = ay
+    dPHI_vec[41] = az
 
     return dPHI_vec
 
 
-def compute_stm(x0, mu, tf, forward=1, **solve_kwargs):
-    """
-    Compute the State Transition Matrix (STM) for the CR3BP.
-    
-    This function integrates the combined CR3BP equations of motion and 
-    variational equations from t=0 to t=tf to obtain the state transition 
-    matrix Φ(tf, 0). The implementation mirrors MATLAB's var3D approach
-    for compatibility with existing methods.
-    
-    Parameters
-    ----------
-    x0 : array_like
-        Initial state vector [x, y, z, vx, vy, vz] in the rotating frame
-    mu : float
-        Mass parameter of the CR3BP system (ratio of smaller to total mass)
-    tf : float
-        Final integration time (must be positive)
-    forward : int, optional
-        Direction of integration (1 for forward, -1 for backward). Default is 1.
-    **solve_kwargs
-        Additional keyword arguments
-    
-    Returns
-    -------
-    x : ndarray
-        Array of shape (n_times, 6) containing the state trajectory
-    t : ndarray
-        Array of shape (n_times,) containing the time points
-        (If forward=-1, times are negated to reflect backward integration)
-    phi_T : ndarray
-        The 6x6 state transition matrix Φ(tf, 0) at the final time
-    PHI : ndarray
-        Array of shape (n_times, 42) containing the full integrated
-        solution at each time point, where each row is [flattened STM(36), state(6)]
-    
-    Notes
-    -----
-    The state transition matrix Φ(t, t0) maps perturbations in the initial state
-    to perturbations at time t according to: δx(t) = Φ(t, t0)·δx(t0).
-    
-    The STM is initialized as the 6x6 identity matrix at t=0, representing
-    the fact that initially, a perturbation in any direction affects only that
-    direction with unit magnitude.
-    
-    For numerical reasons, the function always integrates forward in time
-    (from 0 to |tf|), but controls the direction of the dynamics through the
-    'forward' parameter, which is multiplied by the derivatives.
-    """
-
-    # Build initial 42-vector in MATLAB ordering: [flattened STM, state]
+def compute_stm(dynsys, x0, tf, steps=1000, forward=1, method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy", order=8):
     PHI0 = np.zeros(42, dtype=np.float64)
     PHI0[:36] = np.eye(6, dtype=np.float64).ravel()
     PHI0[36:] = x0
 
-    # Determine fixed-step grid.  If caller supplies 'steps' use it; else dt.
-    steps = solve_kwargs.pop('steps', 4000)
-    times = np.linspace(0.0, tf, steps, dtype=np.float64)
-
-    # Create DynamicalSystem wrapper for the 42-dim variational equations
-    def _var_eq(t, y):  # noqa: D401 (simple func)
-        return variational_equations(t, y, mu, forward)
-
-    rhs_system = create_rhs_system(_var_eq, dim=42, name="CR3BP STM")
-
-    # Use high-order RK8 for accuracy unless caller overrides
-    order = solve_kwargs.pop('rk_order', 8)
-    integrator = RungeKutta(order=order)
-
-    sol_obj = integrator.integrate(rhs_system, PHI0, times)
+    sol_obj = _propagate_crtbp(
+        dynsys=dynsys,
+        state0=PHI0,
+        t0=0.0,
+        tf=tf,
+        forward=forward,
+        steps=steps,
+        method=method,
+        order=order,
+    )
 
     PHI = sol_obj.states  # shape (n_times, 42)
-    
-    # Possibly flip time if forward==-1, to mirror MATLAB's t=FORWARD*t
-    if forward == -1:
-        sol_obj.times = -sol_obj.times  # so we see times from 0 down to -tf
     
     # The state is in columns [36..41] of PHI
     x = PHI[:, 36:42]   # shape (n_times, 6)
 
-    # The final row's first 36 columns = flattened STM at t=tf
     phi_tf_flat = PHI[-1, :36]
     phi_T = phi_tf_flat.reshape((6, 6))
 
     return x, sol_obj.times, phi_T, PHI
 
 
-def monodromy_matrix(x0, mu, period, **solve_kwargs):
-    """
-    Compute the monodromy matrix for a periodic orbit.
-    
-    The monodromy matrix is the state transition matrix evaluated over one 
-    orbital period of a periodic orbit. Its eigenvalues (the Floquet multipliers)
-    determine the stability properties of the orbit.
-    
-    Parameters
-    ----------
-    x0 : array_like
-        Initial state vector [x, y, z, vx, vy, vz] representing a point on the periodic orbit
-    mu : float
-        Mass parameter of the CR3BP system (ratio of smaller to total mass)
-    period : float
-        Period of the orbit
-    **solve_kwargs
-        Additional keyword arguments passed to compute_stm
-    
-    Returns
-    -------
-    M : ndarray
-        6x6 monodromy matrix
-    """
-    _, _, M, _ = compute_stm(x0, mu, period, **solve_kwargs)
+def monodromy_matrix(dynsys, x0, period):
+    _, _, M, _ = compute_stm(dynsys, x0, period)
     return M
 
 
@@ -395,6 +310,50 @@ def stability_indices(monodromy):
     return (nu1, nu2), eigs
 
 
+class JacobianRHS(DynamicalSystem):
+    def __init__(self, mu: float, name: str = "CR3BP Jacobian"):
+        super().__init__(dim=3)
+        self.name = name
+        self.mu = float(mu)
+        
+        mu_val = self.mu
+
+        @numba.njit(fastmath=FASTMATH, cache=True)
+        def _jacobian_rhs(t: float, state, _mu=mu_val) -> np.ndarray:
+            return _jacobian_crtbp(state[0], state[1], state[2], _mu)
+        
+        self._rhs = _jacobian_rhs
+
+    @property
+    def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
+        return self._rhs
+
+    def __repr__(self) -> str:
+        return f"JacobianRHS(name='{self.name}', mu={self.mu})"
+
+
+class VariationalEquationsRHS(DynamicalSystem):
+    def __init__(self, mu: float, name: str = "CR3BP Variational Equations"):
+        super().__init__(dim=42)
+        self.name = name
+        self.mu = float(mu)
+
+        mu_val = self.mu
+
+        @numba.njit(fastmath=FASTMATH, cache=True)
+        def _var_eq_rhs(t: float, y: np.ndarray, _mu=mu_val) -> np.ndarray:
+            return _var_equations(t, y, _mu)
+        
+        self._rhs = _var_eq_rhs
+
+    @property
+    def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
+        return self._rhs
+
+    def __repr__(self) -> str:
+        return f"VariationalEquationsRHS(name='{self.name}', mu={self.mu})"
+
+
 class RTBPSystem(DynamicalSystem):
     """Dynamical system wrapper for the Circular Restricted Three-Body Problem."""
 
@@ -407,21 +366,13 @@ class RTBPSystem(DynamicalSystem):
 
         @numba.njit(fastmath=FASTMATH, cache=True)
         def _crtbp_rhs(t: float, state: np.ndarray, _mu=mu_val) -> np.ndarray:
-            return crtbp_accel(state, _mu)
+            return _crtbp_accel(state, _mu)
 
         self._rhs = _crtbp_rhs
 
     @property
     def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
         return self._rhs
-
-    @property
-    def jacobian(self) -> Callable:
-        return jacobian_crtbp
-
-    @property
-    def stm(self) -> Callable[[np.ndarray, float, int, dict], tuple]:
-        return compute_stm
 
     def __repr__(self) -> str:
         return f"RTBPSystem(name='{self.name}', mu={self.mu})"
@@ -430,6 +381,12 @@ class RTBPSystem(DynamicalSystem):
 def create_rtbp_system(mu: float, name: str = "RTBP") -> RTBPSystem:
     """Factory for creating CR3BP dynamical systems."""
     return RTBPSystem(mu=mu, name=name)
+
+def create_jacobian_system(mu: float, name: str="Jacobian") -> JacobianRHS:
+    return JacobianRHS(mu=mu, name=name)
+
+def create_var_eq_system(mu: float, name: str = "VarEq") -> VariationalEquationsRHS:
+    return VariationalEquationsRHS(mu=mu, name=name)
 
 
 def _propagate_crtbp(
@@ -442,7 +399,7 @@ def _propagate_crtbp(
     method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
     order: int = 6,
 ) -> Solution:
-    state0_np = _validate_initial_state(state0)
+    state0_np = _validate_initial_state(state0, dynsys.dim)
 
     if forward == 1:
         t_eval = np.linspace(t0, tf, steps)
@@ -487,10 +444,10 @@ def _propagate_crtbp(
     return Solution(times, states)
 
 
-def _validate_initial_state(state): 
+def _validate_initial_state(state, expected_dim=6): 
     state_np = np.asarray(state, dtype=np.float64)
-    if state_np.shape != (6,):
-        msg = f"Initial state vector must have 6 elements, but got shape {state_np.shape}"
+    if state_np.shape != (expected_dim,):
+        msg = f"Initial state vector must have {expected_dim} elements, but got shape {state_np.shape}"
         logger.error(msg)
         raise ValueError(msg)
     return state_np

@@ -43,6 +43,9 @@ class correctionConfig(NamedTuple):
     target: tuple[float, ...] = (0.0,)
     event_func: Callable[...,tuple[float,np.ndarray]] = _find_y_zero_crossing
 
+    method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy"
+    order: int = 8
+    steps: int = 1000
 
 class PeriodicOrbit(ABC):
 
@@ -271,9 +274,7 @@ class PeriodicOrbit(ABC):
         
         logger.info(f"Computing stability for orbit with period {self.period}")
         # Compute STM over one period
-        _, _, monodromy, _ = compute_stm(
-            self.initial_state, self.mu, self.period, **kwargs
-        )
+        _, _, monodromy, _ = compute_stm(self.libration_point._var_eq_system, self.initial_state, self.period)
         
         # Analyze stability
         stability = stability_indices(monodromy)
@@ -608,9 +609,9 @@ class PeriodicOrbit(ABC):
         ) -> tuple[np.ndarray, float]:
         X0 = self.initial_state.copy()
         for k in range(max_attempts + 1):
-            logger.debug(f"Differential correction iteration {k}")
+
             t_ev, X_ev = cfg.event_func(dynsys=self.system._dynsys, x0=X0, forward=forward)
-            logger.debug(f"called event_func: t_ev: {t_ev}, X_ev: {X_ev}")
+
             R = X_ev[list(cfg.residual_indices)] - np.array(cfg.target)
 
             if np.linalg.norm(R, ord=np.inf) < tol:
@@ -618,8 +619,8 @@ class PeriodicOrbit(ABC):
                 self.period = 2 * t_ev
                 return X0, t_ev
 
-            _, _, Phi, _ = compute_stm(X0, self.mu, t_ev, forward=forward)
-            logger.debug(f"Called compute_stm: Phi: {Phi}")
+            _, _, Phi, _ = compute_stm(self.libration_point._var_eq_system, X0, t_ev, steps=cfg.steps, method=cfg.method, order=cfg.order)
+
             J = Phi[np.ix_(cfg.residual_indices, cfg.control_indices)]
 
             if cfg.extra_jacobian is not None:
@@ -630,10 +631,8 @@ class PeriodicOrbit(ABC):
                 J += np.eye(J.shape[0]) * 1e-12
 
             delta = np.linalg.solve(J, -R)
-            logger.info(f"Differential correction delta: {delta} at iteration {k}")
+            logger.debug(f"Differential correction delta: {delta} at iteration {k}")
             X0[list(cfg.control_indices)] += delta
-        
-            logger.info(f"X0: {X0}")
 
         raise RuntimeError("did not converge")
 

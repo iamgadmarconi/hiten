@@ -19,19 +19,17 @@ eigenvalue decomposition appropriate to the specific dynamics of that point type
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Tuple
+from typing import TYPE_CHECKING, Tuple
 
 import numpy as np
 
-from algorithms.dynamics.rtbp import jacobian_crtbp
+from algorithms.dynamics.rtbp import _jacobian_crtbp, create_var_eq_system
 from algorithms.energy import crtbp_energy, energy_to_jacobi
 from algorithms.linalg import eigenvalue_decomposition
 from config import MPMATH_DPS
 from utils.log_config import logger
 from utils.precision import find_root, hp
 
-# Use TYPE_CHECKING for type hints to avoid circular imports
-from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from system.base import System
 
@@ -75,6 +73,7 @@ class LibrationPoint(ABC):
         self._energy = None
         self._jacobi_constant = None
         self._cache = {}
+        self._var_eq_system = create_var_eq_system(self.mu, name=f"CR3BP Variational Equations for {self.__class__.__name__}")
     
     def __str__(self) -> str:
         return f"{type(self).__name__}(mu={self.mu:.6e})"
@@ -186,7 +185,7 @@ class LibrationPoint(ABC):
         mode_str = "Continuous" if discrete == CONTINUOUS_SYSTEM else "Discrete"
         logger.info(f"Analyzing stability for {type(self).__name__} (mu={self.mu}), mode={mode_str}, delta={delta}.")
         pos = self.position
-        A = jacobian_crtbp(pos[0], pos[1], pos[2], self.mu)
+        A = _jacobian_crtbp(pos[0], pos[1], pos[2], self.mu)
         
         logger.debug(f"Jacobian calculated at position {pos}:\n{A}")
 
