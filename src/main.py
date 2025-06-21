@@ -3,9 +3,9 @@ import os
 from algorithms.center.base import CenterManifold
 from algorithms.center.poincare.base import PoincareMap, poincareMapConfig
 from algorithms.center.utils import format_cm_table
-from config import (C_OMEGA_HEURISTIC, DT, H0, INTEGRATOR_ORDER,
-                    L_POINT, MAX_DEG, N_ITER, N_SEEDS, PRIMARY, SECONDARY,
-                    USE_GPU, USE_SYMPLECTIC)
+from config import (C_OMEGA_HEURISTIC, DT, H0, INTEGRATOR_METHOD,
+                    INTEGRATOR_ORDER, L_POINT, MAX_DEG, N_ITER, N_SEEDS,
+                    PRIMARY, SECONDARY, USE_GPU)
 from orbits.base import orbitConfig
 from orbits.halo import HaloOrbit
 from orbits.lyapunov import LyapunovOrbit, VerticalLyapunovOrbit
@@ -27,7 +27,7 @@ def main() -> None:
     cm_H = cm.compute()
 
     logger.info(
-        "\nCentre-manifold Hamiltonian (deg 2 to %d) in real NF variables (q2, p2, q3, p3)\n",
+        "\nCentre-manifold Hamiltonian (deg 2 to 5) in real NF variables (q2, p2, q3, p3)\n",
         MAX_DEG,
     )
     logger.info("\n\n%s\n\n", format_cm_table(cm_H, cm.clmo))
@@ -35,11 +35,8 @@ def main() -> None:
     logger.info("Starting Poincaré map generation process…")
 
     logger.info("Generating iterated Poincaré map for h0=%.3f", H0)
-    pm_cfg = poincareMapConfig(dt=DT, method="symplectic" if USE_SYMPLECTIC else "rk", 
-                                n_seeds=N_SEEDS, n_iter=N_ITER, seed_axis="q2", section_coord="q3",
-                                integrator_order=INTEGRATOR_ORDER, 
-                                c_omega_heuristic=C_OMEGA_HEURISTIC,
-                                compute_on_init=False, use_gpu=USE_GPU)
+    pm_cfg = poincareMapConfig(dt=DT, method=INTEGRATOR_METHOD, n_seeds=N_SEEDS, n_iter=N_ITER, seed_axis="q2", section_coord="q3",
+                                integrator_order=INTEGRATOR_ORDER, c_omega_heuristic=C_OMEGA_HEURISTIC, compute_on_init=False, use_gpu=USE_GPU)
 
     filepath = f"results/maps/poincare_map_{H0}.pkl"
 
@@ -94,11 +91,11 @@ def main() -> None:
         orbit = spec["cls"](cfg, spec["initial_state"])
 
         # Differential correction & propagation
-        # orbit.differential_correction(max_attempts=spec["diff_corr_attempts"])
+        orbit.differential_correction(max_attempts=spec["diff_corr_attempts"])
         orbit.period = 2 * 1.3841169221196443
         orbit.propagate(steps=1000)
-        # orbit.plot("rotating")
-        # orbit.animate()
+        orbit.plot("rotating")
+        orbit.animate()
 
         # Build manifold configuration
         manifold_cfg = manifoldConfig(orbit, stable=False, direction="Positive")
