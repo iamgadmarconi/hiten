@@ -45,7 +45,7 @@ class correctionConfig(NamedTuple):
 
     method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy"
     order: int = 8
-    steps: int = 1000
+    steps: int = 2000
 
 class PeriodicOrbit(ABC):
 
@@ -631,7 +631,7 @@ class PeriodicOrbit(ABC):
                 J += np.eye(J.shape[0]) * 1e-12
 
             delta = np.linalg.solve(J, -R)
-            logger.debug(f"Differential correction delta: {delta} at iteration {k}")
+            logger.info(f"Differential correction delta: {delta} at iteration {k}")
             X0[list(cfg.control_indices)] += delta
 
         raise RuntimeError("did not converge")

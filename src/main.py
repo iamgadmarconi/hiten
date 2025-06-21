@@ -68,8 +68,8 @@ def main() -> None:
         {
             "cls": HaloOrbit,
             "name": "Halo",
-            "extra_params": {},
-            "initial_state": [ 0.82465709, -0.00000000, 0.06637936, 0.00000000, 0.17816738, 0.00000000],
+            "extra_params": {"Az": 0.2, "Zenith": "southern"},
+            # "initial_state": [ 0.82465709, -0.00000000, 0.06637936, 0.00000000, 0.17816738, 0.00000000],
             "diff_corr_attempts": 25,
             "manifold_file": "results/manifolds/halo_orbit_manifold.pkl",
         },
@@ -92,13 +92,12 @@ def main() -> None:
 
         # Differential correction & propagation
         orbit.differential_correction(max_attempts=spec["diff_corr_attempts"])
-        orbit.period = 2 * 1.3841169221196443
         orbit.propagate(steps=1000)
         orbit.plot("rotating")
         orbit.animate()
 
         # Build manifold configuration
-        manifold_cfg = manifoldConfig(orbit, stable=False, direction="Positive")
+        manifold_cfg = manifoldConfig(orbit, stable=True, direction="Positive")
         manifold = Manifold(manifold_cfg)
         m_filepath = spec["manifold_file"]
 
