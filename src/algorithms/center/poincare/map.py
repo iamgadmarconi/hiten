@@ -1,5 +1,5 @@
 import math
-from typing import Callable, List, Optional, Tuple
+from typing import Callable, List, NamedTuple, Optional, Tuple
 
 import numpy as np
 from numba import njit, prange
@@ -16,6 +16,12 @@ from algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
                                                integrate_symplectic)
 from config import FASTMATH
 from utils.log_config import logger
+
+
+class PoincareSection(NamedTuple):
+    """Named tuple holding Poincaré section points and coordinate labels."""
+    points: np.ndarray  # shape (n, 2) 
+    labels: tuple[str, str]  # coordinate labels for the two columns
 
 
 @njit(cache=False, fastmath=FASTMATH)
@@ -167,9 +173,39 @@ def _find_turning(
     logger.info("Found %s turning point: %.6e", q_or_p, root)
     return root
 
-def _solve_p3(
-    q2: float,
-    p2: float,
+def section_closure(section_coord: str) -> Tuple[int, int, Tuple[str, str]]:
+    """
+    Create closure information for a section defined by section_coord=0.
+    
+    Parameters
+    ----------
+    section_coord : str
+        The coordinate that defines the section (e.g., "q3" for q3=0 section)
+        
+    Returns
+    -------
+    tuple
+        (section_index, direction_sign, labels)
+        section_index: index in 6D state vector
+        direction_sign: +1 or -1 for momentum crossing direction
+        labels: tuple of two coordinate names that vary on the section
+    """
+    coord_map = {
+        "q3": (2, 1, ("q2", "p2")),     # q3=0 section, p3>0 direction
+        "p3": (5, -1, ("q2", "p2")),    # p3=0 section, q3<0 direction  
+        "q2": (1, 1, ("q3", "p3")),     # q2=0 section, p2>0 direction
+        "p2": (4, -1, ("q3", "p3")),    # p2=0 section, q2<0 direction
+    }
+    
+    if section_coord not in coord_map:
+        raise ValueError(f"Unsupported section_coord: {section_coord}")
+        
+    return coord_map[section_coord]
+
+
+def _solve_missing_coord(
+    varname: str,
+    fixed_vals: dict[str, float],
     h0: float,
     H_blocks: List[np.ndarray],
     clmo: List[np.ndarray],
@@ -178,14 +214,14 @@ def _solve_p3(
     max_expand: int = 40,
 ) -> Optional[float]:
     """
-    Solve H(q2,p2,0,p3)=h0 for p3>0.
+    Solve H(...) = h0 for a missing coordinate.
     
     Parameters
     ----------
-    q2 : float
-        Second position coordinate
-    p2 : float
-        Second momentum coordinate
+    varname : str
+        Name of the variable to solve for ("q2", "p2", "q3", "p3")
+    fixed_vals : dict
+        Dictionary of fixed coordinate values
     h0 : float
         Energy level
     H_blocks : List[np.ndarray]
@@ -193,39 +229,80 @@ def _solve_p3(
     clmo : List[np.ndarray]
         CLMO index table
     initial_guess : float, optional
-        Initial guess for bracketing procedure, by default 1e-3
+        Initial guess for bracketing procedure
     expand_factor : float, optional
-        Factor for expanding the bracket, by default 2.0
+        Factor for expanding the bracket
     max_expand : int, optional
-        Maximum number of expansions to try, by default 40
+        Maximum number of expansions to try
         
     Returns
     -------
     Optional[float]
-        Positive p3 solution if exists, None otherwise
+        Solution if found, None otherwise
     """
-    logger.info(f"Solving for p3 at (q2,p2)=({q2:.4e},{p2:.4e}), h0={h0:.6e}")
+    logger.info(f"Solving for {varname} with fixed values {fixed_vals}, h0={h0:.6e}")
     
-    def f(p3: float) -> float:
+    # Map variable names to indices in 6D state vector
+    var_indices = {
+        "q1": 0, "q2": 1, "q3": 2,
+        "p1": 3, "p2": 4, "p3": 5
+    }
+    
+    if varname not in var_indices:
+        raise ValueError(f"Unknown variable: {varname}")
+    
+    solve_idx = var_indices[varname]
+    
+    def f(x: float) -> float:
         state = np.zeros(6, dtype=np.complex128)
-        state[1] = q2
-        state[4] = p2
-        state[5] = p3
+        
+        # Set fixed values
+        for name, val in fixed_vals.items():
+            if name in var_indices:
+                state[var_indices[name]] = val
+                
+        # Set the variable we're solving for
+        state[solve_idx] = x
+        
         return polynomial_evaluate(H_blocks, state, clmo).real - h0
 
     root = _bracketed_root(f, initial=initial_guess, factor=expand_factor, max_expand=max_expand)
 
     if root is None:
-        logger.warning("Failed to locate p3 turning point within search limits")
-        raise RuntimeError("Root finding for Hill boundary did not converge.")
-
-    if root < 0.0:
-        logger.warning("Found negative p3 solution: %.6e", root)
+        logger.warning("Failed to locate %s turning point within search limits", varname)
         return None
 
-    logger.info("Found p3 turning point: %.6e", root)
+    logger.info("Found %s turning point: %.6e", varname, root)
     return root
 
+
+@njit(cache=True, fastmath=FASTMATH)
+def _get_section_value(state: np.ndarray, section_coord: str) -> float:
+    """Return the section coordinate value."""
+    if section_coord == "q3":
+        return state[2]
+    elif section_coord == "p3":
+        return state[5]
+    elif section_coord == "q2":
+        return state[1]
+    elif section_coord == "p2":
+        return state[4]
+    else:
+        return state[2]  # Default to q3
+
+@njit(cache=True, fastmath=FASTMATH)
+def _get_direction_sign(section_coord: str) -> float:
+    """Return the direction sign for crossing detection."""
+    if section_coord == "q3":
+        return 1.0  # p3 > 0
+    elif section_coord == "p3":
+        return 1.0  # p3 crosses from - to +, so we want dp3/dt > 0 
+    elif section_coord == "q2":
+        return 1.0  # p2 > 0
+    elif section_coord == "p2":
+        return 1.0  # p2 crosses from - to +, so we want dp2/dt > 0
+    else:
+        return 1.0
 
 @njit(cache=True, fastmath=FASTMATH)
 def _get_rk_coefficients(order: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -241,6 +318,7 @@ def _get_rk_coefficients(order: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray
 def _poincare_step(
     q2: float,
     p2: float,
+    q3: float,
     p3: float,
     dt: float,
     jac_H: List[List[np.ndarray]],
@@ -249,15 +327,19 @@ def _poincare_step(
     max_steps: int,
     use_symplectic: bool,
     n_dof: int,
+    section_coord: str,
     c_omega_heuristic: float=20.0,
 ) -> Tuple[int, float, float, float]:
     """Return (flag, q2', p2', p3').  flag=1 if success, 0 otherwise."""
 
     state_old = np.zeros(2 * n_dof, dtype=np.float64)
     state_old[1] = q2
-    state_old[2] = 0.0  # q3 always zero on the section
+    state_old[2] = q3
     state_old[n_dof + 1] = p2
     state_old[n_dof + 2] = p3
+
+    # Get direction sign
+    direction_sign = _get_direction_sign(section_coord)
 
     for _ in range(max_steps):
         if use_symplectic:
@@ -283,27 +365,56 @@ def _poincare_step(
             )
             state_new = traj[1]
 
-        q3_old = state_old[2]
-        q3_new = state_new[2]
-        p3_old = state_old[n_dof + 2]
-        p3_new = state_new[n_dof + 2]
+        f_old = _get_section_value(state_old, section_coord)
+        f_new = _get_section_value(state_new, section_coord)
+        
+        # Direction-dependent momentum check
+        # For coordinate sections (q3=0, q2=0), check associated momentum > 0
+        # For momentum sections (p3=0, p2=0), check associated coordinate derivative > 0
+        if section_coord == "q3":
+            momentum_check = state_new[n_dof + 2] > 0.0  # p3 > 0
+        elif section_coord == "p3":
+            # For p3=0 section, check that dq3/dt > 0 (trajectory moving in +q3 direction)
+            rhs_new = _hamiltonian_rhs(state_new, jac_H, clmo, n_dof)
+            momentum_check = rhs_new[2] > 0.0  # dq3/dt > 0
+        elif section_coord == "q2":
+            momentum_check = state_new[n_dof + 1] > 0.0  # p2 > 0
+        elif section_coord == "p2":
+            # For p2=0 section, check that dq2/dt > 0 (trajectory moving in +q2 direction)
+            rhs_new = _hamiltonian_rhs(state_new, jac_H, clmo, n_dof)
+            momentum_check = rhs_new[1] > 0.0  # dq2/dt > 0
+        else:
+            momentum_check = True  # Default
 
-        if (q3_old * q3_new < 0.0) and (p3_new > 0.0):
+        if (f_old * f_new < 0.0) and momentum_check:
 
             # 1) linear first guess
-            alpha = q3_old / (q3_old - q3_new)
+            alpha = f_old / (f_old - f_new)
 
             # 2) endpoint derivatives for Hermite poly (need dt-scaled slopes)
             rhs_old = _hamiltonian_rhs(state_old, jac_H, clmo, n_dof)
             rhs_new = _hamiltonian_rhs(state_new, jac_H, clmo, n_dof)
-            m0 = rhs_old[2] * dt          # dq3/dt at t=0  → slope * dt
-            m1 = rhs_new[2] * dt          # dq3/dt at t=dt
+            
+            # Get the derivative index based on section coordinate
+            if section_coord == "q3":
+                deriv_idx = 2  # dq3/dt
+            elif section_coord == "p3":
+                deriv_idx = n_dof + 2  # dp3/dt
+            elif section_coord == "q2":
+                deriv_idx = 1  # dq2/dt
+            elif section_coord == "p2":
+                deriv_idx = n_dof + 1  # dp2/dt
+            else:
+                deriv_idx = 2  # Default to q3
+                
+            m0 = rhs_old[deriv_idx] * dt    # section derivative at t=0
+            m1 = rhs_new[deriv_idx] * dt    # section derivative at t=dt
 
             # 3) cubic Hermite coefficients H(t) = a t³ + b t² + c t + d   ( 0 ≤ t ≤ 1 )
-            d  = q3_old
+            d  = f_old
             c  = m0
-            b  = 3.0*(q3_new - q3_old) - (2.0*m0 +   m1)
-            a  = 2.0*(q3_old - q3_new) + (   m0 +   m1)
+            b  = 3.0*(f_new - f_old) - (2.0*m0 +   m1)
+            a  = 2.0*(f_old - f_new) + (   m0 +   m1)
 
             # 4) one Newton iteration on H(t)=0  (enough because linear guess is very close)
             f  = ((a*alpha + b)*alpha + c)*alpha + d
@@ -332,7 +443,8 @@ def _poincare_step(
             q2p = hermite(state_old[1], state_new[1], rhs_old[1], rhs_new[1])
             p2p = hermite(state_old[n_dof+1], state_new[n_dof+1],
                           rhs_old[n_dof+1],    rhs_new[n_dof+1])
-            p3p = hermite(p3_old, p3_new, rhs_old[n_dof+2], rhs_new[n_dof+2])
+            p3p = hermite(state_old[n_dof+2], state_new[n_dof+2],
+                          rhs_old[n_dof+2], rhs_new[n_dof+2])
 
             return 1, q2p, p2p, p3p
 
@@ -350,6 +462,7 @@ def _poincare_map(
     max_steps: int,
     use_symplectic: bool,
     n_dof: int,
+    section_coord: str,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Return (success flags, q2p array, p2p array, p3p array) processed in parallel."""
     n_seeds = seeds.shape[0]
@@ -361,11 +474,13 @@ def _poincare_map(
     for i in prange(n_seeds):
         q2 = seeds[i, 0]
         p2 = seeds[i, 1]
-        p3 = seeds[i, 3]  # q3 column is seeds[:,2] which is zero
+        q3 = seeds[i, 2]
+        p3 = seeds[i, 3]
 
         flag, q2_new, p2_new, p3_new = _poincare_step(
             q2,
             p2,
+            q3,
             p3,
             dt,
             jac_H,
@@ -374,6 +489,7 @@ def _poincare_map(
             max_steps,
             use_symplectic,
             n_dof,
+            section_coord,
         )
 
         if flag == 1:
@@ -398,7 +514,8 @@ def _generate_map(
     integrator_order: int = 6,
     c_omega_heuristic: float=20.0,
     seed_axis: str = "q2",  # "q2" or "p2"
-) -> np.ndarray:
+    section_coord: str = "q3",  # "q2", "p2", "q3", or "p3"
+) -> PoincareSection:
     """Generate a Poincaré map by iterating each seed many times.
 
     Parameters
@@ -420,9 +537,12 @@ def _generate_map(
 
     Returns
     -------
-    np.ndarray, shape (n_success * n_iter, 2)
-        Collected (q2, p2) points of all iterates.
+    PoincareSection
+        Collected section points with appropriate labels.
     """
+    # Get section information
+    section_idx, direction_sign, labels = section_closure(section_coord)
+    
     # 1. Build Jacobian once.
     jac_H = polynomial_jacobian(
         poly_p=H_blocks,
@@ -432,32 +552,92 @@ def _generate_map(
         encode_dict_list=encode_dict_list,
     )
 
-    # 2. Turning points for seed placement.
-    q2_max = _find_turning("q2", h0, H_blocks, clmo_table)
-    p2_max = _find_turning("p2", h0, H_blocks, clmo_table)
-
+    # 2. Generate seeds based on section type
     seeds: list[Tuple[float, float, float, float]] = []
-
-    if seed_axis == "q2":
-        q2_vals = np.linspace(-0.9 * q2_max, 0.9 * q2_max, n_seeds)
-        for q2 in q2_vals:
-            p2 = 0.0
-            p3 = _solve_p3(q2, p2, h0, H_blocks, clmo_table)
-            if p3 is not None:
-                seeds.append((q2, p2, 0.0, p3))
-    elif seed_axis == "p2":
-        p2_vals = np.linspace(-0.9 * p2_max, 0.9 * p2_max, n_seeds)
-        for p2 in p2_vals:
-            q2 = 0.0
-            p3 = _solve_p3(q2, p2, h0, H_blocks, clmo_table)
-            if p3 is not None:
-                seeds.append((q2, p2, 0.0, p3))
+    
+    if section_coord == "q3":
+        # Traditional q3=0 section: vary along seed_axis, solve for p3
+        q2_max = _find_turning("q2", h0, H_blocks, clmo_table)
+        p2_max = _find_turning("p2", h0, H_blocks, clmo_table)
+        
+        if seed_axis == "q2":
+            q2_vals = np.linspace(-0.9 * q2_max, 0.9 * q2_max, n_seeds)
+            for q2 in q2_vals:
+                p2 = 0.0
+                p3 = _solve_missing_coord("p3", {"q2": q2, "p2": p2, "p3": 0.0}, h0, H_blocks, clmo_table)
+                if p3 is not None:
+                    seeds.append((q2, p2, 0.0, p3))
+        elif seed_axis == "p2":
+            p2_vals = np.linspace(-0.9 * p2_max, 0.9 * p2_max, n_seeds)
+            for p2 in p2_vals:
+                q2 = 0.0
+                p3 = _solve_missing_coord("p3", {"q2": q2, "p2": p2, "p3": 0.0}, h0, H_blocks, clmo_table)
+                if p3 is not None:
+                    seeds.append((q2, p2, 0.0, p3))
+    
+    elif section_coord == "p3":
+        # p3=0 section: vary along seed_axis, solve for q3
+        q2_max = _find_turning("q2", h0, H_blocks, clmo_table)
+        p2_max = _find_turning("p2", h0, H_blocks, clmo_table)
+        
+        if seed_axis == "q2":
+            q2_vals = np.linspace(-0.9 * q2_max, 0.9 * q2_max, n_seeds)
+            for q2 in q2_vals:
+                p2 = 0.0
+                q3 = _solve_missing_coord("q3", {"q2": q2, "p2": p2, "p3": 0.0}, h0, H_blocks, clmo_table)
+                if q3 is not None:
+                    seeds.append((q2, p2, q3, 0.0))
+        elif seed_axis == "p2":
+            p2_vals = np.linspace(-0.9 * p2_max, 0.9 * p2_max, n_seeds)
+            for p2 in p2_vals:
+                q2 = 0.0
+                q3 = _solve_missing_coord("q3", {"q2": q2, "p2": p2, "p3": 0.0}, h0, H_blocks, clmo_table)
+                if q3 is not None:
+                    seeds.append((q2, p2, q3, 0.0))
+                    
+    elif section_coord == "q2":
+        # q2=0 section: vary along seed_axis (q3 or p3), solve for the other
+        q3_max = _find_turning("q3", h0, H_blocks, clmo_table)
+        p3_max = _find_turning("p3", h0, H_blocks, clmo_table)
+        
+        if seed_axis == "q3":
+            q3_vals = np.linspace(-0.9 * q3_max, 0.9 * q3_max, n_seeds)
+            for q3 in q3_vals:
+                p2 = 0.0
+                p3 = _solve_missing_coord("p3", {"q2": 0.0, "q3": q3, "p2": p2}, h0, H_blocks, clmo_table)
+                if p3 is not None:
+                    seeds.append((0.0, p2, q3, p3))
+        elif seed_axis == "p3":
+            p3_vals = np.linspace(-0.9 * p3_max, 0.9 * p3_max, n_seeds)
+            for p3 in p3_vals:
+                p2 = 0.0
+                q3 = _solve_missing_coord("q3", {"q2": 0.0, "p2": p2, "p3": p3}, h0, H_blocks, clmo_table)
+                if q3 is not None:
+                    seeds.append((0.0, p2, q3, p3))
+                    
+    elif section_coord == "p2":
+        # p2=0 section: vary along seed_axis (q3 or p3), solve for the other
+        q3_max = _find_turning("q3", h0, H_blocks, clmo_table)
+        p3_max = _find_turning("p3", h0, H_blocks, clmo_table)
+        
+        if seed_axis == "q3":
+            q3_vals = np.linspace(-0.9 * q3_max, 0.9 * q3_max, n_seeds)
+            for q3 in q3_vals:
+                q2 = 0.0
+                p3 = _solve_missing_coord("p3", {"q2": q2, "q3": q3, "p2": 0.0}, h0, H_blocks, clmo_table)
+                if p3 is not None:
+                    seeds.append((q2, 0.0, q3, p3))
+        elif seed_axis == "p3":
+            p3_vals = np.linspace(-0.9 * p3_max, 0.9 * p3_max, n_seeds)
+            for p3 in p3_vals:
+                q2 = 0.0
+                q3 = _solve_missing_coord("q3", {"q2": q2, "p2": 0.0, "p3": p3}, h0, H_blocks, clmo_table)
+                if q3 is not None:
+                    seeds.append((q2, 0.0, q3, p3))
     else:
-        raise ValueError("seed_axis must be 'q2' or 'p2'.")
+        raise ValueError(f"Unsupported section_coord: {section_coord}")
 
-    logger.info("Iterating %d seeds (%s-axis) for %d crossings each", len(seeds), seed_axis, n_iter)
-
-    # 3. Iterate.
+    # 3. Iterate each seed to generate map points
     pts_accum: list[Tuple[float, float]] = []
 
     # Dynamically adjust max_steps based on dt to allow a consistent total integration time for finding a crossing.
@@ -473,7 +653,8 @@ def _generate_map(
                 flag, q2p, p2p, p3p = _poincare_step(
                     state[0],  # q2
                     state[1],  # p2
-                    state[3],  # p3 (q3 is always 0)
+                    state[2],  # q3
+                    state[3],  # p3
                     dt,
                     jac_H,
                     clmo_table,
@@ -481,13 +662,25 @@ def _generate_map(
                     calculated_max_steps,
                     use_symplectic,
                     N_SYMPLECTIC_DOF,
+                    section_coord,
                     c_omega_heuristic,
                 )
 
                 if flag == 1:
-                    pts_accum.append((q2p, p2p))
-                    # fixed: restart with the p3 belonging to this crossing
-                    state = (q2p, p2p, 0.0, p3p)
+                    # Extract the appropriate coordinates for the section
+                    if section_coord == "q3":
+                        pts_accum.append((q2p, p2p))
+                        state = (q2p, p2p, 0.0, p3p)
+                    elif section_coord == "p3":
+                        pts_accum.append((q2p, p2p))
+                        # For p3=0 section, need to keep q3 from the crossing
+                        state = (q2p, p2p, state[2], 0.0)  # p3 is fixed at 0
+                    elif section_coord == "q2":
+                        pts_accum.append((state[2], p3p))  # (q3, p3)
+                        state = (0.0, p2p, state[2], p3p)  # q2 is fixed at 0
+                    elif section_coord == "p2":
+                        pts_accum.append((state[2], p3p))  # (q3, p3)
+                        state = (q2p, 0.0, state[2], p3p)  # p2 is fixed at 0
                 else:
                     logger.warning(
                         "Failed to find Poincaré crossing for seed %s at iteration %d/%d",
@@ -500,7 +693,12 @@ def _generate_map(
                 logger.warning(f"Failed to find Poincaré crossing for seed {seed} at iteration {i+1}/{n_iter}: {e}")
                 break # Stop iterating this seed if a crossing is not found
 
-    return np.asarray(pts_accum, dtype=np.float64)
+    if len(pts_accum) == 0:
+        # Return empty array with correct shape
+        points_array = np.empty((0, 2), dtype=np.float64)
+    else:
+        points_array = np.asarray(pts_accum, dtype=np.float64)
+    return PoincareSection(points_array, labels)
 
 def _generate_grid(
     h0: float,
@@ -515,7 +713,8 @@ def _generate_grid(
     Np: int = 201,
     integrator_order: int = 6,
     use_symplectic: bool = False,
-) -> np.ndarray:
+    section_coord: str = "q3",
+) -> PoincareSection:
     """
     Compute Poincaré map points at a given energy level.
 
@@ -549,10 +748,13 @@ def _generate_grid(
 
     Returns
     -------
-    np.ndarray
-        An (M,2) array of (q2', p2') Poincaré-map points at energy h0
+    PoincareSection
+        Section points with coordinate labels
     """
     logger.info(f"Computing Poincaré map for energy h0={h0:.6e}, grid size: {Nq}x{Np}")
+    
+    # Get section information
+    section_idx, direction_sign, labels = section_closure(section_coord)
     
     # 1.  Jacobian (once per energy level).
     logger.info("Computing Hamiltonian Jacobian")
@@ -564,13 +766,23 @@ def _generate_grid(
         encode_dict_list=encode_dict_list,
     )
 
-    # 2.  Hill-boundary turning points.
-    q2_max = _find_turning("q2", h0, H_blocks, clmo_table)
-    p2_max = _find_turning("p2", h0, H_blocks, clmo_table)
-    logger.info(f"Hill boundary turning points: q2_max={q2_max:.6e}, p2_max={p2_max:.6e}")
-
-    q2_vals = np.linspace(-q2_max, q2_max, Nq)
-    p2_vals = np.linspace(-p2_max, p2_max, Np)
+    # 2.  Hill-boundary turning points - get the right ones based on section
+    if section_coord in ("q3", "p3"):
+        # For q3 or p3 sections, vary q2 and p2
+        q2_max = _find_turning("q2", h0, H_blocks, clmo_table)
+        p2_max = _find_turning("p2", h0, H_blocks, clmo_table)
+        logger.info(f"Hill boundary turning points: q2_max={q2_max:.6e}, p2_max={p2_max:.6e}")
+        coord1_vals = np.linspace(-q2_max, q2_max, Nq)
+        coord2_vals = np.linspace(-p2_max, p2_max, Np)
+    elif section_coord in ("q2", "p2"):
+        # For q2 or p2 sections, vary q3 and p3
+        q3_max = _find_turning("q3", h0, H_blocks, clmo_table)
+        p3_max = _find_turning("p3", h0, H_blocks, clmo_table)
+        logger.info(f"Hill boundary turning points: q3_max={q3_max:.6e}, p3_max={p3_max:.6e}")
+        coord1_vals = np.linspace(-q3_max, q3_max, Nq)
+        coord2_vals = np.linspace(-p3_max, p3_max, Np)
+    else:
+        raise ValueError(f"Unsupported section_coord: {section_coord}")
 
     # Find valid seeds
     logger.info("Finding valid seeds within Hill boundary")
@@ -579,17 +791,38 @@ def _generate_grid(
     points_checked = 0
     valid_seeds_found = 0
     
-    for q2 in q2_vals:
-        for p2 in p2_vals:
+    for coord1 in coord1_vals:
+        for coord2 in coord2_vals:
             points_checked += 1
             if points_checked % (total_points // 10) == 0:
                 percentage = int(100 * points_checked / total_points)
                 logger.info(f"Seed search progress: {percentage}%, found {valid_seeds_found} valid seeds")
                 
-            p3 = _solve_p3(q2, p2, h0, H_blocks, clmo_table)
-            if p3 is not None:
-                seeds.append((q2, p2, 0.0, p3))
-                valid_seeds_found += 1
+            # Dispatch seed solving based on section type
+            if section_coord == "q3":
+                # q3=0 section: coord1=q2, coord2=p2, solve for p3
+                missing_coord = _solve_missing_coord("p3", {"q2": coord1, "p2": coord2, "p3": 0.0}, h0, H_blocks, clmo_table)
+                if missing_coord is not None:
+                    seeds.append((coord1, coord2, 0.0, missing_coord))
+                    valid_seeds_found += 1
+            elif section_coord == "p3":
+                # p3=0 section: coord1=q2, coord2=p2, solve for q3
+                missing_coord = _solve_missing_coord("q3", {"q2": coord1, "p2": coord2, "p3": 0.0}, h0, H_blocks, clmo_table)
+                if missing_coord is not None:
+                    seeds.append((coord1, coord2, missing_coord, 0.0))
+                    valid_seeds_found += 1
+            elif section_coord == "q2":
+                # q2=0 section: coord1=q3, coord2=p3, solve for p2
+                missing_coord = _solve_missing_coord("p2", {"q2": 0.0, "q3": coord1, "p3": coord2}, h0, H_blocks, clmo_table)
+                if missing_coord is not None:
+                    seeds.append((0.0, missing_coord, coord1, coord2))
+                    valid_seeds_found += 1
+            elif section_coord == "p2":
+                # p2=0 section: coord1=q3, coord2=p3, solve for q2
+                missing_coord = _solve_missing_coord("q2", {"p2": 0.0, "q3": coord1, "p3": coord2}, h0, H_blocks, clmo_table)
+                if missing_coord is not None:
+                    seeds.append((missing_coord, 0.0, coord1, coord2))
+                    valid_seeds_found += 1
     
     logger.info(f"Found {len(seeds)} valid seeds out of {total_points} grid points")
 
@@ -597,7 +830,7 @@ def _generate_grid(
     logger.info("Computing Poincaré map points in parallel")
 
     if len(seeds) == 0:
-        return np.empty((0, 2), dtype=np.float64)
+        return PoincareSection(np.empty((0, 2), dtype=np.float64), labels)
 
     seeds_arr = np.asarray(seeds, dtype=np.float64)
 
@@ -610,6 +843,7 @@ def _generate_grid(
         max_steps,
         use_symplectic,
         N_SYMPLECTIC_DOF,
+        section_coord,
     )
 
     n_success = int(np.sum(success_flags))
@@ -619,8 +853,21 @@ def _generate_grid(
     idx = 0
     for i in range(success_flags.shape[0]):
         if success_flags[i]:
-            map_pts[idx, 0] = q2p_arr[i]
-            map_pts[idx, 1] = p2p_arr[i]
+            # Extract the appropriate coordinates based on section type
+            if section_coord == "q3":
+                map_pts[idx, 0] = q2p_arr[i]
+                map_pts[idx, 1] = p2p_arr[i]
+            elif section_coord == "p3":
+                map_pts[idx, 0] = q2p_arr[i]
+                map_pts[idx, 1] = p2p_arr[i]
+            elif section_coord == "q2":
+                # For q2=0 section, we store (q3, p3)
+                map_pts[idx, 0] = seeds_arr[i, 2]  # q3 coordinate
+                map_pts[idx, 1] = p3p_arr[i]  # p3 coordinate from crossing
+            elif section_coord == "p2":
+                # For p2=0 section, we store (q3, p3) 
+                map_pts[idx, 0] = seeds_arr[i, 2]  # q3 coordinate
+                map_pts[idx, 1] = p3p_arr[i]  # p3 coordinate from crossing
             idx += 1
 
-    return map_pts
+    return PoincareSection(map_pts, labels)

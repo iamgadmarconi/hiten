@@ -5,7 +5,7 @@ import numpy as np
 from algorithms.center.hamiltonian import build_physical_hamiltonian
 from algorithms.center.lie import (_lie_expansion, _evaluate_transform,
                                    _lie_transform)
-from algorithms.center.poincare.map import _solve_p3
+from algorithms.center.poincare.map import _solve_missing_coord
 from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
                                                decode_multiindex,
                                                init_index_tables)
@@ -176,82 +176,106 @@ class CenterManifold:
         """
         pass
 
-    def cm2ic(self, poincare_point: np.ndarray, energy: float) -> np.ndarray:
+    def cm2ic(self, poincare_point: np.ndarray, energy: float, section_coord: str = "q3") -> np.ndarray:
         """
-        Convert a single Poincaré section point to initial conditions in physical coordinates.
-        
-        Parameters
-        ----------
-        poincare_point : numpy.ndarray
-            A single Poincaré section point [q2, p2]
-        energy : float
-            Energy level for the trajectory
-            
-        Returns
-        -------
-        numpy.ndarray
-            Initial conditions in synodic coordinates [X, Y, Z, Vx, Vy, Vz]
+        Convert a single Poincaré section point (in centre-manifold coordinates)
+        into full synodic initial conditions.
+
+        The meaning of *poincare_point* depends on which section was used:
+
+        ┌─────────────┬────────────────────────────────────────────┐
+        │ section     │ contents of *poincare_point*               │
+        ├─────────────┼────────────────────────────────────────────┤
+        │ q3 (=0)     │ (q2, p2)                                   │
+        │ p3 (=0)     │ (q2, p2)                                   │
+        │ q2 (=0)     │ (q3, p3)                                   │
+        │ p2 (=0)     │ (q3, p3)                                   │
+        └─────────────┴────────────────────────────────────────────┘
+
+        The missing coordinate is solved for on-the-fly using
+        ``_solve_missing_coord`` so no information is lost regardless of the
+        chosen section.
         """
-        logger.info(f"Converting Poincaré point {poincare_point} to initial conditions\n\n"
-                   f"Point: {self.point}\nEnergy: {energy}\nSystem mu: {self.point.mu}\n"
-                   f"Max degree: {self.max_degree}\n")
-        
-        # Ensure center manifold has been computed
-        poly_cm_real = self.cache_get(('hamiltonian', self.max_degree, 'center_manifold_real'))
-        poly_G_total = self.cache_get(('generating_functions', self.max_degree))
-        
+        logger.info(
+            "Converting Poincaré point %s (section=%s) to initial conditions", 
+            poincare_point, section_coord,
+        )
+
+        # Ensure we have the centre-manifold Hamiltonian and Lie generators.
+        poly_cm_real = self.cache_get(("hamiltonian", self.max_degree, "center_manifold_real"))
         if poly_cm_real is None:
-            logger.info("Center manifold not cached, computing...")
             self.compute()
-            poly_cm_real = self.cache_get(('hamiltonian', self.max_degree, 'center_manifold_real'))
-        
+            poly_cm_real = self.cache_get(("hamiltonian", self.max_degree, "center_manifold_real"))
+
+        poly_G_total = self.cache_get(("generating_functions", self.max_degree))
         if poly_G_total is None:
-            poly_G_total = self.cache_get(('generating_functions', self.max_degree))
-            if poly_G_total is None:
-                err = f"Generating functions not cached for max_degree={self.max_degree}. Center manifold computation incomplete."
-                logger.error(err)
-                raise ValueError(err)
-        
-        try:
-            q2, p2 = poincare_point
-            
-            p3 = _solve_p3(
-                q2=float(q2), 
-                p2=float(p2), 
-                h0=energy, 
-                H_blocks=poly_cm_real, 
-                clmo=self.clmo
-            )
-            
-            if p3 is None or p3 < 0:
-                err = f"_solve_p3 failed for q2={q2}, p2={p2}, energy={energy}"
-                logger.error(err)
-                raise ValueError(err)
-
-            real_4d_cm = np.array([q2, p2, 0.0, p3], dtype=np.complex128)
-
-            # Expand to 6D coordinates
-            real_6d_cm = np.zeros(6, dtype=np.complex128)
-            real_6d_cm[1] = real_4d_cm[0]  # q2 = q2
-            real_6d_cm[2] = real_4d_cm[2]  # q3 = 0.0 (q3 is zero on center manifold)
-            real_6d_cm[4] = real_4d_cm[1]  # p2 = p2
-            real_6d_cm[5] = real_4d_cm[3]  # p3 = p3
-            
-            # Transform through coordinate systems
-            complex_6d_cm = solve_complex(real_6d_cm)
-            expansions = _lie_expansion(poly_G_total, self.max_degree, self.psi, self.clmo, 1e-30, inverse=False, sign=1, restrict=False)
-            complex_6d = _evaluate_transform(expansions, complex_6d_cm, self.clmo)
-            real_6d = solve_real(complex_6d)
-            local_6d = _realmodal2local(self.point, real_6d)
-            synodic_6d = _local2synodic(self.point, local_6d)
-
-            logger.info("Completed transformation to initial conditions")
-            return synodic_6d
-            
-        except Exception as e:
-            err = f"Failed to transform point {poincare_point}, error: {e}"
+            err = "Generating functions not cached - centre-manifold computation incomplete."
             logger.error(err)
             raise RuntimeError(err)
+
+        # Alias for brevity.
+        h0 = float(energy)
+        q2 = p2 = q3 = p3 = None  # type: ignore
+
+        if section_coord == "q3":
+            # q3 = 0 section → need p3
+            q2, p2 = map(float, poincare_point)
+            q3 = 0.0
+            p3 = _solve_missing_coord(
+                "p3", {"q2": q2, "p2": p2}, h0, poly_cm_real, self.clmo
+            )
+        elif section_coord == "p3":
+            # p3 = 0 section → need q3
+            q2, p2 = map(float, poincare_point)
+            p3 = 0.0
+            q3 = _solve_missing_coord(
+                "q3", {"q2": q2, "p2": p2, "p3": 0.0}, h0, poly_cm_real, self.clmo
+            )
+        elif section_coord == "q2":
+            # q2 = 0 section → need p2
+            q3, p3 = map(float, poincare_point)
+            q2 = 0.0
+            p2 = _solve_missing_coord(
+                "p2", {"q2": 0.0, "q3": q3, "p3": p3}, h0, poly_cm_real, self.clmo
+            )
+        elif section_coord == "p2":
+            # p2 = 0 section → need q2
+            q3, p3 = map(float, poincare_point)
+            p2 = 0.0
+            q2 = _solve_missing_coord(
+                "q2", {"p2": 0.0, "q3": q3, "p3": p3}, h0, poly_cm_real, self.clmo
+            )
+        else:
+            raise ValueError(f"Unsupported section_coord '{section_coord}'.")
+
+        # Validate solutions.
+        if None in (q2, p2, q3, p3):
+            err = "Failed to reconstruct full CM coordinates - root finding did not converge."
+            logger.error(err)
+            raise RuntimeError(err)
+
+        q2, p2, q3, p3 = float(q2), float(p2), float(q3), float(p3)  # type: ignore
+
+        real_4d_cm = np.array([q2, p2, q3, p3], dtype=np.complex128)
+
+        real_6d_cm = np.zeros(6, dtype=np.complex128)
+        real_6d_cm[1] = real_4d_cm[0]  # q2
+        real_6d_cm[2] = real_4d_cm[2]  # q3
+        real_6d_cm[4] = real_4d_cm[1]  # p2
+        real_6d_cm[5] = real_4d_cm[3]  # p3
+
+        complex_6d_cm = solve_complex(real_6d_cm)
+        expansions = _lie_expansion(
+            poly_G_total, self.max_degree, self.psi, self.clmo, 1e-30,
+            inverse=False, sign=1, restrict=False,
+        )
+        complex_6d = _evaluate_transform(expansions, complex_6d_cm, self.clmo)
+        real_6d = solve_real(complex_6d)
+        local_6d = _realmodal2local(self.point, real_6d)
+        synodic_6d = _local2synodic(self.point, local_6d)
+
+        logger.info("CM → synodic transformation complete")
+        return synodic_6d
 
     def ic2cm(self) -> np.ndarray:
         """

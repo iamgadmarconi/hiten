@@ -4,7 +4,7 @@ from typing import List, Tuple
 import numpy as np
 
 from algorithms.center.poincare.cuda.step import PoincareMapCUDA
-from algorithms.center.poincare.map import _find_turning, _solve_p3
+from algorithms.center.poincare.map import _find_turning, _solve_missing_coord, section_closure, PoincareSection
 from algorithms.center.polynomial.operations import polynomial_jacobian
 from utils.log_config import logger
 
@@ -23,7 +23,8 @@ def _generate_map_gpu(
     integrator_order: int = 6,
     c_omega_heuristic: float = 20.0,
     seed_axis: str = "q2",  # "q2" or "p2"
-) -> np.ndarray:
+    section_coord: str = "q3",  # "q2", "p2", "q3", or "p3"
+) -> PoincareSection:
     """
     GPU-accelerated version of _generate_map.
     
@@ -44,14 +45,19 @@ def _generate_map_gpu(
         would need to be ported to GPU.
     seed_axis : {"q2", "p2"}
         Place seeds on this axis with the other momentum/position set to zero.
+    section_coord : {"q2", "p2", "q3", "p3"}
+        The coordinate that defines the section.
 
     Returns
     -------
-    np.ndarray, shape (n_points, 2)
-        Collected (q2, p2) points of all iterates.
+    PoincareSection
+        Collected section points with appropriate labels.
     """
     if use_symplectic:
         logger.warning("Symplectic integrator not yet implemented on GPU, using RK4")
+    
+    # Get section information
+    section_idx, direction_sign, labels = section_closure(section_coord)
     
     # 1. Build Jacobian once (CPU)
     logger.info("Building polynomial Jacobian")
@@ -63,60 +69,122 @@ def _generate_map_gpu(
         encode_dict_list=encode_dict_list,
     )
 
-    # 2. Turning points for seed placement (CPU)
+    # 2. Generate seeds based on section type (CPU)
     logger.info("Finding Hill boundary turning points")
-    q2_max = _find_turning("q2", h0, H_blocks, clmo_table)
-    p2_max = _find_turning("p2", h0, H_blocks, clmo_table)
-
-    # 3. Generate seeds (CPU)
-    seeds: List[Tuple[float, float, float]] = []
-
-    if seed_axis == "q2":
-        q2_vals = np.linspace(-0.9 * q2_max, 0.9 * q2_max, n_seeds)
-        for q2 in q2_vals:
-            p2 = 0.0
-            p3 = _solve_p3(q2, p2, h0, H_blocks, clmo_table)
-            if p3 is not None:
-                seeds.append((q2, p2, p3))
-    elif seed_axis == "p2":
-        p2_vals = np.linspace(-0.9 * p2_max, 0.9 * p2_max, n_seeds)
-        for p2 in p2_vals:
-            q2 = 0.0
-            p3 = _solve_p3(q2, p2, h0, H_blocks, clmo_table)
-            if p3 is not None:
-                seeds.append((q2, p2, p3))
+    seeds: List[Tuple[float, float, float, float]] = []
+    
+    if section_coord == "q3":
+        # Traditional q3=0 section: vary along seed_axis, solve for p3
+        q2_max = _find_turning("q2", h0, H_blocks, clmo_table)
+        p2_max = _find_turning("p2", h0, H_blocks, clmo_table)
+        
+        if seed_axis == "q2":
+            q2_vals = np.linspace(-0.9 * q2_max, 0.9 * q2_max, n_seeds)
+            for q2 in q2_vals:
+                p2 = 0.0
+                p3 = _solve_missing_coord("p3", {"q2": q2, "p2": p2, "p3": 0.0}, h0, H_blocks, clmo_table)
+                if p3 is not None:
+                    seeds.append((q2, p2, 0.0, p3))
+        elif seed_axis == "p2":
+            p2_vals = np.linspace(-0.9 * p2_max, 0.9 * p2_max, n_seeds)
+            for p2 in p2_vals:
+                q2 = 0.0
+                p3 = _solve_missing_coord("p3", {"q2": q2, "p2": p2, "p3": 0.0}, h0, H_blocks, clmo_table)
+                if p3 is not None:
+                    seeds.append((q2, p2, 0.0, p3))
+    
+    elif section_coord == "p3":
+        # p3=0 section: vary along seed_axis, solve for q3
+        q2_max = _find_turning("q2", h0, H_blocks, clmo_table)
+        p2_max = _find_turning("p2", h0, H_blocks, clmo_table)
+        
+        if seed_axis == "q2":
+            q2_vals = np.linspace(-0.9 * q2_max, 0.9 * q2_max, n_seeds)
+            for q2 in q2_vals:
+                p2 = 0.0
+                q3 = _solve_missing_coord("q3", {"q2": q2, "p2": p2, "p3": 0.0}, h0, H_blocks, clmo_table)
+                if q3 is not None:
+                    seeds.append((q2, p2, q3, 0.0))
+        elif seed_axis == "p2":
+            p2_vals = np.linspace(-0.9 * p2_max, 0.9 * p2_max, n_seeds)
+            for p2 in p2_vals:
+                q2 = 0.0
+                q3 = _solve_missing_coord("q3", {"q2": q2, "p2": p2, "p3": 0.0}, h0, H_blocks, clmo_table)
+                if q3 is not None:
+                    seeds.append((q2, p2, q3, 0.0))
+                    
+    elif section_coord == "q2":
+        # q2=0 section: vary along seed_axis (q3 or p3), solve for the other
+        q3_max = _find_turning("q3", h0, H_blocks, clmo_table)
+        p3_max = _find_turning("p3", h0, H_blocks, clmo_table)
+        
+        if seed_axis == "q3":
+            q3_vals = np.linspace(-0.9 * q3_max, 0.9 * q3_max, n_seeds)
+            for q3 in q3_vals:
+                p2 = 0.0
+                p3 = _solve_missing_coord("p3", {"q2": 0.0, "q3": q3, "p2": p2}, h0, H_blocks, clmo_table)
+                if p3 is not None:
+                    seeds.append((0.0, p2, q3, p3))
+        elif seed_axis == "p3":
+            p3_vals = np.linspace(-0.9 * p3_max, 0.9 * p3_max, n_seeds)
+            for p3 in p3_vals:
+                p2 = 0.0
+                q3 = _solve_missing_coord("q3", {"q2": 0.0, "p2": p2, "p3": p3}, h0, H_blocks, clmo_table)
+                if q3 is not None:
+                    seeds.append((0.0, p2, q3, p3))
+                    
+    elif section_coord == "p2":
+        # p2=0 section: vary along seed_axis (q3 or p3), solve for the other
+        q3_max = _find_turning("q3", h0, H_blocks, clmo_table)
+        p3_max = _find_turning("p3", h0, H_blocks, clmo_table)
+        
+        if seed_axis == "q3":
+            q3_vals = np.linspace(-0.9 * q3_max, 0.9 * q3_max, n_seeds)
+            for q3 in q3_vals:
+                q2 = 0.0
+                p3 = _solve_missing_coord("p3", {"q2": q2, "q3": q3, "p2": 0.0}, h0, H_blocks, clmo_table)
+                if p3 is not None:
+                    seeds.append((q2, 0.0, q3, p3))
+        elif seed_axis == "p3":
+            p3_vals = np.linspace(-0.9 * p3_max, 0.9 * p3_max, n_seeds)
+            for p3 in p3_vals:
+                q2 = 0.0
+                q3 = _solve_missing_coord("q3", {"q2": q2, "p2": 0.0, "p3": p3}, h0, H_blocks, clmo_table)
+                if q3 is not None:
+                    seeds.append((q2, 0.0, q3, p3))
     else:
-        raise ValueError("seed_axis must be 'q2' or 'p2'.")
+        raise ValueError(f"Unsupported section_coord: {section_coord}")
 
     logger.info("Generated %d valid seeds (%s-axis) for %d crossings each", 
                 len(seeds), seed_axis, n_iter)
 
-    # 4. Calculate max_steps based on dt
+    # 3. Calculate max_steps based on dt
     target_max_integration_time_per_crossing = 20.0
     calculated_max_steps = int(math.ceil(target_max_integration_time_per_crossing / dt))
     logger.info(f"Using dt={dt:.1e}, calculated max_steps per crossing: {calculated_max_steps}")
 
-    # 5. Convert seeds to numpy array
+    # 4. Convert seeds to numpy array
     if len(seeds) == 0:
         logger.warning("No valid seeds found")
-        return np.empty((0, 2), dtype=np.float64)
+        return PoincareSection(np.empty((0, 2), dtype=np.float64), labels)
     
     seeds_array = np.array(seeds, dtype=np.float64)
     
-    # 6. Initialize GPU Poincaré map calculator
+    # 5. Initialize GPU Poincaré map calculator
     logger.info("Initializing GPU computation")
     poincare_map = PoincareMapCUDA(jac_H, clmo_table)
     
-    # 7. Run GPU computation
+    # 6. Run GPU computation
     logger.info("Starting GPU Poincaré map iteration")
     points = poincare_map.iterate_map(
         seeds_array, 
         n_iterations=n_iter,
         dt=dt,
-        max_steps=calculated_max_steps
+        max_steps=calculated_max_steps,
+        section_coord=section_coord
     )
     
     logger.info("GPU computation complete: generated %d points from %d seeds", 
                 points.shape[0], len(seeds))
     
-    return points
+    return PoincareSection(points, labels)
