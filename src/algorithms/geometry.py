@@ -6,7 +6,7 @@ from scipy.interpolate import CubicSpline
 from scipy.optimize import root_scalar
 
 from algorithms.dynamics.base import _DynamicalSystem
-from algorithms.dynamics.rtbp import _propagate_crtbp
+from algorithms.dynamics.rtbp import _propagate_dynsys
 from utils.log_config import logger
 
 
@@ -52,7 +52,7 @@ def _find_y_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], for
 
     # 1) Integrate from t=0 up to t0_z.
     logger.debug(f"Propagating from t=0 to t={t0_z}")
-    sol = _propagate_crtbp(dynsys, x0, 0.0, t0_z, forward=forward)
+    sol = _propagate_dynsys(dynsys, x0, 0.0, t0_z, forward=forward)
     xx = sol.states
     x0_z: NDArray[np.float64] = xx[-1]
     logger.debug(f"State after initial propagation x0_z = {x0_z}")
@@ -84,7 +84,7 @@ def _find_y_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], for
 
     # 4) Integrate from t0_z to t1_z to get the final state.
     logger.debug(f"Propagating from t={t0_z} to t={t1_z} to get final state")
-    sol = _propagate_crtbp(dynsys, x0_z, t0_z, t1_z, forward=forward)
+    sol = _propagate_dynsys(dynsys, x0_z, t0_z, t1_z, forward=forward)
     xx_final = sol.states
     x1_z: NDArray[np.float64] = xx_final[-1]
     logger.debug(f"Final state at crossing x1_z = {x1_z}")
@@ -134,7 +134,7 @@ def _find_x_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], for
 
     # 1) Integrate from t=0 up to t0_z.
     logger.debug(f"Propagating from t=0 to t={t0_z}")
-    sol = _propagate_crtbp(dynsys, x0, 0.0, t0_z, forward=forward)
+    sol = _propagate_dynsys(dynsys, x0, 0.0, t0_z, forward=forward)
     xx = sol.states
     x0_z: NDArray[np.float64] = xx[-1]
     logger.debug(f"State after initial propagation x0_z = {x0_z}")
@@ -166,7 +166,7 @@ def _find_x_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], for
 
     # 4) Integrate from t0_z to t1_z to get the final state.
     logger.debug(f"Propagating from t={t0_z} to t={t1_z} to get final state")
-    sol = _propagate_crtbp(dynsys, x0_z, t0_z, t1_z, forward=forward)
+    sol = _propagate_dynsys(dynsys, x0_z, t0_z, t1_z, forward=forward)
     xx_final = sol.states
     x1_z: NDArray[np.float64] = xx_final[-1]
     logger.debug(f"Final state at crossing x1_z = {x1_z}")
@@ -216,7 +216,7 @@ def _find_z_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], for
 
     # 1) Integrate from t=0 up to t0_z.
     logger.debug(f"Propagating from t=0 to t={t0_z}")
-    sol = _propagate_crtbp(dynsys, x0, 0.0, t0_z, forward=forward)
+    sol = _propagate_dynsys(dynsys, x0, 0.0, t0_z, forward=forward)
     xx = sol.states
     x0_z: NDArray[np.float64] = xx[-1]
     logger.debug(f"State after initial propagation x0_z = {x0_z}")
@@ -248,7 +248,7 @@ def _find_z_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], for
 
     # 4) Integrate from t0_z to t1_z to get the final state.
     logger.debug(f"Propagating from t={t0_z} to t={t1_z} to get final state")
-    sol = _propagate_crtbp(dynsys, x0_z, t0_z, t1_z, forward=forward)
+    sol = _propagate_dynsys(dynsys, x0_z, t0_z, t1_z, forward=forward)
     xx_final = sol.states
     x1_z: NDArray[np.float64] = xx_final[-1]
     logger.debug(f"Final state at crossing x1_z = {x1_z}")
@@ -377,7 +377,7 @@ def _y_component(dynsys: _DynamicalSystem, t1: float, t0_z: float, x0_z: NDArray
         logger.debug(f"t1 ({t1}) is close to t0_z ({t0_z}). Returning y-component from x0_z: {x1_zgl[1]}")
     else:
         logger.debug(f"Propagating from t={t0_z} to t={t1}")
-        sol = _propagate_crtbp(dynsys, x0_z, t0_z, t1, forward=forward, steps=steps)
+        sol = _propagate_dynsys(dynsys, x0_z, t0_z, t1, forward=forward, steps=steps)
         xx = sol.states
         # The final state is the last row of xx
         x1_zgl: NDArray[np.float64] = xx[-1, :]
@@ -432,7 +432,7 @@ def _x_component(dynsys: _DynamicalSystem, t1: float, t0_z: float, x0_z: NDArray
         logger.debug(f"t1 ({t1}) is close to t0_z ({t0_z}). Returning x-component from x0_z: {x1_zgl[0]}")
     else:
         logger.debug(f"Propagating from t={t0_z} to t={t1}")
-        sol = _propagate_crtbp(dynsys, x0_z, t0_z, t1, forward=forward, steps=steps)
+        sol = _propagate_dynsys(dynsys, x0_z, t0_z, t1, forward=forward, steps=steps)
         xx = sol.states
         # The final state is the last row of xx
         x1_zgl: NDArray[np.float64] = xx[-1, :]
@@ -487,7 +487,7 @@ def _z_component(dynsys: _DynamicalSystem, t1: float, t0_z: float, x0_z: NDArray
         logger.debug(f"t1 ({t1}) is close to t0_z ({t0_z}). Returning z-component from x0_z: {x1_zgl[2]}")
     else:
         logger.debug(f"Propagating from t={t0_z} to t={t1}")
-        sol = _propagate_crtbp(dynsys, x0_z, t0_z, t1, forward=forward, steps=steps)
+        sol = _propagate_dynsys(dynsys, x0_z, t0_z, t1, forward=forward, steps=steps)
         xx = sol.states
         # The final state is the last row of xx
         x1_zgl: NDArray[np.float64] = xx[-1, :]

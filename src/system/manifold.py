@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
-from algorithms.dynamics.rtbp import _propagate_crtbp, compute_stm
+from algorithms.dynamics.rtbp import _propagate_dynsys, compute_stm
 from algorithms.geometry import surface_of_section
 from algorithms.linalg import _totime, eigenvalue_decomposition
 from orbits.base import PeriodicOrbit
@@ -100,7 +100,7 @@ class Manifold:
 
                 steps = max(int(abs(tf) / dt) + 1, 100)
 
-                sol = _propagate_crtbp(
+                sol = _propagate_dynsys(
                     dynsys=self.generating_orbit.system._dynsys,
                     state0=x0W, 
                     t0=0.0, 

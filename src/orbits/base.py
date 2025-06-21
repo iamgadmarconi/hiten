@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 
-from algorithms.dynamics.rtbp import (_propagate_crtbp, compute_stm,
+from algorithms.dynamics.rtbp import (_propagate_dynsys, compute_stm,
                                       create_rtbp_system, stability_indices)
 from algorithms.energy import crtbp_energy, energy_to_jacobi
 from algorithms.geometry import _find_y_zero_crossing
@@ -230,7 +230,7 @@ class PeriodicOrbit(ABC):
         if self.period is None:
             raise ValueError("Period must be set before propagation")
         
-        sol = _propagate_crtbp(
+        sol = _propagate_dynsys(
             dynsys=self.system._dynsys,
             state0=self.initial_state,
             t0=0.0,

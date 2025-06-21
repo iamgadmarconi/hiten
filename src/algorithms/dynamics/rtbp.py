@@ -134,7 +134,7 @@ def compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["scipy", 
     PHI0[:36] = np.eye(6, dtype=np.float64).ravel()
     PHI0[36:] = x0
 
-    sol_obj = _propagate_crtbp(
+    sol_obj = _propagate_dynsys(
         dynsys=dynsys,
         state0=PHI0,
         t0=0.0,
@@ -248,7 +248,7 @@ def create_var_eq_system(mu: float, name: str = "VarEq") -> VariationalEquations
     return VariationalEquationsRHS(mu=mu, name=name)
 
 
-def _propagate_crtbp(
+def _propagate_dynsys(
     dynsys: _DynamicalSystem,
     state0: Sequence[float],
     t0: float,
