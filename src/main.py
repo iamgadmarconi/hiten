@@ -69,7 +69,7 @@ def main() -> None:
             "cls": HaloOrbit,
             "name": "Halo",
             "extra_params": {"Az": 0.2, "Zenith": "southern"},
-            # "initial_state": [ 0.82465709, -0.00000000, 0.06637936, 0.00000000, 0.17816738, 0.00000000],
+            "initial_state": None,
             "diff_corr_attempts": 25,
             "manifold_file": "results/manifolds/halo_orbit_manifold.pkl",
         },

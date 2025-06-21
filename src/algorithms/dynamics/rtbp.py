@@ -8,7 +8,7 @@ from algorithms.dynamics.base import _DirectedSystem, _DynamicalSystem
 from algorithms.integrators.base import Solution
 from algorithms.integrators.rk import AdaptiveRK, RungeKutta
 from algorithms.integrators.symplectic import TaoSymplectic
-from config import FASTMATH
+from config import FASTMATH, TOL
 from utils.log_config import logger
 
 
@@ -275,6 +275,8 @@ def _propagate_crtbp(
             t_eval=t_eval,
             method='DOP853',
             dense_output=True,
+            rtol=TOL,
+            atol=TOL,
         )
         times = sol.t
         states = sol.y.T
