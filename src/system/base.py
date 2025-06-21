@@ -1,9 +1,12 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Dict
 
 from system.body import Body
 from system.libration import (L1Point, L2Point, L3Point, L4Point, L5Point,
                               LibrationPoint)
+from algorithms.dynamics.rtbp import create_rtbp_system
 from utils.log_config import logger
 from utils.precision import hp
 
@@ -33,8 +36,10 @@ class System(object):
         self.mu: float = self._get_mu()
         logger.info(f"Calculated mass parameter mu = {self.mu:.6e}")
 
-        self.libration_points: Dict[int, LibrationPoint] = self._compute_libration_points(self.mu)
+        self.libration_points: Dict[int, LibrationPoint] = self._compute_libration_points()
         logger.info(f"Computed {len(self.libration_points)} Libration points.")
+
+        self._dynsys = create_rtbp_system(self.mu, name=self.primary.name + "_" + self.secondary.name)
 
     def __str__(self) -> str:
         return f"System(primary='{self.primary.name}', secondary='{self.secondary.name}', mu={self.mu:.4e})"
@@ -56,15 +61,15 @@ class System(object):
         logger.debug(f"Calculated mu with high precision: {mu}")
         return mu
 
-    def _compute_libration_points(self, mu: float) -> Dict[int, LibrationPoint]:
+    def _compute_libration_points(self) -> Dict[int, LibrationPoint]:
         """Computes all five Libration points for the given mass parameter."""
-        logger.debug(f"Computing Libration points for mu={mu}")
+        logger.debug(f"Computing Libration points for mu={self.mu}")
         points = {
-            1: L1Point(mu),
-            2: L2Point(mu),
-            3: L3Point(mu),
-            4: L4Point(mu),
-            5: L5Point(mu)
+            1: L1Point(self),
+            2: L2Point(self),
+            3: L3Point(self),
+            4: L4Point(self),
+            5: L5Point(self)
         }
         logger.debug(f"Finished computing Libration points.")
         return points

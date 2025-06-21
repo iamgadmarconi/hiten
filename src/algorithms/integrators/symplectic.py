@@ -578,7 +578,10 @@ class TaoSymplectic(Integrator):
             )
         
         # Call the existing symplectic integration function
-        # This function expects 6D states but works with n_dof degrees of freedom
+        # This function naturally handles direction through np.diff(t_vals):
+        # - Forward: t_vals=[0,1,2] → dt=[1,1] → positive timesteps
+        # - Backward: t_vals=[2,1,0] → dt=[-1,-1] → negative timesteps
+        # The symplectic updates automatically reverse when dt < 0
         trajectory_array = integrate_symplectic(
             initial_state_6d=y0,
             t_values=t_vals,

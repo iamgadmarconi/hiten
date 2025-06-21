@@ -7,10 +7,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
-from algorithms.dynamics.rtbp import compute_stm, create_rtbp_system
+from algorithms.dynamics.rtbp import _propagate_crtbp, compute_stm
 from algorithms.geometry import surface_of_section
-from algorithms.integrators.rk import RungeKutta
-from algorithms.integrators.symplectic import TaoSymplectic
 from algorithms.linalg import _totime, eigenvalue_decomposition
 from orbits.base import PeriodicOrbit
 from plots.plots import _plot_body, _set_axes_equal
@@ -23,7 +21,8 @@ class manifoldConfig:
     stable: bool = True
     direction: Literal["Positive", "Negative"] = "Positive"
 
-    method: str = "rk8"
+    method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy"
+    order: int = 6
 
 
 @dataclass
@@ -50,22 +49,12 @@ class Manifold:
         self.libration_point = self.generating_orbit.libration_point
         self.stable = 1 if config.stable else -1
         self.direction = 1 if config.direction == "Positive" else -1
-        self.mu = self.generating_orbit.mu
-
-
-        if config.method.lower().startswith("rk"):
-            order = int(config.method.lower()[2:])
-            self._integrator = RungeKutta(order=order)
-        elif config.method.lower().startswith("symp"):
-            order = int(config.method.lower()[4:])
-            self._integrator = TaoSymplectic(order=order)
-        else:
-            raise ValueError(f"Unknown integration method '{config.method}'.")
-        
-        self._dynsys = create_rtbp_system(mu=self.mu)
+        self._forward = -self.stable
+        self.mu = self.generating_orbit.system.mu
+        self.method = config.method
+        self.order = config.order
         self._successes = 0
         self._attempts = 0
-
         self.manifold_result: ManifoldResult = None
 
     def __str__(self):
@@ -74,12 +63,7 @@ class Manifold:
     def __repr__(self):
         return self.__str__()
     
-    def compute(
-        self,
-        step: float = 0.02,
-        integration_fraction: float = 0.75,
-        **kwargs,
-    ):
+    def compute(self, step: float = 0.02, integration_fraction: float = 0.75, **kwargs):
 
         if self.manifold_result is not None:
             return self.manifold_result
@@ -89,7 +73,6 @@ class Manifold:
 
         # Stable manifolds (self.stable == 1) use backward integration (forward = -1)
         # Unstable manifolds (self.stable == -1) use forward integration (forward = 1)
-        forward = -self.stable
 
         initial_state = self.generating_orbit._initial_state
 
@@ -113,17 +96,30 @@ class Manifold:
                     initial_state,
                     self.generating_orbit.period,
                     fraction,
-                    forward=forward,
+                    forward=self._forward,
                 )
                 x0W = x0W.flatten().astype(np.float64)
                 tf = integration_fraction * 2 * np.pi
 
                 # Build signed time grid for the chosen integration direction
                 dt = abs(kwargs["dt"])
-                dt_signed = dt * forward
-                t_vals = np.arange(0.0, forward * tf, dt_signed)
+                dt_signed = dt * self._forward
+                t_vals = np.arange(0.0, self._forward * tf, dt_signed)
+                
+                # Calculate steps from the desired dt and integration time
+                steps = max(int(abs(tf) / dt) + 1, 100)  # Ensure minimum steps
 
-                sol = self._integrator.integrate(self._dynsys, x0W, t_vals)
+                # Integrate using the pre-configured dynamical system
+                sol = _propagate_crtbp(
+                    dynsys=self.generating_orbit.system._dynsys,
+                    state0=x0W, 
+                    t0=0.0, 
+                    tf=tf,
+                    forward=self._forward,  # Handle integration direction properly
+                    steps=steps,
+                    method=self.method, 
+                    order=self.order
+                )
                 states, times = sol.states, sol.times
 
                 states_list.append(states)
@@ -158,15 +154,27 @@ class Manifold:
 
         sn, un, _, Ws, Wu, _ = eigenvalue_decomposition(phi_T, discrete=1)
 
-        # Filter for real stable eigenvalues and their corresponding eigenvectors
-        stable_real_indices = np.where(np.isreal(sn))[0]
-        snreal_vals = np.real(sn[stable_real_indices])
-        snreal_vecs = Ws[:, stable_real_indices]
-        
-        # Filter for real unstable eigenvalues and their corresponding eigenvectors
-        unstable_real_indices = np.where(np.isreal(un))[0]
-        unreal_vals = np.real(un[unstable_real_indices])
-        unreal_vecs = Wu[:, unstable_real_indices]
+        snreal_vals = []
+        snreal_vecs = []
+        for k in range(len(sn)):
+            if np.isreal(sn[k]):
+                snreal_vals.append(sn[k])
+                snreal_vecs.append(Ws[:, k])
+
+        # 4) Collect real eigen-directions for unstable set
+        unreal_vals = []
+        unreal_vecs = []
+        for k in range(len(un)):
+            if np.isreal(un[k]):
+                unreal_vals.append(un[k])
+                unreal_vecs.append(Wu[:, k])
+
+        snreal_vals = np.array(snreal_vals, dtype=np.complex128)
+        unreal_vals = np.array(unreal_vals, dtype=np.complex128)
+        snreal_vecs = (np.column_stack(snreal_vecs) 
+                    if len(snreal_vecs) else np.zeros((6, 0), dtype=np.complex128))
+        unreal_vecs = (np.column_stack(unreal_vecs) 
+                    if len(unreal_vecs) else np.zeros((6, 0), dtype=np.complex128))
 
         col_idx = NN - 1
 
@@ -259,7 +267,8 @@ class Manifold:
             "manifold_type": self.__class__.__name__,
             "stable": bool(self.stable == 1),
             "direction": "Positive" if self.direction == 1 else "Negative",
-            "integrator_method": self._integrator.__class__.__name__,
+            "method": self.method,
+            "order": self.order,
         }
 
         # Lightweight generating-orbit info (if available)

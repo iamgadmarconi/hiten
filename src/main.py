@@ -23,84 +23,85 @@ def main() -> None:
     l_point = system.get_libration_point(L_POINT)
     logger.info(f"Using {PRIMARY}-{SECONDARY} system with L{L_POINT} point")
 
-    cm = CenterManifold(l_point, MAX_DEG)
-    cm_H = cm.compute()
+    # cm = CenterManifold(l_point, MAX_DEG)
+    # cm_H = cm.compute()
 
-    logger.info(
-        "\nCentre-manifold Hamiltonian (deg 2 to %d) in real NF variables (q2, p2, q3, p3)\n",
-        MAX_DEG,
-    )
-    logger.info("\n\n%s\n\n", format_cm_table(cm_H, cm.clmo))
+    # logger.info(
+    #     "\nCentre-manifold Hamiltonian (deg 2 to %d) in real NF variables (q2, p2, q3, p3)\n",
+    #     MAX_DEG,
+    # )
+    # logger.info("\n\n%s\n\n", format_cm_table(cm_H, cm.clmo))
 
-    logger.info("Starting Poincaré map generation process…")
+    # logger.info("Starting Poincaré map generation process…")
 
-    logger.info("Generating iterated Poincaré map for h0=%.3f", H0)
-    pm_cfg = poincareMapConfig(dt=DT, method="symplectic" if USE_SYMPLECTIC else "rk", 
-                                n_seeds=N_SEEDS, n_iter=N_ITER, seed_axis="q2", section_coord="q3",
-                                integrator_order=INTEGRATOR_ORDER, 
-                                c_omega_heuristic=C_OMEGA_HEURISTIC,
-                                compute_on_init=False, use_gpu=USE_GPU)
+    # logger.info("Generating iterated Poincaré map for h0=%.3f", H0)
+    # pm_cfg = poincareMapConfig(dt=DT, method="symplectic" if USE_SYMPLECTIC else "rk", 
+    #                             n_seeds=N_SEEDS, n_iter=N_ITER, seed_axis="q2", section_coord="q3",
+    #                             integrator_order=INTEGRATOR_ORDER, 
+    #                             c_omega_heuristic=C_OMEGA_HEURISTIC,
+    #                             compute_on_init=False, use_gpu=USE_GPU)
 
-    filepath = f"results/maps/poincare_map_{H0}.pkl"
+    # filepath = f"results/maps/poincare_map_{H0}.pkl"
 
-    pm = PoincareMap(cm, energy=H0, config=pm_cfg)
+    # pm = PoincareMap(cm, energy=H0, config=pm_cfg)
 
-    if os.path.exists(filepath):
-        logger.info(f"Loading existing Poincaré map from {filepath}")
-        pm.load(filepath)
-    else:
-        logger.info("Computing new Poincaré map")
-        pm.compute()
-        pm.save(filepath)
+    # if os.path.exists(filepath):
+    #     logger.info(f"Loading existing Poincaré map from {filepath}")
+    #     pm.load(filepath)
+    # else:
+    #     logger.info("Computing new Poincaré map")
+    #     pm.compute()
+    #     pm.save(filepath)
 
-    pm.plot_interactive(system)
+    # pm.plot_interactive(system)
 
-    logger.info("Converting Poincaré points to initial conditions")
-    ic = cm.cm2ic([0.0, 0.0], energy=H0)
-    logger.info(f"Initial conditions (CM→IC):\n\n{ic}\n\n")
+    # logger.info("Converting Poincaré points to initial conditions")
+    # ic = cm.cm2ic([0.0, 0.0], energy=H0)
+    # logger.info(f"Initial conditions (CM→IC):\n\n{ic}\n\n")
 
     orbit_specs = [
-        {
-            "cls": VerticalLyapunovOrbit,
-            "name": "Vertical Lyapunov",
-            "extra_params": {},
-            "initial_state": ic,               # Use CM seed
-            "diff_corr_attempts": 100,
-            "manifold_file": "results/manifolds/vertical_orbit_manifold.pkl",
-        },
+        # {
+        #     "cls": VerticalLyapunovOrbit,
+        #     "name": "Vertical Lyapunov",
+        #     "extra_params": {},
+        #     "initial_state": ic,               # Use CM seed
+        #     "diff_corr_attempts": 100,
+        #     "manifold_file": "results/manifolds/vertical_orbit_manifold.pkl",
+        # },
         {
             "cls": HaloOrbit,
             "name": "Halo",
-            "extra_params": {"Az": 0.2, "Zenith": "Southern"},
-            "initial_state": None,             # Let class build analytical guess
+            "extra_params": {},
+            "initial_state": [ 0.82465709, -0.00000000, 0.06637936, 0.00000000, 0.17816738, 0.00000000],
             "diff_corr_attempts": 25,
             "manifold_file": "results/manifolds/halo_orbit_manifold.pkl",
         },
-        {
-            "cls": LyapunovOrbit,
-            "name": "Lyapunov",
-            "extra_params": {"Ax": 4e-3},
-            "initial_state": None,
-            "diff_corr_attempts": 25,
-            "manifold_file": "results/manifolds/lyapunov_orbit_manifold.pkl",
-        },
+        # {
+        #     "cls": LyapunovOrbit,
+        #     "name": "Lyapunov",
+        #     "extra_params": {"Ax": 4e-3},
+        #     "initial_state": None,
+        #     "diff_corr_attempts": 25,
+        #     "manifold_file": "results/manifolds/lyapunov_orbit_manifold.pkl",
+        # },
     ]
 
     for spec in orbit_specs:
         logger.info("\n================  Generating %s orbit  ================", spec["name"])
 
         # Build orbit
-        cfg = orbitConfig(system, spec["name"], L_POINT, extra_params=spec["extra_params"])
+        cfg = orbitConfig(spec["name"], l_point, extra_params=spec["extra_params"])
         orbit = spec["cls"](cfg, spec["initial_state"])
 
         # Differential correction & propagation
-        orbit.differential_correction(max_attempts=spec["diff_corr_attempts"])
-        orbit.propagate(steps=1000, method="rk8")
-        orbit.plot("rotating")
-        orbit.animate()
+        # orbit.differential_correction(max_attempts=spec["diff_corr_attempts"])
+        orbit.period = 2 * 1.3841169221196443
+        orbit.propagate(steps=1000)
+        # orbit.plot("rotating")
+        # orbit.animate()
 
         # Build manifold configuration
-        manifold_cfg = manifoldConfig(orbit, stable=False, direction="Negative", method="rk6")
+        manifold_cfg = manifoldConfig(orbit, stable=False, direction="Positive")
         manifold = Manifold(manifold_cfg)
         m_filepath = spec["manifold_file"]
 

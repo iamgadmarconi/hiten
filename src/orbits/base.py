@@ -3,37 +3,34 @@ import pickle
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import Any, Callable, Dict, NamedTuple, Optional, Sequence, Tuple
+from typing import (Any, Callable, Dict, Literal, NamedTuple, Optional,
+                    Sequence, Tuple)
 
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 
-from algorithms.dynamics.rtbp import (compute_stm, create_rtbp_system,
-                                      stability_indices)
+from algorithms.dynamics.rtbp import (_propagate_crtbp, compute_stm,
+                                      create_rtbp_system, stability_indices)
 from algorithms.energy import crtbp_energy, energy_to_jacobi
 from algorithms.geometry import _find_y_zero_crossing
-from algorithms.integrators.rk import RungeKutta
-from algorithms.integrators.symplectic import TaoSymplectic
-from plots.plots import _plot_body, _set_axes_equal, _set_dark_mode, animate_trajectories
-from system import System
+from plots.plots import (_plot_body, _set_axes_equal, _set_dark_mode,
+                         animate_trajectories)
+from system.libration import LibrationPoint
+from system.base import System
 from utils.coordinates import rotating_to_inertial
 from utils.log_config import logger
 
 
 @dataclass
 class orbitConfig:
-    system: System
     orbit_family: str
-    libration_point_idx: int
+    libration_point: LibrationPoint
     extra_params: Dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self):
         # Validate that distance is positive.
         self.orbit_family = self.orbit_family.lower() # Normalize to lowercase
-
-        if self.libration_point_idx not in [1, 2, 3, 4, 5]:
-            raise ValueError(f"Libration point index must be 1, 2, 3, 4, or 5. Got {self.libration_point_idx}.")
 
 
 class S(IntEnum): X=0; Y=1; Z=2; VX=3; VY=4; VZ=5
@@ -50,17 +47,17 @@ class correctionConfig(NamedTuple):
 class PeriodicOrbit(ABC):
 
     def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):
-        self._system = config.system
-        self.mu = self._system.mu
         self.family = config.orbit_family
-        self.libration_point = self._system.get_libration_point(config.libration_point_idx)
+        self.libration_point = config.libration_point
+        self._system = self.libration_point.system
+        self.mu = self.system.mu
 
         # Determine how the initial state will be obtained and log accordingly
         if initial_state is not None:
             logger.info(
                 "Using provided initial conditions for %s orbit around L%d: %s",
                 self.family,
-                config.libration_point_idx,
+                self.libration_point.idx,
                 np.array2string(np.asarray(initial_state, dtype=np.float64), precision=12, suppress_small=True),
             )
             self._initial_state = np.asarray(initial_state, dtype=np.float64)
@@ -68,7 +65,7 @@ class PeriodicOrbit(ABC):
             logger.info(
                 "No initial conditions provided; computing analytical approximation for %s orbit around L%d.",
                 self.family,
-                config.libration_point_idx,
+                self.libration_point.idx,
             )
             self._initial_state = self._initial_guess()
 
@@ -78,7 +75,7 @@ class PeriodicOrbit(ABC):
         self._stability_info = None
         
         # General initialization log
-        logger.info(f"Initialized {self.family} orbit around L{config.libration_point_idx}")
+        logger.info(f"Initialized {self.family} orbit around L{self.libration_point.idx}")
 
     def __str__(self):
         return f"{self.family} orbit around {self.libration_point}."
@@ -212,7 +209,8 @@ class PeriodicOrbit(ABC):
     def propagate(
         self,
         steps: int = 1000,
-        method: str = "rk8",
+        method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy",
+        order: int = 8,
         **options,
     ) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         """
@@ -223,7 +221,7 @@ class PeriodicOrbit(ABC):
         steps : int, optional
             Number of time steps. Default is 1000.
         method : str, optional
-            Integration method. Default is "rk8".
+            Integration method. Default is "rk".
         **options
             Additional keyword arguments for the integration method
             
@@ -234,32 +232,21 @@ class PeriodicOrbit(ABC):
         """
         if self.period is None:
             raise ValueError("Period must be set before propagation")
-
-        # Build time grid
-        t_vals = np.linspace(0.0, self.period, steps, dtype=np.float64)
-
-        method_lc = method.lower()
-        if method_lc.startswith("rk"):
-            order = int(method_lc[2:])
-            integrator = RungeKutta(order=order, **options)
-        elif method_lc.startswith("symp"):
-            order = int(method_lc[4:])
-            integrator = TaoSymplectic(order=order, **options)
-        else:
-            raise ValueError(f"Unknown integration method '{method}'.")
-
-        dynsys = self._cr3bp_system()
-        sol = integrator.integrate(dynsys, self.initial_state, t_vals)
+        
+        sol = _propagate_crtbp(
+            dynsys=self.system._dynsys,
+            state0=self.initial_state,
+            t0=0.0,
+            tf=self.period,
+            forward=1,
+            steps=steps,
+            method=method,
+            order=order,
+            **options
+        )
 
         self._trajectory = sol.states
         self._times = sol.times
-
-        logger.info(
-            "Propagation complete using %s (order=%s). Trajectory shape: %s",
-            integrator.name,
-            integrator.order,
-            self._trajectory.shape,
-        )
 
         return self._times, self._trajectory
 
@@ -622,7 +609,7 @@ class PeriodicOrbit(ABC):
         X0 = self.initial_state.copy()
         for k in range(max_attempts + 1):
             logger.debug(f"Differential correction iteration {k}")
-            t_ev, X_ev = cfg.event_func(X0, self.mu, forward=forward)
+            t_ev, X_ev = cfg.event_func(dynsys=self.system._dynsys, x0=X0, forward=forward)
             logger.debug(f"called event_func: t_ev: {t_ev}, X_ev: {X_ev}")
             R = X_ev[list(cfg.residual_indices)] - np.array(cfg.target)
 

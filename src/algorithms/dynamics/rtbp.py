@@ -1,12 +1,16 @@
-from typing import Callable
+from typing import Callable, Literal, Sequence
 
 import numba
 import numpy as np
-from algorithms.dynamics.rhs import create_rhs_system
-from algorithms.integrators.rk import RungeKutta
+from scipy.integrate import solve_ivp
 
 from algorithms.dynamics.base import DynamicalSystem
+from algorithms.dynamics.rhs import create_rhs_system
+from algorithms.integrators.base import Solution
+from algorithms.integrators.rk import AdaptiveRK, RungeKutta
+from algorithms.integrators.symplectic import TaoSymplectic
 from config import FASTMATH
+from utils.log_config import logger
 
 
 @numba.njit(fastmath=FASTMATH, cache=True)
@@ -402,7 +406,7 @@ class RTBPSystem(DynamicalSystem):
         mu_val = self.mu
 
         @numba.njit(fastmath=FASTMATH, cache=True)
-        def _crtbp_rhs(t: float, state: np.ndarray, _mu=mu_val) -> np.ndarray:  # type: ignore[missing-return-type]
+        def _crtbp_rhs(t: float, state: np.ndarray, _mu=mu_val) -> np.ndarray:
             return crtbp_accel(state, _mu)
 
         self._rhs = _crtbp_rhs
@@ -424,5 +428,69 @@ class RTBPSystem(DynamicalSystem):
 
 
 def create_rtbp_system(mu: float, name: str = "RTBP") -> RTBPSystem:
-    """Factory matching the signature used in the test-suite."""
+    """Factory for creating CR3BP dynamical systems."""
     return RTBPSystem(mu=mu, name=name)
+
+
+def _propagate_crtbp(
+    dynsys: DynamicalSystem,
+    state0: Sequence[float],
+    t0: float,
+    tf: float,
+    forward: int = 1,
+    steps: int = 1000,
+    method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
+    order: int = 6,
+) -> Solution:
+    state0_np = _validate_initial_state(state0)
+
+    if forward == 1:
+        t_eval = np.linspace(t0, tf, steps)
+    else:
+        t_eval = np.linspace(tf, t0, steps)
+
+    if method == "scipy":
+        t_span = (t_eval[0], t_eval[-1])
+
+        def directional_rhs(t, y):
+            return forward * dynsys.rhs(t, y)
+
+        sol = solve_ivp(
+            directional_rhs, 
+            t_span, 
+            state0_np, 
+            t_eval=t_eval, 
+            method='DOP853', 
+            dense_output=True
+        )
+        times = sol.t
+        states = sol.y.T
+        
+    elif method == "rk":
+        integrator = RungeKutta(order=order)
+        sol = integrator.integrate(dynsys, state0_np, t_eval)
+        times = sol.times
+        states = sol.states
+        
+    elif method == "symplectic":
+        integrator = TaoSymplectic(order=order)
+        sol = integrator.integrate(dynsys, state0_np, t_eval)
+        times = sol.times
+        states = sol.states
+        
+    elif method == "adaptive":
+        integrator = AdaptiveRK(order=order, max_step=1e4, rtol=1e-3, atol=1e-6)
+        sol = integrator.integrate(dynsys, state0_np, t_eval)
+        times = sol.times
+        states = sol.states
+
+    return Solution(times, states)
+
+
+def _validate_initial_state(state): 
+    state_np = np.asarray(state, dtype=np.float64)
+    if state_np.shape != (6,):
+        msg = f"Initial state vector must have 6 elements, but got shape {state_np.shape}"
+        logger.error(msg)
+        raise ValueError(msg)
+    return state_np

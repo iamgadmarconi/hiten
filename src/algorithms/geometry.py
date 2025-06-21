@@ -1,18 +1,16 @@
-from typing import Callable, Sequence, Tuple
+from typing import Callable, Tuple
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.integrate import solve_ivp
 from scipy.interpolate import CubicSpline
 from scipy.optimize import root_scalar
 
-from algorithms.dynamics.rtbp import create_rtbp_system
-from algorithms.integrators.base import Solution
-from algorithms.integrators.rk import AdaptiveRK
+from algorithms.dynamics.base import DynamicalSystem
+from algorithms.dynamics.rtbp import _propagate_crtbp
 from utils.log_config import logger
 
 
-def _find_y_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1) -> Tuple[float, NDArray[np.float64]]:
+def _find_y_zero_crossing(dynsys: DynamicalSystem, x0: NDArray[np.float64], forward: int = 1) -> Tuple[float, NDArray[np.float64]]:
     """
     Find the time and state at which an orbit next crosses the y=0 plane.
     
@@ -48,13 +46,13 @@ def _find_y_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1) 
     This hybrid approach is more efficient than using a very fine integration
     time step, especially for orbits with long periods.
     """
-    logger.debug(f"Entering _find_y_zero_crossing with x0={x0}, mu={mu}, forward={forward}")
+    logger.debug(f"Entering _find_y_zero_crossing with x0={x0}, forward={forward}")
     t0_z = np.pi/2 - 0.15
     logger.debug(f"Initial time guess t0_z = {t0_z}")
 
     # 1) Integrate from t=0 up to t0_z.
     logger.debug(f"Propagating from t=0 to t={t0_z}")
-    sol = _propagate_crtbp(x0, 0.0, t0_z, mu, forward=forward)
+    sol = _propagate_crtbp(dynsys, x0, 0.0, t0_z, forward=forward)
     xx = sol.states
     x0_z: NDArray[np.float64] = xx[-1]
     logger.debug(f"State after initial propagation x0_z = {x0_z}")
@@ -77,7 +75,7 @@ def _find_y_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1) 
         float
             The y-coordinate of the orbit at time t
         """
-        return _y_component(t, t0_z, x0_z, mu, forward=forward, steps=500)
+        return _y_component(dynsys, t, t0_z, x0_z, forward=forward, steps=500)
 
     # 3) Find the time at which y=0 by bracketing the root.
     logger.debug(f"Finding root bracket starting from t0_z = {t0_z}")
@@ -86,7 +84,7 @@ def _find_y_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1) 
 
     # 4) Integrate from t0_z to t1_z to get the final state.
     logger.debug(f"Propagating from t={t0_z} to t={t1_z} to get final state")
-    sol = _propagate_crtbp(x0_z, t0_z, t1_z, mu, forward=forward)
+    sol = _propagate_crtbp(dynsys, x0_z, t0_z, t1_z, forward=forward)
     xx_final = sol.states
     x1_z: NDArray[np.float64] = xx_final[-1]
     logger.debug(f"Final state at crossing x1_z = {x1_z}")
@@ -94,7 +92,7 @@ def _find_y_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1) 
     return t1_z, x1_z
 
 
-def _find_x_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1) -> Tuple[float, NDArray[np.float64]]:
+def _find_x_zero_crossing(dynsys: DynamicalSystem, x0: NDArray[np.float64], forward: int = 1) -> Tuple[float, NDArray[np.float64]]:
     """
     Find the time and state at which an orbit next crosses the x=0 plane.
     
@@ -130,13 +128,13 @@ def _find_x_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1) 
     This hybrid approach is more efficient than using a very fine integration
     time step, especially for orbits with long periods.
     """
-    logger.debug(f"Entering _find_x_zero_crossing with x0={x0}, mu={mu}, forward={forward}")
+    logger.debug(f"Entering _find_x_zero_crossing with x0={x0}, forward={forward}")
     t0_z = np.pi/2 - 0.15
     logger.debug(f"Initial time guess t0_z = {t0_z}")
 
     # 1) Integrate from t=0 up to t0_z.
     logger.debug(f"Propagating from t=0 to t={t0_z}")
-    sol = _propagate_crtbp(x0, 0.0, t0_z, mu, forward=forward)
+    sol = _propagate_crtbp(dynsys, x0, 0.0, t0_z, forward=forward)
     xx = sol.states
     x0_z: NDArray[np.float64] = xx[-1]
     logger.debug(f"State after initial propagation x0_z = {x0_z}")
@@ -159,7 +157,7 @@ def _find_x_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1) 
         float
             The x-coordinate of the orbit at time t
         """
-        return _x_component(t, t0_z, x0_z, mu, forward=forward, steps=500)
+        return _x_component(dynsys, t, t0_z, x0_z, forward=forward, steps=500)
 
     # 3) Find the time at which x=0 by bracketing the root.
     logger.debug(f"Finding root bracket starting from t0_z = {t0_z}")
@@ -168,7 +166,7 @@ def _find_x_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1) 
 
     # 4) Integrate from t0_z to t1_z to get the final state.
     logger.debug(f"Propagating from t={t0_z} to t={t1_z} to get final state")
-    sol = _propagate_crtbp(x0_z, t0_z, t1_z, mu, forward=forward)
+    sol = _propagate_crtbp(dynsys, x0_z, t0_z, t1_z, forward=forward)
     xx_final = sol.states
     x1_z: NDArray[np.float64] = xx_final[-1]
     logger.debug(f"Final state at crossing x1_z = {x1_z}")
@@ -176,7 +174,7 @@ def _find_x_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1) 
     return t1_z, x1_z
 
 
-def _find_z_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1) -> Tuple[float, NDArray[np.float64]]:
+def _find_z_zero_crossing(dynsys: DynamicalSystem, x0: NDArray[np.float64], forward: int = 1) -> Tuple[float, NDArray[np.float64]]:
     """
     Find the time and state at which an orbit next crosses the z=0 plane.
     
@@ -212,13 +210,13 @@ def _find_z_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1) 
     This hybrid approach is more efficient than using a very fine integration
     time step, especially for orbits with long periods.
     """
-    logger.debug(f"Entering _find_z_zero_crossing with x0={x0}, mu={mu}, forward={forward}")
+    logger.debug(f"Entering _find_z_zero_crossing with x0={x0}, forward={forward}")
     t0_z = np.pi/2 - 0.15
     logger.debug(f"Initial time guess t0_z = {t0_z}")
 
     # 1) Integrate from t=0 up to t0_z.
     logger.debug(f"Propagating from t=0 to t={t0_z}")
-    sol = _propagate_crtbp(x0, 0.0, t0_z, mu, forward=forward)
+    sol = _propagate_crtbp(dynsys, x0, 0.0, t0_z, forward=forward)
     xx = sol.states
     x0_z: NDArray[np.float64] = xx[-1]
     logger.debug(f"State after initial propagation x0_z = {x0_z}")
@@ -241,7 +239,7 @@ def _find_z_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1) 
         float
             The z-coordinate of the orbit at time t
         """
-        return _z_component(t, t0_z, x0_z, mu, forward=forward, steps=500)
+        return _z_component(dynsys, t, t0_z, x0_z, forward=forward, steps=500)
 
     # 3) Find the time at which z=0 by bracketing the root.
     logger.debug(f"Finding root bracket starting from t0_z = {t0_z}")
@@ -250,7 +248,7 @@ def _find_z_zero_crossing(x0: NDArray[np.float64], mu: float, forward: int = 1) 
 
     # 4) Integrate from t0_z to t1_z to get the final state.
     logger.debug(f"Propagating from t={t0_z} to t={t1_z} to get final state")
-    sol = _propagate_crtbp(x0_z, t0_z, t1_z, mu, forward=forward)
+    sol = _propagate_crtbp(dynsys, x0_z, t0_z, t1_z, forward=forward)
     xx_final = sol.states
     x1_z: NDArray[np.float64] = xx_final[-1]
     logger.debug(f"Final state at crossing x1_z = {x1_z}")
@@ -333,7 +331,7 @@ def _find_bracket(f: Callable[[float], float], x0: float, max_expand: int = 500)
     raise RuntimeError(f"Could not find bracket for root near {x0} within {max_expand} iterations")
 
 
-def _y_component(t1: float, t0_z: float, x0_z: NDArray[np.float64], mu: float, forward: int = 1, steps: int = 3000, tol: float = 1e-10) -> float:
+def _y_component(dynsys: DynamicalSystem, t1: float, t0_z: float, x0_z: NDArray[np.float64], forward: int = 1, steps: int = 3000) -> float:
     """
     Compute the y-component of an orbit at a specified time.
     
@@ -372,14 +370,14 @@ def _y_component(t1: float, t0_z: float, x0_z: NDArray[np.float64], mu: float, f
     computation when t1 is very close to t0_z by simply returning the y-component
     of the reference state in that case.
     """
-    logger.debug(f"Entering _y_component: t1={t1}, t0_z={t0_z}, x0_z={x0_z}, mu={mu}, forward={forward}")
+    logger.debug(f"Entering _y_component: t1={t1}, t0_z={t0_z}, x0_z={x0_z}, forward={forward}")
     # If t1 == t0_z, no integration is done.  Just take the initial condition.
     if np.isclose(t1, t0_z, rtol=3e-10, atol=1e-10):
         x1_zgl = x0_z
         logger.debug(f"t1 ({t1}) is close to t0_z ({t0_z}). Returning y-component from x0_z: {x1_zgl[1]}")
     else:
         logger.debug(f"Propagating from t={t0_z} to t={t1}")
-        sol = _propagate_crtbp(x0_z, t0_z, t1, mu, forward=forward, steps=steps)
+        sol = _propagate_crtbp(dynsys, x0_z, t0_z, t1, forward=forward, steps=steps)
         xx = sol.states
         # The final state is the last row of xx
         x1_zgl: NDArray[np.float64] = xx[-1, :]
@@ -388,7 +386,7 @@ def _y_component(t1: float, t0_z: float, x0_z: NDArray[np.float64], mu: float, f
     return float(x1_zgl[1]) # Explicitly cast to float
 
 
-def _x_component(t1: float, t0_z: float, x0_z: NDArray[np.float64], mu: float, forward: int = 1, steps: int = 3000, tol: float = 1e-10) -> float:
+def _x_component(dynsys: DynamicalSystem, t1: float, t0_z: float, x0_z: NDArray[np.float64], forward: int = 1, steps: int = 3000) -> float:
     """
     Compute the x-component of an orbit at a specified time.
     
@@ -427,14 +425,14 @@ def _x_component(t1: float, t0_z: float, x0_z: NDArray[np.float64], mu: float, f
     computation when t1 is very close to t0_z by simply returning the x-component
     of the reference state in that case.
     """
-    logger.debug(f"Entering _x_component: t1={t1}, t0_z={t0_z}, x0_z={x0_z}, mu={mu}, forward={forward}")
+    logger.debug(f"Entering _x_component: t1={t1}, t0_z={t0_z}, x0_z={x0_z}, forward={forward}")
     # If t1 == t0_z, no integration is done.  Just take the initial condition.
     if np.isclose(t1, t0_z, rtol=3e-10, atol=1e-10):
         x1_zgl = x0_z
         logger.debug(f"t1 ({t1}) is close to t0_z ({t0_z}). Returning x-component from x0_z: {x1_zgl[0]}")
     else:
         logger.debug(f"Propagating from t={t0_z} to t={t1}")
-        sol = _propagate_crtbp(x0_z, t0_z, t1, mu, forward=forward, steps=steps)
+        sol = _propagate_crtbp(dynsys, x0_z, t0_z, t1, forward=forward, steps=steps)
         xx = sol.states
         # The final state is the last row of xx
         x1_zgl: NDArray[np.float64] = xx[-1, :]
@@ -443,7 +441,7 @@ def _x_component(t1: float, t0_z: float, x0_z: NDArray[np.float64], mu: float, f
     return float(x1_zgl[0]) # Explicitly cast to float
 
 
-def _z_component(t1: float, t0_z: float, x0_z: NDArray[np.float64], mu: float, forward: int = 1, steps: int = 3000, tol: float = 1e-10) -> float:
+def _z_component(dynsys: DynamicalSystem, t1: float, t0_z: float, x0_z: NDArray[np.float64], forward: int = 1, steps: int = 3000, tol: float = 1e-10) -> float:
     """
     Compute the z-component of an orbit at a specified time.
     
@@ -482,14 +480,14 @@ def _z_component(t1: float, t0_z: float, x0_z: NDArray[np.float64], mu: float, f
     computation when t1 is very close to t0_z by simply returning the z-component
     of the reference state in that case.
     """
-    logger.debug(f"Entering _z_component: t1={t1}, t0_z={t0_z}, x0_z={x0_z}, mu={mu}, forward={forward}")
+    logger.debug(f"Entering _z_component: t1={t1}, t0_z={t0_z}, x0_z={x0_z}, forward={forward}")
     # If t1 == t0_z, no integration is done.  Just take the initial condition.
     if np.isclose(t1, t0_z, rtol=3e-10, atol=1e-10):
         x1_zgl = x0_z
         logger.debug(f"t1 ({t1}) is close to t0_z ({t0_z}). Returning z-component from x0_z: {x1_zgl[2]}")
     else:
         logger.debug(f"Propagating from t={t0_z} to t={t1}")
-        sol = _propagate_crtbp(x0_z, t0_z, t1, mu, forward=forward, steps=steps)
+        sol = _propagate_crtbp(dynsys, x0_z, t0_z, t1, forward=forward, steps=steps)
         xx = sol.states
         # The final state is the last row of xx
         x1_zgl: NDArray[np.float64] = xx[-1, :]
@@ -739,40 +737,3 @@ def _interpolate(x, t=None, dt=None):
             X[:, i] = cs(TT)
     
     return X, T
-
-def _propagate_crtbp(
-    state0: Sequence[float],
-    t0: float,
-    tf: float,
-    mu: float,
-    forward: int = 1,
-    steps: int = 1000,
-    use_scipy: bool = True,
-) -> Solution:
-    state0_np = _validate_initial_state(state0)
-    system = create_rtbp_system(mu)
-    t0_abs = abs(t0)
-    tf_abs = abs(tf)
-    t_eval = np.linspace(t0_abs, tf_abs, steps)
-
-    if use_scipy:
-        sol = solve_ivp(system.rhs, (t0_abs, tf_abs), state0_np, t_eval=t_eval, method='DOP853', dense_output=True)
-        times = sol.t
-        states = sol.y.T
-    else:
-        integrator = AdaptiveRK(order=8, max_step=1e4, rtol=1e-3, atol=1e-6)
-        sol = integrator.integrate(system, state0_np, t_eval)
-        times = sol.times
-        states = sol.states
-
-    t = forward * times
-    return Solution(t, states)
-
-
-def _validate_initial_state(state):
-    state_np = np.asarray(state, dtype=np.float64)
-    if state_np.shape != (6,):
-        msg = f"Initial state vector must have 6 elements, but got shape {state_np.shape}"
-        logger.error(msg)
-        raise ValueError(msg)
-    return state_np

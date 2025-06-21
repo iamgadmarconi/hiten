@@ -30,6 +30,11 @@ from config import MPMATH_DPS
 from utils.log_config import logger
 from utils.precision import find_root, hp
 
+# Use TYPE_CHECKING for type hints to avoid circular imports
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from system.base import System
+
 # Constants for stability analysis mode
 CONTINUOUS_SYSTEM = 0
 DISCRETE_SYSTEM = 1
@@ -60,9 +65,10 @@ class LibrationPoint(ABC):
         Mass parameter of the CR3BP system (ratio of smaller to total mass)
     """
     
-    def __init__(self, mu: float):
+    def __init__(self, system: "System"):
         """Initialize a Libration point with the mass parameter and point index."""
-        self.mu = mu
+        self.system = system
+        self.mu = system.mu
         self._position = None
         self._stability_info = None
         self._linear_data = None
@@ -325,11 +331,11 @@ class CollinearPoint(LibrationPoint):
     mu : float
         Mass parameter of the CR3BP system (ratio of smaller to total mass)
     """
-    def __init__(self, mu: float):
+    def __init__(self, system: "System"):
         """Initialize a collinear Libration point."""
-        if not 0 < mu < 0.5:
-            raise ValueError(f"Mass parameter mu must be in range (0, 0.5), got {mu}")
-        super().__init__(mu)
+        if not 0 < system.mu < 0.5:
+            raise ValueError(f"Mass parameter mu must be in range (0, 0.5), got {system.mu}")
+        super().__init__(system)
 
     def _find_position(self, primary_interval: list) -> float:
         """
@@ -736,9 +742,9 @@ class L1Point(CollinearPoint):
         Mass parameter of the CR3BP system (ratio of smaller to total mass)
     """
     
-    def __init__(self, mu: float):
+    def __init__(self, system: "System"):
         """Initialize the L1 Libration point."""
-        super().__init__(mu)
+        super().__init__(system)
         
     def _calculate_position(self) -> np.ndarray:
         """
@@ -794,9 +800,9 @@ class L2Point(CollinearPoint):
         Mass parameter of the CR3BP system (ratio of smaller to total mass)
     """
     
-    def __init__(self, mu: float):
+    def __init__(self, system: "System"):
         """Initialize the L2 Libration point."""
-        super().__init__(mu)
+        super().__init__(system)
     
     def _calculate_position(self) -> np.ndarray:
         """
@@ -853,9 +859,9 @@ class L3Point(CollinearPoint):
         Mass parameter of the CR3BP system (ratio of smaller to total mass)
     """
     
-    def __init__(self, mu: float):
+    def __init__(self, system: "System"):
         """Initialize the L3 Libration point."""
-        super().__init__(mu)
+        super().__init__(system)
     
     def _calculate_position(self) -> np.ndarray:
         """
@@ -919,12 +925,12 @@ class TriangularPoint(LibrationPoint):
     """
     ROUTH_CRITICAL_MU = (1.0 - np.sqrt(1.0 - (1.0/27.0))) / 2.0 # approx 0.03852
     
-    def __init__(self, mu: float):
+    def __init__(self, system: "System"):
         """Initialize a triangular Libration point."""
-        super().__init__(mu)
+        super().__init__(system)
         # Log stability warning based on mu
-        if mu > self.ROUTH_CRITICAL_MU:
-            logger.warning(f"Triangular points are potentially unstable for mu > {self.ROUTH_CRITICAL_MU:.6f} (current mu = {mu})")
+        if system.mu > self.ROUTH_CRITICAL_MU:
+            logger.warning(f"Triangular points are potentially unstable for mu > {self.ROUTH_CRITICAL_MU:.6f} (current mu = {system.mu})")
 
     def _find_position(self, y_sign: int) -> np.ndarray:
         """
@@ -967,9 +973,9 @@ class L4Point(TriangularPoint):
         Mass parameter of the CR3BP system (ratio of smaller to total mass)
     """
     
-    def __init__(self, mu: float):
+    def __init__(self, system: "System"):
         """Initialize the L4 Libration point."""
-        super().__init__(mu)
+        super().__init__(system)
     
     def _calculate_position(self) -> np.ndarray:
         """
@@ -998,9 +1004,9 @@ class L5Point(TriangularPoint):
         Mass parameter of the CR3BP system (ratio of smaller to total mass)
     """
     
-    def __init__(self, mu: float):
+    def __init__(self, system: "System"):
         """Initialize the L5 Libration point."""
-        super().__init__(mu)
+        super().__init__(system)
     
     def _calculate_position(self) -> np.ndarray:
         """

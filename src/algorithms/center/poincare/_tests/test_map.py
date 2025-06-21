@@ -30,7 +30,7 @@ def poincare_test_setup():
 
     pmGPUConfig = poincareMapConfig(
         dt=TEST_DT,
-        method="rk4",
+        method="rk",
         integrator_order=4,
         c_omega_heuristic=20.0,
         n_seeds=TEST_N_SEEDS,
@@ -42,7 +42,7 @@ def poincare_test_setup():
 
     pmCPUConfig = poincareMapConfig(
         dt=TEST_DT,
-        method="rk4",
+        method="rk",
         integrator_order=4,
         c_omega_heuristic=20.0,
         n_seeds=TEST_N_SEEDS,

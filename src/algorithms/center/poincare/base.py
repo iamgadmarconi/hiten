@@ -187,7 +187,7 @@ class PoincareMap:
         logger.info("Dense-grid Poincaré map computation complete: %d points", len(self))
         return pts.points if hasattr(pts, 'points') else pts
 
-    def _propagate_from_point(self, cm_point, energy, system, steps=1000, method="rk8"):
+    def _propagate_from_point(self, cm_point, energy, system, steps=1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order=6):
         """
         Convert a Poincaré map point to initial conditions, create a GenericOrbit, propagate, and return the orbit.
         """
@@ -197,7 +197,7 @@ class PoincareMap:
         orbit = GenericOrbit(cfg, ic)
         if orbit.period is None:
             orbit.period = 2 * np.pi
-        orbit.propagate(steps=steps, method=method)
+        orbit.propagate(steps=steps, method=method, order=order)
         return orbit
 
     def save(self, filepath: str, **kwargs) -> None:
@@ -318,7 +318,7 @@ class PoincareMap:
         plt.show()
         return fig, ax
 
-    def plot_interactive(self, system, steps=1000, method="rk8", frame="rotating"):
+    def plot_interactive(self, system, steps=1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order=6, frame="rotating"):
         """
         Interactively select a point from the Poincaré map, generate initial conditions, create a GenericOrbit, propagate, and plot.
         You can select as many points as you want. Press 'q' to quit the selection window.
@@ -346,7 +346,7 @@ class PoincareMap:
             ax.scatter([pt[0]], [pt[1]], s=60, c='red', marker='x')
             fig.canvas.draw()
             print(f"Selected Poincaré point: {pt}")
-            orbit = self._propagate_from_point(pt, self.energy, system, steps=steps, method=method)
+            orbit = self._propagate_from_point(pt, self.energy, system, steps=steps, method=method, order=order)
             orbit.plot(frame=frame, show=True)
             selected_orbit['orbit'] = orbit
             print("Orbit propagation and plot complete.")

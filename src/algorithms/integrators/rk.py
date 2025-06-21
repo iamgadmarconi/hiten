@@ -94,8 +94,12 @@ class _FixedStepRK(_RungeKuttaBase):
 
         rhs_wrapped = _build_rhs_wrapper(system)
 
+        # STANDARDIZED TIME DIRECTION HANDLING: Detect direction from time array
+        # This matches the approach used in adaptive integrators
+        forward = np.sign(t_vals[-1] - t_vals[0])
+
         def f(t, y):
-            return rhs_wrapped(t, y)
+            return forward * rhs_wrapped(t, y)
 
         traj = np.empty((t_vals.size, y0.size), dtype=np.float64)
         derivs = np.empty_like(traj)
