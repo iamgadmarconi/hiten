@@ -51,7 +51,7 @@ def main() -> None:
     else:
         logger.info("Computing new Poincaré map")
         pm.compute()
-        # pm.save(filepath)
+        pm.save(filepath)
 
     pm.plot_interactive(system)
 

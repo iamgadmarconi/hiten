@@ -76,7 +76,7 @@ class LyapunovOrbit(PeriodicOrbit):
 
     def differential_correction(self, **kw):
         cfg = correctionConfig(
-            residual_indices=(S.VZ, S.Z),
+            residual_indices=(S.VX, S.Z),
             control_indices=(S.VZ, S.VY),
             target=(0.0, 0.0),
             extra_jacobian=None,
