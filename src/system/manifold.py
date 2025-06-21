@@ -78,7 +78,6 @@ class Manifold:
         self,
         step: float = 0.02,
         integration_fraction: float = 0.75,
-        forward: int | None = None,
         **kwargs,
     ):
 
@@ -86,19 +85,11 @@ class Manifold:
             return self.manifold_result
 
         kwargs.setdefault("show_progress", True)
-        kwargs.setdefault("dt", 1e-3)
+        kwargs.setdefault("dt", 1e-2)
 
-        if forward is None:
-            forward = -1 if self.stable == 1 else 1
-        else:
-            forward = 1 if forward in [True, 1] else -1
-
-        if forward * self.stable != -1:
-            raise ValueError(
-                "Inconsistent forward/stable choice: stable manifolds must be "
-                "integrated backward (forward = -1) and unstable manifolds "
-                "forward (forward = +1)."
-            )
+        # Stable manifolds (self.stable == 1) use backward integration (forward = -1)
+        # Unstable manifolds (self.stable == -1) use forward integration (forward = 1)
+        forward = -self.stable
 
         initial_state = self.generating_orbit._initial_state
 
@@ -122,6 +113,7 @@ class Manifold:
                     initial_state,
                     self.generating_orbit.period,
                     fraction,
+                    forward=forward,
                 )
                 x0W = x0W.flatten().astype(np.float64)
                 tf = integration_fraction * 2 * np.pi
@@ -137,7 +129,7 @@ class Manifold:
                 states_list.append(states)
                 times_list.append(times)
 
-                Xy0, Ty0 = surface_of_section(states, times, self.mu, M=2, C=1)
+                Xy0, Ty0 = surface_of_section(states, times, self.mu, M=2, C=0)
 
                 if len(Xy0) > 0:
                     # If intersection found, extract coordinates
@@ -146,20 +138,23 @@ class Manifold:
                     dysos.append(Xy0[4])
                     self._successes += 1
                     logger.debug(f"Fraction {fraction:.3f}: Found Poincaré section point at y={Xy0[1]:.6f}, vy={Xy0[4]:.6f}")
-                else:
-                    logger.warning(f"No section points found for fraction {fraction:.3f}")
-                    pass
 
             except Exception as e:
                 err = f"Error computing manifold: {e}"
                 logger.error(err)
                 continue
+        
+        # Show summary warning if there were failed crossings
+        if self._attempts > 0 and self._successes < self._attempts:
+            failed_attempts = self._attempts - self._successes
+            failure_rate = (failed_attempts / self._attempts) * 100
+            logger.warning(f"Failed to find {failure_rate:.1f}% ({failed_attempts}/{self._attempts}) Poincaré section crossings")
             
         self.manifold_result = ManifoldResult(ysos, dysos, states_list, times_list, self._successes, self._attempts)
         return self.manifold_result
 
-    def _compute_manifold_section(self, state: np.ndarray, period: float, fraction: float, NN: int = 1):
-        xx, tt, phi_T, PHI = compute_stm(state, self.mu, period)
+    def _compute_manifold_section(self, state: np.ndarray, period: float, fraction: float, NN: int = 1, forward: int = 1):
+        xx, tt, phi_T, PHI = compute_stm(state, self.mu, period, forward=forward)
 
         sn, un, _, Ws, Wu, _ = eigenvalue_decomposition(phi_T, discrete=1)
 
@@ -198,7 +193,7 @@ class Manifold:
             MAN = self.direction * (phi_frac @ WS)
             logger.debug(f"Using stable manifold direction with eigenvalue {np.real(snreal_vals[col_idx]):.6f} for {NN}th eigenvector")
 
-        if self.stable == -1:
+        elif self.stable == -1:
             MAN = self.direction * (phi_frac @ WU)
             logger.debug(f"Using unstable manifold direction with eigenvalue {np.real(unreal_vals[col_idx]):.6f} for {NN}th eigenvector")
 

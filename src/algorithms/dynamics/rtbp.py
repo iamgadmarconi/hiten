@@ -245,7 +245,7 @@ def variational_equations(t, PHI_vec, mu, forward=1):
     return dPHI_vec
 
 
-def compute_stm(x0, mu, tf, **solve_kwargs):
+def compute_stm(x0, mu, tf, forward=1, **solve_kwargs):
     """
     Compute the State Transition Matrix (STM) for the CR3BP.
     
@@ -305,7 +305,7 @@ def compute_stm(x0, mu, tf, **solve_kwargs):
 
     # Create DynamicalSystem wrapper for the 42-dim variational equations
     def _var_eq(t, y):  # noqa: D401 (simple func)
-        return variational_equations(t, y, mu, 1)
+        return variational_equations(t, y, mu, forward)
 
     rhs_system = create_rhs_system(_var_eq, dim=42, name="CR3BP STM")
 
@@ -316,6 +316,10 @@ def compute_stm(x0, mu, tf, **solve_kwargs):
     sol_obj = integrator.integrate(rhs_system, PHI0, times)
 
     PHI = sol_obj.states  # shape (n_times, 42)
+    
+    # Possibly flip time if forward==-1, to mirror MATLAB's t=FORWARD*t
+    if forward == -1:
+        sol_obj.times = -sol_obj.times  # so we see times from 0 down to -tf
     
     # The state is in columns [36..41] of PHI
     x = PHI[:, 36:42]   # shape (n_times, 6)

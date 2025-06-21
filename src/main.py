@@ -79,7 +79,7 @@ def main() -> None:
         {
             "cls": LyapunovOrbit,
             "name": "Lyapunov",
-            "extra_params": {"Ax": 1e-3},
+            "extra_params": {"Ax": 4e-3},
             "initial_state": None,
             "diff_corr_attempts": 25,
             "manifold_file": "results/manifolds/lyapunov_orbit_manifold.pkl",
@@ -100,7 +100,7 @@ def main() -> None:
         orbit.animate()
 
         # Build manifold configuration
-        manifold_cfg = manifoldConfig(orbit, stable=True, direction="Positive", method="rk6")
+        manifold_cfg = manifoldConfig(orbit, stable=False, direction="Negative", method="rk6")
         manifold = Manifold(manifold_cfg)
         m_filepath = spec["manifold_file"]
 
@@ -111,7 +111,7 @@ def main() -> None:
         else:
             logger.info("Computing manifold for %s orbit", spec["name"])
             manifold.compute()
-            manifold.save(m_filepath)
+            # manifold.save(m_filepath)
 
         manifold.plot()
 
