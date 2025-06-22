@@ -20,13 +20,13 @@ class poincareMapConfig:
     """Configuration parameters for the Poincaré map generation."""
 
     # Numerical / integration
-    dt: float = 1e-3
+    dt: float = 1e-2
     method: str = "rk"  # "symplectic" or "rk"
     integrator_order: int = 4
     c_omega_heuristic: float = 20.0  # Only used by the extended-phase symplectic scheme
 
     n_seeds: int = 20
-    n_iter: int = 1500
+    n_iter: int = 40
     seed_axis: str = "q2"  # "q2" or "p2"
     section_coord: Literal["q2", "p2", "q3", "p3"] = "q3"  # Default keeps existing behavior
 

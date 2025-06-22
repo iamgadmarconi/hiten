@@ -180,17 +180,20 @@ class CenterManifold:
         return poly_cm
     
     def poincare_map(self, energy: float, **kwargs) -> "PoincareMap":
+        from algorithms.poincare.base import PoincareMap, poincareMapConfig
+
         if self._poincare_map is None:
 
             default_cfg = dict(
-                dt=1e-3,
-                method="symplectic",
+                dt=1e-2,
+                method="rk",
+                integrator_order=4,
+                c_omega_heuristic=20.0,
                 n_seeds=20,
-                n_iter=1500,
+                n_iter=40,
                 seed_axis="q2",
                 section_coord="q3",
-                integrator_order=6,
-                c_omega_heuristic=20.0,
+
                 compute_on_init=True,
                 use_gpu=False,
             )

@@ -1,27 +1,20 @@
 PRIMARY = "Earth"
 SECONDARY = "Moon"
-L_POINT = 1    # Libration point number (1 or 2)
+L_POINT = 1
 
-# Algorithm parameters
 MAX_DEG = 8
 TOL = 1e-13
 
-FASTMATH = False  # Global flag for Numba's fastmath option 
+FASTMATH = False
 
 H0 = 0.6
-DT = 1e-2
-INTEGRATOR_METHOD = "rk4"
-INTEGRATOR_ORDER = 6
-C_OMEGA_HEURISTIC = 100.0
-N_SEEDS = 20 # seeds along q2-axis
-N_ITER = 25 # iterations per seed
+N_SEEDS = 20
+N_ITER = 25
 
-# Precision control
-USE_ARBITRARY_PRECISION = True  # Set to True to enable mpmath for critical computations
-MPMATH_DPS = 50  # Decimal places for mpmath (default 50, standard float64 ≈ 15-17)
-NUMPY_DTYPE_REAL = "float64"  # "float32" or "float64" 
-NUMPY_DTYPE_COMPLEX = "complex128"  # "complex64" or "complex128"
+USE_ARBITRARY_PRECISION = True
+MPMATH_DPS = 50
+NUMPY_DTYPE_REAL = "float64"
+NUMPY_DTYPE_COMPLEX = "complex128"
 
-# GPU configuration
 USE_GPU = False
 N_VARS = 6

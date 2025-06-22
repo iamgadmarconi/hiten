@@ -1,10 +1,8 @@
 import os
 
 from algorithms.center.base import CenterManifold
-from algorithms.poincare.base import PoincareMap, poincareMapConfig
-from config import (C_OMEGA_HEURISTIC, DT, H0, INTEGRATOR_METHOD,
-                    INTEGRATOR_ORDER, L_POINT, MAX_DEG, N_ITER, N_SEEDS,
-                    PRIMARY, SECONDARY, USE_GPU)
+from config import (H0, L_POINT, MAX_DEG, N_ITER, N_SEEDS, PRIMARY, SECONDARY,
+                    USE_GPU)
 from system.base import System, systemConfig
 from system.body import Body
 from system.manifold import Manifold, manifoldConfig
@@ -30,7 +28,7 @@ def main() -> None:
     logger.info("\n\n%s\n\n", format_cm_table(cm_H, cm.clmo))
     logger.info("Starting Poincaré map generation process…")
 
-    pm = cm.poincare_map(H0, seed_axis='q2', section_coord='q3')
+    pm = cm.poincare_map(H0, seed_axis='q2', section_coord='q3', n_seeds=N_SEEDS, n_iter=N_ITER, use_gpu=USE_GPU)
 
     pm.plot_interactive()
 
