@@ -115,12 +115,12 @@ def _find_turning(
     max_expand: int = 40,
 ) -> float:
     """
-    Return the positive intercept q2_max or p2_max of the Hill boundary.
+    Return the positive intercept q2_max, p2_max, q3_max or p3_max of the Hill boundary.
 
     Parameters
     ----------
     q_or_p : str
-        "q2" or "p2" specifying which variable to solve for
+        One of "q2", "p2", "q3" or "p3" specifying which variable to solve for
     h0 : float
         Energy level (centre-manifold value)
     H_blocks : List[np.ndarray]
@@ -142,21 +142,25 @@ def _find_turning(
     Raises
     ------
     ValueError
-        If q_or_p is not 'q2' or 'p2'
+        If q_or_p is not 'q2', 'p2', 'q3' or 'p3'
     RuntimeError
         If root finding fails or doesn't converge
     """
     logger.info(f"Finding {q_or_p} turning point at energy h0={h0:.6e}")
     
-    if q_or_p not in {"q2", "p2"}:
-        raise ValueError("q_or_p must be 'q2' or 'p2'.")
+    if q_or_p not in {"q2", "p2", "q3", "p3"}:
+        raise ValueError("q_or_p must be 'q2', 'p2', 'q3' or 'p3'.")
 
     def f(x: float) -> float:
         state = np.zeros(6, dtype=np.complex128)
         if q_or_p == "q2":
             state[1] = x  # q2
-        else:
+        elif q_or_p == "p2":
             state[4] = x  # p2 (index 4 in (q1,q2,q3,p1,p2,p3))
+        elif q_or_p == "q3":
+            state[2] = x  # q3
+        else:  # "p3"
+            state[5] = x  # p3
         return polynomial_evaluate(H_blocks, state, clmo).real - h0
 
     root = _bracketed_root(
