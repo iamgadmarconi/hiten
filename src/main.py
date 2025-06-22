@@ -2,18 +2,18 @@ import os
 
 from algorithms.center.base import CenterManifold
 from algorithms.poincare.base import PoincareMap, poincareMapConfig
-from utils.printing import format_cm_table
 from config import (C_OMEGA_HEURISTIC, DT, H0, INTEGRATOR_METHOD,
                     INTEGRATOR_ORDER, L_POINT, MAX_DEG, N_ITER, N_SEEDS,
                     PRIMARY, SECONDARY, USE_GPU)
-from system.orbits.base import orbitConfig
-from system.orbits.halo import HaloOrbit
-from system.orbits.lyapunov import LyapunovOrbit, VerticalLyapunovOrbit
 from system.base import System, systemConfig
 from system.body import Body
 from system.manifold import Manifold, manifoldConfig
+from system.orbits.base import orbitConfig
+from system.orbits.halo import HaloOrbit
+from system.orbits.lyapunov import LyapunovOrbit, VerticalLyapunovOrbit
 from utils.constants import Constants
 from utils.log_config import logger
+from utils.printing import format_cm_table
 
 
 def main() -> None:

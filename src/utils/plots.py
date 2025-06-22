@@ -10,7 +10,7 @@ from utils.coordinates import (_get_angular_velocity, rotating_to_inertial,
                                si_time, to_si_units)
 
 
-def animate_trajectories(states, times, bodies, system_distance, interval=20, figsize=(14, 6), save=False):
+def animate_trajectories(states, times, bodies, system_distance, interval=10, figsize=(14, 6), save=False, dark_mode: bool = True):
     """
     Create an animated comparison of trajectories in rotating and inertial frames.
     
@@ -70,28 +70,69 @@ def animate_trajectories(states, times, bodies, system_distance, interval=20, fi
     
     primary_inert_center = np.array([0, 0, 0])
 
+    # ------------------------------------------------------------------
+    # Pre-compute global axis limits so that zoom/scale is persistent.
+    # ------------------------------------------------------------------
+    coords_list = [
+        traj_rot,
+        traj_inert,
+        np.stack([secondary_x, secondary_y, secondary_z], axis=1),
+        primary_rot_center[None, :],
+        secondary_rot_center[None, :],
+        primary_inert_center[None, :],
+    ]
+    all_coords = np.vstack(coords_list)
+    xyz_min = all_coords.min(axis=0)
+    xyz_max = all_coords.max(axis=0)
+    span = np.max(xyz_max - xyz_min)
+    half_span = 0.55 * span  # slight padding (10%)
+    center = 0.5 * (xyz_max + xyz_min)
+    x_limits = (center[0] - half_span, center[0] + half_span)
+    y_limits = (center[1] - half_span, center[1] + half_span)
+    z_limits = (center[2] - half_span, center[2] + half_span)
+
+    # Store initial view angles to keep orientation persistent
+    init_elev_rot, init_azim_rot = ax_rot.elev, ax_rot.azim
+    init_elev_inert, init_azim_inert = ax_inert.elev, ax_inert.azim
+
+    # ----- Persisted view state (updated every frame, used by init on repeats) -----
+    view_state = {
+        'rot_elev': ax_rot.elev,
+        'rot_azim': ax_rot.azim,
+        'inert_elev': ax_inert.elev,
+        'inert_azim': ax_inert.azim,
+        'rot_xlim': x_limits,
+        'rot_ylim': y_limits,
+        'rot_zlim': z_limits,
+        'inert_xlim': x_limits,
+        'inert_ylim': y_limits,
+        'inert_zlim': z_limits,
+    }
+
     def init():
         """
-        Initialize the animation.
-        
-        Returns
-        -------
-        tuple
-            A tuple containing the figure and the axes.
-            
-        Notes
-        -----
-        Clears the axes and sets up the labels and limits.
+        Initialize the animation (also called at every repeat).
+        Uses the most recently stored `view_state` so the view chosen by the
+        user persists across loops.
         """
-        for ax in (ax_rot, ax_inert):
+        for ax, elev, azim, xl, yl, zl in (
+            (ax_rot, view_state['rot_elev'], view_state['rot_azim'], view_state['rot_xlim'], view_state['rot_ylim'], view_state['rot_zlim']),
+            (ax_inert, view_state['inert_elev'], view_state['inert_azim'], view_state['inert_xlim'], view_state['inert_ylim'], view_state['inert_zlim']),
+        ):
             ax.clear()
             ax.set_xlabel("X [m]")
             ax.set_ylabel("Y [m]")
             ax.set_zlabel("Z [m]")
-            _set_axes_equal(ax)
+            ax.set_xlim(xl)
+            ax.set_ylim(yl)
+            ax.set_zlim(zl)
+            ax.view_init(elev=elev, azim=azim)
         
-        ax_rot.set_title("Rotating Frame (SI Distances)")
-        ax_inert.set_title("Inertial Frame (Real Time, Real Ω)")
+        ax_rot.set_title("Rotating Frame (SI Distances)", color='white' if dark_mode else 'black')
+        ax_inert.set_title("Inertial Frame (Real Time, Real Ω)", color='white' if dark_mode else 'black')
+        if dark_mode:
+            _set_dark_mode(fig, ax_rot, title=ax_rot.get_title())
+            _set_dark_mode(fig, ax_inert, title=ax_inert.get_title())
         return fig,
     
     def update(frame):
@@ -113,16 +154,47 @@ def animate_trajectories(states, times, bodies, system_distance, interval=20, fi
         Updates the plot for the current frame, clearing the axes and
         setting the title and labels.
         """
-        ax_rot.clear()
-        ax_inert.clear()
+        # ax_rot.clear()
+        # ax_inert.clear()
         
-        for ax in (ax_rot, ax_inert):
+        # Capture existing user view/zoom before clearing (ensures persistence)
+        elev_rot_prev, azim_rot_prev = ax_rot.elev, ax_rot.azim
+        elev_inert_prev, azim_inert_prev = ax_inert.elev, ax_inert.azim
+
+        xlim_rot_prev, ylim_rot_prev, zlim_rot_prev = ax_rot.get_xlim(), ax_rot.get_ylim(), ax_rot.get_zlim()
+        xlim_inert_prev, ylim_inert_prev, zlim_inert_prev = ax_inert.get_xlim(), ax_inert.get_ylim(), ax_inert.get_zlim()
+
+        ax_rot.cla()
+        ax_inert.cla()
+
+        # Restore view/limits captured this frame
+        for ax, elev, azim, xl, yl, zl in (
+                (ax_rot, elev_rot_prev, azim_rot_prev, xlim_rot_prev, ylim_rot_prev, zlim_rot_prev),
+                (ax_inert, elev_inert_prev, azim_inert_prev, xlim_inert_prev, ylim_inert_prev, zlim_inert_prev),
+            ):
+            ax.clear()
             ax.set_xlabel("X [m]")
             ax.set_ylabel("Y [m]")
             ax.set_zlabel("Z [m]")
+            ax.set_xlim(xl)
+            ax.set_ylim(yl)
+            ax.set_zlim(zl)
+            ax.view_init(elev=elev, azim=azim)
         
+        # Save these settings for the init() function on the next repeat
+        view_state['rot_elev'] = elev_rot_prev
+        view_state['rot_azim'] = azim_rot_prev
+        view_state['inert_elev'] = elev_inert_prev
+        view_state['inert_azim'] = azim_inert_prev
+        view_state['rot_xlim'] = xlim_rot_prev
+        view_state['rot_ylim'] = ylim_rot_prev
+        view_state['rot_zlim'] = zlim_rot_prev
+        view_state['inert_xlim'] = xlim_inert_prev
+        view_state['inert_ylim'] = ylim_inert_prev
+        view_state['inert_zlim'] = zlim_inert_prev
+
         current_t_days = t_si[frame] / 86400.0
-        fig.suptitle(f"Time = {current_t_days:.2f} days")
+        fig.suptitle(f"Time = {current_t_days:.2f} days", color='white' if dark_mode else 'black')
         
         ax_rot.plot(traj_rot[:frame+1, 0],
                     traj_rot[:frame+1, 1],
@@ -132,9 +204,8 @@ def animate_trajectories(states, times, bodies, system_distance, interval=20, fi
         _plot_body(ax_rot, primary_rot_center, bodies[0].radius, 'blue', bodies[0].name)
         _plot_body(ax_rot, secondary_rot_center, bodies[1].radius, 'gray', bodies[1].name)
         
-        ax_rot.set_title("Rotating Frame (SI Distances)")
+        ax_rot.set_title("Rotating Frame (SI Distances)", color='white' if dark_mode else 'black')
         ax_rot.legend()
-        _set_axes_equal(ax_rot)
         
         ax_inert.plot(traj_inert[:frame+1, 0],
                       traj_inert[:frame+1, 1],
@@ -148,9 +219,13 @@ def animate_trajectories(states, times, bodies, system_distance, interval=20, fi
         secondary_center_now = np.array([secondary_x[frame], secondary_y[frame], secondary_z[frame]])
         _plot_body(ax_inert, secondary_center_now, bodies[1].radius, 'gray', bodies[1].name)
         
-        ax_inert.set_title("Inertial Frame (Real Time, Real Ω)")
+        ax_inert.set_title("Inertial Frame (Real Time, Real Ω)", color='white' if dark_mode else 'black')
         ax_inert.legend()
-        _set_axes_equal(ax_inert)
+        
+        # Ensure dark-mode styling (including legend) is applied for this frame
+        if dark_mode:
+            _set_dark_mode(fig, ax_rot, title=ax_rot.get_title())
+            _set_dark_mode(fig, ax_inert, title=ax_inert.get_title())
         
         return fig,
     

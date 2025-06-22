@@ -11,8 +11,8 @@ from algorithms.dynamics.rtbp import _propagate_dynsys, compute_stm
 from algorithms.dynamics.utils.geometry import surface_of_section
 from algorithms.dynamics.utils.linalg import _totime, eigenvalue_decomposition
 from system.orbits.base import PeriodicOrbit
-from utils.plots import _plot_body, _set_axes_equal
 from utils.log_config import logger
+from utils.plots import _plot_body, _set_axes_equal, _set_dark_mode
 
 
 @dataclass
@@ -212,7 +212,7 @@ class Manifold:
 
         return x0W
     
-    def plot(self):
+    def plot(self, dark_mode: bool = True):
         if self.manifold_result is None:
             err = "Manifold result not computed. Please compute the manifold first."
             logger.error(err)
@@ -245,6 +245,8 @@ class Manifold:
         ax.set_zlabel('z')
         _set_axes_equal(ax)
         ax.set_title('Manifold')
+        if dark_mode:
+            _set_dark_mode(fig, ax, title=ax.get_title())
         plt.show()
 
     def save(self, filepath: str, **kwargs) -> None:

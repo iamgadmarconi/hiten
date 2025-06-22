@@ -193,7 +193,7 @@ class PoincareMap:
         """
         ic = self.cm.cm2ic(cm_point, energy, section_coord=self.config.section_coord)
         logger.info(f"Initial conditions: {ic}")
-        cfg = orbitConfig(system=system, orbit_family="generic", libration_point_idx=self.cm.point.idx)
+        cfg = orbitConfig(orbit_family="generic", libration_point=self.cm.point)
         orbit = GenericOrbit(cfg, ic)
         if orbit.period is None:
             orbit.period = 2 * np.pi
@@ -318,7 +318,7 @@ class PoincareMap:
         plt.show()
         return fig, ax
 
-    def plot_interactive(self, system, steps=1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order=6, frame="rotating"):
+    def plot_interactive(self, system, steps=1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order=6, frame="rotating", dark_mode: bool = True):
         """
         Interactively select a point from the Poincaré map, generate initial conditions, create a GenericOrbit, propagate, and plot.
         You can select as many points as you want. Press 'q' to quit the selection window.
@@ -334,6 +334,11 @@ class PoincareMap:
         ax.set_title(f"Select a point on the Poincaré Map (h={self.energy:.6e})\n(Press 'q' to quit)")
         ax.set_aspect("equal", adjustable="box")
         ax.grid(True, alpha=0.3)
+        
+        # Apply dark-mode styling if requested (match other plotting routines)
+        if dark_mode:
+            _set_dark_mode(fig, ax, title=ax.get_title())
+        
         selected_marker = ax.scatter([], [], s=60, c='red', marker='x')
         selected_orbit = {'orbit': None}
         def onclick(event):
@@ -347,7 +352,7 @@ class PoincareMap:
             fig.canvas.draw()
             print(f"Selected Poincaré point: {pt}")
             orbit = self._propagate_from_point(pt, self.energy, system, steps=steps, method=method, order=order)
-            orbit.plot(frame=frame, show=True)
+            orbit.plot(frame=frame, show=True, dark_mode=dark_mode)
             selected_orbit['orbit'] = orbit
             print("Orbit propagation and plot complete.")
         def onkey(event):
