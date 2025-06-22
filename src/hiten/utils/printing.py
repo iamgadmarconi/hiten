@@ -82,14 +82,14 @@ def _fmt_coeff(c: complex, width: int = 25) -> str:
     return s.rjust(width)
 
 
-def format_cm_table(poly_cm_cn: List[np.ndarray], clmo: np.ndarray) -> str:
+def _format_cm_table(poly_cm: List[np.ndarray], clmo: np.ndarray) -> str:
     """
     Create a formatted table of center manifold Hamiltonian coefficients.
     
     Parameters
     ----------
-    poly_cm_cn : List[numpy.ndarray]
-        List of coefficient arrays for center manifold Hamiltonian in complex normal form
+    poly_cm : List[numpy.ndarray]
+        List of coefficient arrays reduced to the center manifold
     clmo : numpy.ndarray
         List of arrays containing packed multi-indices
         
@@ -119,13 +119,14 @@ def format_cm_table(poly_cm_cn: List[np.ndarray], clmo: np.ndarray) -> str:
     k_spacing = "  "
 
     MIN_DEG_TO_DISPLAY = 2
-    MAX_DEG_TO_DISPLAY = 5 # As per original image and previous MAX_DEG usage
+    # Dynamically determine the maximum degree available in the provided polynomial list
+    max_deg_to_display = len(poly_cm) - 1  # Highest degree present in the coefficient list
 
-    for deg in range(MIN_DEG_TO_DISPLAY, MAX_DEG_TO_DISPLAY + 1):
-        if deg >= len(poly_cm_cn) or not poly_cm_cn[deg].any():
+    for deg in range(MIN_DEG_TO_DISPLAY, max_deg_to_display + 1):
+        if deg >= len(poly_cm) or not poly_cm[deg].any():
             continue
         
-        coeff_vec = poly_cm_cn[deg]
+        coeff_vec = poly_cm[deg]
 
         for pos, c_val_complex in enumerate(coeff_vec):
             # Ensure c_val is treated as a number; np.isscalar checks for single numpy values
@@ -160,15 +161,25 @@ def format_cm_table(poly_cm_cn: List[np.ndarray], clmo: np.ndarray) -> str:
     }
 
     def sort_key(term_data):
+        r"""
+        Return a composite sort key for each term.
+
+        1. Primary key   : the polynomial degree.
+        2. Secondary key : the predefined order for known degrees (2-5).
+        3. Tertiary key  : lexicographic order of the exponent tuple so that
+           terms belonging to higher degrees without a predefined ordering
+           are still sorted deterministically.
+        """
         term_deg = term_data[0]
         term_k_tuple = term_data[1]
-        
+
         order_list_for_degree = desired_k_tuple_order_by_degree.get(term_deg, [])
         try:
             k_tuple_sort_order = order_list_for_degree.index(term_k_tuple)
         except ValueError:
-            k_tuple_sort_order = float('inf') # Place unknown tuples at the end of their degree group
-        return (term_deg, k_tuple_sort_order)
+            k_tuple_sort_order = float('inf')  # Unknown tuples are placed after the predefined ones
+
+        return (term_deg, k_tuple_sort_order, term_k_tuple)
 
     structured_terms.sort(key=sort_key)
 

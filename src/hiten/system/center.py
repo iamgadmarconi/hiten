@@ -38,6 +38,7 @@ from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                               init_index_tables)
 from hiten.system.libration.collinear import CollinearPoint
 from hiten.utils.log_config import logger
+from hiten.utils.printing import _format_cm_table
 
 if TYPE_CHECKING:
     from hiten.system.poincare import PoincareMap
@@ -89,7 +90,22 @@ class CenterManifold:
         self._poincare_map: "PoincareMap" = None
 
     def __str__(self):
-        return f"CenterManifold(point={self.point}, max_degree={self.max_degree})"
+        r"""
+        Return a nicely formatted table of centre-manifold coefficients.
+
+        The coefficients are taken from the cache if available; otherwise the
+        centre-manifold Hamiltonian is computed on the fly (which implicitly
+        stores the result in the cache).  The helper function
+        :pyfunc:`hiten.utils.printing._format_cm_table` is then used to create
+        the textual representation.
+        """
+        # Retrieve cached coefficients if present; otherwise compute them.
+        poly_cm = self.cache_get(("hamiltonian", self.max_degree, "center_manifold_real"))
+
+        if poly_cm is None:
+            poly_cm = self.compute()
+
+        return _format_cm_table(poly_cm, self.clmo)
     
     def __repr__(self):
         return f"CenterManifold(point={self.point}, max_degree={self.max_degree})"

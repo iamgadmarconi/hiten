@@ -12,7 +12,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from hiten.system import Body, CenterManifold, System, systemConfig
-from hiten.utils import Constants, format_cm_table
+from hiten.utils import Constants
 from hiten.utils.log_config import logger
 
 
@@ -46,13 +46,9 @@ def main() -> None:
     logger.info("Computing centre manifold around L%s of the %s-%s system…", 1, "Earth", "Moon")
 
     cm = CenterManifold(l_point, 10)
-    cm_H = cm.compute()
+    cm.compute()
 
-    logger.info(
-        "\nCentre-manifold Hamiltonian (deg 2 → %d) in real NF variables (q₂, p₂, q₃, p₃)\n",
-        10,
-    )
-    logger.info("\n%s\n", format_cm_table(cm_H, cm.clmo))
+    logger.info("\n%s\n", cm)
 
 
 if __name__ == "__main__":
