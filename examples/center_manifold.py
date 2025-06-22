@@ -1,4 +1,4 @@
-"""Example script: computing the centre manifold Hamiltonian for the Earth-Moon system.
+"""Example script: computing the centre manifold Hamiltonian for the Earth-Moon hiten.system.
 
 Run with
     python examples/center_manifold.py
@@ -11,9 +11,9 @@ import sys
 # the script is executed from the project root.
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from system import Body, CenterManifold, System, systemConfig
-from utils import Constants, format_cm_table
-from utils.log_config import logger
+from hiten.system import Body, CenterManifold, System, systemConfig
+from hiten.utils import Constants, format_cm_table
+from hiten.utils.log_config import logger
 
 
 def main() -> None:

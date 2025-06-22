@@ -1,4 +1,4 @@
-"""Example script: generating and displaying a Poincaré map for the Earth-Moon system.
+"""Example script: generating and displaying a Poincaré map for the Earth-Moon hiten.system.
 
 python examples/poincare_map.py
 """
@@ -8,9 +8,9 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from system import Body, CenterManifold, System, systemConfig
-from utils import Constants
-from utils.log_config import logger
+from hiten.system import Body, CenterManifold, System, systemConfig
+from hiten.utils import Constants
+from hiten.utils.log_config import logger
 
 
 def main() -> None:
