@@ -26,34 +26,17 @@ def main() -> None:
     cm = CenterManifold(l_point, MAX_DEG)
     cm_H = cm.compute()
 
-    logger.info(
-        "\nCentre-manifold Hamiltonian (deg 2 to 5) in real NF variables (q2, p2, q3, p3)\n",
-        MAX_DEG,
-    )
+    logger.info("\nCentre-manifold Hamiltonian (deg 2 to 5) in real NF variables (q2, p2, q3, p3)\n")
     logger.info("\n\n%s\n\n", format_cm_table(cm_H, cm.clmo))
-
     logger.info("Starting Poincaré map generation process…")
 
-    logger.info("Generating iterated Poincaré map for h0=%.3f", H0)
-    pm_cfg = poincareMapConfig(dt=DT, method=INTEGRATOR_METHOD, n_seeds=N_SEEDS, n_iter=N_ITER, seed_axis="q2", section_coord="q3",
-                                integrator_order=INTEGRATOR_ORDER, c_omega_heuristic=C_OMEGA_HEURISTIC, compute_on_init=False, use_gpu=USE_GPU)
+    pm = cm.poincare_map(H0, seed_axis='q2', section_coord='q3')
 
-    filepath = f"results/maps/poincare_map_{H0}.pkl"
-
-    pm = PoincareMap(cm, energy=H0, config=pm_cfg)
-
-    if os.path.exists(filepath):
-        logger.info(f"Loading existing Poincaré map from {filepath}")
-        pm.load(filepath)
-    else:
-        logger.info("Computing new Poincaré map")
-        pm.compute()
-        pm.save(filepath)
-
-    pm.plot_interactive(system)
+    pm.plot_interactive()
 
     logger.info("Converting Poincaré points to initial conditions")
-    ic = cm.cm2ic([0.0, 0.0], energy=H0)
+
+    ic = pm.ic([0.0, 0.0])
     logger.info(f"Initial conditions (CM→IC):\n\n{ic}\n\n")
 
     orbit_specs = [
@@ -108,7 +91,7 @@ def main() -> None:
         else:
             logger.info("Computing manifold for %s orbit", spec["name"])
             manifold.compute()
-            # manifold.save(m_filepath)
+            manifold.save(m_filepath)
 
         manifold.plot()
 

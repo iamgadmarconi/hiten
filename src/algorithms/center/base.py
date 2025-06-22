@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import numpy as np
 
@@ -18,6 +18,10 @@ from system.libration.collinear import CollinearPoint
 from utils.log_config import logger
 
 
+if TYPE_CHECKING:
+    from algorithms.poincare.base import PoincareMap, poincareMapConfig
+
+
 class CenterManifold:
     def __init__(self, point: CollinearPoint, max_degree: int):
         self.point = point
@@ -29,6 +33,8 @@ class CenterManifold:
         self._local2synodic = _local2synodic_collinear if isinstance(self.point, CollinearPoint) else _local2synodic_triangular
 
         self._cache = {}
+
+        self._poincare_map: "PoincareMap" = None
 
     def __str__(self):
         return f"CenterManifold(point={self.point}, max_degree={self.max_degree})"
@@ -173,13 +179,29 @@ class CenterManifold:
                     coeff_vec[pos] = 0.0
         return poly_cm
     
-    def poincare_map(self):
-        """
-        TODO: Implement Poincare map computation.
-        """
-        pass
+    def poincare_map(self, energy: float, **kwargs) -> "PoincareMap":
+        if self._poincare_map is None:
 
-    def cm2ic(self, poincare_point: np.ndarray, energy: float, section_coord: str = "q3") -> np.ndarray:
+            default_cfg = dict(
+                dt=1e-3,
+                method="symplectic",
+                n_seeds=20,
+                n_iter=1500,
+                seed_axis="q2",
+                section_coord="q3",
+                integrator_order=6,
+                c_omega_heuristic=20.0,
+                compute_on_init=True,
+                use_gpu=False,
+            )
+
+            default_cfg.update(kwargs)
+
+            cfg = poincareMapConfig(**default_cfg)
+            self._poincare_map = PoincareMap(self, energy, cfg)
+        return self._poincare_map
+
+    def ic(self, poincare_point: np.ndarray, energy: float, section_coord: str = "q3") -> np.ndarray:
         """
         Convert a single Poincaré section point (in centre-manifold coordinates)
         into full synodic initial conditions.
