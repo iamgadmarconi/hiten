@@ -3,17 +3,18 @@ from typing import Any
 import numpy as np
 
 from algorithms.center.hamiltonian import build_physical_hamiltonian
-from algorithms.center.lie import (_lie_expansion, _evaluate_transform,
+from algorithms.center.lie import (_evaluate_transform, _lie_expansion,
                                    _lie_transform)
-from algorithms.poincare.map import _solve_missing_coord
-from algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                               decode_multiindex,
-                                               init_index_tables)
-from algorithms.center.transforms import (_local2realmodal, _local2synodic,
+from algorithms.center.transforms import (_local2realmodal,
+                                          _local2synodic_collinear,
+                                          _local2synodic_triangular,
                                           _realmodal2local, solve_complex,
                                           solve_real, substitute_complex,
                                           substitute_real)
-from system.libration import CollinearPoint
+from algorithms.poincare.map import _solve_missing_coord
+from algorithms.polynomial.base import (_create_encode_dict_from_clmo,
+                                        decode_multiindex, init_index_tables)
+from system.libration.collinear import CollinearPoint
 from utils.log_config import logger
 
 
@@ -24,6 +25,8 @@ class CenterManifold:
 
         self.psi, self.clmo = init_index_tables(self.max_degree)
         self.encode_dict_list = _create_encode_dict_from_clmo(self.clmo)
+
+        self._local2synodic = _local2synodic_collinear if isinstance(self.point, CollinearPoint) else _local2synodic_triangular
 
         self._cache = {}
 
@@ -272,7 +275,7 @@ class CenterManifold:
         complex_6d = _evaluate_transform(expansions, complex_6d_cm, self.clmo)
         real_6d = solve_real(complex_6d)
         local_6d = _realmodal2local(self.point, real_6d)
-        synodic_6d = _local2synodic(self.point, local_6d)
+        synodic_6d = self._local2synodic(self.point, local_6d)
 
         logger.info("CM → synodic transformation complete")
         return synodic_6d

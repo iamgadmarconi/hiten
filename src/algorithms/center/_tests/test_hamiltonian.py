@@ -8,14 +8,14 @@ from algorithms.center.hamiltonian import (
     _build_R_polynomials, _build_T_polynomials,
     build_lindstedt_poincare_rhs_polynomials, build_physical_hamiltonian)
 from algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                               init_index_tables)
+                                        init_index_tables)
 from algorithms.polynomial.conversion import sympy2poly
 from algorithms.polynomial.operations import (polynomial_add_inplace,
-                                                     polynomial_evaluate,
-                                                     polynomial_multiply,
-                                                     polynomial_variable,
-                                                     polynomial_zero_list)
-from system.libration import L1Point
+                                              polynomial_evaluate,
+                                              polynomial_multiply,
+                                              polynomial_variable,
+                                              polynomial_zero_list)
+from system.libration.collinear import L1Point
 
 _sympy_vars = sp.symbols("x y z px py pz")
 

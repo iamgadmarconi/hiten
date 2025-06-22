@@ -3,9 +3,10 @@ from typing import Optional, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
-from algorithms.dynamics.utils.geometry import _find_y_zero_crossing, _find_z_zero_crossing
+from algorithms.dynamics.utils.geometry import (_find_y_zero_crossing,
+                                                _find_z_zero_crossing)
+from system.libration.collinear import CollinearPoint, L3Point
 from system.orbits.base import PeriodicOrbit, S, correctionConfig, orbitConfig
-from system.libration import CollinearPoint, L3Point
 from utils.log_config import logger
 
 

@@ -3,8 +3,9 @@ from typing import Literal, Optional, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
+from system.libration.collinear import (CollinearPoint, L1Point, L2Point,
+                                        L3Point)
 from system.orbits.base import PeriodicOrbit, S, correctionConfig, orbitConfig
-from system.libration import CollinearPoint, L1Point, L2Point, L3Point
 from utils.log_config import logger
 
 

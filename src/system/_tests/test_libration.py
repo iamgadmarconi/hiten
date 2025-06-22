@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
 
-from system.libration import L1Point, L2Point, L3Point, L4Point, L5Point
+from system.libration.collinear import L1Point, L2Point, L3Point
+from system.libration.triangular import L4Point, L5Point
 
 TEST_MU_EARTH_MOON = 0.01215  # Earth-Moon system
 TEST_MU_SUN_EARTH = 3.00348e-6  # Sun-Earth system

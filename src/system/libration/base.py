@@ -1,0 +1,296 @@
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Tuple
+
+import numpy as np
+
+from algorithms.dynamics.rtbp import _jacobian_crtbp, variational_dynsys
+from algorithms.dynamics.utils.energy import crtbp_energy, energy_to_jacobi
+from algorithms.dynamics.utils.linalg import eigenvalue_decomposition
+from utils.log_config import logger
+
+if TYPE_CHECKING:
+    from system.base import System
+
+# Constants for stability analysis mode
+CONTINUOUS_SYSTEM = 0
+DISCRETE_SYSTEM = 1
+
+
+@dataclass(slots=True)
+class LinearData:
+    mu: float
+    point: str        # 'L1', 'L2', 'L3'
+    lambda1: float
+    omega1: float
+    omega2: float
+    C: np.ndarray     # 6×6 symplectic transform
+    Cinv: np.ndarray  # inverse
+
+
+class LibrationPoint(ABC):
+    """
+    Abstract base class for Libration points in the CR3BP.
+    
+    This class provides the common interface and functionality for all 
+    Libration points. Specific point types (collinear, triangular) will
+    extend this class with specialized implementations.
+    
+    Parameters
+    ----------
+    mu : float
+        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+    """
+    
+    def __init__(self, system: "System"):
+        """Initialize a Libration point with the mass parameter and point index."""
+        self.system = system
+        self.mu = system.mu
+        self._position = None
+        self._stability_info = None
+        self._linear_data = None
+        self._energy = None
+        self._jacobi_constant = None
+        self._cache = {}
+        self._var_eq_system = variational_dynsys(self.mu, name=f"CR3BP Variational Equations for {self.__class__.__name__}")
+    
+    def __str__(self) -> str:
+        return f"{type(self).__name__}(mu={self.mu:.6e})"
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(mu={self.mu:.6e})"
+
+    @property
+    def idx(self) -> int:
+        pass
+
+    @property
+    def position(self) -> np.ndarray:
+        """
+        Get the position of the Libration point in the rotating frame.
+        
+        Returns
+        -------
+        ndarray
+            3D vector [x, y, z] representing the position
+        """
+        if self._position is None:
+            self._position = self._calculate_position()
+        return self._position
+    
+    @property
+    def energy(self) -> float:
+        """
+        Get the energy of the Libration point.
+        """
+        if self._energy is None:
+            self._energy = self._compute_energy()
+        return self._energy
+    
+    @property
+    def jacobi_constant(self) -> float:
+        """
+        Get the Jacobi constant of the Libration point.
+        """
+        if self._jacobi_constant is None:
+            self._jacobi_constant = self._compute_jacobi_constant()
+        return self._jacobi_constant
+    
+    @property
+    def is_stable(self) -> bool:
+        """
+        Check if the Libration point is stable.
+        """
+        if self._stability_info is None:
+            self.analyze_stability() 
+        
+        indices = self._stability_info[0] 
+        return np.all(np.abs(indices) <= 1.0 + 1e-9)
+
+    @property
+    def linear_data(self) -> LinearData:
+        """
+        Get the linear data for the Libration point.
+        """
+        if self._linear_data is None:
+            self._linear_data = self._get_linear_data()
+        return self._linear_data
+
+    def _compute_energy(self) -> float:
+        """
+        Compute the energy of the Libration point.
+        """
+        state = np.concatenate([self.position, [0, 0, 0]])
+        return crtbp_energy(state, self.mu)
+
+    def _compute_jacobi_constant(self) -> float:
+        """
+        Compute the Jacobi constant of the Libration point.
+        """
+        return energy_to_jacobi(self.energy)
+
+    def analyze_stability(self, discrete: int = CONTINUOUS_SYSTEM, delta: float = 1e-4) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Analyze the stability properties of the Libration point.
+        
+        Parameters
+        ----------
+        discrete : int, optional
+            Classification mode for eigenvalues:
+            * CONTINUOUS_SYSTEM (0): continuous-time system (classify by real part sign)
+            * DISCRETE_SYSTEM (1): discrete-time system (classify by magnitude relative to 1)
+        delta : float, optional
+            Tolerance for classification
+            
+        Returns
+        -------
+        tuple
+            (sn, un, cn, Ws, Wu, Wc) containing:
+            - sn: stable eigenvalues
+            - un: unstable eigenvalues
+            - cn: center eigenvalues
+            - Ws: eigenvectors spanning stable subspace
+            - Wu: eigenvectors spanning unstable subspace
+            - Wc: eigenvectors spanning center subspace
+        """
+        # Check cache first
+        cache_key = ('stability_analysis', discrete, delta)
+        cached = self.cache_get(cache_key)
+        if cached is not None:
+            logger.debug(f"Using cached stability analysis for {type(self).__name__}")
+            self._stability_info = cached  # Update instance variable for property access
+            return cached
+        
+        mode_str = "Continuous" if discrete == CONTINUOUS_SYSTEM else "Discrete"
+        logger.info(f"Analyzing stability for {type(self).__name__} (mu={self.mu}), mode={mode_str}, delta={delta}.")
+        pos = self.position
+        A = _jacobian_crtbp(pos[0], pos[1], pos[2], self.mu)
+        
+        logger.debug(f"Jacobian calculated at position {pos}:\n{A}")
+
+        # Perform eigenvalue decomposition and classification
+        stability_info = eigenvalue_decomposition(A, discrete, delta)
+        
+        # Cache and store in instance variable
+        self._stability_info = stability_info
+        self.cache_set(cache_key, stability_info)
+        
+        sn, un, cn, _, _, _ = stability_info
+        logger.info(f"Stability analysis complete: {len(sn)} stable, {len(un)} unstable, {len(cn)} center eigenvalues.")
+        
+        return stability_info
+
+    def cache_get(self, key) -> any:
+        """Get item from cache."""
+        return self._cache.get(key)
+    
+    def cache_set(self, key, value) -> any:
+        """Set item in cache and return the value."""
+        self._cache[key] = value
+        return value
+    
+    def cache_clear(self) -> None:
+        """Clear all cached data."""
+        self._cache.clear()
+        logger.debug(f"Cache cleared for {type(self).__name__}")
+
+    def get_center_manifold(self, max_degree: int):
+        """Return (and lazily construct) a CenterManifold of given degree.
+
+        Heavy polynomial data (Hamiltonians in multiple coordinate systems,
+        Lie generators, etc.) are cached *inside* the returned CenterManifold,
+        not in the LibrationPoint itself.
+        """
+        from algorithms.center.base import CenterManifold
+
+        if max_degree not in self._cm_registry:
+            self._cm_registry[max_degree] = CenterManifold(self, max_degree)
+        return self._cm_registry[max_degree]
+
+    def hamiltonian(self, max_deg: int) -> dict:
+        """Return all Hamiltonian representations from the associated CenterManifold.
+
+        Keys: 'physical', 'real_normal', 'complex_normal', 'normalized',
+        'center_manifold_complex', 'center_manifold_real'.
+        """
+        cm = self.get_center_manifold(max_deg)
+        cm.compute()  # ensures all representations are cached
+
+        reprs = {}
+        for label in (
+            'physical',
+            'real_normal',
+            'complex_normal',
+            'normalized',
+            'center_manifold_complex',
+            'center_manifold_real',
+        ):
+            data = cm.cache_get(('hamiltonian', max_deg, label))
+            if data is not None:
+                reprs[label] = [arr.copy() for arr in data]
+        return reprs
+
+    def generating_functions(self, max_deg: int):
+        """Return the Lie-series generating functions from CenterManifold."""
+        cm = self.get_center_manifold(max_deg)
+        cm.compute()  # ensure they exist
+        data = cm.cache_get(('generating_functions', max_deg))
+        return [] if data is None else [g.copy() for g in data]
+
+    @property
+    def eigenvalues(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Get the eigenvalues of the linearized system at the Libration point.
+        
+        Returns
+        -------
+        tuple
+            (stable_eigenvalues, unstable_eigenvalues, center_eigenvalues)
+        """
+        if self._stability_info is None:
+            self.analyze_stability() # Ensure stability is analyzed
+        sn, un, cn, _, _, _ = self._stability_info
+        return (sn, un, cn)
+    
+    @property
+    def eigenvectors(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Get the eigenvectors of the linearized system at the Libration point.
+        
+        Returns
+        -------
+        tuple
+            (stable_eigenvectors, unstable_eigenvectors, center_eigenvectors)
+        """
+        if self._stability_info is None:
+            self.analyze_stability() # Ensure stability is analyzed
+        _, _, _, Ws, Wu, Wc = self._stability_info
+        return (Ws, Wu, Wc)
+    
+    @abstractmethod
+    def _calculate_position(self) -> np.ndarray:
+        """
+        Calculate the position of the Libration point.
+        
+        This is an abstract method that must be implemented by subclasses.
+        
+        Returns
+        -------
+        ndarray
+            3D vector [x, y, z] representing the position
+        """
+        pass
+
+    @abstractmethod
+    def _get_linear_data(self) -> LinearData:
+        """
+        Get the linear data for the Libration point.
+        """
+        pass
+
+    @abstractmethod
+    def normal_form_transform(self) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Get the normal form transform for the Libration point.
+        """
+        pass
