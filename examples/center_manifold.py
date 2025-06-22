@@ -11,9 +11,8 @@ import sys
 # the script is executed from the project root.
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from algorithms.center.base import CenterManifold
-from system.base import System, systemConfig
-from system.body import Body
+from system.center import CenterManifold
+from system import Body, System, systemConfig
 from utils.constants import Constants
 from utils.log_config import logger
 from utils.printing import format_cm_table

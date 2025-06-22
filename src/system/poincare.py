@@ -20,7 +20,7 @@ from typing import List, Literal, Optional, Sequence
 import matplotlib.pyplot as plt
 import numpy as np
 
-from algorithms.center.base import CenterManifold
+from system.center import CenterManifold
 from algorithms.poincare.cuda.map import _generate_map_gpu
 from algorithms.poincare.map import PoincareSection, _generate_grid
 from algorithms.poincare.map import _generate_map as _generate_map_cpu

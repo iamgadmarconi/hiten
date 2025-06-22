@@ -116,7 +116,7 @@ class LibrationPoint(ABC):
 
     Heavy algebraic objects produced by the centre-manifold normal-form
     procedure are cached inside a dedicated
-    :pyclass:`algorithms.center.base.CenterManifold` instance to avoid memory
+    :pyclass:`system.center.CenterManifold` instance to avoid memory
     bloat.
 
     Examples
@@ -287,7 +287,7 @@ class LibrationPoint(ABC):
         Lie generators, etc.) are cached *inside* the returned CenterManifold,
         not in the LibrationPoint itself.
         """
-        from algorithms.center.base import CenterManifold
+        from system.center import CenterManifold
 
         if max_degree not in self._cm_registry:
             self._cm_registry[max_degree] = CenterManifold(self, max_degree)

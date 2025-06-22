@@ -8,7 +8,7 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from algorithms.center.base import CenterManifold
+from system.center import CenterManifold
 
 from system.base import System, systemConfig
 from system.body import Body

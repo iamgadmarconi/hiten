@@ -39,7 +39,7 @@ from utils.log_config import logger
 
 
 if TYPE_CHECKING:
-    from algorithms.poincare.base import PoincareMap
+    from system.poincare import PoincareMap
 
 
 class CenterManifold:
@@ -65,7 +65,7 @@ class CenterManifold:
     _cache : dict
         Stores intermediate polynomial objects keyed by tuples to avoid
         recomputation.
-    _poincare_map : algorithms.poincare.base.PoincareMap or None
+    _poincare_map : system.poincare.PoincareMap or None
         Lazy cached instance of the Poincaré return map.
 
     Notes
@@ -259,11 +259,11 @@ class CenterManifold:
             constant.
         **kwargs
             Optional keyword arguments forwarded to
-            :pyclass:`algorithms.poincare.base.PoincareMap`.
+            :pyclass:`system.poincare.PoincareMap`.
 
         Returns
         -------
-        algorithms.poincare.base.PoincareMap
+        system.poincare.PoincareMap
             Configured Poincaré map instance.
 
         Notes
@@ -271,7 +271,7 @@ class CenterManifold:
         The map is constructed only once and stored internally. Subsequent
         calls return the cached object.
         """
-        from algorithms.poincare.base import PoincareMap, poincareMapConfig
+        from system.poincare import PoincareMap, poincareMapConfig
 
         if self._poincare_map is None:
 

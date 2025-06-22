@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pytest
 
-from algorithms.center.base import CenterManifold
+from system.center import CenterManifold
 from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
