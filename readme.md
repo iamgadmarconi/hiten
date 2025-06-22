@@ -1,4 +1,4 @@
-# CR3BPv2 – Computational Toolkit for the Circular Restricted Three-Body Problem
+# CR3BPv2 - Computational Toolkit for the Circular Restricted Three-Body Problem
 
 ## Overview
 

@@ -8,10 +8,10 @@ import numpy as np
 from tqdm import tqdm
 
 from algorithms.dynamics.rtbp import _propagate_dynsys, compute_stm
-from algorithms.geometry import surface_of_section
-from algorithms.linalg import _totime, eigenvalue_decomposition
-from orbits.base import PeriodicOrbit
-from plots.plots import _plot_body, _set_axes_equal
+from algorithms.dynamics.utils.geometry import surface_of_section
+from algorithms.dynamics.utils.linalg import _totime, eigenvalue_decomposition
+from system.orbits.base import PeriodicOrbit
+from utils.plots import _plot_body, _set_axes_equal
 from utils.log_config import logger
 
 

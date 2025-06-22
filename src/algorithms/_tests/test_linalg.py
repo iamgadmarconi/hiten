@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from algorithms.linalg import eigenvalue_decomposition, stability_indices
+from algorithms.dynamics.utils.linalg import eigenvalue_decomposition, stability_indices
 
 
 def test_eig_decomp():

@@ -4,9 +4,9 @@ from numba.typed import List
 from numba import types
 from typing import Tuple
 
-from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
+from algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                                init_index_tables)
-from algorithms.center.polynomial.operations import (polynomial_add_inplace,
+from algorithms.polynomial.operations import (polynomial_add_inplace,
                                                      polynomial_multiply,
                                                      polynomial_variable,
                                                      polynomial_zero_list)

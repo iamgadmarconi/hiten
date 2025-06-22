@@ -2,7 +2,7 @@ import numpy as np
 from numba import get_num_threads, get_thread_id, njit, prange
 from numba.typed import List
 
-from algorithms.center.polynomial.base import (decode_multiindex,
+from algorithms.polynomial.base import (decode_multiindex,
                                                encode_multiindex,
                                                fill_exponents)
 from config import FASTMATH, N_VARS

@@ -1,7 +1,7 @@
 import numpy as np
 from numba import cuda, float64
 
-from algorithms.center.poincare.cuda.hrhs import (HamiltonianRHSEvaluatorCUDA,
+from algorithms.poincare.cuda.hrhs import (HamiltonianRHSEvaluatorCUDA,
                                                   hamiltonian_rhs_device)
 
 

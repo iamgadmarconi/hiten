@@ -4,8 +4,8 @@ import numpy as np
 import sympy as sp
 from numba.typed import List
 
-from algorithms.center.polynomial.algebra import _get_degree
-from algorithms.center.polynomial.base import (decode_multiindex,
+from algorithms.polynomial.algebra import _get_degree
+from algorithms.polynomial.base import (decode_multiindex,
                                                encode_multiindex, make_poly)
 from config import N_VARS
 

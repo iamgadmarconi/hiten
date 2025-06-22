@@ -6,7 +6,7 @@ from numba import njit, prange
 from numba.typed import List
 from scipy.optimize import root_scalar
 
-from algorithms.center.polynomial.operations import (polynomial_evaluate,
+from algorithms.polynomial.operations import (polynomial_evaluate,
                                                      polynomial_jacobian)
 from algorithms.dynamics.hamiltonian import (_eval_dH_dP, _eval_dH_dQ,
                                              _hamiltonian_rhs)

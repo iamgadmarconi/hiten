@@ -3,11 +3,11 @@ import pytest
 import sympy as sp
 
 from algorithms.center.hamiltonian import build_physical_hamiltonian
-from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
+from algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                                encode_multiindex,
                                                init_index_tables)
-from algorithms.center.polynomial.conversion import poly2sympy, sympy2poly
-from algorithms.center.polynomial.operations import (
+from algorithms.polynomial.conversion import poly2sympy, sympy2poly
+from algorithms.polynomial.operations import (
     _linear_variable_polys, polynomial_add_inplace, polynomial_multiply,
     polynomial_poisson_bracket, polynomial_power, polynomial_variable,
     polynomial_zero_list)

@@ -2,12 +2,12 @@ import numpy as np
 import pytest
 from numba.typed import List
 
-from algorithms.center.polynomial.base import (CLMO_GLOBAL, ENCODE_DICT_GLOBAL,
+from algorithms.polynomial.base import (CLMO_GLOBAL, ENCODE_DICT_GLOBAL,
                                                PSI_GLOBAL,
                                                _create_encode_dict_from_clmo,
                                                encode_multiindex,
                                                init_index_tables)
-from algorithms.center.polynomial.operations import (
+from algorithms.polynomial.operations import (
     polynomial_add_inplace, polynomial_clean, polynomial_degree,
     polynomial_differentiate, polynomial_evaluate, polynomial_jacobian,
     polynomial_multiply, polynomial_poisson_bracket, polynomial_power,

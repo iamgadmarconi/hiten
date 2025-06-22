@@ -1,10 +1,10 @@
 import numpy as np
 from numba.typed import List
 
-from algorithms.center.polynomial.base import _create_encode_dict_from_clmo
-from algorithms.center.polynomial.coordinates import (_clean_coordinates,
+from algorithms.polynomial.base import _create_encode_dict_from_clmo
+from algorithms.polynomial.coordinates import (_clean_coordinates,
                                                       _substitute_coordinates)
-from algorithms.center.polynomial.operations import (polynomial_clean,
+from algorithms.polynomial.operations import (polynomial_clean,
                                                      substitute_linear)
 from utils.log_config import logger
 

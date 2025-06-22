@@ -3,10 +3,10 @@ import pytest
 import sympy as sp
 from numba.typed import List
 
-from algorithms.center.polynomial.base import (CLMO_GLOBAL, ENCODE_DICT_GLOBAL,
+from algorithms.polynomial.base import (CLMO_GLOBAL, ENCODE_DICT_GLOBAL,
                                                PSI_GLOBAL, encode_multiindex,
                                                make_poly)
-from algorithms.center.polynomial.conversion import poly2sympy, sympy2poly
+from algorithms.polynomial.conversion import poly2sympy, sympy2poly
 from config import N_VARS
 
 s_vars = list(sp.symbols(f'x_0:{N_VARS}'))

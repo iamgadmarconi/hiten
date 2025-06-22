@@ -3,7 +3,7 @@ from typing import Literal, Optional, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
-from orbits.base import PeriodicOrbit, S, correctionConfig, orbitConfig
+from system.orbits.base import PeriodicOrbit, S, correctionConfig, orbitConfig
 from system.libration import CollinearPoint, L1Point, L2Point, L3Point
 from utils.log_config import logger
 
@@ -21,7 +21,7 @@ class HaloOrbit(PeriodicOrbit):
                 self.Az = config.extra_params['Az']
                 self.Zenith = config.extra_params['Zenith']
             except KeyError:
-                err = "Halo orbits require an 'Az' (z-amplitude) parameter and a 'Zenith' parameter ('northern' or 'southern') OR an initial state."
+                err = "Halo system.orbits require an 'Az' (z-amplitude) parameter and a 'Zenith' parameter ('northern' or 'southern') OR an initial state."
                 logger.error(err)
                 raise ValueError(err)
         else:
@@ -41,7 +41,7 @@ class HaloOrbit(PeriodicOrbit):
             raise TypeError(msg)
 
         if isinstance(self.libration_point, L3Point):
-            logger.warning("Must supply initial state for L3 halo orbits.")
+            logger.warning("Must supply initial state for L3 halo system.orbits.")
 
     def _initial_guess(self) -> NDArray[np.float64]:
         """
@@ -73,7 +73,7 @@ class HaloOrbit(PeriodicOrbit):
             won = +1
             primary = -mu
         else:
-            raise ValueError(f"Halo orbits only supported for L1, L2, L3 (got L{self.libration_point})")
+            raise ValueError(f"Halo system.orbits only supported for L1, L2, L3 (got L{self.libration_point})")
         
         # Set n for northern/southern family
         n = 1 if self.Zenith == "northern" else -1

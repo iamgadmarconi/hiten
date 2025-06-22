@@ -7,11 +7,11 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from algorithms.center.base import CenterManifold
-from algorithms.center.poincare.cuda.map import _generate_map_gpu
-from algorithms.center.poincare.map import _generate_grid, PoincareSection
-from algorithms.center.poincare.map import _generate_map as _generate_map_cpu
-from orbits.base import GenericOrbit, orbitConfig
-from plots.plots import _set_dark_mode
+from algorithms.poincare.cuda.map import _generate_map_gpu
+from algorithms.poincare.map import _generate_grid, PoincareSection
+from algorithms.poincare.map import _generate_map as _generate_map_cpu
+from system.orbits.base import GenericOrbit, orbitConfig
+from utils.plots import _set_dark_mode
 from utils.log_config import logger
 
 

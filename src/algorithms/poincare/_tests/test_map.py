@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from algorithms.center.base import CenterManifold
-from algorithms.center.poincare.base import PoincareMap, poincareMapConfig
+from algorithms.poincare.base import PoincareMap, poincareMapConfig
 from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants

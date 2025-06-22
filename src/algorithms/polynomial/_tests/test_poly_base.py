@@ -5,7 +5,7 @@ import pytest
 from numba import types
 from numba.typed import Dict, List
 
-from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
+from algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                                decode_multiindex,
                                                encode_multiindex,
                                                init_index_tables, make_poly)

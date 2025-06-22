@@ -2,7 +2,7 @@
 import numpy as np
 from numba import complex128, cuda, float64
 
-from algorithms.center.polynomial.cuda.evaluate import (
+from algorithms.polynomial.cuda.evaluate import (
     CUDAEvaluate, poly_evaluate_degree_device)
 
 

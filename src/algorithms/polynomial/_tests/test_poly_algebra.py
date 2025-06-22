@@ -1,13 +1,13 @@
 import numpy as np
 import pytest
 
-from algorithms.center.polynomial.algebra import (_get_degree, _poly_add,
+from algorithms.polynomial.algebra import (_get_degree, _poly_add,
                                                   _poly_clean,
                                                   _poly_clean_inplace,
                                                   _poly_diff, _poly_evaluate,
                                                   _poly_mul, _poly_poisson,
                                                   _poly_scale)
-from algorithms.center.polynomial.base import (ENCODE_DICT_GLOBAL,
+from algorithms.polynomial.base import (ENCODE_DICT_GLOBAL,
                                                decode_multiindex,
                                                encode_multiindex,
                                                init_index_tables, make_poly)

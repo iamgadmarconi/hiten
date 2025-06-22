@@ -3,9 +3,9 @@ from typing import List, Tuple
 
 import numpy as np
 
-from algorithms.center.poincare.cuda.step import PoincareMapCUDA
-from algorithms.center.poincare.map import _find_turning, _solve_missing_coord, section_closure, PoincareSection
-from algorithms.center.polynomial.operations import polynomial_jacobian
+from algorithms.poincare.cuda.step import PoincareMapCUDA
+from algorithms.poincare.map import _find_turning, _solve_missing_coord, section_closure, PoincareSection
+from algorithms.polynomial.operations import polynomial_jacobian
 from utils.log_config import logger
 
 

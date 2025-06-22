@@ -2,11 +2,11 @@ import numpy as np
 from numba import njit, prange
 from numba.typed import List
 
-from algorithms.center.polynomial.algebra import (_get_degree, _poly_clean,
+from algorithms.polynomial.algebra import (_get_degree, _poly_clean,
                                                   _poly_diff, _poly_evaluate,
                                                   _poly_integrate, _poly_mul,
                                                   _poly_poisson)
-from algorithms.center.polynomial.base import (decode_multiindex,
+from algorithms.polynomial.base import (decode_multiindex,
                                                encode_multiindex, make_poly)
 from config import FASTMATH, N_VARS
 

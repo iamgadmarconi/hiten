@@ -3,8 +3,8 @@ from typing import Optional, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
-from algorithms.geometry import _find_y_zero_crossing, _find_z_zero_crossing
-from orbits.base import PeriodicOrbit, S, correctionConfig, orbitConfig
+from algorithms.dynamics.utils.geometry import _find_y_zero_crossing, _find_z_zero_crossing
+from system.orbits.base import PeriodicOrbit, S, correctionConfig, orbitConfig
 from system.libration import CollinearPoint, L3Point
 from utils.log_config import logger
 
@@ -27,7 +27,7 @@ class LyapunovOrbit(PeriodicOrbit):
             raise TypeError(msg)
 
         if isinstance(self.libration_point, L3Point):
-            msg = "L3 libration points are not supported for Lyapunov orbits."
+            msg = "L3 libration points are not supported for Lyapunov system.orbits."
             logger.error(msg)
             raise NotImplementedError(msg)
 
@@ -85,13 +85,13 @@ class LyapunovOrbit(PeriodicOrbit):
         return super().differential_correction(cfg, **kw)
 
     def eccentricity(self) -> float:
-        """Eccentricity is not typically defined for Lyapunov orbits.
+        """Eccentricity is not typically defined for Lyapunov system.orbits.
         
         Raises
         ------
         NotImplementedError
         """
-        raise NotImplementedError("Eccentricity is not implemented for Lyapunov orbits.")
+        raise NotImplementedError("Eccentricity is not implemented for Lyapunov system.orbits.")
 
 
 class VerticalLyapunovOrbit(PeriodicOrbit):
@@ -100,7 +100,7 @@ class VerticalLyapunovOrbit(PeriodicOrbit):
         super().__init__(config, initial_state)
 
     def _initial_guess(self) -> NDArray[np.float64]:
-        raise NotImplementedError("Initial guess is not implemented for Vertical Lyapunov orbits.")
+        raise NotImplementedError("Initial guess is not implemented for Vertical Lyapunov system.orbits.")
 
     @staticmethod
     def _extra_jacobian(_: np.ndarray, __: np.ndarray) -> np.ndarray:
@@ -126,5 +126,5 @@ class VerticalLyapunovOrbit(PeriodicOrbit):
         )
 
     def eccentricity(self) -> float:
-        """Eccentricity is not defined for Vertical Lyapunov orbits."""
+        """Eccentricity is not defined for Vertical Lyapunov system.orbits."""
         return np.nan

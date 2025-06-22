@@ -1,15 +1,15 @@
 import numpy as np
 import pytest
 
-from orbits.base import orbitConfig
-from orbits.halo import HaloOrbit
+from system.orbits.base import orbitConfig
+from system.orbits.lyapunov import LyapunovOrbit
 from system.base import System, systemConfig
 from system.body import Body
 from utils.constants import Constants
 
 
 @pytest.fixture
-def system():   
+def system():
     earth_mass = Constants.get_mass("earth")
     earth_radius = Constants.get_radius("earth")
     moon_mass = Constants.get_mass("moon")
@@ -25,33 +25,36 @@ def system():
 def l1_orbit(system):
     config = orbitConfig(
         system=system,
-        orbit_family="halo",
+        orbit_family="lyapunov",
         libration_point_idx=1,
-        extra_params={"Az": 0.2, "Zenith": "Southern"}
+        extra_params={"Ax": 4e-3}
     )
-    return HaloOrbit(config)
+    return LyapunovOrbit(config)
 
 @pytest.fixture
 def l2_orbit(system):
     config = orbitConfig(
         system=system,
-        orbit_family="halo",
+        orbit_family="lyapunov",
         libration_point_idx=2,
-        extra_params={"Az": 0.2, "Zenith": "Southern"}
+        extra_params={"Ax": 4e-3}
     )
-    return HaloOrbit(config)
+    return LyapunovOrbit(config)
 
-def test_halo_orbit_ic(l1_orbit, l2_orbit):
+def test_lyapunov_orbit_ic(l1_orbit, l2_orbit):
     assert l1_orbit.initial_state.shape == (6,), "Initial state should be a 6-element vector"
     assert l2_orbit.initial_state.shape == (6,), "Initial state should be a 6-element vector"
     
     l1_position = l1_orbit.libration_point.position[0]
-    assert l1_orbit.initial_state[0] < l1_position, f"L1 orbit x ({l1_orbit.initial_state[0]}) should be less than L1 position ({l1_position})"
+    assert abs(l1_orbit.initial_state[0] - l1_position) < 0.1, f"L1 orbit x ({l1_orbit.initial_state[0]}) should be near L1 position ({l1_position})"
     
     l2_position = l2_orbit.libration_point.position[0]
     assert abs(l2_orbit.initial_state[0] - l2_position) < 0.1, f"L2 orbit x ({l2_orbit.initial_state[0]}) should be within 0.1 of L2 position ({l2_position})"
+    
+    assert abs(l1_orbit.initial_state[1]) < 1e-10, "Y coordinate should be approximately zero for planar Lyapunov orbit"
+    assert abs(l2_orbit.initial_state[1]) < 1e-10, "Y coordinate should be approximately zero for planar Lyapunov orbit"
 
-def test_halo_differential_correction(l1_orbit):
+def test_lyapunov_differential_correction(l1_orbit):
     initial_state_before = l1_orbit.initial_state.copy()
     
     l1_orbit.differential_correction()
@@ -59,8 +62,10 @@ def test_halo_differential_correction(l1_orbit):
     assert not np.array_equal(l1_orbit.initial_state, initial_state_before), "Initial state should change after correction"
     
     assert l1_orbit.period > 0, "Period should be positive after correction"
+    
+    assert abs(l1_orbit.initial_state[1]) < 1e-10, "Y coordinate should still be approximately zero after correction"
 
-def test_halo_orbit_propagation(l1_orbit):
+def test_lyapunov_orbit_propagation(l1_orbit):
     l1_orbit.differential_correction()
     l1_orbit.propagate()
     
@@ -74,7 +79,7 @@ def test_halo_orbit_propagation(l1_orbit):
     position_close = np.allclose(final_state[:3], initial_state[:3], rtol=1e-2, atol=1e-2)
     assert position_close, "Trajectory should approximately return to initial position after one period"
 
-def test_halo_orbit_stability(l1_orbit):
+def test_lyapunov_orbit_stability(l1_orbit):
     l1_orbit.differential_correction()
     l1_orbit.propagate()
     l1_orbit.compute_stability()
@@ -93,7 +98,7 @@ def test_halo_orbit_stability(l1_orbit):
     assert isinstance(is_unstable, bool), "is_unstable should be convertible to a boolean"
     assert is_stable != is_unstable, "An orbit should be either stable or unstable, not both"
 
-def test_halo_base_class(l1_orbit):
+def test_lyapunov_base_class(l1_orbit):
     l1_orbit.differential_correction()
     l1_orbit.propagate()
     l1_orbit.compute_stability()

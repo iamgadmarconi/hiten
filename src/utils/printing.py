@@ -2,7 +2,7 @@ from typing import List
 
 import numpy as np
 
-from algorithms.center.polynomial.base import decode_multiindex
+from algorithms.polynomial.base import decode_multiindex
 
 
 def _monomial_to_string(exps: tuple[int, ...]) -> str:

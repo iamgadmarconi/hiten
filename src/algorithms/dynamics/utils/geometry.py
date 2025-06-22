@@ -44,7 +44,7 @@ def _find_y_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], for
     2. Then using a root-finding method to precisely locate the crossing time
     
     This hybrid approach is more efficient than using a very fine integration
-    time step, especially for orbits with long periods.
+    time step, especially for system.orbits with long periods.
     """
     logger.debug(f"Entering _find_y_zero_crossing with x0={x0}, forward={forward}")
     t0_z = np.pi/2 - 0.15
@@ -126,7 +126,7 @@ def _find_x_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], for
     2. Then using a root-finding method to precisely locate the crossing time
     
     This hybrid approach is more efficient than using a very fine integration
-    time step, especially for orbits with long periods.
+    time step, especially for system.orbits with long periods.
     """
     logger.debug(f"Entering _find_x_zero_crossing with x0={x0}, forward={forward}")
     t0_z = np.pi/2 - 0.15
@@ -208,7 +208,7 @@ def _find_z_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], for
     2. Then using a root-finding method to precisely locate the crossing time
     
     This hybrid approach is more efficient than using a very fine integration
-    time step, especially for orbits with long periods.
+    time step, especially for system.orbits with long periods.
     """
     logger.debug(f"Entering _find_z_zero_crossing with x0={x0}, forward={forward}")
     t0_z = np.pi/2 - 0.15

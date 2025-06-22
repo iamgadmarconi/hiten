@@ -1,11 +1,11 @@
 import numpy as np
 import pytest
 
-from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
+from algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                                decode_multiindex,
                                                encode_multiindex,
                                                init_index_tables, make_poly)
-from algorithms.center.polynomial.cuda.evaluate import CUDAEvaluate
+from algorithms.polynomial.cuda.evaluate import CUDAEvaluate
 from config import N_VARS
 
 TEST_MAX_DEG = 5

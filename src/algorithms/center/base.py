@@ -5,8 +5,8 @@ import numpy as np
 from algorithms.center.hamiltonian import build_physical_hamiltonian
 from algorithms.center.lie import (_lie_expansion, _evaluate_transform,
                                    _lie_transform)
-from algorithms.center.poincare.map import _solve_missing_coord
-from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
+from algorithms.poincare.map import _solve_missing_coord
+from algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                                decode_multiindex,
                                                init_index_tables)
 from algorithms.center.transforms import (_local2realmodal, _local2synodic,

@@ -2,10 +2,10 @@ import numpy as np
 from numba import njit
 from numba.typed import List
 
-from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
+from algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                                _factorial, decode_multiindex,
                                                make_poly)
-from algorithms.center.polynomial.operations import (
+from algorithms.polynomial.operations import (
     polynomial_clean, polynomial_evaluate, polynomial_poisson_bracket,
     polynomial_total_degree, polynomial_zero_list)
 from config import FASTMATH
