@@ -174,9 +174,12 @@ cython_debug/
 .pypirc
 
 ._deprecated/
-Dynamics in the Center Manifold of the Collinear Points of the RTBP.pdf
-results/
-.results/
-.results
+
+# Ignore everything in results except plots (allow folder structure)
+results/**
+!results/
+!results/plots/
+!results/plots/**
+!results/**/.gitkeep
+
 .cursor/
-refernce.py
