@@ -1,4 +1,4 @@
-"""
+r"""
 polynomial.conversion
 =====================
 
@@ -26,7 +26,7 @@ from utils.config import N_VARS
 
 
 def poly2sympy(poly_p: List[np.ndarray], vars_list: typing.List[sp.Symbol], psi: np.ndarray, clmo: np.ndarray) -> sp.Expr:
-    """
+    r"""
     Convert a polynomial represented as a list of coefficient arrays to a SymPy expression.
     
     Parameters
@@ -68,7 +68,7 @@ def poly2sympy(poly_p: List[np.ndarray], vars_list: typing.List[sp.Symbol], psi:
 
 
 def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray, clmo: np.ndarray, encode_dict_list: List) -> List[np.ndarray]:
-    """
+    r"""
     Convert a SymPy expression to a polynomial represented as a list of coefficient arrays.
     
     Parameters
@@ -207,7 +207,7 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray
 
 
 def hpoly2sympy(p: np.ndarray, vars_list: typing.List[sp.Symbol], psi: np.ndarray, clmo: np.ndarray) -> sp.Expr:
-    """
+    r"""
     Convert a homogeneous polynomial coefficient array to a SymPy expression.
     
     Parameters

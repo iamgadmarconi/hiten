@@ -1,4 +1,4 @@
-"""
+r"""
 polynomial.base
 ===============
 
@@ -30,7 +30,7 @@ from utils.config import FASTMATH, N_VARS
 
 @njit(fastmath=FASTMATH,cache=True)
 def _factorial(n: int) -> int:
-    """
+    r"""
     Calculate the factorial of a non-negative integer.
     
     Parameters
@@ -41,7 +41,7 @@ def _factorial(n: int) -> int:
     Returns
     -------
     int
-        The factorial n! = n * (n-1) * ... * 2 * 1
+        The factorial :math:`n! = n * (n-1) * ... * 2 * 1`
         
     Notes
     -----
@@ -56,8 +56,8 @@ def _factorial(n: int) -> int:
 
 @njit(fastmath=FASTMATH, cache=True)
 def _combinations(n: int, k: int) -> int:
-    """
-    Calculate the binomial coefficient C(n,k) = n! / (k! * (n-k)!).
+    r"""
+    Calculate the binomial coefficient :math:`C(n,k) = n! / (k! * (n-k)!)`.
     
     Parameters
     ----------
@@ -70,7 +70,7 @@ def _combinations(n: int, k: int) -> int:
     -------
     int
         The number of ways to choose k items from n items,
-        which equals n! / (k! * (n-k)!)
+        which equals :math:`n! / (k! * (n-k)!)`
         
     Notes
     -----
@@ -93,7 +93,7 @@ def _combinations(n: int, k: int) -> int:
 
 @njit(fastmath=FASTMATH,cache=True)
 def init_index_tables(max_degree: int):
-    """
+    r"""
     Initialize lookup tables for polynomial multi-index encoding and decoding.
     
     This function creates two data structures essential for polynomial operations:
@@ -118,8 +118,8 @@ def init_index_tables(max_degree: int):
         
     Notes
     -----
-    The packing scheme allocates 6 bits for each variable x_1 through x_5,
-    with x_0's exponent implicitly determined by the total degree.
+    The packing scheme allocates 6 bits for each variable :math:`x_1` through :math:`x_5`,
+    with :math:`x_0`'s exponent implicitly determined by the total degree.
     """
     psi = np.zeros((N_VARS+1, max_degree+1), dtype=np.int64)
     for i_vars_count in range(1, N_VARS+1):
@@ -181,7 +181,7 @@ for clmo_arr in CLMO_GLOBAL:
 
 @njit(fastmath=FASTMATH, cache=True)
 def pack_multiindex(k: np.ndarray) -> np.uint32:
-    """
+    r"""
     Pack the exponents k_1 through k_5 into a 32-bit integer.
     
     Parameters
@@ -216,7 +216,7 @@ def pack_multiindex(k: np.ndarray) -> np.uint32:
 
 @njit(fastmath=FASTMATH, cache=True)
 def decode_multiindex(pos: int, degree: int, clmo) -> np.ndarray:
-    """
+    r"""
     Decode a packed multi-index from its position in the lookup table.
     
     Parameters
@@ -267,7 +267,7 @@ def fill_exponents(pos, degree, clmo, out):
 
 @njit(fastmath=FASTMATH, cache=True)
 def encode_multiindex(k: np.ndarray, degree: int, encode_dict_list: List) -> int:
-    """
+    r"""
     Encode a multi-index to find its position in the coefficient array.
     
     Parameters
@@ -309,7 +309,7 @@ def encode_multiindex(k: np.ndarray, degree: int, encode_dict_list: List) -> int
 
 @njit(fastmath=FASTMATH, cache=True)
 def make_poly(degree: int, psi) -> np.ndarray:
-    """
+    r"""
     Create a new polynomial coefficient array of specified degree with complex128 dtype.
     
     Parameters
@@ -338,7 +338,7 @@ def make_poly(degree: int, psi) -> np.ndarray:
 # Helper to create encode_dict_list from clmo_table
 @njit(fastmath=FASTMATH, cache=True)
 def _create_encode_dict_from_clmo(clmo_table: List) -> List:
-    """
+    r"""
     Create a list of dictionaries mapping packed multi-indices to their positions.
     
     Parameters

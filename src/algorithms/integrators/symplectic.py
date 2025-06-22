@@ -1,4 +1,4 @@
-"""
+r"""
 algorithms.integrators.symplectic
 ================================
 
@@ -39,7 +39,7 @@ P_POLY_INDICES = np.array([3, 4, 5], dtype=np.int64)
 
 @njit(fastmath=FASTMATH, cache=True)
 def _get_tao_omega (delta: float, order: int, c: float = 10.0) -> float:
-    """
+    r"""
     Calculate the frequency parameter for the symplectic integrator.
     
     Parameters
@@ -66,7 +66,7 @@ def _get_tao_omega (delta: float, order: int, c: float = 10.0) -> float:
 
 @njit(cache=True, fastmath=FASTMATH)
 def _construct_6d_eval_point(Q_current_ndof: np.ndarray, P_current_ndof: np.ndarray) -> np.ndarray:
-    """
+    r"""
     Construct a 6D evaluation point from N-DOF position and momentum vectors.
     Assumes N_SYMPLECTIC_DOF is 3 for this specific 6D polynomial evaluation context.
     
@@ -111,7 +111,7 @@ def _eval_dH_dQ(
     jac_H: List[List[np.ndarray]],
     clmo_H: List[np.ndarray]
 ) -> np.ndarray:
-    """
+    r"""
     Evaluate derivatives of Hamiltonian with respect to generalized position variables.
     
     Parameters
@@ -149,7 +149,7 @@ def _eval_dH_dP(
     jac_H: List[List[np.ndarray]],
     clmo_H: List[np.ndarray]
 ) -> np.ndarray:
-    """
+    r"""
     Evaluate derivatives of Hamiltonian with respect to generalized momentum variables.
 
     Parameters
@@ -187,7 +187,7 @@ def _phi_H_a_update_poly(
     jac_H: List[List[np.ndarray]], 
     clmo_H: List[np.ndarray]
     ):
-    """
+    r"""
     Apply the first Hamiltonian splitting operator (φₐ) in the symplectic scheme.
     
     Parameters
@@ -231,7 +231,7 @@ def _phi_H_b_update_poly(
     jac_H: List[List[np.ndarray]], 
     clmo_H: List[np.ndarray]
     ):
-    """
+    r"""
     Apply the second Hamiltonian splitting operator (φᵦ) in the symplectic scheme.
     
     Parameters
@@ -270,7 +270,7 @@ def _phi_H_b_update_poly(
 
 @njit(cache=True, fastmath=FASTMATH)
 def _phi_omega_H_c_update_poly(q_ext: np.ndarray, delta: float, omega: float):
-    """
+    r"""
     Apply the rotation operator (φᶜ) in the symplectic scheme.
     
     Parameters
@@ -328,7 +328,7 @@ def _recursive_update_poly(
     jac_H: List[List[np.ndarray]], 
     clmo_H: List[np.ndarray]
     ):
-    """
+    r"""
     Apply recursive symplectic update of specified order.
     
     Parameters
@@ -383,7 +383,7 @@ def integrate_symplectic(
     order: int,
     c_omega_heuristic: float = 20.0
     ) -> np.ndarray:
-    """
+    r"""
     Integrate Hamilton's equations using a high-order symplectic integrator
     for a system with N_SYMPLECTIC_DOF degrees of freedom (e.g., 3 DOF for a 6D phase space).
     
@@ -468,7 +468,7 @@ def integrate_symplectic(
 
 
 class TaoSymplectic(Integrator):
-    """
+    r"""
     High-order explicit Tao symplectic integrator for polynomial
     Hamiltonian systems.
 
@@ -521,11 +521,13 @@ class TaoSymplectic(Integrator):
     
     @property
     def order(self) -> int:
-        """Order of accuracy of the symplectic method."""
+        r"""
+        Order of accuracy of the symplectic method.
+        """
         return self._order
     
     def validate_system(self, system: _DynamicalSystem) -> None:
-        """
+        r"""
         Validate that the system is compatible with symplectic integration.
         
         Parameters
@@ -563,7 +565,7 @@ class TaoSymplectic(Integrator):
         t_vals: np.ndarray,
         **kwargs
     ) -> Solution:
-        """
+        r"""
         Integrate the Hamiltonian system using symplectic method.
         
         Parameters

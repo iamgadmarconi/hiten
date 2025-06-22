@@ -1,4 +1,4 @@
-"""
+r"""
 center.transforms
 =================
 
@@ -26,7 +26,8 @@ from utils.log_config import logger
 
 
 def M() -> np.ndarray:
-    """Return the linear map from complex modal to real modal coordinates.
+    r"""
+    Return the linear map from complex modal to real modal coordinates.
 
     Returns
     -------
@@ -47,7 +48,8 @@ def M() -> np.ndarray:
         [0, 0, 1j/np.sqrt(2), 0, 0, 1/np.sqrt(2)]], dtype=np.complex128) #  real = M @ complex
 
 def M_inv() -> np.ndarray:
-    """Return the inverse transformation :math:`M^{-1}`.
+    r"""
+    Return the inverse transformation :math:`M^{-1}`.
 
     Returns
     -------
@@ -58,7 +60,7 @@ def M_inv() -> np.ndarray:
     return np.linalg.inv(M()) # complex = M_inv @ real
 
 def substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
-    """
+    r"""
     Transform a polynomial from real normal form to complex normal form.
     
     Parameters
@@ -87,7 +89,7 @@ def substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> Li
     return polynomial_clean(substitute_linear(poly_rn, M(), max_deg, psi, clmo, encode_dict_list), 1e-14)
 
 def substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
-    """
+    r"""
     Transform a polynomial from complex normal form to real normal form.
     
     Parameters
@@ -116,7 +118,7 @@ def substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[
     return polynomial_clean(substitute_linear(poly_cn, M_inv(), max_deg, psi, clmo, encode_dict_list), 1e-14)
 
 def solve_complex(real_coords: np.ndarray) -> np.ndarray:
-    """
+    r"""
     Return complex coordinates given real coordinates using the map `M_inv`.
 
     Parameters
@@ -132,7 +134,7 @@ def solve_complex(real_coords: np.ndarray) -> np.ndarray:
     return _clean_coordinates(_substitute_coordinates(real_coords, M_inv())) # [q1c, q2c, q3c, p1c, p2c, p3c]
 
 def solve_real(real_coords: np.ndarray) -> np.ndarray:
-    """
+    r"""
     Return real coordinates given complex coordinates using the map `M`.
 
     Parameters
@@ -148,7 +150,7 @@ def solve_real(real_coords: np.ndarray) -> np.ndarray:
     return _clean_coordinates(_substitute_coordinates(real_coords, M())) # [q1r, q2r, q3r, p1r, p2r, p3r]
 
 def _local2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
-    """
+    r"""
     Transform a polynomial from local frame to real modal frame.
     
     Parameters
@@ -180,7 +182,7 @@ def _local2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi, clm
     return substitute_linear(poly_local, C, max_deg, psi, clmo, encode_dict_list)
 
 def _realmodal2local(point, modal_coords: np.ndarray) -> np.ndarray:
-    """
+    r"""
     Transform coordinates from real modal to local frame.
     
     Parameters
@@ -204,7 +206,7 @@ def _realmodal2local(point, modal_coords: np.ndarray) -> np.ndarray:
     return _clean_coordinates(C.dot(modal_coords))
 
 def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray) -> np.ndarray:
-    """
+    r"""
     Transform coordinates from local to synodic frame for the collinear points.
 
     Parameters
@@ -269,7 +271,7 @@ def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray) ->
     return syn
 
 def _local2synodic_triangular(point: TriangularPoint, local_coords: np.ndarray) -> np.ndarray:
-    """
+    r"""
     Transform coordinates from local to synodic frame for the equilateral points.
     
     Parameters

@@ -1,4 +1,4 @@
-"""
+r"""
 system.orbits.lyapunov
 ======================
 
@@ -28,7 +28,8 @@ from utils.log_config import logger
 
 
 class LyapunovOrbit(PeriodicOrbit):
-    """Planar Lyapunov family around a collinear libration point.
+    r"""
+    Planar Lyapunov family around a collinear libration point.
 
     The orbit lies in the :math:`(x, y)` plane and is symmetric with respect to
     the :math:`x`-axis.  A linear analytical approximation is used to build the
@@ -83,7 +84,8 @@ class LyapunovOrbit(PeriodicOrbit):
             raise NotImplementedError(msg)
 
     def _initial_guess(self) -> NDArray[np.float64]:
-        """Return an analytical first guess for the planar Lyapunov orbit.
+        r"""
+        Return an analytical first guess for the planar Lyapunov orbit.
 
         The guess is derived from the linearised equations of motion around the
         collinear point.  Given the user-supplied amplitude :math:`A_x`, the
@@ -149,15 +151,6 @@ class LyapunovOrbit(PeriodicOrbit):
         return state_6d
 
     def differential_correction(self, **kw):
-        """Refine the initial guess using a single-shooting corrector.
-
-        The routine enforces the symmetry conditions ``VX = 0`` at
-        :pyfunc:`_find_y_zero_crossing` and ``Z = 0`` at the initial epoch by
-        adjusting the initial velocities ``VZ`` and ``VY``.
-
-        Other parameters are forwarded to
-        :pyfunc:`PeriodicOrbit.differential_correction`.
-        """
         cfg = correctionConfig(
             residual_indices=(S.VX, S.Z),
             control_indices=(S.VZ, S.VY),
@@ -168,18 +161,12 @@ class LyapunovOrbit(PeriodicOrbit):
         return super().differential_correction(cfg, **kw)
 
     def eccentricity(self) -> float:
-        """Eccentricity is undefined for planar Lyapunov orbits.
-
-        Raises
-        ------
-        NotImplementedError
-            Always raised when the method is called.
-        """
         raise NotImplementedError("Eccentricity is not implemented for Lyapunov system.orbits.")
 
 
 class VerticalLyapunovOrbit(PeriodicOrbit):
-    """Vertical Lyapunov family about a collinear libration point.
+    r"""
+    Vertical Lyapunov family about a collinear libration point.
 
     The orbit oscillates out of the synodic plane and is symmetric with
     respect to the :math:`x`-:math:`z` plane.  Initial-guess generation is not
@@ -202,13 +189,6 @@ class VerticalLyapunovOrbit(PeriodicOrbit):
         super().__init__(config, initial_state)
 
     def _initial_guess(self) -> NDArray[np.float64]:
-        """Generate a first guess for the vertical Lyapunov orbit.
-
-        Raises
-        ------
-        NotImplementedError
-            Always raised because the method is not implemented.
-        """
         raise NotImplementedError("Initial guess is not implemented for Vertical Lyapunov system.orbits.")
 
     @staticmethod
@@ -222,22 +202,6 @@ class VerticalLyapunovOrbit(PeriodicOrbit):
         max_attempts: int = 25,
         forward: int = 1,
     ):
-        """Refine the vertical Lyapunov seed by differential correction.
-
-        Parameters
-        ----------
-        tol : float, optional
-            Absolute convergence tolerance.  Default is ``1e-10``.
-        max_attempts : int, optional
-            Maximum number of Newton iterations.  Default is ``25``.
-        forward : int, optional
-            Integration direction, ``+1`` or ``-1``.  Default is ``+1``.
-
-        Returns
-        -------
-        Any
-            Output of :pyfunc:`PeriodicOrbit.differential_correction`.
-        """
         cfg = correctionConfig(
             residual_indices=(S.VX, S.Y),     # Want VX=0 and Y=0
             control_indices=(S.VZ, S.VY),     # Adjust initial VZ and VY
@@ -251,11 +215,4 @@ class VerticalLyapunovOrbit(PeriodicOrbit):
         )
 
     def eccentricity(self) -> float:
-        """Eccentricity is not defined for vertical Lyapunov orbits.
-
-        Returns
-        -------
-        float
-            Not-a-number (``numpy.nan``).
-        """
         return np.nan

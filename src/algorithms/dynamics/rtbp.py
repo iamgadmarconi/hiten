@@ -1,4 +1,4 @@
-"""
+r"""
 algorithms.dynamics.rtbp
 ========================
 
@@ -149,7 +149,8 @@ def _var_equations(t, PHI_vec, mu):
 
 
 def compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy", order=8):
-    """Propagate the state-transition matrix (STM).
+    r"""
+    Propagate the state-transition matrix (STM).
 
     Parameters
     ----------
@@ -216,7 +217,8 @@ def compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["scipy", 
 
 
 def monodromy_matrix(dynsys, x0, period):
-    """Return the monodromy matrix of a periodic CR3BP orbit.
+    r"""
+    Return the monodromy matrix of a periodic CR3BP orbit.
 
     Parameters
     ----------
@@ -237,7 +239,8 @@ def monodromy_matrix(dynsys, x0, period):
 
 
 def stability_indices(monodromy):
-    """Compute the classical linear stability indices.
+    r"""
+    Compute the classical linear stability indices.
 
     Parameters
     ----------
@@ -264,7 +267,8 @@ def stability_indices(monodromy):
 
 
 class JacobianRHS(_DynamicalSystem):
-    """Right-hand side returning the Jacobian matrix of the CR3BP.
+    r"""
+    Right-hand side returning the Jacobian matrix of the CR3BP.
 
     Parameters
     ----------
@@ -305,7 +309,8 @@ class JacobianRHS(_DynamicalSystem):
 
 
 class VariationalEquationsRHS(_DynamicalSystem):
-    """Variational equations of the CR3BP (42-dimensional system).
+    r"""
+    Variational equations of the CR3BP (42-dimensional system).
 
     Parameters
     ----------
@@ -341,7 +346,8 @@ class VariationalEquationsRHS(_DynamicalSystem):
 
 
 class RTBPRHS(_DynamicalSystem):
-    """Equations of motion of the planar/3-D circular restricted three-body problem.
+    r"""
+    Equations of motion of the planar/3-D circular restricted three-body problem.
 
     Parameters
     ----------
@@ -402,7 +408,8 @@ def _propagate_dynsys(
     order: int = 6,
     flip_indices: Sequence[int] | None = None,
 ) -> Solution:
-    """Generic propagation routine shared by public helpers.
+    r"""
+    Generic propagation routine shared by public helpers.
 
     This is an internal utility.  It normalises *state0*, applies the
     :pyclass:`_DirectedSystem` wrapper and delegates the actual
@@ -454,7 +461,8 @@ def _propagate_dynsys(
 
 
 def _validate_initial_state(state, expected_dim=6): 
-    """Validate shape of *state*.
+    r"""
+    Validate shape of *state*.
 
     Raises
     ------

@@ -1,4 +1,4 @@
-"""
+r"""
 polynomial.coordinates
 ======================
 
@@ -22,7 +22,8 @@ from utils.log_config import logger
 
 
 def _clean_coordinates(coords: np.ndarray, tol: float = 1e-30) -> np.ndarray:
-    """Remove tiny numerical artefacts from a complex coordinate vector.
+    r"""
+    Remove tiny numerical artefacts from a complex coordinate vector.
 
     Parameters
     ----------
@@ -74,12 +75,12 @@ def _clean_coordinates(coords: np.ndarray, tol: float = 1e-30) -> np.ndarray:
 
 
 def _substitute_coordinates(coords: np.ndarray, matrix: np.ndarray) -> np.ndarray:
-    """Apply a linear substitution matrix to a coordinate vector.
+    r"""
+    Apply a linear substitution matrix to a coordinate vector.
 
     The operation performed is
 
-    .. math::
-        y_{i} = \sum_{j=1}^{6} M_{ij}\,x_{j},
+    :math:`y_{i} = \sum_{j=1}^{6} M_{ij}\,x_{j},`
 
     where :math:`M` is *matrix*, :math:`x` is *coords* and the result
     :math:`y` is returned.

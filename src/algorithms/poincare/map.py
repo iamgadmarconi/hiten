@@ -1,4 +1,4 @@
-"""
+r"""
 algorithms.poincare.map
 =======================
 
@@ -35,7 +35,9 @@ from utils.log_config import logger
 
 
 class PoincareSection(NamedTuple):
-    """Named tuple holding Poincaré section points and coordinate labels."""
+    r"""
+    Named tuple holding Poincaré section points and coordinate labels.
+    """
     points: np.ndarray  # shape (n, 2) 
     labels: tuple[str, str]  # coordinate labels for the two columns
 
@@ -50,7 +52,9 @@ def _integrate_rk_ham(
     jac_H,
     clmo_H,
 ) -> np.ndarray:
-    """Explicit RK integrator specialised for `HamiltonianSystem`."""
+    r"""
+    Explicit RK integrator specialised for :pyclass:`HamiltonianSystem`.
+    """
 
     n_steps = t_vals.shape[0]
     dim = y0.shape[0]
@@ -101,7 +105,8 @@ def _bracketed_root(
     max_expand: int = 40,
     xtol: float = 1e-12,
 ) -> Optional[float]:
-    """Return a positive root of *f* if a sign change can be bracketed.
+    r"""
+    Return a positive root of *f* if a sign change can be bracketed.
 
     The routine starts from ``x=0`` and expands the upper bracket until the
     function changes sign.  If no sign change occurs within
@@ -130,7 +135,7 @@ def _find_turning(
     expand_factor: float = 2.0,
     max_expand: int = 40,
 ) -> float:
-    """
+    r"""
     Return the positive intercept q2_max, p2_max, q3_max or p3_max of the Hill boundary.
 
     Parameters
@@ -194,7 +199,7 @@ def _find_turning(
     return root
 
 def section_closure(section_coord: str) -> Tuple[int, int, Tuple[str, str]]:
-    """
+    r"""
     Create closure information for a section defined by section_coord=0.
     
     Parameters
@@ -233,7 +238,7 @@ def _solve_missing_coord(
     expand_factor: float = 2.0,
     max_expand: int = 40,
 ) -> Optional[float]:
-    """
+    r"""
     Solve H(...) = h0 for a missing coordinate.
     
     Parameters
@@ -298,7 +303,9 @@ def _solve_missing_coord(
 
 @njit(cache=True, fastmath=FASTMATH)
 def _get_section_value(state: np.ndarray, section_coord: str) -> float:
-    """Return the section coordinate value."""
+    r"""
+    Return the section coordinate value.
+    """
     if section_coord == "q3":
         return state[2]
     elif section_coord == "p3":
@@ -312,7 +319,9 @@ def _get_section_value(state: np.ndarray, section_coord: str) -> float:
 
 @njit(cache=True, fastmath=FASTMATH)
 def _get_direction_sign(section_coord: str) -> float:
-    """Return the direction sign for crossing detection."""
+    r"""
+    Return the direction sign for crossing detection.
+    """
     if section_coord == "q3":
         return 1.0  # p3 > 0
     elif section_coord == "p3":
@@ -350,16 +359,15 @@ def _poincare_step(
     section_coord: str,
     c_omega_heuristic: float=20.0,
 ) -> Tuple[int, float, float, float]:
-    """Return (flag, q2', p2', p3').  flag=1 if success, 0 otherwise."""
+    r"""
+    Return (flag, q2', p2', p3').  flag=1 if success, 0 otherwise.
+    """
 
     state_old = np.zeros(2 * n_dof, dtype=np.float64)
     state_old[1] = q2
     state_old[2] = q3
     state_old[n_dof + 1] = p2
     state_old[n_dof + 2] = p3
-
-    # Get direction sign
-    direction_sign = _get_direction_sign(section_coord)
 
     for _ in range(max_steps):
         if use_symplectic:
@@ -484,7 +492,9 @@ def _poincare_map(
     n_dof: int,
     section_coord: str,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """Return (success flags, q2p array, p2p array, p3p array) processed in parallel."""
+    r"""
+    Return (success flags, q2p array, p2p array, p3p array) processed in parallel.
+    """
     n_seeds = seeds.shape[0]
     success = np.zeros(n_seeds, dtype=np.int64)
     q2p_out = np.empty(n_seeds, dtype=np.float64)
@@ -536,7 +546,8 @@ def _generate_map(
     seed_axis: str = "q2",  # "q2" or "p2"
     section_coord: str = "q3",  # "q2", "p2", "q3", or "p3"
 ) -> PoincareSection:
-    """Generate a Poincaré return map by forward integration of a small set of seeds.
+    r"""
+    Generate a Poincaré return map by forward integration of a small set of seeds.
 
     Parameters
     ----------
@@ -559,7 +570,7 @@ def _generate_map(
     dt : float, default 1e-2
         Fixed integration step size.
     use_symplectic : bool, default True
-        If ``True`` use the extended-phase symplectic integrator, otherwise an explicit Runge–Kutta scheme.
+        If ``True`` use the extended-phase symplectic integrator, otherwise an explicit Runge-Kutta scheme.
     integrator_order : {4, 6, 8}, default 6
         Tableau order for the numerical integrator.
     c_omega_heuristic : float, default 20.0
@@ -758,7 +769,7 @@ def _generate_grid(
     use_symplectic: bool = False,
     section_coord: str = "q3",
 ) -> PoincareSection:
-    """
+    r"""
     Compute Poincaré map points at a given energy level.
 
     Parameters
@@ -791,7 +802,7 @@ def _generate_grid(
 
     Returns
     -------
-    PoincareSection
+    :class:`PoincareSection`
         Section points with coordinate labels
 
     Raises

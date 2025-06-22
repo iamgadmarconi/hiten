@@ -1,4 +1,4 @@
-"""
+r"""
 algorithms.poincare.base
 =========================
 
@@ -32,7 +32,9 @@ from utils.plots import _set_dark_mode
 
 @dataclass
 class poincareMapConfig:
-    """Configuration parameters for the Poincaré map generation."""
+    r"""
+    Configuration parameters for the Poincaré map generation.
+    """
 
     # Numerical / integration
     dt: float = 1e-2
@@ -51,7 +53,8 @@ class poincareMapConfig:
 
 
 class PoincareMap:
-    """High-level object representing a Poincaré map on the centre manifold.
+    r"""
+    High-level object representing a Poincaré map on the centre manifold.
 
     Parameters
     ----------
@@ -59,7 +62,7 @@ class PoincareMap:
         The centre-manifold object to operate on.  Its polynomial representation is
         used for the reduced Hamiltonian flow.
     energy : float
-        Energy level (same convention as `_solve_p3`, *not* the Jacobi constant).
+        Energy level (same convention as :pyfunc:`_solve_missing_coord`, *not* the Jacobi constant).
     config : poincareMapConfig, optional
         Numerical parameters controlling the map generation.  A sensible default
         configuration is used if none is supplied.
@@ -103,7 +106,9 @@ class PoincareMap:
 
     @property
     def points(self) -> np.ndarray:
-        """Return the computed Poincaré-map points (backward compatibility)."""
+        r"""
+        Return the computed Poincaré-map points (backward compatibility).
+        """
         if self._section is None:
             raise RuntimeError(
                 "Poincaré map has not been computed yet.  Call compute() first."
@@ -112,7 +117,9 @@ class PoincareMap:
 
     @property
     def section(self) -> PoincareSection:
-        """Return the computed Poincaré section with labels."""
+        r"""
+        Return the computed Poincaré section with labels.
+        """
         if self._section is None:
             raise RuntimeError(
                 "Poincaré map has not been computed yet.  Call compute() first."
@@ -120,7 +127,8 @@ class PoincareMap:
         return self._section
 
     def compute(self) -> np.ndarray:
-        """Compute the discrete Poincaré return map.
+        r"""
+        Compute the discrete Poincaré return map.
 
         Returns
         -------
@@ -169,7 +177,8 @@ class PoincareMap:
         return section.points  # Return raw points for backward compatibility
 
     def pm2ic(self, indices: Optional[Sequence[int]] = None) -> np.ndarray:
-        """Convert stored map points to full six dimensional initial conditions.
+        r"""
+        Convert stored map points to full six dimensional initial conditions.
 
         Parameters
         ----------
@@ -203,7 +212,8 @@ class PoincareMap:
         return np.stack(ic_list, axis=0)
 
     def grid(self, Nq: int = 201, Np: int = 201, max_steps: int = 20_000) -> np.ndarray:
-        """Generate a dense rectangular grid of the Poincaré map.
+        r"""
+        Generate a dense rectangular grid of the Poincaré map.
 
         Parameters
         ----------
@@ -257,7 +267,7 @@ class PoincareMap:
         return pts.points if hasattr(pts, 'points') else pts
 
     def _propagate_from_point(self, cm_point, energy, steps=1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order=6):
-        """
+        r"""
         Convert a Poincaré map point to initial conditions, create a GenericOrbit, propagate, and return the orbit.
         """
         ic = self.cm.ic(cm_point, energy, section_coord=self.config.section_coord)
@@ -270,7 +280,8 @@ class PoincareMap:
         return orbit
 
     def save(self, filepath: str, **kwargs) -> None:
-        """Serialize the current map to disk.
+        r"""
+        Serialize the current map to disk.
 
         Parameters
         ----------
@@ -301,7 +312,8 @@ class PoincareMap:
         logger.info("Poincaré map saved to %s", filepath)
 
     def load(self, filepath: str, **kwargs) -> None:
-        """Load a map previously stored with :pyfunc:`save`.
+        r"""
+        Load a map previously stored with :pyfunc:`save`.
 
         Parameters
         ----------
@@ -353,7 +365,8 @@ class PoincareMap:
         logger.info("Poincaré map loaded from %s", filepath)
 
     def plot(self, dark_mode: bool = True, output_dir: Optional[str] = None, filename: Optional[str] = None, **kwargs):
-        """Render the 2-D Poincaré map.
+        r"""
+        Render the 2-D Poincaré map.
 
         Parameters
         ----------
@@ -434,7 +447,8 @@ class PoincareMap:
         return fig, ax
 
     def plot_interactive(self, steps=1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order=6, frame="rotating", dark_mode: bool = True):
-        """Interactively select map points and propagate the corresponding orbits.
+        r"""
+        Interactively select map points and propagate the corresponding orbits.
 
         Parameters
         ----------
@@ -500,7 +514,8 @@ class PoincareMap:
         return selected_orbit['orbit']
 
     def ic(self, pt: np.ndarray) -> np.ndarray:
-        """Map a Poincaré point to six dimensional initial conditions.
+        r"""
+        Map a Poincaré point to six dimensional initial conditions.
 
         Parameters
         ----------

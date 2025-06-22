@@ -1,4 +1,4 @@
-"""
+r"""
 system.libration.triangular
 ==========================
 
@@ -22,7 +22,8 @@ if TYPE_CHECKING:
 
 
 class TriangularPoint(LibrationPoint):
-    """Abstract helper for the triangular Libration points.
+    r"""
+    Abstract helper for the triangular Libration points.
 
     The triangular points form equilateral triangles with the two primary
     bodies. They behave as centre-type equilibria when the mass ratio
@@ -51,7 +52,9 @@ class TriangularPoint(LibrationPoint):
     ROUTH_CRITICAL_MU = (1.0 - np.sqrt(1.0 - (1.0/27.0))) / 2.0 # approx 0.03852
     
     def __init__(self, system: "System"):
-        """Initialize a triangular Libration point."""
+        r"""
+        Initialize a triangular Libration point.
+        """
         super().__init__(system)
         # Log stability warning based on mu
         if system.mu > self.ROUTH_CRITICAL_MU:
@@ -59,7 +62,8 @@ class TriangularPoint(LibrationPoint):
 
     @property
     def sign(self) -> int:
-        """Sign convention distinguishing L4 and L5.
+        r"""
+        Sign convention distinguishing L4 and L5.
 
         Returns
         -------
@@ -70,12 +74,13 @@ class TriangularPoint(LibrationPoint):
     
     @property
     def a(self) -> float:
-        """Offset *a* along the x axis used in frame changes.
+        r"""
+        Offset *a* along the x axis used in frame changes.
         """
         return self.sign * 3 * np.sqrt(3) / 4 * (1 - 2 * self.mu)
 
     def _find_position(self, y_sign: int) -> np.ndarray:
-        """
+        r"""
         Calculate the position of a triangular point (L4 or L5).
         
         Parameters
@@ -105,7 +110,7 @@ class TriangularPoint(LibrationPoint):
 
 
 class L4Point(TriangularPoint):
-    """
+    r"""
     L4 Libration point, forming an equilateral triangle with the two primary bodies,
     located above the x-axis (positive y).
     
@@ -120,7 +125,7 @@ class L4Point(TriangularPoint):
         super().__init__(system)
     
     def _calculate_position(self) -> np.ndarray:
-        """
+        r"""
         Calculate the position of the L4 point.
         
         Returns
@@ -136,7 +141,7 @@ class L4Point(TriangularPoint):
 
 
 class L5Point(TriangularPoint):
-    """
+    r"""
     L5 Libration point, forming an equilateral triangle with the two primary bodies,
     located below the x-axis (negative y).
     

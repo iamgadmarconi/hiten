@@ -1,4 +1,4 @@
-"""
+r"""
 dynamics.utils.linalg
 =====================
 
@@ -17,7 +17,7 @@ from utils.log_config import logger
 
 
 def eigenvalue_decomposition(A: np.ndarray, discrete: int = 0, delta: float = 1e-4) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """
+    r"""
     Classify eigen-pairs into stable, unstable and centre subspaces.
 
     Parameters
@@ -170,7 +170,7 @@ def eigenvalue_decomposition(A: np.ndarray, discrete: int = 0, delta: float = 1e
 
 
 def stability_indices(M: np.ndarray, tol: float = 1e-8) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
+    r"""
     Compute the three Floquet stability indices of a periodic orbit.
 
     Parameters
@@ -374,7 +374,7 @@ def stability_indices(M: np.ndarray, tol: float = 1e-8) -> Tuple[np.ndarray, np.
 
 
 def _remove_infinitesimals_in_place(vec: np.ndarray, tol: float = 1e-14) -> None:
-    """
+    r"""
     Replace very small real and imaginary parts with exact zeros in-place.
     
     This function modifies the input vector by setting real and imaginary parts
@@ -409,7 +409,7 @@ def _remove_infinitesimals_in_place(vec: np.ndarray, tol: float = 1e-14) -> None
         vec[i] = re + 1j*im
 
 def _remove_infinitesimals_array(vec: np.ndarray, tol: float = 1e-12) -> np.ndarray:
-    """
+    r"""
     Create a copy of a vector with very small values replaced by exact zeros.
     
     This function creates a copy of the input vector and then calls
@@ -438,7 +438,7 @@ def _remove_infinitesimals_array(vec: np.ndarray, tol: float = 1e-12) -> np.ndar
     return vcopy
 
 def _zero_small_imag_part(eig_val: complex, tol: float = 1e-12) -> complex:
-    """
+    r"""
     Set the imaginary part of a complex number to zero if it's very small.
     
     This function is useful for cleaning up eigenvalues that should be real
@@ -464,7 +464,7 @@ def _zero_small_imag_part(eig_val: complex, tol: float = 1e-12) -> complex:
 
 
 def _totime(t, tf):
-    """
+    r"""
     Find indices in a time array that are closest to specified target times.
     
     This function searches through a time array and finds the indices where

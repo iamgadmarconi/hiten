@@ -1,4 +1,4 @@
-"""
+r"""
 algorithms.integrators.rk
 =========================
 
@@ -66,7 +66,8 @@ from utils.log_config import logger
 
 
 class _RungeKuttaBase(Integrator):
-    """Shared functionality of explicit Runge-Kutta schemes.
+    r"""
+    Shared functionality of explicit Runge-Kutta schemes.
 
     The class stores a Butcher tableau and provides a single low level helper
     :pyfunc:`_rk_embedded_step` that advances one macro time step and, when a
@@ -125,7 +126,7 @@ class _RungeKuttaBase(Integrator):
 
 
 class _FixedStepRK(_RungeKuttaBase):
-    """Explicit fixed-step Runge-Kutta scheme.
+    r"""Explicit fixed-step Runge-Kutta scheme.
 
     Parameters
     ----------
@@ -211,7 +212,8 @@ class RK8(_FixedStepRK):
 
 
 class _AdaptiveStepRK(_RungeKuttaBase):
-    """Embedded adaptive Runge-Kutta integrator with PI controller.
+    r"""
+    Embedded adaptive Runge-Kutta integrator with PI controller.
 
     The class implements proportional-integral (PI) step-size control using
     the error estimates returned by :pyfunc:`_rk_embedded_step`.  Two safety
@@ -273,7 +275,7 @@ class _AdaptiveStepRK(_RungeKuttaBase):
         return self._p
 
     def integrate(self, system: _DynamicalSystem, y0: np.ndarray, t_vals: np.ndarray, **kwargs) -> Solution:
-        """
+        r"""
         Integrate a dynamical system using an adaptive Runge-Kutta method.
         """
         self.validate_inputs(system, y0, t_vals)
@@ -385,7 +387,8 @@ class _AdaptiveStepRK(_RungeKuttaBase):
         return Solution(times=t_eval.copy(), states=y_eval, derivatives=derivs_out)
 
     def _select_initial_step(self, f, t0, y0, tf):
-        """Choose an initial step size following Hairer et al. / SciPy heuristics.
+        r"""
+        Choose an initial step size following Hairer et al. / SciPy heuristics.
 
         The strategy tries to obtain a first step that keeps the truncation
         error around the requested tolerance.  A too-small *h* makes the
@@ -528,7 +531,8 @@ class AdaptiveRK:
 
 @njit(cache=True, fastmath=FASTMATH)
 def _hamiltonian_rhs(y: np.ndarray, jac_H, clmo_H, n_dof: int) -> np.ndarray:  # type: ignore[valid-type]
-    """Hamiltonian vector field evaluated in compiled code.
+    r"""
+    Hamiltonian vector field evaluated in compiled code.
 
     This helper is intended to be used from within a :class:`numba.njit`
     context and therefore keeps its interface minimal.  The Jacobian of the
@@ -566,7 +570,8 @@ def _hamiltonian_rhs(y: np.ndarray, jac_H, clmo_H, n_dof: int) -> np.ndarray:  #
     return out
 
 def _build_rhs_wrapper(system: _DynamicalSystem) -> Callable[[float, np.ndarray], np.ndarray]:
-    """Return a JIT friendly wrapper around *system.rhs*.
+    r"""
+    Return a JIT friendly wrapper around *system.rhs*.
 
     The dynamical systems implemented in the code base expose their vector
     field either as ``rhs(t, y)`` or, for autonomous systems, as ``rhs(y)``.

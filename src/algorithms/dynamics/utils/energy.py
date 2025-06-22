@@ -1,4 +1,4 @@
-"""
+r"""
 dynamics.utils.energy
 =====================
 
@@ -19,7 +19,7 @@ from utils.log_config import logger
 
 
 def crtbp_energy(state: Sequence[float], mu: float) -> float:
-    """
+    r"""
     Compute the Hamiltonian energy :math:`E` of a single state in the CRTBP.
 
     The definition is
@@ -78,7 +78,7 @@ def hill_region(
     y_range: Tuple[float, float] = (-1.5, 1.5), 
     n_grid: int = 400
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
+    r"""
     Compute the Hill region associated with a Jacobi constant.
 
     The Hill region corresponds to the projection on the synodic
@@ -136,7 +136,7 @@ def hill_region(
     return X, Y, Z
 
 def energy_to_jacobi(energy: float) -> float:
-    """
+    r"""
     Convert Hamiltonian energy to Jacobi constant.
 
     Parameters
@@ -159,7 +159,7 @@ def energy_to_jacobi(energy: float) -> float:
 
 
 def jacobi_to_energy(jacobi: float) -> float:
-    """
+    r"""
     Convert Jacobi constant to Hamiltonian energy.
 
     Parameters
@@ -182,7 +182,7 @@ def jacobi_to_energy(jacobi: float) -> float:
 
 
 def kinetic_energy(state: Sequence[float]) -> float:
-    """
+    r"""
     Return the kinetic energy :math:`T` of a state.
 
     The definition is
@@ -211,7 +211,7 @@ def kinetic_energy(state: Sequence[float]) -> float:
 
 
 def effective_potential(state: Sequence[float], mu: float) -> float:
-    """
+    r"""
     Compute the effective potential :math:`U_{\mathrm{eff}}` in the CRTBP.
 
     Parameters
@@ -256,7 +256,7 @@ def effective_potential(state: Sequence[float], mu: float) -> float:
 
 
 def pseudo_potential_at_point(x: float, y: float, mu: float) -> float:
-    """
+    r"""
     Evaluate the pseudo-potential :math:`\Omega` at a planar point.
 
     Parameters
@@ -286,7 +286,7 @@ def pseudo_potential_at_point(x: float, y: float, mu: float) -> float:
 
 
 def gravitational_potential(state: Sequence[float], mu: float) -> float:
-    """
+    r"""
     Gravitational potential energy of the test particle.
 
     Parameters
@@ -318,7 +318,7 @@ def gravitational_potential(state: Sequence[float], mu: float) -> float:
 
 
 def primary_distance(state: Sequence[float], mu: float) -> float:
-    """
+    r"""
     Distance from the particle to the primary body.
 
     Parameters
@@ -347,7 +347,7 @@ def primary_distance(state: Sequence[float], mu: float) -> float:
 
 
 def secondary_distance(state: Sequence[float], mu: float) -> float:
-    """
+    r"""
     Distance from the particle to the secondary body.
 
     Parameters

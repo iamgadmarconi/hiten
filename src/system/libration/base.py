@@ -1,4 +1,4 @@
-"""
+r"""
 system.libration.base
 =====================
 
@@ -32,7 +32,8 @@ DISCRETE_SYSTEM = 1
 
 @dataclass(slots=True)
 class LinearData:
-    """Container with linearised CR3BP invariants.
+    r"""
+    Container with linearised CR3BP invariants.
 
     Parameters
     ----------
@@ -70,7 +71,8 @@ class LinearData:
 
 
 class LibrationPoint(ABC):
-    """Abstract base class for Libration points of the CR3BP.
+    r"""
+    Abstract base class for Libration points of the CR3BP.
 
     Parameters
     ----------
@@ -129,7 +131,6 @@ class LibrationPoint(ABC):
     """
     
     def __init__(self, system: "System"):
-        """Initialize a Libration point with the mass parameter and point index."""
         self.system = system
         self.mu = system.mu
         self._position = None
@@ -152,7 +153,7 @@ class LibrationPoint(ABC):
 
     @property
     def position(self) -> np.ndarray:
-        """
+        r"""
         Get the position of the Libration point in the rotating frame.
         
         Returns
@@ -166,7 +167,7 @@ class LibrationPoint(ABC):
     
     @property
     def energy(self) -> float:
-        """
+        r"""
         Get the energy of the Libration point.
         """
         if self._energy is None:
@@ -175,7 +176,7 @@ class LibrationPoint(ABC):
     
     @property
     def jacobi_constant(self) -> float:
-        """
+        r"""
         Get the Jacobi constant of the Libration point.
         """
         if self._jacobi_constant is None:
@@ -184,7 +185,7 @@ class LibrationPoint(ABC):
     
     @property
     def is_stable(self) -> bool:
-        """
+        r"""
         Check if the Libration point is stable.
         """
         if self._stability_info is None:
@@ -195,7 +196,7 @@ class LibrationPoint(ABC):
 
     @property
     def linear_data(self) -> LinearData:
-        """
+        r"""
         Get the linear data for the Libration point.
         """
         if self._linear_data is None:
@@ -203,20 +204,20 @@ class LibrationPoint(ABC):
         return self._linear_data
 
     def _compute_energy(self) -> float:
-        """
+        r"""
         Compute the energy of the Libration point.
         """
         state = np.concatenate([self.position, [0, 0, 0]])
         return crtbp_energy(state, self.mu)
 
     def _compute_jacobi_constant(self) -> float:
-        """
+        r"""
         Compute the Jacobi constant of the Libration point.
         """
         return energy_to_jacobi(self.energy)
 
     def analyze_stability(self, discrete: int = CONTINUOUS_SYSTEM, delta: float = 1e-4) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """
+        r"""
         Analyze the stability properties of the Libration point.
         
         Parameters
@@ -267,21 +268,28 @@ class LibrationPoint(ABC):
         return stability_info
 
     def cache_get(self, key) -> any:
-        """Get item from cache."""
+        r"""
+        Get item from cache.
+        """
         return self._cache.get(key)
     
     def cache_set(self, key, value) -> any:
-        """Set item in cache and return the value."""
+        r"""
+        Set item in cache and return the value.
+        """
         self._cache[key] = value
         return value
     
     def cache_clear(self) -> None:
-        """Clear all cached data."""
+        r"""
+        Clear all cached data.
+        """
         self._cache.clear()
         logger.debug(f"Cache cleared for {type(self).__name__}")
 
     def get_center_manifold(self, max_degree: int):
-        """Return (and lazily construct) a CenterManifold of given degree.
+        r"""
+        Return (and lazily construct) a CenterManifold of given degree.
 
         Heavy polynomial data (Hamiltonians in multiple coordinate systems,
         Lie generators, etc.) are cached *inside* the returned CenterManifold,
@@ -294,7 +302,8 @@ class LibrationPoint(ABC):
         return self._cm_registry[max_degree]
 
     def hamiltonian(self, max_deg: int) -> dict:
-        """Return all Hamiltonian representations from the associated CenterManifold.
+        r"""
+        Return all Hamiltonian representations from the associated CenterManifold.
 
         Keys: 'physical', 'real_normal', 'complex_normal', 'normalized',
         'center_manifold_complex', 'center_manifold_real'.
@@ -317,7 +326,9 @@ class LibrationPoint(ABC):
         return reprs
 
     def generating_functions(self, max_deg: int):
-        """Return the Lie-series generating functions from CenterManifold."""
+        r"""
+        Return the Lie-series generating functions from CenterManifold.
+        """
         cm = self.get_center_manifold(max_deg)
         cm.compute()  # ensure they exist
         data = cm.cache_get(('generating_functions', max_deg))
@@ -325,7 +336,7 @@ class LibrationPoint(ABC):
 
     @property
     def eigenvalues(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """
+        r"""
         Get the eigenvalues of the linearized system at the Libration point.
         
         Returns
@@ -340,7 +351,7 @@ class LibrationPoint(ABC):
     
     @property
     def eigenvectors(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """
+        r"""
         Get the eigenvectors of the linearized system at the Libration point.
         
         Returns
@@ -355,7 +366,7 @@ class LibrationPoint(ABC):
     
     @abstractmethod
     def _calculate_position(self) -> np.ndarray:
-        """
+        r"""
         Calculate the position of the Libration point.
         
         This is an abstract method that must be implemented by subclasses.
@@ -369,14 +380,14 @@ class LibrationPoint(ABC):
 
     @abstractmethod
     def _get_linear_data(self) -> LinearData:
-        """
+        r"""
         Get the linear data for the Libration point.
         """
         pass
 
     @abstractmethod
     def normal_form_transform(self) -> Tuple[np.ndarray, np.ndarray]:
-        """
+        r"""
         Get the normal form transform for the Libration point.
         """
         pass

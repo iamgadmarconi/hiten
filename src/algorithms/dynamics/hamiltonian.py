@@ -1,4 +1,4 @@
-"""
+r"""
 dynamics.hamiltonian
 ====================
 
@@ -38,7 +38,26 @@ def _hamiltonian_rhs(
     clmo: List[np.ndarray],
     n_dof: int,
 ) -> np.ndarray:
-    """Compute time derivative (Qdot, Pdot) for the 2*n_dof Hamiltonian system."""
+    r"""
+    Compute time derivative (Qdot, Pdot) for the 2*n_dof Hamiltonian system.
+
+    Parameters
+    ----------
+    state6 : numpy.ndarray
+        State vector of the 2*n_dof Hamiltonian system.
+    jac_H : numba.typed.List of numba.typed.List of numpy.ndarray
+        Jacobian of the Hamiltonian.
+    clmo : numba.typed.List of numpy.ndarray
+        Coefficient-layout mapping objects used by
+        :pyfunc:`algorithms.polynomial.operations.polynomial_evaluate`.
+    n_dof : int
+        Number of degrees of freedom.
+
+    Returns
+    -------
+    numpy.ndarray
+        Time derivative (Qdot, Pdot) of the 2*n_dof Hamiltonian system.
+    """
 
     dH_dQ = np.empty(n_dof)
     dH_dP = np.empty(n_dof)
@@ -54,7 +73,7 @@ def _hamiltonian_rhs(
 
 @runtime_checkable
 class HamiltonianSystemProtocol(DynamicalSystemProtocol, Protocol):
-    """
+    r"""
     Protocol for Hamiltonian dynamical systems.
     
     Extends DynamicalSystemProtocol with methods specific to Hamiltonian mechanics.
@@ -67,7 +86,7 @@ class HamiltonianSystemProtocol(DynamicalSystemProtocol, Protocol):
         ...
     
     def dH_dQ(self, Q: np.ndarray, P: np.ndarray) -> np.ndarray:
-        """
+        r"""
         Compute partial derivatives of Hamiltonian with respect to positions.
         
         Parameters
@@ -85,7 +104,7 @@ class HamiltonianSystemProtocol(DynamicalSystemProtocol, Protocol):
         ...
     
     def dH_dP(self, Q: np.ndarray, P: np.ndarray) -> np.ndarray:
-        """
+        r"""
         Compute partial derivatives of Hamiltonian with respect to momenta.
         
         Parameters
@@ -104,7 +123,8 @@ class HamiltonianSystemProtocol(DynamicalSystemProtocol, Protocol):
 
 
 class HamiltonianSystem(_DynamicalSystem):
-    """Lightweight polynomial Hamiltonian wrapper.
+    r"""
+    Lightweight polynomial Hamiltonian wrapper.
 
     The class stores the Jacobian of a polynomial Hamiltonian in packed form
     and exposes the information required by symplectic integrators, namely
@@ -220,7 +240,8 @@ def create_hamiltonian_system(
     n_dof: int = 3,
     name: str = "Center Manifold Hamiltonian"
 ) -> HamiltonianSystem:
-    """Factory helper that converts packed polynomial data into a runtime Hamiltonian.
+    r"""
+    Factory helper that converts packed polynomial data into a runtime Hamiltonian.
 
     Parameters
     ----------

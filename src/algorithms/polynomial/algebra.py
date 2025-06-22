@@ -1,4 +1,4 @@
-"""
+r"""
 algorithms.polynomial.algebra
 ============================
 
@@ -42,7 +42,7 @@ from utils.config import FASTMATH, N_VARS
 
 @njit(fastmath=FASTMATH, cache=True)
 def _poly_add(p: np.ndarray, q: np.ndarray, out: np.ndarray) -> None:
-    """
+    r"""
     Add two polynomial coefficient arrays element-wise.
     
     Parameters
@@ -69,7 +69,7 @@ def _poly_add(p: np.ndarray, q: np.ndarray, out: np.ndarray) -> None:
 
 @njit(fastmath=FASTMATH, cache=True)
 def _poly_scale(p: np.ndarray, alpha, out: np.ndarray) -> None:
-    """
+    r"""
     Scale a polynomial coefficient array by a constant factor.
     
     Parameters
@@ -96,7 +96,7 @@ def _poly_scale(p: np.ndarray, alpha, out: np.ndarray) -> None:
 
 @njit(fastmath=FASTMATH, cache=False, parallel=True)
 def _poly_mul(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clmo, encode_dict_list) -> np.ndarray:
-    """
+    r"""
     Multiply two polynomials using their coefficient arrays.
     
     Parameters
@@ -163,7 +163,7 @@ def _poly_mul(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clmo, e
 
 @njit(fastmath=FASTMATH, cache=False, parallel=True)
 def _poly_diff(p: np.ndarray, var: int, degree: int, psi, clmo, encode_dict_list) -> np.ndarray:
-    """
+    r"""
     Compute the partial derivative of a polynomial with respect to a variable.
     
     Parameters
@@ -234,7 +234,7 @@ def _poly_diff(p: np.ndarray, var: int, degree: int, psi, clmo, encode_dict_list
 
 @njit(fastmath=FASTMATH, cache=False)
 def _poly_poisson(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clmo, encode_dict_list) -> np.ndarray:
-    """
+    r"""
     Compute the Poisson bracket of two polynomials.
     
     Parameters
@@ -320,7 +320,7 @@ def _poly_poisson(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clm
 
 @njit(fastmath=FASTMATH, cache=True)
 def _get_degree(p: np.ndarray, psi) -> int:
-    """
+    r"""
     Determine the degree of a polynomial from its coefficient array length.
     
     Parameters
@@ -354,7 +354,7 @@ def _get_degree(p: np.ndarray, psi) -> int:
 
 @njit(fastmath=FASTMATH, cache=True)
 def _poly_clean_inplace(p: np.ndarray, tol: float) -> None:
-    """
+    r"""
     Set coefficients with absolute value below tolerance to zero (in-place).
     
     Parameters
@@ -381,7 +381,7 @@ def _poly_clean_inplace(p: np.ndarray, tol: float) -> None:
 
 @njit(fastmath=FASTMATH, cache=True)
 def _poly_clean(p: np.ndarray, tol: float, out: np.ndarray) -> None:
-    """
+    r"""
     Set coefficients with absolute value below tolerance to zero (out-of-place).
     
     Parameters
@@ -416,7 +416,7 @@ def _poly_evaluate(
     point: np.ndarray, 
     clmo: List[np.ndarray]
 ) -> np.complex128:
-    """
+    r"""
     Evaluate a polynomial at a specific point.
     
     Parameters
@@ -477,7 +477,7 @@ def _evaluate_reduced_monomial(
     var_idx: int,
     exp_change: int
 ) -> np.complex128:
-    """
+    r"""
     Evaluate a monomial with modified exponent at specified coordinates.
     
     This function computes the value of a monomial x^k at given coordinates,
@@ -516,9 +516,9 @@ def _evaluate_reduced_monomial(
     -----
     The function computes the product:
     
-    ∏_{i=0}^{5} coords[i]^{exp_i}
+    :math:`\prod_{i=0}^{5} coords[i]^{exp_i}`
     
-    where exp_i = k[i] for i ≠ var_idx, and exp_{var_idx} = k[var_idx] + exp_change.
+    where :math:`exp_i = k[i]` for :math:`i \neq var_idx`, and :math:`exp_{var_idx} = k[var_idx] + exp_change`.
     """
     result = 1.0 + 0.0j
     
@@ -538,7 +538,7 @@ def _evaluate_reduced_monomial(
 
 @njit(fastmath=FASTMATH, cache=True)
 def _poly_integrate(p: np.ndarray, var: int, degree: int, psi, clmo, encode_dict_list) -> np.ndarray:
-    """
+    r"""
     Integrate a polynomial with respect to one variable.
     
     Parameters

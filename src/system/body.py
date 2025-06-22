@@ -1,8 +1,9 @@
-"""
+r"""
 system.body
 ===========
 
-Light-weight representation of a celestial body participating in a circular restricted three body problem (CR3BP) or standalone dynamical simulation.
+Light-weight representation of a celestial body participating in a circular restricted three 
+body problem (CR3BP) or standalone dynamical simulation.
 
 The module defines the :pyclass:`Body` class, a minimal container that stores
 basic physical quantities and plotting attributes while preserving the
@@ -20,7 +21,8 @@ from utils.log_config import logger
 
 
 class Body(object):
-    """Celestial body container.
+    r"""
+    Celestial body container.
 
     Parameters
     ----------
@@ -87,7 +89,8 @@ class Body(object):
         logger.info(f"Created Body: name='{self.name}', mass={self.mass}, radius={self.radius}, color='{self.color}', parent='{parent_name}'")
 
     def __str__(self) -> str:
-        """Return a concise human-readable description of the body.
+        r"""
+        Return a concise human-readable description of the body.
 
         Returns
         -------
@@ -99,7 +102,8 @@ class Body(object):
         return f"{self.name} {parent_desc}"
 
     def __repr__(self) -> str:
-        """Unambiguous representation that can be evaluated by :pyfunc:`eval`.
+        r"""
+        Unambiguous representation that can be evaluated by :pyfunc:`eval`.
 
         Returns
         -------

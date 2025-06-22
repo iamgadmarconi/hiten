@@ -1,4 +1,4 @@
-"""
+r"""
 dynamics.rhs
 ============
 
@@ -21,7 +21,8 @@ from algorithms.dynamics.base import _DynamicalSystem
 
 
 class RHSSystem(_DynamicalSystem):
-    """Lightweight wrapper around an RHS callable.
+    r"""
+    Lightweight wrapper around an RHS callable.
 
     Parameters
     ----------
@@ -55,7 +56,8 @@ class RHSSystem(_DynamicalSystem):
     """
 
     def __init__(self, rhs_func: Callable[[float, np.ndarray], np.ndarray], dim: int, name: str = "Generic RHS"):
-        """Wrap an arbitrary RHS into a _DynamicalSystem instance.
+        r"""
+        Wrap an arbitrary RHS into a _DynamicalSystem instance.
 
         The supplied *rhs_func* is automatically JIT-compiled (if it is not a
         Numba dispatcher already) so that it can be called from inside
@@ -86,7 +88,8 @@ class RHSSystem(_DynamicalSystem):
     
     @property
     def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        """Return the compiled RHS callable.
+        r"""
+        Return the compiled RHS callable.
 
         Returns
         -------
@@ -101,7 +104,8 @@ class RHSSystem(_DynamicalSystem):
 
 
 def create_rhs_system(rhs_func: Callable[[float, np.ndarray], np.ndarray], dim: int, name: str = "Generic RHS"):
-    """Factory helper that mirrors :pyfunc:`RHSSystem`.
+    r"""
+    Factory helper that mirrors :pyfunc:`RHSSystem`.
 
     This convenience function exists mainly to enable a functional style
     when the object-oriented interface of :pyclass:`RHSSystem` is not needed.
@@ -117,4 +121,5 @@ def create_rhs_system(rhs_func: Callable[[float, np.ndarray], np.ndarray], dim: 
         Instance wrapping *rhs_func*.
     """
     return RHSSystem(rhs_func, dim, name)
+
 

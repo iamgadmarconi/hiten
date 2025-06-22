@@ -1,4 +1,4 @@
-"""
+r"""
 system.base
 ===========
 
@@ -30,7 +30,8 @@ from utils.precision import hp
 
 @dataclass
 class systemConfig:
-    """Configuration container for a CR3BP system.
+    r"""
+    Configuration container for a CR3BP system.
 
     Parameters
     ----------
@@ -67,7 +68,8 @@ class systemConfig:
 
 
 class System(object):
-    """Lightweight wrapper around the CR3BP dynamical system.
+    r"""
+    Lightweight wrapper around the CR3BP dynamical system.
 
     The class stores the physical properties of the primaries, computes the
     dimensionless mass parameter :math:`\mu = m_2 / (m_1 + m_2)`, instantiates
@@ -125,7 +127,8 @@ class System(object):
         return f"System(config=systemConfig(primary={self.primary!r}, secondary={self.secondary!r}, distance={self.distance}))"
 
     def _get_mu(self) -> float:
-        """Compute the dimensionless mass parameter.
+        r"""
+        Compute the dimensionless mass parameter.
 
         Returns
         -------
@@ -151,7 +154,8 @@ class System(object):
         return mu
 
     def _compute_libration_points(self) -> Dict[int, LibrationPoint]:
-        """Instantiate the five classical libration points.
+        r"""
+        Instantiate the five classical libration points.
 
         Returns
         -------
@@ -171,7 +175,8 @@ class System(object):
         return points
 
     def get_libration_point(self, index: int) -> LibrationPoint:
-        """Access a pre-computed libration point.
+        r"""
+        Access a pre-computed libration point.
 
         Parameters
         ----------

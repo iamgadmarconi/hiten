@@ -1,4 +1,4 @@
-"""
+r"""
 system.manifold
 ===============
 
@@ -38,7 +38,8 @@ from utils.plots import _plot_body, _set_axes_equal, _set_dark_mode
 
 @dataclass
 class manifoldConfig:
-    """Configuration options for :pyclass:`Manifold`.
+    r"""
+    Configuration options for :pyclass:`Manifold`.
 
     Parameter
     ----------
@@ -64,7 +65,8 @@ class manifoldConfig:
 
 @dataclass
 class ManifoldResult:
-    """Output container produced by :pyfunc:`Manifold.compute`.
+    r"""
+    Output container produced by :pyfunc:`Manifold.compute`.
 
     Attributes
     ----------
@@ -102,7 +104,8 @@ class ManifoldResult:
 
 
 class Manifold:
-    """Compute and cache the invariant manifold of a periodic orbit.
+    r"""
+    Compute and cache the invariant manifold of a periodic orbit.
 
     Parameters
     ----------
@@ -151,7 +154,8 @@ class Manifold:
         return self.__str__()
     
     def compute(self, step: float = 0.02, integration_fraction: float = 0.75, **kwargs):
-        """Generate manifold trajectories and build a Poincaré map.
+        r"""
+        Generate manifold trajectories and build a Poincaré map.
 
         The routine samples the generating orbit at equally spaced fractions
         of its period, displaces each point :math:`10^{-6}` units along the
@@ -266,6 +270,32 @@ class Manifold:
         return self.manifold_result
 
     def _compute_manifold_section(self, state: np.ndarray, period: float, fraction: float, NN: int = 1, forward: int = 1):
+        r"""
+        Compute a section of the invariant manifold.
+
+        Parameters
+        ----------
+        state : numpy.ndarray
+            Initial state of the periodic orbit.
+        period : float
+            Period of the periodic orbit.
+        fraction : float
+            Fraction of the period to compute the section at.
+        NN : int, default 1
+            Index of the eigenvector to compute the section for.
+        forward : int, default 1
+            Direction of integration.
+
+        Returns
+        -------
+        numpy.ndarray
+            Initial condition for the manifold section.
+
+        Raises
+        ------
+        ValueError
+            If the requested eigenvector is not available.
+        """
         xx, tt, phi_T, PHI = compute_stm(self.libration_point._var_eq_system, state, period, steps=2000, forward=forward, method=self.method, order=self.order)
 
         sn, un, _, Ws, Wu, _ = eigenvalue_decomposition(phi_T, discrete=1)
@@ -340,7 +370,8 @@ class Manifold:
         return x0W
     
     def plot(self, dark_mode: bool = True):
-        """Render a 3-D plot of the computed manifold.
+        r"""
+        Render a 3-D plot of the computed manifold.
 
         Parameters
         ----------
@@ -389,7 +420,8 @@ class Manifold:
         plt.show()
 
     def save(self, filepath: str, **kwargs) -> None:
-        """Serialise the manifold to *filepath*.
+        r"""
+        Serialise the manifold to *filepath*.
 
         Parameters
         ----------
@@ -444,7 +476,8 @@ class Manifold:
         logger.info("Manifold saved to %s", filepath)
 
     def load(self, filepath: str, **kwargs) -> None:
-        """Load a manifold previously stored with :pyfunc:`save`.
+        r"""
+        Load a manifold previously stored with :pyfunc:`save`.
 
         Parameters
         ----------

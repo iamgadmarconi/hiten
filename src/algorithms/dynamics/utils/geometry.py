@@ -1,4 +1,4 @@
-"""
+r"""
 dynamics.utils.geometry
 =======================
 
@@ -18,6 +18,7 @@ References
 ----------
 Szebehely, V. (1967). "Theory of Orbits".
 """
+
 from typing import Callable, Tuple
 
 import numpy as np
@@ -31,7 +32,7 @@ from utils.log_config import logger
 
 
 def _find_y_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], forward: int = 1) -> Tuple[float, NDArray[np.float64]]:
-    """
+    r"""
     Find the time and state at which an orbit next crosses the y=0 plane.
     
     This function propagates a trajectory from an initial state and determines
@@ -79,7 +80,7 @@ def _find_y_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], for
 
     # 2) Define a local function that depends on time t.
     def y_component_wrapper(t: float) -> float:
-        """
+        r"""
         Wrapper function that returns the y-coordinate of the orbit at time t.
         
         This function is used as the target for root-finding, since we want to
@@ -113,7 +114,7 @@ def _find_y_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], for
 
 
 def _find_x_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], forward: int = 1) -> Tuple[float, NDArray[np.float64]]:
-    """
+    r"""
     Find the time and state at which an orbit next crosses the x=0 plane.
     
     This function propagates a trajectory from an initial state and determines
@@ -161,7 +162,7 @@ def _find_x_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], for
 
     # 2) Define a local function that depends on time t.
     def x_component_wrapper(t: float) -> float:
-        """
+        r"""
         Wrapper function that returns the x-coordinate of the orbit at time t.
         
         This function is used as the target for root-finding, since we want to
@@ -195,7 +196,7 @@ def _find_x_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], for
 
 
 def _find_z_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], forward: int = 1) -> Tuple[float, NDArray[np.float64]]:
-    """
+    r"""
     Find the time and state at which an orbit next crosses the z=0 plane.
     
     This function propagates a trajectory from an initial state and determines
@@ -243,7 +244,7 @@ def _find_z_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], for
 
     # 2) Define a local function that depends on time t.
     def z_component_wrapper(t: float) -> float:
-        """
+        r"""
         Wrapper function that returns the z-coordinate of the orbit at time t.
         
         This function is used as the target for root-finding, since we want to
@@ -276,7 +277,7 @@ def _find_z_zero_crossing(dynsys: _DynamicalSystem, x0: NDArray[np.float64], for
     return t1_z, x1_z
 
 def _find_bracket(f: Callable[[float], float], x0: float, max_expand: int = 500) -> float:
-    """
+    r"""
     Find a bracketing interval for a root and solve using Brent's method.
     
     This function attempts to locate an interval containing a root of the function f
@@ -352,7 +353,7 @@ def _find_bracket(f: Callable[[float], float], x0: float, max_expand: int = 500)
 
 
 def _y_component(dynsys: _DynamicalSystem, t1: float, t0_z: float, x0_z: NDArray[np.float64], forward: int = 1, steps: int = 3000) -> float:
-    """
+    r"""
     Compute the y-component of an orbit at a specified time.
     
     This function propagates an orbit from a reference state and time to a
@@ -407,7 +408,7 @@ def _y_component(dynsys: _DynamicalSystem, t1: float, t0_z: float, x0_z: NDArray
 
 
 def _x_component(dynsys: _DynamicalSystem, t1: float, t0_z: float, x0_z: NDArray[np.float64], forward: int = 1, steps: int = 3000) -> float:
-    """
+    r"""
     Compute the x-component of an orbit at a specified time.
     
     This function propagates an orbit from a reference state and time to a
@@ -462,7 +463,7 @@ def _x_component(dynsys: _DynamicalSystem, t1: float, t0_z: float, x0_z: NDArray
 
 
 def _z_component(dynsys: _DynamicalSystem, t1: float, t0_z: float, x0_z: NDArray[np.float64], forward: int = 1, steps: int = 3000, tol: float = 1e-10) -> float:
-    """
+    r"""
     Compute the z-component of an orbit at a specified time.
     
     This function propagates an orbit from a reference state and time to a
@@ -517,7 +518,7 @@ def _z_component(dynsys: _DynamicalSystem, t1: float, t0_z: float, x0_z: NDArray
 
 
 def surface_of_section(X, T, mu, M=1, C=1):
-    """
+    r"""
     Compute the surface-of-section for the CR3BP at specified plane crossings.
     
     This function identifies and computes the points where a trajectory crosses
@@ -664,10 +665,8 @@ def surface_of_section(X, T, mu, M=1, C=1):
         return np.array([]), np.array([]) 
 
 
-
-
 def _interpolate(x, t=None, dt=None):
-    """
+    r"""
     Function with dual behavior:
     1. When called with 3 arguments like _interpolate(x1, x2, s), performs simple linear interpolation
        between two points x1 and x2 with parameter s.

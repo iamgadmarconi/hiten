@@ -1,4 +1,4 @@
-"""
+r"""
 center.base
 ===========
 
@@ -43,7 +43,8 @@ if TYPE_CHECKING:
 
 
 class CenterManifold:
-    """Centre manifold normal-form builder.
+    r"""
+    Centre manifold normal-form builder.
 
     Parameters
     ----------
@@ -93,33 +94,34 @@ class CenterManifold:
         return f"CenterManifold(point={self.point}, max_degree={self.max_degree})"
     
     def cache_get(self, key: tuple) -> Any:
-        """
+        r"""
         Get a value from the cache.
         """
         return self._cache.get(key)
     
     def cache_set(self, key: tuple, value: Any):
-        """
+        r"""
         Set a value in the cache.
         """
         self._cache[key] = value
     
     def cache_clear(self):
-        """
+        r"""
         Clear the cache.
         """
         self._cache.clear()
     
     def compute(self):
-        """Compute the polynomial Hamiltonian restricted to the centre manifold.
+        r"""
+        Compute the polynomial Hamiltonian restricted to the centre manifold.
 
         The returned list lives in *real modal* coordinates
-        \((q_2, p_2, q_3, p_3)\).
+        :math:`(q_2, p_2, q_3, p_3)`.
 
         Returns
         -------
         list of numpy.ndarray
-            Sequence \([H_0, H_2, \dots, H_N]\) where each entry contains the
+            Sequence :math:`[H_0, H_2, \dots, H_N]` where each entry contains the
             packed coefficients of the homogeneous polynomial of that degree.
 
         Raises
@@ -210,7 +212,7 @@ class CenterManifold:
         return poly_cm_real
 
     def _restrict_to_center_manifold(self, poly_H, tol=1e-14):
-        """
+        r"""
         Restrict a Hamiltonian to the center manifold by eliminating hyperbolic variables.
         
         Parameters
@@ -250,12 +252,13 @@ class CenterManifold:
         return poly_cm
     
     def poincare_map(self, energy: float, **kwargs) -> "PoincareMap":
-        """Return a cached (or newly built) Poincaré return map.
+        r"""
+        Return a cached (or newly built) Poincaré return map.
 
         Parameters
         ----------
         energy : float
-            Hamiltonian energy \(h_0\) corresponding to the desired Jacobi
+            Hamiltonian energy :math:`h_0` corresponding to the desired Jacobi
             constant.
         **kwargs
             Optional keyword arguments forwarded to
@@ -296,14 +299,15 @@ class CenterManifold:
         return self._poincare_map
 
     def ic(self, poincare_point: np.ndarray, energy: float, section_coord: str = "q3") -> np.ndarray:
-        """Convert a point on a 2-dimensional centre-manifold section to full ICs.
+        r"""
+        Convert a point on a 2-dimensional centre-manifold section to full ICs.
 
         Parameters
         ----------
         poincare_point : numpy.ndarray, shape (2,)
             Coordinates on the chosen Poincaré section.
         energy : float
-            Hamiltonian energy \(h_0\) used to solve for the missing coordinate.
+            Hamiltonian energy :math:`h_0` used to solve for the missing coordinate.
         section_coord : {'q3', 'p3', 'q2', 'p2'}, default 'q3'
             Coordinate fixed to zero on the section.
 
@@ -311,7 +315,7 @@ class CenterManifold:
         -------
         numpy.ndarray, shape (6,)
             Synodic initial conditions
-            \((q_1, q_2, q_3, p_1, p_2, p_3)\).
+            :math:`(q_1, q_2, q_3, p_1, p_2, p_3)`.
 
         Raises
         ------
@@ -405,7 +409,7 @@ class CenterManifold:
         return synodic_6d
 
     def ic2cm(self) -> np.ndarray:
-        """
+        r"""
         TODO: Implement initial conditions to center manifold transformation.
         """
         pass

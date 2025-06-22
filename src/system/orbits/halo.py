@@ -1,4 +1,4 @@
-"""
+r"""
 system.orbits.halo
 ==================
 
@@ -32,7 +32,8 @@ from utils.log_config import logger
 
 
 class HaloOrbit(PeriodicOrbit):
-    """Third-order halo orbit about a collinear libration point.
+    r"""
+    Halo orbit class.
 
     Parameters
     ----------
@@ -98,7 +99,8 @@ class HaloOrbit(PeriodicOrbit):
             logger.warning("Must supply initial state for L3 halo system.orbits.")
 
     def _initial_guess(self) -> NDArray[np.float64]:
-        """Richardson third-order analytical approximation.
+        r"""
+        Richardson third-order analytical approximation.
 
         The method evaluates the closed-form expressions published by
         Richardson to obtain an *O(\!\epsilon^{3})* approximation of the halo
@@ -330,7 +332,8 @@ class HaloOrbit(PeriodicOrbit):
         return np.array([rx, ry, rz, vx, vy, vz], dtype=np.float64)
 
     def _halo_quadratic_term(self, X_ev, Phi):
-        """Evaluate the quadratic part of the Jacobian for differential correction.
+        r"""
+        Evaluate the quadratic part of the Jacobian for differential correction.
 
         Parameters
         ----------
@@ -358,23 +361,6 @@ class HaloOrbit(PeriodicOrbit):
         return np.array([[DDx],[DDz]]) @ Phi[[S.Y],:][:, (S.X,S.VY)] / vy
 
     def differential_correction(self, **kw):
-        """Refine the orbit so that the periodicity conditions are satisfied.
-
-        The method builds a :math:`2\times2` root-finding problem on the velocity
-        components :math:`\dot{x}` and :math:`\dot{z}` at the symmetry plane
-        crossing (half period) and solves it with a Newton iteration.
-
-        Other Parameters
-        ----------------
-        **kw
-            Additional keyword arguments forwarded verbatim to the base
-            implementation.
-
-        Returns
-        -------
-        NDArray[np.float64]
-            Corrected six-dimensional initial condition for the halo orbit.
-        """
         cfg = correctionConfig(
             residual_indices=(S.VX, S.VZ),
             control_indices=(S.X,  S.VY),
@@ -384,17 +370,4 @@ class HaloOrbit(PeriodicOrbit):
 
 
     def eccentricity(self) -> float:
-        """Compute the osculating eccentricity of the halo orbit.
-
-        Returns
-        -------
-        float
-            Eccentricity of the quasi-periodic projection of the halo orbit
-            onto the :math:`x\,y`-plane.
-
-        Raises
-        ------
-        NotImplementedError
-            Always; the routine is not yet available.
-        """
         raise NotImplementedError("Eccentricity calculation not implemented for HaloOrbit.")

@@ -1,4 +1,4 @@
-"""
+r"""
 algorithms.integrators.base
 ===========================
 
@@ -29,7 +29,8 @@ from algorithms.dynamics.base import DynamicalSystemProtocol
 
 @dataclass
 class Solution:
-    """Discrete solution returned by an integrator.
+    r"""
+    Discrete solution returned by an integrator.
 
     Parameters
     ----------
@@ -74,7 +75,8 @@ class Solution:
             )
 
     def interpolate(self, t: Union[np.ndarray, float]) -> np.ndarray:
-        """Evaluate the trajectory at intermediate time points.
+        r"""
+        Evaluate the trajectory at intermediate time points.
 
         If :pyattr:`Solution.derivatives` are provided a cubic Hermite scheme
         of order three is employed on every step; otherwise straight linear
@@ -152,7 +154,8 @@ class Solution:
 
 
 class Integrator(ABC):
-    """Minimal interface that every concrete integrator must satisfy.
+    r"""
+    Minimal interface that every concrete integrator must satisfy.
 
     Parameters
     ----------
@@ -198,7 +201,7 @@ class Integrator(ABC):
     @property
     @abstractmethod
     def order(self) -> Optional[int]:
-        """
+        r"""
         Order of accuracy of the integrator.
         
         Returns
@@ -216,7 +219,7 @@ class Integrator(ABC):
         t_vals: np.ndarray,
         **kwargs
     ) -> Solution:
-        """
+        r"""
         Integrate the dynamical system from initial conditions.
         
         Parameters
@@ -243,7 +246,8 @@ class Integrator(ABC):
         pass
     
     def validate_system(self, system: DynamicalSystemProtocol) -> None:
-        """Check that *system* complies with :pyclass:`DynamicalSystemProtocol`.
+        r"""
+        Check that *system* complies with :pyclass:`DynamicalSystemProtocol`.
 
         Parameters
         ----------
@@ -264,7 +268,8 @@ class Integrator(ABC):
         y0: np.ndarray,
         t_vals: np.ndarray
     ) -> None:
-        """Validate that the input arguments form a consistent integration task.
+        r"""
+        Validate that the input arguments form a consistent integration task.
 
         Parameters
         ----------

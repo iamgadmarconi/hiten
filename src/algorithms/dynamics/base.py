@@ -1,4 +1,4 @@
-"""
+r"""
 algorithms.dynamics.base
 ========================
 
@@ -24,7 +24,8 @@ import numpy as np
 
 @runtime_checkable
 class DynamicalSystemProtocol(Protocol):
-    """Lightweight structural type understood by the integrator layer.
+    r"""
+    Lightweight structural type understood by the integrator layer.
 
     The protocol declares the minimal read-only attributes that a concrete
     dynamical system must expose.
@@ -50,7 +51,8 @@ class DynamicalSystemProtocol(Protocol):
             
 
 class _DynamicalSystem(ABC):
-    """Abstract base class implementing common functionality for concrete
+    r"""
+    Abstract base class implementing common functionality for concrete
     dynamical systems.
 
     Parameters
@@ -115,7 +117,8 @@ class _DynamicalSystem(ABC):
 
 
 class _DirectedSystem(_DynamicalSystem):
-    """Directional wrapper around another dynamical system.
+    r"""
+    Directional wrapper around another dynamical system.
 
     The wrapper permits integration forward or backward in time and can
     selectively negate derivatives of specified state components. This is

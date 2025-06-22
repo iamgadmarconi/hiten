@@ -1,4 +1,4 @@
-"""
+r"""
 center.hamiltonian
 ==================
 
@@ -34,7 +34,7 @@ from utils.config import FASTMATH
 
 @njit(fastmath=FASTMATH, cache=False)
 def _build_T_polynomials(poly_x, poly_y, poly_z, max_deg: int, psi_table, clmo_table, encode_dict_list) -> types.ListType:
-    """
+    r"""
     Compute three-dimensional Chebyshev polynomials of the first kind
     \(T_n(r)\) where \(r = x / \sqrt{x^2 + y^2 + z^2}\).
 
@@ -111,7 +111,7 @@ def _build_T_polynomials(poly_x, poly_y, poly_z, max_deg: int, psi_table, clmo_t
 
 @njit(fastmath=FASTMATH, cache=False)
 def _build_R_polynomials(poly_x, poly_y, poly_z, poly_T: types.ListType, max_deg: int, psi_table, clmo_table, encode_dict_list) -> types.ListType:
-    """
+    r"""
     Generate the auxiliary sequence \(R_n\) required by the Lindstedt-Poincaré
     formulation.
 
@@ -211,7 +211,7 @@ def _build_R_polynomials(poly_x, poly_y, poly_z, poly_T: types.ListType, max_deg
 
 
 def _build_potential_U(poly_T, point, max_deg: int, psi_table) -> List[np.ndarray]:
-    """
+    r"""
     Assemble the gravitational potential expansion
     \(U = -\sum_{n\ge 2} c_n T_n(r)\).
 
@@ -242,7 +242,7 @@ def _build_potential_U(poly_T, point, max_deg: int, psi_table) -> List[np.ndarra
 
 
 def _build_kinetic_energy_terms(poly_px, poly_py, poly_pz, max_deg: int, psi_table, clmo_table, encode_dict_list) -> List[np.ndarray]:
-    """
+    r"""
     Build the kinetic energy term
     \(T = \frac{1}{2}(p_x^2 + p_y^2 + p_z^2)\).
 
@@ -270,7 +270,7 @@ def _build_kinetic_energy_terms(poly_px, poly_py, poly_pz, max_deg: int, psi_tab
 
 
 def _build_rotational_terms(poly_x, poly_y, poly_px, poly_py, max_deg: int, psi_table, clmo_table, encode_dict_list) -> List[np.ndarray]:
-    """
+    r"""
     Construct the Coriolis (rotational) contribution
     \(C = y\,p_x - x\,p_y\).
 
@@ -304,7 +304,7 @@ def _build_rotational_terms(poly_x, poly_y, poly_px, poly_py, max_deg: int, psi_
 
 
 def build_physical_hamiltonian(point, max_deg: int) -> List[np.ndarray]:
-    """
+    r"""
     Combine kinetic, potential, and Coriolis parts to obtain the full
     rotating-frame Hamiltonian \(H = T + U + C\).
 
@@ -355,7 +355,7 @@ def build_physical_hamiltonian(point, max_deg: int) -> List[np.ndarray]:
 
 
 def build_lindstedt_poincare_rhs_polynomials(point, max_deg: int) -> Tuple[List, List, List]:
-    """
+    r"""
     Compute RHS polynomials for the first Lindstedt-Poincaré iteration.
 
     Parameters
@@ -407,4 +407,3 @@ def build_lindstedt_poincare_rhs_polynomials(point, max_deg: int) -> Tuple[List,
     rhs_z_poly = polynomial_multiply(poly_z, sum_term_for_y_z_eqs, max_deg, psi_table, clmo_table, encode_dict_list)
     
     return rhs_x_poly, rhs_y_poly, rhs_z_poly
-
