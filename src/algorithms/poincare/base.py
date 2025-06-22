@@ -1,3 +1,17 @@
+"""
+algorithms.poincare.base
+=========================
+
+Poincaré return map utilities on the centre manifold of the spatial circular
+restricted three body problem.
+
+The module exposes a high level interface :pyclass:`PoincareMap` that wraps
+specialised CPU/GPU kernels to generate, query, and visualise discrete
+Poincaré sections arising from the reduced Hamiltonian flow. Numerical
+parameters are grouped in the lightweight dataclass
+:pyclass:`poincareMapConfig`.
+"""
+
 import os
 import pickle
 from dataclasses import asdict, dataclass
@@ -106,6 +120,23 @@ class PoincareMap:
         return self._section
 
     def compute(self) -> np.ndarray:
+        """Compute the discrete Poincaré return map.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of shape (:math:`n`, 2) containing the intersection points.
+
+        Raises
+        ------
+        RuntimeError
+            If the underlying centre manifold computation fails.
+
+        Notes
+        -----
+        The resulting section is cached in :pyattr:`_section`; subsequent calls
+        reuse the stored data.
+        """
         logger.info(
             "Generating Poincaré map at energy h0=%.6e (method=%s)",
             self.energy,
@@ -138,6 +169,23 @@ class PoincareMap:
         return section.points  # Return raw points for backward compatibility
 
     def pm2ic(self, indices: Optional[Sequence[int]] = None) -> np.ndarray:
+        """Convert stored map points to full six dimensional initial conditions.
+
+        Parameters
+        ----------
+        indices : Sequence[int] or None, optional
+            Indices of the points to convert. If *None* all points are used.
+
+        Returns
+        -------
+        numpy.ndarray
+            Matrix of shape (:math:`m`, 6) with synodic frame coordinates.
+
+        Raises
+        ------
+        RuntimeError
+            If the map has not been computed yet.
+        """
         if self._section is None:
             raise RuntimeError(
                 "Poincaré map has not been computed yet - cannot convert.")
@@ -155,6 +203,26 @@ class PoincareMap:
         return np.stack(ic_list, axis=0)
 
     def grid(self, Nq: int = 201, Np: int = 201, max_steps: int = 20_000) -> np.ndarray:
+        """Generate a dense rectangular grid of the Poincaré map.
+
+        Parameters
+        ----------
+        Nq, Np : int, default 201
+            Number of nodes along the :math:`q` and :math:`p` axes.
+        max_steps : int, default 20000
+            Maximum number of integration steps for each seed.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array containing the grid points with the same layout as
+            :pyattr:`section.points`.
+
+        Raises
+        ------
+        ValueError
+            If an unsupported backend is selected.
+        """
         logger.info(
             "Generating *dense-grid* Poincaré map at energy h0=%.6e (Nq=%d, Np=%d)",
             self.energy,
@@ -202,6 +270,15 @@ class PoincareMap:
         return orbit
 
     def save(self, filepath: str, **kwargs) -> None:
+        """Serialize the current map to disk.
+
+        Parameters
+        ----------
+        filepath : str
+            Destination pickle file.
+        **kwargs
+            Reserved for future extensions.
+        """
 
         _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
 
@@ -224,6 +301,20 @@ class PoincareMap:
         logger.info("Poincaré map saved to %s", filepath)
 
     def load(self, filepath: str, **kwargs) -> None:
+        """Load a map previously stored with :pyfunc:`save`.
+
+        Parameters
+        ----------
+        filepath : str
+            Path to the pickle file.
+        **kwargs
+            Reserved for future extensions.
+
+        Raises
+        ------
+        FileNotFoundError
+            If *filepath* does not exist.
+        """
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Poincaré-map file not found: {filepath}")
 
@@ -262,6 +353,27 @@ class PoincareMap:
         logger.info("Poincaré map loaded from %s", filepath)
 
     def plot(self, dark_mode: bool = True, output_dir: Optional[str] = None, filename: Optional[str] = None, **kwargs):
+        """Render the 2-D Poincaré map.
+
+        Parameters
+        ----------
+        dark_mode : bool, default True
+            Use a dark background colour scheme.
+        output_dir : str or None, optional
+            Folder where the figure is saved. If *None* the plot is only
+            displayed.
+        filename : str or None, optional
+            Name of the output image inside *output_dir*.
+        **kwargs
+            Additional arguments forwarded to :pyfunc:`matplotlib.pyplot.scatter`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            Figure handle.
+        matplotlib.axes.Axes
+            Axes handle.
+        """
         if self._section is None:
             logger.debug("No cached Poincaré-map points found - computing now …")
             self.compute()
@@ -322,9 +434,25 @@ class PoincareMap:
         return fig, ax
 
     def plot_interactive(self, steps=1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order=6, frame="rotating", dark_mode: bool = True):
-        """
-        Interactively select a point from the Poincaré map, generate initial conditions, create a GenericOrbit, propagate, and plot.
-        You can select as many points as you want. Press 'q' to quit the selection window.
+        """Interactively select map points and propagate the corresponding orbits.
+
+        Parameters
+        ----------
+        steps : int, default 1000
+            Number of propagation steps for the generated orbit.
+        method : {'rk', 'scipy', 'symplectic', 'adaptive'}, default 'scipy'
+            Integrator backend.
+        order : int, default 6
+            Integrator order when applicable.
+        frame : str, default 'rotating'
+            Reference frame used by :pyfunc:`GenericOrbit.plot`.
+        dark_mode : bool, default True
+            Use dark background colours.
+
+        Returns
+        -------
+        system.orbits.base.GenericOrbit
+            The last orbit generated by the selector.
         """
         if self._section is None:
             self.compute()
@@ -372,4 +500,16 @@ class PoincareMap:
         return selected_orbit['orbit']
 
     def ic(self, pt: np.ndarray) -> np.ndarray:
+        """Map a Poincaré point to six dimensional initial conditions.
+
+        Parameters
+        ----------
+        pt : numpy.ndarray, shape (2,)
+            Poincaré section coordinates.
+
+        Returns
+        -------
+        numpy.ndarray
+            Synodic frame state vector of length 6.
+        """
         return self.cm.ic(pt, self.energy, section_coord=self.config.section_coord)

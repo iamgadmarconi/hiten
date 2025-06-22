@@ -1,13 +1,29 @@
+"""
+center.lie
+==========
+
+Numba-accelerated helpers for Lie-series based normalization of polynomial
+Hamiltonians in the center-manifold reduction of the spatial restricted three-body
+problem (RTBP).
+
+References
+----------
+Jorba, À. (1999). "A Methodology for the Numerical Computation of Normal Forms, Centre
+Manifolds and First Integrals of Hamiltonian Systems".
+"""
+
 import numpy as np
 from numba import njit
 from numba.typed import List
 
 from algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                               _factorial, decode_multiindex,
-                                               make_poly)
-from algorithms.polynomial.operations import (
-    polynomial_clean, polynomial_evaluate, polynomial_poisson_bracket,
-    polynomial_total_degree, polynomial_zero_list)
+                                        _factorial, decode_multiindex,
+                                        make_poly)
+from algorithms.polynomial.operations import (polynomial_clean,
+                                              polynomial_evaluate,
+                                              polynomial_poisson_bracket,
+                                              polynomial_total_degree,
+                                              polynomial_zero_list)
 from utils.config import FASTMATH
 from utils.log_config import logger
 

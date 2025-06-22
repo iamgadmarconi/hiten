@@ -1,3 +1,26 @@
+"""
+polynomial.base
+===============
+
+Low-level helpers for manipulating multivariate polynomial coefficient arrays
+used throughout the library.  The routines defined here are performance-critical
+Numba-JIT compiled kernels that:
+
+* build combinatorial lookup tables (:pyfunc:`init_index_tables`) for fast
+  encoding/decoding of monomial multi-indices,
+* provide packing/unpacking utilities for exponents in a compact
+  32-bit representation (:pyfunc:`pack_multiindex`,
+  :pyfunc:`decode_multiindex`, :pyfunc:`encode_multiindex`,
+  :pyfunc:`fill_exponents`),
+* expose lightweight algebraic helpers such as factorial and binomial
+  coefficients (:pyfunc:`_factorial`, :pyfunc:`_combinations`), and
+* create suitably-shaped zero coefficient arrays (:pyfunc:`make_poly`).
+
+The module is intentionally dependency-light (only *NumPy* and *Numba*) so that
+these utilities can be reused by both CPU and GPU back-ends without circular
+dependencies.
+"""
+
 import numpy as np
 from numba import njit, types
 from numba.typed import Dict, List

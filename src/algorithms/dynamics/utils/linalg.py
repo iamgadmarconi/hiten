@@ -1,3 +1,14 @@
+"""
+dynamics.utils.linalg
+=====================
+
+Linear-algebra helpers for the dynamical-systems sub-package. The routines
+are pure NumPy and therefore portable, vectorised and JIT-friendly.
+
+References
+----------
+Koon, W. S., Lo, M. W., Marsden, J. E., Ross, S. D. (2000) "Dynamical Systems, the Three-Body Problem and Space Mission Design".
+"""
 from typing import Set, Tuple
 
 import numpy as np
@@ -7,30 +18,57 @@ from utils.log_config import logger
 
 def eigenvalue_decomposition(A: np.ndarray, discrete: int = 0, delta: float = 1e-4) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """
-    Compute and classify eigenvalues and eigenvectors of a matrix into stable, 
-    unstable, and center subspaces.
-    
+    Classify eigen-pairs into stable, unstable and centre subspaces.
+
     Parameters
     ----------
-    A : ndarray
-        Square matrix to analyze
-    discrete : int, optional
-        Classification mode:
-        * 0: continuous-time system (classify by real part sign)
-        * 1: discrete-time system (classify by magnitude relative to 1)
-    delta : float, optional
-        Tolerance for classification
-    
+    A : ndarray, shape (n, n)
+        Real or complex square matrix whose spectrum is to be analysed.
+    discrete : int, default 0
+        Classification mode.
+        * ``0`` - treat :pyfunc:`A` as a continuous-time Jacobian and use
+          :math:`\operatorname{sign}(\Re\{\lambda\})`.
+        * ``1`` - treat :pyfunc:`A` as a discrete map and use
+          :math:`|\lambda|` with a neutral band of width ``delta``.
+    delta : float, default 1e-4
+        Half-width of the neutral band around the stability threshold.
+
     Returns
     -------
-    tuple
-        (sn, un, cn, Ws, Wu, Wc) containing:
-        - sn: stable eigenvalues
-        - un: unstable eigenvalues
-        - cn: center eigenvalues
-        - Ws: eigenvectors spanning stable subspace
-        - Wu: eigenvectors spanning unstable subspace
-        - Wc: eigenvectors spanning center subspace
+    sn : ndarray
+        Stable eigenvalues (:math:`\Re\{\lambda\}<0` or
+        :math:`|\lambda|<1-\delta`).
+    un : ndarray
+        Unstable eigenvalues (:math:`\Re\{\lambda\}>0` or
+        :math:`|\lambda|>1+\delta`).
+    cn : ndarray
+        Centre eigenvalues (neutral spectrum).
+    Ws : ndarray, shape (n, n_s)
+        Stable eigenvectors stacked column-wise.
+    Wu : ndarray, shape (n, n_u)
+        Unstable eigenvectors.
+    Wc : ndarray, shape (n, n_c)
+        Centre eigenvectors.
+
+    Raises
+    ------
+    numpy.linalg.LinAlgError
+        If the eigen-decomposition fails.
+
+    Notes
+    -----
+    Each eigenvector is *pivot-normalised* so that its first non-zero entry
+    equals 1. Infinitesimal imaginary parts are discarded with a tolerance of
+    ``1e-14``.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from algorithms.dynamics.utils.linalg import eigenvalue_decomposition
+    >>> A = np.diag([-2.0, 0.0, 0.5])
+    >>> sn, un, cn, Ws, Wu, Wc = eigenvalue_decomposition(A)
+    >>> sn
+    array([-2.])
     """
     logger.debug(f"Starting eigenvalue decomposition for matrix A with shape {A.shape}, discrete={discrete}, delta={delta}")
     # Compute eigen-decomposition
@@ -133,35 +171,51 @@ def eigenvalue_decomposition(A: np.ndarray, discrete: int = 0, delta: float = 1e
 
 def stability_indices(M: np.ndarray, tol: float = 1e-8) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
-    Compute stability indices from a monodromy matrix robustly by explicitly 
-    finding reciprocal eigenvalue pairs (λ, 1/λ).
+    Compute the three Floquet stability indices of a periodic orbit.
 
     Parameters
     ----------
-    M : array_like
-        6x6 monodromy matrix from a periodic orbit.
-    tol : float, optional
-        Tolerance used for `np.isclose` when identifying reciprocal pairs 
-        and eigenvalues with magnitude near 1.0. Defaults to 1e-8.
+    M : ndarray, shape (6, 6)
+        Monodromy matrix returned by a one-period state transition
+        integration.
+    tol : float, default 1e-8
+        Pairing tolerance used for
+        :pyfunc:`numpy.isclose` when matching reciprocal eigenvalues and
+        detecting unit-modulus values.
 
     Returns
     -------
-    tuple
-        (nu, eigvals, eigvecs) containing:
-        - nu: Array of 3 stability indices (complex). Contains np.nan for 
-              indices where pairs could not be reliably found.
-        - eigvals: Array of 6 eigenvalues of M, sorted by magnitude descending.
-        - eigvecs: Matrix of eigenvectors corresponding to the sorted eigenvalues.
+    nu : ndarray, shape (3,)
+        Stability indices :math:`\nu_i = (\lambda_i + 1/\lambda_i)/2`.
+        Entries are :pydata:`numpy.nan` if a reciprocal pair cannot be
+        identified.
+    eigvals : ndarray, shape (6,)
+        Eigenvalues of :pyfunc:`M` sorted by decreasing magnitude.
+    eigvecs : ndarray, shape (6, 6)
+        Corresponding eigenvectors.
+
+    Raises
+    ------
+    ValueError
+        If :pyfunc:`M` is not of shape ``(6, 6)``.
+    numpy.linalg.LinAlgError
+        If the eigen-decomposition fails.
 
     Notes
     -----
-    - The stability indices are computed as nu = (λ + 1/λ)/2. 
-    - For a stable orbit, all indices must satisfy |nu| ≤ 1.
-    - Assumes the input matrix `M` is symplectic or nearly so, meaning 
-      eigenvalues should come in reciprocal pairs (λ, 1/λ).
-    - Issues `RuntimeWarning` if expected pairing structure is not found 
-      within the specified tolerance, which might indicate numerical issues 
-      or a non-symplectic matrix.
+    The input matrix is assumed (but not required) to be symplectic so that
+    the spectrum occurs in reciprocal pairs :math:`(\lambda, 1/\lambda)`.
+    The algorithm searches these pairs explicitly and is therefore robust to
+    small symmetry-breaking numerical errors.
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from algorithms.dynamics.utils.linalg import stability_indices
+    >>> M = np.eye(6)
+    >>> nu, *_ = stability_indices(M)
+    >>> np.allclose(nu, 1.0)
+    True
     """
     logger.info(f"Calculating stability indices for matrix M with shape {M.shape}, tolerance={tol}")
 

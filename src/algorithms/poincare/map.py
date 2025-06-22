@@ -1,3 +1,19 @@
+"""
+algorithms.poincare.map
+=======================
+
+Fast generation of Poincaré sections on the centre manifold of the spatial
+circular restricted three body problem (CRTBP).
+
+References
+----------
+Jorba, À. (1999). "A Methodology for the Numerical Computation of Normal Forms, Centre
+Manifolds and First Integrals of Hamiltonian Systems".
+
+Zhang, H. Q., Li, S. (2001). "Improved semi-analytical computation of center
+manifolds near collinear libration points".
+"""
+
 import math
 from typing import Callable, List, NamedTuple, Optional, Tuple
 
@@ -520,29 +536,52 @@ def _generate_map(
     seed_axis: str = "q2",  # "q2" or "p2"
     section_coord: str = "q3",  # "q2", "p2", "q3", or "p3"
 ) -> PoincareSection:
-    """Generate a Poincaré map by iterating each seed many times.
+    """Generate a Poincaré return map by forward integration of a small set of seeds.
 
     Parameters
     ----------
     h0 : float
-        Energy level.
-    H_blocks, max_degree, psi_table, clmo_table, encode_dict_list
-        Same polynomial data as `_generate_grid`.
-    n_seeds : int, optional
-        Number of initial seeds to distribute along the chosen axis.
-    n_iter : int, optional
-        How many Poincaré iterates to compute for each seed.
-    dt : float, optional
-        Timestep for the integrator.
-    use_symplectic : bool, optional
-        True → Symplectic (recommended); False → RK4.
-    seed_axis : {"q2", "p2"}
-        Place seeds on this axis with the other momentum/position set to zero.
+        Target energy :math:`h_0` on the centre manifold.
+    H_blocks : list[numpy.ndarray]
+        Packed polynomial coefficients of the reduced Hamiltonian.
+    max_degree : int
+        Maximum homogeneous degree :math:`N` kept in the truncation.
+    psi_table : numpy.ndarray
+        PSI lookup table used by polynomial routines.
+    clmo_table : list[numpy.ndarray]
+        CLMO index tables corresponding to *H_blocks*.
+    encode_dict_list : list[dict]
+        Helper encoders for multi-index compression.
+    n_seeds : int, default 20
+        Number of seeds laid uniformly along *seed_axis*.
+    n_iter : int, default 1500
+        Successive Poincaré crossings computed for each seed.
+    dt : float, default 1e-2
+        Fixed integration step size.
+    use_symplectic : bool, default True
+        If ``True`` use the extended-phase symplectic integrator, otherwise an explicit Runge–Kutta scheme.
+    integrator_order : {4, 6, 8}, default 6
+        Tableau order for the numerical integrator.
+    c_omega_heuristic : float, default 20.0
+        Heuristic scaling constant for the extended-phase method.
+    seed_axis : {'q2', 'p2'}, default 'q2'
+        Coordinate along which seeds are distributed.
+    section_coord : {'q2', 'p2', 'q3', 'p3'}, default 'q3'
+        Coordinate that defines the Poincaré section :math:`\Sigma`.
 
     Returns
     -------
     PoincareSection
-        Collected section points with appropriate labels.
+        Map points with matching axis labels.
+
+    Raises
+    ------
+    ValueError
+        If *section_coord* is not supported.
+
+    Notes
+    -----
+    The routine is performance-critical and therefore JIT-compiled with :pyfunc:`numba.njit`.
     """
     # Get section information
     section_idx, direction_sign, labels = section_closure(section_coord)
@@ -754,6 +793,16 @@ def _generate_grid(
     -------
     PoincareSection
         Section points with coordinate labels
+
+    Raises
+    ------
+    ValueError
+        If *section_coord* is not one of the supported identifiers.
+
+    Notes
+    -----
+    Designed for exhaustive scans. For faster qualitative exploration use
+    :pyfunc:`_generate_map` with a handful of seeds.
     """
     logger.info(f"Computing Poincaré map for energy h0={h0:.6e}, grid size: {Nq}x{Np}")
     

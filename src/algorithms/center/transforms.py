@@ -1,3 +1,17 @@
+"""
+center.transforms
+=================
+
+Linear coordinate transformations and helper utilities used in the centre
+manifold normal-form pipeline of the spatial circular restricted three body
+problem (CRTBP).
+
+References
+----------
+Jorba, À. (1999). "A Methodology for the Numerical Computation of Normal Forms, Centre
+Manifolds and First Integrals of Hamiltonian Systems".
+"""
+
 import numpy as np
 from numba.typed import List
 
@@ -12,6 +26,19 @@ from utils.log_config import logger
 
 
 def M() -> np.ndarray:
+    """Return the linear map from complex modal to real modal coordinates.
+
+    Returns
+    -------
+    numpy.ndarray
+        A :math:`6 x 6` complex-valued matrix :math:`M` such that
+        :math:`\mathbf{z}_{\text{real}} = M\,\mathbf{z}_{\text{complex}}`.
+
+    Notes
+    -----
+    The matrix is unitary up to scaling and preserves the canonical
+    symplectic structure.
+    """
     return np.array([[1, 0, 0, 0, 0, 0],
         [0, 1/np.sqrt(2), 0, 0, 1j/np.sqrt(2), 0],
         [0, 0, 1/np.sqrt(2), 0, 0, 1j/np.sqrt(2)],
@@ -20,6 +47,14 @@ def M() -> np.ndarray:
         [0, 0, 1j/np.sqrt(2), 0, 0, 1/np.sqrt(2)]], dtype=np.complex128) #  real = M @ complex
 
 def M_inv() -> np.ndarray:
+    """Return the inverse transformation :math:`M^{-1}`.
+
+    Returns
+    -------
+    numpy.ndarray
+        The inverse of :pyfunc:`M`, satisfying
+        \(\mathbf{z}_{\text{complex}} = M^{-1}\,\mathbf{z}_{\text{real}}\).
+    """
     return np.linalg.inv(M()) # complex = M_inv @ real
 
 def substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
@@ -188,6 +223,12 @@ def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray) ->
     -----
     - Local coordinates are ordered as [x1, x2, x3, px1, px2, px3].
     - Synodic coordinates are ordered as [X, Y, Z, Vx, Vy, Vz].
+
+    Raises
+    ------
+    ValueError
+        If *local_coords* is not a flat array of length 6 or contains an
+        imaginary part larger than the tolerance (``1e-16``).
     """
     gamma, mu, sgn, a = point.gamma, point.mu, point.sign, point.a
 
@@ -242,6 +283,17 @@ def _local2synodic_triangular(point: TriangularPoint, local_coords: np.ndarray) 
     -------
     np.ndarray
         Coordinates in synodic frame
+
+    Notes
+    -----
+    - Local coordinates are ordered as [x1, x2, x3, px1, px2, px3].
+    - Synodic coordinates are ordered as [X, Y, Z, Vx, Vy, Vz].
+
+    Raises
+    ------
+    ValueError
+        If *local_coords* is not a flat array of length 6 or contains an
+        imaginary part larger than the tolerance (``1e-16``).
     """
     mu, sgn = point.mu, point.sign
 

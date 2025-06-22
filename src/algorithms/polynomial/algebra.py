@@ -1,3 +1,35 @@
+"""
+algorithms.polynomial.algebra
+============================
+
+Numba accelerated helpers for algebraic manipulation of multivariate
+polynomial coefficient arrays in :math:`6` canonical variables
+:math:`(q_{1}, q_{2}, q_{3}, p_{1}, p_{2}, p_{3})`.
+
+The module supplies low level kernels for
+
+* Element wise arithmetic (:pyfunc:`_poly_add`, :pyfunc:`_poly_scale`)
+* Dense convolution style multiplication (:pyfunc:`_poly_mul`)
+* Partial differentiation and Poisson brackets (:pyfunc:`_poly_diff`,
+  :pyfunc:`_poly_poisson`)
+* Numerical evaluation, integration and coefficient cleaning
+  (:pyfunc:`_poly_evaluate`, :pyfunc:`_poly_integrate`,
+  :pyfunc:`_poly_clean`, :pyfunc:`_poly_clean_inplace`).
+
+All routines operate on one-dimensional coefficient arrays that follow
+the compressed monomial ordering provided by
+:pyfunc:`algorithms.polynomial.base.init_index_tables`.  Kernels are
+compiled in nopython mode with :pyfunc:`numba.njit`; computationally
+intensive operations additionally exploit :pyfunc:`numba.prange` for
+parallelism.
+
+Notes
+-----
+These helpers are primarily intended for internal use by higher-level
+abstractions in :pymod:`algorithms.polynomial`.  Inputs are assumed to
+be well-formed; minimal validation is performed at runtime to maximise
+performance.
+"""
 import numpy as np
 from numba import get_num_threads, get_thread_id, njit, prange
 from numba.typed import List

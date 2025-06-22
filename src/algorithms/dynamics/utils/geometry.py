@@ -1,3 +1,23 @@
+"""
+dynamics.utils.geometry
+=======================
+
+Utility routines for geometric post-processing in the spatial circular
+restricted three-body problem (CRTBP).
+
+The functions in this module locate coordinate-plane crossings, build
+Poincaré surfaces of section and resample numerical trajectories
+produced by :pyfunc:`algorithms.dynamics.rtbp._propagate_dynsys`.
+
+All routines assume the canonical rotating frame of the CRTBP, where the
+primary bodies are fixed at :math:`(-\mu, 0, 0)` and
+:math:`(1-\mu, 0, 0)` and time is non-dimensionalised so that the mean
+motion equals one.
+
+References
+----------
+Szebehely, V. (1967). "Theory of Orbits".
+"""
 from typing import Callable, Tuple
 
 import numpy as np

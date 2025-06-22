@@ -1,3 +1,18 @@
+"""
+polynomial.conversion
+=====================
+
+Helpers that convert between the internal *coefficient-array* representation of multivariate polynomials and symbolic :class:`sympy.Expr` objects.
+The six canonical variables are ordered as :math:`(q_1, q_2, q_3, p_1, p_2, p_3)`.
+
+The module exposes:
+
+* :pyfunc:`poly2sympy` - coefficient arrays to SymPy expression.
+* :pyfunc:`sympy2poly` - SymPy expression to coefficient arrays.
+* :pyfunc:`hpoly2sympy` - single homogeneous block to SymPy expression.
+
+These routines are mainly intended for debugging and diagnostic workflows where readability outweighs raw speed.
+"""
 import typing
 
 import numpy as np
@@ -38,7 +53,7 @@ def poly2sympy(poly_p: List[np.ndarray], vars_list: typing.List[sp.Symbol], psi:
     Notes
     -----
     This function converts each homogeneous part of the polynomial separately 
-    using hpoly2sympy, then combines them into a single SymPy expression.
+    with :pyfunc:`hpoly2sympy`, then combines them into a single SymPy expression.
     """
     if len(vars_list) != N_VARS:
         raise ValueError(f"Expected {N_VARS} symbols in vars_list, but got {len(vars_list)}.")
@@ -220,8 +235,9 @@ def hpoly2sympy(p: np.ndarray, vars_list: typing.List[sp.Symbol], psi: np.ndarra
     Notes
     -----
     This function converts each term of the homogeneous polynomial by decoding
-    the multi-index to determine the exponents, constructing the corresponding
-    monomial, and multiplying it by the coefficient.
+    the multi-index with :pyfunc:`decode_multiindex` to determine the
+    exponents, constructing the corresponding monomial, and multiplying it by
+    the coefficient.
     """
     if p is None or p.size == 0:
         return sp.Integer(0)

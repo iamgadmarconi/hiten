@@ -1,3 +1,23 @@
+"""
+algorithms.integrators.base
+===========================
+
+Abstract interfaces for numerical time integration.
+
+The module provides two core abstractions:
+
+* :pyclass:`Solution` - an immutable container that stores a time grid, the
+  associated state vectors, and, optionally, the vector field evaluations so
+  that the trajectory can be queried by cubic Hermite interpolation.
+* :pyclass:`Integrator` - an abstract base class that prescribes the public
+  API for every concrete one-step or multi-step integrator.
+
+References
+----------
+Hairer, E., Nørsett, S. P., & Wanner, G. (1993). "Solving Ordinary
+Differential Equations I: Non-stiff Problems".
+"""
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional, Union
@@ -9,19 +29,33 @@ from algorithms.dynamics.base import DynamicalSystemProtocol
 
 @dataclass
 class Solution:
-    """
-    Container for integration results.
-    
+    """Discrete solution returned by an integrator.
+
+    Parameters
+    ----------
+    times : numpy.ndarray, shape (:math:`n`,)
+        Monotonically ordered time grid.
+    states : numpy.ndarray, shape (:math:`n`, :math:`d`)
+        State vectors corresponding to *times*.
+    derivatives : numpy.ndarray or None, optional, shape (:math:`n`, :math:`d`)
+        Evaluations of :math:`f(t,\mathbf y)` at the stored nodes. When
+        available a cubic Hermite interpolant is employed by
+        :pyfunc:`Solution.interpolate`; otherwise linear interpolation is used.
+
     Attributes
     ----------
-    times : numpy.ndarray
-        Array of time points, shape (n_points,)
-    states : numpy.ndarray
-        Array of state vectors, shape (n_points, n_dim)
-    derivatives : numpy.ndarray or None, optional
-        Array of time derivatives f(t, y) evaluated at the stored time points,
-        shape (n_points, n_dim).  When provided, cubic Hermite interpolation is
-        used; otherwise interpolation falls back to linear.
+    Same as *Parameters*.
+
+    Raises
+    ------
+    ValueError
+        If the lengths of *times*, *states*, or *derivatives* (when provided)
+        are inconsistent.
+
+    Notes
+    -----
+    The class is a :pyclass:`dataclasses.dataclass` and behaves like an
+    immutable record.
     """
     times: np.ndarray
     states: np.ndarray
@@ -40,22 +74,33 @@ class Solution:
             )
 
     def interpolate(self, t: Union[np.ndarray, float]) -> np.ndarray:
-        """Evaluate the solution at arbitrary time points by interpolation.
+        """Evaluate the trajectory at intermediate time points.
 
-        If *derivatives* are available, a cubic Hermite interpolant is used on
-        every interval; otherwise linear interpolation is applied.
+        If :pyattr:`Solution.derivatives` are provided a cubic Hermite scheme
+        of order three is employed on every step; otherwise straight linear
+        interpolation is used.
 
         Parameters
         ----------
         t : float or array_like
-            Time (or array of times) at which to evaluate the solution.  Must
-            lie within the integration interval ``[times[0], times[-1]]``.
+            Query time or array of times contained in
+            :math:`[\text{times}[0],\,\text{times}[-1]]`.
 
         Returns
         -------
-        ndarray
-            Interpolated state(s) with shape ``(n_dim,)`` for a scalar *t* or
-            ``(n_times, n_dim)`` for an array input.
+        numpy.ndarray
+            Interpolated state with shape (:math:`d`,) when *t* is scalar or
+            (:math:`m`, :math:`d`) when *t* comprises :math:`m` points.
+
+        Raises
+        ------
+        ValueError
+            If any entry of *t* lies outside the stored integration interval.
+
+        Examples
+        --------
+        >>> sol = integrator.integrate(sys, y0, np.linspace(0, 10, 11))
+        >>> y_mid = sol.interpolate(5.5)
         """
         t_arr = np.atleast_1d(t).astype(float)
 
@@ -107,19 +152,43 @@ class Solution:
 
 
 class Integrator(ABC):
-    """
-    Abstract base class for numerical integrators.
-    
-    This class defines the common interface that all integrators must implement.
-    Concrete integrators should inherit from this class and implement the
-    abstract methods.
-    
+    """Minimal interface that every concrete integrator must satisfy.
+
     Parameters
     ----------
     name : str
-        Human-readable name of the integrator
+        Human-readable identifier of the method.
     **options
-        Integrator-specific options (stored in self.options)
+        Extra keyword arguments left untouched and stored in
+        :pyattr:`options` for later use by subclasses.
+
+    Attributes
+    ----------
+    name : str
+        Same as the constructor argument.
+    options : dict
+        User-supplied options passed verbatim to the instance.
+
+    Notes
+    -----
+    Subclasses *must* implement the abstract members :pyfunc:`order` and
+    :pyfunc:`integrate`.
+
+    Examples
+    --------
+    Creating a dummy first-order explicit Euler scheme::
+
+        class Euler(Integrator):
+            @property
+            def order(self):
+                return 1
+
+            def integrate(self, system, y0, t_vals, **kwds):
+                y = [y0]
+                for t0, t1 in zip(t_vals[:-1], t_vals[1:]):
+                    dt = t1 - t0
+                    y.append(y[-1] + dt * system.rhs(t0, y[-1]))
+                return Solution(np.asarray(t_vals), np.asarray(y))
     """
     
     def __init__(self, name: str, **options):
@@ -174,18 +243,17 @@ class Integrator(ABC):
         pass
     
     def validate_system(self, system: DynamicalSystemProtocol) -> None:
-        """
-        Validate that the system is compatible with this integrator.
-        
+        """Check that *system* complies with :pyclass:`DynamicalSystemProtocol`.
+
         Parameters
         ----------
         system : DynamicalSystemProtocol
-            The system to validate
-            
+            Candidate system whose suitability is being tested.
+
         Raises
         ------
         ValueError
-            If the system is incompatible with this integrator
+            If the required attribute :pyattr:`rhs` is absent.
         """
         if not hasattr(system, 'rhs'):
             raise ValueError(f"System must implement 'rhs' method for {self.name}")
@@ -196,22 +264,24 @@ class Integrator(ABC):
         y0: np.ndarray,
         t_vals: np.ndarray
     ) -> None:
-        """
-        Validate integration inputs.
-        
+        """Validate that the input arguments form a consistent integration task.
+
         Parameters
         ----------
         system : DynamicalSystemProtocol
-            The dynamical system to integrate
+            System to be integrated.
         y0 : numpy.ndarray
-            Initial state vector
+            Initial state vector of length :pyattr:`system.dim`.
         t_vals : numpy.ndarray
-            Array of time points
-            
+            Strictly monotonic array of time nodes with at least two entries.
+
         Raises
         ------
         ValueError
-            If inputs are invalid
+            If any of the following conditions holds:
+            * ``len(y0)`` differs from :pyattr:`system.dim`.
+            * ``t_vals`` contains fewer than two points.
+            * ``t_vals`` is not strictly monotonic.
         """
         self.validate_system(system)
         

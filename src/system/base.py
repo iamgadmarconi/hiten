@@ -1,3 +1,19 @@
+"""
+system.base
+===========
+
+High-level abstractions for the Circular Restricted Three-Body Problem (CR3BP).
+
+This module bundles the physical information of a binary system, computes the
+mass parameter :math:`\mu`, instantiates the underlying vector field via
+:pyfunc:`algorithms.dynamics.rtbp.rtbp_dynsys`, and pre-computes the five
+classical Lagrange (libration) points.
+
+References
+----------
+Szebehely, V. (1967). "Theory of Orbits".
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -14,6 +30,32 @@ from utils.precision import hp
 
 @dataclass
 class systemConfig:
+    """Configuration container for a CR3BP system.
+
+    Parameters
+    ----------
+    primary : Body
+        Primary gravitating body.
+    secondary : Body
+        Secondary gravitating body.
+    distance : float
+        Characteristic separation between *primary* and *secondary* in
+        consistent units.
+
+    Attributes
+    ----------
+    Same as *Parameters*.
+
+    Raises
+    ------
+    ValueError
+        If :pyattr:`distance` is not strictly positive.
+
+    Notes
+    -----
+    The class is a :pyclass:`dataclasses.dataclass` and therefore immutable
+    once instantiated.
+    """
     primary: Body
     secondary: Body
     distance: float
@@ -25,6 +67,40 @@ class systemConfig:
 
 
 class System(object):
+    """Lightweight wrapper around the CR3BP dynamical system.
+
+    The class stores the physical properties of the primaries, computes the
+    dimensionless mass parameter :math:`\mu = m_2 / (m_1 + m_2)`, instantiates
+    the CR3BP vector field through :pyfunc:`algorithms.dynamics.rtbp.rtbp_dynsys`,
+    and caches the five Lagrange points.
+
+    Parameters
+    ----------
+    config : systemConfig
+        Fully specified configuration of the system.
+
+    Attributes
+    ----------
+    primary : Body
+        Primary gravitating body.
+    secondary : Body
+        Secondary gravitating body.
+    distance : float
+        Characteristic separation between the bodies.
+    mu : float
+        Mass parameter :math:`\mu`.
+    libration_points : dict[int, LibrationPoint]
+        Mapping from integer identifiers {1,…,5} to the corresponding
+        libration point objects.
+    _dynsys : algorithms.dynamics.base.DynamicalSystemProtocol
+        Underlying vector field instance compatible with the integrators
+        defined in :pymod:`algorithms.integrators`.
+
+    Notes
+    -----
+    The heavy computations reside in the dynamical system and individual
+    libration point classes; this wrapper simply orchestrates them.
+    """
     def __init__(self, config: systemConfig):
         """Initializes the CR3BP system based on the provided configuration."""
 
@@ -49,7 +125,19 @@ class System(object):
         return f"System(config=systemConfig(primary={self.primary!r}, secondary={self.secondary!r}, distance={self.distance}))"
 
     def _get_mu(self) -> float:
-        """Calculates the mass parameter mu with high precision if enabled."""
+        """Compute the dimensionless mass parameter.
+
+        Returns
+        -------
+        float
+            Value of :math:`\mu`.
+
+        Notes
+        -----
+        The calculation is performed in high precision using
+        :pyfunc:`utils.precision.hp` to mitigate numerical cancellation when
+        :math:`m_1 \approx m_2`.
+        """
         logger.debug(f"Calculating mu: {self.secondary.mass} / ({self.primary.mass} + {self.secondary.mass})")
 
         # Use Number for critical mu calculation
@@ -63,7 +151,14 @@ class System(object):
         return mu
 
     def _compute_libration_points(self) -> Dict[int, LibrationPoint]:
-        """Computes all five Libration points for the given mass parameter."""
+        """Instantiate the five classical libration points.
+
+        Returns
+        -------
+        dict[int, LibrationPoint]
+            Mapping {1,…,5} to :pyclass:`system.libration.base.LibrationPoint`
+            objects.
+        """
         logger.debug(f"Computing Libration points for mu={self.mu}")
         points = {
             1: L1Point(self),
@@ -76,7 +171,29 @@ class System(object):
         return points
 
     def get_libration_point(self, index: int) -> LibrationPoint:
-        """Returns the requested Libration point object."""
+        """Access a pre-computed libration point.
+
+        Parameters
+        ----------
+        index : int
+            Identifier of the desired point in {1, 2, 3, 4, 5}.
+
+        Returns
+        -------
+        LibrationPoint
+            Requested libration point instance.
+
+        Raises
+        ------
+        ValueError
+            If *index* is not in the valid range.
+
+        Examples
+        --------
+        >>> cfg = systemConfig(primary, secondary, distance)
+        >>> sys = System(cfg)
+        >>> L1 = sys.get_libration_point(1)
+        """
         if index not in self.libration_points:
             logger.error(f"Invalid Libration point index requested: {index}. Must be 1-5.")
             raise ValueError(f"Invalid Libration point index: {index}. Must be 1, 2, 3, 4, or 5.")

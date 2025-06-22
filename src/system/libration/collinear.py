@@ -1,3 +1,15 @@
+"""
+system.libration.collinear
+==========================
+
+Collinear libration points :math:`L_1`, :math:`L_2` and :math:`L_3` of the circular restricted three body problem (CR3BP).
+
+The module defines:
+
+* :pyclass:`CollinearPoint` - an abstract helper encapsulating the geometry shared by the collinear points.
+* :pyclass:`L1Point`, :pyclass:`L2Point`, :pyclass:`L3Point` - concrete equilibria located on the x-axis connecting the primaries.
+"""
+
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Tuple
 

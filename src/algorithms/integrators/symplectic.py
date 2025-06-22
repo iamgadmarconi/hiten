@@ -1,3 +1,27 @@
+"""
+algorithms.integrators.symplectic
+================================
+
+High-order explicit symplectic integrators for polynomial Hamiltonian
+systems with :math:`n_\text{dof}=3`.  The module provides two layers of
+functionality:
+
+* Low-level, :pyfunc:`numba.njit` accelerated kernels that implement the
+  extended phase-space method of Tao for non-separable Hamiltonians.
+* A high-level :pyclass:`TaoSymplectic` wrapper compatible with the
+  abstract :pyclass:`~algorithms.integrators.base.Integrator` interface.
+
+The implementation follows the recursive operator-splitting strategy
+originally proposed by Tao and yields a family of even-order schemes that
+exactly preserve the symplectic structure and exhibit excellent long-term
+energy behaviour.
+
+References
+----------
+Tao, M. (2016). "Explicit symplectic approximation of non-separable
+Hamiltonians: algorithm and long-time performance".
+"""
+
 import numpy as np
 from numba import njit
 from numba.typed import List
@@ -445,38 +469,46 @@ def integrate_symplectic(
 
 class TaoSymplectic(Integrator):
     """
-    High-order symplectic integrator for Hamiltonian systems.
-    
-    This integrator wraps the existing extended phase-space symplectic method
-    specifically designed for polynomial Hamiltonian systems. It preserves
-    the symplectic structure and provides excellent long-term energy conservation.
-    
+    High-order explicit Tao symplectic integrator for polynomial
+    Hamiltonian systems.
+
     Parameters
     ----------
     order : int, optional
-        Order of the symplectic integrator (must be even and >= 2). Default is 6.
+        Even order of the underlying scheme (:math:`\ge 2`). Default is 6.
     c_omega_heuristic : float, optional
-        Scaling parameter for frequency calculation. Default is 20.0.
-        Higher values may improve energy conservation at the cost of smaller effective timesteps.
+        Scaling coefficient used in the heuristic
+        :pyfunc:`_get_tao_omega` frequency.  Default is 20.0.
     **options
-        Additional options (currently unused but reserved for future extensions)
-        
+        Additional keyword options stored verbatim in
+        :pyattr:`~algorithms.integrators.base.Integrator.options`.
+
+    Attributes
+    ----------
+    name : str
+        Human-readable identifier, e.g. ``"Symplectic6"``.
+    order : int
+        Same as the *order* constructor argument.
+    c_omega_heuristic : float
+        Same as the constructor argument.
+
     Examples
     --------
-    >>> from algorithms.integrators.symplectic import SymplecticIntegrator
-    >>> integrator = SymplecticIntegrator(order=8, c_omega_heuristic=25.0)
-    >>> solution = integrator.integrate(hamiltonian_system, y0, t_vals)
-        
+    >>> from algorithms.integrators.symplectic import TaoSymplectic
+    >>> integrator = TaoSymplectic(order=8, c_omega_heuristic=25.0)
+    >>> sol = integrator.integrate(hamiltonian_system, y0, t_vals)
+
     Notes
     -----
-    This integrator requires the system to be a HamiltonianSystem that provides:
-    - jac_H: List of polynomial coefficient arrays for Jacobian
-    - clmo_H: List of coefficient layout mapping objects
-    - n_dof: Number of degrees of freedom
-    
-    The method uses an extended phase-space technique with auxiliary variables
-    and recursive composition to achieve high-order accuracy while maintaining
-    the symplectic property.
+    The target *system* must expose three public attributes:
+
+    * **jac_H** - Jacobian of the Hamiltonian given as a nested list of
+      polynomial coefficient arrays compatible with
+      :pyfunc:`algorithms.polynomial.operations.polynomial_evaluate`.
+    * **clmo_H** - co-efficient layout mapping objects for the same
+      polynomials.
+    * **n_dof** - number of degrees of freedom (must equal 3 for this
+      implementation).
     """
     
     def __init__(self, order: int = 6, c_omega_heuristic: float = 20.0, **options):

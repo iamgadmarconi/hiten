@@ -1,3 +1,23 @@
+"""
+center.base
+===========
+
+High-level utilities for computing a polynomial normal form of the centre
+manifold around a collinear libration point of the spatial circular
+restricted three body problem (CRTBP).
+
+All heavy algebra is performed symbolically on packed coefficient arrays.
+Only NumPy is used so the implementation is portable and fast.
+
+References
+----------
+Jorba, À. (1999). "A Methodology for the Numerical Computation of Normal Forms, Centre
+Manifolds and First Integrals of Hamiltonian Systems".
+
+Zhang, H. Q., Li, S. (2001). "Improved semi-analytical computation of center
+manifolds near collinear libration points".
+"""
+
 from typing import Any, TYPE_CHECKING
 
 import numpy as np
@@ -19,10 +39,40 @@ from utils.log_config import logger
 
 
 if TYPE_CHECKING:
-    from algorithms.poincare.base import PoincareMap, poincareMapConfig
+    from algorithms.poincare.base import PoincareMap
 
 
 class CenterManifold:
+    """Centre manifold normal-form builder.
+
+    Parameters
+    ----------
+    point : system.libration.collinear.CollinearPoint
+        Collinear libration point about which the normal form is computed.
+    max_degree : int
+        Maximum total degree \(N\) of the polynomial truncation.
+
+    Attributes
+    ----------
+    point : system.libration.collinear.CollinearPoint
+        Same as the constructor argument.
+    max_degree : int
+        Same as the constructor argument.
+    psi, clmo : numpy.ndarray
+        Index tables used to pack and unpack multivariate monomials.
+    encode_dict_list : list of dict
+        Helper structures for encoding multi-indices.
+    _cache : dict
+        Stores intermediate polynomial objects keyed by tuples to avoid
+        recomputation.
+    _poincare_map : algorithms.poincare.base.PoincareMap or None
+        Lazy cached instance of the Poincaré return map.
+
+    Notes
+    -----
+    All heavy computations are cached. Calling :py:meth:`compute` more than once
+    with the same *max_degree* is inexpensive because it reuses cached results.
+    """
     def __init__(self, point: CollinearPoint, max_degree: int):
         self.point = point
         self.max_degree = max_degree
@@ -61,14 +111,34 @@ class CenterManifold:
         self._cache.clear()
     
     def compute(self):
-        """
-        Computes the center manifold in realified coordinates.
-        
+        """Compute the polynomial Hamiltonian restricted to the centre manifold.
+
+        The returned list lives in *real modal* coordinates
+        \((q_2, p_2, q_3, p_3)\).
+
         Returns
         -------
-        List[numpy.ndarray]
-            Polynomial representation of the Hamiltonian restricted to the center manifold
-            in realified coordinates
+        list of numpy.ndarray
+            Sequence \([H_0, H_2, \dots, H_N]\) where each entry contains the
+            packed coefficients of the homogeneous polynomial of that degree.
+
+        Raises
+        ------
+        RuntimeError
+            If the underlying Lie transformation fails.
+
+        Notes
+        -----
+        This routine chains together the full normal-form pipeline and may be
+        computationally expensive on the first call. Intermediate objects are
+        cached so that subsequent calls are fast.
+
+        Examples
+        --------
+        >>> cm = CenterManifold(L1, 8)
+        >>> poly_cm = cm.compute()
+        >>> len(poly_cm)
+        9
         """
         # First check if realified center manifold is already cached
         cm_real = self.cache_get(('hamiltonian', self.max_degree, 'center_manifold_real'))
@@ -180,6 +250,27 @@ class CenterManifold:
         return poly_cm
     
     def poincare_map(self, energy: float, **kwargs) -> "PoincareMap":
+        """Return a cached (or newly built) Poincaré return map.
+
+        Parameters
+        ----------
+        energy : float
+            Hamiltonian energy \(h_0\) corresponding to the desired Jacobi
+            constant.
+        **kwargs
+            Optional keyword arguments forwarded to
+            :pyclass:`algorithms.poincare.base.PoincareMap`.
+
+        Returns
+        -------
+        algorithms.poincare.base.PoincareMap
+            Configured Poincaré map instance.
+
+        Notes
+        -----
+        The map is constructed only once and stored internally. Subsequent
+        calls return the cached object.
+        """
         from algorithms.poincare.base import PoincareMap, poincareMapConfig
 
         if self._poincare_map is None:
@@ -205,24 +296,32 @@ class CenterManifold:
         return self._poincare_map
 
     def ic(self, poincare_point: np.ndarray, energy: float, section_coord: str = "q3") -> np.ndarray:
-        """
-        Convert a single Poincaré section point (in centre-manifold coordinates)
-        into full synodic initial conditions.
+        """Convert a point on a 2-dimensional centre-manifold section to full ICs.
 
-        The meaning of *poincare_point* depends on which section was used:
+        Parameters
+        ----------
+        poincare_point : numpy.ndarray, shape (2,)
+            Coordinates on the chosen Poincaré section.
+        energy : float
+            Hamiltonian energy \(h_0\) used to solve for the missing coordinate.
+        section_coord : {'q3', 'p3', 'q2', 'p2'}, default 'q3'
+            Coordinate fixed to zero on the section.
 
-        ┌─────────────┬────────────────────────────────────────────┐
-        │ section     │ contents of *poincare_point*               │
-        ├─────────────┼────────────────────────────────────────────┤
-        │ q3 (=0)     │ (q2, p2)                                   │
-        │ p3 (=0)     │ (q2, p2)                                   │
-        │ q2 (=0)     │ (q3, p3)                                   │
-        │ p2 (=0)     │ (q3, p3)                                   │
-        └─────────────┴────────────────────────────────────────────┘
+        Returns
+        -------
+        numpy.ndarray, shape (6,)
+            Synodic initial conditions
+            \((q_1, q_2, q_3, p_1, p_2, p_3)\).
 
-        The missing coordinate is solved for on-the-fly using
-        ``_solve_missing_coord`` so no information is lost regardless of the
-        chosen section.
+        Raises
+        ------
+        RuntimeError
+            If root finding fails or if required Lie generators are missing.
+
+        Examples
+        --------
+        >>> cm = CenterManifold(L1, 8)
+        >>> ic_synodic = cm.ic(np.array([0.01, 0.0]), energy=-1.5, section_coord='q3')
         """
         logger.info(
             "Converting Poincaré point %s (section=%s) to initial conditions", 

@@ -1,3 +1,25 @@
+"""
+system.orbits.halo
+==================
+
+Generation and refinement of halo periodic orbits about the collinear
+libration points of the Circular Restricted Three-Body Problem (CRTBP).
+
+The module provides the :pyclass:`HaloOrbit` class which
+
+* synthesises an initial state from the third-order analytic expansion of
+  Richardson (1980), yielding a fast and robust first guess for the full
+  nonlinear halo orbit;
+* refines this guess through a differential-correction procedure that
+  enforces the periodicity conditions by solving a reduced :math:`2\times2` boundary
+  value problem.
+
+References
+----------
+Richardson, D. L. (1980). "Analytic construction of periodic orbits about the
+collinear libration points".
+"""
+
 from typing import Literal, Optional, Sequence
 
 import numpy as np
@@ -10,6 +32,37 @@ from utils.log_config import logger
 
 
 class HaloOrbit(PeriodicOrbit):
+    """Third-order halo orbit about a collinear libration point.
+
+    Parameters
+    ----------
+    config : orbitConfig
+        Problem definition comprising the primaries, target
+        :pyclass:`system.libration.collinear.CollinearPoint`, numerical
+        tolerances and any extra parameters.
+    initial_state : Sequence[float] or None, optional
+        Six-dimensional state vector
+        :math:`[x,\,y,\,z,\,\dot{x},\,\dot{y},\,\dot{z}]` in the rotating
+        synodic frame. When *None* an analytical initial guess is generated
+        from :pyattr:`config.extra_params` (requires ``'Az'`` and
+        ``'Zenith'``).
+
+    Attributes
+    ----------
+    Az : float or None
+        :math:`z`-amplitude of the halo orbit in the synodic frame.
+    Zenith : {'northern', 'southern'} or None
+        Indicates the symmetry branch with respect to the :math:`x\,y`-plane.
+
+    Raises
+    ------
+    ValueError
+        If the required amplitude or branch is missing and *initial_state*
+        is *None*.
+    TypeError
+        If *config.libration_point* is not an instance of
+        :pyclass:`system.libration.collinear.CollinearPoint`.
+    """
     Az: Optional[float] # Amplitude of the halo orbit
     Zenith: Optional[Literal["northern", "southern"]]
 
@@ -45,13 +98,28 @@ class HaloOrbit(PeriodicOrbit):
             logger.warning("Must supply initial state for L3 halo system.orbits.")
 
     def _initial_guess(self) -> NDArray[np.float64]:
-        """
-        Generate initial conditions for a Halo orbit around a libration point.
-        
+        """Richardson third-order analytical approximation.
+
+        The method evaluates the closed-form expressions published by
+        Richardson to obtain an *O(\!\epsilon^{3})* approximation of the halo
+        orbit where :math:`\epsilon` is the amplitude ratio.
+
         Returns
         -------
-        ndarray
-            6D state vector [x, y, z, vx, vy, vz] in the rotating frame
+        numpy.ndarray
+            State vector of shape (6,) containing
+            :math:`[x,\,y,\,z,\,\dot{x},\,\dot{y},\,\dot{z}]` in the synodic
+            frame and normalised CRTBP units.
+
+        Notes
+        -----
+        The computation follows [Richardson1980]_.
+
+        Examples
+        --------
+        >>> cfg = orbitConfig(system, L1Point(system), extra_params={'Az': 0.01, 'Zenith': 'northern'})
+        >>> orb = HaloOrbit(cfg)
+        >>> y0 = orb._initial_guess()
         """
         # Determine sign (won) and which "primary" to use
 
@@ -262,16 +330,51 @@ class HaloOrbit(PeriodicOrbit):
         return np.array([rx, ry, rz, vx, vy, vz], dtype=np.float64)
 
     def _halo_quadratic_term(self, X_ev, Phi):
-            x, y, z, vx, vy, vz = X_ev
-            mu2 = 1 - self.mu
-            rho_1 = 1/(((x+self.mu)**2 + y**2 + z**2)**1.5)
-            rho_2 = 1/(((x-mu2 )**2 + y**2 + z**2)**1.5)
-            omega_x  = -(mu2*(x+self.mu)*rho_1) - (self.mu*(x-mu2)*rho_2) + x
-            DDx = 2*vy + omega_x
-            DDz = -(mu2*z*rho_1) - (self.mu*z*rho_2)
-            return np.array([[DDx],[DDz]]) @ Phi[[S.Y],:][:, (S.X,S.VY)] / vy
+        """Evaluate the quadratic part of the Jacobian for differential correction.
+
+        Parameters
+        ----------
+        X_ev : numpy.ndarray, shape (6,)
+            State vector at the event time (half-period).
+        Phi : numpy.ndarray
+            State-transition matrix evaluated at the same event; only the
+            row corresponding to :pyattr:`S.Y` and the columns
+            :pyattr:`S.X`, :pyattr:`S.VY` are used.
+
+        Returns
+        -------
+        numpy.ndarray, shape (2, 2)
+            Reduced Jacobian matrix employed by the
+            :pyfunc:`system.orbits.base.PeriodicOrbit.differential_correction`
+            solver.
+        """
+        x, y, z, vx, vy, vz = X_ev
+        mu2 = 1 - self.mu
+        rho_1 = 1/(((x+self.mu)**2 + y**2 + z**2)**1.5)
+        rho_2 = 1/(((x-mu2 )**2 + y**2 + z**2)**1.5)
+        omega_x  = -(mu2*(x+self.mu)*rho_1) - (self.mu*(x-mu2)*rho_2) + x
+        DDx = 2*vy + omega_x
+        DDz = -(mu2*z*rho_1) - (self.mu*z*rho_2)
+        return np.array([[DDx],[DDz]]) @ Phi[[S.Y],:][:, (S.X,S.VY)] / vy
 
     def differential_correction(self, **kw):
+        """Refine the orbit so that the periodicity conditions are satisfied.
+
+        The method builds a :math:`2\times2` root-finding problem on the velocity
+        components :math:`\dot{x}` and :math:`\dot{z}` at the symmetry plane
+        crossing (half period) and solves it with a Newton iteration.
+
+        Other Parameters
+        ----------------
+        **kw
+            Additional keyword arguments forwarded verbatim to the base
+            implementation.
+
+        Returns
+        -------
+        NDArray[np.float64]
+            Corrected six-dimensional initial condition for the halo orbit.
+        """
         cfg = correctionConfig(
             residual_indices=(S.VX, S.VZ),
             control_indices=(S.X,  S.VY),
@@ -281,7 +384,17 @@ class HaloOrbit(PeriodicOrbit):
 
 
     def eccentricity(self) -> float:
-        """
-        Calculate the eccentricity of the halo orbit.
+        """Compute the osculating eccentricity of the halo orbit.
+
+        Returns
+        -------
+        float
+            Eccentricity of the quasi-periodic projection of the halo orbit
+            onto the :math:`x\,y`-plane.
+
+        Raises
+        ------
+        NotImplementedError
+            Always; the routine is not yet available.
         """
         raise NotImplementedError("Eccentricity calculation not implemented for HaloOrbit.")

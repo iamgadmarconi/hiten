@@ -1,3 +1,16 @@
+"""
+system.libration.base
+=====================
+
+Abstract helpers to model Libration points of the Circular Restricted Three-Body Problem (CR3BP).
+
+The module introduces two primary abstractions:
+
+* :pyclass:`LinearData` - an immutable record storing the salient linear characteristics (eigenfrequencies and canonical basis) of the flow linearised at a libration point.
+* :pyclass:`LibrationPoint` - an abstract base class encapsulating geometry, energetic properties, linear stability analysis and lazy construction of centre-manifold normal forms. 
+   Concrete subclasses implement the specific coordinates of the collinear (:math:`L_1`, :math:`L_2`, :math:`L_3`) and triangular (:math:`L_4`, :math:`L_5`) points.
+"""
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Tuple
@@ -19,6 +32,34 @@ DISCRETE_SYSTEM = 1
 
 @dataclass(slots=True)
 class LinearData:
+    """Container with linearised CR3BP invariants.
+
+    Parameters
+    ----------
+    mu : float
+        Mass ratio :math:`\mu := m_2/(m_1+m_2)` of the primaries.
+    point : str
+        Identifier of the libration point (``'L1'``, ``'L2'`` or ``'L3'``).
+    lambda1 : float
+        Real hyperbolic eigenvalue :math:`\lambda_1>0` associated with the
+        saddle behaviour along the centre-saddle subspace.
+    omega1 : float
+        First elliptic frequency :math:`\omega_1>0` of the centre subspace.
+    omega2 : float
+        Second elliptic frequency :math:`\omega_2>0` of the centre subspace.
+    C : numpy.ndarray, shape (6, 6)
+        Symplectic change-of-basis matrix such that :math:`C^{-1}AC` is in real
+        Jordan canonical form, with :math:`A` the Jacobian of the vector
+        field evaluated at the libration point.
+    Cinv : numpy.ndarray, shape (6, 6)
+        Precomputed inverse of :pyattr:`C`.
+
+    Notes
+    -----
+    The record is *immutable* thanks to ``slots=True``; all fields are plain
+    :pyclass:`numpy.ndarray` or scalars so the instance can be safely cached
+    and shared among different computations.
+    """
     mu: float
     point: str        # 'L1', 'L2', 'L3'
     lambda1: float
@@ -29,17 +70,62 @@ class LinearData:
 
 
 class LibrationPoint(ABC):
-    """
-    Abstract base class for Libration points in the CR3BP.
-    
-    This class provides the common interface and functionality for all 
-    Libration points. Specific point types (collinear, triangular) will
-    extend this class with specialized implementations.
-    
+    """Abstract base class for Libration points of the CR3BP.
+
     Parameters
     ----------
+    system : system.base.System
+        Parent CR3BP model providing the mass ratio :math:`\mu` and utility
+        functions.
+
+    Attributes
+    ----------
     mu : float
-        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+        Mass ratio :math:`\mu` of the primaries (copied from *system*).
+    system : system.base.System
+        Reference to the owner system.
+    position : numpy.ndarray, shape (3,)
+        Cartesian coordinates in the synodic rotating frame. Evaluated on
+        first access and cached thereafter.
+    energy : float
+        Dimensionless mechanical energy evaluated via
+        :pyfunc:`algorithms.dynamics.utils.energy.crtbp_energy`.
+    jacobi_constant : float
+        Jacobi integral :math:`C_J = -2E` corresponding to
+        :pyattr:`energy`.
+    is_stable : bool
+        True if all eigenvalues returned by :pyfunc:`analyze_stability` lie
+        inside the unit circle (discrete case) or have non-positive real
+        part (continuous case).
+    eigenvalues : tuple(numpy.ndarray, numpy.ndarray, numpy.ndarray)
+        Arrays of stable, unstable and centre eigenvalues.
+    eigenvectors : tuple(numpy.ndarray, numpy.ndarray, numpy.ndarray)
+        Bases of the corresponding invariant subspaces.
+    linear_data : LinearData
+        Record with canonical invariants and symplectic basis returned by the
+        normal-form computation.
+
+    Notes
+    -----
+    The class is *abstract*. Concrete subclasses must implement:
+
+    * :pyfunc:`idx`
+    * :pyfunc:`_calculate_position`
+    * :pyfunc:`_get_linear_data`
+    * :pyfunc:`normal_form_transform`
+
+    Heavy algebraic objects produced by the centre-manifold normal-form
+    procedure are cached inside a dedicated
+    :pyclass:`algorithms.center.base.CenterManifold` instance to avoid memory
+    bloat.
+
+    Examples
+    --------
+    >>> from system.base import System
+    >>> sys = System(mu=0.0121505856)   # Earth-Moon system
+    >>> L1 = sys.libration_points['L1']
+    >>> L1.position
+    array([...])
     """
     
     def __init__(self, system: "System"):

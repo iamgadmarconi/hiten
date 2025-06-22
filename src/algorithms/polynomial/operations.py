@@ -1,3 +1,46 @@
+"""
+polynomial.operations
+=====================
+
+High-level utilities for manipulating multivariate polynomials that appear in
+normal-form and centre-manifold calculations of the spatial circular
+restricted three-body problem.
+
+The module operates on the packed-coefficient representation returned by
+:pyfunc:`algorithms.polynomial.base.init_index_tables`. A polynomial
+:math:`P(q, p)` is stored as a Numba typed list ``[P_0, P_1, ... , P_N]``
+where ``P_d`` is a :class:`numpy.ndarray` containing the complex coefficients
+of the homogeneous part of total degree :math:`d` in the canonical variables
+:math:`(q_1, q_2, q_3, p_1, p_2, p_3)`.
+
+Function categories
+-------------------
+* Construction helpers - :pyfunc:`polynomial_zero_list`,
+  :pyfunc:`polynomial_variable`, :pyfunc:`polynomial_variables_list`.
+* In-place algebra - :pyfunc:`polynomial_add_inplace`.
+* Binary operations - :pyfunc:`polynomial_multiply`,
+  :pyfunc:`polynomial_power`, :pyfunc:`polynomial_poisson_bracket`.
+* Analysis - :pyfunc:`polynomial_clean`, :pyfunc:`polynomial_degree`,
+  :pyfunc:`polynomial_total_degree`.
+* Calculus - :pyfunc:`polynomial_differentiate`, :pyfunc:`polynomial_jacobian`,
+  :pyfunc:`polynomial_integrate`.
+* Evaluation and substitution - :pyfunc:`polynomial_evaluate`,
+  :pyfunc:`substitute_linear`.
+
+Attributes
+----------
+FASTMATH : bool
+    Flag propagated to :pyfunc:`numba.njit(fastmath=True)` that enables unsafe
+    floating-point optimisations.
+N_VARS : int
+    Number of canonical variables (six for the CRTBP).
+
+Notes
+-----
+Every public routine is compiled with `numba.njit`; the most expensive kernels
+are parallelised with :pyfunc:`numba.prange`.
+"""
+
 import numpy as np
 from numba import njit, prange
 from numba.typed import List
