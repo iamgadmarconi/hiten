@@ -14,7 +14,7 @@ from algorithms.integrators.rk import (RK4_A, RK4_B, RK4_C, RK6_A, RK6_B,
                                        RK6_C, RK8_A, RK8_B, RK8_C)
 from algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
                                                integrate_symplectic)
-from config import FASTMATH
+from utils.config import FASTMATH
 from utils.log_config import logger
 
 

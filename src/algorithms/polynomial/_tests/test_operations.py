@@ -13,7 +13,7 @@ from algorithms.polynomial.operations import (
     polynomial_multiply, polynomial_poisson_bracket, polynomial_power,
     polynomial_total_degree, polynomial_variable, polynomial_variables_list,
     polynomial_zero_list)
-from config import N_VARS
+from utils.config import N_VARS
 
 TEST_MAX_DEG = 5
 PSI, CLMO = init_index_tables(TEST_MAX_DEG)

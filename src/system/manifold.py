@@ -11,6 +11,7 @@ from algorithms.dynamics.rtbp import _propagate_dynsys, compute_stm
 from algorithms.dynamics.utils.geometry import surface_of_section
 from algorithms.dynamics.utils.linalg import _totime, eigenvalue_decomposition
 from system.orbits.base import PeriodicOrbit
+from utils.files import _ensure_dir
 from utils.log_config import logger
 from utils.plots import _plot_body, _set_axes_equal, _set_dark_mode
 
@@ -250,6 +251,9 @@ class Manifold:
         plt.show()
 
     def save(self, filepath: str, **kwargs) -> None:
+
+        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+
         data = {
             "manifold_type": self.__class__.__name__,
             "stable": bool(self.stable == 1),

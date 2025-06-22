@@ -1,7 +1,7 @@
 from typing import Callable
 
 import numpy as np
-from config import FASTMATH
+from utils.config import FASTMATH
 
 from algorithms.dynamics.base import _DynamicalSystem
 

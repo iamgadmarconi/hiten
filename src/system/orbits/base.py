@@ -17,6 +17,7 @@ from algorithms.dynamics.utils.geometry import _find_y_zero_crossing
 from system.base import System
 from system.libration.base import LibrationPoint
 from utils.coordinates import rotating_to_inertial
+from utils.files import _ensure_dir
 from utils.log_config import logger
 from utils.plots import (_plot_body, _set_axes_equal, _set_dark_mode,
                          animate_trajectories)
@@ -488,6 +489,8 @@ class PeriodicOrbit(ABC):
         This saves the essential orbit information including initial state, 
         period, and trajectory (if computed).
         """
+        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+
         # Create data dictionary with all essential information
         data = {
             'orbit_type': self.__class__.__name__,

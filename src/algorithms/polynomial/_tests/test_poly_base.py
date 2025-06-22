@@ -9,7 +9,7 @@ from algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                                decode_multiindex,
                                                encode_multiindex,
                                                init_index_tables, make_poly)
-from config import N_VARS
+from utils.config import N_VARS
 
 TEST_MAX_DEG = 5
 PSI, CLMO = init_index_tables(TEST_MAX_DEG)

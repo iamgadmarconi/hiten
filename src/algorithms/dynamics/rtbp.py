@@ -8,7 +8,7 @@ from algorithms.dynamics.base import _DirectedSystem, _DynamicalSystem
 from algorithms.integrators.base import Solution
 from algorithms.integrators.rk import AdaptiveRK, RungeKutta
 from algorithms.integrators.symplectic import TaoSymplectic
-from config import FASTMATH, TOL
+from utils.config import FASTMATH, TOL
 from utils.log_config import logger
 
 

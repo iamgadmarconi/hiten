@@ -1,3 +1,4 @@
+import os
 from typing import Optional
 
 import matplotlib.animation as animation
@@ -8,9 +9,10 @@ from mpl_toolkits.mplot3d import Axes3D
 
 from utils.coordinates import (_get_angular_velocity, rotating_to_inertial,
                                si_time, to_si_units)
+from utils.files import _ensure_dir
 
 
-def animate_trajectories(states, times, bodies, system_distance, interval=10, figsize=(14, 6), save=False, dark_mode: bool = True):
+def animate_trajectories(states, times, bodies, system_distance, interval=10, figsize=(14, 6), save=False, dark_mode: bool = True, filepath: str = 'trajectory.mp4'):
     """
     Create an animated comparison of trajectories in rotating and inertial frames.
     
@@ -154,9 +156,6 @@ def animate_trajectories(states, times, bodies, system_distance, interval=10, fi
         Updates the plot for the current frame, clearing the axes and
         setting the title and labels.
         """
-        # ax_rot.clear()
-        # ax_inert.clear()
-        
         # Capture existing user view/zoom before clearing (ensures persistence)
         elev_rot_prev, azim_rot_prev = ax_rot.elev, ax_rot.azim
         elev_inert_prev, azim_inert_prev = ax_inert.elev, ax_inert.azim
@@ -240,7 +239,8 @@ def animate_trajectories(states, times, bodies, system_distance, interval=10, fi
         blit=False
     )
     if save:
-        ani.save('trajectory.mp4', fps=60, dpi=500)
+        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+        ani.save(filepath, fps=60, dpi=500)
     plt.show()
     plt.close()
     return ani

@@ -34,7 +34,7 @@ from algorithms.integrators.coefficients.rk45 import A as RK45_A
 from algorithms.integrators.coefficients.rk45 import C as RK45_C
 from algorithms.integrators.coefficients.rk45 import E as RK45_E
 from algorithms.integrators.symplectic import _eval_dH_dP, _eval_dH_dQ
-from config import FASTMATH, TOL
+from utils.config import FASTMATH, TOL
 from utils.log_config import logger
 
 

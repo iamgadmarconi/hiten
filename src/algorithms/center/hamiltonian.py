@@ -10,7 +10,7 @@ from algorithms.polynomial.operations import (polynomial_add_inplace,
                                                      polynomial_multiply,
                                                      polynomial_variable,
                                                      polynomial_zero_list)
-from config import FASTMATH
+from utils.config import FASTMATH
 
 
 @njit(fastmath=FASTMATH, cache=False)

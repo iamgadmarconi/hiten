@@ -6,7 +6,7 @@ from algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                                encode_multiindex,
                                                init_index_tables, make_poly)
 from algorithms.polynomial.cuda.evaluate import CUDAEvaluate
-from config import N_VARS
+from utils.config import N_VARS
 
 TEST_MAX_DEG = 5
 PSI, CLMO = init_index_tables(TEST_MAX_DEG)

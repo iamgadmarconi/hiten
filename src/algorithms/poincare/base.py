@@ -8,11 +8,12 @@ import numpy as np
 
 from algorithms.center.base import CenterManifold
 from algorithms.poincare.cuda.map import _generate_map_gpu
-from algorithms.poincare.map import _generate_grid, PoincareSection
+from algorithms.poincare.map import PoincareSection, _generate_grid
 from algorithms.poincare.map import _generate_map as _generate_map_cpu
 from system.orbits.base import GenericOrbit, orbitConfig
-from utils.plots import _set_dark_mode
+from utils.files import _ensure_dir
 from utils.log_config import logger
+from utils.plots import _set_dark_mode
 
 
 @dataclass
@@ -202,6 +203,8 @@ class PoincareMap:
 
     def save(self, filepath: str, **kwargs) -> None:
 
+        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+
         data = {
             "map_type": self.__class__.__name__,
             "energy": self.energy,
@@ -279,18 +282,18 @@ class PoincareMap:
             ax.set_yticks([])
             title_text = "Poincaré Map (No Data)"
         else:
-            # Plot the points
-            ax.scatter(points[:, 0], points[:, 1], s=1, alpha=0.7)
+            n_pts = points.shape[0]
+            point_size = max(0.2, min(4.0, 4000.0 / max(n_pts, 1)))
+
+            ax.scatter(points[:, 0], points[:, 1], s=point_size, alpha=0.7)
             
-            # Set axis limits based on data range
             max_val_0 = max(abs(points[:, 0].max()), abs(points[:, 0].min()))
             max_val_1 = max(abs(points[:, 1].max()), abs(points[:, 1].min()))
-            max_abs_val = max(max_val_0, max_val_1, 1e-9)  # Ensure not zero
+            max_abs_val = max(max_val_0, max_val_1, 1e-9)
             
             ax.set_xlim(-max_abs_val * 1.1, max_abs_val * 1.1)
             ax.set_ylim(-max_abs_val * 1.1, max_abs_val * 1.1)
             
-            # Use dynamic labels from section
             ax.set_xlabel(f"${labels[0]}'$")
             ax.set_ylabel(f"${labels[1]}'$")
             title_text = f"Poincaré Map (h={self.energy:.6e})"
@@ -328,7 +331,11 @@ class PoincareMap:
         fig, ax = plt.subplots(figsize=(6, 6))
         pts = self._section.points
         labels = self._section.labels
-        scatter = ax.scatter(pts[:, 0], pts[:, 1], s=10, alpha=0.7)
+        # Adaptive point size: scale inversely with number of points
+        n_pts_int = pts.shape[0]
+        adaptive_ps = max(0.2, min(4.0, 4000.0 / max(n_pts_int, 1)))
+
+        scatter = ax.scatter(pts[:, 0], pts[:, 1], s=adaptive_ps, alpha=0.7)
         ax.set_xlabel(f"${labels[0]}'$")
         ax.set_ylabel(f"${labels[1]}'$")
         ax.set_title(f"Select a point on the Poincaré Map (h={self.energy:.6e})\n(Press 'q' to quit)")

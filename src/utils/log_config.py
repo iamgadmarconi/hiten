@@ -1,7 +1,10 @@
 import logging
-import sys
 import os
+import sys
 from datetime import datetime
+
+from utils.files import _ensure_dir
+
 
 def setup_logging(level=logging.INFO, format_string='%(asctime)s - %(name)s - %(levelname)s - %(message)s', 
                   save_to_file=True, log_dir=r'results/logs'):
@@ -19,6 +22,8 @@ def setup_logging(level=logging.INFO, format_string='%(asctime)s - %(name)s - %(
     log_dir : str
         Directory to save log files (default: 'results')
     """
+    _ensure_dir(log_dir)
+
     # Create formatter
     formatter = logging.Formatter(format_string)
     

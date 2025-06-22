@@ -5,7 +5,7 @@ from numba.typed import List
 from algorithms.polynomial.base import (decode_multiindex,
                                                encode_multiindex,
                                                fill_exponents)
-from config import FASTMATH, N_VARS
+from utils.config import FASTMATH, N_VARS
 
 
 @njit(fastmath=FASTMATH, cache=True)

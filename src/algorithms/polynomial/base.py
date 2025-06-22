@@ -2,7 +2,7 @@ import numpy as np
 from numba import njit, types
 from numba.typed import Dict, List
 
-from config import FASTMATH, N_VARS
+from utils.config import FASTMATH, N_VARS
 
 
 @njit(fastmath=FASTMATH,cache=True)

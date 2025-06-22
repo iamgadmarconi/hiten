@@ -3,9 +3,7 @@ from typing import Callable, Union
 import mpmath as mp
 import numpy as np
 
-from config import (MPMATH_DPS, NUMPY_DTYPE_COMPLEX, NUMPY_DTYPE_REAL,
-                    USE_ARBITRARY_PRECISION)
-from utils.log_config import logger
+from utils.config import USE_ARBITRARY_PRECISION
 
 
 class Number:
@@ -25,9 +23,9 @@ class Number:
         value : float, int, str, or Number
             The numeric value to wrap
         precision : int, optional
-            Number of decimal places. If None, uses MPMATH_DPS from config.
+            Number of decimal places. If None, uses 100.
         """
-        self.precision = precision if precision is not None else MPMATH_DPS
+        self.precision = precision if precision is not None else 100
         
         if isinstance(value, Number):
             self.value = value.value

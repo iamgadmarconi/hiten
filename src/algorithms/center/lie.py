@@ -8,7 +8,7 @@ from algorithms.polynomial.base import (_create_encode_dict_from_clmo,
 from algorithms.polynomial.operations import (
     polynomial_clean, polynomial_evaluate, polynomial_poisson_bracket,
     polynomial_total_degree, polynomial_zero_list)
-from config import FASTMATH
+from utils.config import FASTMATH
 from utils.log_config import logger
 
 

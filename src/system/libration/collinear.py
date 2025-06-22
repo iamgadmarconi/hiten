@@ -3,7 +3,7 @@ from typing import TYPE_CHECKING, Tuple
 
 import numpy as np
 
-from config import MPMATH_DPS
+from utils.config import MPMATH_DPS
 from system.libration.base import LibrationPoint, LinearData
 from utils.log_config import logger
 from utils.precision import find_root, hp

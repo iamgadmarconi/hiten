@@ -8,7 +8,7 @@ from algorithms.polynomial.operations import (polynomial_evaluate,
                                                      polynomial_jacobian)
 from algorithms.dynamics.base import _DynamicalSystem, DynamicalSystemProtocol
 from algorithms.integrators.symplectic import _eval_dH_dP, _eval_dH_dQ
-from config import FASTMATH
+from utils.config import FASTMATH
 
 
 @njit(cache=True, fastmath=FASTMATH)
