@@ -1,3 +1,15 @@
+r"""
+system.libration.collinear
+==========================
+
+Collinear libration points :math:`L_1`, :math:`L_2` and :math:`L_3` of the circular restricted three body problem (CR3BP).
+
+The module defines:
+
+* :pyclass:`CollinearPoint` - an abstract helper encapsulating the geometry shared by the collinear points.
+* :pyclass:`L1Point`, :pyclass:`L2Point`, :pyclass:`L3Point` - concrete equilibria located on the x-axis connecting the primaries.
+"""
+
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Tuple
 
@@ -13,7 +25,7 @@ if TYPE_CHECKING:
 
 
 class CollinearPoint(LibrationPoint):
-    """
+    r"""
     Base class for collinear Libration points (L1, L2, L3).
     
     The collinear points lie on the x-axis connecting the two primary
@@ -26,13 +38,13 @@ class CollinearPoint(LibrationPoint):
         Mass parameter of the CR3BP system (ratio of smaller to total mass)
     """
     def __init__(self, system: "System"):
-        """Initialize a collinear Libration point."""
+        r"""Initialize a collinear Libration point."""
         if not 0 < system.mu < 0.5:
             raise ValueError(f"Mass parameter mu must be in range (0, 0.5), got {system.mu}")
         super().__init__(system)
 
     def _find_position(self, primary_interval: list) -> float:
-        """
+        r"""
         Find the x-coordinate of a collinear point using retry logic.
         
         Parameters
@@ -64,7 +76,7 @@ class CollinearPoint(LibrationPoint):
             raise RuntimeError(err) from e
 
     def _solve_gamma_polynomial(self, coeffs: list, gamma_range: tuple) -> float:
-        """
+        r"""
         Solve the quintic polynomial for gamma with validation and fallback.
         
         Parameters
@@ -110,7 +122,7 @@ class CollinearPoint(LibrationPoint):
 
     @property
     def gamma(self) -> float:
-        """
+        r"""
         Get the distance ratio gamma for the libration point, calculated
         with high precision.
 
@@ -136,7 +148,8 @@ class CollinearPoint(LibrationPoint):
 
     @property
     def sign(self) -> int:
-        """Sign convention (±1) used for local ↔ synodic transformations.
+        r"""
+        Sign convention (±1) used for local ↔ synodic transformations.
 
         Following the convention adopted in Gómez et al. (2001):
 
@@ -147,7 +160,8 @@ class CollinearPoint(LibrationPoint):
 
     @property
     def a(self) -> float:
-        """Offset *a* along the x axis used in frame changes.
+        r"""
+        Offset *a* along the x axis used in frame changes.
 
         The relation x_L = μ + a links the equilibrium x coordinate in
         synodic coordinates (x_L) with the mass parameter μ.  Using the
@@ -168,7 +182,7 @@ class CollinearPoint(LibrationPoint):
 
     @abstractmethod
     def _compute_gamma(self) -> float:
-        """
+        r"""
         Compute the gamma value for this specific libration point.
         
         Returns
@@ -180,14 +194,14 @@ class CollinearPoint(LibrationPoint):
 
     @abstractmethod
     def _compute_cn(self, n: int) -> float:
-        """
+        r"""
         Compute the actual value of cn(mu) without caching.
         This needs to be implemented by subclasses.
         """
         pass
 
     def _cn(self, n: int) -> float:
-        """
+        r"""
         Get the cn coefficient with caching.
         """
         if n < 0:
@@ -204,7 +218,7 @@ class CollinearPoint(LibrationPoint):
         return self.cache_set(('cn', n), value)
 
     def _dOmega_dx(self, x: float) -> float:
-        """
+        r"""
         Compute the derivative of the effective potential with respect to x.
         
         Parameters
@@ -240,7 +254,7 @@ class CollinearPoint(LibrationPoint):
 
     @property
     def linear_modes(self):
-        """
+        r"""
         Get the linear modes for the Libration point.
         
         Returns
@@ -256,7 +270,7 @@ class CollinearPoint(LibrationPoint):
         return self.cache_set(('linear_modes',), result)
 
     def _compute_linear_modes(self):
-        """
+        r"""
         Compute the linear modes for the Libration point.
         
         Returns
@@ -301,7 +315,7 @@ class CollinearPoint(LibrationPoint):
             raise RuntimeError(err) from e
 
     def _scale_factor(self, lambda1, omega1):
-        """
+        r"""
         Calculate the normalization factors s1 and s2 used in the normal form transformation.
         
         Parameters
@@ -343,7 +357,7 @@ class CollinearPoint(LibrationPoint):
         return float(expr1_hp.sqrt()), float(expr2_hp.sqrt())
 
     def normal_form_transform(self) -> Tuple[np.ndarray, np.ndarray]:
-        """
+        r"""
         Build the 6x6 symplectic matrix C of eq. (10) that sends H_2 to
         lambda_1 x px + (omega_1/2)(y²+p_y²) + (omega_2/2)(z²+p_z²).
 
@@ -402,7 +416,7 @@ class CollinearPoint(LibrationPoint):
         return result
 
     def _get_linear_data(self) -> LinearData:
-        """
+        r"""
         Get the linear data for the Libration point.
         
         Returns
@@ -427,7 +441,7 @@ class CollinearPoint(LibrationPoint):
 
 
 class L1Point(CollinearPoint):
-    """
+    r"""
     L1 Libration point, located between the two primary bodies.
     
     Parameters
@@ -437,11 +451,13 @@ class L1Point(CollinearPoint):
     """
     
     def __init__(self, system: "System"):
-        """Initialize the L1 Libration point."""
+        r"""
+        Initialize the L1 Libration point.
+        """
         super().__init__(system)
         
     def _calculate_position(self) -> np.ndarray:
-        """
+        r"""
         Calculate the position of the L1 point by finding the root of dOmega/dx.
         
         Returns
@@ -456,7 +472,7 @@ class L1Point(CollinearPoint):
         return np.array([x, 0, 0], dtype=np.float64)
 
     def _compute_gamma(self) -> float:
-        """
+        r"""
         Compute gamma for L1 point by solving the quintic polynomial equation.
         For L1, gamma is the distance from the second primary (smaller mass).
         """
@@ -467,7 +483,7 @@ class L1Point(CollinearPoint):
         return self._solve_gamma_polynomial(coeffs, [0, 1])
 
     def _compute_cn(self, n: int) -> float:
-        """
+        r"""
         Compute cn coefficient for L1 using Jorba & Masdemont (1999), eq. (3).
         """
         gamma = self.gamma
@@ -485,7 +501,7 @@ class L1Point(CollinearPoint):
 
 
 class L2Point(CollinearPoint):
-    """
+    r"""
     L2 Libration point, located beyond the smaller primary body.
     
     Parameters
@@ -495,11 +511,13 @@ class L2Point(CollinearPoint):
     """
     
     def __init__(self, system: "System"):
-        """Initialize the L2 Libration point."""
+        r"""
+        Initialize the L2 Libration point.
+        """
         super().__init__(system)
     
     def _calculate_position(self) -> np.ndarray:
-        """
+        r"""
         Calculate the position of the L2 point by finding the root of dOmega/dx.
         
         Returns
@@ -514,7 +532,7 @@ class L2Point(CollinearPoint):
         return np.array([x, 0, 0], dtype=np.float64)
 
     def _compute_gamma(self) -> float:
-        """
+        r"""
         Compute gamma for L2 point by solving the quintic polynomial equation.
         For L2, gamma is the distance from the second primary (smaller mass).
         """
@@ -526,7 +544,7 @@ class L2Point(CollinearPoint):
         return self._solve_gamma_polynomial(coeffs, [0, 1])
 
     def _compute_cn(self, n: int) -> float:
-        """
+        r"""
         Compute cn coefficient for L2 using Jorba & Masdemont (1999), eq. (3).
         """
         gamma = self.gamma
@@ -544,7 +562,7 @@ class L2Point(CollinearPoint):
 
 
 class L3Point(CollinearPoint):
-    """
+    r"""
     L3 Libration point, located beyond the larger primary body.
     
     Parameters
@@ -554,11 +572,13 @@ class L3Point(CollinearPoint):
     """
     
     def __init__(self, system: "System"):
-        """Initialize the L3 Libration point."""
+        r"""
+        Initialize the L3 Libration point.
+        """
         super().__init__(system)
     
     def _calculate_position(self) -> np.ndarray:
-        """
+        r"""
         Calculate the position of the L3 point by finding the root of dOmega/dx.
         
         Returns
@@ -573,7 +593,7 @@ class L3Point(CollinearPoint):
         return np.array([x, 0, 0], dtype=np.float64)
 
     def _compute_gamma(self) -> float:
-        """
+        r"""
         Compute gamma for L3 point by solving the quintic polynomial equation.
         For L3, gamma is the distance from the first primary (larger mass).
         """
@@ -586,7 +606,7 @@ class L3Point(CollinearPoint):
         return self._solve_gamma_polynomial(coeffs, [0.5, 1.5])
 
     def _compute_cn(self, n: int) -> float:
-        """
+        r"""
         Compute cn coefficient for L3 using Jorba & Masdemont (1999), eq. (3).
         """
         gamma = self.gamma

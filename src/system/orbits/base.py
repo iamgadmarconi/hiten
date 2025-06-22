@@ -1,3 +1,28 @@
+r"""
+system.orbits.base
+===================
+
+Abstract definitions and convenience utilities for periodic orbit computation
+in the circular restricted three-body problem (CR3BP).
+
+The module provides:
+
+* :pyclass:`PeriodicOrbit` - an abstract base class that implements common
+  functionality such as energy evaluation, propagation wrappers, plotting and
+  differential correction.
+* :pyclass:`GenericOrbit` - a minimal concrete implementation useful for
+  arbitrary initial conditions when no analytical guess or specific correction
+  is required.
+* Light-weight configuration containers (:pyclass:`orbitConfig`,
+  :pyclass:`correctionConfig`) that encapsulate user input for families,
+  libration points and differential correction settings.
+
+References
+----------
+Szebehely, V. (1967). "Theory of Orbits - The Restricted Problem of Three
+Bodies".
+"""
+
 import os
 import pickle
 from abc import ABC, abstractmethod
@@ -25,6 +50,28 @@ from utils.plots import (_plot_body, _set_axes_equal, _set_dark_mode,
 
 @dataclass
 class orbitConfig:
+    r"""
+    Configuration for an orbit family around a specific libration point.
+
+    Parameters
+    ----------
+    orbit_family : str
+        Identifier of the orbit family, e.g. ``"halo"`` or ``"lyapunov"``.
+    libration_point : LibrationPoint
+        The libration point instance that anchors the family.
+    extra_params : dict, optional
+        Additional keyword parameters that specialised subclasses may
+        require (left untouched by the base implementation).
+
+    Attributes
+    ----------
+    orbit_family : str
+        Normalised to lowercase in :pyfunc:`orbitConfig.__post_init__`.
+    libration_point : LibrationPoint
+        Same as *Parameters*.
+    extra_params : dict
+        Same as *Parameters*.
+    """
     orbit_family: str
     libration_point: LibrationPoint
     extra_params: Dict[str, Any] = field(default_factory=dict)
@@ -38,6 +85,34 @@ class S(IntEnum): X=0; Y=1; Z=2; VX=3; VY=4; VZ=5
 
 
 class correctionConfig(NamedTuple):
+    r"""
+    Settings that drive the differential correction routine.
+
+    The named-tuple is immutable and therefore safe to share across calls.
+
+    Parameters
+    ----------
+    residual_indices : tuple of int
+        Indices of the state vector used to build the residual vector
+        :math:`\mathbf R`.
+    control_indices : tuple of int
+        Indices of the state vector that are allowed to change so as to cancel
+        :math:`\mathbf R`.
+    extra_jacobian : callable or None, optional
+        Function returning an additional contribution that is subtracted from
+        the Jacobian before solving the linear system; useful when the event
+        definition introduces extra dependencies.
+    target : tuple of float, default ``(0.0,)``
+        Desired values for the residual components.
+    event_func : callable, default :pyfunc:`utils.geometry._find_y_zero_crossing`
+        Event used to terminate half-period propagation.
+    method : {"rk", "scipy", "symplectic", "adaptive"}, default "scipy"
+        Integrator back-end to use when marching the variational equations.
+    order : int, default 8
+        Order for the custom integrators.
+    steps : int, default 2000
+        Number of fixed steps per half-period when *method* is not adaptive.
+    """
     residual_indices: tuple[int, ...]
     control_indices: tuple[int, ...]
     extra_jacobian: Callable[[np.ndarray,np.ndarray], np.ndarray] | None = None
@@ -49,6 +124,51 @@ class correctionConfig(NamedTuple):
     steps: int = 2000
 
 class PeriodicOrbit(ABC):
+    r"""
+    Abstract base-class that encapsulates a CR3BP periodic orbit.
+
+    The constructor either accepts a user supplied initial state or derives an
+    analytical first guess via :pyfunc:`PeriodicOrbit._initial_guess` (to be
+    implemented by subclasses). All subsequent high-level operations
+    (propagation, plotting, stability analysis, differential correction) build
+    upon this initial description.
+
+    Parameters
+    ----------
+    config : orbitConfig
+        Orbit family and libration point configuration.
+    initial_state : Sequence[float] or None, optional
+        Initial condition in rotating canonical units
+        :math:`[x, y, z, \dot x, \dot y, \dot z]`. When *None* an analytical
+        approximation is attempted.
+
+    Attributes
+    ----------
+    family : str
+        Orbit family name inherited from *config*.
+    libration_point : LibrationPoint
+        Libration point anchoring the family.
+    system : System
+        Parent CR3BP system.
+    mu : float
+        Mass ratio of the system, accessed as :pyattr:`System.mu`.
+    initial_state : ndarray, shape (6,)
+        Current initial condition.
+    period : float or None
+        Orbit period, set after a successful correction.
+    trajectory : ndarray or None, shape (N, 6)
+        Stored trajectory after :pyfunc:`PeriodicOrbit.propagate`.
+    times : ndarray or None, shape (N,)
+        Time vector associated with *trajectory*.
+    stability_info : tuple or None
+        Output of :pyfunc:`algorithms.dynamics.rtbp.stability_indices`.
+
+    Notes
+    -----
+    Instantiating the class does **not** perform any propagation. Users must
+    call :pyfunc:`PeriodicOrbit.differential_correction` (or manually set
+    :pyattr:`period`) followed by :pyfunc:`PeriodicOrbit.propagate`.
+    """
 
     def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):
         self.family = config.orbit_family
@@ -89,7 +209,7 @@ class PeriodicOrbit(ABC):
 
     @property
     def initial_state(self) -> npt.NDArray[np.float64]:
-        """
+        r"""
         Get the initial state vector of the orbit.
         
         Returns
@@ -101,7 +221,7 @@ class PeriodicOrbit(ABC):
     
     @property
     def trajectory(self) -> Optional[npt.NDArray[np.float64]]:
-        """
+        r"""
         Get the computed trajectory points.
         
         Returns
@@ -116,7 +236,7 @@ class PeriodicOrbit(ABC):
     
     @property
     def times(self) -> Optional[npt.NDArray[np.float64]]:
-        """
+        r"""
         Get the time points corresponding to the trajectory.
         
         Returns
@@ -130,7 +250,7 @@ class PeriodicOrbit(ABC):
     
     @property
     def stability_info(self) -> Optional[Tuple]:
-        """
+        r"""
         Get the stability information for the orbit.
         
         Returns
@@ -148,7 +268,7 @@ class PeriodicOrbit(ABC):
         return self._system
 
     def _reset(self) -> None:
-        """
+        r"""
         Reset all computed properties when the initial state is changed.
         Called internally after differential correction or any other operation
         that modifies the initial state.
@@ -161,7 +281,7 @@ class PeriodicOrbit(ABC):
 
     @property
     def is_stable(self) -> bool:
-        """
+        r"""
         Check if the orbit is linearly stable.
         
         Returns
@@ -180,7 +300,7 @@ class PeriodicOrbit(ABC):
 
     @property
     def energy(self) -> float:
-        """
+        r"""
         Compute the energy of the orbit at the initial state.
         
         Returns
@@ -194,7 +314,7 @@ class PeriodicOrbit(ABC):
     
     @property
     def jacobi_constant(self) -> float:
-        """
+        r"""
         Compute the Jacobi constant of the orbit.
         
         Returns
@@ -205,13 +325,15 @@ class PeriodicOrbit(ABC):
         return energy_to_jacobi(self.energy)
 
     def _cr3bp_system(self):
-        """Create (or reuse) a _DynamicalSystem wrapper for the CR3BP."""
+        r"""
+        Create (or reuse) a _DynamicalSystem wrapper for the CR3BP.
+        """
         if not hasattr(self, "_cached_dynsys"):
             self._cached_dynsys = rtbp_dynsys(mu=self.mu, name=str(self))
         return self._cached_dynsys
 
     def propagate(self, steps: int = 1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 8) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-        """
+        r"""
         Propagate the orbit for one period.
         
         Parameters
@@ -248,7 +370,7 @@ class PeriodicOrbit(ABC):
         return self._times, self._trajectory
 
     def compute_stability(self, **kwargs) -> Tuple:
-        """
+        r"""
         Compute stability information for the orbit.
         
         Parameters
@@ -280,7 +402,7 @@ class PeriodicOrbit(ABC):
         return stability
 
     def plot(self, frame="rotating", show=True, figsize=(10, 8), dark_mode=True, **kwargs):
-        """
+        r"""
         Plot the orbit trajectory in the specified reference frame.
         
         Parameters
@@ -327,7 +449,7 @@ class PeriodicOrbit(ABC):
         return animate_trajectories(self._trajectory, self._times, [self._system.primary, self._system.secondary], self._system.distance, **kwargs)
 
     def plot_rotating_frame(self, show=True, figsize=(10, 8), dark_mode=True, **kwargs):
-        """
+        r"""
         Plot the orbit trajectory in the rotating reference frame.
         
         Parameters
@@ -395,7 +517,7 @@ class PeriodicOrbit(ABC):
 
         
     def plot_inertial_frame(self, show=True, figsize=(10, 8), dark_mode=True, **kwargs):
-        """
+        r"""
         Plot the orbit trajectory in the primary-centered inertial reference frame.
         
         Parameters
@@ -474,7 +596,7 @@ class PeriodicOrbit(ABC):
         return fig, ax
 
     def save(self, filepath: str, **kwargs) -> None:
-        """
+        r"""
         Save the orbit data to a file.
         
         Parameters
@@ -526,7 +648,7 @@ class PeriodicOrbit(ABC):
         logger.info(f"Orbit saved to {filepath}")
     
     def load(self, filepath: str, **kwargs) -> None:
-        """
+        r"""
         Load orbit data from a file.
         
         Parameters
@@ -603,6 +725,30 @@ class PeriodicOrbit(ABC):
             max_attempts: int = 25,
             forward: int = 1
         ) -> tuple[np.ndarray, float]:
+        """
+        Perform differential correction to find a periodic orbit.
+        
+        Parameters
+        ----------
+        cfg : correctionConfig
+            Configuration for the differential correction.
+        tol : float, optional
+            Tolerance for the correction.
+        max_attempts : int, optional
+            Maximum number of attempts to find the orbit.
+        forward : int, optional
+            Direction of propagation.
+
+        Returns
+        -------
+        tuple
+            (state, period)
+
+        Raises
+        ------
+        RuntimeError
+            If the orbit is not found.
+        """
         X0 = self.initial_state.copy()
         for k in range(max_attempts + 1):
 
@@ -634,7 +780,7 @@ class PeriodicOrbit(ABC):
 
 
 class GenericOrbit(PeriodicOrbit):
-    """
+    r"""
     A minimal concrete orbit class for arbitrary initial conditions, with no correction or special guess logic.
     """
     def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):

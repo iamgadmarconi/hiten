@@ -11,14 +11,10 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from algorithms.center.base import CenterManifold
-from system.base import System, systemConfig
-from system.body import Body
-from system.manifold import Manifold, manifoldConfig
-from system.orbits.base import orbitConfig
-from system.orbits.halo import HaloOrbit
-from system.orbits.lyapunov import LyapunovOrbit, VerticalLyapunovOrbit
-from utils.constants import Constants
+from system import (Body, CenterManifold, HaloOrbit, LyapunovOrbit, Manifold,
+                    System, VerticalLyapunovOrbit, manifoldConfig, orbitConfig,
+                    systemConfig)
+from utils import Constants
 from utils.files import _ensure_dir
 from utils.log_config import logger
 
@@ -79,7 +75,7 @@ def main() -> None:
     logger.info("Preparing centre manifold for initial guesses…")
     cm = compute_center_manifold(l_point)
     ic_seed = initial_conditions_from_cm(cm)
-    logger.info("Initial conditions (CM → physical coordinates): %s", ic_seed)
+    logger.info("Initial conditions (CM to physical coordinates): %s", ic_seed)
 
     # Specifications for each family we wish to generate
     orbit_specs = [

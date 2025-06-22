@@ -1,3 +1,23 @@
+r"""
+system.manifold
+===============
+
+Stable/unstable invariant manifolds of periodic orbits in the spatial circular
+restricted three-body problem.
+
+The module offers a high-level interface (:pyclass:`Manifold`) that, given a
+generating :pyclass:`system.orbits.base.PeriodicOrbit`, launches trajectory
+integrations along the selected eigen-directions, records their intersections
+with the canonical Poincaré section, provides quick 3-D visualisation, and
+handles (de)serialisation through :pyfunc:`Manifold.save` /
+:pyfunc:`Manifold.load`.
+
+References
+----------
+Koon, W. S., Lo, M. W., Marsden, J. E., & Ross, S. D. (2016). "Dynamical Systems, the Three-Body Problem
+and Space Mission Design".
+"""
+
 import os
 import pickle
 from dataclasses import dataclass
@@ -18,6 +38,23 @@ from utils.plots import _plot_body, _set_axes_equal, _set_dark_mode
 
 @dataclass
 class manifoldConfig:
+    r"""
+    Configuration options for :pyclass:`Manifold`.
+
+    Parameter
+    ----------
+    generating_orbit : system.orbits.base.PeriodicOrbit
+        Periodic orbit that generates the manifold.
+    stable : bool, default True
+        ``True`` selects the stable manifold, ``False`` the unstable one.
+    direction : {{'Positive', 'Negative'}}, default 'Positive'
+        Sign of the eigenvector used to initialise the manifold branch.
+    method : {{'rk', 'scipy', 'symplectic', 'adaptive'}}, default 'scipy'
+        Backend integrator passed to
+        :pyfunc:`algorithms.dynamics.rtbp._propagate_dynsys`.
+    order : int, default 6
+        Integration order for fixed-step Runge-Kutta methods.
+    """
     generating_orbit: PeriodicOrbit
     stable: bool = True
     direction: Literal["Positive", "Negative"] = "Positive"
@@ -28,6 +65,29 @@ class manifoldConfig:
 
 @dataclass
 class ManifoldResult:
+    r"""
+    Output container produced by :pyfunc:`Manifold.compute`.
+
+    Attributes
+    ----------
+    ysos : list[float]
+        :math:`y`-coordinates of Poincaré section crossings.
+    dysos : list[float]
+        Corresponding :math:`\dot y` values.
+    states_list : list[numpy.ndarray]
+        Propagated state arrays, one per trajectory.
+    times_list : list[numpy.ndarray]
+        Time grids associated with *states_list*.
+    _successes : int
+        Number of trajectories that intersected the section.
+    _attempts : int
+        Total number of trajectories launched.
+
+    Notes
+    -----
+    The :pyattr:`success_rate` property returns
+    :math:`\frac{_successes}{\max(1,\,_attempts)}`.
+    """
     ysos: List[float]
     dysos: List[float]
     states_list: List[float]
@@ -44,6 +104,35 @@ class ManifoldResult:
 
 
 class Manifold:
+    r"""
+    Compute and cache the invariant manifold of a periodic orbit.
+
+    Parameters
+    ----------
+    config : manifoldConfig
+        Run-time options.
+
+    Attributes
+    ----------
+    generating_orbit : system.orbits.base.PeriodicOrbit
+        Orbit that seeds the manifold.
+    libration_point
+        Libration point associated with *generating_orbit*.
+    stable, direction : int
+        Encoded form of the options in :pyclass:`manifoldConfig`.
+    mu : float
+        Mass ratio of the underlying CRTBP system.
+    method, order
+        Numerical integration settings.
+    manifold_result : ManifoldResult or None
+        Cached result returned by the last successful
+        :pyfunc:`compute` call.
+
+    Notes
+    -----
+    Re-invoking :pyfunc:`compute` after a successful run returns the cached
+    :pyclass:`ManifoldResult` without recomputation.
+    """
 
     def __init__(self, config: manifoldConfig):
         self.generating_orbit = config.generating_orbit
@@ -65,6 +154,47 @@ class Manifold:
         return self.__str__()
     
     def compute(self, step: float = 0.02, integration_fraction: float = 0.75, **kwargs):
+        r"""
+        Generate manifold trajectories and build a Poincaré map.
+
+        The routine samples the generating orbit at equally spaced fractions
+        of its period, displaces each point :math:`10^{-6}` units along the
+        selected eigenvector and integrates the resulting initial condition
+        for *integration_fraction* of one synodic period.
+
+        Parameters
+        ----------
+        step : float, optional
+            Increment of the dimensionless fraction along the orbit. Default
+            0.02 (i.e. 50 samples per orbit).
+        integration_fraction : float, optional
+            Portion of :math:`2\pi` non-dimensional time units to integrate
+            each trajectory. Default 0.75.
+        **kwargs
+            Additional options:
+
+            show_progress : bool, default True
+                Display a :pydata:`tqdm` progress bar.
+            dt : float, default 1e-3
+                Nominal time step for fixed-step integrators.
+
+        Returns
+        -------
+        ManifoldResult
+            See above.
+
+        Raises
+        ------
+        ValueError
+            If called after a previous run with incompatible settings.
+
+        Examples
+        --------
+        >>> cfg = manifoldConfig(halo_L2)  # halo_L2 is a PeriodicOrbit
+        >>> man = Manifold(cfg)
+        >>> result = man.compute(step=0.05)
+        >>> print(f"Success rate: {result.success_rate:.0%}")
+        """
 
         if self.manifold_result is not None:
             return self.manifold_result
@@ -140,6 +270,32 @@ class Manifold:
         return self.manifold_result
 
     def _compute_manifold_section(self, state: np.ndarray, period: float, fraction: float, NN: int = 1, forward: int = 1):
+        r"""
+        Compute a section of the invariant manifold.
+
+        Parameters
+        ----------
+        state : numpy.ndarray
+            Initial state of the periodic orbit.
+        period : float
+            Period of the periodic orbit.
+        fraction : float
+            Fraction of the period to compute the section at.
+        NN : int, default 1
+            Index of the eigenvector to compute the section for.
+        forward : int, default 1
+            Direction of integration.
+
+        Returns
+        -------
+        numpy.ndarray
+            Initial condition for the manifold section.
+
+        Raises
+        ------
+        ValueError
+            If the requested eigenvector is not available.
+        """
         xx, tt, phi_T, PHI = compute_stm(self.libration_point._var_eq_system, state, period, steps=2000, forward=forward, method=self.method, order=self.order)
 
         sn, un, _, Ws, Wu, _ = eigenvalue_decomposition(phi_T, discrete=1)
@@ -214,6 +370,19 @@ class Manifold:
         return x0W
     
     def plot(self, dark_mode: bool = True):
+        r"""
+        Render a 3-D plot of the computed manifold.
+
+        Parameters
+        ----------
+        dark_mode : bool, default True
+            Apply a dark colour scheme.
+
+        Raises
+        ------
+        ValueError
+            If :pyattr:`manifold_result` is *None*.
+        """
         if self.manifold_result is None:
             err = "Manifold result not computed. Please compute the manifold first."
             logger.error(err)
@@ -251,6 +420,21 @@ class Manifold:
         plt.show()
 
     def save(self, filepath: str, **kwargs) -> None:
+        r"""
+        Serialise the manifold to *filepath*.
+
+        Parameters
+        ----------
+        filepath : str
+            Destination file. Parent directories are created automatically.
+        **kwargs
+            Reserved for future use.
+
+        Raises
+        ------
+        OSError
+            If the file cannot be written.
+        """
 
         _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
 
@@ -292,6 +476,21 @@ class Manifold:
         logger.info("Manifold saved to %s", filepath)
 
     def load(self, filepath: str, **kwargs) -> None:
+        r"""
+        Load a manifold previously stored with :pyfunc:`save`.
+
+        Parameters
+        ----------
+        filepath : str
+            File generated by :pyfunc:`save`.
+        **kwargs
+            Reserved for future use.
+
+        Raises
+        ------
+        FileNotFoundError
+            If *filepath* does not exist.
+        """
 
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Manifold file not found: {filepath}")

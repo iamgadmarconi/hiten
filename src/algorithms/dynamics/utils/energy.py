@@ -1,12 +1,14 @@
-"""
-Energy computation functions for the Circular Restricted Three-Body Problem (CR3BP).
+r"""
+dynamics.utils.energy
+=====================
 
-This module provides functions for calculating and analyzing energies and
-related quantities in the CR3BP, including:
-- Computing the energy (Hamiltonian) of a state
-- Converting between energy and Jacobi constant
-- Determining energy bounds for different regimes of motion
-- Computing the potential and effective potential
+Numerical helpers for evaluating energies, potentials and zero-velocity 
+curves in the spatial circular restricted three-body problem (CRTBP).  All 
+quantities are nondimensional and expressed in the rotating (synodic) frame.
+
+References
+----------
+Szebehely, V. (1967). "Theory of Orbits".
 """
 
 from typing import Sequence, Tuple
@@ -17,31 +19,36 @@ from utils.log_config import logger
 
 
 def crtbp_energy(state: Sequence[float], mu: float) -> float:
-    """
-    Compute the energy (Hamiltonian) of a state in the CR3BP.
-    
-    This function calculates the total energy of a given state in the CR3BP,
-    which is a conserved quantity in the rotating frame and is related to
-    the Jacobi constant by C = -2E.
-    
+    r"""
+    Compute the Hamiltonian energy :math:`E` of a single state in the CRTBP.
+
+    The definition is
+    :math:`E = T + U_{\mathrm{eff}}`, where :math:`T` is the kinetic energy
+    and :math:`U_{\mathrm{eff}}` the effective potential.  The Jacobi
+    constant is linked through :math:`C = -2E`.
+
     Parameters
     ----------
     state : Sequence[float]
-        State vector [x, y, z, vx, vy, vz] in the rotating frame
+        Six-component vector :math:`(x, y, z, \dot{x}, \dot{y}, \dot{z})`.
     mu : float
-        Mass parameter of the CR3BP system (ratio of smaller to total mass)
-    
+        Mass parameter :math:`\mu \in (0, 1)`.
+
     Returns
     -------
     float
-        The energy value (scalar)
-    
-    Notes
-    -----
-    The energy in the rotating frame consists of the kinetic energy plus
-    the effective potential, which includes the gravitational potential and
-    the centrifugal potential. This is a conserved quantity along any trajectory
-    in the CR3BP.
+        Energy of the given state.
+
+    Raises
+    ------
+    ValueError
+        If *state* cannot be unpacked into six elements.
+
+    Examples
+    --------
+    >>> from algorithms.dynamics.utils.energy import crtbp_energy
+    >>> crtbp_energy([1.0, 0.0, 0.0, 0.0, 0.5, 0.0], 0.01215)  # doctest: +ELLIPSIS
+    -1.51...
     """
     logger.debug(f"Computing energy for state={state}, mu={mu}")
     
@@ -71,42 +78,45 @@ def hill_region(
     y_range: Tuple[float, float] = (-1.5, 1.5), 
     n_grid: int = 400
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """
-    Compute the Hill region (zero-velocity curves) for a given Jacobi constant.
-    
-    This function calculates the regions in the x-y plane that are accessible
-    to an orbit with a specific Jacobi constant. The boundaries of these regions
-    are the zero-velocity curves where the kinetic energy is exactly zero.
-    
+    r"""
+    Compute the Hill region associated with a Jacobi constant.
+
+    The Hill region corresponds to the projection on the synodic
+    :math:`(x, y)` plane of the zero-velocity surface defined by
+    :math:`E = -C/2`.
+
     Parameters
     ----------
     mu : float
-        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+        Mass parameter, see :pyfunc:`crtbp_energy`.
     C : float
-        Jacobi constant value
-    x_range : tuple, optional
-        Range of x values to compute (xmin, xmax). Default is (-1.5, 1.5).
-    y_range : tuple, optional
-        Range of y values to compute (ymin, ymax). Default is (-1.5, 1.5).
-    n_grid : int, optional
-        Number of grid points in each dimension. Default is 400.
-    
+        Jacobi constant.
+    x_range : Tuple[float, float], optional
+        Bounds for :math:`x`.  Default is ``(-1.5, 1.5)``.
+    y_range : Tuple[float, float], optional
+        Bounds for :math:`y`.  Default is ``(-1.5, 1.5)``.
+    n_grid : int, default 400
+        Number of grid points per axis.
+
     Returns
     -------
-    X : ndarray
-        2D array of x-coordinates
-    Y : ndarray
-        2D array of y-coordinates
-    Z : ndarray
-        2D array of values where Z > 0 indicates forbidden regions and
-        Z ≤ 0 indicates allowed regions
-    
+    X : numpy.ndarray
+        Meshgrid of x-coordinates, shape ``(n_grid, n_grid)``.
+    Y : numpy.ndarray
+        Meshgrid of y-coordinates, shape ``(n_grid, n_grid)``.
+    Z : numpy.ndarray
+        Values of :math:`\Omega - C/2`; positive entries mark forbidden
+        motion.
+
+    Raises
+    ------
+    ValueError
+        If *n_grid* is smaller than 2.
+
     Notes
     -----
-    The Hill region calculation is a powerful tool for visualizing the
-    accessible regions of phase space. Points where Z > 0 are inaccessible
-    (forbidden) to an orbit with the given Jacobi constant, while points
-    where Z ≤ 0 are accessible.
+    No attempt is made to handle singularities near the primaries; users may
+    wish to mask those regions.
     """
     logger.info(f"Computing Hill region for mu={mu}, C={C}, grid={n_grid}x{n_grid}")
     logger.debug(f"x_range={x_range}, y_range={y_range}")
@@ -126,20 +136,22 @@ def hill_region(
     return X, Y, Z
 
 def energy_to_jacobi(energy: float) -> float:
-    """
-    Convert energy to Jacobi constant.
-    
-    The Jacobi constant C is related to the energy E by C = -2E.
-    
+    r"""
+    Convert Hamiltonian energy to Jacobi constant.
+
     Parameters
     ----------
     energy : float
-        Energy value
-    
+        Energy :math:`E`.
+
     Returns
     -------
     float
-        Corresponding Jacobi constant
+        Jacobi constant :math:`C = -2E`.
+
+    Raises
+    ------
+    None
     """
     jacobi = -2 * energy
     logger.debug(f"Converted energy {energy} to Jacobi constant {jacobi}")
@@ -147,20 +159,22 @@ def energy_to_jacobi(energy: float) -> float:
 
 
 def jacobi_to_energy(jacobi: float) -> float:
-    """
-    Convert Jacobi constant to energy.
-    
-    The energy E is related to the Jacobi constant C by E = -C/2.
-    
+    r"""
+    Convert Jacobi constant to Hamiltonian energy.
+
     Parameters
     ----------
     jacobi : float
-        Jacobi constant value
-    
+        Jacobi constant :math:`C`.
+
     Returns
     -------
     float
-        Corresponding energy value
+        Energy :math:`E = -C/2`.
+
+    Raises
+    ------
+    None
     """
     energy = -jacobi / 2
     logger.debug(f"Converted Jacobi constant {jacobi} to energy {energy}")
@@ -168,18 +182,26 @@ def jacobi_to_energy(jacobi: float) -> float:
 
 
 def kinetic_energy(state: Sequence[float]) -> float:
-    """
-    Compute the kinetic energy of a state.
-    
+    r"""
+    Return the kinetic energy :math:`T` of a state.
+
+    The definition is
+    :math:`T = \tfrac12 (\dot{x}^2 + \dot{y}^2 + \dot{z}^2)`.
+
     Parameters
     ----------
     state : Sequence[float]
-        State vector [x, y, z, vx, vy, vz] in the rotating frame
-    
+        State vector.
+
     Returns
     -------
     float
-        Kinetic energy value
+        Kinetic energy.
+
+    Raises
+    ------
+    ValueError
+        If *state* cannot be unpacked into six elements.
     """
     x, y, z, vx, vy, vz = state
     
@@ -189,29 +211,30 @@ def kinetic_energy(state: Sequence[float]) -> float:
 
 
 def effective_potential(state: Sequence[float], mu: float) -> float:
-    """
-    Compute the effective potential of a state in the CR3BP.
-    
-    The effective potential includes both the gravitational potential
-    and the centrifugal potential in the rotating frame.
-    
+    r"""
+    Compute the effective potential :math:`U_{\mathrm{eff}}` in the CRTBP.
+
     Parameters
     ----------
     state : Sequence[float]
-        State vector [x, y, z, vx, vy, vz] in the rotating frame
+        Six-component state vector.
     mu : float
-        Mass parameter of the CR3BP system (ratio of smaller to total mass)
-    
+        Mass parameter.
+
     Returns
     -------
     float
-        The effective potential value
-    
+        Effective potential value.
+
+    Raises
+    ------
+    ValueError
+        If *state* cannot be unpacked into six elements.
+
     Notes
     -----
-    The effective potential is the sum of the gravitational potential
-    and the centrifugal potential. It determines the shape of the
-    zero-velocity curves and the location of the libration points.
+    Internally relies on :pyfunc:`primary_distance` and
+    :pyfunc:`secondary_distance`.
     """
     logger.debug(f"Computing effective potential for state={state}, mu={mu}")
     
@@ -233,33 +256,28 @@ def effective_potential(state: Sequence[float], mu: float) -> float:
 
 
 def pseudo_potential_at_point(x: float, y: float, mu: float) -> float:
-    """
-    Compute the pseudo-potential (Omega) at a point (x,y) in the rotating frame.
-    
-    The pseudo-potential Ω is the function whose negative gradient gives
-    the forces in the rotating frame, excluding the Coriolis force.
-    Note that Ω = -U_eff (ignoring constant terms and z-dimension).
-    
+    r"""
+    Evaluate the pseudo-potential :math:`\Omega` at a planar point.
+
     Parameters
     ----------
-    x : float
-        x-coordinate in the rotating frame
-    y : float
-        y-coordinate in the rotating frame
+    x, y : float
+        Synodic coordinates.
     mu : float
-        Mass parameter of the CR3BP
-    
+        Mass parameter.
+
     Returns
     -------
     float
-        The pseudo-potential (Omega) value
-    
+        Value of :math:`\Omega(x, y)`.
+
+    Raises
+    ------
+    None
+
     Notes
     -----
-    This function calculates the commonly used pseudo-potential Ω rather than U_eff
-    (which is computed by effective_potential() and used in the Hamiltonian).
-    The sign convention is Ω = 0.5*(x^2+y^2) + (1-mu)/r1 + mu/r2, which is
-    essentially the negative of the effective potential used in the Hamiltonian.
+    :math:`\Omega = \tfrac12 (x^2 + y^2) + (1-\mu)/r_1 + \mu/r_2`.
     """
     logger.debug(f"Computing pseudo-potential at point x={x}, y={y}, mu={mu}")
     r1 = np.sqrt((x + mu)**2 + y**2)
@@ -268,23 +286,25 @@ def pseudo_potential_at_point(x: float, y: float, mu: float) -> float:
 
 
 def gravitational_potential(state: Sequence[float], mu: float) -> float:
-    """
-    Compute the gravitational potential of a state in the CR3BP.
-    
-    This function calculates the gravitational potential energy due
-    to the two primary bodies in the CR3BP.
-    
+    r"""
+    Gravitational potential energy of the test particle.
+
     Parameters
     ----------
     state : Sequence[float]
-        State vector [x, y, z, vx, vy, vz] in the rotating frame
+        Six-component state vector.
     mu : float
-        Mass parameter of the CR3BP system (ratio of smaller to total mass)
-    
+        Mass parameter.
+
     Returns
     -------
     float
-        The gravitational potential value
+        Gravitational potential :math:`U`.
+
+    Raises
+    ------
+    ValueError
+        If *state* cannot be unpacked into six elements.
     """
     logger.debug(f"Computing gravitational potential for state={state}, mu={mu}")
     
@@ -298,20 +318,25 @@ def gravitational_potential(state: Sequence[float], mu: float) -> float:
 
 
 def primary_distance(state: Sequence[float], mu: float) -> float:
-    """
-    Compute the distance from a state to the primary body.
-    
+    r"""
+    Distance from the particle to the primary body.
+
     Parameters
     ----------
     state : Sequence[float]
-        State vector [x, y, z, vx, vy, vz] in the rotating frame
+        Six-component state vector.
     mu : float
-        Mass parameter of the CR3BP system (ratio of smaller to total mass)
-    
+        Mass parameter.
+
     Returns
     -------
     float
-        Distance to the primary body
+        Distance :math:`r_1`.
+
+    Raises
+    ------
+    ValueError
+        If *state* cannot be unpacked into six elements.
     """
     # This is a simple helper function, so we'll just use debug level log
     logger.debug(f"Computing primary distance for state={state}, mu={mu}")
@@ -322,20 +347,25 @@ def primary_distance(state: Sequence[float], mu: float) -> float:
 
 
 def secondary_distance(state: Sequence[float], mu: float) -> float:
-    """
-    Compute the distance from a state to the secondary body.
-    
+    r"""
+    Distance from the particle to the secondary body.
+
     Parameters
     ----------
     state : Sequence[float]
-        State vector [x, y, z, vx, vy, vz] in the rotating frame
+        Six-component state vector.
     mu : float
-        Mass parameter of the CR3BP system (ratio of smaller to total mass)
-    
+        Mass parameter.
+
     Returns
     -------
     float
-        Distance to the secondary body
+        Distance :math:`r_2`.
+
+    Raises
+    ------
+    ValueError
+        If *state* cannot be unpacked into six elements.
     """
     # This is a simple helper function, so we'll just use debug level log
     logger.debug(f"Computing secondary distance for state={state}, mu={mu}")

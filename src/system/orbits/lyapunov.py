@@ -1,3 +1,20 @@
+r"""
+system.orbits.lyapunov
+======================
+
+Periodic Lyapunov orbits of the circular restricted three-body problem.
+
+This module supplies concrete realisations of :pyclass:`system.orbits.base.PeriodicOrbit`
+corresponding to the planar and vertical Lyapunov families around the collinear
+libration points :math:`L_1` and :math:`L_2`.  Each class provides an analytical
+first guess together with a customised differential corrector that exploits the
+symmetries of the family.
+
+References
+----------
+Szebehely, V. (1967). "Theory of Orbits".
+"""
+
 from typing import Optional, Sequence
 
 import numpy as np
@@ -11,6 +28,40 @@ from utils.log_config import logger
 
 
 class LyapunovOrbit(PeriodicOrbit):
+    r"""
+    Planar Lyapunov family around a collinear libration point.
+
+    The orbit lies in the :math:`(x, y)` plane and is symmetric with respect to
+    the :math:`x`-axis.  A linear analytical approximation is used to build the
+    initial guess which is subsequently refined by a differential corrector.
+
+    Parameters
+    ----------
+    config : system.orbits.base.orbitConfig
+        Configuration of the system, including the chosen libration point and
+        numerical tolerances.  The field ``extra_params`` must contain the key
+        ``'Ax'`` storing the in-plane amplitude :math:`A_x`.
+    initial_state : Sequence[float] or None, optional
+        Six-dimensional state vector
+        :math:`(x, y, z, \\dot x, \\dot y, \\dot z)` expressed in synodic
+        coordinates.  If *None*, an analytical guess is generated.
+
+    Attributes
+    ----------
+    Ax : float
+        Requested amplitude :math:`A_x` along the :math:`x`-direction.
+    libration_point : system.libration.collinear.CollinearPoint
+        Equilibrium point about which the orbit is continued.
+
+    Raises
+    ------
+    TypeError
+        If *libration_point* is not an instance of
+        :pyclass:`system.libration.collinear.CollinearPoint`.
+    NotImplementedError
+        If the selected point corresponds to :math:`L_3`, which is not
+        supported for Lyapunov orbits.
+    """
     Ax: float # Amplitude of the Lyapunov orbit
 
     def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):
@@ -33,6 +84,30 @@ class LyapunovOrbit(PeriodicOrbit):
             raise NotImplementedError(msg)
 
     def _initial_guess(self) -> NDArray[np.float64]:
+        r"""
+        Return an analytical first guess for the planar Lyapunov orbit.
+
+        The guess is derived from the linearised equations of motion around the
+        collinear point.  Given the user-supplied amplitude :math:`A_x`, the
+        displacement vector is built as
+
+        :math:`\Delta\mathbf x = A_x\,(1, 0, 0, \lambda\tau, 0, 0),`
+
+        where :math:`\lambda` is the in-plane eigenvalue and :math:`\tau` is a
+        constant that relates the position and velocity components in the
+        linear approximation.
+
+        Returns
+        -------
+        numpy.ndarray
+            Array of shape ``(6,)`` containing the synodic state vector.
+
+        Raises
+        ------
+        ValueError
+            If the auxiliary quantity *mu_bar* computed during the linear
+            analysis becomes negative, indicating an invalid parameter regime.
+        """
 
         if self._initial_state is not None:
             logger.info(f"Using provided initial state: {self._initial_state} for {str(self)}")
@@ -41,7 +116,7 @@ class LyapunovOrbit(PeriodicOrbit):
         L_i = self.libration_point.position
         mu = self.mu
         x_L_i: float = L_i[0]
-        # Note: This mu_bar is often denoted c2 or \omega_p^2 in literature
+        # Note: This mu_bar is often denoted c2 or \\omega_p^2 in literature
         mu_bar: float = mu * np.abs(x_L_i - 1 + mu) ** (-3) + (1 - mu) * np.abs(x_L_i + mu) ** (-3)
 
         if mu_bar < 0:
@@ -86,16 +161,29 @@ class LyapunovOrbit(PeriodicOrbit):
         return super().differential_correction(cfg, **kw)
 
     def eccentricity(self) -> float:
-        """Eccentricity is not typically defined for Lyapunov system.orbits.
-        
-        Raises
-        ------
-        NotImplementedError
-        """
         raise NotImplementedError("Eccentricity is not implemented for Lyapunov system.orbits.")
 
 
 class VerticalLyapunovOrbit(PeriodicOrbit):
+    r"""
+    Vertical Lyapunov family about a collinear libration point.
+
+    The orbit oscillates out of the synodic plane and is symmetric with
+    respect to the :math:`x`-:math:`z` plane.  Initial-guess generation is not
+    yet available.
+
+    Parameters
+    ----------
+    config : system.orbits.base.orbitConfig
+        Configuration of the system and numerical options.
+    initial_state : Sequence[float] or None, optional
+        Optional six-dimensional initial state vector.
+
+    Notes
+    -----
+    The implementation of the analytical seed and the Jacobian adjustment for
+    the vertical family is work in progress.
+    """
 
     def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):
         super().__init__(config, initial_state)
@@ -127,5 +215,4 @@ class VerticalLyapunovOrbit(PeriodicOrbit):
         )
 
     def eccentricity(self) -> float:
-        """Eccentricity is not defined for Vertical Lyapunov system.orbits."""
         return np.nan

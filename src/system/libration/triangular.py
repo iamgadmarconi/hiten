@@ -1,3 +1,15 @@
+r"""
+system.libration.triangular
+==========================
+
+Triangular Libration points (:math:`L_4` and :math:`L_5`) of the Circular Restricted Three-Body Problem (CR3BP).
+
+The module defines:
+
+* :pyclass:`TriangularPoint` - an abstract helper encapsulating the geometry shared by the triangular points.
+* :pyclass:`L4Point` and :pyclass:`L5Point` - concrete equilibria located at ±60° with respect to the line connecting the primaries.
+"""
+
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -10,23 +22,39 @@ if TYPE_CHECKING:
 
 
 class TriangularPoint(LibrationPoint):
-    """
-    Base class for triangular Libration points (L4, L5).
-    
+    r"""
+    Abstract helper for the triangular Libration points.
+
     The triangular points form equilateral triangles with the two primary
-    bodies. They are characterized by having center stability (stable)
-    for mass ratios μ < Routh's critical mass ratio (~0.0385), 
-    and unstable for larger mass ratios.
-    
+    bodies. They behave as centre-type equilibria when the mass ratio
+    :math:`\mu` is below Routh's critical value.
+
     Parameters
     ----------
+    system : System
+        CR3BP model supplying the mass parameter :math:`\mu`.
+
+    Attributes
+    ----------
     mu : float
-        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+        Mass ratio :math:`\mu = m_2 / (m_1 + m_2)` taken from *system*.
+    ROUTH_CRITICAL_MU : float
+        Critical value :math:`\mu_R` delimiting linear stability.
+    sign : int
+        +1 for :pyclass:`L4Point`, -1 for :pyclass:`L5Point`.
+    a : float
+        Offset used by local ↔ synodic frame transformations.
+
+    Notes
+    -----
+    A warning is logged if :math:`\mu > \mu_R`.
     """
     ROUTH_CRITICAL_MU = (1.0 - np.sqrt(1.0 - (1.0/27.0))) / 2.0 # approx 0.03852
     
     def __init__(self, system: "System"):
-        """Initialize a triangular Libration point."""
+        r"""
+        Initialize a triangular Libration point.
+        """
         super().__init__(system)
         # Log stability warning based on mu
         if system.mu > self.ROUTH_CRITICAL_MU:
@@ -34,20 +62,25 @@ class TriangularPoint(LibrationPoint):
 
     @property
     def sign(self) -> int:
-        """Sign convention (±1) used for local ↔ synodic transformations.
+        r"""
+        Sign convention distinguishing L4 and L5.
 
-        Following the convention adopted in Gómez et al. (2001):
+        Returns
+        -------
+        int
+            +1 for :pyclass:`L4Point`, -1 for :pyclass:`L5Point`.
         """
         return 1 if isinstance(self, L4Point) else -1
     
     @property
     def a(self) -> float:
-        """Offset *a* along the x axis used in frame changes.
+        r"""
+        Offset *a* along the x axis used in frame changes.
         """
         return self.sign * 3 * np.sqrt(3) / 4 * (1 - 2 * self.mu)
 
     def _find_position(self, y_sign: int) -> np.ndarray:
-        """
+        r"""
         Calculate the position of a triangular point (L4 or L5).
         
         Parameters
@@ -77,7 +110,7 @@ class TriangularPoint(LibrationPoint):
 
 
 class L4Point(TriangularPoint):
-    """
+    r"""
     L4 Libration point, forming an equilateral triangle with the two primary bodies,
     located above the x-axis (positive y).
     
@@ -92,7 +125,7 @@ class L4Point(TriangularPoint):
         super().__init__(system)
     
     def _calculate_position(self) -> np.ndarray:
-        """
+        r"""
         Calculate the position of the L4 point.
         
         Returns
@@ -108,7 +141,7 @@ class L4Point(TriangularPoint):
 
 
 class L5Point(TriangularPoint):
-    """
+    r"""
     L5 Libration point, forming an equilateral triangle with the two primary bodies,
     located below the x-axis (negative y).
     

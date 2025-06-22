@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 import sympy as sp
 
-from algorithms.center.base import CenterManifold
+from system.center import CenterManifold
 from algorithms.center.hamiltonian import build_physical_hamiltonian
 from algorithms.center.lie import (_apply_coord_transform,
                                    _apply_poly_transform, _evaluate_transform,

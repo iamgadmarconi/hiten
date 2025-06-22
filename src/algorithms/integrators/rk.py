@@ -1,3 +1,30 @@
+r"""
+algorithms.integrators.rk
+=========================
+
+Explicit Runge-Kutta integrators used throughout the project.  Both fixed
+and adaptive step-size variants are provided together with small convenience
+factories that select an appropriate implementation given the desired
+formal order of accuracy.
+
+The concrete schemes implemented are:
+
+* Fixed step: RK4, RK6, RK8
+* Adaptive embedded: RK45 (Dormand-Prince) and DOP853 (Dormand-Prince 8(5,3))
+
+Internally the module also defines helper routines to evaluate Hamiltonian
+vector fields with :pyfunc:`numba.njit` and to wrap right-hand side (RHS)
+callables into a uniform signature accepted by the integrators.
+
+References
+----------
+Hairer, E.; Nørsett, S.; Wanner, G. (1993). "Solving Ordinary Differential
+Equations I".
+
+Dormand, J. R.; Prince, P. J. (1980). "A family of embedded Runge-Kutta
+formulas".
+"""
+
 import inspect
 from typing import Callable, Optional
 
@@ -39,6 +66,36 @@ from utils.log_config import logger
 
 
 class _RungeKuttaBase(Integrator):
+    r"""
+    Shared functionality of explicit Runge-Kutta schemes.
+
+    The class stores a Butcher tableau and provides a single low level helper
+    :pyfunc:`_rk_embedded_step` that advances one macro time step and, when a
+    second set of weights is available, returns an error estimate suitable
+    for adaptive step-size control.
+
+    Attributes
+    ----------
+    _A : numpy.ndarray of shape (s, s)
+        Strictly lower triangular array of stage coefficients :math:`a_{ij}`.
+    _B_HIGH : numpy.ndarray of shape (s,)
+        Weights of the high order solution.
+    _B_LOW : numpy.ndarray or None
+        Weights of the lower order solution, optional.  When *None* no error
+        estimate is produced and :pyfunc:`_rk_embedded_step` falls back to
+        the high order result for both outputs.
+    _C : numpy.ndarray of shape (s,)
+        Nodes :math:`c_i` measured in units of the step size.
+    _p : int
+        Formal order of accuracy of the high order scheme.
+
+    Notes
+    -----
+    The class is **not** intended to be used directly.  Concrete subclasses
+    define the specific coefficients and expose a public interface compliant
+    with :class:`algorithms.integrators.base.Integrator`.
+    """
+
     _A: np.ndarray = None
     _B_HIGH: np.ndarray = None
     _B_LOW: Optional[np.ndarray] = None
@@ -69,7 +126,24 @@ class _RungeKuttaBase(Integrator):
 
 
 class _FixedStepRK(_RungeKuttaBase):
-    """Explicit fixed-step Runge-Kutta scheme (RK4/RK6/RK8)."""
+    r"""Explicit fixed-step Runge-Kutta scheme.
+
+    Parameters
+    ----------
+    name : str
+        Human readable identifier of the scheme (e.g. ``"RK4"``).
+    A, B, C : numpy.ndarray
+        Butcher tableau as returned by :pymod:`algorithms.integrators.coefficients.*`.
+    order : int
+        Formal order of accuracy :math:`p` of the method.
+    **options
+        Additional keyword options forwarded to the base :class:`Integrator`.
+
+    Notes
+    -----
+    The step size is assumed to be **constant** and is inferred from the
+    spacing of the *t_vals* array supplied to :pyfunc:`integrate`.
+    """
 
     def __init__(self, name: str, A: np.ndarray, B: np.ndarray, C: np.ndarray, order: int, **options):
         self._A = A
@@ -95,7 +169,7 @@ class _FixedStepRK(_RungeKuttaBase):
         rhs_wrapped = _build_rhs_wrapper(system)
 
         # The RHS that comes in may already embed the intended time direction.
-        # Therefore do *not* apply any additional sign here – simply forward
+        # Therefore do *not* apply any additional sign here - simply forward
         # the call to the wrapped system RHS.
         def f(t, y):
             return rhs_wrapped(t, y)
@@ -138,7 +212,41 @@ class RK8(_FixedStepRK):
 
 
 class _AdaptiveStepRK(_RungeKuttaBase):
-    """Embedded adaptive Runge-Kutta using PI step-size control."""
+    r"""
+    Embedded adaptive Runge-Kutta integrator with PI controller.
+
+    The class implements proportional-integral (PI) step-size control using
+    the error estimates returned by :pyfunc:`_rk_embedded_step`.  Two safety
+    factors are used:
+
+    * *rtol*, *atol*  - user requested relative and absolute tolerances
+    * :pyattr:`SAFETY` - hard coded damping on the acceptance criterion.
+
+    Parameters
+    ----------
+    name : str, default "AdaptiveRK"
+        Identifier passed to the :class:`Integrator` base class.
+    rtol, atol : float, optional
+        Relative and absolute error tolerances.  Defaults are read from
+        :pydata:`utils.config.TOL`.
+    max_step : float, optional
+        Upper bound on the step size.  :math:`\infty` by default.
+    min_step : float or None, optional
+        Lower bound on the step size.  When *None* the value is derived from
+        machine precision.
+
+    Attributes
+    ----------
+    SAFETY, MIN_FACTOR, MAX_FACTOR : float
+        Magic constants used by the PI controller.  They follow SciPy's
+        implementation and the recommendations by Hairer et al.
+
+    Raises
+    ------
+    RuntimeError
+        If the step size underflows while trying to satisfy the error
+        tolerance.
+    """
 
     SAFETY = 0.9
     MIN_FACTOR = 0.2
@@ -167,7 +275,7 @@ class _AdaptiveStepRK(_RungeKuttaBase):
         return self._p
 
     def integrate(self, system: _DynamicalSystem, y0: np.ndarray, t_vals: np.ndarray, **kwargs) -> Solution:
-        """
+        r"""
         Integrate a dynamical system using an adaptive Runge-Kutta method.
         """
         self.validate_inputs(system, y0, t_vals)
@@ -177,7 +285,7 @@ class _AdaptiveStepRK(_RungeKuttaBase):
         rhs_wrapped = _build_rhs_wrapper(system)
 
         # The RHS that comes in may already embed the intended time direction.
-        # Therefore do *not* apply any additional sign here – simply forward
+        # Therefore do *not* apply any additional sign here - simply forward
         # the call to the wrapped system RHS.
         def f(t, y):
             return rhs_wrapped(t, y)
@@ -279,7 +387,8 @@ class _AdaptiveStepRK(_RungeKuttaBase):
         return Solution(times=t_eval.copy(), states=y_eval, derivatives=derivs_out)
 
     def _select_initial_step(self, f, t0, y0, tf):
-        """Choose an initial step size following Hairer et al. / SciPy heuristics.
+        r"""
+        Choose an initial step size following Hairer et al. / SciPy heuristics.
 
         The strategy tries to obtain a first step that keeps the truncation
         error around the requested tolerance.  A too-small *h* makes the
@@ -422,18 +531,32 @@ class AdaptiveRK:
 
 @njit(cache=True, fastmath=FASTMATH)
 def _hamiltonian_rhs(y: np.ndarray, jac_H, clmo_H, n_dof: int) -> np.ndarray:  # type: ignore[valid-type]
-    """Numba-compiled core that evaluates (dQ, dP) for a Hamiltonian system.
+    r"""
+    Hamiltonian vector field evaluated in compiled code.
+
+    This helper is intended to be used from within a :class:`numba.njit`
+    context and therefore keeps its interface minimal.  The Jacobian of the
+    polynomial Hamiltonian and the associated coefficient layout must be
+    supplied explicitly because Numba treats them as runtime values rather
+    than embedding them as compile time constants.
 
     Parameters
     ----------
-    y : ndarray
-        2*n_dof phase-space vector [Q, P].
-    jac_H, clmo_H : numba.typed.List
-        Polynomial Jacobian and coefficient-layout objects coming from the
-        center-manifold build.  They are passed as *arguments* so that Numba
-        does not need to embed them as compile-time constants.
+    y : numpy.ndarray
+        Phase space vector of size ``2 * n_dof`` storing the concatenation
+        ``[Q, P]``.
+    jac_H, clmo_H
+        Internal representations of the Hamiltonian used by
+        :pyfunc:`algorithms.integrators.symplectic._eval_dH_dP` and
+        :pyfunc:`algorithms.integrators.symplectic._eval_dH_dQ`.
     n_dof : int
         Number of degrees of freedom.
+
+    Returns
+    -------
+    numpy.ndarray
+        Time derivative :math:`(\dot{Q}, \dot{P})` with the same shape as
+        *y*.
     """
     Q = y[:n_dof]
     P = y[n_dof : 2 * n_dof]
@@ -447,6 +570,33 @@ def _hamiltonian_rhs(y: np.ndarray, jac_H, clmo_H, n_dof: int) -> np.ndarray:  #
     return out
 
 def _build_rhs_wrapper(system: _DynamicalSystem) -> Callable[[float, np.ndarray], np.ndarray]:
+    r"""
+    Return a JIT friendly wrapper around *system.rhs*.
+
+    The dynamical systems implemented in the code base expose their vector
+    field either as ``rhs(t, y)`` or, for autonomous systems, as ``rhs(y)``.
+    The integrator layer expects the non autonomous signature and therefore
+    needs to adapt the call site on the fly.  This helper inspects the right
+    hand side via :pyfunc:`inspect.signature` and generates a small
+    :pyfunc:`numba.njit` compiled closure with the correct arity.
+
+    Parameters
+    ----------
+    system : _DynamicalSystem
+        Instance providing the original vector field.
+
+    Returns
+    -------
+    Callable[[float, numpy.ndarray], numpy.ndarray]
+        Function accepting the full ``(t, y)`` signature required by the
+        integrators.
+
+    Raises
+    ------
+    ValueError
+        If the detected signature contains neither one nor two positional
+        arguments.
+    """
 
     rhs_func = system.rhs
 

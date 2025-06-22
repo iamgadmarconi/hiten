@@ -1,13 +1,29 @@
+r"""
+center.lie
+==========
+
+Numba-accelerated helpers for Lie-series based normalization of polynomial
+Hamiltonians in the center-manifold reduction of the spatial restricted three-body
+problem (RTBP).
+
+References
+----------
+Jorba, À. (1999). "A Methodology for the Numerical Computation of Normal Forms, Centre
+Manifolds and First Integrals of Hamiltonian Systems".
+"""
+
 import numpy as np
 from numba import njit
 from numba.typed import List
 
 from algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                               _factorial, decode_multiindex,
-                                               make_poly)
-from algorithms.polynomial.operations import (
-    polynomial_clean, polynomial_evaluate, polynomial_poisson_bracket,
-    polynomial_total_degree, polynomial_zero_list)
+                                        _factorial, decode_multiindex,
+                                        make_poly)
+from algorithms.polynomial.operations import (polynomial_clean,
+                                              polynomial_evaluate,
+                                              polynomial_poisson_bracket,
+                                              polynomial_total_degree,
+                                              polynomial_zero_list)
 from utils.config import FASTMATH
 from utils.log_config import logger
 
@@ -19,7 +35,7 @@ psi: np.ndarray,
 clmo: np.ndarray, 
 max_degree: int, 
 tol: float = 1e-30) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
-    """
+    r"""
     Perform a Lie transformation to normalize a Hamiltonian.
     
     Parameters
@@ -116,7 +132,7 @@ def _get_homogeneous_terms(
 poly_H: List[np.ndarray],
 n: int, 
 psi: np.ndarray) -> np.ndarray:
-    """
+    r"""
     Extract the homogeneous terms of degree n from a polynomial.
     
     Parameters
@@ -150,7 +166,7 @@ def _select_terms_for_elimination(
 p_n: np.ndarray, 
 n: int, 
 clmo: np.ndarray) -> np.ndarray:
-    """
+    r"""
     Select non-resonant terms to be eliminated by the Lie transform.
     
     Parameters
@@ -188,7 +204,7 @@ p_elim: np.ndarray,
 n: int, 
 eta: np.ndarray, 
 clmo: np.ndarray) -> np.ndarray:
-    """
+    r"""
     Solve the homological equation to find the generating function.
     
     Parameters
@@ -244,7 +260,7 @@ psi: np.ndarray,
 clmo: np.ndarray, 
 encode_dict_list: List[dict], 
 tol: float) -> List[np.ndarray]:
-    """
+    r"""
     Apply a Lie transform with generating function G to a Hamiltonian.
     
     Parameters
@@ -338,7 +354,7 @@ tol: float = 1e-30,
 inverse: bool = False, # If False, Generators are applied in ascending order. If True, Generators are applied in descending order.
 sign: int = None, # If None, the sign is determined by the inverse flag. If not None, the sign is used to determine sign of the generator.
 restrict: bool = True) -> List[List[np.ndarray]]:
-    """
+    r"""
     Perform inverse Lie transformation from center manifold coordinates to complex-diagonalized coordinates.
     
     Parameters
@@ -422,7 +438,7 @@ psi: np.ndarray,
 clmo: np.ndarray, 
 encode_dict_list: List[dict], 
 tol: float) -> List[np.ndarray]:
-    """
+    r"""
     Apply inverse Lie series transformation to a coordinate polynomial.
     
     Parameters
@@ -494,7 +510,7 @@ def _evaluate_transform(
 expansions: List[List[np.ndarray]], 
 coords_cm_complex: np.ndarray, 
 clmo: np.ndarray) -> np.ndarray:
-    """
+    r"""
     Evaluate the six polynomial expansions at given center manifold values.
     
     Parameters
@@ -526,7 +542,7 @@ def _zero_q1p1(
     clmo: np.ndarray, 
     tol: float = 1e-30
 ) -> List[List[np.ndarray]]:
-    """
+    r"""
     Restrict coordinate expansions to the center manifold by eliminating 
     terms containing q1 or p1.
     

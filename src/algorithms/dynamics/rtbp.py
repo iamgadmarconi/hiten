@@ -1,3 +1,22 @@
+r"""
+algorithms.dynamics.rtbp
+========================
+
+Numba-accelerated equations of motion, Jacobians and variational
+systems for the circular restricted three-body problem (CR3BP) written
+in the synodic (rotating) frame.  The module also provides lightweight
+:pyclass:`_DynamicalSystem` wrappers and utility helpers for propagating
+the state-transition matrix (STM), the monodromy matrix and linear
+stability indices of periodic orbits.
+
+References
+----------
+Szebehely, V. (1967). "Theory of Orbits".
+
+Koon, W. S.; Lo, M. W.; Marsden, J. E.; Ross, S. D. (2011). "Dynamical
+Systems, the Three-Body Problem and Space Mission Design".
+"""
+
 from typing import Callable, Literal, Sequence
 
 import numba
@@ -130,6 +149,47 @@ def _var_equations(t, PHI_vec, mu):
 
 
 def compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy", order=8):
+    r"""
+    Propagate the state-transition matrix (STM).
+
+    Parameters
+    ----------
+    dynsys : _DynamicalSystem
+        Dynamical system exposing the 42-dimensional variational
+        equations of the CR3BP.
+    x0 : array_like, shape (6,)
+        Initial phase-space state :math:`(x, y, z, \dot x, \dot y, \dot z)`.
+    tf : float
+        Final integration time :math:`t_{\mathrm f}`.
+    steps : int, default 2000
+        Number of output points equally spaced in time.
+    forward : int, {1, -1}, default 1
+        Sign of time flow.  If negative the system is integrated
+        backward in time while the momentum-like variables are
+        sign-flipped via :pyclass:`_DirectedSystem`.
+    method : {'scipy', 'rk', 'symplectic', 'adaptive'}, default 'scipy'
+        Integration backend to be used.
+    order : int, default 8
+        Order of the Runge-Kutta or symplectic scheme.
+
+    Returns
+    -------
+    x : numpy.ndarray
+        Trajectory of the physical state, shape *(steps, 6)*.
+    times : numpy.ndarray
+        Time stamps corresponding to *x*.
+    phi_T : numpy.ndarray
+        State-transition matrix at *tf*, shape *(6, 6)*.
+    PHI : numpy.ndarray
+        Flattened STM and state history, shape *(steps, 42)*.
+
+    Notes
+    -----
+    The STM is embedded into a 42-dimensional vector composed of the 36
+    independent entries of :math:`\Phi(t)` followed by the phase-space
+    variables.  The combined system is then advanced with the selected
+    integrator.
+    """
     PHI0 = np.zeros(42, dtype=np.float64)
     PHI0[:36] = np.eye(6, dtype=np.float64).ravel()
     PHI0[36:] = x0
@@ -157,11 +217,45 @@ def compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["scipy", 
 
 
 def monodromy_matrix(dynsys, x0, period):
+    r"""
+    Return the monodromy matrix of a periodic CR3BP orbit.
+
+    Parameters
+    ----------
+    dynsys : _DynamicalSystem
+        Variational system to propagate.
+    x0 : array_like, shape (6,)
+        Initial state on the periodic orbit.
+    period : float
+        Orbital period :math:`T`.
+
+    Returns
+    -------
+    numpy.ndarray
+        Monodromy matrix :math:`\Phi(T)` of shape *(6, 6)*.
+    """
     _, _, M, _ = compute_stm(dynsys, x0, period)
     return M
 
 
 def stability_indices(monodromy):
+    r"""
+    Compute the classical linear stability indices.
+
+    Parameters
+    ----------
+    monodromy : numpy.ndarray
+        Monodromy matrix obtained from :pyfunc:`monodromy_matrix`.
+
+    Returns
+    -------
+    tuple
+        Pair :math:`(\nu_1, \nu_2)` where each index is defined as
+        :math:`\nu_i = \tfrac{1}{2}(\lambda_i + 1/\lambda_i)` with
+        :math:`\lambda_i` the corresponding eigenvalue.
+    numpy.ndarray
+        Eigenvalues of *monodromy* sorted by absolute value (descending).
+    """
     eigs = np.linalg.eigvals(monodromy)
     
     eigs = sorted(eigs, key=abs, reverse=True)
@@ -173,6 +267,26 @@ def stability_indices(monodromy):
 
 
 class JacobianRHS(_DynamicalSystem):
+    r"""
+    Right-hand side returning the Jacobian matrix of the CR3BP.
+
+    Parameters
+    ----------
+    mu : float
+        Mass parameter :math:`\mu \in (0, 1)`.
+    name : str, default 'CR3BP Jacobian'
+        Human-readable identifier.
+
+    Attributes
+    ----------
+    mu : float
+        Normalised mass parameter.
+    name : str
+        Display name used in :pyfunc:`repr`.
+    rhs : Callable[[float, numpy.ndarray], numpy.ndarray]
+        Vector field returning the Jacobian evaluated at the current
+        position.
+    """
     def __init__(self, mu: float, name: str = "CR3BP Jacobian"):
         super().__init__(3)
         self.name = name
@@ -195,6 +309,21 @@ class JacobianRHS(_DynamicalSystem):
 
 
 class VariationalEquationsRHS(_DynamicalSystem):
+    r"""
+    Variational equations of the CR3BP (42-dimensional system).
+
+    Parameters
+    ----------
+    mu : float
+        Mass parameter.
+    name : str, default 'CR3BP Variational Equations'
+        Display name.
+
+    Notes
+    -----
+    The state vector contains the flattened STM (first 36 components)
+    followed by the usual 6-component phase-space state.
+    """
     def __init__(self, mu: float, name: str = "CR3BP Variational Equations"):
         super().__init__(42)
         self.name = name
@@ -217,6 +346,23 @@ class VariationalEquationsRHS(_DynamicalSystem):
 
 
 class RTBPRHS(_DynamicalSystem):
+    r"""
+    Equations of motion of the planar/3-D circular restricted three-body problem.
+
+    Parameters
+    ----------
+    mu : float
+        Mass parameter of the secondary body.
+    name : str, default 'RTBP'
+        Display name.
+
+    Attributes
+    ----------
+    dim : int
+        Always 6.
+    rhs : Callable[[float, numpy.ndarray], numpy.ndarray]
+        Vector field :math:`f(t,\mathbf x)`.
+    """
     def __init__(self, mu: float, name: str = "RTBP"):
         super().__init__(dim=6)
         self.name = name
@@ -239,12 +385,15 @@ class RTBPRHS(_DynamicalSystem):
 
 
 def rtbp_dynsys(mu: float, name: str = "RTBP") -> RTBPRHS:
+    """Factory helper returning :pyclass:`RTBPRHS` with the given *mu*."""
     return RTBPRHS(mu=mu, name=name)
 
 def jacobian_dynsys(mu: float, name: str="Jacobian") -> JacobianRHS:
+    """Factory helper returning :pyclass:`JacobianRHS`."""
     return JacobianRHS(mu=mu, name=name)
 
 def variational_dynsys(mu: float, name: str = "VarEq") -> VariationalEquationsRHS:
+    """Factory helper returning :pyclass:`VariationalEquationsRHS`."""
     return VariationalEquationsRHS(mu=mu, name=name)
 
 
@@ -259,6 +408,13 @@ def _propagate_dynsys(
     order: int = 6,
     flip_indices: Sequence[int] | None = None,
 ) -> Solution:
+    r"""
+    Generic propagation routine shared by public helpers.
+
+    This is an internal utility.  It normalises *state0*, applies the
+    :pyclass:`_DirectedSystem` wrapper and delegates the actual
+    integration to the requested backend.
+    """
     state0_np = _validate_initial_state(state0, dynsys.dim)
 
     dynsys_dir = _DirectedSystem(dynsys, forward, flip_indices=flip_indices)
@@ -305,6 +461,14 @@ def _propagate_dynsys(
 
 
 def _validate_initial_state(state, expected_dim=6): 
+    r"""
+    Validate shape of *state*.
+
+    Raises
+    ------
+    ValueError
+        If length of *state* does not equal *expected_dim*.
+    """
     state_np = np.asarray(state, dtype=np.float64)
     if state_np.shape != (expected_dim,):
         msg = f"Initial state vector must have {expected_dim} elements, but got shape {state_np.shape}"

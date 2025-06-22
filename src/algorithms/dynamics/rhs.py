@@ -1,3 +1,17 @@
+r"""
+dynamics.rhs
+============
+
+Lightweight wrappers for arbitrary right-hand side functions.
+
+This module offers a thin adapter class :pyclass:`RHSSystem` that converts a
+plain Python callable representing the ODE :math:`\dot y = f(t, y)` into an
+object compatible with the internal :pyclass:`~algorithms.dynamics.base._DynamicalSystem`
+interface.  The adapter takes care of JIT-compiling the callable with
+:pyfunc:`numba.njit` (unless it is already a Numba :pyclass:`~numba.core.registry.CPUDispatcher`) 
+so that it can be invoked from nopython kernels without performance penalties.
+"""
+
 from typing import Callable
 
 import numpy as np
@@ -7,8 +21,43 @@ from algorithms.dynamics.base import _DynamicalSystem
 
 
 class RHSSystem(_DynamicalSystem):
+    r"""
+    Lightweight wrapper around an RHS callable.
+
+    Parameters
+    ----------
+    rhs_func : Callable[[float, numpy.ndarray], numpy.ndarray]
+        Callable implementing the dynamical system :math:`\dot y = f(t, y)`.
+        The signature must be ``(t, y)`` where *t* is time (float) and *y* is
+        the state vector (one-dimensional :pyclass:`numpy.ndarray`).
+    dim : int
+        Dimension :math:`n` of the state space.
+    name : str, optional
+        Human-readable identifier for the system, used only for
+        :pyfunc:`__repr__`.  Defaults to ``"Generic RHS"``.
+
+    Attributes
+    ----------
+    dim : int
+        Inherited from :pyclass:`_DynamicalSystem`.  Equal to *dim*.
+    name : str
+        Identifier provided at construction time.
+    rhs : Callable[[float, numpy.ndarray], numpy.ndarray]
+        JIT-compiled RHS callable.  Can be used inside :pyfunc:`numba.njit`
+        functions without falling back to object mode.
+
+    Notes
+    -----
+    * If *rhs_func* is already a Numba :pyclass:`CPUDispatcher`, it is reused
+      directly.  Otherwise it is compiled with :pyfunc:`numba.njit` using the
+      global fast-math setting :pydata:`utils.config.FASTMATH`.
+    * Any error raised by the parent constructor (e.g., if *dim* is not
+      positive) propagates unchanged.
+    """
+
     def __init__(self, rhs_func: Callable[[float, np.ndarray], np.ndarray], dim: int, name: str = "Generic RHS"):
-        """Wrap an arbitrary RHS into a _DynamicalSystem instance.
+        r"""
+        Wrap an arbitrary RHS into a _DynamicalSystem instance.
 
         The supplied *rhs_func* is automatically JIT-compiled (if it is not a
         Numba dispatcher already) so that it can be called from inside
@@ -39,6 +88,15 @@ class RHSSystem(_DynamicalSystem):
     
     @property
     def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
+        r"""
+        Return the compiled RHS callable.
+
+        Returns
+        -------
+        Callable[[float, numpy.ndarray], numpy.ndarray]
+            A Numba-compiled function with the same semantics as the original
+            *rhs_func* passed at construction.
+        """
         return self._rhs_compiled
     
     def __repr__(self) -> str:
@@ -46,5 +104,22 @@ class RHSSystem(_DynamicalSystem):
 
 
 def create_rhs_system(rhs_func: Callable[[float, np.ndarray], np.ndarray], dim: int, name: str = "Generic RHS"):
+    r"""
+    Factory helper that mirrors :pyfunc:`RHSSystem`.
+
+    This convenience function exists mainly to enable a functional style
+    when the object-oriented interface of :pyclass:`RHSSystem` is not needed.
+
+    Parameters
+    ----------
+    rhs_func, dim, name
+        Forwarded verbatim to the :pyfunc:`RHSSystem` constructor.
+
+    Returns
+    -------
+    RHSSystem
+        Instance wrapping *rhs_func*.
+    """
     return RHSSystem(rhs_func, dim, name)
+
 

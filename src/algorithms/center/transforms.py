@@ -1,3 +1,17 @@
+r"""
+center.transforms
+=================
+
+Linear coordinate transformations and helper utilities used in the centre
+manifold normal-form pipeline of the spatial circular restricted three body
+problem (CRTBP).
+
+References
+----------
+Jorba, À. (1999). "A Methodology for the Numerical Computation of Normal Forms, Centre
+Manifolds and First Integrals of Hamiltonian Systems".
+"""
+
 import numpy as np
 from numba.typed import List
 
@@ -12,6 +26,20 @@ from utils.log_config import logger
 
 
 def M() -> np.ndarray:
+    r"""
+    Return the linear map from complex modal to real modal coordinates.
+
+    Returns
+    -------
+    numpy.ndarray
+        A :math:`6 x 6` complex-valued matrix :math:`M` such that
+        :math:`\mathbf{z}_{\text{real}} = M\,\mathbf{z}_{\text{complex}}`.
+
+    Notes
+    -----
+    The matrix is unitary up to scaling and preserves the canonical
+    symplectic structure.
+    """
     return np.array([[1, 0, 0, 0, 0, 0],
         [0, 1/np.sqrt(2), 0, 0, 1j/np.sqrt(2), 0],
         [0, 0, 1/np.sqrt(2), 0, 0, 1j/np.sqrt(2)],
@@ -20,10 +48,19 @@ def M() -> np.ndarray:
         [0, 0, 1j/np.sqrt(2), 0, 0, 1/np.sqrt(2)]], dtype=np.complex128) #  real = M @ complex
 
 def M_inv() -> np.ndarray:
+    r"""
+    Return the inverse transformation :math:`M^{-1}`.
+
+    Returns
+    -------
+    numpy.ndarray
+        The inverse of :pyfunc:`M`, satisfying
+        :math:`\mathbf{z}_{\text{complex}} = M^{-1}\,\mathbf{z}_{\text{real}}`.
+    """
     return np.linalg.inv(M()) # complex = M_inv @ real
 
 def substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
-    """
+    r"""
     Transform a polynomial from real normal form to complex normal form.
     
     Parameters
@@ -52,7 +89,7 @@ def substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> Li
     return polynomial_clean(substitute_linear(poly_rn, M(), max_deg, psi, clmo, encode_dict_list), 1e-14)
 
 def substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
-    """
+    r"""
     Transform a polynomial from complex normal form to real normal form.
     
     Parameters
@@ -81,7 +118,7 @@ def substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[
     return polynomial_clean(substitute_linear(poly_cn, M_inv(), max_deg, psi, clmo, encode_dict_list), 1e-14)
 
 def solve_complex(real_coords: np.ndarray) -> np.ndarray:
-    """
+    r"""
     Return complex coordinates given real coordinates using the map `M_inv`.
 
     Parameters
@@ -97,7 +134,7 @@ def solve_complex(real_coords: np.ndarray) -> np.ndarray:
     return _clean_coordinates(_substitute_coordinates(real_coords, M_inv())) # [q1c, q2c, q3c, p1c, p2c, p3c]
 
 def solve_real(real_coords: np.ndarray) -> np.ndarray:
-    """
+    r"""
     Return real coordinates given complex coordinates using the map `M`.
 
     Parameters
@@ -113,7 +150,7 @@ def solve_real(real_coords: np.ndarray) -> np.ndarray:
     return _clean_coordinates(_substitute_coordinates(real_coords, M())) # [q1r, q2r, q3r, p1r, p2r, p3r]
 
 def _local2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
-    """
+    r"""
     Transform a polynomial from local frame to real modal frame.
     
     Parameters
@@ -145,7 +182,7 @@ def _local2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi, clm
     return substitute_linear(poly_local, C, max_deg, psi, clmo, encode_dict_list)
 
 def _realmodal2local(point, modal_coords: np.ndarray) -> np.ndarray:
-    """
+    r"""
     Transform coordinates from real modal to local frame.
     
     Parameters
@@ -169,7 +206,7 @@ def _realmodal2local(point, modal_coords: np.ndarray) -> np.ndarray:
     return _clean_coordinates(C.dot(modal_coords))
 
 def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray) -> np.ndarray:
-    """
+    r"""
     Transform coordinates from local to synodic frame for the collinear points.
 
     Parameters
@@ -188,6 +225,12 @@ def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray) ->
     -----
     - Local coordinates are ordered as [x1, x2, x3, px1, px2, px3].
     - Synodic coordinates are ordered as [X, Y, Z, Vx, Vy, Vz].
+
+    Raises
+    ------
+    ValueError
+        If *local_coords* is not a flat array of length 6 or contains an
+        imaginary part larger than the tolerance (``1e-16``).
     """
     gamma, mu, sgn, a = point.gamma, point.mu, point.sign, point.a
 
@@ -228,7 +271,7 @@ def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray) ->
     return syn
 
 def _local2synodic_triangular(point: TriangularPoint, local_coords: np.ndarray) -> np.ndarray:
-    """
+    r"""
     Transform coordinates from local to synodic frame for the equilateral points.
     
     Parameters
@@ -242,6 +285,17 @@ def _local2synodic_triangular(point: TriangularPoint, local_coords: np.ndarray) 
     -------
     np.ndarray
         Coordinates in synodic frame
+
+    Notes
+    -----
+    - Local coordinates are ordered as [x1, x2, x3, px1, px2, px3].
+    - Synodic coordinates are ordered as [X, Y, Z, Vx, Vy, Vz].
+
+    Raises
+    ------
+    ValueError
+        If *local_coords* is not a flat array of length 6 or contains an
+        imaginary part larger than the tolerance (``1e-16``).
     """
     mu, sgn = point.mu, point.sign
 
