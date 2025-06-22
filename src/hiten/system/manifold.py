@@ -6,7 +6,7 @@ Stable/unstable invariant manifolds of periodic orbits in the spatial circular
 restricted three-body problem.
 
 The module offers a high-level interface (:pyclass:`Manifold`) that, given a
-generating :pyclass:`hiten.system.orbits.base.PeriodicOrbit`, launches trajectory
+generating :pyclass:`PeriodicOrbit`, launches trajectory
 integrations along the selected eigen-directions, records their intersections
 with the canonical Poincaré section, provides quick 3-D visualisation, and
 handles (de)serialisation through :pyfunc:`Manifold.save` /
@@ -44,15 +44,14 @@ class manifoldConfig:
 
     Parameter
     ----------
-    generating_orbit : hiten.system.orbits.base.PeriodicOrbit
+    generating_orbit : :pyclass:`PeriodicOrbit`
         Periodic orbit that generates the manifold.
     stable : bool, default True
         ``True`` selects the stable manifold, ``False`` the unstable one.
     direction : {{'Positive', 'Negative'}}, default 'Positive'
         Sign of the eigenvector used to initialise the manifold branch.
     method : {{'rk', 'scipy', 'symplectic', 'adaptive'}}, default 'scipy'
-        Backend integrator passed to
-        :pyfunc:`hiten.algorithms.dynamics.rtbp._propagate_dynsys`.
+        Backend integrator passed to :pyfunc:`_propagate_dynsys`.
     order : int, default 6
         Integration order for fixed-step Runge-Kutta methods.
     """
@@ -115,17 +114,17 @@ class Manifold:
 
     Attributes
     ----------
-    generating_orbit : hiten.system.orbits.base.PeriodicOrbit
+    generating_orbit : :pyclass:`PeriodicOrbit`
         Orbit that seeds the manifold.
-    libration_point
+    libration_point : :pyclass:`LibrationPoint`
         Libration point associated with *generating_orbit*.
     stable, direction : int
-        Encoded form of the options in :pyclass:`manifoldConfig`.
+        Encoded form of the options in :pyclass:`ManifoldConfig`.
     mu : float
-        Mass ratio of the underlying CRTBP hiten.system.
+        Mass ratio of the underlying CRTBP system.
     method, order
         Numerical integration settings.
-    manifold_result : ManifoldResult or None
+    manifold_result : :pyclass:`ManifoldResult` or None
         Cached result returned by the last successful
         :pyfunc:`compute` call.
 
@@ -233,7 +232,7 @@ class Manifold:
                 steps = max(int(abs(tf) / dt) + 1, 100)
 
                 sol = _propagate_dynsys(
-                    dynsys=self.generating_orbit.hiten.system._dynsys,
+                    dynsys=self.generating_orbit.system._dynsys,
                     state0=x0W, 
                     t0=0.0, 
                     tf=tf,
