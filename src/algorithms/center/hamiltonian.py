@@ -127,7 +127,7 @@ def _build_R_polynomials(poly_x, poly_y, poly_z, poly_T: types.ListType, max_deg
     Returns
     -------
     List[List[np.ndarray]]
-        Polynomials \(\{R_0,\dots,R_{\text{max\_deg}}\}\).
+        Polynomials :math:`\{R_0,\dots,R_{\text{max\_deg}}\}`.
 
     Raises
     ------

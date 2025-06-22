@@ -103,7 +103,7 @@ class HaloOrbit(PeriodicOrbit):
         Richardson third-order analytical approximation.
 
         The method evaluates the closed-form expressions published by
-        Richardson to obtain an *O(\!\epsilon^{3})* approximation of the halo
+        Richardson to obtain an :math:`O(\!\epsilon^{3})` approximation of the halo
         orbit where :math:`\epsilon` is the amplitude ratio.
 
         Returns

@@ -250,8 +250,8 @@ def stability_indices(monodromy):
     Returns
     -------
     tuple
-        Pair *(\nu_1, \nu_2)* where each index is defined as
-        :math:`\nu_i = \tfrac12(\lambda_i + 1/\lambda_i)` with
+        Pair :math:`(\nu_1, \nu_2)` where each index is defined as
+        :math:`\nu_i = \tfrac{1}{2}(\lambda_i + 1/\lambda_i)` with
         :math:`\lambda_i` the corresponding eigenvalue.
     numpy.ndarray
         Eigenvalues of *monodromy* sorted by absolute value (descending).

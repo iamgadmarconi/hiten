@@ -55,7 +55,7 @@ def M_inv() -> np.ndarray:
     -------
     numpy.ndarray
         The inverse of :pyfunc:`M`, satisfying
-        \(\mathbf{z}_{\text{complex}} = M^{-1}\,\mathbf{z}_{\text{real}}\).
+        :math:`\mathbf{z}_{\text{complex}} = M^{-1}\,\mathbf{z}_{\text{real}}`.
     """
     return np.linalg.inv(M()) # complex = M_inv @ real
 

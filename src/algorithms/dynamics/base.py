@@ -123,7 +123,7 @@ class _DirectedSystem(_DynamicalSystem):
     The wrapper permits integration forward or backward in time and can
     selectively negate derivatives of specified state components. This is
     particularly handy for Hamiltonian systems written in
-    :math:`(\mathbf q,\,\mathbf p)` form where momentum variables change sign
+    :math:`\mathbf{q},\,\mathbf{p}` form where momentum variables change sign
     under time reversal.
 
     Parameters
