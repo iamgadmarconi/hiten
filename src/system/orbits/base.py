@@ -14,12 +14,12 @@ from algorithms.dynamics.rtbp import (_propagate_dynsys, compute_stm,
                                       rtbp_dynsys, stability_indices)
 from algorithms.dynamics.utils.energy import crtbp_energy, energy_to_jacobi
 from algorithms.dynamics.utils.geometry import _find_y_zero_crossing
-from utils.plots import (_plot_body, _set_axes_equal, _set_dark_mode,
-                         animate_trajectories)
-from system.libration import LibrationPoint
 from system.base import System
+from system.libration.base import LibrationPoint
 from utils.coordinates import rotating_to_inertial
 from utils.log_config import logger
+from utils.plots import (_plot_body, _set_axes_equal, _set_dark_mode,
+                         animate_trajectories)
 
 
 @dataclass

@@ -24,9 +24,8 @@ def system():
 @pytest.fixture
 def l1_orbit(system):
     config = orbitConfig(
-        system=system,
         orbit_family="lyapunov",
-        libration_point_idx=1,
+        libration_point=system.get_libration_point(1),
         extra_params={"Ax": 4e-3}
     )
     return LyapunovOrbit(config)
@@ -34,9 +33,8 @@ def l1_orbit(system):
 @pytest.fixture
 def l2_orbit(system):
     config = orbitConfig(
-        system=system,
         orbit_family="lyapunov",
-        libration_point_idx=2,
+        libration_point=system.get_libration_point(2),
         extra_params={"Ax": 4e-3}
     )
     return LyapunovOrbit(config)

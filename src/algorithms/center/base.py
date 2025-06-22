@@ -1,20 +1,25 @@
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import numpy as np
 
 from algorithms.center.hamiltonian import build_physical_hamiltonian
-from algorithms.center.lie import (_lie_expansion, _evaluate_transform,
+from algorithms.center.lie import (_evaluate_transform, _lie_expansion,
                                    _lie_transform)
-from algorithms.poincare.map import _solve_missing_coord
-from algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                               decode_multiindex,
-                                               init_index_tables)
-from algorithms.center.transforms import (_local2realmodal, _local2synodic,
+from algorithms.center.transforms import (_local2realmodal,
+                                          _local2synodic_collinear,
+                                          _local2synodic_triangular,
                                           _realmodal2local, solve_complex,
                                           solve_real, substitute_complex,
                                           substitute_real)
-from system.libration import CollinearPoint
+from algorithms.poincare.map import _solve_missing_coord
+from algorithms.polynomial.base import (_create_encode_dict_from_clmo,
+                                        decode_multiindex, init_index_tables)
+from system.libration.collinear import CollinearPoint
 from utils.log_config import logger
+
+
+if TYPE_CHECKING:
+    from algorithms.poincare.base import PoincareMap, poincareMapConfig
 
 
 class CenterManifold:
@@ -25,7 +30,11 @@ class CenterManifold:
         self.psi, self.clmo = init_index_tables(self.max_degree)
         self.encode_dict_list = _create_encode_dict_from_clmo(self.clmo)
 
+        self._local2synodic = _local2synodic_collinear if isinstance(self.point, CollinearPoint) else _local2synodic_triangular
+
         self._cache = {}
+
+        self._poincare_map: "PoincareMap" = None
 
     def __str__(self):
         return f"CenterManifold(point={self.point}, max_degree={self.max_degree})"
@@ -170,13 +179,32 @@ class CenterManifold:
                     coeff_vec[pos] = 0.0
         return poly_cm
     
-    def poincare_map(self):
-        """
-        TODO: Implement Poincare map computation.
-        """
-        pass
+    def poincare_map(self, energy: float, **kwargs) -> "PoincareMap":
+        from algorithms.poincare.base import PoincareMap, poincareMapConfig
 
-    def cm2ic(self, poincare_point: np.ndarray, energy: float, section_coord: str = "q3") -> np.ndarray:
+        if self._poincare_map is None:
+
+            default_cfg = dict(
+                dt=1e-2,
+                method="rk",
+                integrator_order=4,
+                c_omega_heuristic=20.0,
+                n_seeds=20,
+                n_iter=40,
+                seed_axis="q2",
+                section_coord="q3",
+
+                compute_on_init=True,
+                use_gpu=False,
+            )
+
+            default_cfg.update(kwargs)
+
+            cfg = poincareMapConfig(**default_cfg)
+            self._poincare_map = PoincareMap(self, energy, cfg)
+        return self._poincare_map
+
+    def ic(self, poincare_point: np.ndarray, energy: float, section_coord: str = "q3") -> np.ndarray:
         """
         Convert a single Poincaré section point (in centre-manifold coordinates)
         into full synodic initial conditions.
@@ -272,7 +300,7 @@ class CenterManifold:
         complex_6d = _evaluate_transform(expansions, complex_6d_cm, self.clmo)
         real_6d = solve_real(complex_6d)
         local_6d = _realmodal2local(self.point, real_6d)
-        synodic_6d = _local2synodic(self.point, local_6d)
+        synodic_6d = self._local2synodic(self.point, local_6d)
 
         logger.info("CM → synodic transformation complete")
         return synodic_6d

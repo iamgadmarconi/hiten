@@ -3,9 +3,11 @@ from numba.typed import List
 
 from algorithms.polynomial.base import _create_encode_dict_from_clmo
 from algorithms.polynomial.coordinates import (_clean_coordinates,
-                                                      _substitute_coordinates)
+                                               _substitute_coordinates)
 from algorithms.polynomial.operations import (polynomial_clean,
-                                                     substitute_linear)
+                                              substitute_linear)
+from system.libration.collinear import CollinearPoint
+from system.libration.triangular import TriangularPoint
 from utils.log_config import logger
 
 
@@ -166,9 +168,9 @@ def _realmodal2local(point, modal_coords: np.ndarray) -> np.ndarray:
     C, _ = point.normal_form_transform()
     return _clean_coordinates(C.dot(modal_coords))
 
-def _local2synodic(point, local_coords: np.ndarray) -> np.ndarray:
+def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray) -> np.ndarray:
     """
-    Transform coordinates from local to synodic frame.
+    Transform coordinates from local to synodic frame for the collinear points.
 
     Parameters
     ----------
@@ -192,7 +194,7 @@ def _local2synodic(point, local_coords: np.ndarray) -> np.ndarray:
     tol = 1e-16
     c_complex = np.asarray(local_coords, dtype=np.complex128)
     if np.any(np.abs(np.imag(c_complex)) > tol):
-        err = f"_local2synodic received coords with non-negligible imaginary part; max |Im(coords)| = {np.max(np.abs(np.imag(c_complex))):.3e} > {tol}."
+        err = f"_local2synodic_collinear received coords with non-negligible imaginary part; max |Im(coords)| = {np.max(np.abs(np.imag(c_complex))):.3e} > {tol}."
         logger.error(err)
         raise ValueError(err)
 
@@ -219,6 +221,60 @@ def _local2synodic(point, local_coords: np.ndarray) -> np.ndarray:
     syn[3] = gamma * vx  # Vx
     syn[4] = gamma * vy  # Vy
     syn[5] = gamma * vz  # Vz
+
+    # Flip X and Vx according to NASA/Szebehely convention (see standard relations)
+    syn[[0, 3]] *= -1.0
+
+    return syn
+
+def _local2synodic_triangular(point: TriangularPoint, local_coords: np.ndarray) -> np.ndarray:
+    """
+    Transform coordinates from local to synodic frame for the equilateral points.
+    
+    Parameters
+    ----------
+    point : object
+        An object with a normal_form_transform method that returns the transformation matrix
+    local_coords : np.ndarray
+        Coordinates in local frame
+
+    Returns
+    -------
+    np.ndarray
+        Coordinates in synodic frame
+    """
+    mu, sgn = point.mu, point.sign
+
+    tol = 1e-16
+    c_complex = np.asarray(local_coords, dtype=np.complex128)
+    if np.any(np.abs(np.imag(c_complex)) > tol):
+        err = f"_local2synodic_triangular received coords with non-negligible imaginary part; max |Im(coords)| = {np.max(np.abs(np.imag(c_complex))):.3e} > {tol}."
+        logger.error(err)
+        raise ValueError(err)
+
+    # From here on we work with the real part only.
+    c = c_complex.real.astype(np.float64)
+
+    if c.ndim != 1 or c.size != 6:
+        raise ValueError(
+            f"coords must be a flat array of 6 elements, got shape {c.shape}"
+        )
+
+    syn = np.empty(6, dtype=np.float64)
+
+    # Positions
+    syn[0] = c[0] - mu + 1 / 2 # X
+    syn[1] = c[1] + sgn * np.sqrt(3) / 2 # Y
+    syn[2] = c[2]  # Z
+
+    # Local momenta to synodic velocities
+    vx = c[3] - sgn * np.sqrt(3) / 2
+    vy = c[4] - mu  + 1 / 2
+    vz = c[5]
+
+    syn[3] = vx  # Vx
+    syn[4] = vy  # Vy
+    syn[5] = vz  # Vz
 
     # Flip X and Vx according to NASA/Szebehely convention (see standard relations)
     syn[[0, 3]] *= -1.0

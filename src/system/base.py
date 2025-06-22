@@ -3,10 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict
 
-from system.body import Body
-from system.libration import (L1Point, L2Point, L3Point, L4Point, L5Point,
-                              LibrationPoint)
 from algorithms.dynamics.rtbp import rtbp_dynsys
+from system.body import Body
+from system.libration.base import LibrationPoint
+from system.libration.collinear import L1Point, L2Point, L3Point
+from system.libration.triangular import L4Point, L5Point
 from utils.log_config import logger
 from utils.precision import hp
 
