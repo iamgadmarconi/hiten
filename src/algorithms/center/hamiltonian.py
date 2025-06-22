@@ -36,14 +36,14 @@ from utils.config import FASTMATH
 def _build_T_polynomials(poly_x, poly_y, poly_z, max_deg: int, psi_table, clmo_table, encode_dict_list) -> types.ListType:
     r"""
     Compute three-dimensional Chebyshev polynomials of the first kind
-    \(T_n(r)\) where \(r = x / \sqrt{x^2 + y^2 + z^2}\).
+    :math:`T_n(r)` where :math:`r = x / \sqrt{x^2 + y^2 + z^2}`.
 
     Parameters
     ----------
     poly_x, poly_y, poly_z : List[np.ndarray]
-        Polynomial representations of the Cartesian coordinates \(x,y,z\).
+        Polynomial representations of the Cartesian coordinates :math:`x,y,z`.
     max_deg : int
-        Highest order \(n\) such that \(T_n\) is returned.
+        Highest order :math:`n` such that :math:`T_n` is returned.
     psi_table : ndarray
         Combinatorial index table produced by
         :pyfunc:`algorithms.polynomial.base.init_index_tables`.
@@ -55,7 +55,7 @@ def _build_T_polynomials(poly_x, poly_y, poly_z, max_deg: int, psi_table, clmo_t
     Returns
     -------
     List[List[np.ndarray]]
-        Numba typed list; element *i* holds the coefficients of \(T_i\).
+        Numba typed list; element *i* holds the coefficients of :math:`	T_i`.
 
     Raises
     ------
@@ -64,12 +64,9 @@ def _build_T_polynomials(poly_x, poly_y, poly_z, max_deg: int, psi_table, clmo_t
     Notes
     -----
     The classical recurrence
-    \(T_0 = 1,\; T_1 = r,\; T_n = 2 r\,T_{n-1} - T_{n-2}\)
+    :math:`T_0 = 1,\; T_1 = r,\; T_n = 2 r\,T_{n-1} - T_{n-2}`
     becomes in Cartesian variables
-    \[
-        T_n = \frac{2n-1}{n}\,x\,T_{n-1}
-        - \frac{n-1}{n}\,(x^2 + y^2 + z^2)\,T_{n-2}.
-    \]
+    :math:`T_n = \frac{2n-1}{n}\,x\,T_{n-1}-\frac{n-1}{n}\,(x^2 + y^2 + z^2)\,T_{n-2}`.
     """
     poly_T_list_of_polys = List()
     for _ in range(max_deg + 1):
@@ -112,13 +109,13 @@ def _build_T_polynomials(poly_x, poly_y, poly_z, max_deg: int, psi_table, clmo_t
 @njit(fastmath=FASTMATH, cache=False)
 def _build_R_polynomials(poly_x, poly_y, poly_z, poly_T: types.ListType, max_deg: int, psi_table, clmo_table, encode_dict_list) -> types.ListType:
     r"""
-    Generate the auxiliary sequence \(R_n\) required by the Lindstedt-Poincaré
+    Generate the auxiliary sequence :math:`R_n` required by the Lindstedt-Poincaré
     formulation.
 
     Parameters
     ----------
     poly_x, poly_y, poly_z : List[np.ndarray]
-        Polynomial representations of \(x,y,z\).
+        Polynomial representations of :math:`x,y,z`.
     poly_T : List[List[np.ndarray]]
         Output of :pyfunc:`_build_T_polynomials`.
     max_deg, psi_table, clmo_table, encode_dict_list
@@ -213,14 +210,14 @@ def _build_R_polynomials(poly_x, poly_y, poly_z, poly_T: types.ListType, max_deg
 def _build_potential_U(poly_T, point, max_deg: int, psi_table) -> List[np.ndarray]:
     r"""
     Assemble the gravitational potential expansion
-    \(U = -\sum_{n\ge 2} c_n T_n(r)\).
+    :math:`U = -\sum_{n\ge 2} c_n T_n(r)`.
 
     Parameters
     ----------
     poly_T : List[List[np.ndarray]]
         Chebyshev polynomials from :pyfunc:`_build_T_polynomials`.
     point : Any
-        Object exposing ``_cn(k)`` which returns the coefficient \(c_k\).
+        Object exposing ``_cn(k)`` which returns the coefficient :math:`c_k`.
     max_deg : int
         Polynomial truncation degree.
     psi_table : ndarray
@@ -229,7 +226,7 @@ def _build_potential_U(poly_T, point, max_deg: int, psi_table) -> List[np.ndarra
     Returns
     -------
     List[np.ndarray]
-        Polynomial representation of \(U\).
+        Polynomial representation of :math:`U`.
 
     Raises
     ------
@@ -244,7 +241,7 @@ def _build_potential_U(poly_T, point, max_deg: int, psi_table) -> List[np.ndarra
 def _build_kinetic_energy_terms(poly_px, poly_py, poly_pz, max_deg: int, psi_table, clmo_table, encode_dict_list) -> List[np.ndarray]:
     r"""
     Build the kinetic energy term
-    \(T = \frac{1}{2}(p_x^2 + p_y^2 + p_z^2)\).
+    :math:`T = \frac{1}{2}(p_x^2 + p_y^2 + p_z^2)`.
 
     Parameters
     ----------
@@ -256,7 +253,7 @@ def _build_kinetic_energy_terms(poly_px, poly_py, poly_pz, max_deg: int, psi_tab
     Returns
     -------
     List[np.ndarray]
-        Polynomial representation of \(T\).
+        Polynomial representation of :math:`T`.
 
     Raises
     ------
@@ -272,7 +269,7 @@ def _build_kinetic_energy_terms(poly_px, poly_py, poly_pz, max_deg: int, psi_tab
 def _build_rotational_terms(poly_x, poly_y, poly_px, poly_py, max_deg: int, psi_table, clmo_table, encode_dict_list) -> List[np.ndarray]:
     r"""
     Construct the Coriolis (rotational) contribution
-    \(C = y\,p_x - x\,p_y\).
+    :math:`C = y\,p_x - x\,p_y`.
 
     Parameters
     ----------
@@ -286,7 +283,7 @@ def _build_rotational_terms(poly_x, poly_y, poly_px, poly_py, max_deg: int, psi_
     Returns
     -------
     List[np.ndarray]
-        Polynomial representation of \(C\).
+        Polynomial representation of :math:`C`.
 
     Raises
     ------
@@ -306,13 +303,13 @@ def _build_rotational_terms(poly_x, poly_y, poly_px, poly_py, max_deg: int, psi_
 def build_physical_hamiltonian(point, max_deg: int) -> List[np.ndarray]:
     r"""
     Combine kinetic, potential, and Coriolis parts to obtain the full
-    rotating-frame Hamiltonian \(H = T + U + C\).
+    rotating-frame Hamiltonian :math:`H = T + U + C`.
 
     Parameters
     ----------
     point : Any
         Object with method ``_cn(k)`` returning the potential coefficient
-        \(c_k\) of order *k*.
+        :math:`c_k` of order *k*.
     max_deg : int
         Truncation degree for every polynomial sub-component.
 
@@ -361,7 +358,7 @@ def build_lindstedt_poincare_rhs_polynomials(point, max_deg: int) -> Tuple[List,
     Parameters
     ----------
     point : Any
-        Provider of the sequence \(c_k\) via ``_cn``.
+        Provider of the sequence :math:`c_k` via ``_cn``.
     max_deg : int
         Truncation degree.
 

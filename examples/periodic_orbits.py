@@ -75,7 +75,7 @@ def main() -> None:
     logger.info("Preparing centre manifold for initial guesses…")
     cm = compute_center_manifold(l_point)
     ic_seed = initial_conditions_from_cm(cm)
-    logger.info("Initial conditions (CM → physical coordinates): %s", ic_seed)
+    logger.info("Initial conditions (CM to physical coordinates): %s", ic_seed)
 
     # Specifications for each family we wish to generate
     orbit_specs = [

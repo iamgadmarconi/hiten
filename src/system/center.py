@@ -51,7 +51,7 @@ class CenterManifold:
     point : system.libration.collinear.CollinearPoint
         Collinear libration point about which the normal form is computed.
     max_degree : int
-        Maximum total degree \(N\) of the polynomial truncation.
+        Maximum total degree :math:`N` of the polynomial truncation.
 
     Attributes
     ----------
