@@ -4,7 +4,7 @@ import numpy as np
 from numba import njit
 from numba.typed import List
 
-from algorithms.center.polynomial.operations import (polynomial_evaluate,
+from algorithms.polynomial.operations import (polynomial_evaluate,
                                                      polynomial_jacobian)
 from algorithms.dynamics.base import _DynamicalSystem, DynamicalSystemProtocol
 from algorithms.integrators.symplectic import _eval_dH_dP, _eval_dH_dQ

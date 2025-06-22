@@ -2,7 +2,7 @@ import numpy as np
 from numba import njit
 from numba.typed import List
 
-from algorithms.center.polynomial.operations import polynomial_evaluate
+from algorithms.polynomial.operations import polynomial_evaluate
 from config import FASTMATH
 from algorithms.integrators.base import Integrator, Solution
 from algorithms.dynamics.base import _DynamicalSystem

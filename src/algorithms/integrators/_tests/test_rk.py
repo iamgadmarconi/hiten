@@ -6,10 +6,10 @@ import pytest
 from numba.typed import List
 from scipy.integrate import solve_ivp
 
-from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
+from algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                                encode_multiindex,
                                                init_index_tables)
-from algorithms.center.polynomial.operations import polynomial_evaluate
+from algorithms.polynomial.operations import polynomial_evaluate
 from algorithms.dynamics.rhs import create_rhs_system
 from algorithms.dynamics.rtbp import rtbp_dynsys
 from algorithms.dynamics.hamiltonian import create_hamiltonian_system

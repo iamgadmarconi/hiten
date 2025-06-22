@@ -24,8 +24,8 @@ from typing import TYPE_CHECKING, Tuple
 import numpy as np
 
 from algorithms.dynamics.rtbp import _jacobian_crtbp, variational_dynsys
-from algorithms.energy import crtbp_energy, energy_to_jacobi
-from algorithms.linalg import eigenvalue_decomposition
+from algorithms.dynamics.utils.energy import crtbp_energy, energy_to_jacobi
+from algorithms.dynamics.utils.linalg import eigenvalue_decomposition
 from config import MPMATH_DPS
 from utils.log_config import logger
 from utils.precision import find_root, hp

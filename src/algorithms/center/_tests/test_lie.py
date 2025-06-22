@@ -12,12 +12,12 @@ from algorithms.center.lie import (_apply_coord_transform,
                                    _lie_transform,
                                    _select_terms_for_elimination,
                                    _solve_homological_equation)
-from algorithms.center.polynomial.algebra import _poly_poisson
-from algorithms.center.polynomial.base import (_create_encode_dict_from_clmo,
+from algorithms.polynomial.algebra import _poly_poisson
+from algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                                decode_multiindex,
                                                encode_multiindex, make_poly)
-from algorithms.center.polynomial.conversion import sympy2poly
-from algorithms.center.polynomial.operations import (
+from algorithms.polynomial.conversion import sympy2poly
+from algorithms.polynomial.operations import (
     polynomial_evaluate, polynomial_poisson_bracket, polynomial_zero_list)
 from algorithms.center.transforms import _local2realmodal, substitute_complex
 from config import N_VARS
