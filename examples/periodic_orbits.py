@@ -11,14 +11,10 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from system.center import CenterManifold
-from system.base import System, systemConfig
-from system.body import Body
-from system.manifold import Manifold, manifoldConfig
-from system.orbits.base import orbitConfig
-from system.orbits.halo import HaloOrbit
-from system.orbits.lyapunov import LyapunovOrbit, VerticalLyapunovOrbit
-from utils.constants import Constants
+from system import (Body, CenterManifold, HaloOrbit, LyapunovOrbit, Manifold,
+                    System, VerticalLyapunovOrbit, manifoldConfig, orbitConfig,
+                    systemConfig)
+from utils import Constants
 from utils.files import _ensure_dir
 from utils.log_config import logger
 
