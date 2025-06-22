@@ -35,7 +35,7 @@ def lie_test_setup():
     Moon = Body("Moon", Constants.bodies["moon"]["mass"], Constants.bodies["moon"]["radius"], "gray", Earth)
     distance = Constants.get_orbital_distance("earth", "moon")
     system = System(systemConfig(Earth, Moon, distance))
-    libration_point = hiten.system.get_libration_point(TEST_L_POINT_IDX)
+    libration_point = system.get_libration_point(TEST_L_POINT_IDX)
 
     cm = CenterManifold(libration_point, TEST_MAX_DEG)
     cm.compute()

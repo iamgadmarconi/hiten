@@ -40,7 +40,7 @@ from hiten.algorithms.polynomial.base import (decode_multiindex,
 from hiten.utils.config import FASTMATH, N_VARS
 
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def _poly_add(p: np.ndarray, q: np.ndarray, out: np.ndarray) -> None:
     r"""
     Add two polynomial coefficient arrays element-wise.
@@ -67,7 +67,7 @@ def _poly_add(p: np.ndarray, q: np.ndarray, out: np.ndarray) -> None:
     for i in range(p.shape[0]):
         out[i] = p[i] + q[i]
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def _poly_scale(p: np.ndarray, alpha, out: np.ndarray) -> None:
     r"""
     Scale a polynomial coefficient array by a constant factor.
@@ -318,7 +318,7 @@ def _poly_poisson(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clm
             r -= term2
     return r
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def _get_degree(p: np.ndarray, psi) -> int:
     r"""
     Determine the degree of a polynomial from its coefficient array length.
@@ -352,7 +352,7 @@ def _get_degree(p: np.ndarray, psi) -> int:
             return d
     return -1 # Should not be reached if poly and psi are consistent
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def _poly_clean_inplace(p: np.ndarray, tol: float) -> None:
     r"""
     Set coefficients with absolute value below tolerance to zero (in-place).
@@ -379,7 +379,7 @@ def _poly_clean_inplace(p: np.ndarray, tol: float) -> None:
         if np.abs(p[i]) <= tol:
             p[i] = 0
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def _poly_clean(p: np.ndarray, tol: float, out: np.ndarray) -> None:
     r"""
     Set coefficients with absolute value below tolerance to zero (out-of-place).
@@ -409,7 +409,7 @@ def _poly_clean(p: np.ndarray, tol: float, out: np.ndarray) -> None:
         else:
             out[i] = p[i]
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def _poly_evaluate(
     p: np.ndarray, 
     degree: int, 
@@ -470,7 +470,7 @@ def _poly_evaluate(
 
     return current_sum
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def _evaluate_reduced_monomial(
     k: np.ndarray,
     coords: np.ndarray, 
@@ -536,7 +536,7 @@ def _evaluate_reduced_monomial(
                 
     return result
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def _poly_integrate(p: np.ndarray, var: int, degree: int, psi, clmo, encode_dict_list) -> np.ndarray:
     r"""
     Integrate a polynomial with respect to one variable.

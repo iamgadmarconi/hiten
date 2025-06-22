@@ -301,7 +301,7 @@ def _solve_missing_coord(
     return root
 
 
-@njit(cache=True, fastmath=FASTMATH)
+@njit(cache=False, fastmath=FASTMATH)
 def _get_section_value(state: np.ndarray, section_coord: str) -> float:
     r"""
     Return the section coordinate value.
@@ -317,7 +317,7 @@ def _get_section_value(state: np.ndarray, section_coord: str) -> float:
     else:
         return state[2]  # Default to q3
 
-@njit(cache=True, fastmath=FASTMATH)
+@njit(cache=False, fastmath=FASTMATH)
 def _get_direction_sign(section_coord: str) -> float:
     r"""
     Return the direction sign for crossing detection.
@@ -333,7 +333,7 @@ def _get_direction_sign(section_coord: str) -> float:
     else:
         return 1.0
 
-@njit(cache=True, fastmath=FASTMATH)
+@njit(cache=False, fastmath=FASTMATH)
 def _get_rk_coefficients(order: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     if order == 4:
         return RK4_A, RK4_B, RK4_C
@@ -343,7 +343,7 @@ def _get_rk_coefficients(order: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray
         return RK8_A, RK8_B, RK8_C
 
 
-@njit(cache=True, fastmath=FASTMATH)
+@njit(cache=False, fastmath=FASTMATH)
 def _poincare_step(
     q2: float,
     p2: float,
@@ -480,7 +480,7 @@ def _poincare_step(
 
     return 0, 0.0, 0.0, 0.0
 
-@njit(parallel=True, cache=True)
+@njit(parallel=True, cache=False)
 def _poincare_map(
     seeds: np.ndarray,  # (N,4) float64
     dt: float,

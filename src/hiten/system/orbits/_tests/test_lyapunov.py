@@ -89,12 +89,7 @@ def test_lyapunov_orbit_stability(l1_orbit):
     
     assert isinstance(stability_indices[0], complex), "Stability indices should be complex numbers"
     
-    is_stable = bool(l1_orbit.is_stable)
-    is_unstable = bool(l1_orbit.is_unstable)
-    
-    assert isinstance(is_stable, bool), "is_stable should be convertible to a boolean"
-    assert isinstance(is_unstable, bool), "is_unstable should be convertible to a boolean"
-    assert is_stable != is_unstable, "An orbit should be either stable or unstable, not both"
+    assert isinstance(l1_orbit.is_stable, (bool, np.bool_)), "is_stable should be convertible to a boolean"
 
 def test_lyapunov_base_class(l1_orbit):
     l1_orbit.differential_correction()

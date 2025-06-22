@@ -8,7 +8,7 @@ from pathlib import Path
 def find_test_files():
     """Find all test_*.py files in the project."""
     # Get the src directory (go up from utils to src)
-    src_dir = Path(os.path.dirname(os.path.abspath(__file__))).parent
+    src_dir = Path(os.path.dirname(os.path.abspath(__file__))).parent.parent
     project_root = src_dir.parent
     
     # Add src directory to Python path so imports work correctly

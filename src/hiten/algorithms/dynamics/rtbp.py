@@ -31,7 +31,7 @@ from hiten.utils.config import FASTMATH, TOL
 from hiten.utils.log_config import logger
 
 
-@numba.njit(fastmath=FASTMATH, cache=True)
+@numba.njit(fastmath=FASTMATH, cache=False)
 def _crtbp_accel(state, mu):
     x, y, z, vx, vy, vz = state
 
@@ -44,7 +44,7 @@ def _crtbp_accel(state, mu):
 
     return np.array([vx, vy, vz, ax, ay, az], dtype=np.float64)
 
-@numba.njit(fastmath=FASTMATH, cache=True)
+@numba.njit(fastmath=FASTMATH, cache=False)
 def _jacobian_crtbp(x, y, z, mu):
     mu2 = 1.0 - mu
 
@@ -98,7 +98,7 @@ def _jacobian_crtbp(x, y, z, mu):
 
     return F
 
-@numba.njit(fastmath=FASTMATH, cache=True)
+@numba.njit(fastmath=FASTMATH, cache=False)
 def _var_equations(t, PHI_vec, mu):
     phi_flat = PHI_vec[:36]
     x_vec    = PHI_vec[36:]  # [x, y, z, vx, vy, vz]
@@ -294,7 +294,7 @@ class JacobianRHS(_DynamicalSystem):
         
         mu_val = self.mu
 
-        @numba.njit(fastmath=FASTMATH, cache=True)
+        @numba.njit(fastmath=FASTMATH, cache=False)
         def _jacobian_rhs(t: float, state, _mu=mu_val) -> np.ndarray:
             return _jacobian_crtbp(state[0], state[1], state[2], _mu)
         
@@ -331,7 +331,7 @@ class VariationalEquationsRHS(_DynamicalSystem):
 
         mu_val = self.mu
 
-        @numba.njit(fastmath=FASTMATH, cache=True)
+        @numba.njit(fastmath=FASTMATH, cache=False)
         def _var_eq_rhs(t: float, y: np.ndarray, _mu=mu_val) -> np.ndarray:
             return _var_equations(t, y, _mu)
         
@@ -370,7 +370,7 @@ class RTBPRHS(_DynamicalSystem):
 
         mu_val = self.mu
 
-        @numba.njit(fastmath=FASTMATH, cache=True)
+        @numba.njit(fastmath=FASTMATH, cache=False)
         def _crtbp_rhs(t: float, state: np.ndarray, _mu=mu_val) -> np.ndarray:
             return _crtbp_accel(state, _mu)
 

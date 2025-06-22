@@ -54,7 +54,7 @@ from hiten.algorithms.polynomial.base import (decode_multiindex,
 from hiten.utils.config import FASTMATH, N_VARS
 
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def polynomial_zero_list(max_deg: int, psi) -> List[np.ndarray]:
     r"""
     Create a list of zero polynomial coefficient arrays up to a maximum degree.
@@ -84,7 +84,7 @@ def polynomial_zero_list(max_deg: int, psi) -> List[np.ndarray]:
         lst.append(make_poly(d, psi))
     return lst
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def polynomial_variable(idx: int, max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
     r"""
     Create a polynomial representing a single variable.
@@ -122,7 +122,7 @@ def polynomial_variable(idx: int, max_deg: int, psi, clmo, encode_dict_list) -> 
             poly_result[1][encoded_idx] = 1.0
     return poly_result
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def polynomial_variables_list(max_deg: int, psi, clmo, encode_dict_list) -> List[List[np.ndarray]]:
     r"""
     Create a list of polynomials for each variable in the hiten.system.
@@ -154,7 +154,7 @@ def polynomial_variables_list(max_deg: int, psi, clmo, encode_dict_list) -> List
         var_polys.append(polynomial_variable(var_idx, max_deg, psi, clmo, encode_dict_list))
     return var_polys
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def polynomial_add_inplace(poly_p: List[np.ndarray], poly_q: List[np.ndarray], scale=1.0, max_deg: int = -1):
     r"""
     Add or subtract one polynomial to/from another in-place.
@@ -353,7 +353,7 @@ def polynomial_poisson_bracket(poly_p: List[np.ndarray], poly_q: List[np.ndarray
                 poly_r[res_deg] += term_coeffs.reshape(poly_r[res_deg].shape)
     return poly_r
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def polynomial_clean(poly_p: List[np.ndarray], tol: float) -> List[np.ndarray]:
     r"""
     Create a new polynomial with small coefficients set to zero.
@@ -384,7 +384,7 @@ def polynomial_clean(poly_p: List[np.ndarray], tol: float) -> List[np.ndarray]:
         cleaned_list.append(out_arr)
     return cleaned_list
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def polynomial_degree(poly_p: List[np.ndarray]) -> int:
     r"""
     Get the degree of a polynomial represented as a list of homogeneous parts.
@@ -408,7 +408,7 @@ def polynomial_degree(poly_p: List[np.ndarray]) -> int:
             return d
     return -1 # All parts are zero or poly_p is empty
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def polynomial_total_degree(poly_p: List[np.ndarray], psi) -> int:
     r"""
     Get the total degree of a polynomial using the _get_degree kernel function.
@@ -581,7 +581,7 @@ def polynomial_jacobian(
     
     return jacobian_list
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def polynomial_evaluate(
     poly_p: List[np.ndarray], 
     point: np.ndarray, 
@@ -617,7 +617,7 @@ def polynomial_evaluate(
             total_value += _poly_evaluate(coeffs_d, degree, point, clmo)
     return total_value
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def polynomial_integrate(
     poly_p: List[np.ndarray],
     var_idx: int,
@@ -692,7 +692,7 @@ def polynomial_integrate(
     return integral_coeffs_list, integral_max_deg
 
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def _linear_variable_polys(C: np.ndarray, max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
     r"""
     Create polynomials for new variables after a linear transformation.

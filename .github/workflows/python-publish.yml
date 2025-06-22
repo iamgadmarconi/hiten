@@ -26,9 +26,20 @@ jobs:
         with:
           python-version: "3.x"
 
+      # 1) install runtime + test deps
+      - name: Install project (with dev extras) and pytest
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install .[dev]             # or: -r requirements.txt
+          python -m pip install pytest
+
+      # 2) run the internal test driver
+      - name: Run utils test suite
+        run: python -m hiten.utils.tests           # equivalent to python src/hiten/utils/tests.py
+
+      # 3) build the distributions **only if the tests above passed**
       - name: Build release distributions
         run: |
-          # NOTE: put your own distribution build steps here.
           python -m pip install build
           python -m build
 

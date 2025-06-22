@@ -82,7 +82,7 @@ class RHSSystem(_DynamicalSystem):
             # Compile with fastmath setting consistent with global config.
             import numba
 
-            self._rhs_compiled = numba.njit(cache=True, fastmath=FASTMATH)(rhs_func)  # type: ignore[arg-type]
+            self._rhs_compiled = numba.njit(cache=False, fastmath=FASTMATH)(rhs_func)  # type: ignore[arg-type]
 
         self.name = name
     

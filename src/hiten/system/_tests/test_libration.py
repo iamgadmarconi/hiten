@@ -1,13 +1,15 @@
 import numpy as np
 import pytest
 
+from hiten.system.base import System, systemConfig
+from hiten.system.body import Body
 from hiten.system.libration.collinear import L1Point, L2Point, L3Point
 from hiten.system.libration.triangular import L4Point, L5Point
+from hiten.utils.constants import Constants
 
 TEST_MU_EARTH_MOON = 0.01215  # Earth-Moon system
 TEST_MU_SUN_EARTH = 3.00348e-6  # Sun-Earth system
 TEST_MU_SUN_JUPITER = 9.5387e-4  # Sun-Jupiter system
-TEST_MU_UNSTABLE = 0.04  # Above Routh's critical value for triangular points
 
 
 def is_symplectic(matrix, tol=1e-10):
@@ -30,57 +32,99 @@ def is_symplectic(matrix, tol=1e-10):
 
 
 @pytest.fixture
-def l1_earth_moon():
-    return L1Point(TEST_MU_EARTH_MOON)
+def system_earth_moon():   
+    earth_mass = Constants.get_mass("earth")
+    earth_radius = Constants.get_radius("earth")
+    moon_mass = Constants.get_mass("moon")
+    moon_radius = Constants.get_radius("moon")
+    distance = Constants.get_orbital_distance("earth", "moon")
+
+    earth = Body("Earth", earth_mass, earth_radius, color="blue")
+    moon = Body("Moon", moon_mass, moon_radius, color="gray", parent=earth)
+
+    return System(systemConfig(primary=earth, secondary=moon, distance=distance))
 
 @pytest.fixture
-def l2_earth_moon():
-    return L2Point(TEST_MU_EARTH_MOON)
+def system_sun_earth():
+    sun_mass = Constants.get_mass("sun")
+    sun_radius = Constants.get_radius("sun")
+    earth_mass = Constants.get_mass("earth")
+    earth_radius = Constants.get_radius("earth")
+    distance = Constants.get_orbital_distance("sun", "earth")
+
+    sun = Body("Sun", sun_mass, sun_radius, color="yellow")
+    earth = Body("Earth", earth_mass, earth_radius, color="blue", parent=sun)
+
+    return System(systemConfig(primary=sun, secondary=earth, distance=distance))
 
 @pytest.fixture
-def l3_earth_moon():
-    return L3Point(TEST_MU_EARTH_MOON)
+def system_sun_jupiter():
+    sun_mass = Constants.get_mass("sun")
+    sun_radius = Constants.get_radius("sun")
+    jupiter_mass = Constants.get_mass("jupiter")
+    jupiter_radius = Constants.get_radius("jupiter")
+    distance = Constants.get_orbital_distance("sun", "jupiter")
+
+    sun = Body("Sun", sun_mass, sun_radius, color="yellow")
+    jupiter = Body("Jupiter", jupiter_mass, jupiter_radius, color="gray", parent=sun)
+    return System(systemConfig(primary=sun, secondary=jupiter, distance=distance))
 
 @pytest.fixture
-def l4_earth_moon():
-    return L4Point(TEST_MU_EARTH_MOON)
+def l1_earth_moon(system_earth_moon):
+    return L1Point(system_earth_moon)
 
 @pytest.fixture
-def l5_earth_moon():
-    return L5Point(TEST_MU_EARTH_MOON)
+def l2_earth_moon(system_earth_moon):
+    return L2Point(system_earth_moon)
 
 @pytest.fixture
-def l1_sun_earth():
-    return L1Point(TEST_MU_SUN_EARTH)
+def l3_earth_moon(system_earth_moon):
+    return L3Point(system_earth_moon)
 
 @pytest.fixture
-def l2_sun_earth():
-    return L2Point(TEST_MU_SUN_EARTH)
+def l4_earth_moon(system_earth_moon):
+    return L4Point(system_earth_moon)
 
 @pytest.fixture
-def l3_sun_jupiter():
-    return L3Point(TEST_MU_SUN_JUPITER)
+def l5_earth_moon(system_earth_moon):
+    return L5Point(system_earth_moon)
 
 @pytest.fixture
-def l4_unstable():
-    return L4Point(TEST_MU_UNSTABLE)
+def l1_sun_earth(system_sun_earth):
+    return L1Point(system_sun_earth)
+
+@pytest.fixture
+def l2_sun_earth(system_sun_earth):
+    return L2Point(system_sun_earth)
+
+@pytest.fixture
+def l3_sun_jupiter(system_sun_jupiter):
+    return L3Point(system_sun_jupiter)
 
 
 def test_libration_point_initialization():
     """Test initialization of different libration points."""
-    l1_earth_moon = L1Point(TEST_MU_EARTH_MOON)
+    
+    def create_mock_system(mu):
+        # Create a mock system with the given mu. The bodies are placeholders.
+        primary = Body("p", 1 - mu, 0.1)
+        secondary = Body("s", mu, 0.1, parent=primary)
+        config = systemConfig(primary=primary, secondary=secondary, distance=1.0)
+        return System(config)
+
+    l1_earth_moon = L1Point(create_mock_system(TEST_MU_EARTH_MOON))
     assert l1_earth_moon.mu == TEST_MU_EARTH_MOON
     
-    l2_sun_earth = L2Point(TEST_MU_SUN_EARTH)
+    l2_sun_earth = L2Point(create_mock_system(TEST_MU_SUN_EARTH))
     assert l2_sun_earth.mu == TEST_MU_SUN_EARTH
     
-    l3_sun_jupiter = L3Point(TEST_MU_SUN_JUPITER)
+    l3_sun_jupiter = L3Point(create_mock_system(TEST_MU_SUN_JUPITER))
     assert l3_sun_jupiter.mu == TEST_MU_SUN_JUPITER
     
-    l4_earth_moon = L4Point(TEST_MU_EARTH_MOON)
+    l4_earth_moon = L4Point(create_mock_system(TEST_MU_EARTH_MOON))
     assert l4_earth_moon.mu == TEST_MU_EARTH_MOON
     
-    l5_sun_earth = L5Point(TEST_MU_SUN_EARTH)
+    l5_sun_earth = L5Point(create_mock_system(TEST_MU_SUN_EARTH))
     assert l5_sun_earth.mu == TEST_MU_SUN_EARTH
 
 def test_positions(l1_earth_moon, l2_earth_moon, l3_earth_moon, l4_earth_moon, l5_earth_moon):

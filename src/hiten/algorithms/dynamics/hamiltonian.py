@@ -24,14 +24,15 @@ import numpy as np
 from numba import njit
 from numba.typed import List
 
-from hiten.algorithms.polynomial.operations import (polynomial_evaluate,
-                                                     polynomial_jacobian)
-from hiten.algorithms.dynamics.base import _DynamicalSystem, DynamicalSystemProtocol
+from hiten.algorithms.dynamics.base import (DynamicalSystemProtocol,
+                                            _DynamicalSystem)
 from hiten.algorithms.integrators.symplectic import _eval_dH_dP, _eval_dH_dQ
+from hiten.algorithms.polynomial.operations import (polynomial_evaluate,
+                                                    polynomial_jacobian)
 from hiten.utils.config import FASTMATH
 
 
-@njit(cache=True, fastmath=FASTMATH)
+@njit(cache=False, fastmath=FASTMATH)
 def _hamiltonian_rhs(
     state6: np.ndarray,
     jac_H: List[List[np.ndarray]],
@@ -39,17 +40,17 @@ def _hamiltonian_rhs(
     n_dof: int,
 ) -> np.ndarray:
     r"""
-    Compute time derivative (Qdot, Pdot) for the 2*n_dof Hamiltonian hiten.system.
+    Compute time derivative (Qdot, Pdot) for the :math:`2*n_dof` Hamiltonian :pyfunc:`hiten.system`.
 
     Parameters
     ----------
     state6 : numpy.ndarray
-        State vector of the 2*n_dof Hamiltonian hiten.system.
+        State vector of the :math:`2*n_dof` Hamiltonian :pyfunc:`hiten.system`.
     jac_H : numba.typed.List of numba.typed.List of numpy.ndarray
         Jacobian of the Hamiltonian.
     clmo : numba.typed.List of numpy.ndarray
         Coefficient-layout mapping objects used by
-        :pyfunc:`hiten.algorithms.polynomial.operations.polynomial_evaluate`.
+        :pyfunc:`polynomial_evaluate`.
     n_dof : int
         Number of degrees of freedom.
 
@@ -200,15 +201,26 @@ class HamiltonianSystem(_DynamicalSystem):
 
     @property
     def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        # Capture instance-specific data in a closure for the RHS function.
+        r"""
+        Return a lightweight wrapper around the compiled Hamiltonian RHS.
+
+        The heavy numerical work is carried out by the JIT-compiled helper
+        :pyfunc:`_hamiltonian_rhs`.  We purposefully keep this outer wrapper
+        as a regular Python function to avoid capturing *numba.typed.List*
+        objects inside another Numba-compiled closure - such closures cannot
+        be pickled during compilation and therefore trigger errors in the
+        caching layer.  The marginal overhead of this thin Python layer is
+        negligible compared to the cost of evaluating high-order polynomial
+        Hamiltonians, while it guarantees compatibility with the JIT runtime.
+        """
+
         jac_H, clmo_H, n_dof = self.jac_H, self.clmo_H, self.n_dof
 
-        @njit(cache=True, fastmath=FASTMATH)
         def _rhs_closure(t: float, state: np.ndarray) -> np.ndarray:
-            # The 't' argument is unused in this autonomous system but required
-            # by the standard ODE solver interface.
+            # The 't' argument is unused in this autonomous system but
+            # required by the standard ODE solver interface.
             return _hamiltonian_rhs(state, jac_H, clmo_H, n_dof)
-        
+
         return _rhs_closure
     
     def dH_dQ(self, Q: np.ndarray, P: np.ndarray) -> np.ndarray:

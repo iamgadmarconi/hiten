@@ -1,7 +1,8 @@
 import numpy as np
 import pytest
 
-from hiten.algorithms.dynamics.hiten.utils.linalg import eigenvalue_decomposition, stability_indices
+from hiten.algorithms.dynamics.utils.linalg import (eigenvalue_decomposition,
+                                                    stability_indices)
 
 
 def test_eig_decomp():

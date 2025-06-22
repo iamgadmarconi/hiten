@@ -32,7 +32,8 @@ import numpy as np
 from numba import njit
 
 from hiten.algorithms.dynamics.base import _DynamicalSystem
-from hiten.algorithms.dynamics.hamiltonian import HamiltonianSystem
+from hiten.algorithms.dynamics.hamiltonian import (HamiltonianSystem,
+                                                   _hamiltonian_rhs)
 from hiten.algorithms.integrators.base import Integrator, Solution
 from hiten.algorithms.integrators.coefficients.dop853 import E3 as DOP853_E3
 from hiten.algorithms.integrators.coefficients.dop853 import E5 as DOP853_E5
@@ -55,12 +56,12 @@ from hiten.algorithms.integrators.coefficients.rk6 import C as RK6_C
 from hiten.algorithms.integrators.coefficients.rk8 import A as RK8_A
 from hiten.algorithms.integrators.coefficients.rk8 import B as RK8_B
 from hiten.algorithms.integrators.coefficients.rk8 import C as RK8_C
-from hiten.algorithms.integrators.coefficients.rk45 import B_HIGH as RK45_B_HIGH
+from hiten.algorithms.integrators.coefficients.rk45 import \
+    B_HIGH as RK45_B_HIGH
 from hiten.algorithms.integrators.coefficients.rk45 import B_LOW as RK45_B_LOW
 from hiten.algorithms.integrators.coefficients.rk45 import A as RK45_A
 from hiten.algorithms.integrators.coefficients.rk45 import C as RK45_C
 from hiten.algorithms.integrators.coefficients.rk45 import E as RK45_E
-from hiten.algorithms.integrators.symplectic import _eval_dH_dP, _eval_dH_dQ
 from hiten.utils.config import FASTMATH, TOL
 from hiten.utils.log_config import logger
 
@@ -529,54 +530,14 @@ class AdaptiveRK:
         return cls._map[order](**opts)
 
 
-@njit(cache=True, fastmath=FASTMATH)
-def _hamiltonian_rhs(y: np.ndarray, jac_H, clmo_H, n_dof: int) -> np.ndarray:  # type: ignore[valid-type]
-    r"""
-    Hamiltonian vector field evaluated in compiled code.
-
-    This helper is intended to be used from within a :class:`numba.njit`
-    context and therefore keeps its interface minimal.  The Jacobian of the
-    polynomial Hamiltonian and the associated coefficient layout must be
-    supplied explicitly because Numba treats them as runtime values rather
-    than embedding them as compile time constants.
-
-    Parameters
-    ----------
-    y : numpy.ndarray
-        Phase space vector of size ``2 * n_dof`` storing the concatenation
-        ``[Q, P]``.
-    jac_H, clmo_H
-        Internal representations of the Hamiltonian used by
-        :pyfunc:`hiten.algorithms.integrators.symplectic._eval_dH_dP` and
-        :pyfunc:`hiten.algorithms.integrators.symplectic._eval_dH_dQ`.
-    n_dof : int
-        Number of degrees of freedom.
-
-    Returns
-    -------
-    numpy.ndarray
-        Time derivative :math:`(\dot{Q}, \dot{P})` with the same shape as
-        *y*.
-    """
-    Q = y[:n_dof]
-    P = y[n_dof : 2 * n_dof]
-
-    dQ = _eval_dH_dP(Q, P, jac_H, clmo_H)
-    dP = -_eval_dH_dQ(Q, P, jac_H, clmo_H)
-
-    out = np.empty_like(y)
-    out[:n_dof] = dQ
-    out[n_dof : 2 * n_dof] = dP
-    return out
-
 def _build_rhs_wrapper(system: _DynamicalSystem) -> Callable[[float, np.ndarray], np.ndarray]:
     r"""
-    Return a JIT friendly wrapper around *hiten.system.rhs*.
+    Return a JIT friendly wrapper around :pyfunc:`hiten.system.rhs`.
 
     The dynamical systems implemented in the code base expose their vector
     field either as ``rhs(t, y)`` or, for autonomous systems, as ``rhs(y)``.
     The integrator layer expects the non autonomous signature and therefore
-    needs to adapt the call site on the fly.  This helper inspects the right
+    needs to adapt the call site on the fly. This helper inspects the right
     hand side via :pyfunc:`inspect.signature` and generates a small
     :pyfunc:`numba.njit` compiled closure with the correct arity.
 
@@ -600,31 +561,22 @@ def _build_rhs_wrapper(system: _DynamicalSystem) -> Callable[[float, np.ndarray]
 
     rhs_func = system.rhs
 
-    try:
-        sig = inspect.signature(rhs_func)
-    except AttributeError:
-        sig = inspect.signature(rhs_func)
-
+    sig = inspect.signature(rhs_func)
     n_params = len(sig.parameters)
 
+    # Case 1: Function already accepts (t, y) – use directly.
     if n_params >= 2:
+        return rhs_func
 
-        @njit(cache=False, fastmath=FASTMATH)
-        def _rhs_two(t, y):
-            return rhs_func(t, y)
+    # Case 2: Autonomous system with signature rhs(y).  Wrap to inject time argument.
+    if n_params == 1:
 
-        return _rhs_two
-
-    elif n_params == 1:
-
-        @njit(cache=False, fastmath=FASTMATH)
         def _rhs_one(t, y):
             return rhs_func(y)
 
         return _rhs_one
 
-    else:
-        raise ValueError(
-            f"Unsupported rhs signature with {n_params} parameters. "
-            "Only (t, y) or (y,) are currently supported."
-        )
+    raise ValueError(
+        f"Unsupported rhs signature with {n_params} parameters. "
+        "Only (t, y) or (y,) are currently supported."
+    )

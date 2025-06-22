@@ -37,7 +37,7 @@ Q_POLY_INDICES = np.array([0, 1, 2], dtype=np.int64)
 P_POLY_INDICES = np.array([3, 4, 5], dtype=np.int64)
 
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def _get_tao_omega (delta: float, order: int, c: float = 10.0) -> float:
     r"""
     Calculate the frequency parameter for the symplectic integrator.
@@ -64,7 +64,7 @@ def _get_tao_omega (delta: float, order: int, c: float = 10.0) -> float:
     return (c * delta)**(-float(order))
 
 
-@njit(cache=True, fastmath=FASTMATH)
+@njit(cache=False, fastmath=FASTMATH)
 def _construct_6d_eval_point(Q_current_ndof: np.ndarray, P_current_ndof: np.ndarray) -> np.ndarray:
     r"""
     Construct a 6D evaluation point from N-DOF position and momentum vectors.
@@ -104,7 +104,7 @@ def _construct_6d_eval_point(Q_current_ndof: np.ndarray, P_current_ndof: np.ndar
         
     return point_6d
 
-@njit(cache=True, fastmath=FASTMATH)
+@njit(cache=False, fastmath=FASTMATH)
 def _eval_dH_dQ(
     Q_eval_ndof: np.ndarray,
     P_eval_ndof: np.ndarray,
@@ -142,7 +142,7 @@ def _eval_dH_dQ(
     
     return derivatives_Q
 
-@njit(cache=True, fastmath=FASTMATH)
+@njit(cache=False, fastmath=FASTMATH)
 def _eval_dH_dP(
     Q_eval_ndof: np.ndarray,
     P_eval_ndof: np.ndarray,
@@ -180,7 +180,7 @@ def _eval_dH_dP(
         
     return derivatives_P
 
-@njit(cache=True, fastmath=FASTMATH)
+@njit(cache=False, fastmath=FASTMATH)
 def _phi_H_a_update_poly(
     q_ext: np.ndarray, 
     delta: float, 
@@ -224,7 +224,7 @@ def _phi_H_a_update_poly(
     P_current -= delta * dH_dQ_at_QY
     X_current += delta * dH_dP_at_QY
 
-@njit(cache=True, fastmath=FASTMATH)
+@njit(cache=False, fastmath=FASTMATH)
 def _phi_H_b_update_poly(
     q_ext: np.ndarray, 
     delta: float, 
@@ -268,7 +268,7 @@ def _phi_H_b_update_poly(
     Q_current += delta * dH_dP_at_XP
     Y_current -= delta * dH_dQ_at_XP
 
-@njit(cache=True, fastmath=FASTMATH)
+@njit(cache=False, fastmath=FASTMATH)
 def _phi_omega_H_c_update_poly(q_ext: np.ndarray, delta: float, omega: float):
     r"""
     Apply the rotation operator (φᶜ) in the symplectic scheme.
@@ -319,7 +319,7 @@ def _phi_omega_H_c_update_poly(q_ext: np.ndarray, delta: float, omega: float):
     q_ext[2*N_SYMPLECTIC_DOF : 3*N_SYMPLECTIC_DOF] = X_new
     q_ext[3*N_SYMPLECTIC_DOF : 4*N_SYMPLECTIC_DOF] = Y_new
 
-@njit(cache=True, fastmath=FASTMATH)
+@njit(cache=False, fastmath=FASTMATH)
 def _recursive_update_poly(
     q_ext: np.ndarray, 
     timestep: float, 
@@ -374,7 +374,7 @@ def _recursive_update_poly(
         _recursive_update_poly(q_ext, gamma * timestep, lower_order, omega, jac_H, clmo_H)
 
 
-@njit(cache=True, fastmath=FASTMATH)
+@njit(cache=False, fastmath=FASTMATH)
 def integrate_symplectic(
     initial_state_6d: np.ndarray,
     t_values: np.ndarray,

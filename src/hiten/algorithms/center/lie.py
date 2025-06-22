@@ -127,7 +127,7 @@ tol: float = 1e-30) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray
     return poly_trans, poly_G_total, poly_elim_total
 
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def _get_homogeneous_terms(
 poly_H: List[np.ndarray],
 n: int, 
@@ -161,7 +161,7 @@ psi: np.ndarray) -> np.ndarray:
     return result
 
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def _select_terms_for_elimination(
 p_n: np.ndarray, 
 n: int, 
@@ -198,7 +198,7 @@ clmo: np.ndarray) -> np.ndarray:
     return p_elim
 
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def _solve_homological_equation(
 p_elim: np.ndarray, 
 n: int, 
@@ -505,7 +505,7 @@ tol: float) -> List[np.ndarray]:
     return polynomial_clean(poly_result, tol)
 
 
-@njit(fastmath=FASTMATH, cache=True)
+@njit(fastmath=FASTMATH, cache=False)
 def _evaluate_transform(
 expansions: List[List[np.ndarray]], 
 coords_cm_complex: np.ndarray, 

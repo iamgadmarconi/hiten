@@ -8,14 +8,17 @@ from hiten.algorithms.center.hamiltonian import (
     _build_R_polynomials, _build_T_polynomials,
     build_lindstedt_poincare_rhs_polynomials, build_physical_hamiltonian)
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                        init_index_tables)
+                                              init_index_tables)
 from hiten.algorithms.polynomial.conversion import sympy2poly
 from hiten.algorithms.polynomial.operations import (polynomial_add_inplace,
-                                              polynomial_evaluate,
-                                              polynomial_multiply,
-                                              polynomial_variable,
-                                              polynomial_zero_list)
+                                                    polynomial_evaluate,
+                                                    polynomial_multiply,
+                                                    polynomial_variable,
+                                                    polynomial_zero_list)
+from hiten.system.base import System, systemConfig
+from hiten.system.body import Body
 from hiten.system.libration.collinear import L1Point
+from hiten.utils.constants import Constants
 
 _sympy_vars = sp.symbols("x y z px py pz")
 
@@ -73,10 +76,34 @@ def _get_symbolic_lindstedt_poincare_rhs(point: L1Point, max_deg: int, x_s: sp.S
     return rhs_x_sym_expr, rhs_y_sym_expr, rhs_z_sym_expr
 
 @pytest.fixture()
-def point() -> L1Point:
+def system() -> System:
+    """Return a system with Earth-Moon L1 point (mu value taken from JPL DE-430)."""
+    primary = Body(
+        "Earth",
+        Constants.bodies["earth"]["mass"],
+        Constants.bodies["earth"]["radius"],
+        "blue",
+    )
+    secondary = Body(
+        "Moon",
+        Constants.bodies["moon"]["mass"],
+        Constants.bodies["moon"]["radius"],
+        "gray",
+        primary,
+    )
+    system = System(
+        systemConfig(
+            primary,
+            secondary,
+            Constants.get_orbital_distance("Earth", "Moon"),
+        )
+    )
+    return system
+
+@pytest.fixture()
+def point(system: System) -> L1Point:
     """Return an Earth-Moon L1 point (mu value taken from JPL DE-430)."""
-    mu_earth_moon = 0.012150585609624
-    return L1Point(mu=mu_earth_moon)
+    return system.get_libration_point(1)
 
 @pytest.fixture(params=[4, 6])
 def max_deg(request):
