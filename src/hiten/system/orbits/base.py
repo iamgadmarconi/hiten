@@ -174,7 +174,7 @@ class PeriodicOrbit(ABC):
         self.family = config.orbit_family
         self.libration_point = config.libration_point
         self._system = self.libration_point.system
-        self.mu = self.hiten.system.mu
+        self.mu = self._system.mu
 
         # Determine how the initial state will be obtained and log accordingly
         if initial_state is not None:
@@ -354,7 +354,7 @@ class PeriodicOrbit(ABC):
             raise ValueError("Period must be set before propagation")
         
         sol = _propagate_dynsys(
-            dynsys=self.hiten.system._dynsys,
+            dynsys=self.system._dynsys,
             state0=self.initial_state,
             t0=0.0,
             tf=self.period,
@@ -752,7 +752,7 @@ class PeriodicOrbit(ABC):
         X0 = self.initial_state.copy()
         for k in range(max_attempts + 1):
 
-            t_ev, X_ev = cfg.event_func(dynsys=self.hiten.system._dynsys, x0=X0, forward=forward)
+            t_ev, X_ev = cfg.event_func(dynsys=self.system._dynsys, x0=X0, forward=forward)
 
             R = X_ev[list(cfg.residual_indices)] - np.array(cfg.target)
 

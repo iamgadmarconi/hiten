@@ -49,7 +49,7 @@ def build_system():
 
 
 def compute_center_manifold(l_point):
-    cm = CenterManifold(l_point, 12)
+    cm = CenterManifold(l_point, 10)
     cm.compute()
     return cm
 

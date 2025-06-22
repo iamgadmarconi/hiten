@@ -1,0 +1,47 @@
+[build-system]
+requires = [
+  "setuptools>=64",
+  "wheel"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hiten"
+version = "0.1.0"
+description = "Algorithms and utilities for the restricted three-body problem"
+readme = "README.md"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Gad Marconi", email = "gad.marconi@cranfield.ac.uk" }
+]
+requires-python = ">=3.9"
+
+dependencies = [
+  "numpy>=1.23",
+  "scipy>=1.15",
+  "numba>=0.61",
+  "mpmath>=1.3",
+  "sympy>=1.14",
+  "h5py>=3.13",
+  "matplotlib>=3.10",
+  "tqdm>=4.67",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/iamgadmarconi/hiten"
+"Bug Tracker" = "https://github.com/iamgadmarconi/hiten/issues"
+
+[project.optional-dependencies]
+# Development / contributor tools
+dev = [
+  "pytest>=8",
+  "black>=24",
+  "ruff>=0.3",
+]
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["hiten*"]  # ensure we pick up all subpackages

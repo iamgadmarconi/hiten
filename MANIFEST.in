@@ -1,0 +1,8 @@
+include README.md
+include LICENSE
+
+# Include the full examples tree
+recursive-include examples *
+
+# Include the pre-computed results (plots, data etc.)
+recursive-include results * 

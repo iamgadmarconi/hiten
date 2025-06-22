@@ -141,7 +141,7 @@ class Manifold:
         self.stable = 1 if config.stable else -1
         self.direction = 1 if config.direction == "Positive" else -1
         self._forward = -self.stable
-        self.mu = self.generating_orbit.hiten.system.mu
+        self.mu = self.generating_orbit.system.mu
         self.method = config.method
         self.order = config.order
         self._successes = 0

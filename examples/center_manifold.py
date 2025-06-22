@@ -45,12 +45,12 @@ def main() -> None:
     l_point = system.get_libration_point(1)
     logger.info("Computing centre manifold around L%s of the %s-%s system…", 1, "Earth", "Moon")
 
-    cm = CenterManifold(l_point, 12)
+    cm = CenterManifold(l_point, 10)
     cm_H = cm.compute()
 
     logger.info(
         "\nCentre-manifold Hamiltonian (deg 2 → %d) in real NF variables (q₂, p₂, q₃, p₃)\n",
-        12,
+        10,
     )
     logger.info("\n%s\n", format_cm_table(cm_H, cm.clmo))
 
