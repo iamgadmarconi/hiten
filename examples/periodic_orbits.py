@@ -3,7 +3,7 @@ Halo, planar Lyapunov) around an Earth-Moon libration point, together with their
 stable manifolds.
 
 Run with
-    python examples/periodic_orbits_example.py
+    python examples/periodic_orbits.py
 """
 
 import os
@@ -19,15 +19,16 @@ from system.orbits.base import orbitConfig
 from system.orbits.halo import HaloOrbit
 from system.orbits.lyapunov import LyapunovOrbit, VerticalLyapunovOrbit
 from utils.constants import Constants
+from utils.files import _ensure_dir
 from utils.log_config import logger
 
-
+_ensure_dir("results")
 # Directory that will hold manifold pickle files
 _MANIFOLD_DIR = os.path.join("results", "manifolds")
 
 
 def build_system():
-    """Utility to construct the Earth–Moon CRTBP system and its L point."""
+    """Utility to construct the Earth-Moon CRTBP system and its L point."""
     primary = Body(
         "Earth",
         Constants.bodies["earth"]["mass"],
@@ -74,7 +75,7 @@ def main() -> None:
     _ensure_dir(_MANIFOLD_DIR)
 
     # Build system & centre manifold
-    system, l_point = build_system()
+    _, l_point = build_system()
     logger.info("Preparing centre manifold for initial guesses…")
     cm = compute_center_manifold(l_point)
     ic_seed = initial_conditions_from_cm(cm)
@@ -120,7 +121,7 @@ def main() -> None:
         # Optionally animate (comment out if running headless)
         try:
             orbit.animate()
-        except Exception as exc:  # pragma: no cover  # noqa: BLE001
+        except Exception as exc:
             logger.warning("Could not create animation: %s", exc)
 
         # ---- Stable manifold generation --------------------------------------------------

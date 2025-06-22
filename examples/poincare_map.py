@@ -1,3 +1,8 @@
+"""Example script: generating and displaying a Poincaré map for the Earth-Moon system.
+
+python examples/poincare_map.py
+"""
+
 import os
 import sys
 
