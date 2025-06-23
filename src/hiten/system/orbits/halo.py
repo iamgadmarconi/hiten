@@ -148,17 +148,18 @@ class HaloOrbit(PeriodicOrbit):
         # Get gamma from the libration point instance property
         gamma = self.libration_point.gamma
         
-        if isinstance(self.libration_point, L1Point):
-            won = +1
-            primary = 1 - mu
-        elif isinstance(self.libration_point, L2Point):
-            won = -1
-            primary = 1 - mu 
-        elif isinstance(self.libration_point, L3Point):
-            won = +1
-            primary = -mu
+        point_map = {
+            L1Point: (+1, 1 - mu),
+            L2Point: (-1, 1 - mu),
+            L3Point: (+1, -mu)
+        }
+        
+        point_type = type(self.libration_point)
+        if point_type in point_map:
+            won, primary = point_map[point_type]
         else:
-            raise ValueError(f"Halo orbits only supported for L1, L2, L3 (got L{self.libration_point})")
+            # This case should ideally not be hit due to __init__ checks, but provides a safeguard.
+            raise ValueError(f"Analytical guess for Halo orbits is not supported for {self.libration_point.name} (got {point_type.__name__})")
         
         # Set n for northern/southern family
         n = 1 if self.Zenith == "northern" else -1
@@ -372,6 +373,11 @@ class HaloOrbit(PeriodicOrbit):
         omega_x  = -(mu2*(x+self.mu)*rho_1) - (self.mu*(x-mu2)*rho_2) + x
         DDx = 2*vy + omega_x
         DDz = -(mu2*z*rho_1) - (self.mu*z*rho_2)
+
+        if abs(vy) < 1e-9:
+            logger.warning(f"Denominator 'vy' is very small ({vy:.2e}). Correction step may be inaccurate.")
+            vy = np.sign(vy) * 1e-9 if vy != 0 else 1e-9
+            
         return np.array([[DDx],[DDz]]) @ Phi[[S.Y],:][:, (S.X,S.VY)] / vy
 
     @property

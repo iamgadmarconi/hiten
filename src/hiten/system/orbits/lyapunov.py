@@ -95,15 +95,12 @@ class LyapunovOrbit(PeriodicOrbit):
         
         self.Ax = Ax
         
-        self._initial_state = None
-        if initial_state is not None:
-            self._initial_state = np.array(initial_state, dtype=np.float64)
-            
         if isinstance(libration_point, L3Point):
             msg = "L3 libration points are not supported for Lyapunov orbits."
             logger.error(msg)
             raise NotImplementedError(msg)
 
+        # The base class __init__ handles the logic for initial_state vs. _initial_guess
         super().__init__(libration_point, initial_state)
 
         # Ensure Ax is consistent with the state if it was provided directly.
@@ -136,11 +133,6 @@ class LyapunovOrbit(PeriodicOrbit):
             If the auxiliary quantity *mu_bar* computed during the linear
             analysis becomes negative, indicating an invalid parameter regime.
         """
-
-        if self._initial_state is not None:
-            logger.info(f"Using provided initial state: {self._initial_state} for {str(self)}")
-            return self._initial_state
-
         L_i = self.libration_point.position
         mu = self.mu
         x_L_i: float = L_i[0]
@@ -224,10 +216,6 @@ class VerticalLyapunovOrbit(PeriodicOrbit):
 
     def _initial_guess(self) -> NDArray[np.float64]:
         raise NotImplementedError("Initial guess is not implemented for Vertical Lyapunov orbits.")
-
-    @staticmethod
-    def _extra_jacobian(_: np.ndarray, __: np.ndarray) -> np.ndarray:
-        pass
 
     @property
     def _correction_config(self) -> _CorrectionConfig:

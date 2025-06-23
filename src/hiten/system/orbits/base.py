@@ -255,6 +255,11 @@ class PeriodicOrbit(ABC):
         return self._system
 
     @property
+    def mu(self) -> float:
+        """Mass ratio of the system."""
+        return self._mu
+
+    @property
     def is_stable(self) -> bool:
         r"""
         Check if the orbit is linearly stable.
@@ -325,16 +330,6 @@ class PeriodicOrbit(ABC):
     @abstractmethod
     def _initial_guess(self, **kwargs):
         pass
-
-    def _cr3bp_system(self):
-        r"""
-        Create (or reuse) a _DynamicalSystem wrapper for the CR3BP.
-        The wrapper may be missing (first use) or explicitly cleared during
-        serialisation.  In both cases we generate a fresh instance on demand.
-        """
-        if not hasattr(self, "_cached_dynsys") or self._cached_dynsys is None:
-            self._cached_dynsys = rtbp_dynsys(mu=self.mu, name=str(self))
-        return self._cached_dynsys
 
     def _compute_correction_step(self, current_state: np.ndarray, t_event: float, x_event: np.ndarray) -> np.ndarray:
         """Compute the correction step `delta` for the differential corrector."""
