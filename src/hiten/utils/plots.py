@@ -212,8 +212,10 @@ def animate_trajectories(
                     traj_rot[:frame+1, 2],
                     color='red', label='Particle')
         
-        _plot_body(ax_rot, primary_rot_center, bodies[0].radius, 'blue', bodies[0].name)
-        _plot_body(ax_rot, secondary_rot_center, bodies[1].radius, 'gray', bodies[1].name)
+        primary_color = _get_body_color(bodies[0], 'royalblue')
+        secondary_color = _get_body_color(bodies[1], 'slategray')
+        _plot_body(ax_rot, primary_rot_center, bodies[0].radius, primary_color, bodies[0].name)
+        _plot_body(ax_rot, secondary_rot_center, bodies[1].radius, secondary_color, bodies[1].name)
         
         ax_rot.set_title("Rotating Frame (SI Distances)", color='white' if dark_mode else 'black')
         ax_rot.legend()
@@ -223,12 +225,12 @@ def animate_trajectories(
                       traj_inert[:frame+1, 2],
                       color='red', label='Particle')
         
-        _plot_body(ax_inert, primary_inert_center, bodies[0].radius, 'blue', bodies[0].name)
+        _plot_body(ax_inert, primary_inert_center, bodies[0].radius, primary_color, bodies[0].name)
         
         ax_inert.plot(secondary_x[:frame+1], secondary_y[:frame+1], secondary_z[:frame+1],
                       '--', color='gray', alpha=0.5, label=f'{bodies[1].name} orbit')
         secondary_center_now = np.array([secondary_x[frame], secondary_y[frame], secondary_z[frame]])
-        _plot_body(ax_inert, secondary_center_now, bodies[1].radius, 'gray', bodies[1].name)
+        _plot_body(ax_inert, secondary_center_now, bodies[1].radius, secondary_color, bodies[1].name)
         
         ax_inert.set_title("Inertial Frame (Real Time, Real Ω)", color='white' if dark_mode else 'black')
         ax_inert.legend()
@@ -308,12 +310,14 @@ def plot_rotating_frame(
     # Plot primary body (canonical position: -mu, 0, 0)
     primary_pos = np.array([-mu, 0, 0])
     primary_radius = bodies[0].radius / system_distance  # Convert to canonical units
-    _plot_body(ax, primary_pos, primary_radius, bodies[0].color, bodies[0].name)
+    primary_color = _get_body_color(bodies[0], 'royalblue')
+    _plot_body(ax, primary_pos, primary_radius, primary_color, bodies[0].name)
     
     # Plot secondary body (canonical position: 1-mu, 0, 0)
     secondary_pos = np.array([1-mu, 0, 0])
     secondary_radius = bodies[1].radius / system_distance  # Convert to canonical units
-    _plot_body(ax, secondary_pos, secondary_radius, bodies[1].color, bodies[1].name)
+    secondary_color = _get_body_color(bodies[1], 'slategray')
+    _plot_body(ax, secondary_pos, secondary_radius, secondary_color, bodies[1].name)
     
     ax.set_xlabel('X [canonical]')
     ax.set_ylabel('Y [canonical]')
@@ -392,7 +396,8 @@ def plot_inertial_frame(
     # Plot primary body at origin
     primary_pos = np.array([0, 0, 0])
     primary_radius = bodies[0].radius / system_distance  # Convert to canonical units
-    _plot_body(ax, primary_pos, primary_radius, bodies[0].color, bodies[0].name)
+    primary_color = _get_body_color(bodies[0], 'royalblue')
+    _plot_body(ax, primary_pos, primary_radius, primary_color, bodies[0].name)
     
     # Plot secondary's orbit and position
     theta = times  # Time is angle in canonical units
@@ -407,7 +412,8 @@ def plot_inertial_frame(
     # Plot secondary at final position
     secondary_pos = np.array([secondary_x[-1], secondary_y[-1], secondary_z[-1]])
     secondary_radius = bodies[1].radius / system_distance  # Convert to canonical units
-    _plot_body(ax, secondary_pos, secondary_radius, bodies[1].color, bodies[1].name)
+    secondary_color = _get_body_color(bodies[1], 'slategray')
+    _plot_body(ax, secondary_pos, secondary_radius, secondary_color, bodies[1].name)
     
     ax.set_xlabel('X [canonical]')
     ax.set_ylabel('Y [canonical]')
@@ -481,13 +487,15 @@ def plot_manifold(
         color = cmap(i / (num_traj - 1)) if num_traj > 1 else cmap(0.5)
         ax.plot(xW[:, 0], xW[:, 1], xW[:, 2], color=color, lw=2)
 
+    primary_color = _get_body_color(bodies[0], 'royalblue')
     primary_center = np.array([-mu, 0, 0])
     primary_radius = bodies[0].radius
-    _plot_body(ax, primary_center, primary_radius / system_distance, 'blue', bodies[0].name)
+    _plot_body(ax, primary_center, primary_radius / system_distance, primary_color, bodies[0].name)
 
+    secondary_color = _get_body_color(bodies[1], 'slategray')
     secondary_center = np.array([(1 - mu), 0, 0])
     secondary_radius = bodies[1].radius
-    _plot_body(ax, secondary_center, secondary_radius / system_distance, 'grey', bodies[1].name)
+    _plot_body(ax, secondary_center, secondary_radius / system_distance, secondary_color, bodies[1].name)
     
     ax.set_xlabel('x')
     ax.set_ylabel('y')
@@ -654,6 +662,30 @@ def plot_poincare_map_interactive(
     plt.close(fig)
 
     return selected_payload.get("orbit")
+
+def _get_body_color(body: Body, default_color: str) -> str:
+    """
+    Determines the color for a celestial body in a plot.
+
+    It returns the color specified in the `Body` object, unless the color is
+    the default black ("#000000"), in which case it returns a specified default
+    color. This ensures visibility in both light and dark modes.
+
+    Parameters
+    ----------
+    body : Body
+        The celestial body object.
+    default_color : str
+        The color to use if the body's color is the default black.
+
+    Returns
+    -------
+    str
+        The determined color string.
+    """
+    if body.color and body.color.upper() != '#000000':
+        return body.color
+    return default_color
 
 def _plot_body(ax, center, radius, color, name, u_res=40, v_res=15):
     """

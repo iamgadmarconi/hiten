@@ -137,9 +137,9 @@ class PeriodicOrbit(ABC):
     _family: str = "generic"
 
     def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None):
-        self.libration_point = libration_point
-        self._system = self.libration_point.system
-        self.mu = self._system.mu
+        self._libration_point = libration_point
+        self._system = self._libration_point.system
+        self._mu = self._system.mu
 
         # Determine how the initial state will be obtained and log accordingly
         if initial_state is not None:
@@ -158,7 +158,7 @@ class PeriodicOrbit(ABC):
             )
             self._initial_state = self._initial_guess()
 
-        self.period = None
+        self._period = None
         self._trajectory = None
         self._times = None
         self._stability_info = None
@@ -167,10 +167,10 @@ class PeriodicOrbit(ABC):
         logger.info(f"Initialized {self.family} orbit around L{self.libration_point.idx}")
 
     def __str__(self):
-        return f"{self.family} orbit around {self.libration_point}."
+        return f"{self.family} orbit around {self._libration_point}."
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(family={self.family}, libration_point={self.libration_point})"
+        return f"{self.__class__.__name__}(family={self.family}, libration_point={self._libration_point})"
 
     @property
     def family(self) -> str:
@@ -184,17 +184,10 @@ class PeriodicOrbit(ABC):
         """
         return self._family
 
-    @family.setter
-    def family(self, value: str) -> None:
-        r"""
-        Set the orbit family name.
-        
-        Parameters
-        ----------
-        value : str
-            The new family name
-        """
-        self._family = value
+    @property
+    def libration_point(self) -> LibrationPoint:
+        """The libration point instance that anchors the family."""
+        return self._libration_point
 
     @property
     def initial_state(self) -> npt.NDArray[np.float64]:
@@ -253,6 +246,11 @@ class PeriodicOrbit(ABC):
         return self._stability_info
 
     @property
+    def period(self) -> Optional[float]:
+        """Orbit period, set after a successful correction."""
+        return self._period
+
+    @property
     def system(self) -> System:
         return self._system
 
@@ -306,6 +304,12 @@ class PeriodicOrbit(ABC):
     def eccentricity(self):
         pass
 
+    @property
+    @abstractmethod
+    def _correction_config(self) -> _CorrectionConfig:
+        """Provides the differential correction configuration for this orbit family."""
+        pass
+
     def _reset(self) -> None:
         r"""
         Reset all computed properties when the initial state is changed.
@@ -315,7 +319,7 @@ class PeriodicOrbit(ABC):
         self._trajectory = None
         self._times = None
         self._stability_info = None
-        self.period = None
+        self._period = None
         logger.debug("Reset computed orbit properties due to state change")
 
     @abstractmethod
@@ -332,9 +336,37 @@ class PeriodicOrbit(ABC):
             self._cached_dynsys = rtbp_dynsys(mu=self.mu, name=str(self))
         return self._cached_dynsys
 
+    def _compute_correction_step(self, current_state: np.ndarray, t_event: float, x_event: np.ndarray) -> np.ndarray:
+        """Compute the correction step `delta` for the differential corrector."""
+        cfg = self._correction_config
+        
+        _, _, Phi, _ = _compute_stm(
+            self.libration_point._var_eq_system, current_state, t_event, 
+            steps=cfg.steps, method=cfg.method, order=cfg.order
+        )
+
+        J = Phi[np.ix_(cfg.residual_indices, cfg.control_indices)]
+
+        if cfg.extra_jacobian is not None:
+            J -= cfg.extra_jacobian(x_event, Phi)
+
+        if np.linalg.det(J) < 1e-12:
+            logger.warning(f"Jacobian determinant is small ({np.linalg.det(J):.2e}), adding regularization.")
+            J += np.eye(J.shape[0]) * 1e-12
+        
+        R = x_event[list(cfg.residual_indices)] - np.array(cfg.target)
+        delta = np.linalg.solve(J, -R)
+        
+        return delta
+
+    def _apply_correction(self, state: np.ndarray, delta: np.ndarray) -> np.ndarray:
+        """Apply the correction `delta` to the appropriate state variables."""
+        cfg = self._correction_config
+        state[list(cfg.control_indices)] += delta
+        return state
+
     def differential_correction(
             self,
-            cfg: _CorrectionConfig,
             *,
             tol: float = 1e-10,
             max_attempts: int = 25,
@@ -343,55 +375,50 @@ class PeriodicOrbit(ABC):
         """
         Perform differential correction to find a periodic orbit.
         
+        This method uses the configuration provided by `self._correction_config`
+        to iteratively refine the `initial_state` until it converges to a
+        periodic orbit.
+
         Parameters
         ----------
-        cfg : _CorrectionConfig
-            Configuration for the differential correction.
         tol : float, optional
-            Tolerance for the correction.
+            Tolerance for the correction, measured by the infinity norm of the
+            residual vector. Default is 1e-10.
         max_attempts : int, optional
-            Maximum number of attempts to find the orbit.
+            Maximum number of correction attempts. Default is 25.
         forward : int, optional
-            Direction of propagation.
+            Direction of propagation (1 for forward, -1 for backward). Default is 1.
 
         Returns
         -------
         tuple
-            (state, period)
+            A tuple containing the corrected initial state and the half-period
+            of the resulting orbit `(state, period/2)`.
 
         Raises
         ------
         RuntimeError
-            If the orbit is not found.
+            If the correction does not converge within `max_attempts`.
         """
         X0 = self.initial_state.copy()
+        cfg = self._correction_config
+
         for k in range(max_attempts + 1):
-
             t_ev, X_ev = cfg.event_func(dynsys=self.system._dynsys, x0=X0, forward=forward)
-
             R = X_ev[list(cfg.residual_indices)] - np.array(cfg.target)
 
             if np.linalg.norm(R, ord=np.inf) < tol:
-                self._reset(); self._initial_state = X0
-                self.period = 2 * t_ev
+                self._reset()
+                self._initial_state = X0
+                self._period = 2 * t_ev
+                logger.info(f"Differential correction converged after {k} iterations.")
                 return X0, t_ev
 
-            _, _, Phi, _ = _compute_stm(self.libration_point._var_eq_system, X0, t_ev, steps=cfg.steps, method=cfg.method, order=cfg.order)
+            delta = self._compute_correction_step(X0, t_ev, X_ev)
+            X0 = self._apply_correction(X0, delta)
+            logger.info(f"Correction attempt {k+1}/{max_attempts}: |R|={np.linalg.norm(R):.2e}, delta={delta}")
 
-            J = Phi[np.ix_(cfg.residual_indices, cfg.control_indices)]
-
-            if cfg.extra_jacobian is not None:
-                J -= cfg.extra_jacobian(X_ev, Phi)
-
-            if np.linalg.det(J) < 1e-12:
-                logger.warning(f"Jacobian determinant is small ({np.linalg.det(J):.2e}), adding regularization.")
-                J += np.eye(J.shape[0]) * 1e-12
-
-            delta = np.linalg.solve(J, -R)
-            logger.info(f"Differential correction delta: {delta} at iteration {k}")
-            X0[list(cfg.control_indices)] += delta
-
-        raise RuntimeError("did not converge")
+        raise RuntimeError(f"Differential correction did not converge after {max_attempts} attempts.")
 
     def propagate(self, steps: int = 1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 8) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         r"""
@@ -553,8 +580,26 @@ class GenericOrbit(PeriodicOrbit):
     
     def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None):
         super().__init__(libration_point, initial_state)
-        if self.period is None:
-            self.period = np.pi
+        self._custom_correction_config: Optional[_CorrectionConfig] = None
+        if self._period is None:
+            self._period = np.pi
+
+    @property
+    def correction_config(self) -> Optional[_CorrectionConfig]:
+        """
+        Get or set the user-defined differential correction configuration.
+
+        This property must be set to a valid :py:class:`_CorrectionConfig`
+        instance before calling :py:meth:`differential_correction` on a
+        :py:class:`GenericOrbit` object.
+        """
+        return self._custom_correction_config
+
+    @correction_config.setter
+    def correction_config(self, value: Optional[_CorrectionConfig]):
+        if value is not None and not isinstance(value, _CorrectionConfig):
+            raise TypeError("correction_config must be an instance of _CorrectionConfig or None.")
+        self._custom_correction_config = value
 
     @property
     def eccentricity(self):
@@ -564,3 +609,18 @@ class GenericOrbit(PeriodicOrbit):
         if hasattr(self, '_initial_state') and self._initial_state is not None:
             return self._initial_state
         raise ValueError("No initial state provided for GenericOrbit.")
+
+    @property
+    def _correction_config(self) -> _CorrectionConfig:
+        """
+        Provides the differential correction configuration.
+
+        For GenericOrbit, this must be set via the `correction_config` property
+        to enable differential correction.
+        """
+        if self.correction_config is not None:
+            return self.correction_config
+        raise NotImplementedError(
+            "Differential correction is not defined for a GenericOrbit unless the "
+            "`correction_config` property is set with a valid _CorrectionConfig."
+        )

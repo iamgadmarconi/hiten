@@ -25,6 +25,7 @@ from typing import Literal, Optional, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
+from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import (CollinearPoint, L1Point, L2Point,
                                               L3Point)
 from hiten.system.orbits.base import PeriodicOrbit, S, _CorrectionConfig
@@ -76,34 +77,44 @@ class HaloOrbit(PeriodicOrbit):
 
     def __init__(
             self, 
-            libration_point: CollinearPoint, 
+            libration_point: LibrationPoint, 
             Az: Optional[float] = None,
             Zenith: Optional[Literal["northern", "southern"]] = None,
             initial_state: Optional[Sequence[float]] = None
         ):
 
-        self._initial_state = None
-        if initial_state is None:
-            if Az is None or Zenith is None:
-                err = "Halo orbits require an 'Az' (z-amplitude) parameter and a 'Zenith' parameter ('northern' or 'southern') OR an initial state."
-                logger.error(err)
-                raise ValueError(err)
-            self.Az = Az
-            self.Zenith = Zenith
-        else:
-            self._initial_state = np.array(initial_state, dtype=np.float64)
-            self.Az = Az if Az is not None else self._initial_state[2]
-            self.Zenith = Zenith if Zenith is not None else ("northern" if self._initial_state[2] > 0 else "southern")
+        # Validate constructor parameters
+        if initial_state is not None and (Az is not None or Zenith is not None):
+            raise ValueError("Cannot provide both an initial_state and analytical parameters (Az, Zenith).")
 
         if not isinstance(libration_point, CollinearPoint):
-            msg = f"Expected CollinearPoint, got {type(libration_point)}."
+            msg = f"Halo orbits are only defined for CollinearPoint, but got {type(libration_point)}."
             logger.error(msg)
             raise TypeError(msg)
+            
+        if initial_state is None:
+            if Az is None or Zenith is None:
+                err = "Halo orbits require an 'Az' (z-amplitude) and 'Zenith' ('northern'/'southern') parameter when an initial_state is not provided."
+                logger.error(err)
+                raise ValueError(err)
+            if not isinstance(libration_point, (L1Point, L2Point)):
+                # L3 is technically possible but not validated
+                raise ValueError(f"Analytical guess is only validated for L1/L2 points. An initial_state must be provided for {libration_point.name}.")
 
-        if isinstance(libration_point, L3Point):
-            logger.warning("Must supply initial state for L3 halo orbits.")
+        self.Az = Az
+        self.Zenith = Zenith
 
         super().__init__(libration_point, initial_state)
+
+        # After super().__init__, _initial_state is set.
+        # Ensure Az/Zenith are consistent with the state if it was provided directly.
+        if initial_state is not None:
+            # If Az was not provided with the state, infer it.
+            if self.Az is None:
+                self.Az = self._initial_state[S.Z]
+            # If Zenith was not provided with the state, infer it.
+            if self.Zenith is None:
+                self.Zenith = "northern" if self._initial_state[S.Z] > 0 else "southern"
 
     def _initial_guess(self) -> NDArray[np.float64]:
         r"""
@@ -131,10 +142,6 @@ class HaloOrbit(PeriodicOrbit):
         >>> y0 = orb._initial_guess()
         """
         # Determine sign (won) and which "primary" to use
-
-        if self._initial_state is not None:
-            logger.info(f"Using provided initial state: {self._initial_state} for {str(self)}")
-            return self._initial_state
 
         mu = self.mu
         Az = self.Az
@@ -367,14 +374,16 @@ class HaloOrbit(PeriodicOrbit):
         DDz = -(mu2*z*rho_1) - (self.mu*z*rho_2)
         return np.array([[DDx],[DDz]]) @ Phi[[S.Y],:][:, (S.X,S.VY)] / vy
 
-    def differential_correction(self, **kw):
-        cfg = _CorrectionConfig(
+    @property
+    def _correction_config(self) -> _CorrectionConfig:
+        """Provides the differential correction configuration for halo orbits."""
+        return _CorrectionConfig(
             residual_indices=(S.VX, S.VZ),
-            control_indices=(S.X,  S.VY),
+            control_indices=(S.X, S.VY),
             extra_jacobian=self._halo_quadratic_term
         )
-        return super().differential_correction(cfg, **kw)
 
-
+    @property
     def eccentricity(self) -> float:
-        raise NotImplementedError("Eccentricity calculation not implemented for HaloOrbit.")
+        """Eccentricity is not a well-defined concept for halo orbits."""
+        return np.nan
