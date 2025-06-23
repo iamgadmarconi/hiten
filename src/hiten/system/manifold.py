@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
-from hiten.algorithms.dynamics.rtbp import _propagate_dynsys, compute_stm
+from hiten.algorithms.dynamics.rtbp import _propagate_dynsys, _compute_stm
 from hiten.algorithms.dynamics.utils.geometry import surface_of_section
 from hiten.algorithms.dynamics.utils.linalg import (_totime,
                                                     eigenvalue_decomposition)
@@ -35,32 +35,6 @@ from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.files import _ensure_dir
 from hiten.utils.log_config import logger
 from hiten.utils.plots import _plot_body, _set_axes_equal, _set_dark_mode
-
-
-@dataclass
-class manifoldConfig:
-    r"""
-    Configuration options for :pyclass:`Manifold`.
-
-    Parameter
-    ----------
-    generating_orbit : :pyclass:`PeriodicOrbit`
-        Periodic orbit that generates the manifold.
-    stable : bool, default True
-        ``True`` selects the stable manifold, ``False`` the unstable one.
-    direction : {{'Positive', 'Negative'}}, default 'Positive'
-        Sign of the eigenvector used to initialise the manifold branch.
-    method : {{'rk', 'scipy', 'symplectic', 'adaptive'}}, default 'scipy'
-        Backend integrator passed to :pyfunc:`_propagate_dynsys`.
-    order : int, default 6
-        Integration order for fixed-step Runge-Kutta methods.
-    """
-    generating_orbit: PeriodicOrbit
-    stable: bool = True
-    direction: Literal["Positive", "Negative"] = "Positive"
-
-    method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy"
-    order: int = 6
 
 
 @dataclass
@@ -109,8 +83,16 @@ class Manifold:
 
     Parameters
     ----------
-    config : manifoldConfig
-        Run-time options.
+    generating_orbit : :pyclass:`PeriodicOrbit`
+        Orbit that seeds the manifold.
+    stable : bool, default True
+        ``True`` selects the stable manifold, ``False`` the unstable one.
+    direction : {{'Positive', 'Negative'}}, default 'Positive'
+        Sign of the eigenvector used to initialise the manifold branch.
+    method : {{'rk', 'scipy', 'symplectic', 'adaptive'}}, default 'scipy'
+        Backend integrator passed to :pyfunc:`_propagate_dynsys`.
+    order : int, default 6
+        Integration order for fixed-step Runge-Kutta methods.
 
     Attributes
     ----------
@@ -119,7 +101,7 @@ class Manifold:
     libration_point : :pyclass:`LibrationPoint`
         Libration point associated with *generating_orbit*.
     stable, direction : int
-        Encoded form of the options in :pyclass:`ManifoldConfig`.
+        Encoded form of the options in :pyclass:`Manifold`.
     mu : float
         Mass ratio of the underlying CRTBP system.
     method, order
@@ -134,15 +116,22 @@ class Manifold:
     :pyclass:`ManifoldResult` without recomputation.
     """
 
-    def __init__(self, config: manifoldConfig):
-        self.generating_orbit = config.generating_orbit
+    def __init__(
+            self, 
+            generating_orbit: PeriodicOrbit, 
+            stable: bool = True, 
+            direction: Literal["Positive", "Negative"] = "Positive", 
+            method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", 
+            order: int = 6
+        ):
+        self.generating_orbit = generating_orbit
         self.libration_point = self.generating_orbit.libration_point
-        self.stable = 1 if config.stable else -1
-        self.direction = 1 if config.direction == "Positive" else -1
+        self.stable = 1 if stable else -1
+        self.direction = 1 if direction == "Positive" else -1
         self._forward = -self.stable
         self.mu = self.generating_orbit.system.mu
-        self.method = config.method
-        self.order = config.order
+        self.method = method
+        self.order = order
         self._successes = 0
         self._attempts = 0
         self.manifold_result: ManifoldResult = None
@@ -190,8 +179,11 @@ class Manifold:
 
         Examples
         --------
-        >>> cfg = manifoldConfig(halo_L2)  # halo_L2 is a PeriodicOrbit
-        >>> man = Manifold(cfg)
+        >>> from hiten.system import System, Manifold, HaloOrbit
+        >>> system = System.from_bodies("earth", "moon")
+        >>> L2 = system.get_libration_point(2)
+        >>> halo_L2 = HaloOrbit(system, L2, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+        >>> man = Manifold(halo_L2)
         >>> result = man.compute(step=0.05)
         >>> print(f"Success rate: {result.success_rate:.0%}")
         """
@@ -296,7 +288,7 @@ class Manifold:
         ValueError
             If the requested eigenvector is not available.
         """
-        xx, tt, phi_T, PHI = compute_stm(self.libration_point._var_eq_system, state, period, steps=2000, forward=forward, method=self.method, order=self.order)
+        xx, tt, phi_T, PHI = _compute_stm(self.libration_point._var_eq_system, state, period, steps=2000, forward=forward, method=self.method, order=self.order)
 
         sn, un, _, Ws, Wu, _ = eigenvalue_decomposition(phi_T, discrete=1)
 

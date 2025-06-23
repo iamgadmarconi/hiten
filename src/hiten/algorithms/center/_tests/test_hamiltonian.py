@@ -6,16 +6,16 @@ from numba.typed import Dict, List
 
 from hiten.algorithms.center.hamiltonian import (
     _build_R_polynomials, _build_T_polynomials,
-    build_lindstedt_poincare_rhs_polynomials, build_physical_hamiltonian)
+    _build_lindstedt_poincare_rhs_polynomials, _build_physical_hamiltonian)
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                              init_index_tables)
+                                              _init_index_tables)
 from hiten.algorithms.polynomial.conversion import sympy2poly
-from hiten.algorithms.polynomial.operations import (polynomial_add_inplace,
-                                                    polynomial_evaluate,
-                                                    polynomial_multiply,
-                                                    polynomial_variable,
-                                                    polynomial_zero_list)
-from hiten.system.base import System, systemConfig
+from hiten.algorithms.polynomial.operations import (_polynomial_add_inplace,
+                                                    _polynomial_evaluate,
+                                                    _polynomial_multiply,
+                                                    _polynomial_variable,
+                                                    _polynomial_zero_list)
+from hiten.system.base import System
 from hiten.system.body import Body
 from hiten.system.libration.collinear import L1Point
 from hiten.utils.constants import Constants
@@ -92,11 +92,9 @@ def system() -> System:
         primary,
     )
     system = System(
-        systemConfig(
-            primary,
-            secondary,
-            Constants.get_orbital_distance("Earth", "Moon"),
-        )
+        primary,
+        secondary,
+        Constants.get_orbital_distance("Earth", "Moon"),
     )
     return system
 
@@ -111,7 +109,7 @@ def max_deg(request):
 
 @pytest.fixture()
 def psi_clmo(max_deg):
-    psi, clmo = init_index_tables(max_deg)
+    psi, clmo = _init_index_tables(max_deg)
     encode_dict = List.empty_list(types.DictType(types.int64, types.int32))
     for clmo_arr in clmo:
         d_map = Dict.empty(key_type=types.int64, value_type=types.int32)
@@ -154,10 +152,10 @@ def _get_symbolic_physical_hamiltonian(point: L1Point, max_deg: int) -> sp.Expr:
 def test_symbolic_identity(point, max_deg):
     """Coefficient arrays must match a SymPy ground-truth for small degrees."""
 
-    psi, clmo = init_index_tables(max_deg)
+    psi, clmo = _init_index_tables(max_deg)
     encode_dict = _create_encode_dict_from_clmo(clmo)
     
-    H_build = build_physical_hamiltonian(point, max_deg)
+    H_build = _build_physical_hamiltonian(point, max_deg)
 
     H_sympy = _get_symbolic_physical_hamiltonian(point, max_deg)
     H_ref = sympy2poly(H_sympy, _sympy_vars, psi, clmo, encode_dict)
@@ -173,14 +171,14 @@ def test_legendre_recursion(point, max_deg, psi_clmo):
 
     psi, clmo, encode_dict = psi_clmo
     x_poly, y_poly, z_poly, *_ = [
-        polynomial_variable(i, max_deg, psi, clmo, encode_dict) for i in range(6)
+        _polynomial_variable(i, max_deg, psi, clmo, encode_dict) for i in range(6)
     ]
 
     T = _build_T_polynomials(x_poly, y_poly, z_poly, max_deg, psi, clmo, encode_dict)
 
-    sum_sq = polynomial_zero_list(max_deg, psi)
+    sum_sq = _polynomial_zero_list(max_deg, psi)
     for var in (x_poly, y_poly, z_poly):
-        polynomial_add_inplace(sum_sq, polynomial_multiply(var, var, max_deg, psi, clmo, encode_dict), 1.0)
+        _polynomial_add_inplace(sum_sq, _polynomial_multiply(var, var, max_deg, psi, clmo, encode_dict), 1.0)
     
     for n in range(2, max_deg + 1):
         n_ = float(n)
@@ -189,17 +187,17 @@ def test_legendre_recursion(point, max_deg, psi_clmo):
 
         lhs = T[n]
 
-        term1_mult = polynomial_multiply(x_poly, T[n - 1], max_deg, psi, clmo, encode_dict)
-        term1 = polynomial_zero_list(max_deg, psi)
-        polynomial_add_inplace(term1, term1_mult, a)
+        term1_mult = _polynomial_multiply(x_poly, T[n - 1], max_deg, psi, clmo, encode_dict)
+        term1 = _polynomial_zero_list(max_deg, psi)
+        _polynomial_add_inplace(term1, term1_mult, a)
         
-        term2_mult = polynomial_multiply(sum_sq, T[n - 2], max_deg, psi, clmo, encode_dict)
-        term2 = polynomial_zero_list(max_deg, psi)
-        polynomial_add_inplace(term2, term2_mult, -b)
+        term2_mult = _polynomial_multiply(sum_sq, T[n - 2], max_deg, psi, clmo, encode_dict)
+        term2 = _polynomial_zero_list(max_deg, psi)
+        _polynomial_add_inplace(term2, term2_mult, -b)
 
-        rhs = polynomial_zero_list(max_deg, psi)
-        polynomial_add_inplace(rhs, term1, 1.0)
-        polynomial_add_inplace(rhs, term2, 1.0)
+        rhs = _polynomial_zero_list(max_deg, psi)
+        _polynomial_add_inplace(rhs, term1, 1.0)
+        _polynomial_add_inplace(rhs, term2, 1.0)
 
         for d in range(max_deg + 1):
             assert np.array_equal(lhs[d], rhs[d]), f"Legendre recursion failed at n={n}, degree slice d={d}"
@@ -210,7 +208,7 @@ def test_R_polynomial_recursion(point, max_deg, psi_clmo):
 
     psi, clmo, encode_dict = psi_clmo
     x_poly, y_poly, z_poly, *_ = [
-        polynomial_variable(i, max_deg, psi, clmo, encode_dict) for i in range(3) # Only x,y,z needed
+        _polynomial_variable(i, max_deg, psi, clmo, encode_dict) for i in range(3) # Only x,y,z needed
     ]
 
     # Generate T_n polynomials (needed for R_n recurrence)
@@ -220,13 +218,13 @@ def test_R_polynomial_recursion(point, max_deg, psi_clmo):
     R_n_list = _build_R_polynomials(x_poly, y_poly, z_poly, T_n_list, max_deg, psi, clmo, encode_dict)
 
     # Calculate rho_sq = x^2 + y^2 + z^2 polynomial
-    rho_sq_poly = polynomial_zero_list(max_deg, psi)
-    x_sq = polynomial_multiply(x_poly, x_poly, max_deg, psi, clmo, encode_dict)
-    y_sq = polynomial_multiply(y_poly, y_poly, max_deg, psi, clmo, encode_dict)
-    z_sq = polynomial_multiply(z_poly, z_poly, max_deg, psi, clmo, encode_dict)
-    polynomial_add_inplace(rho_sq_poly, x_sq, 1.0)
-    polynomial_add_inplace(rho_sq_poly, y_sq, 1.0)
-    polynomial_add_inplace(rho_sq_poly, z_sq, 1.0)
+    rho_sq_poly = _polynomial_zero_list(max_deg, psi)
+    x_sq = _polynomial_multiply(x_poly, x_poly, max_deg, psi, clmo, encode_dict)
+    y_sq = _polynomial_multiply(y_poly, y_poly, max_deg, psi, clmo, encode_dict)
+    z_sq = _polynomial_multiply(z_poly, z_poly, max_deg, psi, clmo, encode_dict)
+    _polynomial_add_inplace(rho_sq_poly, x_sq, 1.0)
+    _polynomial_add_inplace(rho_sq_poly, y_sq, 1.0)
+    _polynomial_add_inplace(rho_sq_poly, z_sq, 1.0)
 
     # The recurrence for R_n starts from n=2, using R_0 and R_1 as base cases.
     for n in range(2, max_deg + 1):
@@ -240,26 +238,26 @@ def test_R_polynomial_recursion(point, max_deg, psi_clmo):
         
         # Term 1: ((2n+3)/(n+2)) * x * R_{n-1}
         coeff1 = (2.0 * n_ + 3.0) / (n_ + 2.0)
-        term1_mult_x_Rnm1 = polynomial_multiply(x_poly, R_n_list[n - 1], max_deg, psi, clmo, encode_dict)
-        term1_poly = polynomial_zero_list(max_deg, psi)
-        polynomial_add_inplace(term1_poly, term1_mult_x_Rnm1, coeff1)
+        term1_mult_x_Rnm1 = _polynomial_multiply(x_poly, R_n_list[n - 1], max_deg, psi, clmo, encode_dict)
+        term1_poly = _polynomial_zero_list(max_deg, psi)
+        _polynomial_add_inplace(term1_poly, term1_mult_x_Rnm1, coeff1)
 
         # Term 2: -((2n+2)/(n+2)) * T_n
         coeff2 = - (2.0 * n_ + 2.0) / (n_ + 2.0) # Note the negative sign here
-        term2_poly = polynomial_zero_list(max_deg, psi)
-        polynomial_add_inplace(term2_poly, T_n_list[n], coeff2) # T_n_list[n] is T_n
+        term2_poly = _polynomial_zero_list(max_deg, psi)
+        _polynomial_add_inplace(term2_poly, T_n_list[n], coeff2) # T_n_list[n] is T_n
 
         # Term 3: -((n+1)/(n+2)) * rho^2 * R_{n-2}
         coeff3 = - (n_ + 1.0) / (n_ + 2.0) # Note the negative sign here
-        term3_mult_rhosq_Rnm2 = polynomial_multiply(rho_sq_poly, R_n_list[n - 2], max_deg, psi, clmo, encode_dict)
-        term3_poly = polynomial_zero_list(max_deg, psi)
-        polynomial_add_inplace(term3_poly, term3_mult_rhosq_Rnm2, coeff3)
+        term3_mult_rhosq_Rnm2 = _polynomial_multiply(rho_sq_poly, R_n_list[n - 2], max_deg, psi, clmo, encode_dict)
+        term3_poly = _polynomial_zero_list(max_deg, psi)
+        _polynomial_add_inplace(term3_poly, term3_mult_rhosq_Rnm2, coeff3)
         
         # RHS: Sum of the three terms
-        rhs = polynomial_zero_list(max_deg, psi)
-        polynomial_add_inplace(rhs, term1_poly, 1.0)
-        polynomial_add_inplace(rhs, term2_poly, 1.0)
-        polynomial_add_inplace(rhs, term3_poly, 1.0)
+        rhs = _polynomial_zero_list(max_deg, psi)
+        _polynomial_add_inplace(rhs, term1_poly, 1.0)
+        _polynomial_add_inplace(rhs, term2_poly, 1.0)
+        _polynomial_add_inplace(rhs, term3_poly, 1.0)
 
         for d in range(max_deg + 1):
             assert np.array_equal(lhs[d], rhs[d]), (
@@ -276,7 +274,7 @@ def test_numerical_evaluation(point, max_deg, psi_clmo):
     """Evaluate both Hamiltonians at random points and compare numerically."""
 
     psi, clmo, _ = psi_clmo
-    H_poly = build_physical_hamiltonian(point, max_deg) 
+    H_poly = _build_physical_hamiltonian(point, max_deg) 
     H_sym = _get_symbolic_physical_hamiltonian(point, max_deg)
 
     rng = np.random.default_rng(42)
@@ -284,7 +282,7 @@ def test_numerical_evaluation(point, max_deg, psi_clmo):
 
     for _ in range(50):
         vals = rng.uniform(-0.1, 0.1, 6)
-        H_num_poly = polynomial_evaluate(H_poly, vals, clmo)
+        H_num_poly = _polynomial_evaluate(H_poly, vals, clmo)
         H_num_sym = float(H_sym.subs(dict(zip(vars_syms, vals))))
         assert np.isclose(
             H_num_poly, H_num_sym, atol=1e-12
@@ -301,7 +299,7 @@ def test_lindstedt_poincare_rhs_symbolic(point, max_deg, psi_clmo):
     rhs_x_sym, rhs_y_sym, rhs_z_sym = _get_symbolic_lindstedt_poincare_rhs(point, max_deg, x_s, y_s, z_s)
 
     # Get computed polynomials
-    rhs_x_calc, rhs_y_calc, rhs_z_calc = build_lindstedt_poincare_rhs_polynomials(point, max_deg)
+    rhs_x_calc, rhs_y_calc, rhs_z_calc = _build_lindstedt_poincare_rhs_polynomials(point, max_deg)
 
     # Convert SymPy expressions to polynomial coefficient lists.
     rhs_x_ref = sympy2poly(rhs_x_sym, _sympy_vars, psi_table, clmo_table, encode_dict_list)
@@ -323,7 +321,7 @@ def test_lindstedt_poincare_rhs_numerical(point, max_deg, psi_clmo):
     psi_table, clmo_table, encode_dict_list = psi_clmo
 
     # Get computed polynomials from the function under test
-    rhs_x_calc, rhs_y_calc, rhs_z_calc = build_lindstedt_poincare_rhs_polynomials(point, max_deg)
+    rhs_x_calc, rhs_y_calc, rhs_z_calc = _build_lindstedt_poincare_rhs_polynomials(point, max_deg)
 
     # Symbolic variables for evaluation reference
     x_s, y_s, z_s = sp.symbols("x y z")
@@ -339,14 +337,14 @@ def test_lindstedt_poincare_rhs_numerical(point, max_deg, psi_clmo):
         sub_dict = dict(zip(symbolic_vars_for_eval, xyz_vals_array))
 
         # Numerical evaluation of calculated polynomials
-        # polynomial_evaluate expects all 6 phase space variables. Fill px,py,pz with 0.
+        # _polynomial_evaluate expects all 6 phase space variables. Fill px,py,pz with 0.
         full_eval_point = np.zeros(6)
         full_eval_point[0:3] = xyz_vals_array # x, y, z
         # full_eval_point[3:6] are already 0 for px, py, pz
 
-        num_rhs_x_calc = polynomial_evaluate(rhs_x_calc, full_eval_point, clmo_table)
-        num_rhs_y_calc = polynomial_evaluate(rhs_y_calc, full_eval_point, clmo_table)
-        num_rhs_z_calc = polynomial_evaluate(rhs_z_calc, full_eval_point, clmo_table)
+        num_rhs_x_calc = _polynomial_evaluate(rhs_x_calc, full_eval_point, clmo_table)
+        num_rhs_y_calc = _polynomial_evaluate(rhs_y_calc, full_eval_point, clmo_table)
+        num_rhs_z_calc = _polynomial_evaluate(rhs_z_calc, full_eval_point, clmo_table)
 
         # Numerical evaluation of SymPy reference expressions
         num_rhs_x_sym = float(rhs_x_sym.subs(sub_dict))

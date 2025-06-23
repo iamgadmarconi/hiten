@@ -6,15 +6,15 @@ Low-level helpers for manipulating multivariate polynomial coefficient arrays
 used throughout the library.  The routines defined here are performance-critical
 Numba-JIT compiled kernels that:
 
-* build combinatorial lookup tables (:pyfunc:`init_index_tables`) for fast
+* build combinatorial lookup tables (:pyfunc:`_init_index_tables`) for fast
   encoding/decoding of monomial multi-indices,
 * provide packing/unpacking utilities for exponents in a compact
-  32-bit representation (:pyfunc:`pack_multiindex`,
-  :pyfunc:`decode_multiindex`, :pyfunc:`encode_multiindex`,
-  :pyfunc:`fill_exponents`),
+  32-bit representation (:pyfunc:`_pack_multiindex`,
+  :pyfunc:`_decode_multiindex`, :pyfunc:`_encode_multiindex`,
+  :pyfunc:`_fill_exponents`),
 * expose lightweight algebraic helpers such as factorial and binomial
   coefficients (:pyfunc:`_factorial`, :pyfunc:`_combinations`), and
-* create suitably-shaped zero coefficient arrays (:pyfunc:`make_poly`).
+* create suitably-shaped zero coefficient arrays (:pyfunc:`_make_poly`).
 
 The module is intentionally dependency-light (only *NumPy* and *Numba*) so that
 these utilities can be reused by both CPU and GPU back-ends without circular
@@ -92,7 +92,7 @@ def _combinations(n: int, k: int) -> int:
     return res
 
 @njit(fastmath=FASTMATH,cache=False)
-def init_index_tables(max_degree: int):
+def _init_index_tables(max_degree: int):
     r"""
     Initialize lookup tables for polynomial multi-index encoding and decoding.
     
@@ -157,16 +157,16 @@ def init_index_tables(max_degree: int):
 # -----------------------------------------------------------------------------
 #  GLOBAL clmo cache (Numba functions need it at definition time)
 # -----------------------------------------------------------------------------
-PSI_GLOBAL, CLMO_GLOBAL = init_index_tables(30)  # default; will be overwritten
+_PSI_GLOBAL, _CLMO_GLOBAL = _init_index_tables(30)  # default; will be overwritten
 
 # -----------------------------------------------------------------------------
 # Build a Numba‐typed lookup: for each degree d, a dict mapping
-# packed_exponent → index in CLMO_GLOBAL[d]
+# packed_exponent → index in _CLMO_GLOBAL[d]
 # -----------------------------------------------------------------------------
-ENCODE_DICT_GLOBAL = List.empty_list(
+_ENCODE_DICT_GLOBAL = List.empty_list(
     types.DictType(types.int64, types.int32)
 )
-for clmo_arr in CLMO_GLOBAL:
+for clmo_arr in _CLMO_GLOBAL:
     d = Dict.empty(
         key_type=types.int64,
         value_type=types.int32,
@@ -175,12 +175,12 @@ for clmo_arr in CLMO_GLOBAL:
     for idx, packed_val in enumerate(clmo_arr):
         # Explicitly cast key to int64 and value to int32 for the dictionary
         d[np.int64(packed_val)] = np.int32(idx)
-    ENCODE_DICT_GLOBAL.append(d)
+    _ENCODE_DICT_GLOBAL.append(d)
 
 # -----------------------------------------------------------------------------
 
 @njit(fastmath=FASTMATH, cache=False)
-def pack_multiindex(k: np.ndarray) -> np.uint32:
+def _pack_multiindex(k: np.ndarray) -> np.uint32:
     r"""
     Pack the exponents k_1 through k_5 into a 32-bit integer.
     
@@ -204,7 +204,7 @@ def pack_multiindex(k: np.ndarray) -> np.uint32:
     k[0] is not included in the packed value. Each exponent uses 6 bits,
     limiting its maximum value to 63.
     """
-    # This logic is derived from the original encode_multiindex and init_index_tables
+    # This logic is derived from the original _encode_multiindex and _init_index_tables
     packed = (
         (k[1] & 0x3F)
         | ((k[2] & 0x3F) << 6)
@@ -212,10 +212,10 @@ def pack_multiindex(k: np.ndarray) -> np.uint32:
         | ((k[4] & 0x3F) << 18)
         | ((k[5] & 0x3F) << 24)
     )
-    return np.uint32(packed) # Ensure it returns uint32 as in init_index_tables
+    return np.uint32(packed) # Ensure it returns uint32 as in _init_index_tables
 
 @njit(fastmath=FASTMATH, cache=False)
-def decode_multiindex(pos: int, degree: int, clmo) -> np.ndarray:
+def _decode_multiindex(pos: int, degree: int, clmo) -> np.ndarray:
     r"""
     Decode a packed multi-index from its position in the lookup table.
     
@@ -226,7 +226,7 @@ def decode_multiindex(pos: int, degree: int, clmo) -> np.ndarray:
     degree : int
         Degree of the monomial
     clmo : numba.typed.List
-        List of arrays containing packed multi-indices, as returned by init_index_tables
+        List of arrays containing packed multi-indices, as returned by _init_index_tables
         
     Returns
     -------
@@ -255,7 +255,7 @@ def decode_multiindex(pos: int, degree: int, clmo) -> np.ndarray:
     return k0, k1, k2, k3, k4, k5
 
 @njit(fastmath=FASTMATH, inline='always', cache=False)
-def fill_exponents(pos, degree, clmo, out):
+def _fill_exponents(pos, degree, clmo, out):
     packed = clmo[degree][pos]
     out[1] =  packed        & 0x3F
     out[2] = (packed >>  6) & 0x3F
@@ -266,7 +266,7 @@ def fill_exponents(pos, degree, clmo, out):
 
 
 @njit(fastmath=FASTMATH, cache=False)
-def encode_multiindex(k: np.ndarray, degree: int, encode_dict_list: List) -> int:
+def _encode_multiindex(k: np.ndarray, degree: int, encode_dict_list: List) -> int:
     r"""
     Encode a multi-index to find its position in the coefficient array.
     
@@ -277,7 +277,7 @@ def encode_multiindex(k: np.ndarray, degree: int, encode_dict_list: List) -> int
     degree : int
         Degree of the monomial (should equal sum of elements in k)
     encode_dict_list : numba.typed.List
-        The precomputed list of dictionaries (e.g., ENCODE_DICT_GLOBAL)
+        The precomputed list of dictionaries (e.g., _ENCODE_DICT_GLOBAL)
         mapping packed exponents (int64) to indices (int32).
         
     Returns
@@ -292,7 +292,7 @@ def encode_multiindex(k: np.ndarray, degree: int, encode_dict_list: List) -> int
     It packs the exponents k_1 through k_5 into a 32-bit integer (uint32),
     casts it to int64 for lookup, and expects an int32 index.
     """
-    packed_val = pack_multiindex(k) # pack_multiindex returns uint32
+    packed_val = _pack_multiindex(k) # _pack_multiindex returns uint32
     packed_key = np.int64(packed_val) # Explicitly cast to int64 for dict key type
 
     # Ensure degree is within the bounds of encode_dict_list
@@ -308,7 +308,7 @@ def encode_multiindex(k: np.ndarray, degree: int, encode_dict_list: List) -> int
         return -1 # Key not found
 
 @njit(fastmath=FASTMATH, cache=False)
-def make_poly(degree: int, psi) -> np.ndarray:
+def _make_poly(degree: int, psi) -> np.ndarray:
     r"""
     Create a new polynomial coefficient array of specified degree with complex128 dtype.
     
@@ -317,7 +317,7 @@ def make_poly(degree: int, psi) -> np.ndarray:
     degree : int
         Degree of the polynomial
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
         
     Returns
     -------
@@ -354,7 +354,7 @@ def _create_encode_dict_from_clmo(clmo_table: List) -> List:
         
     Notes
     -----
-    This is a helper function used to build the ENCODE_DICT_GLOBAL structure.
+    This is a helper function used to build the _ENCODE_DICT_GLOBAL structure.
     Each dictionary provides O(1) lookup time for finding the position
     of a multi-index in the coefficient array.
     """

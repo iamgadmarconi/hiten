@@ -22,19 +22,19 @@ from numba import njit, prange
 from numba.typed import List
 from scipy.optimize import root_scalar
 
-from hiten.algorithms.polynomial.operations import (polynomial_evaluate,
-                                                     polynomial_jacobian)
+from hiten.algorithms.polynomial.operations import (_polynomial_evaluate,
+                                                     _polynomial_jacobian)
 from hiten.algorithms.dynamics.hamiltonian import (_eval_dH_dP, _eval_dH_dQ,
                                              _hamiltonian_rhs)
 from hiten.algorithms.integrators.rk import (RK4_A, RK4_B, RK4_C, RK6_A, RK6_B,
                                        RK6_C, RK8_A, RK8_B, RK8_C)
 from hiten.algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
-                                               integrate_symplectic)
+                                               _integrate_symplectic)
 from hiten.utils.config import FASTMATH
 from hiten.utils.log_config import logger
 
 
-class PoincareSection(NamedTuple):
+class _PoincareSection(NamedTuple):
     r"""
     Named tuple holding Poincaré section points and coordinate labels.
     """
@@ -53,7 +53,7 @@ def _integrate_rk_ham(
     clmo_H,
 ) -> np.ndarray:
     r"""
-    Explicit RK integrator specialised for :pyclass:`HamiltonianSystem`.
+    Explicit RK integrator specialised for :pyclass:`_HamiltonianSystem`.
     """
 
     n_steps = t_vals.shape[0]
@@ -167,7 +167,7 @@ def _find_turning(
     RuntimeError
         If root finding fails or doesn't converge
     """
-    logger.info(f"Finding {q_or_p} turning point at energy h0={h0:.6e}")
+    logger.debug(f"Finding {q_or_p} turning point at energy h0={h0:.6e}")
     
     if q_or_p not in {"q2", "p2", "q3", "p3"}:
         raise ValueError("q_or_p must be 'q2', 'p2', 'q3' or 'p3'.")
@@ -182,7 +182,7 @@ def _find_turning(
             state[2] = x  # q3
         else:  # "p3"
             state[5] = x  # p3
-        return polynomial_evaluate(H_blocks, state, clmo).real - h0
+        return _polynomial_evaluate(H_blocks, state, clmo).real - h0
 
     root = _bracketed_root(
         f,
@@ -195,10 +195,10 @@ def _find_turning(
         logger.warning("Failed to locate %s turning point within search limits", q_or_p)
         raise RuntimeError("Root finding for Hill boundary did not converge.")
 
-    logger.info("Found %s turning point: %.6e", q_or_p, root)
+    logger.debug("Found %s turning point: %.6e", q_or_p, root)
     return root
 
-def section_closure(section_coord: str) -> Tuple[int, int, Tuple[str, str]]:
+def _section_closure(section_coord: str) -> Tuple[int, int, Tuple[str, str]]:
     r"""
     Create closure information for a section defined by section_coord=0.
     
@@ -263,9 +263,9 @@ def _solve_missing_coord(
     Returns
     -------
     Optional[float]
-        Solution if found, None otherwise
+        _Solution if found, None otherwise
     """
-    logger.info(f"Solving for {varname} with fixed values {fixed_vals}, h0={h0:.6e}")
+    logger.debug(f"Solving for {varname} with fixed values {fixed_vals}, h0={h0:.6e}")
     
     # Map variable names to indices in 6D state vector
     var_indices = {
@@ -289,7 +289,7 @@ def _solve_missing_coord(
         # Set the variable we're solving for
         state[solve_idx] = x
         
-        return polynomial_evaluate(H_blocks, state, clmo).real - h0
+        return _polynomial_evaluate(H_blocks, state, clmo).real - h0
 
     root = _bracketed_root(f, initial=initial_guess, factor=expand_factor, max_expand=max_expand)
 
@@ -297,7 +297,7 @@ def _solve_missing_coord(
         logger.warning("Failed to locate %s turning point within search limits", varname)
         return None
 
-    logger.info("Found %s turning point: %.6e", varname, root)
+    logger.debug("Found %s turning point: %.6e", varname, root)
     return root
 
 
@@ -371,7 +371,7 @@ def _poincare_step(
 
     for _ in range(max_steps):
         if use_symplectic:
-            traj = integrate_symplectic(
+            traj = _integrate_symplectic(
                 initial_state_6d=state_old,
                 t_values=np.array([0.0, dt]),
                 jac_H=jac_H,
@@ -545,7 +545,7 @@ def _generate_map(
     c_omega_heuristic: float=20.0,
     seed_axis: str = "q2",  # "q2" or "p2"
     section_coord: str = "q3",  # "q2", "p2", "q3", or "p3"
-) -> PoincareSection:
+) -> _PoincareSection:
     r"""
     Generate a Poincaré return map by forward integration of a small set of seeds.
 
@@ -582,7 +582,7 @@ def _generate_map(
 
     Returns
     -------
-    PoincareSection
+    _PoincareSection
         Map points with matching axis labels.
 
     Raises
@@ -595,10 +595,10 @@ def _generate_map(
     The routine is performance-critical and therefore JIT-compiled with :pyfunc:`numba.njit`.
     """
     # Get section information
-    section_idx, direction_sign, labels = section_closure(section_coord)
+    section_idx, direction_sign, labels = _section_closure(section_coord)
     
     # 1. Build Jacobian once.
-    jac_H = polynomial_jacobian(
+    jac_H = _polynomial_jacobian(
         poly_p=H_blocks,
         max_deg=max_degree,
         psi_table=psi_table,
@@ -752,7 +752,7 @@ def _generate_map(
         points_array = np.empty((0, 2), dtype=np.float64)
     else:
         points_array = np.asarray(pts_accum, dtype=np.float64)
-    return PoincareSection(points_array, labels)
+    return _PoincareSection(points_array, labels)
 
 def _generate_grid(
     h0: float,
@@ -768,7 +768,7 @@ def _generate_grid(
     integrator_order: int = 6,
     use_symplectic: bool = False,
     section_coord: str = "q3",
-) -> PoincareSection:
+) -> _PoincareSection:
     r"""
     Compute Poincaré map points at a given energy level.
 
@@ -802,7 +802,7 @@ def _generate_grid(
 
     Returns
     -------
-    :class:`PoincareSection`
+    :class:`_PoincareSection`
         Section points with coordinate labels
 
     Raises
@@ -818,11 +818,9 @@ def _generate_grid(
     logger.info(f"Computing Poincaré map for energy h0={h0:.6e}, grid size: {Nq}x{Np}")
     
     # Get section information
-    section_idx, direction_sign, labels = section_closure(section_coord)
+    section_idx, direction_sign, labels = _section_closure(section_coord)
     
-    # 1.  Jacobian (once per energy level).
-    logger.info("Computing Hamiltonian Jacobian")
-    jac_H = polynomial_jacobian(
+    jac_H = _polynomial_jacobian(
         poly_p=H_blocks,
         max_deg=max_degree,
         psi_table=psi_table,
@@ -830,7 +828,6 @@ def _generate_grid(
         encode_dict_list=encode_dict_list,
     )
 
-    # 2.  Hill-boundary turning points - get the right ones based on section
     if section_coord in ("q3", "p3"):
         # For q3 or p3 sections, vary q2 and p2
         q2_max = _find_turning("q2", h0, H_blocks, clmo_table)
@@ -890,11 +887,8 @@ def _generate_grid(
     
     logger.info(f"Found {len(seeds)} valid seeds out of {total_points} grid points")
 
-    # 3.  Iterate all seeds in a parallel JIT kernel.
-    logger.info("Computing Poincaré map points in parallel")
-
     if len(seeds) == 0:
-        return PoincareSection(np.empty((0, 2), dtype=np.float64), labels)
+        return _PoincareSection(np.empty((0, 2), dtype=np.float64), labels)
 
     seeds_arr = np.asarray(seeds, dtype=np.float64)
 
@@ -934,4 +928,4 @@ def _generate_grid(
                 map_pts[idx, 1] = p3p_arr[i]  # p3 coordinate from crossing
             idx += 1
 
-    return PoincareSection(map_pts, labels)
+    return _PoincareSection(map_pts, labels)

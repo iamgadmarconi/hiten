@@ -13,9 +13,8 @@ The module provides:
 * :pyclass:`GenericOrbit` - a minimal concrete implementation useful for
   arbitrary initial conditions when no analytical guess or specific correction
   is required.
-* Light-weight configuration containers (:pyclass:`orbitConfig`,
-  :pyclass:`correctionConfig`) that encapsulate user input for families,
-  libration points and differential correction settings.
+* Light-weight configuration containers (:pyclass:`_CorrectionConfig`) that 
+  encapsulate user input for differential correction settings.
 
 References
 ----------
@@ -26,18 +25,17 @@ Bodies".
 import os
 import pickle
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import (Any, Callable, Dict, Literal, NamedTuple, Optional,
-                    Sequence, Tuple)
+from typing import Callable, Literal, NamedTuple, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 
-from hiten.algorithms.dynamics.rtbp import (_propagate_dynsys, compute_stm,
-                                      rtbp_dynsys, stability_indices)
-from hiten.algorithms.dynamics.utils.energy import crtbp_energy, energy_to_jacobi
+from hiten.algorithms.dynamics.rtbp import (_propagate_dynsys, _compute_stm,
+                                            rtbp_dynsys, _stability_indices)
+from hiten.algorithms.dynamics.utils.energy import (crtbp_energy,
+                                                    energy_to_jacobi)
 from hiten.algorithms.dynamics.utils.geometry import _find_y_zero_crossing
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
@@ -45,46 +43,13 @@ from hiten.utils.coordinates import rotating_to_inertial
 from hiten.utils.files import _ensure_dir
 from hiten.utils.log_config import logger
 from hiten.utils.plots import (_plot_body, _set_axes_equal, _set_dark_mode,
-                         animate_trajectories)
-
-
-@dataclass
-class orbitConfig:
-    r"""
-    Configuration for an orbit family around a specific libration point.
-
-    Parameters
-    ----------
-    orbit_family : str
-        Identifier of the orbit family, e.g. ``"halo"`` or ``"lyapunov"``.
-    libration_point : LibrationPoint
-        The libration point instance that anchors the family.
-    extra_params : dict, optional
-        Additional keyword parameters that specialised subclasses may
-        require (left untouched by the base implementation).
-
-    Attributes
-    ----------
-    orbit_family : str
-        Normalised to lowercase in :pyfunc:`orbitConfig.__post_init__`.
-    libration_point : LibrationPoint
-        Same as *Parameters*.
-    extra_params : dict
-        Same as *Parameters*.
-    """
-    orbit_family: str
-    libration_point: LibrationPoint
-    extra_params: Dict[str, Any] = field(default_factory=dict)
-
-    def __post_init__(self):
-        # Validate that distance is positive.
-        self.orbit_family = self.orbit_family.lower() # Normalize to lowercase
+                               animate_trajectories)
 
 
 class S(IntEnum): X=0; Y=1; Z=2; VX=3; VY=4; VZ=5
 
 
-class correctionConfig(NamedTuple):
+class _CorrectionConfig(NamedTuple):
     r"""
     Settings that drive the differential correction routine.
 
@@ -107,7 +72,7 @@ class correctionConfig(NamedTuple):
     event_func : callable, default :pyfunc:`hiten.utils.geometry._find_y_zero_crossing`
         Event used to terminate half-period propagation.
     method : {"rk", "scipy", "symplectic", "adaptive"}, default "scipy"
-        Integrator back-end to use when marching the variational equations.
+        _Integrator back-end to use when marching the variational equations.
     order : int, default 8
         Order for the custom integrators.
     steps : int, default 2000
@@ -135,8 +100,8 @@ class PeriodicOrbit(ABC):
 
     Parameters
     ----------
-    config : orbitConfig
-        Orbit family and libration point configuration.
+    libration_point : LibrationPoint
+        The libration point instance that anchors the family.
     initial_state : Sequence[float] or None, optional
         Initial condition in rotating canonical units
         :math:`[x, y, z, \dot x, \dot y, \dot z]`. When *None* an analytical
@@ -145,7 +110,7 @@ class PeriodicOrbit(ABC):
     Attributes
     ----------
     family : str
-        Orbit family name inherited from *config*.
+        Orbit family name (settable property with class-specific defaults).
     libration_point : LibrationPoint
         Libration point anchoring the family.
     system : System
@@ -161,7 +126,7 @@ class PeriodicOrbit(ABC):
     times : ndarray or None, shape (N,)
         Time vector associated with *trajectory*.
     stability_info : tuple or None
-        Output of :pyfunc:`hiten.algorithms.dynamics.rtbp.stability_indices`.
+        Output of :pyfunc:`hiten.algorithms.dynamics.rtbp._stability_indices`.
 
     Notes
     -----
@@ -169,10 +134,12 @@ class PeriodicOrbit(ABC):
     call :pyfunc:`PeriodicOrbit.differential_correction` (or manually set
     :pyattr:`period`) followed by :pyfunc:`PeriodicOrbit.propagate`.
     """
+    
+    # This should be overridden by subclasses
+    _family: str = "generic"
 
-    def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):
-        self.family = config.orbit_family
-        self.libration_point = config.libration_point
+    def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None):
+        self.libration_point = libration_point
         self._system = self.libration_point.system
         self.mu = self._system.mu
 
@@ -206,6 +173,30 @@ class PeriodicOrbit(ABC):
 
     def __repr__(self):
         return f"{self.__class__.__name__}(family={self.family}, libration_point={self.libration_point})"
+
+    @property
+    def family(self) -> str:
+        r"""
+        Get the orbit family name.
+        
+        Returns
+        -------
+        str
+            The orbit family name
+        """
+        return self._family
+
+    @family.setter
+    def family(self, value: str) -> None:
+        r"""
+        Set the orbit family name.
+        
+        Parameters
+        ----------
+        value : str
+            The new family name
+        """
+        self._family = value
 
     @property
     def initial_state(self) -> npt.NDArray[np.float64]:
@@ -256,7 +247,7 @@ class PeriodicOrbit(ABC):
         Returns
         -------
         tuple or None
-            Tuple containing (stability_indices, eigenvalues, eigenvectors),
+            Tuple containing (_stability_indices, eigenvalues, eigenvectors),
             or None if stability hasn't been computed yet.
         """
         if self._stability_info is None:
@@ -293,7 +284,7 @@ class PeriodicOrbit(ABC):
             logger.info("Computing stability for stability check")
             self.compute_stability()
         
-        indices = self._stability_info[0]  # nu values from stability_indices
+        indices = self._stability_info[0]  # nu values from _stability_indices
         
         # An orbit is stable if all stability indices have magnitude <= 1
         return np.all(np.abs(indices) <= 1.0)
@@ -381,7 +372,7 @@ class PeriodicOrbit(ABC):
         Returns
         -------
         tuple
-            (stability_indices, eigenvalues, eigenvectors) from the monodromy matrix
+            (_stability_indices, eigenvalues, eigenvectors) from the monodromy matrix
         """
         if self.period is None:
             msg = "Period must be set before stability analysis"
@@ -390,10 +381,10 @@ class PeriodicOrbit(ABC):
         
         logger.info(f"Computing stability for orbit with period {self.period}")
         # Compute STM over one period
-        _, _, monodromy, _ = compute_stm(self.libration_point._var_eq_system, self.initial_state, self.period)
+        _, _, monodromy, _ = _compute_stm(self.libration_point._var_eq_system, self.initial_state, self.period)
         
         # Analyze stability
-        stability = stability_indices(monodromy)
+        stability = _stability_indices(monodromy)
         self._stability_info = stability
         
         is_stable = np.all(np.abs(stability[0]) <= 1.0)
@@ -683,7 +674,6 @@ class PeriodicOrbit(ABC):
             
         # Update orbit properties
         self.mu = data['mu']
-        self.family = data['family']
         
         if data['initial_state'] is not None:
             self._initial_state = np.array(data['initial_state'])
@@ -719,7 +709,7 @@ class PeriodicOrbit(ABC):
 
     def differential_correction(
             self,
-            cfg: correctionConfig,
+            cfg: _CorrectionConfig,
             *,
             tol: float = 1e-10,
             max_attempts: int = 25,
@@ -730,7 +720,7 @@ class PeriodicOrbit(ABC):
         
         Parameters
         ----------
-        cfg : correctionConfig
+        cfg : _CorrectionConfig
             Configuration for the differential correction.
         tol : float, optional
             Tolerance for the correction.
@@ -761,7 +751,7 @@ class PeriodicOrbit(ABC):
                 self.period = 2 * t_ev
                 return X0, t_ev
 
-            _, _, Phi, _ = compute_stm(self.libration_point._var_eq_system, X0, t_ev, steps=cfg.steps, method=cfg.method, order=cfg.order)
+            _, _, Phi, _ = _compute_stm(self.libration_point._var_eq_system, X0, t_ev, steps=cfg.steps, method=cfg.method, order=cfg.order)
 
             J = Phi[np.ix_(cfg.residual_indices, cfg.control_indices)]
 
@@ -783,8 +773,11 @@ class GenericOrbit(PeriodicOrbit):
     r"""
     A minimal concrete orbit class for arbitrary initial conditions, with no correction or special guess logic.
     """
-    def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):
-        super().__init__(config, initial_state)
+    
+    _family = "generic"
+    
+    def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None):
+        super().__init__(libration_point, initial_state)
         if self.period is None:
             self.period = np.pi
 

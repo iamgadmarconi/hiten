@@ -2,7 +2,7 @@ from typing import List
 
 import numpy as np
 
-from hiten.algorithms.polynomial.base import decode_multiindex
+from hiten.algorithms.polynomial.base import _decode_multiindex
 
 
 def _monomial_to_string(exps: tuple[int, ...]) -> str:
@@ -136,7 +136,7 @@ def _format_cm_table(poly_cm: List[np.ndarray], clmo: np.ndarray) -> str:
             if abs(c_val) <= 1e-14: # Skip zero coefficients
                 continue
             
-            k_exps = decode_multiindex(pos, deg, clmo) 
+            k_exps = _decode_multiindex(pos, deg, clmo) 
             
             if k_exps[0] != 0 or k_exps[3] != 0:  # Skip terms involving q1 or p1
                 continue

@@ -1,14 +1,13 @@
 import numpy as np
 from numba import cuda, float64
 
-from hiten.algorithms.poincare.cuda.hrhs import (HamiltonianRHSEvaluatorCUDA,
-                                                  hamiltonian_rhs_device)
-
+from hiten.algorithms.poincare.cuda.hrhs import (_hamiltonian_rhs_device,
+                                                 _HamiltonianRHSEvaluatorCUDA)
 
 THREADS_PER_BLOCK = 256
 
 @cuda.jit(device=True)
-def rk4_step_device(state, dt, jac_coeffs_data, jac_metadata,
+def _rk4_step_device(state, dt, jac_coeffs_data, jac_metadata,
                    clmo_flat, clmo_offsets, state_out):
     """
     Device function to perform a single RK4 step.
@@ -38,25 +37,25 @@ def rk4_step_device(state, dt, jac_coeffs_data, jac_metadata,
     temp_state = cuda.local.array(6, dtype=float64) # n_vars replaced with 6
     
     # Stage 1: k1 = f(state)
-    hamiltonian_rhs_device(state, jac_coeffs_data, jac_metadata,
+    _hamiltonian_rhs_device(state, jac_coeffs_data, jac_metadata,
                           clmo_flat, clmo_offsets, k1)
     
     # Stage 2: k2 = f(state + 0.5 * dt * k1)
     for i in range(6): # n_vars replaced with 6
         temp_state[i] = state[i] + 0.5 * dt * k1[i]
-    hamiltonian_rhs_device(temp_state, jac_coeffs_data, jac_metadata,
+    _hamiltonian_rhs_device(temp_state, jac_coeffs_data, jac_metadata,
                           clmo_flat, clmo_offsets, k2)
     
     # Stage 3: k3 = f(state + 0.5 * dt * k2)
     for i in range(6): # n_vars replaced with 6
         temp_state[i] = state[i] + 0.5 * dt * k2[i]
-    hamiltonian_rhs_device(temp_state, jac_coeffs_data, jac_metadata,
+    _hamiltonian_rhs_device(temp_state, jac_coeffs_data, jac_metadata,
                           clmo_flat, clmo_offsets, k3)
     
     # Stage 4: k4 = f(state + dt * k3)
     for i in range(6): # n_vars replaced with 6
         temp_state[i] = state[i] + dt * k3[i]
-    hamiltonian_rhs_device(temp_state, jac_coeffs_data, jac_metadata,
+    _hamiltonian_rhs_device(temp_state, jac_coeffs_data, jac_metadata,
                           clmo_flat, clmo_offsets, k4)
     
     # Combine: state_new = state + (dt/6) * (k1 + 2*k2 + 2*k3 + k4)
@@ -66,7 +65,7 @@ def rk4_step_device(state, dt, jac_coeffs_data, jac_metadata,
 
 
 @cuda.jit
-def rk4_step_kernel(states, dt, jac_coeffs_data, jac_metadata,
+def _rk4_step_kernel(states, dt, jac_coeffs_data, jac_metadata,
                    clmo_flat, clmo_offsets, states_out):
     """
     CUDA kernel to perform RK4 steps for multiple states.
@@ -100,7 +99,7 @@ def rk4_step_kernel(states, dt, jac_coeffs_data, jac_metadata,
     
     # Perform RK4 step
     state_new = cuda.local.array(6, dtype=float64) # n_vars replaced with 6
-    rk4_step_device(state, dt, jac_coeffs_data, jac_metadata,
+    _rk4_step_device(state, dt, jac_coeffs_data, jac_metadata,
                    clmo_flat, clmo_offsets, state_new)
     
     # Store result
@@ -109,7 +108,7 @@ def rk4_step_kernel(states, dt, jac_coeffs_data, jac_metadata,
 
 
 @cuda.jit
-def rk4_trajectory_kernel(initial_states, t_values, jac_coeffs_data, jac_metadata,
+def _rk4_trajectory_kernel(initial_states, t_values, jac_coeffs_data, jac_metadata,
                          clmo_flat, clmo_offsets, trajectories):
     """
     CUDA kernel to integrate trajectories using RK4.
@@ -151,7 +150,7 @@ def rk4_trajectory_kernel(initial_states, t_values, jac_coeffs_data, jac_metadat
         dt = t_values[t_idx] - t_values[t_idx-1]
         
         # Perform RK4 step
-        rk4_step_device(state, dt, jac_coeffs_data, jac_metadata,
+        _rk4_step_device(state, dt, jac_coeffs_data, jac_metadata,
                        clmo_flat, clmo_offsets, state_new)
         
         # Update state and store
@@ -160,7 +159,7 @@ def rk4_trajectory_kernel(initial_states, t_values, jac_coeffs_data, jac_metadat
             trajectories[tid, t_idx, i] = state[i]
 
 
-class RK4IntegratorCUDA:
+class _RK4IntegratorCUDA:
     """
     Helper class to manage RK4 integration on GPU.
     """
@@ -176,7 +175,7 @@ class RK4IntegratorCUDA:
             CLMO lookup table
         """
 
-        self.rhs_evaluator = HamiltonianRHSEvaluatorCUDA(jac_H, clmo)
+        self.rhs_evaluator = _HamiltonianRHSEvaluatorCUDA(jac_H, clmo)
         self.n_dof = self.rhs_evaluator.n_dof
         
         # Get device arrays
@@ -209,7 +208,7 @@ class RK4IntegratorCUDA:
         threads_per_block = THREADS_PER_BLOCK
         blocks_per_grid = (n_states + threads_per_block - 1) // threads_per_block
         
-        rk4_step_kernel[blocks_per_grid, threads_per_block](
+        _rk4_step_kernel[blocks_per_grid, threads_per_block](
             d_states, dt, self.d_jac_coeffs_data, self.d_jac_metadata,
             self.d_clmo_flat, self.d_clmo_offsets, d_states_out
         )
@@ -247,7 +246,7 @@ class RK4IntegratorCUDA:
         threads_per_block = THREADS_PER_BLOCK
         blocks_per_grid = (n_trajectories + threads_per_block - 1) // threads_per_block
         
-        rk4_trajectory_kernel[blocks_per_grid, threads_per_block](
+        _rk4_trajectory_kernel[blocks_per_grid, threads_per_block](
             d_initial_states, d_t_values, self.d_jac_coeffs_data, self.d_jac_metadata,
             self.d_clmo_flat, self.d_clmo_offsets, d_trajectories
         )
@@ -268,12 +267,12 @@ class RK4IntegratorCUDA:
 
 
 # Convenience function
-def rk4_step_cuda(states, dt, jac_H, clmo, n_dof=3):
+def _rk4_step_cuda(states, dt, jac_H, clmo, n_dof=3):
     """
     Perform RK4 step for multiple states using CUDA.
     
     This is a convenience wrapper. For better performance with repeated
-    integrations, create an RK4IntegratorCUDA instance and reuse it.
+    integrations, create an _RK4IntegratorCUDA instance and reuse it.
     """
-    integrator = RK4IntegratorCUDA(jac_H, clmo)
+    integrator = _RK4IntegratorCUDA(jac_H, clmo)
     return integrator.step(states, dt)

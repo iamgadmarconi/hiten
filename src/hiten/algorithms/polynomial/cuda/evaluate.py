@@ -5,7 +5,7 @@ N_VARS = 6
 THREADS_PER_BLOCK = 256
 
 @cuda.jit(device=True, inline=True)
-def decode_multiindex_device(pos, degree, clmo_flat, clmo_offsets):
+def _decode_multiindex_device(pos, degree, clmo_flat, clmo_offsets):
     """
     Device function to decode a packed multi-index.
     
@@ -40,7 +40,7 @@ def decode_multiindex_device(pos, degree, clmo_flat, clmo_offsets):
 
 
 @cuda.jit(device=True)
-def poly_evaluate_degree_device(coeffs, n_coeffs, degree, point, clmo_flat, clmo_offsets):
+def _poly_evaluate_degree_device(coeffs, n_coeffs, degree, point, clmo_flat, clmo_offsets):
     """
     Device function to evaluate a homogeneous polynomial of given degree.
     
@@ -84,7 +84,7 @@ def poly_evaluate_degree_device(coeffs, n_coeffs, degree, point, clmo_flat, clmo
             continue
             
         # Decode the multi-index
-        k0, k1, k2, k3, k4, k5 = decode_multiindex_device(i, degree, clmo_flat, clmo_offsets)
+        k0, k1, k2, k3, k4, k5 = _decode_multiindex_device(i, degree, clmo_flat, clmo_offsets)
         
         # Compute monomial value
         term_val = (pow_table[0, k0] * pow_table[1, k1] * 
@@ -97,7 +97,7 @@ def poly_evaluate_degree_device(coeffs, n_coeffs, degree, point, clmo_flat, clmo
 
 
 @cuda.jit
-def polynomial_evaluate_kernel(points, coeffs_flat, coeffs_offsets, coeffs_sizes,
+def _polynomial_evaluate_kernel(points, coeffs_flat, coeffs_offsets, coeffs_sizes,
                              clmo_flat, clmo_offsets, max_degree, results):
     """
     CUDA kernel to evaluate polynomials at multiple points.
@@ -141,7 +141,7 @@ def polynomial_evaluate_kernel(points, coeffs_flat, coeffs_offsets, coeffs_sizes
             # Create a view of coefficients for this degree
             coeffs_degree = coeffs_flat[offset:offset+n_coeffs]
             
-            total += poly_evaluate_degree_device(
+            total += _poly_evaluate_degree_device(
                 coeffs_degree, n_coeffs, degree, point, 
                 clmo_flat, clmo_offsets
             )
@@ -150,7 +150,7 @@ def polynomial_evaluate_kernel(points, coeffs_flat, coeffs_offsets, coeffs_sizes
 
 
 @cuda.jit
-def polynomial_evaluate_batch_kernel(points, poly_indices, coeffs_data, coeffs_metadata,
+def _polynomial_evaluate_batch_kernel(points, poly_indices, coeffs_data, coeffs_metadata,
                                    clmo_flat, clmo_offsets, results):
     """
     CUDA kernel to evaluate different polynomials at different points.
@@ -194,7 +194,7 @@ def polynomial_evaluate_batch_kernel(points, poly_indices, coeffs_data, coeffs_m
         
         if n_coeffs > 0:
             coeffs_degree = coeffs_data[offset:offset+n_coeffs]
-            total += poly_evaluate_degree_device(
+            total += _poly_evaluate_degree_device(
                 coeffs_degree, n_coeffs, degree, point,
                 clmo_flat, clmo_offsets
             )
@@ -202,7 +202,7 @@ def polynomial_evaluate_batch_kernel(points, poly_indices, coeffs_data, coeffs_m
     results[tid] = total
 
 
-class CUDAEvaluate:
+class _CUDAEvaluate:
     """
     Helper class to manage polynomial evaluation on GPU.
     """
@@ -316,7 +316,7 @@ class CUDAEvaluate:
         threads_per_block = THREADS_PER_BLOCK
         blocks_per_grid = (n_points + threads_per_block - 1) // threads_per_block
         
-        polynomial_evaluate_kernel[blocks_per_grid, threads_per_block](
+        _polynomial_evaluate_kernel[blocks_per_grid, threads_per_block](
             d_points, self.d_coeffs_data, d_coeffs_offsets, d_coeffs_sizes,
             self.d_clmo_flat, self.d_clmo_offsets, self.max_degree, d_results
         )
@@ -350,7 +350,7 @@ class CUDAEvaluate:
         threads_per_block = THREADS_PER_BLOCK
         blocks_per_grid = (n_evals + threads_per_block - 1) // threads_per_block
         
-        polynomial_evaluate_batch_kernel[blocks_per_grid, threads_per_block](
+        _polynomial_evaluate_batch_kernel[blocks_per_grid, threads_per_block](
             d_points, d_poly_indices, self.d_coeffs_data, self.d_coeffs_metadata,
             self.d_clmo_flat, self.d_clmo_offsets, d_results
         )
@@ -358,6 +358,6 @@ class CUDAEvaluate:
         return d_results.copy_to_host()
 
 
-def polynomial_evaluate_cuda(poly_p, points, clmo):
-    evaluator = CUDAEvaluate([poly_p], clmo)
+def _polynomial_evaluate_cuda(poly_p, points, clmo):
+    evaluator = _CUDAEvaluate([poly_p], clmo)
     return evaluator.evaluate_single(0, points)

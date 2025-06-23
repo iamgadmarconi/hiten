@@ -23,7 +23,7 @@ import numpy as np
 
 
 @runtime_checkable
-class DynamicalSystemProtocol(Protocol):
+class _DynamicalSystemProtocol(Protocol):
     r"""
     Lightweight structural type understood by the integrator layer.
 
@@ -73,7 +73,7 @@ class _DynamicalSystem(ABC):
     Notes
     -----
     Subclasses must override :pyattr:`rhs` with a callable complying with
-    :pyclass:`DynamicalSystemProtocol`.
+    :pyclass:`_DynamicalSystemProtocol`.
     """
     
     def __init__(self, dim: int):

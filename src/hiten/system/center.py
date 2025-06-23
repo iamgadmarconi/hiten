@@ -18,30 +18,32 @@ Zhang, H. Q., Li, S. (2001). "Improved semi-analytical computation of center
 manifolds near collinear libration points".
 """
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Dict, List, Tuple
 
 import numpy as np
 
-from hiten.algorithms.center.hamiltonian import build_physical_hamiltonian
+from hiten.algorithms.center.hamiltonian import _build_physical_hamiltonian
 from hiten.algorithms.center.lie import (_evaluate_transform, _lie_expansion,
                                          _lie_transform)
 from hiten.algorithms.center.transforms import (_local2realmodal,
                                                 _local2synodic_collinear,
                                                 _local2synodic_triangular,
                                                 _realmodal2local,
-                                                solve_complex, solve_real,
-                                                substitute_complex,
-                                                substitute_real)
+                                                _solve_complex, _solve_real,
+                                                _substitute_complex,
+                                                _substitute_real)
 from hiten.algorithms.poincare.map import _solve_missing_coord
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                              decode_multiindex,
-                                              init_index_tables)
-from hiten.system.libration.collinear import CollinearPoint
+                                              _decode_multiindex,
+                                              _init_index_tables)
+from hiten.system.libration.base import LibrationPoint
+from hiten.system.libration.collinear import CollinearPoint, L3Point
+from hiten.system.libration.triangular import TriangularPoint
 from hiten.utils.log_config import logger
 from hiten.utils.printing import _format_cm_table
 
 if TYPE_CHECKING:
-    from hiten.system.poincare import PoincareMap
+    from hiten.algorithms.poincare.base import _PoincareMap
 
 
 class CenterManifold:
@@ -68,26 +70,37 @@ class CenterManifold:
     _cache : dict
         Stores intermediate polynomial objects keyed by tuples to avoid
         recomputation.
-    _poincare_map : hiten.system.poincare.PoincareMap or None
-        Lazy cached instance of the Poincaré return map.
+    _poincare_maps : Dict[Tuple[float, tuple], hiten.algorithms.poincare.base._PoincareMap]
+        Lazy cached instances of the Poincaré return maps.
 
     Notes
     -----
     All heavy computations are cached. Calling :py:meth:`compute` more than once
     with the same *max_degree* is inexpensive because it reuses cached results.
     """
-    def __init__(self, point: CollinearPoint, max_degree: int):
+    def __init__(self, point: LibrationPoint, max_degree: int):
         self.point = point
         self.max_degree = max_degree
 
-        self.psi, self.clmo = init_index_tables(self.max_degree)
-        self.encode_dict_list = _create_encode_dict_from_clmo(self.clmo)
+        if isinstance(self.point, CollinearPoint):
+            self._local2synodic = _local2synodic_collinear
 
-        self._local2synodic = _local2synodic_collinear if isinstance(self.point, CollinearPoint) else _local2synodic_triangular
+            if isinstance(self.point, L3Point):
+                logger.warning("L3 point is not has not been verified for centre manifold computation!")
 
+        elif isinstance(self.point, TriangularPoint):
+            self._local2synodic = _local2synodic_triangular
+            err = "Triangular points not implemented for centre manifold computation!"
+            logger.error(err)
+            raise NotImplementedError(err)
+
+        else:
+            raise ValueError(f"Unsupported libration point type: {type(self.point)}")
+
+        self._psi, self._clmo = _init_index_tables(self.max_degree)
+        self._encode_dict_list = _create_encode_dict_from_clmo(self._clmo)
         self._cache = {}
-
-        self._poincare_map: "PoincareMap" = None
+        self._poincare_maps: Dict[Tuple[float, tuple], "_PoincareMap"] = {}
 
     def __str__(self):
         r"""
@@ -105,7 +118,7 @@ class CenterManifold:
         if poly_cm is None:
             poly_cm = self.compute()
 
-        return _format_cm_table(poly_cm, self.clmo)
+        return _format_cm_table(poly_cm, self._clmo)
     
     def __repr__(self):
         return f"CenterManifold(point={self.point}, max_degree={self.max_degree})"
@@ -128,12 +141,67 @@ class CenterManifold:
         """
         self._cache.clear()
     
-    def compute(self):
+    def _get_physical_hamiltonian(self) -> List[np.ndarray]:
+        key = ('hamiltonian', self.max_degree, 'physical')
+        if (poly_phys := self.cache_get(key)) is None:
+            poly_phys = _build_physical_hamiltonian(self.point, self.max_degree)
+            self.cache_set(key, [h.copy() for h in poly_phys])
+        return [h.copy() for h in poly_phys]
+
+    def _get_real_normal_form(self) -> List[np.ndarray]:
+        key = ('hamiltonian', self.max_degree, 'real_normal')
+        if (poly_rn := self.cache_get(key)) is None:
+            poly_phys = self._get_physical_hamiltonian()
+            poly_rn = _local2realmodal(self.point, poly_phys, self.max_degree, self._psi, self._clmo)
+            self.cache_set(key, [h.copy() for h in poly_rn])
+        return [h.copy() for h in poly_rn]
+
+    def _get_complex_normal_form(self) -> List[np.ndarray]:
+        key = ('hamiltonian', self.max_degree, 'complex_normal')
+        if (poly_cn := self.cache_get(key)) is None:
+            poly_rn = self._get_real_normal_form()
+            poly_cn = _substitute_complex(poly_rn, self.max_degree, self._psi, self._clmo)
+            self.cache_set(key, [h.copy() for h in poly_cn])
+        return [h.copy() for h in poly_cn]
+
+    def _get_lie_transform_results(self) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
+        key_trans = ('hamiltonian', self.max_degree, 'normalized')
+        key_G = ('generating_functions', self.max_degree)
+        key_elim = ('terms_to_eliminate', self.max_degree)
+
+        poly_trans = self.cache_get(key_trans)
+        poly_G_total = self.cache_get(key_G)
+        poly_elim_total = self.cache_get(key_elim)
+
+        if any(p is None for p in [poly_trans, poly_G_total, poly_elim_total]):
+            logger.info("Performing Lie transformation...")
+            poly_cn = self._get_complex_normal_form()
+            poly_trans, poly_G_total, poly_elim_total = _lie_transform(
+                self.point, poly_cn, self._psi, self._clmo, self.max_degree
+            )
+            
+            self.cache_set(key_trans, [h.copy() for h in poly_trans])
+            self.cache_set(key_G, [g.copy() for g in poly_G_total])
+            self.cache_set(key_elim, [e.copy() for e in poly_elim_total])
+        
+        return ([h.copy() for h in poly_trans], [g.copy() for g in poly_G_total], [e.copy() for e in poly_elim_total])
+
+    def _get_center_manifold_complex(self) -> List[np.ndarray]:
+        key = ('hamiltonian', self.max_degree, 'center_manifold_complex')
+        if (poly_cm_complex := self.cache_get(key)) is None:
+            poly_trans, _, _ = self._get_lie_transform_results()
+            poly_cm_complex = self._restrict_to_center_manifold(poly_trans)
+            self.cache_set(key, [h.copy() for h in poly_cm_complex])
+        return [h.copy() for h in poly_cm_complex]
+    
+    def compute(self) -> List[np.ndarray]:
         r"""
         Compute the polynomial Hamiltonian restricted to the centre manifold.
 
         The returned list lives in *real modal* coordinates
-        :math:`(q_2, p_2, q_3, p_3)`.
+        :math:`(q_2, p_2, q_3, p_3)`. This method serves as the main entry
+        point for the centre manifold computation pipeline, triggering lazy
+        computation and caching of all intermediate steps.
 
         Returns
         -------
@@ -144,89 +212,23 @@ class CenterManifold:
         Raises
         ------
         RuntimeError
-            If the underlying Lie transformation fails.
-
+            If any underlying computation step fails.
+        
         Notes
         -----
         This routine chains together the full normal-form pipeline and may be
         computationally expensive on the first call. Intermediate objects are
         cached so that subsequent calls are fast.
-
-        Examples
-        --------
-        >>> cm = CenterManifold(L1, 8)
-        >>> poly_cm = cm.compute()
-        >>> len(poly_cm)
-        9
         """
-        # First check if realified center manifold is already cached
-        cm_real = self.cache_get(('hamiltonian', self.max_degree, 'center_manifold_real'))
-        if cm_real is not None:
-            return [h.copy() for h in cm_real]
-
-        # If not, check if complex center manifold is cached
-        cm_complex = self.cache_get(('hamiltonian', self.max_degree, 'center_manifold_complex'))
-        if cm_complex is not None:
-            # Convert complex to real
-            cm_real = substitute_real(cm_complex, self.max_degree, self.psi, self.clmo)
-            self.cache_set(('hamiltonian', self.max_degree, 'center_manifold_real'), [h.copy() for h in cm_real])
-            return cm_real
-
-        # If complex center manifold is not cached, compute it from scratch
-        logger.info(f"Computing center manifold for {type(self.point).__name__}, max_deg={self.max_degree}")
+        key = ('hamiltonian', self.max_degree, 'center_manifold_real')
+        if (poly_cm_real := self.cache_get(key)) is None:
+            logger.info(f"Computing center manifold for {type(self.point).__name__}, max_deg={self.max_degree}")
+            poly_cm_complex = self._get_center_manifold_complex()
+            poly_cm_real = _substitute_real(poly_cm_complex, self.max_degree, self._psi, self._clmo)
+            self.cache_set(key, [h.copy() for h in poly_cm_real])
+            logger.info(f"Center manifold computation complete for {type(self.point).__name__}")
         
-        # Build physical Hamiltonian
-        poly_phys = self.cache_get(('hamiltonian', self.max_degree, 'physical'))
-        if poly_phys is None:
-            poly_phys = build_physical_hamiltonian(self.point, self.max_degree)
-            self.cache_set(('hamiltonian', self.max_degree, 'physical'), [h.copy() for h in poly_phys])
-        else:
-            poly_phys = [h.copy() for h in poly_phys]
-
-        # Transform to real normal form
-        poly_rn = self.cache_get(('hamiltonian', self.max_degree, 'real_normal'))
-        if poly_rn is None:
-            poly_rn = _local2realmodal(self.point, poly_phys, self.max_degree, self.psi, self.clmo)
-            self.cache_set(('hamiltonian', self.max_degree, 'real_normal'), [h.copy() for h in poly_rn])
-        else:
-            poly_rn = [h.copy() for h in poly_rn]
-
-        # Transform to complex normal form
-        poly_cn = self.cache_get(('hamiltonian', self.max_degree, 'complex_normal'))
-        if poly_cn is None:
-            poly_cn = substitute_complex(poly_rn, self.max_degree, self.psi, self.clmo)
-            self.cache_set(('hamiltonian', self.max_degree, 'complex_normal'), [h.copy() for h in poly_cn])
-        else:
-            poly_cn = [h.copy() for h in poly_cn]
-
-        # Perform Lie transformation
-        poly_trans = self.cache_get(('hamiltonian', self.max_degree, 'normalized'))
-        poly_G_total = self.cache_get(('generating_functions', self.max_degree))
-        poly_elim_total = self.cache_get(('terms_to_eliminate', self.max_degree))
-        
-        if poly_trans is None or poly_G_total is None or poly_elim_total is None:
-            poly_trans, poly_G_total, poly_elim_total = _lie_transform(self.point, poly_cn, self.psi, self.clmo, self.max_degree)
-            self.cache_set(('hamiltonian', self.max_degree, 'normalized'), [h.copy() for h in poly_trans])
-            self.cache_set(('generating_functions', self.max_degree), [g.copy() for g in poly_G_total])
-            self.cache_set(('terms_to_eliminate', self.max_degree), [e.copy() for e in poly_elim_total])
-        else:
-            if poly_trans is not None:
-                poly_trans = [h.copy() for h in poly_trans]
-            if poly_G_total is not None:
-                poly_G_total = [g.copy() for g in poly_G_total]
-            if poly_elim_total is not None:
-                poly_elim_total = [e.copy() for e in poly_elim_total]
-
-        # Restrict to center manifold
-        poly_cm_complex = self._restrict_to_center_manifold(poly_trans, tol=1e-14)
-        self.cache_set(('hamiltonian', self.max_degree, 'center_manifold_complex'), [h.copy() for h in poly_cm_complex])
-
-        # Convert to real coordinates
-        poly_cm_real = substitute_real(poly_cm_complex, self.max_degree, self.psi, self.clmo)
-        self.cache_set(('hamiltonian', self.max_degree, 'center_manifold_real'), [h.copy() for h in poly_cm_real])
-
-        logger.info(f"Center manifold computation complete for {type(self.point).__name__}")
-        return poly_cm_real
+        return [h.copy() for h in poly_cm_real]
 
     def _restrict_to_center_manifold(self, poly_H, tol=1e-14):
         r"""
@@ -263,12 +265,12 @@ class CenterManifold:
                 if abs(c) <= tol:
                     coeff_vec[pos] = 0.0
                     continue
-                k = decode_multiindex(pos, deg, self.clmo)
+                k = _decode_multiindex(pos, deg, self._clmo)
                 if k[0] != 0 or k[3] != 0:       # q1 or p1 exponent non-zero
                     coeff_vec[pos] = 0.0
         return poly_cm
     
-    def poincare_map(self, energy: float, **kwargs) -> "PoincareMap":
+    def poincare_map(self, energy: float, **kwargs) -> "_PoincareMap":
         r"""
         Return a cached (or newly built) Poincaré return map.
 
@@ -279,41 +281,39 @@ class CenterManifold:
             constant.
         **kwargs
             Optional keyword arguments forwarded to
-            :pyclass:`hiten.system.poincare.PoincareMap`.
+            :pyclass:`hiten.algorithms.poincare.base._PoincareMapConfig`.
 
         Returns
         -------
-        hiten.system.poincare.PoincareMap
+        hiten.algorithms.poincare.base._PoincareMap
             Configured Poincaré map instance.
 
         Notes
         -----
-        The map is constructed only once and stored internally. Subsequent
-        calls return the cached object.
+        A map is constructed for each unique combination of energy and
+        configuration, and stored internally. Subsequent calls with the same
+        parameters return the cached object.
         """
-        from hiten.system.poincare import PoincareMap, poincareMapConfig
+        # Note: moved here from top level to avoid circular import.
+        from dataclasses import asdict
 
-        if self._poincare_map is None:
+        from hiten.algorithms.poincare.base import (_PoincareMap,
+                                                    _PoincareMapConfig)
 
-            default_cfg = dict(
-                dt=1e-2,
-                method="rk",
-                integrator_order=4,
-                c_omega_heuristic=20.0,
-                n_seeds=20,
-                n_iter=40,
-                seed_axis="q2",
-                section_coord="q3",
+        # Create a config object from kwargs, using dataclass defaults for any
+        # that are not provided.
+        config_fields = set(_PoincareMapConfig.__dataclass_fields__.keys())
+        valid_kwargs = {k: v for k, v in kwargs.items() if k in config_fields}
+        cfg = _PoincareMapConfig(**valid_kwargs)
 
-                compute_on_init=True,
-                use_gpu=False,
-            )
+        # Create a hashable key from the configuration.
+        config_tuple = tuple(sorted(asdict(cfg).items()))
+        cache_key = (energy, config_tuple)
 
-            default_cfg.update(kwargs)
-
-            cfg = poincareMapConfig(**default_cfg)
-            self._poincare_map = PoincareMap(self, energy, cfg)
-        return self._poincare_map
+        if cache_key not in self._poincare_maps:
+            self._poincare_maps[cache_key] = _PoincareMap(self, energy, cfg)
+        
+        return self._poincare_maps[cache_key]
 
     def ic(self, poincare_point: np.ndarray, energy: float, section_coord: str = "q3") -> np.ndarray:
         r"""
@@ -350,16 +350,8 @@ class CenterManifold:
         )
 
         # Ensure we have the centre-manifold Hamiltonian and Lie generators.
-        poly_cm_real = self.cache_get(("hamiltonian", self.max_degree, "center_manifold_real"))
-        if poly_cm_real is None:
-            self.compute()
-            poly_cm_real = self.cache_get(("hamiltonian", self.max_degree, "center_manifold_real"))
-
-        poly_G_total = self.cache_get(("generating_functions", self.max_degree))
-        if poly_G_total is None:
-            err = "Generating functions not cached - centre-manifold computation incomplete."
-            logger.error(err)
-            raise RuntimeError(err)
+        poly_cm_real = self.compute()
+        _, poly_G_total, _ = self._get_lie_transform_results()
 
         # Alias for brevity.
         h0 = float(energy)
@@ -370,28 +362,28 @@ class CenterManifold:
             q2, p2 = map(float, poincare_point)
             q3 = 0.0
             p3 = _solve_missing_coord(
-                "p3", {"q2": q2, "p2": p2}, h0, poly_cm_real, self.clmo
+                "p3", {"q2": q2, "p2": p2}, h0, poly_cm_real, self._clmo
             )
         elif section_coord == "p3":
             # p3 = 0 section → need q3
             q2, p2 = map(float, poincare_point)
             p3 = 0.0
             q3 = _solve_missing_coord(
-                "q3", {"q2": q2, "p2": p2, "p3": 0.0}, h0, poly_cm_real, self.clmo
+                "q3", {"q2": q2, "p2": p2, "p3": 0.0}, h0, poly_cm_real, self._clmo
             )
         elif section_coord == "q2":
             # q2 = 0 section → need p2
             q3, p3 = map(float, poincare_point)
             q2 = 0.0
             p2 = _solve_missing_coord(
-                "p2", {"q2": 0.0, "q3": q3, "p3": p3}, h0, poly_cm_real, self.clmo
+                "p2", {"q2": 0.0, "q3": q3, "p3": p3}, h0, poly_cm_real, self._clmo
             )
         elif section_coord == "p2":
             # p2 = 0 section → need q2
             q3, p3 = map(float, poincare_point)
             p2 = 0.0
             q2 = _solve_missing_coord(
-                "q2", {"p2": 0.0, "q3": q3, "p3": p3}, h0, poly_cm_real, self.clmo
+                "q2", {"p2": 0.0, "q3": q3, "p3": p3}, h0, poly_cm_real, self._clmo
             )
         else:
             raise ValueError(f"Unsupported section_coord '{section_coord}'.")
@@ -412,13 +404,13 @@ class CenterManifold:
         real_6d_cm[4] = real_4d_cm[1]  # p2
         real_6d_cm[5] = real_4d_cm[3]  # p3
 
-        complex_6d_cm = solve_complex(real_6d_cm)
+        complex_6d_cm = _solve_complex(real_6d_cm)
         expansions = _lie_expansion(
-            poly_G_total, self.max_degree, self.psi, self.clmo, 1e-30,
+            poly_G_total, self.max_degree, self._psi, self._clmo, 1e-30,
             inverse=False, sign=1, restrict=False,
         )
-        complex_6d = _evaluate_transform(expansions, complex_6d_cm, self.clmo)
-        real_6d = solve_real(complex_6d)
+        complex_6d = _evaluate_transform(expansions, complex_6d_cm, self._clmo)
+        real_6d = _solve_real(complex_6d)
         local_6d = _realmodal2local(self.point, real_6d)
         synodic_6d = self._local2synodic(self.point, local_6d)
 

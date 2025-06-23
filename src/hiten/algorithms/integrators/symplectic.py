@@ -8,8 +8,8 @@ functionality:
 
 * Low-level, :pyfunc:`numba.njit` accelerated kernels that implement the
   extended phase-space method of Tao for non-separable Hamiltonians.
-* A high-level :pyclass:`TaoSymplectic` wrapper compatible with the
-  abstract :pyclass:`~hiten.algorithms.integrators.base.Integrator` interface.
+* A high-level :pyclass:`_ExtendedSymplectic` wrapper compatible with the
+  abstract :pyclass:`~hiten.algorithms.integrators.base._Integrator` interface.
 
 The implementation follows the recursive operator-splitting strategy
 originally proposed by Tao and yields a family of even-order schemes that
@@ -26,9 +26,9 @@ import numpy as np
 from numba import njit
 from numba.typed import List
 
-from hiten.algorithms.polynomial.operations import polynomial_evaluate
+from hiten.algorithms.polynomial.operations import _polynomial_evaluate
 from hiten.utils.config import FASTMATH
-from hiten.algorithms.integrators.base import Integrator, Solution
+from hiten.algorithms.integrators.base import _Integrator, _Solution
 from hiten.algorithms.dynamics.base import _DynamicalSystem
 
 N_SYMPLECTIC_DOF = 3
@@ -93,7 +93,7 @@ def _construct_6d_eval_point(Q_current_ndof: np.ndarray, P_current_ndof: np.ndar
         # Consider how to handle errors if Numba context allows.
         pass
 
-    point_6d = np.zeros(N_VARS_POLY, dtype=np.complex128) # Use complex for polynomial_evaluate
+    point_6d = np.zeros(N_VARS_POLY, dtype=np.complex128) # Use complex for _polynomial_evaluate
 
     # Map Q and P variables to the 6D vector
     # Q_current_ndof = [q1, q2, q3] maps to point_6d[0], point_6d[1], point_6d[2]
@@ -137,7 +137,7 @@ def _eval_dH_dQ(
     for i in range(N_SYMPLECTIC_DOF):
         poly_var_index = Q_POLY_INDICES[i]
         dH_dQi_poly = jac_H[poly_var_index]
-        val_dH_dQi = polynomial_evaluate(dH_dQi_poly, eval_point_6d, clmo_H)
+        val_dH_dQi = _polynomial_evaluate(dH_dQi_poly, eval_point_6d, clmo_H)
         derivatives_Q[i] = val_dH_dQi.real
     
     return derivatives_Q
@@ -175,7 +175,7 @@ def _eval_dH_dP(
     for i in range(N_SYMPLECTIC_DOF):
         poly_var_index = P_POLY_INDICES[i]
         dH_dPi_poly = jac_H[poly_var_index]
-        val_dH_dPi = polynomial_evaluate(dH_dPi_poly, eval_point_6d, clmo_H)
+        val_dH_dPi = _polynomial_evaluate(dH_dPi_poly, eval_point_6d, clmo_H)
         derivatives_P[i] = val_dH_dPi.real
         
     return derivatives_P
@@ -375,7 +375,7 @@ def _recursive_update_poly(
 
 
 @njit(cache=False, fastmath=FASTMATH)
-def integrate_symplectic(
+def _integrate_symplectic(
     initial_state_6d: np.ndarray,
     t_values: np.ndarray,
     jac_H: List[List[np.ndarray]],
@@ -467,7 +467,7 @@ def integrate_symplectic(
     return trajectory
 
 
-class TaoSymplectic(Integrator):
+class _ExtendedSymplectic(_Integrator):
     r"""
     High-order explicit Tao symplectic integrator for polynomial
     Hamiltonian systems.
@@ -481,7 +481,7 @@ class TaoSymplectic(Integrator):
         :pyfunc:`_get_tao_omega` frequency.  Default is 20.0.
     **options
         Additional keyword options stored verbatim in
-        :pyattr:`~hiten.algorithms.integrators.base.Integrator.options`.
+        :pyattr:`~hiten.algorithms.integrators.base._Integrator.options`.
 
     Attributes
     ----------
@@ -494,8 +494,8 @@ class TaoSymplectic(Integrator):
 
     Examples
     --------
-    >>> from hiten.algorithms.integrators.symplectic import TaoSymplectic
-    >>> integrator = TaoSymplectic(order=8, c_omega_heuristic=25.0)
+    >>> from hiten.algorithms.integrators.symplectic import _ExtendedSymplectic
+    >>> integrator = _ExtendedSymplectic(order=8, c_omega_heuristic=25.0)
     >>> sol = integrator.integrate(hamiltonian_system, y0, t_vals)
 
     Notes
@@ -504,7 +504,7 @@ class TaoSymplectic(Integrator):
 
     * **jac_H** - Jacobian of the Hamiltonian given as a nested list of
       polynomial coefficient arrays compatible with
-      :pyfunc:`hiten.algorithms.polynomial.operations.polynomial_evaluate`.
+      :pyfunc:`hiten.algorithms.polynomial.operations._polynomial_evaluate`.
     * **clmo_H** - co-efficient layout mapping objects for the same
       polynomials.
     * **n_dof** - number of degrees of freedom (must equal 3 for this
@@ -564,7 +564,7 @@ class TaoSymplectic(Integrator):
         y0: np.ndarray,
         t_vals: np.ndarray,
         **kwargs
-    ) -> Solution:
+    ) -> _Solution:
         r"""
         Integrate the Hamiltonian system using symplectic method.
         
@@ -581,12 +581,12 @@ class TaoSymplectic(Integrator):
             
         Returns
         -------
-        Solution
+        _Solution
             Integration results containing times and states
             
         Notes
         -----
-        This method delegates to the existing integrate_symplectic function,
+        This method delegates to the existing _integrate_symplectic function,
         which expects the system to provide:
         - jac_H: Jacobian polynomial coefficients
         - clmo_H: Coefficient layout mapping objects  
@@ -622,7 +622,7 @@ class TaoSymplectic(Integrator):
         # Provide a signed version of the time array for the low-level routine.
         t_vals_int = t_vals if fwd == 1 else t_vals * (-1.0)
 
-        trajectory_array = integrate_symplectic(
+        trajectory_array = _integrate_symplectic(
             initial_state_6d=y0,
             t_values=t_vals_int,
             jac_H=jac_H_typed,
@@ -634,4 +634,12 @@ class TaoSymplectic(Integrator):
         # Return times with the intended sign convention (multiplying back).
         times_out = t_vals.copy() * fwd
 
-        return Solution(times=times_out, states=trajectory_array)
+        return _Solution(times=times_out, states=trajectory_array)
+
+
+class ExtendedSymplectic:
+    _map = {2: _ExtendedSymplectic, 4: _ExtendedSymplectic, 6: _ExtendedSymplectic, 8: _ExtendedSymplectic}
+    def __new__(cls, order=5, **opts):
+        if order not in cls._map:
+            raise ValueError("Extended symplectic order not supported")
+        return cls._map[order](**opts)

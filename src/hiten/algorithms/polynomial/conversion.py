@@ -20,8 +20,8 @@ import sympy as sp
 from numba.typed import List
 
 from hiten.algorithms.polynomial.algebra import _get_degree
-from hiten.algorithms.polynomial.base import (decode_multiindex,
-                                               encode_multiindex, make_poly)
+from hiten.algorithms.polynomial.base import (_decode_multiindex,
+                                               _encode_multiindex, _make_poly)
 from hiten.utils.config import N_VARS
 
 
@@ -36,7 +36,7 @@ def poly2sympy(poly_p: List[np.ndarray], vars_list: typing.List[sp.Symbol], psi:
     vars_list : typing.List[sympy.Symbol]
         List of SymPy symbols used as variables in the expression
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo : numpy.ndarray
         List of arrays containing packed multi-indices
         
@@ -61,7 +61,7 @@ def poly2sympy(poly_p: List[np.ndarray], vars_list: typing.List[sp.Symbol], psi:
     total_sympy_expr = sp.Integer(0)
     for degree, p in enumerate(poly_p):
         if p is not None and p.size > 0:
-            # hpoly2sympy needs clmo for decode_multiindex
+            # hpoly2sympy needs clmo for _decode_multiindex
             homogeneous_expr = hpoly2sympy(p, vars_list, psi, clmo)
             total_sympy_expr += homogeneous_expr
     return total_sympy_expr
@@ -78,7 +78,7 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray
     vars_list : typing.List[sympy.Symbol]
         List of SymPy symbols used as variables in the expression
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo : numpy.ndarray
         List of arrays containing packed multi-indices
     encode_dict_list : List
@@ -112,7 +112,7 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray
 
     if expr == sp.S.Zero:
         # Return a list representing a zero polynomial (degree 0, coefficient 0)
-        return [make_poly(0, psi)]
+        return [_make_poly(0, psi)]
 
     # Attempt to convert the expression to a Sympy Poly object
     try:
@@ -125,7 +125,7 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray
         raise TypeError(f"Input expr (type: {type(expr)}) did not convert to a Sympy Poly object.")
     
     if sp_poly.is_zero:
-        return [make_poly(0, psi)]
+        return [_make_poly(0, psi)]
 
     # Determine the maximum degree of the polynomial
     max_deg_expr = -1
@@ -136,7 +136,7 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray
                 max_deg_expr = int(current_deg)
     
     if max_deg_expr == -1 : # Should only happen if sp_poly was zero, handled already. Safety.
-        return [make_poly(0, psi)]
+        return [_make_poly(0, psi)]
 
     # Check if the polynomial's degree exceeds precomputed table limits
     max_supported_degree = psi.shape[1] - 1
@@ -147,7 +147,7 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray
         )
 
     # Initialize list of coefficient arrays (one for each degree up to max_deg_expr)
-    poly_p = [make_poly(d, psi) for d in range(max_deg_expr + 1)]
+    poly_p = [_make_poly(d, psi) for d in range(max_deg_expr + 1)]
 
     # Populate coefficient arrays
     for monom_exp_tuple, coeff_val_sympy in sp_poly.terms():
@@ -162,8 +162,8 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray
 
         term_degree = int(sum(k_np))
 
-        # Get position in our coefficient array using encode_multiindex
-        pos = encode_multiindex(k_np, term_degree, encode_dict_list)
+        # Get position in our coefficient array using _encode_multiindex
+        pos = _encode_multiindex(k_np, term_degree, encode_dict_list)
 
         if pos == -1:
             # This can happen if term_degree > max_degree for clmo or other encoding issues
@@ -217,7 +217,7 @@ def hpoly2sympy(p: np.ndarray, vars_list: typing.List[sp.Symbol], psi: np.ndarra
     vars_list : typing.List[sympy.Symbol]
         List of SymPy symbols used as variables in the expression
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo : numpy.ndarray
         List of arrays containing packed multi-indices
         
@@ -235,7 +235,7 @@ def hpoly2sympy(p: np.ndarray, vars_list: typing.List[sp.Symbol], psi: np.ndarra
     Notes
     -----
     This function converts each term of the homogeneous polynomial by decoding
-    the multi-index with :pyfunc:`decode_multiindex` to determine the
+    the multi-index with :pyfunc:`_decode_multiindex` to determine the
     exponents, constructing the corresponding monomial, and multiplying it by
     the coefficient.
     """
@@ -269,7 +269,7 @@ def hpoly2sympy(p: np.ndarray, vars_list: typing.List[sp.Symbol], psi: np.ndarra
         if coeff == 0:
             continue
 
-        k_vector = decode_multiindex(pos, degree, clmo)
+        k_vector = _decode_multiindex(pos, degree, clmo)
         
         monomial_expr = sp.Integer(1)
         for i in range(N_VARS):

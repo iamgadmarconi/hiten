@@ -2,19 +2,19 @@ import numpy as np
 import pytest
 import sympy as sp
 
-from hiten.algorithms.center.hamiltonian import build_physical_hamiltonian
+from hiten.algorithms.center.hamiltonian import _build_physical_hamiltonian
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                               encode_multiindex,
-                                               init_index_tables)
+                                               _encode_multiindex,
+                                               _init_index_tables)
 from hiten.algorithms.polynomial.conversion import poly2sympy, sympy2poly
 from hiten.algorithms.polynomial.operations import (
-    _linear_variable_polys, polynomial_add_inplace, polynomial_multiply,
-    polynomial_poisson_bracket, polynomial_power, polynomial_variable,
-    polynomial_zero_list)
-from hiten.algorithms.center.transforms import (_local2realmodal, solve_complex,
-                                          solve_real, substitute_complex,
-                                          substitute_linear, substitute_real)
-from hiten.system.base import System, systemConfig
+    _linear_variable_polys, _polynomial_add_inplace, _polynomial_multiply,
+    _polynomial_poisson_bracket, _polynomial_power, _polynomial_variable,
+    _polynomial_zero_list)
+from hiten.algorithms.center.transforms import (_local2realmodal, _solve_complex,
+                                          _solve_real, _substitute_complex,
+                                          _substitute_linear, _substitute_real)
+from hiten.system.base import System
 from hiten.system.body import Body
 from hiten.utils.constants import Constants
 
@@ -27,10 +27,10 @@ def transforms_test_setup():
     Earth = Body("Earth", Constants.bodies["earth"]["mass"], Constants.bodies["earth"]["radius"], "blue")
     Moon = Body("Moon", Constants.bodies["moon"]["mass"], Constants.bodies["moon"]["radius"], "gray", Earth)
     distance = Constants.get_orbital_distance("earth", "moon")
-    system = System(systemConfig(Earth, Moon, distance))
+    system = System(Earth, Moon, distance)
     libration_point = system.get_libration_point(TEST_L_POINT_IDX)
 
-    psi, clmo = init_index_tables(TEST_MAX_DEG)
+    psi, clmo = _init_index_tables(TEST_MAX_DEG)
     encode_dict = _create_encode_dict_from_clmo(clmo)
 
     return psi, clmo, encode_dict, libration_point
@@ -76,14 +76,14 @@ def test_linear_variable_polys(transforms_test_setup):
 
     L_actual = _linear_variable_polys(C, TEST_MAX_DEG, psi, clmo, encode_dict)
 
-    new_basis_expected = [polynomial_variable(j, TEST_MAX_DEG, psi, clmo, encode_dict) for j in range(6)]
+    new_basis_expected = [_polynomial_variable(j, TEST_MAX_DEG, psi, clmo, encode_dict) for j in range(6)]
     
     L_expected = []
     for i in range(6):
-        pol_expected_i = polynomial_zero_list(TEST_MAX_DEG, psi)
+        pol_expected_i = _polynomial_zero_list(TEST_MAX_DEG, psi)
         for j in range(6):
             if C[i, j] != 0: 
-                polynomial_add_inplace(pol_expected_i, new_basis_expected[j], C[i, j], TEST_MAX_DEG)
+                _polynomial_add_inplace(pol_expected_i, new_basis_expected[j], C[i, j], TEST_MAX_DEG)
         L_expected.append(pol_expected_i)
 
     assert len(L_actual) == 6, f"L_actual should have 6 polynomials"
@@ -107,16 +107,16 @@ def test_linear_variable_polys(transforms_test_setup):
 
 
 def test_substitute_linear(transforms_test_setup):
-    """Test the substitute_linear function for correctness."""
+    """Test the _substitute_linear function for correctness."""
     psi, clmo, encode_dict, _ = transforms_test_setup
 
     def create_const_poly(val, max_deg_local, psi_local):
-        p = polynomial_zero_list(max_deg_local, psi_local)
+        p = _polynomial_zero_list(max_deg_local, psi_local)
         p[0][0] = val
         return p
 
     # Test Case 0: H_old is a constant
-    H_old0 = polynomial_zero_list(TEST_MAX_DEG, psi)
+    H_old0 = _polynomial_zero_list(TEST_MAX_DEG, psi)
     const_val = 5.0 - 2.0j
     H_old0[0][0] = const_val
     
@@ -124,42 +124,42 @@ def test_substitute_linear(transforms_test_setup):
                      [0.5, 1.0, 0,0,0,0],
                      [0,0,1,0,0,0],[0,0,0,1,0,0],[0,0,0,0,1,0],[0,0,0,0,0,1]], dtype=np.complex128)
 
-    H_actual0 = substitute_linear(H_old0, C0, TEST_MAX_DEG, psi, clmo, encode_dict) # Pass local encode_dict
+    H_actual0 = _substitute_linear(H_old0, C0, TEST_MAX_DEG, psi, clmo, encode_dict) # Pass local encode_dict
     # Expected is just H_old0 itself, as constants are unaffected by variable substitution.
     for d_idx in range(TEST_MAX_DEG + 1):
         assert np.allclose(H_actual0[d_idx], H_old0[d_idx], atol=1e-15, rtol=1e-12), \
             f"SubstLinear TC0 (const) failed: max_deg={TEST_MAX_DEG}, d_idx={d_idx}"
 
     if TEST_MAX_DEG >= 1:
-        H_old1 = polynomial_zero_list(TEST_MAX_DEG, psi)
+        H_old1 = _polynomial_zero_list(TEST_MAX_DEG, psi)
         c0_val = 2.0 + 1.0j
         c1_val = 3.0 - 0.5j
 
         k_x0 = tuple([1 if i == 0 else 0 for i in range(6)])
-        idx_x0 = encode_multiindex(np.array(k_x0, dtype=np.int64), 1, encode_dict)
+        idx_x0 = _encode_multiindex(np.array(k_x0, dtype=np.int64), 1, encode_dict)
         H_old1[1][idx_x0] = c0_val
 
         k_x1 = tuple([1 if i == 1 else 0 for i in range(6)])
-        idx_x1 = encode_multiindex(np.array(k_x1, dtype=np.int64), 1, encode_dict)
+        idx_x1 = _encode_multiindex(np.array(k_x1, dtype=np.int64), 1, encode_dict)
         H_old1[1][idx_x1] = c1_val
         
         C1 = np.identity(6, dtype=np.complex128)
         C1[0,1] = 0.5 + 0.2j # x_old_0 = 1*x_new_0 + (0.5+0.2j)*x_new_1
         C1[1,0] = 0.3 - 0.1j # x_old_1 = (0.3-0.1j)*x_new_0 + 1*x_new_1
 
-        H_actual1 = substitute_linear(H_old1, C1, TEST_MAX_DEG, psi, clmo, encode_dict)
+        H_actual1 = _substitute_linear(H_old1, C1, TEST_MAX_DEG, psi, clmo, encode_dict)
         
         L1 = _linear_variable_polys(C1, TEST_MAX_DEG, psi, clmo, encode_dict)
         
         const_poly_c0 = create_const_poly(c0_val, TEST_MAX_DEG, psi)
         const_poly_c1 = create_const_poly(c1_val, TEST_MAX_DEG, psi)
 
-        term_for_c0_x_old_0 = polynomial_multiply(const_poly_c0, L1[0], TEST_MAX_DEG, psi, clmo, encode_dict)
-        term_for_c1_x_old_1 = polynomial_multiply(const_poly_c1, L1[1], TEST_MAX_DEG, psi, clmo, encode_dict)
+        term_for_c0_x_old_0 = _polynomial_multiply(const_poly_c0, L1[0], TEST_MAX_DEG, psi, clmo, encode_dict)
+        term_for_c1_x_old_1 = _polynomial_multiply(const_poly_c1, L1[1], TEST_MAX_DEG, psi, clmo, encode_dict)
         
-        H_expected1 = polynomial_zero_list(TEST_MAX_DEG, psi)
-        polynomial_add_inplace(H_expected1, term_for_c0_x_old_0, 1.0, TEST_MAX_DEG)
-        polynomial_add_inplace(H_expected1, term_for_c1_x_old_1, 1.0, TEST_MAX_DEG)
+        H_expected1 = _polynomial_zero_list(TEST_MAX_DEG, psi)
+        _polynomial_add_inplace(H_expected1, term_for_c0_x_old_0, 1.0, TEST_MAX_DEG)
+        _polynomial_add_inplace(H_expected1, term_for_c1_x_old_1, 1.0, TEST_MAX_DEG)
 
         for d_idx in range(TEST_MAX_DEG + 1):
             assert np.allclose(H_actual1[d_idx], H_expected1[d_idx], atol=1e-15, rtol=1e-12), \
@@ -167,24 +167,24 @@ def test_substitute_linear(transforms_test_setup):
 
     # Test Case 2: H_old = c_sq * (x_old_0)^2 (only if max_deg_test >= 2)
     if TEST_MAX_DEG >= 2:
-        H_old2 = polynomial_zero_list(TEST_MAX_DEG, psi)
+        H_old2 = _polynomial_zero_list(TEST_MAX_DEG, psi)
         c_sq_val = 1.5 + 0.5j
         
         k_x0sq = tuple([2 if i == 0 else 0 for i in range(6)])
-        idx_x0sq = encode_multiindex(np.array(k_x0sq, dtype=np.int64), 2, encode_dict)
+        idx_x0sq = _encode_multiindex(np.array(k_x0sq, dtype=np.int64), 2, encode_dict)
         H_old2[2][idx_x0sq] = c_sq_val
 
         C2 = np.identity(6, dtype=np.complex128)
         C2[0,0] = 1.2 - 0.3j 
         C2[0,1] = 0.7 + 0.4j # x_old_0 = C2[0,0]*x_new_0 + C2[0,1]*x_new_1
         
-        H_actual2 = substitute_linear(H_old2, C2, TEST_MAX_DEG, psi, clmo, encode_dict)
+        H_actual2 = _substitute_linear(H_old2, C2, TEST_MAX_DEG, psi, clmo, encode_dict)
         
         L2 = _linear_variable_polys(C2, TEST_MAX_DEG, psi, clmo, encode_dict)
         const_poly_c_sq = create_const_poly(c_sq_val, TEST_MAX_DEG, psi)
         
-        powered_L0 = polynomial_power(L2[0], 2, TEST_MAX_DEG, psi, clmo, encode_dict)
-        H_expected2 = polynomial_multiply(const_poly_c_sq, powered_L0, TEST_MAX_DEG, psi, clmo, encode_dict)
+        powered_L0 = _polynomial_power(L2[0], 2, TEST_MAX_DEG, psi, clmo, encode_dict)
+        H_expected2 = _polynomial_multiply(const_poly_c_sq, powered_L0, TEST_MAX_DEG, psi, clmo, encode_dict)
 
         for d_idx in range(TEST_MAX_DEG + 1):
             assert np.allclose(H_actual2[d_idx], H_expected2[d_idx], atol=1e-14, rtol=1e-11), \
@@ -213,9 +213,9 @@ def test_identity(transforms_test_setup):
     P = sympy2poly(expr, _sympy_vars, psi, clmo, encode_dict)
 
     while len(P) < TEST_MAX_DEG + 1:
-        P.append(polynomial_zero_list(len(P), psi)[0])
+        P.append(_polynomial_zero_list(len(P), psi)[0])
 
-    P_sub = substitute_linear(P, I, TEST_MAX_DEG, psi, clmo, encode_dict)
+    P_sub = _substitute_linear(P, I, TEST_MAX_DEG, psi, clmo, encode_dict)
 
     assert all(
         np.allclose(a, b, atol=1e-14, rtol=1e-12) for a, b in zip(P, P_sub)
@@ -236,9 +236,9 @@ def test_permutation(transforms_test_setup):
     P_old = sympy2poly(expr, _sympy_vars, psi, clmo, encode_dict)
     
     while len(P_old) < TEST_MAX_DEG + 1:
-        P_old.append(polynomial_zero_list(len(P_old), psi)[0])
+        P_old.append(_polynomial_zero_list(len(P_old), psi)[0])
         
-    P_new = substitute_linear(P_old, Pmat, TEST_MAX_DEG, psi, clmo, encode_dict)
+    P_new = _substitute_linear(P_old, Pmat, TEST_MAX_DEG, psi, clmo, encode_dict)
     
     expected_expr = y**2 + 2*x*px + 3*z**2
     expr_test = poly2sympy(P_new, _sympy_vars, psi, clmo)
@@ -276,9 +276,9 @@ def test_random_matrix(seed, transforms_test_setup):
     P_old = sympy2poly(expr, _sympy_vars, psi, clmo, encode_dict)
     
     while len(P_old) < TEST_MAX_DEG + 1:
-        P_old.append(polynomial_zero_list(len(P_old), psi)[0])
+        P_old.append(_polynomial_zero_list(len(P_old), psi)[0])
         
-    P_new = substitute_linear(P_old, C, TEST_MAX_DEG, psi, clmo, encode_dict)
+    P_new = _substitute_linear(P_old, C, TEST_MAX_DEG, psi, clmo, encode_dict)
 
     x_old = np.array(_sympy_vars[:6])
     subs_dict = {x_old[i]: sum(int(C[i, j]) * x_old[j] for j in range(6)) for i in range(6)}
@@ -301,7 +301,7 @@ def test_symplectic(transforms_test_setup):
 def test_real_normal_form(transforms_test_setup):
     psi, clmo, _, libration_point = transforms_test_setup
 
-    H_phys = build_physical_hamiltonian(libration_point, TEST_MAX_DEG)
+    H_phys = _build_physical_hamiltonian(libration_point, TEST_MAX_DEG)
     H_rn   = _local2realmodal(libration_point, H_phys, TEST_MAX_DEG, psi, clmo)
 
     x, y, z, px, py, pz = sp.symbols('x y z px py pz')
@@ -341,9 +341,9 @@ def test_real_normal_form(transforms_test_setup):
 def test_complex_normal_form(transforms_test_setup):
     psi, clmo, encode_dict, libration_point = transforms_test_setup
 
-    H_phys = build_physical_hamiltonian(libration_point, TEST_MAX_DEG)
+    H_phys = _build_physical_hamiltonian(libration_point, TEST_MAX_DEG)
     H_rn   = _local2realmodal(libration_point, H_phys, TEST_MAX_DEG, psi, clmo)
-    H_cn   = substitute_complex(H_rn, TEST_MAX_DEG, psi, clmo)
+    H_cn   = _substitute_complex(H_rn, TEST_MAX_DEG, psi, clmo)
 
     q1, q2, q3, p1, p2, p3 = sp.symbols("q1 q2 q3 p1 p2 p3")
     expr = poly2sympy(H_cn, (q1, q2, q3, p1, p2, p3), psi, clmo)
@@ -378,24 +378,24 @@ def test_complex_normal_form(transforms_test_setup):
     assert np.isclose(coeff_q2p2 / 1j, omega1, rtol=1e-12)
     assert np.isclose(coeff_q3p3 / 1j, omega2, rtol=1e-12)
 
-    H2 = polynomial_zero_list(TEST_MAX_DEG, psi)
+    H2 = _polynomial_zero_list(TEST_MAX_DEG, psi)
     for d in range(len(H_cn)):
         if d == 2:  # Only copy degree 2 terms
             H2[d] = H_cn[d].copy()
     
     # Create |q2|^2 = q2 * p2 polynomial
-    q2_var = polynomial_variable(1, TEST_MAX_DEG, psi, clmo, encode_dict)
-    p2_var = polynomial_variable(4, TEST_MAX_DEG, psi, clmo, encode_dict)
-    q2p2_poly = polynomial_multiply(q2_var, p2_var, TEST_MAX_DEG, psi, clmo, encode_dict)
+    q2_var = _polynomial_variable(1, TEST_MAX_DEG, psi, clmo, encode_dict)
+    p2_var = _polynomial_variable(4, TEST_MAX_DEG, psi, clmo, encode_dict)
+    q2p2_poly = _polynomial_multiply(q2_var, p2_var, TEST_MAX_DEG, psi, clmo, encode_dict)
     
     # Create |q3|^2 = q3 * p3 polynomial
-    q3_var = polynomial_variable(2, TEST_MAX_DEG, psi, clmo, encode_dict)
-    p3_var = polynomial_variable(5, TEST_MAX_DEG, psi, clmo, encode_dict)
-    q3p3_poly = polynomial_multiply(q3_var, p3_var, TEST_MAX_DEG, psi, clmo, encode_dict)
+    q3_var = _polynomial_variable(2, TEST_MAX_DEG, psi, clmo, encode_dict)
+    p3_var = _polynomial_variable(5, TEST_MAX_DEG, psi, clmo, encode_dict)
+    q3p3_poly = _polynomial_multiply(q3_var, p3_var, TEST_MAX_DEG, psi, clmo, encode_dict)
     
     # Compute the Poisson brackets
-    pb_H2_q2p2 = polynomial_poisson_bracket(H2, q2p2_poly, TEST_MAX_DEG, psi, clmo, encode_dict)
-    pb_H2_q3p3 = polynomial_poisson_bracket(H2, q3p3_poly, TEST_MAX_DEG, psi, clmo, encode_dict)
+    pb_H2_q2p2 = _polynomial_poisson_bracket(H2, q2p2_poly, TEST_MAX_DEG, psi, clmo, encode_dict)
+    pb_H2_q3p3 = _polynomial_poisson_bracket(H2, q3p3_poly, TEST_MAX_DEG, psi, clmo, encode_dict)
     
     # Check that the Poisson brackets are zero (within numerical tolerance)
     for d in range(TEST_MAX_DEG + 1):
@@ -407,11 +407,11 @@ def test_complex_normal_form(transforms_test_setup):
                 f"Poisson bracket {{{H2}, |q3|^2}} should be zero, but degree {d} terms are not"
     
     # Also test the bracket with hyperbolic action I1 = q1 * p1
-    q1_var = polynomial_variable(0, TEST_MAX_DEG, psi, clmo, encode_dict)
-    p1_var = polynomial_variable(3, TEST_MAX_DEG, psi, clmo, encode_dict)
-    q1p1_poly = polynomial_multiply(q1_var, p1_var, TEST_MAX_DEG, psi, clmo, encode_dict)
+    q1_var = _polynomial_variable(0, TEST_MAX_DEG, psi, clmo, encode_dict)
+    p1_var = _polynomial_variable(3, TEST_MAX_DEG, psi, clmo, encode_dict)
+    q1p1_poly = _polynomial_multiply(q1_var, p1_var, TEST_MAX_DEG, psi, clmo, encode_dict)
     
-    pb_H2_q1p1 = polynomial_poisson_bracket(H2, q1p1_poly, TEST_MAX_DEG, psi, clmo, encode_dict)
+    pb_H2_q1p1 = _polynomial_poisson_bracket(H2, q1p1_poly, TEST_MAX_DEG, psi, clmo, encode_dict)
     
     for d in range(TEST_MAX_DEG + 1):
         if pb_H2_q1p1[d].size > 0:
@@ -422,10 +422,10 @@ def test_complex_normal_form(transforms_test_setup):
 def test_poly_realification_complexification(transforms_test_setup):
     psi, clmo, _, libration_point = transforms_test_setup
 
-    H_phys = build_physical_hamiltonian(libration_point, TEST_MAX_DEG)
+    H_phys = _build_physical_hamiltonian(libration_point, TEST_MAX_DEG)
     H_rn   = _local2realmodal(libration_point, H_phys, TEST_MAX_DEG, psi, clmo)
-    H_cn   = substitute_complex(H_rn, TEST_MAX_DEG, psi, clmo)
-    H_back = substitute_real(H_cn, TEST_MAX_DEG, psi, clmo)
+    H_cn   = _substitute_complex(H_rn, TEST_MAX_DEG, psi, clmo)
+    H_back = _substitute_real(H_cn, TEST_MAX_DEG, psi, clmo)
 
     for d in range(TEST_MAX_DEG+1):
         assert np.allclose(H_back[d], H_rn[d], atol=1e-14, rtol=1e-14), f"degree {d} mismatch"
@@ -466,8 +466,8 @@ def test_coordinate_realification_complexification(seed):
     ]
     
     for i, real_coords in enumerate(test_real_coords):
-        complex_coords = solve_real(real_coords)
-        recovered_real_coords = solve_complex(complex_coords)
+        complex_coords = _solve_real(real_coords)
+        recovered_real_coords = _solve_complex(complex_coords)
         
         np.testing.assert_allclose(
             recovered_real_coords, real_coords, 

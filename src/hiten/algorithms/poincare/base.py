@@ -5,11 +5,11 @@ hiten.algorithms.poincare.base
 Poincaré return map utilities on the centre manifold of the spatial circular
 restricted three body problem.
 
-The module exposes a high level interface :pyclass:`PoincareMap` that wraps
+The module exposes a high level interface :pyclass:`_PoincareMap` that wraps
 specialised CPU/GPU kernels to generate, query, and visualise discrete
 Poincaré sections arising from the reduced Hamiltonian flow. Numerical
 parameters are grouped in the lightweight dataclass
-:pyclass:`poincareMapConfig`.
+:pyclass:`_PoincareMapConfig`.
 """
 
 import os
@@ -21,17 +21,17 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from hiten.algorithms.poincare.cuda.map import _generate_map_gpu
-from hiten.algorithms.poincare.map import PoincareSection, _generate_grid
+from hiten.algorithms.poincare.map import _PoincareSection, _generate_grid
 from hiten.algorithms.poincare.map import _generate_map as _generate_map_cpu
 from hiten.system.center import CenterManifold
-from hiten.system.orbits.base import GenericOrbit, orbitConfig
+from hiten.system.orbits.base import GenericOrbit
 from hiten.utils.files import _ensure_dir
 from hiten.utils.log_config import logger
 from hiten.utils.plots import _set_dark_mode
 
 
 @dataclass
-class poincareMapConfig:
+class _PoincareMapConfig:
     r"""
     Configuration parameters for the Poincaré map generation.
     """
@@ -52,7 +52,7 @@ class poincareMapConfig:
     use_gpu: bool = False
 
 
-class PoincareMap:
+class _PoincareMap:
     r"""
     High-level object representing a Poincaré map on the centre manifold.
 
@@ -63,7 +63,7 @@ class PoincareMap:
         used for the reduced Hamiltonian flow.
     energy : float
         Energy level (same convention as :pyfunc:`_solve_missing_coord`, *not* the Jacobi constant).
-    config : poincareMapConfig, optional
+    config : _PoincareMapConfig, optional
         Numerical parameters controlling the map generation.  A sensible default
         configuration is used if none is supplied.
     """
@@ -72,17 +72,17 @@ class PoincareMap:
         self,
         cm: CenterManifold,
         energy: float,
-        config: Optional[poincareMapConfig] = None,
+        config: Optional[_PoincareMapConfig] = None,
     ) -> None:
         self.cm: CenterManifold = cm
         self.energy: float = float(energy)
-        self.config: poincareMapConfig = config or poincareMapConfig()
+        self.config: _PoincareMapConfig = config or _PoincareMapConfig()
 
         # Derived flags
         self._use_symplectic: bool = self.config.method.lower() == "symplectic"
 
         # Storage for computed points
-        self._section: Optional[PoincareSection] = None
+        self._section: Optional[_PoincareSection] = None
         self._backend: str = "cpu" if not self.config.use_gpu else "gpu"
 
         if self.config.compute_on_init:
@@ -90,7 +90,7 @@ class PoincareMap:
 
     def __repr__(self) -> str:
         return (
-            f"PoincareMap(cm={self.cm!r}, energy={self.energy:.3e}, "
+            f"_PoincareMap(cm={self.cm!r}, energy={self.energy:.3e}, "
             f"points={len(self) if self._section is not None else '∅'})"
         )
 
@@ -116,7 +116,7 @@ class PoincareMap:
         return self._section.points
 
     @property
-    def section(self) -> PoincareSection:
+    def section(self) -> _PoincareSection:
         r"""
         Return the computed Poincaré section with labels.
         """
@@ -159,9 +159,9 @@ class PoincareMap:
             h0=self.energy,
             H_blocks=poly_cm_real,
             max_degree=self.cm.max_degree,
-            psi_table=self.cm.psi,
-            clmo_table=self.cm.clmo,
-            encode_dict_list=self.cm.encode_dict_list,
+            psi_table=self.cm._psi,
+            clmo_table=self.cm._clmo,
+            encode_dict_list=self.cm._encode_dict_list,
             n_seeds=self.config.n_seeds,
             n_iter=self.config.n_iter,
             dt=self.config.dt,
@@ -248,9 +248,9 @@ class PoincareMap:
                 h0=self.energy,
                 H_blocks=poly_cm_real,
                 max_degree=self.cm.max_degree,
-                psi_table=self.cm.psi,
-                clmo_table=self.cm.clmo,
-                encode_dict_list=self.cm.encode_dict_list,
+                psi_table=self.cm._psi,
+                clmo_table=self.cm._clmo,
+                encode_dict_list=self.cm._encode_dict_list,
                 dt=self.config.dt,
                 max_steps=max_steps,
                 Nq=Nq,
@@ -262,7 +262,7 @@ class PoincareMap:
         else:
             raise ValueError(f"Unsupported backend: {self._backend}")
 
-        self._section = pts  # _generate_grid will be updated to return PoincareSection
+        self._section = pts  # _generate_grid will be updated to return _PoincareSection
         logger.info("Dense-grid Poincaré map computation complete: %d points", len(self))
         return pts.points if hasattr(pts, 'points') else pts
 
@@ -272,8 +272,7 @@ class PoincareMap:
         """
         ic = self.cm.ic(cm_point, energy, section_coord=self.config.section_coord)
         logger.info(f"Initial conditions: {ic}")
-        cfg = orbitConfig(orbit_family="generic", libration_point=self.cm.point)
-        orbit = GenericOrbit(cfg, ic)
+        orbit = GenericOrbit(self.cm.point, ic)
         if orbit.period is None:
             orbit.period = 2 * np.pi
         orbit.propagate(steps=steps, method=method, order=order)
@@ -346,10 +345,10 @@ class PoincareMap:
         # Reconstruct config dataclass (fall back to defaults if missing).
         cfg_dict = data.get("config", {})
         try:
-            self.config = poincareMapConfig(**cfg_dict)
+            self.config = _PoincareMapConfig(**cfg_dict)
         except TypeError:
-            logger.error("Saved configuration is incompatible with current poincareMapConfig schema; using defaults.")
-            self.config = poincareMapConfig()
+            logger.error("Saved configuration is incompatible with current _PoincareMapConfig schema; using defaults.")
+            self.config = _PoincareMapConfig()
 
         # Refresh derived flags dependent on config.
         self._use_symplectic = self.config.method.lower() == "symplectic"
@@ -359,7 +358,7 @@ class PoincareMap:
             points_array = np.array(data["points"])
             # Try to load labels, fall back to default q3 section labels for backward compatibility
             labels = data.get("labels", ("q2", "p2"))
-            self._section = PoincareSection(points_array, labels)
+            self._section = _PoincareSection(points_array, labels)
         else:
             self._section = None
         logger.info("Poincaré map loaded from %s", filepath)
@@ -455,9 +454,9 @@ class PoincareMap:
         steps : int, default 1000
             Number of propagation steps for the generated orbit.
         method : {'rk', 'scipy', 'symplectic', 'adaptive'}, default 'scipy'
-            Integrator backend.
+            _Integrator backend.
         order : int, default 6
-            Integrator order when applicable.
+            _Integrator order when applicable.
         frame : str, default 'rotating'
             Reference frame used by :pyfunc:`GenericOrbit.plot`.
         dark_mode : bool, default True

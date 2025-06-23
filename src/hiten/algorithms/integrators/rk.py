@@ -9,8 +9,8 @@ formal order of accuracy.
 
 The concrete schemes implemented are:
 
-* Fixed step: RK4, RK6, RK8
-* Adaptive embedded: RK45 (Dormand-Prince) and DOP853 (Dormand-Prince 8(5,3))
+* Fixed step: _RK4, _RK6, _RK8
+* Adaptive embedded: _RK45 (Dormand-Prince) and _DOP853 (Dormand-Prince 8(5,3))
 
 Internally the module also defines helper routines to evaluate Hamiltonian
 vector fields with :pyfunc:`numba.njit` and to wrap right-hand side (RHS)
@@ -32,9 +32,9 @@ import numpy as np
 from numba import njit
 
 from hiten.algorithms.dynamics.base import _DynamicalSystem
-from hiten.algorithms.dynamics.hamiltonian import (HamiltonianSystem,
+from hiten.algorithms.dynamics.hamiltonian import (_HamiltonianSystem,
                                                    _hamiltonian_rhs)
-from hiten.algorithms.integrators.base import Integrator, Solution
+from hiten.algorithms.integrators.base import _Integrator, _Solution
 from hiten.algorithms.integrators.coefficients.dop853 import E3 as DOP853_E3
 from hiten.algorithms.integrators.coefficients.dop853 import E5 as DOP853_E5
 from hiten.algorithms.integrators.coefficients.dop853 import \
@@ -66,7 +66,7 @@ from hiten.utils.config import FASTMATH, TOL
 from hiten.utils.log_config import logger
 
 
-class _RungeKuttaBase(Integrator):
+class _RungeKuttaBase(_Integrator):
     r"""
     Shared functionality of explicit Runge-Kutta schemes.
 
@@ -94,7 +94,7 @@ class _RungeKuttaBase(Integrator):
     -----
     The class is **not** intended to be used directly.  Concrete subclasses
     define the specific coefficients and expose a public interface compliant
-    with :class:`hiten.algorithms.integrators.base.Integrator`.
+    with :class:`hiten.algorithms.integrators.base._Integrator`.
     """
 
     _A: np.ndarray = None
@@ -132,13 +132,13 @@ class _FixedStepRK(_RungeKuttaBase):
     Parameters
     ----------
     name : str
-        Human readable identifier of the scheme (e.g. ``"RK4"``).
+        Human readable identifier of the scheme (e.g. ``"_RK4"``).
     A, B, C : numpy.ndarray
         Butcher tableau as returned by :pymod:`hiten.algorithms.integrators.coefficients.*`.
     order : int
         Formal order of accuracy :math:`p` of the method.
     **options
-        Additional keyword options forwarded to the base :class:`Integrator`.
+        Additional keyword options forwarded to the base :class:`_Integrator`.
 
     Notes
     -----
@@ -164,7 +164,7 @@ class _FixedStepRK(_RungeKuttaBase):
         y0: np.ndarray,
         t_vals: np.ndarray,
         **kwargs,
-    ) -> Solution:
+    ) -> _Solution:
         self.validate_inputs(system, y0, t_vals)
 
         rhs_wrapped = _build_rhs_wrapper(system)
@@ -194,22 +194,22 @@ class _FixedStepRK(_RungeKuttaBase):
             # Derivative at the new time point (needed for Hermite interpolation)
             derivs[idx + 1] = f(t_vals[idx + 1], y_high)
 
-        return Solution(times=t_vals.copy(), states=traj, derivatives=derivs)
+        return _Solution(times=t_vals.copy(), states=traj, derivatives=derivs)
 
 
-class RK4(_FixedStepRK):
+class _RK4(_FixedStepRK):
     def __init__(self, **opts):
-        super().__init__("RK4", RK4_A, RK4_B, RK4_C, 4, **opts)
+        super().__init__("_RK4", RK4_A, RK4_B, RK4_C, 4, **opts)
 
 
-class RK6(_FixedStepRK):
+class _RK6(_FixedStepRK):
     def __init__(self, **opts):
-        super().__init__("RK6", RK6_A, RK6_B, RK6_C, 6, **opts)
+        super().__init__("_RK6", RK6_A, RK6_B, RK6_C, 6, **opts)
 
 
-class RK8(_FixedStepRK):
+class _RK8(_FixedStepRK):
     def __init__(self, **opts):
-        super().__init__("RK8", RK8_A, RK8_B, RK8_C, 8, **opts)
+        super().__init__("_RK8", RK8_A, RK8_B, RK8_C, 8, **opts)
 
 
 class _AdaptiveStepRK(_RungeKuttaBase):
@@ -226,7 +226,7 @@ class _AdaptiveStepRK(_RungeKuttaBase):
     Parameters
     ----------
     name : str, default "AdaptiveRK"
-        Identifier passed to the :class:`Integrator` base class.
+        Identifier passed to the :class:`_Integrator` base class.
     rtol, atol : float, optional
         Relative and absolute error tolerances.  Defaults are read from
         :pydata:`hiten.utils.config.TOL`.
@@ -275,7 +275,7 @@ class _AdaptiveStepRK(_RungeKuttaBase):
     def order(self) -> int:
         return self._p
 
-    def integrate(self, system: _DynamicalSystem, y0: np.ndarray, t_vals: np.ndarray, **kwargs) -> Solution:
+    def integrate(self, system: _DynamicalSystem, y0: np.ndarray, t_vals: np.ndarray, **kwargs) -> _Solution:
         r"""
         Integrate a dynamical system using an adaptive Runge-Kutta method.
         """
@@ -385,7 +385,7 @@ class _AdaptiveStepRK(_RungeKuttaBase):
         # For now, use f(t_eval, y_eval) for derivatives
         derivs_out = np.array([f(t, y) for t, y in zip(t_eval, y_eval)])
 
-        return Solution(times=t_eval.copy(), states=y_eval, derivatives=derivs_out)
+        return _Solution(times=t_eval.copy(), states=y_eval, derivatives=derivs_out)
 
     def _select_initial_step(self, f, t0, y0, tf):
         r"""
@@ -432,7 +432,7 @@ class _AdaptiveStepRK(_RungeKuttaBase):
         return np.clip(self.SAFETY * err_norm ** (-self._err_exp), self.MIN_FACTOR, self.MAX_FACTOR)
 
 
-class RK45(_AdaptiveStepRK):
+class _RK45(_AdaptiveStepRK):
     _A = RK45_A
     _B_HIGH = RK45_B_HIGH
     _B_LOW = None
@@ -442,7 +442,7 @@ class RK45(_AdaptiveStepRK):
     _E = RK45_E
 
     def __init__(self, **opts):
-        super().__init__("RK45", **opts)
+        super().__init__("_RK45", **opts)
 
     def _rk_embedded_step(self, f, t, y, h):
         s = 6
@@ -458,7 +458,7 @@ class RK45(_AdaptiveStepRK):
         return y_high, y_low, err_vec
 
 
-class DOP853(_AdaptiveStepRK):
+class _DOP853(_AdaptiveStepRK):
     _A = DOP853_A[:DOP853_N_STAGES, :DOP853_N_STAGES]
     _B_HIGH = DOP853_B[:DOP853_N_STAGES]
     _B_LOW = None
@@ -472,7 +472,7 @@ class DOP853(_AdaptiveStepRK):
     _N_STAGES = DOP853_N_STAGES
 
     def __init__(self, **opts):
-        super().__init__("DOP853", **opts)
+        super().__init__("_DOP853", **opts)
 
     def _rk_embedded_step(self, f, t, y, h):
         s = self._N_STAGES
@@ -516,14 +516,14 @@ class DOP853(_AdaptiveStepRK):
 
 
 class RungeKutta:
-    _map = {4: RK4, 6: RK6, 8: RK8}
+    _map = {4: _RK4, 6: _RK6, 8: _RK8}
     def __new__(cls, order=4, **opts):
         if order not in cls._map:
             raise ValueError("RK order must be 4, 6, or 8")
         return cls._map[order](**opts)
 
 class AdaptiveRK:
-    _map = {5: RK45, 8: DOP853}
+    _map = {5: _RK45, 8: _DOP853}
     def __new__(cls, order=5, **opts):
         if order not in cls._map:
             raise ValueError("Adaptive RK order not supported")

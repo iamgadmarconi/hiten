@@ -18,14 +18,14 @@ from numba.typed import List
 from hiten.algorithms.polynomial.base import _create_encode_dict_from_clmo
 from hiten.algorithms.polynomial.coordinates import (_clean_coordinates,
                                                _substitute_coordinates)
-from hiten.algorithms.polynomial.operations import (polynomial_clean,
-                                              substitute_linear)
+from hiten.algorithms.polynomial.operations import (_polynomial_clean,
+                                              _substitute_linear)
 from hiten.system.libration.collinear import CollinearPoint
 from hiten.system.libration.triangular import TriangularPoint
 from hiten.utils.log_config import logger
 
 
-def M() -> np.ndarray:
+def _M() -> np.ndarray:
     r"""
     Return the linear map from complex modal to real modal coordinates.
 
@@ -47,7 +47,7 @@ def M() -> np.ndarray:
         [0, 1j/np.sqrt(2), 0, 0, 1/np.sqrt(2), 0],
         [0, 0, 1j/np.sqrt(2), 0, 0, 1/np.sqrt(2)]], dtype=np.complex128) #  real = M @ complex
 
-def M_inv() -> np.ndarray:
+def _M_inv() -> np.ndarray:
     r"""
     Return the inverse transformation :math:`M^{-1}`.
 
@@ -57,9 +57,9 @@ def M_inv() -> np.ndarray:
         The inverse of :pyfunc:`M`, satisfying
         :math:`\mathbf{z}_{\text{complex}} = M^{-1}\,\mathbf{z}_{\text{real}}`.
     """
-    return np.linalg.inv(M()) # complex = M_inv @ real
+    return np.linalg.inv(_M()) # complex = M_inv @ real
 
-def substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
+def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
     r"""
     Transform a polynomial from real normal form to complex normal form.
     
@@ -70,7 +70,7 @@ def substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> Li
     max_deg : int
         Maximum degree for polynomial representations
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
         
@@ -82,13 +82,13 @@ def substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> Li
     Notes
     -----
     This function transforms a polynomial from real normal form coordinates
-    to complex normal form coordinates using the predefined transformation matrix M_inv().
-    Since complex = M_inv @ real, we use M_inv() for the transformation.
+    to complex normal form coordinates using the predefined transformation matrix _M_inv().
+    Since complex = M_inv @ real, we use _M_inv() for the transformation.
     """
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return polynomial_clean(substitute_linear(poly_rn, M(), max_deg, psi, clmo, encode_dict_list), 1e-14)
+    return _polynomial_clean(_substitute_linear(poly_rn, _M(), max_deg, psi, clmo, encode_dict_list), 1e-14)
 
-def substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
+def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
     r"""
     Transform a polynomial from complex normal form to real normal form.
     
@@ -99,7 +99,7 @@ def substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[
     max_deg : int
         Maximum degree for polynomial representations
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
         
@@ -111,13 +111,13 @@ def substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[
     Notes
     -----
     This function transforms a polynomial from complex normal form coordinates
-    to real normal form coordinates using the predefined transformation matrix M().
-    Since real = M @ complex, we use M() for the transformation.
+    to real normal form coordinates using the predefined transformation matrix _M().
+    Since real = M @ complex, we use _M() for the transformation.
     """
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return polynomial_clean(substitute_linear(poly_cn, M_inv(), max_deg, psi, clmo, encode_dict_list), 1e-14)
+    return _polynomial_clean(_substitute_linear(poly_cn, _M_inv(), max_deg, psi, clmo, encode_dict_list), 1e-14)
 
-def solve_complex(real_coords: np.ndarray) -> np.ndarray:
+def _solve_complex(real_coords: np.ndarray) -> np.ndarray:
     r"""
     Return complex coordinates given real coordinates using the map `M_inv`.
 
@@ -131,9 +131,9 @@ def solve_complex(real_coords: np.ndarray) -> np.ndarray:
     np.ndarray
         Complex coordinates [q1c, q2c, q3c, p1c, p2c, p3c]
     """
-    return _clean_coordinates(_substitute_coordinates(real_coords, M_inv())) # [q1c, q2c, q3c, p1c, p2c, p3c]
+    return _clean_coordinates(_substitute_coordinates(real_coords, _M_inv())) # [q1c, q2c, q3c, p1c, p2c, p3c]
 
-def solve_real(real_coords: np.ndarray) -> np.ndarray:
+def _solve_real(real_coords: np.ndarray) -> np.ndarray:
     r"""
     Return real coordinates given complex coordinates using the map `M`.
 
@@ -147,7 +147,7 @@ def solve_real(real_coords: np.ndarray) -> np.ndarray:
     np.ndarray
         Real coordinates [q1r, q2r, q3r, p1r, p2r, p3r]
     """
-    return _clean_coordinates(_substitute_coordinates(real_coords, M())) # [q1r, q2r, q3r, p1r, p2r, p3r]
+    return _clean_coordinates(_substitute_coordinates(real_coords, _M())) # [q1r, q2r, q3r, p1r, p2r, p3r]
 
 def _local2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
     r"""
@@ -162,7 +162,7 @@ def _local2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi, clm
     max_deg : int
         Maximum degree for polynomial representations
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
         
@@ -179,7 +179,7 @@ def _local2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi, clm
     """
     C, _ = point.normal_form_transform()
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return substitute_linear(poly_local, C, max_deg, psi, clmo, encode_dict_list)
+    return _substitute_linear(poly_local, C, max_deg, psi, clmo, encode_dict_list)
 
 def _realmodal2local(point, modal_coords: np.ndarray) -> np.ndarray:
     r"""

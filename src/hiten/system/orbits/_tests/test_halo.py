@@ -1,10 +1,9 @@
 import numpy as np
 import pytest
 
-from hiten.system.orbits.base import orbitConfig
-from hiten.system.orbits.halo import HaloOrbit
-from hiten.system.base import System, systemConfig
+from hiten.system.base import System
 from hiten.system.body import Body
+from hiten.system.orbits.halo import HaloOrbit
 from hiten.utils.constants import Constants
 
 
@@ -19,25 +18,15 @@ def system():
     earth = Body("Earth", earth_mass, earth_radius, color="blue")
     moon = Body("Moon", moon_mass, moon_radius, color="gray", parent=earth)
 
-    return System(systemConfig(primary=earth, secondary=moon, distance=distance))
+    return System(earth, moon, distance)
 
 @pytest.fixture
 def l1_orbit(system):
-    config = orbitConfig(
-        orbit_family="halo",
-        libration_point=system.get_libration_point(1),
-        extra_params={"Az": 0.2, "Zenith": "Southern"}
-    )
-    return HaloOrbit(config)
+    return HaloOrbit(system.get_libration_point(1), Az=0.2, Zenith="Southern")
 
 @pytest.fixture
 def l2_orbit(system):
-    config = orbitConfig(
-        orbit_family="halo",
-        libration_point=system.get_libration_point(2),
-        extra_params={"Az": 0.2, "Zenith": "Southern"}
-    )
-    return HaloOrbit(config)
+    return HaloOrbit(system.get_libration_point(2), Az=0.2, Zenith="Southern")
 
 def test_halo_orbit_ic(l1_orbit, l2_orbit):
     assert l1_orbit.initial_state.shape == (6,), "Initial state should be a 6-element vector"
@@ -78,11 +67,11 @@ def test_halo_orbit_stability(l1_orbit):
     l1_orbit.compute_stability()
     
     assert l1_orbit.stability_info is not None, "Stability info should be computed"
-    stability_indices, stability_eigvals = l1_orbit.stability_info
+    _stability_indices, stability_eigvals = l1_orbit.stability_info
     
-    assert len(stability_indices) >= 1, "Should have at least one stability index"
+    assert len(_stability_indices) >= 1, "Should have at least one stability index"
     
-    assert isinstance(stability_indices[0], complex), "Stability indices should be complex numbers"
+    assert isinstance(_stability_indices[0], complex), "Stability indices should be complex numbers"
     
     assert isinstance(l1_orbit.is_stable, (bool, np.bool_)), "is_stable should be convertible to a boolean"
 
