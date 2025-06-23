@@ -318,8 +318,10 @@ class PeriodicOrbit(ABC):
     def _cr3bp_system(self):
         r"""
         Create (or reuse) a _DynamicalSystem wrapper for the CR3BP.
+        The wrapper may be missing (first use) or explicitly cleared during
+        serialisation.  In both cases we generate a fresh instance on demand.
         """
-        if not hasattr(self, "_cached_dynsys"):
+        if not hasattr(self, "_cached_dynsys") or self._cached_dynsys is None:
             self._cached_dynsys = rtbp_dynsys(mu=self.mu, name=str(self))
         return self._cached_dynsys
 
@@ -767,6 +769,30 @@ class PeriodicOrbit(ABC):
             X0[list(cfg.control_indices)] += delta
 
         raise RuntimeError("did not converge")
+
+    def __setstate__(self, state):
+        """Restore the PeriodicOrbit instance after unpickling.
+
+        The cached dynamical system used for high-performance propagation is
+        removed before pickling (it may contain numba objects) and recreated
+        lazily on first access after unpickling.
+        """
+        # Simply update the dictionary – the cached dynamical system will be
+        # rebuilt lazily when :pyfunc:`_cr3bp_system` is first invoked.
+        self.__dict__.update(state)
+
+    def __getstate__(self):
+        """Custom state extractor to enable pickling.
+
+        We strip attributes that might keep references to non-pickleable numba
+        objects (e.g. the cached dynamical system) while leaving all the
+        essential orbital data untouched.
+        """
+        state = self.__dict__.copy()
+        # Remove the cached CR3BP dynamical system wrapper
+        if "_cached_dynsys" in state:
+            state["_cached_dynsys"] = None
+        return state
 
 
 class GenericOrbit(PeriodicOrbit):

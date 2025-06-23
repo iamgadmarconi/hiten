@@ -248,3 +248,33 @@ class System(object):
 
         # Create and return the CR3BP system
         return cls(primary, secondary, distance)
+
+    def __getstate__(self):
+        """Custom state extractor to enable pickling.
+
+        The underlying dynamical system instance stored in ``_dynsys`` often
+        contains numba-compiled objects that cannot be serialised.  We exclude
+        it from the pickled representation and recreate it automatically when
+        the object is re-loaded.
+        """
+        state = self.__dict__.copy()
+        # Remove the compiled dynamical system before pickling
+        if "_dynsys" in state:
+            state["_dynsys"] = None
+        return state
+
+    def __setstate__(self, state):
+        """Restore the System instance after unpickling.
+
+        The heavy, non-serialisable dynamical system is reconstructed lazily
+        using the stored value of :pyattr:`mu` and the names of the primary and
+        secondary bodies.
+        """
+        from hiten.algorithms.dynamics.rtbp import rtbp_dynsys  # local import to avoid circular deps
+
+        # Restore the plain attributes
+        self.__dict__.update(state)
+
+        # Re-instantiate the CR3BP vector field that had been stripped during pickling
+        if self.__dict__.get("_dynsys") is None:
+            self._dynsys = rtbp_dynsys(self.mu, name=self.primary.name + "_" + self.secondary.name)

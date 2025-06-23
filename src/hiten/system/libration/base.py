@@ -139,6 +139,7 @@ class LibrationPoint(ABC):
         self._energy = None
         self._jacobi_constant = None
         self._cache = {}
+        self._cm_registry = {}
         self._var_eq_system = variational_dynsys(self.mu, name=f"CR3BP Variational Equations for {self.__class__.__name__}")
     
     def __str__(self) -> str:
@@ -391,3 +392,38 @@ class LibrationPoint(ABC):
         Get the normal form transform for the Libration point.
         """
         pass
+
+    def __getstate__(self):
+        """
+        Custom state extractor to enable pickling.
+
+        We remove attributes that may contain unpickleable Numba runtime
+        objects (e.g., the compiled variational dynamics system) and restore
+        them on unpickling.
+        """
+        state = self.__dict__.copy()
+        # Remove the compiled RHS system which cannot be pickled
+        if '_var_eq_system' in state:
+            state['_var_eq_system'] = None
+        # Remove potential circular/self references to center manifolds
+        if '_cm_registry' in state:
+            state['_cm_registry'] = {}
+        return state
+
+    def __setstate__(self, state):
+        """
+        Restore object state after unpickling.
+
+        The variational dynamics system is re-constructed because it was
+        omitted during pickling (it contains unpickleable Numba objects).
+        """
+        # Restore the plain attributes
+        self.__dict__.update(state)
+        # Recreate the compiled variational dynamics system on demand
+        from hiten.algorithms.dynamics.rtbp import variational_dynsys  # local import to avoid circular deps
+        self._var_eq_system = variational_dynsys(
+            self.mu, name=f"CR3BP Variational Equations for {self.__class__.__name__}")
+
+        # Ensure _cm_registry exists after unpickling
+        if not hasattr(self, '_cm_registry') or self._cm_registry is None:
+            self._cm_registry = {}

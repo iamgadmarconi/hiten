@@ -21,13 +21,13 @@ and Space Mission Design".
 import os
 import pickle
 from dataclasses import dataclass
-from typing import List, Literal
+from typing import List, Literal, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
-from hiten.algorithms.dynamics.rtbp import _propagate_dynsys, _compute_stm
+from hiten.algorithms.dynamics.rtbp import _compute_stm, _propagate_dynsys
 from hiten.algorithms.dynamics.utils.geometry import surface_of_section
 from hiten.algorithms.dynamics.utils.linalg import (_totime,
                                                     eigenvalue_decomposition)
@@ -124,30 +124,72 @@ class Manifold:
             method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", 
             order: int = 6
         ):
-        self.generating_orbit = generating_orbit
-        self.libration_point = self.generating_orbit.libration_point
-        self.stable = 1 if stable else -1
-        self.direction = 1 if direction == "Positive" else -1
-        self._forward = -self.stable
-        self.mu = self.generating_orbit.system.mu
-        self.method = method
-        self.order = order
+        self._generating_orbit = generating_orbit
+        self._libration_point = self._generating_orbit.libration_point
+        self._stable = 1 if stable else -1
+        self._direction = 1 if direction == "Positive" else -1
+        self._mu = self._generating_orbit.system.mu
+        self._method = method
+        self._order = order
+
+        self._forward = -self._stable
         self._successes = 0
         self._attempts = 0
-        self.manifold_result: ManifoldResult = None
+        self._last_compute_params: dict = None
+        self._manifold_result: ManifoldResult = None
+
+    @property
+    def generating_orbit(self) -> PeriodicOrbit:
+        """Orbit that seeds the manifold."""
+        return self._generating_orbit
+
+    @property
+    def libration_point(self):
+        """Libration point associated with the generating orbit."""
+        return self._libration_point
+
+    @property
+    def stable(self) -> int:
+        """Encoded stability: 1 for stable, -1 for unstable."""
+        return self._stable
+
+    @property
+    def direction(self) -> int:
+        """Encoded direction: 1 for 'Positive', -1 for 'Negative'."""
+        return self._direction
+
+    @property
+    def mu(self) -> float:
+        """Mass ratio of the underlying CRTBP system."""
+        return self._mu
+
+    @property
+    def method(self) -> str:
+        """Backend integrator used for propagation."""
+        return self._method
+
+    @property
+    def order(self) -> int:
+        """Integration order for fixed-step Runge-Kutta methods."""
+        return self._order
+
+    @property
+    def manifold_result(self) -> ManifoldResult:
+        """Cached result from the last successful compute call."""
+        return self._manifold_result
 
     def __str__(self):
-        return f"Manifold(stable={self.stable}, direction={self.direction}) of {self.libration_point}-{self.generating_orbit}"
+        return f"Manifold(stable={self._stable}, direction={self._direction}) of {self._libration_point}-{self._generating_orbit}"
     
     def __repr__(self):
         return self.__str__()
     
-    def compute(self, step: float = 0.02, integration_fraction: float = 0.75, **kwargs):
+    def compute(self, step: float = 0.02, integration_fraction: float = 0.75, NN: int = 1, displacement: float = 1e-6, **kwargs):
         r"""
         Generate manifold trajectories and build a Poincaré map.
 
         The routine samples the generating orbit at equally spaced fractions
-        of its period, displaces each point :math:`10^{-6}` units along the
+        of its period, displaces each point by *displacement* along the
         selected eigenvector and integrates the resulting initial condition
         for *integration_fraction* of one synodic period.
 
@@ -159,6 +201,10 @@ class Manifold:
         integration_fraction : float, optional
             Portion of :math:`2\pi` non-dimensional time units to integrate
             each trajectory. Default 0.75.
+        NN : int, default 1
+            Index of the real eigenvector to follow (1-based).
+        displacement : float, default 1e-6
+            Dimensionless displacement applied along the eigenvector.
         **kwargs
             Additional options:
 
@@ -187,14 +233,25 @@ class Manifold:
         >>> result = man.compute(step=0.05)
         >>> print(f"Success rate: {result.success_rate:.0%}")
         """
-
-        if self.manifold_result is not None:
-            return self.manifold_result
-
+        # Create a canonical representation of the parameters for comparison.
         kwargs.setdefault("show_progress", True)
         kwargs.setdefault("dt", 1e-3)
+        current_params = {
+            "step": step, "integration_fraction": integration_fraction, "NN": NN, "displacement": displacement, **kwargs
+        }
 
-        initial_state = self.generating_orbit._initial_state
+        if self._manifold_result is not None and self._last_compute_params == current_params:
+            logger.info("Returning cached manifold result for identical parameters.")
+            return self._manifold_result
+
+        logger.info("New computation parameters detected or first run, computing manifold.")
+        # Invalidate cache and reset counters for a new computation
+        self._manifold_result = None
+        self._successes = 0
+        self._attempts = 0
+
+
+        initial_state = self._generating_orbit._initial_state
 
         ysos, dysos, states_list, times_list = [], [], [], []
 
@@ -212,9 +269,11 @@ class Manifold:
             try:
                 x0W = self._compute_manifold_section(
                     initial_state,
-                    self.generating_orbit.period,
+                    self._generating_orbit.period,
                     fraction,
+                    NN=NN,
                     forward=self._forward,
+                    displacement=displacement
                 )
                 x0W = x0W.flatten().astype(np.float64)
                 tf = integration_fraction * 2 * np.pi
@@ -224,14 +283,14 @@ class Manifold:
                 steps = max(int(abs(tf) / dt) + 1, 100)
 
                 sol = _propagate_dynsys(
-                    dynsys=self.generating_orbit.system._dynsys,
+                    dynsys=self._generating_orbit.system._dynsys,
                     state0=x0W, 
                     t0=0.0, 
                     tf=tf,
                     forward=self._forward,
                     steps=steps,
-                    method=self.method, 
-                    order=self.order,
+                    method=self._method, 
+                    order=self._order,
                     flip_indices=slice(0, 6)
                 )
                 states, times = sol.states, sol.times
@@ -239,7 +298,7 @@ class Manifold:
                 states_list.append(states)
                 times_list.append(times)
 
-                Xy0, _ = surface_of_section(states, times, self.mu, M=2, C=0)
+                Xy0, _ = surface_of_section(states, times, self._mu, M=2, C=0)
 
                 if len(Xy0) > 0:
                     Xy0 = Xy0.flatten()
@@ -258,10 +317,28 @@ class Manifold:
             failure_rate = (failed_attempts / self._attempts) * 100
             logger.warning(f"Failed to find {failure_rate:.1f}% ({failed_attempts}/{self._attempts}) Poincaré section crossings")
             
-        self.manifold_result = ManifoldResult(ysos, dysos, states_list, times_list, self._successes, self._attempts)
-        return self.manifold_result
+        self._manifold_result = ManifoldResult(ysos, dysos, states_list, times_list, self._successes, self._attempts)
+        self._last_compute_params = current_params
+        return self._manifold_result
 
-    def _compute_manifold_section(self, state: np.ndarray, period: float, fraction: float, NN: int = 1, forward: int = 1):
+    def _get_real_eigenvectors(self, vectors: np.ndarray, values: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Filter for real eigenvalues and their corresponding eigenvectors."""
+        real_vals = []
+        real_vecs_list = []
+        for k in range(len(values)):
+            if np.isreal(values[k]):
+                real_vals.append(values[k])
+                real_vecs_list.append(vectors[:, k])
+        
+        real_vals_arr = np.array(real_vals, dtype=np.complex128)
+        if real_vecs_list:
+            real_vecs_arr = np.column_stack(real_vecs_list)
+        else:
+            real_vecs_arr = np.zeros((vectors.shape[0], 0), dtype=np.complex128)
+            
+        return real_vals_arr, real_vecs_arr
+
+    def _compute_manifold_section(self, state: np.ndarray, period: float, fraction: float, NN: int = 1, forward: int = 1, displacement: float = 1e-6):
         r"""
         Compute a section of the invariant manifold.
 
@@ -277,6 +354,8 @@ class Manifold:
             Index of the eigenvector to compute the section for.
         forward : int, default 1
             Direction of integration.
+        displacement : float, default 1e-6
+            Displacement applied along the eigenvector.
 
         Returns
         -------
@@ -288,41 +367,28 @@ class Manifold:
         ValueError
             If the requested eigenvector is not available.
         """
-        xx, tt, phi_T, PHI = _compute_stm(self.libration_point._var_eq_system, state, period, steps=2000, forward=forward, method=self.method, order=self.order)
+        xx, tt, phi_T, PHI = _compute_stm(self._libration_point._var_eq_system, state, period, steps=2000, forward=forward, method=self._method, order=self._order)
 
         sn, un, _, Ws, Wu, _ = eigenvalue_decomposition(phi_T, discrete=1)
 
-        snreal_vals = []
-        snreal_vecs = []
-        for k in range(len(sn)):
-            if np.isreal(sn[k]):
-                snreal_vals.append(sn[k])
-                snreal_vecs.append(Ws[:, k])
-
-        unreal_vals = []
-        unreal_vecs = []
-        for k in range(len(un)):
-            if np.isreal(un[k]):
-                unreal_vals.append(un[k])
-                unreal_vecs.append(Wu[:, k])
-
-        snreal_vals = np.array(snreal_vals, dtype=np.complex128)
-        unreal_vals = np.array(unreal_vals, dtype=np.complex128)
-        snreal_vecs = (np.column_stack(snreal_vecs) 
-                    if len(snreal_vecs) else np.zeros((6, 0), dtype=np.complex128))
-        unreal_vecs = (np.column_stack(unreal_vecs) 
-                    if len(unreal_vecs) else np.zeros((6, 0), dtype=np.complex128))
+        snreal_vals, snreal_vecs = self._get_real_eigenvectors(Ws, sn)
+        unreal_vals, unreal_vecs = self._get_real_eigenvectors(Wu, un)
 
         col_idx = NN - 1
 
-        if self.stable == 1 and (snreal_vecs.shape[1] <= col_idx or col_idx < 0):
-            raise ValueError(f"Requested stable eigenvector {NN} not available. Only {snreal_vecs.shape[1]} real stable eigenvectors found.")
-        
-        if self.stable == -1 and (unreal_vecs.shape[1] <= col_idx or col_idx < 0):
-            raise ValueError(f"Requested unstable eigenvector {NN} not available. Only {unreal_vecs.shape[1]} real unstable eigenvectors found.")
+        if self._stable == 1:
+            if snreal_vecs.shape[1] <= col_idx or col_idx < 0:
+                raise ValueError(f"Requested stable eigenvector {NN} not available. Only {snreal_vecs.shape[1]} real stable eigenvectors found.")
+            eigval = np.real(snreal_vals[col_idx])
+            eigvec = snreal_vecs[:, col_idx]
+            logger.debug(f"Using stable manifold direction with eigenvalue {eigval:.6f} for {NN}th eigenvector")
 
-        WS = snreal_vecs[:, col_idx] if self.stable == 1 else None
-        WU = unreal_vecs[:, col_idx] if self.stable == -1 else None
+        else:  # unstable
+            if unreal_vecs.shape[1] <= col_idx or col_idx < 0:
+                raise ValueError(f"Requested unstable eigenvector {NN} not available. Only {unreal_vecs.shape[1]} real unstable eigenvectors found.")
+            eigval = np.real(unreal_vals[col_idx])
+            eigvec = unreal_vecs[:, col_idx]
+            logger.debug(f"Using unstable manifold direction with eigenvalue {eigval:.6f} for {NN}th eigenvector")
 
         mfrac = _totime(tt, fraction * period)
         
@@ -334,20 +400,14 @@ class Manifold:
         phi_frac_flat = PHI[mfrac_idx, :36]
         phi_frac = phi_frac_flat.reshape((6, 6))
 
-        if self.stable == 1:
-            MAN = self.direction * (phi_frac @ WS)
-            logger.debug(f"Using stable manifold direction with eigenvalue {np.real(snreal_vals[col_idx]):.6f} for {NN}th eigenvector")
-
-        elif self.stable == -1:
-            MAN = self.direction * (phi_frac @ WU)
-            logger.debug(f"Using unstable manifold direction with eigenvalue {np.real(unreal_vals[col_idx]):.6f} for {NN}th eigenvector")
+        MAN = self._direction * (phi_frac @ eigvec)
 
         disp_magnitude = np.linalg.norm(MAN[0:3])
 
         if disp_magnitude < 1e-14:
             logger.warning(f"Very small displacement magnitude: {disp_magnitude:.2e}, setting to 1.0")
             disp_magnitude = 1.0
-        d = 1e-6 / disp_magnitude
+        d = displacement / disp_magnitude
 
         fracH = xx[mfrac_idx, :].copy()
 
@@ -375,13 +435,13 @@ class Manifold:
         ValueError
             If :pyattr:`manifold_result` is *None*.
         """
-        if self.manifold_result is None:
+        if self._manifold_result is None:
             err = "Manifold result not computed. Please compute the manifold first."
             logger.error(err)
             raise ValueError(err)
 
 
-        states_list, times_list = self.manifold_result.states_list, self.manifold_result.times_list
+        states_list, times_list = self._manifold_result.states_list, self._manifold_result.times_list
 
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
@@ -392,15 +452,15 @@ class Manifold:
             color = cmap(i / (num_traj - 1)) if num_traj > 1 else cmap(0.5)
             ax.plot(xW[:, 0], xW[:, 1], xW[:, 2], color=color, lw=2)
 
-        mu = self.mu
+        mu = self._mu
 
         primary_center = np.array([-mu, 0, 0])
-        primary_radius = self.generating_orbit._system.primary.radius
-        _plot_body(ax, primary_center, primary_radius / self.generating_orbit._system.distance, 'blue', self.generating_orbit._system.primary.name)
+        primary_radius = self._generating_orbit._system.primary.radius
+        _plot_body(ax, primary_center, primary_radius / self._generating_orbit._system.distance, 'blue', self._generating_orbit._system.primary.name)
 
         secondary_center = np.array([(1 - mu), 0, 0])
-        secondary_radius = self.generating_orbit._system.secondary.radius
-        _plot_body(ax, secondary_center, secondary_radius / self.generating_orbit._system.distance, 'grey', self.generating_orbit._system.secondary.name)
+        secondary_radius = self._generating_orbit._system.secondary.radius
+        _plot_body(ax, secondary_center, secondary_radius / self._generating_orbit._system.distance, 'grey', self._generating_orbit._system.secondary.name)
         
         ax.set_xlabel('x')
         ax.set_ylabel('y')
@@ -410,6 +470,54 @@ class Manifold:
         if dark_mode:
             _set_dark_mode(fig, ax, title=ax.get_title())
         plt.show()
+
+    def to_csv(self, filepath: str, **kwargs):
+        r"""
+        Export manifold trajectory data to a CSV file.
+
+        Each row in the CSV file represents a point in a trajectory,
+        and includes a trajectory ID, timestamp, and the 6D state vector
+        (x, y, z, vx, vy, vz).
+
+        Parameters
+        ----------
+        filepath : str
+            Path to the output CSV file. Parent directories are created if
+            they do not exist.
+        **kwargs
+            Reserved for future use.
+
+        Raises
+        ------
+        ValueError
+            If :pyattr:`manifold_result` is `None`.
+        ImportError
+            If `pandas` is not installed.
+        """
+        if self._manifold_result is None:
+            err = "Manifold result not computed. Please compute the manifold first."
+            logger.error(err)
+            raise ValueError(err)
+
+        try:
+            import pandas as pd
+        except ImportError:
+            logger.error("The 'pandas' library is required to export to CSV. Please install it.")
+            raise
+
+        data = []
+        for i, (states, times) in enumerate(zip(self._manifold_result.states_list, self._manifold_result.times_list)):
+            for j in range(states.shape[0]):
+                data.append(
+                    [i, times[j], states[j, 0], states[j, 1], states[j, 2], states[j, 3], states[j, 4], states[j, 5]]
+                )
+        
+        df = pd.DataFrame(data, columns=['trajectory_id', 'time', 'x', 'y', 'z', 'vx', 'vy', 'vz'])
+
+        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+
+        df.to_csv(filepath, index=False)
+        logger.info(f"Manifold data successfully exported to {filepath}")
 
     def save(self, filepath: str, **kwargs) -> None:
         r"""
@@ -430,25 +538,28 @@ class Manifold:
 
         _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
 
+        # -------------------------------------------------------------------
+        # Serialized representation.  We now embed the *full* PeriodicOrbit
+        # instance directly so that the Manifold can be re-loaded without the
+        # user having to recreate (and therefore remember) the generating
+        # orbit.  Custom ``__getstate__`` / ``__setstate__`` hooks on the
+        # PeriodicOrbit, LibrationPoint and System classes ensure that the
+        # resulting pickle remains lightweight and free of non-serialisable
+        # numba objects.
+        # -------------------------------------------------------------------
+
         data = {
             "manifold_type": self.__class__.__name__,
-            "stable": bool(self.stable == 1),
-            "direction": "Positive" if self.direction == 1 else "Negative",
-            "method": self.method,
-            "order": self.order,
+            "stable": bool(self._stable == 1),
+            "direction": "Positive" if self._direction == 1 else "Negative",
+            "method": self._method,
+            "order": self._order,
+            # Store the *full* PeriodicOrbit instance for self-contained reloads
+            "generating_orbit": self._generating_orbit,
         }
 
-        try:
-            data["generating_orbit"] = {
-                "family": getattr(self.generating_orbit, "orbit_family", self.generating_orbit.__class__.__name__),
-                "period": getattr(self.generating_orbit, "period", None),
-                "initial_state": self.generating_orbit._initial_state.tolist(),
-            }
-        except Exception:
-            pass
-
-        if self.manifold_result is not None:
-            mr = self.manifold_result
+        if self._manifold_result is not None:
+            mr = self._manifold_result
             data["manifold_result"] = {
                 "ysos": mr.ysos,
                 "dysos": mr.dysos,
@@ -467,49 +578,74 @@ class Manifold:
 
         logger.info("Manifold saved to %s", filepath)
 
-    def load(self, filepath: str, **kwargs) -> None:
+    @classmethod
+    def load(cls, filepath: str) -> "Manifold":
         r"""
-        Load a manifold previously stored with :pyfunc:`save`.
+        Load a manifold from a file, creating a new Manifold instance.
+
+        This method restores a previously saved manifold.  The generating
+        PeriodicOrbit is embedded directly in the pickle file, therefore no
+        external orbit needs to be supplied by the caller.
 
         Parameters
         ----------
         filepath : str
             File generated by :pyfunc:`save`.
-        **kwargs
-            Reserved for future use.
+
+        Returns
+        -------
+        Manifold
+            A new instance with the loaded data.
 
         Raises
         ------
         FileNotFoundError
             If *filepath* does not exist.
+        ValueError
+            If the file was created with an older version of hiten that did
+            not embed the generating orbit.
         """
-
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Manifold file not found: {filepath}")
 
         with open(filepath, "rb") as fh:
             data = pickle.load(fh)
 
-        if data.get("manifold_type") != self.__class__.__name__:
+        # Validate file type
+        if data.get("manifold_type") != cls.__name__:
             logger.warning(
-                "Loading %s data into %s instance", data.get("manifold_type", "<unknown>"), self.__class__.__name__
+                "Loading %s data into %s instance",
+                data.get("manifold_type", "<unknown>"),
+                cls.__name__,
             )
 
-        self.stable = 1 if data.get("stable", True) else -1
-        self.direction = 1 if data.get("direction", "Positive") == "Positive" else -1
+        gen_orbit = data.get("generating_orbit")
 
-        self._loaded_generating_orbit_info = data.get("generating_orbit", {})
+        if gen_orbit is None:
+            raise ValueError(
+                "The manifold file does not contain an embedded generating orbit. "
+                "It was likely created with an older version of hiten.  "
+                "Please regenerate the manifold with the current version.")
 
+        instance = cls(
+            generating_orbit=gen_orbit,
+            stable=data.get("stable", True),
+            direction=data.get("direction", "Positive"),
+            method=data.get("method", "scipy"),
+            order=data.get("order", 6),
+        )
+
+        # Populate the result from the file
         mr_data = data.get("manifold_result")
-        if mr_data is not None:
-            ysos = mr_data["ysos"]
-            dysos = mr_data["dysos"]
-            states_list = [np.array(s, dtype=float) for s in mr_data["states_list"]]
-            times_list = [np.array(t, dtype=float) for t in mr_data["times_list"]]
-            _successes = mr_data.get("_successes", 0)
-            _attempts = mr_data.get("_attempts", 0)
-            self.manifold_result = ManifoldResult(ysos, dysos, states_list, times_list, _successes, _attempts)
-        else:
-            self.manifold_result = None
-
+        if mr_data:
+            instance._manifold_result = ManifoldResult(
+                ysos=mr_data["ysos"],
+                dysos=mr_data["dysos"],
+                states_list=[np.array(s, dtype=float) for s in mr_data["states_list"]],
+                times_list=[np.array(t, dtype=float) for t in mr_data["times_list"]],
+                _successes=mr_data.get("_successes", 0),
+                _attempts=mr_data.get("_attempts", 0),
+            )
+        
         logger.info("Manifold loaded from %s", filepath)
+        return instance
