@@ -24,10 +24,10 @@ import numpy as np
 from scipy.integrate import solve_ivp
 
 from hiten.algorithms.dynamics.base import _DirectedSystem, _DynamicalSystem
-from hiten.algorithms.integrators.base import Solution
+from hiten.algorithms.integrators.base import _Solution
 from hiten.algorithms.integrators.rk import AdaptiveRK, RungeKutta
-from hiten.algorithms.integrators.symplectic import TaoSymplectic
-from hiten.utils.config import FASTMATH, TOL
+from hiten.algorithms.integrators.symplectic import _ExtendedSymplectic
+from hiten.algorithms.utils.config import FASTMATH, TOL
 from hiten.utils.log_config import logger
 
 
@@ -148,7 +148,7 @@ def _var_equations(t, PHI_vec, mu):
     return dPHI_vec
 
 
-def compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy", order=8):
+def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy", order=8):
     r"""
     Propagate the state-transition matrix (STM).
 
@@ -216,7 +216,7 @@ def compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["scipy", 
     return x, sol_obj.times, phi_T, PHI
 
 
-def monodromy_matrix(dynsys, x0, period):
+def _compute_monodromy(dynsys, x0, period):
     r"""
     Return the monodromy matrix of a periodic CR3BP orbit.
 
@@ -234,18 +234,18 @@ def monodromy_matrix(dynsys, x0, period):
     numpy.ndarray
         Monodromy matrix :math:`\Phi(T)` of shape *(6, 6)*.
     """
-    _, _, M, _ = compute_stm(dynsys, x0, period)
+    _, _, M, _ = _compute_stm(dynsys, x0, period)
     return M
 
 
-def stability_indices(monodromy):
+def _stability_indices(monodromy):
     r"""
     Compute the classical linear stability indices.
 
     Parameters
     ----------
     monodromy : numpy.ndarray
-        Monodromy matrix obtained from :pyfunc:`monodromy_matrix`.
+        Monodromy matrix obtained from :pyfunc:`_compute_monodromy`.
 
     Returns
     -------
@@ -266,7 +266,7 @@ def stability_indices(monodromy):
     return (nu1, nu2), eigs
 
 
-class JacobianRHS(_DynamicalSystem):
+class _JacobianRHS(_DynamicalSystem):
     r"""
     Right-hand side returning the Jacobian matrix of the CR3BP.
 
@@ -305,10 +305,10 @@ class JacobianRHS(_DynamicalSystem):
         return self._rhs
 
     def __repr__(self) -> str:
-        return f"JacobianRHS(name='{self.name}', mu={self.mu})"
+        return f"_JacobianRHS(name='{self.name}', mu={self.mu})"
 
 
-class VariationalEquationsRHS(_DynamicalSystem):
+class _VarEqRHS(_DynamicalSystem):
     r"""
     Variational equations of the CR3BP (42-dimensional system).
 
@@ -342,10 +342,10 @@ class VariationalEquationsRHS(_DynamicalSystem):
         return self._rhs
 
     def __repr__(self) -> str:
-        return f"VariationalEquationsRHS(name='{self.name}', mu={self.mu})"
+        return f"_VarEqRHS(name='{self.name}', mu={self.mu})"
 
 
-class RTBPRHS(_DynamicalSystem):
+class _RTBPRHS(_DynamicalSystem):
     r"""
     Equations of motion of the planar/3-D circular restricted three-body problem.
 
@@ -381,20 +381,20 @@ class RTBPRHS(_DynamicalSystem):
         return self._rhs
 
     def __repr__(self) -> str:
-        return f"RTBPRHS(name='{self.name}', mu={self.mu})"
+        return f"_RTBPRHS(name='{self.name}', mu={self.mu})"
 
 
-def rtbp_dynsys(mu: float, name: str = "RTBP") -> RTBPRHS:
-    """Factory helper returning :pyclass:`RTBPRHS` with the given *mu*."""
-    return RTBPRHS(mu=mu, name=name)
+def rtbp_dynsys(mu: float, name: str = "RTBP") -> _RTBPRHS:
+    """Factory helper returning :pyclass:`_RTBPRHS` with the given *mu*."""
+    return _RTBPRHS(mu=mu, name=name)
 
-def jacobian_dynsys(mu: float, name: str="Jacobian") -> JacobianRHS:
-    """Factory helper returning :pyclass:`JacobianRHS`."""
-    return JacobianRHS(mu=mu, name=name)
+def jacobian_dynsys(mu: float, name: str="Jacobian") -> _JacobianRHS:
+    """Factory helper returning :pyclass:`_JacobianRHS`."""
+    return _JacobianRHS(mu=mu, name=name)
 
-def variational_dynsys(mu: float, name: str = "VarEq") -> VariationalEquationsRHS:
-    """Factory helper returning :pyclass:`VariationalEquationsRHS`."""
-    return VariationalEquationsRHS(mu=mu, name=name)
+def variational_dynsys(mu: float, name: str = "VarEq") -> _VarEqRHS:
+    """Factory helper returning :pyclass:`_VarEqRHS`."""
+    return _VarEqRHS(mu=mu, name=name)
 
 
 def _propagate_dynsys(
@@ -407,7 +407,7 @@ def _propagate_dynsys(
     method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
     order: int = 6,
     flip_indices: Sequence[int] | None = None,
-) -> Solution:
+) -> _Solution:
     r"""
     Generic propagation routine shared by public helpers.
 
@@ -444,7 +444,7 @@ def _propagate_dynsys(
         states = sol.states
         
     elif method == "symplectic":
-        integrator = TaoSymplectic(order=order)
+        integrator = _ExtendedSymplectic(order=order)
         sol = integrator.integrate(dynsys_dir, state0_np, t_eval)
         times = sol.times
         states = sol.states
@@ -457,7 +457,7 @@ def _propagate_dynsys(
 
     times_signed = forward * times
 
-    return Solution(times_signed, states)
+    return _Solution(times_signed, states)
 
 
 def _validate_initial_state(state, expected_dim=6): 

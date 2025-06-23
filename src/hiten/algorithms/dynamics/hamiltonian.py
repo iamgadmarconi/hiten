@@ -9,7 +9,7 @@ circular restricted three-body problem (CRTBP).
 The module translates a list of packed polynomial blocks - typically produced
 by the normal-form pipeline - into a lightweight, JIT-compiled rhs suitable
 for both explicit Runge-Kutta and symplectic integrators.  All heavy symbolic
-work is delegated to :pyfunc:`hiten.algorithms.polynomial.operations.polynomial_jacobian` and
+work is delegated to :pyfunc:`hiten.algorithms.polynomial.operations._polynomial_jacobian` and
 the numba-compiled helpers in :pyfunc:`hiten.algorithms.integrators.symplectic`.
 
 References
@@ -24,12 +24,12 @@ import numpy as np
 from numba import njit
 from numba.typed import List
 
-from hiten.algorithms.dynamics.base import (DynamicalSystemProtocol,
+from hiten.algorithms.dynamics.base import (_DynamicalSystemProtocol,
                                             _DynamicalSystem)
 from hiten.algorithms.integrators.symplectic import _eval_dH_dP, _eval_dH_dQ
-from hiten.algorithms.polynomial.operations import (polynomial_evaluate,
-                                                    polynomial_jacobian)
-from hiten.utils.config import FASTMATH
+from hiten.algorithms.polynomial.operations import (_polynomial_evaluate,
+                                                    _polynomial_jacobian)
+from hiten.algorithms.utils.config import FASTMATH
 
 
 @njit(cache=False, fastmath=FASTMATH)
@@ -50,7 +50,7 @@ def _hamiltonian_rhs(
         Jacobian of the Hamiltonian.
     clmo : numba.typed.List of numpy.ndarray
         Coefficient-layout mapping objects used by
-        :pyfunc:`polynomial_evaluate`.
+        :pyfunc:`_polynomial_evaluate`.
     n_dof : int
         Number of degrees of freedom.
 
@@ -64,8 +64,8 @@ def _hamiltonian_rhs(
     dH_dP = np.empty(n_dof)
 
     for i in range(n_dof):
-        dH_dQ[i] = polynomial_evaluate(jac_H[i], state6.astype(np.complex128), clmo).real
-        dH_dP[i] = polynomial_evaluate(jac_H[n_dof + i], state6.astype(np.complex128), clmo).real
+        dH_dQ[i] = _polynomial_evaluate(jac_H[i], state6.astype(np.complex128), clmo).real
+        dH_dP[i] = _polynomial_evaluate(jac_H[n_dof + i], state6.astype(np.complex128), clmo).real
 
     rhs = np.empty_like(state6)
     rhs[:n_dof] = dH_dP  # dq/dt
@@ -73,11 +73,11 @@ def _hamiltonian_rhs(
     return rhs
 
 @runtime_checkable
-class HamiltonianSystemProtocol(DynamicalSystemProtocol, Protocol):
+class _HamiltonianSystemProtocol(_DynamicalSystemProtocol, Protocol):
     r"""
     Protocol for Hamiltonian dynamical systems.
     
-    Extends DynamicalSystemProtocol with methods specific to Hamiltonian mechanics.
+    Extends _DynamicalSystemProtocol with methods specific to Hamiltonian mechanics.
     These methods are required by symplectic integrators.
     """
     
@@ -123,7 +123,7 @@ class HamiltonianSystemProtocol(DynamicalSystemProtocol, Protocol):
         ...
 
 
-class HamiltonianSystem(_DynamicalSystem):
+class _HamiltonianSystem(_DynamicalSystem):
     r"""
     Lightweight polynomial Hamiltonian wrapper.
 
@@ -141,7 +141,7 @@ class HamiltonianSystem(_DynamicalSystem):
         the polynomial degree.
     clmo_H : numba.typed.List of numpy.ndarray
         Coefficient-layout mapping objects used by
-        :pyfunc:`hiten.algorithms.polynomial.operations.polynomial_evaluate`.
+        :pyfunc:`hiten.algorithms.polynomial.operations._polynomial_evaluate`.
     n_dof : int
         Number of degrees of freedom, the full phase-space dimension is
         ``2 * n_dof``.
@@ -161,7 +161,7 @@ class HamiltonianSystem(_DynamicalSystem):
 
     Examples
     --------
-    >>> sys = HamiltonianSystem(jac_H, clmo, n_dof=3)
+    >>> sys = _HamiltonianSystem(jac_H, clmo, n_dof=3)
     >>> ydot = sys.rhs(0.0, y0)  # integrates as a standard autonomous ODE
     """
 
@@ -240,7 +240,7 @@ class HamiltonianSystem(_DynamicalSystem):
             raise ValueError(f"Momentum dimension {len(P)} != n_dof {self.n_dof}")
     
     def __repr__(self) -> str:
-        return f"HamiltonianSystem(name='{self.name}', n_dof={self.n_dof})"
+        return f"_HamiltonianSystem(name='{self.name}', n_dof={self.n_dof})"
 
 
 def create_hamiltonian_system(
@@ -251,7 +251,7 @@ def create_hamiltonian_system(
     encode_dict_list: List,
     n_dof: int = 3,
     name: str = "Center Manifold Hamiltonian"
-) -> HamiltonianSystem:
+) -> _HamiltonianSystem:
     r"""
     Factory helper that converts packed polynomial data into a runtime Hamiltonian.
 
@@ -264,31 +264,31 @@ def create_hamiltonian_system(
         Maximum total degree :math:`N` represented in *H_blocks*.
     psi_table : numpy.ndarray
         Lookup table mapping monomial exponents to packed indices (see
-        :pyfunc:`hiten.algorithms.polynomial.base.init_index_tables`).
+        :pyfunc:`hiten.algorithms.polynomial.base._init_index_tables`).
     clmo_table : list of numpy.ndarray
         Per-degree coefficient-layout mapping objects.
     encode_dict_list : list of dict
-        Encoder dictionaries required by :pyfunc:`hiten.algorithms.polynomial.operations.polynomial_jacobian`.
+        Encoder dictionaries required by :pyfunc:`hiten.algorithms.polynomial.operations._polynomial_jacobian`.
     n_dof : int, default=3
         Number of degrees of freedom.
     name : str, default="Center Manifold Hamiltonian"
-        Identifier forwarded to the underlying :pyclass:`HamiltonianSystem`.
+        Identifier forwarded to the underlying :pyclass:`_HamiltonianSystem`.
 
     Returns
     -------
-    HamiltonianSystem
+    _HamiltonianSystem
         Ready-to-integrate instance wrapping the supplied Hamiltonian.
 
     Notes
     -----
     The function performs three lightweight steps:
 
-    1. Build the Jacobian via :pyfunc:`hiten.algorithms.polynomial.operations.polynomial_jacobian`.
+    1. Build the Jacobian via :pyfunc:`hiten.algorithms.polynomial.operations._polynomial_jacobian`.
     2. Cast nested Python lists into ``numba.typed.List`` so that JIT compiled
        helpers can access them at native speed.
-    3. Instantiate and return :pyclass:`HamiltonianSystem`.
+    3. Instantiate and return :pyclass:`_HamiltonianSystem`.
     """
-    jac_H = polynomial_jacobian(H_blocks, max_degree, psi_table, clmo_table, encode_dict_list)
+    jac_H = _polynomial_jacobian(H_blocks, max_degree, psi_table, clmo_table, encode_dict_list)
 
     jac_H_typed = List()
     for var_derivs in jac_H:
@@ -301,4 +301,4 @@ def create_hamiltonian_system(
     for clmo in clmo_table:
         clmo_H.append(clmo)
 
-    return HamiltonianSystem(jac_H_typed, clmo_H, n_dof, name)
+    return _HamiltonianSystem(jac_H_typed, clmo_H, n_dof, name)

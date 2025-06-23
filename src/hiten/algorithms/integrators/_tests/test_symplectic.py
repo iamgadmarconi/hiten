@@ -7,13 +7,13 @@ from numba.typed import List
 from scipy.integrate import solve_ivp
 
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                               encode_multiindex,
-                                               init_index_tables)
-from hiten.algorithms.polynomial.operations import polynomial_evaluate
+                                               _encode_multiindex,
+                                               _init_index_tables)
+from hiten.algorithms.polynomial.operations import _polynomial_evaluate
 from hiten.algorithms.dynamics.hamiltonian import create_hamiltonian_system
 from hiten.algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF, N_VARS_POLY,
                                                P_POLY_INDICES, Q_POLY_INDICES,
-                                               TaoSymplectic)
+                                               _ExtendedSymplectic)
 
 TEST_MAX_DEG = 6
 
@@ -34,12 +34,12 @@ def evaluate_hamiltonian(
     eval_point_6d[Q_POLY_INDICES] = state_6d[0:N_SYMPLECTIC_DOF] # q1,q2,q3
     eval_point_6d[P_POLY_INDICES] = state_6d[N_SYMPLECTIC_DOF : 2*N_SYMPLECTIC_DOF] # p1,p2,p3
     
-    return polynomial_evaluate(H_poly_list, eval_point_6d, clmo_tables).real
+    return _polynomial_evaluate(H_poly_list, eval_point_6d, clmo_tables).real
 
 
 @pytest.fixture(scope="module")
 def symplectic_test_data():
-    psi_tables, clmo_tables_numba = init_index_tables(TEST_MAX_DEG)
+    psi_tables, clmo_tables_numba = _init_index_tables(TEST_MAX_DEG)
     encode_dict_list = _create_encode_dict_from_clmo(clmo_tables_numba)
 
     H_poly = [np.zeros(psi_tables[N_VARS_POLY, d], dtype=np.complex128) for d in range(TEST_MAX_DEG + 1)]
@@ -50,32 +50,32 @@ def symplectic_test_data():
     # H = P1^2/2 - (1 - Q1^2/2 + Q1^4/24 - Q1^6/720)
     # P1^2/2 term (degree 2)
     k_Psq = np.zeros(N_VARS_POLY, dtype=np.int64); k_Psq[idx_P_var] = 2
-    idx_Psq_encoded = encode_multiindex(k_Psq, 2, encode_dict_list)
+    idx_Psq_encoded = _encode_multiindex(k_Psq, 2, encode_dict_list)
     if idx_Psq_encoded != -1: H_poly[2][idx_Psq_encoded] = 0.5
 
     # -1 term (degree 0)
     k_const = np.zeros(N_VARS_POLY, dtype=np.int64)
-    idx_const_encoded = encode_multiindex(k_const, 0, encode_dict_list)
+    idx_const_encoded = _encode_multiindex(k_const, 0, encode_dict_list)
     if idx_const_encoded != -1: H_poly[0][idx_const_encoded] = -1.0
 
     # +Q1^2/2 term (degree 2)
     k_Qsq = np.zeros(N_VARS_POLY, dtype=np.int64); k_Qsq[idx_Q_var] = 2
-    idx_Qsq_encoded = encode_multiindex(k_Qsq, 2, encode_dict_list)
+    idx_Qsq_encoded = _encode_multiindex(k_Qsq, 2, encode_dict_list)
     if idx_Qsq_encoded != -1: H_poly[2][idx_Qsq_encoded] += 0.5 # Add to existing P1^2/2 degree 2 array
 
     # -Q1^4/24 term (degree 4)
     if TEST_MAX_DEG >= 4:
         k_Q4 = np.zeros(N_VARS_POLY, dtype=np.int64); k_Q4[idx_Q_var] = 4
-        idx_Q4_encoded = encode_multiindex(k_Q4, 4, encode_dict_list)
+        idx_Q4_encoded = _encode_multiindex(k_Q4, 4, encode_dict_list)
         if idx_Q4_encoded != -1: H_poly[4][idx_Q4_encoded] = -1.0 / 24.0
 
     # +Q1^6/720 term (degree 6)
     if TEST_MAX_DEG >= 6:
         k_Q6 = np.zeros(N_VARS_POLY, dtype=np.int64); k_Q6[idx_Q_var] = 6
-        idx_Q6_encoded = encode_multiindex(k_Q6, 6, encode_dict_list)
+        idx_Q6_encoded = _encode_multiindex(k_Q6, 6, encode_dict_list)
         if idx_Q6_encoded != -1: H_poly[6][idx_Q6_encoded] = 1.0 / 720.0
     
-    # Convert H_poly to Numba typed list for internal consistency if polynomial_jacobian needs it
+    # Convert H_poly to Numba typed list for internal consistency if _polynomial_jacobian needs it
     H_poly_numba = List()
     for arr in H_poly:
         H_poly_numba.append(arr.copy())
@@ -109,7 +109,7 @@ def test_energy_conservation(symplectic_test_data):
     omega_tao = 20.0 # Increased from 5.0 for better energy conservation
 
     # Use the new integrator API
-    integrator = TaoSymplectic(order=order, c_omega_heuristic=omega_tao)
+    integrator = _ExtendedSymplectic(order=order, c_omega_heuristic=omega_tao)
     solution = integrator.integrate(hamiltonian_system, initial_state, times)
     trajectory = solution.states
 
@@ -137,7 +137,7 @@ def test_reversibility(symplectic_test_data):
     omega_tao = 5.0  # Increased from 0.1 for better energy conservation
 
     # Use the new integrator API
-    integrator = TaoSymplectic(order=order, c_omega_heuristic=omega_tao)
+    integrator = _ExtendedSymplectic(order=order, c_omega_heuristic=omega_tao)
 
     # Forward integration
     solution_fwd = integrator.integrate(hamiltonian_system, initial_state, times_forward)
@@ -165,7 +165,7 @@ def test_final_state_error(symplectic_test_data):
     omega_tao = 5.0  # Increased from 0.05 for better energy conservation
 
     # Use the new integrator API
-    integrator = TaoSymplectic(order=order, c_omega_heuristic=omega_tao)
+    integrator = _ExtendedSymplectic(order=order, c_omega_heuristic=omega_tao)
 
     # Run with a moderate number of steps
     num_steps1 = 200
@@ -217,7 +217,7 @@ def test_vs_solve_ivp(symplectic_test_data):
     omega_tao = 20.0
     
     # Use the new integrator API
-    integrator = TaoSymplectic(order=order, c_omega_heuristic=omega_tao)
+    integrator = _ExtendedSymplectic(order=order, c_omega_heuristic=omega_tao)
     solution = integrator.integrate(hamiltonian_system, initial_state_symplectic, actual_times)
     symplectic_traj = solution.states
     

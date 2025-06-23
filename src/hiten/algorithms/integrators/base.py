@@ -6,10 +6,10 @@ Abstract interfaces for numerical time integration.
 
 The module provides two core abstractions:
 
-* :pyclass:`Solution` - an immutable container that stores a time grid, the
+* :pyclass:`_Solution` - an immutable container that stores a time grid, the
   associated state vectors, and, optionally, the vector field evaluations so
   that the trajectory can be queried by cubic Hermite interpolation.
-* :pyclass:`Integrator` - an abstract base class that prescribes the public
+* :pyclass:`_Integrator` - an abstract base class that prescribes the public
   API for every concrete one-step or multi-step integrator.
 
 References
@@ -24,11 +24,11 @@ from typing import Optional, Union
 
 import numpy as np
 
-from hiten.algorithms.dynamics.base import DynamicalSystemProtocol
+from hiten.algorithms.dynamics.base import _DynamicalSystemProtocol
 
 
 @dataclass
-class Solution:
+class _Solution:
     r"""
     Discrete solution returned by an integrator.
 
@@ -41,7 +41,7 @@ class Solution:
     derivatives : numpy.ndarray or None, optional, shape (:math:`n`, :math:`d`)
         Evaluations of :math:`f(t,\mathbf y)` at the stored nodes. When
         available a cubic Hermite interpolant is employed by
-        :pyfunc:`Solution.interpolate`; otherwise linear interpolation is used.
+        :pyfunc:`_Solution.interpolate`; otherwise linear interpolation is used.
 
     Attributes
     ----------
@@ -78,7 +78,7 @@ class Solution:
         r"""
         Evaluate the trajectory at intermediate time points.
 
-        If :pyattr:`Solution.derivatives` are provided a cubic Hermite scheme
+        If :pyattr:`_Solution.derivatives` are provided a cubic Hermite scheme
         of order three is employed on every step; otherwise straight linear
         interpolation is used.
 
@@ -153,7 +153,7 @@ class Solution:
         return y_out
 
 
-class Integrator(ABC):
+class _Integrator(ABC):
     r"""
     Minimal interface that every concrete integrator must satisfy.
 
@@ -181,7 +181,7 @@ class Integrator(ABC):
     --------
     Creating a dummy first-order explicit Euler scheme::
 
-        class Euler(Integrator):
+        class Euler(_Integrator):
             @property
             def order(self):
                 return 1
@@ -191,7 +191,7 @@ class Integrator(ABC):
                 for t0, t1 in zip(t_vals[:-1], t_vals[1:]):
                     dt = t1 - t0
                     y.append(y[-1] + dt * hiten.system.rhs(t0, y[-1]))
-                return Solution(np.asarray(t_vals), np.asarray(y))
+                return _Solution(np.asarray(t_vals), np.asarray(y))
     """
     
     def __init__(self, name: str, **options):
@@ -214,17 +214,17 @@ class Integrator(ABC):
     @abstractmethod
     def integrate(
         self,
-        system: DynamicalSystemProtocol,
+        system: _DynamicalSystemProtocol,
         y0: np.ndarray,
         t_vals: np.ndarray,
         **kwargs
-    ) -> Solution:
+    ) -> _Solution:
         r"""
         Integrate the dynamical system from initial conditions.
         
         Parameters
         ----------
-        system : DynamicalSystemProtocol
+        system : _DynamicalSystemProtocol
             The dynamical system to integrate
         y0 : numpy.ndarray
             Initial state vector, shape (hiten.system.dim,)
@@ -235,7 +235,7 @@ class Integrator(ABC):
             
         Returns
         -------
-        Solution
+        _Solution
             Integration results containing times and states
             
         Raises
@@ -245,13 +245,13 @@ class Integrator(ABC):
         """
         pass
     
-    def validate_system(self, system: DynamicalSystemProtocol) -> None:
+    def validate_system(self, system: _DynamicalSystemProtocol) -> None:
         r"""
-        Check that *system* complies with :pyclass:`DynamicalSystemProtocol`.
+        Check that *system* complies with :pyclass:`_DynamicalSystemProtocol`.
 
         Parameters
         ----------
-        system : DynamicalSystemProtocol
+        system : _DynamicalSystemProtocol
             Candidate system whose suitability is being tested.
 
         Raises
@@ -264,7 +264,7 @@ class Integrator(ABC):
     
     def validate_inputs(
         self,
-        system: DynamicalSystemProtocol,
+        system: _DynamicalSystemProtocol,
         y0: np.ndarray,
         t_vals: np.ndarray
     ) -> None:
@@ -273,7 +273,7 @@ class Integrator(ABC):
 
         Parameters
         ----------
-        system : DynamicalSystemProtocol
+        system : _DynamicalSystemProtocol
             System to be integrated.
         y0 : numpy.ndarray
             Initial state vector of length :pyattr:`hiten.system.dim`.

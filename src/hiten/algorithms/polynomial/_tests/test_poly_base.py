@@ -6,13 +6,13 @@ from numba import types
 from numba.typed import Dict, List
 
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                               decode_multiindex,
-                                               encode_multiindex,
-                                               init_index_tables, make_poly)
-from hiten.utils.config import N_VARS
+                                               _decode_multiindex,
+                                               _encode_multiindex,
+                                               _init_index_tables, _make_poly)
+from hiten.algorithms.utils.config import N_VARS
 
 TEST_MAX_DEG = 5
-PSI, CLMO = init_index_tables(TEST_MAX_DEG)
+PSI, CLMO = _init_index_tables(TEST_MAX_DEG)
 ENCODE_DICT = _create_encode_dict_from_clmo(CLMO)
 
 def test_init_index_tables():
@@ -36,7 +36,7 @@ def test_make_poly():
     """Test creation of zero polynomials with complex128 dtype"""
     for degree in range(TEST_MAX_DEG + 1):
         # Test polynomial creation
-        poly = make_poly(degree, PSI)
+        poly = _make_poly(degree, PSI)
         
         # Check size
         expected_size = PSI[N_VARS, degree]
@@ -62,7 +62,7 @@ def test_decode_multiindex():
             positions.extend(range(size//2-5, size//2+5))
         
         for pos in positions:
-            k = decode_multiindex(pos, degree, CLMO)
+            k = _decode_multiindex(pos, degree, CLMO)
             
             k = np.asarray(k)
             assert k.shape == (N_VARS,)
@@ -86,10 +86,10 @@ def test_encode_multiindex():
             positions.extend(range(size//2-5, size//2+5))
         
         for pos in positions:
-            k = decode_multiindex(pos, degree, CLMO)
+            k = _decode_multiindex(pos, degree, CLMO)
             k = np.asarray(k)
             
-            idx = encode_multiindex(k, degree, ENCODE_DICT)
+            idx = _encode_multiindex(k, degree, ENCODE_DICT)
             assert idx == pos
             
             if np.any(k > 0):
@@ -98,7 +98,7 @@ def test_encode_multiindex():
                     if k[i] > 0:
                         k_invalid[i] -= 1
                         k_invalid[(i+1) % N_VARS] += 1
-                        idx_invalid = encode_multiindex(k_invalid, degree, ENCODE_DICT)
+                        idx_invalid = _encode_multiindex(k_invalid, degree, ENCODE_DICT)
                         assert idx_invalid != pos
                         break
 
@@ -119,9 +119,9 @@ def test_multi_index_roundtrip():
                 test_positions.append(size - 1)
                 
         for pos in test_positions:
-            k1 = decode_multiindex(pos, degree, CLMO)
-            idx = encode_multiindex(k1, degree, ENCODE_DICT)
-            k2 = decode_multiindex(idx, degree, CLMO)
+            k1 = _decode_multiindex(pos, degree, CLMO)
+            idx = _encode_multiindex(k1, degree, ENCODE_DICT)
+            k2 = _decode_multiindex(idx, degree, CLMO)
             
             assert idx == pos
             
@@ -130,7 +130,7 @@ def test_multi_index_roundtrip():
 
 @pytest.mark.parametrize("deg", [0, 1, 2, 3, 4, 5, 6])
 def test_encode_decode_roundtrip(deg):
-    _, clmo = init_index_tables(6)
+    _, clmo = _init_index_tables(6)
     encode_dict_for_deg6 = _create_encode_dict_from_clmo(clmo)
     for _ in range(10):
         k = np.zeros(N_VARS, dtype=np.int64)
@@ -139,14 +139,14 @@ def test_encode_decode_roundtrip(deg):
             k[i] = random.randint(0, remaining)
             remaining -= k[i]
         k[-1] = remaining
-        idx = encode_multiindex(k, deg, encode_dict_for_deg6)
+        idx = _encode_multiindex(k, deg, encode_dict_for_deg6)
         assert idx >= 0
-        k_back = decode_multiindex(idx, deg, clmo)
+        k_back = _decode_multiindex(idx, deg, clmo)
         assert np.array_equal(k_back, k)
 
     k = np.array([0,0,0,0,0,0], dtype=np.int64)
     deg = 0
-    _, clmo = init_index_tables(deg)
+    _, clmo = _init_index_tables(deg)
     local_encode_dict_list = List.empty_list(types.DictType(types.int64, types.int32))
     for d_arr in clmo:
         d_map = Dict.empty(key_type=types.int64, value_type=types.int32)
@@ -154,5 +154,5 @@ def test_encode_decode_roundtrip(deg):
             d_map[np.int64(p_val)] = np.int32(i)
         local_encode_dict_list.append(d_map)
 
-    idx = encode_multiindex(k, deg, local_encode_dict_list)
+    idx = _encode_multiindex(k, deg, local_encode_dict_list)
     assert idx == 0

@@ -13,9 +13,8 @@ The module provides:
 * :pyclass:`GenericOrbit` - a minimal concrete implementation useful for
   arbitrary initial conditions when no analytical guess or specific correction
   is required.
-* Light-weight configuration containers (:pyclass:`orbitConfig`,
-  :pyclass:`correctionConfig`) that encapsulate user input for families,
-  libration points and differential correction settings.
+* Light-weight configuration containers (:pyclass:`_CorrectionConfig`) that 
+  encapsulate user input for differential correction settings.
 
 References
 ----------
@@ -23,68 +22,38 @@ Szebehely, V. (1967). "Theory of Orbits - The Restricted Problem of Three
 Bodies".
 """
 
+from __future__ import annotations
+
 import os
-import pickle
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import (Any, Callable, Dict, Literal, NamedTuple, Optional,
+from typing import (TYPE_CHECKING, Callable, Literal, NamedTuple, Optional,
                     Sequence, Tuple)
 
-import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
+import pandas as pd
 
-from hiten.algorithms.dynamics.rtbp import (_propagate_dynsys, compute_stm,
-                                      rtbp_dynsys, stability_indices)
-from hiten.algorithms.dynamics.utils.energy import crtbp_energy, energy_to_jacobi
+from hiten.algorithms.dynamics.rtbp import (_compute_stm, _propagate_dynsys,
+                                            _stability_indices)
+from hiten.algorithms.dynamics.utils.energy import (crtbp_energy,
+                                                    energy_to_jacobi)
 from hiten.algorithms.dynamics.utils.geometry import _find_y_zero_crossing
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
-from hiten.utils.coordinates import rotating_to_inertial
-from hiten.utils.files import _ensure_dir
+from hiten.utils.io import (_ensure_dir, _load_periodic_orbit,
+                            _load_periodic_orbit_inplace, _save_periodic_orbit)
 from hiten.utils.log_config import logger
-from hiten.utils.plots import (_plot_body, _set_axes_equal, _set_dark_mode,
-                         animate_trajectories)
+from hiten.utils.plots import (animate_trajectories, plot_inertial_frame,
+                               plot_rotating_frame)
 
-
-@dataclass
-class orbitConfig:
-    r"""
-    Configuration for an orbit family around a specific libration point.
-
-    Parameters
-    ----------
-    orbit_family : str
-        Identifier of the orbit family, e.g. ``"halo"`` or ``"lyapunov"``.
-    libration_point : LibrationPoint
-        The libration point instance that anchors the family.
-    extra_params : dict, optional
-        Additional keyword parameters that specialised subclasses may
-        require (left untouched by the base implementation).
-
-    Attributes
-    ----------
-    orbit_family : str
-        Normalised to lowercase in :pyfunc:`orbitConfig.__post_init__`.
-    libration_point : LibrationPoint
-        Same as *Parameters*.
-    extra_params : dict
-        Same as *Parameters*.
-    """
-    orbit_family: str
-    libration_point: LibrationPoint
-    extra_params: Dict[str, Any] = field(default_factory=dict)
-
-    def __post_init__(self):
-        # Validate that distance is positive.
-        self.orbit_family = self.orbit_family.lower() # Normalize to lowercase
-
+if TYPE_CHECKING:
+    from hiten.system.manifold import Manifold
 
 class S(IntEnum): X=0; Y=1; Z=2; VX=3; VY=4; VZ=5
 
 
-class correctionConfig(NamedTuple):
+class _CorrectionConfig(NamedTuple):
     r"""
     Settings that drive the differential correction routine.
 
@@ -107,7 +76,7 @@ class correctionConfig(NamedTuple):
     event_func : callable, default :pyfunc:`hiten.utils.geometry._find_y_zero_crossing`
         Event used to terminate half-period propagation.
     method : {"rk", "scipy", "symplectic", "adaptive"}, default "scipy"
-        Integrator back-end to use when marching the variational equations.
+        _Integrator back-end to use when marching the variational equations.
     order : int, default 8
         Order for the custom integrators.
     steps : int, default 2000
@@ -135,8 +104,8 @@ class PeriodicOrbit(ABC):
 
     Parameters
     ----------
-    config : orbitConfig
-        Orbit family and libration point configuration.
+    libration_point : LibrationPoint
+        The libration point instance that anchors the family.
     initial_state : Sequence[float] or None, optional
         Initial condition in rotating canonical units
         :math:`[x, y, z, \dot x, \dot y, \dot z]`. When *None* an analytical
@@ -145,7 +114,7 @@ class PeriodicOrbit(ABC):
     Attributes
     ----------
     family : str
-        Orbit family name inherited from *config*.
+        Orbit family name (settable property with class-specific defaults).
     libration_point : LibrationPoint
         Libration point anchoring the family.
     system : System
@@ -161,7 +130,7 @@ class PeriodicOrbit(ABC):
     times : ndarray or None, shape (N,)
         Time vector associated with *trajectory*.
     stability_info : tuple or None
-        Output of :pyfunc:`hiten.algorithms.dynamics.rtbp.stability_indices`.
+        Output of :pyfunc:`hiten.algorithms.dynamics.rtbp._stability_indices`.
 
     Notes
     -----
@@ -169,12 +138,14 @@ class PeriodicOrbit(ABC):
     call :pyfunc:`PeriodicOrbit.differential_correction` (or manually set
     :pyattr:`period`) followed by :pyfunc:`PeriodicOrbit.propagate`.
     """
+    
+    # This should be overridden by subclasses
+    _family: str = "generic"
 
-    def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):
-        self.family = config.orbit_family
-        self.libration_point = config.libration_point
-        self._system = self.libration_point.system
-        self.mu = self._system.mu
+    def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None):
+        self._libration_point = libration_point
+        self._system = self._libration_point.system
+        self._mu = self._system.mu
 
         # Determine how the initial state will be obtained and log accordingly
         if initial_state is not None:
@@ -193,7 +164,7 @@ class PeriodicOrbit(ABC):
             )
             self._initial_state = self._initial_guess()
 
-        self.period = None
+        self._period = None
         self._trajectory = None
         self._times = None
         self._stability_info = None
@@ -202,10 +173,27 @@ class PeriodicOrbit(ABC):
         logger.info(f"Initialized {self.family} orbit around L{self.libration_point.idx}")
 
     def __str__(self):
-        return f"{self.family} orbit around {self.libration_point}."
+        return f"{self.family} orbit around {self._libration_point}."
 
     def __repr__(self):
-        return f"{self.__class__.__name__}(family={self.family}, libration_point={self.libration_point})"
+        return f"{self.__class__.__name__}(family={self.family}, libration_point={self._libration_point})"
+
+    @property
+    def family(self) -> str:
+        r"""
+        Get the orbit family name.
+        
+        Returns
+        -------
+        str
+            The orbit family name
+        """
+        return self._family
+
+    @property
+    def libration_point(self) -> LibrationPoint:
+        """The libration point instance that anchors the family."""
+        return self._libration_point
 
     @property
     def initial_state(self) -> npt.NDArray[np.float64]:
@@ -256,7 +244,7 @@ class PeriodicOrbit(ABC):
         Returns
         -------
         tuple or None
-            Tuple containing (stability_indices, eigenvalues, eigenvectors),
+            Tuple containing (_stability_indices, eigenvalues, eigenvectors),
             or None if stability hasn't been computed yet.
         """
         if self._stability_info is None:
@@ -264,20 +252,47 @@ class PeriodicOrbit(ABC):
         return self._stability_info
 
     @property
+    def period(self) -> Optional[float]:
+        """Orbit period, set after a successful correction."""
+        return self._period
+
+    @period.setter
+    def period(self, value: Optional[float]):
+        """Set the orbit period and invalidate cached data.
+
+        Setting the period manually allows users (or serialization logic)
+        to override the value obtained via differential correction. Any time
+        the period changes we must invalidate cached trajectory, time array
+        and stability information so they can be recomputed consistently.
+        """
+        # Basic validation: positive period or None
+        if value is not None and value <= 0:
+            raise ValueError("period must be a positive number or None.")
+
+        # Only act if the period actually changes to avoid unnecessary resets
+        current_period = getattr(self, "_period", None)
+        if value != current_period:
+            # Ensure the private attribute exists before use
+            self._period = value
+
+            # Invalidate caches that depend on the period, if they already exist
+            if hasattr(self, "_trajectory"):
+                self._trajectory = None
+            if hasattr(self, "_times"):
+                self._times = None
+            if hasattr(self, "_stability_info"):
+                self._stability_info = None
+
+            logger.info("Period updated, cached trajectory, times and stability information cleared")
+
+    @property
     def system(self) -> System:
         return self._system
 
-    def _reset(self) -> None:
-        r"""
-        Reset all computed properties when the initial state is changed.
-        Called internally after differential correction or any other operation
-        that modifies the initial state.
-        """
-        self._trajectory = None
-        self._times = None
-        self._stability_info = None
-        self.period = None
-        logger.debug("Reset computed orbit properties due to state change")
+    @property
+    def mu(self) -> float:
+        """Mass ratio of the system."""
+        return self._mu
 
     @property
     def is_stable(self) -> bool:
@@ -293,7 +308,7 @@ class PeriodicOrbit(ABC):
             logger.info("Computing stability for stability check")
             self.compute_stability()
         
-        indices = self._stability_info[0]  # nu values from stability_indices
+        indices = self._stability_info[0]  # nu values from _stability_indices
         
         # An orbit is stable if all stability indices have magnitude <= 1
         return np.all(np.abs(indices) <= 1.0)
@@ -324,13 +339,116 @@ class PeriodicOrbit(ABC):
         """
         return energy_to_jacobi(self.energy)
 
-    def _cr3bp_system(self):
+    @property
+    @abstractmethod
+    def eccentricity(self):
+        pass
+
+    @property
+    @abstractmethod
+    def _correction_config(self) -> _CorrectionConfig:
+        """Provides the differential correction configuration for this orbit family."""
+        pass
+
+    def _reset(self) -> None:
         r"""
-        Create (or reuse) a _DynamicalSystem wrapper for the CR3BP.
+        Reset all computed properties when the initial state is changed.
+        Called internally after differential correction or any other operation
+        that modifies the initial state.
         """
-        if not hasattr(self, "_cached_dynsys"):
-            self._cached_dynsys = rtbp_dynsys(mu=self.mu, name=str(self))
-        return self._cached_dynsys
+        self._trajectory = None
+        self._times = None
+        self._stability_info = None
+        self._period = None
+        logger.debug("Reset computed orbit properties due to state change")
+
+    @abstractmethod
+    def _initial_guess(self, **kwargs):
+        pass
+
+    def _compute_correction_step(self, current_state: np.ndarray, t_event: float, x_event: np.ndarray) -> np.ndarray:
+        """Compute the correction step `delta` for the differential corrector."""
+        cfg = self._correction_config
+        
+        _, _, Phi, _ = _compute_stm(
+            self.libration_point._var_eq_system, current_state, t_event, 
+            steps=cfg.steps, method=cfg.method, order=cfg.order
+        )
+
+        J = Phi[np.ix_(cfg.residual_indices, cfg.control_indices)]
+
+        if cfg.extra_jacobian is not None:
+            J -= cfg.extra_jacobian(x_event, Phi)
+
+        if np.linalg.det(J) < 1e-12:
+            logger.warning(f"Jacobian determinant is small ({np.linalg.det(J):.2e}), adding regularization.")
+            J += np.eye(J.shape[0]) * 1e-12
+        
+        R = x_event[list(cfg.residual_indices)] - np.array(cfg.target)
+        delta = np.linalg.solve(J, -R)
+        
+        return delta
+
+    def _apply_correction(self, state: np.ndarray, delta: np.ndarray) -> np.ndarray:
+        """Apply the correction `delta` to the appropriate state variables."""
+        cfg = self._correction_config
+        state[list(cfg.control_indices)] += delta
+        return state
+
+    def differential_correction(
+            self,
+            *,
+            tol: float = 1e-10,
+            max_attempts: int = 25,
+            forward: int = 1
+        ) -> tuple[np.ndarray, float]:
+        """
+        Perform differential correction to find a periodic orbit.
+        
+        This method uses the configuration provided by `self._correction_config`
+        to iteratively refine the `initial_state` until it converges to a
+        periodic orbit.
+
+        Parameters
+        ----------
+        tol : float, optional
+            Tolerance for the correction, measured by the infinity norm of the
+            residual vector. Default is 1e-10.
+        max_attempts : int, optional
+            Maximum number of correction attempts. Default is 25.
+        forward : int, optional
+            Direction of propagation (1 for forward, -1 for backward). Default is 1.
+
+        Returns
+        -------
+        tuple
+            A tuple containing the corrected initial state and the half-period
+            of the resulting orbit `(state, period/2)`.
+
+        Raises
+        ------
+        RuntimeError
+            If the correction does not converge within `max_attempts`.
+        """
+        X0 = self.initial_state.copy()
+        cfg = self._correction_config
+
+        for k in range(max_attempts + 1):
+            t_ev, X_ev = cfg.event_func(dynsys=self.system._dynsys, x0=X0, forward=forward)
+            R = X_ev[list(cfg.residual_indices)] - np.array(cfg.target)
+
+            if np.linalg.norm(R, ord=np.inf) < tol:
+                self._reset()
+                self._initial_state = X0
+                self._period = 2 * t_ev
+                logger.info(f"Differential correction converged after {k} iterations.")
+                return X0, t_ev
+
+            delta = self._compute_correction_step(X0, t_ev, X_ev)
+            X0 = self._apply_correction(X0, delta)
+            logger.info(f"Correction attempt {k+1}/{max_attempts}: |R|={np.linalg.norm(R):.2e}, delta={delta}")
+
+        raise RuntimeError(f"Differential correction did not converge after {max_attempts} attempts.")
 
     def propagate(self, steps: int = 1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 8) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         r"""
@@ -381,7 +499,7 @@ class PeriodicOrbit(ABC):
         Returns
         -------
         tuple
-            (stability_indices, eigenvalues, eigenvectors) from the monodromy matrix
+            (_stability_indices, eigenvalues, eigenvectors) from the monodromy matrix
         """
         if self.period is None:
             msg = "Period must be set before stability analysis"
@@ -390,10 +508,10 @@ class PeriodicOrbit(ABC):
         
         logger.info(f"Computing stability for orbit with period {self.period}")
         # Compute STM over one period
-        _, _, monodromy, _ = compute_stm(self.libration_point._var_eq_system, self.initial_state, self.period)
+        _, _, monodromy, _ = _compute_stm(self.libration_point._var_eq_system, self.initial_state, self.period)
         
         # Analyze stability
-        stability = stability_indices(monodromy)
+        stability = _stability_indices(monodromy)
         self._stability_info = stability
         
         is_stable = np.all(np.abs(stability[0]) <= 1.0)
@@ -401,41 +519,36 @@ class PeriodicOrbit(ABC):
         
         return stability
 
-    def plot(self, frame="rotating", show=True, figsize=(10, 8), dark_mode=True, **kwargs):
-        r"""
-        Plot the orbit trajectory in the specified reference frame.
-        
-        Parameters
-        ----------
-        frame : str, optional
-            Reference frame to use for plotting. Options are "rotating" or "inertial".
-            Default is "rotating".
-        show : bool, optional
-            Whether to call plt.show() after creating the plot. Default is True.
-        figsize : tuple, optional
-            Figure size in inches (width, height). Default is (10, 8).
-        **kwargs
-            Additional keyword arguments passed to the specific plotting function.
-            
-        Returns
-        -------
-        tuple
-            (fig, ax) containing the figure and axis objects for further customization
-            
-        Notes
-        -----
-        This is a convenience method that calls either plot_rotating_frame or
-        plot_inertial_frame based on the 'frame' parameter.
-        """
+    def manifold(self, stable: bool = True, direction: Literal["Positive", "Negative"] = "Positive", method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 6) -> "Manifold":
+        from hiten.system.manifold import Manifold
+        return Manifold(self, stable=stable, direction=direction, method=method, order=order)
+
+    def plot(self, frame: Literal["rotating", "inertial"] = "rotating", dark_mode: bool = True, save: bool = False, filepath: str = f'orbit.svg', **kwargs):
         if self._trajectory is None:
             msg = "No trajectory to plot. Call propagate() first."
             logger.error(msg)
             raise RuntimeError(msg)
             
         if frame.lower() == "rotating":
-            return self.plot_rotating_frame(show=show, figsize=figsize, dark_mode=dark_mode, **kwargs)
+            return plot_rotating_frame(
+                states=self._trajectory, 
+                times=self._times, 
+                bodies=[self._system.primary, self._system.secondary], 
+                system_distance=self._system.distance, 
+                dark_mode=dark_mode, 
+                save=save,
+                filepath=filepath,
+                **kwargs)
         elif frame.lower() == "inertial":
-            return self.plot_inertial_frame(show=show, figsize=figsize, dark_mode=dark_mode, **kwargs)
+            return plot_inertial_frame(
+                states=self._trajectory, 
+                times=self._times, 
+                bodies=[self._system.primary, self._system.secondary], 
+                system_distance=self._system.distance, 
+                dark_mode=dark_mode, 
+                save=save,
+                filepath=filepath,
+                **kwargs)
         else:
             msg = f"Invalid frame '{frame}'. Must be 'rotating' or 'inertial'."
             logger.error(msg)
@@ -448,345 +561,93 @@ class PeriodicOrbit(ABC):
         
         return animate_trajectories(self._trajectory, self._times, [self._system.primary, self._system.secondary], self._system.distance, **kwargs)
 
-    def plot_rotating_frame(self, show=True, figsize=(10, 8), dark_mode=True, **kwargs):
-        r"""
-        Plot the orbit trajectory in the rotating reference frame.
-        
-        Parameters
-        ----------
-        show : bool, optional
-            Whether to call plt.show() after creating the plot. Default is True.
-        figsize : tuple, optional
-            Figure size in inches (width, height). Default is (10, 8).
-        **kwargs
-            Additional keyword arguments for plot customization.
-            
-        Returns
-        -------
-        tuple
-            (fig, ax) containing the figure and axis objects for further customization
-        """
-        if self._trajectory is None:
-            logger.warning("No trajectory to plot. Call propagate() first.")
-            return None, None
-        
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111, projection='3d')
-        
-        # Get trajectory data
-        x = self._trajectory[:, 0]
-        y = self._trajectory[:, 1]
-        z = self._trajectory[:, 2]
-        
-        # Plot orbit trajectory
-        orbit_color = kwargs.get('orbit_color', 'cyan')
-        ax.plot(x, y, z, label=f'{self.family.capitalize()} Orbit', color=orbit_color)
-        
-        # Plot primary body (canonical position: -mu, 0, 0)
-        primary_pos = np.array([-self.mu, 0, 0])
-        primary_radius = self._system.primary.radius / self._system.distance  # Convert to canonical units
-        _plot_body(ax, primary_pos, primary_radius, self._system.primary.color, self._system.primary.name)
-        
-        # Plot secondary body (canonical position: 1-mu, 0, 0)
-        secondary_pos = np.array([1-self.mu, 0, 0])
-        secondary_radius = self._system.secondary.radius / self._system.distance  # Convert to canonical units
-        _plot_body(ax, secondary_pos, secondary_radius, self._system.secondary.color, self._system.secondary.name)
-        
-        # Plot libration point
-        ax.scatter(*self.libration_point.position, color='#FF00FF', marker='o', 
-                s=5, label=f'{self.libration_point}')
-        
-        ax.set_xlabel('X [canonical]')
-        ax.set_ylabel('Y [canonical]')
-        ax.set_zlabel('Z [canonical]')
-        
-        # Create legend and apply styling
-        ax.legend()
-        _set_axes_equal(ax)
-        
-        # Apply dark mode if requested
-        if dark_mode:
-            _set_dark_mode(fig, ax, title=f'{self.family.capitalize()} Orbit in Rotating Frame')
-        else:
-            ax.set_title(f'{self.family.capitalize()} Orbit in Rotating Frame')
-        
-        if show:
-            plt.show()
-            
-        return fig, ax
-
-        
-    def plot_inertial_frame(self, show=True, figsize=(10, 8), dark_mode=True, **kwargs):
-        r"""
-        Plot the orbit trajectory in the primary-centered inertial reference frame.
-        
-        Parameters
-        ----------
-        show : bool, optional
-            Whether to call plt.show() after creating the plot. Default is True.
-        figsize : tuple, optional
-            Figure size in inches (width, height). Default is (10, 8).
-        **kwargs
-            Additional keyword arguments for plot customization.
-            
-        Returns
-        -------
-        tuple
-            (fig, ax) containing the figure and axis objects for further customization
-        """
+    def to_csv(self, filepath: str, **kwargs):
         if self._trajectory is None or self._times is None:
-            logger.warning("No trajectory to plot. Call propagate() first.")
-            return None, None
-        
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111, projection='3d')
-        
-        # Get trajectory data and convert to inertial frame
-        traj_inertial = []
-        
-        for state, t in zip(self._trajectory, self._times):
-            # Convert rotating frame to inertial frame (canonical units)
-            inertial_state = rotating_to_inertial(state, t, self.mu)
-            traj_inertial.append(inertial_state)
-        
-        traj_inertial = np.array(traj_inertial)
-        x, y, z = traj_inertial[:, 0], traj_inertial[:, 1], traj_inertial[:, 2]
-        
-        # Plot orbit trajectory
-        orbit_color = kwargs.get('orbit_color', 'red')
-        ax.plot(x, y, z, label=f'{self.family.capitalize()} Orbit', color=orbit_color)
-        
-        # Plot primary body at origin
-        primary_pos = np.array([0, 0, 0])
-        primary_radius = self._system.primary.radius / self._system.distance  # Convert to canonical units
-        _plot_body(ax, primary_pos, primary_radius, self._system.primary.color, self._system.primary.name)
-        
-        # Plot secondary's orbit and position
-        theta = self._times  # Time is angle in canonical units
-        secondary_x = (1-self.mu) * np.cos(theta)
-        secondary_y = (1-self.mu) * np.sin(theta)
-        secondary_z = np.zeros_like(theta)
-        
-        # Plot secondary's orbit
-        ax.plot(secondary_x, secondary_y, secondary_z, '--', color=self._system.secondary.color, 
-                alpha=0.5, label=f'{self._system.secondary.name} Orbit')
-        
-        # Plot secondary at final position
-        secondary_pos = np.array([secondary_x[-1], secondary_y[-1], secondary_z[-1]])
-        secondary_radius = self._system.secondary.radius / self._system.distance  # Convert to canonical units
-        _plot_body(ax, secondary_pos, secondary_radius, self._system.secondary.color, self._system.secondary.name)
-        
-        ax.set_xlabel('X [canonical]')
-        ax.set_ylabel('Y [canonical]')
-        ax.set_zlabel('Z [canonical]')
-        
-        # Create legend and apply styling
-        ax.legend()
-        _set_axes_equal(ax)
-        
-        # Apply dark mode if requested
-        if dark_mode:
-            _set_dark_mode(fig, ax, title=f'{self.family.capitalize()} Orbit in Inertial Frame')
-        else:
-            ax.set_title(f'{self.family.capitalize()} Orbit in Inertial Frame')
-        
-        if show:
-            plt.show()
-            
-        return fig, ax
+            err = "Trajectory not computed. Please call propagate() first."
+            logger.error(err)
+            raise ValueError(err)
+
+        # Assemble the data: time followed by the six-dimensional state vector
+        data = np.column_stack((self._times, self._trajectory))
+        df = pd.DataFrame(data, columns=["time", "x", "y", "z", "vx", "vy", "vz"])
+
+        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+        df.to_csv(filepath, index=False)
+        logger.info(f"Orbit trajectory successfully exported to {filepath}")
 
     def save(self, filepath: str, **kwargs) -> None:
-        r"""
-        Save the orbit data to a file.
-        
-        Parameters
-        ----------
-        filepath : str
-            Path to save the orbit data
-        **kwargs
-            Additional options for saving
-            
-        Notes
-        -----
-        This saves the essential orbit information including initial state, 
-        period, and trajectory (if computed).
-        """
         _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+        _save_periodic_orbit(self, filepath)
+        return
 
-        # Create data dictionary with all essential information
-        data = {
-            'orbit_type': self.__class__.__name__,
-            'family': self.family,
-            'mu': self.mu,
-            'initial_state': self._initial_state.tolist() if self._initial_state is not None else None,
-            'period': self.period,
-        }
-        
-        # Add trajectory data if available
-        if self._trajectory is not None:
-            data['trajectory'] = self._trajectory.tolist()
-            data['times'] = self._times.tolist()
-        
-        # Add stability information if available
-        if self._stability_info is not None:
-            # Convert numpy arrays to lists for serialization
-            stability_data = []
-            for item in self._stability_info:
-                if isinstance(item, np.ndarray):
-                    stability_data.append(item.tolist())
-                else:
-                    stability_data.append(item)
-            data['stability_info'] = stability_data
-            
-        # Ensure directory exists
-        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
-        
-        # Save data
-        with open(filepath, 'wb') as f:
-            pickle.dump(data, f)
-            
-        logger.info(f"Orbit saved to {filepath}")
-    
-    def load(self, filepath: str, **kwargs) -> None:
-        r"""
-        Load orbit data from a file.
-        
-        Parameters
-        ----------
-        filepath : str
-            Path to the saved orbit data
-        **kwargs
-            Additional options for loading
-            
-        Returns
-        -------
-        None
-            Updates the current instance with loaded data
-            
-        Raises
-        ------
-        FileNotFoundError
-            If the specified file doesn't exist
-        ValueError
-            If the file contains incompatible data
-        """
+    def load_inplace(self, filepath: str, **kwargs) -> None:
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Orbit file not found: {filepath}")
-        
-        # Load data
-        with open(filepath, 'rb') as f:
-            data = pickle.load(f)
-        
-        # Verify orbit type
-        if data['orbit_type'] != self.__class__.__name__:
-            logger.warning(f"Loading {data['orbit_type']} data into {self.__class__.__name__} instance")
-            
-        # Update orbit properties
-        self.mu = data['mu']
-        self.family = data['family']
-        
-        if data['initial_state'] is not None:
-            self._initial_state = np.array(data['initial_state'])
-        
-        self.period = data['period']
-        
-        # Load trajectory if available
-        if 'trajectory' in data:
-            self._trajectory = np.array(data['trajectory'])
-            self._times = np.array(data['times'])
-        
-        # Load stability information if available
-        if 'stability_info' in data:
-            # Convert lists back to numpy arrays
-            stability_data = []
-            for item in data['stability_info']:
-                if isinstance(item, list):
-                    stability_data.append(np.array(item))
-                else:
-                    stability_data.append(item)
-            self._stability_info = tuple(stability_data)
-            
-        logger.info(f"Orbit loaded from {filepath}")
 
-    @property
-    @abstractmethod
-    def eccentricity(self):
-        pass
+        _load_periodic_orbit_inplace(self, filepath)
+        return
 
-    @abstractmethod
-    def _initial_guess(self, **kwargs):
-        pass
+    @classmethod
+    def load(cls, filepath: str, **kwargs) -> "PeriodicOrbit":
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"Orbit file not found: {filepath}")
 
-    def differential_correction(
-            self,
-            cfg: correctionConfig,
-            *,
-            tol: float = 1e-10,
-            max_attempts: int = 25,
-            forward: int = 1
-        ) -> tuple[np.ndarray, float]:
+        return _load_periodic_orbit(filepath)
+
+    def __setstate__(self, state):
+        """Restore the PeriodicOrbit instance after unpickling.
+
+        The cached dynamical system used for high-performance propagation is
+        removed before pickling (it may contain numba objects) and recreated
+        lazily on first access after unpickling.
         """
-        Perform differential correction to find a periodic orbit.
-        
-        Parameters
-        ----------
-        cfg : correctionConfig
-            Configuration for the differential correction.
-        tol : float, optional
-            Tolerance for the correction.
-        max_attempts : int, optional
-            Maximum number of attempts to find the orbit.
-        forward : int, optional
-            Direction of propagation.
+        # Simply update the dictionary – the cached dynamical system will be
+        # rebuilt lazily when :pyfunc:`_cr3bp_system` is first invoked.
+        self.__dict__.update(state)
 
-        Returns
-        -------
-        tuple
-            (state, period)
+    def __getstate__(self):
+        """Custom state extractor to enable pickling.
 
-        Raises
-        ------
-        RuntimeError
-            If the orbit is not found.
+        We strip attributes that might keep references to non-pickleable numba
+        objects (e.g. the cached dynamical system) while leaving all the
+        essential orbital data untouched.
         """
-        X0 = self.initial_state.copy()
-        for k in range(max_attempts + 1):
-
-            t_ev, X_ev = cfg.event_func(dynsys=self.system._dynsys, x0=X0, forward=forward)
-
-            R = X_ev[list(cfg.residual_indices)] - np.array(cfg.target)
-
-            if np.linalg.norm(R, ord=np.inf) < tol:
-                self._reset(); self._initial_state = X0
-                self.period = 2 * t_ev
-                return X0, t_ev
-
-            _, _, Phi, _ = compute_stm(self.libration_point._var_eq_system, X0, t_ev, steps=cfg.steps, method=cfg.method, order=cfg.order)
-
-            J = Phi[np.ix_(cfg.residual_indices, cfg.control_indices)]
-
-            if cfg.extra_jacobian is not None:
-                J -= cfg.extra_jacobian(X_ev, Phi)
-
-            if np.linalg.det(J) < 1e-12:
-                logger.warning(f"Jacobian determinant is small ({np.linalg.det(J):.2e}), adding regularization.")
-                J += np.eye(J.shape[0]) * 1e-12
-
-            delta = np.linalg.solve(J, -R)
-            logger.info(f"Differential correction delta: {delta} at iteration {k}")
-            X0[list(cfg.control_indices)] += delta
-
-        raise RuntimeError("did not converge")
+        state = self.__dict__.copy()
+        # Remove the cached CR3BP dynamical system wrapper
+        if "_cached_dynsys" in state:
+            state["_cached_dynsys"] = None
+        return state
 
 
 class GenericOrbit(PeriodicOrbit):
     r"""
     A minimal concrete orbit class for arbitrary initial conditions, with no correction or special guess logic.
     """
-    def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):
-        super().__init__(config, initial_state)
-        if self.period is None:
-            self.period = np.pi
+    
+    _family = "generic"
+    
+    def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None):
+        super().__init__(libration_point, initial_state)
+        self._custom_correction_config: Optional[_CorrectionConfig] = None
+        if self._period is None:
+            self._period = np.pi
+
+    @property
+    def correction_config(self) -> Optional[_CorrectionConfig]:
+        """
+        Get or set the user-defined differential correction configuration.
+
+        This property must be set to a valid :py:class:`_CorrectionConfig`
+        instance before calling :py:meth:`differential_correction` on a
+        :py:class:`GenericOrbit` object.
+        """
+        return self._custom_correction_config
+
+    @correction_config.setter
+    def correction_config(self, value: Optional[_CorrectionConfig]):
+        if value is not None and not isinstance(value, _CorrectionConfig):
+            raise TypeError("correction_config must be an instance of _CorrectionConfig or None.")
+        self._custom_correction_config = value
 
     @property
     def eccentricity(self):
@@ -796,3 +657,18 @@ class GenericOrbit(PeriodicOrbit):
         if hasattr(self, '_initial_state') and self._initial_state is not None:
             return self._initial_state
         raise ValueError("No initial state provided for GenericOrbit.")
+
+    @property
+    def _correction_config(self) -> _CorrectionConfig:
+        """
+        Provides the differential correction configuration.
+
+        For GenericOrbit, this must be set via the `correction_config` property
+        to enable differential correction.
+        """
+        if self.correction_config is not None:
+            return self.correction_config
+        raise NotImplementedError(
+            "Differential correction is not defined for a GenericOrbit unless the "
+            "`correction_config` property is set with a valid _CorrectionConfig."
+        )

@@ -4,9 +4,9 @@ from numba.typed import List
 from scipy.integrate import solve_ivp
 
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                               encode_multiindex,
-                                               init_index_tables)
-from hiten.algorithms.polynomial.operations import polynomial_evaluate
+                                               _encode_multiindex,
+                                               _init_index_tables)
+from hiten.algorithms.polynomial.operations import _polynomial_evaluate
 from hiten.algorithms.dynamics.rhs import create_rhs_system
 from hiten.algorithms.dynamics.hamiltonian import create_hamiltonian_system
 from hiten.algorithms.integrators.rk import RungeKutta, AdaptiveRK
@@ -32,13 +32,13 @@ def evaluate_hamiltonian(
     eval_point_6d[Q_POLY_INDICES] = state_6d[0:N_SYMPLECTIC_DOF] # q1,q2,q3
     eval_point_6d[P_POLY_INDICES] = state_6d[N_SYMPLECTIC_DOF : 2*N_SYMPLECTIC_DOF] # p1,p2,p3
     
-    return polynomial_evaluate(H_poly_list, eval_point_6d, clmo_tables).real
+    return _polynomial_evaluate(H_poly_list, eval_point_6d, clmo_tables).real
 
 
 @pytest.fixture(scope="module")
 def rk_test_data():
     """Create test data for RK integrator tests."""
-    psi_tables, clmo_tables_numba = init_index_tables(TEST_MAX_DEG)
+    psi_tables, clmo_tables_numba = _init_index_tables(TEST_MAX_DEG)
     encode_dict_list = _create_encode_dict_from_clmo(clmo_tables_numba)
 
     H_poly = [np.zeros(psi_tables[N_VARS_POLY, d], dtype=np.complex128) for d in range(TEST_MAX_DEG + 1)]
@@ -49,29 +49,29 @@ def rk_test_data():
     # H = P1^2/2 - (1 - Q1^2/2 + Q1^4/24 - Q1^6/720)
     # P1^2/2 term (degree 2)
     k_Psq = np.zeros(N_VARS_POLY, dtype=np.int64); k_Psq[idx_P_var] = 2
-    idx_Psq_encoded = encode_multiindex(k_Psq, 2, encode_dict_list)
+    idx_Psq_encoded = _encode_multiindex(k_Psq, 2, encode_dict_list)
     if idx_Psq_encoded != -1: H_poly[2][idx_Psq_encoded] = 0.5
 
     # -1 term (degree 0)
     k_const = np.zeros(N_VARS_POLY, dtype=np.int64)
-    idx_const_encoded = encode_multiindex(k_const, 0, encode_dict_list)
+    idx_const_encoded = _encode_multiindex(k_const, 0, encode_dict_list)
     if idx_const_encoded != -1: H_poly[0][idx_const_encoded] = -1.0
 
     # +Q1^2/2 term (degree 2)
     k_Qsq = np.zeros(N_VARS_POLY, dtype=np.int64); k_Qsq[idx_Q_var] = 2
-    idx_Qsq_encoded = encode_multiindex(k_Qsq, 2, encode_dict_list)
+    idx_Qsq_encoded = _encode_multiindex(k_Qsq, 2, encode_dict_list)
     if idx_Qsq_encoded != -1: H_poly[2][idx_Qsq_encoded] += 0.5 # Add to existing P1^2/2 degree 2 array
 
     # -Q1^4/24 term (degree 4)
     if TEST_MAX_DEG >= 4:
         k_Q4 = np.zeros(N_VARS_POLY, dtype=np.int64); k_Q4[idx_Q_var] = 4
-        idx_Q4_encoded = encode_multiindex(k_Q4, 4, encode_dict_list)
+        idx_Q4_encoded = _encode_multiindex(k_Q4, 4, encode_dict_list)
         if idx_Q4_encoded != -1: H_poly[4][idx_Q4_encoded] = -1.0 / 24.0
 
     # +Q1^6/720 term (degree 6)
     if TEST_MAX_DEG >= 6:
         k_Q6 = np.zeros(N_VARS_POLY, dtype=np.int64); k_Q6[idx_Q_var] = 6
-        idx_Q6_encoded = encode_multiindex(k_Q6, 6, encode_dict_list)
+        idx_Q6_encoded = _encode_multiindex(k_Q6, 6, encode_dict_list)
         if idx_Q6_encoded != -1: H_poly[6][idx_Q6_encoded] = 1.0 / 720.0
     
     # Convert H_poly to Numba typed list for internal consistency
@@ -119,7 +119,7 @@ def test_energy_conservation(rk_test_data):
     energy_drift = abs(final_energy - initial_energy)
     relative_drift = energy_drift / abs(initial_energy)
     
-    # For RK8 with fine timestep, energy drift should be reasonable but not perfect
+    # For _RK8 with fine timestep, energy drift should be reasonable but not perfect
     assert relative_drift < 1e-6, (
         f"Energy drift too large for RK integrator. Initial: {initial_energy}, "
         f"Final: {final_energy}, Relative drift: {relative_drift}"
@@ -186,7 +186,7 @@ def test_final_state_error(rk_test_data):
     solution2 = integrator.integrate(hamiltonian_system, initial_state, times2)
     final_state_ref = solution2.states[-1]
 
-    # For RK6, error should scale as O(h^6), so 16x more steps should give much better accuracy
+    # For _RK6, error should scale as O(h^6), so 16x more steps should give much better accuracy
     assert np.allclose(final_state1, final_state_ref, atol=1e-4, rtol=1e-3), (
         f"Final state error too large for RK integrator. Coarse: {final_state1}, "
         f"Ref: {final_state_ref}"
@@ -212,11 +212,11 @@ def test_vs_solve_ivp(rk_test_data):
 
     # (label, factory, scipy_method)
     rk_variants = [
-        ("RK4",  lambda: RungeKutta(order=4), "DOP853"),
-        ("RK6",  lambda: RungeKutta(order=6), "DOP853"),
-        ("RK8",  lambda: RungeKutta(order=8), "DOP853"),
-        ("RK45", lambda: AdaptiveRK(order=5, debug=True), "RK45"),
-        ("DOP853", lambda: AdaptiveRK(order=8, debug=True), "DOP853"),
+        ("_RK4",  lambda: RungeKutta(order=4), "DOP853"),
+        ("_RK6",  lambda: RungeKutta(order=6), "DOP853"),
+        ("_RK8",  lambda: RungeKutta(order=8), "DOP853"),
+        ("_RK45", lambda: AdaptiveRK(order=5, debug=True), "RK45"),
+        ("_DOP853", lambda: AdaptiveRK(order=8, debug=True), "DOP853"),
     ]
 
     def taylor_pendulum_ode(t, y):
@@ -276,11 +276,11 @@ def test_vs_solve_ivp_generic_rhs():
     t_eval = np.linspace(0.0, t_final, n_samples, dtype=np.float64)
 
     rk_variants = [
-        ("RK4",  lambda: RungeKutta(order=4), "DOP853"),
-        ("RK6",  lambda: RungeKutta(order=6), "DOP853"),
-        ("RK8",  lambda: RungeKutta(order=8), "DOP853"),
-        ("RK45", lambda: AdaptiveRK(order=5, debug=True), "RK45"),
-        ("DOP853", lambda: AdaptiveRK(order=8, debug=True), "DOP853"),
+        ("_RK4",  lambda: RungeKutta(order=4), "DOP853"),
+        ("_RK6",  lambda: RungeKutta(order=6), "DOP853"),
+        ("_RK8",  lambda: RungeKutta(order=8), "DOP853"),
+        ("_RK45", lambda: AdaptiveRK(order=5, debug=True), "RK45"),
+        ("_DOP853", lambda: AdaptiveRK(order=8, debug=True), "DOP853"),
     ]
 
     for label, make_integrator, scipy_method in rk_variants:
@@ -305,7 +305,7 @@ def test_vs_solve_ivp_generic_rhs():
         x_rms = np.sqrt(np.mean((rk_x - sp_x) ** 2))
         v_rms = np.sqrt(np.mean((rk_v - sp_v) ** 2))
 
-        tol = 1e-5 if label != "RK4" else 1e-4  # slightly looser for lower order
+        tol = 1e-5 if label != "_RK4" else 1e-4  # slightly looser for lower order
         assert x_rms < tol, f"{label}: position RMS error too large - {x_rms}"
         assert v_rms < tol, f"{label}: velocity RMS error too large - {v_rms}"
 

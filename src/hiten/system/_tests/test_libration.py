@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from hiten.system.base import System, systemConfig
+from hiten.system.base import System
 from hiten.system.body import Body
 from hiten.system.libration.collinear import L1Point, L2Point, L3Point
 from hiten.system.libration.triangular import L4Point, L5Point
@@ -40,9 +40,9 @@ def system_earth_moon():
     distance = Constants.get_orbital_distance("earth", "moon")
 
     earth = Body("Earth", earth_mass, earth_radius, color="blue")
-    moon = Body("Moon", moon_mass, moon_radius, color="gray", parent=earth)
+    moon = Body("Moon", moon_mass, moon_radius, color="gray", _parent_input=earth)
 
-    return System(systemConfig(primary=earth, secondary=moon, distance=distance))
+    return System(earth, moon, distance)
 
 @pytest.fixture
 def system_sun_earth():
@@ -53,9 +53,9 @@ def system_sun_earth():
     distance = Constants.get_orbital_distance("sun", "earth")
 
     sun = Body("Sun", sun_mass, sun_radius, color="yellow")
-    earth = Body("Earth", earth_mass, earth_radius, color="blue", parent=sun)
+    earth = Body("Earth", earth_mass, earth_radius, color="blue", _parent_input=sun)
 
-    return System(systemConfig(primary=sun, secondary=earth, distance=distance))
+    return System(sun, earth, distance)
 
 @pytest.fixture
 def system_sun_jupiter():
@@ -66,8 +66,8 @@ def system_sun_jupiter():
     distance = Constants.get_orbital_distance("sun", "jupiter")
 
     sun = Body("Sun", sun_mass, sun_radius, color="yellow")
-    jupiter = Body("Jupiter", jupiter_mass, jupiter_radius, color="gray", parent=sun)
-    return System(systemConfig(primary=sun, secondary=jupiter, distance=distance))
+    jupiter = Body("Jupiter", jupiter_mass, jupiter_radius, color="gray", _parent_input=sun)
+    return System(sun, jupiter, distance)
 
 @pytest.fixture
 def l1_earth_moon(system_earth_moon):
@@ -108,9 +108,8 @@ def test_libration_point_initialization():
     def create_mock_system(mu):
         # Create a mock system with the given mu. The bodies are placeholders.
         primary = Body("p", 1 - mu, 0.1)
-        secondary = Body("s", mu, 0.1, parent=primary)
-        config = systemConfig(primary=primary, secondary=secondary, distance=1.0)
-        return System(config)
+        secondary = Body("s", mu, 0.1, _parent_input=primary)
+        return System(primary, secondary, 1.0)
 
     l1_earth_moon = L1Point(create_mock_system(TEST_MU_EARTH_MOON))
     assert l1_earth_moon.mu == TEST_MU_EARTH_MOON

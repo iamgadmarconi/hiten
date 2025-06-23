@@ -12,8 +12,8 @@ instead of navigating the full internal hierarchy (``hiten.system.base``,
 
 # Core containers
 from .body import Body
-from .base import systemConfig, System
-from .manifold import manifoldConfig, ManifoldResult, Manifold
+from .base import System
+from .manifold import ManifoldResult, Manifold
 
 # Libration points
 from .libration.base import LinearData, LibrationPoint
@@ -24,12 +24,11 @@ from .libration.triangular import TriangularPoint, L4Point, L5Point
 from .center import CenterManifold
 
 # Poincare map
-from .poincare import poincareMapConfig, PoincareMap
+from ..algorithms.poincare.base import _PoincareMapConfig, _PoincareMap
 
 # Orbits
 from .orbits.base import (
-    orbitConfig,
-    correctionConfig,
+    _CorrectionConfig,
     PeriodicOrbit,
     GenericOrbit,
     S,  # state-vector helper enum
@@ -40,9 +39,7 @@ from .orbits.lyapunov import LyapunovOrbit, VerticalLyapunovOrbit
 __all__ = [
     # Base system
     "Body",
-    "systemConfig",
     "System",
-    "manifoldConfig",
     "ManifoldResult",
     "Manifold",
     # Libration points
@@ -58,11 +55,10 @@ __all__ = [
     # Center manifold
     "CenterManifold",
     # Poincare map
-    "poincareMapConfig",
-    "PoincareMap",
+    "_PoincareMapConfig",
+    "_PoincareMap",
     # Orbits / configs
-    "orbitConfig",
-    "correctionConfig",
+    "_CorrectionConfig",
     "PeriodicOrbit",
     "GenericOrbit",
     "HaloOrbit",

@@ -17,14 +17,14 @@ from numba import njit
 from numba.typed import List
 
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                        _factorial, decode_multiindex,
-                                        make_poly)
-from hiten.algorithms.polynomial.operations import (polynomial_clean,
-                                              polynomial_evaluate,
-                                              polynomial_poisson_bracket,
-                                              polynomial_total_degree,
-                                              polynomial_zero_list)
-from hiten.utils.config import FASTMATH
+                                        _factorial, _decode_multiindex,
+                                        _make_poly)
+from hiten.algorithms.polynomial.operations import (_polynomial_clean,
+                                              _polynomial_evaluate,
+                                              _polynomial_poisson_bracket,
+                                              _polynomial_total_degree,
+                                              _polynomial_zero_list)
+from hiten.algorithms.utils.config import FASTMATH
 from hiten.utils.log_config import logger
 
 
@@ -46,7 +46,7 @@ tol: float = 1e-30) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray
     poly_init : List[np.ndarray]
         Initial polynomial Hamiltonian to normalize
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo : numpy.ndarray
         List of arrays containing packed multi-indices
     max_degree : int
@@ -80,8 +80,8 @@ tol: float = 1e-30) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
 
     poly_trans = [h.copy() for h in poly_init]
-    poly_G_total = polynomial_zero_list(max_degree, psi)
-    poly_elim_total = polynomial_zero_list(max_degree, psi)  # Store eliminated terms
+    poly_G_total = _polynomial_zero_list(max_degree, psi)
+    poly_elim_total = _polynomial_zero_list(max_degree, psi)  # Store eliminated terms
 
     for n in range(3, max_degree+1):
         logger.info(f"Normalizing at order: {n}")
@@ -99,11 +99,11 @@ tol: float = 1e-30) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray
         p_G_n = _solve_homological_equation(p_elim, n, eta, clmo)
 
         
-        # Clean Gn using a Numba typed list for compatibility with polynomial_clean
+        # Clean Gn using a Numba typed list for compatibility with _polynomial_clean
         if p_G_n.any(): # Only clean if there's something to clean
             temp_G_n_list = List()
             temp_G_n_list.append(p_G_n)
-            cleaned_G_n_list = polynomial_clean(temp_G_n_list, tol)
+            cleaned_G_n_list = _polynomial_clean(temp_G_n_list, tol)
             p_G_n = cleaned_G_n_list[0]
 
         # Pass the cleaned Gn to _apply_poly_transform
@@ -122,8 +122,8 @@ tol: float = 1e-30) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray
         if not _select_terms_for_elimination(poly_trans[n], n, clmo).any():
             continue
             
-    poly_G_total = polynomial_clean(poly_G_total, tol)
-    poly_elim_total = polynomial_clean(poly_elim_total, tol)
+    poly_G_total = _polynomial_clean(poly_G_total, tol)
+    poly_elim_total = _polynomial_clean(poly_elim_total, tol)
     return poly_trans, poly_G_total, poly_elim_total
 
 
@@ -142,7 +142,7 @@ psi: np.ndarray) -> np.ndarray:
     n : int
         Degree of the homogeneous terms to extract
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
         
     Returns
     -------
@@ -157,7 +157,7 @@ psi: np.ndarray) -> np.ndarray:
     if n < len(poly_H):
         result = poly_H[n].copy()
     else:
-        result = make_poly(n, psi)
+        result = _make_poly(n, psi)
     return result
 
 
@@ -192,7 +192,7 @@ clmo: np.ndarray) -> np.ndarray:
     p_elim = p_n.copy()           # independent buffer
     for i in range(p_n.shape[0]):
         if p_elim[i] != 0.0:     # skip explicit zeros
-            k = decode_multiindex(i, n, clmo)
+            k = _decode_multiindex(i, n, clmo)
             if k[0] == k[3]:   # not a "bad" monomial -> zero it
                 p_elim[i] = 0.0
     return p_elim
@@ -239,7 +239,7 @@ clmo: np.ndarray) -> np.ndarray:
     for i in range(p_elim.shape[0]):
         c = p_elim[i]
         if c != 0.0:
-            k = decode_multiindex(i, n, clmo)
+            k = _decode_multiindex(i, n, clmo)
             denom = ((k[3]-k[0]) * eta[0] +
                      (k[4]-k[1]) * eta[1] +
                      (k[5]-k[2]) * eta[2])
@@ -274,7 +274,7 @@ tol: float) -> List[np.ndarray]:
     N_max : int
         Maximum degree to include in the transformed Hamiltonian
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : List
@@ -304,10 +304,10 @@ tol: float) -> List[np.ndarray]:
         if i < len(poly_H):
             poly_result.append(poly_H[i].copy())
         else:
-            poly_result.append(make_poly(i, psi))
+            poly_result.append(_make_poly(i, psi))
     
     # Build complete generator polynomial from single degree
-    poly_G = polynomial_zero_list(N_max, psi)
+    poly_G = _polynomial_zero_list(N_max, psi)
     if deg_G < len(poly_G):
         poly_G[deg_G] = p_G_n.copy()
     
@@ -328,7 +328,7 @@ tol: float) -> List[np.ndarray]:
     # Apply Lie series: H + {H,G} + (1/2!){{H,G},G} + ...
     for k in range(1, K + 1):
         # Compute next Poisson bracket
-        poly_bracket = polynomial_poisson_bracket(
+        poly_bracket = _polynomial_poisson_bracket(
             poly_bracket,
             poly_G,
             N_max,
@@ -336,14 +336,14 @@ tol: float) -> List[np.ndarray]:
             clmo,
             encode_dict_list
         )
-        poly_bracket = polynomial_clean(poly_bracket, tol)
+        poly_bracket = _polynomial_clean(poly_bracket, tol)
         
         # Add to result with factorial coefficient
         coeff = 1.0 / factorials[k]
         for d in range(min(len(poly_bracket), len(poly_result))):
             poly_result[d] += coeff * poly_bracket[d]
     
-    return polynomial_clean(poly_result, tol)
+    return _polynomial_clean(poly_result, tol)
 
 
 def _lie_expansion(
@@ -364,7 +364,7 @@ restrict: bool = True) -> List[List[np.ndarray]]:
     max_degree : int
         Maximum polynomial degree for the transformation
     psi : np.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo : np.ndarray
         List of arrays containing packed multi-indices
     tol : float, optional
@@ -380,7 +380,7 @@ restrict: bool = True) -> List[List[np.ndarray]]:
 
     current_coords = []
     for i in range(6):
-        poly = polynomial_zero_list(max_degree, psi)
+        poly = _polynomial_zero_list(max_degree, psi)
         poly[1] = np.zeros(6, dtype=np.complex128)
         poly[1][i] = 1.0 + 0j       # identity for q₁,q₂,q₃,p₁,p₂,p₃
         current_coords.append(poly) # [q1, q2, q3, p1, p2, p3]
@@ -401,7 +401,7 @@ restrict: bool = True) -> List[List[np.ndarray]]:
             continue
 
         G_n = sign * poly_G_total[n]
-        poly_G = polynomial_zero_list(max_degree, psi)
+        poly_G = _polynomial_zero_list(max_degree, psi)
         poly_G[n] = G_n.copy()
         
         new_coords = []
@@ -465,10 +465,10 @@ tol: float) -> List[np.ndarray]:
         if i < len(poly_X):
             poly_result.append(poly_X[i].copy())
         else:
-            poly_result.append(make_poly(i, psi))
+            poly_result.append(_make_poly(i, psi))
 
     # Find degree of generating function
-    deg_G = polynomial_total_degree(poly_G, psi)
+    deg_G = _polynomial_total_degree(poly_G, psi)
 
     if deg_G > 2:
         K_max = max(N_max, (N_max - 1) // (deg_G - 2) + 1)
@@ -487,7 +487,7 @@ tol: float) -> List[np.ndarray]:
     for k in range(1, K_max + 1):
 
         # Compute next Poisson bracket
-        poly_bracket = polynomial_poisson_bracket(
+        poly_bracket = _polynomial_poisson_bracket(
             poly_bracket,
             poly_G,
             N_max,
@@ -496,13 +496,13 @@ tol: float) -> List[np.ndarray]:
             encode_dict_list
         )
 
-        poly_bracket = polynomial_clean(poly_bracket, tol)
+        poly_bracket = _polynomial_clean(poly_bracket, tol)
 
         coeff = 1.0 / factorials[k]
         for d in range(min(len(poly_bracket), len(poly_result))):
             poly_result[d] += coeff * poly_bracket[d]
 
-    return polynomial_clean(poly_result, tol)
+    return _polynomial_clean(poly_result, tol)
 
 
 @njit(fastmath=FASTMATH, cache=False)
@@ -532,7 +532,7 @@ clmo: np.ndarray) -> np.ndarray:
     
     for i in range(6):
         # Evaluate each polynomial at the given point
-        result[i] = polynomial_evaluate(expansions[i], coords_cm_complex, clmo)
+        result[i] = _polynomial_evaluate(expansions[i], coords_cm_complex, clmo)
     
     return result # [q̃1, q̃2, q̃3, p̃1, p̃2, p̃3]
 
@@ -564,7 +564,7 @@ def _zero_q1p1(
                 if abs(c) <= tol:
                     coeff_vec[pos] = 0.0
                     continue
-                k = decode_multiindex(pos, deg, clmo)
+                k = _decode_multiindex(pos, deg, clmo)
                 if k[0] != 0 or k[3] != 0:  # q1 or p1 exponent non-zero
                     coeff_vec[pos] = 0.0
         restricted_expansions.append(restricted_poly)

@@ -4,7 +4,7 @@ dynamics.rhs
 
 Lightweight wrappers for arbitrary right-hand side functions.
 
-This module offers a thin adapter class :pyclass:`RHSSystem` that converts a
+This module offers a thin adapter class :pyclass:`_RHSSystem` that converts a
 plain Python callable representing the ODE :math:`\dot y = f(t, y)` into an
 object compatible with the internal :pyclass:`~hiten.algorithms.dynamics.base._DynamicalSystem`
 interface.  The adapter takes care of JIT-compiling the callable with
@@ -15,12 +15,12 @@ so that it can be invoked from nopython kernels without performance penalties.
 from typing import Callable
 
 import numpy as np
-from hiten.utils.config import FASTMATH
+from hiten.algorithms.utils.config import FASTMATH
 
 from hiten.algorithms.dynamics.base import _DynamicalSystem
 
 
-class RHSSystem(_DynamicalSystem):
+class _RHSSystem(_DynamicalSystem):
     r"""
     Lightweight wrapper around an RHS callable.
 
@@ -100,26 +100,26 @@ class RHSSystem(_DynamicalSystem):
         return self._rhs_compiled
     
     def __repr__(self) -> str:
-        return f"RHSSystem(name='{self.name}', dim={self.dim})"
+        return f"_RHSSystem(name='{self.name}', dim={self.dim})"
 
 
 def create_rhs_system(rhs_func: Callable[[float, np.ndarray], np.ndarray], dim: int, name: str = "Generic RHS"):
     r"""
-    Factory helper that mirrors :pyfunc:`RHSSystem`.
+    Factory helper that mirrors :pyfunc:`_RHSSystem`.
 
     This convenience function exists mainly to enable a functional style
-    when the object-oriented interface of :pyclass:`RHSSystem` is not needed.
+    when the object-oriented interface of :pyclass:`_RHSSystem` is not needed.
 
     Parameters
     ----------
     rhs_func, dim, name
-        Forwarded verbatim to the :pyfunc:`RHSSystem` constructor.
+        Forwarded verbatim to the :pyfunc:`_RHSSystem` constructor.
 
     Returns
     -------
-    RHSSystem
+    _RHSSystem
         Instance wrapping *rhs_func*.
     """
-    return RHSSystem(rhs_func, dim, name)
+    return _RHSSystem(rhs_func, dim, name)
 
 

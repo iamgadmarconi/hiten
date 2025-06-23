@@ -4,12 +4,11 @@ Public interface for the orbit-family classes.
 
 Usage example::
 
-    from hiten.system.orbits import HaloOrbit, LyapunovOrbit, orbitConfig
+    from hiten.system.orbits import HaloOrbit, LyapunovOrbit
 """
 
 from .base import (
-    orbitConfig,
-    correctionConfig,
+    _CorrectionConfig,
     PeriodicOrbit,
     GenericOrbit,
     S,
@@ -18,8 +17,7 @@ from .halo import HaloOrbit
 from .lyapunov import LyapunovOrbit, VerticalLyapunovOrbit
 
 __all__ = [
-    "orbitConfig",
-    "correctionConfig",
+    "_CorrectionConfig",
     "PeriodicOrbit",
     "GenericOrbit",
     "HaloOrbit",

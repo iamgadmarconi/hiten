@@ -5,7 +5,7 @@ import pytest
 import sympy as sp
 
 from hiten.system.center import CenterManifold
-from hiten.algorithms.center.hamiltonian import build_physical_hamiltonian
+from hiten.algorithms.center.hamiltonian import _build_physical_hamiltonian
 from hiten.algorithms.center.lie import (_apply_coord_transform,
                                    _apply_poly_transform, _evaluate_transform,
                                    _get_homogeneous_terms, _lie_expansion,
@@ -14,14 +14,14 @@ from hiten.algorithms.center.lie import (_apply_coord_transform,
                                    _solve_homological_equation)
 from hiten.algorithms.polynomial.algebra import _poly_poisson
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                               decode_multiindex,
-                                               encode_multiindex, make_poly)
+                                               _decode_multiindex,
+                                               _encode_multiindex, _make_poly)
 from hiten.algorithms.polynomial.conversion import sympy2poly
 from hiten.algorithms.polynomial.operations import (
-    polynomial_evaluate, polynomial_poisson_bracket, polynomial_zero_list)
-from hiten.algorithms.center.transforms import _local2realmodal, substitute_complex
-from hiten.utils.config import N_VARS
-from hiten.system.base import System, systemConfig
+    _polynomial_evaluate, _polynomial_poisson_bracket, _polynomial_zero_list)
+from hiten.algorithms.center.transforms import _local2realmodal, _substitute_complex
+from hiten.algorithms.utils.config import N_VARS
+from hiten.system.base import System
 from hiten.system.body import Body
 from hiten.utils.constants import Constants
 
@@ -34,7 +34,7 @@ def lie_test_setup():
     Earth = Body("Earth", Constants.bodies["earth"]["mass"], Constants.bodies["earth"]["radius"], "blue")
     Moon = Body("Moon", Constants.bodies["moon"]["mass"], Constants.bodies["moon"]["radius"], "gray", Earth)
     distance = Constants.get_orbital_distance("earth", "moon")
-    system = System(systemConfig(Earth, Moon, distance))
+    system = System(Earth, Moon, distance)
     libration_point = system.get_libration_point(TEST_L_POINT_IDX)
 
     cm = CenterManifold(libration_point, TEST_MAX_DEG)
@@ -45,7 +45,7 @@ def lie_test_setup():
 def test_get_homogeneous_terms(lie_test_setup):
     cm = lie_test_setup
     H_coeffs = cm.cache_get(('hamiltonian', TEST_MAX_DEG, 'center_manifold_real'))
-    psi = cm.psi
+    psi = cm._psi
 
     n = 3  # Test for degree 3 terms
     if n > TEST_MAX_DEG:
@@ -70,8 +70,8 @@ def test_get_homogeneous_terms(lie_test_setup):
 @pytest.mark.parametrize("n", [3, 4, 6])
 def test_select_terms_for_elimination(seed, n, lie_test_setup):
     cm = lie_test_setup
-    psi = cm.psi
-    clmo = cm.clmo
+    psi = cm._psi
+    clmo = cm._clmo
     size = psi[6, n]
     rng  = np.random.default_rng(seed)
 
@@ -87,7 +87,7 @@ def test_select_terms_for_elimination(seed, n, lie_test_setup):
         f"Output dtype {got.dtype} does not match input dtype {Hn_orig.dtype}."
 
     for pos in range(size):
-        k = decode_multiindex(pos, n, clmo)
+        k = _decode_multiindex(pos, n, clmo)
         original_value_at_pos = Hn_orig[pos]
 
         if k[0] == k[3]:
@@ -107,9 +107,9 @@ def test_select_terms_for_elimination(seed, n, lie_test_setup):
 @pytest.mark.parametrize("n", [2, 3, 4, 6])
 def test_homological_property(n, lie_test_setup):
     cm = lie_test_setup
-    psi = cm.psi
-    clmo = cm.clmo
-    encode_dict = cm.encode_dict_list
+    psi = cm._psi
+    clmo = cm._clmo
+    encode_dict = cm._encode_dict_list
 
     lam, w1, w2 = 3.1, 2.4, 2.2
     eta = np.array([lam, 1j*w1, 1j*w2], dtype=np.complex128)
@@ -118,18 +118,18 @@ def test_homological_property(n, lie_test_setup):
     rng  = np.random.default_rng(1234)
     Hn_bad = np.zeros(size, dtype=np.complex128)
     for pos in range(size):
-        k = decode_multiindex(pos, n, clmo)
+        k = _decode_multiindex(pos, n, clmo)
         if k[0] != k[3]:
             Hn_bad[pos] = rng.normal() + 1j*rng.normal()
 
     Gn = _solve_homological_equation(Hn_bad, n, eta, clmo)
 
-    H2_list = polynomial_zero_list(TEST_MAX_DEG, psi)
-    idx = encode_multiindex((1,0,0,1,0,0), 2, encode_dict) # q1 p1
+    H2_list = _polynomial_zero_list(TEST_MAX_DEG, psi)
+    idx = _encode_multiindex((1,0,0,1,0,0), 2, encode_dict) # q1 p1
     H2_list[2][idx] = lam
-    idx = encode_multiindex((0,1,0,0,1,0), 2, encode_dict) # q2 p2
+    idx = _encode_multiindex((0,1,0,0,1,0), 2, encode_dict) # q2 p2
     H2_list[2][idx] = 1j*w1
-    idx = encode_multiindex((0,0,1,0,0,1), 2, encode_dict)   # q3 p3
+    idx = _encode_multiindex((0,0,1,0,0,1), 2, encode_dict)   # q3 p3
     H2_list[2][idx] = 1j*w2
 
     PB_coeffs = _poly_poisson(H2_list[2], 2, Gn, n, psi, clmo, encode_dict)
@@ -137,7 +137,7 @@ def test_homological_property(n, lie_test_setup):
     assert np.allclose(PB_coeffs, -Hn_bad, atol=1e-14, rtol=1e-14)
 
     for pos, g in enumerate(Gn):
-        k = decode_multiindex(pos, n, clmo)
+        k = _decode_multiindex(pos, n, clmo)
         if k[0] == k[3]:
             assert g == 0
 
@@ -156,24 +156,24 @@ test_params = [
 )
 def test_apply_poly_transform(test_name, G_deg_actual, G_exps, G_coeff_val, H_coeff_val, N_max_test, lie_test_setup):
     cm = lie_test_setup
-    psi = cm.psi
-    clmo = cm.clmo
-    encode_dict = cm.encode_dict_list
+    psi = cm._psi
+    clmo = cm._clmo
+    encode_dict = cm._encode_dict_list
 
     H_deg_actual = 2
     H_exps_tuple = (0,1,0,0,1,0)
     H_exps_np = np.array(H_exps_tuple, dtype=np.int64)
-    H_coeffs_list = polynomial_zero_list(N_max_test, psi)
-    idx_H = encode_multiindex(H_exps_np, H_deg_actual, encode_dict)
+    H_coeffs_list = _polynomial_zero_list(N_max_test, psi)
+    idx_H = _encode_multiindex(H_exps_np, H_deg_actual, encode_dict)
     if H_deg_actual <= N_max_test:
         H_coeffs_list[H_deg_actual][idx_H] = H_coeff_val
 
-    _ = polynomial_zero_list(N_max_test, psi)
+    _ = _polynomial_zero_list(N_max_test, psi)
 
-    G_n_array = make_poly(G_deg_actual, psi)
+    G_n_array = _make_poly(G_deg_actual, psi)
 
     G_exps_np = np.array(G_exps, dtype=np.int64)
-    idx_G = encode_multiindex(G_exps_np, G_deg_actual, encode_dict)
+    idx_G = _encode_multiindex(G_exps_np, G_deg_actual, encode_dict)
     G_n_array[idx_G] = G_coeff_val
     
     H1_transformed_coeffs = _apply_poly_transform(H_coeffs_list, G_n_array, G_deg_actual, N_max_test, psi, clmo, encode_dict, tol=1e-15)
@@ -243,8 +243,8 @@ def test_apply_poly_transform(test_name, G_deg_actual, G_exps, G_coeff_val, H_co
 def test_lie_transform_removes_bad_terms(lie_test_setup):
     cm = lie_test_setup
     H_coeffs = cm.cache_get(('hamiltonian', TEST_MAX_DEG, 'center_manifold_real'))
-    psi = cm.psi
-    clmo = cm.clmo
+    psi = cm._psi
+    clmo = cm._clmo
     max_deg = TEST_MAX_DEG
 
     point = cm.point
@@ -266,13 +266,13 @@ def test_lie_transform_removes_bad_terms(lie_test_setup):
 def test_lie_transform_on_center_manifold(lie_test_setup):
     cm = lie_test_setup
     point = cm.point
-    psi = cm.psi
-    clmo = cm.clmo
+    psi = cm._psi
+    clmo = cm._clmo
     max_degree = TEST_MAX_DEG
     
-    H_phys = build_physical_hamiltonian(point, max_degree)
+    H_phys = _build_physical_hamiltonian(point, max_degree)
     H_rn = _local2realmodal(point, H_phys, max_degree, psi, clmo)
-    H_cn = substitute_complex(H_rn, max_degree, psi, clmo)
+    H_cn = _substitute_complex(H_rn, max_degree, psi, clmo)
     
     poly_trans, _, _ = _lie_transform(point, H_cn, psi, clmo, max_degree)
     
@@ -292,7 +292,7 @@ def test_lie_transform_on_center_manifold(lie_test_setup):
         cross_terms = []
         for idx, coeff in enumerate(H2):
             if abs(coeff) > 1e-15:
-                k = decode_multiindex(idx, 2, clmo)
+                k = _decode_multiindex(idx, 2, clmo)
                 has_q1p1 = (k[0] > 0 or k[3] > 0)
                 has_cm = (k[1] > 0 or k[2] > 0 or k[4] > 0 or k[5] > 0)
                 if has_q1p1 and has_cm:
@@ -311,8 +311,8 @@ def test_lie_transform_on_center_manifold(lie_test_setup):
 def test_lie_expansion_accumulation(lie_test_setup):
     cm = lie_test_setup
     point = cm.point
-    psi = cm.psi
-    clmo = cm.clmo
+    psi = cm._psi
+    clmo = cm._clmo
     
     cm_point = np.array([0, 1e-3+1e-3j, 0.5e-3+0.2e-3j,
                    0, 1e-3-1e-3j, 0.5e-3-0.2e-3j])
@@ -321,9 +321,9 @@ def test_lie_expansion_accumulation(lie_test_setup):
     print("-" * 50)
     
     for max_deg in [3, 4, 5, 6]:
-        H_phys = build_physical_hamiltonian(point, 6)
+        H_phys = _build_physical_hamiltonian(point, 6)
         H_rn = _local2realmodal(point, H_phys, 6, psi, clmo)
-        H_cn = substitute_complex(H_rn, 6, psi, clmo)
+        H_cn = _substitute_complex(H_rn, 6, psi, clmo)
         _, poly_G_total, _ = _lie_transform(point, H_cn, psi, clmo, max_deg)
         
         expansions = _lie_expansion(poly_G_total, max_deg, psi, clmo, 
@@ -342,8 +342,8 @@ def test_lie_expansion_accumulation(lie_test_setup):
 
 def test_lie_expansion_application(lie_test_setup):
     cm = lie_test_setup
-    psi = cm.psi
-    clmo = cm.clmo
+    psi = cm._psi
+    clmo = cm._clmo
     max_degree = TEST_MAX_DEG
 
     poly_G_total = cm.cache_get(('generating_functions', TEST_MAX_DEG))
@@ -358,7 +358,7 @@ def test_lie_expansion_application(lie_test_setup):
     # Start with identity transformation
     identity_coords = []
     for i in range(6):
-        poly = polynomial_zero_list(max_degree, psi)
+        poly = _polynomial_zero_list(max_degree, psi)
         poly[1][i] = 1.0
         identity_coords.append(poly)
     
@@ -370,7 +370,7 @@ def test_lie_expansion_application(lie_test_setup):
         print(f"\nApplying only G_{n}:")
         
         # Create polynomial for this generator only
-        test_G = polynomial_zero_list(max_degree, psi)
+        test_G = _polynomial_zero_list(max_degree, psi)
         test_G[n] = poly_G_total[n].copy()
         
         # Apply to q1 coordinate (index 0)
@@ -380,7 +380,7 @@ def test_lie_expansion_application(lie_test_setup):
         )
         
         # Evaluate the transformation at the test point
-        q1_value = polynomial_evaluate(transformed_q1, cm_point, clmo)
+        q1_value = _polynomial_evaluate(transformed_q1, cm_point, clmo)
         
         print(f"  q1 transformation: {q1_value:.6e}")
         print(f"  Change from identity: {abs(q1_value):.6e}")
@@ -418,13 +418,13 @@ def test_lie_expansion_application(lie_test_setup):
 def test_lie_expansion_degree_scaling(lie_test_setup):
     cm = lie_test_setup
     point = cm.point
-    psi = cm.psi
-    clmo = cm.clmo
+    psi = cm._psi
+    clmo = cm._clmo
     
     # Build and normalize Hamiltonian for different degrees
-    H_phys = build_physical_hamiltonian(point, 6)  # Use max degree 6 for building
+    H_phys = _build_physical_hamiltonian(point, 6)  # Use max degree 6 for building
     H_rn = _local2realmodal(point, H_phys, 6, psi, clmo)
-    H_cn = substitute_complex(H_rn, 6, psi, clmo)
+    H_cn = _substitute_complex(H_rn, 6, psi, clmo)
     
     # Test point on center manifold
     cm_point = np.array([0, 1e-3+1e-3j, 0.5e-3+0.2e-3j,   # q1,q2,q3
@@ -467,8 +467,8 @@ def test_lie_expansion_degree_scaling(lie_test_setup):
 def test_lie_expansion_amplitude_scaling(lie_test_setup):
     cm = lie_test_setup
     poly_G_total = cm.cache_get(('generating_functions', TEST_MAX_DEG))
-    psi = cm.psi
-    clmo = cm.clmo
+    psi = cm._psi
+    clmo = cm._clmo
     max_degree = TEST_MAX_DEG
     
     # Generate the coordinate transformation expansions
@@ -556,10 +556,10 @@ def test_lie_expansion_symplecticity(lie_test_setup):
         
         for i in range(n):
             for j in range(i+1, n):
-                bracket = polynomial_poisson_bracket(
+                bracket = _polynomial_poisson_bracket(
                     expansions[i], expansions[j], max_degree, psi, clmo, encode_dict_list
                 )
-                val = polynomial_evaluate(bracket, test_point, clmo)
+                val = _polynomial_evaluate(bracket, test_point, clmo)
                 M[i, j] = val
                 M[j, i] = -val  # antisymmetry
         return M
@@ -583,12 +583,12 @@ def test_lie_expansion_symplecticity(lie_test_setup):
 
     cm = lie_test_setup
     point = cm.point
-    psi = cm.psi
-    clmo = cm.clmo
+    psi = cm._psi
+    clmo = cm._clmo
     
-    H_phys = build_physical_hamiltonian(point, 6)
+    H_phys = _build_physical_hamiltonian(point, 6)
     H_rn = _local2realmodal(point, H_phys, 6, psi, clmo)
-    H_cn = substitute_complex(H_rn, 6, psi, clmo)
+    H_cn = _substitute_complex(H_rn, 6, psi, clmo)
     
     Omega = np.block([[np.zeros((3,3)),  np.eye(3)],
                       [-np.eye(3), np.zeros((3,3))]])

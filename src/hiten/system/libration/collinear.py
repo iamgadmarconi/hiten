@@ -15,10 +15,10 @@ from typing import TYPE_CHECKING, Tuple
 
 import numpy as np
 
-from hiten.utils.config import MPMATH_DPS
+from hiten.algorithms.utils.config import MPMATH_DPS
 from hiten.system.libration.base import LibrationPoint, LinearData
 from hiten.utils.log_config import logger
-from hiten.utils.precision import find_root, hp
+from hiten.algorithms.utils.precision import find_root, hp
 
 if TYPE_CHECKING:
     from hiten.system.base import System
@@ -42,6 +42,102 @@ class CollinearPoint(LibrationPoint):
         if not 0 < system.mu < 0.5:
             raise ValueError(f"Mass parameter mu must be in range (0, 0.5), got {system.mu}")
         super().__init__(system)
+
+    @property
+    def gamma(self) -> float:
+        r"""
+        Get the distance ratio gamma for the libration point, calculated
+        with high precision.
+
+        Gamma is defined as the distance from the libration point to the nearest primary,
+        normalized by the distance between the primaries.
+        - For L1 and L2, gamma = |x_L - (1-mu)|
+        - For L3, gamma = |x_L - (-mu)| 
+        (Note: This is equivalent to the root of the specific polynomial for each point).
+
+        Returns
+        -------
+        float
+            The gamma value calculated with high precision.
+        """
+        cached = self.cache_get(('gamma',))
+        if cached is not None:
+            return cached
+
+        gamma = self._compute_gamma()
+        logger.info(f"Gamma for {type(self).__name__} = {gamma}")
+        
+        return self.cache_set(('gamma',), gamma)
+
+    @property
+    def sign(self) -> int:
+        r"""
+        Sign convention (±1) used for local ↔ synodic transformations.
+
+        Following the convention adopted in Gómez et al. (2001):
+
+        * L1, L2  →  -1 ("lower" sign)
+        * L3      →  +1 ("upper" sign)
+        """
+        return 1 if isinstance(self, L3Point) else -1
+
+    @property
+    def a(self) -> float:
+        r"""
+        Offset *a* along the x axis used in frame changes.
+
+        The relation x_L = μ + a links the equilibrium x coordinate in
+        synodic coordinates (x_L) with the mass parameter μ.  Using the
+        distance gamma (``self.gamma``) to the closest primary we obtain:
+
+            a = -1 + gamma   (L1)
+            a = -1 - gamma   (L2)
+            a =  gamma       (L3)
+        """
+        if isinstance(self, L1Point):
+            return -1 + self.gamma
+        elif isinstance(self, L2Point):
+            return -1 - self.gamma
+        elif isinstance(self, L3Point):
+            return self.gamma
+        else:
+            raise AttributeError("Offset 'a' undefined for this point type.")
+
+    @property
+    def linear_modes(self):
+        r"""
+        Get the linear modes for the Libration point.
+        
+        Returns
+        -------
+        tuple
+            (lambda1, omega1, omega2) values
+        """
+        cached = self.cache_get(('linear_modes',))
+        if cached is not None:
+            return cached
+            
+        result = self._compute_linear_modes()
+        return self.cache_set(('linear_modes',), result)
+
+    @property
+    @abstractmethod
+    def _position_search_interval(self) -> list:
+        """Defines the search interval for finding the x-position."""
+        pass
+
+    @property
+    @abstractmethod
+    def _gamma_poly_def(self) -> Tuple[list, tuple]:
+        """
+        Defines the quintic polynomial for gamma calculation.
+        
+        Returns
+        -------
+        tuple
+            (coefficients, search_range)
+        """
+        pass
 
     def _find_position(self, primary_interval: list) -> float:
         r"""
@@ -120,66 +216,6 @@ class CollinearPoint(LibrationPoint):
         logger.error(err)
         raise RuntimeError(err)
 
-    @property
-    def gamma(self) -> float:
-        r"""
-        Get the distance ratio gamma for the libration point, calculated
-        with high precision.
-
-        Gamma is defined as the distance from the libration point to the nearest primary,
-        normalized by the distance between the primaries.
-        - For L1 and L2, gamma = |x_L - (1-mu)|
-        - For L3, gamma = |x_L - (-mu)| 
-        (Note: This is equivalent to the root of the specific polynomial for each point).
-
-        Returns
-        -------
-        float
-            The gamma value calculated with high precision.
-        """
-        cached = self.cache_get(('gamma',))
-        if cached is not None:
-            return cached
-
-        gamma = self._compute_gamma()
-        logger.info(f"Gamma for {type(self).__name__} = {gamma}")
-        
-        return self.cache_set(('gamma',), gamma)
-
-    @property
-    def sign(self) -> int:
-        r"""
-        Sign convention (±1) used for local ↔ synodic transformations.
-
-        Following the convention adopted in Gómez et al. (2001):
-
-        * L1, L2  →  -1 ("lower" sign)
-        * L3      →  +1 ("upper" sign)
-        """
-        return 1 if isinstance(self, L3Point) else -1
-
-    @property
-    def a(self) -> float:
-        r"""
-        Offset *a* along the x axis used in frame changes.
-
-        The relation x_L = μ + a links the equilibrium x coordinate in
-        synodic coordinates (x_L) with the mass parameter μ.  Using the
-        distance gamma (``self.gamma``) to the closest primary we obtain:
-
-            a = -1 + gamma   (L1)
-            a = -1 - gamma   (L2)
-            a =  gamma       (L3)
-        """
-        if isinstance(self, L1Point):
-            return -1 + self.gamma
-        elif isinstance(self, L2Point):
-            return -1 - self.gamma
-        elif isinstance(self, L3Point):
-            return self.gamma
-        else:
-            raise AttributeError("Offset 'a' undefined for this point type.")
-
     @abstractmethod
     def _compute_gamma(self) -> float:
         r"""
@@ -251,23 +287,6 @@ class CollinearPoint(LibrationPoint):
         term3 = -mu * (x - (1 - mu)) / r2_3
         
         return term1 + term2 + term3
-
-    @property
-    def linear_modes(self):
-        r"""
-        Get the linear modes for the Libration point.
-        
-        Returns
-        -------
-        tuple
-            (lambda1, omega1, omega2) values
-        """
-        cached = self.cache_get(('linear_modes',))
-        if cached is not None:
-            return cached
-            
-        result = self._compute_linear_modes()
-        return self.cache_set(('linear_modes',), result)
 
     def _compute_linear_modes(self):
         r"""
@@ -356,65 +375,6 @@ class CollinearPoint(LibrationPoint):
         
         return float(expr1_hp.sqrt()), float(expr2_hp.sqrt())
 
-    def normal_form_transform(self) -> Tuple[np.ndarray, np.ndarray]:
-        r"""
-        Build the 6x6 symplectic matrix C of eq. (10) that sends H_2 to
-        lambda_1 x px + (omega_1/2)(y²+p_y²) + (omega_2/2)(z²+p_z²).
-
-        Returns
-        -------
-        tuple
-            (C, Cinv) where C is the symplectic transformation matrix and Cinv is its inverse
-        """
-        # Check cache first
-        cache_key = ('normal_form_transform',)
-        cached = self.cache_get(cache_key)
-        if cached is not None:
-            return cached
-            
-        # Get the numerical parameters
-        lambda1, omega1, omega2 = self.linear_modes
-        c2 = self._cn(2)
-        s1, s2 = self._scale_factor(lambda1, omega1)
-        
-        # Build the 6x6 transformation matrix C numerically
-        C = np.zeros((6, 6))
-        
-        # First row
-        C[0, 0] = 2 * lambda1 / s1
-        C[0, 3] = -2 * lambda1 / s1
-        C[0, 4] = 2 * omega1 / s2
-        
-        # Second row
-        C[1, 0] = (lambda1**2 - 2*c2 - 1) / s1
-        C[1, 1] = (-omega1**2 - 2*c2 - 1) / s2
-        C[1, 3] = (lambda1**2 - 2*c2 - 1) / s1
-        
-        # Third row
-        C[2, 2] = 1 / np.sqrt(omega2)
-        
-        # Fourth row
-        C[3, 0] = (lambda1**2 + 2*c2 + 1) / s1
-        C[3, 1] = (-omega1**2 + 2*c2 + 1) / s2
-        C[3, 3] = (lambda1**2 + 2*c2 + 1) / s1
-        
-        # Fifth row
-        C[4, 0] = (lambda1**3 + (1 - 2*c2)*lambda1) / s1
-        C[4, 3] = (-lambda1**3 - (1 - 2*c2)*lambda1) / s1
-        C[4, 4] = (-omega1**3 + (1 - 2*c2)*omega1) / s2
-        
-        # Sixth row
-        C[5, 5] = np.sqrt(omega2)
-        
-        # Compute the inverse
-        Cinv = np.linalg.inv(C)
-        
-        # Cache the result
-        result = (C, Cinv)
-        self.cache_set(cache_key, result)
-        
-        return result
-
     def _get_linear_data(self) -> LinearData:
         r"""
         Get the linear data for the Libration point.
@@ -439,6 +399,88 @@ class CollinearPoint(LibrationPoint):
             Cinv=Cinv
         )
 
+    def _calculate_position(self) -> np.ndarray:
+        r"""
+        Calculate the position of the point by finding the root of dOmega/dx
+        within a search interval defined by the concrete subclass.
+        """
+        x = self._find_position(self._position_search_interval)
+        return np.array([x, 0, 0], dtype=np.float64)
+
+    def _compute_gamma(self) -> float:
+        r"""
+        Compute gamma for the libration point by solving the quintic polynomial
+        defined by the concrete subclass.
+        """
+        coeffs, search_range = self._gamma_poly_def
+        return self._solve_gamma_polynomial(coeffs, search_range)
+
+    def normal_form_transform(self) -> Tuple[np.ndarray, np.ndarray]:
+        r"""
+        Build the 6x6 symplectic matrix C of eq. (10) that sends H_2 to
+        lambda_1 x px + (omega_1/2)(y²+p_y²) + (omega_2/2)(z²+p_z²).
+
+        Returns
+        -------
+        tuple
+            (C, Cinv) where C is the symplectic transformation matrix and Cinv is its inverse
+        """
+        # Check cache first
+        cache_key = ('normal_form_transform',)
+        cached = self.cache_get(cache_key)
+        if cached is not None:
+            return cached
+            
+        # Get the numerical parameters
+        lambda1, omega1, omega2 = self.linear_modes
+        c2 = self._cn(2)
+        s1, s2 = self._scale_factor(lambda1, omega1)
+        
+        # Add a safeguard for the vertical frequency omega2 to prevent division by zero
+        if abs(omega2) < 1e-12:
+            logger.warning(f"Vertical frequency omega2 is very small ({omega2:.2e}). Transformation matrix may be ill-conditioned.")
+            sqrt_omega2 = 1e-6  # Use a small regularizing value
+        else:
+            sqrt_omega2 = np.sqrt(omega2)
+
+        # Build the 6x6 transformation matrix C numerically
+        C = np.zeros((6, 6))
+        
+        # First row
+        C[0, 0] = 2 * lambda1 / s1
+        C[0, 3] = -2 * lambda1 / s1
+        C[0, 4] = 2 * omega1 / s2
+        
+        # Second row
+        C[1, 0] = (lambda1**2 - 2*c2 - 1) / s1
+        C[1, 1] = (-omega1**2 - 2*c2 - 1) / s2
+        C[1, 3] = (lambda1**2 - 2*c2 - 1) / s1
+        
+        # Third row
+        C[2, 2] = 1 / sqrt_omega2
+        
+        # Fourth row
+        C[3, 0] = (lambda1**2 + 2*c2 + 1) / s1
+        C[3, 1] = (-omega1**2 + 2*c2 + 1) / s2
+        C[3, 3] = (lambda1**2 + 2*c2 + 1) / s1
+        
+        # Fifth row
+        C[4, 0] = (lambda1**3 + (1 - 2*c2)*lambda1) / s1
+        C[4, 3] = (-lambda1**3 - (1 - 2*c2)*lambda1) / s1
+        C[4, 4] = (-omega1**3 + (1 - 2*c2)*omega1) / s2
+        
+        # Sixth row
+        C[5, 5] = sqrt_omega2
+        
+        # Compute the inverse
+        Cinv = np.linalg.inv(C)
+        
+        # Cache the result
+        result = (C, Cinv)
+        self.cache_set(cache_key, result)
+        
+        return result
+
 
 class L1Point(CollinearPoint):
     r"""
@@ -455,32 +497,24 @@ class L1Point(CollinearPoint):
         Initialize the L1 Libration point.
         """
         super().__init__(system)
-        
-    def _calculate_position(self) -> np.ndarray:
-        r"""
-        Calculate the position of the L1 point by finding the root of dOmega/dx.
-        
-        Returns
-        -------
-        ndarray
-            3D vector [x, 0, 0] giving the position of L1
-        """
+
+    @property
+    def idx(self) -> int:
+        return 1
+
+    @property
+    def _position_search_interval(self) -> list:
+        """Search interval for L1's x-position."""
         # L1 is between the primaries: -mu < x < 1-mu
-        primary_interval = [-self.mu + 0.01, 1 - self.mu - 0.01]
+        return [-self.mu + 0.01, 1 - self.mu - 0.01]
 
-        x = self._find_position(primary_interval)
-        return np.array([x, 0, 0], dtype=np.float64)
-
-    def _compute_gamma(self) -> float:
-        r"""
-        Compute gamma for L1 point by solving the quintic polynomial equation.
-        For L1, gamma is the distance from the second primary (smaller mass).
-        """
+    @property
+    def _gamma_poly_def(self) -> Tuple[list, tuple]:
+        """Quintic polynomial definition for L1's gamma value."""
         mu = self.mu
-        
         # Coefficients for L1 quintic: x^5 - (3-μ)x^4 + (3-2μ)x^3 - μx^2 + 2μx - μ = 0
-        coeffs = [1, -(3-mu), (3-2*mu), -mu, 2*mu, -mu]
-        return self._solve_gamma_polynomial(coeffs, [0, 1])
+        coeffs = [1, -(3 - mu), (3 - 2 * mu), -mu, 2 * mu, -mu]
+        return coeffs, (0, 1)
 
     def _compute_cn(self, n: int) -> float:
         r"""
@@ -494,10 +528,6 @@ class L1Point(CollinearPoint):
         term3 = ((-1)**n) * (1 - mu) * (gamma**(n+1)) / ((1 - gamma)**(n+1))
         
         return term1 * (term2 + term3)
-
-    @property
-    def idx(self) -> int:
-        return 1
 
 
 class L2Point(CollinearPoint):
@@ -515,33 +545,24 @@ class L2Point(CollinearPoint):
         Initialize the L2 Libration point.
         """
         super().__init__(system)
-    
-    def _calculate_position(self) -> np.ndarray:
-        r"""
-        Calculate the position of the L2 point by finding the root of dOmega/dx.
-        
-        Returns
-        -------
-        ndarray
-            3D vector [x, 0, 0] giving the position of L2
-        """
+
+    @property
+    def idx(self) -> int:
+        return 2
+
+    @property
+    def _position_search_interval(self) -> list:
+        """Search interval for L2's x-position."""
         # L2 is beyond the smaller primary: x > 1-mu
-        primary_interval = [1 - self.mu + 0.001, 2.0]
+        return [1 - self.mu + 0.001, 2.0]
 
-        x = self._find_position(primary_interval)
-        return np.array([x, 0, 0], dtype=np.float64)
-
-    def _compute_gamma(self) -> float:
-        r"""
-        Compute gamma for L2 point by solving the quintic polynomial equation.
-        For L2, gamma is the distance from the second primary (smaller mass).
-        """
+    @property
+    def _gamma_poly_def(self) -> Tuple[list, tuple]:
+        """Quintic polynomial definition for L2's gamma value."""
         mu = self.mu
-        
         # Coefficients for L2 quintic: x^5 + (3-μ)x^4 + (3-2μ)x^3 - μx^2 - 2μx - μ = 0
-        coeffs = [1, (3-mu), (3-2*mu), -mu, -2*mu, -mu]
-
-        return self._solve_gamma_polynomial(coeffs, [0, 1])
+        coeffs = [1, (3 - mu), (3 - 2 * mu), -mu, -2 * mu, -mu]
+        return coeffs, (0, 1)
 
     def _compute_cn(self, n: int) -> float:
         r"""
@@ -555,10 +576,6 @@ class L2Point(CollinearPoint):
         term3 = ((-1)**n) * (1 - mu) * (gamma**(n+1)) / ((1 + gamma)**(n+1))
         
         return term1 * (term2 + term3)
-
-    @property
-    def idx(self) -> int:
-        return 2
 
 
 class L3Point(CollinearPoint):
@@ -576,34 +593,25 @@ class L3Point(CollinearPoint):
         Initialize the L3 Libration point.
         """
         super().__init__(system)
-    
-    def _calculate_position(self) -> np.ndarray:
-        r"""
-        Calculate the position of the L3 point by finding the root of dOmega/dx.
-        
-        Returns
-        -------
-        ndarray
-            3D vector [x, 0, 0] giving the position of L3
-        """
+
+    @property
+    def idx(self) -> int:
+        return 3
+
+    @property
+    def _position_search_interval(self) -> list:
+        """Search interval for L3's x-position."""
         # L3 is beyond the larger primary: x < -mu
-        primary_interval = [-1.5, -self.mu - 0.001]
+        return [-1.5, -self.mu - 0.001]
 
-        x = self._find_position(primary_interval)
-        return np.array([x, 0, 0], dtype=np.float64)
-
-    def _compute_gamma(self) -> float:
-        r"""
-        Compute gamma for L3 point by solving the quintic polynomial equation.
-        For L3, gamma is the distance from the first primary (larger mass).
-        """
+    @property
+    def _gamma_poly_def(self) -> Tuple[list, tuple]:
+        """Quintic polynomial definition for L3's gamma value."""
         mu = self.mu
         mu1 = 1 - mu  # mass of larger primary
-        
         # Coefficients for L3 quintic: x^5 + (2+μ)x^4 + (1+2μ)x^3 - μ₁x^2 - 2μ₁x - μ₁ = 0
-        coeffs = [1, (2+mu), (1+2*mu), -mu1, -2*mu1, -mu1]
-
-        return self._solve_gamma_polynomial(coeffs, [0.5, 1.5])
+        coeffs = [1, (2 + mu), (1 + 2 * mu), -mu1, -2 * mu1, -mu1]
+        return coeffs, (0.5, 1.5)
 
     def _compute_cn(self, n: int) -> float:
         r"""
@@ -617,7 +625,3 @@ class L3Point(CollinearPoint):
         term3 = mu * (gamma**(n+1)) / ((1 + gamma)**(n+1))
         
         return term1 * (term2 + term3)
-
-    @property
-    def idx(self) -> int:
-        return 3

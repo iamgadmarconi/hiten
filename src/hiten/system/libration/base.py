@@ -139,6 +139,7 @@ class LibrationPoint(ABC):
         self._energy = None
         self._jacobi_constant = None
         self._cache = {}
+        self._cm_registry = {}
         self._var_eq_system = variational_dynsys(self.mu, name=f"CR3BP Variational Equations for {self.__class__.__name__}")
     
     def __str__(self) -> str:
@@ -148,6 +149,7 @@ class LibrationPoint(ABC):
         return f"{type(self).__name__}(mu={self.mu:.6e})"
 
     @property
+    @abstractmethod
     def idx(self) -> int:
         pass
 
@@ -186,13 +188,20 @@ class LibrationPoint(ABC):
     @property
     def is_stable(self) -> bool:
         r"""
-        Check if the Libration point is stable.
+        Check if the Libration point is linearly stable.
+
+        A libration point is considered stable if its linear analysis yields no
+        unstable eigenvalues. The check is performed on the continuous-time
+        system by default.
         """
         if self._stability_info is None:
-            self.analyze_stability() 
+            # The default mode for analyze_stability is CONTINUOUS_SYSTEM,
+            # which correctly classifies eigenvalues based on their real part
+            # for determining stability.
+            self.analyze_stability()
         
-        indices = self._stability_info[0] 
-        return np.all(np.abs(indices) <= 1.0 + 1e-9)
+        unstable_eigenvalues = self._stability_info[1]
+        return len(unstable_eigenvalues) == 0
 
     @property
     def linear_data(self) -> LinearData:
@@ -202,6 +211,61 @@ class LibrationPoint(ABC):
         if self._linear_data is None:
             self._linear_data = self._get_linear_data()
         return self._linear_data
+
+    @property
+    def eigenvalues(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        r"""
+        Get the eigenvalues of the linearized system at the Libration point.
+        
+        Returns
+        -------
+        tuple
+            (stable_eigenvalues, unstable_eigenvalues, center_eigenvalues)
+        """
+        if self._stability_info is None:
+            self.analyze_stability() # Ensure stability is analyzed
+        sn, un, cn, _, _, _ = self._stability_info
+        return (sn, un, cn)
+    
+    @property
+    def eigenvectors(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        r"""
+        Get the eigenvectors of the linearized system at the Libration point.
+        
+        Returns
+        -------
+        tuple
+            (stable_eigenvectors, unstable_eigenvectors, center_eigenvectors)
+        """
+        if self._stability_info is None:
+            self.analyze_stability() # Ensure stability is analyzed
+        _, _, _, Ws, Wu, Wc = self._stability_info
+        return (Ws, Wu, Wc)
+
+    def cache_get(self, key) -> any:
+        r"""
+        Get item from cache.
+        """
+        return self._cache.get(key)
+    
+    def cache_set(self, key, value) -> any:
+        r"""
+        Set item in cache and return the value.
+        """
+        self._cache[key] = value
+        return value
+    
+    def cache_clear(self) -> None:
+        r"""
+        Clear all cached data, including computed properties.
+        """
+        self._cache.clear()
+        self._position = None
+        self._stability_info = None
+        self._linear_data = None
+        self._energy = None
+        self._jacobi_constant = None
+        logger.debug(f"Cache cleared for {type(self).__name__}")
 
     def _compute_energy(self) -> float:
         r"""
@@ -215,6 +279,27 @@ class LibrationPoint(ABC):
         Compute the Jacobi constant of the Libration point.
         """
         return energy_to_jacobi(self.energy)
+
+    @abstractmethod
+    def _calculate_position(self) -> np.ndarray:
+        r"""
+        Calculate the position of the Libration point.
+        
+        This is an abstract method that must be implemented by subclasses.
+        
+        Returns
+        -------
+        ndarray
+            3D vector [x, y, z] representing the position
+        """
+        pass
+
+    @abstractmethod
+    def _get_linear_data(self) -> LinearData:
+        r"""
+        Get the linear data for the Libration point.
+        """
+        pass
 
     def analyze_stability(self, discrete: int = CONTINUOUS_SYSTEM, delta: float = 1e-4) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         r"""
@@ -267,26 +352,6 @@ class LibrationPoint(ABC):
         
         return stability_info
 
-    def cache_get(self, key) -> any:
-        r"""
-        Get item from cache.
-        """
-        return self._cache.get(key)
-    
-    def cache_set(self, key, value) -> any:
-        r"""
-        Set item in cache and return the value.
-        """
-        self._cache[key] = value
-        return value
-    
-    def cache_clear(self) -> None:
-        r"""
-        Clear all cached data.
-        """
-        self._cache.clear()
-        logger.debug(f"Cache cleared for {type(self).__name__}")
-
     def get_center_manifold(self, max_degree: int):
         r"""
         Return (and lazily construct) a CenterManifold of given degree.
@@ -334,60 +399,44 @@ class LibrationPoint(ABC):
         data = cm.cache_get(('generating_functions', max_deg))
         return [] if data is None else [g.copy() for g in data]
 
-    @property
-    def eigenvalues(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        r"""
-        Get the eigenvalues of the linearized system at the Libration point.
-        
-        Returns
-        -------
-        tuple
-            (stable_eigenvalues, unstable_eigenvalues, center_eigenvalues)
-        """
-        if self._stability_info is None:
-            self.analyze_stability() # Ensure stability is analyzed
-        sn, un, cn, _, _, _ = self._stability_info
-        return (sn, un, cn)
-    
-    @property
-    def eigenvectors(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        r"""
-        Get the eigenvectors of the linearized system at the Libration point.
-        
-        Returns
-        -------
-        tuple
-            (stable_eigenvectors, unstable_eigenvectors, center_eigenvectors)
-        """
-        if self._stability_info is None:
-            self.analyze_stability() # Ensure stability is analyzed
-        _, _, _, Ws, Wu, Wc = self._stability_info
-        return (Ws, Wu, Wc)
-    
-    @abstractmethod
-    def _calculate_position(self) -> np.ndarray:
-        r"""
-        Calculate the position of the Libration point.
-        
-        This is an abstract method that must be implemented by subclasses.
-        
-        Returns
-        -------
-        ndarray
-            3D vector [x, y, z] representing the position
-        """
-        pass
-
-    @abstractmethod
-    def _get_linear_data(self) -> LinearData:
-        r"""
-        Get the linear data for the Libration point.
-        """
-        pass
-
     @abstractmethod
     def normal_form_transform(self) -> Tuple[np.ndarray, np.ndarray]:
         r"""
         Get the normal form transform for the Libration point.
         """
         pass
+
+    def __getstate__(self):
+        """
+        Custom state extractor to enable pickling.
+
+        We remove attributes that may contain unpickleable Numba runtime
+        objects (e.g., the compiled variational dynamics system) and restore
+        them on unpickling.
+        """
+        state = self.__dict__.copy()
+        # Remove the compiled RHS system which cannot be pickled
+        if '_var_eq_system' in state:
+            state['_var_eq_system'] = None
+        # Remove potential circular/self references to center manifolds
+        if '_cm_registry' in state:
+            state['_cm_registry'] = {}
+        return state
+
+    def __setstate__(self, state):
+        """
+        Restore object state after unpickling.
+
+        The variational dynamics system is re-constructed because it was
+        omitted during pickling (it contains unpickleable Numba objects).
+        """
+        # Restore the plain attributes
+        self.__dict__.update(state)
+        # Recreate the compiled variational dynamics system on demand
+        from hiten.algorithms.dynamics.rtbp import variational_dynsys
+        self._var_eq_system = variational_dynsys(
+            self.mu, name=f"CR3BP Variational Equations for {self.__class__.__name__}")
+
+        # Ensure _cm_registry exists after unpickling
+        if not hasattr(self, '_cm_registry') or self._cm_registry is None:
+            self._cm_registry = {}

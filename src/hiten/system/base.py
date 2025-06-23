@@ -16,55 +16,16 @@ Szebehely, V. (1967). "Theory of Orbits".
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Dict
+from typing import Dict, Optional
 
 from hiten.algorithms.dynamics.rtbp import rtbp_dynsys
 from hiten.system.body import Body
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import L1Point, L2Point, L3Point
 from hiten.system.libration.triangular import L4Point, L5Point
+from hiten.utils.constants import Constants
 from hiten.utils.log_config import logger
-from hiten.utils.precision import hp
-
-
-@dataclass
-class systemConfig:
-    r"""
-    Configuration container for a CR3BP hiten.system.
-
-    Parameters
-    ----------
-    primary : Body
-        Primary gravitating body.
-    secondary : Body
-        Secondary gravitating body.
-    distance : float
-        Characteristic separation between *primary* and *secondary* in
-        consistent units.
-
-    Attributes
-    ----------
-    Same as *Parameters*.
-
-    Raises
-    ------
-    ValueError
-        If :pyattr:`distance` is not strictly positive.
-
-    Notes
-    -----
-    The class is a :pyclass:`dataclasses.dataclass` and therefore immutable
-    once instantiated.
-    """
-    primary: Body
-    secondary: Body
-    distance: float
-
-    def __post_init__(self):
-        # Validate that distance is positive.
-        if self.distance <= 0:
-            raise ValueError("Distance must be a positive value.")
+from hiten.algorithms.utils.precision import hp
 
 
 class System(object):
@@ -78,8 +39,12 @@ class System(object):
 
     Parameters
     ----------
-    config : systemConfig
-        Fully specified configuration of the hiten.system.
+    primary : Body
+        Primary gravitating body.
+    secondary : Body
+        Secondary gravitating body.
+    distance : float
+        Characteristic separation between the bodies in km.
 
     Attributes
     ----------
@@ -88,13 +53,13 @@ class System(object):
     secondary : Body
         Secondary gravitating body.
     distance : float
-        Characteristic separation between the bodies.
+        Characteristic separation between the bodies in km.
     mu : float
         Mass parameter :math:`\mu`.
     libration_points : dict[int, LibrationPoint]
         Mapping from integer identifiers {1,…,5} to the corresponding
         libration point objects.
-    _dynsys : hiten.algorithms.dynamics.base.DynamicalSystemProtocol
+    _dynsys : hiten.algorithms.dynamics.base._DynamicalSystemProtocol
         Underlying vector field instance compatible with the integrators
         defined in :pymod:`hiten.algorithms.integrators`.
 
@@ -103,19 +68,19 @@ class System(object):
     The heavy computations reside in the dynamical system and individual
     libration point classes; this wrapper simply orchestrates them.
     """
-    def __init__(self, config: systemConfig):
+    def __init__(self, primary: Body, secondary: Body, distance: float):
         """Initializes the CR3BP system based on the provided configuration."""
 
-        logger.info(f"Initializing System with primary='{config.primary.name}', secondary='{config.secondary.name}', distance={config.distance:.4e}")
+        logger.info(f"Initializing System with primary='{primary.name}', secondary='{secondary.name}', distance={distance:.4e}")
         
-        self.primary = config.primary
-        self.secondary = config.secondary
-        self.distance = config.distance
+        self._primary = primary
+        self._secondary = secondary
+        self._distance = distance
 
-        self.mu: float = self._get_mu()
+        self._mu: float = self._get_mu()
         logger.info(f"Calculated mass parameter mu = {self.mu:.6e}")
 
-        self.libration_points: Dict[int, LibrationPoint] = self._compute_libration_points()
+        self._libration_points: Dict[int, LibrationPoint] = self._compute_libration_points()
         logger.info(f"Computed {len(self.libration_points)} Libration points.")
 
         self._dynsys = rtbp_dynsys(self.mu, name=self.primary.name + "_" + self.secondary.name)
@@ -124,7 +89,37 @@ class System(object):
         return f"System(primary='{self.primary.name}', secondary='{self.secondary.name}', mu={self.mu:.4e})"
 
     def __repr__(self) -> str:
-        return f"System(config=systemConfig(primary={self.primary!r}, secondary={self.secondary!r}, distance={self.distance}))"
+        return f"System(primary={self.primary!r}, secondary={self.secondary!r}, distance={self.distance})"
+
+    @property
+    def primary(self) -> Body:
+        """Primary gravitating body."""
+        return self._primary
+
+    @property
+    def secondary(self) -> Body:
+        """Secondary gravitating body."""
+        return self._secondary
+
+    @property
+    def distance(self) -> float:
+        """Characteristic separation between the bodies in km."""
+        return self._distance
+
+    @property
+    def mu(self) -> float:
+        r"""Mass parameter :math:`\mu`."""
+        return self._mu
+
+    @property
+    def libration_points(self) -> Dict[int, LibrationPoint]:
+        """Mapping from integer identifiers {1,…,5} to libration point objects."""
+        return self._libration_points
+        
+    @property
+    def dynsys(self):
+        """Underlying vector field instance."""
+        return self._dynsys
 
     def _get_mu(self) -> float:
         r"""
@@ -195,12 +190,91 @@ class System(object):
 
         Examples
         --------
-        >>> cfg = systemConfig(primary, secondary, distance)
-        >>> sys = System(cfg)
+        >>> sys = System(primary, secondary, distance)
         >>> L1 = sys.get_libration_point(1)
         """
-        if index not in self.libration_points:
+        point: Optional[LibrationPoint] = self.libration_points.get(index)
+        if point is None:
             logger.error(f"Invalid Libration point index requested: {index}. Must be 1-5.")
             raise ValueError(f"Invalid Libration point index: {index}. Must be 1, 2, 3, 4, or 5.")
         logger.debug(f"Retrieving Libration point L{index}")
-        return self.libration_points[index]
+        return point
+
+    @classmethod
+    def from_bodies(cls, primary_name: str, secondary_name: str) -> "System":
+        r"""
+        Factory method to build a :class:`System` directly from body names.
+
+        This helper retrieves the masses, radii and characteristic orbital
+        distance of the selected primary/secondary pair from
+        :pyclass:`hiten.utils.constants.Constants` and instantiates the
+        corresponding :pyclass:`Body` objects before finally returning the
+        fully-initialised :class:`System` instance.
+
+        Parameters
+        ----------
+        primary_name : str
+            Name of the primary body (case-insensitive, e.g. ``"earth"``).
+        secondary_name : str
+            Name of the secondary body orbiting the primary (e.g. ``"moon"``).
+
+        Returns
+        -------
+        System
+            Newly created CR3BP system.
+        """
+        # Normalise the identifiers so that the lookup in *Constants* is
+        # case-insensitive while preserving the original capitalisation for
+        # display purposes.
+        p_key = primary_name.lower()
+        s_key = secondary_name.lower()
+
+        # Retrieve physical parameters from the constants catalogue
+        try:
+            p_mass = Constants.get_mass(p_key)
+            p_radius = Constants.get_radius(p_key)
+            s_mass = Constants.get_mass(s_key)
+            s_radius = Constants.get_radius(s_key)
+            distance = Constants.get_orbital_distance(p_key, s_key)
+        except KeyError as exc:
+            # Re-raise with a clearer error message for the end-user
+            raise ValueError(
+                f"Unknown body or orbital distance for pair '{primary_name}', '{secondary_name}'."
+            ) from exc
+
+        # Instantiate the bodies – the secondary orbits the primary.
+        primary = Body(primary_name.capitalize(), p_mass, p_radius)
+        secondary = Body(secondary_name.capitalize(), s_mass, s_radius, _parent_input=primary)
+
+        # Create and return the CR3BP system
+        return cls(primary, secondary, distance)
+
+    def __getstate__(self):
+        """Custom state extractor to enable pickling.
+
+        The underlying dynamical system instance stored in ``_dynsys`` often
+        contains numba-compiled objects that cannot be serialised.  We exclude
+        it from the pickled representation and recreate it automatically when
+        the object is re-loaded.
+        """
+        state = self.__dict__.copy()
+        # Remove the compiled dynamical system before pickling
+        if "_dynsys" in state:
+            state["_dynsys"] = None
+        return state
+
+    def __setstate__(self, state):
+        """Restore the System instance after unpickling.
+
+        The heavy, non-serialisable dynamical system is reconstructed lazily
+        using the stored value of :pyattr:`mu` and the names of the primary and
+        secondary bodies.
+        """
+        from hiten.algorithms.dynamics.rtbp import rtbp_dynsys  # local import to avoid circular deps
+
+        # Restore the plain attributes
+        self.__dict__.update(state)
+
+        # Re-instantiate the CR3BP vector field that had been stripped during pickling
+        if self.__dict__.get("_dynsys") is None:
+            self._dynsys = rtbp_dynsys(self.mu, name=self.primary.name + "_" + self.secondary.name)

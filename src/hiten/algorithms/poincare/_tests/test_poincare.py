@@ -4,8 +4,8 @@ import tempfile
 import os
 
 from hiten.system.center import CenterManifold
-from hiten.system.poincare import PoincareMap, poincareMapConfig
-from hiten.system.base import System, systemConfig
+from hiten.algorithms.poincare.base import _PoincareMap, _PoincareMapConfig
+from hiten.system.base import System
 from hiten.system.body import Body
 from hiten.utils.constants import Constants
 
@@ -23,13 +23,13 @@ def poincare_test_setup():
     Earth = Body("Earth", Constants.bodies["earth"]["mass"], Constants.bodies["earth"]["radius"], "blue")
     Moon = Body("Moon", Constants.bodies["moon"]["mass"], Constants.bodies["moon"]["radius"], "gray", Earth)
     distance = Constants.get_orbital_distance("earth", "moon")
-    system = System(systemConfig(Earth, Moon, distance))
+    system = System(Earth, Moon, distance)
     libration_point = system.get_libration_point(TEST_L_POINT_IDX)
 
     cm = CenterManifold(libration_point, TEST_MAX_DEG)
     cm.compute()
 
-    pmConfig = poincareMapConfig(
+    pmConfig = _PoincareMapConfig(
         dt=TEST_DT,
         method="rk",
         integrator_order=4,
@@ -41,7 +41,7 @@ def poincare_test_setup():
         use_gpu=False,
     )
 
-    pm = PoincareMap(cm, TEST_H0, pmConfig)
+    pm = _PoincareMap(cm, TEST_H0, pmConfig)
     return cm, pmConfig, pm
 
 def test_poincaremap_save_load(poincare_test_setup):
@@ -54,8 +54,8 @@ def test_poincaremap_save_load(poincare_test_setup):
         pm.save(filepath)
 
         # Create a new map instance (with same CM, config, but do not compute)
-        pm_loaded = PoincareMap(cm, 0.0, pmConfig)  # energy will be overwritten by load
-        pm_loaded.load(filepath)
+        pm_loaded = _PoincareMap(cm, 0.0, pmConfig)  # energy will be overwritten by load
+        pm_loaded.load_inplace(filepath)
 
         # Check energy
         assert np.isclose(pm.energy, pm_loaded.energy), f"Energy mismatch: {pm.energy} vs {pm_loaded.energy}"

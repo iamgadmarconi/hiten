@@ -1,16 +1,16 @@
 import numpy as np
 from numba import cuda, float64
 
-from hiten.algorithms.poincare.cuda.hrhs import hamiltonian_rhs_device
-from hiten.algorithms.poincare.cuda.rk4 import (RK4IntegratorCUDA,
-                                                 rk4_step_device)
+from hiten.algorithms.poincare.cuda.hrhs import _hamiltonian_rhs_device
+from hiten.algorithms.poincare.cuda.rk4 import (_RK4IntegratorCUDA,
+                                                _rk4_step_device)
 
 # Constants
 N_DOF = 3
 THREADS_PER_BLOCK = 256
 
 @cuda.jit(device=True)
-def hermite_interpolate_device(y0, y1, dy0_dt, dy1_dt, alpha):
+def _hermite_interpolate_device(y0, y1, dy0_dt, dy1_dt, alpha):
     """
     Cubic Hermite interpolation.
     
@@ -32,7 +32,7 @@ def hermite_interpolate_device(y0, y1, dy0_dt, dy1_dt, alpha):
 
 
 @cuda.jit(device=True)
-def get_section_value_device(state, section_coord_int):
+def _get_section_value_device(state, section_coord_int):
     """Return the section coordinate value."""
     if section_coord_int == 0:  # "q2"
         return state[1]
@@ -47,7 +47,7 @@ def get_section_value_device(state, section_coord_int):
 
 
 @cuda.jit(device=True)
-def check_momentum_condition_device(state, rhs, section_coord_int):
+def _check_momentum_condition_device(state, rhs, section_coord_int):
     """Check momentum condition for crossing direction."""
     if section_coord_int == 0:  # "q2" section
         return state[N_DOF + 1] > 0.0  # p2 > 0
@@ -62,7 +62,7 @@ def check_momentum_condition_device(state, rhs, section_coord_int):
 
 
 @cuda.jit(device=True)
-def get_derivative_index_device(section_coord_int):
+def _get_derivative_index_device(section_coord_int):
     """Get the derivative index for Hermite interpolation."""
     if section_coord_int == 0:  # "q2"
         return 1  # dq2/dt
@@ -77,7 +77,7 @@ def get_derivative_index_device(section_coord_int):
 
 
 @cuda.jit(device=True)
-def poincare_step_device(q2, p2, q3, p3, dt, jac_coeffs_data, jac_metadata,
+def _poincare_step_device(q2, p2, q3, p3, dt, jac_coeffs_data, jac_metadata,
                         clmo_flat, clmo_offsets, max_steps, section_coord_int,
                         q2_out, p2_out, p3_out, q3_out):
     """
@@ -120,22 +120,22 @@ def poincare_step_device(q2, p2, q3, p3, dt, jac_coeffs_data, jac_metadata,
     # Integration loop
     for step in range(max_steps):
         # Perform RK4 step
-        rk4_step_device(state_old, dt, jac_coeffs_data, jac_metadata,
+        _rk4_step_device(state_old, dt, jac_coeffs_data, jac_metadata,
                        clmo_flat, clmo_offsets, state_new)
         
         # Extract section values
-        f_old = get_section_value_device(state_old, section_coord_int)
-        f_new = get_section_value_device(state_new, section_coord_int)
+        f_old = _get_section_value_device(state_old, section_coord_int)
+        f_new = _get_section_value_device(state_new, section_coord_int)
         
         # Check for crossing: section coordinate changes sign
         if f_old * f_new < 0.0:
             # Compute RHS for momentum check
             rhs_new = cuda.local.array(6, dtype=float64)
-            hamiltonian_rhs_device(state_new, jac_coeffs_data, jac_metadata,
+            _hamiltonian_rhs_device(state_new, jac_coeffs_data, jac_metadata,
                                  clmo_flat, clmo_offsets, rhs_new)
             
             # Check direction-dependent momentum condition
-            momentum_check = check_momentum_condition_device(state_new, rhs_new, section_coord_int)
+            momentum_check = _check_momentum_condition_device(state_new, rhs_new, section_coord_int)
             
             if momentum_check:
                 # Found a crossing - perform Hermite interpolation
@@ -146,11 +146,11 @@ def poincare_step_device(q2, p2, q3, p3, dt, jac_coeffs_data, jac_metadata,
                 # 2) Compute RHS at both endpoints
                 rhs_old = cuda.local.array(6, dtype=float64)
                 
-                hamiltonian_rhs_device(state_old, jac_coeffs_data, jac_metadata,
+                _hamiltonian_rhs_device(state_old, jac_coeffs_data, jac_metadata,
                                      clmo_flat, clmo_offsets, rhs_old)
                 
                 # 3) Get derivative index for section coordinate
-                deriv_idx = get_derivative_index_device(section_coord_int)
+                deriv_idx = _get_derivative_index_device(section_coord_int)
                 
                 # 4) Hermite polynomial coefficients for section coordinate
                 m0 = rhs_old[deriv_idx] * dt  # section derivative at t=0, scaled by dt
@@ -171,22 +171,22 @@ def poincare_step_device(q2, p2, q3, p3, dt, jac_coeffs_data, jac_metadata,
                 alpha = max(0.0, min(1.0, alpha))
                 
                 # 6) Interpolate all coordinates using same cubic basis
-                q2_out[0] = hermite_interpolate_device(
+                q2_out[0] = _hermite_interpolate_device(
                     state_old[1], state_new[1],
                     rhs_old[1] * dt, rhs_new[1] * dt, alpha
                 )
                 
-                p2_out[0] = hermite_interpolate_device(
+                p2_out[0] = _hermite_interpolate_device(
                     state_old[N_DOF + 1], state_new[N_DOF + 1],
                     rhs_old[N_DOF + 1] * dt, rhs_new[N_DOF + 1] * dt, alpha
                 )
                 
-                q3_out[0] = hermite_interpolate_device(
+                q3_out[0] = _hermite_interpolate_device(
                     state_old[2], state_new[2],
                     rhs_old[2] * dt, rhs_new[2] * dt, alpha
                 )
                 
-                p3_out[0] = hermite_interpolate_device(
+                p3_out[0] = _hermite_interpolate_device(
                     state_old[N_DOF + 2], state_new[N_DOF + 2],
                     rhs_old[N_DOF + 2] * dt, rhs_new[N_DOF + 2] * dt, alpha
                 )
@@ -202,7 +202,7 @@ def poincare_step_device(q2, p2, q3, p3, dt, jac_coeffs_data, jac_metadata,
 
 
 @cuda.jit
-def poincare_step_kernel(initial_q2, initial_p2, initial_q3, initial_p3, dt,
+def _poincare_step_kernel(initial_q2, initial_p2, initial_q3, initial_p3, dt,
                         jac_coeffs_data, jac_metadata,
                         clmo_flat, clmo_offsets, max_steps, section_coord_int,
                         success_flags, q2_out, p2_out, q3_out, p3_out):
@@ -246,7 +246,7 @@ def poincare_step_kernel(initial_q2, initial_p2, initial_q3, initial_p3, dt,
     p3_result = cuda.local.array(1, dtype=float64)
     
     # Find crossing
-    success = poincare_step_device(
+    success = _poincare_step_device(
         q2, p2, q3, p3, dt, jac_coeffs_data, jac_metadata,
         clmo_flat, clmo_offsets, max_steps, section_coord_int,
         q2_result, p2_result, p3_result, q3_result
@@ -267,7 +267,7 @@ def poincare_step_kernel(initial_q2, initial_p2, initial_q3, initial_p3, dt,
 
 
 @cuda.jit
-def poincare_iterate_kernel(seeds_q2, seeds_p2, seeds_q3, seeds_p3, dt,
+def _poincare_iterate_kernel(seeds_q2, seeds_p2, seeds_q3, seeds_p3, dt,
                           jac_coeffs_data, jac_metadata,
                           clmo_flat, clmo_offsets, max_steps, section_coord_int,
                           n_iterations, output_points, output_count):
@@ -314,7 +314,7 @@ def poincare_iterate_kernel(seeds_q2, seeds_p2, seeds_q3, seeds_p3, dt,
     
     # Iterate to find multiple crossings
     for iter_idx in range(n_iterations):
-        success = poincare_step_device(
+        success = _poincare_step_device(
             q2, p2, q3, p3, dt, jac_coeffs_data, jac_metadata,
             clmo_flat, clmo_offsets, max_steps, section_coord_int,
             q2_new, p2_new, p3_new, q3_new
@@ -363,7 +363,7 @@ def poincare_iterate_kernel(seeds_q2, seeds_p2, seeds_q3, seeds_p3, dt,
             break
 
 
-class PoincareMapCUDA:
+class _PoincareMapCUDA:
     """
     Helper class to compute Poincaré maps on GPU.
     """
@@ -379,7 +379,7 @@ class PoincareMapCUDA:
             CLMO lookup table
         """
 
-        self.integrator = RK4IntegratorCUDA(jac_H, clmo)
+        self.integrator = _RK4IntegratorCUDA(jac_H, clmo)
         (self.d_jac_coeffs_data, self.d_jac_metadata,
          self.d_clmo_flat, self.d_clmo_offsets) = self.integrator.get_device_arrays()
     
@@ -430,7 +430,7 @@ class PoincareMapCUDA:
         threads_per_block = THREADS_PER_BLOCK
         blocks_per_grid = (n_seeds + threads_per_block - 1) // threads_per_block
         
-        poincare_step_kernel[blocks_per_grid, threads_per_block](
+        _poincare_step_kernel[blocks_per_grid, threads_per_block](
             d_q2, d_p2, d_q3, d_p3, dt,
             self.d_jac_coeffs_data, self.d_jac_metadata,
             self.d_clmo_flat, self.d_clmo_offsets, max_steps, section_coord_int,
@@ -488,7 +488,7 @@ class PoincareMapCUDA:
         threads_per_block = min(THREADS_PER_BLOCK, n_seeds)
         blocks_per_grid = (n_seeds + threads_per_block - 1) // threads_per_block
         
-        poincare_iterate_kernel[blocks_per_grid, threads_per_block](
+        _poincare_iterate_kernel[blocks_per_grid, threads_per_block](
             d_q2, d_p2, d_q3, d_p3, dt,
             self.d_jac_coeffs_data, self.d_jac_metadata,
             self.d_clmo_flat, self.d_clmo_offsets, max_steps, section_coord_int,

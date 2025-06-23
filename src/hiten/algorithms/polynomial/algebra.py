@@ -18,7 +18,7 @@ The module supplies low level kernels for
 
 All routines operate on one-dimensional coefficient arrays that follow
 the compressed monomial ordering provided by
-:pyfunc:`hiten.algorithms.polynomial.base.init_index_tables`.  Kernels are
+:pyfunc:`hiten.algorithms.polynomial.base._init_index_tables`.  Kernels are
 compiled in nopython mode with :pyfunc:`numba.njit`; computationally
 intensive operations additionally exploit :pyfunc:`numba.prange` for
 parallelism.
@@ -34,10 +34,10 @@ import numpy as np
 from numba import get_num_threads, get_thread_id, njit, prange
 from numba.typed import List
 
-from hiten.algorithms.polynomial.base import (decode_multiindex,
-                                               encode_multiindex,
-                                               fill_exponents)
-from hiten.utils.config import FASTMATH, N_VARS
+from hiten.algorithms.polynomial.base import (_decode_multiindex,
+                                               _encode_multiindex,
+                                               _fill_exponents)
+from hiten.algorithms.utils.config import FASTMATH, N_VARS
 
 
 @njit(fastmath=FASTMATH, cache=False)
@@ -110,7 +110,7 @@ def _poly_mul(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clmo, e
     deg_q : int
         Degree of the second polynomial
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -140,18 +140,18 @@ def _poly_mul(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clmo, e
         pi = p[i]
         if pi == 0:
             continue
-        ki = decode_multiindex(i, deg_p, clmo)
+        ki = _decode_multiindex(i, deg_p, clmo)
         for j in range(q.shape[0]):
             qj = q[j]
             if qj == 0:
                 continue
-            kj = decode_multiindex(j, deg_q, clmo)
+            kj = _decode_multiindex(j, deg_q, clmo)
             # build sum of exponents explicitly to avoid potential nopython
             # pitfalls of `ki + kj` with newly allocated arrays
             ks = np.empty(N_VARS, dtype=np.int64)
             for m in range(N_VARS):
                 ks[m] = ki[m] + kj[m]
-            idx = encode_multiindex(ks, deg_r, encode_dict_list)
+            idx = _encode_multiindex(ks, deg_r, encode_dict_list)
             if idx != -1:
                 scratch[tid, idx] += pi * qj      # no race
 
@@ -175,7 +175,7 @@ def _poly_diff(p: np.ndarray, var: int, degree: int, psi, clmo, encode_dict_list
     degree : int
         Degree of the polynomial
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -213,14 +213,14 @@ def _poly_diff(p: np.ndarray, var: int, degree: int, psi, clmo, encode_dict_list
             continue
 
         k_vec = np.empty(6, dtype=np.int64)
-        fill_exponents(i, degree, clmo, k_vec)   # mutable view
+        _fill_exponents(i, degree, clmo, k_vec)   # mutable view
 
         exp = k_vec[var]
         if exp == 0:
             continue
 
         k_vec[var] = exp - 1                     # safe mutation
-        idx = encode_multiindex(k_vec, degree - 1, encode_dict_list)
+        idx = _encode_multiindex(k_vec, degree - 1, encode_dict_list)
         if idx != -1:
             scratch[tid, idx] += coeff * exp  # race-free write
         scratch_exp[var] = exp                # restore for next iteration
@@ -248,7 +248,7 @@ def _poly_poisson(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clm
     deg_q : int
         Degree of the second polynomial
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -328,7 +328,7 @@ def _get_degree(p: np.ndarray, psi) -> int:
     p : numpy.ndarray
         Coefficient array of the polynomial
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
         
     Returns
     -------
@@ -460,7 +460,7 @@ def _poly_evaluate(
         if coeff_val == 0.0 + 0.0j:
             continue
 
-        exps = decode_multiindex(i, degree, clmo)   # immutable 6-tuple
+        exps = _decode_multiindex(i, degree, clmo)   # immutable 6-tuple
 
         term_val = 1.0 + 0.0j
         for v in range(N_VARS):
@@ -550,7 +550,7 @@ def _poly_integrate(p: np.ndarray, var: int, degree: int, psi, clmo, encode_dict
     degree : int
         Degree of the polynomial
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -576,14 +576,14 @@ def _poly_integrate(p: np.ndarray, var: int, degree: int, psi, clmo, encode_dict
             continue
 
         k_vec = np.empty(6, dtype=np.int64)
-        fill_exponents(i, degree, clmo, k_vec)
+        _fill_exponents(i, degree, clmo, k_vec)
 
         k_integrated = k_vec.copy()
         k_integrated[var] += 1
 
         new_coeff = coeff / (k_vec[var] + 1)
 
-        idx = encode_multiindex(k_integrated, out_degree, encode_dict_list)
+        idx = _encode_multiindex(k_integrated, out_degree, encode_dict_list)
         if idx != -1:
             ip[idx] += new_coeff
 

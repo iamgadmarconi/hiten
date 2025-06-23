@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from hiten.system.center import CenterManifold
-from hiten.system.base import System, systemConfig
+from hiten.system.base import System
 from hiten.system.body import Body
 from hiten.utils.constants import Constants
 
@@ -21,8 +21,8 @@ def reduction_test_setup():
     distance_em = Constants.get_orbital_distance("earth", "moon")
     distance_se = Constants.get_orbital_distance("sun", "earth")
 
-    system_em = System(systemConfig(Earth, Moon, distance_em))
-    system_se = System(systemConfig(Sun, Earth, distance_se))
+    system_em = System(Earth, Moon, distance_em)
+    system_se = System(Sun, Earth, distance_se)
 
     libration_point_em = system_em.get_libration_point(TEST_L_POINT_IDX) # L1
     libration_point_se = system_se.get_libration_point(TEST_L_POINT_IDX) # L1

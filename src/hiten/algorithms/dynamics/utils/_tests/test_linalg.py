@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 from hiten.algorithms.dynamics.utils.linalg import (eigenvalue_decomposition,
-                                                    stability_indices)
+                                                    _stability_indices)
 
 
 def test_eig_decomp():
@@ -34,7 +34,7 @@ def test_eig_decomp():
 
 def test_stability_indices():
     M = np.eye(6)
-    nu, eigvals, eigvecs = stability_indices(M)
+    nu, eigvals, eigvecs = _stability_indices(M)
 
     assert np.allclose(eigvals, np.ones(6)), "Eigenvalues of identity matrix should all be 1"
     

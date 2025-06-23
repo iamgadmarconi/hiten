@@ -3,8 +3,7 @@ import numpy as np
 from numba import complex128, cuda, float64
 
 from hiten.algorithms.polynomial.cuda.evaluate import (
-    CUDAEvaluate, poly_evaluate_degree_device)
-
+    _CUDAEvaluate, _poly_evaluate_degree_device)
 
 N_VARS = 6
 N_DOF = 3
@@ -12,7 +11,7 @@ THREADS_PER_BLOCK = 256
 
 
 @cuda.jit(device=True)
-def hamiltonian_rhs_device(state, jac_coeffs_data, jac_metadata, 
+def _hamiltonian_rhs_device(state, jac_coeffs_data, jac_metadata, 
                           clmo_flat, clmo_offsets, result):
     """
     Device function to compute Hamiltonian RHS for a single state.
@@ -47,7 +46,7 @@ def hamiltonian_rhs_device(state, jac_coeffs_data, jac_metadata,
             
             if n_coeffs > 0:
                 coeffs_degree = jac_coeffs_data[offset:offset+n_coeffs]
-                value += poly_evaluate_degree_device(
+                value += _poly_evaluate_degree_device(
                     coeffs_degree, n_coeffs, degree, state_complex,
                     clmo_flat, clmo_offsets
                 )
@@ -64,7 +63,7 @@ def hamiltonian_rhs_device(state, jac_coeffs_data, jac_metadata,
             
             if n_coeffs > 0:
                 coeffs_degree = jac_coeffs_data[offset:offset+n_coeffs]
-                value += poly_evaluate_degree_device(
+                value += _poly_evaluate_degree_device(
                     coeffs_degree, n_coeffs, degree, state_complex,
                     clmo_flat, clmo_offsets
                 )
@@ -74,7 +73,7 @@ def hamiltonian_rhs_device(state, jac_coeffs_data, jac_metadata,
 
 
 @cuda.jit
-def hamiltonian_rhs_kernel(states, jac_coeffs_data, jac_metadata,
+def _hamiltonian_rhs_kernel(states, jac_coeffs_data, jac_metadata,
                           clmo_flat, clmo_offsets, rhs_results):
     """
     CUDA kernel to compute Hamiltonian RHS for multiple states.
@@ -104,7 +103,7 @@ def hamiltonian_rhs_kernel(states, jac_coeffs_data, jac_metadata,
     
     # Compute RHS
     rhs = cuda.local.array(6, dtype=float64)
-    hamiltonian_rhs_device(state, jac_coeffs_data, jac_metadata,
+    _hamiltonian_rhs_device(state, jac_coeffs_data, jac_metadata,
                           clmo_flat, clmo_offsets, rhs)
     
     # Store result
@@ -113,7 +112,7 @@ def hamiltonian_rhs_kernel(states, jac_coeffs_data, jac_metadata,
 
 
 @cuda.jit
-def hamiltonian_rhs_single_kernel(state, jac_coeffs_data, jac_metadata,
+def _hamiltonian_rhs_single_kernel(state, jac_coeffs_data, jac_metadata,
                                  clmo_flat, clmo_offsets, rhs_result):
     """
     CUDA kernel to compute Hamiltonian RHS for a single state.
@@ -135,11 +134,11 @@ def hamiltonian_rhs_single_kernel(state, jac_coeffs_data, jac_metadata,
     tid = cuda.grid(1)
     
     if tid == 0:  # Only first thread does the work
-        hamiltonian_rhs_device(state, jac_coeffs_data, jac_metadata,
+        _hamiltonian_rhs_device(state, jac_coeffs_data, jac_metadata,
                               clmo_flat, clmo_offsets, rhs_result)
 
 
-class HamiltonianRHSEvaluatorCUDA:
+class _HamiltonianRHSEvaluatorCUDA:
     """
     Helper class to manage Hamiltonian RHS evaluation on GPU.
     """
@@ -156,7 +155,7 @@ class HamiltonianRHSEvaluatorCUDA:
         """
         # Use the polynomial evaluator to handle data flattening
 
-        self.poly_evaluator = CUDAEvaluate(jac_H, clmo)
+        self.poly_evaluator = _CUDAEvaluate(jac_H, clmo)
         self.n_components = len(jac_H)
         self.n_dof = self.n_components // 2
         
@@ -190,7 +189,7 @@ class HamiltonianRHSEvaluatorCUDA:
         threads_per_block = THREADS_PER_BLOCK
         blocks_per_grid = (n_states + threads_per_block - 1) // threads_per_block
         
-        hamiltonian_rhs_kernel[blocks_per_grid, threads_per_block](
+        _hamiltonian_rhs_kernel[blocks_per_grid, threads_per_block](
             d_states, self.d_jac_coeffs_data, self.d_jac_metadata,
             self.d_clmo_flat, self.d_clmo_offsets, d_rhs_results
         )

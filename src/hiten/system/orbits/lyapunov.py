@@ -22,9 +22,10 @@ from numpy.typing import NDArray
 
 from hiten.algorithms.dynamics.utils.geometry import (_find_y_zero_crossing,
                                                       _find_z_zero_crossing)
-from hiten.system.libration.collinear import CollinearPoint, L3Point
-from hiten.system.orbits.base import (PeriodicOrbit, S, correctionConfig,
-                                      orbitConfig)
+from hiten.system.libration.base import LibrationPoint
+from hiten.system.libration.collinear import (CollinearPoint, L1Point, L2Point,
+                                              L3Point)
+from hiten.system.orbits.base import PeriodicOrbit, S, _CorrectionConfig
 from hiten.utils.log_config import logger
 
 
@@ -38,10 +39,12 @@ class LyapunovOrbit(PeriodicOrbit):
 
     Parameters
     ----------
-    config : hiten.system.orbits.base.orbitConfig
-        Configuration of the system, including the chosen libration point and
-        numerical tolerances.  The field ``extra_params`` must contain the key
-        ``'Ax'`` storing the in-plane amplitude :math:`A_x`.
+    libration_point : CollinearPoint
+        Target :pyclass:`hiten.system.libration.collinear.CollinearPoint` around
+        which the orbit is computed.
+    Ax : float, optional
+        Requested amplitude :math:`A_x` along the :math:`x`-direction. Required if
+        *initial_state* is None.
     initial_state : Sequence[float] or None, optional
         Six-dimensional state vector
         :math:`(x, y, z, \\dot x, \\dot y, \\dot z)` expressed in synodic
@@ -63,26 +66,47 @@ class LyapunovOrbit(PeriodicOrbit):
         If the selected point corresponds to :math:`L_3`, which is not
         supported for Lyapunov orbits.
     """
+    
+    _family = "lyapunov"
+    
     Ax: float # Amplitude of the Lyapunov orbit
 
-    def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):
-        self.Ax = config.extra_params['Ax']
+    def __init__(
+            self, 
+            libration_point: LibrationPoint, 
+            Ax: Optional[float] = None,
+            initial_state: Optional[Sequence[float]] = None
+        ):
         
-        self._initial_state = None
-        if initial_state is not None:
-            self._initial_state = np.array(initial_state, dtype=np.float64)
-            
-        super().__init__(config, initial_state)
+        # Validate constructor parameters
+        if initial_state is not None and Ax is not None:
+            raise ValueError("Cannot provide both an initial_state and an analytical parameter (Ax).")
 
-        if not isinstance(self.libration_point, CollinearPoint):
-            msg = f"Expected CollinearPoint, got {type(self.libration_point)}."
+        if not isinstance(libration_point, CollinearPoint):
+            msg = f"Lyapunov orbits are only defined for CollinearPoint, but got {type(libration_point)}."
             logger.error(msg)
             raise TypeError(msg)
-
-        if isinstance(self.libration_point, L3Point):
-            msg = "L3 libration points are not supported for Lyapunov hiten.system.orbits."
+            
+        if initial_state is None:
+            if Ax is None:
+                raise ValueError("Lyapunov orbits require an 'Ax' (x-amplitude) parameter when an initial_state is not provided.")
+            if not isinstance(libration_point, (L1Point, L2Point)):
+                raise ValueError(f"Analytical guess is only available for L1/L2 points. An initial_state must be provided for {libration_point.name}.")
+        
+        self.Ax = Ax
+        
+        if isinstance(libration_point, L3Point):
+            msg = "L3 libration points are not supported for Lyapunov orbits."
             logger.error(msg)
             raise NotImplementedError(msg)
+
+        # The base class __init__ handles the logic for initial_state vs. _initial_guess
+        super().__init__(libration_point, initial_state)
+
+        # Ensure Ax is consistent with the state if it was provided directly.
+        if initial_state is not None and self.Ax is None:
+            # Infer Ax from the initial state's x-component relative to the libration point.
+            self.Ax = self._initial_state[S.X] - self.libration_point.position[0]
 
     def _initial_guess(self) -> NDArray[np.float64]:
         r"""
@@ -109,11 +133,6 @@ class LyapunovOrbit(PeriodicOrbit):
             If the auxiliary quantity *mu_bar* computed during the linear
             analysis becomes negative, indicating an invalid parameter regime.
         """
-
-        if self._initial_state is not None:
-            logger.info(f"Using provided initial state: {self._initial_state} for {str(self)}")
-            return self._initial_state
-
         L_i = self.libration_point.position
         mu = self.mu
         x_L_i: float = L_i[0]
@@ -151,18 +170,21 @@ class LyapunovOrbit(PeriodicOrbit):
         logger.debug(f"Generated initial guess for Lyapunov orbit around {self.libration_point} with Ax={self.Ax}: {state_6d}")
         return state_6d
 
-    def differential_correction(self, **kw):
-        cfg = correctionConfig(
-            residual_indices=(S.VX, S.Z),
-            control_indices=(S.VZ, S.VY),
+    @property
+    def _correction_config(self) -> _CorrectionConfig:
+        """Provides the differential correction configuration for planar Lyapunov orbits."""
+        return _CorrectionConfig(
+            residual_indices=(S.VX, S.VZ),
+            control_indices=(S.X, S.VY),
             target=(0.0, 0.0),
             extra_jacobian=None,
             event_func=_find_y_zero_crossing,
         )
-        return super().differential_correction(cfg, **kw)
 
+    @property
     def eccentricity(self) -> float:
-        raise NotImplementedError("Eccentricity is not implemented for Lyapunov hiten.system.orbits.")
+        """Eccentricity is not a well-defined concept for Lyapunov orbits."""
+        return np.nan
 
 
 class VerticalLyapunovOrbit(PeriodicOrbit):
@@ -175,8 +197,9 @@ class VerticalLyapunovOrbit(PeriodicOrbit):
 
     Parameters
     ----------
-    config : hiten.system.orbits.base.orbitConfig
-        Configuration of the system and numerical options.
+    libration_point : CollinearPoint
+        Target :pyclass:`CollinearPoint` around
+        which the orbit is computed.
     initial_state : Sequence[float] or None, optional
         Optional six-dimensional initial state vector.
 
@@ -185,25 +208,19 @@ class VerticalLyapunovOrbit(PeriodicOrbit):
     The implementation of the analytical seed and the Jacobian adjustment for
     the vertical family is work in progress.
     """
+    
+    _family = "vertical_lyapunov"
 
-    def __init__(self, config: orbitConfig, initial_state: Optional[Sequence[float]] = None):
-        super().__init__(config, initial_state)
+    def __init__(self, libration_point: CollinearPoint, initial_state: Optional[Sequence[float]] = None):
+        super().__init__(libration_point, initial_state)
 
     def _initial_guess(self) -> NDArray[np.float64]:
-        raise NotImplementedError("Initial guess is not implemented for Vertical Lyapunov hiten.system.orbits.")
+        raise NotImplementedError("Initial guess is not implemented for Vertical Lyapunov orbits.")
 
-    @staticmethod
-    def _extra_jacobian(_: np.ndarray, __: np.ndarray) -> np.ndarray:
-        pass
-
-    def differential_correction(
-        self,
-        *,
-        tol: float = 1e-10,
-        max_attempts: int = 25,
-        forward: int = 1,
-    ):
-        cfg = correctionConfig(
+    @property
+    def _correction_config(self) -> _CorrectionConfig:
+        """Provides the differential correction configuration for vertical Lyapunov orbits."""
+        return _CorrectionConfig(
             residual_indices=(S.VX, S.Y),     # Want VX=0 and Y=0
             control_indices=(S.VZ, S.VY),     # Adjust initial VZ and VY
             target=(0.0, 0.0),
@@ -211,9 +228,7 @@ class VerticalLyapunovOrbit(PeriodicOrbit):
             event_func=_find_z_zero_crossing,
         )
 
-        return super().differential_correction(
-            cfg, tol=tol, max_attempts=max_attempts, forward=forward
-        )
-
+    @property
     def eccentricity(self) -> float:
+        """Eccentricity is not a well-defined concept for vertical Lyapunov orbits."""
         return np.nan

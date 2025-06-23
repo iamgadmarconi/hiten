@@ -7,7 +7,7 @@ normal-form and centre-manifold calculations of the spatial circular
 restricted three-body problem.
 
 The module operates on the packed-coefficient representation returned by
-:pyfunc:`hiten.algorithms.polynomial.base.init_index_tables`. A polynomial
+:pyfunc:`hiten.algorithms.polynomial.base._init_index_tables`. A polynomial
 :math:`P(q, p)` is stored as a Numba typed list ``[P_0, P_1, ... , P_N]``
 where ``P_d`` is a :class:`numpy.ndarray` containing the complex coefficients
 of the homogeneous part of total degree :math:`d` in the canonical variables
@@ -15,17 +15,17 @@ of the homogeneous part of total degree :math:`d` in the canonical variables
 
 Function categories
 -------------------
-* Construction helpers - :pyfunc:`polynomial_zero_list`,
-  :pyfunc:`polynomial_variable`, :pyfunc:`polynomial_variables_list`.
-* In-place algebra - :pyfunc:`polynomial_add_inplace`.
-* Binary operations - :pyfunc:`polynomial_multiply`,
-  :pyfunc:`polynomial_power`, :pyfunc:`polynomial_poisson_bracket`.
-* Analysis - :pyfunc:`polynomial_clean`, :pyfunc:`polynomial_degree`,
-  :pyfunc:`polynomial_total_degree`.
-* Calculus - :pyfunc:`polynomial_differentiate`, :pyfunc:`polynomial_jacobian`,
-  :pyfunc:`polynomial_integrate`.
-* Evaluation and substitution - :pyfunc:`polynomial_evaluate`,
-  :pyfunc:`substitute_linear`.
+* Construction helpers - :pyfunc:`_polynomial_zero_list`,
+  :pyfunc:`_polynomial_variable`, :pyfunc:`_polynomial_variables_list`.
+* In-place algebra - :pyfunc:`_polynomial_add_inplace`.
+* Binary operations - :pyfunc:`_polynomial_multiply`,
+  :pyfunc:`_polynomial_power`, :pyfunc:`_polynomial_poisson_bracket`.
+* Analysis - :pyfunc:`_polynomial_clean`, :pyfunc:`_polynomial_degree`,
+  :pyfunc:`_polynomial_total_degree`.
+* Calculus - :pyfunc:`_polynomial_differentiate`, :pyfunc:`_polynomial_jacobian`,
+  :pyfunc:`_polynomial_integrate`.
+* Evaluation and substitution - :pyfunc:`_polynomial_evaluate`,
+  :pyfunc:`_substitute_linear`.
 
 Attributes
 ----------
@@ -49,13 +49,13 @@ from hiten.algorithms.polynomial.algebra import (_get_degree, _poly_clean,
                                                   _poly_diff, _poly_evaluate,
                                                   _poly_integrate, _poly_mul,
                                                   _poly_poisson)
-from hiten.algorithms.polynomial.base import (decode_multiindex,
-                                               encode_multiindex, make_poly)
-from hiten.utils.config import FASTMATH, N_VARS
+from hiten.algorithms.polynomial.base import (_decode_multiindex,
+                                               _encode_multiindex, _make_poly)
+from hiten.algorithms.utils.config import FASTMATH, N_VARS
 
 
 @njit(fastmath=FASTMATH, cache=False)
-def polynomial_zero_list(max_deg: int, psi) -> List[np.ndarray]:
+def _polynomial_zero_list(max_deg: int, psi) -> List[np.ndarray]:
     r"""
     Create a list of zero polynomial coefficient arrays up to a maximum degree.
     
@@ -64,7 +64,7 @@ def polynomial_zero_list(max_deg: int, psi) -> List[np.ndarray]:
     max_deg : int
         Maximum degree of the polynomials to create
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
         
     Returns
     -------
@@ -81,11 +81,11 @@ def polynomial_zero_list(max_deg: int, psi) -> List[np.ndarray]:
     """
     lst = List()
     for d in range(max_deg + 1):
-        lst.append(make_poly(d, psi))
+        lst.append(_make_poly(d, psi))
     return lst
 
 @njit(fastmath=FASTMATH, cache=False)
-def polynomial_variable(idx: int, max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
+def _polynomial_variable(idx: int, max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
     r"""
     Create a polynomial representing a single variable.
     
@@ -96,7 +96,7 @@ def polynomial_variable(idx: int, max_deg: int, psi, clmo, encode_dict_list) -> 
     max_deg : int
         Maximum degree to allocate for the polynomial
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -113,17 +113,17 @@ def polynomial_variable(idx: int, max_deg: int, psi, clmo, encode_dict_list) -> 
     The result is a polynomial with a single non-zero coefficient
     corresponding to the monomial x_idx.
     """
-    poly_result = polynomial_zero_list(max_deg, psi)
+    poly_result = _polynomial_zero_list(max_deg, psi)
     k = np.zeros(N_VARS, dtype=np.int64)
     k[idx] = 1
     if 1 < len(poly_result) and poly_result[1].size > 0:
-        encoded_idx = encode_multiindex(k, 1, encode_dict_list)
+        encoded_idx = _encode_multiindex(k, 1, encode_dict_list)
         if 0 <= encoded_idx < poly_result[1].shape[0]:
             poly_result[1][encoded_idx] = 1.0
     return poly_result
 
 @njit(fastmath=FASTMATH, cache=False)
-def polynomial_variables_list(max_deg: int, psi, clmo, encode_dict_list) -> List[List[np.ndarray]]:
+def _polynomial_variables_list(max_deg: int, psi, clmo, encode_dict_list) -> List[List[np.ndarray]]:
     r"""
     Create a list of polynomials for each variable in the hiten.system.
     
@@ -132,7 +132,7 @@ def polynomial_variables_list(max_deg: int, psi, clmo, encode_dict_list) -> List
     max_deg : int
         Maximum degree to allocate for each polynomial
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -151,11 +151,11 @@ def polynomial_variables_list(max_deg: int, psi, clmo, encode_dict_list) -> List
     """
     var_polys = List()
     for var_idx in range(6):
-        var_polys.append(polynomial_variable(var_idx, max_deg, psi, clmo, encode_dict_list))
+        var_polys.append(_polynomial_variable(var_idx, max_deg, psi, clmo, encode_dict_list))
     return var_polys
 
 @njit(fastmath=FASTMATH, cache=False)
-def polynomial_add_inplace(poly_p: List[np.ndarray], poly_q: List[np.ndarray], scale=1.0, max_deg: int = -1):
+def _polynomial_add_inplace(poly_p: List[np.ndarray], poly_q: List[np.ndarray], scale=1.0, max_deg: int = -1):
     r"""
     Add or subtract one polynomial to/from another in-place.
     
@@ -199,7 +199,7 @@ def polynomial_add_inplace(poly_p: List[np.ndarray], poly_q: List[np.ndarray], s
             poly_p[d] += scale * poly_q[d]
 
 @njit(fastmath=FASTMATH, cache=False)
-def polynomial_multiply(poly_p: List[np.ndarray], poly_q: List[np.ndarray], max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
+def _polynomial_multiply(poly_p: List[np.ndarray], poly_q: List[np.ndarray], max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
     r"""
     Multiply two polynomials.
     
@@ -212,7 +212,7 @@ def polynomial_multiply(poly_p: List[np.ndarray], poly_q: List[np.ndarray], max_
     max_deg : int
         Maximum degree for the result
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -229,7 +229,7 @@ def polynomial_multiply(poly_p: List[np.ndarray], poly_q: List[np.ndarray], max_
     with each homogeneous part of poly_q, and accumulating the results in the
     appropriate degree of the output polynomial.
     """
-    poly_r = polynomial_zero_list(max_deg, psi)
+    poly_r = _polynomial_zero_list(max_deg, psi)
     for d1 in range(max_deg + 1):
         if d1 >= len(poly_p) or not np.any(poly_p[d1]):
             continue
@@ -245,7 +245,7 @@ def polynomial_multiply(poly_p: List[np.ndarray], poly_q: List[np.ndarray], max_
     return poly_r
 
 @njit(fastmath=FASTMATH, cache=False)
-def polynomial_power(poly_p: List[np.ndarray], k: int, max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
+def _polynomial_power(poly_p: List[np.ndarray], k: int, max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
     r"""
     Raise a polynomial to a power using binary exponentiation.
     
@@ -258,7 +258,7 @@ def polynomial_power(poly_p: List[np.ndarray], k: int, max_deg: int, psi, clmo, 
     max_deg : int
         Maximum degree for the result
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -277,12 +277,12 @@ def polynomial_power(poly_p: List[np.ndarray], k: int, max_deg: int, psi, clmo, 
     For k=0, the result is the constant polynomial 1.
     """
     if k == 0:
-        poly_result = polynomial_zero_list(max_deg, psi)
+        poly_result = _polynomial_zero_list(max_deg, psi)
         if max_deg >= 0 and len(poly_result) > 0 and poly_result[0].size > 0:
             poly_result[0][0] = 1.0 + 0.0j
         return poly_result
 
-    poly_result = polynomial_zero_list(max_deg, psi)
+    poly_result = _polynomial_zero_list(max_deg, psi)
     if max_deg >= 0 and len(poly_result) > 0 and poly_result[0].size > 0:
         poly_result[0][0] = 1.0 + 0.0j
 
@@ -293,15 +293,15 @@ def polynomial_power(poly_p: List[np.ndarray], k: int, max_deg: int, psi, clmo, 
     exponent = k
     while exponent > 0:
         if exponent % 2 == 1:
-            poly_result = polynomial_multiply(poly_result, active_base, max_deg, psi, clmo, encode_dict_list)
+            poly_result = _polynomial_multiply(poly_result, active_base, max_deg, psi, clmo, encode_dict_list)
         
         if exponent > 1 :
-            active_base = polynomial_multiply(active_base, active_base, max_deg, psi, clmo, encode_dict_list)
+            active_base = _polynomial_multiply(active_base, active_base, max_deg, psi, clmo, encode_dict_list)
         exponent //= 2
     return poly_result
 
 @njit(fastmath=FASTMATH, cache=False)
-def polynomial_poisson_bracket(poly_p: List[np.ndarray], poly_q: List[np.ndarray], max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
+def _polynomial_poisson_bracket(poly_p: List[np.ndarray], poly_q: List[np.ndarray], max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
     r"""
     Compute the Poisson bracket of two polynomials.
     
@@ -314,7 +314,7 @@ def polynomial_poisson_bracket(poly_p: List[np.ndarray], poly_q: List[np.ndarray
     max_deg : int
         Maximum degree for the result
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -333,7 +333,7 @@ def polynomial_poisson_bracket(poly_p: List[np.ndarray], poly_q: List[np.ndarray
     The degree of the Poisson bracket of terms of degrees d1 and d2
     is d1 + d2 - 2.
     """
-    poly_r = polynomial_zero_list(max_deg, psi)
+    poly_r = _polynomial_zero_list(max_deg, psi)
     for d1 in range(len(poly_p)):
         if not np.any(poly_p[d1]):
             continue
@@ -354,7 +354,7 @@ def polynomial_poisson_bracket(poly_p: List[np.ndarray], poly_q: List[np.ndarray
     return poly_r
 
 @njit(fastmath=FASTMATH, cache=False)
-def polynomial_clean(poly_p: List[np.ndarray], tol: float) -> List[np.ndarray]:
+def _polynomial_clean(poly_p: List[np.ndarray], tol: float) -> List[np.ndarray]:
     r"""
     Create a new polynomial with small coefficients set to zero.
     
@@ -385,7 +385,7 @@ def polynomial_clean(poly_p: List[np.ndarray], tol: float) -> List[np.ndarray]:
     return cleaned_list
 
 @njit(fastmath=FASTMATH, cache=False)
-def polynomial_degree(poly_p: List[np.ndarray]) -> int:
+def _polynomial_degree(poly_p: List[np.ndarray]) -> int:
     r"""
     Get the degree of a polynomial represented as a list of homogeneous parts.
 
@@ -409,7 +409,7 @@ def polynomial_degree(poly_p: List[np.ndarray]) -> int:
     return -1 # All parts are zero or poly_p is empty
 
 @njit(fastmath=FASTMATH, cache=False)
-def polynomial_total_degree(poly_p: List[np.ndarray], psi) -> int:
+def _polynomial_total_degree(poly_p: List[np.ndarray], psi) -> int:
     r"""
     Get the total degree of a polynomial using the _get_degree kernel function.
     
@@ -423,7 +423,7 @@ def polynomial_total_degree(poly_p: List[np.ndarray], psi) -> int:
         A list where poly_p[d] is a NumPy array of coefficients for the
         homogeneous part of degree d.
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
         
     Returns
     -------
@@ -432,7 +432,7 @@ def polynomial_total_degree(poly_p: List[np.ndarray], psi) -> int:
         
     Notes
     -----
-    This function provides an alternative to polynomial_degree() by using the 
+    This function provides an alternative to _polynomial_degree() by using the 
     _get_degree kernel function to determine the degree of each homogeneous part
     based on coefficient array size rather than relying on array indexing.
     """
@@ -460,7 +460,7 @@ def polynomial_total_degree(poly_p: List[np.ndarray], psi) -> int:
     return max_degree_found
 
 @njit(fastmath=FASTMATH, cache=False)
-def polynomial_differentiate(
+def _polynomial_differentiate(
     poly_p: List[np.ndarray], 
     var_idx: int, 
     max_deg: int, 
@@ -508,7 +508,7 @@ def polynomial_differentiate(
     if derivative_max_deg < 0:
         derivative_max_deg = 0
 
-    derivative_coeffs_list = polynomial_zero_list(derivative_max_deg, derivative_psi_table)
+    derivative_coeffs_list = _polynomial_zero_list(derivative_max_deg, derivative_psi_table)
 
     for d_orig in range(1, max_deg + 1):
         d_res = d_orig - 1 
@@ -530,7 +530,7 @@ def polynomial_differentiate(
     return derivative_coeffs_list, derivative_max_deg
 
 @njit(fastmath=FASTMATH, cache=False)
-def polynomial_jacobian(
+def _polynomial_jacobian(
     poly_p: List[np.ndarray],
     max_deg: int,
     psi_table: np.ndarray,
@@ -547,7 +547,7 @@ def polynomial_jacobian(
     max_deg : int
         Maximum degree of the input polynomial
     psi_table : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo_table : List[numpy.ndarray]
         List of arrays containing packed multi-indices
     encode_dict_list : List
@@ -567,7 +567,7 @@ def polynomial_jacobian(
     jacobian_list = List.empty_list(List.empty_list(np.complex128[::1])) # Typed list for list of polynomials
 
     for i in prange(N_VARS): # Iterate over all variables
-        derivative_poly_coeffs, _ = polynomial_differentiate(
+        derivative_poly_coeffs, _ = _polynomial_differentiate(
             poly_p=poly_p,
             var_idx=i,
             max_deg=max_deg,
@@ -582,10 +582,10 @@ def polynomial_jacobian(
     return jacobian_list
 
 @njit(fastmath=FASTMATH, cache=False)
-def polynomial_evaluate(
+def _polynomial_evaluate(
     poly_p: List[np.ndarray], 
     point: np.ndarray, 
-    clmo: List[np.ndarray] # Typically CLMO_GLOBAL
+    clmo: List[np.ndarray] # Typically _CLMO_GLOBAL
 ) -> np.complex128:
     r"""
     Evaluate a polynomial at a specific point.
@@ -618,7 +618,7 @@ def polynomial_evaluate(
     return total_value
 
 @njit(fastmath=FASTMATH, cache=False)
-def polynomial_integrate(
+def _polynomial_integrate(
     poly_p: List[np.ndarray],
     var_idx: int,
     max_deg: int,
@@ -665,7 +665,7 @@ def polynomial_integrate(
     """
     integral_max_deg = max_deg + 1
     # Ensure integral_coeffs_list is initialized up to integral_max_deg using integral_psi_table
-    integral_coeffs_list = polynomial_zero_list(integral_max_deg, integral_psi_table)
+    integral_coeffs_list = _polynomial_zero_list(integral_max_deg, integral_psi_table)
 
     for d_orig in range(max_deg + 1): # Iterate through all degrees of original polynomial
         d_res = d_orig + 1 # Degree of the result of integrating this part
@@ -704,7 +704,7 @@ def _linear_variable_polys(C: np.ndarray, max_deg: int, psi, clmo, encode_dict_l
     max_deg : int
         Maximum degree for polynomial representations
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -722,20 +722,20 @@ def _linear_variable_polys(C: np.ndarray, max_deg: int, psi, clmo, encode_dict_l
     L_i = ∑_j C[i,j] * var_j
     where var_j are the original variables and L_i are the transformed variables.
     """
-    new_basis = [polynomial_variable(j, max_deg, psi, clmo, encode_dict_list) for j in range(6)]
+    new_basis = [_polynomial_variable(j, max_deg, psi, clmo, encode_dict_list) for j in range(6)]
     L: List[np.ndarray] = []
     for i in range(6):
-        poly_result = polynomial_zero_list(max_deg, psi)
+        poly_result = _polynomial_zero_list(max_deg, psi)
         for j in range(6):
             if C[i, j] == 0:
                 continue
-            polynomial_add_inplace(poly_result, new_basis[j], C[i, j], max_deg)
+            _polynomial_add_inplace(poly_result, new_basis[j], C[i, j], max_deg)
         L.append(poly_result)
     return L
 
 
 @njit(fastmath=FASTMATH)
-def substitute_linear(poly_old: List[np.ndarray], C: np.ndarray, max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
+def _substitute_linear(poly_old: List[np.ndarray], C: np.ndarray, max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
     r"""
     Perform variable substitution in a polynomial using a linear transformation.
     
@@ -748,7 +748,7 @@ def substitute_linear(poly_old: List[np.ndarray], C: np.ndarray, max_deg: int, p
     max_deg : int
         Maximum degree for polynomial representations
     psi : numpy.ndarray
-        Combinatorial table from init_index_tables
+        Combinatorial table from _init_index_tables
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -767,7 +767,7 @@ def substitute_linear(poly_old: List[np.ndarray], C: np.ndarray, max_deg: int, p
     to the appropriate power.
     """
     var_polys = _linear_variable_polys(C, max_deg, psi, clmo, encode_dict_list)
-    poly_new = polynomial_zero_list(max_deg, psi)
+    poly_new = _polynomial_zero_list(max_deg, psi)
 
     for deg in range(max_deg + 1):
         p = poly_old[deg]
@@ -776,10 +776,10 @@ def substitute_linear(poly_old: List[np.ndarray], C: np.ndarray, max_deg: int, p
         for pos, coeff in enumerate(p):
             if coeff == 0:
                 continue
-            k = decode_multiindex(pos, deg, clmo)
+            k = _decode_multiindex(pos, deg, clmo)
             
             # build product  Π_i  (var_polys[i] ** k_i)
-            term = polynomial_zero_list(max_deg, psi)
+            term = _polynomial_zero_list(max_deg, psi)
             
             # Fix: Preserve the full complex value instead of just the real part
             if len(term) > 0 and term[0].size > 0:
@@ -790,9 +790,9 @@ def substitute_linear(poly_old: List[np.ndarray], C: np.ndarray, max_deg: int, p
             for i_var in range(6):
                 if k[i_var] == 0:
                     continue
-                pwr = polynomial_power(var_polys[i_var], k[i_var], max_deg, psi, clmo, encode_dict_list)
-                term = polynomial_multiply(term, pwr, max_deg, psi, clmo, encode_dict_list)
+                pwr = _polynomial_power(var_polys[i_var], k[i_var], max_deg, psi, clmo, encode_dict_list)
+                term = _polynomial_multiply(term, pwr, max_deg, psi, clmo, encode_dict_list)
                 
-            polynomial_add_inplace(poly_new, term, 1.0, max_deg)
+            _polynomial_add_inplace(poly_new, term, 1.0, max_deg)
 
-    return polynomial_clean(poly_new, 1e-14)
+    return _polynomial_clean(poly_new, 1e-14)

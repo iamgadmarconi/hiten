@@ -1,5 +1,5 @@
 import os
-from typing import Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import matplotlib.animation as animation
 import matplotlib.patheffects as patheffects
@@ -7,12 +7,24 @@ import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 
-from hiten.utils.coordinates import (_get_angular_velocity, rotating_to_inertial,
-                               si_time, to_si_units)
-from hiten.utils.files import _ensure_dir
+from hiten.system.body import Body
+from hiten.algorithms.utils.coordinates import (_get_angular_velocity,
+                                     _get_mass_parameter, _rotating_to_inertial,
+                                     _si_time, _to_si_units)
+from hiten.utils.io import _ensure_dir
 
 
-def animate_trajectories(states, times, bodies, system_distance, interval=10, figsize=(14, 6), save=False, dark_mode: bool = True, filepath: str = 'trajectory.mp4'):
+def animate_trajectories(
+        states: np.ndarray, 
+        times: np.ndarray, 
+        bodies: List[Body], 
+        system_distance: float, 
+        interval: int = 10, 
+        figsize: Tuple[int, int] = (14, 6), 
+        save: bool = False, 
+        dark_mode: bool = True, 
+        filepath: str = 'trajectory.mp4'
+    ):
     """
     Create an animated comparison of trajectories in rotating and inertial frames.
     
@@ -49,17 +61,17 @@ def animate_trajectories(states, times, bodies, system_distance, interval=10, fi
 
     mu = bodies[1].mass / (bodies[0].mass + bodies[1].mass)
     omega_real = _get_angular_velocity(bodies[0].mass, bodies[1].mass, system_distance)
-    t_si = si_time(times, bodies[0].mass, bodies[1].mass, system_distance)
+    t_si = _si_time(times, bodies[0].mass, bodies[1].mass, system_distance)
 
     traj_rot = np.array([
-        to_si_units(s, bodies[0].mass, bodies[1].mass, system_distance)[:3]
+        _to_si_units(s, bodies[0].mass, bodies[1].mass, system_distance)[:3]
         for s in states
     ])
     
     traj_inert = []
     for s_dimless, t_dimless in zip(states, times):
-        s_inert_dimless = rotating_to_inertial(s_dimless, t_dimless, mu)
-        s_inert_si = to_si_units(s_inert_dimless, bodies[0].mass, bodies[1].mass, system_distance)
+        s_inert_dimless = _rotating_to_inertial(s_dimless, t_dimless, mu)
+        s_inert_si = _to_si_units(s_inert_dimless, bodies[0].mass, bodies[1].mass, system_distance)
         traj_inert.append(s_inert_si[:3])
     traj_inert = np.array(traj_inert)
     
@@ -200,8 +212,10 @@ def animate_trajectories(states, times, bodies, system_distance, interval=10, fi
                     traj_rot[:frame+1, 2],
                     color='red', label='Particle')
         
-        _plot_body(ax_rot, primary_rot_center, bodies[0].radius, 'blue', bodies[0].name)
-        _plot_body(ax_rot, secondary_rot_center, bodies[1].radius, 'gray', bodies[1].name)
+        primary_color = _get_body_color(bodies[0], 'royalblue')
+        secondary_color = _get_body_color(bodies[1], 'slategray')
+        _plot_body(ax_rot, primary_rot_center, bodies[0].radius, primary_color, bodies[0].name)
+        _plot_body(ax_rot, secondary_rot_center, bodies[1].radius, secondary_color, bodies[1].name)
         
         ax_rot.set_title("Rotating Frame (SI Distances)", color='white' if dark_mode else 'black')
         ax_rot.legend()
@@ -211,12 +225,12 @@ def animate_trajectories(states, times, bodies, system_distance, interval=10, fi
                       traj_inert[:frame+1, 2],
                       color='red', label='Particle')
         
-        _plot_body(ax_inert, primary_inert_center, bodies[0].radius, 'blue', bodies[0].name)
+        _plot_body(ax_inert, primary_inert_center, bodies[0].radius, primary_color, bodies[0].name)
         
         ax_inert.plot(secondary_x[:frame+1], secondary_y[:frame+1], secondary_z[:frame+1],
                       '--', color='gray', alpha=0.5, label=f'{bodies[1].name} orbit')
         secondary_center_now = np.array([secondary_x[frame], secondary_y[frame], secondary_z[frame]])
-        _plot_body(ax_inert, secondary_center_now, bodies[1].radius, 'gray', bodies[1].name)
+        _plot_body(ax_inert, secondary_center_now, bodies[1].radius, secondary_color, bodies[1].name)
         
         ax_inert.set_title("Inertial Frame (Real Time, Real Ω)", color='white' if dark_mode else 'black')
         ax_inert.legend()
@@ -243,7 +257,435 @@ def animate_trajectories(states, times, bodies, system_distance, interval=10, fi
         ani.save(filepath, fps=60, dpi=500)
     plt.show()
     plt.close()
+
     return ani
+
+def plot_rotating_frame(
+        states: np.ndarray,
+        times: np.ndarray,
+        bodies: List[Body],
+        system_distance: float,
+        figsize: Tuple[int, int] = (10, 8),
+        save: bool = False,
+        dark_mode: bool = True,
+        filepath: str = 'rotating_frame.svg',
+        *,
+        block: bool = True,
+        close_after: bool = True,
+        **kwargs):
+    r"""
+    Plot the orbit trajectory in the rotating reference frame.
+    
+    Parameters
+    ----------
+    states : array-like
+        The states to plot.
+    times : array-like
+        The times corresponding to the states.
+    bodies : list
+        The bodies to plot.
+    system_distance : float
+        The distance between the bodies.
+    figsize : tuple, optional
+        Figure size in inches (width, height). Default is (10, 8).
+        
+    Returns
+    -------
+    tuple
+        (fig, ax) containing the figure and axis objects for further customization
+    """
+    mu = _get_mass_parameter(bodies[0].mass, bodies[1].mass)
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111, projection='3d')
+    
+    # Get trajectory data
+    x = states[:, 0]
+    y = states[:, 1]
+    z = states[:, 2]
+    
+    # Plot orbit trajectory
+    orbit_color = kwargs.get('orbit_color', 'cyan')
+    ax.plot(x, y, z, label=f'Orbit', color=orbit_color)
+    
+    # Plot primary body (canonical position: -mu, 0, 0)
+    primary_pos = np.array([-mu, 0, 0])
+    primary_radius = bodies[0].radius / system_distance  # Convert to canonical units
+    primary_color = _get_body_color(bodies[0], 'royalblue')
+    _plot_body(ax, primary_pos, primary_radius, primary_color, bodies[0].name)
+    
+    # Plot secondary body (canonical position: 1-mu, 0, 0)
+    secondary_pos = np.array([1-mu, 0, 0])
+    secondary_radius = bodies[1].radius / system_distance  # Convert to canonical units
+    secondary_color = _get_body_color(bodies[1], 'slategray')
+    _plot_body(ax, secondary_pos, secondary_radius, secondary_color, bodies[1].name)
+    
+    ax.set_xlabel('X [canonical]')
+    ax.set_ylabel('Y [canonical]')
+    ax.set_zlabel('Z [canonical]')
+    
+    # Create legend and apply styling
+    ax.legend()
+    _set_axes_equal(ax)
+    
+    # Apply dark mode if requested
+    if dark_mode:
+        _set_dark_mode(fig, ax, title=f'Orbit in Rotating Frame')
+    else:
+        ax.set_title(f'Orbit in Rotating Frame')
+    
+    if save:
+        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+        plt.savefig(filepath)
+
+    plt.show(block=block)
+    if close_after:
+        plt.close(fig)
+
+    return fig, ax
+
+    
+def plot_inertial_frame(
+        states: np.ndarray,
+        times: np.ndarray,
+        bodies: List[Body],
+        system_distance: float,
+        figsize: Tuple[int, int] = (10, 8),
+        save: bool = False,
+        dark_mode: bool = True,
+        filepath: str = 'inertial_frame.svg',
+        *,
+        block: bool = True,
+        close_after: bool = True,
+        **kwargs):
+    r"""
+    Plot the orbit trajectory in the primary-centered inertial reference frame.
+    
+    Parameters
+    ----------
+    show : bool, optional
+        Whether to call plt.show() after creating the plot. Default is True.
+    figsize : tuple, optional
+        Figure size in inches (width, height). Default is (10, 8).
+    **kwargs
+        Additional keyword arguments for plot customization.
+        
+    Returns
+    -------
+    tuple
+        (fig, ax) containing the figure and axis objects for further customization
+    """
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111, projection='3d')
+    
+    mu = _get_mass_parameter(bodies[0].mass, bodies[1].mass)
+    # Get trajectory data and convert to inertial frame
+    traj_inertial = []
+    
+    for state, t in zip(states, times):
+        # Convert rotating frame to inertial frame (canonical units)
+        inertial_state = _rotating_to_inertial(state, t, mu)
+        traj_inertial.append(inertial_state)
+    
+    traj_inertial = np.array(traj_inertial)
+    x, y, z = traj_inertial[:, 0], traj_inertial[:, 1], traj_inertial[:, 2]
+    
+    # Plot orbit trajectory
+    orbit_color = kwargs.get('orbit_color', 'red')
+    ax.plot(x, y, z, label=f'Orbit', color=orbit_color)
+    
+    # Plot primary body at origin
+    primary_pos = np.array([0, 0, 0])
+    primary_radius = bodies[0].radius / system_distance  # Convert to canonical units
+    primary_color = _get_body_color(bodies[0], 'royalblue')
+    _plot_body(ax, primary_pos, primary_radius, primary_color, bodies[0].name)
+    
+    # Plot secondary's orbit and position
+    theta = times  # Time is angle in canonical units
+    secondary_x = (1-mu)
+    secondary_y = np.zeros_like(theta)
+    secondary_z = np.zeros_like(theta)
+    
+    # Plot secondary's orbit
+    ax.plot(secondary_x, secondary_y, secondary_z, '--', color=bodies[1].color, 
+            alpha=0.5, label=f'{bodies[1].name} Orbit')
+    
+    # Plot secondary at final position
+    secondary_pos = np.array([secondary_x[-1], secondary_y[-1], secondary_z[-1]])
+    secondary_radius = bodies[1].radius / system_distance  # Convert to canonical units
+    secondary_color = _get_body_color(bodies[1], 'slategray')
+    _plot_body(ax, secondary_pos, secondary_radius, secondary_color, bodies[1].name)
+    
+    ax.set_xlabel('X [canonical]')
+    ax.set_ylabel('Y [canonical]')
+    ax.set_zlabel('Z [canonical]')
+    
+    # Create legend and apply styling
+    ax.legend()
+    _set_axes_equal(ax)
+    
+    # Apply dark mode if requested
+    if dark_mode:
+        _set_dark_mode(fig, ax, title=f'Orbit in Inertial Frame')
+    else:
+        ax.set_title(f'Orbit in Inertial Frame')
+    
+    if save:
+        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+        plt.savefig(filepath)
+    
+    plt.show(block=block)
+    if close_after:
+        plt.close(fig)
+        
+    return fig, ax
+
+def plot_manifold(
+        states_list: List[np.ndarray], 
+        times_list: List[np.ndarray], 
+        bodies: List[Body], 
+        system_distance: float, 
+        figsize: Tuple[int, int] = (10, 8), 
+        save: bool = False, 
+        dark_mode: bool = True, 
+        filepath: str = 'manifold.svg',
+        **kwargs):
+    r"""
+    Plot the manifold.
+    
+    Parameters
+    ----------
+    states_list : list
+        The states to plot.
+    times_list : list
+        The times corresponding to the states.
+    bodies : list
+        The bodies to plot.
+    system_distance : float
+        The distance between the bodies.
+    figsize : tuple, optional
+        Figure size in inches (width, height). Default is (10, 8).
+    save : bool, optional
+        Whether to save the plot to a file. Default is False.
+    dark_mode : bool, optional
+        Whether to use dark mode for the plot. Default is True.
+
+    Returns
+    -------
+    tuple
+        (fig, ax) containing the figure and axis objects for further customization
+    """
+
+    cmap_key = kwargs.get('cmap', 'plasma')
+    mu = _get_mass_parameter(bodies[0].mass, bodies[1].mass)
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111, projection='3d')
+    
+    num_traj = len(states_list)
+    cmap = plt.get_cmap(cmap_key)
+
+    for i, (xW, _) in enumerate(zip(states_list, times_list)):
+        color = cmap(i / (num_traj - 1)) if num_traj > 1 else cmap(0.5)
+        ax.plot(xW[:, 0], xW[:, 1], xW[:, 2], color=color, lw=2)
+
+    primary_color = _get_body_color(bodies[0], 'royalblue')
+    primary_center = np.array([-mu, 0, 0])
+    primary_radius = bodies[0].radius
+    _plot_body(ax, primary_center, primary_radius / system_distance, primary_color, bodies[0].name)
+
+    secondary_color = _get_body_color(bodies[1], 'slategray')
+    secondary_center = np.array([(1 - mu), 0, 0])
+    secondary_radius = bodies[1].radius
+    _plot_body(ax, secondary_center, secondary_radius / system_distance, secondary_color, bodies[1].name)
+    
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_zlabel('z')
+    _set_axes_equal(ax)
+    ax.set_title('Manifold')
+
+    if dark_mode:
+        _set_dark_mode(fig, ax, title=ax.get_title())
+
+    if save:
+        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+        plt.savefig(filepath)
+
+    plt.show()
+    plt.close()
+
+    return fig, ax
+
+def plot_poincare_map(
+        points: np.ndarray,
+        labels: List[str],
+        figsize: Tuple[int, int] = (10, 8),
+        save: bool = False,
+        dark_mode: bool = True,
+        filepath: str = 'poincare_map.svg',
+        **kwargs):
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    if points.shape[0] == 0:
+        ax.text(0.5, 0.5, "No data to plot", ha='center', va='center', 
+                color='red' if not dark_mode else 'white', fontsize=12)
+        ax.set_xlim(-1, 1)
+        ax.set_ylim(-1, 1)
+        ax.set_xticks([])
+        ax.set_yticks([])
+        title_text = "Poincaré Map (No Data)"
+
+    else:
+        n_pts = points.shape[0]
+        point_size = max(0.2, min(4.0, 4000.0 / max(n_pts, 1)))
+
+        ax.scatter(points[:, 0], points[:, 1], s=point_size, alpha=0.7)
+        
+        max_val_0 = max(abs(points[:, 0].max()), abs(points[:, 0].min()))
+        max_val_1 = max(abs(points[:, 1].max()), abs(points[:, 1].min()))
+        max_abs_val = max(max_val_0, max_val_1, 1e-9)
+        
+        ax.set_xlim(-max_abs_val * 1.1, max_abs_val * 1.1)
+        ax.set_ylim(-max_abs_val * 1.1, max_abs_val * 1.1)
+        
+        ax.set_xlabel(f"${labels[0]}'$")
+        ax.set_ylabel(f"${labels[1]}'$")
+        title_text = f"Poincaré Map"
+
+    ax.set_aspect("equal", adjustable="box")
+    ax.grid(True, alpha=0.3)
+    
+    if dark_mode:
+        _set_dark_mode(fig, ax, title=title_text)
+    else:
+        ax.set_title(title_text)
+
+    plt.tight_layout()
+
+    if save:
+        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+        plt.savefig(filepath)
+
+    plt.show()
+    plt.close()
+
+    return fig, ax
+
+def plot_poincare_map_interactive(
+        points: np.ndarray,
+        labels: List[str],
+        on_select: Optional[Callable[[np.ndarray], Any]] = None,
+        figsize: Tuple[int, int] = (10, 8),
+        dark_mode: bool = True,
+        **kwargs):
+    """Interactive Poincaré-map viewer.
+
+    Parameters
+    ----------
+    points : numpy.ndarray, shape (n, 2)
+        Collection of Poincaré-section points to visualise.
+    labels : list[str]
+        Axis labels corresponding to *points* (e.g. ["q2", "p2"]).
+    on_select : callable, optional
+        Callback executed when a point is selected with the left mouse button.
+        It receives the coordinates of the selected point *(2,)* and may return
+        an arbitrary object (e.g. a `GenericOrbit`).  The last returned value is
+        also the return value of this function.
+    figsize : tuple[int, int], default (10, 8)
+        Figure size in inches.
+    dark_mode : bool, default True
+        Use a dark colour scheme.
+    **kwargs
+        Currently ignored.  Reserved for future extensions.
+    """
+
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    pts = points  # Local alias inside closure
+
+    # Adaptive point size for clarity on dense maps
+    n_pts_int = pts.shape[0]
+    adaptive_ps = max(0.2, min(4.0, 4000.0 / max(n_pts_int, 1)))
+
+    # Scatter plot of the Poincaré set
+    ax.scatter(pts[:, 0], pts[:, 1], s=adaptive_ps, alpha=0.7)
+    ax.set_xlabel(f"${labels[0]}'$")
+    ax.set_ylabel(f"${labels[1]}'$")
+    ax.set_title("Select a point on the Poincaré Map\n(Press 'q' to quit)")
+    ax.set_aspect("equal", adjustable="box")
+    ax.grid(True, alpha=0.3)
+
+    if dark_mode:
+        _set_dark_mode(fig, ax, title=ax.get_title())
+
+    # Marker highlighting the selected point
+    selected_marker = ax.scatter([], [], s=60, c='red', marker='x')
+    selected_payload: Dict[str, Any] = {"orbit": None}
+
+    # ------------------------------------------------------------------
+    # Event handlers
+    # ------------------------------------------------------------------
+    def _onclick(event):
+        """Handle mouse-click events inside the axes."""
+        if event.inaxes != ax or event.button != 1:  # Left click only
+            return
+
+        # Find the closest point to the click position
+        click_xy = np.array([event.xdata, event.ydata])
+        distances = np.linalg.norm(pts - click_xy, axis=1)
+        idx = int(np.argmin(distances))
+        pt = pts[idx]
+
+        # Update marker position
+        selected_marker.set_offsets(np.array([[pt[0], pt[1]]]))
+        fig.canvas.draw_idle()
+
+        # Execute user callback, if any
+        if on_select is not None:
+            try:
+                selected_payload["orbit"] = on_select(pt)
+            except Exception as exc:  # pragma: no cover
+                raise Exception(f"Error in on_select callback: {exc}")
+
+    def _onkey(event):
+        """Close the figure when the user presses *q*."""
+        if event.key == 'q':
+            plt.close(fig)
+
+    # Register the callbacks
+    fig.canvas.mpl_connect('button_press_event', _onclick)
+    fig.canvas.mpl_connect('key_press_event', _onkey)
+
+    # Start the UI loop (blocking)
+    plt.show()
+    plt.close(fig)
+
+    return selected_payload.get("orbit")
+
+def _get_body_color(body: Body, default_color: str) -> str:
+    """
+    Determines the color for a celestial body in a plot.
+
+    It returns the color specified in the `Body` object, unless the color is
+    the default black ("#000000"), in which case it returns a specified default
+    color. This ensures visibility in both light and dark modes.
+
+    Parameters
+    ----------
+    body : Body
+        The celestial body object.
+    default_color : str
+        The color to use if the body's color is the default black.
+
+    Returns
+    -------
+    str
+        The determined color string.
+    """
+    if body.color and body.color.upper() != '#000000':
+        return body.color
+    return default_color
 
 def _plot_body(ax, center, radius, color, name, u_res=40, v_res=15):
     """

@@ -169,7 +169,7 @@ def eigenvalue_decomposition(A: np.ndarray, discrete: int = 0, delta: float = 1e
     return sn, un, cn, Ws, Wu, Wc
 
 
-def stability_indices(M: np.ndarray, tol: float = 1e-8) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _stability_indices(M: np.ndarray, tol: float = 1e-8) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     r"""
     Compute the three Floquet stability indices of a periodic orbit.
 
@@ -211,9 +211,9 @@ def stability_indices(M: np.ndarray, tol: float = 1e-8) -> Tuple[np.ndarray, np.
     Examples
     --------
     >>> import numpy as np
-    >>> from hiten.algorithms.dynamics.hiten.utils.linalg import stability_indices
+    >>> from hiten.algorithms.dynamics.hiten.utils.linalg import _stability_indices
     >>> M = np.eye(6)
-    >>> nu, *_ = stability_indices(M)
+    >>> nu, *_ = _stability_indices(M)
     >>> np.allclose(nu, 1.0)
     True
     """

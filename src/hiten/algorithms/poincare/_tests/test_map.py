@@ -2,8 +2,8 @@ import numpy as np
 import pytest
 
 from hiten.system.center import CenterManifold
-from hiten.system.poincare import PoincareMap, poincareMapConfig
-from hiten.system.base import System, systemConfig
+from hiten.algorithms.poincare.base import _PoincareMap, _PoincareMapConfig
+from hiten.system.base import System
 from hiten.system.body import Body
 from hiten.utils.constants import Constants
 
@@ -22,13 +22,13 @@ def poincare_test_setup():
     Earth = Body("Earth", Constants.bodies["earth"]["mass"], Constants.bodies["earth"]["radius"], "blue")
     Moon = Body("Moon", Constants.bodies["moon"]["mass"], Constants.bodies["moon"]["radius"], "gray", Earth)
     distance = Constants.get_orbital_distance("earth", "moon")
-    system = System(systemConfig(Earth, Moon, distance))
+    system = System(Earth, Moon, distance)
     libration_point = system.get_libration_point(TEST_L_POINT_IDX)
 
     cm = CenterManifold(libration_point, TEST_MAX_DEG)
     cm.compute()
 
-    pmGPUConfig = poincareMapConfig(
+    pmGPUConfig = _PoincareMapConfig(
         dt=TEST_DT,
         method="rk",
         integrator_order=4,
@@ -40,7 +40,7 @@ def poincare_test_setup():
         use_gpu=True,
     )
 
-    pmCPUConfig = poincareMapConfig(
+    pmCPUConfig = _PoincareMapConfig(
         dt=TEST_DT,
         method="rk",
         integrator_order=4,
@@ -52,8 +52,8 @@ def poincare_test_setup():
         use_gpu=False,
     )
 
-    pmGPU = PoincareMap(cm, TEST_H0, pmGPUConfig)
-    pmCPU = PoincareMap(cm, TEST_H0, pmCPUConfig)
+    pmGPU = _PoincareMap(cm, TEST_H0, pmGPUConfig)
+    pmCPU = _PoincareMap(cm, TEST_H0, pmCPUConfig)
 
     return pmGPU, pmCPU
 
