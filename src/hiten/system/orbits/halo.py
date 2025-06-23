@@ -98,8 +98,12 @@ class HaloOrbit(PeriodicOrbit):
                 logger.error(err)
                 raise ValueError(err)
             if not isinstance(libration_point, (L1Point, L2Point)):
-                # L3 is technically possible but not validated
-                raise ValueError(f"Analytical guess is only validated for L1/L2 points. An initial_state must be provided for {libration_point.name}.")
+                # This implies the point is L3, which is known to be a CollinearPoint.
+                # The guess is implemented but not fully validated.
+                logger.warning(
+                    "The analytical guess for L3 Halo orbits is experimental. "
+                    "Convergence is not guaranteed and may require more iterations."
+                )
 
         self.Az = Az
         self.Zenith = Zenith

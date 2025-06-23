@@ -11,8 +11,8 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from hiten.system import (CenterManifold, HaloOrbit, LyapunovOrbit,
-                          Manifold, System, VerticalLyapunovOrbit)
+from hiten.system import (CenterManifold, HaloOrbit, LyapunovOrbit, System,
+                          VerticalLyapunovOrbit)
 from hiten.utils.io import _ensure_dir
 from hiten.utils.log_config import logger
 
@@ -67,7 +67,7 @@ def main() -> None:
         orbit.plot("rotating")
 
         # ---- Stable manifold generation --------------------------------------------------
-        manifold = Manifold(orbit, stable=True, direction="Positive")
+        manifold = orbit.manifold(stable=True, direction="Positive")
         m_filepath = os.path.join(_MANIFOLD_DIR, f"{spec['name'].lower().replace(' ', '_')}_manifold.pkl")
 
         logger.info("Computing manifold for %s orbit", spec["name"])

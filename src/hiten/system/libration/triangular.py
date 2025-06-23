@@ -79,15 +79,10 @@ class TriangularPoint(LibrationPoint):
         """
         return self.sign * 3 * np.sqrt(3) / 4 * (1 - 2 * self.mu)
 
-    def _find_position(self, y_sign: int) -> np.ndarray:
+    def _calculate_position(self) -> np.ndarray:
         r"""
         Calculate the position of a triangular point (L4 or L5).
         
-        Parameters
-        ----------
-        y_sign : int
-            Sign for y-coordinate: +1 for L4, -1 for L5
-            
         Returns
         -------
         ndarray
@@ -97,7 +92,7 @@ class TriangularPoint(LibrationPoint):
         logger.debug(f"Calculating {point_name} position directly.")
         
         x = 0.5 - self.mu
-        y = y_sign * np.sqrt(3) / 2.0
+        y = self.sign * np.sqrt(3) / 2.0
         
         logger.info(f"{point_name} position calculated: x = {x:.6f}, y = {y:.6f}")
         return np.array([x, y, 0], dtype=np.float64)
@@ -124,17 +119,6 @@ class L4Point(TriangularPoint):
         """Initialize the L4 Libration point."""
         super().__init__(system)
     
-    def _calculate_position(self) -> np.ndarray:
-        r"""
-        Calculate the position of the L4 point.
-        
-        Returns
-        -------
-        ndarray
-            3D vector [x, y, 0] giving the position of L4
-        """
-        return self._find_position(y_sign=+1)
-
     @property
     def idx(self) -> int:
         return 4
@@ -155,17 +139,6 @@ class L5Point(TriangularPoint):
         """Initialize the L5 Libration point."""
         super().__init__(system)
     
-    def _calculate_position(self) -> np.ndarray:
-        """
-        Calculate the position of the L5 point.
-        
-        Returns
-        -------
-        ndarray
-            3D vector [x, y, 0] giving the position of L5
-        """
-        return self._find_position(y_sign=-1)
-
     @property
     def idx(self) -> int:
         return 5

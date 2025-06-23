@@ -22,16 +22,18 @@ Szebehely, V. (1967). "Theory of Orbits - The Restricted Problem of Three
 Bodies".
 """
 
+from __future__ import annotations
+
 import os
 from abc import ABC, abstractmethod
 from enum import IntEnum
-from typing import Callable, Literal, NamedTuple, Optional, Sequence, Tuple
+from typing import Callable, Literal, NamedTuple, Optional, Sequence, Tuple, TYPE_CHECKING
 
 import numpy as np
 import numpy.typing as npt
 
 from hiten.algorithms.dynamics.rtbp import (_compute_stm, _propagate_dynsys,
-                                            _stability_indices, rtbp_dynsys)
+                                            _stability_indices)
 from hiten.algorithms.dynamics.utils.energy import (crtbp_energy,
                                                     energy_to_jacobi)
 from hiten.algorithms.dynamics.utils.geometry import _find_y_zero_crossing
@@ -43,6 +45,8 @@ from hiten.utils.log_config import logger
 from hiten.utils.plots import (animate_trajectories, plot_inertial_frame,
                                plot_rotating_frame)
 
+if TYPE_CHECKING:
+    from hiten.system.manifold import Manifold
 
 class S(IntEnum): X=0; Y=1; Z=2; VX=3; VY=4; VZ=5
 
@@ -483,6 +487,10 @@ class PeriodicOrbit(ABC):
         logger.info(f"Orbit stability: {'stable' if is_stable else 'unstable'}")
         
         return stability
+
+    def manifold(self, stable: bool = True, direction: Literal["Positive", "Negative"] = "Positive", method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 6) -> "Manifold":
+        from hiten.system.manifold import Manifold
+        return Manifold(self, stable=stable, direction=direction, method=method, order=order)
 
     def plot(self, frame: Literal["rotating", "inertial"] = "rotating", dark_mode: bool = True, save: bool = False, filepath: str = f'orbit.svg', **kwargs):
         if self._trajectory is None:
