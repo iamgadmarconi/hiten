@@ -29,7 +29,7 @@ def _write_dataset(group: h5py.Group, name: str, data: Optional[np.ndarray], *, 
         group.create_dataset(name, data=data, compression=compression, compression_opts=level)
 
 
-def save_periodic_orbit(orbit: "PeriodicOrbit", filepath: str, *, compression: str = "gzip", level: int = 4) -> None:
+def _save_periodic_orbit(orbit: "PeriodicOrbit", filepath: str, *, compression: str = "gzip", level: int = 4) -> None:
     os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
 
     with h5py.File(filepath, "w") as f:
@@ -65,7 +65,7 @@ def save_periodic_orbit(orbit: "PeriodicOrbit", filepath: str, *, compression: s
             _write_dataset(grp, "eigvecs", np.asarray(eigvecs))
 
 
-def load_periodic_orbit(obj: "PeriodicOrbit", filepath: str) -> None:
+def _load_periodic_orbit_inplace(obj: "PeriodicOrbit", filepath: str) -> None:
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Orbit file not found: {filepath}")
 
@@ -81,9 +81,6 @@ def load_periodic_orbit(obj: "PeriodicOrbit", filepath: str) -> None:
 
         obj._initial_state = f["initial_state"][()]
 
-        # ------------------------------------------------------------------
-        # Rebuild the CR3BP context if the metadata is present.
-        # ------------------------------------------------------------------
         try:
             primary_name = f.attrs.get("primary", None)
             secondary_name = f.attrs.get("secondary", None)
@@ -132,11 +129,20 @@ def load_periodic_orbit(obj: "PeriodicOrbit", filepath: str) -> None:
             obj._stability_info = None
 
     if getattr(obj, "libration_point", None) is None:
-        obj.libration_point = None  
+        obj.libration_point = None
     if getattr(obj, "_system", None) is None:
-        obj._system = None  
+        obj._system = None
 
     obj._cached_dynsys = None
+
+
+def _load_periodic_orbit(filepath: str) -> "PeriodicOrbit":
+    """Loads a periodic orbit from a file, creating a new object."""
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"Orbit file not found: {filepath}")
+
+    with h5py.File(filepath, "r") as f:
+        return _read_periodic_orbit_group(f)
 
 
 def _write_periodic_orbit_group(grp: h5py.Group, orbit: "PeriodicOrbit", *, compression: str = "gzip", level: int = 4) -> None:
@@ -148,7 +154,7 @@ def _write_periodic_orbit_group(grp: h5py.Group, orbit: "PeriodicOrbit", *, comp
     # -- Essential state --
     _write_dataset(grp, "initial_state", np.asarray(orbit._initial_state))
 
-    # Context metadata (see save_periodic_orbit above)
+    # Context metadata (see _save_periodic_orbit above)
     if getattr(orbit, "_system", None) is not None:
         grp.attrs["primary"] = orbit._system.primary.name
         grp.attrs["secondary"] = orbit._system.secondary.name
@@ -168,7 +174,7 @@ def _write_periodic_orbit_group(grp: h5py.Group, orbit: "PeriodicOrbit", *, comp
         _write_dataset(sgrp, "eigvecs", np.asarray(eigvecs))
 
 
-def save_manifold(manifold: "Manifold", filepath: str, *, compression: str = "gzip", level: int = 4) -> None:
+def _save_manifold(manifold: "Manifold", filepath: str, *, compression: str = "gzip", level: int = 4) -> None:
     _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
 
     with h5py.File(filepath, "w") as f:
@@ -280,7 +286,7 @@ def _read_periodic_orbit_group(grp: h5py.Group) -> "PeriodicOrbit":
     return orbit
 
 
-def load_manifold(filepath: str) -> "Manifold":
+def _load_manifold(filepath: str) -> "Manifold":
     from hiten.system.manifold import Manifold, ManifoldResult
 
     if not os.path.exists(filepath):
@@ -328,7 +334,7 @@ def load_manifold(filepath: str) -> "Manifold":
     return man
 
 
-def save_poincare_map(pmap: "_PoincareMap", filepath: str, *, compression: str = "gzip", level: int = 4) -> None:
+def _save_poincare_map(pmap: "_PoincareMap", filepath: str, *, compression: str = "gzip", level: int = 4) -> None:
     _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
 
     with h5py.File(filepath, "w") as f:
@@ -342,7 +348,7 @@ def save_poincare_map(pmap: "_PoincareMap", filepath: str, *, compression: str =
             f.attrs["labels_json"] = json.dumps(list(pmap._section.labels))
 
 
-def load_poincare_map(obj: "_PoincareMap", filepath: str) -> None:
+def _load_poincare_map_inplace(obj: "_PoincareMap", filepath: str) -> None:
     from hiten.algorithms.poincare.base import _PoincareMapConfig
     from hiten.algorithms.poincare.map import _PoincareSection
 
@@ -369,7 +375,20 @@ def load_poincare_map(obj: "_PoincareMap", filepath: str) -> None:
             obj._section = None
 
 
-def save_center_manifold(cm: "CenterManifold", dir_path: str | os.PathLike, *, compression: str = "gzip", level: int = 4) -> None:
+def _load_poincare_map(filepath: str, cm: "CenterManifold") -> "_PoincareMap":
+    from hiten.algorithms.poincare.base import _PoincareMap
+
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"Poincaré-map file not found: {filepath}")
+
+    with h5py.File(filepath, "r") as f:
+        energy = float(f.attrs["energy"])
+        pmap = _PoincareMap(cm, energy)
+        _load_poincare_map_inplace(pmap, filepath)
+    return pmap
+
+
+def _save_center_manifold(cm: "CenterManifold", dir_path: str | os.PathLike, *, compression: str = "gzip", level: int = 4) -> None:
     dir_path = Path(dir_path)
     dir_path.mkdir(parents=True, exist_ok=True)
 
@@ -402,7 +421,7 @@ def save_center_manifold(cm: "CenterManifold", dir_path: str | os.PathLike, *, c
             keys_file.unlink()
 
 
-def load_center_manifold(dir_path: str | os.PathLike) -> "CenterManifold":
+def _load_center_manifold(dir_path: str | os.PathLike) -> "CenterManifold":
     from pathlib import Path
 
     from hiten.algorithms.poincare.base import _PoincareMap
@@ -446,4 +465,4 @@ def load_center_manifold(dir_path: str | os.PathLike) -> "CenterManifold":
             pmap.cm = cm
             cm._poincare_maps[original_key] = pmap
 
-    return cm 
+    return cm

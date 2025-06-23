@@ -37,8 +37,8 @@ from hiten.algorithms.dynamics.utils.energy import (crtbp_energy,
 from hiten.algorithms.dynamics.utils.geometry import _find_y_zero_crossing
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
-from hiten.utils.io import (_ensure_dir, load_periodic_orbit,
-                            save_periodic_orbit)
+from hiten.utils.io import (_ensure_dir, _load_periodic_orbit_inplace,
+                            _load_periodic_orbit, _save_periodic_orbit)
 from hiten.utils.log_config import logger
 from hiten.utils.plots import (animate_trajectories, plot_inertial_frame,
                                plot_rotating_frame)
@@ -256,18 +256,6 @@ class PeriodicOrbit(ABC):
     def system(self) -> System:
         return self._system
 
-    def _reset(self) -> None:
-        r"""
-        Reset all computed properties when the initial state is changed.
-        Called internally after differential correction or any other operation
-        that modifies the initial state.
-        """
-        self._trajectory = None
-        self._times = None
-        self._stability_info = None
-        self.period = None
-        logger.debug("Reset computed orbit properties due to state change")
-
     @property
     def is_stable(self) -> bool:
         r"""
@@ -313,6 +301,27 @@ class PeriodicOrbit(ABC):
         """
         return energy_to_jacobi(self.energy)
 
+    @property
+    @abstractmethod
+    def eccentricity(self):
+        pass
+
+    def _reset(self) -> None:
+        r"""
+        Reset all computed properties when the initial state is changed.
+        Called internally after differential correction or any other operation
+        that modifies the initial state.
+        """
+        self._trajectory = None
+        self._times = None
+        self._stability_info = None
+        self.period = None
+        logger.debug("Reset computed orbit properties due to state change")
+
+    @abstractmethod
+    def _initial_guess(self, **kwargs):
+        pass
+
     def _cr3bp_system(self):
         r"""
         Create (or reuse) a _DynamicalSystem wrapper for the CR3BP.
@@ -322,6 +331,67 @@ class PeriodicOrbit(ABC):
         if not hasattr(self, "_cached_dynsys") or self._cached_dynsys is None:
             self._cached_dynsys = rtbp_dynsys(mu=self.mu, name=str(self))
         return self._cached_dynsys
+
+    def differential_correction(
+            self,
+            cfg: _CorrectionConfig,
+            *,
+            tol: float = 1e-10,
+            max_attempts: int = 25,
+            forward: int = 1
+        ) -> tuple[np.ndarray, float]:
+        """
+        Perform differential correction to find a periodic orbit.
+        
+        Parameters
+        ----------
+        cfg : _CorrectionConfig
+            Configuration for the differential correction.
+        tol : float, optional
+            Tolerance for the correction.
+        max_attempts : int, optional
+            Maximum number of attempts to find the orbit.
+        forward : int, optional
+            Direction of propagation.
+
+        Returns
+        -------
+        tuple
+            (state, period)
+
+        Raises
+        ------
+        RuntimeError
+            If the orbit is not found.
+        """
+        X0 = self.initial_state.copy()
+        for k in range(max_attempts + 1):
+
+            t_ev, X_ev = cfg.event_func(dynsys=self.system._dynsys, x0=X0, forward=forward)
+
+            R = X_ev[list(cfg.residual_indices)] - np.array(cfg.target)
+
+            if np.linalg.norm(R, ord=np.inf) < tol:
+                self._reset(); self._initial_state = X0
+                self.period = 2 * t_ev
+                return X0, t_ev
+
+            _, _, Phi, _ = _compute_stm(self.libration_point._var_eq_system, X0, t_ev, steps=cfg.steps, method=cfg.method, order=cfg.order)
+
+            J = Phi[np.ix_(cfg.residual_indices, cfg.control_indices)]
+
+            if cfg.extra_jacobian is not None:
+                J -= cfg.extra_jacobian(X_ev, Phi)
+
+            if np.linalg.det(J) < 1e-12:
+                logger.warning(f"Jacobian determinant is small ({np.linalg.det(J):.2e}), adding regularization.")
+                J += np.eye(J.shape[0]) * 1e-12
+
+            delta = np.linalg.solve(J, -R)
+            logger.info(f"Differential correction delta: {delta} at iteration {k}")
+            X0[list(cfg.control_indices)] += delta
+
+        raise RuntimeError("did not converge")
 
     def propagate(self, steps: int = 1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 8) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         r"""
@@ -392,40 +462,7 @@ class PeriodicOrbit(ABC):
         
         return stability
 
-    def plot(
-            self, 
-            frame: Literal["rotating", "inertial"] = "rotating", 
-            dark_mode: bool = True, 
-            save: bool = False, 
-            filepath: str = f'orbit.svg',
-            **kwargs):
-        r"""
-        Plot the orbit trajectory in the specified reference frame.
-        
-        Parameters
-        ----------
-        frame : str, optional
-            Reference frame to use for plotting. Options are "rotating" or "inertial".
-            Default is "rotating".
-        dark_mode : bool, optional
-            Whether to use dark mode for the plot. Default is True.
-        save : bool, optional
-            Whether to save the plot to a file. Default is False.
-        filepath : str, optional
-            Path to save the plot to. Default is "orbit.svg".
-        **kwargs
-            Additional keyword arguments passed to the specific plotting function.
-            
-        Returns
-        -------
-        tuple
-            (fig, ax) containing the figure and axis objects for further customization
-            
-        Notes
-        -----
-        This is a convenience method that calls either plot_rotating_frame or
-        plot_inertial_frame based on the 'frame' parameter.
-        """
+    def plot(self, frame: Literal["rotating", "inertial"] = "rotating", dark_mode: bool = True, save: bool = False, filepath: str = f'orbit.svg', **kwargs):
         if self._trajectory is None:
             msg = "No trajectory to plot. Call propagate() first."
             logger.error(msg)
@@ -465,85 +502,22 @@ class PeriodicOrbit(ABC):
 
     def save(self, filepath: str, **kwargs) -> None:
         _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
-        save_periodic_orbit(self, filepath)
+        _save_periodic_orbit(self, filepath)
         return
 
-    def load(self, filepath: str, **kwargs) -> None:
+    def load_inplace(self, filepath: str, **kwargs) -> None:
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Orbit file not found: {filepath}")
 
-        load_periodic_orbit(self, filepath)
+        _load_periodic_orbit_inplace(self, filepath)
         return
 
-    @property
-    @abstractmethod
-    def eccentricity(self):
-        pass
+    @classmethod
+    def load(cls, filepath: str, **kwargs) -> "PeriodicOrbit":
+        if not os.path.exists(filepath):
+            raise FileNotFoundError(f"Orbit file not found: {filepath}")
 
-    @abstractmethod
-    def _initial_guess(self, **kwargs):
-        pass
-
-    def differential_correction(
-            self,
-            cfg: _CorrectionConfig,
-            *,
-            tol: float = 1e-10,
-            max_attempts: int = 25,
-            forward: int = 1
-        ) -> tuple[np.ndarray, float]:
-        """
-        Perform differential correction to find a periodic orbit.
-        
-        Parameters
-        ----------
-        cfg : _CorrectionConfig
-            Configuration for the differential correction.
-        tol : float, optional
-            Tolerance for the correction.
-        max_attempts : int, optional
-            Maximum number of attempts to find the orbit.
-        forward : int, optional
-            Direction of propagation.
-
-        Returns
-        -------
-        tuple
-            (state, period)
-
-        Raises
-        ------
-        RuntimeError
-            If the orbit is not found.
-        """
-        X0 = self.initial_state.copy()
-        for k in range(max_attempts + 1):
-
-            t_ev, X_ev = cfg.event_func(dynsys=self.system._dynsys, x0=X0, forward=forward)
-
-            R = X_ev[list(cfg.residual_indices)] - np.array(cfg.target)
-
-            if np.linalg.norm(R, ord=np.inf) < tol:
-                self._reset(); self._initial_state = X0
-                self.period = 2 * t_ev
-                return X0, t_ev
-
-            _, _, Phi, _ = _compute_stm(self.libration_point._var_eq_system, X0, t_ev, steps=cfg.steps, method=cfg.method, order=cfg.order)
-
-            J = Phi[np.ix_(cfg.residual_indices, cfg.control_indices)]
-
-            if cfg.extra_jacobian is not None:
-                J -= cfg.extra_jacobian(X_ev, Phi)
-
-            if np.linalg.det(J) < 1e-12:
-                logger.warning(f"Jacobian determinant is small ({np.linalg.det(J):.2e}), adding regularization.")
-                J += np.eye(J.shape[0]) * 1e-12
-
-            delta = np.linalg.solve(J, -R)
-            logger.info(f"Differential correction delta: {delta} at iteration {k}")
-            X0[list(cfg.control_indices)] += delta
-
-        raise RuntimeError("did not converge")
+        return _load_periodic_orbit(filepath)
 
     def __setstate__(self, state):
         """Restore the PeriodicOrbit instance after unpickling.

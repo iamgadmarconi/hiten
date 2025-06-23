@@ -30,7 +30,7 @@ from hiten.algorithms.dynamics.utils.geometry import surface_of_section
 from hiten.algorithms.dynamics.utils.linalg import (_totime,
                                                     eigenvalue_decomposition)
 from hiten.system.orbits.base import PeriodicOrbit
-from hiten.utils.io import _ensure_dir, load_manifold, save_manifold
+from hiten.utils.io import _ensure_dir, _load_manifold, _save_manifold
 from hiten.utils.log_config import logger
 from hiten.utils.plots import plot_manifold
 
@@ -181,7 +181,107 @@ class Manifold:
     
     def __repr__(self):
         return self.__str__()
-    
+
+    def _get_real_eigenvectors(self, vectors: np.ndarray, values: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Filter for real eigenvalues and their corresponding eigenvectors."""
+        real_vals = []
+        real_vecs_list = []
+        for k in range(len(values)):
+            if np.isreal(values[k]):
+                real_vals.append(values[k])
+                real_vecs_list.append(vectors[:, k])
+        
+        real_vals_arr = np.array(real_vals, dtype=np.complex128)
+        if real_vecs_list:
+            real_vecs_arr = np.column_stack(real_vecs_list)
+        else:
+            real_vecs_arr = np.zeros((vectors.shape[0], 0), dtype=np.complex128)
+            
+        return real_vals_arr, real_vecs_arr
+
+    def _compute_manifold_section(self, state: np.ndarray, period: float, fraction: float, NN: int = 1, forward: int = 1, displacement: float = 1e-6):
+        r"""
+        Compute a section of the invariant manifold.
+
+        Parameters
+        ----------
+        state : numpy.ndarray
+            Initial state of the periodic orbit.
+        period : float
+            Period of the periodic orbit.
+        fraction : float
+            Fraction of the period to compute the section at.
+        NN : int, default 1
+            Index of the eigenvector to compute the section for.
+        forward : int, default 1
+            Direction of integration.
+        displacement : float, default 1e-6
+            Displacement applied along the eigenvector.
+
+        Returns
+        -------
+        numpy.ndarray
+            Initial condition for the manifold section.
+
+        Raises
+        ------
+        ValueError
+            If the requested eigenvector is not available.
+        """
+        xx, tt, phi_T, PHI = _compute_stm(self._libration_point._var_eq_system, state, period, steps=2000, forward=forward, method=self._method, order=self._order)
+
+        sn, un, _, Ws, Wu, _ = eigenvalue_decomposition(phi_T, discrete=1)
+
+        snreal_vals, snreal_vecs = self._get_real_eigenvectors(Ws, sn)
+        unreal_vals, unreal_vecs = self._get_real_eigenvectors(Wu, un)
+
+        col_idx = NN - 1
+
+        if self._stable == 1:
+            if snreal_vecs.shape[1] <= col_idx or col_idx < 0:
+                raise ValueError(f"Requested stable eigenvector {NN} not available. Only {snreal_vecs.shape[1]} real stable eigenvectors found.")
+            eigval = np.real(snreal_vals[col_idx])
+            eigvec = snreal_vecs[:, col_idx]
+            logger.debug(f"Using stable manifold direction with eigenvalue {eigval:.6f} for {NN}th eigenvector")
+
+        else:  # unstable
+            if unreal_vecs.shape[1] <= col_idx or col_idx < 0:
+                raise ValueError(f"Requested unstable eigenvector {NN} not available. Only {unreal_vecs.shape[1]} real unstable eigenvectors found.")
+            eigval = np.real(unreal_vals[col_idx])
+            eigvec = unreal_vecs[:, col_idx]
+            logger.debug(f"Using unstable manifold direction with eigenvalue {eigval:.6f} for {NN}th eigenvector")
+
+        mfrac = _totime(tt, fraction * period)
+        
+        if np.isscalar(mfrac):
+            mfrac_idx = mfrac
+        else:
+            mfrac_idx = mfrac[0]
+
+        phi_frac_flat = PHI[mfrac_idx, :36]
+        phi_frac = phi_frac_flat.reshape((6, 6))
+
+        MAN = self._direction * (phi_frac @ eigvec)
+
+        disp_magnitude = np.linalg.norm(MAN[0:3])
+
+        if disp_magnitude < 1e-14:
+            logger.warning(f"Very small displacement magnitude: {disp_magnitude:.2e}, setting to 1.0")
+            disp_magnitude = 1.0
+        d = displacement / disp_magnitude
+
+        fracH = xx[mfrac_idx, :].copy()
+
+        x0W = fracH + d * MAN.real
+        x0W = x0W.flatten()
+        
+        if abs(x0W[2]) < 1.0e-15:
+            x0W[2] = 0.0
+        if abs(x0W[5]) < 1.0e-15:
+            x0W[5] = 0.0
+
+        return x0W
+
     def compute(self, step: float = 0.02, integration_fraction: float = 0.75, NN: int = 1, displacement: float = 1e-6, **kwargs):
         r"""
         Generate manifold trajectories and build a Poincaré map.
@@ -319,106 +419,6 @@ class Manifold:
         self._last_compute_params = current_params
         return self._manifold_result
 
-    def _get_real_eigenvectors(self, vectors: np.ndarray, values: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Filter for real eigenvalues and their corresponding eigenvectors."""
-        real_vals = []
-        real_vecs_list = []
-        for k in range(len(values)):
-            if np.isreal(values[k]):
-                real_vals.append(values[k])
-                real_vecs_list.append(vectors[:, k])
-        
-        real_vals_arr = np.array(real_vals, dtype=np.complex128)
-        if real_vecs_list:
-            real_vecs_arr = np.column_stack(real_vecs_list)
-        else:
-            real_vecs_arr = np.zeros((vectors.shape[0], 0), dtype=np.complex128)
-            
-        return real_vals_arr, real_vecs_arr
-
-    def _compute_manifold_section(self, state: np.ndarray, period: float, fraction: float, NN: int = 1, forward: int = 1, displacement: float = 1e-6):
-        r"""
-        Compute a section of the invariant manifold.
-
-        Parameters
-        ----------
-        state : numpy.ndarray
-            Initial state of the periodic orbit.
-        period : float
-            Period of the periodic orbit.
-        fraction : float
-            Fraction of the period to compute the section at.
-        NN : int, default 1
-            Index of the eigenvector to compute the section for.
-        forward : int, default 1
-            Direction of integration.
-        displacement : float, default 1e-6
-            Displacement applied along the eigenvector.
-
-        Returns
-        -------
-        numpy.ndarray
-            Initial condition for the manifold section.
-
-        Raises
-        ------
-        ValueError
-            If the requested eigenvector is not available.
-        """
-        xx, tt, phi_T, PHI = _compute_stm(self._libration_point._var_eq_system, state, period, steps=2000, forward=forward, method=self._method, order=self._order)
-
-        sn, un, _, Ws, Wu, _ = eigenvalue_decomposition(phi_T, discrete=1)
-
-        snreal_vals, snreal_vecs = self._get_real_eigenvectors(Ws, sn)
-        unreal_vals, unreal_vecs = self._get_real_eigenvectors(Wu, un)
-
-        col_idx = NN - 1
-
-        if self._stable == 1:
-            if snreal_vecs.shape[1] <= col_idx or col_idx < 0:
-                raise ValueError(f"Requested stable eigenvector {NN} not available. Only {snreal_vecs.shape[1]} real stable eigenvectors found.")
-            eigval = np.real(snreal_vals[col_idx])
-            eigvec = snreal_vecs[:, col_idx]
-            logger.debug(f"Using stable manifold direction with eigenvalue {eigval:.6f} for {NN}th eigenvector")
-
-        else:  # unstable
-            if unreal_vecs.shape[1] <= col_idx or col_idx < 0:
-                raise ValueError(f"Requested unstable eigenvector {NN} not available. Only {unreal_vecs.shape[1]} real unstable eigenvectors found.")
-            eigval = np.real(unreal_vals[col_idx])
-            eigvec = unreal_vecs[:, col_idx]
-            logger.debug(f"Using unstable manifold direction with eigenvalue {eigval:.6f} for {NN}th eigenvector")
-
-        mfrac = _totime(tt, fraction * period)
-        
-        if np.isscalar(mfrac):
-            mfrac_idx = mfrac
-        else:
-            mfrac_idx = mfrac[0]
-
-        phi_frac_flat = PHI[mfrac_idx, :36]
-        phi_frac = phi_frac_flat.reshape((6, 6))
-
-        MAN = self._direction * (phi_frac @ eigvec)
-
-        disp_magnitude = np.linalg.norm(MAN[0:3])
-
-        if disp_magnitude < 1e-14:
-            logger.warning(f"Very small displacement magnitude: {disp_magnitude:.2e}, setting to 1.0")
-            disp_magnitude = 1.0
-        d = displacement / disp_magnitude
-
-        fracH = xx[mfrac_idx, :].copy()
-
-        x0W = fracH + d * MAN.real
-        x0W = x0W.flatten()
-        
-        if abs(x0W[2]) < 1.0e-15:
-            x0W[2] = 0.0
-        if abs(x0W[5]) < 1.0e-15:
-            x0W[5] = 0.0
-
-        return x0W
-    
     def plot(self, dark_mode: bool = True, save: bool = False, filepath: str = 'manifold.svg', **kwargs):
         r"""
         Render a 3-D plot of the computed manifold.
@@ -499,11 +499,11 @@ class Manifold:
 
     def save(self, filepath: str, **kwargs) -> None:
         _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
-        save_manifold(self, filepath)
+        _save_manifold(self, filepath)
         return
 
     @classmethod
     def load(cls, filepath: str) -> "Manifold":
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Manifold file not found: {filepath}")
-        return load_manifold(filepath)
+        return _load_manifold(filepath)

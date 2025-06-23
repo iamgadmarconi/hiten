@@ -35,18 +35,18 @@ def test_serialization() -> None:
     orbit = HaloOrbit(L1, Az=0.01, Zenith="northern")
     orbit.period = 2 * math.pi  # quick dummy value to avoid runtime checks
 
-    orbit_path = TMP_DIR / "halo_orbit.pkl"
+    orbit_path = TMP_DIR / "halo_orbit.h5"
     logger.info("[PeriodicOrbit] saving: %s", orbit_path)
     orbit.save(str(orbit_path))
 
     orbit_loaded = HaloOrbit(L1, Az=0.01, Zenith="northern")  # placeholder instance
-    orbit_loaded.load(str(orbit_path))
+    orbit_loaded.load_inplace(str(orbit_path))
     _assert_equal("PeriodicOrbit.initial_state", orbit.initial_state, orbit_loaded.initial_state)
     assert math.isclose(orbit.period or 0.0, orbit_loaded.period or 0.0, rel_tol=1e-12)
     logger.info("[PeriodicOrbit] round-trip OK\n")
 
     manifold = Manifold(orbit)
-    man_path = TMP_DIR / "manifold.pkl"
+    man_path = TMP_DIR / "manifold.h5"
     logger.info("[Manifold] saving: %s", man_path)
     manifold.save(str(man_path))
 
@@ -85,12 +85,12 @@ def test_serialization() -> None:
     energy_level = L1.energy + 1e-5
     pmap = _PoincareMap(cm, energy=energy_level)
 
-    pmap_path = TMP_DIR / "poincare_map.pkl"
+    pmap_path = TMP_DIR / "poincare_map.h5"
     logger.info("[_PoincareMap] saving: %s", pmap_path)
     pmap.save(str(pmap_path))
 
     pmap_loaded = _PoincareMap(cm, energy=0.0)  # dummy – will be overwritten
-    pmap_loaded.load(str(pmap_path))
+    pmap_loaded.load_inplace(str(pmap_path))
     assert math.isclose(pmap_loaded.energy, energy_level, rel_tol=1e-12)
     # Dataclass comparison works out of the box
     assert pmap_loaded.config == pmap.config

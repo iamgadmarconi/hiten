@@ -39,7 +39,7 @@ from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import CollinearPoint, L3Point
 from hiten.system.libration.triangular import TriangularPoint
-from hiten.utils.io import load_center_manifold, save_center_manifold
+from hiten.utils.io import _load_center_manifold, _save_center_manifold
 from hiten.utils.log_config import logger
 from hiten.utils.printing import _format_cm_table
 
@@ -269,43 +269,6 @@ class CenterManifold:
             return self._restrict_to_center_manifold(poly_trans)
 
         return self._get_or_compute(key, compute_cm_complex)
-    
-    def compute(self) -> List[np.ndarray]:
-        r"""
-        Compute the polynomial Hamiltonian restricted to the centre manifold.
-
-        The returned list lives in *real modal* coordinates
-        :math:`(q_2, p_2, q_3, p_3)`. This method serves as the main entry
-        point for the centre manifold computation pipeline, triggering lazy
-        computation and caching of all intermediate steps.
-
-        Returns
-        -------
-        list of numpy.ndarray
-            Sequence :math:`[H_0, H_2, \dots, H_N]` where each entry contains the
-            packed coefficients of the homogeneous polynomial of that degree.
-
-        Raises
-        ------
-        RuntimeError
-            If any underlying computation step fails.
-        
-        Notes
-        -----
-        This routine chains together the full normal-form pipeline and may be
-        computationally expensive on the first call. Intermediate objects are
-        cached so that subsequent calls are fast.
-        """
-        key = ('hamiltonian', self._max_degree, 'center_manifold_real')
-
-        def compute_cm_real():
-            logger.info(f"Computing center manifold for {type(self._point).__name__}, max_deg={self._max_degree}")
-            poly_cm_complex = self._get_center_manifold_complex()
-            poly_cm_real = _substitute_real(poly_cm_complex, self._max_degree, self._psi, self._clmo)
-            logger.info(f"Center manifold computation complete for {type(self._point).__name__}")
-            return poly_cm_real
-
-        return self._get_or_compute(key, compute_cm_real)
 
     def _restrict_to_center_manifold(self, poly_H, tol=1e-14):
         r"""
@@ -347,6 +310,43 @@ class CenterManifold:
                     coeff_vec[pos] = 0.0
         return poly_cm
     
+    def compute(self) -> List[np.ndarray]:
+        r"""
+        Compute the polynomial Hamiltonian restricted to the centre manifold.
+
+        The returned list lives in *real modal* coordinates
+        :math:`(q_2, p_2, q_3, p_3)`. This method serves as the main entry
+        point for the centre manifold computation pipeline, triggering lazy
+        computation and caching of all intermediate steps.
+
+        Returns
+        -------
+        list of numpy.ndarray
+            Sequence :math:`[H_0, H_2, \dots, H_N]` where each entry contains the
+            packed coefficients of the homogeneous polynomial of that degree.
+
+        Raises
+        ------
+        RuntimeError
+            If any underlying computation step fails.
+        
+        Notes
+        -----
+        This routine chains together the full normal-form pipeline and may be
+        computationally expensive on the first call. Intermediate objects are
+        cached so that subsequent calls are fast.
+        """
+        key = ('hamiltonian', self._max_degree, 'center_manifold_real')
+
+        def compute_cm_real():
+            logger.info(f"Computing center manifold for {type(self._point).__name__}, max_deg={self._max_degree}")
+            poly_cm_complex = self._get_center_manifold_complex()
+            poly_cm_real = _substitute_real(poly_cm_complex, self._max_degree, self._psi, self._clmo)
+            logger.info(f"Center manifold computation complete for {type(self._point).__name__}")
+            return poly_cm_real
+
+        return self._get_or_compute(key, compute_cm_real)
+
     def poincare_map(self, energy: float, **kwargs) -> "_PoincareMap":
         r"""
         Return a cached (or newly built) Poincaré return map.
@@ -490,12 +490,6 @@ class CenterManifold:
         logger.info("CM → synodic transformation complete")
         return synodic_6d
 
-    def ic2cm(self) -> np.ndarray:
-        r"""
-        TODO: Implement initial conditions to center manifold transformation.
-        """
-        pass
-
     def save(self, dir_path: str):
         r"""
         Save the CenterManifold instance to a directory.
@@ -509,7 +503,7 @@ class CenterManifold:
         dir_path : str or path-like object
             The path to the directory where the data will be saved.
         """
-        save_center_manifold(self, dir_path)
+        _save_center_manifold(self, dir_path)
 
     @classmethod
     def load(cls, dir_path: str) -> "CenterManifold":
@@ -529,7 +523,7 @@ class CenterManifold:
         CenterManifold
             The loaded CenterManifold instance with its Poincare maps.
         """
-        return load_center_manifold(dir_path)
+        return _load_center_manifold(dir_path)
 
     @staticmethod
     def _sanitize_cache(cache_in):

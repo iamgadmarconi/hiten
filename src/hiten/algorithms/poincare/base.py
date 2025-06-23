@@ -24,7 +24,8 @@ from hiten.algorithms.poincare.map import _generate_map as _generate_map_cpu
 from hiten.algorithms.poincare.map import _PoincareSection
 from hiten.system.center import CenterManifold
 from hiten.system.orbits.base import GenericOrbit
-from hiten.utils.io import _ensure_dir, save_poincare_map, load_poincare_map
+from hiten.utils.io import (_ensure_dir, _load_poincare_map,
+                            _load_poincare_map_inplace, _save_poincare_map)
 from hiten.utils.log_config import logger
 from hiten.utils.plots import plot_poincare_map, plot_poincare_map_interactive
 
@@ -125,6 +126,18 @@ class _PoincareMap:
             )
         return self._section
 
+    def _propagate_from_point(self, cm_point, energy, steps=1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order=6):
+        r"""
+        Convert a Poincaré map point to initial conditions, create a GenericOrbit, propagate, and return the orbit.
+        """
+        ic = self.cm.ic(cm_point, energy, section_coord=self.config.section_coord)
+        logger.info(f"Initial conditions: {ic}")
+        orbit = GenericOrbit(self.cm.point, ic)
+        if orbit.period is None:
+            orbit.period = 2 * np.pi
+        orbit.propagate(steps=steps, method=method, order=order)
+        return orbit
+
     def compute(self) -> np.ndarray:
         r"""
         Compute the discrete Poincaré return map.
@@ -174,41 +187,6 @@ class _PoincareMap:
         self._section = section
         logger.info("Poincaré map computation complete: %d points", len(self))
         return section.points  # Return raw points for backward compatibility
-
-    def pm2ic(self, indices: Optional[Sequence[int]] = None) -> np.ndarray:
-        r"""
-        Convert stored map points to full six dimensional initial conditions.
-
-        Parameters
-        ----------
-        indices : Sequence[int] or None, optional
-            Indices of the points to convert. If *None* all points are used.
-
-        Returns
-        -------
-        numpy.ndarray
-            Matrix of shape (:math:`m`, 6) with synodic frame coordinates.
-
-        Raises
-        ------
-        RuntimeError
-            If the map has not been computed yet.
-        """
-        if self._section is None:
-            raise RuntimeError(
-                "Poincaré map has not been computed yet - cannot convert.")
-
-        if indices is None:
-            sel_pts = self._section.points
-        else:
-            sel_pts = self._section.points[np.asarray(indices, dtype=int)]
-
-        ic_list: List[np.ndarray] = []
-        for pt in sel_pts:
-            ic = self.cm.ic(pt, self.energy, section_coord=self.config.section_coord)
-            ic_list.append(ic)
-
-        return np.stack(ic_list, axis=0)
 
     def grid(self, Nq: int = 201, Np: int = 201, max_steps: int = 20_000) -> np.ndarray:
         r"""
@@ -265,26 +243,56 @@ class _PoincareMap:
         logger.info("Dense-grid Poincaré map computation complete: %d points", len(self))
         return pts.points if hasattr(pts, 'points') else pts
 
-    def _propagate_from_point(self, cm_point, energy, steps=1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order=6):
+    def ic(self, pt: np.ndarray) -> np.ndarray:
         r"""
-        Convert a Poincaré map point to initial conditions, create a GenericOrbit, propagate, and return the orbit.
+        Map a Poincaré point to six dimensional initial conditions.
+
+        Parameters
+        ----------
+        pt : numpy.ndarray, shape (2,)
+            Poincaré section coordinates.
+
+        Returns
+        -------
+        numpy.ndarray
+            Synodic frame state vector of length 6.
         """
-        ic = self.cm.ic(cm_point, energy, section_coord=self.config.section_coord)
-        logger.info(f"Initial conditions: {ic}")
-        orbit = GenericOrbit(self.cm.point, ic)
-        if orbit.period is None:
-            orbit.period = 2 * np.pi
-        orbit.propagate(steps=steps, method=method, order=order)
-        return orbit
+        return self.cm.ic(pt, self.energy, section_coord=self.config.section_coord)
+    
+    def map2ic(self, indices: Optional[Sequence[int]] = None) -> np.ndarray:
+        r"""
+        Convert stored map points to full six dimensional initial conditions.
 
-    def save(self, filepath: str, **kwargs) -> None:
-        """Serialise the map to *filepath* (HDF5 only)."""
-        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
-        save_poincare_map(self, filepath)
+        Parameters
+        ----------
+        indices : Sequence[int] or None, optional
+            Indices of the points to convert. If *None* all points are used.
 
-    def load(self, filepath: str, **kwargs) -> None:
-        """Populate this map from *filepath* (HDF5)."""
-        load_poincare_map(self, filepath)
+        Returns
+        -------
+        numpy.ndarray
+            Matrix of shape (:math:`m`, 6) with synodic frame coordinates.
+
+        Raises
+        ------
+        RuntimeError
+            If the map has not been computed yet.
+        """
+        if self._section is None:
+            raise RuntimeError(
+                "Poincaré map has not been computed yet - cannot convert.")
+
+        if indices is None:
+            sel_pts = self._section.points
+        else:
+            sel_pts = self._section.points[np.asarray(indices, dtype=int)]
+
+        ic_list: List[np.ndarray] = []
+        for pt in sel_pts:
+            ic = self.cm.ic(pt, self.energy, section_coord=self.config.section_coord)
+            ic_list.append(ic)
+
+        return np.stack(ic_list, axis=0)
 
     def plot(self, dark_mode: bool = True, save: bool = False, filepath: str = 'poincare_map.svg', **kwargs):
         r"""
@@ -372,18 +380,14 @@ class _PoincareMap:
             dark_mode=dark_mode,
         )
 
-    def ic(self, pt: np.ndarray) -> np.ndarray:
-        r"""
-        Map a Poincaré point to six dimensional initial conditions.
+    def save(self, filepath: str, **kwargs) -> None:
+        """Serialise the map to *filepath* (HDF5 only)."""
+        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+        _save_poincare_map(self, filepath)
 
-        Parameters
-        ----------
-        pt : numpy.ndarray, shape (2,)
-            Poincaré section coordinates.
+    def load_inplace(self, filepath: str, **kwargs) -> None:
+        _load_poincare_map_inplace(self, filepath)
 
-        Returns
-        -------
-        numpy.ndarray
-            Synodic frame state vector of length 6.
-        """
-        return self.cm.ic(pt, self.energy, section_coord=self.config.section_coord)
+    @classmethod
+    def load(cls, filepath: str, cm: "CenterManifold", **kwargs) -> "_PoincareMap":
+        return _load_poincare_map(filepath, cm)
