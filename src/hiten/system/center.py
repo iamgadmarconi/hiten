@@ -18,7 +18,7 @@ Zhang, H. Q., Li, S. (2001). "Improved semi-analytical computation of center
 manifolds near collinear libration points".
 """
 
-from typing import TYPE_CHECKING, Any, Dict, List, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple
 
 import numpy as np
 
@@ -140,59 +140,81 @@ class CenterManifold:
         Clear the cache.
         """
         self._cache.clear()
-    
+
+    def _get_or_compute(self, key: tuple, compute_func: Callable[[], Any]) -> Any:
+        r"""
+        Retrieve a value from the cache or compute it if not present.
+
+        This helper centralizes the caching logic. It ensures that computed
+        values (which are assumed to be lists of numpy arrays or tuples of
+        such lists) are stored and retrieved as copies to prevent mutation
+        of the cached objects.
+        """
+        if (cached_val := self.cache_get(key)) is None:
+            logger.debug(f"Cache miss for key {key}, computing.")
+            computed_val = compute_func()
+            
+            # Store a copy to prevent mutation of the cached object.
+            if isinstance(computed_val, tuple):
+                self.cache_set(key, tuple([item.copy() for item in sublist] if isinstance(sublist, list) else sublist for sublist in computed_val))
+            elif isinstance(computed_val, list):
+                self.cache_set(key, [item.copy() for item in computed_val])
+            else:
+                self.cache_set(key, computed_val) # Should not be mutable
+            
+            return computed_val
+
+        logger.debug(f"Cache hit for key {key}.")
+        # Return a copy to the caller.
+        if isinstance(cached_val, tuple):
+            return tuple([item.copy() for item in sublist] if isinstance(sublist, list) else sublist for sublist in cached_val)
+        elif isinstance(cached_val, list):
+            return [item.copy() for item in cached_val]
+        else:
+            return cached_val
+
     def _get_physical_hamiltonian(self) -> List[np.ndarray]:
         key = ('hamiltonian', self.max_degree, 'physical')
-        if (poly_phys := self.cache_get(key)) is None:
-            poly_phys = _build_physical_hamiltonian(self.point, self.max_degree)
-            self.cache_set(key, [h.copy() for h in poly_phys])
-        return [h.copy() for h in poly_phys]
+        return self._get_or_compute(key, lambda: _build_physical_hamiltonian(self.point, self.max_degree))
 
     def _get_real_normal_form(self) -> List[np.ndarray]:
         key = ('hamiltonian', self.max_degree, 'real_normal')
-        if (poly_rn := self.cache_get(key)) is None:
-            poly_phys = self._get_physical_hamiltonian()
-            poly_rn = _local2realmodal(self.point, poly_phys, self.max_degree, self._psi, self._clmo)
-            self.cache_set(key, [h.copy() for h in poly_rn])
-        return [h.copy() for h in poly_rn]
+        return self._get_or_compute(key, lambda: _local2realmodal(
+            self.point, self._get_physical_hamiltonian(), self.max_degree, self._psi, self._clmo
+        ))
 
     def _get_complex_normal_form(self) -> List[np.ndarray]:
         key = ('hamiltonian', self.max_degree, 'complex_normal')
-        if (poly_cn := self.cache_get(key)) is None:
-            poly_rn = self._get_real_normal_form()
-            poly_cn = _substitute_complex(poly_rn, self.max_degree, self._psi, self._clmo)
-            self.cache_set(key, [h.copy() for h in poly_cn])
-        return [h.copy() for h in poly_cn]
+        return self._get_or_compute(key, lambda: _substitute_complex(
+            self._get_real_normal_form(), self.max_degree, self._psi, self._clmo
+        ))
 
     def _get_lie_transform_results(self) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
         key_trans = ('hamiltonian', self.max_degree, 'normalized')
         key_G = ('generating_functions', self.max_degree)
         key_elim = ('terms_to_eliminate', self.max_degree)
+        
+        # We bundle the results under a single key to ensure atomicity
+        bundle_key = ('lie_transform_bundle', self.max_degree)
 
-        poly_trans = self.cache_get(key_trans)
-        poly_G_total = self.cache_get(key_G)
-        poly_elim_total = self.cache_get(key_elim)
-
-        if any(p is None for p in [poly_trans, poly_G_total, poly_elim_total]):
+        def compute_lie_bundle():
             logger.info("Performing Lie transformation...")
             poly_cn = self._get_complex_normal_form()
             poly_trans, poly_G_total, poly_elim_total = _lie_transform(
                 self.point, poly_cn, self._psi, self._clmo, self.max_degree
             )
-            
-            self.cache_set(key_trans, [h.copy() for h in poly_trans])
-            self.cache_set(key_G, [g.copy() for g in poly_G_total])
-            self.cache_set(key_elim, [e.copy() for e in poly_elim_total])
-        
-        return ([h.copy() for h in poly_trans], [g.copy() for g in poly_G_total], [e.copy() for e in poly_elim_total])
+            return poly_trans, poly_G_total, poly_elim_total
+
+        return self._get_or_compute(bundle_key, compute_lie_bundle)
 
     def _get_center_manifold_complex(self) -> List[np.ndarray]:
         key = ('hamiltonian', self.max_degree, 'center_manifold_complex')
-        if (poly_cm_complex := self.cache_get(key)) is None:
+        
+        def compute_cm_complex():
             poly_trans, _, _ = self._get_lie_transform_results()
-            poly_cm_complex = self._restrict_to_center_manifold(poly_trans)
-            self.cache_set(key, [h.copy() for h in poly_cm_complex])
-        return [h.copy() for h in poly_cm_complex]
+            return self._restrict_to_center_manifold(poly_trans)
+
+        return self._get_or_compute(key, compute_cm_complex)
     
     def compute(self) -> List[np.ndarray]:
         r"""
@@ -221,14 +243,15 @@ class CenterManifold:
         cached so that subsequent calls are fast.
         """
         key = ('hamiltonian', self.max_degree, 'center_manifold_real')
-        if (poly_cm_real := self.cache_get(key)) is None:
+
+        def compute_cm_real():
             logger.info(f"Computing center manifold for {type(self.point).__name__}, max_deg={self.max_degree}")
             poly_cm_complex = self._get_center_manifold_complex()
             poly_cm_real = _substitute_real(poly_cm_complex, self.max_degree, self._psi, self._clmo)
-            self.cache_set(key, [h.copy() for h in poly_cm_real])
             logger.info(f"Center manifold computation complete for {type(self.point).__name__}")
-        
-        return [h.copy() for h in poly_cm_real]
+            return poly_cm_real
+
+        return self._get_or_compute(key, compute_cm_real)
 
     def _restrict_to_center_manifold(self, poly_H, tol=1e-14):
         r"""
@@ -287,6 +310,11 @@ class CenterManifold:
         -------
         hiten.algorithms.poincare.base._PoincareMap
             Configured Poincaré map instance.
+            
+        Raises
+        ------
+        TypeError
+            If any of the provided kwargs are not valid configuration fields.
 
         Notes
         -----
@@ -300,11 +328,13 @@ class CenterManifold:
         from hiten.algorithms.poincare.base import (_PoincareMap,
                                                     _PoincareMapConfig)
 
-        # Create a config object from kwargs, using dataclass defaults for any
-        # that are not provided.
+        # Validate that all provided kwargs are valid fields in the config.
         config_fields = set(_PoincareMapConfig.__dataclass_fields__.keys())
-        valid_kwargs = {k: v for k, v in kwargs.items() if k in config_fields}
-        cfg = _PoincareMapConfig(**valid_kwargs)
+        for key in kwargs:
+            if key not in config_fields:
+                raise TypeError(f"'{key}' is not a valid keyword argument for PoincareMap configuration.")
+        
+        cfg = _PoincareMapConfig(**kwargs)
 
         # Create a hashable key from the configuration.
         config_tuple = tuple(sorted(asdict(cfg).items()))
@@ -353,50 +383,39 @@ class CenterManifold:
         poly_cm_real = self.compute()
         _, poly_G_total, _ = self._get_lie_transform_results()
 
-        # Alias for brevity.
-        h0 = float(energy)
-        q2 = p2 = q3 = p3 = None  # type: ignore
+        # Define the mapping from section coordinate to the variables involved.
+        # Format: {section: (var_to_solve, {known_var1: value, known_var2: value, ...})}
+        section_map = {
+            "q3": ("p3", {"q2": poincare_point[0], "p2": poincare_point[1], "q3": 0.0}),
+            "p3": ("q3", {"q2": poincare_point[0], "p2": poincare_point[1], "p3": 0.0}),
+            "q2": ("p2", {"q3": poincare_point[0], "p3": poincare_point[1], "q2": 0.0}),
+            "p2": ("q2", {"q3": poincare_point[0], "p3": poincare_point[1], "p2": 0.0}),
+        }
 
-        if section_coord == "q3":
-            # q3 = 0 section → need p3
-            q2, p2 = map(float, poincare_point)
-            q3 = 0.0
-            p3 = _solve_missing_coord(
-                "p3", {"q2": q2, "p2": p2}, h0, poly_cm_real, self._clmo
-            )
-        elif section_coord == "p3":
-            # p3 = 0 section → need q3
-            q2, p2 = map(float, poincare_point)
-            p3 = 0.0
-            q3 = _solve_missing_coord(
-                "q3", {"q2": q2, "p2": p2, "p3": 0.0}, h0, poly_cm_real, self._clmo
-            )
-        elif section_coord == "q2":
-            # q2 = 0 section → need p2
-            q3, p3 = map(float, poincare_point)
-            q2 = 0.0
-            p2 = _solve_missing_coord(
-                "p2", {"q2": 0.0, "q3": q3, "p3": p3}, h0, poly_cm_real, self._clmo
-            )
-        elif section_coord == "p2":
-            # p2 = 0 section → need q2
-            q3, p3 = map(float, poincare_point)
-            p2 = 0.0
-            q2 = _solve_missing_coord(
-                "q2", {"p2": 0.0, "q3": q3, "p3": p3}, h0, poly_cm_real, self._clmo
-            )
-        else:
-            raise ValueError(f"Unsupported section_coord '{section_coord}'.")
+        if section_coord not in section_map:
+            raise ValueError(f"Unsupported section_coord '{section_coord}'. Must be one of {list(section_map.keys())}")
 
-        # Validate solutions.
-        if None in (q2, p2, q3, p3):
+        var_to_solve, known_vars = section_map[section_coord]
+        
+        # Solve for the missing coordinate on the centre manifold.
+        solved_val = _solve_missing_coord(var_to_solve, known_vars, float(energy), poly_cm_real, self._clmo)
+        
+        # Combine known and solved variables to form the 4D point on the CM.
+        full_cm_coords = known_vars.copy()
+        full_cm_coords[var_to_solve] = solved_val
+
+        # Validate solution and construct the real 4D vector.
+        if any(v is None for v in full_cm_coords.values()):
             err = "Failed to reconstruct full CM coordinates - root finding did not converge."
             logger.error(err)
             raise RuntimeError(err)
-
-        q2, p2, q3, p3 = float(q2), float(p2), float(q3), float(p3)  # type: ignore
-
-        real_4d_cm = np.array([q2, p2, q3, p3], dtype=np.complex128)
+            
+        real_4d_cm = np.array([
+            full_cm_coords["q2"], 
+            full_cm_coords["p2"], 
+            full_cm_coords["q3"], 
+            full_cm_coords["p3"]
+        ], dtype=np.complex128)
 
         real_6d_cm = np.zeros(6, dtype=np.complex128)
         real_6d_cm[1] = real_4d_cm[0]  # q2

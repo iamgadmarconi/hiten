@@ -40,7 +40,7 @@ def system_earth_moon():
     distance = Constants.get_orbital_distance("earth", "moon")
 
     earth = Body("Earth", earth_mass, earth_radius, color="blue")
-    moon = Body("Moon", moon_mass, moon_radius, color="gray", parent=earth)
+    moon = Body("Moon", moon_mass, moon_radius, color="gray", _parent_input=earth)
 
     return System(earth, moon, distance)
 
@@ -53,7 +53,7 @@ def system_sun_earth():
     distance = Constants.get_orbital_distance("sun", "earth")
 
     sun = Body("Sun", sun_mass, sun_radius, color="yellow")
-    earth = Body("Earth", earth_mass, earth_radius, color="blue", parent=sun)
+    earth = Body("Earth", earth_mass, earth_radius, color="blue", _parent_input=sun)
 
     return System(sun, earth, distance)
 
@@ -66,7 +66,7 @@ def system_sun_jupiter():
     distance = Constants.get_orbital_distance("sun", "jupiter")
 
     sun = Body("Sun", sun_mass, sun_radius, color="yellow")
-    jupiter = Body("Jupiter", jupiter_mass, jupiter_radius, color="gray", parent=sun)
+    jupiter = Body("Jupiter", jupiter_mass, jupiter_radius, color="gray", _parent_input=sun)
     return System(sun, jupiter, distance)
 
 @pytest.fixture
@@ -108,7 +108,7 @@ def test_libration_point_initialization():
     def create_mock_system(mu):
         # Create a mock system with the given mu. The bodies are placeholders.
         primary = Body("p", 1 - mu, 0.1)
-        secondary = Body("s", mu, 0.1, parent=primary)
+        secondary = Body("s", mu, 0.1, _parent_input=primary)
         return System(primary, secondary, 1.0)
 
     l1_earth_moon = L1Point(create_mock_system(TEST_MU_EARTH_MOON))

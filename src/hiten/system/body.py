@@ -15,11 +15,13 @@ high-precision calculations.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from typing import Optional
 
 from hiten.utils.log_config import logger
 
 
+@dataclass(frozen=True)
 class Body(object):
     r"""
     Celestial body container.
@@ -75,15 +77,15 @@ class Body(object):
     name: str
     mass: float
     radius: float
-    color: str
-    parent: Body # A body's parent is always another Body instance (itself if it's the primary)
+    color: str = "#000000"
+    parent: Optional[Body] = field(default=None, init=False)
+    _parent_input: Optional[Body] = field(default=None, repr=False, compare=False)
 
-    def __init__(self, name: str, mass: float, radius: float, color: Optional[str] = None, parent: Optional[Body] = None):
-        self.name = name
-        self.mass = mass
-        self.radius = radius
-        self.color = color if color else "#000000"
-        self.parent = parent if parent else self
+    def __post_init__(self):
+        # Use object.__setattr__ to bypass frozen=True protection. This is a
+        # standard pattern for initializing fields in frozen dataclasses.
+        parent_to_set = self._parent_input or self
+        object.__setattr__(self, 'parent', parent_to_set)
 
         parent_name = self.parent.name if self.parent is not self else "None"
         logger.info(f"Created Body: name='{self.name}', mass={self.mass}, radius={self.radius}, color='{self.color}', parent='{parent_name}'")
@@ -103,12 +105,25 @@ class Body(object):
 
     def __repr__(self) -> str:
         r"""
-        Unambiguous representation that can be evaluated by :pyfunc:`eval`.
+        Unambiguous representation that avoids recursion.
+
+        Notes
+        -----
+        The representation of a secondary body is intentionally not evaluatable
+        with :pyfunc:`eval` because it only includes the parent's name to
+        prevent infinite recursion. A primary body's representation, however,
+        can be evaluated.
 
         Returns
         -------
         str
-            Python expression that recreates the :pyclass:`Body` instance.
+            Python expression that describes the :pyclass:`Body` instance.
         """
-        parent_repr = f"parent={self.parent.name!r}" if self.parent is not self else "parent=self"
-        return f"Body(name={self.name!r}, mass={self.mass}, radius={self.radius}, color={self.color!r}, {parent_repr})"
+        # For the parent, we show its name to avoid recursion.
+        # This makes the repr not perfectly eval-able for secondaries, but it's safe.
+        if self.parent is self:
+            parent_repr = ""
+        else:
+            parent_repr = f", _parent_input=Body(name='{self.parent.name}', ...)"
+
+        return f"Body(name={self.name!r}, mass={self.mass}, radius={self.radius}, color={self.color!r}{parent_repr})"

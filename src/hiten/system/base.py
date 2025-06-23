@@ -16,7 +16,7 @@ Szebehely, V. (1967). "Theory of Orbits".
 
 from __future__ import annotations
 
-from typing import Dict
+from typing import Dict, Optional
 
 from hiten.algorithms.dynamics.rtbp import rtbp_dynsys
 from hiten.system.body import Body
@@ -73,14 +73,14 @@ class System(object):
 
         logger.info(f"Initializing System with primary='{primary.name}', secondary='{secondary.name}', distance={distance:.4e}")
         
-        self.primary = primary
-        self.secondary = secondary
-        self.distance = distance
+        self._primary = primary
+        self._secondary = secondary
+        self._distance = distance
 
-        self.mu: float = self._get_mu()
+        self._mu: float = self._get_mu()
         logger.info(f"Calculated mass parameter mu = {self.mu:.6e}")
 
-        self.libration_points: Dict[int, LibrationPoint] = self._compute_libration_points()
+        self._libration_points: Dict[int, LibrationPoint] = self._compute_libration_points()
         logger.info(f"Computed {len(self.libration_points)} Libration points.")
 
         self._dynsys = rtbp_dynsys(self.mu, name=self.primary.name + "_" + self.secondary.name)
@@ -90,6 +90,36 @@ class System(object):
 
     def __repr__(self) -> str:
         return f"System(primary={self.primary!r}, secondary={self.secondary!r}, distance={self.distance})"
+
+    @property
+    def primary(self) -> Body:
+        """Primary gravitating body."""
+        return self._primary
+
+    @property
+    def secondary(self) -> Body:
+        """Secondary gravitating body."""
+        return self._secondary
+
+    @property
+    def distance(self) -> float:
+        """Characteristic separation between the bodies in km."""
+        return self._distance
+
+    @property
+    def mu(self) -> float:
+        r"""Mass parameter :math:`\mu`."""
+        return self._mu
+
+    @property
+    def libration_points(self) -> Dict[int, LibrationPoint]:
+        """Mapping from integer identifiers {1,…,5} to libration point objects."""
+        return self._libration_points
+        
+    @property
+    def dynsys(self):
+        """Underlying vector field instance."""
+        return self._dynsys
 
     def _get_mu(self) -> float:
         r"""
@@ -163,11 +193,12 @@ class System(object):
         >>> sys = System(primary, secondary, distance)
         >>> L1 = sys.get_libration_point(1)
         """
-        if index not in self.libration_points:
+        point: Optional[LibrationPoint] = self.libration_points.get(index)
+        if point is None:
             logger.error(f"Invalid Libration point index requested: {index}. Must be 1-5.")
             raise ValueError(f"Invalid Libration point index: {index}. Must be 1, 2, 3, 4, or 5.")
         logger.debug(f"Retrieving Libration point L{index}")
-        return self.libration_points[index]
+        return point
 
     @classmethod
     def from_bodies(cls, primary_name: str, secondary_name: str) -> "System":
@@ -213,7 +244,7 @@ class System(object):
 
         # Instantiate the bodies – the secondary orbits the primary.
         primary = Body(primary_name.capitalize(), p_mass, p_radius)
-        secondary = Body(secondary_name.capitalize(), s_mass, s_radius, parent=primary)
+        secondary = Body(secondary_name.capitalize(), s_mass, s_radius, _parent_input=primary)
 
         # Create and return the CR3BP system
         return cls(primary, secondary, distance)
