@@ -30,7 +30,7 @@ from hiten.algorithms.integrators.rk import (RK4_A, RK4_B, RK4_C, RK6_A, RK6_B,
                                        RK6_C, RK8_A, RK8_B, RK8_C)
 from hiten.algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
                                                _integrate_symplectic)
-from hiten.utils.config import FASTMATH
+from hiten.algorithms.utils.config import FASTMATH
 from hiten.utils.log_config import logger
 
 

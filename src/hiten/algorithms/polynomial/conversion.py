@@ -22,7 +22,7 @@ from numba.typed import List
 from hiten.algorithms.polynomial.algebra import _get_degree
 from hiten.algorithms.polynomial.base import (_decode_multiindex,
                                                _encode_multiindex, _make_poly)
-from hiten.utils.config import N_VARS
+from hiten.algorithms.utils.config import N_VARS
 
 
 def poly2sympy(poly_p: List[np.ndarray], vars_list: typing.List[sp.Symbol], psi: np.ndarray, clmo: np.ndarray) -> sp.Expr:

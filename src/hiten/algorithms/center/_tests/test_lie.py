@@ -20,7 +20,7 @@ from hiten.algorithms.polynomial.conversion import sympy2poly
 from hiten.algorithms.polynomial.operations import (
     _polynomial_evaluate, _polynomial_poisson_bracket, _polynomial_zero_list)
 from hiten.algorithms.center.transforms import _local2realmodal, _substitute_complex
-from hiten.utils.config import N_VARS
+from hiten.algorithms.utils.config import N_VARS
 from hiten.system.base import System
 from hiten.system.body import Body
 from hiten.utils.constants import Constants

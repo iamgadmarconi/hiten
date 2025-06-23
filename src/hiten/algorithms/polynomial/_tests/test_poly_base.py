@@ -9,7 +9,7 @@ from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                                _decode_multiindex,
                                                _encode_multiindex,
                                                _init_index_tables, _make_poly)
-from hiten.utils.config import N_VARS
+from hiten.algorithms.utils.config import N_VARS
 
 TEST_MAX_DEG = 5
 PSI, CLMO = _init_index_tables(TEST_MAX_DEG)

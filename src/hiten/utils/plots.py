@@ -8,10 +8,10 @@ import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 
 from hiten.system.body import Body
-from hiten.utils.coordinates import (_get_angular_velocity,
-                                     _get_mass_parameter, rotating_to_inertial,
-                                     si_time, to_si_units)
-from hiten.utils.files import _ensure_dir
+from hiten.algorithms.utils.coordinates import (_get_angular_velocity,
+                                     _get_mass_parameter, _rotating_to_inertial,
+                                     _si_time, _to_si_units)
+from hiten.utils.io import _ensure_dir
 
 
 def animate_trajectories(
@@ -61,17 +61,17 @@ def animate_trajectories(
 
     mu = bodies[1].mass / (bodies[0].mass + bodies[1].mass)
     omega_real = _get_angular_velocity(bodies[0].mass, bodies[1].mass, system_distance)
-    t_si = si_time(times, bodies[0].mass, bodies[1].mass, system_distance)
+    t_si = _si_time(times, bodies[0].mass, bodies[1].mass, system_distance)
 
     traj_rot = np.array([
-        to_si_units(s, bodies[0].mass, bodies[1].mass, system_distance)[:3]
+        _to_si_units(s, bodies[0].mass, bodies[1].mass, system_distance)[:3]
         for s in states
     ])
     
     traj_inert = []
     for s_dimless, t_dimless in zip(states, times):
-        s_inert_dimless = rotating_to_inertial(s_dimless, t_dimless, mu)
-        s_inert_si = to_si_units(s_inert_dimless, bodies[0].mass, bodies[1].mass, system_distance)
+        s_inert_dimless = _rotating_to_inertial(s_dimless, t_dimless, mu)
+        s_inert_si = _to_si_units(s_inert_dimless, bodies[0].mass, bodies[1].mass, system_distance)
         traj_inert.append(s_inert_si[:3])
     traj_inert = np.array(traj_inert)
     
@@ -259,14 +259,17 @@ def animate_trajectories(
     return ani
 
 def plot_rotating_frame(
-        states: np.ndarray, 
-        times: np.ndarray, 
-        bodies: List[Body], 
-        system_distance: float, 
-        figsize: Tuple[int, int] = (10, 8), 
-        save: bool = False, 
-        dark_mode: bool = True, 
+        states: np.ndarray,
+        times: np.ndarray,
+        bodies: List[Body],
+        system_distance: float,
+        figsize: Tuple[int, int] = (10, 8),
+        save: bool = False,
+        dark_mode: bool = True,
         filepath: str = 'rotating_frame.svg',
+        *,
+        block: bool = True,
+        close_after: bool = True,
         **kwargs):
     r"""
     Plot the orbit trajectory in the rotating reference frame.
@@ -330,21 +333,25 @@ def plot_rotating_frame(
         _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
         plt.savefig(filepath)
 
-    plt.show()
-    plt.close()
+    plt.show(block=block)
+    if close_after:
+        plt.close(fig)
 
     return fig, ax
 
     
 def plot_inertial_frame(
-        states: np.ndarray, 
-        times: np.ndarray, 
-        bodies: List[Body], 
-        system_distance: float, 
-        figsize: Tuple[int, int] = (10, 8), 
-        save: bool = False, 
-        dark_mode: bool = True, 
+        states: np.ndarray,
+        times: np.ndarray,
+        bodies: List[Body],
+        system_distance: float,
+        figsize: Tuple[int, int] = (10, 8),
+        save: bool = False,
+        dark_mode: bool = True,
         filepath: str = 'inertial_frame.svg',
+        *,
+        block: bool = True,
+        close_after: bool = True,
         **kwargs):
     r"""
     Plot the orbit trajectory in the primary-centered inertial reference frame.
@@ -372,7 +379,7 @@ def plot_inertial_frame(
     
     for state, t in zip(states, times):
         # Convert rotating frame to inertial frame (canonical units)
-        inertial_state = rotating_to_inertial(state, t, mu)
+        inertial_state = _rotating_to_inertial(state, t, mu)
         traj_inertial.append(inertial_state)
     
     traj_inertial = np.array(traj_inertial)
@@ -420,8 +427,9 @@ def plot_inertial_frame(
         _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
         plt.savefig(filepath)
     
-    plt.show()
-    plt.close()
+    plt.show(block=block)
+    if close_after:
+        plt.close(fig)
         
     return fig, ax
 

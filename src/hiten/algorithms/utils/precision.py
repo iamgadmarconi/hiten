@@ -3,10 +3,10 @@ from typing import Callable, Union
 import mpmath as mp
 import numpy as np
 
-from hiten.utils.config import USE_ARBITRARY_PRECISION
+from hiten.algorithms.utils.config import USE_ARBITRARY_PRECISION
 
 
-class Number:
+class _Number:
     """
     A number class that supports high-precision arithmetic operations.
     
@@ -14,20 +14,20 @@ class Number:
     natural mathematical syntax while maintaining high precision when enabled.
     """
     
-    def __init__(self, value: Union[float, int, str, 'Number'], precision: int = None):
+    def __init__(self, value: Union[float, int, str, '_Number'], precision: int = None):
         """
         Initialize a high precision number.
         
         Parameters
         ----------
-        value : float, int, str, or Number
+        value : float, int, str, or _Number
             The numeric value to wrap
         precision : int, optional
-            Number of decimal places. If None, uses 100.
+            _Number of decimal places. If None, uses 100.
         """
         self.precision = precision if precision is not None else 100
         
-        if isinstance(value, Number):
+        if isinstance(value, _Number):
             self.value = value.value
             self.precision = max(self.precision, value.precision)
         elif USE_ARBITRARY_PRECISION:
@@ -36,10 +36,10 @@ class Number:
         else:
             self.value = float(value)
     
-    def _ensure_precision_number(self, other) -> 'Number':
-        """Convert other operand to Number if needed."""
-        if not isinstance(other, Number):
-            return Number(other, self.precision)
+    def _ensure_precision_number(self, other) -> '_Number':
+        """Convert other operand to _Number if needed."""
+        if not isinstance(other, _Number):
+            return _Number(other, self.precision)
         return other
     
     def _binary_operation(self, other, operation):
@@ -80,44 +80,44 @@ class Number:
             else:
                 raise ValueError(f"Unsupported operation: {operation}")
         
-        return Number(result_value, max_precision)
+        return _Number(result_value, max_precision)
     
     # Arithmetic operators
     def __add__(self, other):
         return self._binary_operation(other, 'add')
     
     def __radd__(self, other):
-        return Number(other, self.precision).__add__(self)
+        return _Number(other, self.precision).__add__(self)
     
     def __sub__(self, other):
         return self._binary_operation(other, 'sub')
     
     def __rsub__(self, other):
-        return Number(other, self.precision).__sub__(self)
+        return _Number(other, self.precision).__sub__(self)
     
     def __mul__(self, other):
         return self._binary_operation(other, 'mul')
     
     def __rmul__(self, other):
-        return Number(other, self.precision).__mul__(self)
+        return _Number(other, self.precision).__mul__(self)
     
     def __truediv__(self, other):
         return self._binary_operation(other, 'truediv')
     
     def __rtruediv__(self, other):
-        return Number(other, self.precision).__truediv__(self)
+        return _Number(other, self.precision).__truediv__(self)
     
     def __pow__(self, other):
         return self._binary_operation(other, 'pow')
     
     def __rpow__(self, other):
-        return Number(other, self.precision).__pow__(self)
+        return _Number(other, self.precision).__pow__(self)
     
     def __mod__(self, other):
         return self._binary_operation(other, 'mod')
     
     def __rmod__(self, other):
-        return Number(other, self.precision).__mod__(self)
+        return _Number(other, self.precision).__mod__(self)
     
     # Unary operators
     def __neg__(self):
@@ -126,7 +126,7 @@ class Number:
                 result_value = -self.value
         else:
             result_value = -float(self.value)
-        return Number(result_value, self.precision)
+        return _Number(result_value, self.precision)
     
     def __abs__(self):
         if USE_ARBITRARY_PRECISION:
@@ -134,7 +134,7 @@ class Number:
                 result_value = abs(self.value)
         else:
             result_value = abs(float(self.value))
-        return Number(result_value, self.precision)
+        return _Number(result_value, self.precision)
     
     # Comparison operators
     def __eq__(self, other):
@@ -168,7 +168,7 @@ class Number:
                 result_value = mp.sqrt(self.value)
         else:
             result_value = np.sqrt(float(self.value))
-        return Number(result_value, self.precision)
+        return _Number(result_value, self.precision)
     
     def sin(self):
         """Compute sine with high precision."""
@@ -177,7 +177,7 @@ class Number:
                 result_value = mp.sin(self.value)
         else:
             result_value = np.sin(float(self.value))
-        return Number(result_value, self.precision)
+        return _Number(result_value, self.precision)
     
     def cos(self):
         """Compute cosine with high precision."""
@@ -186,7 +186,7 @@ class Number:
                 result_value = mp.cos(self.value)
         else:
             result_value = np.cos(float(self.value))
-        return Number(result_value, self.precision)
+        return _Number(result_value, self.precision)
     
     def exp(self):
         """Compute exponential with high precision."""
@@ -195,7 +195,7 @@ class Number:
                 result_value = mp.exp(self.value)
         else:
             result_value = np.exp(float(self.value))
-        return Number(result_value, self.precision)
+        return _Number(result_value, self.precision)
     
     def log(self, base=None):
         """Compute logarithm with high precision."""
@@ -210,7 +210,7 @@ class Number:
                 result_value = np.log(float(self.value))
             else:
                 result_value = np.log(float(self.value)) / np.log(float(base))
-        return Number(result_value, self.precision)
+        return _Number(result_value, self.precision)
     
     # Conversion methods
     def __float__(self):
@@ -227,13 +227,13 @@ class Number:
     
     def __repr__(self):
         """Detailed string representation."""
-        return f"Number({float(self.value)}, precision={self.precision})"
+        return f"_Number({float(self.value)}, precision={self.precision})"
 
 
 # Factory function for convenience
-def hp(value: Union[float, int, str], precision: int = None) -> Number:
+def hp(value: Union[float, int, str], precision: int = None) -> _Number:
     """
-    Create a Number instance.
+    Create a _Number instance.
     
     Convenience factory function for creating high precision numbers.
     
@@ -242,11 +242,11 @@ def hp(value: Union[float, int, str], precision: int = None) -> Number:
     value : float, int, or str
         The numeric value
     precision : int, optional
-        Number of decimal places. If None, uses MPMATH_DPS from config.
+        _Number of decimal places. If None, uses MPMATH_DPS from config.
         
     Returns
     -------
-    Number
+    _Number
         High precision number instance
         
     Examples
@@ -255,7 +255,7 @@ def hp(value: Union[float, int, str], precision: int = None) -> Number:
     >>> b = hp(3.0)
     >>> result = (a ** b) / hp(7.0)
     """
-    return Number(value, precision)
+    return _Number(value, precision)
 
 
 def with_precision(precision: int = None):
@@ -265,7 +265,7 @@ def with_precision(precision: int = None):
     Parameters
     ----------
     precision : int, optional
-        Number of decimal places. If None, uses MPMATH_DPS from config.
+        _Number of decimal places. If None, uses MPMATH_DPS from config.
     """
     return mp.workdps(precision)
 
@@ -281,7 +281,7 @@ def divide(numerator: float, denominator: float, precision: int = None) -> float
     denominator : float  
         Denominator value
     precision : int, optional
-        Number of decimal places. If None, uses MPMATH_DPS from config.
+        _Number of decimal places. If None, uses MPMATH_DPS from config.
         
     Returns
     -------
@@ -306,7 +306,7 @@ def sqrt(value: float, precision: int = None) -> float:
     value : float
         Value to take square root of
     precision : int, optional
-        Number of decimal places. If None, uses MPMATH_DPS from config.
+        _Number of decimal places. If None, uses MPMATH_DPS from config.
         
     Returns
     -------
@@ -333,7 +333,7 @@ def power(base: float, exponent: float, precision: int = None) -> float:
     exponent : float
         Exponent value
     precision : int, optional
-        Number of decimal places. If None, uses MPMATH_DPS from config.
+        _Number of decimal places. If None, uses MPMATH_DPS from config.
         
     Returns
     -------
@@ -360,7 +360,7 @@ def find_root(func: Callable, x0: Union[float, list], precision: int = None) -> 
     x0 : float or list
         Initial guess or bracket
     precision : int, optional
-        Number of decimal places. If None, uses MPMATH_DPS from config.
+        _Number of decimal places. If None, uses MPMATH_DPS from config.
         
     Returns
     -------

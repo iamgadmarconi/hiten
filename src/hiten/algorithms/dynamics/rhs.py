@@ -15,7 +15,7 @@ so that it can be invoked from nopython kernels without performance penalties.
 from typing import Callable
 
 import numpy as np
-from hiten.utils.config import FASTMATH
+from hiten.algorithms.utils.config import FASTMATH
 
 from hiten.algorithms.dynamics.base import _DynamicalSystem
 

@@ -7,7 +7,7 @@ from hiten.algorithms.polynomial.base import (_CLMO_GLOBAL, _ENCODE_DICT_GLOBAL,
                                                _PSI_GLOBAL, _encode_multiindex,
                                                _make_poly)
 from hiten.algorithms.polynomial.conversion import poly2sympy, sympy2poly
-from hiten.utils.config import N_VARS
+from hiten.algorithms.utils.config import N_VARS
 
 s_vars = list(sp.symbols(f'x_0:{N_VARS}'))
 TEST_MAX_DEG = _PSI_GLOBAL.shape[1] - 1

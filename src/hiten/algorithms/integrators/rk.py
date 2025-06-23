@@ -62,7 +62,7 @@ from hiten.algorithms.integrators.coefficients.rk45 import B_LOW as RK45_B_LOW
 from hiten.algorithms.integrators.coefficients.rk45 import A as RK45_A
 from hiten.algorithms.integrators.coefficients.rk45 import C as RK45_C
 from hiten.algorithms.integrators.coefficients.rk45 import E as RK45_E
-from hiten.utils.config import FASTMATH, TOL
+from hiten.algorithms.utils.config import FASTMATH, TOL
 from hiten.utils.log_config import logger
 
 

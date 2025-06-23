@@ -3,7 +3,7 @@ import numpy as np
 from hiten.utils.constants import Constants
 
 
-def rotating_to_inertial(state, t, mu):
+def _rotating_to_inertial(state, t, mu):
     """
     Convert state from rotating to inertial frame.
     
@@ -55,7 +55,7 @@ def rotating_to_inertial(state, t, mu):
     return np.concatenate([pos_inertial, vel_inertial])
 
 
-def inertial_to_rotating(state, t, mu):
+def _inertial_to_rotating(state, t, mu):
     """
     Convert state from inertial to rotating frame.
     
@@ -156,7 +156,7 @@ def _get_angular_velocity(primary_mass, secondary_mass, distance):
     """
     return np.sqrt(Constants.G * (primary_mass + secondary_mass) / distance**3)
 
-def to_crtbp_units(state_si, m1, m2, distance):
+def _to_crtbp_units(state_si, m1, m2, distance):
     """
     Convert an SI-state vector into the dimensionless state used by crtbp_accel.
     
@@ -197,7 +197,7 @@ def to_crtbp_units(state_si, m1, m2, distance):
     state_dimless = np.array([x_star, y_star, z_star, vx_star, vy_star, vz_star], dtype=np.float64)
     return state_dimless
 
-def to_si_units(state_dimless, m1, m2, distance):
+def _to_si_units(state_dimless, m1, m2, distance):
     """
     Convert a dimensionless state vector into the SI-state vector used by crtbp_accel.
 
@@ -229,7 +229,7 @@ def to_si_units(state_dimless, m1, m2, distance):
 
     return np.array([x, y, z, vx, vy, vz], dtype=np.float64)
 
-def dimless_time(T, m1, m2, distance):
+def _dimless_time(T, m1, m2, distance):
     """
     Convert time from SI units (seconds) to dimensionless CR3BP time units.
     
@@ -259,7 +259,7 @@ def dimless_time(T, m1, m2, distance):
     return T * n
 
 
-def si_time(T_dimless, m1, m2, distance):
+def _si_time(T_dimless, m1, m2, distance):
     """
     Convert time from dimensionless CR3BP time units to SI units (seconds).
     
@@ -281,13 +281,13 @@ def si_time(T_dimless, m1, m2, distance):
         
     Notes
     -----
-    This is the inverse operation of dimless_time().
+    This is the inverse operation of _dimless_time().
     """
     n = _get_angular_velocity(m1, m2, distance)
     return T_dimless / n
 
 
-def get_distance(state_1_nondim, state_0_nondim, system_distance):
+def _get_distance(state_1_nondim, state_0_nondim, system_distance):
     """
     Calculate physical distance between two bodies in meters.
     

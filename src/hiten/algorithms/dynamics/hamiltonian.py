@@ -29,7 +29,7 @@ from hiten.algorithms.dynamics.base import (_DynamicalSystemProtocol,
 from hiten.algorithms.integrators.symplectic import _eval_dH_dP, _eval_dH_dQ
 from hiten.algorithms.polynomial.operations import (_polynomial_evaluate,
                                                     _polynomial_jacobian)
-from hiten.utils.config import FASTMATH
+from hiten.algorithms.utils.config import FASTMATH
 
 
 @njit(cache=False, fastmath=FASTMATH)

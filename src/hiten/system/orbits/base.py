@@ -23,7 +23,6 @@ Bodies".
 """
 
 import os
-import pickle
 from abc import ABC, abstractmethod
 from enum import IntEnum
 from typing import Callable, Literal, NamedTuple, Optional, Sequence, Tuple
@@ -38,7 +37,8 @@ from hiten.algorithms.dynamics.utils.energy import (crtbp_energy,
 from hiten.algorithms.dynamics.utils.geometry import _find_y_zero_crossing
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
-from hiten.utils.files import _ensure_dir
+from hiten.utils.io import (_ensure_dir, load_periodic_orbit,
+                            save_periodic_orbit)
 from hiten.utils.log_config import logger
 from hiten.utils.plots import (animate_trajectories, plot_inertial_frame,
                                plot_rotating_frame)
@@ -464,116 +464,16 @@ class PeriodicOrbit(ABC):
         return animate_trajectories(self._trajectory, self._times, [self._system.primary, self._system.secondary], self._system.distance, **kwargs)
 
     def save(self, filepath: str, **kwargs) -> None:
-        r"""
-        Save the orbit data to a file.
-        
-        Parameters
-        ----------
-        filepath : str
-            Path to save the orbit data
-        **kwargs
-            Additional options for saving
-            
-        Notes
-        -----
-        This saves the essential orbit information including initial state, 
-        period, and trajectory (if computed).
-        """
         _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+        save_periodic_orbit(self, filepath)
+        return
 
-        # Create data dictionary with all essential information
-        data = {
-            'orbit_type': self.__class__.__name__,
-            'family': self.family,
-            'mu': self.mu,
-            'initial_state': self._initial_state.tolist() if self._initial_state is not None else None,
-            'period': self.period,
-        }
-        
-        # Add trajectory data if available
-        if self._trajectory is not None:
-            data['trajectory'] = self._trajectory.tolist()
-            data['times'] = self._times.tolist()
-        
-        # Add stability information if available
-        if self._stability_info is not None:
-            # Convert numpy arrays to lists for serialization
-            stability_data = []
-            for item in self._stability_info:
-                if isinstance(item, np.ndarray):
-                    stability_data.append(item.tolist())
-                else:
-                    stability_data.append(item)
-            data['stability_info'] = stability_data
-            
-        # Ensure directory exists
-        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
-        
-        # Save data
-        with open(filepath, 'wb') as f:
-            pickle.dump(data, f)
-            
-        logger.info(f"Orbit saved to {filepath}")
-    
     def load(self, filepath: str, **kwargs) -> None:
-        r"""
-        Load orbit data from a file.
-        
-        Parameters
-        ----------
-        filepath : str
-            Path to the saved orbit data
-        **kwargs
-            Additional options for loading
-            
-        Returns
-        -------
-        None
-            Updates the current instance with loaded data
-            
-        Raises
-        ------
-        FileNotFoundError
-            If the specified file doesn't exist
-        ValueError
-            If the file contains incompatible data
-        """
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Orbit file not found: {filepath}")
-        
-        # Load data
-        with open(filepath, 'rb') as f:
-            data = pickle.load(f)
-        
-        # Verify orbit type
-        if data['orbit_type'] != self.__class__.__name__:
-            logger.warning(f"Loading {data['orbit_type']} data into {self.__class__.__name__} instance")
-            
-        # Update orbit properties
-        self.mu = data['mu']
-        
-        if data['initial_state'] is not None:
-            self._initial_state = np.array(data['initial_state'])
-        
-        self.period = data['period']
-        
-        # Load trajectory if available
-        if 'trajectory' in data:
-            self._trajectory = np.array(data['trajectory'])
-            self._times = np.array(data['times'])
-        
-        # Load stability information if available
-        if 'stability_info' in data:
-            # Convert lists back to numpy arrays
-            stability_data = []
-            for item in data['stability_info']:
-                if isinstance(item, list):
-                    stability_data.append(np.array(item))
-                else:
-                    stability_data.append(item)
-            self._stability_info = tuple(stability_data)
-            
-        logger.info(f"Orbit loaded from {filepath}")
+
+        load_periodic_orbit(self, filepath)
+        return
 
     @property
     @abstractmethod

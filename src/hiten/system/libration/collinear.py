@@ -15,10 +15,10 @@ from typing import TYPE_CHECKING, Tuple
 
 import numpy as np
 
-from hiten.utils.config import MPMATH_DPS
+from hiten.algorithms.utils.config import MPMATH_DPS
 from hiten.system.libration.base import LibrationPoint, LinearData
 from hiten.utils.log_config import logger
-from hiten.utils.precision import find_root, hp
+from hiten.algorithms.utils.precision import find_root, hp
 
 if TYPE_CHECKING:
     from hiten.system.base import System

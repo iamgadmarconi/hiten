@@ -37,7 +37,7 @@ from numba.typed import List
 from hiten.algorithms.polynomial.base import (_decode_multiindex,
                                                _encode_multiindex,
                                                _fill_exponents)
-from hiten.utils.config import FASTMATH, N_VARS
+from hiten.algorithms.utils.config import FASTMATH, N_VARS
 
 
 @njit(fastmath=FASTMATH, cache=False)

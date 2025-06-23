@@ -27,7 +27,7 @@ from numba import njit
 from numba.typed import List
 
 from hiten.algorithms.polynomial.operations import _polynomial_evaluate
-from hiten.utils.config import FASTMATH
+from hiten.algorithms.utils.config import FASTMATH
 from hiten.algorithms.integrators.base import _Integrator, _Solution
 from hiten.algorithms.dynamics.base import _DynamicalSystem
 

@@ -25,7 +25,7 @@ import numpy as np
 from numba import njit, types
 from numba.typed import Dict, List
 
-from hiten.utils.config import FASTMATH, N_VARS
+from hiten.algorithms.utils.config import FASTMATH, N_VARS
 
 
 @njit(fastmath=FASTMATH,cache=False)

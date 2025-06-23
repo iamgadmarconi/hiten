@@ -25,7 +25,7 @@ from hiten.system.libration.collinear import L1Point, L2Point, L3Point
 from hiten.system.libration.triangular import L4Point, L5Point
 from hiten.utils.constants import Constants
 from hiten.utils.log_config import logger
-from hiten.utils.precision import hp
+from hiten.algorithms.utils.precision import hp
 
 
 class System(object):

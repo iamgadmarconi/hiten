@@ -13,7 +13,7 @@ from hiten.algorithms.polynomial.operations import (
     _polynomial_multiply, _polynomial_poisson_bracket, _polynomial_power,
     _polynomial_total_degree, _polynomial_variable, _polynomial_variables_list,
     _polynomial_zero_list)
-from hiten.utils.config import N_VARS
+from hiten.algorithms.utils.config import N_VARS
 
 TEST_MAX_DEG = 5
 PSI, CLMO = _init_index_tables(TEST_MAX_DEG)

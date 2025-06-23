@@ -6,7 +6,6 @@ import numpy as np
 
 from hiten.system import (CenterManifold, HaloOrbit, Manifold, System,
                           _PoincareMap)
-
 from hiten.utils.log_config import logger
 
 TMP_DIR = Path("results") / "serialization_test"

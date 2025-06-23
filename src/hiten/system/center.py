@@ -19,7 +19,6 @@ manifolds near collinear libration points".
 """
 
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple
-import copy
 
 import numpy as np
 
@@ -40,6 +39,7 @@ from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import CollinearPoint, L3Point
 from hiten.system.libration.triangular import TriangularPoint
+from hiten.utils.io import load_center_manifold, save_center_manifold
 from hiten.utils.log_config import logger
 from hiten.utils.printing import _format_cm_table
 
@@ -154,29 +154,16 @@ class CenterManifold:
         return f"CenterManifold(point={self._point}, max_degree={self._max_degree})"
     
     def __getstate__(self):
-        """Return a lightweight, pickle-friendly representation.
-
-        Instead of trying to deep-copy every cached Numba array (which often
-        carries an unpickleable ``_MemInfo`` pointer), we simply *discard* all
-        heavy, fully reproducible data structures and rebuild them after
-        unpickling.  This keeps the on-disk object small and robust.
-        """
-        # We only keep the minimal set of attributes required to recreate the
-        # instance.  Heavy caches and Numba-typed tables are regenerated in
-        # ``__setstate__``.
         return {
-            "_point": self._point,            # LibrationPoint instance (itself pickle-safe)
+            "_point": self._point,
             "_max_degree": self._max_degree,
             "_cache": self._sanitize_cache(self._cache),
         }
 
     def __setstate__(self, state):
-        """Recreate transient attributes that were dropped by ``__getstate__``."""
-        # Restore the minimal persistent state.
         self._point = state["_point"]
         self._max_degree = state["_max_degree"]
 
-        # Recreate heavy tables and caches.
         self._psi, self._clmo = _init_index_tables(self._max_degree)
         self._encode_dict_list = _create_encode_dict_from_clmo(self._clmo)
         self._cache = self._clone_cache(state.get("_cache", {}))
@@ -522,40 +509,7 @@ class CenterManifold:
         dir_path : str or path-like object
             The path to the directory where the data will be saved.
         """
-        import pickle
-        import json
-        from pathlib import Path
-
-        dir_path = Path(dir_path)
-        dir_path.mkdir(parents=True, exist_ok=True)
-
-        # --- Save the main CenterManifold object ---
-        # Temporarily remove Poincare maps as they will be saved separately.
-        poincare_maps_backup = self._poincare_maps
-        self._poincare_maps = {}
-        try:
-            with open(dir_path / "manifold.pkl", "wb") as f:
-                pickle.dump(self, f, protocol=pickle.HIGHEST_PROTOCOL)
-        finally:
-            self._poincare_maps = poincare_maps_backup # Restore for current session
-
-        # --- Save the Poincare maps and their keys ---
-        if poincare_maps_backup:
-            maps_path = dir_path / "maps"
-            maps_path.mkdir(exist_ok=True)
-            
-            map_keys = []
-            for i, (key, pmap) in enumerate(poincare_maps_backup.items()):
-                map_filename = f"map_{i}.pkl"
-                map_keys.append({"key": list(key), "file": map_filename})
-                
-                # The pmap.save method already handles setting cm to None
-                pmap.save(maps_path / map_filename)
-
-            with open(dir_path / "poincare_maps_keys.json", "w") as f:
-                json.dump(map_keys, f)
-
-        logger.info(f"CenterManifold instance and associated maps saved to {dir_path}")
+        save_center_manifold(self, dir_path)
 
     @classmethod
     def load(cls, dir_path: str) -> "CenterManifold":
@@ -575,40 +529,7 @@ class CenterManifold:
         CenterManifold
             The loaded CenterManifold instance with its Poincare maps.
         """
-        import pickle
-        import json
-        from pathlib import Path
-
-        from hiten.algorithms.poincare.base import _PoincareMap
-
-        dir_path = Path(dir_path)
-        
-        # --- Load main CenterManifold object ---
-        with open(dir_path / "manifold.pkl", "rb") as f:
-            instance = pickle.load(f)
-        if not isinstance(instance, cls):
-            raise TypeError(f"File {dir_path / 'manifold.pkl'} does not contain a valid {cls.__name__} object.")
-
-        # --- Load Poincare maps and reconstruct the dictionary ---
-        keys_path = dir_path / "poincare_maps_keys.json"
-        if keys_path.exists():
-            maps_path = dir_path / "maps"
-            with open(keys_path, "r") as f:
-                map_keys_info = json.load(f)
-            
-            for info in map_keys_info:
-                key_list = info["key"]
-                # Reconstruct the key tuple (energy, config_tuple)
-                energy = key_list[0]
-                config_tuple = tuple(tuple(item) for item in key_list[1])
-                original_key = (energy, config_tuple)
-
-                pmap = _PoincareMap.load(maps_path / info["file"])
-                pmap.cm = instance # Re-attach the manifold
-                instance._poincare_maps[original_key] = pmap
-
-        logger.info(f"CenterManifold instance and maps loaded from {dir_path}")
-        return instance
+        return load_center_manifold(dir_path)
 
     @staticmethod
     def _sanitize_cache(cache_in):
@@ -625,7 +546,8 @@ class CenterManifold:
                 return {k: _clone(v) for k, v in obj.items()}
             try:
                 # Handle numba.typed.List / Dict by casting to list / dict
-                from numba.typed import List as NumbaList, Dict as NumbaDict
+                from numba.typed import Dict as NumbaDict
+                from numba.typed import List as NumbaList
                 if isinstance(obj, NumbaList):
                     return [_clone(x) for x in list(obj)]
                 if isinstance(obj, NumbaDict):

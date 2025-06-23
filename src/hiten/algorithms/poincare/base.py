@@ -13,8 +13,7 @@ parameters are grouped in the lightweight dataclass
 """
 
 import os
-import pickle
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import List, Literal, Optional, Sequence
 
 import numpy as np
@@ -25,7 +24,7 @@ from hiten.algorithms.poincare.map import _generate_map as _generate_map_cpu
 from hiten.algorithms.poincare.map import _PoincareSection
 from hiten.system.center import CenterManifold
 from hiten.system.orbits.base import GenericOrbit
-from hiten.utils.files import _ensure_dir
+from hiten.utils.io import _ensure_dir, save_poincare_map, load_poincare_map
 from hiten.utils.log_config import logger
 from hiten.utils.plots import plot_poincare_map, plot_poincare_map_interactive
 
@@ -279,89 +278,13 @@ class _PoincareMap:
         return orbit
 
     def save(self, filepath: str, **kwargs) -> None:
-        r"""
-        Serialize the current map to disk.
-
-        Parameters
-        ----------
-        filepath : str
-            Destination pickle file.
-        **kwargs
-            Reserved for future extensions.
-        """
-
+        """Serialise the map to *filepath* (HDF5 only)."""
         _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
-
-        data = {
-            "map_type": self.__class__.__name__,
-            "energy": self.energy,
-            "config": asdict(self.config),
-        }
-
-        if self._section is not None:
-            data["points"] = self._section.points.tolist()
-            data["labels"] = self._section.labels
-
-        # Ensure directory exists.
-        os.makedirs(os.path.dirname(os.path.abspath(filepath)), exist_ok=True)
-
-        with open(filepath, "wb") as fh:
-            pickle.dump(data, fh)
-
-        logger.info("Poincaré map saved to %s", filepath)
+        save_poincare_map(self, filepath)
 
     def load(self, filepath: str, **kwargs) -> None:
-        r"""
-        Load a map previously stored with :pyfunc:`save`.
-
-        Parameters
-        ----------
-        filepath : str
-            Path to the pickle file.
-        **kwargs
-            Reserved for future extensions.
-
-        Raises
-        ------
-        FileNotFoundError
-            If *filepath* does not exist.
-        """
-        if not os.path.exists(filepath):
-            raise FileNotFoundError(f"Poincaré-map file not found: {filepath}")
-
-        with open(filepath, "rb") as fh:
-            data = pickle.load(fh)
-
-        if data.get("map_type") != self.__class__.__name__:
-            logger.warning(
-                "Loading %s data into %s instance",
-                data.get("map_type", "<unknown>"),
-                self.__class__.__name__,
-            )
-
-        # Update simple attributes.
-        self.energy = data["energy"]
-
-        # Reconstruct config dataclass (fall back to defaults if missing).
-        cfg_dict = data.get("config", {})
-        try:
-            self.config = _PoincareMapConfig(**cfg_dict)
-        except TypeError:
-            logger.error("Saved configuration is incompatible with current _PoincareMapConfig schema; using defaults.")
-            self.config = _PoincareMapConfig()
-
-        # Refresh derived flags dependent on config.
-        self._use_symplectic = self.config.method.lower() == "symplectic"
-
-        # Load points (if present).
-        if "points" in data and data["points"] is not None:
-            points_array = np.array(data["points"])
-            # Try to load labels, fall back to default q3 section labels for backward compatibility
-            labels = data.get("labels", ("q2", "p2"))
-            self._section = _PoincareSection(points_array, labels)
-        else:
-            self._section = None
-        logger.info("Poincaré map loaded from %s", filepath)
+        """Populate this map from *filepath* (HDF5)."""
+        load_poincare_map(self, filepath)
 
     def plot(self, dark_mode: bool = True, save: bool = False, filepath: str = 'poincare_map.svg', **kwargs):
         r"""
@@ -432,7 +355,13 @@ class _PoincareMap:
                 order=order,
             )
 
-            orbit.plot(frame=frame, dark_mode=dark_mode)
+            orbit.plot(
+                frame=frame,
+                dark_mode=dark_mode,
+                block=False,
+                close_after=False,
+            )
+
             return orbit
 
         # Launch interactive viewer and return the last selected orbit.

@@ -27,7 +27,7 @@ from hiten.algorithms.dynamics.base import _DirectedSystem, _DynamicalSystem
 from hiten.algorithms.integrators.base import _Solution
 from hiten.algorithms.integrators.rk import AdaptiveRK, RungeKutta
 from hiten.algorithms.integrators.symplectic import _ExtendedSymplectic
-from hiten.utils.config import FASTMATH, TOL
+from hiten.algorithms.utils.config import FASTMATH, TOL
 from hiten.utils.log_config import logger
 
 

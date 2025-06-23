@@ -13,11 +13,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from hiten.system import (CenterManifold, HaloOrbit, LyapunovOrbit,
                           Manifold, System, VerticalLyapunovOrbit)
-from hiten.utils.files import _ensure_dir
+from hiten.utils.io import _ensure_dir
 from hiten.utils.log_config import logger
 
 _ensure_dir("results")
-# Directory that will hold manifold pickle files
 _MANIFOLD_DIR = os.path.join("results", "manifolds")
 
 

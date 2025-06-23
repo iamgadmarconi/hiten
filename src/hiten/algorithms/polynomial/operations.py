@@ -51,7 +51,7 @@ from hiten.algorithms.polynomial.algebra import (_get_degree, _poly_clean,
                                                   _poly_poisson)
 from hiten.algorithms.polynomial.base import (_decode_multiindex,
                                                _encode_multiindex, _make_poly)
-from hiten.utils.config import FASTMATH, N_VARS
+from hiten.algorithms.utils.config import FASTMATH, N_VARS
 
 
 @njit(fastmath=FASTMATH, cache=False)

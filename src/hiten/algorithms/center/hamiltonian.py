@@ -29,7 +29,7 @@ from hiten.algorithms.polynomial.operations import (_polynomial_add_inplace,
                                               _polynomial_multiply,
                                               _polynomial_variable,
                                               _polynomial_zero_list)
-from hiten.utils.config import FASTMATH
+from hiten.algorithms.utils.config import FASTMATH
 
 
 @njit(fastmath=FASTMATH, cache=False)
