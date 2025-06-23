@@ -75,7 +75,16 @@ def _load_periodic_orbit_inplace(obj: "PeriodicOrbit", filepath: str) -> None:
         if cls_name != obj.__class__.__name__:
             raise ValueError(f"Mismatch between file and object class: {cls_name} != {obj.__class__.__name__}")
         obj._family = str(f.attrs.get("family", obj._family))
-        obj.mu = float(f.attrs["mu"])
+        # Retrieve stored mass ratio (mu) and ensure consistency with current object.
+        stored_mu = float(f.attrs["mu"])
+        # If the object already has a _mu attribute, keep it unless it is uninitialised or differs significantly
+        if not hasattr(obj, "_mu") or obj._mu is None:
+            obj._mu = stored_mu
+        elif abs(obj._mu - stored_mu) > 1e-12:
+            import warnings
+            warnings.warn(
+                f"Loaded mu ({stored_mu}) differs from object mu ({obj._mu}); keeping existing value.")
+
         period_val = float(f.attrs["period"])
         obj.period = None if period_val < 0 else period_val
 
@@ -105,8 +114,8 @@ def _load_periodic_orbit_inplace(obj: "PeriodicOrbit", filepath: str) -> None:
 
                 system = System(primary, secondary, distance_km)
                 obj._system = system
-                if 1 <= lib_idx <=5:
-                    obj.libration_point = system.get_libration_point(lib_idx)
+                if 1 <= lib_idx <= 5:
+                    obj._libration_point = system.get_libration_point(lib_idx)
         except Exception as exc:
             # Silent failure – context reconstruction is best effort only.
             import warnings
@@ -128,8 +137,8 @@ def _load_periodic_orbit_inplace(obj: "PeriodicOrbit", filepath: str) -> None:
         else:
             obj._stability_info = None
 
-    if getattr(obj, "libration_point", None) is None:
-        obj.libration_point = None
+    if getattr(obj, "_libration_point", None) is None:
+        obj._libration_point = None
     if getattr(obj, "_system", None) is None:
         obj._system = None
 
@@ -228,7 +237,8 @@ def _read_periodic_orbit_group(grp: h5py.Group) -> "PeriodicOrbit":
 
     # Patch basic attributes
     orbit._family = str(grp.attrs.get("family", "generic"))
-    orbit.mu = float(grp.attrs["mu"])
+    stored_mu = float(grp.attrs["mu"])
+    orbit._mu = stored_mu
     period_val = float(grp.attrs["period"])
     orbit.period = None if period_val < 0 else period_val
 
@@ -255,8 +265,8 @@ def _read_periodic_orbit_group(grp: h5py.Group) -> "PeriodicOrbit":
 
             system = System(primary, secondary, distance_km)
             orbit._system = system
-            if 1 <= lib_idx <=5:
-                orbit.libration_point = system.get_libration_point(lib_idx)
+            if 1 <= lib_idx <= 5:
+                orbit._libration_point = system.get_libration_point(lib_idx)
     except Exception:
         pass
 
@@ -276,8 +286,8 @@ def _read_periodic_orbit_group(grp: h5py.Group) -> "PeriodicOrbit":
     else:
         orbit._stability_info = None
 
-    if getattr(orbit, "libration_point", None) is None:
-        orbit.libration_point = None  
+    if getattr(orbit, "_libration_point", None) is None:
+        orbit._libration_point = None  
     if getattr(orbit, "_system", None) is None:
         orbit._system = None  
 

@@ -13,16 +13,10 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from hiten.system import (CenterManifold, HaloOrbit, LyapunovOrbit, System,
                           VerticalLyapunovOrbit)
-from hiten.utils.io import _ensure_dir
 from hiten.utils.log_config import logger
-
-_ensure_dir("results")
-_MANIFOLD_DIR = os.path.join("results", "manifolds")
 
 
 def main() -> None:
-    _ensure_dir(_MANIFOLD_DIR)
-
     # Build system & centre manifold
     system = System.from_bodies("earth", "moon")
     l_point = system.get_libration_point(1)
@@ -56,9 +50,7 @@ def main() -> None:
     ]
 
     for spec in orbit_specs:
-        logger.info("\n================  Generating %s orbit  ================", spec["name"])
 
-        # Build orbit object with the new direct parameter API
         orbit = spec["cls"](l_point, **spec["kwargs"])
 
         # Differential correction, propagation & basic visualisation
@@ -66,14 +58,9 @@ def main() -> None:
         orbit.propagate(steps=1000)
         orbit.plot("rotating")
 
-        # ---- Stable manifold generation --------------------------------------------------
         manifold = orbit.manifold(stable=True, direction="Positive")
-        m_filepath = os.path.join(_MANIFOLD_DIR, f"{spec['name'].lower().replace(' ', '_')}_manifold.pkl")
-
         logger.info("Computing manifold for %s orbit", spec["name"])
         manifold.compute()
-        manifold.save(m_filepath)
-
         manifold.plot()
 
 

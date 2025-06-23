@@ -22,7 +22,7 @@
    orbit.differential_correction(max_attempts=25)
    orbit.propagate(steps=1000)
 
-   manifold = Manifold(orbit, stable=True, direction="Positive")
+   manifold = orbit.manifold(stable=True, direction="Positive")
    manifold.compute()
    manifold.plot()
    ```
@@ -50,7 +50,7 @@
    orbit.differential_correction(max_attempts=100)
    orbit.propagate(steps=1000)
 
-   manifold = Manifold(orbit, stable=True, direction="Positive")
+   manifold = orbit.manifold(stable=True, direction="Positive")
    manifold.compute()
    manifold.plot()
    ```

@@ -254,6 +254,35 @@ class PeriodicOrbit(ABC):
         """Orbit period, set after a successful correction."""
         return self._period
 
+    @period.setter
+    def period(self, value: Optional[float]):
+        """Set the orbit period and invalidate cached data.
+
+        Setting the period manually allows users (or serialization logic)
+        to override the value obtained via differential correction. Any time
+        the period changes we must invalidate cached trajectory, time array
+        and stability information so they can be recomputed consistently.
+        """
+        # Basic validation: positive period or None
+        if value is not None and value <= 0:
+            raise ValueError("period must be a positive number or None.")
+
+        # Only act if the period actually changes to avoid unnecessary resets
+        current_period = getattr(self, "_period", None)
+        if value != current_period:
+            # Ensure the private attribute exists before use
+            self._period = value
+
+            # Invalidate caches that depend on the period, if they already exist
+            if hasattr(self, "_trajectory"):
+                self._trajectory = None
+            if hasattr(self, "_times"):
+                self._times = None
+            if hasattr(self, "_stability_info"):
+                self._stability_info = None
+
+            logger.info("Period updated, cached trajectory, times and stability information cleared")
+
     @property
     def system(self) -> System:
         return self._system

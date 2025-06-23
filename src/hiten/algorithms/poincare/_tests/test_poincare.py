@@ -55,7 +55,7 @@ def test_poincaremap_save_load(poincare_test_setup):
 
         # Create a new map instance (with same CM, config, but do not compute)
         pm_loaded = _PoincareMap(cm, 0.0, pmConfig)  # energy will be overwritten by load
-        pm_loaded.load(filepath)
+        pm_loaded.load_inplace(filepath)
 
         # Check energy
         assert np.isclose(pm.energy, pm_loaded.energy), f"Energy mismatch: {pm.energy} vs {pm_loaded.energy}"
