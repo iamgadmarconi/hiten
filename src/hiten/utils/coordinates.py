@@ -108,22 +108,22 @@ def inertial_to_rotating(state, t, mu):
 
 def _get_mass_parameter(primary_mass, secondary_mass):
     """
-    Calculate the mass parameter μ for the CR3BP.
+    Calculate the mass parameter :math:`\mu` for the CR3BP.
     
-    The mass parameter μ is defined as the ratio of the secondary mass
-    to the total system mass: μ = m₂/(m₁ + m₂).
+    The mass parameter :math:`\mu` is defined as the ratio of the secondary mass
+    to the total system mass: :math:`\mu = m_2/(m_1 + m_2)`.
     
     Parameters
     ----------
     primary_mass : float
-        Mass of the primary body (m₁) in kilograms
+        Mass of the primary body :math:`m_1` in kilograms
     secondary_mass : float
-        Mass of the secondary body (m₂) in kilograms
+        Mass of the secondary body :math:`m_2` in kilograms
     
     Returns
     -------
     float
-        Mass parameter μ (dimensionless)
+        Mass parameter :math:`\mu` (dimensionless)
     """
     return secondary_mass / (primary_mass + secondary_mass)
 
@@ -163,21 +163,20 @@ def to_crtbp_units(state_si, m1, m2, distance):
     Parameters
     ----------
     state_si  : array-like of shape (6,)
-        [x, y, z, vx, vy, vz] in meters and meters/sec, all in Earth-centered coordinates
-        if you're modeling Earth-Moon, for example.
+        [x, y, z, vx, vy, vz] in meters and meters/sec, all in Earth-centered coordinates.
     m1        : float
-        Mass of primary (e.g., Earth) in kilograms.
+        Mass of primary :math:`m_1` in kilograms.
     m2        : float
-        Mass of secondary (e.g., Moon) in kilograms.
+        Mass of secondary :math:`m_2` in kilograms.
     distance  : float
-        Distance between the two main bodies (e.g., Earth-Moon) in meters.
+        Distance between the two main bodies in meters.
         
     Returns
     -------
     state_dimless : np.ndarray of shape (6,)
         The dimensionless state vector suitable for crtbp_accel.
     mu            : float
-        Dimensionless mass parameter = m2 / (m1 + m2).
+        Dimensionless mass parameter :math:`\mu = m_2 / (m_1 + m_2)`.
     """
     # Mean motion (rad/s) => in CRTBP, we want n = 1, so we scale by this factor.
     n = _get_angular_velocity(m1, m2, distance)
@@ -207,11 +206,11 @@ def to_si_units(state_dimless, m1, m2, distance):
     state_dimless : np.ndarray of shape (6,)
         The dimensionless state vector suitable for crtbp_accel.
     m1        : float
-        Mass of primary (e.g., Earth) in kilograms.
+        Mass of primary :math:`m_1` in kilograms.
     m2        : float
-        Mass of secondary (e.g., Moon) in kilograms.
+        Mass of secondary :math:`m_2` in kilograms.
     distance  : float
-        Distance between the two main bodies (e.g., Earth-Moon) in meters.
+        Distance between the two main bodies in meters.
 
     Returns
     -------
@@ -239,9 +238,9 @@ def dimless_time(T, m1, m2, distance):
     T : float
         Time in seconds
     m1 : float
-        Mass of primary body in kilograms
+        Mass of primary body :math:`m_1` in kilograms
     m2 : float
-        Mass of secondary body in kilograms
+        Mass of secondary body :math:`m_2` in kilograms
     distance : float
         Distance between the two bodies in meters
         
@@ -269,9 +268,9 @@ def si_time(T_dimless, m1, m2, distance):
     T_dimless : float
         Time in dimensionless CR3BP units
     m1 : float
-        Mass of primary body in kilograms
+        Mass of primary body :math:`m_1` in kilograms
     m2 : float
-        Mass of secondary body in kilograms
+        Mass of secondary body :math:`m_2` in kilograms
     distance : float
         Distance between the two bodies in meters
         

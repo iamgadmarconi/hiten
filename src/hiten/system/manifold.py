@@ -23,7 +23,6 @@ import pickle
 from dataclasses import dataclass
 from typing import List, Literal, Tuple
 
-import matplotlib.pyplot as plt
 import numpy as np
 from tqdm import tqdm
 
@@ -34,7 +33,7 @@ from hiten.algorithms.dynamics.utils.linalg import (_totime,
 from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.files import _ensure_dir
 from hiten.utils.log_config import logger
-from hiten.utils.plots import _plot_body, _set_axes_equal, _set_dark_mode
+from hiten.utils.plots import plot_manifold
 
 
 @dataclass
@@ -421,7 +420,7 @@ class Manifold:
 
         return x0W
     
-    def plot(self, dark_mode: bool = True):
+    def plot(self, dark_mode: bool = True, save: bool = False, filepath: str = 'manifold.svg', **kwargs):
         r"""
         Render a 3-D plot of the computed manifold.
 
@@ -440,36 +439,16 @@ class Manifold:
             logger.error(err)
             raise ValueError(err)
 
-
-        states_list, times_list = self._manifold_result.states_list, self._manifold_result.times_list
-
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
-        
-        num_traj = len(states_list)
-        cmap = plt.get_cmap('plasma')
-        for i, (xW, _) in enumerate(zip(states_list, times_list)):
-            color = cmap(i / (num_traj - 1)) if num_traj > 1 else cmap(0.5)
-            ax.plot(xW[:, 0], xW[:, 1], xW[:, 2], color=color, lw=2)
-
-        mu = self._mu
-
-        primary_center = np.array([-mu, 0, 0])
-        primary_radius = self._generating_orbit._system.primary.radius
-        _plot_body(ax, primary_center, primary_radius / self._generating_orbit._system.distance, 'blue', self._generating_orbit._system.primary.name)
-
-        secondary_center = np.array([(1 - mu), 0, 0])
-        secondary_radius = self._generating_orbit._system.secondary.radius
-        _plot_body(ax, secondary_center, secondary_radius / self._generating_orbit._system.distance, 'grey', self._generating_orbit._system.secondary.name)
-        
-        ax.set_xlabel('x')
-        ax.set_ylabel('y')
-        ax.set_zlabel('z')
-        _set_axes_equal(ax)
-        ax.set_title('Manifold')
-        if dark_mode:
-            _set_dark_mode(fig, ax, title=ax.get_title())
-        plt.show()
+        return plot_manifold(
+            states_list=self._manifold_result.states_list,
+            times_list=self._manifold_result.times_list,
+            bodies=[self._generating_orbit._system.primary, self._generating_orbit._system.secondary],
+            system_distance=self._generating_orbit._system.distance,
+            dark_mode=dark_mode,
+            save=save,
+            filepath=filepath,
+            **kwargs
+        )
 
     def to_csv(self, filepath: str, **kwargs):
         r"""

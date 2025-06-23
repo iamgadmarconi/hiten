@@ -28,22 +28,20 @@ from abc import ABC, abstractmethod
 from enum import IntEnum
 from typing import Callable, Literal, NamedTuple, Optional, Sequence, Tuple
 
-import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 
-from hiten.algorithms.dynamics.rtbp import (_propagate_dynsys, _compute_stm,
-                                            rtbp_dynsys, _stability_indices)
+from hiten.algorithms.dynamics.rtbp import (_compute_stm, _propagate_dynsys,
+                                            _stability_indices, rtbp_dynsys)
 from hiten.algorithms.dynamics.utils.energy import (crtbp_energy,
                                                     energy_to_jacobi)
 from hiten.algorithms.dynamics.utils.geometry import _find_y_zero_crossing
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
-from hiten.utils.coordinates import rotating_to_inertial
 from hiten.utils.files import _ensure_dir
 from hiten.utils.log_config import logger
-from hiten.utils.plots import (_plot_body, _set_axes_equal, _set_dark_mode,
-                               animate_trajectories)
+from hiten.utils.plots import (animate_trajectories, plot_inertial_frame,
+                               plot_rotating_frame)
 
 
 class S(IntEnum): X=0; Y=1; Z=2; VX=3; VY=4; VZ=5
@@ -394,7 +392,13 @@ class PeriodicOrbit(ABC):
         
         return stability
 
-    def plot(self, frame="rotating", show=True, figsize=(10, 8), dark_mode=True, **kwargs):
+    def plot(
+            self, 
+            frame: Literal["rotating", "inertial"] = "rotating", 
+            dark_mode: bool = True, 
+            save: bool = False, 
+            filepath: str = f'orbit.svg',
+            **kwargs):
         r"""
         Plot the orbit trajectory in the specified reference frame.
         
@@ -403,10 +407,12 @@ class PeriodicOrbit(ABC):
         frame : str, optional
             Reference frame to use for plotting. Options are "rotating" or "inertial".
             Default is "rotating".
-        show : bool, optional
-            Whether to call plt.show() after creating the plot. Default is True.
-        figsize : tuple, optional
-            Figure size in inches (width, height). Default is (10, 8).
+        dark_mode : bool, optional
+            Whether to use dark mode for the plot. Default is True.
+        save : bool, optional
+            Whether to save the plot to a file. Default is False.
+        filepath : str, optional
+            Path to save the plot to. Default is "orbit.svg".
         **kwargs
             Additional keyword arguments passed to the specific plotting function.
             
@@ -426,9 +432,25 @@ class PeriodicOrbit(ABC):
             raise RuntimeError(msg)
             
         if frame.lower() == "rotating":
-            return self.plot_rotating_frame(show=show, figsize=figsize, dark_mode=dark_mode, **kwargs)
+            return plot_rotating_frame(
+                states=self._trajectory, 
+                times=self._times, 
+                bodies=[self._system.primary, self._system.secondary], 
+                system_distance=self._system.distance, 
+                dark_mode=dark_mode, 
+                save=save,
+                filepath=filepath,
+                **kwargs)
         elif frame.lower() == "inertial":
-            return self.plot_inertial_frame(show=show, figsize=figsize, dark_mode=dark_mode, **kwargs)
+            return plot_inertial_frame(
+                states=self._trajectory, 
+                times=self._times, 
+                bodies=[self._system.primary, self._system.secondary], 
+                system_distance=self._system.distance, 
+                dark_mode=dark_mode, 
+                save=save,
+                filepath=filepath,
+                **kwargs)
         else:
             msg = f"Invalid frame '{frame}'. Must be 'rotating' or 'inertial'."
             logger.error(msg)
@@ -440,153 +462,6 @@ class PeriodicOrbit(ABC):
             return None, None
         
         return animate_trajectories(self._trajectory, self._times, [self._system.primary, self._system.secondary], self._system.distance, **kwargs)
-
-    def plot_rotating_frame(self, show=True, figsize=(10, 8), dark_mode=True, **kwargs):
-        r"""
-        Plot the orbit trajectory in the rotating reference frame.
-        
-        Parameters
-        ----------
-        show : bool, optional
-            Whether to call plt.show() after creating the plot. Default is True.
-        figsize : tuple, optional
-            Figure size in inches (width, height). Default is (10, 8).
-        **kwargs
-            Additional keyword arguments for plot customization.
-            
-        Returns
-        -------
-        tuple
-            (fig, ax) containing the figure and axis objects for further customization
-        """
-        if self._trajectory is None:
-            logger.warning("No trajectory to plot. Call propagate() first.")
-            return None, None
-        
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111, projection='3d')
-        
-        # Get trajectory data
-        x = self._trajectory[:, 0]
-        y = self._trajectory[:, 1]
-        z = self._trajectory[:, 2]
-        
-        # Plot orbit trajectory
-        orbit_color = kwargs.get('orbit_color', 'cyan')
-        ax.plot(x, y, z, label=f'{self.family.capitalize()} Orbit', color=orbit_color)
-        
-        # Plot primary body (canonical position: -mu, 0, 0)
-        primary_pos = np.array([-self.mu, 0, 0])
-        primary_radius = self._system.primary.radius / self._system.distance  # Convert to canonical units
-        _plot_body(ax, primary_pos, primary_radius, self._system.primary.color, self._system.primary.name)
-        
-        # Plot secondary body (canonical position: 1-mu, 0, 0)
-        secondary_pos = np.array([1-self.mu, 0, 0])
-        secondary_radius = self._system.secondary.radius / self._system.distance  # Convert to canonical units
-        _plot_body(ax, secondary_pos, secondary_radius, self._system.secondary.color, self._system.secondary.name)
-        
-        # Plot libration point
-        ax.scatter(*self.libration_point.position, color='#FF00FF', marker='o', 
-                s=5, label=f'{self.libration_point}')
-        
-        ax.set_xlabel('X [canonical]')
-        ax.set_ylabel('Y [canonical]')
-        ax.set_zlabel('Z [canonical]')
-        
-        # Create legend and apply styling
-        ax.legend()
-        _set_axes_equal(ax)
-        
-        # Apply dark mode if requested
-        if dark_mode:
-            _set_dark_mode(fig, ax, title=f'{self.family.capitalize()} Orbit in Rotating Frame')
-        else:
-            ax.set_title(f'{self.family.capitalize()} Orbit in Rotating Frame')
-        
-        if show:
-            plt.show()
-            
-        return fig, ax
-
-        
-    def plot_inertial_frame(self, show=True, figsize=(10, 8), dark_mode=True, **kwargs):
-        r"""
-        Plot the orbit trajectory in the primary-centered inertial reference frame.
-        
-        Parameters
-        ----------
-        show : bool, optional
-            Whether to call plt.show() after creating the plot. Default is True.
-        figsize : tuple, optional
-            Figure size in inches (width, height). Default is (10, 8).
-        **kwargs
-            Additional keyword arguments for plot customization.
-            
-        Returns
-        -------
-        tuple
-            (fig, ax) containing the figure and axis objects for further customization
-        """
-        if self._trajectory is None or self._times is None:
-            logger.warning("No trajectory to plot. Call propagate() first.")
-            return None, None
-        
-        fig = plt.figure(figsize=figsize)
-        ax = fig.add_subplot(111, projection='3d')
-        
-        # Get trajectory data and convert to inertial frame
-        traj_inertial = []
-        
-        for state, t in zip(self._trajectory, self._times):
-            # Convert rotating frame to inertial frame (canonical units)
-            inertial_state = rotating_to_inertial(state, t, self.mu)
-            traj_inertial.append(inertial_state)
-        
-        traj_inertial = np.array(traj_inertial)
-        x, y, z = traj_inertial[:, 0], traj_inertial[:, 1], traj_inertial[:, 2]
-        
-        # Plot orbit trajectory
-        orbit_color = kwargs.get('orbit_color', 'red')
-        ax.plot(x, y, z, label=f'{self.family.capitalize()} Orbit', color=orbit_color)
-        
-        # Plot primary body at origin
-        primary_pos = np.array([0, 0, 0])
-        primary_radius = self._system.primary.radius / self._system.distance  # Convert to canonical units
-        _plot_body(ax, primary_pos, primary_radius, self._system.primary.color, self._system.primary.name)
-        
-        # Plot secondary's orbit and position
-        theta = self._times  # Time is angle in canonical units
-        secondary_x = (1-self.mu) * np.cos(theta)
-        secondary_y = (1-self.mu) * np.sin(theta)
-        secondary_z = np.zeros_like(theta)
-        
-        # Plot secondary's orbit
-        ax.plot(secondary_x, secondary_y, secondary_z, '--', color=self._system.secondary.color, 
-                alpha=0.5, label=f'{self._system.secondary.name} Orbit')
-        
-        # Plot secondary at final position
-        secondary_pos = np.array([secondary_x[-1], secondary_y[-1], secondary_z[-1]])
-        secondary_radius = self._system.secondary.radius / self._system.distance  # Convert to canonical units
-        _plot_body(ax, secondary_pos, secondary_radius, self._system.secondary.color, self._system.secondary.name)
-        
-        ax.set_xlabel('X [canonical]')
-        ax.set_ylabel('Y [canonical]')
-        ax.set_zlabel('Z [canonical]')
-        
-        # Create legend and apply styling
-        ax.legend()
-        _set_axes_equal(ax)
-        
-        # Apply dark mode if requested
-        if dark_mode:
-            _set_dark_mode(fig, ax, title=f'{self.family.capitalize()} Orbit in Inertial Frame')
-        else:
-            ax.set_title(f'{self.family.capitalize()} Orbit in Inertial Frame')
-        
-        if show:
-            plt.show()
-            
-        return fig, ax
 
     def save(self, filepath: str, **kwargs) -> None:
         r"""
