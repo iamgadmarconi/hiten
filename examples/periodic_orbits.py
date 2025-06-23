@@ -59,7 +59,6 @@ def main() -> None:
         orbit.plot("rotating")
 
         manifold = orbit.manifold(stable=True, direction="Positive")
-        logger.info("Computing manifold for %s orbit", spec["name"])
         manifold.compute()
         manifold.plot()
 

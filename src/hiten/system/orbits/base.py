@@ -27,10 +27,12 @@ from __future__ import annotations
 import os
 from abc import ABC, abstractmethod
 from enum import IntEnum
-from typing import Callable, Literal, NamedTuple, Optional, Sequence, Tuple, TYPE_CHECKING
+from typing import (TYPE_CHECKING, Callable, Literal, NamedTuple, Optional,
+                    Sequence, Tuple)
 
 import numpy as np
 import numpy.typing as npt
+import pandas as pd
 
 from hiten.algorithms.dynamics.rtbp import (_compute_stm, _propagate_dynsys,
                                             _stability_indices)
@@ -39,8 +41,8 @@ from hiten.algorithms.dynamics.utils.energy import (crtbp_energy,
 from hiten.algorithms.dynamics.utils.geometry import _find_y_zero_crossing
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
-from hiten.utils.io import (_ensure_dir, _load_periodic_orbit_inplace,
-                            _load_periodic_orbit, _save_periodic_orbit)
+from hiten.utils.io import (_ensure_dir, _load_periodic_orbit,
+                            _load_periodic_orbit_inplace, _save_periodic_orbit)
 from hiten.utils.log_config import logger
 from hiten.utils.plots import (animate_trajectories, plot_inertial_frame,
                                plot_rotating_frame)
@@ -558,6 +560,20 @@ class PeriodicOrbit(ABC):
             return None, None
         
         return animate_trajectories(self._trajectory, self._times, [self._system.primary, self._system.secondary], self._system.distance, **kwargs)
+
+    def to_csv(self, filepath: str, **kwargs):
+        if self._trajectory is None or self._times is None:
+            err = "Trajectory not computed. Please call propagate() first."
+            logger.error(err)
+            raise ValueError(err)
+
+        # Assemble the data: time followed by the six-dimensional state vector
+        data = np.column_stack((self._times, self._trajectory))
+        df = pd.DataFrame(data, columns=["time", "x", "y", "z", "vx", "vy", "vz"])
+
+        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+        df.to_csv(filepath, index=False)
+        logger.info(f"Orbit trajectory successfully exported to {filepath}")
 
     def save(self, filepath: str, **kwargs) -> None:
         _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
