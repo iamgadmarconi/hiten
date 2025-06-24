@@ -16,16 +16,19 @@ Szebehely, V. (1967). "Theory of Orbits".
 
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Dict, Literal, Optional, Sequence, Tuple
 
-from hiten.algorithms.dynamics.rtbp import rtbp_dynsys
+import numpy as np
+import numpy.typing as npt
+
+from hiten.algorithms.dynamics.rtbp import _propagate_dynsys, rtbp_dynsys
+from hiten.algorithms.utils.precision import hp
 from hiten.system.body import Body
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import L1Point, L2Point, L3Point
 from hiten.system.libration.triangular import L4Point, L5Point
 from hiten.utils.constants import Constants
 from hiten.utils.log_config import logger
-from hiten.algorithms.utils.precision import hp
 
 
 class System(object):
@@ -200,6 +203,60 @@ class System(object):
         logger.debug(f"Retrieving Libration point L{index}")
         return point
 
+    def propagate(
+        self,
+        initial_conditions: Sequence[float],
+        tf: float = 2 * np.pi,
+        *,
+        steps: int = 1000,
+        method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy",
+        order: int = 8,
+        **kwargs
+    ) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        r"""
+        Propagate arbitrary initial conditions in the CR3BP.
+
+        This helper is a thin wrapper around
+        :func:`hiten.algorithms.dynamics.rtbp._propagate_dynsys` that avoids
+        the need to instantiate a :class:`~hiten.system.orbits.base.PeriodicOrbit`.
+
+        Parameters
+        ----------
+        initial_conditions : Sequence[float]
+            Six-element state vector ``[x, y, z, vx, vy, vz]`` expressed in
+            canonical CR3BP units.
+        steps : int, default 1000
+            Number of output nodes in the returned trajectory.
+        method : {"rk", "scipy", "symplectic", "adaptive"}, default "scipy"
+            Integration backend to employ.
+        order : int, default 8
+            Formal order of the integrator when applicable (ignored by the
+            SciPy backend).
+
+        Returns
+        -------
+        tuple (times, states)
+            *times* - 1-D array of shape ``(steps,)`` holding the sampling
+            instants (radial-normalised units).
+            *states* - 2-D array of shape ``(steps, 6)`` with the propagated
+            trajectory.
+        """
+
+        forward = kwargs.get("forward", 1)
+
+        sol = _propagate_dynsys(
+            dynsys=self._dynsys,
+            state0=initial_conditions,
+            t0=0.0,
+            tf=tf,
+            forward=forward,
+            steps=steps,
+            method=method,
+            order=order,
+        )
+
+        return sol.times, sol.states
+
     @classmethod
     def from_bodies(cls, primary_name: str, secondary_name: str) -> "System":
         r"""
@@ -270,7 +327,8 @@ class System(object):
         using the stored value of :pyattr:`mu` and the names of the primary and
         secondary bodies.
         """
-        from hiten.algorithms.dynamics.rtbp import rtbp_dynsys  # local import to avoid circular deps
+        from hiten.algorithms.dynamics.rtbp import \
+            rtbp_dynsys  # local import to avoid circular deps
 
         # Restore the plain attributes
         self.__dict__.update(state)
