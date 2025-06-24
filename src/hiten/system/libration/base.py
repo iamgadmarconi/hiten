@@ -28,6 +28,7 @@ from hiten.utils.log_config import logger
 if TYPE_CHECKING:
     from hiten.system.base import System
     from hiten.system.center import CenterManifold
+    from hiten.system.orbits.base import PeriodicOrbit
 
 # Constants for stability analysis mode
 CONTINUOUS_SYSTEM = 0
@@ -444,3 +445,68 @@ class LibrationPoint(ABC):
         # Ensure _cm_registry exists after unpickling
         if not hasattr(self, '_cm_registry') or self._cm_registry is None:
             self._cm_registry = {}
+
+    # ---------------------------------------------------------------------
+    # Convenience factory for periodic orbits anchored at this libration
+    # point.
+    # ---------------------------------------------------------------------
+    def create_orbit(self, family: str | type["PeriodicOrbit"], /, **kwargs) -> "PeriodicOrbit":
+        r"""
+        Create a periodic orbit *family* anchored at this libration point.
+
+        The helper transparently instantiates the appropriate concrete
+        subclass of :class:`hiten.system.orbits.base.PeriodicOrbit` and
+        returns it.  The mapping is based on the *family* string or directly
+        on a subclass type::
+
+            L1 = system.get_libration_point(1)
+            orb1 = L1.create_orbit("halo", amplitude_z=0.03, zenith="northern")
+            orb2 = L1.create_orbit("lyapunov", amplitude_x=0.05)
+
+        Parameters
+        ----------
+        family : str or PeriodicOrbit subclass
+            Identifier of the orbit family or an explicit subclass type.
+            Accepted strings (case-insensitive): ``"halo"``, ``"lyapunov"``,
+            ``"vertical_lyapunov"`` and ``"generic"``.  If a subclass is
+            passed, it is instantiated directly.
+        **kwargs
+            Forwarded verbatim to the underlying orbit constructor.
+
+        Returns
+        -------
+        PeriodicOrbit
+            Newly created orbit instance.
+        """
+
+        # Lazy imports to avoid circular dependencies and reduce import time.
+        from hiten.system.orbits.halo import HaloOrbit
+        from hiten.system.orbits.lyapunov import LyapunovOrbit, VerticalLyapunovOrbit
+        from hiten.system.orbits.base import GenericOrbit, PeriodicOrbit
+
+        # Direct class provided
+        if isinstance(family, type) and issubclass(family, PeriodicOrbit):
+            orbit_cls = family  # type: ignore[arg-type]
+            return orbit_cls(self, **kwargs)
+
+        # String identifier provided
+        if not isinstance(family, str):
+            raise TypeError("family must be either a string identifier or a PeriodicOrbit subclass")
+
+        key = family.lower().strip()
+        mapping: dict[str, type[PeriodicOrbit]] = {
+            "halo": HaloOrbit,
+            "lyapunov": LyapunovOrbit,
+            "vertical_lyapunov": VerticalLyapunovOrbit,
+            "vertical": VerticalLyapunovOrbit,
+            "generic": GenericOrbit,
+        }
+
+        if key not in mapping:
+            raise ValueError(
+                f"Unknown orbit family '{family}'. Available options: {', '.join(mapping.keys())} "
+                "or pass a PeriodicOrbit subclass directly."
+            )
+
+        orbit_cls = mapping[key]
+        return orbit_cls(self, **kwargs)

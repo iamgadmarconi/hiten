@@ -13,12 +13,12 @@
    The toolkit constructs periodic solutions such as halo orbits and obtains polynomial representations of their stable and unstable manifolds. This enables fast, mesh-free evaluation of trajectories seeded on these structures.
 
    ```python
-   from hiten import System, HaloOrbit
+   from hiten import System
 
    system = System.from_bodies("earth", "moon")
    libration_point = system.get_libration_point(1)
 
-   orbit = HaloOrbit(libration_point, amplitude_z=0.2, zenith="southern")
+   orbit = libration_point.create_orbit("halo", amplitude_z=0.2, zenith="southern")
    orbit.differential_correction(max_attempts=25)
    orbit.propagate(steps=1000)
 

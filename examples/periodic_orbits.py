@@ -50,7 +50,7 @@ def main() -> None:
 
     for spec in orbit_specs:
 
-        orbit = spec["cls"](l_point, **spec["kwargs"])
+        orbit = l_point.create_orbit(spec["cls"], **spec["kwargs"])
 
         # Differential correction, propagation & basic visualisation
         orbit.differential_correction(max_attempts=spec["diff_corr_attempts"])
