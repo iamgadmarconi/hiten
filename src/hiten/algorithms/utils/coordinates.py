@@ -157,7 +157,7 @@ def _get_angular_velocity(primary_mass, secondary_mass, distance):
     return np.sqrt(Constants.G * (primary_mass + secondary_mass) / distance**3)
 
 def _to_crtbp_units(state_si, m1, m2, distance):
-    """
+    r"""
     Convert an SI-state vector into the dimensionless state used by crtbp_accel.
     
     Parameters

@@ -9,15 +9,14 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from hiten import CenterManifold, System
+from hiten import System
 
 
 def main() -> None:
     """Compute and display the centre-manifold Hamiltonian."""
     system = System.from_bodies("sun", "earth")
     l_point = system.get_libration_point(1)
-
-    cm = CenterManifold(l_point, 10)
+    cm = l_point.get_center_manifold(max_degree=10)
     cm.compute()
 
     print(cm)

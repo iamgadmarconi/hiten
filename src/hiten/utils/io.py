@@ -190,7 +190,7 @@ def _save_manifold(manifold: "Manifold", filepath: str, *, compression: str = "g
         f.attrs["class"] = manifold.__class__.__name__
         f.attrs["format_version"] = "1.0"
         f.attrs["stable"] = bool(manifold._stable == 1)
-        f.attrs["direction"] = "Positive" if manifold._direction == 1 else "Negative"
+        f.attrs["direction"] = "positive" if manifold._direction == 1 else "negative"
         f.attrs["method"] = manifold._method
         f.attrs["order"] = manifold._order
 
@@ -304,7 +304,7 @@ def _load_manifold(filepath: str) -> "Manifold":
 
     with h5py.File(filepath, "r") as f:
         stable_flag = bool(f.attrs.get("stable", True))
-        direction_str = f.attrs.get("direction", "Positive")
+        direction_str = f.attrs.get("direction", "positive")
         method = f.attrs.get("method", "scipy")
         order = int(f.attrs.get("order", 6))
 

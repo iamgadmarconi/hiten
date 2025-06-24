@@ -519,7 +519,7 @@ class PeriodicOrbit(ABC):
         
         return stability
 
-    def manifold(self, stable: bool = True, direction: Literal["Positive", "Negative"] = "Positive", method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 6) -> "Manifold":
+    def manifold(self, stable: bool = True, direction: Literal["positive", "negative"] = "positive", method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 6) -> "Manifold":
         from hiten.system.manifold import Manifold
         return Manifold(self, stable=stable, direction=direction, method=method, order=order)
 

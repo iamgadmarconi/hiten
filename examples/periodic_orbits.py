@@ -11,7 +11,7 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from hiten.system import (CenterManifold, HaloOrbit, LyapunovOrbit, System,
+from hiten.system import (HaloOrbit, LyapunovOrbit, System,
                           VerticalLyapunovOrbit)
 from hiten.utils.log_config import logger
 
@@ -20,11 +20,10 @@ def main() -> None:
     # Build system & centre manifold
     system = System.from_bodies("earth", "moon")
     l_point = system.get_libration_point(1)
-
-    cm = CenterManifold(l_point, 10)
+    cm = l_point.get_center_manifold(max_degree=10)
     cm.compute()
 
-    ic_seed = cm.ic([0.0, 0.0], 0.6, "q3")
+    ic_seed = cm.ic([0.0, 0.0], 0.6, "q3") # Good initial guess from CM
     logger.info("Initial conditions (CM to physical coordinates): %s", ic_seed)
 
     # Specifications for each family we wish to generate
@@ -32,19 +31,19 @@ def main() -> None:
         {
             "cls": VerticalLyapunovOrbit,
             "name": "Vertical Lyapunov",
-            "kwargs": {"initial_state": ic_seed},  # Good initial guess from CM
+            "kwargs": {"initial_state": ic_seed},
             "diff_corr_attempts": 100,
         },
         {
             "cls": HaloOrbit,
             "name": "Halo",
-            "kwargs": {"Az": 0.2, "Zenith": "southern"},
+            "kwargs": {"amplitude_z": 0.2, "zenith": "southern"},
             "diff_corr_attempts": 25,
         },
         {
             "cls": LyapunovOrbit,
             "name": "Planar Lyapunov",
-            "kwargs": {"Ax": 4e-3},
+            "kwargs": {"amplitude_x": 4e-3},
             "diff_corr_attempts": 25,
         },
     ]
@@ -58,7 +57,7 @@ def main() -> None:
         orbit.propagate(steps=1000)
         orbit.plot("rotating")
 
-        manifold = orbit.manifold(stable=True, direction="Positive")
+        manifold = orbit.manifold(stable=True, direction="positive")
         manifold.compute()
         manifold.plot()
 

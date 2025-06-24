@@ -11,6 +11,8 @@ The module introduces two primary abstractions:
    Concrete subclasses implement the specific coordinates of the collinear (:math:`L_1`, :math:`L_2`, :math:`L_3`) and triangular (:math:`L_4`, :math:`L_5`) points.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Tuple
@@ -18,12 +20,14 @@ from typing import TYPE_CHECKING, Tuple
 import numpy as np
 
 from hiten.algorithms.dynamics.rtbp import _jacobian_crtbp, variational_dynsys
-from hiten.algorithms.dynamics.utils.energy import crtbp_energy, energy_to_jacobi
+from hiten.algorithms.dynamics.utils.energy import (crtbp_energy,
+                                                    energy_to_jacobi)
 from hiten.algorithms.dynamics.utils.linalg import eigenvalue_decomposition
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
     from hiten.system.base import System
+    from hiten.system.center import CenterManifold
 
 # Constants for stability analysis mode
 CONTINUOUS_SYSTEM = 0
@@ -352,7 +356,7 @@ class LibrationPoint(ABC):
         
         return stability_info
 
-    def get_center_manifold(self, max_degree: int):
+    def get_center_manifold(self, max_degree: int) -> "CenterManifold":
         r"""
         Return (and lazily construct) a CenterManifold of given degree.
 

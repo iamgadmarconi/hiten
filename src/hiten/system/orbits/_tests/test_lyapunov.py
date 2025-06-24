@@ -22,11 +22,11 @@ def system():
 
 @pytest.fixture
 def l1_orbit(system):
-    return LyapunovOrbit(system.get_libration_point(1), Ax=4e-3)
+    return LyapunovOrbit(system.get_libration_point(1), amplitude_x=4e-3)
 
 @pytest.fixture
 def l2_orbit(system):
-    return LyapunovOrbit(system.get_libration_point(2), Ax=4e-3)
+    return LyapunovOrbit(system.get_libration_point(2), amplitude_x=4e-3)
 
 def test_lyapunov_orbit_ic(l1_orbit, l2_orbit):
     assert l1_orbit.initial_state.shape == (6,), "Initial state should be a 6-element vector"
