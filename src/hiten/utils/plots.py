@@ -454,7 +454,8 @@ def plot_orbit_family(
         dark_mode: bool = True,
         filepath: str = "orbit_family.svg",
         **kwargs):
-    """Visualise a family of periodic orbits (rotating-frame trajectories).
+    r"""
+    Visualise a family of periodic orbits (rotating-frame trajectories).
 
     Parameters
     ----------
@@ -465,14 +466,31 @@ def plot_orbit_family(
     bodies : list[Body]
         Primary and secondary bodies of the system.
     system_distance : float
-        Characteristic distance (km) – needed to scale body radii.
+        Characteristic distance (km) - needed to scale body radii.
     figsize, save, dark_mode, filepath, cmap : see other plot helpers.
     """
 
     cmap_key = kwargs.get('cmap', 'plasma')
 
-    if len(states_list) != len(parameter_values):
-        raise ValueError("states_list and parameter_values length mismatch")
+    param_index = kwargs.get('param_index', None)
+
+    param_arr = np.asarray(parameter_values, dtype=float)
+    if param_arr.ndim == 2 and param_arr.shape[1] > 1:
+        if param_index is not None:
+            if not (0 <= param_index < param_arr.shape[1]):
+                raise ValueError(
+                    f"param_index={param_index} out of bounds for parameter_values with shape {param_arr.shape}"
+                )
+            scalar_param = param_arr[:, param_index]
+        else:
+            # Default: use Euclidean norm across components
+            scalar_param = np.linalg.norm(param_arr, axis=1)
+    else:
+        # Already 1-D (or a list/tuple of scalars)
+        scalar_param = param_arr.squeeze()
+
+    if len(states_list) != len(scalar_param):
+        raise ValueError("states_list and parameter_values length mismatch after flattening")
 
     mu = _get_mass_parameter(bodies[0].mass, bodies[1].mass)
 
@@ -480,11 +498,11 @@ def plot_orbit_family(
     ax = fig.add_subplot(111, projection='3d')
 
     # Use matplotlib's colour normalisation utilities (not available via `plt`)
-    norm = mpl.colors.Normalize(vmin=float(np.min(parameter_values)), vmax=float(np.max(parameter_values)))
+    norm = mpl.colors.Normalize(vmin=float(np.min(scalar_param)), vmax=float(np.max(scalar_param)))
     sm = plt.cm.ScalarMappable(cmap=cmap_key, norm=norm)
 
-    for traj, val in zip(states_list, parameter_values):
-        color = sm.to_rgba(val)
+    for traj, val in zip(states_list, scalar_param):
+        color = sm.to_rgba(float(val))
         ax.plot(traj[:, 0], traj[:, 1], traj[:, 2], color=color, lw=1.2)
 
     # plot primaries in rotating frame (-mu,0,0) and (1-mu,0,0)
