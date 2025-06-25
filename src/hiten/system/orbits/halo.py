@@ -28,7 +28,8 @@ from numpy.typing import NDArray
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import (CollinearPoint, L1Point, L2Point,
                                               L3Point)
-from hiten.system.orbits.base import PeriodicOrbit, S, _CorrectionConfig
+from hiten.system.orbits.base import (PeriodicOrbit, S, _ContinuationConfig,
+                                      _CorrectionConfig)
 from hiten.utils.log_config import logger
 
 
@@ -88,9 +89,9 @@ class HaloOrbit(PeriodicOrbit):
             raise ValueError("Cannot provide both an initial_state and analytical parameters (amplitude_z, zenith).")
 
         if not isinstance(libration_point, CollinearPoint):
-            msg = f"Halo orbits are only defined for CollinearPoint, but got {type(libration_point)}."
-            logger.error(msg)
-            raise TypeError(msg)
+            err = f"Halo orbits are only defined for CollinearPoint, but got {type(libration_point)}."
+            logger.error(err)
+            raise TypeError(err)
             
         if initial_state is None:
             if amplitude_z is None or zenith is None:
@@ -98,27 +99,45 @@ class HaloOrbit(PeriodicOrbit):
                 logger.error(err)
                 raise ValueError(err)
             if not isinstance(libration_point, (L1Point, L2Point)):
-                # This implies the point is L3, which is known to be a CollinearPoint.
-                # The guess is implemented but not fully validated.
                 logger.warning(
-                    "The analytical guess for L3 Halo orbits is experimental. "
+                    "The analytical guess for L3 Halo orbits is experimental.\n "
                     "Convergence is not guaranteed and may require more iterations."
                 )
 
-        self.amplitude_z = amplitude_z
+        # Store user-supplied amplitude; will be replaced after correction
+        self._amplitude_z = amplitude_z
+
         self.zenith = zenith
 
         super().__init__(libration_point, initial_state)
 
-        # After super().__init__, _initial_state is set.
-        # Ensure amplitude_z/zenith are consistent with the state if it was provided directly.
         if initial_state is not None:
-            # If amplitude_z was not provided with the state, infer it.
-            if self.amplitude_z is None:
-                self.amplitude_z = self._initial_state[S.Z]
-            # If zenith was not provided with the state, infer it.
+            # Infer missing zenith
             if self.zenith is None:
                 self.zenith = "northern" if self._initial_state[S.Z] > 0 else "southern"
+            # Infer missing amplitude
+            if self._amplitude_z is None:
+                self._amplitude_z = self._initial_state[S.Z]
+
+    @property
+    def amplitude(self) -> float:
+        """(Read-only) Current z-amplitude of the orbit in the synodic frame."""
+        if getattr(self, "_initial_state", None) is not None:
+            return float(self._initial_state[S.Z])
+        return float(self._amplitude_z)
+
+    @property
+    def _correction_config(self) -> _CorrectionConfig:
+        """Provides the differential correction configuration for halo orbits."""
+        return _CorrectionConfig(
+            residual_indices=(S.VX, S.VZ),
+            control_indices=(S.X, S.VY),
+            extra_jacobian=self._halo_quadratic_term
+        )
+
+    @property
+    def _continuation_config(self) -> _ContinuationConfig:
+        return _ContinuationConfig(state=S.Z, amplitude=True)
 
     def _initial_guess(self) -> NDArray[np.float64]:
         r"""
@@ -148,7 +167,7 @@ class HaloOrbit(PeriodicOrbit):
         # Determine sign (won) and which "primary" to use
 
         mu = self.mu
-        amplitude_z = self.amplitude_z
+        amplitude_z = self._amplitude_z
         # Get gamma from the libration point instance property
         gamma = self.libration_point.gamma
         
@@ -347,7 +366,7 @@ class HaloOrbit(PeriodicOrbit):
         vz = gamma * zdot
 
         # Return the state vector
-        logger.debug(f"Generated initial guess for Halo orbit around {self.libration_point} with amplitude_z={self.amplitude_z}: {np.array([rx, ry, rz, vx, vy, vz], dtype=np.float64)}")
+        logger.debug(f"Generated initial guess for Halo orbit around {self.libration_point} with amplitude_z={self.amplitude}: {np.array([rx, ry, rz, vx, vy, vz], dtype=np.float64)}")
         return np.array([rx, ry, rz, vx, vy, vz], dtype=np.float64)
 
     def _halo_quadratic_term(self, X_ev, Phi):
@@ -384,16 +403,6 @@ class HaloOrbit(PeriodicOrbit):
             
         return np.array([[DDx],[DDz]]) @ Phi[[S.Y],:][:, (S.X,S.VY)] / vy
 
-    @property
-    def _correction_config(self) -> _CorrectionConfig:
-        """Provides the differential correction configuration for halo orbits."""
-        return _CorrectionConfig(
-            residual_indices=(S.VX, S.VZ),
-            control_indices=(S.X, S.VY),
-            extra_jacobian=self._halo_quadratic_term
-        )
-
-    @property
     def eccentricity(self) -> float:
         """Eccentricity is not a well-defined concept for halo orbits."""
         return np.nan

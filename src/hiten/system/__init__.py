@@ -10,29 +10,22 @@ instead of navigating the full internal hierarchy (``hiten.system.base``,
 ``hiten.system.libration.collinear`` …).
 """
 
+# Poincare map
+from ..algorithms.poincare.base import _PoincareMap, _PoincareMapConfig
+from .base import System
 # Core containers
 from .body import Body
-from .base import System
-from .manifold import ManifoldResult, Manifold
-
-# Libration points
-from .libration.base import LinearData, LibrationPoint
-from .libration.collinear import CollinearPoint, L1Point, L2Point, L3Point
-from .libration.triangular import TriangularPoint, L4Point, L5Point
-
 # Center manifold
 from .center import CenterManifold
-
-# Poincare map
-from ..algorithms.poincare.base import _PoincareMapConfig, _PoincareMap
-
+from .family import OrbitFamily
+# Libration points
+from .libration.base import LibrationPoint, LinearData
+from .libration.collinear import CollinearPoint, L1Point, L2Point, L3Point
+from .libration.triangular import L4Point, L5Point, TriangularPoint
+from .manifold import Manifold, ManifoldResult
 # Orbits
-from .orbits.base import (
-    _CorrectionConfig,
-    PeriodicOrbit,
-    GenericOrbit,
-    S,  # state-vector helper enum
-)
+from .orbits.base import S  # state-vector helper enum
+from .orbits.base import GenericOrbit, PeriodicOrbit, _CorrectionConfig
 from .orbits.halo import HaloOrbit
 from .orbits.lyapunov import LyapunovOrbit, VerticalLyapunovOrbit
 
@@ -65,4 +58,6 @@ __all__ = [
     "LyapunovOrbit",
     "VerticalLyapunovOrbit",
     "S",
+    # Family
+    "OrbitFamily",
 ]

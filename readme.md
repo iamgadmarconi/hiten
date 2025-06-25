@@ -8,9 +8,9 @@
 
 ## Examples
 
-1. **High-order parameterisation of periodic orbits and their invariant manifolds**
+1. **Parameterisation of periodic orbits and their invariant manifolds**
 
-   The toolkit constructs periodic solutions such as halo orbits and obtains polynomial representations of their stable and unstable manifolds. This enables fast, mesh-free evaluation of trajectories seeded on these structures.
+   The toolkit constructs periodic solutions such as halo orbits and computes their stable and unstable manifolds.
 
    ```python
    from hiten import System
@@ -31,9 +31,7 @@
 
    *Figure&nbsp;1 - Stable manifold of an Earth-Moon \(L_1\) halo orbit.*
 
-2. **Computation of Lyapunov families and associated transport pathways**
-
-   Built-in continuation routines retrieve vertical Lyapunov orbits of varying amplitudes. Their invariant manifolds reveal natural transport channels that can be exploited for low-energy mission design.
+   Knowing the dynamics of the center manifold, initial conditions for vertical Lyapunov orbits can be computed and associated manifolds created. These reveal natural transport channels that can be exploited for low-energy mission design.
 
    ```python
    from hiten import System, VerticalLyapunovOrbit
@@ -58,3 +56,44 @@
    ![Vertical Lyapunov orbit stable manifold](results/plots/vl_stable_manifold.svg)
 
    *Figure&nbsp;2 - Stable manifold of an Earth-Moon \(L_1\) vertical Lyapunov orbit.*
+
+2. **Generating families of periodic orbits**
+
+   The toolkit can generate families of periodic orbits by continuation.
+
+   ```python
+   from hiten import System
+   from hiten.algorithms import NaturalParameter
+
+    system = System.from_bodies("earth", "moon")
+    l1 = system.get_libration_point(1)
+
+    seed = l1.create_orbit('lyapunov', amplitude_x= 1e-3)
+    seed.differential_correction(max_attempts=25)
+
+    target_amp = 1e-2 # grow A_x from 0.02 to 0.05 (relative amplitude)
+    current_amp = seed.amplitude
+    num_orbits = 10
+
+    # Step in amplitude space (predictor still tweaks X component)
+    step = (target_amp - current_amp) / (num_orbits - 1)
+
+    engine = NaturalParameter(
+        initial_orbit=seed,
+        state=(S.X),     # underlying coordinate that gets nudged
+        amplitude=True,       # but the continuation parameter is A_x
+        target=(current_amp, target_amp),
+        step=step,
+        corrector_kwargs=dict(max_attempts=50, tol=1e-13),
+        max_orbits=num_orbits,
+    )
+    engine.run()
+
+    family = OrbitFamily.from_engine(engine)
+    family.propagate()
+    family.plot()
+    ```
+
+    ![Lyapunov orbit family](results/plots/lyapunov_family.svg)
+
+    *Figure&nbsp;3 - Family of Earth-Moon \(L_1\) Lyapunov orbits.*

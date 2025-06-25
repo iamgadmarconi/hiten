@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from typing import List, Literal, Tuple
 
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 
 from hiten.algorithms.dynamics.rtbp import _compute_stm, _propagate_dynsys
@@ -469,19 +470,11 @@ class Manifold:
         ------
         ValueError
             If :pyattr:`manifold_result` is `None`.
-        ImportError
-            If `pandas` is not installed.
         """
         if self._manifold_result is None:
             err = "Manifold result not computed. Please compute the manifold first."
             logger.error(err)
             raise ValueError(err)
-
-        try:
-            import pandas as pd
-        except ImportError:
-            logger.error("The 'pandas' library is required to export to CSV. Please install it.")
-            raise
 
         data = []
         for i, (states, times) in enumerate(zip(self._manifold_result.states_list, self._manifold_result.times_list)):
