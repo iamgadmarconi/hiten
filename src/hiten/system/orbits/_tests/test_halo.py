@@ -22,11 +22,11 @@ def system():
 
 @pytest.fixture
 def l1_orbit(system):
-    return HaloOrbit(system.get_libration_point(1), Az=0.2, Zenith="Southern")
+    return HaloOrbit(system.get_libration_point(1), amplitude_z=0.2, zenith="Southern")
 
 @pytest.fixture
 def l2_orbit(system):
-    return HaloOrbit(system.get_libration_point(2), Az=0.2, Zenith="Southern")
+    return HaloOrbit(system.get_libration_point(2), amplitude_z=0.2, zenith="Southern")
 
 def test_halo_orbit_ic(l1_orbit, l2_orbit):
     assert l1_orbit.initial_state.shape == (6,), "Initial state should be a 6-element vector"

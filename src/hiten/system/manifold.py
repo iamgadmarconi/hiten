@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from typing import List, Literal, Tuple
 
 import numpy as np
+import pandas as pd
 from tqdm import tqdm
 
 from hiten.algorithms.dynamics.rtbp import _compute_stm, _propagate_dynsys
@@ -85,7 +86,7 @@ class Manifold:
         Orbit that seeds the manifold.
     stable : bool, default True
         ``True`` selects the stable manifold, ``False`` the unstable one.
-    direction : {{'Positive', 'Negative'}}, default 'Positive'
+    direction : {{'positive', 'negative'}}, default 'positive'
         Sign of the eigenvector used to initialise the manifold branch.
     method : {{'rk', 'scipy', 'symplectic', 'adaptive'}}, default 'scipy'
         Backend integrator passed to :pyfunc:`_propagate_dynsys`.
@@ -118,14 +119,14 @@ class Manifold:
             self, 
             generating_orbit: PeriodicOrbit, 
             stable: bool = True, 
-            direction: Literal["Positive", "Negative"] = "Positive", 
+            direction: Literal["positive", "negative"] = "positive", 
             method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", 
             order: int = 6
         ):
         self._generating_orbit = generating_orbit
         self._libration_point = self._generating_orbit.libration_point
         self._stable = 1 if stable else -1
-        self._direction = 1 if direction == "Positive" else -1
+        self._direction = 1 if direction == "positive" else -1
         self._mu = self._generating_orbit.system.mu
         self._method = method
         self._order = order
@@ -153,7 +154,7 @@ class Manifold:
 
     @property
     def direction(self) -> int:
-        """Encoded direction: 1 for 'Positive', -1 for 'Negative'."""
+        """Encoded direction: 1 for 'positive', -1 for 'negative'."""
         return self._direction
 
     @property
@@ -469,19 +470,11 @@ class Manifold:
         ------
         ValueError
             If :pyattr:`manifold_result` is `None`.
-        ImportError
-            If `pandas` is not installed.
         """
         if self._manifold_result is None:
             err = "Manifold result not computed. Please compute the manifold first."
             logger.error(err)
             raise ValueError(err)
-
-        try:
-            import pandas as pd
-        except ImportError:
-            logger.error("The 'pandas' library is required to export to CSV. Please install it.")
-            raise
 
         data = []
         for i, (states, times) in enumerate(zip(self._manifold_result.states_list, self._manifold_result.times_list)):

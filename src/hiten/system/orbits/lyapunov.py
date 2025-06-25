@@ -25,7 +25,8 @@ from hiten.algorithms.dynamics.utils.geometry import (_find_y_zero_crossing,
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import (CollinearPoint, L1Point, L2Point,
                                               L3Point)
-from hiten.system.orbits.base import PeriodicOrbit, S, _CorrectionConfig
+from hiten.system.orbits.base import (PeriodicOrbit, S, _ContinuationConfig,
+                                      _CorrectionConfig)
 from hiten.utils.log_config import logger
 
 
@@ -42,7 +43,7 @@ class LyapunovOrbit(PeriodicOrbit):
     libration_point : CollinearPoint
         Target :pyclass:`hiten.system.libration.collinear.CollinearPoint` around
         which the orbit is computed.
-    Ax : float, optional
+    amplitude_x : float, optional
         Requested amplitude :math:`A_x` along the :math:`x`-direction. Required if
         *initial_state* is None.
     initial_state : Sequence[float] or None, optional
@@ -52,7 +53,7 @@ class LyapunovOrbit(PeriodicOrbit):
 
     Attributes
     ----------
-    Ax : float
+    amplitude_x : float
         Requested amplitude :math:`A_x` along the :math:`x`-direction.
     libration_point : hiten.system.libration.collinear.CollinearPoint
         Equilibrium point about which the orbit is continued.
@@ -69,18 +70,18 @@ class LyapunovOrbit(PeriodicOrbit):
     
     _family = "lyapunov"
     
-    Ax: float # Amplitude of the Lyapunov orbit
+    amplitude_x: float # Amplitude of the Lyapunov orbit
 
     def __init__(
             self, 
             libration_point: LibrationPoint, 
-            Ax: Optional[float] = None,
+            amplitude_x: Optional[float] = None,
             initial_state: Optional[Sequence[float]] = None
         ):
         
         # Validate constructor parameters
-        if initial_state is not None and Ax is not None:
-            raise ValueError("Cannot provide both an initial_state and an analytical parameter (Ax).")
+        if initial_state is not None and amplitude_x is not None:
+            raise ValueError("Cannot provide both an initial_state and an analytical parameter (amplitude_x).")
 
         if not isinstance(libration_point, CollinearPoint):
             msg = f"Lyapunov orbits are only defined for CollinearPoint, but got {type(libration_point)}."
@@ -88,12 +89,17 @@ class LyapunovOrbit(PeriodicOrbit):
             raise TypeError(msg)
             
         if initial_state is None:
-            if Ax is None:
-                raise ValueError("Lyapunov orbits require an 'Ax' (x-amplitude) parameter when an initial_state is not provided.")
+            if amplitude_x is None:
+                err = "Lyapunov orbits require an 'amplitude_x' (x-amplitude) parameter when an initial_state is not provided."
+                logger.error(err)
+                raise ValueError(err)
             if not isinstance(libration_point, (L1Point, L2Point)):
-                raise ValueError(f"Analytical guess is only available for L1/L2 points. An initial_state must be provided for {libration_point.name}.")
+                err = f"Analytical guess is only available for L1/L2 points. An initial_state must be provided for {libration_point.name}."
+                logger.error(err)
+                raise ValueError(err)
         
-        self.Ax = Ax
+        # Preserve user-supplied amplitude (may be None) for initial guess
+        self._amplitude_x = amplitude_x
         
         if isinstance(libration_point, L3Point):
             msg = "L3 libration points are not supported for Lyapunov orbits."
@@ -103,10 +109,37 @@ class LyapunovOrbit(PeriodicOrbit):
         # The base class __init__ handles the logic for initial_state vs. _initial_guess
         super().__init__(libration_point, initial_state)
 
-        # Ensure Ax is consistent with the state if it was provided directly.
-        if initial_state is not None and self.Ax is None:
-            # Infer Ax from the initial state's x-component relative to the libration point.
-            self.Ax = self._initial_state[S.X] - self.libration_point.position[0]
+        # Ensure amplitude_x is consistent with the state if it was provided directly.
+        if initial_state is not None and self._amplitude_x is None:
+            # Infer amplitude from state so _initial_guess works in property logic
+            self._amplitude_x = self._initial_state[S.X] - self.libration_point.position[0]
+
+    @property
+    def eccentricity(self) -> float:
+        """Eccentricity is not a well-defined concept for Lyapunov orbits."""
+        return np.nan
+
+    @property
+    def amplitude(self) -> float:
+        """(Read-only) Current x-amplitude relative to the libration point."""
+        if getattr(self, "_initial_state", None) is not None:
+            return float(self._initial_state[S.X] - self.libration_point.position[0])
+        return float(self._amplitude_x)
+
+    @property
+    def _correction_config(self) -> _CorrectionConfig:
+        """Provides the differential correction configuration for planar Lyapunov orbits."""
+        return _CorrectionConfig(
+            residual_indices=(S.VX, S.Z),
+            control_indices=(S.VY, S.VZ),
+            target=(0.0, 0.0),
+            extra_jacobian=None,
+            event_func=_find_y_zero_crossing,
+        )
+
+    @property
+    def _continuation_config(self) -> _ContinuationConfig:
+        return _ContinuationConfig(state=S.X, amplitude=True)
 
     def _initial_guess(self) -> NDArray[np.float64]:
         r"""
@@ -163,28 +196,14 @@ class LyapunovOrbit(PeriodicOrbit):
         # [delta_x, delta_y, delta_vx, delta_vy]
         u = np.array([1, 0, 0, nu_1 * tau]) 
 
-        displacement = self.Ax * u
+        displacement = self._amplitude_x * u
         state_4d = np.array([x_L_i, 0, 0, 0], dtype=np.float64) + displacement
         # Construct 6D state [x, y, z, vx, vy, vz]
         state_6d = np.array([state_4d[0], state_4d[1], 0, state_4d[2], state_4d[3], 0], dtype=np.float64)
-        logger.debug(f"Generated initial guess for Lyapunov orbit around {self.libration_point} with Ax={self.Ax}: {state_6d}")
+        logger.debug(f"Generated initial guess for Lyapunov orbit around {self.libration_point} with amplitude_x={self.amplitude}: {state_6d}")
         return state_6d
 
-    @property
-    def _correction_config(self) -> _CorrectionConfig:
-        """Provides the differential correction configuration for planar Lyapunov orbits."""
-        return _CorrectionConfig(
-            residual_indices=(S.VX, S.VZ),
-            control_indices=(S.X, S.VY),
-            target=(0.0, 0.0),
-            extra_jacobian=None,
-            event_func=_find_y_zero_crossing,
-        )
 
-    @property
-    def eccentricity(self) -> float:
-        """Eccentricity is not a well-defined concept for Lyapunov orbits."""
-        return np.nan
 
 
 class VerticalLyapunovOrbit(PeriodicOrbit):
@@ -218,6 +237,18 @@ class VerticalLyapunovOrbit(PeriodicOrbit):
         raise NotImplementedError("Initial guess is not implemented for Vertical Lyapunov orbits.")
 
     @property
+    def amplitude(self) -> float:
+        """(Read-only) Current z-amplitude of the vertical Lyapunov orbit."""
+        if getattr(self, "_initial_state", None) is not None:
+            return float(abs(self._initial_state[S.Z]))
+        return float(self._amplitude_z)
+
+    @property
+    def eccentricity(self) -> float:
+        """Eccentricity is not a well-defined concept for vertical Lyapunov orbits."""
+        return np.nan
+
+    @property
     def _correction_config(self) -> _CorrectionConfig:
         """Provides the differential correction configuration for vertical Lyapunov orbits."""
         return _CorrectionConfig(
@@ -229,6 +260,6 @@ class VerticalLyapunovOrbit(PeriodicOrbit):
         )
 
     @property
-    def eccentricity(self) -> float:
-        """Eccentricity is not a well-defined concept for vertical Lyapunov orbits."""
-        return np.nan
+    def _continuation_config(self) -> _ContinuationConfig:
+        """Default continuation parameter: vary the out-of-plane amplitude."""
+        return _ContinuationConfig(state=S.Z, amplitude=True)

@@ -32,14 +32,14 @@ def test_serialization() -> None:
     L1 = system.get_libration_point(1)
 
     # 2. Periodic orbit (halo) – minimal example, no correction/propagation
-    orbit = HaloOrbit(L1, Az=0.01, Zenith="northern")
+    orbit = HaloOrbit(L1, amplitude_z=0.01, zenith="northern")
     orbit.period = 2 * math.pi  # quick dummy value to avoid runtime checks
 
     orbit_path = TMP_DIR / "halo_orbit.h5"
     logger.info("[PeriodicOrbit] saving: %s", orbit_path)
     orbit.save(str(orbit_path))
 
-    orbit_loaded = HaloOrbit(L1, Az=0.01, Zenith="northern")  # placeholder instance
+    orbit_loaded = HaloOrbit(L1, amplitude_z=0.01, zenith="northern")  # placeholder instance
     orbit_loaded.load_inplace(str(orbit_path))
     _assert_equal("PeriodicOrbit.initial_state", orbit.initial_state, orbit_loaded.initial_state)
     assert math.isclose(orbit.period or 0.0, orbit_loaded.period or 0.0, rel_tol=1e-12)

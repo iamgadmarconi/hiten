@@ -50,6 +50,7 @@ from hiten.utils.plots import (animate_trajectories, plot_inertial_frame,
 if TYPE_CHECKING:
     from hiten.system.manifold import Manifold
 
+
 class S(IntEnum): X=0; Y=1; Z=2; VX=3; VY=4; VZ=5
 
 
@@ -91,6 +92,14 @@ class _CorrectionConfig(NamedTuple):
     method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy"
     order: int = 8
     steps: int = 2000
+
+
+class _ContinuationConfig(NamedTuple):
+    state: S | None
+    amplitude: bool = False
+    getter: Callable[["PeriodicOrbit"], float] | None = None
+    extra_params: dict | None = None
+
 
 class PeriodicOrbit(ABC):
     r"""
@@ -252,6 +261,12 @@ class PeriodicOrbit(ABC):
         return self._stability_info
 
     @property
+    @abstractmethod
+    def amplitude(self) -> float:
+        """(Read-only) Current amplitude of the orbit."""
+        pass
+
+    @property
     def period(self) -> Optional[float]:
         """Orbit period, set after a successful correction."""
         return self._period
@@ -349,6 +364,12 @@ class PeriodicOrbit(ABC):
     def _correction_config(self) -> _CorrectionConfig:
         """Provides the differential correction configuration for this orbit family."""
         pass
+
+    @property
+    @abstractmethod
+    def _continuation_config(self) -> _ContinuationConfig:
+        """Default parameter for family continuation (must be overridden)."""
+        raise NotImplementedError
 
     def _reset(self) -> None:
         r"""
@@ -519,7 +540,7 @@ class PeriodicOrbit(ABC):
         
         return stability
 
-    def manifold(self, stable: bool = True, direction: Literal["Positive", "Negative"] = "Positive", method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 6) -> "Manifold":
+    def manifold(self, stable: bool = True, direction: Literal["positive", "negative"] = "positive", method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 6) -> "Manifold":
         from hiten.system.manifold import Manifold
         return Manifold(self, stable=stable, direction=direction, method=method, order=order)
 
@@ -629,8 +650,11 @@ class GenericOrbit(PeriodicOrbit):
     def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None):
         super().__init__(libration_point, initial_state)
         self._custom_correction_config: Optional[_CorrectionConfig] = None
+        self._custom_continuation_config: Optional[_ContinuationConfig] = None
         if self._period is None:
             self._period = np.pi
+
+        self._amplitude = None
 
     @property
     def correction_config(self) -> Optional[_CorrectionConfig]:
@@ -653,11 +677,6 @@ class GenericOrbit(PeriodicOrbit):
     def eccentricity(self):
         return np.nan
 
-    def _initial_guess(self, **kwargs):
-        if hasattr(self, '_initial_state') and self._initial_state is not None:
-            return self._initial_state
-        raise ValueError("No initial state provided for GenericOrbit.")
-
     @property
     def _correction_config(self) -> _CorrectionConfig:
         """
@@ -672,3 +691,36 @@ class GenericOrbit(PeriodicOrbit):
             "Differential correction is not defined for a GenericOrbit unless the "
             "`correction_config` property is set with a valid _CorrectionConfig."
         )
+
+    @property
+    def amplitude(self) -> float:
+        """(Read-only) Current amplitude of the orbit."""
+        return self._amplitude
+
+    @amplitude.setter
+    def amplitude(self, value: float):
+        self._amplitude = value
+
+    @property
+    def continuation_config(self) -> Optional[_ContinuationConfig]:
+        """Get or set the continuation parameter for this orbit."""
+        return self._custom_continuation_config
+
+    @continuation_config.setter
+    def continuation_config(self, cfg: Optional[_ContinuationConfig]):
+        if cfg is not None and not isinstance(cfg, _ContinuationConfig):
+            raise TypeError("continuation_config must be a _ContinuationConfig instance or None")
+        self._custom_continuation_config = cfg
+
+    @property
+    def _continuation_config(self) -> _ContinuationConfig:  # used by engines
+        if self._custom_continuation_config is None:
+            raise NotImplementedError(
+                "GenericOrbit requires 'continuation_config' to be set before using continuation engines."
+            )
+        return self._custom_continuation_config
+
+    def _initial_guess(self, **kwargs):
+        if hasattr(self, '_initial_state') and self._initial_state is not None:
+            return self._initial_state
+        raise ValueError("No initial state provided for GenericOrbit.")

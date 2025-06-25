@@ -1,16 +1,18 @@
 import os
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+import matplotlib as mpl
 import matplotlib.animation as animation
 import matplotlib.patheffects as patheffects
 import matplotlib.pyplot as plt
 import numpy as np
 from mpl_toolkits.mplot3d import Axes3D
 
-from hiten.system.body import Body
 from hiten.algorithms.utils.coordinates import (_get_angular_velocity,
-                                     _get_mass_parameter, _rotating_to_inertial,
-                                     _si_time, _to_si_units)
+                                                _get_mass_parameter,
+                                                _rotating_to_inertial,
+                                                _si_time, _to_si_units)
+from hiten.system.body import Body
 from hiten.utils.io import _ensure_dir
 
 
@@ -438,6 +440,81 @@ def plot_inertial_frame(
         plt.close(fig)
         
     return fig, ax
+
+
+def plot_orbit_family(
+        states_list: List[np.ndarray],
+        times_list: List[np.ndarray],
+        parameter_values: np.ndarray,
+        bodies: List[Body],
+        system_distance: float,
+        *,
+        figsize: Tuple[int, int] = (10, 8),
+        save: bool = False,
+        dark_mode: bool = True,
+        filepath: str = "orbit_family.svg",
+        **kwargs):
+    """Visualise a family of periodic orbits (rotating-frame trajectories).
+
+    Parameters
+    ----------
+    states_list, times_list : list[array]
+        Trajectory arrays for each family member.
+    parameter_values : array-like
+        Scalar parameter associated with each orbit (used for colour-coding).
+    bodies : list[Body]
+        Primary and secondary bodies of the system.
+    system_distance : float
+        Characteristic distance (km) – needed to scale body radii.
+    figsize, save, dark_mode, filepath, cmap : see other plot helpers.
+    """
+
+    cmap_key = kwargs.get('cmap', 'plasma')
+
+    if len(states_list) != len(parameter_values):
+        raise ValueError("states_list and parameter_values length mismatch")
+
+    mu = _get_mass_parameter(bodies[0].mass, bodies[1].mass)
+
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Use matplotlib's colour normalisation utilities (not available via `plt`)
+    norm = mpl.colors.Normalize(vmin=float(np.min(parameter_values)), vmax=float(np.max(parameter_values)))
+    sm = plt.cm.ScalarMappable(cmap=cmap_key, norm=norm)
+
+    for traj, val in zip(states_list, parameter_values):
+        color = sm.to_rgba(val)
+        ax.plot(traj[:, 0], traj[:, 1], traj[:, 2], color=color, lw=1.2)
+
+    # plot primaries in rotating frame (-mu,0,0) and (1-mu,0,0)
+    primary_pos = np.array([-mu, 0, 0])
+    secondary_pos = np.array([1 - mu, 0, 0])
+    _plot_body(ax, primary_pos, bodies[0].radius / system_distance, _get_body_color(bodies[0], 'royalblue'), bodies[0].name)
+    _plot_body(ax, secondary_pos, bodies[1].radius / system_distance, _get_body_color(bodies[1], 'slategray'), bodies[1].name)
+
+    ax.set_xlabel('X [canonical]')
+    ax.set_ylabel('Y [canonical]')
+    ax.set_zlabel('Z [canonical]')
+    _set_axes_equal(ax)
+    ax.set_title('Orbit family')
+
+    cbar = fig.colorbar(sm, ax=ax, pad=0.1)
+    cbar.set_label('Continuation parameter')
+
+    if dark_mode:
+        _set_dark_mode(fig, ax, title=ax.get_title())
+        cbar.ax.yaxis.label.set_color('white')
+        cbar.ax.tick_params(colors='white')
+
+    if save:
+        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+        plt.savefig(filepath)
+
+    plt.show()
+    plt.close(fig)
+    return fig, ax
+
 
 def plot_manifold(
         states_list: List[np.ndarray], 
