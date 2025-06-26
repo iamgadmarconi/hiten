@@ -44,12 +44,21 @@ class _PoincareMapConfig:
 
     n_seeds: int = 20
     n_iter: int = 40
-    seed_axis: str = "q2"  # "q2" or "p2"
+    seed_strategy: Literal["single", "axis_aligned", "level_sets", "radial", "random"] = "single"
+    seed_axis: Optional[Literal["q2", "p2", "q3", "p3"]] = None
     section_coord: Literal["q2", "p2", "q3", "p3"] = "q3"  # Default keeps existing behavior
 
     # Misc
     compute_on_init: bool = False
     use_gpu: bool = False
+
+    def __post_init__(self):
+        if self.seed_strategy == "single" and self.seed_axis is None:
+            raise ValueError("seed_axis must be specified when seed_strategy is 'single'")
+        
+        elif self.seed_strategy != 'single':
+            if self.seed_axis is not None:
+                logger.warning("seed_axis is ignored when seed_strategy is not 'single'")
 
 
 class _PoincareMap:
@@ -212,6 +221,7 @@ class _PoincareMap:
                 use_symplectic=self._use_symplectic,
                 integrator_order=self.config.integrator_order,
                 c_omega_heuristic=self.config.c_omega_heuristic,
+                seed_strategy=self.config.seed_strategy,
                 seed_axis=self.config.seed_axis,
                 section_coord=self.config.section_coord,
             )
@@ -230,6 +240,7 @@ class _PoincareMap:
                 use_symplectic=self._use_symplectic,
                 integrator_order=self.config.integrator_order,
                 c_omega_heuristic=self.config.c_omega_heuristic,
+                seed_strategy=self.config.seed_strategy,
                 seed_axis=self.config.seed_axis,
                 section_coord=self.config.section_coord,
                 parallel=parallel,

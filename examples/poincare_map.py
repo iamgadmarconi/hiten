@@ -23,12 +23,13 @@ def main() -> None:
     cm.compute()
 
     pm = cm.poincare_map(
-        energy=0.7,
-        seed_axis="q3",
+        energy=0.6,
         section_coord="p2",
-        n_seeds=50,
-        n_iter=100,
+        n_seeds=20,
+        n_iter=25,
         parallel=True,
+        seed_strategy="radial",
+        # seed_axis="q3",
     )
 
     pm.plot_interactive()

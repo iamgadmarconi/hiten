@@ -510,7 +510,7 @@ class CenterManifold:
         local_6d = _realmodal2local(self._point, real_6d)
         synodic_6d = self._local2synodic(self._point, local_6d)
 
-        logger.info("CM → synodic transformation complete")
+        logger.info("CM to synodic transformation complete")
         return synodic_6d
 
     def save(self, dir_path: str):
