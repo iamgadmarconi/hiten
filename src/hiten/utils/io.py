@@ -357,6 +357,10 @@ def _save_poincare_map(pmap: "_PoincareMap", filepath: str, *, compression: str 
             _write_dataset(f, "points", np.asarray(pmap._section.points), compression=compression, level=level)
             f.attrs["labels_json"] = json.dumps(list(pmap._section.labels))
 
+        if pmap._grid is not None:
+            _write_dataset(f, "grid", np.asarray(pmap._grid), compression=compression, level=level)
+            f.attrs["grid_labels_json"] = json.dumps(list(pmap._section.labels))
+
 
 def _load_poincare_map_inplace(obj: "_PoincareMap", filepath: str) -> None:
     from hiten.algorithms.poincare.base import _PoincareMapConfig
@@ -381,8 +385,15 @@ def _load_poincare_map_inplace(obj: "_PoincareMap", filepath: str) -> None:
             labels_json = f.attrs.get("labels_json")
             labels = tuple(json.loads(labels_json)) if labels_json else ("q2", "p2")
             obj._section = _PoincareSection(pts, labels)
+
+        if "grid" in f:
+            obj._grid = f["grid"][()]
+            grid_labels_json = f.attrs.get("grid_labels_json")
+            grid_labels = tuple(json.loads(grid_labels_json)) if grid_labels_json else ("q2", "p2")
+            obj._grid_labels = grid_labels
         else:
             obj._section = None
+            obj._grid = None
 
 
 def _load_poincare_map(filepath: str, cm: "CenterManifold") -> "_PoincareMap":

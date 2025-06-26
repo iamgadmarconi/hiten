@@ -33,6 +33,7 @@ from hiten.algorithms.center.transforms import (_local2realmodal,
                                                 _solve_complex, _solve_real,
                                                 _substitute_complex,
                                                 _substitute_real)
+from hiten.algorithms.poincare.config import _get_section_config
 from hiten.algorithms.poincare.map import _solve_missing_coord
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                               _decode_multiindex,
@@ -350,30 +351,42 @@ class CenterManifold:
 
     def poincare_map(self, energy: float, **kwargs) -> "_PoincareMap":
         r"""
-        Return a cached (or newly built) Poincaré return map.
+        Create a Poincaré map at the specified energy level.
 
         Parameters
         ----------
         energy : float
-            Hamiltonian energy :math:`h_0` corresponding to the desired Jacobi
-            constant.
+            Hamiltonian energy :math:`h_0`.
         **kwargs
-            Optional keyword arguments forwarded to
-            :pyclass:`hiten.algorithms.poincare.base._PoincareMapConfig`.
-            Additional runtime parameters like 'parallel', 'n_processes', 
-            'parallel_seed_finding' can be passed to compute() and grid() methods.
+            Configuration parameters for the Poincaré map:
+            
+            - dt : float, default 1e-2
+                Integration step size.
+            - method : {'rk', 'symplectic'}, default 'rk'
+                Integration method.
+            - integrator_order : int, default 4
+                Order of the integration scheme.
+            - c_omega_heuristic : float, default 20.0
+                Heuristic parameter for symplectic integrators.
+            - n_seeds : int, default 20
+                Number of initial seed points.
+            - n_iter : int, default 40
+                Number of map iterations per seed.
+            - seed_strategy : {'single', 'axis_aligned', 'level_sets', 'radial', 'random'}, default 'single'
+                Strategy for generating initial seed points.
+            - seed_axis : {'q2', 'p2', 'q3', 'p3'}, optional
+                Axis for seeding when using 'single' strategy.
+            - section_coord : {'q2', 'p2', 'q3', 'p3'}, default 'q3'
+                Coordinate defining the Poincaré section.
+            - compute_on_init : bool, default False
+                Whether to compute the map immediately upon creation.
+            - use_gpu : bool, default False
+                Whether to use GPU acceleration.
 
         Returns
         -------
-        hiten.algorithms.poincare.base._PoincareMap
-            Configured Poincaré map instance.
-            
-        Raises
-        ------
-        TypeError
-            If any of the provided kwargs are not valid configuration fields.
-        ValueError
-            If both use_gpu=True and parallel runtime parameters are specified.
+        _PoincareMap
+            A Poincaré map object for the given energy and configuration.
 
         Notes
         -----
@@ -381,31 +394,21 @@ class CenterManifold:
         configuration, and stored internally. Subsequent calls with the same
         parameters return the cached object.
         
-        Parallel processing parameters (parallel, n_processes, parallel_seed_finding)
-        are not part of the configuration cache key since they are runtime parameters
-        passed to compute() and grid() methods. Uses multithreading for parallelization.
+        Parallel processing is enabled automatically for CPU computations.
         """
         from hiten.algorithms.poincare.base import (_PoincareMap,
                                                     _PoincareMapConfig)
 
-        # Separate config kwargs from runtime parallel kwargs
+        # Separate config kwargs from runtime kwargs (currently none)
         config_fields = set(_PoincareMapConfig.__dataclass_fields__.keys())
-        parallel_kwargs = {'parallel', 'n_processes', 'parallel_seed_finding'}
         
         config_kwargs = {}
-        runtime_kwargs = {}
         
         for key, value in kwargs.items():
             if key in config_fields:
                 config_kwargs[key] = value
-            elif key in parallel_kwargs:
-                runtime_kwargs[key] = value
             else:
-                raise TypeError(f"'{key}' is not a valid keyword argument for PoincareMap configuration or runtime parameters.")
-        
-        # Validate conflicting usage of GPU and parallel processing
-        if config_kwargs.get('use_gpu', False) and runtime_kwargs.get('parallel', False):
-            raise ValueError("Cannot use use_gpu=True with parallel=True. Choose one or the other.")
+                raise TypeError(f"'{key}' is not a valid keyword argument for PoincareMap configuration.")
         
         cfg = _PoincareMapConfig(**config_kwargs)
 
@@ -416,11 +419,7 @@ class CenterManifold:
         if cache_key not in self._poincare_maps:
             self._poincare_maps[cache_key] = _PoincareMap(self, energy, cfg)
         
-        # Store runtime kwargs in the instance for use in compute/grid methods
-        poincare_map = self._poincare_maps[cache_key]
-        poincare_map._runtime_kwargs = runtime_kwargs
-        
-        return poincare_map
+        return self._poincare_maps[cache_key]
 
     def ic(self, poincare_point: np.ndarray, energy: float, section_coord: str = "q3") -> np.ndarray:
         r"""
@@ -460,19 +459,14 @@ class CenterManifold:
         poly_cm_real = self.compute()
         _, poly_G_total, _ = self._get_lie_transform_results()
 
-        # Define the mapping from section coordinate to the variables involved.
-        # Format: {section: (var_to_solve, {known_var1: value, known_var2: value, ...})}
-        section_map = {
-            "q3": ("p3", {"q2": poincare_point[0], "p2": poincare_point[1], "q3": 0.0}),
-            "p3": ("q3", {"q2": poincare_point[0], "p2": poincare_point[1], "p3": 0.0}),
-            "q2": ("p2", {"q3": poincare_point[0], "p3": poincare_point[1], "q2": 0.0}),
-            "p2": ("q2", {"q3": poincare_point[0], "p3": poincare_point[1], "p2": 0.0}),
-        }
-
-        if section_coord not in section_map:
-            raise ValueError(f"Unsupported section_coord '{section_coord}'. Must be one of {list(section_map.keys())}")
-
-        var_to_solve, known_vars = section_map[section_coord]
+        config = _get_section_config(section_coord)
+        
+        # Build the known variables dictionary using the section configuration
+        known_vars = {config.section_coord: 0.0}  # Section coordinate is zero
+        known_vars[config.plane_coords[0]] = float(poincare_point[0])
+        known_vars[config.plane_coords[1]] = float(poincare_point[1])
+        
+        var_to_solve = config.missing_coord
         
         # Solve for the missing coordinate on the centre manifold.
         solved_val = _solve_missing_coord(var_to_solve, known_vars, float(energy), poly_cm_real, self._clmo)
