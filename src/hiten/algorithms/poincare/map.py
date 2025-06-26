@@ -701,10 +701,11 @@ def _generate_map(
     use_symplectic: bool = True,
     integrator_order: int = 6,
     c_omega_heuristic: float=20.0,
-    seed_axis: str = "q2",  # "q2" or "p2"
+    seed_axis: str = "q2",  # "q2" or "p2" - deprecated, use seed_strategy instead
     section_coord: str = "q3",  # "q2", "p2", "q3", or "p3"
     parallel: bool = False,  # Enable CPU parallelization
     n_processes: Optional[int] = None,  # Number of processes (default: CPU count)
+    seed_strategy: str = "mixed",  # "single", "mixed", "comprehensive"
 ) -> _PoincareSection:
     r"""
     Generate a Poincaré return map by forward integration of a small set of seeds.
@@ -736,7 +737,7 @@ def _generate_map(
     c_omega_heuristic : float, default 20.0
         Heuristic scaling constant for the extended-phase method.
     seed_axis : {'q2', 'p2'}, default 'q2'
-        Coordinate along which seeds are distributed.
+        Coordinate along which seeds are distributed. **Deprecated**: Use ``seed_strategy`` instead.
     section_coord : {'q2', 'p2', 'q3', 'p3'}, default 'q3'
         Coordinate that defines the Poincaré section :math:`\Sigma`.
     parallel : bool, default False
@@ -744,6 +745,12 @@ def _generate_map(
         Uses threads instead of processes to avoid Numba object serialization issues.
     n_processes : int, optional
         Number of worker threads to use. If ``None``, defaults to the number of CPU cores.
+    seed_strategy : str, default "mixed"
+        Seeding strategy to capture different orbit families:
+        
+        - "single": Original single-axis approach (uses ``seed_axis`` parameter)
+        - "mixed": Combination of zero and non-zero constraints (recommended for finding quasi-halo orbits)
+        - "comprehensive": All strategies combined (most thorough but slowest)
 
     Returns
     -------
@@ -754,6 +761,11 @@ def _generate_map(
     ------
     ValueError
         If *section_coord* is not supported.
+        
+    Notes
+    -----
+    The "mixed" and "comprehensive" seeding strategies are designed to capture orbit families
+    that may be missed by the traditional single-axis approach, such as quasi-halo orbits.
     """
     # Get section information
     _, _, labels = _section_closure(section_coord)
@@ -767,96 +779,108 @@ def _generate_map(
         encode_dict_list=encode_dict_list,
     )
 
-    # 2. Generate seeds based on section type
-    seeds: list[Tuple[float, float, float, float]] = []
-    
-    if section_coord == "q3":
-        # Traditional q3=0 section: vary along seed_axis, solve for p3
-        q2_max = _find_turning("q2", h0, H_blocks, clmo_table)
-        p2_max = _find_turning("p2", h0, H_blocks, clmo_table)
+    # 2. Generate seeds using the new comprehensive strategy
+    if seed_strategy == "single":
+        # Use the original single-axis approach for backward compatibility
+        seeds: list[Tuple[float, float, float, float]] = []
         
-        if seed_axis == "q2":
-            q2_vals = np.linspace(-0.9 * q2_max, 0.9 * q2_max, n_seeds)
-            for q2 in q2_vals:
-                p2 = 0.0
-                p3 = _solve_missing_coord("p3", {"q2": q2, "p2": p2, "q3": 0.0}, h0, H_blocks, clmo_table)
-                if p3 is not None:
-                    seeds.append((q2, p2, 0.0, p3))
-        elif seed_axis == "p2":
-            p2_vals = np.linspace(-0.9 * p2_max, 0.9 * p2_max, n_seeds)
-            for p2 in p2_vals:
-                q2 = 0.0
-                p3 = _solve_missing_coord("p3", {"q2": q2, "p2": p2, "q3": 0.0}, h0, H_blocks, clmo_table)
-                if p3 is not None:
-                    seeds.append((q2, p2, 0.0, p3))
-    
-    elif section_coord == "p3":
-        # p3=0 section: vary along seed_axis, solve for q3
-        q2_max = _find_turning("q2", h0, H_blocks, clmo_table)
-        p2_max = _find_turning("p2", h0, H_blocks, clmo_table)
+        if section_coord == "q3":
+            # Traditional q3=0 section: vary along seed_axis, solve for p3
+            q2_max = _find_turning("q2", h0, H_blocks, clmo_table)
+            p2_max = _find_turning("p2", h0, H_blocks, clmo_table)
+            
+            if seed_axis == "q2":
+                q2_vals = np.linspace(-0.9 * q2_max, 0.9 * q2_max, n_seeds)
+                for q2 in q2_vals:
+                    p2 = 0.0
+                    p3 = _solve_missing_coord("p3", {"q2": q2, "p2": p2, "q3": 0.0}, h0, H_blocks, clmo_table)
+                    if p3 is not None:
+                        seeds.append((q2, p2, 0.0, p3))
+            elif seed_axis == "p2":
+                p2_vals = np.linspace(-0.9 * p2_max, 0.9 * p2_max, n_seeds)
+                for p2 in p2_vals:
+                    q2 = 0.0
+                    p3 = _solve_missing_coord("p3", {"q2": q2, "p2": p2, "q3": 0.0}, h0, H_blocks, clmo_table)
+                    if p3 is not None:
+                        seeds.append((q2, p2, 0.0, p3))
         
-        if seed_axis == "q2":
-            q2_vals = np.linspace(-0.9 * q2_max, 0.9 * q2_max, n_seeds)
-            for q2 in q2_vals:
-                p2 = 0.0
-                q3 = _solve_missing_coord("q3", {"q2": q2, "p2": p2, "p3": 0.0}, h0, H_blocks, clmo_table)
-                if q3 is not None:
-                    seeds.append((q2, p2, q3, 0.0))
-        elif seed_axis == "p2":
-            p2_vals = np.linspace(-0.9 * p2_max, 0.9 * p2_max, n_seeds)
-            for p2 in p2_vals:
-                q2 = 0.0
-                q3 = _solve_missing_coord("q3", {"q2": q2, "p2": p2, "p3": 0.0}, h0, H_blocks, clmo_table)
-                if q3 is not None:
-                    seeds.append((q2, p2, q3, 0.0))
-                    
-    elif section_coord == "q2":
-        # q2=0 section: vary along seed_axis (q3 or p3), solve for the other
-        # IMPORTANT: We set p3=0 (not p2=0) to avoid constraining seeds to special invariant curves
-        # that would result in circular Poincaré maps. The (q2, p2) and (q3, p3) planes have
-        # different dynamical properties in the center manifold reduction.
-        q3_max = _find_turning("q3", h0, H_blocks, clmo_table)
-        p3_max = _find_turning("p3", h0, H_blocks, clmo_table)
-        
-        if seed_axis == "q3":
-            q3_vals = np.linspace(-0.9 * q3_max, 0.9 * q3_max, n_seeds)
-            for q3 in q3_vals:
-                p3 = 0.0
-                p2 = _solve_missing_coord("p2", {"q2": 0.0, "q3": q3, "p3": p3}, h0, H_blocks, clmo_table)
-                if p2 is not None:
-                    seeds.append((0.0, p2, q3, p3))
-        elif seed_axis == "p3":
-            p3_vals = np.linspace(-0.9 * p3_max, 0.9 * p3_max, n_seeds)
-            for p3 in p3_vals:
-                q3 = 0.0
-                p2 = _solve_missing_coord("p2", {"q2": 0.0, "q3": q3, "p3": p3}, h0, H_blocks, clmo_table)
-                if p2 is not None:
-                    seeds.append((0.0, p2, q3, p3))
-                    
-    elif section_coord == "p2":
-        # p2=0 section: vary along seed_axis (q3 or p3), solve for the other
-        # IMPORTANT: We set q3=0 (not q2=0) to avoid constraining seeds to special invariant curves
-        # that would result in circular Poincaré maps. The (q2, p2) and (q3, p3) planes have
-        # different dynamical properties in the center manifold reduction.
-        q3_max = _find_turning("q3", h0, H_blocks, clmo_table)
-        p3_max = _find_turning("p3", h0, H_blocks, clmo_table)
-        
-        if seed_axis == "q3":
-            q3_vals = np.linspace(-0.9 * q3_max, 0.9 * q3_max, n_seeds)
-            for q3 in q3_vals:
-                p3 = 0.0  # Changed from q2 = 0.0
-                q2 = _solve_missing_coord("q2", {"p2": 0.0, "q3": q3, "p3": p3}, h0, H_blocks, clmo_table)  # Changed to solve for q2
-                if q2 is not None:
-                    seeds.append((q2, 0.0, q3, p3))  # Kept p2=0 (section constraint)
-        elif seed_axis == "p3":
-            p3_vals = np.linspace(-0.9 * p3_max, 0.9 * p3_max, n_seeds)
-            for p3 in p3_vals:
-                q3 = 0.0  # Set q3=0 instead of q2=0
-                q2 = _solve_missing_coord("q2", {"p2": 0.0, "q3": q3, "p3": p3}, h0, H_blocks, clmo_table)  # Solve for q2
-                if q2 is not None:
-                    seeds.append((q2, 0.0, q3, p3))
+        elif section_coord == "p3":
+            # p3=0 section: vary along seed_axis, solve for q3
+            q2_max = _find_turning("q2", h0, H_blocks, clmo_table)
+            p2_max = _find_turning("p2", h0, H_blocks, clmo_table)
+            
+            if seed_axis == "q2":
+                q2_vals = np.linspace(-0.9 * q2_max, 0.9 * q2_max, n_seeds)
+                for q2 in q2_vals:
+                    p2 = 0.0
+                    q3 = _solve_missing_coord("q3", {"q2": q2, "p2": p2, "p3": 0.0}, h0, H_blocks, clmo_table)
+                    if q3 is not None:
+                        seeds.append((q2, p2, q3, 0.0))
+            elif seed_axis == "p2":
+                p2_vals = np.linspace(-0.9 * p2_max, 0.9 * p2_max, n_seeds)
+                for p2 in p2_vals:
+                    q2 = 0.0
+                    q3 = _solve_missing_coord("q3", {"q2": q2, "p2": p2, "p3": 0.0}, h0, H_blocks, clmo_table)
+                    if q3 is not None:
+                        seeds.append((q2, p2, q3, 0.0))
+                        
+        elif section_coord == "q2":
+            # q2=0 section: vary along seed_axis (q3 or p3), solve for the other
+            # IMPORTANT: We set p3=0 (not p2=0) to avoid constraining seeds to special invariant curves
+            # that would result in circular Poincaré maps. The (q2, p2) and (q3, p3) planes have
+            # different dynamical properties in the center manifold reduction.
+            q3_max = _find_turning("q3", h0, H_blocks, clmo_table)
+            p3_max = _find_turning("p3", h0, H_blocks, clmo_table)
+            
+            if seed_axis == "q3":
+                q3_vals = np.linspace(-0.9 * q3_max, 0.9 * q3_max, n_seeds)
+                for q3 in q3_vals:
+                    p3 = 0.0
+                    p2 = _solve_missing_coord("p2", {"q2": 0.0, "q3": q3, "p3": p3}, h0, H_blocks, clmo_table)
+                    if p2 is not None:
+                        seeds.append((0.0, p2, q3, p3))
+            elif seed_axis == "p3":
+                p3_vals = np.linspace(-0.9 * p3_max, 0.9 * p3_max, n_seeds)
+                for p3 in p3_vals:
+                    q3 = 0.0
+                    p2 = _solve_missing_coord("p2", {"q2": 0.0, "q3": q3, "p3": p3}, h0, H_blocks, clmo_table)
+                    if p2 is not None:
+                        seeds.append((0.0, p2, q3, p3))
+                        
+        elif section_coord == "p2":
+            # p2=0 section: vary along seed_axis (q3 or p3), solve for the other
+            # IMPORTANT: We set q3=0 (not q2=0) to avoid constraining seeds to special invariant curves
+            # that would result in circular Poincaré maps. The (q2, p2) and (q3, p3) planes have
+            # different dynamical properties in the center manifold reduction.
+            q3_max = _find_turning("q3", h0, H_blocks, clmo_table)
+            p3_max = _find_turning("p3", h0, H_blocks, clmo_table)
+            
+            if seed_axis == "q3":
+                q3_vals = np.linspace(-0.9 * q3_max, 0.9 * q3_max, n_seeds)
+                for q3 in q3_vals:
+                    p3 = 0.0  # Changed from q2 = 0.0
+                    q2 = _solve_missing_coord("q2", {"p2": 0.0, "q3": q3, "p3": p3}, h0, H_blocks, clmo_table)  # Changed to solve for q2
+                    if q2 is not None:
+                        seeds.append((q2, 0.0, q3, p3))  # Kept p2=0 (section constraint)
+            elif seed_axis == "p3":
+                p3_vals = np.linspace(-0.9 * p3_max, 0.9 * p3_max, n_seeds)
+                for p3 in p3_vals:
+                    q3 = 0.0  # Set q3=0 instead of q2=0
+                    q2 = _solve_missing_coord("q2", {"p2": 0.0, "q3": q3, "p3": p3}, h0, H_blocks, clmo_table)  # Solve for q2
+                    if q2 is not None:
+                        seeds.append((q2, 0.0, q3, p3))
+        else:
+            raise ValueError(f"Unsupported section_coord: {section_coord}")
     else:
-        raise ValueError(f"Unsupported section_coord: {section_coord}")
+        # Use the new comprehensive seeding strategy
+        seeds = _generate_comprehensive_seeds(
+            section_coord=section_coord,
+            h0=h0,
+            H_blocks=H_blocks,
+            clmo_table=clmo_table,
+            n_seeds=n_seeds,
+            seed_strategy=seed_strategy,
+        )
 
     # 3. Process seeds to generate map points
     # Dynamically adjust max_steps based on dt to allow a consistent total integration time for finding a crossing.
@@ -965,6 +989,234 @@ def _generate_map(
     else:
         points_array = np.asarray(pts_accum, dtype=np.float64)
     return _PoincareSection(points_array, labels)
+
+def _generate_comprehensive_seeds(
+    section_coord: str,
+    h0: float,
+    H_blocks: List[np.ndarray],
+    clmo_table: List[np.ndarray],
+    n_seeds: int,
+    seed_strategy: str = "mixed",  # "single", "dual", "mixed", "comprehensive"
+) -> List[Tuple[float, float, float, float]]:
+    r"""
+    Generate seeds using multiple strategies to capture diverse orbit families.
+    
+    Parameters
+    ----------
+    section_coord : str
+        Section coordinate ("q2", "p2", "q3", "p3")
+    h0 : float
+        Energy level
+    H_blocks : List[np.ndarray]
+        Hamiltonian polynomial blocks
+    clmo_table : List[np.ndarray]
+        CLMO index table
+    n_seeds : int
+        Target number of seeds per strategy
+    seed_strategy : str, default "mixed"
+        Seeding strategy:
+        - "single": Original single-axis approach
+        - "dual": Two-axis approach with zero constraint
+        - "mixed": Combination of zero and non-zero constraints
+        - "comprehensive": All strategies combined
+        
+    Returns
+    -------
+    List[Tuple[float, float, float, float]]
+        List of seed points (q2, p2, q3, p3)
+    """
+    logger.info(f"Generating seeds with strategy '{seed_strategy}' for {section_coord} section")
+    
+    all_seeds: List[Tuple[float, float, float, float]] = []
+    
+    # Get boundary turning points for all coordinates
+    try:
+        q2_max = _find_turning("q2", h0, H_blocks, clmo_table)
+        p2_max = _find_turning("p2", h0, H_blocks, clmo_table)
+        q3_max = _find_turning("q3", h0, H_blocks, clmo_table)
+        p3_max = _find_turning("p3", h0, H_blocks, clmo_table)
+    except RuntimeError as e:
+        logger.warning(f"Failed to find some turning points: {e}")
+        # Use fallback values if turning point finding fails
+        q2_max = p2_max = q3_max = p3_max = 0.1
+    
+    if section_coord == "q3":
+        # q3=0 section: vary in (q2, p2) plane
+        
+        if seed_strategy in ("single", "mixed", "comprehensive"):
+            # Strategy 1: Original approach - one axis varying, p2=0
+            q2_vals = np.linspace(-0.9 * q2_max, 0.9 * q2_max, n_seeds // 2)
+            for q2 in q2_vals:
+                p3 = _solve_missing_coord("p3", {"q2": q2, "p2": 0.0, "q3": 0.0}, h0, H_blocks, clmo_table)
+                if p3 is not None:
+                    all_seeds.append((q2, 0.0, 0.0, p3))
+            
+            # Strategy 1b: Original approach - other axis varying, q2=0
+            p2_vals = np.linspace(-0.9 * p2_max, 0.9 * p2_max, n_seeds // 2)
+            for p2 in p2_vals:
+                p3 = _solve_missing_coord("p3", {"q2": 0.0, "p2": p2, "q3": 0.0}, h0, H_blocks, clmo_table)
+                if p3 is not None:
+                    all_seeds.append((0.0, p2, 0.0, p3))
+        
+        if seed_strategy in ("mixed", "comprehensive"):
+            # Strategy 2: Non-zero p2 values with varying q2
+            p2_levels = np.linspace(-0.5 * p2_max, 0.5 * p2_max, 5)  # Multiple p2 levels
+            for p2_level in p2_levels:
+                if abs(p2_level) > 0.05 * p2_max:  # Skip near-zero to avoid duplication
+                    q2_vals = np.linspace(-0.8 * q2_max, 0.8 * q2_max, n_seeds // 5)
+                    for q2 in q2_vals:
+                        p3 = _solve_missing_coord("p3", {"q2": q2, "p2": p2_level, "q3": 0.0}, h0, H_blocks, clmo_table)
+                        if p3 is not None:
+                            all_seeds.append((q2, p2_level, 0.0, p3))
+        
+        if seed_strategy == "comprehensive":
+            # Strategy 3: Radial distribution in (q2, p2) plane
+            n_radial = n_seeds // 4
+            n_angular = 8
+            for i in range(n_radial):
+                r = (i + 1) / n_radial * 0.8 * min(q2_max, p2_max)
+                for j in range(n_angular):
+                    theta = 2 * np.pi * j / n_angular
+                    q2 = r * np.cos(theta)
+                    p2 = r * np.sin(theta)
+                    if abs(q2) < q2_max and abs(p2) < p2_max:
+                        p3 = _solve_missing_coord("p3", {"q2": q2, "p2": p2, "q3": 0.0}, h0, H_blocks, clmo_table)
+                        if p3 is not None:
+                            all_seeds.append((q2, p2, 0.0, p3))
+    
+    elif section_coord == "p3":
+        # p3=0 section: vary in (q2, p2) plane, solve for q3
+        
+        if seed_strategy in ("single", "mixed", "comprehensive"):
+            # Strategy 1: Original approach
+            q2_vals = np.linspace(-0.9 * q2_max, 0.9 * q2_max, n_seeds // 2)
+            for q2 in q2_vals:
+                q3 = _solve_missing_coord("q3", {"q2": q2, "p2": 0.0, "p3": 0.0}, h0, H_blocks, clmo_table)
+                if q3 is not None:
+                    all_seeds.append((q2, 0.0, q3, 0.0))
+                    
+            p2_vals = np.linspace(-0.9 * p2_max, 0.9 * p2_max, n_seeds // 2)
+            for p2 in p2_vals:
+                q3 = _solve_missing_coord("q3", {"q2": 0.0, "p2": p2, "p3": 0.0}, h0, H_blocks, clmo_table)
+                if q3 is not None:
+                    all_seeds.append((0.0, p2, q3, 0.0))
+        
+        if seed_strategy in ("mixed", "comprehensive"):
+            # Strategy 2: Non-zero constraints
+            p2_levels = np.linspace(-0.5 * p2_max, 0.5 * p2_max, 5)
+            for p2_level in p2_levels:
+                if abs(p2_level) > 0.05 * p2_max:
+                    q2_vals = np.linspace(-0.8 * q2_max, 0.8 * q2_max, n_seeds // 5)
+                    for q2 in q2_vals:
+                        q3 = _solve_missing_coord("q3", {"q2": q2, "p2": p2_level, "p3": 0.0}, h0, H_blocks, clmo_table)
+                        if q3 is not None:
+                            all_seeds.append((q2, p2_level, q3, 0.0))
+        
+        if seed_strategy == "comprehensive":
+            # Strategy 3: Radial distribution
+            n_radial = n_seeds // 4
+            n_angular = 8
+            for i in range(n_radial):
+                r = (i + 1) / n_radial * 0.8 * min(q2_max, p2_max)
+                for j in range(n_angular):
+                    theta = 2 * np.pi * j / n_angular
+                    q2 = r * np.cos(theta)
+                    p2 = r * np.sin(theta)
+                    if abs(q2) < q2_max and abs(p2) < p2_max:
+                        q3 = _solve_missing_coord("q3", {"q2": q2, "p2": p2, "p3": 0.0}, h0, H_blocks, clmo_table)
+                        if q3 is not None:
+                            all_seeds.append((q2, p2, q3, 0.0))
+    
+    elif section_coord == "q2":
+        # q2=0 section: vary in (q3, p3) plane, solve for p2
+        
+        if seed_strategy in ("single", "mixed", "comprehensive"):
+            # Strategy 1: Fixed p3=0 (our current approach)
+            q3_vals = np.linspace(-0.9 * q3_max, 0.9 * q3_max, n_seeds // 2)
+            for q3 in q3_vals:
+                p2 = _solve_missing_coord("p2", {"q2": 0.0, "q3": q3, "p3": 0.0}, h0, H_blocks, clmo_table)
+                if p2 is not None:
+                    all_seeds.append((0.0, p2, q3, 0.0))
+                    
+            # Strategy 1b: Fixed q3=0
+            p3_vals = np.linspace(-0.9 * p3_max, 0.9 * p3_max, n_seeds // 2)
+            for p3 in p3_vals:
+                p2 = _solve_missing_coord("p2", {"q2": 0.0, "q3": 0.0, "p3": p3}, h0, H_blocks, clmo_table)
+                if p2 is not None:
+                    all_seeds.append((0.0, p2, 0.0, p3))
+        
+        if seed_strategy in ("mixed", "comprehensive"):
+            # Strategy 2: Non-zero p3 levels - THIS MIGHT CAPTURE QUASI-HALO ORBITS
+            p3_levels = np.linspace(-0.5 * p3_max, 0.5 * p3_max, 5)
+            for p3_level in p3_levels:
+                if abs(p3_level) > 0.05 * p3_max:
+                    q3_vals = np.linspace(-0.8 * q3_max, 0.8 * q3_max, n_seeds // 5)
+                    for q3 in q3_vals:
+                        p2 = _solve_missing_coord("p2", {"q2": 0.0, "q3": q3, "p3": p3_level}, h0, H_blocks, clmo_table)
+                        if p2 is not None:
+                            all_seeds.append((0.0, p2, q3, p3_level))
+        
+        if seed_strategy == "comprehensive":
+            # Strategy 3: Radial distribution in (q3, p3) plane
+            n_radial = n_seeds // 4
+            n_angular = 8
+            for i in range(n_radial):
+                r = (i + 1) / n_radial * 0.8 * min(q3_max, p3_max)
+                for j in range(n_angular):
+                    theta = 2 * np.pi * j / n_angular
+                    q3 = r * np.cos(theta)
+                    p3 = r * np.sin(theta)
+                    if abs(q3) < q3_max and abs(p3) < p3_max:
+                        p2 = _solve_missing_coord("p2", {"q2": 0.0, "q3": q3, "p3": p3}, h0, H_blocks, clmo_table)
+                        if p2 is not None:
+                            all_seeds.append((0.0, p2, q3, p3))
+    
+    elif section_coord == "p2":
+        # p2=0 section: vary in (q3, p3) plane, solve for q2
+        
+        if seed_strategy in ("single", "mixed", "comprehensive"):
+            # Strategy 1: Fixed q3=0 (our current approach) 
+            p3_vals = np.linspace(-0.9 * p3_max, 0.9 * p3_max, n_seeds // 2)
+            for p3 in p3_vals:
+                q2 = _solve_missing_coord("q2", {"p2": 0.0, "q3": 0.0, "p3": p3}, h0, H_blocks, clmo_table)
+                if q2 is not None:
+                    all_seeds.append((q2, 0.0, 0.0, p3))
+                    
+            # Strategy 1b: Fixed p3=0
+            q3_vals = np.linspace(-0.9 * q3_max, 0.9 * q3_max, n_seeds // 2)
+            for q3 in q3_vals:
+                q2 = _solve_missing_coord("q2", {"p2": 0.0, "q3": q3, "p3": 0.0}, h0, H_blocks, clmo_table)
+                if q2 is not None:
+                    all_seeds.append((q2, 0.0, q3, 0.0))
+        
+        if seed_strategy in ("mixed", "comprehensive"):
+            # Strategy 2: Non-zero q3 levels - THIS MIGHT CAPTURE QUASI-HALO ORBITS
+            q3_levels = np.linspace(-0.5 * q3_max, 0.5 * q3_max, 5)
+            for q3_level in q3_levels:
+                if abs(q3_level) > 0.05 * q3_max:
+                    p3_vals = np.linspace(-0.8 * p3_max, 0.8 * p3_max, n_seeds // 5)
+                    for p3 in p3_vals:
+                        q2 = _solve_missing_coord("q2", {"p2": 0.0, "q3": q3_level, "p3": p3}, h0, H_blocks, clmo_table)
+                        if q2 is not None:
+                            all_seeds.append((q2, 0.0, q3_level, p3))
+        
+        if seed_strategy == "comprehensive":
+            # Strategy 3: Radial distribution
+            n_radial = n_seeds // 4
+            n_angular = 8
+            for i in range(n_radial):
+                r = (i + 1) / n_radial * 0.8 * min(q3_max, p3_max)
+                for j in range(n_angular):
+                    theta = 2 * np.pi * j / n_angular
+                    q3 = r * np.cos(theta)
+                    p3 = r * np.sin(theta)
+                    if abs(q3) < q3_max and abs(p3) < p3_max:
+                        q2 = _solve_missing_coord("q2", {"p2": 0.0, "q3": q3, "p3": p3}, h0, H_blocks, clmo_table)
+                        if q2 is not None:
+                            all_seeds.append((q2, 0.0, q3, p3))
+    
+    logger.info(f"Generated {len(all_seeds)} seeds using '{seed_strategy}' strategy")
+    return all_seeds
 
 def _generate_grid(
     h0: float,
