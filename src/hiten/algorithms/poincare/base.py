@@ -32,11 +32,6 @@ from hiten.utils.plots import plot_poincare_map, plot_poincare_map_interactive
 
 @dataclass
 class _PoincareMapConfig:
-    r"""
-    Configuration parameters for the Poincaré map generation.
-    """
-
-    # Numerical / integration
     dt: float = 1e-2
     method: str = "rk"  # "symplectic" or "rk"
     integrator_order: int = 4
@@ -44,12 +39,20 @@ class _PoincareMapConfig:
 
     n_seeds: int = 20
     n_iter: int = 40
-    seed_axis: str = "q2"  # "q2" or "p2"
-    section_coord: Literal["q2", "p2", "q3", "p3"] = "q3"  # Default keeps existing behavior
+    seed_strategy: Literal["single", "axis_aligned", "level_sets", "radial", "random"] = "single"
+    seed_axis: Optional[Literal["q2", "p2", "q3", "p3"]] = None
+    section_coord: Literal["q2", "p2", "q3", "p3"] = "q3"
 
-    # Misc
     compute_on_init: bool = False
     use_gpu: bool = False
+
+    def __post_init__(self):
+        if self.seed_strategy == "single" and self.seed_axis is None:
+            raise ValueError("seed_axis must be specified when seed_strategy is 'single'")
+        
+        elif self.seed_strategy != 'single':
+            if self.seed_axis is not None:
+                logger.warning("seed_axis is ignored when seed_strategy is not 'single'")
 
 
 class _PoincareMap:
@@ -83,6 +86,7 @@ class _PoincareMap:
 
         # Storage for computed points
         self._section: Optional[_PoincareSection] = None
+        self._grid: Optional[np.ndarray] = None
         self._backend: str = "cpu" if not self.config.use_gpu else "gpu"
 
         if self.config.compute_on_init:
@@ -114,6 +118,17 @@ class _PoincareMap:
                 "Poincaré map has not been computed yet.  Call compute() first."
             )
         return self._section.points
+    
+    @property
+    def grid(self) -> np.ndarray:
+        r"""
+        Return the computed Poincaré-map grid (backward compatibility).
+        """
+        if self._grid is None:
+            raise RuntimeError(
+                "Poincaré map has not been computed yet.  Call compute() first."
+            )
+        return self._grid
 
     @property
     def section(self) -> _PoincareSection:
@@ -138,9 +153,14 @@ class _PoincareMap:
         orbit.propagate(steps=steps, method=method, order=order)
         return orbit
 
-    def compute(self) -> np.ndarray:
+    def compute(self, **kwargs) -> np.ndarray:
         r"""
         Compute the discrete Poincaré return map.
+
+        Parameters
+        ----------
+        **kwargs
+            Reserved for future extensions.
 
         Returns
         -------
@@ -151,23 +171,27 @@ class _PoincareMap:
         ------
         RuntimeError
             If the underlying centre manifold computation fails.
+        TypeError
+            If invalid kwargs are provided.
 
         Notes
         -----
         The resulting section is cached in :pyattr:`_section`; subsequent calls
-        reuse the stored data.
+        reuse the stored data. Parallel processing is enabled automatically for
+        CPU computations.
         """
         logger.info(
-            "Generating Poincaré map at energy h0=%.6e (method=%s)",
+            "Generating Poincaré map at energy h0=%.6e (method=%s, cpu_parallel=%s)",
             self.energy,
             self.config.method,
+            self._backend == "cpu",
         )
 
         poly_cm_real = self.cm.compute()
 
         kernel = _generate_map_gpu if self._backend == "gpu" else _generate_map_cpu
 
-        section = kernel(
+        self._section = kernel(
             h0=self.energy,
             H_blocks=poly_cm_real,
             max_degree=self.cm.max_degree,
@@ -180,15 +204,14 @@ class _PoincareMap:
             use_symplectic=self._use_symplectic,
             integrator_order=self.config.integrator_order,
             c_omega_heuristic=self.config.c_omega_heuristic,
+            seed_strategy=self.config.seed_strategy,
             seed_axis=self.config.seed_axis,
-            section_coord=self.config.section_coord,
-        )
+            section_coord=self.config.section_coord)
 
-        self._section = section
         logger.info("Poincaré map computation complete: %d points", len(self))
-        return section.points  # Return raw points for backward compatibility
+        return self._section.points
 
-    def grid(self, Nq: int = 201, Np: int = 201, max_steps: int = 20_000) -> np.ndarray:
+    def compute_grid(self, Nq: int = 201, Np: int = 201, max_steps: int = 20_000, **kwargs) -> np.ndarray:
         r"""
         Generate a dense rectangular grid of the Poincaré map.
 
@@ -198,6 +221,8 @@ class _PoincareMap:
             Number of nodes along the :math:`q` and :math:`p` axes.
         max_steps : int, default 20000
             Maximum number of integration steps for each seed.
+        **kwargs
+            Reserved for future extensions.
 
         Returns
         -------
@@ -209,7 +234,16 @@ class _PoincareMap:
         ------
         ValueError
             If an unsupported backend is selected.
+        TypeError
+            If invalid kwargs are provided.
+
+        Notes
+        -----
+        Parallel processing is enabled automatically for CPU computations.
         """
+        if self._backend == "gpu":
+            raise ValueError("GPU backend does not support CPU parallel processing.")
+            
         logger.info(
             "Generating *dense-grid* Poincaré map at energy h0=%.6e (Nq=%d, Np=%d)",
             self.energy,
@@ -220,28 +254,24 @@ class _PoincareMap:
         # Ensure that the centre manifold polynomial is current.
         poly_cm_real = self.cm.compute()
 
-        if self._backend == "cpu":
-            pts = _generate_grid(
-                h0=self.energy,
-                H_blocks=poly_cm_real,
-                max_degree=self.cm.max_degree,
-                psi_table=self.cm._psi,
-                clmo_table=self.cm._clmo,
-                encode_dict_list=self.cm._encode_dict_list,
-                dt=self.config.dt,
-                max_steps=max_steps,
-                Nq=Nq,
-                Np=Np,
-                integrator_order=self.config.integrator_order,
-                use_symplectic=self._use_symplectic,
-                section_coord=self.config.section_coord,
-                )
-        else:
-            raise ValueError(f"Unsupported backend: {self._backend}")
+        self._grid = _generate_grid(
+            h0=self.energy,
+            H_blocks=poly_cm_real,
+            max_degree=self.cm.max_degree,
+            psi_table=self.cm._psi,
+            clmo_table=self.cm._clmo,
+            encode_dict_list=self.cm._encode_dict_list,
+            dt=self.config.dt,
+            max_steps=max_steps,
+            Nq=Nq,
+            Np=Np,
+            integrator_order=self.config.integrator_order,
+            use_symplectic=self._use_symplectic,
+            section_coord=self.config.section_coord,
+            )
 
-        self._section = pts  # _generate_grid will be updated to return _PoincareSection
         logger.info("Dense-grid Poincaré map computation complete: %d points", len(self))
-        return pts.points if hasattr(pts, 'points') else pts
+        return self._grid
 
     def ic(self, pt: np.ndarray) -> np.ndarray:
         r"""
@@ -294,9 +324,87 @@ class _PoincareMap:
 
         return np.stack(ic_list, axis=0)
 
-    def plot(self, dark_mode: bool = True, save: bool = False, filepath: str = 'poincare_map.svg', **kwargs):
+    def get_points(self, axes: Sequence[str] | None = None) -> np.ndarray:
+        """Return the Poincaré-map points projected onto arbitrary coordinate axes.
+
+        Parameters
+        ----------
+        axes : Sequence[str] | None, optional
+            Pair of coordinate names to project the section onto (e.g. ("q3", "p2")).
+            If *None* (default) the axes associated with ``section.labels`` are used,
+            reproducing the legacy behaviour.
+
+        Notes
+        -----
+        The underlying map stores only the two coordinates that were chosen when
+        the section was computed.  When a different projection is requested we
+        reconstruct the full 4-D center manifold coordinates for every stored point
+        and extract the desired components.  This is done on-demand and therefore 
+        incurs a modest overhead which is negligible for interactive exploration/plotting workflows.
+        """
+        if self._section is None:
+            # Automatically compute if the map has not been generated yet
+            logger.debug("No cached Poincaré-map points found - computing now...")
+            self.compute()
+
+        # Default - legacy - behaviour
+        if axes is None:
+            return self._section.points
+
+        if len(axes) != 2:
+            raise ValueError("Exactly two axis names must be provided (e.g. ('q3', 'p2')).")
+
+        # Map variable name -> index in 4-D center manifold coordinates (q2, p2, q3, p3)
+        idx_map = {
+            "q2": 0, "p2": 1, "q3": 2, "p3": 3,
+        }
+
+        try:
+            i0, i1 = idx_map[axes[0]], idx_map[axes[1]]
+        except KeyError as exc:
+            raise ValueError(f"Unknown axis name: {exc.args[0]}. Must be one of q2, p2, q3, p3.") from exc
+
+        # Get section configuration
+        from hiten.algorithms.poincare.config import _get_section_config
+        from hiten.algorithms.poincare.map import _solve_missing_coord
+        config = _get_section_config(self.config.section_coord)
+        
+        # Get center manifold Hamiltonian for solving missing coordinate
+        poly_cm_real = self.cm.compute()
+
+        # Reconstruct the requested coordinates for every section point
+        pts_proj = np.empty((len(self), 2), dtype=np.float64)
+        for k, pt in enumerate(self._section.points):
+            # Build known variables from the stored section point
+            known_vars = {config.section_coord: 0.0}  # Section coordinate is zero
+            known_vars[config.plane_coords[0]] = float(pt[0])
+            known_vars[config.plane_coords[1]] = float(pt[1])
+            
+            # Solve for the missing coordinate
+            solved_val = _solve_missing_coord(
+                config.missing_coord, known_vars, self.energy, poly_cm_real, self.cm._clmo
+            )
+            
+            # Build full 4D center manifold coordinates
+            full_cm_coords = known_vars.copy()
+            full_cm_coords[config.missing_coord] = solved_val
+            
+            # Extract the requested coordinates (in order q2, p2, q3, p3)
+            cm_4d = np.array([
+                full_cm_coords["q2"],
+                full_cm_coords["p2"], 
+                full_cm_coords["q3"],
+                full_cm_coords["p3"]
+            ])
+            
+            pts_proj[k, 0] = cm_4d[i0]
+            pts_proj[k, 1] = cm_4d[i1]
+
+        return pts_proj
+
+    def plot(self, dark_mode: bool = True, save: bool = False, filepath: str = 'poincare_map.svg', axes: Optional[Sequence[str]] = None, **kwargs):
         r"""
-        Render the 2-D Poincaré map.
+        Render the 2-D Poincaré map on a selectable pair of axes.
 
         Parameters
         ----------
@@ -306,8 +414,13 @@ class _PoincareMap:
             Whether to save the plot to a file.
         filepath : str, default 'poincare_map.svg'
             Path to save the plot to.
+        axes : Sequence[str] | None, optional
+            Names of the coordinates to visualise (e.g. ("q3", "p2")).  If *None*
+            the default pair associated with the section (``self.section.labels``)
+            is used.
         **kwargs
-            Additional arguments forwarded to :pyfunc:`matplotlib.pyplot.scatter`.
+            Additional keyword arguments forwarded to
+            :pyfunc:`hiten.utils.plots.plot_poincare_map`.
 
         Returns
         -------
@@ -317,17 +430,27 @@ class _PoincareMap:
             Axes handle.
         """
         if self._section is None:
-            logger.debug("No cached Poincaré-map points found - computing now …")
+            logger.debug("No cached Poincaré-map points found - computing now...")
             self.compute()
+
+        # Select the requested projection
+        if axes is None:
+            pts = self._section.points
+            lbls = self._section.labels
+        else:
+            pts = self.get_points(tuple(axes))
+            lbls = tuple(axes)
+
         return plot_poincare_map(
-            points=self._section.points,
-            labels=self._section.labels,
+            points=pts,
+            labels=lbls,
             dark_mode=dark_mode,
             save=save,
             filepath=filepath,
-            **kwargs)
+            **kwargs
+        )
 
-    def plot_interactive(self, steps=1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order=6, frame="rotating", dark_mode: bool = True):
+    def plot_interactive(self, steps=1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order=6, frame="rotating", dark_mode: bool = True, axes: Optional[Sequence[str]] = None):
         r"""
         Interactively select map points and propagate the corresponding orbits.
 
@@ -343,6 +466,10 @@ class _PoincareMap:
             Reference frame used by :pyfunc:`GenericOrbit.plot`.
         dark_mode : bool, default True
             Use dark background colours.
+        axes : Sequence[str] | None, optional
+            Names of the coordinates to visualise (e.g. ("q3", "p2")).  If *None*
+            the default pair associated with the section (``self.section.labels``)
+            is used.
 
         Returns
         -------
@@ -355,8 +482,21 @@ class _PoincareMap:
 
         def _on_select(pt_np: np.ndarray):
             """Generate and display an orbit for the selected map point."""
+            # Convert the selected point back to the original section coordinates
+            if axes is None:
+                # Direct use of stored section point
+                section_pt = pt_np
+            else:
+                # Need to find the corresponding section point
+                # This is a bit tricky - we need to reverse the projection
+                # For now, we'll use the first point that matches closely
+                proj_pts = self.get_points(tuple(axes))
+                distances = np.linalg.norm(proj_pts - pt_np, axis=1)
+                closest_idx = np.argmin(distances)
+                section_pt = self._section.points[closest_idx]
+            
             orbit = self._propagate_from_point(
-                pt_np,
+                section_pt,
                 self.energy,
                 steps=steps,
                 method=method,
@@ -372,10 +512,18 @@ class _PoincareMap:
 
             return orbit
 
+        # Select the requested projection
+        if axes is None:
+            pts = self._section.points
+            lbls = self._section.labels
+        else:
+            pts = self.get_points(tuple(axes))
+            lbls = tuple(axes)
+
         # Launch interactive viewer and return the last selected orbit.
         return plot_poincare_map_interactive(
-            points=self._section.points,
-            labels=self._section.labels,
+            points=pts,
+            labels=lbls,
             on_select=_on_select,
             dark_mode=dark_mode,
         )

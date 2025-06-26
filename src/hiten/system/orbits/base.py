@@ -622,7 +622,7 @@ class PeriodicOrbit(ABC):
         removed before pickling (it may contain numba objects) and recreated
         lazily on first access after unpickling.
         """
-        # Simply update the dictionary – the cached dynamical system will be
+        # Simply update the dictionary - the cached dynamical system will be
         # rebuilt lazily when :pyfunc:`_cr3bp_system` is first invoked.
         self.__dict__.update(state)
 

@@ -18,6 +18,7 @@ Zhang, H. Q., Li, S. (2001). "Improved semi-analytical computation of center
 manifolds near collinear libration points".
 """
 
+from dataclasses import asdict
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple
 
 import numpy as np
@@ -32,6 +33,7 @@ from hiten.algorithms.center.transforms import (_local2realmodal,
                                                 _solve_complex, _solve_real,
                                                 _substitute_complex,
                                                 _substitute_real)
+from hiten.algorithms.poincare.config import _get_section_config
 from hiten.algorithms.poincare.map import _solve_missing_coord
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                               _decode_multiindex,
@@ -349,48 +351,68 @@ class CenterManifold:
 
     def poincare_map(self, energy: float, **kwargs) -> "_PoincareMap":
         r"""
-        Return a cached (or newly built) Poincaré return map.
+        Create a Poincaré map at the specified energy level.
 
         Parameters
         ----------
         energy : float
-            Hamiltonian energy :math:`h_0` corresponding to the desired Jacobi
-            constant.
+            Hamiltonian energy :math:`h_0`.
         **kwargs
-            Optional keyword arguments forwarded to
-            :pyclass:`hiten.algorithms.poincare.base._PoincareMapConfig`.
+            Configuration parameters for the Poincaré map:
+            
+            - dt : float, default 1e-2
+                Integration step size.
+            - method : {'rk', 'symplectic'}, default 'rk'
+                Integration method.
+            - integrator_order : int, default 4
+                Order of the integration scheme.
+            - c_omega_heuristic : float, default 20.0
+                Heuristic parameter for symplectic integrators.
+            - n_seeds : int, default 20
+                Number of initial seed points.
+            - n_iter : int, default 40
+                Number of map iterations per seed.
+            - seed_strategy : {'single', 'axis_aligned', 'level_sets', 'radial', 'random'}, default 'single'
+                Strategy for generating initial seed points.
+            - seed_axis : {'q2', 'p2', 'q3', 'p3'}, optional
+                Axis for seeding when using 'single' strategy.
+            - section_coord : {'q2', 'p2', 'q3', 'p3'}, default 'q3'
+                Coordinate defining the Poincaré section.
+            - compute_on_init : bool, default False
+                Whether to compute the map immediately upon creation.
+            - use_gpu : bool, default False
+                Whether to use GPU acceleration.
 
         Returns
         -------
-        hiten.algorithms.poincare.base._PoincareMap
-            Configured Poincaré map instance.
-            
-        Raises
-        ------
-        TypeError
-            If any of the provided kwargs are not valid configuration fields.
+        _PoincareMap
+            A Poincaré map object for the given energy and configuration.
 
         Notes
         -----
         A map is constructed for each unique combination of energy and
         configuration, and stored internally. Subsequent calls with the same
         parameters return the cached object.
+        
+        Parallel processing is enabled automatically for CPU computations.
         """
-        # Note: moved here from top level to avoid circular import.
-        from dataclasses import asdict
-
         from hiten.algorithms.poincare.base import (_PoincareMap,
                                                     _PoincareMapConfig)
 
-        # Validate that all provided kwargs are valid fields in the config.
+        # Separate config kwargs from runtime kwargs (currently none)
         config_fields = set(_PoincareMapConfig.__dataclass_fields__.keys())
-        for key in kwargs:
-            if key not in config_fields:
+        
+        config_kwargs = {}
+        
+        for key, value in kwargs.items():
+            if key in config_fields:
+                config_kwargs[key] = value
+            else:
                 raise TypeError(f"'{key}' is not a valid keyword argument for PoincareMap configuration.")
         
-        cfg = _PoincareMapConfig(**kwargs)
+        cfg = _PoincareMapConfig(**config_kwargs)
 
-        # Create a hashable key from the configuration.
+        # Create a hashable key from the configuration only (not runtime params)
         config_tuple = tuple(sorted(asdict(cfg).items()))
         cache_key = (energy, config_tuple)
 
@@ -437,19 +459,14 @@ class CenterManifold:
         poly_cm_real = self.compute()
         _, poly_G_total, _ = self._get_lie_transform_results()
 
-        # Define the mapping from section coordinate to the variables involved.
-        # Format: {section: (var_to_solve, {known_var1: value, known_var2: value, ...})}
-        section_map = {
-            "q3": ("p3", {"q2": poincare_point[0], "p2": poincare_point[1], "q3": 0.0}),
-            "p3": ("q3", {"q2": poincare_point[0], "p2": poincare_point[1], "p3": 0.0}),
-            "q2": ("p2", {"q3": poincare_point[0], "p3": poincare_point[1], "q2": 0.0}),
-            "p2": ("q2", {"q3": poincare_point[0], "p3": poincare_point[1], "p2": 0.0}),
-        }
-
-        if section_coord not in section_map:
-            raise ValueError(f"Unsupported section_coord '{section_coord}'. Must be one of {list(section_map.keys())}")
-
-        var_to_solve, known_vars = section_map[section_coord]
+        config = _get_section_config(section_coord)
+        
+        # Build the known variables dictionary using the section configuration
+        known_vars = {config.section_coord: 0.0}  # Section coordinate is zero
+        known_vars[config.plane_coords[0]] = float(poincare_point[0])
+        known_vars[config.plane_coords[1]] = float(poincare_point[1])
+        
+        var_to_solve = config.missing_coord
         
         # Solve for the missing coordinate on the centre manifold.
         solved_val = _solve_missing_coord(var_to_solve, known_vars, float(energy), poly_cm_real, self._clmo)
@@ -487,7 +504,7 @@ class CenterManifold:
         local_6d = _realmodal2local(self._point, real_6d)
         synodic_6d = self._local2synodic(self._point, local_6d)
 
-        logger.info("CM → synodic transformation complete")
+        logger.info("CM to synodic transformation complete")
         return synodic_6d
 
     def save(self, dir_path: str):

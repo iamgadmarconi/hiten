@@ -3,13 +3,18 @@ from typing import List, Tuple
 
 import numpy as np
 
+from hiten.algorithms.poincare.config import _get_section_config
 from hiten.algorithms.poincare.cuda.step import _PoincareMapCUDA
-from hiten.algorithms.poincare.map import (_find_turning, _PoincareSection,
-                                           _solve_missing_coord,
-                                           _section_closure)
+from hiten.algorithms.poincare.map import (_PoincareSection,
+                                           _solve_missing_coord)
+from hiten.algorithms.poincare.seeding.base import _find_turning
 from hiten.algorithms.polynomial.operations import _polynomial_jacobian
 from hiten.utils.log_config import logger
 
+
+def _section_closure(section_coord: str) -> Tuple[int, int, Tuple[str, str]]:
+    config = _get_section_config(section_coord)
+    return config.section_index, config.momentum_check_sign, config.plane_coords
 
 def _generate_map_gpu(
     h0: float,

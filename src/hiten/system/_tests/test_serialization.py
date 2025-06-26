@@ -31,7 +31,7 @@ def test_serialization() -> None:
     system = System.from_bodies("earth", "moon")
     L1 = system.get_libration_point(1)
 
-    # 2. Periodic orbit (halo) – minimal example, no correction/propagation
+    # 2. Periodic orbit (halo) - minimal example, no correction/propagation
     orbit = HaloOrbit(L1, amplitude_z=0.01, zenith="northern")
     orbit.period = 2 * math.pi  # quick dummy value to avoid runtime checks
 
@@ -89,7 +89,7 @@ def test_serialization() -> None:
     logger.info("[_PoincareMap] saving: %s", pmap_path)
     pmap.save(str(pmap_path))
 
-    pmap_loaded = _PoincareMap(cm, energy=0.0)  # dummy – will be overwritten
+    pmap_loaded = _PoincareMap(cm, energy=0.0)  # dummy - will be overwritten
     pmap_loaded.load_inplace(str(pmap_path))
     assert math.isclose(pmap_loaded.energy, energy_level, rel_tol=1e-12)
     # Dataclass comparison works out of the box

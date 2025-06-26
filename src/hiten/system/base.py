@@ -299,7 +299,7 @@ class System(object):
                 f"Unknown body or orbital distance for pair '{primary_name}', '{secondary_name}'."
             ) from exc
 
-        # Instantiate the bodies – the secondary orbits the primary.
+        # Instantiate the bodies - the secondary orbits the primary.
         primary = Body(primary_name.capitalize(), p_mass, p_radius)
         secondary = Body(secondary_name.capitalize(), s_mass, s_radius, _parent_input=primary)
 
