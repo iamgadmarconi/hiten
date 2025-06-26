@@ -338,10 +338,9 @@ class _PoincareMap:
         -----
         The underlying map stores only the two coordinates that were chosen when
         the section was computed.  When a different projection is requested we
-        reconstruct the full 6-D phase-space state for every stored point via
-        :pyfunc:`CenterManifold.ic` and extract the desired components.  This is
-        done on-demand and therefore incurs a modest overhead which is negligible
-        for interactive exploration/plotting workflows.
+        reconstruct the full 4-D center manifold coordinates for every stored point
+        and extract the desired components.  This is done on-demand and therefore 
+        incurs a modest overhead which is negligible for interactive exploration/plotting workflows.
         """
         if self._section is None:
             # Automatically compute if the map has not been generated yet
@@ -355,23 +354,51 @@ class _PoincareMap:
         if len(axes) != 2:
             raise ValueError("Exactly two axis names must be provided (e.g. ('q3', 'p2')).")
 
-        # Map variable name -> index in 6-D state
+        # Map variable name -> index in 4-D center manifold coordinates (q2, p2, q3, p3)
         idx_map = {
-            "q1": 0, "q2": 1, "q3": 2,
-            "p1": 3, "p2": 4, "p3": 5,
+            "q2": 0, "p2": 1, "q3": 2, "p3": 3,
         }
 
         try:
             i0, i1 = idx_map[axes[0]], idx_map[axes[1]]
         except KeyError as exc:
-            raise ValueError(f"Unknown axis name: {exc.args[0]}") from exc
+            raise ValueError(f"Unknown axis name: {exc.args[0]}. Must be one of q2, p2, q3, p3.") from exc
+
+        # Get section configuration
+        from hiten.algorithms.poincare.config import _get_section_config
+        from hiten.algorithms.poincare.map import _solve_missing_coord
+        config = _get_section_config(self.config.section_coord)
+        
+        # Get center manifold Hamiltonian for solving missing coordinate
+        poly_cm_real = self.cm.compute()
 
         # Reconstruct the requested coordinates for every section point
         pts_proj = np.empty((len(self), 2), dtype=np.float64)
         for k, pt in enumerate(self._section.points):
-            state6 = self.cm.ic(pt, self.energy, section_coord=self.config.section_coord)
-            pts_proj[k, 0] = state6[i0]
-            pts_proj[k, 1] = state6[i1]
+            # Build known variables from the stored section point
+            known_vars = {config.section_coord: 0.0}  # Section coordinate is zero
+            known_vars[config.plane_coords[0]] = float(pt[0])
+            known_vars[config.plane_coords[1]] = float(pt[1])
+            
+            # Solve for the missing coordinate
+            solved_val = _solve_missing_coord(
+                config.missing_coord, known_vars, self.energy, poly_cm_real, self.cm._clmo
+            )
+            
+            # Build full 4D center manifold coordinates
+            full_cm_coords = known_vars.copy()
+            full_cm_coords[config.missing_coord] = solved_val
+            
+            # Extract the requested coordinates (in order q2, p2, q3, p3)
+            cm_4d = np.array([
+                full_cm_coords["q2"],
+                full_cm_coords["p2"], 
+                full_cm_coords["q3"],
+                full_cm_coords["p3"]
+            ])
+            
+            pts_proj[k, 0] = cm_4d[i0]
+            pts_proj[k, 1] = cm_4d[i1]
 
         return pts_proj
 
@@ -423,7 +450,7 @@ class _PoincareMap:
             **kwargs
         )
 
-    def plot_interactive(self, steps=1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order=6, frame="rotating", dark_mode: bool = True):
+    def plot_interactive(self, steps=1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order=6, frame="rotating", dark_mode: bool = True, axes: Optional[Sequence[str]] = None):
         r"""
         Interactively select map points and propagate the corresponding orbits.
 
@@ -439,6 +466,10 @@ class _PoincareMap:
             Reference frame used by :pyfunc:`GenericOrbit.plot`.
         dark_mode : bool, default True
             Use dark background colours.
+        axes : Sequence[str] | None, optional
+            Names of the coordinates to visualise (e.g. ("q3", "p2")).  If *None*
+            the default pair associated with the section (``self.section.labels``)
+            is used.
 
         Returns
         -------
@@ -451,8 +482,21 @@ class _PoincareMap:
 
         def _on_select(pt_np: np.ndarray):
             """Generate and display an orbit for the selected map point."""
+            # Convert the selected point back to the original section coordinates
+            if axes is None:
+                # Direct use of stored section point
+                section_pt = pt_np
+            else:
+                # Need to find the corresponding section point
+                # This is a bit tricky - we need to reverse the projection
+                # For now, we'll use the first point that matches closely
+                proj_pts = self.get_points(tuple(axes))
+                distances = np.linalg.norm(proj_pts - pt_np, axis=1)
+                closest_idx = np.argmin(distances)
+                section_pt = self._section.points[closest_idx]
+            
             orbit = self._propagate_from_point(
-                pt_np,
+                section_pt,
                 self.energy,
                 steps=steps,
                 method=method,
@@ -468,10 +512,18 @@ class _PoincareMap:
 
             return orbit
 
+        # Select the requested projection
+        if axes is None:
+            pts = self._section.points
+            lbls = self._section.labels
+        else:
+            pts = self.get_points(tuple(axes))
+            lbls = tuple(axes)
+
         # Launch interactive viewer and return the last selected orbit.
         return plot_poincare_map_interactive(
-            points=self._section.points,
-            labels=self._section.labels,
+            points=pts,
+            labels=lbls,
             on_select=_on_select,
             dark_mode=dark_mode,
         )
