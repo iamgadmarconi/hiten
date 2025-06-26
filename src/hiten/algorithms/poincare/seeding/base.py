@@ -1,3 +1,13 @@
+r"""
+hiten.algorithms.poincare.seeding.base
+====================================
+
+Base class for Poincaré section seeding strategies.
+
+The module exposes a base class :pyclass:`_SeedingStrategy` that defines the
+interface for all seeding strategies.
+"""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod

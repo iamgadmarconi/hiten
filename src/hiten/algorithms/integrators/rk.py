@@ -564,7 +564,7 @@ def _build_rhs_wrapper(system: _DynamicalSystem) -> Callable[[float, np.ndarray]
     sig = inspect.signature(rhs_func)
     n_params = len(sig.parameters)
 
-    # Case 1: Function already accepts (t, y) – use directly.
+    # Case 1: Function already accepts (t, y) - use directly.
     if n_params >= 2:
         return rhs_func
 

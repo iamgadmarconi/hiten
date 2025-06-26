@@ -1,3 +1,13 @@
+r"""
+hiten.algorithms.poincare.seeding.strategies
+===========================================
+
+Implementation of various Poincaré section seeding strategies.
+
+The module exposes concrete implementations of the :pyclass:`_SeedingStrategy`
+base class for different seeding strategies.
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, List, Optional, Tuple

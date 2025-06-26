@@ -70,7 +70,7 @@ def _load_periodic_orbit_inplace(obj: "PeriodicOrbit", filepath: str) -> None:
         raise FileNotFoundError(f"Orbit file not found: {filepath}")
 
     with h5py.File(filepath, "r") as f:
-        # Sanity check – only warn on mismatch to allow subclass <-> base use
+        # Sanity check - only warn on mismatch to allow subclass <-> base use
         cls_name = f.attrs.get("class", "<unknown>")
         if cls_name != obj.__class__.__name__:
             raise ValueError(f"Mismatch between file and object class: {cls_name} != {obj.__class__.__name__}")
@@ -117,7 +117,7 @@ def _load_periodic_orbit_inplace(obj: "PeriodicOrbit", filepath: str) -> None:
                 if 1 <= lib_idx <= 5:
                     obj._libration_point = system.get_libration_point(lib_idx)
         except Exception as exc:
-            # Silent failure – context reconstruction is best effort only.
+            # Silent failure - context reconstruction is best effort only.
             import warnings
             warnings.warn(f"Could not reconstruct System from metadata: {exc}")
 

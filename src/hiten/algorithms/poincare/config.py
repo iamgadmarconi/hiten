@@ -1,3 +1,14 @@
+r"""
+hiten.algorithms.poincare.config
+===============================
+
+Configuration for Poincaré sections of the centre manifold of the spatial
+circular restricted three body problem.
+
+The module exposes a lightweight dataclass :pyclass:`_PoincareSectionConfig`
+that encapsulates the configuration of a Poincaré section.
+"""
+
 from __future__ import annotations
 
 from typing import Tuple

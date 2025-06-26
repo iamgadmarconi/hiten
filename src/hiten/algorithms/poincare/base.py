@@ -348,7 +348,7 @@ class _PoincareMap:
             logger.debug("No cached Poincaré-map points found - computing now...")
             self.compute()
 
-        # Default – legacy – behaviour
+        # Default - legacy - behaviour
         if axes is None:
             return self._section.points
 
