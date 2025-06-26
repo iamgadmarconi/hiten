@@ -97,3 +97,25 @@
     ![Lyapunov orbit family](results/plots/lyapunov_family.svg)
 
     *Figure&nbsp;3 - Family of Earth-Moon \(L_1\) Lyapunov orbits.*
+
+3. **Generating Poincaré maps**
+
+   The toolkit can generate Poincaré maps for the centre manifold over various sections.
+
+   ```python
+   from hiten import System
+
+   system = System.from_bodies("earth", "moon")
+   l1 = system.get_libration_point(1)
+
+   cm = l1.get_center_manifold(max_degree=12)
+   cm.compute()
+
+   pm = cm.poincare_map(energy=0.7, section_coord="q2", n_seeds=50, n_iter=100, seed_strategy="axis_aligned")
+   pm.compute()
+   pm.plot()
+   ```
+
+   ![Poincaré map](results/plots/poincare_map.svg)
+
+   *Figure&nbsp;4 - Poincaré map of the centre manifold of the Earth-Moon \(L_1\) libration point using the \(q_2=0\) section.*
