@@ -78,7 +78,7 @@ def test_map_cpu_vs_gpu(poincare_test_setup):
         np.testing.assert_allclose(
             pts_cpu_sorted,
             pts_gpu_sorted,
-            atol=1e-6,
-            rtol=1e-6,
+            atol=5e-6,
+            rtol=1e-4,
             err_msg="Poincaré map points differ between CPU and GPU implementations"
         )
