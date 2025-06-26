@@ -19,16 +19,16 @@ def main() -> None:
 
     l_point = system.get_libration_point(1)
     logger.info("Generating Poincaré map for L%s of the %s-%s system...", 1, "Earth", "Moon")
-    cm = l_point.get_center_manifold(max_degree=10)
+    cm = l_point.get_center_manifold(max_degree=8)
     cm.compute()
 
     pm = cm.poincare_map(
-        0.6,
-        seed_axis="q2",
-        section_coord="q3",
+        energy=0.6,
+        seed_axis="q3",
+        section_coord="p2",
         n_seeds=20,
         n_iter=25,
-        use_gpu=False,
+        parallel=True,
     )
 
     pm.plot_interactive()

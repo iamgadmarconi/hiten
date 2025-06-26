@@ -84,6 +84,7 @@ class _PoincareMap:
         # Storage for computed points
         self._section: Optional[_PoincareSection] = None
         self._backend: str = "cpu" if not self.config.use_gpu else "gpu"
+        self._runtime_kwargs: dict = {}  # For storing parallel processing kwargs
 
         if self.config.compute_on_init:
             self.compute()
@@ -138,9 +139,19 @@ class _PoincareMap:
         orbit.propagate(steps=steps, method=method, order=order)
         return orbit
 
-    def compute(self) -> np.ndarray:
+    def compute(self, **kwargs) -> np.ndarray:
         r"""
         Compute the discrete Poincaré return map.
+
+        Parameters
+        ----------
+        **kwargs
+            Runtime parameters for parallel processing:
+            - parallel : bool, default False
+                If ``True``, use multithreading to parallelize seed processing across CPU cores.
+                Cannot be used with GPU backend. Uses threads to avoid Numba pickling issues.
+            - n_processes : int, optional
+                Number of worker threads to use. If ``None``, defaults to the number of CPU cores.
 
         Returns
         -------
@@ -151,44 +162,85 @@ class _PoincareMap:
         ------
         RuntimeError
             If the underlying centre manifold computation fails.
+        ValueError
+            If parallel=True is used with GPU backend.
+        TypeError
+            If invalid kwargs are provided.
 
         Notes
         -----
         The resulting section is cached in :pyattr:`_section`; subsequent calls
         reuse the stored data.
         """
+        # Merge stored runtime kwargs with any provided kwargs (provided kwargs take precedence)
+        runtime_params = {**self._runtime_kwargs, **kwargs}
+        
+        # Validate parallel kwargs
+        valid_parallel_kwargs = {'parallel', 'n_processes'}
+        invalid_kwargs = set(runtime_params.keys()) - valid_parallel_kwargs
+        if invalid_kwargs:
+            raise TypeError(f"Invalid keyword arguments for compute(): {invalid_kwargs}. Valid options: {valid_parallel_kwargs}")
+        
+        parallel = runtime_params.get('parallel', False)
+        n_processes = runtime_params.get('n_processes', None)
+        if parallel and self._backend == "gpu":
+            raise ValueError("Cannot use parallel=True with GPU backend (use_gpu=True). Choose one or the other.")
+            
         logger.info(
-            "Generating Poincaré map at energy h0=%.6e (method=%s)",
+            "Generating Poincaré map at energy h0=%.6e (method=%s, parallel=%s)",
             self.energy,
             self.config.method,
+            parallel,
         )
 
         poly_cm_real = self.cm.compute()
 
         kernel = _generate_map_gpu if self._backend == "gpu" else _generate_map_cpu
 
-        section = kernel(
-            h0=self.energy,
-            H_blocks=poly_cm_real,
-            max_degree=self.cm.max_degree,
-            psi_table=self.cm._psi,
-            clmo_table=self.cm._clmo,
-            encode_dict_list=self.cm._encode_dict_list,
-            n_seeds=self.config.n_seeds,
-            n_iter=self.config.n_iter,
-            dt=self.config.dt,
-            use_symplectic=self._use_symplectic,
-            integrator_order=self.config.integrator_order,
-            c_omega_heuristic=self.config.c_omega_heuristic,
-            seed_axis=self.config.seed_axis,
-            section_coord=self.config.section_coord,
-        )
+        if self._backend == "gpu":
+            # GPU backend doesn't support parallel kwargs
+            section = kernel(
+                h0=self.energy,
+                H_blocks=poly_cm_real,
+                max_degree=self.cm.max_degree,
+                psi_table=self.cm._psi,
+                clmo_table=self.cm._clmo,
+                encode_dict_list=self.cm._encode_dict_list,
+                n_seeds=self.config.n_seeds,
+                n_iter=self.config.n_iter,
+                dt=self.config.dt,
+                use_symplectic=self._use_symplectic,
+                integrator_order=self.config.integrator_order,
+                c_omega_heuristic=self.config.c_omega_heuristic,
+                seed_axis=self.config.seed_axis,
+                section_coord=self.config.section_coord,
+            )
+        else:
+            # CPU backend with parallel support
+            section = kernel(
+                h0=self.energy,
+                H_blocks=poly_cm_real,
+                max_degree=self.cm.max_degree,
+                psi_table=self.cm._psi,
+                clmo_table=self.cm._clmo,
+                encode_dict_list=self.cm._encode_dict_list,
+                n_seeds=self.config.n_seeds,
+                n_iter=self.config.n_iter,
+                dt=self.config.dt,
+                use_symplectic=self._use_symplectic,
+                integrator_order=self.config.integrator_order,
+                c_omega_heuristic=self.config.c_omega_heuristic,
+                seed_axis=self.config.seed_axis,
+                section_coord=self.config.section_coord,
+                parallel=parallel,
+                n_processes=n_processes,
+            )
 
         self._section = section
         logger.info("Poincaré map computation complete: %d points", len(self))
         return section.points  # Return raw points for backward compatibility
 
-    def grid(self, Nq: int = 201, Np: int = 201, max_steps: int = 20_000) -> np.ndarray:
+    def grid(self, Nq: int = 201, Np: int = 201, max_steps: int = 20_000, **kwargs) -> np.ndarray:
         r"""
         Generate a dense rectangular grid of the Poincaré map.
 
@@ -198,6 +250,15 @@ class _PoincareMap:
             Number of nodes along the :math:`q` and :math:`p` axes.
         max_steps : int, default 20000
             Maximum number of integration steps for each seed.
+        **kwargs
+            Runtime parameters for parallel processing:
+            - parallel : bool, default False
+                If ``True``, use multithreading to parallelize the seed finding process.
+                Cannot be used with GPU backend. Uses threads to avoid Numba pickling issues.
+            - parallel_seed_finding : bool, default True
+                If ``True`` and ``parallel=True``, parallelize the seed finding phase.
+            - n_processes : int, optional
+                Number of worker threads to use. If ``None``, defaults to the number of CPU cores.
 
         Returns
         -------
@@ -208,8 +269,26 @@ class _PoincareMap:
         Raises
         ------
         ValueError
-            If an unsupported backend is selected.
+            If an unsupported backend is selected or if parallel=True is used with GPU backend.
+        TypeError
+            If invalid kwargs are provided.
         """
+        # Merge stored runtime kwargs with any provided kwargs (provided kwargs take precedence)
+        runtime_params = {**self._runtime_kwargs, **kwargs}
+        
+        # Validate parallel kwargs
+        valid_parallel_kwargs = {'parallel', 'n_processes', 'parallel_seed_finding'}
+        invalid_kwargs = set(runtime_params.keys()) - valid_parallel_kwargs
+        if invalid_kwargs:
+            raise TypeError(f"Invalid keyword arguments for grid(): {invalid_kwargs}. Valid options: {valid_parallel_kwargs}")
+        
+        parallel = runtime_params.get('parallel', False)
+        n_processes = runtime_params.get('n_processes', None)
+        parallel_seed_finding = runtime_params.get('parallel_seed_finding', True)
+        
+        if parallel and self._backend == "gpu":
+            raise ValueError("Cannot use parallel=True with GPU backend (use_gpu=True). Choose one or the other.")
+            
         logger.info(
             "Generating *dense-grid* Poincaré map at energy h0=%.6e (Nq=%d, Np=%d)",
             self.energy,
@@ -235,6 +314,9 @@ class _PoincareMap:
                 integrator_order=self.config.integrator_order,
                 use_symplectic=self._use_symplectic,
                 section_coord=self.config.section_coord,
+                parallel=parallel,
+                parallel_seed_finding=parallel_seed_finding,
+                n_processes=n_processes,
                 )
         else:
             raise ValueError(f"Unsupported backend: {self._backend}")

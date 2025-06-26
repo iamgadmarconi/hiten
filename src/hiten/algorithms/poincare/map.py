@@ -15,6 +15,8 @@ manifolds near collinear libration points".
 """
 
 import math
+import multiprocessing as mp
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Callable, List, NamedTuple, Optional, Tuple
 
 import numpy as np
@@ -22,14 +24,14 @@ from numba import njit, prange
 from numba.typed import List
 from scipy.optimize import root_scalar
 
-from hiten.algorithms.polynomial.operations import (_polynomial_evaluate,
-                                                     _polynomial_jacobian)
 from hiten.algorithms.dynamics.hamiltonian import (_eval_dH_dP, _eval_dH_dQ,
-                                             _hamiltonian_rhs)
+                                                   _hamiltonian_rhs)
 from hiten.algorithms.integrators.rk import (RK4_A, RK4_B, RK4_C, RK6_A, RK6_B,
-                                       RK6_C, RK8_A, RK8_B, RK8_C)
+                                             RK6_C, RK8_A, RK8_B, RK8_C)
 from hiten.algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
-                                               _integrate_symplectic)
+                                                     _integrate_symplectic)
+from hiten.algorithms.polynomial.operations import (_polynomial_evaluate,
+                                                    _polynomial_jacobian)
 from hiten.algorithms.utils.config import FASTMATH
 from hiten.utils.log_config import logger
 
@@ -358,9 +360,9 @@ def _poincare_step(
     n_dof: int,
     section_coord: str,
     c_omega_heuristic: float=20.0,
-) -> Tuple[int, float, float, float]:
+) -> Tuple[int, float, float, float, float]:
     r"""
-    Return (flag, q2', p2', p3').  flag=1 if success, 0 otherwise.
+    Return (flag, q2', p2', q3', p3').  flag=1 if success, 0 otherwise.
     """
 
     state_old = np.zeros(2 * n_dof, dtype=np.float64)
@@ -471,14 +473,15 @@ def _poincare_step(
             q2p = hermite(state_old[1], state_new[1], rhs_old[1], rhs_new[1])
             p2p = hermite(state_old[n_dof+1], state_new[n_dof+1],
                           rhs_old[n_dof+1],    rhs_new[n_dof+1])
+            q3p = hermite(state_old[2], state_new[2], rhs_old[2], rhs_new[2])
             p3p = hermite(state_old[n_dof+2], state_new[n_dof+2],
                           rhs_old[n_dof+2], rhs_new[n_dof+2])
 
-            return 1, q2p, p2p, p3p
+            return 1, q2p, p2p, q3p, p3p
 
         state_old = state_new
 
-    return 0, 0.0, 0.0, 0.0
+    return 0, 0.0, 0.0, 0.0, 0.0
 
 @njit(parallel=True, cache=False)
 def _poincare_map(
@@ -491,14 +494,15 @@ def _poincare_map(
     use_symplectic: bool,
     n_dof: int,
     section_coord: str,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     r"""
-    Return (success flags, q2p array, p2p array, p3p array) processed in parallel.
+    Return (success flags, q2p array, p2p array, q3p array, p3p array) processed in parallel.
     """
     n_seeds = seeds.shape[0]
     success = np.zeros(n_seeds, dtype=np.int64)
     q2p_out = np.empty(n_seeds, dtype=np.float64)
     p2p_out = np.empty(n_seeds, dtype=np.float64)
+    q3p_out = np.empty(n_seeds, dtype=np.float64)
     p3p_out = np.empty(n_seeds, dtype=np.float64)
 
     for i in prange(n_seeds):
@@ -507,7 +511,7 @@ def _poincare_map(
         q3 = seeds[i, 2]
         p3 = seeds[i, 3]
 
-        flag, q2_new, p2_new, p3_new = _poincare_step(
+        flag, q2_new, p2_new, q3_new, p3_new = _poincare_step(
             q2,
             p2,
             q3,
@@ -526,9 +530,163 @@ def _poincare_map(
             success[i] = 1
             q2p_out[i] = q2_new
             p2p_out[i] = p2_new
+            q3p_out[i] = q3_new
             p3p_out[i] = p3_new
 
-    return success, q2p_out, p2p_out, p3p_out
+    return success, q2p_out, p2p_out, q3p_out, p3p_out
+
+def _process_seed_chunk(
+    seed_chunk: List[Tuple[float, float, float, float]],
+    n_iter: int,
+    dt: float,
+    jac_H: List[List[np.ndarray]],
+    clmo_table: List[np.ndarray],
+    integrator_order: int,
+    max_steps: int,
+    use_symplectic: bool,
+    n_dof: int,
+    section_coord: str,
+    c_omega_heuristic: float,
+) -> List[Tuple[float, float]]:
+    r"""
+    Process a chunk of seeds for parallel execution in _generate_map.
+    
+    Parameters
+    ----------
+    seed_chunk : List[Tuple[float, float, float, float]]
+        Chunk of seeds to process
+    n_iter : int
+        Number of iterations per seed
+    dt : float
+        Integration timestep
+    jac_H : List[List[np.ndarray]]
+        Jacobian of Hamiltonian
+    clmo_table : List[np.ndarray]
+        CLMO index table
+    integrator_order : int
+        Order of integrator
+    max_steps : int
+        Maximum steps per crossing
+    use_symplectic : bool
+        Whether to use symplectic integrator
+    n_dof : int
+        Number of degrees of freedom
+    section_coord : str
+        Section coordinate
+    c_omega_heuristic : float
+        Heuristic parameter for symplectic integrator
+        
+    Returns
+    -------
+    List[Tuple[float, float]]
+        List of Poincaré map points from this chunk
+    """
+    pts_accum: List[Tuple[float, float]] = []
+    
+    for seed in seed_chunk:
+        state = seed
+        for i in range(n_iter):
+            try:
+                flag, q2p, p2p, q3p, p3p = _poincare_step(
+                    state[0],  # q2
+                    state[1],  # p2
+                    state[2],  # q3
+                    state[3],  # p3
+                    dt,
+                    jac_H,
+                    clmo_table,
+                    integrator_order,
+                    max_steps,
+                    use_symplectic,
+                    n_dof,
+                    section_coord,
+                    c_omega_heuristic,
+                )
+
+                if flag == 1:
+                    # Extract the appropriate coordinates for the section
+                    if section_coord == "q3":
+                        # q3 = 0 section: store (q2, p2); keep q3 fixed to 0 for next iterate
+                        pts_accum.append((q2p, p2p))  # (q2, p2)
+                        state = (q2p, p2p, 0.0, p3p)
+                    elif section_coord == "p3":
+                        pts_accum.append((q2p, p2p))
+                        # For p3=0 section, need to keep q3 from the crossing
+                        state = (q2p, p2p, q3p, 0.0)  # p3 is fixed at 0
+                    elif section_coord == "q2":
+                        pts_accum.append((q3p, p3p))  # (q3, p3)
+                        state = (0.0, p2p, q3p, p3p)  # q2 is fixed at 0
+                    elif section_coord == "p2":
+                        pts_accum.append((q3p, p3p))  # (q3, p3)
+                        state = (q2p, 0.0, q3p, p3p)  # p2 is fixed at 0
+                else:
+                    logger.warning(
+                        "Failed to find Poincaré crossing for seed %s at iteration %d/%d in worker process",
+                        seed,
+                        i + 1,
+                        n_iter,
+                    )
+                    break
+            except RuntimeError as e:
+                logger.warning(f"Failed to find Poincaré crossing for seed {seed} at iteration {i+1}/{n_iter} in worker process: {e}")
+                break
+
+    return pts_accum
+
+def _process_grid_chunk(
+    coord_pairs: List[Tuple[float, float]],
+    h0: float,
+    H_blocks: List[np.ndarray],
+    clmo_table: List[np.ndarray],
+    section_coord: str,
+) -> List[Tuple[float, float, float, float]]:
+    r"""
+    Process a chunk of coordinate pairs to find valid seeds for parallel execution in _generate_grid.
+    
+    Parameters
+    ----------
+    coord_pairs : List[Tuple[float, float]]
+        List of (coord1, coord2) pairs to process
+    h0 : float
+        Energy level
+    H_blocks : List[np.ndarray]
+        Hamiltonian polynomial blocks
+    clmo_table : List[np.ndarray]
+        CLMO index table
+    section_coord : str
+        Section coordinate type
+        
+    Returns
+    -------
+    List[Tuple[float, float, float, float]]
+        List of valid seeds (q2, p2, q3, p3)
+    """
+    seeds: List[Tuple[float, float, float, float]] = []
+    
+    for coord1, coord2 in coord_pairs:
+        # Dispatch seed solving based on section type
+        if section_coord == "q3":
+            # q3=0 section: coord1=q2, coord2=p2, solve for p3
+            missing_coord = _solve_missing_coord("p3", {"q2": coord1, "p2": coord2, "q3": 0.0}, h0, H_blocks, clmo_table)
+            if missing_coord is not None:
+                seeds.append((coord1, coord2, 0.0, missing_coord))
+        elif section_coord == "p3":
+            # p3=0 section: coord1=q2, coord2=p2, solve for q3
+            missing_coord = _solve_missing_coord("q3", {"q2": coord1, "p2": coord2, "p3": 0.0}, h0, H_blocks, clmo_table)
+            if missing_coord is not None:
+                seeds.append((coord1, coord2, missing_coord, 0.0))
+        elif section_coord == "q2":
+            # q2=0 section: coord1=q3, coord2=p3, solve for p2
+            missing_coord = _solve_missing_coord("p2", {"q2": 0.0, "q3": coord1, "p3": coord2}, h0, H_blocks, clmo_table)
+            if missing_coord is not None:
+                seeds.append((0.0, missing_coord, coord1, coord2))
+        elif section_coord == "p2":
+            # p2=0 section: coord1=q3, coord2=p3, solve for q2
+            missing_coord = _solve_missing_coord("q2", {"p2": 0.0, "q3": coord1, "p3": coord2}, h0, H_blocks, clmo_table)
+            if missing_coord is not None:
+                seeds.append((missing_coord, 0.0, coord1, coord2))
+    
+    return seeds
 
 def _generate_map(
     h0: float,
@@ -545,6 +703,8 @@ def _generate_map(
     c_omega_heuristic: float=20.0,
     seed_axis: str = "q2",  # "q2" or "p2"
     section_coord: str = "q3",  # "q2", "p2", "q3", or "p3"
+    parallel: bool = False,  # Enable CPU parallelization
+    n_processes: Optional[int] = None,  # Number of processes (default: CPU count)
 ) -> _PoincareSection:
     r"""
     Generate a Poincaré return map by forward integration of a small set of seeds.
@@ -579,6 +739,11 @@ def _generate_map(
         Coordinate along which seeds are distributed.
     section_coord : {'q2', 'p2', 'q3', 'p3'}, default 'q3'
         Coordinate that defines the Poincaré section :math:`\Sigma`.
+    parallel : bool, default False
+        If ``True``, use multithreading to parallelize seed processing across CPU cores.
+        Uses threads instead of processes to avoid Numba object serialization issues.
+    n_processes : int, optional
+        Number of worker threads to use. If ``None``, defaults to the number of CPU cores.
 
     Returns
     -------
@@ -589,13 +754,9 @@ def _generate_map(
     ------
     ValueError
         If *section_coord* is not supported.
-
-    Notes
-    -----
-    The routine is performance-critical and therefore JIT-compiled with :pyfunc:`numba.njit`.
     """
     # Get section information
-    section_idx, direction_sign, labels = _section_closure(section_coord)
+    _, _, labels = _section_closure(section_coord)
     
     # 1. Build Jacobian once.
     jac_H = _polynomial_jacobian(
@@ -618,14 +779,14 @@ def _generate_map(
             q2_vals = np.linspace(-0.9 * q2_max, 0.9 * q2_max, n_seeds)
             for q2 in q2_vals:
                 p2 = 0.0
-                p3 = _solve_missing_coord("p3", {"q2": q2, "p2": p2, "p3": 0.0}, h0, H_blocks, clmo_table)
+                p3 = _solve_missing_coord("p3", {"q2": q2, "p2": p2, "q3": 0.0}, h0, H_blocks, clmo_table)
                 if p3 is not None:
                     seeds.append((q2, p2, 0.0, p3))
         elif seed_axis == "p2":
             p2_vals = np.linspace(-0.9 * p2_max, 0.9 * p2_max, n_seeds)
             for p2 in p2_vals:
                 q2 = 0.0
-                p3 = _solve_missing_coord("p3", {"q2": q2, "p2": p2, "p3": 0.0}, h0, H_blocks, clmo_table)
+                p3 = _solve_missing_coord("p3", {"q2": q2, "p2": p2, "q3": 0.0}, h0, H_blocks, clmo_table)
                 if p3 is not None:
                     seeds.append((q2, p2, 0.0, p3))
     
@@ -651,101 +812,152 @@ def _generate_map(
                     
     elif section_coord == "q2":
         # q2=0 section: vary along seed_axis (q3 or p3), solve for the other
+        # IMPORTANT: We set p3=0 (not p2=0) to avoid constraining seeds to special invariant curves
+        # that would result in circular Poincaré maps. The (q2, p2) and (q3, p3) planes have
+        # different dynamical properties in the center manifold reduction.
         q3_max = _find_turning("q3", h0, H_blocks, clmo_table)
         p3_max = _find_turning("p3", h0, H_blocks, clmo_table)
         
         if seed_axis == "q3":
             q3_vals = np.linspace(-0.9 * q3_max, 0.9 * q3_max, n_seeds)
             for q3 in q3_vals:
-                p2 = 0.0
-                p3 = _solve_missing_coord("p3", {"q2": 0.0, "q3": q3, "p2": p2}, h0, H_blocks, clmo_table)
-                if p3 is not None:
+                p3 = 0.0
+                p2 = _solve_missing_coord("p2", {"q2": 0.0, "q3": q3, "p3": p3}, h0, H_blocks, clmo_table)
+                if p2 is not None:
                     seeds.append((0.0, p2, q3, p3))
         elif seed_axis == "p3":
             p3_vals = np.linspace(-0.9 * p3_max, 0.9 * p3_max, n_seeds)
             for p3 in p3_vals:
-                p2 = 0.0
-                q3 = _solve_missing_coord("q3", {"q2": 0.0, "p2": p2, "p3": p3}, h0, H_blocks, clmo_table)
-                if q3 is not None:
+                q3 = 0.0
+                p2 = _solve_missing_coord("p2", {"q2": 0.0, "q3": q3, "p3": p3}, h0, H_blocks, clmo_table)
+                if p2 is not None:
                     seeds.append((0.0, p2, q3, p3))
                     
     elif section_coord == "p2":
         # p2=0 section: vary along seed_axis (q3 or p3), solve for the other
+        # IMPORTANT: We set q3=0 (not q2=0) to avoid constraining seeds to special invariant curves
+        # that would result in circular Poincaré maps. The (q2, p2) and (q3, p3) planes have
+        # different dynamical properties in the center manifold reduction.
         q3_max = _find_turning("q3", h0, H_blocks, clmo_table)
         p3_max = _find_turning("p3", h0, H_blocks, clmo_table)
         
         if seed_axis == "q3":
             q3_vals = np.linspace(-0.9 * q3_max, 0.9 * q3_max, n_seeds)
             for q3 in q3_vals:
-                q2 = 0.0
-                p3 = _solve_missing_coord("p3", {"q2": q2, "q3": q3, "p2": 0.0}, h0, H_blocks, clmo_table)
-                if p3 is not None:
-                    seeds.append((q2, 0.0, q3, p3))
+                p3 = 0.0  # Changed from q2 = 0.0
+                q2 = _solve_missing_coord("q2", {"p2": 0.0, "q3": q3, "p3": p3}, h0, H_blocks, clmo_table)  # Changed to solve for q2
+                if q2 is not None:
+                    seeds.append((q2, 0.0, q3, p3))  # Kept p2=0 (section constraint)
         elif seed_axis == "p3":
             p3_vals = np.linspace(-0.9 * p3_max, 0.9 * p3_max, n_seeds)
             for p3 in p3_vals:
-                q2 = 0.0
-                q3 = _solve_missing_coord("q3", {"q2": q2, "p2": 0.0, "p3": p3}, h0, H_blocks, clmo_table)
-                if q3 is not None:
+                q3 = 0.0  # Set q3=0 instead of q2=0
+                q2 = _solve_missing_coord("q2", {"p2": 0.0, "q3": q3, "p3": p3}, h0, H_blocks, clmo_table)  # Solve for q2
+                if q2 is not None:
                     seeds.append((q2, 0.0, q3, p3))
     else:
         raise ValueError(f"Unsupported section_coord: {section_coord}")
 
-    # 3. Iterate each seed to generate map points
-    pts_accum: list[Tuple[float, float]] = []
-
+    # 3. Process seeds to generate map points
     # Dynamically adjust max_steps based on dt to allow a consistent total integration time for finding a crossing.
     # The original implicit max integration time (when dt=1e-3 and max_steps=20000) was 20.0.
     target_max_integration_time_per_crossing = 20.0
     calculated_max_steps = int(math.ceil(target_max_integration_time_per_crossing / dt))
     logger.info(f"Using dt={dt:.1e}, calculated max_steps per crossing: {calculated_max_steps}")
 
-    for seed in seeds:
-        state = seed
-        for i in range(n_iter): # Use a different loop variable, e.g., i
-            try:
-                flag, q2p, p2p, p3p = _poincare_step(
-                    state[0],  # q2
-                    state[1],  # p2
-                    state[2],  # q3
-                    state[3],  # p3
-                    dt,
-                    jac_H,
-                    clmo_table,
-                    integrator_order,
-                    calculated_max_steps,
-                    use_symplectic,
-                    N_SYMPLECTIC_DOF,
-                    section_coord,
-                    c_omega_heuristic,
-                )
+    pts_accum: list[Tuple[float, float]] = []
 
-                if flag == 1:
-                    # Extract the appropriate coordinates for the section
-                    if section_coord == "q3":
-                        pts_accum.append((q2p, p2p))
-                        state = (q2p, p2p, 0.0, p3p)
-                    elif section_coord == "p3":
-                        pts_accum.append((q2p, p2p))
-                        # For p3=0 section, need to keep q3 from the crossing
-                        state = (q2p, p2p, state[2], 0.0)  # p3 is fixed at 0
-                    elif section_coord == "q2":
-                        pts_accum.append((state[2], p3p))  # (q3, p3)
-                        state = (0.0, p2p, state[2], p3p)  # q2 is fixed at 0
-                    elif section_coord == "p2":
-                        pts_accum.append((state[2], p3p))  # (q3, p3)
-                        state = (q2p, 0.0, state[2], p3p)  # p2 is fixed at 0
-                else:
-                    logger.warning(
-                        "Failed to find Poincaré crossing for seed %s at iteration %d/%d",
-                        seed,
-                        i + 1,
+    if parallel and len(seeds) > 1:
+        # Parallel processing
+        if n_processes is None:
+            n_processes = mp.cpu_count()
+        
+        logger.info(f"Using parallel processing with {n_processes} threads for {len(seeds)} seeds")
+        
+        # Split seeds into chunks for parallel processing
+        chunk_size = max(1, len(seeds) // n_processes)
+        seed_chunks = [seeds[i:i + chunk_size] for i in range(0, len(seeds), chunk_size)]
+        
+        # Process chunks in parallel using threads (avoids Numba pickling issues)
+        with ThreadPoolExecutor(max_workers=n_processes) as executor:
+            futures = []
+            for chunk in seed_chunks:
+                if chunk:  # Skip empty chunks
+                    future = executor.submit(
+                        _process_seed_chunk,
+                        chunk,
                         n_iter,
+                        dt,
+                        jac_H,
+                        clmo_table,
+                        integrator_order,
+                        calculated_max_steps,
+                        use_symplectic,
+                        N_SYMPLECTIC_DOF,
+                        section_coord,
+                        c_omega_heuristic,
                     )
+                    futures.append(future)
+            
+            # Collect results from all processes
+            for future in as_completed(futures):
+                try:
+                    chunk_results = future.result()
+                    pts_accum.extend(chunk_results)
+                except Exception as e:
+                    logger.error(f"Error in parallel processing: {e}")
+                    
+        logger.info(f"Parallel processing completed. Generated {len(pts_accum)} map points.")
+        
+    else:
+        # Sequential processing (original implementation)
+        for seed in seeds:
+            state = seed
+            for i in range(n_iter):
+                try:
+                    flag, q2p, p2p, q3p, p3p = _poincare_step(
+                        state[0],  # q2
+                        state[1],  # p2
+                        state[2],  # q3
+                        state[3],  # p3
+                        dt,
+                        jac_H,
+                        clmo_table,
+                        integrator_order,
+                        calculated_max_steps,
+                        use_symplectic,
+                        N_SYMPLECTIC_DOF,
+                        section_coord,
+                        c_omega_heuristic,
+                    )
+
+                    if flag == 1:
+                        # Extract the appropriate coordinates for the section
+                        if section_coord == "q3":
+                            # q3 = 0 section: store (q2, p2); keep q3 fixed to 0 for next iterate
+                            pts_accum.append((q2p, p2p))  # (q2, p2)
+                            state = (q2p, p2p, 0.0, p3p)
+                        elif section_coord == "p3":
+                            pts_accum.append((q2p, p2p))
+                            # For p3=0 section, need to keep q3 from the crossing
+                            state = (q2p, p2p, q3p, 0.0)  # p3 is fixed at 0
+                        elif section_coord == "q2":
+                            pts_accum.append((q3p, p3p))  # (q3, p3)
+                            state = (0.0, p2p, q3p, p3p)  # q2 is fixed at 0
+                        elif section_coord == "p2":
+                            pts_accum.append((q3p, p3p))  # (q3, p3)
+                            state = (q2p, 0.0, q3p, p3p)  # p2 is fixed at 0
+                    else:
+                        logger.warning(
+                            "Failed to find Poincaré crossing for seed %s at iteration %d/%d",
+                            seed,
+                            i + 1,
+                            n_iter,
+                        )
+                        break
+                except RuntimeError as e:
+                    logger.warning(f"Failed to find Poincaré crossing for seed {seed} at iteration {i+1}/{n_iter}: {e}")
                     break
-            except RuntimeError as e:
-                logger.warning(f"Failed to find Poincaré crossing for seed {seed} at iteration {i+1}/{n_iter}: {e}")
-                break # Stop iterating this seed if a crossing is not found
 
     if len(pts_accum) == 0:
         # Return empty array with correct shape
@@ -768,6 +980,9 @@ def _generate_grid(
     integrator_order: int = 6,
     use_symplectic: bool = False,
     section_coord: str = "q3",
+    parallel: bool = False,  # Enable CPU parallelization
+    parallel_seed_finding: bool = True,  # Parallelize seed finding phase
+    n_processes: Optional[int] = None,  # Number of processes (default: CPU count)
 ) -> _PoincareSection:
     r"""
     Compute Poincaré map points at a given energy level.
@@ -799,6 +1014,14 @@ def _generate_grid(
     use_symplectic : bool, optional
         If True, use the extended-phase symplectic integrator; otherwise use
         an explicit RK4 step.  Default is False.
+    section_coord : {'q2', 'p2', 'q3', 'p3'}, default 'q3'
+        Coordinate that defines the Poincaré section.
+    parallel : bool, default False
+        If ``True``, use multithreading to parallelize the seed finding process.
+    parallel_seed_finding : bool, default True
+        If ``True`` and ``parallel=True``, parallelize the seed finding phase.
+    n_processes : int, optional
+        Number of worker processes to use. If ``None``, defaults to the number of CPU cores.
 
     Returns
     -------
@@ -813,12 +1036,13 @@ def _generate_grid(
     Notes
     -----
     Designed for exhaustive scans. For faster qualitative exploration use
-    :pyfunc:`_generate_map` with a handful of seeds.
+    :pyfunc:`_generate_map` with a handful of seeds. When ``parallel=True``,
+    the seed finding process is parallelized across CPU cores.
     """
     logger.info(f"Computing Poincaré map for energy h0={h0:.6e}, grid size: {Nq}x{Np}")
     
     # Get section information
-    section_idx, direction_sign, labels = _section_closure(section_coord)
+    _, _, labels = _section_closure(section_coord)
     
     jac_H = _polynomial_jacobian(
         poly_p=H_blocks,
@@ -847,52 +1071,95 @@ def _generate_grid(
 
     # Find valid seeds
     logger.info("Finding valid seeds within Hill boundary")
-    seeds: list[Tuple[float, float, float, float]] = []
     total_points = Nq * Np
-    points_checked = 0
-    valid_seeds_found = 0
     
-    for coord1 in coord1_vals:
-        for coord2 in coord2_vals:
-            points_checked += 1
-            if points_checked % (total_points // 10) == 0:
-                percentage = int(100 * points_checked / total_points)
-                logger.info(f"Seed search progress: {percentage}%, found {valid_seeds_found} valid seeds")
-                
-            # Dispatch seed solving based on section type
-            if section_coord == "q3":
-                # q3=0 section: coord1=q2, coord2=p2, solve for p3
-                missing_coord = _solve_missing_coord("p3", {"q2": coord1, "p2": coord2, "p3": 0.0}, h0, H_blocks, clmo_table)
-                if missing_coord is not None:
-                    seeds.append((coord1, coord2, 0.0, missing_coord))
-                    valid_seeds_found += 1
-            elif section_coord == "p3":
-                # p3=0 section: coord1=q2, coord2=p2, solve for q3
-                missing_coord = _solve_missing_coord("q3", {"q2": coord1, "p2": coord2, "p3": 0.0}, h0, H_blocks, clmo_table)
-                if missing_coord is not None:
-                    seeds.append((coord1, coord2, missing_coord, 0.0))
-                    valid_seeds_found += 1
-            elif section_coord == "q2":
-                # q2=0 section: coord1=q3, coord2=p3, solve for p2
-                missing_coord = _solve_missing_coord("p2", {"q2": 0.0, "q3": coord1, "p3": coord2}, h0, H_blocks, clmo_table)
-                if missing_coord is not None:
-                    seeds.append((0.0, missing_coord, coord1, coord2))
-                    valid_seeds_found += 1
-            elif section_coord == "p2":
-                # p2=0 section: coord1=q3, coord2=p3, solve for q2
-                missing_coord = _solve_missing_coord("q2", {"p2": 0.0, "q3": coord1, "p3": coord2}, h0, H_blocks, clmo_table)
-                if missing_coord is not None:
-                    seeds.append((missing_coord, 0.0, coord1, coord2))
-                    valid_seeds_found += 1
-    
-    logger.info(f"Found {len(seeds)} valid seeds out of {total_points} grid points")
+    if parallel and parallel_seed_finding and total_points > 100:
+        # Parallel seed finding
+        if n_processes is None:
+            n_processes = mp.cpu_count()
+            
+        logger.info(f"Using parallel seed finding with {n_processes} threads for {total_points} coordinate pairs")
+        
+        # Create all coordinate pairs
+        coord_pairs = [(coord1, coord2) for coord1 in coord1_vals for coord2 in coord2_vals]
+        
+        # Split into chunks for parallel processing
+        chunk_size = max(1, len(coord_pairs) // n_processes)
+        coord_chunks = [coord_pairs[i:i + chunk_size] for i in range(0, len(coord_pairs), chunk_size)]
+        
+        # Process chunks in parallel using threads (avoids Numba pickling issues)
+        seeds: list[Tuple[float, float, float, float]] = []
+        with ThreadPoolExecutor(max_workers=n_processes) as executor:
+            futures = []
+            for chunk in coord_chunks:
+                if chunk:  # Skip empty chunks
+                    future = executor.submit(
+                        _process_grid_chunk,
+                        chunk,
+                        h0,
+                        H_blocks,
+                        clmo_table,
+                        section_coord,
+                    )
+                    futures.append(future)
+            
+            # Collect results from all processes
+            for future in as_completed(futures):
+                try:
+                    chunk_seeds = future.result()
+                    seeds.extend(chunk_seeds)
+                except Exception as e:
+                    logger.error(f"Error in parallel seed finding: {e}")
+                    
+        logger.info(f"Parallel seed finding completed. Found {len(seeds)} valid seeds out of {total_points} grid points")
+        
+    else:
+        # Sequential seed finding (original implementation)
+        seeds: list[Tuple[float, float, float, float]] = []
+        points_checked = 0
+        valid_seeds_found = 0
+        
+        for coord1 in coord1_vals:
+            for coord2 in coord2_vals:
+                points_checked += 1
+                if points_checked % (total_points // 10) == 0:
+                    percentage = int(100 * points_checked / total_points)
+                    logger.info(f"Seed search progress: {percentage}%, found {valid_seeds_found} valid seeds")
+                    
+                # Dispatch seed solving based on section type
+                if section_coord == "q3":
+                    # q3=0 section: coord1=q2, coord2=p2, solve for p3
+                    missing_coord = _solve_missing_coord("p3", {"q2": coord1, "p2": coord2, "q3": 0.0}, h0, H_blocks, clmo_table)
+                    if missing_coord is not None:
+                        seeds.append((coord1, coord2, 0.0, missing_coord))
+                        valid_seeds_found += 1
+                elif section_coord == "p3":
+                    # p3=0 section: coord1=q2, coord2=p2, solve for q3
+                    missing_coord = _solve_missing_coord("q3", {"q2": coord1, "p2": coord2, "p3": 0.0}, h0, H_blocks, clmo_table)
+                    if missing_coord is not None:
+                        seeds.append((coord1, coord2, missing_coord, 0.0))
+                        valid_seeds_found += 1
+                elif section_coord == "q2":
+                    # q2=0 section: coord1=q3, coord2=p3, solve for p2
+                    missing_coord = _solve_missing_coord("p2", {"q2": 0.0, "q3": coord1, "p3": coord2}, h0, H_blocks, clmo_table)
+                    if missing_coord is not None:
+                        seeds.append((0.0, missing_coord, coord1, coord2))
+                        valid_seeds_found += 1
+                elif section_coord == "p2":
+                    # p2=0 section: coord1=q3, coord2=p3, solve for q2
+                    missing_coord = _solve_missing_coord("q2", {"p2": 0.0, "q3": coord1, "p3": coord2}, h0, H_blocks, clmo_table)
+                    if missing_coord is not None:
+                        seeds.append((missing_coord, 0.0, coord1, coord2))
+                        valid_seeds_found += 1
+                        
+        logger.info(f"Sequential seed finding completed. Found {len(seeds)} valid seeds out of {total_points} grid points")
 
     if len(seeds) == 0:
         return _PoincareSection(np.empty((0, 2), dtype=np.float64), labels)
 
     seeds_arr = np.asarray(seeds, dtype=np.float64)
 
-    success_flags, q2p_arr, p2p_arr, p3p_arr = _poincare_map(
+    success_flags, q2p_arr, p2p_arr, q3p_arr, p3p_arr = _poincare_map(
         seeds_arr,
         dt,
         jac_H,
@@ -920,11 +1187,11 @@ def _generate_grid(
                 map_pts[idx, 1] = p2p_arr[i]
             elif section_coord == "q2":
                 # For q2=0 section, we store (q3, p3)
-                map_pts[idx, 0] = seeds_arr[i, 2]  # q3 coordinate
+                map_pts[idx, 0] = q3p_arr[i]  # q3 coordinate
                 map_pts[idx, 1] = p3p_arr[i]  # p3 coordinate from crossing
             elif section_coord == "p2":
                 # For p2=0 section, we store (q3, p3) 
-                map_pts[idx, 0] = seeds_arr[i, 2]  # q3 coordinate
+                map_pts[idx, 0] = q3p_arr[i]  # q3 coordinate
                 map_pts[idx, 1] = p3p_arr[i]  # p3 coordinate from crossing
             idx += 1
 

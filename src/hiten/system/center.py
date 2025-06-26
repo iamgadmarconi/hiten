@@ -18,6 +18,7 @@ Zhang, H. Q., Li, S. (2001). "Improved semi-analytical computation of center
 manifolds near collinear libration points".
 """
 
+from dataclasses import asdict
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple
 
 import numpy as np
@@ -359,6 +360,8 @@ class CenterManifold:
         **kwargs
             Optional keyword arguments forwarded to
             :pyclass:`hiten.algorithms.poincare.base._PoincareMapConfig`.
+            Additional runtime parameters like 'parallel', 'n_processes', 
+            'parallel_seed_finding' can be passed to compute() and grid() methods.
 
         Returns
         -------
@@ -369,35 +372,55 @@ class CenterManifold:
         ------
         TypeError
             If any of the provided kwargs are not valid configuration fields.
+        ValueError
+            If both use_gpu=True and parallel runtime parameters are specified.
 
         Notes
         -----
         A map is constructed for each unique combination of energy and
         configuration, and stored internally. Subsequent calls with the same
         parameters return the cached object.
+        
+        Parallel processing parameters (parallel, n_processes, parallel_seed_finding)
+        are not part of the configuration cache key since they are runtime parameters
+        passed to compute() and grid() methods. Uses multithreading for parallelization.
         """
-        # Note: moved here from top level to avoid circular import.
-        from dataclasses import asdict
-
         from hiten.algorithms.poincare.base import (_PoincareMap,
                                                     _PoincareMapConfig)
 
-        # Validate that all provided kwargs are valid fields in the config.
+        # Separate config kwargs from runtime parallel kwargs
         config_fields = set(_PoincareMapConfig.__dataclass_fields__.keys())
-        for key in kwargs:
-            if key not in config_fields:
-                raise TypeError(f"'{key}' is not a valid keyword argument for PoincareMap configuration.")
+        parallel_kwargs = {'parallel', 'n_processes', 'parallel_seed_finding'}
         
-        cfg = _PoincareMapConfig(**kwargs)
+        config_kwargs = {}
+        runtime_kwargs = {}
+        
+        for key, value in kwargs.items():
+            if key in config_fields:
+                config_kwargs[key] = value
+            elif key in parallel_kwargs:
+                runtime_kwargs[key] = value
+            else:
+                raise TypeError(f"'{key}' is not a valid keyword argument for PoincareMap configuration or runtime parameters.")
+        
+        # Validate conflicting usage of GPU and parallel processing
+        if config_kwargs.get('use_gpu', False) and runtime_kwargs.get('parallel', False):
+            raise ValueError("Cannot use use_gpu=True with parallel=True. Choose one or the other.")
+        
+        cfg = _PoincareMapConfig(**config_kwargs)
 
-        # Create a hashable key from the configuration.
+        # Create a hashable key from the configuration only (not runtime params)
         config_tuple = tuple(sorted(asdict(cfg).items()))
         cache_key = (energy, config_tuple)
 
         if cache_key not in self._poincare_maps:
             self._poincare_maps[cache_key] = _PoincareMap(self, energy, cfg)
         
-        return self._poincare_maps[cache_key]
+        # Store runtime kwargs in the instance for use in compute/grid methods
+        poincare_map = self._poincare_maps[cache_key]
+        poincare_map._runtime_kwargs = runtime_kwargs
+        
+        return poincare_map
 
     def ic(self, poincare_point: np.ndarray, energy: float, section_coord: str = "q3") -> np.ndarray:
         r"""
