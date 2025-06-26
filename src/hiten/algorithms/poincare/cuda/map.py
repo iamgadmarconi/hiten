@@ -29,8 +29,9 @@ def _generate_map_gpu(
     use_symplectic: bool = False,  # Currently only RK4 is implemented
     integrator_order: int = 6,
     c_omega_heuristic: float = 20.0,
-    seed_axis: str = "q2",  # "q2" or "p2"
-    section_coord: str = "q3",  # "q2", "p2", "q3", or "p3"
+    section_coord: str = "q3",
+    seed_strategy: str = "single",
+    seed_axis: str = "q2",
 ) -> _PoincareSection:
     """
     GPU-accelerated version of _generate_map.
