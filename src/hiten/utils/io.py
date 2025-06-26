@@ -385,6 +385,8 @@ def _load_poincare_map_inplace(obj: "_PoincareMap", filepath: str) -> None:
             labels_json = f.attrs.get("labels_json")
             labels = tuple(json.loads(labels_json)) if labels_json else ("q2", "p2")
             obj._section = _PoincareSection(pts, labels)
+        else:
+            obj._section = None
 
         if "grid" in f:
             obj._grid = f["grid"][()]
@@ -392,7 +394,6 @@ def _load_poincare_map_inplace(obj: "_PoincareMap", filepath: str) -> None:
             grid_labels = tuple(json.loads(grid_labels_json)) if grid_labels_json else ("q2", "p2")
             obj._grid_labels = grid_labels
         else:
-            obj._section = None
             obj._grid = None
 
 

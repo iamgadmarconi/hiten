@@ -40,7 +40,7 @@ class _PoincareMapConfig:
     n_seeds: int = 20
     n_iter: int = 40
     seed_strategy: Literal["single", "axis_aligned", "level_sets", "radial", "random"] = "single"
-    seed_axis: Optional[Literal["q2", "p2", "q3", "p3"]] = None
+    seed_axis: Optional[Literal["q2", "p2", "q3", "p3"]] = "q2"
     section_coord: Literal["q2", "p2", "q3", "p3"] = "q3"
 
     compute_on_init: bool = False

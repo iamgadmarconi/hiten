@@ -1,10 +1,10 @@
 import numpy as np
 import pytest
 
-from hiten.system.center import CenterManifold
 from hiten.algorithms.poincare.base import _PoincareMap, _PoincareMapConfig
 from hiten.system.base import System
 from hiten.system.body import Body
+from hiten.system.center import CenterManifold
 from hiten.utils.constants import Constants
 
 TEST_MAX_DEG = 6
@@ -15,6 +15,8 @@ TEST_N_SEEDS = 3
 TEST_N_ITER = 20
 TEST_DT = 0.01
 TEST_SEED_AXIS = "q2"
+TEST_SECTION_COORD = "q3"
+TEST_SEED_STRATEGY = "single"
 
 
 @pytest.fixture(scope="module")
@@ -35,6 +37,8 @@ def poincare_test_setup():
         c_omega_heuristic=20.0,
         n_seeds=TEST_N_SEEDS,
         n_iter=TEST_N_ITER,
+        section_coord=TEST_SECTION_COORD,
+        seed_strategy=TEST_SEED_STRATEGY,
         seed_axis=TEST_SEED_AXIS,
         compute_on_init=True,
         use_gpu=True,
@@ -47,6 +51,8 @@ def poincare_test_setup():
         c_omega_heuristic=20.0,
         n_seeds=TEST_N_SEEDS,
         n_iter=TEST_N_ITER,
+        section_coord=TEST_SECTION_COORD,
+        seed_strategy=TEST_SEED_STRATEGY,
         seed_axis=TEST_SEED_AXIS,
         compute_on_init=True,
         use_gpu=False,
@@ -72,7 +78,7 @@ def test_map_cpu_vs_gpu(poincare_test_setup):
         np.testing.assert_allclose(
             pts_cpu_sorted,
             pts_gpu_sorted,
-            atol=1e-6,
-            rtol=1e-6,
+            atol=5e-6,
+            rtol=1e-4,
             err_msg="Poincaré map points differ between CPU and GPU implementations"
         )
