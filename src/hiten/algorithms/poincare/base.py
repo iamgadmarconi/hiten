@@ -41,7 +41,7 @@ class _PoincareMapConfig:
     n_iter: int = 40
     seed_strategy: Literal["single", "axis_aligned", "level_sets", "radial", "random"] = "single"
     seed_axis: Optional[Literal["q2", "p2", "q3", "p3"]] = None
-    section_coord: Literal["q2", "p2", "q3", "p3"] = "q3"  # Default keeps existing behavior
+    section_coord: Literal["q2", "p2", "q3", "p3"] = "q3"
 
     compute_on_init: bool = False
     use_gpu: bool = False
@@ -324,9 +324,60 @@ class _PoincareMap:
 
         return np.stack(ic_list, axis=0)
 
-    def plot(self, dark_mode: bool = True, save: bool = False, filepath: str = 'poincare_map.svg', **kwargs):
+    def get_points(self, axes: Sequence[str] | None = None) -> np.ndarray:
+        """Return the Poincaré-map points projected onto arbitrary coordinate axes.
+
+        Parameters
+        ----------
+        axes : Sequence[str] | None, optional
+            Pair of coordinate names to project the section onto (e.g. ("q3", "p2")).
+            If *None* (default) the axes associated with ``section.labels`` are used,
+            reproducing the legacy behaviour.
+
+        Notes
+        -----
+        The underlying map stores only the two coordinates that were chosen when
+        the section was computed.  When a different projection is requested we
+        reconstruct the full 6-D phase-space state for every stored point via
+        :pyfunc:`CenterManifold.ic` and extract the desired components.  This is
+        done on-demand and therefore incurs a modest overhead which is negligible
+        for interactive exploration/plotting workflows.
+        """
+        if self._section is None:
+            # Automatically compute if the map has not been generated yet
+            logger.debug("No cached Poincaré-map points found - computing now...")
+            self.compute()
+
+        # Default – legacy – behaviour
+        if axes is None:
+            return self._section.points
+
+        if len(axes) != 2:
+            raise ValueError("Exactly two axis names must be provided (e.g. ('q3', 'p2')).")
+
+        # Map variable name -> index in 6-D state
+        idx_map = {
+            "q1": 0, "q2": 1, "q3": 2,
+            "p1": 3, "p2": 4, "p3": 5,
+        }
+
+        try:
+            i0, i1 = idx_map[axes[0]], idx_map[axes[1]]
+        except KeyError as exc:
+            raise ValueError(f"Unknown axis name: {exc.args[0]}") from exc
+
+        # Reconstruct the requested coordinates for every section point
+        pts_proj = np.empty((len(self), 2), dtype=np.float64)
+        for k, pt in enumerate(self._section.points):
+            state6 = self.cm.ic(pt, self.energy, section_coord=self.config.section_coord)
+            pts_proj[k, 0] = state6[i0]
+            pts_proj[k, 1] = state6[i1]
+
+        return pts_proj
+
+    def plot(self, dark_mode: bool = True, save: bool = False, filepath: str = 'poincare_map.svg', axes: Optional[Sequence[str]] = None, **kwargs):
         r"""
-        Render the 2-D Poincaré map.
+        Render the 2-D Poincaré map on a selectable pair of axes.
 
         Parameters
         ----------
@@ -336,8 +387,13 @@ class _PoincareMap:
             Whether to save the plot to a file.
         filepath : str, default 'poincare_map.svg'
             Path to save the plot to.
+        axes : Sequence[str] | None, optional
+            Names of the coordinates to visualise (e.g. ("q3", "p2")).  If *None*
+            the default pair associated with the section (``self.section.labels``)
+            is used.
         **kwargs
-            Additional arguments forwarded to :pyfunc:`matplotlib.pyplot.scatter`.
+            Additional keyword arguments forwarded to
+            :pyfunc:`hiten.utils.plots.plot_poincare_map`.
 
         Returns
         -------
@@ -347,15 +403,25 @@ class _PoincareMap:
             Axes handle.
         """
         if self._section is None:
-            logger.debug("No cached Poincaré-map points found - computing now …")
+            logger.debug("No cached Poincaré-map points found - computing now...")
             self.compute()
+
+        # Select the requested projection
+        if axes is None:
+            pts = self._section.points
+            lbls = self._section.labels
+        else:
+            pts = self.get_points(tuple(axes))
+            lbls = tuple(axes)
+
         return plot_poincare_map(
-            points=self._section.points,
-            labels=self._section.labels,
+            points=pts,
+            labels=lbls,
             dark_mode=dark_mode,
             save=save,
             filepath=filepath,
-            **kwargs)
+            **kwargs
+        )
 
     def plot_interactive(self, steps=1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order=6, frame="rotating", dark_mode: bool = True):
         r"""
