@@ -227,16 +227,16 @@ class CenterManifold:
         key = ('hamiltonian', self._max_degree, 'physical')
         return self._get_or_compute(key, lambda: _build_physical_hamiltonian(self._point, self._max_degree))
 
-    def _get_real_normal_form(self) -> List[np.ndarray]:
+    def _get_real_modal_form(self) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'real_normal')
         return self._get_or_compute(key, lambda: _local2realmodal(
             self._point, self._get_physical_hamiltonian(), self._max_degree, self._psi, self._clmo
         ))
 
-    def _get_complex_normal_form(self) -> List[np.ndarray]:
+    def _get_complex_modal_form(self) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'complex_normal')
         return self._get_or_compute(key, lambda: _substitute_complex(
-            self._get_real_normal_form(), self._max_degree, self._psi, self._clmo
+            self._get_real_modal_form(), self._max_degree, self._psi, self._clmo
         ))
 
     def _get_lie_transform_results(self) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
@@ -249,7 +249,7 @@ class CenterManifold:
 
         def compute_lie_bundle():
             logger.info("Performing Lie transformation...")
-            poly_cn = self._get_complex_normal_form()
+            poly_cn = self._get_complex_modal_form()
             poly_trans, poly_G_total, poly_elim_total = _lie_transform(
                 self._point, poly_cn, self._psi, self._clmo, self._max_degree
             )
@@ -263,41 +263,26 @@ class CenterManifold:
 
         return self._get_or_compute(bundle_key, compute_lie_bundle)
 
-    def _get_center_manifold_complex(self) -> List[np.ndarray]:
-        key = ('hamiltonian', self._max_degree, 'center_manifold_complex')
-        
-        def compute_cm_complex():
-            poly_trans, _, _ = self._get_lie_transform_results()
-            return self._restrict_to_center_manifold(poly_trans)
+    def _get_complex_normal_form(self) -> List[np.ndarray]:
+        """Return the Lie-transformed (normal-form) Hamiltonian in complex variables.
 
-        return self._get_or_compute(key, compute_cm_complex)
+        This corresponds to the Hamiltonian obtained *after* the Lie series
+        normalization (so it is in normal form), but *before* restricting to
+        the centre manifold.  The result is cached under the same key that is
+        already populated by ``_get_lie_transform_results`` so no duplicate
+        computation occurs.
+        """
+        key = ('hamiltonian', self._max_degree, 'normalized')
+
+        def compute_normal_form():
+            poly_trans, _, _ = self._get_lie_transform_results()
+            return poly_trans
+
+        return self._get_or_compute(key, compute_normal_form)
 
     def _restrict_to_center_manifold(self, poly_H, tol=1e-14):
         r"""
         Restrict a Hamiltonian to the center manifold by eliminating hyperbolic variables.
-        
-        Parameters
-        ----------
-        poly_H : List[numpy.ndarray]
-            Polynomial representation of the Hamiltonian in normal form
-        tol : float, optional
-            Tolerance for considering coefficients as zero, default is 1e-14
-            
-        Returns
-        -------
-        List[numpy.ndarray]
-            Polynomial representation of the Hamiltonian restricted to the center manifold
-            
-        Notes
-        -----
-        The center manifold is obtained by setting the hyperbolic variables (q1, p1)
-        to zero. This function filters out all monomials that contain non-zero
-        powers of q1 or p1.
-        
-        In the packed multi-index format, q1 corresponds to k[0] and p1 corresponds to k[3].
-        Any term with non-zero exponents for these variables is eliminated.
-        
-        Additionally, terms with coefficients smaller than the tolerance are set to zero.
         """
         poly_cm = [h.copy() for h in poly_H]
         for deg, coeff_vec in enumerate(poly_cm):
@@ -312,11 +297,29 @@ class CenterManifold:
                     coeff_vec[pos] = 0.0
         return poly_cm
     
+    def _get_center_manifold_complex(self) -> List[np.ndarray]:
+        key = ('hamiltonian', self._max_degree, 'center_manifold_complex')
+        
+        def compute_cm_complex():
+            poly_trans = self._get_complex_normal_form()
+            return self._restrict_to_center_manifold(poly_trans)
+
+        return self._get_or_compute(key, compute_cm_complex)
+
+    def _get_center_manifold_real(self) -> List[np.ndarray]:
+        key = ('hamiltonian', self._max_degree, 'center_manifold_real')
+
+        def compute_cm_real():
+            poly_cm_complex = self._get_center_manifold_complex()
+            return _substitute_real(poly_cm_complex, self._max_degree, self._psi, self._clmo)
+
+        return self._get_or_compute(key, compute_cm_real)
+
     def compute(self) -> List[np.ndarray]:
         r"""
         Compute the polynomial Hamiltonian restricted to the centre manifold.
 
-        The returned list lives in *real modal* coordinates
+        The returned list lives in *real* coordinates
         :math:`(q_2, p_2, q_3, p_3)`. This method serves as the main entry
         point for the centre manifold computation pipeline, triggering lazy
         computation and caching of all intermediate steps.
@@ -338,16 +341,7 @@ class CenterManifold:
         computationally expensive on the first call. Intermediate objects are
         cached so that subsequent calls are fast.
         """
-        key = ('hamiltonian', self._max_degree, 'center_manifold_real')
-
-        def compute_cm_real():
-            logger.info(f"Computing center manifold for {type(self._point).__name__}, max_deg={self._max_degree}")
-            poly_cm_complex = self._get_center_manifold_complex()
-            poly_cm_real = _substitute_real(poly_cm_complex, self._max_degree, self._psi, self._clmo)
-            logger.info(f"Center manifold computation complete for {type(self._point).__name__}")
-            return poly_cm_real
-
-        return self._get_or_compute(key, compute_cm_real)
+        return self._get_center_manifold_real()
 
     def poincare_map(self, energy: float, **kwargs) -> "_PoincareMap":
         r"""

@@ -446,10 +446,6 @@ class LibrationPoint(ABC):
         if not hasattr(self, '_cm_registry') or self._cm_registry is None:
             self._cm_registry = {}
 
-    # ---------------------------------------------------------------------
-    # Convenience factory for periodic orbits anchored at this libration
-    # point.
-    # ---------------------------------------------------------------------
     def create_orbit(self, family: str | type["PeriodicOrbit"], /, **kwargs) -> "PeriodicOrbit":
         r"""
         Create a periodic orbit *family* anchored at this libration point.
