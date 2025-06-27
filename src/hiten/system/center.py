@@ -228,19 +228,19 @@ class CenterManifold:
         return self._get_or_compute(key, lambda: _build_physical_hamiltonian(self._point, self._max_degree))
 
     def _get_real_modal_form(self) -> List[np.ndarray]:
-        key = ('hamiltonian', self._max_degree, 'real_normal')
+        key = ('hamiltonian', self._max_degree, 'real_modal')
         return self._get_or_compute(key, lambda: _local2realmodal(
             self._point, self._get_physical_hamiltonian(), self._max_degree, self._psi, self._clmo
         ))
 
     def _get_complex_modal_form(self) -> List[np.ndarray]:
-        key = ('hamiltonian', self._max_degree, 'complex_normal')
+        key = ('hamiltonian', self._max_degree, 'complex_modal')
         return self._get_or_compute(key, lambda: _substitute_complex(
             self._get_real_modal_form(), self._max_degree, self._psi, self._clmo
         ))
 
     def _get_lie_transform_results(self) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
-        key_trans = ('hamiltonian', self._max_degree, 'normalized')
+        key_trans = ('hamiltonian', self._max_degree, 'complex_normal')
         key_G = ('generating_functions', self._max_degree)
         key_elim = ('terms_to_eliminate', self._max_degree)
         
@@ -272,11 +272,20 @@ class CenterManifold:
         already populated by ``_get_lie_transform_results`` so no duplicate
         computation occurs.
         """
-        key = ('hamiltonian', self._max_degree, 'normalized')
+        key = ('hamiltonian', self._max_degree, 'complex_normal')
 
         def compute_normal_form():
             poly_trans, _, _ = self._get_lie_transform_results()
             return poly_trans
+
+        return self._get_or_compute(key, compute_normal_form)
+
+    def _get_real_normal_form(self) -> List[np.ndarray]:
+        key = ('hamiltonian', self._max_degree, 'real_normal')
+
+        def compute_normal_form():
+            poly_trans = self._get_complex_normal_form()
+            return _substitute_real(poly_trans, self._max_degree, self._psi, self._clmo)
 
         return self._get_or_compute(key, compute_normal_form)
 
