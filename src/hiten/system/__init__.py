@@ -27,7 +27,8 @@ from .manifold import Manifold, ManifoldResult
 from .orbits.base import S  # state-vector helper enum
 from .orbits.base import GenericOrbit, PeriodicOrbit, _CorrectionConfig
 from .orbits.halo import HaloOrbit
-from .orbits.lyapunov import LyapunovOrbit, VerticalLyapunovOrbit
+from .orbits.lyapunov import LyapunovOrbit
+from .orbits.vertical import VerticalOrbit
 
 __all__ = [
     # Base system
@@ -56,7 +57,7 @@ __all__ = [
     "GenericOrbit",
     "HaloOrbit",
     "LyapunovOrbit",
-    "VerticalLyapunovOrbit",
+    "VerticalOrbit",
     "S",
     # Family
     "OrbitFamily",

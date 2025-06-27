@@ -5,8 +5,8 @@ hiten.system.orbits.lyapunov
 Periodic Lyapunov orbits of the circular restricted three-body problem.
 
 This module supplies concrete realisations of :pyclass:`hiten.system.orbits.base.PeriodicOrbit`
-corresponding to the planar and vertical Lyapunov families around the collinear
-libration points :math:`L_1` and :math:`L_2`.  Each class provides an analytical
+corresponding to the planar families around the collinear libration points
+:math:`L_1` and :math:`L_2`.  Each class provides an analytical
 first guess together with a customised differential corrector that exploits the
 symmetries of the family.
 
@@ -20,8 +20,7 @@ from typing import Optional, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
-from hiten.algorithms.dynamics.utils.geometry import (_find_y_zero_crossing,
-                                                      _find_z_zero_crossing)
+from hiten.algorithms.dynamics.utils.geometry import _find_y_zero_crossing
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import (CollinearPoint, L1Point, L2Point,
                                               L3Point)
@@ -202,64 +201,3 @@ class LyapunovOrbit(PeriodicOrbit):
         state_6d = np.array([state_4d[0], state_4d[1], 0, state_4d[2], state_4d[3], 0], dtype=np.float64)
         logger.debug(f"Generated initial guess for Lyapunov orbit around {self.libration_point} with amplitude_x={self.amplitude}: {state_6d}")
         return state_6d
-
-
-
-
-class VerticalLyapunovOrbit(PeriodicOrbit):
-    r"""
-    Vertical Lyapunov family about a collinear libration point.
-
-    The orbit oscillates out of the synodic plane and is symmetric with
-    respect to the :math:`x`-:math:`z` plane.  Initial-guess generation is not
-    yet available.
-
-    Parameters
-    ----------
-    libration_point : CollinearPoint
-        Target :pyclass:`CollinearPoint` around
-        which the orbit is computed.
-    initial_state : Sequence[float] or None, optional
-        Optional six-dimensional initial state vector.
-
-    Notes
-    -----
-    The implementation of the analytical seed and the Jacobian adjustment for
-    the vertical family is work in progress.
-    """
-    
-    _family = "vertical_lyapunov"
-
-    def __init__(self, libration_point: CollinearPoint, initial_state: Optional[Sequence[float]] = None):
-        super().__init__(libration_point, initial_state)
-
-    def _initial_guess(self) -> NDArray[np.float64]:
-        raise NotImplementedError("Initial guess is not implemented for Vertical Lyapunov orbits.")
-
-    @property
-    def amplitude(self) -> float:
-        """(Read-only) Current z-amplitude of the vertical Lyapunov orbit."""
-        if getattr(self, "_initial_state", None) is not None:
-            return float(abs(self._initial_state[S.Z]))
-        return float(self._amplitude_z)
-
-    @property
-    def eccentricity(self) -> float:
-        """Eccentricity is not a well-defined concept for vertical Lyapunov orbits."""
-        return np.nan
-
-    @property
-    def _correction_config(self) -> _CorrectionConfig:
-        """Provides the differential correction configuration for vertical Lyapunov orbits."""
-        return _CorrectionConfig(
-            residual_indices=(S.VX, S.Y),     # Want VX=0 and Y=0
-            control_indices=(S.VZ, S.VY),     # Adjust initial VZ and VY
-            target=(0.0, 0.0),
-            extra_jacobian=None,
-            event_func=_find_z_zero_crossing,
-        )
-
-    @property
-    def _continuation_config(self) -> _ContinuationConfig:
-        """Default continuation parameter: vary the out-of-plane amplitude."""
-        return _ContinuationConfig(state=S.Z, amplitude=True)

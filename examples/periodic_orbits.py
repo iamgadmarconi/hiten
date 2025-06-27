@@ -1,4 +1,4 @@
-"""Example script: generation of several families of periodic orbits (Vertical Lyapunov,
+"""Example script: generation of several families of periodic orbits (Vertical,
 Halo, planar Lyapunov) around an Earth-Moon libration point, together with their
 stable manifolds.
 
@@ -12,7 +12,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from hiten.system import (HaloOrbit, LyapunovOrbit, System,
-                          VerticalLyapunovOrbit)
+                          VerticalOrbit)
 from hiten.utils.log_config import logger
 
 
@@ -29,8 +29,8 @@ def main() -> None:
     # Specifications for each family we wish to generate
     orbit_specs = [
         {
-            "cls": VerticalLyapunovOrbit,
-            "name": "Vertical Lyapunov",
+            "cls": VerticalOrbit,
+            "name": "Vertical",
             "kwargs": {"initial_state": ic_seed},
             "diff_corr_attempts": 100,
         },
