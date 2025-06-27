@@ -27,6 +27,12 @@ from numba.typed import Dict, List
 
 from hiten.algorithms.utils.config import FASTMATH, N_VARS
 
+#  6 bits for each exponent (0 … 63)
+#
+#  ┌─────────┬────────┬────────┬────────┬────────┬────────┬────────┐
+#  │ bits    │ 0-5    │ 6-11   │ 12-17  │ 18-24  │ 25-31  │ 32-38  │
+#  │ field   │ n1     │ n2     │ n3     │ n4     │ n5     │ n6     │
+#  └─────────┴────────┴────────┴────────┴────────┴────────┴────────┘
 
 @njit(fastmath=FASTMATH,cache=False)
 def _factorial(n: int) -> int:
