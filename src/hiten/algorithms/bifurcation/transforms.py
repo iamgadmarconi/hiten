@@ -1,13 +1,22 @@
+import numpy as np
+# Numba utilities
 from numba import njit, types
 from numba.typed import Dict, List
 
-from hiten.algorithms.polynomial.base import _combinations, _decode_multiindex
+from hiten.algorithms.polynomial.base import (_combinations,
+                                              _create_encode_dict_from_clmo,
+                                              _decode_multiindex,
+                                              _encode_multiindex,
+                                              _init_index_tables, _make_poly)
 from hiten.algorithms.polynomial.fourier import (_create_encode_dict_fourier,
+                                                 _decode_fourier_index,
                                                  _encode_fourier_index,
                                                  _init_fourier_tables,
                                                  _make_fourier_poly)
 from hiten.algorithms.utils.config import FASTMATH
 
+
+_ELLIPTIC_TERM_TYPE = types.Tuple((types.int64, types.int64, types.complex128))
 
 @njit(fastmath=FASTMATH, cache=False)
 def _hyperbolic_monomial(q_pow: int, p_pow: int):
@@ -108,8 +117,8 @@ def _populate_fourier(poly_nf_real, clmo, fourier_coeffs, encode_dictF):
 
                     fourier_coeffs[deg_action][posF] += total_coeff
 
-
-def _realcenter2actionangle(poly_nf_real, clmo, *, k_max: int | None = None):
+@njit(fastmath=FASTMATH, cache=False)
+def _realcenter2actionangle(poly_nf_real, clmo, k_max: int | None = None):
     r"""
     Convert real centre-manifold Hamiltonian *poly_nf_real* to Fourier-Taylor
     coefficient arrays in action-angle variables.
@@ -148,3 +157,136 @@ def _realcenter2actionangle(poly_nf_real, clmo, *, k_max: int | None = None):
     _populate_fourier(poly_nf_real, clmo, fourier_coeffs, encodeF)
 
     return fourier_coeffs, psiF, clmoF, encodeF
+
+
+@njit(fastmath=FASTMATH, cache=False)
+def _inverse_hyperbolic(I_pow: int, k1: int):
+    if (I_pow + k1) & 1:  # different parity - impossible
+        return None
+    a = (I_pow + k1) // 2
+    b = (I_pow - k1) // 2
+    if a < 0 or b < 0:
+        return None
+    return a, b, 1.0 + 0.0j
+
+@njit(fastmath=FASTMATH, cache=False)
+def _elliptic_fourier_to_real(I_pow: int, k: int, tol: float = 1e-14):
+    """Inverse transform for a single elliptic pair.
+
+    Returns a *typed* list of tuples ``(q_pow, p_pow, coeff)`` that Numba can
+    work with in nopython mode. Using typed lists avoids
+    ``list(undefined)`` typing errors that arise from returning ordinary
+    Python lists inside JITed code.
+    """
+
+    # Pre-allocate an empty typed list with the correct element signature
+    empty = List.empty_list(_ELLIPTIC_TERM_TYPE)
+
+    # Only even k appear in the forward transform for elliptic pairs
+    if abs(k) > 2 * I_pow:
+        return empty  # no contribution
+    if (k & 1):
+        return empty  # odd k cannot arise
+
+    n = abs(k)
+    sgn = 1 if k >= 0 else -1  # sign for (p ± i q)
+    m = I_pow - n // 2
+    if m < 0:
+        return empty
+
+    prefactor = 2.0 ** (-I_pow)
+    terms = List.empty_list(_ELLIPTIC_TERM_TYPE)
+
+    for r in range(m + 1):
+        coeff_r = prefactor * _combinations(m, r)
+        q2_pow = 2 * r
+        p2_pow = 2 * (m - r)
+        for j in range(n + 1):
+            coeff = coeff_r * _combinations(n, j) * ((1j * sgn) ** j)
+            if abs(coeff) < tol:
+                continue
+            q_pow = q2_pow + j
+            p_pow = p2_pow + (n - j)
+            terms.append((q_pow, p_pow, coeff))
+
+    return terms
+
+
+@njit(fastmath=FASTMATH, cache=False)
+def _populate_real_from_fourier(fourier_coeffs, clmoF, poly_real, encode_real):
+    """Fill *poly_real* in place by expanding *fourier_coeffs*."""
+    max_deg_F = len(fourier_coeffs) - 1
+    for d in range(max_deg_F + 1):
+        blockF = fourier_coeffs[d]
+        if blockF is None:
+            continue
+        size_block = blockF.shape[0]
+        clmo_arrF = clmoF[d]
+        for posF in range(size_block):
+            cF = blockF[posF]
+            if cF.real == 0.0 and cF.imag == 0.0:
+                continue
+
+            packed = clmo_arrF[posF]
+            I1_pow, I2_pow, I3_pow, k1, k2, k3 = _decode_fourier_index(packed)
+
+            # Hyperbolic pair - unique inverse
+            hyp = _inverse_hyperbolic(I1_pow, k1)
+            if hyp is None:
+                continue  # should not happen
+            q1_pow, p1_pow, coeff_h = hyp
+
+            # Elliptic pairs - possibly many monomials each
+            list2 = _elliptic_fourier_to_real(I2_pow, k2)
+            list3 = _elliptic_fourier_to_real(I3_pow, k3)
+
+            for q2_pow, p2_pow, coeff2 in list2:
+                for q3_pow, p3_pow, coeff3 in list3:
+                    total_coeff = cF * coeff_h * coeff2 * coeff3
+                    # assemble exponent vector (q1,q2,q3,p1,p2,p3)
+                    k_vec = np.array(
+                        [q1_pow, q2_pow, q3_pow, p1_pow, p2_pow, p3_pow],
+                        dtype=np.int64,
+                    )
+                    total_deg = int(q1_pow + q2_pow + q3_pow + p1_pow + p2_pow + p3_pow)
+
+                    posR = _encode_multiindex(k_vec, total_deg, encode_real)
+                    if posR == -1:
+                        # outside allocated table - should not happen for conservative max_deg
+                        continue
+                    poly_real[total_deg][posR] += total_coeff
+
+
+@njit(fastmath=FASTMATH, cache=False)
+def _actionangle2realcenter(fourier_coeffs, clmoF):
+    """Inverse of :pyfunc:`_realcenter2actionangle`.
+
+    Parameters
+    ----------
+    fourier_coeffs : numba.typed.List[List[np.ndarray]]
+        Packed Fourier-Taylor coefficient arrays (output of the forward transform).
+    clmoF : numba.typed.List
+        Lookup table returned by :pyfunc:`_init_fourier_tables` that allows
+        decoding packed Fourier indices.
+
+    Returns
+    -------
+    poly_nf_real : numba.typed.List[np.ndarray]
+        Coefficient arrays in the original real centre-manifold variables.
+    psiR, clmoR, encodeR : objects
+        Lookup tables analogous to those returned by `_init_index_tables`.
+    """
+    max_deg_F = len(fourier_coeffs) - 1
+    max_deg_real = 2 * max_deg_F  # conservative upper bound, see derivation above
+
+    # Real-space lookup tables & blank polynomial
+    psiR, clmoR = _init_index_tables(max_deg_real)
+    encodeR = _create_encode_dict_from_clmo(clmoR)
+
+    poly_real = List()
+    for d in range(max_deg_real + 1):
+        poly_real.append(_make_poly(d, psiR))
+
+    _populate_real_from_fourier(fourier_coeffs, clmoF, poly_real, encodeR)
+
+    return poly_real, psiR, clmoR, encodeR

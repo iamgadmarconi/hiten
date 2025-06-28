@@ -129,7 +129,7 @@ def _init_fourier_tables(max_degree: int, k_max: int):
 
 @njit(fastmath=FASTMATH, cache=False)
 def _create_encode_dict_fourier(clmoF: List):  
-    """Create a list of dictionaries mapping packed index → position for each degree."""
+    """Create a list of dictionaries mapping packed index -> position for each degree."""
     encode_list = List()
     for arr in clmoF:
         d_map = Dict.empty(key_type=types.int64, value_type=types.int32)

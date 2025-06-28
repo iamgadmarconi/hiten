@@ -136,7 +136,7 @@ def _poly_mul(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clmo, e
     scratch = np.zeros((nT, out_len), dtype=p.dtype)   # private copies
 
     for i in prange(p.shape[0]):
-        tid = get_thread_id()          # → row in scratch
+        tid = get_thread_id()          # -> row in scratch
         pi = p[i]
         if pi == 0:
             continue

@@ -167,7 +167,7 @@ _PSI_GLOBAL, _CLMO_GLOBAL = _init_index_tables(30)  # default; will be overwritt
 
 # -----------------------------------------------------------------------------
 # Build a Numba‐typed lookup: for each degree d, a dict mapping
-# packed_exponent → index in _CLMO_GLOBAL[d]
+# packed_exponent -> index in _CLMO_GLOBAL[d]
 # -----------------------------------------------------------------------------
 _ENCODE_DICT_GLOBAL = List.empty_list(
     types.DictType(types.int64, types.int32)

@@ -4,16 +4,51 @@ from numba import types
 from numba.typed import Dict, List
 
 from hiten.algorithms.bifurcation.transforms import (
-    _elliptic_monomial_to_series, _hyperbolic_monomial,
-    _realcenter2actionangle)
+    _actionangle2realcenter, _elliptic_monomial_to_series,
+    _hyperbolic_monomial, _realcenter2actionangle)
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                               _init_index_tables)
-from hiten.algorithms.polynomial.fourier import _encode_fourier_index
+from hiten.algorithms.polynomial.fourier import (_encode_fourier_index,
+                                                 _init_fourier_tables,
+                                                 _make_fourier_poly)
 from hiten.algorithms.polynomial.operations import (_polynomial_add_inplace,
                                                     _polynomial_multiply,
                                                     _polynomial_power,
                                                     _polynomial_variables_list,
                                                     _polynomial_zero_list)
+
+
+def _build_sample_polynomial(max_deg_real: int):
+    """Return polynomial H = q1*p1 + q2**2 + p2**2 and its lookup tables."""
+    psi, clmo = _init_index_tables(max_deg_real)
+    encode = _create_encode_dict_from_clmo(clmo)
+
+    var_polys = _polynomial_variables_list(max_deg_real, psi, clmo, encode)
+    q1_poly, q2_poly, p1_poly, p2_poly = (
+        var_polys[0],
+        var_polys[1],
+        var_polys[3],
+        var_polys[4],
+    )
+
+    term1 = _polynomial_multiply(q1_poly, p1_poly, max_deg_real, psi, clmo, encode)
+    term2 = _polynomial_power(q2_poly, 2, max_deg_real, psi, clmo, encode)
+    term3 = _polynomial_power(p2_poly, 2, max_deg_real, psi, clmo, encode)
+
+    poly = _polynomial_zero_list(max_deg_real, psi)
+    _polynomial_add_inplace(poly, term1)
+    _polynomial_add_inplace(poly, term2)
+    _polynomial_add_inplace(poly, term3)
+    return poly, psi, clmo
+
+
+def _polys_allclose(poly_a, poly_b, atol=1e-12):
+    """Check element-wise closeness of two coefficient lists."""
+    max_deg = min(len(poly_a), len(poly_b))
+    for d in range(max_deg):
+        if not np.allclose(poly_a[d], poly_b[d], atol=atol):
+            return False
+    return True
 
 
 def test_hyperbolic_monomial():
@@ -123,32 +158,7 @@ def test_elliptic_monomial_to_series_qp():
 
 def test_realcenter2actionangle():
 
-    max_deg_real = 2
-    # These tables are for the 6-variable (q', p') real-coordinate polynomials
-    psi, clmo = _init_index_tables(max_deg_real)
-    encode_list = _create_encode_dict_from_clmo(clmo)
-
-    # 2. Construct the input polynomial H = q'₁*p'₁ + (q'₂)² + (p'₂)²
-    #    using the helpers from operations.py
-
-    # Get polynomial representations of q'₁, q'₂, p'₁, p'₂
-    var_polys = _polynomial_variables_list(max_deg_real, psi, clmo, encode_list)
-    q1_poly = var_polys[0]
-    q2_poly = var_polys[1]
-    p1_poly = var_polys[3]
-    p2_poly = var_polys[4]
-
-    # Calculate each term
-    term1 = _polynomial_multiply(q1_poly, p1_poly, max_deg_real, psi, clmo, encode_list)
-    term2 = _polynomial_power(q2_poly, 2, max_deg_real, psi, clmo, encode_list)
-    term3 = _polynomial_power(p2_poly, 2, max_deg_real, psi, clmo, encode_list)
-
-    # Sum the terms to get the final polynomial
-    poly_nf_real = _polynomial_zero_list(max_deg_real, psi)
-    _polynomial_add_inplace(poly_nf_real, term1)
-    _polynomial_add_inplace(poly_nf_real, term2)
-    _polynomial_add_inplace(poly_nf_real, term3)
-
+    poly_nf_real, psi, clmo = _build_sample_polynomial(2)
     # 3. Perform the transformation
     fourier_coeffs, psiF, clmoF, encodeF = _realcenter2actionangle(poly_nf_real, clmo)
 
@@ -250,3 +260,50 @@ def test_realcenter2actionangle_advanced_coupling():
     # k=(1,-2,-2): coeff = 1 * -0.5 * 0.5 = -0.25
     pos = _encode_fourier_index(n_vec + (1, -2, -2), 3, encodeF)
     assert np.isclose(deg3_coeffs[pos], -0.25)
+
+
+def test_actionangle2realcenter_roundtrip():
+    """Forward then inverse transform reproduces original polynomial."""
+    max_deg_real = 2
+    poly_orig, _, clmo = _build_sample_polynomial(max_deg_real)
+
+    fourier_coeffs, _, clmoF, _ = _realcenter2actionangle(poly_orig, clmo)
+    poly_back, _, _, _ = _actionangle2realcenter(fourier_coeffs, clmoF)
+
+    assert _polys_allclose(poly_orig, poly_back)
+
+
+def test_actionangle2realcenter_zero_series():
+    """Zero Fourier series maps to zero real polynomial."""
+    max_deg_F = 3
+    k_max = 0
+    psiF, clmoF = _init_fourier_tables(max_deg_F, k_max)
+
+    fourier_coeffs = List()
+    for d in range(max_deg_F + 1):
+        fourier_coeffs.append(_make_fourier_poly(d, psiF))
+
+    poly_back, _, _, _ = _actionangle2realcenter(fourier_coeffs, clmoF)
+
+    for d in range(len(poly_back)):
+        assert np.count_nonzero(poly_back[d]) == 0
+
+
+def test_actionangle2realcenter_advanced_coupling_roundtrip():
+    """Round-trip for H = q1 * (q2)^2 * (p3)^2."""
+    max_deg_real = 5
+    psi, clmo = _init_index_tables(max_deg_real)
+    encode = _create_encode_dict_from_clmo(clmo)
+
+    vars_polys = _polynomial_variables_list(max_deg_real, psi, clmo, encode)
+    q1_poly, q2_poly, p3_poly = vars_polys[0], vars_polys[1], vars_polys[5]
+
+    q2_sq = _polynomial_power(q2_poly, 2, max_deg_real, psi, clmo, encode)
+    p3_sq = _polynomial_power(p3_poly, 2, max_deg_real, psi, clmo, encode)
+    term1 = _polynomial_multiply(q1_poly, q2_sq, max_deg_real, psi, clmo, encode)
+    poly_orig = _polynomial_multiply(term1, p3_sq, max_deg_real, psi, clmo, encode)
+
+    fourier_coeffs, _, clmoF, _ = _realcenter2actionangle(poly_orig, clmo)
+    poly_back, _, _, _ = _actionangle2realcenter(fourier_coeffs, clmoF)
+
+    assert _polys_allclose(poly_orig, poly_back, atol=1e-9)

@@ -76,8 +76,8 @@ class CollinearPoint(LibrationPoint):
 
         Following the convention adopted in Gómez et al. (2001):
 
-        * L1, L2  →  -1 ("lower" sign)
-        * L3      →  +1 ("upper" sign)
+        * L1, L2  ->  -1 ("lower" sign)
+        * L3      ->  +1 ("upper" sign)
         """
         return 1 if isinstance(self, L3Point) else -1
 
