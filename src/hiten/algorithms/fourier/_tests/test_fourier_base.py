@@ -3,13 +3,13 @@ import random
 import numpy as np
 import pytest
 
-from hiten.algorithms.polynomial.fourier import (_MAX_K, _MAX_N,
-                                                 _create_encode_dict_fourier,
-                                                 _decode_fourier_index,
-                                                 _encode_fourier_index,
-                                                 _init_fourier_tables,
-                                                 _make_fourier_poly,
-                                                 _pack_fourier_index)
+from hiten.algorithms.fourier.base import (_MAX_K, _MAX_N,
+                                           _create_encode_dict_fourier,
+                                           _decode_fourier_index,
+                                           _encode_fourier_index,
+                                           _init_fourier_tables,
+                                           _pack_fourier_index)
+from hiten.algorithms.fourier.operations import _make_fourier_poly
 
 TEST_MAX_DEG = 3  # action‐degree limit for tests
 TEST_K_MAX = 2   # Fourier index limit for tests (–2 … +2)

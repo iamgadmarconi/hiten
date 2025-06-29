@@ -1,28 +1,29 @@
 import numpy as np
-# Numba utilities
+
 from numba import njit, types
 from numba.typed import Dict, List
 
+from hiten.algorithms.fourier.algebra import (_decode_fourier_index,
+                                              _encode_fourier_index)
+from hiten.algorithms.fourier.base import (_create_encode_dict_fourier,
+                                           _init_fourier_tables)
+from hiten.algorithms.fourier.operations import _make_fourier_poly
 from hiten.algorithms.polynomial.base import (_combinations,
                                               _create_encode_dict_from_clmo,
                                               _decode_multiindex,
                                               _encode_multiindex,
                                               _init_index_tables, _make_poly)
-from hiten.algorithms.polynomial.fourier import (_create_encode_dict_fourier,
-                                                 _decode_fourier_index,
-                                                 _encode_fourier_index,
-                                                 _init_fourier_tables,
-                                                 _make_fourier_poly)
 from hiten.algorithms.utils.config import FASTMATH
 
-
 _ELLIPTIC_TERM_TYPE = types.Tuple((types.int64, types.int64, types.complex128))
+
 
 @njit(fastmath=FASTMATH, cache=False)
 def _hyperbolic_monomial(q_pow: int, p_pow: int):
     I1_pow = q_pow + p_pow
     k1 = q_pow - p_pow  # Fourier index (can be negative)
     return I1_pow, k1, 1.0 + 0.0j
+
 
 @njit(fastmath=FASTMATH, cache=False)
 def _elliptic_monomial_to_series(q_pow: int, p_pow: int):
@@ -117,6 +118,7 @@ def _populate_fourier(poly_nf_real, clmo, fourier_coeffs, encode_dictF):
 
                     fourier_coeffs[deg_action][posF] += total_coeff
 
+
 @njit(fastmath=FASTMATH, cache=False)
 def _realcenter2actionangle(poly_nf_real, clmo, k_max: int | None = None):
     r"""
@@ -168,6 +170,7 @@ def _inverse_hyperbolic(I_pow: int, k1: int):
     if a < 0 or b < 0:
         return None
     return a, b, 1.0 + 0.0j
+
 
 @njit(fastmath=FASTMATH, cache=False)
 def _elliptic_fourier_to_real(I_pow: int, k: int, tol: float = 1e-14):

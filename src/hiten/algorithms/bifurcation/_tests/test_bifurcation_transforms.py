@@ -6,11 +6,11 @@ from numba.typed import Dict, List
 from hiten.algorithms.bifurcation.transforms import (
     _actionangle2realcenter, _elliptic_monomial_to_series,
     _hyperbolic_monomial, _realcenter2actionangle)
+from hiten.algorithms.fourier.base import (_encode_fourier_index,
+                                           _init_fourier_tables)
+from hiten.algorithms.fourier.operations import _make_fourier_poly
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                               _init_index_tables)
-from hiten.algorithms.polynomial.fourier import (_encode_fourier_index,
-                                                 _init_fourier_tables,
-                                                 _make_fourier_poly)
 from hiten.algorithms.polynomial.operations import (_polynomial_add_inplace,
                                                     _polynomial_multiply,
                                                     _polynomial_power,
