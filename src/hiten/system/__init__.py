@@ -7,7 +7,7 @@ simply write::
     from system import System, Body, L1Point, HaloOrbit
 
 instead of navigating the full internal hierarchy (``hiten.system.base``,
-``hiten.system.libration.collinear`` …).
+``hiten.system.libration.collinear`` ...).
 """
 
 # Poincare map

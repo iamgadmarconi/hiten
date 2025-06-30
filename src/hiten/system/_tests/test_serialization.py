@@ -25,7 +25,7 @@ def _assert_equal(name: str, left: np.ndarray, right: np.ndarray, atol: float = 
 def test_serialization() -> None:
     _reset_tmp_dir()
 
-    logger.info("\n[SET-UP] Building minimal CR3BP objects …")
+    logger.info("\n[SET-UP] Building minimal CR3BP objects ...")
 
     # 1. Base CR3BP system & libration point
     system = System.from_bodies("earth", "moon")

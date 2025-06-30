@@ -10,7 +10,7 @@ sub-packages so that user code can simply write, for example::
     >>> from hiten import Constants, CenterManifold
 
 instead of navigating the full internal hierarchy (``hiten.utils``,
-``hiten.system`` …).
+``hiten.system`` ...).
 
 The full sub-packages remain accessible under their canonical names
 (``hiten.utils``, ``hiten.system``, ``hiten.algorithms``).

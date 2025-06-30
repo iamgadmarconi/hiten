@@ -290,7 +290,7 @@ def _fpoly_block_hessian(
 
         n1, n2, n3, k1, k2, k3 = _decode_fourier_index(packed_arr[pos])
 
-        # Evaluate the base monomial value at the point (I, θ)
+        # Evaluate the base monomial value at the point (I, theta)
         base_val = c
         if n1:
             base_val *= I1 ** n1
@@ -329,7 +329,7 @@ def _fpoly_block_hessian(
                 H[a, b] += contrib
                 H[b, a] += contrib  # symmetry
 
-        # Action-angle mixed derivatives ∂²H/∂I_a∂θ_b
+        # Action-angle mixed derivatives ∂²H/∂I_a∂theta_b
         for a in range(3):
             na = n[a]
             Ia = I[a]
@@ -344,7 +344,7 @@ def _fpoly_block_hessian(
                 H[a, 3 + b] += contrib
                 H[3 + b, a] += contrib  # symmetry
 
-        # Angle-angle second derivatives ∂²H/∂θ_a∂θ_b
+        # Angle-angle second derivatives ∂²H/∂theta_a∂theta_b
         for a in range(3):
             ka = k[a]
             if ka == 0:

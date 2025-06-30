@@ -15,7 +15,9 @@ from hiten.algorithms.polynomial.operations import (_polynomial_add_inplace,
                                                     _polynomial_multiply,
                                                     _polynomial_power,
                                                     _polynomial_variables_list,
-                                                    _polynomial_zero_list)
+                                                    _polynomial_zero_list,
+                                                    _polynomial_evaluate)
+from hiten.system import System
 
 
 def _build_sample_polynomial(max_deg_real: int):
@@ -307,3 +309,51 @@ def test_actionangle2realcenter_advanced_coupling_roundtrip():
     poly_back, _, _, _ = _actionangle2realcenter(fourier_coeffs, clmoF)
 
     assert _polys_allclose(poly_orig, poly_back, atol=1e-9)
+
+
+def test_center_manifold_evaluation_real_pipeline():
+    system = System.from_bodies("sun", "earth")
+    l1 = system.get_libration_point(1)
+    cm = l1.get_center_manifold(max_degree=4)
+    poly_cm_real = cm.compute()
+
+    fourier_coeffs, _, clmoF, _ = _realcenter2actionangle(poly_cm_real, cm._clmo)
+    poly_back, _, _, _ = _actionangle2realcenter(fourier_coeffs, clmoF)
+
+    # Check energy preservation at 10 random points
+    rng = np.random.default_rng(0)
+    for _ in range(10):
+        # Choose a random point on the center manifold (low amplitude)
+        state = rng.normal(scale=1e-3, size=6)
+        state[0] = 0  # Hyperbolic components are zero
+
+        E_orig = _polynomial_evaluate(poly_cm_real, state, cm._clmo)
+        E_back = _polynomial_evaluate(poly_back, state, cm._clmo)
+
+        assert np.allclose(E_orig, E_back, atol=1e-9)
+
+
+def test_center_manifold_roundtrip_real_pipeline():
+    """Real -> Fourier -> real round-trip preserves coefficients for CM Hamiltonian."""
+
+    # Build a modest-order (degree 4) centre-manifold Hamiltonian for Sun–Earth L1
+    system = System.from_bodies("sun", "earth")
+    l1 = system.get_libration_point(1)
+    cm = l1.get_center_manifold(max_degree=4)
+
+    poly_cm_real = cm.compute()               # list[np.ndarray] in (q',p') variables
+
+    # Forward transform: real -> action–angle Fourier/Taylor
+    fourier_coeffs, _, clmoF, _ = _realcenter2actionangle(poly_cm_real, cm._clmo)
+
+    # Inverse transform: action–angle → real
+    poly_back, _, _, _ = _actionangle2realcenter(fourier_coeffs, clmoF)
+
+    # The round-trip must reproduce every coefficient (up to numerical noise)
+    if not _polys_allclose(poly_cm_real, poly_back, atol=1e-8):
+        print("Original polynomial:")
+        print(poly_cm_real)
+        print("\nRound-tripped polynomial:")
+        print(poly_back)
+    assert _polys_allclose(poly_cm_real, poly_back, atol=1e-8)
+

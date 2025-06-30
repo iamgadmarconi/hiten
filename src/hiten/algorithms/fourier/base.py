@@ -14,8 +14,8 @@ from numba.typed import Dict, List
 
 from hiten.algorithms.utils.config import FASTMATH
 
-#  6 bits for each action exponent (0 … 63)
-#  7 bits for each Fourier index shifted by +64  (-64 … +63)
+#  6 bits for each action exponent (0 ... 63)
+#  7 bits for each Fourier index shifted by +64  (-64 ... +63)
 #
 #  ┌─────────┬────────┬────────┬────────┬────────┬────────┬────────┐
 #  │ bits    │ 0-5    │ 6-11   │ 12-17  │ 18-24  │ 25-31  │ 32-38  │
@@ -87,7 +87,7 @@ def _init_fourier_tables(max_degree: int, k_max: int):
     max_degree : int
         Maximum total action degree *d = n₁+n₂+n₃* to include.
     k_max : int
-        Fourier indices kᵢ will be limited to -k_max … +k_max (k_max ≤ 63).
+        Fourier indices kᵢ will be limited to -k_max ... +k_max (k_max ≤ 63).
 
     Returns
     -------

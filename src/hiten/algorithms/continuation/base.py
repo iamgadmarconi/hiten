@@ -10,7 +10,7 @@ control, logging - but purposely delegates the actual *prediction strategy* to
 sub-classes via the :pyfunc:`_predict` hook.
 
 Optionally override ``_update_step`` and ``_stop_condition`` for fancier
-strategies (pseudo-arclength, MIL continuation, …).
+strategies (pseudo-arclength, MIL continuation, ...).
 """
 from __future__ import annotations
 
@@ -141,7 +141,7 @@ class _ContinuationEngine(ABC):
         list[PeriodicOrbit]
             The generated family, *including* the initial orbit (index 0).
         """
-        logger.info("Starting continuation loop …")
+        logger.info("Starting continuation loop ...")
         attempts_at_current_step = 0
         while not self._stop_condition():
             if len(self._family) >= self._max_orbits:
