@@ -81,7 +81,7 @@
     engine = NaturalParameter(
         initial_orbit=seed,
         state=(S.X),     # underlying coordinate that gets nudged
-        amplitude=True,       # but the continuation parameter is A_x
+        amplitude=True,  # but the continuation parameter is A_x
         target=(current_amp, target_amp),
         step=step,
         corrector_kwargs=dict(max_attempts=50, tol=1e-13),
