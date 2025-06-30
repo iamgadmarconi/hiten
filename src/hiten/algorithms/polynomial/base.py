@@ -27,6 +27,12 @@ from numba.typed import Dict, List
 
 from hiten.algorithms.utils.config import FASTMATH, N_VARS
 
+#  6 bits for each exponent (0 ... 63)
+#
+#  ┌─────────┬────────┬────────┬────────┬────────┬────────┬────────┐
+#  │ bits    │ 0-5    │ 6-11   │ 12-17  │ 18-24  │ 25-31  │ 32-38  │
+#  │ field   │ n1     │ n2     │ n3     │ n4     │ n5     │ n6     │
+#  └─────────┴────────┴────────┴────────┴────────┴────────┴────────┘
 
 @njit(fastmath=FASTMATH,cache=False)
 def _factorial(n: int) -> int:
@@ -161,7 +167,7 @@ _PSI_GLOBAL, _CLMO_GLOBAL = _init_index_tables(30)  # default; will be overwritt
 
 # -----------------------------------------------------------------------------
 # Build a Numba‐typed lookup: for each degree d, a dict mapping
-# packed_exponent → index in _CLMO_GLOBAL[d]
+# packed_exponent -> index in _CLMO_GLOBAL[d]
 # -----------------------------------------------------------------------------
 _ENCODE_DICT_GLOBAL = List.empty_list(
     types.DictType(types.int64, types.int32)

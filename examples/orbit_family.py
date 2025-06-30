@@ -26,30 +26,32 @@ def main() -> None:
     system = System.from_bodies("earth", "moon")
     l1 = system.get_libration_point(1)
 
-    seed = l1.create_orbit('lyapunov', amplitude_x= 1e-3)
+    seed = l1.create_orbit('halo', amplitude_z= 0.2, zenith='southern')
     seed.differential_correction(max_attempts=25)
 
-    # --- two-parameter continuation: vary absolute X and Y -----------------
+    # --- two-parameter continuation: vary absolute X (in-plane) and Z (out-of-plane) ---
     current_x = seed.initial_state[S.X]
-    current_y = seed.initial_state[S.Y]  # 0 for planar Lyapunov seed
+    current_z = seed.initial_state[S.Z]  # 0 for planar Lyapunov seed
 
-    target_x = current_x + 0.02      # shift 0.02 CRTBP units in X
-    target_y = current_y + 0.01      # introduce small out-of-plane Y
+    # Target displacements (CRTBP canonical units)
+    target_x = current_x + 0.2   # moderate shift along X
+    target_z = current_z + 0.3   # introduce small out-of-plane Z
 
     num_orbits = 20
 
     step_x = (target_x - current_x) / (num_orbits - 1)
-    step_y = (target_y - current_y) / (num_orbits - 1)
+    step_z = (target_z - current_z) / (num_orbits - 1)
 
     engine = NaturalParameter(
         initial_orbit=seed,
-        state=(S.X, S.Y),
-        target=([current_x, current_y
-        ], [
-            target_x, target_y
-        ]),
-        step=(step_x, step_y),
-        corrector_kwargs=dict(max_attempts=50, tol=1e-13),
+        state=(S.X, S.Z),   # vary absolute coordinates, not amplitudes
+        amplitude=False,
+        target=(
+            [current_x, current_z],
+            [target_x, target_z],
+        ),
+        step=(step_x, step_z),
+        corrector_kwargs=dict(max_attempts=50, tol=1e-12),
         max_orbits=num_orbits,
     )
     engine.run()

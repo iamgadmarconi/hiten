@@ -321,7 +321,7 @@ def test_real_normal_form(transforms_test_setup):
                (0, 0, 0, 0, 0, 2)}   # pz**2
 
     assert set(significant_quad_terms).issubset(allowed), (
-        "Unexpected quadratic monomials after phys→rn transformation")
+        "Unexpected quadratic monomials after phys->rn transformation")
 
     lambda1, omega1, omega2 = libration_point.linear_modes
     
@@ -362,7 +362,7 @@ def test_complex_normal_form(transforms_test_setup):
         (0, 0, 1, 0, 0, 1): "q3p3",  # q3 * p3  ->  i * omega_2    (imag)
     }
 
-    assert set(quad_terms).issubset(allowed), "Unexpected quadratic monomials after rn→cn"
+    assert set(quad_terms).issubset(allowed), "Unexpected quadratic monomials after rn->cn"
 
     lambda1, omega1, omega2 = libration_point.linear_modes
 

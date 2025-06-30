@@ -446,10 +446,6 @@ class LibrationPoint(ABC):
         if not hasattr(self, '_cm_registry') or self._cm_registry is None:
             self._cm_registry = {}
 
-    # ---------------------------------------------------------------------
-    # Convenience factory for periodic orbits anchored at this libration
-    # point.
-    # ---------------------------------------------------------------------
     def create_orbit(self, family: str | type["PeriodicOrbit"], /, **kwargs) -> "PeriodicOrbit":
         r"""
         Create a periodic orbit *family* anchored at this libration point.
@@ -480,9 +476,10 @@ class LibrationPoint(ABC):
         """
 
         # Lazy imports to avoid circular dependencies and reduce import time.
-        from hiten.system.orbits.halo import HaloOrbit
-        from hiten.system.orbits.lyapunov import LyapunovOrbit, VerticalLyapunovOrbit
         from hiten.system.orbits.base import GenericOrbit, PeriodicOrbit
+        from hiten.system.orbits.halo import HaloOrbit
+        from hiten.system.orbits.lyapunov import LyapunovOrbit
+        from hiten.system.orbits.vertical import VerticalOrbit
 
         # Direct class provided
         if isinstance(family, type) and issubclass(family, PeriodicOrbit):
@@ -497,8 +494,8 @@ class LibrationPoint(ABC):
         mapping: dict[str, type[PeriodicOrbit]] = {
             "halo": HaloOrbit,
             "lyapunov": LyapunovOrbit,
-            "vertical_lyapunov": VerticalLyapunovOrbit,
-            "vertical": VerticalLyapunovOrbit,
+            "vertical_lyapunov": VerticalOrbit,
+            "vertical": VerticalOrbit,
             "generic": GenericOrbit,
         }
 

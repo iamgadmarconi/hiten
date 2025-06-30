@@ -31,10 +31,10 @@
 
    *Figure&nbsp;1 - Stable manifold of an Earth-Moon \(L_1\) halo orbit.*
 
-   Knowing the dynamics of the center manifold, initial conditions for vertical Lyapunov orbits can be computed and associated manifolds created. These reveal natural transport channels that can be exploited for low-energy mission design.
+   Knowing the dynamics of the center manifold, initial conditions for vertical orbits can be computed and associated manifolds created. These reveal natural transport channels that can be exploited for low-energy mission design.
 
    ```python
-   from hiten import System, VerticalLyapunovOrbit
+   from hiten import System, VerticalOrbit
 
    system = System.from_bodies("earth", "moon")
    libration_point = system.get_libration_point(1)
@@ -44,7 +44,7 @@
 
    initial_state = cm.ic(poincare_point=[0.0, 0.0], energy=0.6, section_coord="q3")
 
-   orbit = VerticalLyapunovOrbit(libration_point, initial_state=initial_state)
+   orbit = VerticalOrbit(libration_point, initial_state=initial_state)
    orbit.differential_correction(max_attempts=100)
    orbit.propagate(steps=1000)
 
@@ -53,9 +53,9 @@
    manifold.plot()
    ```
 
-   ![Vertical Lyapunov orbit stable manifold](results/plots/vl_stable_manifold.svg)
+   ![Vertical orbit stable manifold](results/plots/vl_stable_manifold.svg)
 
-   *Figure&nbsp;2 - Stable manifold of an Earth-Moon \(L_1\) vertical Lyapunov orbit.*
+   *Figure&nbsp;2 - Stable manifold of an Earth-Moon \(L_1\) vertical orbit.*
 
 2. **Generating families of periodic orbits**
 
@@ -81,7 +81,7 @@
     engine = NaturalParameter(
         initial_orbit=seed,
         state=(S.X),     # underlying coordinate that gets nudged
-        amplitude=True,       # but the continuation parameter is A_x
+        amplitude=True,  # but the continuation parameter is A_x
         target=(current_amp, target_amp),
         step=step,
         corrector_kwargs=dict(max_attempts=50, tol=1e-13),

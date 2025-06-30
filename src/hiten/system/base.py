@@ -60,7 +60,7 @@ class System(object):
     mu : float
         Mass parameter :math:`\mu`.
     libration_points : dict[int, LibrationPoint]
-        Mapping from integer identifiers {1,…,5} to the corresponding
+        Mapping from integer identifiers {1,...,5} to the corresponding
         libration point objects.
     _dynsys : hiten.algorithms.dynamics.base._DynamicalSystemProtocol
         Underlying vector field instance compatible with the integrators
@@ -116,7 +116,7 @@ class System(object):
 
     @property
     def libration_points(self) -> Dict[int, LibrationPoint]:
-        """Mapping from integer identifiers {1,…,5} to libration point objects."""
+        """Mapping from integer identifiers {1,...,5} to libration point objects."""
         return self._libration_points
         
     @property
@@ -158,7 +158,7 @@ class System(object):
         Returns
         -------
         dict[int, LibrationPoint]
-            Mapping {1,…,5} to :pyclass:`hiten.system.libration.base.LibrationPoint`
+            Mapping {1,...,5} to :pyclass:`hiten.system.libration.base.LibrationPoint`
             objects.
         """
         logger.debug(f"Computing Libration points for mu={self.mu}")

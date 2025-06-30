@@ -698,7 +698,7 @@ def test_lie_expansion_symplecticity(lie_test_setup):
         curr_degree = degrees_to_test[i]
         ratio = degree_max_errors[curr_degree] / degree_max_errors[prev_degree]
         error_ratios.append(ratio)
-        print(f"\nError reduction {prev_degree}→{curr_degree}: {ratio:.2e} ({1/ratio:.1f}x improvement)")
+        print(f"\nError reduction {prev_degree}->{curr_degree}: {ratio:.2e} ({1/ratio:.1f}x improvement)")
     
     avg_reduction_factor = np.mean([1/r for r in error_ratios])
     print(f"\nAverage error reduction per degree: {avg_reduction_factor:.1f}x")
