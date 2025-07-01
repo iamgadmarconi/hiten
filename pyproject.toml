@@ -8,8 +8,8 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "hiten"
 version = "0.2.4"
-description = "Algorithms and utilities for the restricted three-body problem"
-readme = "README.md"
+description = "HITEN - Computational Toolkit for the Circular Restricted Three-Body Problem"
+readme = "readme.md"
 license = { file = "LICENSE" }
 authors = [
   { name = "Gad Marconi", email = "gad.marconi@cranfield.ac.uk" }
