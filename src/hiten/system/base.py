@@ -21,7 +21,8 @@ from typing import Dict, Literal, Optional, Sequence, Tuple
 import numpy as np
 import numpy.typing as npt
 
-from hiten.algorithms.dynamics.rtbp import _propagate_dynsys, rtbp_dynsys
+from hiten.algorithms.dynamics.base import _propagate_dynsys
+from hiten.algorithms.dynamics.rtbp import rtbp_dynsys
 from hiten.algorithms.utils.precision import hp
 from hiten.system.body import Body
 from hiten.system.libration.base import LibrationPoint
@@ -327,8 +328,7 @@ class System(object):
         using the stored value of :pyattr:`mu` and the names of the primary and
         secondary bodies.
         """
-        from hiten.algorithms.dynamics.rtbp import \
-            rtbp_dynsys  # local import to avoid circular deps
+        from hiten.algorithms.dynamics.rtbp import rtbp_dynsys
 
         # Restore the plain attributes
         self.__dict__.update(state)
