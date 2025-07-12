@@ -4,7 +4,7 @@ import sympy as sp
 from numba import types
 from numba.typed import Dict, List
 
-from hiten.algorithms.center.hamiltonian import (
+from hiten.algorithms.hamiltonian.hamiltonian import (
     _build_R_polynomials, _build_T_polynomials,
     _build_lindstedt_poincare_rhs_polynomials, _build_physical_hamiltonian)
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,

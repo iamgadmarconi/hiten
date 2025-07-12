@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 import sympy as sp
 
-from hiten.algorithms.center.hamiltonian import _build_physical_hamiltonian
+from hiten.algorithms.hamiltonian.hamiltonian import _build_physical_hamiltonian
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                                _encode_multiindex,
                                                _init_index_tables)
@@ -11,7 +11,7 @@ from hiten.algorithms.polynomial.operations import (
     _linear_variable_polys, _polynomial_add_inplace, _polynomial_multiply,
     _polynomial_poisson_bracket, _polynomial_power, _polynomial_variable,
     _polynomial_zero_list)
-from hiten.algorithms.center.transforms import (_local2realmodal, _solve_complex,
+from hiten.algorithms.hamiltonian.transforms import (_local2realmodal, _solve_complex,
                                           _solve_real, _substitute_complex,
                                           _substitute_linear, _substitute_real)
 from hiten.system.base import System

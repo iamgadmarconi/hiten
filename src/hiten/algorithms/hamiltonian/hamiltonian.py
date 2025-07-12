@@ -1,5 +1,5 @@
 r"""
-center.hamiltonian
+hamiltonian.hamiltonian
 ==================
 
 Construct polynomial representations of the Collinear Restricted Three-Body Problem (CR3BP)
@@ -324,7 +324,7 @@ def _build_physical_hamiltonian(point, max_deg: int) -> List[np.ndarray]:
 
     Examples
     --------
-    >>> from hiten.algorithms.center.hamiltonian import _build_physical_hamiltonian
+    >>> from hiten.algorithms.hamiltonian.center.hamiltonian import _build_physical_hamiltonian
     >>> H = _build_physical_hamiltonian(l1_point, max_deg=6)  # doctest: +SKIP
     """
     psi_table, clmo_table = _init_index_tables(max_deg)

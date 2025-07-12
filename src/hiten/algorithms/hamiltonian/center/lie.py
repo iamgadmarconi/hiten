@@ -1,5 +1,5 @@
 r"""
-center.lie
+hamiltonian.center.lie
 ==========
 
 Numba-accelerated helpers for Lie-series based normalization of polynomial
@@ -36,7 +36,10 @@ clmo: np.ndarray,
 max_degree: int, 
 tol: float = 1e-30) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
     r"""
-    Perform a Lie transformation to normalize a Hamiltonian.
+    Perform a partial Lie transformation to normalize a Hamiltonian.
+
+    This implements the partial normal form algorithm from Jorba (1999), which
+    systematically eliminates all non-resonant terms according to the resonance condition
     
     Parameters
     ----------
@@ -214,7 +217,7 @@ clmo: np.ndarray) -> np.ndarray:
     n : int
         Degree of the homogeneous terms
     eta : numpy.ndarray
-        Array containing the eigenvalues [λ, iω₁, iω₂]
+        Array containing the eigenvalues :math:`[\lambda, i\omega_1, i\omega_2]`
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
         
@@ -228,12 +231,9 @@ clmo: np.ndarray) -> np.ndarray:
     The homological equation is solved by dividing each coefficient by
     the corresponding eigenvalue combination:
     
-    g_k = -h_k / ((k₃-k₀)λ + (k₄-k₁)iω₁ + (k₅-k₂)iω₂)
+    :math:`g_k = -h_k / ((k_3-k_0)\lambda + (k_4-k_1)i\omega_1 + (k_5-k_2)i\omega_2)`
     
-    where k = [k₀, k₁, k₂, k₃, k₄, k₅] are the exponents of the monomial.
-    
-    This version includes a resonance check to avoid division by zero
-    for nearly resonant terms.
+    where :math:`k = [k_0, k_1, k_2, k_3, k_4, k_5]` are the exponents of the monomial.
     """
     p_G = np.zeros_like(p_elim)
     for i in range(p_elim.shape[0]):
@@ -243,9 +243,9 @@ clmo: np.ndarray) -> np.ndarray:
             denom = ((k[3]-k[0]) * eta[0] +
                      (k[4]-k[1]) * eta[1] +
                      (k[5]-k[2]) * eta[2])
-            # Check for resonance (near-zero denominator)
+
             if abs(denom) < 1e-14:
-                continue  # Skip resonant terms - keep in normal form, should not occur.
+                continue
             p_G[i] = -c / denom
     return p_G
 

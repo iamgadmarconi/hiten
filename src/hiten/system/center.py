@@ -23,10 +23,10 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple
 
 import numpy as np
 
-from hiten.algorithms.center.hamiltonian import _build_physical_hamiltonian
-from hiten.algorithms.center.lie import (_evaluate_transform, _lie_expansion,
+from hiten.algorithms.hamiltonian.hamiltonian import _build_physical_hamiltonian
+from hiten.algorithms.hamiltonian.center.lie import (_evaluate_transform, _lie_expansion,
                                          _lie_transform)
-from hiten.algorithms.center.transforms import (_local2realmodal,
+from hiten.algorithms.hamiltonian.transforms import (_local2realmodal,
                                                 _local2synodic_collinear,
                                                 _local2synodic_triangular,
                                                 _realmodal2local,
