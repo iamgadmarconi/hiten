@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Union, Iterable, Optional
 
 import numpy as np
 
@@ -82,13 +82,13 @@ def _fmt_coeff(c: complex, width: int = 25) -> str:
     return s.rjust(width)
 
 
-def _format_cm_table(poly_cm: List[np.ndarray], clmo: np.ndarray) -> str:
+def _format_poly_table(poly: List[np.ndarray], clmo: np.ndarray, degree: Optional[Union[int, Iterable[int], str]] = None) -> str:
     """
     Create a formatted table of center manifold Hamiltonian coefficients.
     
     Parameters
     ----------
-    poly_cm : List[numpy.ndarray]
+    poly : List[numpy.ndarray]
         List of coefficient arrays reduced to the center manifold
     clmo : numpy.ndarray
         List of arrays containing packed multi-indices
@@ -98,110 +98,78 @@ def _format_cm_table(poly_cm: List[np.ndarray], clmo: np.ndarray) -> str:
     str
         Formatted string table of Hamiltonian coefficients
         
-    Notes
-    -----
-    The table displays coefficients of the center manifold Hamiltonian organized by:
-    - Exponents of q2, p2, q3, p3 (k1, k2, k3, k4)
-    - Terms with q1 or p1 are excluded
-    - Terms with coefficients smaller than 1e-14 are excluded
-    - Terms are sorted by degree and within each degree by a predefined order
-    
-    The table has a two-column layout, with headers:
-    "k1  k2  k3  k4  hk    k1  k2  k3  k4  hk"
-    
     Each row shows the exponents (k1, k2, k3, k4) and the corresponding coefficient (hk)
     in scientific notation.
     """
-    structured_terms: list[tuple[int, tuple[int, int, int, int], complex]] = []
+    # Each entry: (degree, (k_q1, k_q2, k_q3, k_p1, k_p2, k_p3), coeff)
+    structured_terms: list[tuple[int, tuple[int, int, int, int, int, int], complex]] = []
     
     k_col_width = 2
     hk_col_width = 25
     k_spacing = "  "
 
-    MIN_DEG_TO_DISPLAY = 2
-    # Dynamically determine the maximum degree available in the provided polynomial list
-    max_deg_to_display = len(poly_cm) - 1  # Highest degree present in the coefficient list
+    MIN_DEG_DEFAULT = 2  # Default minimum degree when none is specified
 
-    for deg in range(MIN_DEG_TO_DISPLAY, max_deg_to_display + 1):
-        if deg >= len(poly_cm) or not poly_cm[deg].any():
+    max_deg_available = len(poly) - 1  # Highest degree present in the coefficient list
+
+    # Determine which degrees we should include
+    if degree is None or degree == "all":
+        degrees_iter: Iterable[int] = range(MIN_DEG_DEFAULT, max_deg_available + 1)
+    else:
+        # Allow passing a single int or any iterable of ints
+        if isinstance(degree, int):
+            degrees_iter = [degree]
+        else:
+            degrees_iter = degree  # assume already an iterable of ints
+
+    for deg in degrees_iter:
+        if deg >= len(poly) or not poly[deg].any():
             continue
-        
-        coeff_vec = poly_cm[deg]
+
+        coeff_vec = poly[deg]
 
         for pos, c_val_complex in enumerate(coeff_vec):
-            # Ensure c_val is treated as a number; np.isscalar checks for single numpy values
-            c_val = np.complex128(c_val_complex) # Ensure it's a Python/Numpy complex
+            # Ensure c_val is treated as a number
+            c_val = np.complex128(c_val_complex)
             if not (isinstance(c_val, (int, float, complex)) or np.isscalar(c_val)):
                 continue
-            if abs(c_val) <= 1e-14: # Skip zero coefficients
-                continue
-            
-            k_exps = _decode_multiindex(pos, deg, clmo) 
-            
-            if k_exps[0] != 0 or k_exps[3] != 0:  # Skip terms involving q1 or p1
+            if abs(c_val) <= 1e-14:
                 continue
 
-            k1_q2 = k_exps[1]  # exponent of q2
-            k2_p2 = k_exps[4]  # exponent of p2
-            k3_q3 = k_exps[2]  # exponent of q3
-            k4_p3 = k_exps[5]  # exponent of p3
-            
-            current_k_tuple = (k1_q2, k2_p2, k3_q3, k4_p3)
-            structured_terms.append((deg, current_k_tuple, c_val))
+            k_exps = _decode_multiindex(pos, deg, clmo)  # (q1,q2,q3,p1,p2,p3)
 
-    # Define the desired sort order based on the image
-    desired_k_tuple_order_by_degree = {
-        2: [(2,0,0,0), (0,2,0,0), (0,0,2,0), (0,0,0,2)],
-        3: [(2,1,0,0), (0,3,0,0), (0,1,2,0), (0,0,1,2)],
-        4: [(4,0,0,0), (2,2,0,0), (0,4,0,0), (2,0,2,0), (0,2,2,0), 
-            (0,0,4,0), (1,1,1,1), (2,0,0,2), (0,2,0,2), (0,0,2,2)],
-        5: [(4,1,0,0), (2,3,0,0), (0,5,0,0), (2,1,2,0), (0,3,2,0), 
-            (0,1,4,0), (3,0,1,1), (1,2,1,1), (1,0,3,1), (2,1,0,2), 
-            (0,3,0,2), (0,1,2,2), (1,0,1,3), (0,1,0,4)]
-    }
+            structured_terms.append((deg, k_exps, c_val))
 
+    # Simple lexicographic sort within each degree
     def sort_key(term_data):
-        r"""
-        Return a composite sort key for each term.
-
-        1. Primary key   : the polynomial degree.
-        2. Secondary key : the predefined order for known degrees (2-5).
-        3. Tertiary key  : lexicographic order of the exponent tuple so that
-           terms belonging to higher degrees without a predefined ordering
-           are still sorted deterministically.
-        """
-        term_deg = term_data[0]
-        term_k_tuple = term_data[1]
-
-        order_list_for_degree = desired_k_tuple_order_by_degree.get(term_deg, [])
-        try:
-            k_tuple_sort_order = order_list_for_degree.index(term_k_tuple)
-        except ValueError:
-            k_tuple_sort_order = float('inf')  # Unknown tuples are placed after the predefined ones
-
-        return (term_deg, k_tuple_sort_order, term_k_tuple)
+        term_deg, term_k_tuple, _ = term_data
+        return (term_deg, term_k_tuple)
 
     structured_terms.sort(key=sort_key)
 
     data_lines: list[str] = []
-    for term_deg, k_tuple, c_val_sorted in structured_terms:
-        k1_q2, k2_p2, k3_q3, k4_p3 = k_tuple
+    for _, k_tuple, c_val_sorted in structured_terms:
+        k_q1, k_q2, k_q3, k_p1, k_p2, k_p3 = k_tuple
         formatted_hk = _fmt_coeff(c_val_sorted, width=hk_col_width)
         line = (
-            f"{k1_q2:<{k_col_width}d}{k_spacing}"
-            f"{k2_p2:<{k_col_width}d}{k_spacing}"
-            f"{k3_q3:<{k_col_width}d}{k_spacing}"
-            f"{k4_p3:<{k_col_width}d}{k_spacing}"
+            f"{k_q1:<{k_col_width}d}{k_spacing}"
+            f"{k_p1:<{k_col_width}d}{k_spacing}"
+            f"{k_q2:<{k_col_width}d}{k_spacing}"
+            f"{k_p2:<{k_col_width}d}{k_spacing}"
+            f"{k_q3:<{k_col_width}d}{k_spacing}"
+            f"{k_p3:<{k_col_width}d}{k_spacing}"
             f"{formatted_hk}"
         )
         data_lines.append(line)
 
     # Header for one block of the table
     header_part = (
-        f"{'k1':>{k_col_width}s}{k_spacing}"
-        f"{'k2':>{k_col_width}s}{k_spacing}"
-        f"{'k3':>{k_col_width}s}{k_spacing}"
-        f"{'k4':>{k_col_width}s}{k_spacing}"
+        f"{'q1':>{k_col_width}s}{k_spacing}"
+        f"{'p1':>{k_col_width}s}{k_spacing}"
+        f"{'q2':>{k_col_width}s}{k_spacing}"
+        f"{'p2':>{k_col_width}s}{k_spacing}"
+        f"{'q3':>{k_col_width}s}{k_spacing}"
+        f"{'p3':>{k_col_width}s}{k_spacing}"
         f"{'hk':>{hk_col_width}s}"
     )
     block_separator = "    "  # Four spaces between the two table blocks

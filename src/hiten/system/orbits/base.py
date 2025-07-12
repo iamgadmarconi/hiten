@@ -34,8 +34,8 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
-from hiten.algorithms.dynamics.rtbp import (_compute_stm, _propagate_dynsys,
-                                            _stability_indices)
+from hiten.algorithms.dynamics.base import _propagate_dynsys
+from hiten.algorithms.dynamics.rtbp import _compute_stm, _stability_indices
 from hiten.algorithms.dynamics.utils.energy import (crtbp_energy,
                                                     energy_to_jacobi)
 from hiten.algorithms.dynamics.utils.geometry import _find_y_zero_crossing

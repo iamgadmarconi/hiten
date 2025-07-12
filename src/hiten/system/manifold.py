@@ -26,7 +26,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from hiten.algorithms.dynamics.rtbp import _compute_stm, _propagate_dynsys
+from hiten.algorithms.dynamics.base import _propagate_dynsys
+from hiten.algorithms.dynamics.rtbp import _compute_stm
 from hiten.algorithms.dynamics.utils.geometry import surface_of_section
 from hiten.algorithms.dynamics.utils.linalg import (_totime,
                                                     eigenvalue_decomposition)

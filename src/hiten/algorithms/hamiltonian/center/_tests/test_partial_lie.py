@@ -4,25 +4,26 @@ import numpy as np
 import pytest
 import sympy as sp
 
-from hiten.system.center import CenterManifold
-from hiten.algorithms.center.hamiltonian import _build_physical_hamiltonian
-from hiten.algorithms.center.lie import (_apply_coord_transform,
-                                   _apply_poly_transform, _evaluate_transform,
-                                   _get_homogeneous_terms, _lie_expansion,
-                                   _lie_transform,
-                                   _select_terms_for_elimination,
-                                   _solve_homological_equation)
+from hiten.algorithms.hamiltonian.center._lie import (
+    _apply_coord_transform, _evaluate_transform, _get_homogeneous_terms,
+    _lie_expansion, _lie_transform, _select_terms_for_elimination)
+from hiten.algorithms.hamiltonian.hamiltonian import \
+    _build_physical_hamiltonian
+from hiten.algorithms.hamiltonian.lie import (_apply_poly_transform,
+                                              _solve_homological_equation)
+from hiten.algorithms.hamiltonian.transforms import (_local2realmodal,
+                                                     _substitute_complex)
 from hiten.algorithms.polynomial.algebra import _poly_poisson
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                               _decode_multiindex,
-                                               _encode_multiindex, _make_poly)
+                                              _decode_multiindex,
+                                              _encode_multiindex, _make_poly)
 from hiten.algorithms.polynomial.conversion import sympy2poly
 from hiten.algorithms.polynomial.operations import (
     _polynomial_evaluate, _polynomial_poisson_bracket, _polynomial_zero_list)
-from hiten.algorithms.center.transforms import _local2realmodal, _substitute_complex
 from hiten.algorithms.utils.config import N_VARS
 from hiten.system.base import System
 from hiten.system.body import Body
+from hiten.system.center import CenterManifold
 from hiten.utils.constants import Constants
 
 TEST_L_POINT_IDX = 1

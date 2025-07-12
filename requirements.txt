@@ -4,7 +4,6 @@ scipy==1.15.2
 pytest==8.3.5
 h5py==3.13.0
 sympy==1.14.0
-profila==0.3.2
 matplotlib==3.10.3
 tqdm==4.67.1
 pandas==2.3.0

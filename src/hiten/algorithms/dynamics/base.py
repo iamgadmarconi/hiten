@@ -17,10 +17,17 @@ Systems, the Three-Body Problem and Space Mission Design".
 """
 
 from abc import ABC, abstractmethod
-from typing import Callable, Protocol, Sequence, runtime_checkable
+from typing import (TYPE_CHECKING, Callable, Literal, Protocol, Sequence,
+                    runtime_checkable)
 
 import numpy as np
+from scipy.integrate import solve_ivp
 
+from hiten.algorithms.utils.config import TOL
+from hiten.utils.log_config import logger
+
+if TYPE_CHECKING:
+    from hiten.algorithms.integrators.base import _Solution
 
 @runtime_checkable
 class _DynamicalSystemProtocol(Protocol):
@@ -207,3 +214,87 @@ class _DirectedSystem(_DynamicalSystem):
         if self._base is None:
             raise AttributeError(item)
         return getattr(self._base, item)
+
+
+def _propagate_dynsys(
+    dynsys: _DynamicalSystem,
+    state0: Sequence[float],
+    t0: float,
+    tf: float,
+    forward: int = 1,
+    steps: int = 1000,
+    method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
+    order: int = 6,
+    flip_indices: Sequence[int] | None = None,
+) -> "_Solution":
+    r"""
+    Generic propagation routine shared by public helpers.
+
+    This is an internal utility.  It normalises *state0*, applies the
+    :pyclass:`_DirectedSystem` wrapper and delegates the actual
+    integration to the requested backend.
+    """
+    from hiten.algorithms.integrators.base import _Solution
+    from hiten.algorithms.integrators.rk import AdaptiveRK, RungeKutta
+    from hiten.algorithms.integrators.symplectic import _ExtendedSymplectic
+
+    state0_np = _validate_initial_state(state0, dynsys.dim)
+
+    dynsys_dir = _DirectedSystem(dynsys, forward, flip_indices=flip_indices)
+
+    t_eval = np.linspace(t0, tf, steps)
+
+    if method == "scipy":
+        t_span = (t_eval[0], t_eval[-1])
+
+        sol = solve_ivp(
+            dynsys_dir.rhs,
+            t_span,
+            state0_np,
+            t_eval=t_eval,
+            method='DOP853',
+            dense_output=True,
+            rtol=TOL,
+            atol=TOL,
+        )
+        times = sol.t
+        states = sol.y.T
+        
+    elif method == "rk":
+        integrator = RungeKutta(order=order)
+        sol = integrator.integrate(dynsys_dir, state0_np, t_eval)
+        times = sol.times
+        states = sol.states
+        
+    elif method == "symplectic":
+        integrator = _ExtendedSymplectic(order=order)
+        sol = integrator.integrate(dynsys_dir, state0_np, t_eval)
+        times = sol.times
+        states = sol.states
+        
+    elif method == "adaptive":
+        integrator = AdaptiveRK(order=order, max_step=1e4, rtol=1e-3, atol=1e-6)
+        sol = integrator.integrate(dynsys_dir, state0_np, t_eval)
+        times = sol.times
+        states = sol.states
+
+    times_signed = forward * times
+
+    return _Solution(times_signed, states)
+
+
+def _validate_initial_state(state, expected_dim=6): 
+    r"""
+    Validate shape of *state*.
+
+    Raises
+    ------
+    ValueError
+        If length of *state* does not equal *expected_dim*.
+    """
+    state_np = np.asarray(state, dtype=np.float64)
+    if state_np.shape != (expected_dim,):
+        msg = f"Initial state vector must have {expected_dim} elements, but got shape {state_np.shape}"
+        logger.error(msg)
+        raise ValueError(msg)
+    return state_np

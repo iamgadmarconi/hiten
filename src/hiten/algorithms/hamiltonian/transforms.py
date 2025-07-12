@@ -1,5 +1,5 @@
 r"""
-center.transforms
+hamiltonian.transforms
 =================
 
 Linear coordinate transformations and helper utilities used in the centre

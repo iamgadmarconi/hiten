@@ -1,5 +1,5 @@
 r"""
-center.lie
+hamiltonian.center._lie
 ==========
 
 Numba-accelerated helpers for Lie-series based normalization of polynomial
@@ -16,14 +16,14 @@ import numpy as np
 from numba import njit
 from numba.typed import List
 
+from hiten.algorithms.hamiltonian.lie import (_apply_poly_transform,
+                                              _solve_homological_equation)
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                        _factorial, _decode_multiindex,
-                                        _make_poly)
-from hiten.algorithms.polynomial.operations import (_polynomial_clean,
-                                              _polynomial_evaluate,
-                                              _polynomial_poisson_bracket,
-                                              _polynomial_total_degree,
-                                              _polynomial_zero_list)
+                                              _decode_multiindex, _factorial,
+                                              _make_poly)
+from hiten.algorithms.polynomial.operations import (
+    _polynomial_clean, _polynomial_evaluate, _polynomial_poisson_bracket,
+    _polynomial_total_degree, _polynomial_zero_list)
 from hiten.algorithms.utils.config import FASTMATH
 from hiten.utils.log_config import logger
 
@@ -36,7 +36,10 @@ clmo: np.ndarray,
 max_degree: int, 
 tol: float = 1e-30) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
     r"""
-    Perform a Lie transformation to normalize a Hamiltonian.
+    Perform a partial Lie transformation to normalize a Hamiltonian.
+
+    This implements the partial normal form algorithm from Jorba (1999), which
+    systematically eliminates all non-resonant terms according to the resonance condition
     
     Parameters
     ----------
@@ -167,7 +170,7 @@ p_n: np.ndarray,
 n: int, 
 clmo: np.ndarray) -> np.ndarray:
     r"""
-    Select non-resonant terms to be eliminated by the Lie transform.
+    Select terms to be eliminated by the Lie transform.
     
     Parameters
     ----------
@@ -196,154 +199,6 @@ clmo: np.ndarray) -> np.ndarray:
             if k[0] == k[3]:   # not a "bad" monomial -> zero it
                 p_elim[i] = 0.0
     return p_elim
-
-
-@njit(fastmath=FASTMATH, cache=False)
-def _solve_homological_equation(
-p_elim: np.ndarray, 
-n: int, 
-eta: np.ndarray, 
-clmo: np.ndarray) -> np.ndarray:
-    r"""
-    Solve the homological equation to find the generating function.
-    
-    Parameters
-    ----------
-    p_elim : numpy.ndarray
-        Coefficient array containing the terms to be eliminated
-    n : int
-        Degree of the homogeneous terms
-    eta : numpy.ndarray
-        Array containing the eigenvalues [λ, iω₁, iω₂]
-    clmo : numba.typed.List
-        List of arrays containing packed multi-indices
-        
-    Returns
-    -------
-    numpy.ndarray
-        Coefficient array for the generating function of degree n
-        
-    Notes
-    -----
-    The homological equation is solved by dividing each coefficient by
-    the corresponding eigenvalue combination:
-    
-    g_k = -h_k / ((k₃-k₀)λ + (k₄-k₁)iω₁ + (k₅-k₂)iω₂)
-    
-    where k = [k₀, k₁, k₂, k₃, k₄, k₅] are the exponents of the monomial.
-    
-    This version includes a resonance check to avoid division by zero
-    for nearly resonant terms.
-    """
-    p_G = np.zeros_like(p_elim)
-    for i in range(p_elim.shape[0]):
-        c = p_elim[i]
-        if c != 0.0:
-            k = _decode_multiindex(i, n, clmo)
-            denom = ((k[3]-k[0]) * eta[0] +
-                     (k[4]-k[1]) * eta[1] +
-                     (k[5]-k[2]) * eta[2])
-            # Check for resonance (near-zero denominator)
-            if abs(denom) < 1e-14:
-                continue  # Skip resonant terms - keep in normal form, should not occur.
-            p_G[i] = -c / denom
-    return p_G
-
-
-@njit(fastmath=FASTMATH, cache=False)
-def _apply_poly_transform(
-poly_H: List[np.ndarray], 
-p_G_n: np.ndarray, 
-deg_G: int, 
-N_max: int, 
-psi: np.ndarray, 
-clmo: np.ndarray, 
-encode_dict_list: List[dict], 
-tol: float) -> List[np.ndarray]:
-    r"""
-    Apply a Lie transform with generating function G to a Hamiltonian.
-    
-    Parameters
-    ----------
-    poly_H : List[numpy.ndarray]
-        Original Hamiltonian polynomial
-    p_G_n : numpy.ndarray
-        Coefficient array for the generating function of degree deg_G
-    deg_G : int
-        Degree of the generating function
-    N_max : int
-        Maximum degree to include in the transformed Hamiltonian
-    psi : numpy.ndarray
-        Combinatorial table from _init_index_tables
-    clmo : numba.typed.List
-        List of arrays containing packed multi-indices
-    encode_dict_list : List
-        List of dictionaries mapping packed multi-indices to their positions
-    tol : float
-        Tolerance for cleaning small coefficients
-        
-    Returns
-    -------
-    list[numpy.ndarray]
-        The transformed Hamiltonian polynomial
-        
-    Notes
-    -----
-    This function implements the Lie transform:
-    
-    H' = exp(L_G) H = H + {G,H} + 1/2!{{G,H},G} + 1/3!{{{G,H},G},G} + ...
-    
-    where L_G is the Lie operator associated with G, and {,} denotes the Poisson bracket.
-    
-    The sum is truncated based on the maximum achievable degree from repeated
-    Poisson brackets and the specified N_max.
-    """
-    # Initialize result by copying input polynomial
-    poly_result = List()
-    for i in range(N_max + 1):
-        if i < len(poly_H):
-            poly_result.append(poly_H[i].copy())
-        else:
-            poly_result.append(_make_poly(i, psi))
-    
-    # Build complete generator polynomial from single degree
-    poly_G = _polynomial_zero_list(N_max, psi)
-    if deg_G < len(poly_G):
-        poly_G[deg_G] = p_G_n.copy()
-    
-    # Determine number of terms in Lie series
-    if deg_G > 2:
-        K = max(N_max, (N_max - deg_G) // (deg_G - 2) + 1)
-    else:
-        K = 1
-    
-    # Precompute factorials
-    factorials = [_factorial(k) for k in range(K + 1)]
-    
-    # Initialize with H for Poisson bracket iteration
-    poly_bracket = List()
-    for i in range(len(poly_H)):
-        poly_bracket.append(poly_H[i].copy())
-    
-    # Apply Lie series: H + {H,G} + (1/2!){{H,G},G} + ...
-    for k in range(1, K + 1):
-        # Compute next Poisson bracket
-        poly_bracket = _polynomial_poisson_bracket(
-            poly_bracket,
-            poly_G,
-            N_max,
-            psi,
-            clmo,
-            encode_dict_list
-        )
-        poly_bracket = _polynomial_clean(poly_bracket, tol)
-        
-        # Add to result with factorial coefficient
-        coeff = 1.0 / factorials[k]
-        for d in range(min(len(poly_bracket), len(poly_result))):
-            poly_result[d] += coeff * poly_bracket[d]
-    
-    return _polynomial_clean(poly_result, tol)
 
 
 def _lie_expansion(

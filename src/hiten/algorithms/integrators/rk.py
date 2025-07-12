@@ -29,11 +29,8 @@ import inspect
 from typing import Callable, Optional
 
 import numpy as np
-from numba import njit
 
 from hiten.algorithms.dynamics.base import _DynamicalSystem
-from hiten.algorithms.dynamics.hamiltonian import (_HamiltonianSystem,
-                                                   _hamiltonian_rhs)
 from hiten.algorithms.integrators.base import _Integrator, _Solution
 from hiten.algorithms.integrators.coefficients.dop853 import E3 as DOP853_E3
 from hiten.algorithms.integrators.coefficients.dop853 import E5 as DOP853_E5
@@ -62,7 +59,7 @@ from hiten.algorithms.integrators.coefficients.rk45 import B_LOW as RK45_B_LOW
 from hiten.algorithms.integrators.coefficients.rk45 import A as RK45_A
 from hiten.algorithms.integrators.coefficients.rk45 import C as RK45_C
 from hiten.algorithms.integrators.coefficients.rk45 import E as RK45_E
-from hiten.algorithms.utils.config import FASTMATH, TOL
+from hiten.algorithms.utils.config import TOL
 from hiten.utils.log_config import logger
 
 
