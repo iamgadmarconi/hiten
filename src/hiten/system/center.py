@@ -23,16 +23,23 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple
 
 import numpy as np
 
-from hiten.algorithms.hamiltonian.hamiltonian import _build_physical_hamiltonian
-from hiten.algorithms.hamiltonian.center.lie import (_evaluate_transform, _lie_expansion,
-                                         _lie_transform)
+from hiten.algorithms.hamiltonian.center._lie import (_evaluate_transform,
+                                                      _lie_expansion)
+from hiten.algorithms.hamiltonian.center._lie import \
+    _lie_transform as _lie_transform_partial
+from hiten.algorithms.hamiltonian.hamiltonian import \
+    _build_physical_hamiltonian
+# Full ("complete") normal form Lie transform
+from hiten.algorithms.hamiltonian.normal._lie import \
+    _lie_transform as _lie_transform_full
 from hiten.algorithms.hamiltonian.transforms import (_local2realmodal,
-                                                _local2synodic_collinear,
-                                                _local2synodic_triangular,
-                                                _realmodal2local,
-                                                _solve_complex, _solve_real,
-                                                _substitute_complex,
-                                                _substitute_real)
+                                                     _local2synodic_collinear,
+                                                     _local2synodic_triangular,
+                                                     _realmodal2local,
+                                                     _solve_complex,
+                                                     _solve_real,
+                                                     _substitute_complex,
+                                                     _substitute_real)
 from hiten.algorithms.poincare.config import _get_section_config
 from hiten.algorithms.poincare.map import _solve_missing_coord
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
@@ -239,18 +246,18 @@ class CenterManifold:
             self._get_real_modal_form(), self._max_degree, self._psi, self._clmo
         ))
 
-    def _get_lie_transform_results(self) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
-        key_trans = ('hamiltonian', self._max_degree, 'complex_normal')
+    def _get_partial_lie_results(self) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
+        key_trans = ('hamiltonian', self._max_degree, 'complex_partial_normal')
         key_G = ('generating_functions', self._max_degree)
         key_elim = ('terms_to_eliminate', self._max_degree)
         
         # We bundle the results under a single key to ensure atomicity
         bundle_key = ('lie_transform_bundle', self._max_degree)
 
-        def compute_lie_bundle():
-            logger.info("Performing Lie transformation...")
+        def compute_partial_lie_bundle():
+            logger.info("Performing partial Lie transformation...")
             poly_cn = self._get_complex_modal_form()
-            poly_trans, poly_G_total, poly_elim_total = _lie_transform(
+            poly_trans, poly_G_total, poly_elim_total = _lie_transform_partial(
                 self._point, poly_cn, self._psi, self._clmo, self._max_degree
             )
             
@@ -261,34 +268,84 @@ class CenterManifold:
             
             return poly_trans, poly_G_total, poly_elim_total
 
-        return self._get_or_compute(bundle_key, compute_lie_bundle)
+        return self._get_or_compute(bundle_key, compute_partial_lie_bundle)
 
-    def _get_complex_normal_form(self) -> List[np.ndarray]:
+    def _get_complex_partial_normal_form(self) -> List[np.ndarray]:
         """Return the Lie-transformed (normal-form) Hamiltonian in complex variables.
 
         This corresponds to the Hamiltonian obtained *after* the Lie series
         normalization (so it is in normal form), but *before* restricting to
         the centre manifold.  The result is cached under the same key that is
-        already populated by ``_get_lie_transform_results`` so no duplicate
+        already populated by ``_get_partial_lie_results`` so no duplicate
         computation occurs.
         """
-        key = ('hamiltonian', self._max_degree, 'complex_normal')
+        key = ('hamiltonian', self._max_degree, 'complex_partial_normal')
 
         def compute_normal_form():
-            poly_trans, _, _ = self._get_lie_transform_results()
+            poly_trans, _, _ = self._get_partial_lie_results()
             return poly_trans
 
         return self._get_or_compute(key, compute_normal_form)
 
-    def _get_real_normal_form(self) -> List[np.ndarray]:
-        key = ('hamiltonian', self._max_degree, 'real_normal')
+    def _get_partial_real_normal_form(self) -> List[np.ndarray]:
+        key = ('hamiltonian', self._max_degree, 'real_partial_normal')
 
         def compute_normal_form():
-            poly_trans = self._get_complex_normal_form()
+            poly_trans = self._get_complex_partial_normal_form()
             return _substitute_real(poly_trans, self._max_degree, self._psi, self._clmo)
 
         return self._get_or_compute(key, compute_normal_form)
 
+    def _get_full_lie_results(self) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
+        key_trans = ("hamiltonian", self._max_degree, "complex_full_normal")
+        key_G = ("generating_functions_full", self._max_degree)
+        key_elim = ("terms_to_eliminate_full", self._max_degree)
+
+        # Bundle to ensure atomic cache writes
+        bundle_key = ("lie_transform_bundle_full", self._max_degree)
+
+        def compute_full_lie_bundle():
+            logger.info("Performing full Lie transformation...")
+            poly_cn = self._get_complex_modal_form()
+            poly_trans, poly_G_total, poly_elim_total = _lie_transform_full(
+                self._point,
+                poly_cn,
+                self._psi,
+                self._clmo,
+                self._max_degree,
+            )
+
+            # cache copies to avoid accidental mutation
+            self.cache_set(key_trans, [item.copy() for item in poly_trans])
+            self.cache_set(key_G, [item.copy() for item in poly_G_total])
+            self.cache_set(key_elim, [item.copy() for item in poly_elim_total])
+
+            return poly_trans, poly_G_total, poly_elim_total
+
+        return self._get_or_compute(bundle_key, compute_full_lie_bundle)
+
+    def _get_full_complex_normal_form(self) -> List[np.ndarray]:
+        """Return the *full* normal-form Hamiltonian in **complex** variables."""
+        key = ("hamiltonian", self._max_degree, "complex_full_normal")
+
+        def compute_full_complex_normal():
+            poly_trans, _, _ = self._get_full_lie_results()
+            return poly_trans
+
+        return self._get_or_compute(key, compute_full_complex_normal)
+
+    def _get_full_real_normal_form(self) -> List[np.ndarray]:
+        """Return the *full* normal-form Hamiltonian in **real** variables."""
+        key = ("hamiltonian", self._max_degree, "real_full_normal")
+
+        def compute_full_real_normal():
+            poly_trans = self._get_full_complex_normal_form()
+            return _substitute_real(
+                poly_trans, self._max_degree, self._psi, self._clmo
+            )
+
+        return self._get_or_compute(key, compute_full_real_normal)
+    
     def _restrict_to_center_manifold(self, poly_H, tol=1e-14):
         r"""
         Restrict a Hamiltonian to the center manifold by eliminating hyperbolic variables.
@@ -310,7 +367,7 @@ class CenterManifold:
         key = ('hamiltonian', self._max_degree, 'center_manifold_complex')
         
         def compute_cm_complex():
-            poly_trans = self._get_complex_normal_form()
+            poly_trans = self._get_complex_partial_normal_form()
             return self._restrict_to_center_manifold(poly_trans)
 
         return self._get_or_compute(key, compute_cm_complex)
@@ -460,7 +517,7 @@ class CenterManifold:
 
         # Ensure we have the centre-manifold Hamiltonian and Lie generators.
         poly_cm_real = self.compute()
-        _, poly_G_total, _ = self._get_lie_transform_results()
+        _, poly_G_total, _ = self._get_partial_lie_results()
 
         config = _get_section_config(section_coord)
         

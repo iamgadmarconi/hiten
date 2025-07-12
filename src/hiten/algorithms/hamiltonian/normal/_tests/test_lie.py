@@ -4,9 +4,9 @@ import numpy as np
 import pytest
 import sympy as sp
 
-from hiten.algorithms.hamiltonian.normal.lie import (_apply_poly_transform,
-                                                     _lie_transform,
-                                                     _select_nonresonant_terms)
+from hiten.algorithms.hamiltonian.lie import _apply_poly_transform
+from hiten.algorithms.hamiltonian.normal._lie import (
+    _lie_transform, _select_nonresonant_terms)
 from hiten.algorithms.polynomial.base import (_CLMO_GLOBAL, _PSI_GLOBAL,
                                               _create_encode_dict_from_clmo,
                                               _decode_multiindex,
