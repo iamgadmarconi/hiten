@@ -81,6 +81,7 @@ def _lie_transform(
     # Extract frequencies - for full normal form we need all frequencies
     lam, om1, om2 = point.linear_modes
     omega = np.array([lam, -lam, 1j*om1, -1j*om1, 1j*om2, -1j*om2], dtype=np.complex128)
+    eta = np.array([omega[0], omega[2], omega[4]], dtype=np.complex128)
 
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
 
@@ -106,14 +107,10 @@ def _lie_transform(
             poly_elim_total[n] = p_elim.copy()
             
         # Solve homological equation with small divisor handling
-        p_G_n, small_divs = _solve_homological_equation(
-            p_elim, n, omega, clmo
+        p_G_n = _solve_homological_equation(
+            p_elim, n, eta, clmo
         )
-        
-        if small_divs:
-            small_divisors_log.extend([(n, div) for div in small_divs])
-            logger.warning(f"  Found {len(small_divs)} small divisors at degree {n}")
-        
+
         # Clean Gn
         if p_G_n.any():
             temp_G_n_list = List()
@@ -166,7 +163,7 @@ def _select_nonresonant_terms(
     n : int
         Degree of the homogeneous terms
     omega : numpy.ndarray
-        Array of frequencies [ω₁, -ω₁, ω₂, -ω₂, ω₃, -ω₃]
+        Array of frequencies :math:`[\omega_1, -\omega_1, \omega_2, -\omega_2, \omega_3, -\omega_3]`
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     resonance_tol : float

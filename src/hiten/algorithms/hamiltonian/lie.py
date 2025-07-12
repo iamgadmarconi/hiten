@@ -17,7 +17,6 @@ from hiten.algorithms.polynomial.operations import (_polynomial_clean,
                                               _polynomial_poisson_bracket,
                                               _polynomial_zero_list)
 from hiten.algorithms.utils.config import FASTMATH
-from hiten.utils.log_config import logger
 
 
 @njit(fastmath=FASTMATH, cache=False)

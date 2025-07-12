@@ -19,7 +19,7 @@ manifolds near collinear libration points".
 """
 
 from dataclasses import asdict
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple, Iterable, Union
 
 import numpy as np
 
@@ -50,7 +50,7 @@ from hiten.system.libration.collinear import CollinearPoint, L3Point
 from hiten.system.libration.triangular import TriangularPoint
 from hiten.utils.io import _load_center_manifold, _save_center_manifold
 from hiten.utils.log_config import logger
-from hiten.utils.printing import _format_cm_table
+from hiten.utils.printing import _format_poly_table
 
 if TYPE_CHECKING:
     from hiten.algorithms.poincare.base import _PoincareMap
@@ -142,22 +142,7 @@ class CenterManifold:
             self.cache_clear()
 
     def __str__(self):
-        r"""
-        Return a nicely formatted table of centre-manifold coefficients.
-
-        The coefficients are taken from the cache if available; otherwise the
-        centre-manifold Hamiltonian is computed on the fly (which implicitly
-        stores the result in the cache).  The helper function
-        :pyfunc:`hiten.utils.printing._format_cm_table` is then used to create
-        the textual representation.
-        """
-        # Retrieve cached coefficients if present; otherwise compute them.
-        poly_cm = self.cache_get(("hamiltonian", self._max_degree, "center_manifold_real"))
-
-        if poly_cm is None:
-            poly_cm = self.compute()
-
-        return _format_cm_table(poly_cm, self._clmo)
+        return f"CenterManifold(point={self._point}, max_degree={self._max_degree})" 
     
     def __repr__(self):
         return f"CenterManifold(point={self._point}, max_degree={self._max_degree})"
@@ -177,6 +162,42 @@ class CenterManifold:
         self._encode_dict_list = _create_encode_dict_from_clmo(self._clmo)
         self._cache = self._clone_cache(state.get("_cache", {}))
         self._poincare_maps = {}
+
+    def coefficients(
+        self,
+        degree: Union[int, Iterable[int], str, None] = None,
+        form: str = "center_manifold_real",
+    ) -> str:
+
+        # Mapping from *form* identifiers to the corresponding accessor
+        # methods.  These accessors take care of computing and caching the
+        # requested polynomial list on-demand.
+        _form_dispatch: dict[str, Callable[[], List[np.ndarray]]] = {
+            "physical": self._get_physical_hamiltonian,
+            "real_modal": self._get_real_modal_form,
+            "complex_modal": self._get_complex_modal_form,
+            "real_partial_normal": self._get_partial_real_normal_form,
+            "complex_partial_normal": self._get_complex_partial_normal_form,
+            "real_full_normal": self._get_full_real_normal_form,
+            "complex_full_normal": self._get_full_complex_normal_form,
+            "center_manifold_real": self._get_center_manifold_real,
+            "center_manifold_complex": self._get_center_manifold_complex,
+        }
+
+        if form not in _form_dispatch:
+            raise ValueError(
+                f"Unsupported polynomial form '{form}'. Allowed values are: "
+                f"{', '.join(_form_dispatch.keys())}."
+            )
+
+        # Obtain the requested polynomial list (computed lazily & cached)
+        poly_list = _form_dispatch[form]()
+
+        # Delegate the actual formatting to the utility function, passing the
+        # *degree* filter straight through.
+        table = _format_poly_table(poly_list, self._clmo, degree)
+        logger.info(f'{form} coefficients:\n\n{table}\n\n')
+        return table
 
     def cache_get(self, key: tuple) -> Any:
         r"""

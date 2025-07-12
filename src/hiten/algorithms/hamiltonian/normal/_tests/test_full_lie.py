@@ -53,7 +53,7 @@ def test_select_nonresonant_terms(seed, n, libration_point):
     Hn_orig = (rng.uniform(-1, 1, size) + 1j * rng.uniform(-1, 1, size)).astype(np.complex128)
     Hn_snapshot = Hn_orig.copy()
 
-    p_elim, _ = _select_nonresonant_terms(Hn_orig, n, omega, clmo)
+    p_elim = _select_nonresonant_terms(Hn_orig, n, omega, clmo)
 
     # Shape & dtype checks
     assert isinstance(p_elim, np.ndarray)
@@ -235,7 +235,7 @@ def test_lie_transform_removes_nonresonant_terms(center_manifold):
     # Check that all non-resonant monomials have been removed up to the truncation order
     tol = 1e-14
     for n in range(3, TEST_MAX_DEG + 1):
-        bad, _ = _select_nonresonant_terms(poly_trans[n], n, omega, clmo)
+        bad = _select_nonresonant_terms(poly_trans[n], n, omega, clmo)
         max_bad = np.max(np.abs(bad)) if bad.size else 0.0
         assert max_bad < tol, (
             f"Non-resonant terms remain at degree {n}: {max_bad:.2e} > {tol:.1e}")
