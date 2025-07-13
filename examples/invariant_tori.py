@@ -19,10 +19,8 @@ def main() -> None:
     orbit = l_point.create_orbit('halo', amplitude_z=0.3, zenith='southern')
     orbit.differential_correction(max_attempts=25)
     orbit.propagate(steps=1000)
-    orbit.plot("rotating")
-
     torus = InvariantTori(orbit)
-    torus.compute(epsilon=1e-2, n_theta1=256, n_theta2=256)
+    torus.compute(scheme='linear', epsilon=1e-2, n_theta1=256, n_theta2=256)
     torus.plot()
 
 if __name__ == "__main__":

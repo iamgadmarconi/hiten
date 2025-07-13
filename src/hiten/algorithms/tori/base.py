@@ -1,6 +1,8 @@
 from typing import Literal, Optional, Tuple
 
 import numpy as np
+from scipy.optimize import newton_krylov
+from scipy.sparse.linalg import LinearOperator
 
 from hiten.algorithms.dynamics.rtbp import _compute_stm
 from hiten.system.base import System
@@ -130,7 +132,7 @@ class _InvariantTori:
 
     def state(self, theta1: float, theta2: float, epsilon: float = 1e-4) -> np.ndarray:
         r"""
-        Return the 6-state vector :math:`u(\theta_1, \theta_2)` given by equation (15).
+        Return the 6-state vector :math:`u_grid(\theta_1, \theta_2)` given by equation (15).
 
         The angle inputs may lie outside :math:`[0, 2\pi)`; they are wrapped
         automatically. Interpolation is performed along :math:`\theta_1` using the cached
@@ -165,36 +167,15 @@ class _InvariantTori:
         yr = np.real(yvec)
         yi = np.imag(yvec)
 
-        # Perturbation :math:`\hat{u}(\theta_1, \theta_2)`
+        # Perturbation :math:`\hat{u_grid}(\theta_1, \theta_2)`
         uhat = np.cos(th2) * yr - np.sin(th2) * yi
 
         return ubar + float(epsilon) * uhat
 
-    def compute(
-        self,
-        epsilon: float = 1e-4,
-        n_theta1: int = 256,
-        n_theta2: int = 64,
-    ) -> np.ndarray:
-        r"""
-        Return a dense grid :math:`u(\theta_1^i, \theta_2^j)` of torus points.
+    def _compute_linear(self, *, epsilon: float, n_theta1: int, n_theta2: int) -> np.ndarray:
+        """Return the first-order torus grid (current implementation)."""
 
-        Parameters
-        ----------
-        epsilon : float, default 1e-4
-            Torus *size* parameter :math:`\epsilon` in equation (15).
-        n_theta1, n_theta2 : int, optional
-            Number of nodes along the two angular directions. :math:`\theta_2` samples avoid
-            duplication at :math:`2\pi` (endpoint=False).
-
-        Returns
-        -------
-        numpy.ndarray
-            Array of shape (n_theta1, n_theta2, 6) containing the state
-            vectors. The first axis follows increasing :math:`\theta_1`, the second axis
-            increasing :math:`\theta_2`.
-        """
-        # Prepare (re-compute only if resolution changed)
+        # Ensure STM cache at requested resolution
         self._prepare(n_theta1)
 
         assert self._theta1 is not None and self._ubar is not None and self._y_series is not None
@@ -207,13 +188,68 @@ class _InvariantTori:
         yi = np.imag(self._y_series)  # (n_theta1, 6)
 
         u_grid = (
-            self._ubar[:, None, :] +
-            epsilon * (
-                cos_t2[None, :, None] * yr[:, None, :] -
-                sin_t2[None, :, None] * yi[:, None, :]
+            self._ubar[:, None, :]
+            + epsilon
+            * (
+                cos_t2[None, :, None] * yr[:, None, :]
+                - sin_t2[None, :, None] * yi[:, None, :]
             )
         )
-        self._grid = u_grid
+        return u_grid
+
+    def _compute_pde(
+        self,
+        *,
+        n_theta1: int,
+        n_theta2: int,
+        order_fd: int = 2,
+        newton_tol: float = 1e-10,
+        max_iter: int = 25,
+        initialise_from_linear: bool = True,
+        initial_epsilon: float = 1e-3,
+        **kwargs,
+    ) -> np.ndarray:
+        """
+        Iterative discrete-PDE solver (second-order scheme).
+        """
+        if order_fd not in (2, 4):
+            raise NotImplementedError("order_fd must be 2 or 4 (central-difference accuracy)")
+
+        raise NotImplementedError("PDE solver not implemented yet.")
+
+    def compute(
+        self,
+        *,
+        scheme: Literal["linear", "pde"] = "linear",
+        epsilon: float = 1e-4,
+        n_theta1: int = 256,
+        n_theta2: int = 64,
+        **kwargs,
+    ) -> np.ndarray:
+        """Generate and cache a torus grid using the selected *scheme*.
+
+        Parameters
+        ----------
+        scheme : {'linear', 'pde'}, default 'linear'
+            Algorithm to use.  'linear' is the earlier first-order model;
+            'pde' will invoke the discrete-PDE Newton solver (not yet implemented).
+        epsilon, n_theta1, n_theta2 : see documentation of the linear scheme.
+        kwargs : additional parameters forwarded to the chosen backend.
+        """
+
+        if scheme == "linear":
+            self._grid = self._compute_linear(
+                epsilon=epsilon, n_theta1=n_theta1, n_theta2=n_theta2
+            )
+        elif scheme == "pde":
+            if "epsilon" in kwargs:
+                logger.warning("epsilon ignored by 'pde' scheme - torus size is inherent to the solution.")
+            self._grid = self._compute_pde(
+                n_theta1=n_theta1,
+                n_theta2=n_theta2,
+                **kwargs,
+            )
+
         return self._grid
 
     def plot(

@@ -119,3 +119,22 @@
    ![Poincaré map](results/plots/poincare_map.svg)
 
    *Figure&nbsp;4 - Poincaré map of the centre manifold of the Earth-Moon \(L_1\) libration point using the \(q_2=0\) section.*
+
+4. **Generating invariant tori**
+
+   Hiten can generate invariant tori for periodic orbits.
+
+   ```python
+    system = System.from_bodies("earth", "moon")
+    l_point = system.get_libration_point(1)
+    orbit = l_point.create_orbit('halo', amplitude_z=0.3, zenith='southern')
+    orbit.differential_correction(max_attempts=25)
+    orbit.propagate(steps=1000)
+    torus = InvariantTori(orbit)
+    torus.compute(scheme='linear', epsilon=1e-2, n_theta1=256, n_theta2=256)
+    torus.plot()
+   ```
+
+   ![Invariant tori](results/plots/invariant_tori.svg)
+
+   *Figure&nbsp;5 - Invariant torus of an Earth-Moon \(L_1\) quasi-halo orbit.*
