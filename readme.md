@@ -16,9 +16,9 @@
    from hiten import System
 
    system = System.from_bodies("earth", "moon")
-   libration_point = system.get_libration_point(1)
+   l1 = system.get_libration_point(1)
 
-   orbit = libration_point.create_orbit("halo", amplitude_z=0.2, zenith="southern")
+   orbit = l1.create_orbit("halo", amplitude_z=0.2, zenith="southern")
    orbit.differential_correction(max_attempts=25)
    orbit.propagate(steps=1000)
 
@@ -37,14 +37,14 @@
    from hiten import System, VerticalOrbit
 
    system = System.from_bodies("earth", "moon")
-   libration_point = system.get_libration_point(1)
+   l1 = system.get_libration_point(1)
 
-   cm = libration_point.get_center_manifold(max_degree=10)
+   cm = l1.get_center_manifold(max_degree=10)
    cm.compute()
 
    initial_state = cm.ic(poincare_point=[0.0, 0.0], energy=0.6, section_coord="q3")
 
-   orbit = VerticalOrbit(libration_point, initial_state=initial_state)
+   orbit = VerticalOrbit(l1, initial_state=initial_state)
    orbit.differential_correction(max_attempts=100)
    orbit.propagate(steps=1000)
 
@@ -125,11 +125,16 @@
    Hiten can generate invariant tori for periodic orbits.
 
    ```python
+   from hiten import System
+   from hiten.algorithms import InvariantTori
+
     system = System.from_bodies("earth", "moon")
-    l_point = system.get_libration_point(1)
-    orbit = l_point.create_orbit('halo', amplitude_z=0.3, zenith='southern')
+    l1 = system.get_libration_point(1)
+
+    orbit = l1.create_orbit('halo', amplitude_z=0.3, zenith='southern')
     orbit.differential_correction(max_attempts=25)
     orbit.propagate(steps=1000)
+   
     torus = InvariantTori(orbit)
     torus.compute(scheme='linear', epsilon=1e-2, n_theta1=256, n_theta2=256)
     torus.plot()
