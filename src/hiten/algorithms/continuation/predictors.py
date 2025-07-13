@@ -12,6 +12,7 @@ from typing import Sequence
 import numpy as np
 
 from hiten.algorithms.continuation.base import _ContinuationEngine
+from hiten.algorithms.dynamics.utils.energy import crtbp_energy
 from hiten.system.orbits.base import PeriodicOrbit, S
 
 
@@ -158,18 +159,39 @@ class _EnergyLevel(_ContinuationEngine):
         dE = float(step[0])
         new_state = np.copy(last_orbit.initial_state)
 
-        # Velocity vector and its squared magnitude
         v = new_state[3:6]
         v_sq = float(np.dot(v, v))
-        if v_sq == 0:
-            raise ValueError("Velocity magnitude is zero - cannot vary energy through velocity scaling.")
 
-        # Determine scaling factor to achieve approx. energy change dE
-        alpha = dE / v_sq  # small-angle approximation (see docstring)
+        if v_sq < 1e-12:
+            v_sq = 1e-12
+
+        alpha = dE / v_sq
+
+        max_alpha = 0.25
+        if abs(alpha) > max_alpha:
+            alpha = np.sign(alpha) * max_alpha
+
         scale = 1.0 + alpha
-
-        # Use base class helper to prevent pathological scaling while allowing adaptive reduction
-        scale = self._clamp_scale(scale)
+        scale = self._clamp_scale(scale, min_scale=0.8, max_scale=1.25)
 
         new_state[3:6] = v * scale
+
+        current_E = last_orbit.energy
+        scaled_E = crtbp_energy(new_state, last_orbit.mu)
+        residual = dE - (scaled_E - current_E)
+
+        if abs(residual) > 0.2 * abs(dE):
+            grad = np.zeros(3)
+            eps = 1e-5
+            for i in range(3):
+                up = np.copy(new_state)
+                dn = np.copy(new_state)
+                up[i] += eps
+                dn[i] -= eps
+                grad[i] = (crtbp_energy(up, last_orbit.mu) - crtbp_energy(dn, last_orbit.mu)) / (2 * eps)
+
+            if np.linalg.norm(grad) > 0:
+                direction = grad / np.linalg.norm(grad)
+                new_state[:3] += 1e-4 * np.sign(residual) * direction
+
         return new_state

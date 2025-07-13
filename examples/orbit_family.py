@@ -29,7 +29,7 @@ def main() -> None:
     
     # --- Halo seed and state parameter engine ---
     halo_seed = l1.create_orbit('halo', amplitude_z= 0.2, zenith='southern')
-    halo_seed.differential_correction(max_attempts=25)
+    halo_seed.differential_correction(max_attempts=25, max_delta=1e-3)
     # --- two-parameter continuation: vary absolute X (in-plane) and Z (out-of-plane) ---
     current_x = halo_seed.initial_state[S.X]
     current_z = halo_seed.initial_state[S.Z]  # 0 for planar Lyapunov halo_seed

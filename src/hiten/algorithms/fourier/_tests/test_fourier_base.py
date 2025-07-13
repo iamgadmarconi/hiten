@@ -12,7 +12,7 @@ from hiten.algorithms.fourier.base import (_MAX_K, _MAX_N,
 from hiten.algorithms.fourier.operations import _make_fourier_poly
 
 TEST_MAX_DEG = 3  # action‐degree limit for tests
-TEST_K_MAX = 2   # Fourier index limit for tests (–2 ... +2)
+TEST_K_MAX = 2   # Fourier index limit for tests (-2 ... +2)
 
 # Build lookup tables once and reuse across tests
 PSI_F, CLMO_F = _init_fourier_tables(TEST_MAX_DEG, TEST_K_MAX)

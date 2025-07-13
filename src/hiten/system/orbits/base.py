@@ -421,7 +421,10 @@ class PeriodicOrbit(ABC):
             *,
             tol: float = 1e-10,
             max_attempts: int = 25,
-            forward: int = 1
+            forward: int = 1,
+            max_delta: float = 1e-2,
+            alpha_reduction: float = 0.5,
+            min_alpha: float = 1e-4
         ) -> tuple[np.ndarray, float]:
         """
         Perform differential correction to find a periodic orbit.
@@ -439,6 +442,12 @@ class PeriodicOrbit(ABC):
             Maximum number of correction attempts. Default is 25.
         forward : int, optional
             Direction of propagation (1 for forward, -1 for backward). Default is 1.
+        max_delta : float, optional
+            Maximum allowed correction step size. Default is 1e-2.
+        alpha_reduction : float, optional
+            Factor to reduce step size during line search. Default is 0.5.
+        min_alpha : float, optional
+            Minimum step size factor before giving up. Default is 1e-4.
 
         Returns
         -------
@@ -457,17 +466,63 @@ class PeriodicOrbit(ABC):
         for k in range(max_attempts + 1):
             t_ev, X_ev = cfg.event_func(dynsys=self.system._dynsys, x0=X0, forward=forward)
             R = X_ev[list(cfg.residual_indices)] - np.array(cfg.target)
+            R_norm = np.linalg.norm(R, ord=np.inf)
 
-            if np.linalg.norm(R, ord=np.inf) < tol:
+            if R_norm < tol:
                 self._reset()
                 self._initial_state = X0
                 self._period = 2 * t_ev
                 logger.info(f"Differential correction converged after {k} iterations.")
                 return X0, t_ev
 
+            # Compute full Newton step
             delta = self._compute_correction_step(X0, t_ev, X_ev)
-            X0 = self._apply_correction(X0, delta)
-            logger.info(f"Correction attempt {k+1}/{max_attempts}: |R|={np.linalg.norm(R):.2e}, delta={delta}")
+            
+            # Apply step size limit
+            delta_norm = np.linalg.norm(delta, ord=np.inf)
+            if delta_norm > max_delta:
+                delta = delta * (max_delta / delta_norm)
+                logger.debug(f"Limiting correction step from {delta_norm:.2e} to {max_delta:.2e}")
+            
+            # Line search to ensure residual reduction
+            alpha = 1.0
+            X_trial = X0.copy()
+            best_R_norm = R_norm
+            best_alpha = 0.0
+            
+            while alpha >= min_alpha:
+                # Apply scaled correction
+                X_trial = self._apply_correction(X0.copy(), alpha * delta)
+                
+                try:
+                    # Evaluate residual at trial point
+                    _, X_trial_ev = cfg.event_func(dynsys=self.system._dynsys, x0=X_trial, forward=forward)
+                    R_trial = X_trial_ev[list(cfg.residual_indices)] - np.array(cfg.target)
+                    R_trial_norm = np.linalg.norm(R_trial, ord=np.inf)
+                    
+                    # Check if this is an improvement
+                    if R_trial_norm < best_R_norm:
+                        best_R_norm = R_trial_norm
+                        best_alpha = alpha
+                        
+                    # Accept if sufficient decrease (Armijo condition)
+                    if R_trial_norm < (1 - 0.1 * alpha) * R_norm:
+                        X0 = X_trial.copy()
+                        logger.info(f"Correction attempt {k+1}/{max_attempts}: |R|={R_trial_norm:.2e}, "
+                                  f"alpha={alpha:.2e}, delta_norm={delta_norm:.2e}")
+                        break
+                except Exception as e:
+                    logger.debug(f"Line search failed at alpha={alpha}: {e}")
+                
+                # Reduce step size
+                alpha *= alpha_reduction
+            else:
+                # Line search failed, use best found so far
+                if best_alpha > 0:
+                    X0 = self._apply_correction(X0, best_alpha * delta)
+                    logger.warning(f"Line search exhausted, using best alpha={best_alpha:.2e}")
+                else:
+                    raise RuntimeError(f"Line search failed at iteration {k+1}")
 
         raise RuntimeError(f"Differential correction did not converge after {max_attempts} attempts.")
 

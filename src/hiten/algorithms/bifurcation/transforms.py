@@ -137,11 +137,11 @@ def _nf2aa_sc(poly_nf_complex: np.ndarray) -> np.ndarray:
     """
     # Implementation note: the mapping rules that convert canonical
     # monomials (q, p) -> (I, \theta) are identical for the centre directions
-    # of a saddle–centre system.  The hyperbolic pair does not introduce
+    # of a saddle-centre system.  The hyperbolic pair does not introduce
     # any additional angle dependence, but the algebraic prefactors and
     # exponent bookkeeping remain unchanged.  Consequently, the existing
-    # elliptic–elliptic helper covers the required functionality.  We
-    # therefore delegate to it directly – this keeps the public API
+    # elliptic-elliptic helper covers the required functionality.  We
+    # therefore delegate to it directly - this keeps the public API
     # intact and avoids code duplication.  If a future extension needs
     # to treat the hyperbolic degree differently (for example, to drop
     # Fourier harmonics with k_1 != 0), it can be implemented here without
