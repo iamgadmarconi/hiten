@@ -8,7 +8,22 @@ from hiten.algorithms.polynomial.base import (_CLMO_GLOBAL, _PSI_GLOBAL,
                                               _decode_multiindex)
 
 
-def _nf2aa(poly_nf_complex: np.ndarray) -> np.ndarray:
+def _nf2aa_ee(poly_nf_complex: np.ndarray) -> np.ndarray:
+    """
+    Convert a full Birkhoff normal form complex polynomial to an action-angle polynomial.
+
+    This function is specifically applicable to elliptic-elliptic systems (I.e. :math:`L_4, L_5`).
+
+    Parameters
+    ----------
+    poly_nf_complex : np.ndarray
+        Coefficient array of a full Birkhoff normal form complex polynomial.
+
+    Returns
+    -------
+    coeffs_aa : np.ndarray
+        Coefficient array of an action-angle polynomial.
+    """
     deg_nf: int = _get_degree(poly_nf_complex, _PSI_GLOBAL)
     if deg_nf < 0:
         raise ValueError("Unable to infer polynomial degree from coefficient array size.")
@@ -103,3 +118,21 @@ def _nf2aa(poly_nf_complex: np.ndarray) -> np.ndarray:
             coeffs_aa[pos_aa] += pref
 
     return coeffs_aa
+
+def _nf2aa_sc(poly_nf_complex: np.ndarray) -> np.ndarray:
+    """
+    Convert a full Birkhoff normal form complex polynomial to an action-angle polynomial.
+
+    This function is specifically applicable to saddle-center systems (I.e. :math:`L_1, L_2, L_3`).
+
+    Parameters
+    ----------
+    poly_nf_complex : np.ndarray
+        Coefficient array of a full Birkhoff normal form complex polynomial.
+
+    Returns
+    -------
+    coeffs_aa : np.ndarray
+        Coefficient array of an action-angle polynomial.
+    """
+    pass
