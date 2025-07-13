@@ -35,7 +35,8 @@ import numpy.typing as npt
 import pandas as pd
 
 from hiten.algorithms.dynamics.base import _propagate_dynsys
-from hiten.algorithms.dynamics.rtbp import _compute_stm, _stability_indices
+from hiten.algorithms.dynamics.rtbp import (_compute_monodromy, _compute_stm,
+                                            _stability_indices)
 from hiten.algorithms.dynamics.utils.energy import (crtbp_energy,
                                                     energy_to_jacobi)
 from hiten.algorithms.dynamics.utils.geometry import _find_y_zero_crossing
@@ -353,6 +354,22 @@ class PeriodicOrbit(ABC):
             The Jacobi constant value
         """
         return energy_to_jacobi(self.energy)
+    
+    @property
+    def monodromy(self) -> np.ndarray:
+        r"""
+        Compute the monodromy matrix of the orbit.
+        
+        Returns
+        -------
+        numpy.ndarray
+            The monodromy matrix
+        """
+        if self.period is None:
+            raise ValueError("Period must be set before computing monodromy")
+        
+        Phi = _compute_monodromy(self.libration_point._var_eq_system, self.initial_state, self.period)
+        return Phi
 
     @property
     @abstractmethod
@@ -584,10 +601,10 @@ class PeriodicOrbit(ABC):
         
         logger.info(f"Computing stability for orbit with period {self.period}")
         # Compute STM over one period
-        _, _, monodromy, _ = _compute_stm(self.libration_point._var_eq_system, self.initial_state, self.period)
+        _, _, Phi, _ = _compute_stm(self.libration_point._var_eq_system, self.initial_state, self.period)
         
         # Analyze stability
-        stability = _stability_indices(monodromy)
+        stability = _stability_indices(Phi)
         self._stability_info = stability
         
         is_stable = np.all(np.abs(stability[0]) <= 1.0)
