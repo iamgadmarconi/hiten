@@ -25,7 +25,6 @@ def main() -> None:
     num_orbits = 5
     system = System.from_bodies("earth", "moon")
     l1 = system.get_libration_point(1)
-
     
     # --- Halo seed and state parameter engine ---
     halo_seed = l1.create_orbit('halo', amplitude_z= 0.2, zenith='southern')
@@ -64,7 +63,7 @@ def main() -> None:
     lyapunov_seed.differential_correction(max_attempts=25)
     # --- energy continuation ---
     current_energy = lyapunov_seed.energy # Use hamiltonian energy
-    target_energy = current_energy + 1e-1
+    target_energy = current_energy * 1.02
     step = (target_energy - current_energy) / (num_orbits - 1)
 
     # --- Build engine and run ---
@@ -73,7 +72,7 @@ def main() -> None:
         target=(current_energy, target_energy),
         step=step,
         use_jacobi=False,
-        corrector_kwargs=dict(max_attempts=10, tol=1e-9),
+        corrector_kwargs=dict(max_attempts=30, tol=1e-9),
         max_orbits=num_orbits,
     )
     energy_engine.run()

@@ -187,10 +187,11 @@ class _ContinuationEngine(ABC):
         raise NotImplementedError
 
     def _update_step(self, current_step: np.ndarray, *, success: bool) -> np.ndarray:
-        """Simple adaptive strategy applied component-wise."""
+        """Simple adaptive strategy applied component-wise. Preserve sign while clamping magnitude."""
         factor = 2.0 if success else 0.5
         new_step = current_step * factor
-        return np.clip(new_step, 1e-10, 1.0)
+        clipped_mag = np.clip(np.abs(new_step), 1e-10, 1.0)
+        return np.sign(new_step) * clipped_mag
 
     def _stop_condition(self) -> bool:
         """Default stop condition: parameter value left target interval."""
