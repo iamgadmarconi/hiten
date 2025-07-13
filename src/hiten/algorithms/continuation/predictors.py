@@ -161,24 +161,18 @@ class _EnergyLevel(_ContinuationEngine):
         v_free = new_state[free_v_idx]
         v_sq_free = float(np.dot(v_free, v_free))
 
-        if v_sq_free < 1e-14:
-            free_v_idx = [S.VX.value, S.VY.value, S.VZ.value]
-            v_free = new_state[free_v_idx]
-            v_sq_free = float(np.dot(v_free, v_free))
-
         if v_sq_free < 1e-12:
             v_sq_free = 1e-12
 
         alpha = dE / v_sq_free
 
-        max_alpha = 0.25
+        max_alpha = 0.5
         if abs(alpha) > max_alpha:
             alpha = np.sign(alpha) * max_alpha
 
         scale = 1.0 + alpha
-        scale = self._clamp_scale(scale, min_scale=0.8, max_scale=1.25)
+        scale = self._clamp_scale(scale, min_scale=0.8, max_scale=1.2)
 
-        # Apply scaling only to the selected free components
         for idx in free_v_idx:
             new_state[idx] *= scale
 
@@ -186,31 +180,26 @@ class _EnergyLevel(_ContinuationEngine):
         scaled_E = crtbp_energy(new_state, last_orbit.mu)
         residual = dE - (scaled_E - current_E)
 
-        # Add detailed logging for debugging
-        from hiten.utils.log_config import logger
-        logger.info(f"Energy prediction: dE={dE:.6e}, free_v_idx={free_v_idx}, v_sq_free={v_sq_free:.6e}")
-        logger.info(f"Energy prediction: alpha={alpha:.6e}, scale={scale:.6f}")
-        logger.info(f"Energy prediction: current_E={current_E:.6e}, scaled_E={scaled_E:.6e}, residual={residual:.6e}")
-
-        if abs(residual) > 0.2 * abs(dE):
-            grad = np.zeros(3)
+        if abs(residual) > 0.1 * abs(dE):
+            grad = np.zeros(6)
             eps = 1e-5
-            for i in range(3):
+            
+            for i in range(6):
                 up = np.copy(new_state)
                 dn = np.copy(new_state)
                 up[i] += eps
                 dn[i] -= eps
                 grad[i] = (crtbp_energy(up, last_orbit.mu) - crtbp_energy(dn, last_orbit.mu)) / (2 * eps)
 
-            grad_norm = np.linalg.norm(grad)
-            if grad_norm > 0:
-                # Displacement that would realise the missing ΔE in first order
-                delta_s = residual / grad_norm
-                # Limit to a safe maximum to avoid wild guesses
-                max_step = 5e-3   # canonical units
-                delta_s = np.clip(delta_s, -max_step, max_step)
-                new_state[:3] += (delta_s / grad_norm) * grad
-
-                logger.info(f"Energy prediction: position correction applied, delta_s={delta_s:.6e}")
-
+            grad_norm_sq = np.dot(grad, grad)
+            
+            if grad_norm_sq > 1e-20:
+                correction = (residual / grad_norm_sq) * grad
+                
+                max_correction = 0.01
+                correction_norm = np.linalg.norm(correction)
+                if correction_norm > max_correction:
+                    correction *= (max_correction / correction_norm)
+                
+                new_state += correction
         return new_state
