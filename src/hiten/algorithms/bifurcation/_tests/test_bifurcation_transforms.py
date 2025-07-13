@@ -6,7 +6,25 @@ from hiten.algorithms.fourier.base import (_decode_fourier_index,
                                            _init_fourier_tables)
 from hiten.algorithms.polynomial.base import (_CLMO_GLOBAL, _PSI_GLOBAL,
                                               _decode_multiindex, _make_poly)
+from hiten.system.base import System
+from hiten.system.body import Body
+from hiten.system.center import CenterManifold
+from hiten.utils.constants import Constants
 
+TEST_MAX_DEG = 6
+TEST_L_POINT_IDX = 1
+
+
+@pytest.fixture(scope="module")
+def reduction_test_setup():
+    Earth = Body("Earth", Constants.bodies["earth"]["mass"], Constants.bodies["earth"]["radius"], "blue")
+    Moon = Body("Moon", Constants.bodies["moon"]["mass"], Constants.bodies["moon"]["radius"], "gray", Earth)
+    distance_em = Constants.get_orbital_distance("earth", "moon")
+    system_em = System(Earth, Moon, distance_em)
+    libration_point_em = system_em.get_libration_point(TEST_L_POINT_IDX)
+    cm_em = CenterManifold(libration_point_em, TEST_MAX_DEG)
+    cm_em.compute()
+    return cm_em
 
 def _encode_monomial_to_poly(exponents: tuple[int, int, int, int, int, int]):
     degree = int(sum(exponents))
@@ -144,3 +162,27 @@ def test_nf2aa_prefactor_phase():
     mask = np.ones_like(coeffs_aa, dtype=bool)
     mask[pos] = False
     assert np.allclose(coeffs_aa[mask], 0.0, atol=1e-12)
+
+
+def test_center_manifold_normal_form_exponent_symmetry(reduction_test_setup):
+    cm = reduction_test_setup
+
+    H_nf_complex = cm.cache_get(('hamiltonian', cm.max_degree, 'complex_full_normal'))
+    clmo = cm._clmo
+
+    for deg, coeff_vec in enumerate(H_nf_complex):
+        if coeff_vec is None or coeff_vec.size == 0:
+            continue
+        for pos, c in enumerate(coeff_vec):
+            if abs(c) < 1e-12:
+                continue
+            k = _decode_multiindex(pos, deg, clmo)
+            assert k[1] == k[4], (
+                f"q2 exponent {k[1]} != p2 exponent {k[4]} in degree {deg} pos {pos}"
+            )
+            assert k[2] == k[5], (
+                f"q3 exponent {k[2]} != p3 exponent {k[5]} in degree {deg} pos {pos}"
+            )
+            assert k[0] == 0 and k[3] == 0, (
+                f"Center-manifold term has non-zero q1/p1 exponents (q1={k[0]}, p1={k[3]})"
+            )

@@ -8,8 +8,8 @@ from hiten.algorithms.polynomial.base import (_CLMO_GLOBAL, _PSI_GLOBAL,
                                               _decode_multiindex)
 
 
-def _nf2aa(poly_nf: np.ndarray) -> np.ndarray:
-    deg_nf: int = _get_degree(poly_nf, _PSI_GLOBAL)
+def _nf2aa(poly_nf_complex: np.ndarray) -> np.ndarray:
+    deg_nf: int = _get_degree(poly_nf_complex, _PSI_GLOBAL)
     if deg_nf < 0:
         raise ValueError("Unable to infer polynomial degree from coefficient array size.")
 
@@ -28,8 +28,8 @@ def _nf2aa(poly_nf: np.ndarray) -> np.ndarray:
 
     k_max_required = 0  # maximum |k_j| encountered (same for all j)
 
-    for pos in range(poly_nf.shape[0]):
-        c = poly_nf[pos]
+    for pos in range(poly_nf_complex.shape[0]):
+        c = poly_nf_complex[pos]
         if c == 0.0:
             continue
 
@@ -62,8 +62,8 @@ def _nf2aa(poly_nf: np.ndarray) -> np.ndarray:
     # Allocate output block
     coeffs_aa = np.zeros(psiF[deg_aa], dtype=np.complex128)
 
-    for pos in range(poly_nf.shape[0]):
-        c = poly_nf[pos]
+    for pos in range(poly_nf_complex.shape[0]):
+        c = poly_nf_complex[pos]
         if c == 0.0:
             continue
 
