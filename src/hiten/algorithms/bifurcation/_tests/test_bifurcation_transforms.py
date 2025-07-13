@@ -23,7 +23,7 @@ def reduction_test_setup():
     system_em = System(Earth, Moon, distance_em)
     libration_point_em = system_em.get_libration_point(TEST_L_POINT_IDX)
     cm_em = CenterManifold(libration_point_em, TEST_MAX_DEG)
-    cm_em.compute()
+    cm_em.compute('complex_full_normal')
     return cm_em
 
 def _encode_monomial_to_poly(exponents: tuple[int, int, int, int, int, int]):
@@ -177,12 +177,15 @@ def test_center_manifold_normal_form_exponent_symmetry(reduction_test_setup):
             if abs(c) < 1e-12:
                 continue
             k = _decode_multiindex(pos, deg, clmo)
+
+            # Each position coordinate exponent must match its corresponding momentum exponent
+            # to ensure the monomials depend only on the actions I_j (see image reference).
+            assert k[0] == k[3], (
+                f"q1 exponent {k[0]} != p1 exponent {k[3]} in degree {deg} pos {pos}"
+            )
             assert k[1] == k[4], (
                 f"q2 exponent {k[1]} != p2 exponent {k[4]} in degree {deg} pos {pos}"
             )
             assert k[2] == k[5], (
                 f"q3 exponent {k[2]} != p3 exponent {k[5]} in degree {deg} pos {pos}"
-            )
-            assert k[0] == 0 and k[3] == 0, (
-                f"Center-manifold term has non-zero q1/p1 exponents (q1={k[0]}, p1={k[3]})"
             )
