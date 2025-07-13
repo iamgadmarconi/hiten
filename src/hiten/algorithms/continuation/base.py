@@ -209,3 +209,69 @@ class _ContinuationEngine(ABC):
             f"{self.__class__.__name__}(n_orbits={len(self._family)}, "
             f"step={self._step}, target=[{self._target_min}, {self._target_max}])"
         )
+
+    @staticmethod
+    def _clamp_step(step_value: float, reference_value: float = 1.0, min_relative: float = 1e-6, min_absolute: float = 1e-8) -> float:
+        """
+        Apply robust step clamping that preserves sign and allows adaptive reduction.
+        
+        This method prevents pathological step values while respecting the continuation
+        engine's adaptive step reduction logic. It scales the minimum step based on
+        the reference value to handle different parameter magnitudes appropriately.
+        
+        Parameters
+        ----------
+        step_value : float
+            The proposed step value (can be positive or negative)
+        reference_value : float, optional
+            Reference value to scale the minimum step (e.g., current state component).
+            Default is 1.0.
+        min_relative : float, optional
+            Minimum step as a fraction of the reference value. Default is 1e-6.
+        min_absolute : float, optional
+            Absolute minimum step size. Default is 1e-8.
+            
+        Returns
+        -------
+        float
+            Clamped step value that preserves sign and respects minimum bounds
+        """
+        if step_value == 0:
+            return min_absolute
+            
+        # Compute adaptive minimum based on reference value
+        ref_magnitude = abs(reference_value)
+        if ref_magnitude > min_absolute:
+            min_step = max(min_absolute, ref_magnitude * min_relative)
+        else:
+            min_step = min_absolute
+            
+        # Apply sign-aware clamping
+        if abs(step_value) < min_step:
+            return np.sign(step_value) * min_step
+        else:
+            return step_value
+
+    @staticmethod
+    def _clamp_scale(scale_value: float, min_scale: float = 1e-3, max_scale: float = 1e3) -> float:
+        """
+        Apply robust scaling factor clamping for multiplicative predictors.
+        
+        This method ensures scaling factors remain within reasonable bounds to
+        prevent pathological orbit predictions while allowing adaptive step reduction.
+        
+        Parameters
+        ----------
+        scale_value : float
+            The proposed scaling factor
+        min_scale : float, optional
+            Minimum allowed scaling factor. Default is 1e-3.
+        max_scale : float, optional
+            Maximum allowed scaling factor. Default is 1e3.
+            
+        Returns
+        -------
+        float
+            Clamped scaling factor within reasonable bounds
+        """
+        return np.clip(scale_value, min_scale, max_scale)

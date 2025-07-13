@@ -15,12 +15,12 @@ from hiten.algorithms.continuation.base import _ContinuationEngine
 from hiten.system.orbits.base import PeriodicOrbit, S
 
 
-class _NaturalParameter(_ContinuationEngine):
+class _StateParameter(_ContinuationEngine):
     """Vary a single coordinate of the seed state by a constant increment.
 
     Examples
     --------
-    >>> engine = _NaturalParameter(
+    >>> engine = _StateParameter(
     >>>     initial_orbit=halo0,
     >>>     state_index=S.Z,          # third component of state vector
     >>>     target=(halo0.initial_state[S.Z], 0.06),
@@ -84,5 +84,92 @@ class _NaturalParameter(_ContinuationEngine):
         """Copy the state vector and increment the designated component(s)."""
         new_state = np.copy(last_orbit.initial_state)
         for idx, d in zip(self._state_indices, step):
+            # Use base class helper to ensure reasonable step while preserving adaptive reduction
+            d = self._clamp_step(d, reference_value=new_state[idx])
             new_state[idx] += d
+        return new_state
+
+
+class _FixedPeriod(_ContinuationEngine):
+    def __init__(
+        self,
+        *,
+        initial_orbit: PeriodicOrbit,
+        target: "Sequence[float]",
+        step: float = 1e-3,
+        corrector_kwargs: dict | None = None,
+        max_orbits: int = 256,
+    ) -> None:
+        # Continuation parameter (period)
+        parameter_getter = lambda orb: np.asarray([float(orb.period)])
+
+        super().__init__(
+            initial_orbit=initial_orbit,
+            parameter_getter=parameter_getter,
+            target=target,
+            step=step,
+            corrector_kwargs=corrector_kwargs,
+            max_orbits=max_orbits,
+        )
+
+    def _predict(self, last_orbit: PeriodicOrbit, step: np.ndarray) -> np.ndarray:
+        dT = float(step[0])
+        T = float(last_orbit.period)
+        if T == 0:
+            raise ValueError("Last orbit has zero period - cannot continue in period.")
+
+        scale = 1.0 - dT / T
+        # Use base class helper to prevent pathological scaling while allowing adaptive reduction
+        scale = self._clamp_scale(scale)
+
+        new_state = np.copy(last_orbit.initial_state)
+        new_state[3:6] *= scale  # scale vx, vy, vz
+        return new_state
+
+
+class _EnergyLevel(_ContinuationEngine):
+    def __init__(
+        self,
+        *,
+        initial_orbit: PeriodicOrbit,
+        target: "Sequence[float]",
+        step: float = 1e-4,
+        use_jacobi: bool = False,
+        corrector_kwargs: dict | None = None,
+        max_orbits: int = 256,
+    ) -> None:
+        if use_jacobi:
+            parameter_getter = lambda orb: np.asarray([float(orb.jacobi_constant)])
+        else:
+            parameter_getter = lambda orb: np.asarray([float(orb.energy)])
+
+        self._use_jacobi = use_jacobi
+
+        super().__init__(
+            initial_orbit=initial_orbit,
+            parameter_getter=parameter_getter,
+            target=target,
+            step=step,
+            corrector_kwargs=corrector_kwargs,
+            max_orbits=max_orbits,
+        )
+
+    def _predict(self, last_orbit: PeriodicOrbit, step: np.ndarray) -> np.ndarray:
+        dE = float(step[0])
+        new_state = np.copy(last_orbit.initial_state)
+
+        # Velocity vector and its squared magnitude
+        v = new_state[3:6]
+        v_sq = float(np.dot(v, v))
+        if v_sq == 0:
+            raise ValueError("Velocity magnitude is zero - cannot vary energy through velocity scaling.")
+
+        # Determine scaling factor to achieve approx. energy change dE
+        alpha = dE / v_sq  # small-angle approximation (see docstring)
+        scale = 1.0 + alpha
+
+        # Use base class helper to prevent pathological scaling while allowing adaptive reduction
+        scale = self._clamp_scale(scale)
+
+        new_state[3:6] = v * scale
         return new_state

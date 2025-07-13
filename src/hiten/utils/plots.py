@@ -468,9 +468,16 @@ def plot_orbit_family(
     system_distance : float
         Characteristic distance (km) - needed to scale body radii.
     figsize, save, dark_mode, filepath, cmap : see other plot helpers.
+    elev, azim : float, optional
+        Elevation and azimuth angles for 3D view.
+    equal_axes : bool, optional
+        Whether to use equal scaling for all axes. Default is True.
     """
 
     cmap_key = kwargs.get('cmap', 'plasma')
+    elev = kwargs.get('elev', None)
+    azim = kwargs.get('azim', None)
+    equal_axes = kwargs.get('equal_axes', True)
 
     param_index = kwargs.get('param_index', None)
 
@@ -514,7 +521,15 @@ def plot_orbit_family(
     ax.set_xlabel('X [canonical]')
     ax.set_ylabel('Y [canonical]')
     ax.set_zlabel('Z [canonical]')
-    _set_axes_equal(ax)
+    
+    # Apply equal axes scaling only if requested
+    if equal_axes:
+        _set_axes_equal(ax)
+    
+    # Set custom view angle if provided
+    if elev is not None or azim is not None:
+        ax.view_init(elev=elev, azim=azim)
+    
     ax.set_title('Orbit family')
 
     cbar = fig.colorbar(sm, ax=ax, pad=0.1)

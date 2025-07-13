@@ -12,14 +12,14 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from hiten import OrbitFamily, System
-from hiten.algorithms import NaturalParameter
+from hiten.algorithms import StateParameter
 from hiten.system.orbits.base import S
 
 
 def main() -> None:
     """Generate and save a small Halo family around the Earth-Moon L1 point.
     
-    This example demonstrates how to use the NaturalParameter predictor to
+    This example demonstrates how to use the StateParameter predictor to
     generate a family of Halo orbits around the Earth-Moon L1 point.
     """
 
@@ -42,7 +42,7 @@ def main() -> None:
     step_x = (target_x - current_x) / (num_orbits - 1)
     step_z = (target_z - current_z) / (num_orbits - 1)
 
-    engine = NaturalParameter(
+    engine = StateParameter(
         initial_orbit=seed,
         state=(S.X, S.Z),   # vary absolute coordinates, not amplitudes
         amplitude=False,

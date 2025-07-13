@@ -63,7 +63,7 @@
 
    ```python
    from hiten import System
-   from hiten.algorithms import NaturalParameter
+   from hiten.algorithms import StateParameter
 
     system = System.from_bodies("earth", "moon")
     l1 = system.get_libration_point(1)
@@ -71,14 +71,14 @@
     seed = l1.create_orbit('lyapunov', amplitude_x= 1e-3)
     seed.differential_correction(max_attempts=25)
 
-    target_amp = 1e-2 # grow A_x from 0.02 to 0.05 (relative amplitude)
+    target_amp = 1e-2 # grow A_x from 0.001 to 0.01 (relative amplitude)
     current_amp = seed.amplitude
     num_orbits = 10
 
     # Step in amplitude space (predictor still tweaks X component)
     step = (target_amp - current_amp) / (num_orbits - 1)
 
-    engine = NaturalParameter(
+    engine = StateParameter(
         initial_orbit=seed,
         state=(S.X),     # underlying coordinate that gets nudged
         amplitude=True,  # but the continuation parameter is A_x
