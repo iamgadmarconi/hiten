@@ -23,7 +23,7 @@ from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.log_config import logger
 
 
-class _ContinuationEngine(ABC):
+class _PeriodicOrbitContinuationEngine(ABC):
     """Generic predictor-corrector engine for periodic-orbit continuation.
 
     Parameters
@@ -276,3 +276,4 @@ class _ContinuationEngine(ABC):
             Clamped scaling factor within reasonable bounds
         """
         return np.clip(scale_value, min_scale, max_scale)
+

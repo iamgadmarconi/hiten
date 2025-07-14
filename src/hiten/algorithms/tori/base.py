@@ -278,6 +278,11 @@ class _InvariantTori:
         tol: float = 1e-12,
         method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
         order: int = 8,
+        # Newton–GMOS stabilisation parameters (cf. PeriodicOrbit.differential_correction)
+        max_delta: float = 1e-2,
+        alpha_reduction: float = 0.5,
+        min_alpha: float = 1e-4,
+        armijo_c: float = 0.1,
     ) -> np.ndarray:
         """
         Compute quasi-periodic invariant torus using GMOS algorithm.
@@ -404,27 +409,28 @@ class _InvariantTori:
                 logger.info(f"GMOS converged in {newton_iter} iterations")
                 break
                 
-            # Compute Jacobian using finite differences
-            h = 1e-8
+            # Compute Jacobian using adaptive finite differences
             n_vars = n_theta2 * 6
             J = np.zeros((n_vars, n_vars))
-            
+
             # Flatten for linear algebra
             X0_flat = X0.flatten()
             error_flat = error.flatten()
-            
+
             for i in range(n_vars):
                 X0_pert = X0_flat.copy()
-                X0_pert[i] += h
+                # Variable-scaled step to curb round-off noise
+                h_i = 1e-8 * max(1.0, abs(X0_flat[i]))
+                X0_pert[i] += h_i
                 
                 # Reshape and compute perturbed error
                 X0_pert_2d = X0_pert.reshape(n_theta2, 6)
                 X1_pert = np.zeros_like(X0_pert_2d)
                 
-                for j in range(n_theta2):
+                for jj in range(n_theta2):
                     sol = _propagate_dynsys(
                         dynsys=self.dynsys,
-                        state0=X0_pert_2d[j],
+                        state0=X0_pert_2d[jj],
                         t0=0.0,
                         tf=T,
                         forward=1,
@@ -432,7 +438,7 @@ class _InvariantTori:
                         method=method,
                         order=order,
                     )
-                    X1_pert[j] = sol.states[-1]
+                    X1_pert[jj] = sol.states[-1]
                 
                 # Apply rotation operator
                 X1_pert_dft = np.fft.fft(X1_pert, axis=0)
@@ -440,16 +446,70 @@ class _InvariantTori:
                 X1_pert_rotated = np.real(np.fft.ifft(X1_pert_rotated_dft, axis=0))
                 
                 error_pert = (X1_pert_rotated - X0_pert_2d).flatten()
-                J[:, i] = (error_pert - error_flat) / h
+                J[:, i] = (error_pert - error_flat) / h_i
             
-            # Newton update
+            # Newton update with step-size cap and Armijo line search
             try:
-                # Use pseudo-inverse for robustness
+                # Regularise ill-conditioned Jacobian
+                cond_J = np.linalg.cond(J)
+                if np.isnan(cond_J) or cond_J > 1e12:
+                    logger.debug("Jacobian ill-conditioned (cond=%.2e); adding regularisation.", cond_J)
+                    J += np.eye(n_vars) * 1e-8
+
+                # Solve normal equations (least squares)
                 update = np.linalg.lstsq(J, -error_flat, rcond=None)[0]
-                X0_flat += update
-                X0 = X0_flat.reshape(n_theta2, 6)
+
+                delta_norm = np.linalg.norm(update, ord=np.inf)
+                if delta_norm > max_delta:
+                    update *= max_delta / delta_norm
+
+                # Helper to compute the true invariance error for a given curve
+                def _inv_error(curve_2d: np.ndarray) -> tuple[np.ndarray, float]:
+                    X1_local = np.zeros_like(curve_2d)
+                    for jj in range(n_theta2):
+                        _sol = _propagate_dynsys(
+                            dynsys=self.dynsys,
+                            state0=curve_2d[jj],
+                            t0=0.0,
+                            tf=T,
+                            forward=1,
+                            steps=2,
+                            method=method,
+                            order=order,
+                        )
+                        X1_local[jj] = _sol.states[-1]
+
+                    _dft = np.fft.fft(X1_local, axis=0)
+                    _rot_dft = _dft * rotation[:, np.newaxis]
+                    _rot = np.real(np.fft.ifft(_rot_dft, axis=0))
+                    _err = _rot - curve_2d
+                    return _err, np.linalg.norm(_err) / n_theta2
+
+                # Armijo back-tracking line search
+                alpha = 1.0
+                while alpha >= min_alpha:
+                    X_trial_flat = X0_flat + alpha * update
+                    X_trial = X_trial_flat.reshape(n_theta2, 6)
+
+                    err_trial, err_trial_norm = _inv_error(X_trial)
+
+                    if err_trial_norm <= (1 - armijo_c * alpha) * error_norm:
+                        # Accept step
+                        X0_flat = X_trial_flat
+                        X0 = X_trial
+                        error_flat = err_trial.flatten()
+                        error_norm = err_trial_norm
+                        break
+
+                    alpha *= alpha_reduction
+
+                else:
+                    # If all trials fail, take a heavily damped step (5 %)
+                    logger.warning("Line search failed - using damped step (5%% of Δx)")
+                    X0_flat += 0.05 * update
+                    X0 = X0_flat.reshape(n_theta2, 6)
             except np.linalg.LinAlgError:
-                logger.warning("Jacobian singular, using smaller update")
+                logger.warning("Jacobian singular, applying fallback damping")
                 X0 -= 0.1 * error
                 
         else:

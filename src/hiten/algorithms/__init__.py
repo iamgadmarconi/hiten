@@ -2,7 +2,7 @@
 Public API for the ``algorithms`` package.
 """
 
-from .continuation.base import _ContinuationEngine as ContinuationEngine
+from .continuation.base import _PeriodicOrbitContinuationEngine as ContinuationEngine
 from .continuation.predictors import _EnergyLevel as EnergyParameter
 from .continuation.predictors import _FixedPeriod as PeriodParameter
 from .continuation.predictors import _StateParameter as StateParameter
