@@ -5,6 +5,7 @@ import numpy as np
 
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_stm
+from hiten.algorithms.utils.newton import armijo_line_search
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.orbits.base import PeriodicOrbit
@@ -448,7 +449,7 @@ class _InvariantTori:
                 error_pert = (X1_pert_rotated - X0_pert_2d).flatten()
                 J[:, i] = (error_pert - error_flat) / h_i
             
-            # Newton update with step-size cap and Armijo line search
+            # Newton update with shared Armijo line search utility
             try:
                 # Regularise ill-conditioned Jacobian
                 cond_J = np.linalg.cond(J)
@@ -459,12 +460,9 @@ class _InvariantTori:
                 # Solve normal equations (least squares)
                 update = np.linalg.lstsq(J, -error_flat, rcond=None)[0]
 
-                delta_norm = np.linalg.norm(update, ord=np.inf)
-                if delta_norm > max_delta:
-                    update *= max_delta / delta_norm
-
-                # Helper to compute the true invariance error for a given curve
-                def _inv_error(curve_2d: np.ndarray) -> tuple[np.ndarray, float]:
+                # Residual-evaluation closure required by the line-search helper
+                def _residual_fn(flat_curve: np.ndarray) -> np.ndarray:
+                    curve_2d = flat_curve.reshape(n_theta2, 6)
                     X1_local = np.zeros_like(curve_2d)
                     for jj in range(n_theta2):
                         _sol = _propagate_dynsys(
@@ -482,32 +480,21 @@ class _InvariantTori:
                     _dft = np.fft.fft(X1_local, axis=0)
                     _rot_dft = _dft * rotation[:, np.newaxis]
                     _rot = np.real(np.fft.ifft(_rot_dft, axis=0))
-                    _err = _rot - curve_2d
-                    return _err, np.linalg.norm(_err) / n_theta2
+                    return (_rot - curve_2d).flatten()
 
-                # Armijo back-tracking line search
-                alpha = 1.0
-                while alpha >= min_alpha:
-                    X_trial_flat = X0_flat + alpha * update
-                    X_trial = X_trial_flat.reshape(n_theta2, 6)
+                X0_flat, error_norm, _ = armijo_line_search(
+                    x0=X0_flat,
+                    delta=update,
+                    residual_fn=_residual_fn,
+                    current_norm=error_norm,
+                    max_delta=max_delta,
+                    alpha_reduction=alpha_reduction,
+                    min_alpha=min_alpha,
+                    armijo_c=armijo_c,
+                )
 
-                    err_trial, err_trial_norm = _inv_error(X_trial)
-
-                    if err_trial_norm <= (1 - armijo_c * alpha) * error_norm:
-                        # Accept step
-                        X0_flat = X_trial_flat
-                        X0 = X_trial
-                        error_flat = err_trial.flatten()
-                        error_norm = err_trial_norm
-                        break
-
-                    alpha *= alpha_reduction
-
-                else:
-                    # If all trials fail, take a heavily damped step (5 %)
-                    logger.warning("Line search failed - using damped step (5%% of Δx)")
-                    X0_flat += 0.05 * update
-                    X0 = X0_flat.reshape(n_theta2, 6)
+                X0 = X0_flat.reshape(n_theta2, 6)
+                error_flat = _residual_fn(X0_flat)
             except np.linalg.LinAlgError:
                 logger.warning("Jacobian singular, applying fallback damping")
                 X0 -= 0.1 * error

@@ -27,8 +27,17 @@ from __future__ import annotations
 import os
 from abc import ABC, abstractmethod
 from enum import IntEnum
-from typing import (TYPE_CHECKING, Callable, Literal, NamedTuple, Optional,
-                    Sequence, Tuple)
+from typing import (
+    TYPE_CHECKING,
+    Callable,
+    Literal,
+    NamedTuple,
+    Optional,
+    Sequence,
+    Tuple,
+)
+
+from hiten.algorithms.utils.newton import armijo_line_search
 
 import numpy as np
 import numpy.typing as npt
@@ -494,52 +503,42 @@ class PeriodicOrbit(ABC):
 
             # Compute full Newton step
             delta = self._compute_correction_step(X0, t_ev, X_ev)
-            
-            # Apply step size limit
-            delta_norm = np.linalg.norm(delta, ord=np.inf)
-            if delta_norm > max_delta:
-                delta = delta * (max_delta / delta_norm)
-                logger.debug(f"Limiting correction step from {delta_norm:.2e} to {max_delta:.2e}")
-            
-            # Line search to ensure residual reduction
-            alpha = 1.0
-            X_trial = X0.copy()
-            best_R_norm = R_norm
-            best_alpha = 0.0
-            
-            while alpha >= min_alpha:
-                # Apply scaled correction
-                X_trial = self._apply_correction(X0.copy(), alpha * delta)
-                
-                try:
-                    # Evaluate residual at trial point
-                    _, X_trial_ev = cfg.event_func(dynsys=self.system._dynsys, x0=X_trial, forward=forward)
-                    R_trial = X_trial_ev[list(cfg.residual_indices)] - np.array(cfg.target)
-                    R_trial_norm = np.linalg.norm(R_trial, ord=np.inf)
-                    
-                    # Check if this is an improvement
-                    if R_trial_norm < best_R_norm:
-                        best_R_norm = R_trial_norm
-                        best_alpha = alpha
-                        
-                    # Accept if sufficient decrease (Armijo condition)
-                    if R_trial_norm < (1 - 0.1 * alpha) * R_norm:
-                        X0 = X_trial.copy()
-                        logger.info(f"Correction attempt {k+1}/{max_attempts}: |R|={R_trial_norm:.2e}, "
-                                  f"alpha={alpha:.2e}, delta_norm={delta_norm:.2e}")
-                        break
-                except Exception as e:
-                    logger.debug(f"Line search failed at alpha={alpha}: {e}")
-                
-                # Reduce step size
-                alpha *= alpha_reduction
-            else:
-                # Line search failed, use best found so far
-                if best_alpha > 0:
-                    X0 = self._apply_correction(X0, best_alpha * delta)
-                    logger.warning(f"Line search exhausted, using best alpha={best_alpha:.2e}")
-                else:
-                    raise RuntimeError(f"Line search failed at iteration {k+1}")
+
+            # Build a *flat* control vector so the residual function can vary all controls
+            full_delta = np.zeros_like(X0)
+            full_delta[list(cfg.control_indices)] = delta
+
+            # Residual function closure for Armijo helper
+            def _residual_fn(x_flat: np.ndarray) -> np.ndarray:
+                x_vec = x_flat.copy()
+                # Evaluate event residual at this candidate state
+                _, X_ev_local = cfg.event_func(
+                    dynsys=self.system._dynsys,
+                    x0=x_vec,
+                    forward=forward,
+                )
+                return X_ev_local[list(cfg.residual_indices)] - np.array(cfg.target)
+
+            X0_new, R_norm_new, _ = armijo_line_search(
+                x0=X0,
+                delta=full_delta,
+                residual_fn=_residual_fn,
+                current_norm=R_norm,
+                max_delta=max_delta,
+                alpha_reduction=alpha_reduction,
+                min_alpha=min_alpha,
+            )
+
+            logger.info(
+                "Correction attempt %d/%d: |R|=%.2e -> %.2e",
+                k + 1,
+                max_attempts,
+                R_norm,
+                R_norm_new,
+            )
+
+            X0 = X0_new
+            R_norm = R_norm_new
 
         raise RuntimeError(f"Differential correction did not converge after {max_attempts} attempts.")
 
