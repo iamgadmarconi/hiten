@@ -20,7 +20,7 @@ def main() -> None:
     orbit.differential_correction(max_attempts=25)
     orbit.propagate(steps=1000)
     torus = InvariantTori(orbit)
-    torus.compute(scheme='gmos', epsilon=1e-2, n_theta1=64, n_theta2=64)
+    torus.compute(scheme='linear', epsilon=1e-3, n_theta1=32, n_theta2=128)
     torus.plot()
 
 if __name__ == "__main__":
