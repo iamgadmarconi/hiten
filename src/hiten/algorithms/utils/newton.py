@@ -61,11 +61,11 @@ def armijo_line_search(
     if norm_fn is None:
         norm_fn = _default_norm
 
-    # Step-size capping (∞-norm)
+    # Step-size capping (infinity-norm)
     delta_norm = np.linalg.norm(delta, ord=np.inf)
     if delta_norm > max_delta:
         delta = delta * (max_delta / delta_norm)
-        logger.debug("Capping Newton step (‖Δ‖∞ > %.2e)", max_delta)
+        logger.debug("Capping Newton step (|delta| > %.2e)", max_delta)
 
     alpha = 1.0
     best_x = x0
@@ -79,7 +79,7 @@ def armijo_line_search(
         # Armijo / sufficient decrease condition
         if norm_trial <= (1.0 - armijo_c * alpha) * current_norm:
             logger.debug(
-                "Armijo success: \alpha=%.3e, |r|=%.3e (was |r0|=%.3e)",
+                "Armijo success: alpha=%.3e, |r|=%.3e (was |r0|=%.3e)",
                 alpha,
                 norm_trial,
                 current_norm,
@@ -95,7 +95,7 @@ def armijo_line_search(
 
     # Fallback: return the best point found (may be the original)
     logger.warning(
-        "Line search exhausted; using best \alpha found (\alpha=%.3e, |r|=%.3e)",
+        "Line search exhausted; using best alpha found (alpha=%.3e, |r|=%.3e)",
         alpha,
         best_norm,
     )

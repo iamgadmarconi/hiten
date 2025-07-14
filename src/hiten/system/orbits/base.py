@@ -524,6 +524,7 @@ class PeriodicOrbit(ABC):
                 delta=full_delta,
                 residual_fn=_residual_fn,
                 current_norm=R_norm,
+                norm_fn=lambda r: np.linalg.norm(r, ord=np.inf),
                 max_delta=max_delta,
                 alpha_reduction=alpha_reduction,
                 min_alpha=min_alpha,
