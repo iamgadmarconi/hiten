@@ -197,7 +197,7 @@ class _InvariantTori:
         )
         return u_grid
 
-    def _compute_pde(
+    def _compute_gmos(
         self,
     ) -> np.ndarray:
         raise NotImplementedError("PDE solver not implemented yet.")
@@ -205,7 +205,7 @@ class _InvariantTori:
     def compute(
         self,
         *,
-        scheme: Literal["linear", "pde"] = "linear",
+        scheme: Literal["linear", "gmos"] = "linear",
         epsilon: float = 1e-4,
         n_theta1: int = 256,
         n_theta2: int = 64,
@@ -215,25 +215,17 @@ class _InvariantTori:
 
         Parameters
         ----------
-        scheme : {'linear', 'pde'}, default 'linear'
+        scheme : {'linear', 'gmos'}, default 'linear'
             Algorithm to use.  'linear' is the earlier first-order model;
-            'pde' will invoke the discrete-PDE Newton solver (not yet implemented).
+            'gmos' is the discrete-PDE Newton solver (not yet implemented).
         epsilon, n_theta1, n_theta2 : see documentation of the linear scheme.
         kwargs : additional parameters forwarded to the chosen backend.
         """
 
         if scheme == "linear":
-            self._grid = self._compute_linear(
-                epsilon=epsilon, n_theta1=n_theta1, n_theta2=n_theta2
-            )
-        elif scheme == "pde":
-            if "epsilon" in kwargs:
-                logger.warning("epsilon ignored by 'pde' scheme - torus size is inherent to the solution.")
-            self._grid = self._compute_pde(
-                n_theta1=n_theta1,
-                n_theta2=n_theta2,
-                **kwargs,
-            )
+            self._grid = self._compute_linear(epsilon=epsilon, n_theta1=n_theta1, n_theta2=n_theta2)
+        elif scheme == "gmos":
+            self._grid = self._compute_gmos()
 
         return self._grid
 
