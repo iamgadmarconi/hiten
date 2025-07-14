@@ -199,22 +199,7 @@ class _InvariantTori:
 
     def _compute_pde(
         self,
-        *,
-        n_theta1: int,
-        n_theta2: int,
-        order_fd: int = 2,
-        newton_tol: float = 1e-10,
-        max_iter: int = 25,
-        initialise_from_linear: bool = True,
-        initial_epsilon: float = 1e-3,
-        **kwargs,
     ) -> np.ndarray:
-        """
-        Iterative discrete-PDE solver (second-order scheme).
-        """
-        if order_fd not in (2, 4):
-            raise NotImplementedError("order_fd must be 2 or 4 (central-difference accuracy)")
-
         raise NotImplementedError("PDE solver not implemented yet.")
 
     def compute(
