@@ -205,9 +205,9 @@ class _InvariantTori:
     def _compute_gmos(
         self,
         *,
-        epsilon: float = 1e-4,
-        n_theta1: int = 256,
-        n_theta2: int = 64,
+        epsilon: float = 1e-3,
+        n_theta1: int = 64,
+        n_theta2: int = 256,
         max_iter: int = 50,
         tol: float = 1e-12,
         method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
@@ -327,7 +327,7 @@ class _InvariantTori:
             
             # Check convergence
             error_norm = np.linalg.norm(error) / n_theta2
-    
+
             logger.info(
                 "GMOS iteration %d: invariance error = %.3e",
                 newton_iter,
