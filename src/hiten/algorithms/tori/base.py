@@ -5,7 +5,7 @@ import numpy as np
 
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_stm
-from hiten.algorithms.corrector.line import armijo_line_search
+from hiten.algorithms.corrector.newton import _NewtonCorrector
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.orbits.base import PeriodicOrbit
@@ -363,143 +363,44 @@ class _InvariantTori:
             perturbation = epsilon * (np.cos(theta1[j]) * np.real(w) - 
                                      np.sin(theta1[j]) * np.imag(w))
             X0[j] = x0 + perturbation
-        
-        # Newton iteration
-        for newton_iter in range(max_iter):
-            # Propagate each point for stroboscopic time T
-            X1 = np.zeros_like(X0)
+
+        def _error_2d(curve_2d: np.ndarray) -> np.ndarray:
+            """Invariance residual for a (n_theta2,6) curve."""
+            X1 = np.zeros_like(curve_2d)
             for j in range(n_theta2):
-                # Use project-wide helper that wraps the compiled CR3BP RHS
                 sol = _propagate_dynsys(
                     dynsys=self.dynsys,
-                    state0=X0[j],
+                    state0=curve_2d[j],
                     t0=0.0,
                     tf=T,
                     forward=1,
-                    steps=2,  # only need initial & final _state
+                    steps=2,
                     method=method,
                     order=order,
                 )
                 X1[j] = sol.states[-1]
-            
-            # Apply DFT
+
             X1_dft = np.fft.fft(X1, axis=0)
-            
-            # Rotate by -\rho
-            k_vals = np.fft.fftfreq(n_theta2, 1/n_theta2)
+            k_vals = np.fft.fftfreq(n_theta2, 1 / n_theta2)
             rotation = np.exp(-1j * rho * k_vals)
-            X1_rotated_dft = X1_dft * rotation[:, np.newaxis]
-            
-            # Inverse DFT
-            X1_rotated = np.real(np.fft.ifft(X1_rotated_dft, axis=0))
-            
-            # Compute error (invariance condition)
-            error = X1_rotated - X0
-            
-            # Check convergence
-            error_norm = np.linalg.norm(error) / n_theta2
+            X1_rotated = np.real(np.fft.ifft(X1_dft * rotation[:, None], axis=0))
+            return (X1_rotated - curve_2d).flatten()
 
-            logger.info(
-                "GMOS iteration %d: invariance error = %.3e",
-                newton_iter,
-                error_norm,
-            )
-            
-            if error_norm < tol:
-                logger.info(f"GMOS converged in {newton_iter} iterations")
-                break
-                
-            # Compute Jacobian using adaptive finite differences
-            n_vars = n_theta2 * 6
-            J = np.zeros((n_vars, n_vars))
+        newton = _NewtonCorrector()
+        flat_corr, _ = newton.correct(
+            x0=X0.flatten(),
+            residual_fn=lambda v: _error_2d(v.reshape(n_theta2, 6)),
+            jacobian_fn=None,  # finite-difference is fine here
+            norm_fn=lambda r: float(np.linalg.norm(r) / n_theta2),
+            tol=tol,
+            max_attempts=max_iter,
+            max_delta=max_delta,
+            alpha_reduction=alpha_reduction,
+            min_alpha=min_alpha,
+            armijo_c=armijo_c,
+        )
 
-            # Flatten for linear algebra
-            X0_flat = X0.flatten()
-            error_flat = error.flatten()
-
-            for i in range(n_vars):
-                X0_pert = X0_flat.copy()
-                # Variable-scaled step to curb round-off noise
-                h_i = 1e-8 * max(1.0, abs(X0_flat[i]))
-                X0_pert[i] += h_i
-                
-                # Reshape and compute perturbed error
-                X0_pert_2d = X0_pert.reshape(n_theta2, 6)
-                X1_pert = np.zeros_like(X0_pert_2d)
-                
-                for jj in range(n_theta2):
-                    sol = _propagate_dynsys(
-                        dynsys=self.dynsys,
-                        state0=X0_pert_2d[jj],
-                        t0=0.0,
-                        tf=T,
-                        forward=1,
-                        steps=2,
-                        method=method,
-                        order=order,
-                    )
-                    X1_pert[jj] = sol.states[-1]
-                
-                # Apply rotation operator
-                X1_pert_dft = np.fft.fft(X1_pert, axis=0)
-                X1_pert_rotated_dft = X1_pert_dft * rotation[:, np.newaxis]
-                X1_pert_rotated = np.real(np.fft.ifft(X1_pert_rotated_dft, axis=0))
-                
-                error_pert = (X1_pert_rotated - X0_pert_2d).flatten()
-                J[:, i] = (error_pert - error_flat) / h_i
-            
-            # Newton update with shared Armijo line search utility
-            try:
-                # Regularise ill-conditioned Jacobian
-                cond_J = np.linalg.cond(J)
-                if np.isnan(cond_J) or cond_J > 1e12:
-                    logger.debug("Jacobian ill-conditioned (cond=%.2e); adding regularisation.", cond_J)
-                    J += np.eye(n_vars) * 1e-8
-
-                # Solve normal equations (least squares)
-                update = np.linalg.lstsq(J, -error_flat, rcond=None)[0]
-
-                # Residual-evaluation closure required by the line-search helper
-                def _residual_fn(flat_curve: np.ndarray) -> np.ndarray:
-                    curve_2d = flat_curve.reshape(n_theta2, 6)
-                    X1_local = np.zeros_like(curve_2d)
-                    for jj in range(n_theta2):
-                        _sol = _propagate_dynsys(
-                            dynsys=self.dynsys,
-                            state0=curve_2d[jj],
-                            t0=0.0,
-                            tf=T,
-                            forward=1,
-                            steps=2,
-                            method=method,
-                            order=order,
-                        )
-                        X1_local[jj] = _sol.states[-1]
-
-                    _dft = np.fft.fft(X1_local, axis=0)
-                    _rot_dft = _dft * rotation[:, np.newaxis]
-                    _rot = np.real(np.fft.ifft(_rot_dft, axis=0))
-                    return (_rot - curve_2d).flatten()
-
-                X0_flat, error_norm, _ = armijo_line_search(
-                    x0=X0_flat,
-                    delta=update,
-                    residual_fn=_residual_fn,
-                    current_norm=error_norm,
-                    max_delta=max_delta,
-                    alpha_reduction=alpha_reduction,
-                    min_alpha=min_alpha,
-                    armijo_c=armijo_c,
-                )
-
-                X0 = X0_flat.reshape(n_theta2, 6)
-                error_flat = _residual_fn(X0_flat)
-            except np.linalg.LinAlgError:
-                logger.warning("Jacobian singular, applying fallback damping")
-                X0 -= 0.1 * error
-                
-        else:
-            logger.warning(f"GMOS did not converge after {max_iter} iterations")
+        X0 = flat_corr.reshape(n_theta2, 6)
         
         # Construct full 2D torus from invariant curve
         logger.info("Constructing 2D torus grid from invariant curve")
