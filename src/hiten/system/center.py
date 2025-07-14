@@ -463,7 +463,9 @@ class CenterManifold:
             )
 
         # Compute (or retrieve from cache) the requested representation.
-        return _form_dispatch[form]()
+        result = _form_dispatch[form]()
+        logger.info(f"Computed {form} coefficients.")
+        return result
 
     def poincare_map(self, energy: float, **kwargs) -> "_PoincareMap":
         r"""
