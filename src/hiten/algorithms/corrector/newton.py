@@ -1,9 +1,11 @@
-from typing import Tuple, Any, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Tuple
 
 import numpy as np
 
-from hiten.algorithms.corrector.base import _Corrector, JacobianFn, NormFn, ResidualFn
+from hiten.algorithms.corrector.base import (JacobianFn, NormFn, ResidualFn,
+                                             _Corrector)
 from hiten.algorithms.corrector.line import armijo_line_search
+from hiten.algorithms.dynamics.rtbp import _compute_stm
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
@@ -116,7 +118,7 @@ class _OrbitCorrector(_Corrector):
         alpha_reduction: float = 0.5,
         min_alpha: float = 1e-4,
         armijo_c: float = 0.02,
-        monodromy: np.ndarray | None = None,
+        finite_difference: bool = False,
     ) -> Tuple[np.ndarray, float]:
         """Refine *orbit* in-place using the underlying :class:`_NewtonCorrector`.
 
@@ -155,18 +157,29 @@ class _OrbitCorrector(_Corrector):
             return X_ev_local[residual_indices] - target_vec
 
         jacobian_fn = None
-        if monodromy is not None:
-            # Build analytic Jacobian function using supplied monodromy
+
+        if not finite_difference:
+            # Build analytic Jacobian function (either from supplied monodromy or by integrating STM)
             def _jacobian_fn(p_vec: np.ndarray) -> np.ndarray:
                 x_full = _to_full_state(p_vec)
-                # Evaluate event state for possible extra_jacobian usage
-                _, X_ev_local = cfg.event_func(
+                # Evaluate event to get half-period and event state (needed for extra_jacobian or on-the-fly STM)
+                t_ev_local, X_ev_local = cfg.event_func(
                     dynsys=orbit.system._dynsys,
                     x0=x_full,
                     forward=forward,
                 )
 
-                Phi = monodromy  # (6,6) provided upstream
+                # Compute STM over the half-period for current iterate
+                _, _, Phi_flat, _ = _compute_stm(
+                    orbit.libration_point._var_eq_system,
+                    x_full,
+                    t_ev_local,
+                    steps=cfg.steps,
+                    method=cfg.method,
+                    order=cfg.order,
+                )
+                Phi = Phi_flat
+
                 J_red = Phi[np.ix_(residual_indices, control_indices)]
                 if cfg.extra_jacobian is not None:
                     J_red -= cfg.extra_jacobian(X_ev_local, Phi)

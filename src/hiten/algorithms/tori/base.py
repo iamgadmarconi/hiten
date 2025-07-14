@@ -136,7 +136,6 @@ class _InvariantTori:
 
         omega = np.array([omega_long, omega_lat], dtype=float)
 
-        # Jacobi constant (energy-like invariant)
         C0 = self.jacobi
 
         # Return an *immutable* copy of the grid to avoid accidental mutation.

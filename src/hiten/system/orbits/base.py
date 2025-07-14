@@ -296,6 +296,8 @@ class PeriodicOrbit(ABC):
                 self._times = None
             if hasattr(self, "_stability_info"):
                 self._stability_info = None
+            if hasattr(self, "_monodromy"):
+                self._monodromy = None
 
             logger.info("Period updated, cached trajectory, times and stability information cleared")
 
@@ -402,35 +404,6 @@ class PeriodicOrbit(ABC):
     def _initial_guess(self, **kwargs):
         pass
 
-    def _compute_correction_step(self, current_state: np.ndarray, t_event: float, x_event: np.ndarray) -> np.ndarray:
-        """Compute the correction step `delta` for the differential corrector."""
-        cfg = self._correction_config
-        
-        _, _, Phi, _ = _compute_stm(
-            self.libration_point._var_eq_system, current_state, t_event, 
-            steps=cfg.steps, method=cfg.method, order=cfg.order
-        )
-
-        J = Phi[np.ix_(cfg.residual_indices, cfg.control_indices)]
-
-        if cfg.extra_jacobian is not None:
-            J -= cfg.extra_jacobian(x_event, Phi)
-
-        if abs(np.linalg.det(J)) < 1e-12:
-            logger.warning(f"Jacobian determinant is small ({np.linalg.det(J):.2e}), adding regularization.")
-            J += np.eye(J.shape[0]) * 1e-12
-        
-        R = x_event[list(cfg.residual_indices)] - np.array(cfg.target)
-        delta = np.linalg.solve(J, -R)
-        
-        return delta
-
-    def _apply_correction(self, state: np.ndarray, delta: np.ndarray) -> np.ndarray:
-        """Apply the correction `delta` to the appropriate state variables."""
-        cfg = self._correction_config
-        state[list(cfg.control_indices)] += delta
-        return state
-
     def correct(
             self,
             *,
@@ -441,7 +414,7 @@ class PeriodicOrbit(ABC):
             alpha_reduction: float = 0.5,
             min_alpha: float = 1e-4,
             armijo_c: float = 0.02,
-            use_analytic_jacobian: bool = True,
+            finite_difference: bool = False,
         ) -> tuple[np.ndarray, float]:
         """Differential correction wrapper.
 
@@ -458,7 +431,7 @@ class PeriodicOrbit(ABC):
             alpha_reduction=alpha_reduction,
             min_alpha=min_alpha,
             armijo_c=armijo_c,
-            monodromy=self.monodromy if use_analytic_jacobian else None,
+            finite_difference=finite_difference,
         )
 
     def propagate(self, steps: int = 1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 8) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
