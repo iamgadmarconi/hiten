@@ -20,7 +20,7 @@ def main() -> None:
     # Build system & centre manifold
     system = System.from_bodies("earth", "moon")
     l_point = system.get_libration_point(1)
-    cm = l_point.get_center_manifold(max_degree=10)
+    cm = l_point.get_center_manifold(max_degree=6)
     cm.compute()
 
     ic_seed = cm.ic([0.0, 0.0], 0.6, "q3") # Good initial guess from CM
@@ -33,18 +33,21 @@ def main() -> None:
             "name": "Vertical",
             "kwargs": {"initial_state": ic_seed},
             "diff_corr_attempts": 100,
+            "finite_difference": True,
         },
         {
             "cls": HaloOrbit,
             "name": "Halo",
             "kwargs": {"amplitude_z": 0.2, "zenith": "southern"},
             "diff_corr_attempts": 25,
+            "finite_difference": False,
         },
         {
             "cls": LyapunovOrbit,
             "name": "Planar Lyapunov",
             "kwargs": {"amplitude_x": 4e-3},
             "diff_corr_attempts": 25,
+            "finite_difference": False,
         },
     ]
 
@@ -53,7 +56,7 @@ def main() -> None:
         orbit = l_point.create_orbit(spec["cls"], **spec["kwargs"])
 
         # Differential correction, propagation & basic visualisation
-        orbit.differential_correction(max_attempts=spec["diff_corr_attempts"])
+        orbit.correct(max_attempts=spec["diff_corr_attempts"], finite_difference=spec["finite_difference"])
         orbit.propagate(steps=1000)
         orbit.plot("rotating")
 

@@ -41,10 +41,10 @@ def test_lyapunov_orbit_ic(l1_orbit, l2_orbit):
     assert abs(l1_orbit.initial_state[1]) < 1e-10, "Y coordinate should be approximately zero for planar Lyapunov orbit"
     assert abs(l2_orbit.initial_state[1]) < 1e-10, "Y coordinate should be approximately zero for planar Lyapunov orbit"
 
-def test_lyapunov_differential_correction(l1_orbit):
+def test_lyapunov_correct(l1_orbit):
     initial_state_before = l1_orbit.initial_state.copy()
     
-    l1_orbit.differential_correction()
+    l1_orbit.correct()
     
     assert not np.array_equal(l1_orbit.initial_state, initial_state_before), "Initial state should change after correction"
     
@@ -53,7 +53,7 @@ def test_lyapunov_differential_correction(l1_orbit):
     assert abs(l1_orbit.initial_state[1]) < 1e-10, "Y coordinate should still be approximately zero after correction"
 
 def test_lyapunov_orbit_propagation(l1_orbit):
-    l1_orbit.differential_correction()
+    l1_orbit.correct()
     l1_orbit.propagate()
     
     assert l1_orbit.trajectory is not None, "Trajectory should be generated after propagation"
@@ -67,7 +67,7 @@ def test_lyapunov_orbit_propagation(l1_orbit):
     assert position_close, "Trajectory should approximately return to initial position after one period"
 
 def test_lyapunov_orbit_stability(l1_orbit):
-    l1_orbit.differential_correction()
+    l1_orbit.correct()
     l1_orbit.propagate()
     l1_orbit.compute_stability()
     
@@ -81,7 +81,7 @@ def test_lyapunov_orbit_stability(l1_orbit):
     assert isinstance(l1_orbit.is_stable, (bool, np.bool_)), "is_stable should be convertible to a boolean"
 
 def test_lyapunov_base_class(l1_orbit):
-    l1_orbit.differential_correction()
+    l1_orbit.correct()
     l1_orbit.propagate()
     l1_orbit.compute_stability()
     

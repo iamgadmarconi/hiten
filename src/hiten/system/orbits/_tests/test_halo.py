@@ -38,17 +38,17 @@ def test_halo_orbit_ic(l1_orbit, l2_orbit):
     l2_position = l2_orbit.libration_point.position[0]
     assert abs(l2_orbit.initial_state[0] - l2_position) < 0.1, f"L2 orbit x ({l2_orbit.initial_state[0]}) should be within 0.1 of L2 position ({l2_position})"
 
-def test_halo_differential_correction(l1_orbit):
+def test_halo_correct(l1_orbit):
     initial_state_before = l1_orbit.initial_state.copy()
     
-    l1_orbit.differential_correction()
+    l1_orbit.correct()
     
     assert not np.array_equal(l1_orbit.initial_state, initial_state_before), "Initial state should change after correction"
     
     assert l1_orbit.period > 0, "Period should be positive after correction"
 
 def test_halo_orbit_propagation(l1_orbit):
-    l1_orbit.differential_correction()
+    l1_orbit.correct()
     l1_orbit.propagate()
     
     assert l1_orbit.trajectory is not None, "Trajectory should be generated after propagation"
@@ -62,7 +62,7 @@ def test_halo_orbit_propagation(l1_orbit):
     assert position_close, "Trajectory should approximately return to initial position after one period"
 
 def test_halo_orbit_stability(l1_orbit):
-    l1_orbit.differential_correction()
+    l1_orbit.correct()
     l1_orbit.propagate()
     l1_orbit.compute_stability()
     
@@ -76,7 +76,7 @@ def test_halo_orbit_stability(l1_orbit):
     assert isinstance(l1_orbit.is_stable, (bool, np.bool_)), "is_stable should be convertible to a boolean"
 
 def test_halo_base_class(l1_orbit):
-    l1_orbit.differential_correction()
+    l1_orbit.correct()
     l1_orbit.propagate()
     l1_orbit.compute_stability()
     

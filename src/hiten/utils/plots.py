@@ -468,9 +468,16 @@ def plot_orbit_family(
     system_distance : float
         Characteristic distance (km) - needed to scale body radii.
     figsize, save, dark_mode, filepath, cmap : see other plot helpers.
+    elev, azim : float, optional
+        Elevation and azimuth angles for 3D view.
+    equal_axes : bool, optional
+        Whether to use equal scaling for all axes. Default is True.
     """
 
     cmap_key = kwargs.get('cmap', 'plasma')
+    elev = kwargs.get('elev', None)
+    azim = kwargs.get('azim', None)
+    equal_axes = kwargs.get('equal_axes', True)
 
     param_index = kwargs.get('param_index', None)
 
@@ -514,7 +521,15 @@ def plot_orbit_family(
     ax.set_xlabel('X [canonical]')
     ax.set_ylabel('Y [canonical]')
     ax.set_zlabel('Z [canonical]')
-    _set_axes_equal(ax)
+    
+    # Apply equal axes scaling only if requested
+    if equal_axes:
+        _set_axes_equal(ax)
+    
+    # Set custom view angle if provided
+    if elev is not None or azim is not None:
+        ax.view_init(elev=elev, azim=azim)
+    
     ax.set_title('Orbit family')
 
     cbar = fig.colorbar(sm, ax=ax, pad=0.1)
@@ -757,6 +772,86 @@ def plot_poincare_map_interactive(
     plt.close(fig)
 
     return selected_payload.get("orbit")
+
+def plot_invariant_torus(
+        u_grid: np.ndarray,
+        bodies: List[Body],
+        system_distance: float,
+        *,
+        figsize: Tuple[int, int] = (10, 8),
+        save: bool = False,
+        dark_mode: bool = True,
+        filepath: str = "invariant_torus.svg",
+        cmap: str = "plasma",
+        elev: Optional[float] = None,
+        azim: Optional[float] = None,
+        equal_axes: bool = True,
+        **kwargs):
+    """Visualise an invariant torus in the rotating frame.
+
+    Parameters
+    ----------
+    u_grid : numpy.ndarray
+        Grid of state vectors with shape (n_theta1, n_theta2, 6) returned by
+        :pyfunc:`_InvariantTori.sample_grid`.
+    bodies : list[Body]
+        Primary and secondary bodies of the CR3BP.
+    system_distance : float
+        Characteristic distance (km) - required to scale the body radii.
+    figsize, save, dark_mode, filepath : see other plot helpers.
+    cmap : str, optional
+        Colormap name used to colour-code the major-angle \theta₁. Default ``"plasma"``.
+    elev, azim : float, optional
+        Elevation and azimuth view angles passed to ``Axes3D.view_init``.
+    equal_axes : bool, default True
+        If True, enforce identical scaling on all axes.
+    **kwargs
+        Additional keyword arguments reserved for future extensions.
+    """
+    n_theta1, n_theta2, _ = u_grid.shape
+
+    # Mass parameter for canonical positions of the primaries
+    mu = _get_mass_parameter(bodies[0].mass, bodies[1].mass)
+
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111, projection='3d')
+
+    colour_map = plt.get_cmap(cmap)
+    for i in range(n_theta1):
+        traj = u_grid[i, :, :3]  # (n_theta2, 3) - use spatial components only
+        color = colour_map(i / max(n_theta1 - 1, 1))
+        ax.plot(traj[:, 0], traj[:, 1], traj[:, 2], color=color, lw=1.0)
+
+    # Plot primary and secondary in rotating-frame canonical positions
+    primary_pos = np.array([-mu, 0, 0])
+    secondary_pos = np.array([1 - mu, 0, 0])
+    _plot_body(ax, primary_pos, bodies[0].radius / system_distance,
+               _get_body_color(bodies[0], 'royalblue'), bodies[0].name)
+    _plot_body(ax, secondary_pos, bodies[1].radius / system_distance,
+               _get_body_color(bodies[1], 'slategray'), bodies[1].name)
+
+    ax.set_xlabel('X [canonical]')
+    ax.set_ylabel('Y [canonical]')
+    ax.set_zlabel('Z [canonical]')
+
+    if elev is not None or azim is not None:
+        ax.view_init(elev=elev, azim=azim)
+
+    if equal_axes:
+        _set_axes_equal(ax)
+
+    ax.set_title('Invariant Torus')
+
+    if dark_mode:
+        _set_dark_mode(fig, ax, title=ax.get_title())
+
+    if save:
+        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+        plt.savefig(filepath)
+
+    plt.show()
+    plt.close(fig)
+    return fig, ax
 
 def _get_body_color(body: Body, default_color: str) -> str:
     """

@@ -16,10 +16,10 @@
    from hiten import System
 
    system = System.from_bodies("earth", "moon")
-   libration_point = system.get_libration_point(1)
+   l1 = system.get_libration_point(1)
 
-   orbit = libration_point.create_orbit("halo", amplitude_z=0.2, zenith="southern")
-   orbit.differential_correction(max_attempts=25)
+   orbit = l1.create_orbit("halo", amplitude_z=0.2, zenith="southern")
+   orbit.correct(max_attempts=25)
    orbit.propagate(steps=1000)
 
    manifold = orbit.manifold(stable=True, direction="positive")
@@ -37,15 +37,15 @@
    from hiten import System, VerticalOrbit
 
    system = System.from_bodies("earth", "moon")
-   libration_point = system.get_libration_point(1)
+   l1 = system.get_libration_point(1)
 
-   cm = libration_point.get_center_manifold(max_degree=10)
+   cm = l1.get_center_manifold(max_degree=10)
    cm.compute()
 
    initial_state = cm.ic(poincare_point=[0.0, 0.0], energy=0.6, section_coord="q3")
 
-   orbit = VerticalOrbit(libration_point, initial_state=initial_state)
-   orbit.differential_correction(max_attempts=100)
+   orbit = VerticalOrbit(l1, initial_state=initial_state)
+   orbit.correct(max_attempts=100)
    orbit.propagate(steps=1000)
 
    manifold = orbit.manifold(stable=True, direction="positive")
@@ -63,22 +63,22 @@
 
    ```python
    from hiten import System
-   from hiten.algorithms import NaturalParameter
+   from hiten.algorithms import StateParameter
 
     system = System.from_bodies("earth", "moon")
     l1 = system.get_libration_point(1)
 
     seed = l1.create_orbit('lyapunov', amplitude_x= 1e-3)
-    seed.differential_correction(max_attempts=25)
+    seed.correct(max_attempts=25)
 
-    target_amp = 1e-2 # grow A_x from 0.02 to 0.05 (relative amplitude)
+    target_amp = 1e-2 # grow A_x from 0.001 to 0.01 (relative amplitude)
     current_amp = seed.amplitude
     num_orbits = 10
 
     # Step in amplitude space (predictor still tweaks X component)
     step = (target_amp - current_amp) / (num_orbits - 1)
 
-    engine = NaturalParameter(
+    engine = StateParameter(
         initial_orbit=seed,
         state=(S.X),     # underlying coordinate that gets nudged
         amplitude=True,  # but the continuation parameter is A_x
@@ -119,3 +119,27 @@
    ![Poincaré map](results/plots/poincare_map.svg)
 
    *Figure&nbsp;4 - Poincaré map of the centre manifold of the Earth-Moon \(L_1\) libration point using the \(q_2=0\) section.*
+
+4. **Generating invariant tori**
+
+   Hiten can generate invariant tori for periodic orbits.
+
+   ```python
+   from hiten import System
+   from hiten.algorithms import InvariantTori
+
+    system = System.from_bodies("earth", "moon")
+    l1 = system.get_libration_point(1)
+
+    orbit = l1.create_orbit('halo', amplitude_z=0.3, zenith='southern')
+    orbit.correct(max_attempts=25)
+    orbit.propagate(steps=1000)
+   
+    torus = InvariantTori(orbit)
+    torus.compute(scheme='linear', epsilon=1e-2, n_theta1=256, n_theta2=256)
+    torus.plot()
+   ```
+
+   ![Invariant tori](results/plots/invariant_tori.svg)
+
+   *Figure&nbsp;5 - Invariant torus of an Earth-Moon \(L_1\) quasi-halo orbit.*

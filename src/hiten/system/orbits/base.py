@@ -21,9 +21,6 @@ References
 Szebehely, V. (1967). "Theory of Orbits - The Restricted Problem of Three
 Bodies".
 """
-
-from __future__ import annotations
-
 import os
 from abc import ABC, abstractmethod
 from enum import IntEnum
@@ -34,8 +31,10 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
+from hiten.algorithms.corrector.newton import _OrbitCorrector
 from hiten.algorithms.dynamics.base import _propagate_dynsys
-from hiten.algorithms.dynamics.rtbp import _compute_stm, _stability_indices
+from hiten.algorithms.dynamics.rtbp import (_compute_monodromy, _compute_stm,
+                                            _stability_indices)
 from hiten.algorithms.dynamics.utils.energy import (crtbp_energy,
                                                     energy_to_jacobi)
 from hiten.algorithms.dynamics.utils.geometry import _find_y_zero_crossing
@@ -144,7 +143,7 @@ class PeriodicOrbit(ABC):
     Notes
     -----
     Instantiating the class does **not** perform any propagation. Users must
-    call :pyfunc:`PeriodicOrbit.differential_correction` (or manually set
+    call :pyfunc:`PeriodicOrbit.correct` (or manually set
     :pyattr:`period`) followed by :pyfunc:`PeriodicOrbit.propagate`.
     """
     
@@ -297,6 +296,8 @@ class PeriodicOrbit(ABC):
                 self._times = None
             if hasattr(self, "_stability_info"):
                 self._stability_info = None
+            if hasattr(self, "_monodromy"):
+                self._monodromy = None
 
             logger.info("Period updated, cached trajectory, times and stability information cleared")
 
@@ -353,6 +354,22 @@ class PeriodicOrbit(ABC):
             The Jacobi constant value
         """
         return energy_to_jacobi(self.energy)
+    
+    @property
+    def monodromy(self) -> np.ndarray:
+        r"""
+        Compute the monodromy matrix of the orbit.
+        
+        Returns
+        -------
+        numpy.ndarray
+            The monodromy matrix
+        """
+        if self.period is None:
+            raise ValueError("Period must be set before computing monodromy")
+        
+        Phi = _compute_monodromy(self.libration_point._var_eq_system, self.initial_state, self.period)
+        return Phi
 
     @property
     @abstractmethod
@@ -387,89 +404,35 @@ class PeriodicOrbit(ABC):
     def _initial_guess(self, **kwargs):
         pass
 
-    def _compute_correction_step(self, current_state: np.ndarray, t_event: float, x_event: np.ndarray) -> np.ndarray:
-        """Compute the correction step `delta` for the differential corrector."""
-        cfg = self._correction_config
-        
-        _, _, Phi, _ = _compute_stm(
-            self.libration_point._var_eq_system, current_state, t_event, 
-            steps=cfg.steps, method=cfg.method, order=cfg.order
-        )
-
-        J = Phi[np.ix_(cfg.residual_indices, cfg.control_indices)]
-
-        if cfg.extra_jacobian is not None:
-            J -= cfg.extra_jacobian(x_event, Phi)
-
-        if abs(np.linalg.det(J)) < 1e-12:
-            logger.warning(f"Jacobian determinant is small ({np.linalg.det(J):.2e}), adding regularization.")
-            J += np.eye(J.shape[0]) * 1e-12
-        
-        R = x_event[list(cfg.residual_indices)] - np.array(cfg.target)
-        delta = np.linalg.solve(J, -R)
-        
-        return delta
-
-    def _apply_correction(self, state: np.ndarray, delta: np.ndarray) -> np.ndarray:
-        """Apply the correction `delta` to the appropriate state variables."""
-        cfg = self._correction_config
-        state[list(cfg.control_indices)] += delta
-        return state
-
-    def differential_correction(
+    def correct(
             self,
             *,
             tol: float = 1e-10,
             max_attempts: int = 25,
-            forward: int = 1
+            forward: int = 1,
+            max_delta: float | None = None,
+            alpha_reduction: float = 0.5,
+            min_alpha: float = 1e-4,
+            armijo_c: float = 0.02,
+            finite_difference: bool = False,
         ) -> tuple[np.ndarray, float]:
+        """Differential correction wrapper.
+
+        This method now delegates the heavy lifting to the generic
+        :class:`hiten.algorithms.corrector.newton._OrbitCorrector` which
+        implements a robust Newton-Armijo scheme.
         """
-        Perform differential correction to find a periodic orbit.
-        
-        This method uses the configuration provided by `self._correction_config`
-        to iteratively refine the `initial_state` until it converges to a
-        periodic orbit.
-
-        Parameters
-        ----------
-        tol : float, optional
-            Tolerance for the correction, measured by the infinity norm of the
-            residual vector. Default is 1e-10.
-        max_attempts : int, optional
-            Maximum number of correction attempts. Default is 25.
-        forward : int, optional
-            Direction of propagation (1 for forward, -1 for backward). Default is 1.
-
-        Returns
-        -------
-        tuple
-            A tuple containing the corrected initial state and the half-period
-            of the resulting orbit `(state, period/2)`.
-
-        Raises
-        ------
-        RuntimeError
-            If the correction does not converge within `max_attempts`.
-        """
-        X0 = self.initial_state.copy()
-        cfg = self._correction_config
-
-        for k in range(max_attempts + 1):
-            t_ev, X_ev = cfg.event_func(dynsys=self.system._dynsys, x0=X0, forward=forward)
-            R = X_ev[list(cfg.residual_indices)] - np.array(cfg.target)
-
-            if np.linalg.norm(R, ord=np.inf) < tol:
-                self._reset()
-                self._initial_state = X0
-                self._period = 2 * t_ev
-                logger.info(f"Differential correction converged after {k} iterations.")
-                return X0, t_ev
-
-            delta = self._compute_correction_step(X0, t_ev, X_ev)
-            X0 = self._apply_correction(X0, delta)
-            logger.info(f"Correction attempt {k+1}/{max_attempts}: |R|={np.linalg.norm(R):.2e}, delta={delta}")
-
-        raise RuntimeError(f"Differential correction did not converge after {max_attempts} attempts.")
+        return _OrbitCorrector().correct(
+            self,
+            tol=tol,
+            max_attempts=max_attempts,
+            forward=forward,
+            max_delta=max_delta,
+            alpha_reduction=alpha_reduction,
+            min_alpha=min_alpha,
+            armijo_c=armijo_c,
+            finite_difference=finite_difference,
+        )
 
     def propagate(self, steps: int = 1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 8) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         r"""
@@ -529,10 +492,10 @@ class PeriodicOrbit(ABC):
         
         logger.info(f"Computing stability for orbit with period {self.period}")
         # Compute STM over one period
-        _, _, monodromy, _ = _compute_stm(self.libration_point._var_eq_system, self.initial_state, self.period)
+        _, _, Phi, _ = _compute_stm(self.libration_point._var_eq_system, self.initial_state, self.period)
         
         # Analyze stability
-        stability = _stability_indices(monodromy)
+        stability = _stability_indices(Phi)
         self._stability_info = stability
         
         is_stable = np.all(np.abs(stability[0]) <= 1.0)
@@ -662,7 +625,7 @@ class GenericOrbit(PeriodicOrbit):
         Get or set the user-defined differential correction configuration.
 
         This property must be set to a valid :py:class:`_CorrectionConfig`
-        instance before calling :py:meth:`differential_correction` on a
+        instance before calling :py:meth:`correct` on a
         :py:class:`GenericOrbit` object.
         """
         return self._custom_correction_config

@@ -172,17 +172,7 @@ class CenterManifold:
         # Mapping from *form* identifiers to the corresponding accessor
         # methods.  These accessors take care of computing and caching the
         # requested polynomial list on-demand.
-        _form_dispatch: dict[str, Callable[[], List[np.ndarray]]] = {
-            "physical": self._get_physical_hamiltonian,
-            "real_modal": self._get_real_modal_form,
-            "complex_modal": self._get_complex_modal_form,
-            "real_partial_normal": self._get_partial_real_normal_form,
-            "complex_partial_normal": self._get_complex_partial_normal_form,
-            "real_full_normal": self._get_full_real_normal_form,
-            "complex_full_normal": self._get_full_complex_normal_form,
-            "center_manifold_real": self._get_center_manifold_real,
-            "center_manifold_complex": self._get_center_manifold_complex,
-        }
+        _form_dispatch = self._get_form_dispatch()
 
         if form not in _form_dispatch:
             raise ValueError(
@@ -218,6 +208,25 @@ class CenterManifold:
         logger.debug("Clearing polynomial and Poincaré map caches.")
         self._cache.clear()
         self._poincare_maps.clear()
+
+    def _get_form_dispatch(self) -> Dict[str, Callable[[], List[np.ndarray]]]:
+        """Return a dictionary mapping *form* strings to internal accessors.
+
+        This centralizes the mapping so it can be reused by both
+        :py:meth:`coefficients` and :py:meth:`compute` without repeating the
+        same dictionary definition in multiple places.
+        """
+        return {
+            "physical": self._get_physical_hamiltonian,
+            "real_modal": self._get_real_modal_form,
+            "complex_modal": self._get_complex_modal_form,
+            "real_partial_normal": self._get_partial_real_normal_form,
+            "complex_partial_normal": self._get_complex_partial_normal_form,
+            "real_full_normal": self._get_full_real_normal_form,
+            "complex_full_normal": self._get_full_complex_normal_form,
+            "center_manifold_real": self._get_center_manifold_real,
+            "center_manifold_complex": self._get_center_manifold_complex,
+        }
 
     def _get_or_compute(self, key: tuple, compute_func: Callable[[], Any]) -> Any:
         r"""
@@ -402,20 +411,34 @@ class CenterManifold:
 
         return self._get_or_compute(key, compute_cm_real)
 
-    def compute(self) -> List[np.ndarray]:
+    def compute(self, form: str = "center_manifold_real") -> List[np.ndarray]:
         r"""
-        Compute the polynomial Hamiltonian restricted to the centre manifold.
+        Compute and return a specific polynomial representation of the
+        Hamiltonian.
 
-        The returned list lives in *real* coordinates
-        :math:`(q_2, p_2, q_3, p_3)`. This method serves as the main entry
-        point for the centre manifold computation pipeline, triggering lazy
-        computation and caching of all intermediate steps.
+        By default (``form='center_manifold_real'``) this reproduces the
+        historical behaviour of returning the Hamiltonian restricted to the
+        centre manifold expressed in real variables
+        :math:`(q_2, p_2, q_3, p_3)`.  However, any of the internally
+        supported representations can be requested by passing the appropriate
+        *form* key, enabling callers (e.g.
+        bifurcation/continuation routines) to obtain the *full* complex normal
+        form without performing extraneous computations.
+
+        Parameters
+        ----------
+        form : str, optional
+            Identifier of the desired polynomial representation.  Allowed
+            values are the same as those accepted by
+            :py:meth:`CenterManifold.coefficients`.  Defaults to
+            ``'center_manifold_real'`` for backward compatibility.
 
         Returns
         -------
         list of numpy.ndarray
-            Sequence :math:`[H_0, H_2, \dots, H_N]` where each entry contains the
-            packed coefficients of the homogeneous polynomial of that degree.
+            Sequence :math:`[H_0, H_2, \dots, H_N]` where each entry contains
+            the packed coefficients of the homogeneous polynomial of that
+            degree.
 
         Raises
         ------
@@ -424,11 +447,23 @@ class CenterManifold:
         
         Notes
         -----
-        This routine chains together the full normal-form pipeline and may be
-        computationally expensive on the first call. Intermediate objects are
-        cached so that subsequent calls are fast.
+        The computation is performed lazily and all intermediate results are
+        cached.  Subsequent calls with the same *form* are therefore
+        inexpensive.
         """
-        return self._get_center_manifold_real()
+
+        # Mapping reused from ``coefficients`` but returning *raw* coefficient
+        # lists instead of pretty-printed tables.
+        _form_dispatch = self._get_form_dispatch()
+
+        if form not in _form_dispatch:
+            raise ValueError(
+                f"Unsupported form '{form}'. Allowed values are: "
+                f"{', '.join(_form_dispatch.keys())}."
+            )
+
+        # Compute (or retrieve from cache) the requested representation.
+        return _form_dispatch[form]()
 
     def poincare_map(self, energy: float, **kwargs) -> "_PoincareMap":
         r"""
