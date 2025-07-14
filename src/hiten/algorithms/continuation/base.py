@@ -40,7 +40,7 @@ class _PeriodicOrbitContinuationEngine(ABC):
         Initial step size for the predictor (sign included).
     corrector_kwargs : dict, optional
         Keyword arguments forwarded to
-        :pyfunc:`PeriodicOrbit.differential_correction`.
+        :pyfunc:`PeriodicOrbit.correct`.
     max_orbits : int, default 256
         Hard limit on the number of family members to generate (safety brake).
     """
@@ -153,7 +153,7 @@ class _PeriodicOrbitContinuationEngine(ABC):
             trial_orbit = self._instantiate_orbit(predicted_state)
 
             try:
-                trial_orbit.differential_correction(**self._corrector_kwargs)
+                trial_orbit.correct(**self._corrector_kwargs)
             except Exception as exc:
                 logger.debug(
                     "Correction failed at step %s (attempt %d): %s",

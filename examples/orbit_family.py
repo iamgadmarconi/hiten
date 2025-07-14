@@ -28,7 +28,7 @@ def main() -> None:
     
     # --- Halo seed and state parameter engine ---
     halo_seed = l1.create_orbit('halo', amplitude_z= 0.2, zenith='southern')
-    halo_seed.differential_correction(max_attempts=25, max_delta=1e-3)
+    halo_seed.correct(max_attempts=25, max_delta=1e-3)
     # --- two-parameter continuation: vary absolute X (in-plane) and Z (out-of-plane) ---
     current_x = halo_seed.initial_state[S.X]
     current_z = halo_seed.initial_state[S.Z]  # 0 for planar Lyapunov halo_seed
@@ -60,7 +60,7 @@ def main() -> None:
 
     # --- Lyapunov seed and energy parameter engine ---
     lyapunov_seed = l1.create_orbit('lyapunov', amplitude_x=0.01)
-    lyapunov_seed.differential_correction(max_attempts=25)
+    lyapunov_seed.correct(max_attempts=25)
     # --- energy continuation ---
     current_energy = lyapunov_seed.energy # Use hamiltonian energy
     target_energy = current_energy * 1.02

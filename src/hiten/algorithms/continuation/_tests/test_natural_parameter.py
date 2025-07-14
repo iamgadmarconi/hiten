@@ -20,7 +20,7 @@ def _make_seed_orbit():
 
     # Small planar amplitude for fast convergence
     seed = l1.create_orbit("lyapunov", amplitude_x=0.01)
-    seed.differential_correction(max_attempts=10, tol=1e-8)
+    seed.correct(max_attempts=10, tol=1e-8)
     return seed
 
 

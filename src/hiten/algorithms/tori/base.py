@@ -279,7 +279,7 @@ class _InvariantTori:
         tol: float = 1e-12,
         method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
         order: int = 8,
-        # Newton–GMOS stabilisation parameters (cf. PeriodicOrbit.differential_correction)
+        # Newton–GMOS stabilisation parameters (cf. PeriodicOrbit.correct)
         max_delta: float = 1e-2,
         alpha_reduction: float = 0.5,
         min_alpha: float = 1e-4,

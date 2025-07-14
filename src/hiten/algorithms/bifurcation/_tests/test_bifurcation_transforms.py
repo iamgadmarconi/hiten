@@ -20,7 +20,7 @@ def reduction_test_setup_triangular():
     Moon = Body("Moon", Constants.bodies["moon"]["mass"], Constants.bodies["moon"]["radius"], "gray", Earth)
     distance_em = Constants.get_orbital_distance("earth", "moon")
     system_em = System(Earth, Moon, distance_em)
-    libration_point_em = system_em.get_libration_point(4)
+    libration_point_em = system_em.get_libration_point(1)
     cm_em = CenterManifold(libration_point_em, TEST_MAX_DEG)
     cm_em.compute('complex_full_normal')
     return cm_em

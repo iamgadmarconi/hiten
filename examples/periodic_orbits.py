@@ -20,7 +20,7 @@ def main() -> None:
     # Build system & centre manifold
     system = System.from_bodies("earth", "moon")
     l_point = system.get_libration_point(1)
-    cm = l_point.get_center_manifold(max_degree=10)
+    cm = l_point.get_center_manifold(max_degree=6)
     cm.compute()
 
     ic_seed = cm.ic([0.0, 0.0], 0.6, "q3") # Good initial guess from CM
@@ -53,7 +53,7 @@ def main() -> None:
         orbit = l_point.create_orbit(spec["cls"], **spec["kwargs"])
 
         # Differential correction, propagation & basic visualisation
-        orbit.differential_correction(max_attempts=spec["diff_corr_attempts"])
+        orbit.correct(max_attempts=spec["diff_corr_attempts"])
         orbit.propagate(steps=1000)
         orbit.plot("rotating")
 

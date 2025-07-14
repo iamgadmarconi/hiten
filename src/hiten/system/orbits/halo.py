@@ -386,7 +386,7 @@ class HaloOrbit(PeriodicOrbit):
         -------
         numpy.ndarray, shape (2, 2)
             Reduced Jacobian matrix employed by the
-            :pyfunc:`hiten.system.orbits.base.PeriodicOrbit.differential_correction`
+            :pyfunc:`hiten.system.orbits.base.PeriodicOrbit.correct`
             solver.
         """
         x, y, z, vx, vy, vz = X_ev

@@ -124,28 +124,72 @@ class _OrbitCorrector(_Corrector):
 
         cfg = orbit._correction_config
         residual_indices = list(cfg.residual_indices)
+        control_indices = list(cfg.control_indices)
+
         target_vec = np.array(cfg.target)
 
-        # Closure to capture the latest event time so we can set the period later
-        last_t_event: float | None = None  # non-local variable updated by residual_fn
+        # Fixed components (non-control) are kept constant throughout iterations
+        base_state = orbit.initial_state.copy()
 
-        def _residual_fn(x_vec: np.ndarray) -> np.ndarray:  # type: ignore[override]
+        # Initial parameter vector consists only of the control components
+        p0 = base_state[control_indices]
+
+        # Closure capturing latest half-period so we can update orbit.period
+        last_t_event: float | None = None
+
+        def _to_full_state(p_vec: np.ndarray) -> np.ndarray:
+            """Embed control-vector *p* into the full 6-dimensional state."""
+            x = base_state.copy()
+            x[control_indices] = p_vec
+            return x
+
+        def _residual_fn(p_vec: np.ndarray) -> np.ndarray:
             nonlocal last_t_event
+            x_full = _to_full_state(p_vec)
             last_t_event, X_ev_local = cfg.event_func(
                 dynsys=orbit.system._dynsys,
-                x0=x_vec,
+                x0=x_full,
                 forward=forward,
             )
             return X_ev_local[residual_indices] - target_vec
 
-        # Infinity-norm used historically by orbit correctors
+        # Analytic Jacobian using the STM and optional extra_jacobian
+        from hiten.algorithms.dynamics.rtbp import _compute_stm
+
+        def _jacobian_fn(p_vec: np.ndarray) -> np.ndarray:
+            x_full = _to_full_state(p_vec)
+            # Evaluate event to get half-period and event state
+            t_ev_local, X_ev_local = cfg.event_func(
+                dynsys=orbit.system._dynsys,
+                x0=x_full,
+                forward=forward,
+            )
+
+            # State-transition matrix over half-period with same integrator settings
+            _, _, Phi_flat, _ = _compute_stm(
+                orbit.libration_point._var_eq_system,
+                x_full,
+                t_ev_local,
+                steps=cfg.steps,
+                method=cfg.method,
+                order=cfg.order,
+            )
+            Phi = Phi_flat  # already (6,6)
+
+            J_red = Phi[np.ix_(residual_indices, control_indices)]
+            if cfg.extra_jacobian is not None:
+                J_red -= cfg.extra_jacobian(X_ev_local, Phi)
+
+            return J_red
+
+        # Infinity-norm as before
         _norm_inf: NormFn = lambda r: float(np.linalg.norm(r, ord=np.inf))
 
-        # Run the generic Newton solver (finite-difference Jacobian is fine)
-        x_corr, info = self._core.correct(
-            x0=orbit.initial_state.copy(),
+        # Call the generic Newton solver on the reduced parameter space
+        p_corr, info = self._core.correct(
+            x0=p0,
             residual_fn=_residual_fn,
-            jacobian_fn=None,
+            jacobian_fn=_jacobian_fn,
             norm_fn=_norm_inf,
             tol=tol,
             max_attempts=max_attempts,
@@ -155,21 +199,23 @@ class _OrbitCorrector(_Corrector):
             armijo_c=armijo_c,
         )
 
-        # Ensure we have the last event time
+        # Ensure we captured the event time
         if last_t_event is None:
             last_t_event, _ = cfg.event_func(
                 dynsys=orbit.system._dynsys,
-                x0=x_corr,
+                x0=_to_full_state(p_corr),
                 forward=forward,
             )
 
-        # Update the orbit in-place
+        # Build the corrected full state vector and update the orbit
+        x_corr = _to_full_state(p_corr)
+
         orbit._reset()
         orbit._initial_state = x_corr
         orbit._period = 2.0 * last_t_event
 
         logger.info(
-            "_OrbitNewtonCorrector converged in %d iterations (|R|=%.2e)",
+            "_OrbitCorrector converged in %d iterations (|R|=%.2e)",
             info.get("iterations", -1),
             info.get("residual_norm", float('nan')),
         )

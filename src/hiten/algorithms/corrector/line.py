@@ -46,7 +46,7 @@ def armijo_line_search(
         Function to compute a norm from the residual vector.  Defaults to
         2-norm.
     max_delta, alpha_reduction, min_alpha, armijo_c : float, optional
-        Standard Armijo parameters (see :func:`PeriodicOrbit.differential_correction`).
+        Standard Armijo parameters (see :func:`PeriodicOrbit.correct`).
 
     Returns
     -------

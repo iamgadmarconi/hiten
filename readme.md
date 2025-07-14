@@ -19,7 +19,7 @@
    l1 = system.get_libration_point(1)
 
    orbit = l1.create_orbit("halo", amplitude_z=0.2, zenith="southern")
-   orbit.differential_correction(max_attempts=25)
+   orbit.correct(max_attempts=25)
    orbit.propagate(steps=1000)
 
    manifold = orbit.manifold(stable=True, direction="positive")
@@ -45,7 +45,7 @@
    initial_state = cm.ic(poincare_point=[0.0, 0.0], energy=0.6, section_coord="q3")
 
    orbit = VerticalOrbit(l1, initial_state=initial_state)
-   orbit.differential_correction(max_attempts=100)
+   orbit.correct(max_attempts=100)
    orbit.propagate(steps=1000)
 
    manifold = orbit.manifold(stable=True, direction="positive")
@@ -69,7 +69,7 @@
     l1 = system.get_libration_point(1)
 
     seed = l1.create_orbit('lyapunov', amplitude_x= 1e-3)
-    seed.differential_correction(max_attempts=25)
+    seed.correct(max_attempts=25)
 
     target_amp = 1e-2 # grow A_x from 0.001 to 0.01 (relative amplitude)
     current_amp = seed.amplitude
@@ -132,7 +132,7 @@
     l1 = system.get_libration_point(1)
 
     orbit = l1.create_orbit('halo', amplitude_z=0.3, zenith='southern')
-    orbit.differential_correction(max_attempts=25)
+    orbit.correct(max_attempts=25)
     orbit.propagate(steps=1000)
    
     torus = InvariantTori(orbit)
