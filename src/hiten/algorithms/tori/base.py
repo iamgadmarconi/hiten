@@ -214,9 +214,6 @@ class _InvariantTori:
         """
         # Ensure preparation with default resolution
         self._prepare()
-
-        assert self._theta1 is not None and self._ubar is not None and self._y_series is not None  # mypy
-
         # Wrap angles
         th1 = np.mod(theta1, 2.0 * np.pi)
         th2 = np.mod(theta2, 2.0 * np.pi)
@@ -324,21 +321,18 @@ class _InvariantTori:
         )
         
         # Get monodromy matrix and eigenvalues/vectors
-        M = self._monodromy
-        evals, evecs = np.linalg.eig(M)
-        
         # Find complex eigenvalue with unit modulus
         tol_mag = 1e-6
         cand_idx = [
-            i for i, lam in enumerate(evals)
+            i for i, lam in enumerate(self._evals)
             if abs(abs(lam) - 1.0) < tol_mag and abs(np.imag(lam)) > tol_mag
         ]
         if not cand_idx:
             raise RuntimeError("No complex eigenvalue of modulus one found")
             
-        idx = max(cand_idx, key=lambda i: np.imag(evals[i]))
-        lam = evals[idx]
-        w = evecs[:, idx]
+        idx = max(cand_idx, key=lambda i: np.imag(self._evals[i]))
+        lam = self._evals[idx]
+        w = self._evecs[:, idx]
         
         # Rotation number \rho = arg(\lambda)
         rho = np.angle(lam)
