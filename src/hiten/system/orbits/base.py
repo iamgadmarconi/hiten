@@ -37,7 +37,7 @@ from typing import (
     Tuple,
 )
 
-from hiten.algorithms.utils.newton import armijo_line_search
+from hiten.algorithms.corrector.line import armijo_line_search
 
 import numpy as np
 import numpy.typing as npt

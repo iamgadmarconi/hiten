@@ -1,0 +1,177 @@
+from typing import Tuple, Any, TYPE_CHECKING
+
+import numpy as np
+
+from hiten.algorithms.corrector.base import _Corrector, JacobianFn, NormFn, ResidualFn
+from hiten.algorithms.corrector.line import armijo_line_search
+from hiten.utils.log_config import logger
+
+if TYPE_CHECKING:
+    from hiten.system.orbits.base import PeriodicOrbit
+
+
+
+class _NewtonCorrector(_Corrector):
+    """Classical Newton-Raphson solver with optional Armijo line search.
+
+    The algorithm solves ``R(x) = 0`` for *x* given *residual_fn* (and
+    optionally *jacobian_fn*).  If the Jacobian is not provided, it is
+    approximated by forward finite differences.
+    """
+
+    def correct(
+        self,
+        x0: np.ndarray,
+        residual_fn: ResidualFn,
+        *,
+        jacobian_fn: JacobianFn | None = None,
+        norm_fn: NormFn | None = None,
+        tol: float = 1e-10,
+        max_attempts: int = 25,
+        max_delta: float | None = 1e-2,
+        alpha_reduction: float = 0.5,
+        min_alpha: float = 1e-4,
+        armijo_c: float = 0.1,
+        fd_step: float = 1e-8,
+    ) -> Tuple[np.ndarray, dict[str, Any]]:
+        if norm_fn is None:
+            norm_fn = lambda r: float(np.linalg.norm(r))
+
+        x = x0.copy()
+        info: dict[str, Any] = {}
+
+        for k in range(max_attempts + 1):
+            r = residual_fn(x)
+            r_norm = norm_fn(r)
+            if r_norm < tol:
+                logger.info("Newton converged after %d iterations (|R|=%.2e)", k, r_norm)
+                info.update(iterations=k, residual_norm=r_norm)
+                return x, info
+
+            # Compute / approximate Jacobian
+            if jacobian_fn is not None:
+                J = jacobian_fn(x)
+            else:
+                # Finite-difference approximation (forward diff)
+                n = x.size
+                J = np.zeros((r.size, n))
+                for i in range(n):
+                    x_pert = x.copy()
+                    h_i = fd_step * max(1.0, abs(x[i]))
+                    x_pert[i] += h_i
+                    J[:, i] = (residual_fn(x_pert) - r) / h_i
+
+            # Regularise singular / ill-conditioned Jacobian
+            try:
+                cond_J = np.linalg.cond(J)
+                if np.isnan(cond_J) or cond_J > 1e12:
+                    logger.debug("Jacobian ill-conditioned (cond=%.2e); adding regularisation", cond_J)
+                    J += np.eye(J.shape[0]) * 1e-8
+                delta = np.linalg.solve(J, -r)
+            except np.linalg.LinAlgError:
+                logger.warning("Jacobian singular; switching to least-squares update")
+                delta = np.linalg.lstsq(J, -r, rcond=None)[0]
+
+            # Armijo + step capping
+            x_new, r_norm_new, alpha_used = armijo_line_search(
+                x0=x,
+                delta=delta,
+                residual_fn=residual_fn,
+                current_norm=r_norm,
+                norm_fn=norm_fn,
+                max_delta=max_delta,
+                alpha_reduction=alpha_reduction,
+                min_alpha=min_alpha,
+                armijo_c=armijo_c,
+            )
+
+            logger.debug(
+                "Newton iter %d/%d: |R|=%.2e → %.2e (alpha=%.2e)",
+                k + 1,
+                max_attempts,
+                r_norm,
+                r_norm_new,
+                alpha_used,
+            )
+            x = x_new
+
+        raise RuntimeError(f"Newton did not converge after {max_attempts} iterations (|R|={r_norm:.2e}).")
+
+
+class _OrbitCorrector(_Corrector):
+    """Periodic-orbit specific helper that delegates to :class:`_NewtonCorrector`."""
+
+    def __init__(self, core: _NewtonCorrector | None = None):
+        # Allow dependency injection of the generic Newton solver
+        self._core = core or _NewtonCorrector()
+
+    def correct(
+        self,
+        orbit: "PeriodicOrbit",
+        *,
+        tol: float = 1e-10,
+        max_attempts: int = 25,
+        forward: int = 1,
+        max_delta: float | None = None,
+        alpha_reduction: float = 0.5,
+        min_alpha: float = 1e-4,
+        armijo_c: float = 0.02,
+    ) -> Tuple[np.ndarray, float]:
+        """Refine *orbit* in-place using the underlying :class:`_NewtonCorrector`.
+
+        All keyword arguments are forwarded to the generic solver.
+        """
+
+        cfg = orbit._correction_config
+        residual_indices = list(cfg.residual_indices)
+        target_vec = np.array(cfg.target)
+
+        # Closure to capture the latest event time so we can set the period later
+        last_t_event: float | None = None  # non-local variable updated by residual_fn
+
+        def _residual_fn(x_vec: np.ndarray) -> np.ndarray:  # type: ignore[override]
+            nonlocal last_t_event
+            last_t_event, X_ev_local = cfg.event_func(
+                dynsys=orbit.system._dynsys,
+                x0=x_vec,
+                forward=forward,
+            )
+            return X_ev_local[residual_indices] - target_vec
+
+        # Infinity-norm used historically by orbit correctors
+        _norm_inf: NormFn = lambda r: float(np.linalg.norm(r, ord=np.inf))
+
+        # Run the generic Newton solver (finite-difference Jacobian is fine)
+        x_corr, info = self._core.correct(
+            x0=orbit.initial_state.copy(),
+            residual_fn=_residual_fn,
+            jacobian_fn=None,
+            norm_fn=_norm_inf,
+            tol=tol,
+            max_attempts=max_attempts,
+            max_delta=max_delta,
+            alpha_reduction=alpha_reduction,
+            min_alpha=min_alpha,
+            armijo_c=armijo_c,
+        )
+
+        # Ensure we have the last event time
+        if last_t_event is None:
+            last_t_event, _ = cfg.event_func(
+                dynsys=orbit.system._dynsys,
+                x0=x_corr,
+                forward=forward,
+            )
+
+        # Update the orbit in-place
+        orbit._reset()
+        orbit._initial_state = x_corr
+        orbit._period = 2.0 * last_t_event
+
+        logger.info(
+            "_OrbitNewtonCorrector converged in %d iterations (|R|=%.2e)",
+            info.get("iterations", -1),
+            info.get("residual_norm", float('nan')),
+        )
+
+        return x_corr, last_t_event

@@ -5,7 +5,7 @@ import numpy as np
 
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_stm
-from hiten.algorithms.utils.newton import armijo_line_search
+from hiten.algorithms.corrector.line import armijo_line_search
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.orbits.base import PeriodicOrbit
