@@ -1,7 +1,7 @@
+from dataclasses import dataclass
 from typing import Literal, Optional, Tuple
 
 import numpy as np
-from scipy.integrate import solve_ivp
 
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_stm
@@ -10,6 +10,29 @@ from hiten.system.libration.base import LibrationPoint
 from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.log_config import logger
 from hiten.utils.plots import plot_invariant_torus
+
+
+@dataclass(slots=True, frozen=True)
+class _Torus:
+    r"""
+    Immutable representation of a 2-D invariant torus.
+
+    Parameters
+    ----------
+    grid : np.ndarray
+        Real 6-state samples of shape (n_theta1, n_theta2, 6).
+    omega : np.ndarray
+        Fundamental frequencies (ω₁, ω₂).
+    C0 : float
+        Jacobi constant (fixed along the torus family).
+    system : System
+        Parent CR3BP system (useful for downstream algorithms).
+    """
+
+    grid: np.ndarray
+    omega: np.ndarray
+    C0: float
+    system: System
 
 
 class _InvariantTori:
@@ -25,12 +48,14 @@ class _InvariantTori:
             *Corrected* periodic orbit about which the torus is constructed. The
             orbit must expose a valid `period` attribute - no propagation is
             performed here; we only integrate the *variational* equations to
-            obtain the state-transition matrices required by the algorithm.
+            obtain the _state-transition matrices required by the algorithm.
         """
         if orbit.period is None:
             raise ValueError("The generating orbit must be corrected first (period is None).")
 
         self._orbit = orbit
+        self._monodromy = self.orbit.monodromy
+        self._evals, self._evecs = np.linalg.eig(self._monodromy)
         self._dynsys = self.system.dynsys
 
         # Internal caches populated lazily by _prepare().
@@ -69,6 +94,52 @@ class _InvariantTori:
             raise ValueError(err)
 
         return self._grid
+    
+    @property
+    def period(self) -> float:
+        return float(self.orbit.period)
+    
+    @property
+    def jacobi(self) -> float:
+        return float(self.orbit.jacobi_constant)
+    
+    def as_state(self) -> _Torus:
+        r"""
+        Return an immutable :class:`_Torus` view of the current grid.
+
+        The fundamental frequencies are derived from the generating periodic
+        orbit: :math:`\omega_1 = 2 \pi / T` (longitudinal) and 
+        :math:`\omega_2 = \arg(\lambda) / T` where :math:`\lambda` is the
+        complex unit-circle eigenvalue of the monodromy matrix.
+        """
+
+        # Ensure a torus grid is available.
+        if self._grid is None:
+            raise ValueError("Invariant torus grid not computed. Call `compute()` first.")
+
+        omega_long = 2.0 * np.pi / self.period
+
+        tol_mag = 1e-6
+        cand_idx = [
+            i for i, lam in enumerate(self._evals)
+            if abs(abs(lam) - 1.0) < tol_mag and abs(np.imag(lam)) > tol_mag
+        ]
+        if not cand_idx:
+            raise RuntimeError(
+                "No complex eigenvalue of modulus one found in monodromy matrix - cannot determine ω₂."
+            )
+
+        idx = max(cand_idx, key=lambda i: np.imag(self._evals[i]))
+        lam_c = self._evals[idx]
+        omega_lat = np.angle(lam_c) / self.period
+
+        omega = np.array([omega_long, omega_lat], dtype=float)
+
+        # Jacobi constant (energy-like invariant)
+        C0 = self.jacobi
+
+        # Return an *immutable* copy of the grid to avoid accidental mutation.
+        return _Torus(grid=self._grid.copy(), omega=omega, C0=C0, system=self.system)
 
     def _prepare(self, n_theta1: int = 256, *, method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy", order: int = 8) -> None:
         r"""
@@ -100,22 +171,19 @@ class _InvariantTori:
         # Non-dimensional angle \theta_1 along the periodic orbit
         theta1 = 2.0 * np.pi * times / self.orbit.period  # shape (n_theta1,)
 
-        M = self.orbit.monodromy
-        evals, evecs = np.linalg.eig(M)
-
         # Tolerance for identifying *unit-circle, non-trivial* eigenvalues.
         tol_mag = 1e-6
         cand_idx: list[int] = [
-            i for i, lam in enumerate(evals)
+            i for i, lam in enumerate(self._evals)
             if abs(abs(lam) - 1.0) < tol_mag and abs(np.imag(lam)) > tol_mag
         ]
         if not cand_idx:
             raise RuntimeError("No complex eigenvalue of modulus one found in monodromy matrix - cannot construct torus.")
 
         # Choose the eigenvalue with positive imaginary part
-        idx = max(cand_idx, key=lambda i: np.imag(evals[i]))
-        lam_c = evals[idx]
-        y0 = evecs[:, idx]
+        idx = max(cand_idx, key=lambda i: np.imag(self._evals[i]))
+        lam_c = self._evals[idx]
+        y0 = self._evecs[:, idx]
 
         # Normalise the eigenvector
         y0 = y0 / np.linalg.norm(y0)
@@ -135,9 +203,9 @@ class _InvariantTori:
 
         logger.info("Cached STM and eigen-vector field for torus initialisation.")
 
-    def state(self, theta1: float, theta2: float, epsilon: float = 1e-4) -> np.ndarray:
+    def _state(self, theta1: float, theta2: float, epsilon: float = 1e-4) -> np.ndarray:
         r"""
-        Return the 6-state vector :math:`u_grid(\theta_1, \theta_2)` given by equation (15).
+        Return the 6-_state vector :math:`u_grid(\theta_1, \theta_2)` given by equation (15).
 
         The angle inputs may lie outside :math:`[0, 2\pi)`; they are wrapped
         automatically. Interpolation is performed along :math:`\theta_1` using the cached
@@ -182,8 +250,6 @@ class _InvariantTori:
 
         # Ensure STM cache at requested resolution
         self._prepare(n_theta1)
-
-        assert self._theta1 is not None and self._ubar is not None and self._y_series is not None
 
         th2_vals = np.linspace(0.0, 2.0 * np.pi, num=n_theta2, endpoint=False)
         cos_t2 = np.cos(th2_vals)
@@ -253,7 +319,7 @@ class _InvariantTori:
         )
         
         # Get monodromy matrix and eigenvalues/vectors
-        M = self.orbit.monodromy
+        M = self._monodromy
         evals, evecs = np.linalg.eig(M)
         
         # Find complex eigenvalue with unit modulus
@@ -305,7 +371,7 @@ class _InvariantTori:
                     t0=0.0,
                     tf=T,
                     forward=1,
-                    steps=2,  # only need initial & final state
+                    steps=2,  # only need initial & final _state
                     method=method,
                     order=order,
                 )
