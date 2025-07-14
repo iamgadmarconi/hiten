@@ -800,7 +800,7 @@ def plot_invariant_torus(
         Characteristic distance (km) - required to scale the body radii.
     figsize, save, dark_mode, filepath : see other plot helpers.
     cmap : str, optional
-        Colormap name used to colour-code the major-angle θ₁. Default ``"plasma"``.
+        Colormap name used to colour-code the major-angle \theta₁. Default ``"plasma"``.
     elev, azim : float, optional
         Elevation and azimuth view angles passed to ``Axes3D.view_init``.
     equal_axes : bool, default True

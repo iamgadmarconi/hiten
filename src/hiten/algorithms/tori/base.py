@@ -1,9 +1,9 @@
 from typing import Literal, Optional, Tuple
 
 import numpy as np
-from scipy.optimize import newton_krylov
-from scipy.sparse.linalg import LinearOperator
+from scipy.integrate import solve_ivp
 
+from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_stm
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
@@ -31,6 +31,7 @@ class _InvariantTori:
             raise ValueError("The generating orbit must be corrected first (period is None).")
 
         self._orbit = orbit
+        self._dynsys = self.system.dynsys
 
         # Internal caches populated lazily by _prepare().
         self._theta1: Optional[np.ndarray] = None  # angle along the periodic orbit
@@ -55,6 +56,10 @@ class _InvariantTori:
     @property
     def system(self) -> System:
         return self._orbit.system
+    
+    @property
+    def dynsys(self):
+        return self._dynsys
     
     @property
     def grid(self) -> np.ndarray:
@@ -115,7 +120,7 @@ class _InvariantTori:
         # Normalise the eigenvector
         y0 = y0 / np.linalg.norm(y0)
 
-        # Angle α such that λ = e^{iα}
+        # Angle α such that \lambda = e^{iα}
         alpha = np.angle(lam_c)
 
         phase = np.exp(-1j * alpha * theta1 / (2.0 * np.pi))  # shape (n_theta1,)
@@ -199,13 +204,227 @@ class _InvariantTori:
 
     def _compute_gmos(
         self,
+        *,
+        epsilon: float = 1e-4,
+        n_theta1: int = 256,
+        n_theta2: int = 64,
+        max_iter: int = 50,
+        tol: float = 1e-12,
+        method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
+        order: int = 8,
     ) -> np.ndarray:
-        raise NotImplementedError("PDE solver not implemented yet.")
+        """
+        Compute quasi-periodic invariant torus using GMOS algorithm.
+        
+        This implements the algorithm from Gómez-Mondelo (2001) and Olikara-Scheeres (2012),
+        computing invariant curves of a stroboscopic map.
+        
+        Parameters
+        ----------
+        epsilon : float, default 1e-4
+            Initial amplitude of the torus
+        n_theta1 : int, default 256
+            Number of points along the periodic orbit (longitudinal)
+        n_theta2 : int, default 64
+            Number of points in the transverse direction (latitudinal)
+        max_iter : int, default 50
+            Maximum Newton iterations
+        tol : float, default 1e-12
+            Convergence tolerance
+        method : str, default "scipy"
+            Integration method
+        order : int, default 8
+            Integration order
+            
+        Returns
+        -------
+        np.ndarray
+            The computed torus grid of shape (n_theta1, n_theta2, 6)
+        """
+        logger.info("Computing invariant torus using GMOS algorithm")
+        # High-level summary of the run parameters
+        logger.info(
+            "GMOS parameters: epsilon=%g, n_theta1=%d, n_theta2=%d, max_iter=%d, tol=%.1e",
+            epsilon,
+            n_theta1,
+            n_theta2,
+            max_iter,
+            tol,
+        )
+        
+        # Get monodromy matrix and eigenvalues/vectors
+        M = self.orbit.monodromy
+        evals, evecs = np.linalg.eig(M)
+        
+        # Find complex eigenvalue with unit modulus
+        tol_mag = 1e-6
+        cand_idx = [
+            i for i, lam in enumerate(evals)
+            if abs(abs(lam) - 1.0) < tol_mag and abs(np.imag(lam)) > tol_mag
+        ]
+        if not cand_idx:
+            raise RuntimeError("No complex eigenvalue of modulus one found")
+            
+        idx = max(cand_idx, key=lambda i: np.imag(evals[i]))
+        lam = evals[idx]
+        w = evecs[:, idx]
+        
+        # Rotation number \rho = arg(\lambda)
+        rho = np.angle(lam)
+        
+        # Stroboscopic time T (period of underlying orbit)
+        T = self.orbit.period
+        
+        # Frequencies
+        omega0 = 2.0 * np.pi / T  # Longitudinal frequency
+        omega1 = rho / T          # Latitudinal frequency
+        
+        # Initialize invariant curve using equation (4) from paper
+        theta1 = np.linspace(0, 2*np.pi, n_theta2, endpoint=False)
+        
+        # Get initial states along periodic orbit
+        x0 = self.orbit.initial_state
+        
+        # Create initial guess for invariant curve
+        X0 = np.zeros((n_theta2, 6))
+        for j in range(n_theta2):
+            # Linear approximation from monodromy eigenvector
+            perturbation = epsilon * (np.cos(theta1[j]) * np.real(w) - 
+                                     np.sin(theta1[j]) * np.imag(w))
+            X0[j] = x0 + perturbation
+        
+        # Newton iteration
+        for newton_iter in range(max_iter):
+            # Propagate each point for stroboscopic time T
+            X1 = np.zeros_like(X0)
+            for j in range(n_theta2):
+                # Use project-wide helper that wraps the compiled CR3BP RHS
+                sol = _propagate_dynsys(
+                    dynsys=self.dynsys,
+                    state0=X0[j],
+                    t0=0.0,
+                    tf=T,
+                    forward=1,
+                    steps=2,  # only need initial & final state
+                    method=method,
+                    order=order,
+                )
+                X1[j] = sol.states[-1]
+            
+            # Apply DFT
+            X1_dft = np.fft.fft(X1, axis=0)
+            
+            # Rotate by -\rho
+            k_vals = np.fft.fftfreq(n_theta2, 1/n_theta2)
+            rotation = np.exp(-1j * rho * k_vals)
+            X1_rotated_dft = X1_dft * rotation[:, np.newaxis]
+            
+            # Inverse DFT
+            X1_rotated = np.real(np.fft.ifft(X1_rotated_dft, axis=0))
+            
+            # Compute error (invariance condition)
+            error = X1_rotated - X0
+            
+            # Check convergence
+            error_norm = np.linalg.norm(error) / n_theta2
+    
+            logger.info(
+                "GMOS iteration %d: invariance error = %.3e",
+                newton_iter,
+                error_norm,
+            )
+            
+            if error_norm < tol:
+                logger.info(f"GMOS converged in {newton_iter} iterations")
+                break
+                
+            # Compute Jacobian using finite differences
+            h = 1e-8
+            n_vars = n_theta2 * 6
+            J = np.zeros((n_vars, n_vars))
+            
+            # Flatten for linear algebra
+            X0_flat = X0.flatten()
+            error_flat = error.flatten()
+            
+            for i in range(n_vars):
+                X0_pert = X0_flat.copy()
+                X0_pert[i] += h
+                
+                # Reshape and compute perturbed error
+                X0_pert_2d = X0_pert.reshape(n_theta2, 6)
+                X1_pert = np.zeros_like(X0_pert_2d)
+                
+                for j in range(n_theta2):
+                    sol = _propagate_dynsys(
+                        dynsys=self.dynsys,
+                        state0=X0_pert_2d[j],
+                        t0=0.0,
+                        tf=T,
+                        forward=1,
+                        steps=2,
+                        method=method,
+                        order=order,
+                    )
+                    X1_pert[j] = sol.states[-1]
+                
+                # Apply rotation operator
+                X1_pert_dft = np.fft.fft(X1_pert, axis=0)
+                X1_pert_rotated_dft = X1_pert_dft * rotation[:, np.newaxis]
+                X1_pert_rotated = np.real(np.fft.ifft(X1_pert_rotated_dft, axis=0))
+                
+                error_pert = (X1_pert_rotated - X0_pert_2d).flatten()
+                J[:, i] = (error_pert - error_flat) / h
+            
+            # Newton update
+            try:
+                # Use pseudo-inverse for robustness
+                update = np.linalg.lstsq(J, -error_flat, rcond=None)[0]
+                X0_flat += update
+                X0 = X0_flat.reshape(n_theta2, 6)
+            except np.linalg.LinAlgError:
+                logger.warning("Jacobian singular, using smaller update")
+                X0 -= 0.1 * error
+                
+        else:
+            logger.warning(f"GMOS did not converge after {max_iter} iterations")
+        
+        # Construct full 2D torus from invariant curve
+        logger.info("Constructing 2D torus grid from invariant curve")
+        # The invariant curve gives us one slice at \theta_0 = 0
+        # We generate the full torus by propagating along \theta_0
+        
+        u_grid = np.zeros((n_theta1, n_theta2, 6))
+        dt = T / n_theta1
+        
+        for i in range(n_theta1):
+            t = i * dt
+            for j in range(n_theta2):
+                sol = _propagate_dynsys(
+                    dynsys=self.dynsys,
+                    state0=X0[j],
+                    t0=0.0,
+                    tf=t,
+                    forward=1,
+                    steps=2,
+                    method=method,
+                    order=order,
+                )
+                # Account for rotation in \theta_1
+                theta1_shift = omega1 * t
+                j_shifted = int(np.round(j + theta1_shift * n_theta2 / (2 * np.pi))) % n_theta2
+                u_grid[i, j_shifted] = sol.states[-1]
+        
+        return u_grid
+    
+    def _compute_kkg(self, *, epsilon: float, n_theta1: int, n_theta2: int) -> np.ndarray:
+        """Compute invariant torus using the KKG algorithm."""
+        raise NotImplementedError("KKG algorithm not implemented yet.")
 
     def compute(
         self,
         *,
-        scheme: Literal["linear", "gmos"] = "linear",
+        scheme: Literal["linear", "gmos", "kkg"] = "linear",
         epsilon: float = 1e-4,
         n_theta1: int = 256,
         n_theta2: int = 64,
@@ -215,17 +434,30 @@ class _InvariantTori:
 
         Parameters
         ----------
-        scheme : {'linear', 'gmos'}, default 'linear'
+        scheme : {'linear', 'gmos', 'kkg'}, default 'linear'
             Algorithm to use.  'linear' is the earlier first-order model;
-            'gmos' is the discrete-PDE Newton solver (not yet implemented).
-        epsilon, n_theta1, n_theta2 : see documentation of the linear scheme.
+            'gmos' is the GMOS algorithm;
+            'kkg' is the KKG algorithm.
+        epsilon : float, default 1e-4
+            Amplitude of the torus
+        n_theta1 : int, default 256
+            Number of points along periodic orbit (longitudinal)
+        n_theta2 : int, default 64
+            Number of points in transverse direction (latitudinal)
         kwargs : additional parameters forwarded to the chosen backend.
         """
 
         if scheme == "linear":
             self._grid = self._compute_linear(epsilon=epsilon, n_theta1=n_theta1, n_theta2=n_theta2)
         elif scheme == "gmos":
-            self._grid = self._compute_gmos()
+            self._grid = self._compute_gmos(
+                epsilon=epsilon, 
+                n_theta1=n_theta1, 
+                n_theta2=n_theta2,
+                **kwargs
+            )
+        elif scheme == "kkg":
+            self._grid = self._compute_kkg(epsilon=epsilon, n_theta1=n_theta1, n_theta2=n_theta2)
 
         return self._grid
 
