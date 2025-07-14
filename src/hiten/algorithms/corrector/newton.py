@@ -116,6 +116,7 @@ class _OrbitCorrector(_Corrector):
         alpha_reduction: float = 0.5,
         min_alpha: float = 1e-4,
         armijo_c: float = 0.02,
+        monodromy: np.ndarray | None = None,
     ) -> Tuple[np.ndarray, float]:
         """Refine *orbit* in-place using the underlying :class:`_NewtonCorrector`.
 
@@ -153,34 +154,25 @@ class _OrbitCorrector(_Corrector):
             )
             return X_ev_local[residual_indices] - target_vec
 
-        # Analytic Jacobian using the STM and optional extra_jacobian
-        from hiten.algorithms.dynamics.rtbp import _compute_stm
+        jacobian_fn = None
+        if monodromy is not None:
+            # Build analytic Jacobian function using supplied monodromy
+            def _jacobian_fn(p_vec: np.ndarray) -> np.ndarray:
+                x_full = _to_full_state(p_vec)
+                # Evaluate event state for possible extra_jacobian usage
+                _, X_ev_local = cfg.event_func(
+                    dynsys=orbit.system._dynsys,
+                    x0=x_full,
+                    forward=forward,
+                )
 
-        def _jacobian_fn(p_vec: np.ndarray) -> np.ndarray:
-            x_full = _to_full_state(p_vec)
-            # Evaluate event to get half-period and event state
-            t_ev_local, X_ev_local = cfg.event_func(
-                dynsys=orbit.system._dynsys,
-                x0=x_full,
-                forward=forward,
-            )
+                Phi = monodromy  # (6,6) provided upstream
+                J_red = Phi[np.ix_(residual_indices, control_indices)]
+                if cfg.extra_jacobian is not None:
+                    J_red -= cfg.extra_jacobian(X_ev_local, Phi)
+                return J_red
 
-            # State-transition matrix over half-period with same integrator settings
-            _, _, Phi_flat, _ = _compute_stm(
-                orbit.libration_point._var_eq_system,
-                x_full,
-                t_ev_local,
-                steps=cfg.steps,
-                method=cfg.method,
-                order=cfg.order,
-            )
-            Phi = Phi_flat  # already (6,6)
-
-            J_red = Phi[np.ix_(residual_indices, control_indices)]
-            if cfg.extra_jacobian is not None:
-                J_red -= cfg.extra_jacobian(X_ev_local, Phi)
-
-            return J_red
+            jacobian_fn = _jacobian_fn
 
         # Infinity-norm as before
         _norm_inf: NormFn = lambda r: float(np.linalg.norm(r, ord=np.inf))
@@ -189,7 +181,7 @@ class _OrbitCorrector(_Corrector):
         p_corr, info = self._core.correct(
             x0=p0,
             residual_fn=_residual_fn,
-            jacobian_fn=_jacobian_fn,
+            jacobian_fn=jacobian_fn,
             norm_fn=_norm_inf,
             tol=tol,
             max_attempts=max_attempts,

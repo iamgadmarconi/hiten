@@ -440,7 +440,8 @@ class PeriodicOrbit(ABC):
             max_delta: float | None = None,
             alpha_reduction: float = 0.5,
             min_alpha: float = 1e-4,
-            armijo_c: float = 0.02
+            armijo_c: float = 0.02,
+            use_analytic_jacobian: bool = True,
         ) -> tuple[np.ndarray, float]:
         """Differential correction wrapper.
 
@@ -448,7 +449,6 @@ class PeriodicOrbit(ABC):
         :class:`hiten.algorithms.corrector.newton._OrbitCorrector` which
         implements a robust Newton-Armijo scheme.
         """
-
         return _OrbitCorrector().correct(
             self,
             tol=tol,
@@ -458,6 +458,7 @@ class PeriodicOrbit(ABC):
             alpha_reduction=alpha_reduction,
             min_alpha=min_alpha,
             armijo_c=armijo_c,
+            monodromy=self.monodromy if use_analytic_jacobian else None,
         )
 
     def propagate(self, steps: int = 1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 8) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
