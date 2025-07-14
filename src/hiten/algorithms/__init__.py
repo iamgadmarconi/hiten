@@ -9,6 +9,7 @@ from .continuation.predictors import _StateParameter as StateParameter
 from .poincare.base import _PoincareMap as PoincareMap
 from .poincare.base import _PoincareMapConfig as PoincareMapConfig
 from .tori.base import _InvariantTori as InvariantTori
+from .corrector.newton import _NewtonCorrector as NewtonCorrector
 
 __all__ = [
     "ContinuationEngine",
@@ -18,4 +19,5 @@ __all__ = [
     "PoincareMap",
     "PoincareMapConfig",
     "InvariantTori",
+    "NewtonCorrector",
 ]
