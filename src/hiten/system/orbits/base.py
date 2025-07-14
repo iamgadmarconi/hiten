@@ -448,7 +448,7 @@ class PeriodicOrbit(ABC):
             tol: float = 1e-10,
             max_attempts: int = 25,
             forward: int = 1,
-            max_delta: float = 1e-2,
+            max_delta: float | None = None,
             alpha_reduction: float = 0.5,
             min_alpha: float = 1e-4
         ) -> tuple[np.ndarray, float]:
@@ -528,6 +528,7 @@ class PeriodicOrbit(ABC):
                 max_delta=max_delta,
                 alpha_reduction=alpha_reduction,
                 min_alpha=min_alpha,
+                armijo_c=0.02,
             )
 
             logger.info(
