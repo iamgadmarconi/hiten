@@ -22,8 +22,9 @@ def main() -> None:
     orbit.propagate(steps=1000)
 
     torus = InvariantTori(orbit)
-    torus.compute(scheme='gmos', epsilon=1e-3, n_theta1=64, n_theta2=128)
+    torus.compute(scheme='linear', epsilon=1e-3, n_theta1=64, n_theta2=128)
     torus.plot()
+    torus._plot_gmos_diagnostics()
 
 if __name__ == "__main__":
     main()

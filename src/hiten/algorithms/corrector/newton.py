@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Tuple, Callable
 
 import numpy as np
 
@@ -35,6 +35,7 @@ class _NewtonCorrector(_Corrector):
         alpha_reduction: float | None,
         min_alpha: float | None,
         armijo_c: float | None,
+        callback: "Callable[[int, np.ndarray, float], None] | None" = None,
         fd_step: float = 1e-8,
     ) -> Tuple[np.ndarray, dict[str, Any]]:
         if norm_fn is None:
@@ -46,6 +47,14 @@ class _NewtonCorrector(_Corrector):
         for k in range(max_attempts):
             r = residual_fn(x)
             r_norm = norm_fn(r)
+
+            # Optional user-provided callback for real-time diagnostics
+            if callback is not None:
+                try:
+                    callback(k, x, r_norm)
+                except Exception as exc:
+                    logger.warning("Newton callback raised an exception: %s", exc)
+
             if r_norm < tol:
                 logger.info("Newton converged after %d iterations (|R|=%.2e)", k, r_norm)
                 info.update(iterations=k, residual_norm=r_norm)
@@ -143,6 +152,14 @@ class _NewtonCorrector(_Corrector):
         # One final convergence check after exhausting the loop
         r_final = residual_fn(x)
         r_final_norm = norm_fn(r_final)
+
+        # Final callback after exiting the loop (non-converged case)
+        if callback is not None:
+            try:
+                callback(max_attempts, x, r_final_norm)
+            except Exception as exc:
+                logger.warning("Newton callback raised an exception during final call: %s", exc)
+
         if r_final_norm < tol:
             logger.info("Newton converged after %d iterations (|R|=%.2e)", max_attempts, r_final_norm)
             info.update(iterations=max_attempts, residual_norm=r_final_norm)
