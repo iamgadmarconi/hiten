@@ -87,6 +87,10 @@ class _InvariantTori:
         self._y_series: Optional[np.ndarray] = None  # complex eigen-vector field y(\theta_1)
         self._grid: Optional[np.ndarray] = None
 
+        # Continuation bookkeeping for pseudo-arclength.
+        self._v_curve_prev: Optional[np.ndarray] = None  # previous invariant curve
+        self._family_tangent: Optional[np.ndarray] = None  # tangent along torus family
+
     def __str__(self) -> str:
         return f"InvariantTori object for seed orbit={self.orbit} at point={self.libration_point})"
 
@@ -383,9 +387,10 @@ class _InvariantTori:
         logger.info("Initial surface-of-section curve built (n_theta2=%d, rho≈%.5f)", n_theta2, rho)
 
         # --- Placeholder for upcoming Newton correction ---
-        raise NotImplementedError(
-            "GMOS implementation incomplete: only initial curve construction done."
-        )
+        # Store previous curve and tangent for continuation
+        self._update_family_tangent(v_curve)
+
+        return v_curve
     
     def _compute_kkg(self, *, epsilon: float, n_theta1: int, n_theta2: int) -> np.ndarray:
         """Compute invariant torus using the KKG algorithm."""
@@ -655,13 +660,44 @@ class _InvariantTori:
         # Zero-mean version of the curve (same shape).
         curve_zm = curve - curve.mean(axis=0, keepdims=True)
 
-        # θ₂ step and centred finite difference derivative.
+        # theta2 step and centred finite difference derivative.
         dtheta = 2.0 * np.pi / N
         dv = (np.roll(curve, -1, axis=0) - np.roll(curve, 1, axis=0)) / (2.0 * dtheta)
 
         # Inner products for each node then average.
         inner = np.einsum("ij,ij->i", curve_zm, dv)  # shape (N,)
         return float(inner.mean())
+
+    def _arclength_constraint(self, curve: np.ndarray, *, delta_s: float) -> float:
+        r"""
+        Compute pseudo-arclength parametrisation constraint s(curve) = 0.
+
+        Implements Eq. (8): < curve - v_prev,  tangent > + delta s = 0.
+
+        This constraint is only meaningful *after* a previous solution and its
+        family tangent have been stored.  Until those are available the
+        function returns 0 so as not to interfere with the very first Newton
+        solve.
+
+        Parameters
+        ----------
+        curve : numpy.ndarray, shape (N, 6)
+            Current invariant curve candidate.
+        delta_s : float
+            Continuation step length delta s chosen by the user.
+
+        Returns
+        -------
+        float
+            Value of the arclength constraint.
+        """
+        if self._v_curve_prev is None or self._family_tangent is None:
+            # First solution - no arclength constraint yet.
+            return 0.0
+
+        diff = curve - self._v_curve_prev
+        inner = np.einsum("ij,ij->", diff, self._family_tangent) / curve.shape[0]
+        return inner - float(delta_s)
 
     def _gmos_residual(
         self,
@@ -670,10 +706,14 @@ class _InvariantTori:
         *,
         method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
         order: int = 6,
+        delta_s: float = 0.0,
     ) -> np.ndarray:
-        """Return residual vector concatenating Eq. (6) and phase constraint.
+        r"""Return full residual vector for GMOS Newton solve.
 
-        The output length is 6*N + 1.
+        Components (concatenated):
+            1. Invariance residual (Eq. 6) - length 6*N
+            2. Phase condition                     - length 1
+            3. Pseudo-arclength constraint (Eq. 8) - length 1
         """
         # 1. Equation (6) residual (size 6*N).
         phi_v = self._stroboscopic_map(v_curve, method=method, order=order)
@@ -683,4 +723,25 @@ class _InvariantTori:
         # 2. Phase constraint p2(v) (scalar).
         res_phase = self._phase_constraint(v_curve)
 
-        return np.concatenate((res_curve, np.array([res_phase], dtype=float)))
+        # 3. Arclength constraint (scalar)
+        res_arc = self._arclength_constraint(v_curve, delta_s=delta_s)
+
+        return np.concatenate((res_curve, np.array([res_phase, res_arc], dtype=float)))
+
+    def _update_family_tangent(self, new_curve: np.ndarray) -> None:
+        """Update stored previous curve and family tangent for continuation.
+
+        If a previous curve exists the tangent is set to the *normalised*
+        difference between the new and previous curves (component-wise).  The
+        new curve then becomes the stored previous curve.
+        """
+        if self._v_curve_prev is not None:
+            diff = new_curve - self._v_curve_prev
+            # Normalise to unit average magnitude
+            norm = np.linalg.norm(diff) / diff.size
+            if norm > 0:
+                self._family_tangent = diff / norm
+            else:
+                self._family_tangent = diff  # zero diff (unlikely)
+        # Update previous curve regardless
+        self._v_curve_prev = new_curve.copy()
