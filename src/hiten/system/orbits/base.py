@@ -410,6 +410,7 @@ class PeriodicOrbit(ABC):
         self._times = None
         self._stability_info = None
         self._period = None
+        self._monodromy = None
         logger.debug("Reset computed orbit properties due to state change")
 
     @abstractmethod
