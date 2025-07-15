@@ -1,13 +1,11 @@
 from dataclasses import dataclass
-from typing import Callable, Literal, NamedTuple, Optional, Tuple, Sequence
+from typing import Literal, NamedTuple, Optional, Sequence, Tuple
 
 import numpy as np
 
 from hiten.algorithms.corrector.newton import _NewtonCorrector
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_stm
-from hiten.algorithms.dynamics.utils.energy import (crtbp_energy,
-                                                    energy_to_jacobi)
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.orbits.base import PeriodicOrbit
@@ -45,7 +43,7 @@ class _Torus:
     grid : np.ndarray
         Real 6-state samples of shape (n_theta1, n_theta2, 6).
     omega : np.ndarray
-        Fundamental frequencies (ω₁, ω₂).
+        Fundamental frequencies (omega_1, omega_2).
     C0 : float
         Jacobi constant (fixed along the torus family).
     system : System
@@ -376,6 +374,19 @@ class _InvariantTori:
         """
         Compute quasi-periodic invariant torus using the GMOS algorithm.
         """
+        cfg = _ToriCorrectionConfig()
+
+        max_iter        = cfg.max_iter        if max_iter is None        else max_iter
+        tol             = cfg.tol             if tol is None             else tol
+        method          = cfg.method          if method is None          else method
+        order           = cfg.order           if order is None           else order
+
+        line_search     = cfg.line_search     if line_search is None     else line_search
+        max_delta       = cfg.max_delta       if max_delta is None       else max_delta
+        alpha_reduction = cfg.alpha_reduction if alpha_reduction is None else alpha_reduction
+        min_alpha       = cfg.min_alpha       if min_alpha is None       else min_alpha
+        armijo_c        = cfg.armijo_c        if armijo_c is None        else armijo_c
+
         # 1. Ensure the longitudinal data are ready at the desired resolution.
         self._prepare(n_theta1)
 
@@ -384,13 +395,63 @@ class _InvariantTori:
         self._v_curve_initial = v_curve  # store for diagnostics
         self._rotation_number = rho
 
-        logger.info("Initial surface-of-section curve built (n_theta2=%d, rho≈%.5f)", n_theta2, rho)
+        logger.info("Initial surface-of-section curve built (n_theta2=%d, rho=%.5f)", n_theta2, rho)
 
-        # --- Placeholder for upcoming Newton correction ---
-        # Store previous curve and tangent for continuation
-        self._update_family_tangent(v_curve)
+        # 3. Build residual function for Newton corrector (flattened unknowns).
+        n_unknowns = v_curve.size + 1  # +1 for rho
 
-        return v_curve
+        def _pack(curve: np.ndarray, rho_val: float) -> np.ndarray:
+            return np.concatenate((curve.reshape(-1), np.array([rho_val])))
+
+        def _unpack(z: np.ndarray) -> tuple[np.ndarray, float]:
+            curve_flat = z[:-1]
+            rho_val = float(z[-1])
+            return curve_flat.reshape(v_curve.shape), rho_val
+
+        def _residual(z: np.ndarray) -> np.ndarray:
+            curve_z, rho_z = _unpack(z)
+            return self._gmos_residual(
+                curve_z,
+                rho_z,
+                method=method,
+                order=order,
+                delta_s=0.0,
+            )
+
+        # Norm function: infinity norm of residual.
+        _norm_inf = lambda r: float(np.linalg.norm(r, ord=np.inf))
+
+        newton = _NewtonCorrector()
+        z0 = _pack(v_curve, rho)
+        try:
+            z_corr, _ = newton.correct(
+                x0=z0,
+                residual_fn=_residual,
+                jacobian_fn=None,  # finite differences
+                norm_fn=_norm_inf,
+                tol=tol,
+                max_attempts=max_iter,
+                line_search=line_search,
+                max_delta=max_delta,
+                alpha_reduction=alpha_reduction,
+                min_alpha=min_alpha,
+                armijo_c=armijo_c,
+            )
+        except RuntimeError as exc:
+            logger.warning("GMOS Newton corrector did not converge: %s", exc)
+            # fall back to initial curve
+            self._update_family_tangent(v_curve)
+            return v_curve
+
+        v_curve_corr, rho_corr = _unpack(z_corr)
+        logger.info("GMOS Newton correction converged (rho=%.5f)", rho_corr)
+
+        # Store corrected curve and rotation number
+        self._rotation_number = rho_corr
+        self._v_curve_corrected = v_curve_corr
+        self._update_family_tangent(v_curve_corr)
+
+        return v_curve_corr
     
     def _compute_kkg(self, *, epsilon: float, n_theta1: int, n_theta2: int) -> np.ndarray:
         """Compute invariant torus using the KKG algorithm."""
@@ -489,7 +550,8 @@ class _InvariantTori:
 
         # Helper for Jacobi constant computation
         def _jacobi(state: np.ndarray) -> float:
-            from hiten.algorithms.dynamics.utils.energy import crtbp_energy, energy_to_jacobi
+            from hiten.algorithms.dynamics.utils.energy import (
+                crtbp_energy, energy_to_jacobi)
             return energy_to_jacobi(crtbp_energy(state, self.system.mu))
 
         fig, axes = plt.subplots(2, 2, figsize=(12, 10))
