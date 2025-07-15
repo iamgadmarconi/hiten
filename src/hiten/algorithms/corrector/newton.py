@@ -71,7 +71,7 @@ class _NewtonCorrector(_Corrector):
             _COND_THRESH = 1e8
             if J.shape[0] == J.shape[1]:
                 if np.isnan(cond_J) or cond_J > _COND_THRESH:
-                    J_reg = J + np.eye(J.shape[0]) * 1e-8  # stronger ridge to prevent large steps
+                    J_reg = J + np.eye(J.shape[0]) * 1e-12  # stronger ridge to prevent large steps
                 else:
                     J_reg = J
 
@@ -83,7 +83,7 @@ class _NewtonCorrector(_Corrector):
 
             else:
                 logger.debug("Rectangular Jacobian (%dx%d); solving via Tikhonov least-squares", *J.shape)
-                lambda_reg = 1e-8 if (np.isnan(cond_J) or cond_J > _COND_THRESH) else 0.0
+                lambda_reg = 1e-12 if (np.isnan(cond_J) or cond_J > _COND_THRESH) else 0.0
                 JTJ = J.T @ J + lambda_reg * np.eye(J.shape[1])
                 JTr = J.T @ r
                 try:
@@ -104,15 +104,6 @@ class _NewtonCorrector(_Corrector):
                 min_alpha=min_alpha,
                 armijo_c=armijo_c,
             )
-
-            # Abort if line search failed to make progress (alpha=0 ⇒ x_new == x)
-            if alpha_used == 0.0:
-                logger.warning(
-                    "Line search stalled (alpha=0) - terminating Newton iteration early."
-                )
-                raise RuntimeError(
-                    "Armijo line search failed to find a productive step (alpha=0)."
-                )
 
             logger.debug(
                 "Newton iter %d/%d: |R|=%.2e → %.2e (alpha=%.2e)",
