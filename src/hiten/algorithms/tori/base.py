@@ -370,6 +370,7 @@ class _InvariantTori:
         min_alpha: float | None = None,
         armijo_c: float | None = None,
         line_search: bool | None = None,
+        delta_s: float = 0.0,
     ) -> np.ndarray:
         """
         Compute quasi-periodic invariant torus using the GMOS algorithm.
@@ -397,6 +398,73 @@ class _InvariantTori:
 
         logger.info("Initial surface-of-section curve built (n_theta2=%d, rho=%.5f)", n_theta2, rho)
 
+        # Auto-initialise family tangent and delta_s if not provided / first torus
+        if self._family_tangent is None:
+            # Use vector from periodic orbit to initial curve as first tangent
+            diff_init = v_curve - self.orbit.initial_state  # broadcast
+            norm_init = np.linalg.norm(diff_init) / diff_init.size
+            if norm_init == 0.0:
+                norm_init = 1.0  # safeguard
+            self._family_tangent = diff_init / norm_init
+            if delta_s == 0.0:
+                # choose small continuation step proportional to amplitude
+                delta_s = 0.05 * norm_init  # 5% of initial amplitude
+
+        # Ensure delta_s is at least tiny positive so arclength row active
+        if delta_s == 0.0:
+            delta_s = 1e-8
+
+        # Pre-compute phase indices for FFT rotation
+        N_pts = v_curve.shape[0]
+        self._ensure_k_grid(N_pts)
+
+        def _jacobian(z: np.ndarray) -> np.ndarray:
+            curve_z, rho_z = _unpack(z)
+            N = curve_z.shape[0]
+            # compute phi_states and Phi blocks
+            phi_states = np.empty_like(curve_z)
+            phi_blocks = np.empty((N, 6, 6))
+            for idx in range(N):
+                phi_states[idx], phi_blocks[idx] = self._phi_and_stm(curve_z[idx], method=method, order=order)
+            # Rotation matrix W columns via FFT
+            # Build W by rotating unit vectors
+            eye_N = np.eye(N)
+            W = np.empty((N, N))
+            for j in range(N):
+                col = self._fft_rotate(eye_N[:, j][:, None], rho_z).flatten()
+                W[:, j] = col
+            # Build dense Jvv
+            dim = 6 * N
+            J = np.zeros((dim + 2, dim + 1))  # +2 rows, +1 col for rho
+            for j in range(N):
+                Phi_j = phi_blocks[j]
+                for i in range(N):
+                    block = W[i, j] * Phi_j
+                    J[6 * i : 6 * (i + 1), 6 * j : 6 * (j + 1)] = block
+            # subtract identity
+            for i in range(N):
+                J[6 * i : 6 * (i + 1), 6 * i : 6 * (i + 1)] -= np.eye(6)
+            # column wrt rho
+            drot = self._fft_rotate_drho(phi_states, rho_z)
+            J[:dim, -1] = drot.reshape(-1)
+            # Phase row finite diff (reuse existing phase constraint gradient via FD)
+            eps_fd = 1e-6
+            res0 = self._phase_constraint(curve_z)
+            grad_phase = np.zeros(dim)
+            for j in range(dim):
+                curve_pert = curve_z.reshape(-1).copy()
+                curve_pert[j] += eps_fd
+                res1 = self._phase_constraint(curve_pert.reshape(curve_z.shape))
+                grad_phase[j] = (res1 - res0) / eps_fd
+            J[dim, :dim] = grad_phase
+            # Arclength row
+            if self._family_tangent is not None:
+                J[dim + 1, :dim] = (self._family_tangent.reshape(-1) / N)
+            else:
+                J[dim + 1, :dim] = 0.0
+            # last column zeros for the two scalar rows (phase, arclength)
+            return J
+
         # 3. Build residual function for Newton corrector (flattened unknowns).
         n_unknowns = v_curve.size + 1  # +1 for rho
 
@@ -415,11 +483,17 @@ class _InvariantTori:
                 rho_z,
                 method=method,
                 order=order,
-                delta_s=0.0,
+                delta_s=delta_s,
             )
 
         # Norm function: infinity norm of residual.
         _norm_inf = lambda r: float(np.linalg.norm(r, ord=np.inf))
+
+        # Callback for real-time logging of each Newton iteration
+        def _newton_callback(iter_idx: int, z_vec: np.ndarray, r_norm: float) -> None:
+            """Log iteration diagnostics (residual norm and current rho)."""
+            _, rho_val_cb = _unpack(z_vec)
+            logger.info("GMOS Newton iter %d: |R|=%.2e, rho=%.5f", iter_idx, r_norm, rho_val_cb)
 
         newton = _NewtonCorrector()
         z0 = _pack(v_curve, rho)
@@ -427,7 +501,7 @@ class _InvariantTori:
             z_corr, _ = newton.correct(
                 x0=z0,
                 residual_fn=_residual,
-                jacobian_fn=None,  # finite differences
+                jacobian_fn=_jacobian,
                 norm_fn=_norm_inf,
                 tol=tol,
                 max_attempts=max_iter,
@@ -436,12 +510,13 @@ class _InvariantTori:
                 alpha_reduction=alpha_reduction,
                 min_alpha=min_alpha,
                 armijo_c=armijo_c,
+                callback=_newton_callback,
             )
         except RuntimeError as exc:
             logger.warning("GMOS Newton corrector did not converge: %s", exc)
-            # fall back to initial curve
+            # fall back to initial curve (reshape to 3-D grid with single longitudinal slice)
             self._update_family_tangent(v_curve)
-            return v_curve
+            return v_curve[None, :, :]
 
         v_curve_corr, rho_corr = _unpack(z_corr)
         logger.info("GMOS Newton correction converged (rho=%.5f)", rho_corr)
@@ -451,7 +526,8 @@ class _InvariantTori:
         self._v_curve_corrected = v_curve_corr
         self._update_family_tangent(v_curve_corr)
 
-        return v_curve_corr
+        # Return as a "grid" with a single longitudinal slice to satisfy downstream expectations.
+        return v_curve_corr[None, :, :]
     
     def _compute_kkg(self, *, epsilon: float, n_theta1: int, n_theta2: int) -> np.ndarray:
         """Compute invariant torus using the KKG algorithm."""
@@ -633,7 +709,7 @@ class _InvariantTori:
                 "No GMOS curves available. Run `compute(scheme='gmos', ...)` first."
             )
         
-        self.plot_diagnostics(
+        self._plot_diagnostics(
             self._v_curve_initial, 
             self._v_curve_corrected, 
             save_path=save_path
@@ -678,27 +754,38 @@ class _InvariantTori:
             out[i] = sol.states[-1]
         return out
 
-    def _rotate_curve(self, curve: np.ndarray, rho: float) -> np.ndarray:
-        """Rotate the discrete curve by an angle *rho* in theta2 using cyclic shift.
+    def _ensure_k_grid(self, N: int) -> None:
+        """Ensure cached wave-number grid for FFT of length *N*."""
+        if getattr(self, "_k_grid", None) is None or len(self._k_grid) != N:
+            # np.fft.fftfreq returns values in cycles per N, multiply by 2 pi.
+            self._k_grid = 2.0 * np.pi * np.fft.fftfreq(N, d=1.0 / N)
 
-        Parameters
-        ----------
-        curve : numpy.ndarray, shape (N, 6)
-            Discretised invariant curve.
-        rho : float
-            Rotation amount (radians). Positive rho corresponds to a forward
-            shift in theta2.  The function returns R_{-rho}[curve] as required by
-            Eq. (6), i.e. it shifts *backwards* by `rho`.
-
-        Returns
-        -------
-        numpy.ndarray
-            Rotated curve with the same shape as *curve*.
-        """
+    def _fft_rotate(self, curve: np.ndarray, rho: float) -> np.ndarray:
+        """Rotate curve along theta2 by *rho* radians using FFT (continuous shift)."""
+        # curve shape (N,6). FFT along theta2 dimension (axis=0)
         N = curve.shape[0]
-        # Integer shift that best approximates rotation by rho on the grid.
-        shift = int(np.round(-rho * N / (2.0 * np.pi))) % N
-        return np.roll(curve, shift=shift, axis=0)
+        self._ensure_k_grid(N)
+        phase = np.exp(-1j * self._k_grid * rho)  # shape (N,)
+        # FFT each state component separately via axis=0
+        curve_hat = np.fft.fft(curve, axis=0)
+        rotated_hat = phase[:, None] * curve_hat
+        rotated = np.fft.ifft(rotated_hat, axis=0).real
+        return rotated
+
+    def _fft_rotate_drho(self, curve: np.ndarray, rho: float) -> np.ndarray:
+        """Derivative w.r.t rho of FFT-based rotation."""
+        N = curve.shape[0]
+        self._ensure_k_grid(N)
+        phase = np.exp(-1j * self._k_grid * rho)
+        dphase = -1j * self._k_grid * phase
+        curve_hat = np.fft.fft(curve, axis=0)
+        drot_hat = dphase[:, None] * curve_hat
+        drot = np.fft.ifft(drot_hat, axis=0).real
+        return drot
+
+    def _rotate_curve(self, curve: np.ndarray, rho: float) -> np.ndarray:
+        """Rotate curve by *rho* using FFT-based interpolation (continuous)."""
+        return self._fft_rotate(curve, rho)
 
     def _phase_constraint(self, curve: np.ndarray) -> float:
         """Compute the discretised phase condition p2(curve) = 0.
@@ -807,3 +894,27 @@ class _InvariantTori:
                 self._family_tangent = diff  # zero diff (unlikely)
         # Update previous curve regardless
         self._v_curve_prev = new_curve.copy()
+
+    def _phi_and_stm(self, state: np.ndarray, *, method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy", order: int = 6) -> tuple[np.ndarray, np.ndarray]:
+        """Return phi_T(state) and STM Phi for a single state."""
+        _, _, PHI, _ = _compute_stm(
+            self.libration_point._var_eq_system,
+            state,
+            self.period,
+            steps=2,
+            forward=1,
+            method=method,
+            order=order,
+        )
+        # propagate state too
+        sol = _propagate_dynsys(
+            dynsys=self.dynsys,
+            state0=state,
+            t0=0.0,
+            tf=self.period,
+            forward=1,
+            steps=2,
+            method=method,
+            order=order,
+        )
+        return sol.states[-1], PHI
