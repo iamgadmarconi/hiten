@@ -54,14 +54,16 @@ class _NewtonCorrector(_Corrector):
             if jacobian_fn is not None:
                 J = jacobian_fn(x)
             else:
-                # Finite-difference approximation (forward diff)
+                # Finite-difference approximation (central diff, O(h^2))
                 n = x.size
                 J = np.zeros((r.size, n))
                 for i in range(n):
-                    x_pert = x.copy()
+                    x_pert_p = x.copy()
+                    x_pert_m = x.copy()
                     h_i = fd_step * max(1.0, abs(x[i]))
-                    x_pert[i] += h_i
-                    J[:, i] = (residual_fn(x_pert) - r) / h_i
+                    x_pert_p[i] += h_i
+                    x_pert_m[i] -= h_i
+                    J[:, i] = (residual_fn(x_pert_p) - residual_fn(x_pert_m)) / (2.0 * h_i)
 
             try:
                 cond_J = np.linalg.cond(J)
@@ -69,16 +71,20 @@ class _NewtonCorrector(_Corrector):
                 cond_J = np.inf
 
             _COND_THRESH = 1e8
+            lambda_reg = 0.0  # track actual regularisation strength used
             if J.shape[0] == J.shape[1]:
                 if np.isnan(cond_J) or cond_J > _COND_THRESH:
-                    J_reg = J + np.eye(J.shape[0]) * 1e-12  # stronger ridge to prevent large steps
+                    lambda_reg = 1e-12
+                    J_reg = J + np.eye(J.shape[0]) * lambda_reg
                 else:
                     J_reg = J
+
+                logger.debug("Jacobian cond=%.2e, lambda_reg=%.1e", cond_J, lambda_reg)
 
                 try:
                     delta = np.linalg.solve(J_reg, -r)
                 except np.linalg.LinAlgError:
-                    logger.warning("Jacobian singular; switching to least-squares update")
+                    logger.warning("Jacobian singular; switching to SVD least-squares update")
                     delta = np.linalg.lstsq(J_reg, -r, rcond=None)[0]
 
             else:
@@ -86,10 +92,11 @@ class _NewtonCorrector(_Corrector):
                 lambda_reg = 1e-12 if (np.isnan(cond_J) or cond_J > _COND_THRESH) else 0.0
                 JTJ = J.T @ J + lambda_reg * np.eye(J.shape[1])
                 JTr = J.T @ r
+                logger.debug("Jacobian cond=%.2e, lambda_reg=%.1e", cond_J, lambda_reg)
                 try:
                     delta = np.linalg.solve(JTJ, -JTr)
                 except np.linalg.LinAlgError:
-                    logger.warning("Normal equations singular; falling back to lstsq")
+                    logger.warning("Normal equations singular; falling back to SVD lstsq")
                     delta = np.linalg.lstsq(J, -r, rcond=None)[0]
 
             # Armijo + step capping
@@ -106,7 +113,7 @@ class _NewtonCorrector(_Corrector):
             )
 
             logger.debug(
-                "Newton iter %d/%d: |R|=%.2e → %.2e (alpha=%.2e)",
+                "Newton iter %d/%d: |R|=%.2e -> %.2e (alpha=%.2e)",
                 k + 1,
                 max_attempts,
                 r_norm,

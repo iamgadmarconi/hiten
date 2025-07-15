@@ -31,7 +31,6 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
-from hiten.algorithms.corrector.line import armijo_line_search
 from hiten.algorithms.corrector.newton import _OrbitCorrector
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import (_compute_monodromy, _compute_stm,
@@ -91,7 +90,7 @@ class _CorrectionConfig(NamedTuple):
 
     method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy"
     order: int = 8
-    steps: int = 2000
+    steps: int = 500
 
 
 class _ContinuationConfig(NamedTuple):
