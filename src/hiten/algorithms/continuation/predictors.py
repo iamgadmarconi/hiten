@@ -5,8 +5,6 @@ hiten.algorithms.continuation.predictors
 Concrete predictor classes that plug into
 :pyclass:`hiten.algorithms.continuation.base._PeriodicOrbitContinuationEngine`.
 """
-from __future__ import annotations
-
 from typing import Sequence
 
 import numpy as np
@@ -145,61 +143,4 @@ class _EnergyLevel(_PeriodicOrbitContinuationEngine):
         )
 
     def _predict(self, last_orbit: PeriodicOrbit, step: np.ndarray) -> np.ndarray:
-        dE = float(step[0])
-        new_state = np.copy(last_orbit.initial_state)
-
-        vel_idx_set = {S.VX.value, S.VY.value, S.VZ.value}
-        try:
-            ctrl_idx = set(last_orbit._correction_config.control_indices)
-            free_v_idx = sorted(vel_idx_set & ctrl_idx)
-        except Exception:
-            free_v_idx = []
-
-        if not free_v_idx:
-            raise ValueError("No free velocity components found. This is a bug.")
-
-        v_free = new_state[free_v_idx]
-        v_sq_free = float(np.dot(v_free, v_free))
-
-        if v_sq_free < 1e-12:
-            v_sq_free = 1e-12
-
-        alpha = dE / v_sq_free
-
-        max_alpha = 0.5
-        if abs(alpha) > max_alpha:
-            alpha = np.sign(alpha) * max_alpha
-
-        scale = 1.0 + alpha
-        scale = self._clamp_scale(scale, min_scale=0.8, max_scale=1.2)
-
-        for idx in free_v_idx:
-            new_state[idx] *= scale
-
-        current_E = last_orbit.energy
-        scaled_E = crtbp_energy(new_state, last_orbit.mu)
-        residual = dE - (scaled_E - current_E)
-
-        if abs(residual) > 0.1 * abs(dE):
-            grad = np.zeros(6)
-            eps = 1e-5
-            
-            for i in range(6):
-                up = np.copy(new_state)
-                dn = np.copy(new_state)
-                up[i] += eps
-                dn[i] -= eps
-                grad[i] = (crtbp_energy(up, last_orbit.mu) - crtbp_energy(dn, last_orbit.mu)) / (2 * eps)
-
-            grad_norm_sq = np.dot(grad, grad)
-            
-            if grad_norm_sq > 1e-20:
-                correction = (residual / grad_norm_sq) * grad
-                
-                max_correction = 0.01
-                correction_norm = np.linalg.norm(correction)
-                if correction_norm > max_correction:
-                    correction *= (max_correction / correction_norm)
-                
-                new_state += correction
-        return new_state
+        raise NotImplementedError("Energy continuation is not implemented yet.")

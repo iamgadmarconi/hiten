@@ -275,7 +275,6 @@ class _InvariantTori:
         tol: float = 1e-12,
         method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
         order: int = 8,
-        # Newton–GMOS stabilisation parameters (cf. PeriodicOrbit.correct)
         max_delta: float = 1e-2,
         alpha_reduction: float = 0.5,
         min_alpha: float = 1e-4,
@@ -283,44 +282,13 @@ class _InvariantTori:
     ) -> np.ndarray:
         """
         Compute quasi-periodic invariant torus using GMOS algorithm.
-        
-        This implements the algorithm from Gómez-Mondelo (2001) and Olikara-Scheeres (2012),
-        computing invariant curves of a stroboscopic map.
-        
-        Parameters
-        ----------
-        epsilon : float, default 1e-4
-            Initial amplitude of the torus
-        n_theta1 : int, default 256
-            Number of points along the periodic orbit (longitudinal)
-        n_theta2 : int, default 64
-            Number of points in the transverse direction (latitudinal)
-        max_iter : int, default 50
-            Maximum Newton iterations
-        tol : float, default 1e-12
-            Convergence tolerance
-        method : str, default "scipy"
-            Integration method
-        order : int, default 8
-            Integration order
-            
-        Returns
-        -------
-        np.ndarray
-            The computed torus grid of shape (n_theta1, n_theta2, 6)
         """
         logger.info("Computing invariant torus using GMOS algorithm")
-        # High-level summary of the run parameters
         logger.info(
             "GMOS parameters: epsilon=%g, n_theta1=%d, n_theta2=%d, max_iter=%d, tol=%.1e",
-            epsilon,
-            n_theta1,
-            n_theta2,
-            max_iter,
-            tol,
+            epsilon, n_theta1, n_theta2, max_iter, tol
         )
         
-        # Get monodromy matrix and eigenvalues/vectors
         # Find complex eigenvalue with unit modulus
         tol_mag = 1e-6
         cand_idx = [
@@ -332,39 +300,42 @@ class _InvariantTori:
             
         idx = max(cand_idx, key=lambda i: np.imag(self._evals[i]))
         lam = self._evals[idx]
-        w = self._evecs[:, idx]
+        evec = self._evecs[:, idx]
         
-        # Rotation number \rho = arg(\lambda)
+        # Rotation number ρ = arg(λ)
         rho = np.angle(lam)
         
-        # Stroboscopic time T (period of underlying orbit)
+        # Stroboscopic time T
         T = self.orbit.period
         
-        # Frequencies
-        omega0 = 2.0 * np.pi / T  # Longitudinal frequency
-        omega1 = rho / T          # Latitudinal frequency
+        # Step 1: Choose a fixed phase on the periodic orbit
+        # This is our base point on the Poincaré section
+        x_base = self.orbit.initial_state
         
-        # Initialize invariant curve using equation (4) from paper
-        theta1 = np.linspace(0, 2*np.pi, n_theta2, endpoint=False)
+        # Step 2: Create initial guess for invariant curve
+        # The curve is parametrized by theta2 in [0, 2pi)
+        theta2_vals = np.linspace(0, 2*np.pi, n_theta2, endpoint=False)
         
-        # Get initial states along periodic orbit
-        x0 = self.orbit.initial_state
-        
-        # Create initial guess for invariant curve
-        X0 = np.zeros((n_theta2, 6))
+        # Initial invariant curve (perturbed from base point)
+        v_curve = np.zeros((n_theta2, 6))
         for j in range(n_theta2):
-            # Linear approximation from monodromy eigenvector
-            perturbation = epsilon * (np.cos(theta1[j]) * np.real(w) - 
-                                     np.sin(theta1[j]) * np.imag(w))
-            X0[j] = x0 + perturbation
-
-        def _error_2d(curve_2d: np.ndarray) -> np.ndarray:
-            """Invariance residual for a (n_theta2,6) curve."""
-            X1 = np.zeros_like(curve_2d)
+            # Perturbation in the direction of the eigenvector
+            perturbation = epsilon * (
+                np.cos(theta2_vals[j]) * np.real(evec) - 
+                np.sin(theta2_vals[j]) * np.imag(evec)
+            )
+            v_curve[j] = x_base + perturbation
+        
+        # Step 3: Define the invariance error function
+        def invariance_error(v_flat: np.ndarray) -> np.ndarray:
+            v = v_flat.reshape(n_theta2, 6)
+            
+            # Apply stroboscopic map φT to each point
+            v_mapped = np.zeros_like(v)
             for j in range(n_theta2):
                 sol = _propagate_dynsys(
                     dynsys=self.dynsys,
-                    state0=curve_2d[j],
+                    state0=v[j],
                     t0=0.0,
                     tf=T,
                     forward=1,
@@ -372,20 +343,51 @@ class _InvariantTori:
                     method=method,
                     order=order,
                 )
-                X1[j] = sol.states[-1]
-
-            X1_dft = np.fft.fft(X1, axis=0)
-            k_vals = np.fft.fftfreq(n_theta2, 1 / n_theta2)
-            rotation = np.exp(-1j * rho * k_vals)
-            X1_rotated = np.real(np.fft.ifft(X1_dft * rotation[:, None], axis=0))
-            return (X1_rotated - curve_2d).flatten()
-
+                v_mapped[j] = sol.states[-1]
+            
+            # Apply rotation operator R-rho using DFT
+            # Forward DFT
+            v_dft = np.fft.fft(v_mapped, axis=0)
+            
+            # Rotation in Fourier space
+            k_vals = np.arange(n_theta2)
+            # Handle negative frequencies correctly
+            k_vals[n_theta2//2:] -= n_theta2
+            rotation = np.exp(-1j * k_vals * rho)
+            
+            # Apply rotation and inverse DFT
+            v_rotated = np.fft.ifft(v_dft * rotation[:, None], axis=0).real
+            
+            # Invariance error
+            error = v_rotated - v
+            
+            # Add phase condition
+            # This prevents arbitrary rotations of the solution
+            dv_dtheta2 = np.zeros_like(v)
+            for j in range(n_theta2):
+                j_next = (j + 1) % n_theta2
+                j_prev = (j - 1) % n_theta2
+                dv_dtheta2[j] = (v[j_next] - v[j_prev]) / (2 * 2*np.pi/n_theta2)
+            
+            phase_error = np.sum(v * dv_dtheta2) / n_theta2
+            
+            # Flatten and append phase condition
+            return np.concatenate([error.flatten(), [phase_error * n_theta2]])
+        
+        # Step 4: Solve using Newton's method
+        # Add one extra equation for phase condition
+        v_flat_extended = np.concatenate([v_curve.flatten(), [0.0]])
+        
+        def residual_fn(x):
+            # Extract curve and ignore the dummy variable
+            return invariance_error(x[:-1])
+        
         newton = _NewtonCorrector()
-        flat_corr, _ = newton.correct(
-            x0=X0.flatten(),
-            residual_fn=lambda v: _error_2d(v.reshape(n_theta2, 6)),
-            jacobian_fn=None,  # finite-difference is fine here
-            norm_fn=lambda r: float(np.linalg.norm(r) / n_theta2),
+        v_corr_flat, converged = newton.correct(
+            x0=v_flat_extended,
+            residual_fn=residual_fn,
+            jacobian_fn=None,
+            norm_fn=lambda r: float(np.linalg.norm(r) / np.sqrt(n_theta2 * 6 + 1)),
             tol=tol,
             max_attempts=max_iter,
             max_delta=max_delta,
@@ -393,34 +395,40 @@ class _InvariantTori:
             min_alpha=min_alpha,
             armijo_c=armijo_c,
         )
-
-        X0 = flat_corr.reshape(n_theta2, 6)
         
-        # Construct full 2D torus from invariant curve
-        logger.info("Constructing 2D torus grid from invariant curve")
-        # The invariant curve gives us one slice at \theta_0 = 0
-        # We generate the full torus by propagating along \theta_0
+        if not converged:
+            logger.warning("GMOS Newton iteration did not converge")
+        
+        # Extract corrected invariant curve
+        v_curve_corr = v_corr_flat[:-1].reshape(n_theta2, 6)
+        
+        # Step 5: Construct full 2D torus from the invariant curve
+        logger.info("Constructing 2D torus from invariant curve")
         
         u_grid = np.zeros((n_theta1, n_theta2, 6))
-        dt = T / n_theta1
         
+        # For each point on the invariant curve, integrate for different times
+        # to trace out the torus
         for i in range(n_theta1):
-            t = i * dt
+            t_i = i * T / n_theta1  # Time along periodic orbit
+            
             for j in range(n_theta2):
-                sol = _propagate_dynsys(
-                    dynsys=self.dynsys,
-                    state0=X0[j],
-                    t0=0.0,
-                    tf=t,
-                    forward=1,
-                    steps=2,
-                    method=method,
-                    order=order,
-                )
-                # Account for rotation in \theta_1
-                theta1_shift = omega1 * t
-                j_shifted = int(np.round(j + theta1_shift * n_theta2 / (2 * np.pi))) % n_theta2
-                u_grid[i, j_shifted] = sol.states[-1]
+                if i == 0:
+                    # At t=0, we have the invariant curve
+                    u_grid[i, j] = v_curve_corr[j]
+                else:
+                    # Propagate from the invariant curve
+                    sol = _propagate_dynsys(
+                        dynsys=self.dynsys,
+                        state0=v_curve_corr[j],
+                        t0=0.0,
+                        tf=t_i,
+                        forward=1,
+                        steps=2,
+                        method=method,
+                        order=order,
+                    )
+                    u_grid[i, j] = sol.states[-1]
         
         return u_grid
     
