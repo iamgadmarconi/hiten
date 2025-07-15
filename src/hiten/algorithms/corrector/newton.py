@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Tuple, Callable
 
 import numpy as np
 
@@ -30,10 +30,12 @@ class _NewtonCorrector(_Corrector):
         norm_fn: NormFn | None = None,
         tol: float = 1e-10,
         max_attempts: int = 25,
-        max_delta: float | None = 1e-2,
-        alpha_reduction: float = 0.5,
-        min_alpha: float = 1e-4,
-        armijo_c: float = 0.1,
+        line_search: bool = False,
+        max_delta: float | None,
+        alpha_reduction: float | None,
+        min_alpha: float | None,
+        armijo_c: float | None,
+        callback: "Callable[[int, np.ndarray, float], None] | None" = None,
         fd_step: float = 1e-8,
     ) -> Tuple[np.ndarray, dict[str, Any]]:
         if norm_fn is None:
@@ -42,9 +44,17 @@ class _NewtonCorrector(_Corrector):
         x = x0.copy()
         info: dict[str, Any] = {}
 
-        for k in range(max_attempts + 1):
+        for k in range(max_attempts):
             r = residual_fn(x)
             r_norm = norm_fn(r)
+
+            # Optional user-provided callback for real-time diagnostics
+            if callback is not None:
+                try:
+                    callback(k, x, r_norm)
+                except Exception as exc:
+                    logger.warning("Newton callback raised an exception: %s", exc)
+
             if r_norm < tol:
                 logger.info("Newton converged after %d iterations (|R|=%.2e)", k, r_norm)
                 info.update(iterations=k, residual_norm=r_norm)
@@ -54,41 +64,83 @@ class _NewtonCorrector(_Corrector):
             if jacobian_fn is not None:
                 J = jacobian_fn(x)
             else:
-                # Finite-difference approximation (forward diff)
+                # Finite-difference approximation (central diff, O(h^2))
                 n = x.size
                 J = np.zeros((r.size, n))
                 for i in range(n):
-                    x_pert = x.copy()
+                    x_pert_p = x.copy()
+                    x_pert_m = x.copy()
                     h_i = fd_step * max(1.0, abs(x[i]))
-                    x_pert[i] += h_i
-                    J[:, i] = (residual_fn(x_pert) - r) / h_i
+                    x_pert_p[i] += h_i
+                    x_pert_m[i] -= h_i
+                    J[:, i] = (residual_fn(x_pert_p) - residual_fn(x_pert_m)) / (2.0 * h_i)
 
-            # Regularise singular / ill-conditioned Jacobian
             try:
                 cond_J = np.linalg.cond(J)
-                if np.isnan(cond_J) or cond_J > 1e12:
-                    logger.debug("Jacobian ill-conditioned (cond=%.2e); adding regularisation", cond_J)
-                    J += np.eye(J.shape[0]) * 1e-8
-                delta = np.linalg.solve(J, -r)
             except np.linalg.LinAlgError:
-                logger.warning("Jacobian singular; switching to least-squares update")
-                delta = np.linalg.lstsq(J, -r, rcond=None)[0]
+                cond_J = np.inf
 
-            # Armijo + step capping
-            x_new, r_norm_new, alpha_used = armijo_line_search(
-                x0=x,
-                delta=delta,
-                residual_fn=residual_fn,
-                current_norm=r_norm,
-                norm_fn=norm_fn,
-                max_delta=max_delta,
-                alpha_reduction=alpha_reduction,
-                min_alpha=min_alpha,
-                armijo_c=armijo_c,
-            )
+            _COND_THRESH = 1e8
+            lambda_reg = 0.0  # track actual regularisation strength used
+            if J.shape[0] == J.shape[1]:
+                if np.isnan(cond_J) or cond_J > _COND_THRESH:
+                    lambda_reg = 1e-12
+                    J_reg = J + np.eye(J.shape[0]) * lambda_reg
+                else:
+                    J_reg = J
+
+                logger.debug("Jacobian cond=%.2e, lambda_reg=%.1e", cond_J, lambda_reg)
+
+                try:
+                    delta = np.linalg.solve(J_reg, -r)
+                except np.linalg.LinAlgError:
+                    logger.warning("Jacobian singular; switching to SVD least-squares update")
+                    delta = np.linalg.lstsq(J_reg, -r, rcond=None)[0]
+
+            else:
+                logger.debug("Rectangular Jacobian (%dx%d); solving via Tikhonov least-squares", *J.shape)
+                lambda_reg = 1e-12 if (np.isnan(cond_J) or cond_J > _COND_THRESH) else 0.0
+                JTJ = J.T @ J + lambda_reg * np.eye(J.shape[1])
+                JTr = J.T @ r
+                logger.debug("Jacobian cond=%.2e, lambda_reg=%.1e", cond_J, lambda_reg)
+                try:
+                    delta = np.linalg.solve(JTJ, -JTr)
+                except np.linalg.LinAlgError:
+                    logger.warning("Normal equations singular; falling back to SVD lstsq")
+                    delta = np.linalg.lstsq(J, -r, rcond=None)[0]
+
+            # Apply step update: either with Armijo backtracking or directly (toggle)
+            if line_search:
+                # Armijo + step capping
+                x_new, r_norm_new, alpha_used = armijo_line_search(
+                    x0=x,
+                    delta=delta,
+                    residual_fn=residual_fn,
+                    current_norm=r_norm,
+                    norm_fn=norm_fn,
+                    max_delta=max_delta,
+                    alpha_reduction=alpha_reduction,
+                    min_alpha=min_alpha,
+                    armijo_c=armijo_c,
+                )
+            else:
+                # Optional step capping without line search
+                if (max_delta is not None) and (not np.isinf(max_delta)):
+                    delta_norm = np.linalg.norm(delta, ord=np.inf)
+                    if delta_norm > max_delta:
+                        delta = delta * (max_delta / delta_norm)
+                        logger.info(
+                            "Capping Newton step (|delta|=%.2e > %.2e)",
+                            delta_norm,
+                            max_delta,
+                        )
+
+                x_new = x + delta
+                r_norm_new = norm_fn(residual_fn(x_new))
+                alpha_used = 1.0
 
             logger.debug(
-                "Newton iter %d/%d: |R|=%.2e → %.2e (alpha=%.2e)",
+                "Newton iter %d/%d: |R|=%.2e -> %.2e (alpha=%.2e)",
                 k + 1,
                 max_attempts,
                 r_norm,
@@ -97,7 +149,25 @@ class _NewtonCorrector(_Corrector):
             )
             x = x_new
 
-        raise RuntimeError(f"Newton did not converge after {max_attempts} iterations (|R|={r_norm:.2e}).")
+        # One final convergence check after exhausting the loop
+        r_final = residual_fn(x)
+        r_final_norm = norm_fn(r_final)
+
+        # Final callback after exiting the loop (non-converged case)
+        if callback is not None:
+            try:
+                callback(max_attempts, x, r_final_norm)
+            except Exception as exc:
+                logger.warning("Newton callback raised an exception during final call: %s", exc)
+
+        if r_final_norm < tol:
+            logger.info("Newton converged after %d iterations (|R|=%.2e)", max_attempts, r_final_norm)
+            info.update(iterations=max_attempts, residual_norm=r_final_norm)
+            return x, info
+
+        raise RuntimeError(
+            f"Newton did not converge after {max_attempts} iterations (|R|={r_final_norm:.2e})."
+        )
 
 
 class _OrbitCorrector(_Corrector):
@@ -111,14 +181,15 @@ class _OrbitCorrector(_Corrector):
         self,
         orbit: "PeriodicOrbit",
         *,
-        tol: float = 1e-10,
-        max_attempts: int = 25,
-        forward: int = 1,
-        max_delta: float | None = None,
-        alpha_reduction: float = 0.5,
-        min_alpha: float = 1e-4,
-        armijo_c: float = 0.02,
-        finite_difference: bool = False,
+        tol: float,
+        max_attempts: int,
+        forward: int,
+        max_delta: float | None,
+        alpha_reduction: float,
+        min_alpha: float,
+        line_search: bool,
+        armijo_c: Optional[float],
+        finite_difference: bool,
     ) -> Tuple[np.ndarray, float]:
         """Refine *orbit* in-place using the underlying :class:`_NewtonCorrector`.
 
@@ -198,8 +269,9 @@ class _OrbitCorrector(_Corrector):
             norm_fn=_norm_inf,
             tol=tol,
             max_attempts=max_attempts,
-            max_delta=max_delta,
+            line_search=line_search,
             alpha_reduction=alpha_reduction,
+            max_delta=max_delta,
             min_alpha=min_alpha,
             armijo_c=armijo_c,
         )

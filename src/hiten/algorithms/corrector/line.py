@@ -96,9 +96,17 @@ def armijo_line_search(
         alpha *= alpha_reduction
 
     # Fallback: return the best point found (may be the original)
-    logger.warning(
-        "Line search exhausted; using best \u03b1 found (\u03b1=%.3e, |r|=%.3e)",
-        best_alpha,
-        best_norm,
-    )
-    return best_x, best_norm, best_alpha
+    if best_alpha > 0:
+        logger.warning(
+            "Line search exhausted; using best found step (\u03b1=%.3e, |r|=%.3e)",
+            best_alpha,
+            best_norm,
+        )
+        return best_x, best_norm, best_alpha
+    else:
+        logger.warning(
+            "Armijo line search failed to find any step that reduces the residual "
+            "for min_alpha=%.2e",
+            min_alpha,
+        )
+        raise RuntimeError("Armijo line search failed to find a productive step.")

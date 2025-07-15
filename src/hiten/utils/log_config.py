@@ -48,7 +48,7 @@ def setup_logging(level=logging.INFO, format_string='%(asctime)s - %(name)s - %(
         
         # Generate timestamped filename
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_filename = f"run_{timestamp}.log"
+        log_filename = f"run_{timestamp}.txt"
         log_filepath = os.path.join(log_dir, log_filename)
         
         # Create file handler

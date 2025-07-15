@@ -90,7 +90,19 @@ class _CorrectionConfig(NamedTuple):
 
     method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy"
     order: int = 8
-    steps: int = 2000
+    steps: int = 500
+
+    max_attempts: int = 25
+    tol: float = 1e-10
+    forward: int = 1
+
+    line_search: bool = True
+    max_delta: float = 1e-2
+    alpha_reduction: float = 0.5
+    min_alpha: float = 1e-4
+    armijo_c: Optional[float] = 0.02
+
+    finite_difference: bool = False
 
 
 class _ContinuationConfig(NamedTuple):
@@ -398,6 +410,7 @@ class PeriodicOrbit(ABC):
         self._times = None
         self._stability_info = None
         self._period = None
+        self._monodromy = None
         logger.debug("Reset computed orbit properties due to state change")
 
     @abstractmethod
@@ -407,14 +420,15 @@ class PeriodicOrbit(ABC):
     def correct(
             self,
             *,
-            tol: float = 1e-10,
-            max_attempts: int = 25,
-            forward: int = 1,
+            tol: float | None = None,
+            max_attempts: int | None = None,
+            forward: int | None = None,
+            line_search: bool | None = None,
             max_delta: float | None = None,
-            alpha_reduction: float = 0.5,
-            min_alpha: float = 1e-4,
-            armijo_c: float = 0.02,
-            finite_difference: bool = False,
+            alpha_reduction: float | None = None,
+            min_alpha: float | None = None,
+            armijo_c: Optional[float] | None = None,
+            finite_difference: bool | None = None,
         ) -> tuple[np.ndarray, float]:
         """Differential correction wrapper.
 
@@ -422,16 +436,30 @@ class PeriodicOrbit(ABC):
         :class:`hiten.algorithms.corrector.newton._OrbitCorrector` which
         implements a robust Newton-Armijo scheme.
         """
+        # Use per-family correction configuration as fallback defaults
+        cfg = self._correction_config
+
+        _tol = tol if tol is not None else cfg.tol
+        _max_attempts = max_attempts if max_attempts is not None else cfg.max_attempts
+        _forward = forward if forward is not None else cfg.forward
+        _line_search = line_search if line_search is not None else cfg.line_search
+        _max_delta = max_delta if max_delta is not None else cfg.max_delta
+        _alpha_reduction = alpha_reduction if alpha_reduction is not None else cfg.alpha_reduction
+        _min_alpha = min_alpha if min_alpha is not None else cfg.min_alpha
+        _armijo_c = armijo_c if armijo_c is not None else cfg.armijo_c
+        _finite_difference = finite_difference if finite_difference is not None else cfg.finite_difference
+
         return _OrbitCorrector().correct(
             self,
-            tol=tol,
-            max_attempts=max_attempts,
-            forward=forward,
-            max_delta=max_delta,
-            alpha_reduction=alpha_reduction,
-            min_alpha=min_alpha,
-            armijo_c=armijo_c,
-            finite_difference=finite_difference,
+            tol=_tol,
+            max_attempts=_max_attempts,
+            forward=_forward,
+            line_search=_line_search,
+            max_delta=_max_delta,
+            alpha_reduction=_alpha_reduction,
+            min_alpha=_min_alpha,
+            armijo_c=_armijo_c,
+            finite_difference=_finite_difference,
         )
 
     def propagate(self, steps: int = 1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 8) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:

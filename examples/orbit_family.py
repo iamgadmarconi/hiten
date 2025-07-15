@@ -12,7 +12,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from hiten import OrbitFamily, System
-from hiten.algorithms import EnergyParameter, StateParameter
+from hiten.algorithms import StateParameter
 from hiten.system.orbits.base import S
 
 
@@ -57,30 +57,6 @@ def main() -> None:
     halo_family = OrbitFamily.from_engine(state_engine)
     halo_family.propagate()
     halo_family.plot()
-
-    # --- Lyapunov seed and energy parameter engine ---
-    lyapunov_seed = l1.create_orbit('lyapunov', amplitude_x=0.01)
-    lyapunov_seed.correct(max_attempts=25)
-    # --- energy continuation ---
-    current_energy = lyapunov_seed.energy # Use hamiltonian energy
-    target_energy = current_energy * 1.02
-    step = (target_energy - current_energy) / (num_orbits - 1)
-
-    # --- Build engine and run ---
-    energy_engine = EnergyParameter(
-        initial_orbit=lyapunov_seed,
-        target=(current_energy, target_energy),
-        step=step,
-        use_jacobi=False,
-        corrector_kwargs=dict(max_attempts=30, tol=1e-9),
-        max_orbits=num_orbits,
-    )
-    energy_engine.run()
-
-    # --- Build family and propagate ---
-    lyapunov_family = OrbitFamily.from_engine(energy_engine)
-    lyapunov_family.propagate()
-    lyapunov_family.plot()
 
 if __name__ == "__main__":
     main()
