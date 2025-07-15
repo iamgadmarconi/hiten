@@ -17,7 +17,7 @@ class _ToriCorrectionConfig(NamedTuple):
     """Default numerical parameters for invariant-torus Newton solves."""
 
     max_iter: int = 100  # Maximum Newton iterations
-    tol: float = 1e-12  # Convergence tolerance on the residual
+    tol: float = 1e-8  # Convergence tolerance on the residual
     method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy"
     order: int = 4
 
@@ -334,15 +334,14 @@ class _InvariantTori:
             
         idx = max(cand_idx, key=lambda i: np.imag(self._evals[i]))
         lam = self._evals[idx]
-        evec = self._evecs[:, idx]
-        
-        # Rotation number ρ = arg(λ)
+
+        # Rotation number rho = arg(lambda)
         rho = np.angle(lam)
         
         N = n_theta2  # shorthand
 
         def _build_rotation_matrix(N: int, rho_val: float) -> np.ndarray:
-            """Return dense real rotation matrix R_{-rho} acting on θ₂ grid."""
+            """Return dense real rotation matrix R_{-rho} acting on theta2 grid."""
             k_vals = np.arange(N)
             # treat negative frequencies correctly
             k_vals[N // 2 :] -= N
@@ -358,30 +357,19 @@ class _InvariantTori:
         
         # Stroboscopic time T
         T = self.orbit.period
-        
-        # Step 1: Choose a fixed phase on the periodic orbit
-        # This is our base point on the Poincaré section
-        x_base = self.orbit.initial_state
-        
-        # Step 2: Create initial guess for invariant curve
-        # The curve is parametrized by theta2 in [0, 2pi)
-        theta2_vals = np.linspace(0, 2*np.pi, n_theta2, endpoint=False)
-        
-        # Initial invariant curve (perturbed from base point)
+
+        self._prepare(2)
+
+        theta2_vals = np.linspace(0.0, 2.0 * np.pi, n_theta2, endpoint=False)
         v_curve = np.zeros((n_theta2, 6))
-        for j in range(n_theta2):
-            # Perturbation in the direction of the eigenvector
-            perturbation = epsilon * (
-                np.cos(theta2_vals[j]) * np.real(evec) - 
-                np.sin(theta2_vals[j]) * np.imag(evec)
-            )
-            v_curve[j] = x_base + perturbation
+        for j, th2 in enumerate(theta2_vals):
+            v_curve[j] = self._state(0.0, th2, epsilon)
         
-        # Step 3: Define the invariance error function
+        # Define the invariance error function
         def invariance_error(v_flat: np.ndarray) -> np.ndarray:
             v = v_flat.reshape(n_theta2, 6)
             
-            # Apply stroboscopic map φT to each point
+            # Apply stroboscopic map phi_T to each point
             v_mapped = np.zeros_like(v)
             for j in range(n_theta2):
                 sol = _propagate_dynsys(
@@ -425,7 +413,7 @@ class _InvariantTori:
             # Flatten and append phase condition
             return np.concatenate([error.flatten(), [phase_error * n_theta2]])
         
-        # Step 4: Solve using Newton's method
+        # Solve using Newton's method
         # Add one extra equation for phase condition
         v_flat_extended = np.concatenate([v_curve.flatten(), [0.0]])
         
@@ -491,33 +479,47 @@ class _InvariantTori:
         # Extract corrected invariant curve
         v_curve_corr = v_corr_flat[:-1].reshape(n_theta2, 6)
         
-        # Step 5: Construct full 2D torus from the invariant curve
-        logger.info("Constructing 2D torus from invariant curve")
-        
+        # Construct full 2-D torus using interpolation that respects the
+        logger.info("Constructing 2D torus from invariant curve (interpolation)")
+
+        omega1 = 2.0 * np.pi / T           # longitudinal frequency (unused here)
+        omega2 = rho / T                   # latitudinal frequency
+
         u_grid = np.zeros((n_theta1, n_theta2, 6))
-        
-        # For each point on the invariant curve, integrate for different times
-        # to trace out the torus
-        for i in range(n_theta1):
-            t_i = i * T / n_theta1  # Time along periodic orbit
-            
-            for j in range(n_theta2):
-                if i == 0:
-                    # At t=0, we have the invariant curve
-                    u_grid[i, j] = v_curve_corr[j]
-                else:
-                    # Propagate from the invariant curve
-                    sol = _propagate_dynsys(
-                        dynsys=self.dynsys,
-                        state0=v_curve_corr[j],
-                        t0=0.0,
-                        tf=t_i,
-                        forward=1,
-                        steps=2,
-                        method=method,
-                        order=order,
-                    )
-                    u_grid[i, j] = sol.states[-1]
+        # row i = 0 corresponds to theta1 = 0 -> just the invariant curve itself
+        u_grid[0, :, :] = v_curve_corr
+
+        theta2_vals = np.linspace(0.0, 2.0 * np.pi, n_theta2, endpoint=False)
+
+        for i in range(1, n_theta1):
+            t_i = i * T / n_theta1  # time
+
+            for j, theta2_j in enumerate(theta2_vals):
+                # Which point on the invariant curve flows to (theta1_i, theta2_j)?
+                theta2_src = (theta2_j - omega2 * t_i) % (2.0 * np.pi)
+
+                # Fractional index along the discrete theta2 grid
+                idx_f = theta2_src / (2.0 * np.pi) * n_theta2
+                j0 = int(np.floor(idx_f)) % n_theta2
+                j1 = (j0 + 1) % n_theta2
+                w = idx_f - np.floor(idx_f)
+
+                # Linear interpolation between neighbouring nodes of the invariant curve
+                x0_interp = (1.0 - w) * v_curve_corr[j0] + w * v_curve_corr[j1]
+
+                # Propagate this initial condition for time t_i
+                sol = _propagate_dynsys(
+                    dynsys=self.dynsys,
+                    state0=x0_interp,
+                    t0=0.0,
+                    tf=t_i,
+                    forward=1,
+                    steps=2,
+                    method=method,
+                    order=order,
+                )
+
+                u_grid[i, j] = sol.states[-1]
         
         return u_grid
     
