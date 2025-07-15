@@ -31,6 +31,7 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
+from hiten.algorithms.corrector.line import armijo_line_search
 from hiten.algorithms.corrector.newton import _OrbitCorrector
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import (_compute_monodromy, _compute_stm,
@@ -410,7 +411,7 @@ class PeriodicOrbit(ABC):
             tol: float = 1e-10,
             max_attempts: int = 25,
             forward: int = 1,
-            max_delta: float | None = None,
+            max_delta: float = 1e-2,
             alpha_reduction: float = 0.5,
             min_alpha: float = 1e-4,
             armijo_c: float = 0.02,

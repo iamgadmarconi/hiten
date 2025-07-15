@@ -68,6 +68,10 @@ def armijo_line_search(
             logger.info("Capping Newton step (|delta|=%.2e > %.2e)", delta_norm, max_delta)
 
     alpha = 1.0
+    best_x = x0
+    best_norm = current_norm
+    best_alpha = 0.0
+
     while alpha >= min_alpha:
         x_trial = x0 + alpha * delta
         r_trial = residual_fn(x_trial)
@@ -83,12 +87,26 @@ def armijo_line_search(
             )
             return x_trial, norm_trial, alpha
 
+        # Keep track of best point (and corresponding alpha) encountered for fallback
+        if norm_trial < best_norm:
+            best_x = x_trial
+            best_norm = norm_trial
+            best_alpha = alpha
+
         alpha *= alpha_reduction
 
-    # If the loop completes, no suitable step was found
-    logger.warning(
-        "Armijo line search failed to find a step satisfying the condition "
-        "for min_alpha=%.2e",
-        min_alpha,
-    )
-    raise RuntimeError("Armijo line search failed to find a productive step.")
+    # Fallback: return the best point found (may be the original)
+    if best_alpha > 0:
+        logger.warning(
+            "Line search exhausted; using best found step (\u03b1=%.3e, |r|=%.3e)",
+            best_alpha,
+            best_norm,
+        )
+        return best_x, best_norm, best_alpha
+    else:
+        logger.warning(
+            "Armijo line search failed to find any step that reduces the residual "
+            "for min_alpha=%.2e",
+            min_alpha,
+        )
+        raise RuntimeError("Armijo line search failed to find a productive step.")
