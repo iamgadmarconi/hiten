@@ -1,16 +1,36 @@
 from dataclasses import dataclass
-from typing import Literal, Optional, Tuple
+from typing import Literal, NamedTuple, Optional, Tuple
 
 import numpy as np
 
+from hiten.algorithms.corrector.newton import _NewtonCorrector
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_stm
-from hiten.algorithms.corrector.newton import _NewtonCorrector
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.log_config import logger
 from hiten.utils.plots import plot_invariant_torus
+
+
+class _ToriCorrectionConfig(NamedTuple):
+    """Default numerical parameters for invariant-torus Newton solves."""
+
+    max_iter: int = 100  # Maximum Newton iterations
+    tol: float = 1e-12  # Convergence tolerance on the residual
+    method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy"
+    order: int = 4
+
+    # Line-search / step-control parameters
+    line_search: bool = False
+    max_delta: float = None
+    alpha_reduction: float = None
+    min_alpha: float = None
+    armijo_c: float = None
+
+    def __post_init__(self):
+        if self.line_search and (self.max_delta is None or self.alpha_reduction is None or self.min_alpha is None or self.armijo_c is None):
+            raise ValueError("Line-search parameters must be provided if line_search is True")
 
 
 @dataclass(slots=True, frozen=True)
@@ -271,18 +291,32 @@ class _InvariantTori:
         epsilon: float = 1e-3,
         n_theta1: int = 64,
         n_theta2: int = 256,
-        max_iter: int = 50,
-        tol: float = 1e-12,
-        method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
-        order: int = 8,
-        max_delta: float = 1e-2,
-        alpha_reduction: float = 0.5,
-        min_alpha: float = 1e-4,
-        armijo_c: float = 0.1,
+        max_iter: int | None = None,
+        tol: float | None = None,
+        method: Literal["scipy", "rk", "symplectic", "adaptive"] | None = None,
+        order: int | None = None,
+        max_delta: float | None = None,
+        alpha_reduction: float | None = None,
+        min_alpha: float | None = None,
+        armijo_c: float | None = None,
+        line_search: bool | None = None,
     ) -> np.ndarray:
         """
         Compute quasi-periodic invariant torus using GMOS algorithm.
         """
+        # Resolve numerical parameters using the module-level defaults when not supplied
+        cfg = _ToriCorrectionConfig()
+
+        max_iter = cfg.max_iter if max_iter is None else max_iter
+        tol = cfg.tol if tol is None else tol
+        method = cfg.method if method is None else method
+        order = cfg.order if order is None else order
+        max_delta = cfg.max_delta if max_delta is None else max_delta
+        alpha_reduction = cfg.alpha_reduction if alpha_reduction is None else alpha_reduction
+        min_alpha = cfg.min_alpha if min_alpha is None else min_alpha
+        armijo_c = cfg.armijo_c if armijo_c is None else armijo_c
+        line_search = cfg.line_search if line_search is None else line_search
+
         logger.info("Computing invariant torus using GMOS algorithm")
         logger.info(
             "GMOS parameters: epsilon=%g, n_theta1=%d, n_theta2=%d, max_iter=%d, tol=%.1e",
@@ -304,6 +338,23 @@ class _InvariantTori:
         
         # Rotation number ρ = arg(λ)
         rho = np.angle(lam)
+        
+        N = n_theta2  # shorthand
+
+        def _build_rotation_matrix(N: int, rho_val: float) -> np.ndarray:
+            """Return dense real rotation matrix R_{-rho} acting on θ₂ grid."""
+            k_vals = np.arange(N)
+            # treat negative frequencies correctly
+            k_vals[N // 2 :] -= N
+            phase = np.exp(-1j * k_vals * rho_val)  # (N,)
+            # apply operator to each basis vector via FFT (still cheap for N<=512)
+            eye_N = np.eye(N)
+            R = np.fft.ifft(phase[:, None] * np.fft.fft(eye_N, axis=0), axis=0).real
+            return R
+
+        # Cache rotation matrices (size-independent of Newton iterates)
+        R_theta2 = _build_rotation_matrix(N, rho)
+        R_big = np.kron(R_theta2, np.eye(6))  # (N*6, N*6)
         
         # Stroboscopic time T
         T = self.orbit.period
@@ -381,22 +432,60 @@ class _InvariantTori:
         def residual_fn(x):
             # Extract curve and ignore the dummy variable
             return invariance_error(x[:-1])
+
+        def jacobian_fn(x: np.ndarray) -> np.ndarray:
+            """Return Jacobian of the GMOS residual at *x* (including phase row)."""
+            v = x[:-1].reshape(N, 6)
+
+            # Compute STM for each theta2 node (block diagonal entries)
+            Phi_blocks = np.empty((N, 6, 6))
+            for j in range(N):
+                _, _, Phi_T, _ = _compute_stm(
+                    self.libration_point._var_eq_system,
+                    v[j],
+                    T,
+                    steps=2,
+                    method=method,
+                    order=order,
+                )
+                Phi_blocks[j] = Phi_T
+
+            dim = 6 * N
+            D_map = np.zeros((dim, dim))
+            for j in range(N):
+                D_map[j * 6 : (j + 1) * 6, j * 6 : (j + 1) * 6] = Phi_blocks[j]
+
+            J_main = R_big @ D_map - np.eye(dim)
+
+            # Phase condition derivative
+            dv_dtheta2 = (np.roll(v, -1, axis=0) - np.roll(v, 1, axis=0)) / (
+                2 * 2 * np.pi / N
+            )
+            phase_row = (dv_dtheta2.flatten()) / N
+
+            # Assemble full Jacobian with extra column/row for dummy variable
+            J = np.zeros((dim + 1, dim + 1))
+            J[:dim, :dim] = J_main
+            J[-1, :dim] = phase_row
+            # last column already zeros -> derivative wrt dummy variable
+            return J
         
         newton = _NewtonCorrector()
-        v_corr_flat, converged = newton.correct(
+        v_corr_flat, info = newton.correct(
             x0=v_flat_extended,
             residual_fn=residual_fn,
-            jacobian_fn=None,
+            jacobian_fn=jacobian_fn,
             norm_fn=lambda r: float(np.linalg.norm(r) / np.sqrt(n_theta2 * 6 + 1)),
             tol=tol,
             max_attempts=max_iter,
+            line_search=line_search,
             max_delta=max_delta,
             alpha_reduction=alpha_reduction,
             min_alpha=min_alpha,
             armijo_c=armijo_c,
         )
-        
-        if not converged:
+
+        if not info:
             logger.warning("GMOS Newton iteration did not converge")
         
         # Extract corrected invariant curve
