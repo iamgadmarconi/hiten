@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import Literal, NamedTuple, Optional, Sequence, Tuple
 
 import numpy as np
+from scipy.sparse.linalg import LinearOperator
 
 from hiten.algorithms.corrector.newton import _NewtonCorrector
 from hiten.algorithms.dynamics.base import _propagate_dynsys
@@ -918,3 +919,32 @@ class _InvariantTori:
             order=order,
         )
         return sol.states[-1], PHI
+
+    def _dft(self, arr: np.ndarray) -> np.ndarray:
+        """Forward DFT along theta2 axis (axis=0). Accepts real (N,6) array."""
+        return np.fft.fft(arr, axis=0)
+
+    def _idft(self, arr_hat: np.ndarray) -> np.ndarray:
+        """Inverse DFT returning real array along axis 0."""
+        return np.fft.ifft(arr_hat, axis=0).real
+
+    def _rotation_operator(self, N: int, rho: float) -> "LinearOperator":
+        """Return LinearOperator implementing R_{-rho} acting on RR^{N} vectors.
+
+        The operator multiplies the Fourier coefficients by exp(-i k rho)
+        via FFT without forming the dense NxN matrix.
+        """
+        self._ensure_k_grid(N)
+        phase = np.exp(-1j * self._k_grid * rho)
+
+        def _mv(x):  # matvec
+            x_hat = np.fft.fft(x)
+            y_hat = phase * x_hat
+            return np.fft.ifft(y_hat).real
+
+        def _rmv(x):  # adjoint matvec (same since operator is orthogonal)
+            x_hat = np.fft.fft(x)
+            y_hat = np.conj(phase) * x_hat
+            return np.fft.ifft(y_hat).real
+
+        return LinearOperator((N, N), matvec=_mv, rmatvec=_rmv, dtype=float)
