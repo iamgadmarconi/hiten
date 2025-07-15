@@ -1,4 +1,4 @@
-![HITEN](results/hiten.svg)
+![HITEN](results/plots/hiten-cropped.svg)
 
 # HITEN - Computational Toolkit for the Circular Restricted Three-Body Problem
 
