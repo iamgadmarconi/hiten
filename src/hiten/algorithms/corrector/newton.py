@@ -42,7 +42,7 @@ class _NewtonCorrector(_Corrector):
         x = x0.copy()
         info: dict[str, Any] = {}
 
-        for k in range(max_attempts + 1):
+        for k in range(max_attempts):
             r = residual_fn(x)
             r_norm = norm_fn(r)
             if r_norm < tol:
@@ -63,16 +63,36 @@ class _NewtonCorrector(_Corrector):
                     x_pert[i] += h_i
                     J[:, i] = (residual_fn(x_pert) - r) / h_i
 
-            # Regularise singular / ill-conditioned Jacobian
             try:
                 cond_J = np.linalg.cond(J)
-                if np.isnan(cond_J) or cond_J > 1e12:
-                    logger.debug("Jacobian ill-conditioned (cond=%.2e); adding regularisation", cond_J)
-                    J += np.eye(J.shape[0]) * 1e-8
-                delta = np.linalg.solve(J, -r)
             except np.linalg.LinAlgError:
-                logger.warning("Jacobian singular; switching to least-squares update")
-                delta = np.linalg.lstsq(J, -r, rcond=None)[0]
+                cond_J = np.inf
+
+            _COND_THRESH = 1e12
+
+            if J.shape[0] == J.shape[1]:
+                if np.isnan(cond_J) or cond_J > _COND_THRESH:
+                    logger.debug("Jacobian ill-conditioned (cond=%.2e); applying ridge regularisation", cond_J)
+                    J_reg = J + np.eye(J.shape[0]) * 1e-8
+                else:
+                    J_reg = J
+
+                try:
+                    delta = np.linalg.solve(J_reg, -r)
+                except np.linalg.LinAlgError:
+                    logger.warning("Jacobian singular; switching to least-squares update")
+                    delta = np.linalg.lstsq(J_reg, -r, rcond=None)[0]
+
+            else:
+                logger.debug("Rectangular Jacobian (%dx%d); solving via Tikhonov least-squares", *J.shape)
+                lambda_reg = 1e-8 if (np.isnan(cond_J) or cond_J > _COND_THRESH) else 0.0
+                JTJ = J.T @ J + lambda_reg * np.eye(J.shape[1])
+                JTr = J.T @ r
+                try:
+                    delta = np.linalg.solve(JTJ, -JTr)
+                except np.linalg.LinAlgError:
+                    logger.warning("Normal equations singular; falling back to lstsq")
+                    delta = np.linalg.lstsq(J, -r, rcond=None)[0]
 
             # Armijo + step capping
             x_new, r_norm_new, alpha_used = armijo_line_search(
@@ -97,7 +117,17 @@ class _NewtonCorrector(_Corrector):
             )
             x = x_new
 
-        raise RuntimeError(f"Newton did not converge after {max_attempts} iterations (|R|={r_norm:.2e}).")
+        # One final convergence check after exhausting the loop
+        r_final = residual_fn(x)
+        r_final_norm = norm_fn(r_final)
+        if r_final_norm < tol:
+            logger.info("Newton converged after %d iterations (|R|=%.2e)", max_attempts, r_final_norm)
+            info.update(iterations=max_attempts, residual_norm=r_final_norm)
+            return x, info
+
+        raise RuntimeError(
+            f"Newton did not converge after {max_attempts} iterations (|R|={r_final_norm:.2e})."
+        )
 
 
 class _OrbitCorrector(_Corrector):
