@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING, Any, Tuple
+from typing import TYPE_CHECKING, Any, Optional, Tuple
 
 import numpy as np
 
@@ -30,10 +30,11 @@ class _NewtonCorrector(_Corrector):
         norm_fn: NormFn | None = None,
         tol: float = 1e-10,
         max_attempts: int = 25,
-        max_delta: float | None = 1e-2,
-        alpha_reduction: float = 0.5,
-        min_alpha: float = 1e-4,
-        armijo_c: float = 0.1,
+        line_search: bool = False,
+        max_delta: float | None,
+        alpha_reduction: float | None,
+        min_alpha: float | None,
+        armijo_c: float | None,
         fd_step: float = 1e-8,
     ) -> Tuple[np.ndarray, dict[str, Any]]:
         if norm_fn is None:
@@ -99,18 +100,35 @@ class _NewtonCorrector(_Corrector):
                     logger.warning("Normal equations singular; falling back to SVD lstsq")
                     delta = np.linalg.lstsq(J, -r, rcond=None)[0]
 
-            # Armijo + step capping
-            x_new, r_norm_new, alpha_used = armijo_line_search(
-                x0=x,
-                delta=delta,
-                residual_fn=residual_fn,
-                current_norm=r_norm,
-                norm_fn=norm_fn,
-                max_delta=max_delta,
-                alpha_reduction=alpha_reduction,
-                min_alpha=min_alpha,
-                armijo_c=armijo_c,
-            )
+            # Apply step update: either with Armijo backtracking or directly (toggle)
+            if line_search:
+                # Armijo + step capping
+                x_new, r_norm_new, alpha_used = armijo_line_search(
+                    x0=x,
+                    delta=delta,
+                    residual_fn=residual_fn,
+                    current_norm=r_norm,
+                    norm_fn=norm_fn,
+                    max_delta=max_delta,
+                    alpha_reduction=alpha_reduction,
+                    min_alpha=min_alpha,
+                    armijo_c=armijo_c,
+                )
+            else:
+                # Optional step capping without line search
+                if (max_delta is not None) and (not np.isinf(max_delta)):
+                    delta_norm = np.linalg.norm(delta, ord=np.inf)
+                    if delta_norm > max_delta:
+                        delta = delta * (max_delta / delta_norm)
+                        logger.info(
+                            "Capping Newton step (|delta|=%.2e > %.2e)",
+                            delta_norm,
+                            max_delta,
+                        )
+
+                x_new = x + delta
+                r_norm_new = norm_fn(residual_fn(x_new))
+                alpha_used = 1.0
 
             logger.debug(
                 "Newton iter %d/%d: |R|=%.2e -> %.2e (alpha=%.2e)",
@@ -146,14 +164,15 @@ class _OrbitCorrector(_Corrector):
         self,
         orbit: "PeriodicOrbit",
         *,
-        tol: float = 1e-10,
-        max_attempts: int = 25,
-        forward: int = 1,
-        max_delta: float | None = None,
-        alpha_reduction: float = 0.5,
-        min_alpha: float = 1e-4,
-        armijo_c: float = 0.02,
-        finite_difference: bool = False,
+        tol: float,
+        max_attempts: int,
+        forward: int,
+        max_delta: float | None,
+        alpha_reduction: float,
+        min_alpha: float,
+        line_search: bool,
+        armijo_c: Optional[float],
+        finite_difference: bool,
     ) -> Tuple[np.ndarray, float]:
         """Refine *orbit* in-place using the underlying :class:`_NewtonCorrector`.
 
@@ -233,8 +252,9 @@ class _OrbitCorrector(_Corrector):
             norm_fn=_norm_inf,
             tol=tol,
             max_attempts=max_attempts,
-            max_delta=max_delta,
+            line_search=line_search,
             alpha_reduction=alpha_reduction,
+            max_delta=max_delta,
             min_alpha=min_alpha,
             armijo_c=armijo_c,
         )
