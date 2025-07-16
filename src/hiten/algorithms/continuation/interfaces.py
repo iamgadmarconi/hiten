@@ -1,8 +1,15 @@
-from typing import Callable, Sequence
+from typing import Callable, NamedTuple, Sequence
 
 import numpy as np
 
-from hiten.system.orbits.base import PeriodicOrbit
+from hiten.system.orbits.base import PeriodicOrbit, S
+
+
+class _OrbitContinuationConfig(NamedTuple):
+    state: S | None
+    amplitude: bool = False
+    getter: Callable[["PeriodicOrbit"], float] | None = None
+    extra_params: dict | None = None
 
 
 class _PeriodicOrbitContinuationInterface:

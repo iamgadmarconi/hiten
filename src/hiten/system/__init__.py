@@ -24,8 +24,7 @@ from .libration.collinear import CollinearPoint, L1Point, L2Point, L3Point
 from .libration.triangular import L4Point, L5Point, TriangularPoint
 from .manifold import Manifold, ManifoldResult
 # Orbits
-from .orbits.base import S  # state-vector helper enum
-from .orbits.base import GenericOrbit, PeriodicOrbit, _CorrectionConfig
+from .orbits.base import GenericOrbit, PeriodicOrbit, S
 from .orbits.halo import HaloOrbit
 from .orbits.lyapunov import LyapunovOrbit
 from .orbits.vertical import VerticalOrbit
@@ -52,7 +51,6 @@ __all__ = [
     "_PoincareMapConfig",
     "_PoincareMap",
     # Orbits / configs
-    "_CorrectionConfig",
     "PeriodicOrbit",
     "GenericOrbit",
     "HaloOrbit",

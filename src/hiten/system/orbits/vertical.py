@@ -15,15 +15,19 @@ References
 Szebehely, V. (1967). "Theory of Orbits".
 """
 
-from typing import Optional, Sequence
+from typing import TYPE_CHECKING, Optional, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
 
 from hiten.algorithms.dynamics.utils.geometry import _find_z_zero_crossing
 from hiten.system.libration.collinear import CollinearPoint
-from hiten.system.orbits.base import (PeriodicOrbit, S, _ContinuationConfig,
-                                      _CorrectionConfig)
+from hiten.system.orbits.base import PeriodicOrbit, S
+
+if TYPE_CHECKING:
+    from hiten.algorithms.continuation.interfaces import \
+        _OrbitContinuationConfig
+    from hiten.algorithms.corrector.interfaces import _OrbitCorrectionConfig
 
 
 class VerticalOrbit(PeriodicOrbit):
@@ -69,9 +73,10 @@ class VerticalOrbit(PeriodicOrbit):
         return np.nan
 
     @property
-    def _correction_config(self) -> _CorrectionConfig:
+    def _correction_config(self) -> "_OrbitCorrectionConfig":
         """Provides the differential correction configuration for vertical orbits."""
-        return _CorrectionConfig(
+        from hiten.algorithms.corrector.interfaces import _OrbitCorrectionConfig
+        return _OrbitCorrectionConfig(
             residual_indices=(S.VX, S.Y),     # Want VX=0 and Y=0
             control_indices=(S.VZ, S.VY),     # Adjust initial VZ and VY
             target=(0.0, 0.0),
@@ -80,6 +85,7 @@ class VerticalOrbit(PeriodicOrbit):
         )
 
     @property
-    def _continuation_config(self) -> _ContinuationConfig:
+    def _continuation_config(self) -> "_OrbitContinuationConfig":
         """Default continuation parameter: vary the out-of-plane amplitude."""
-        return _ContinuationConfig(state=S.Z, amplitude=True)
+        from hiten.algorithms.continuation.interfaces import _OrbitContinuationConfig
+        return _OrbitContinuationConfig(state=S.Z, amplitude=True)

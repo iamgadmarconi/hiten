@@ -1,14 +1,34 @@
+from dataclasses import dataclass
 from functools import partial
-from typing import TYPE_CHECKING, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, Literal, Optional, Tuple
 
 import numpy as np
 
-from hiten.algorithms.corrector.base import JacobianFn, NormFn
+from hiten.algorithms.corrector.base import (JacobianFn, NormFn,
+                                             _BaseCorrectionConfig)
 from hiten.algorithms.dynamics.rtbp import _compute_stm
+from hiten.algorithms.dynamics.utils.geometry import _find_y_zero_crossing
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
     from hiten.system.orbits.base import PeriodicOrbit
+
+
+@dataclass(frozen=True, slots=True)
+class _OrbitCorrectionConfig(_BaseCorrectionConfig):
+
+    residual_indices: tuple[int, ...] = ()  # Components used to build R(x)
+    control_indices: tuple[int, ...] = ()   # Components allowed to change
+    extra_jacobian: Callable[[np.ndarray, np.ndarray], np.ndarray] | None = None
+    target: tuple[float, ...] = (0.0,)  # Desired residual values
+
+    event_func: Callable[..., tuple[float, np.ndarray]] = _find_y_zero_crossing
+
+    method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy"
+    order: int = 8
+    steps: int = 500
+
+    forward: int = 1
 
 
 class _PeriodicOrbitCorrectorInterface:

@@ -13,7 +13,7 @@ The module provides:
 * :pyclass:`GenericOrbit` - a minimal concrete implementation useful for
   arbitrary initial conditions when no analytical guess or specific correction
   is required.
-* Light-weight configuration containers (:pyclass:`_CorrectionConfig`) that 
+* Light-weight configuration containers (:pyclass:`_OrbitCorrectionConfig`) that 
   encapsulate user input for differential correction settings.
 
 References
@@ -24,8 +24,7 @@ Bodies".
 import os
 from abc import ABC, abstractmethod
 from enum import IntEnum
-from typing import (TYPE_CHECKING, Callable, Literal, NamedTuple, Optional,
-                    Sequence, Tuple)
+from typing import TYPE_CHECKING, Literal, Optional, Sequence, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -38,7 +37,6 @@ from hiten.algorithms.dynamics.rtbp import (_compute_monodromy, _compute_stm,
                                             _stability_indices)
 from hiten.algorithms.dynamics.utils.energy import (crtbp_energy,
                                                     energy_to_jacobi)
-from hiten.algorithms.dynamics.utils.geometry import _find_y_zero_crossing
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
 from hiten.utils.io import (_ensure_dir, _load_periodic_orbit,
@@ -49,78 +47,17 @@ from hiten.utils.plots import (animate_trajectories, plot_inertial_frame,
 
 if TYPE_CHECKING:
     from hiten.system.manifold import Manifold
+    from hiten.algorithms.corrector.interfaces import _OrbitCorrectionConfig
+    from hiten.algorithms.continuation.interfaces import _OrbitContinuationConfig
 
 
-class S(IntEnum): X=0; Y=1; Z=2; VX=3; VY=4; VZ=5
-
-
-class _CorrectionConfig(NamedTuple):
-    r"""
-    Settings that drive the differential correction routine.
-
-    The named-tuple is immutable and therefore safe to share across calls.
-
-    Parameters
-    ----------
-    residual_indices : tuple of int
-        Indices of the state vector used to build the residual vector
-        :math:`\mathbf R`.
-    control_indices : tuple of int
-        Indices of the state vector that are allowed to change so as to cancel
-        :math:`\mathbf R`.
-    extra_jacobian : callable or None, optional
-        Function returning an additional contribution that is subtracted from
-        the Jacobian before solving the linear system; useful when the event
-        definition introduces extra dependencies.
-    target : tuple of float, default ``(0.0,)``
-        Desired values for the residual components.
-    event_func : callable, default :pyfunc:`hiten.utils.geometry._find_y_zero_crossing`
-        Event used to terminate half-period propagation.
-    method : {"rk", "scipy", "symplectic", "adaptive"}, default "scipy"
-        _Integrator back-end to use when marching the variational equations.
-    order : int, default 8
-        Order for the custom integrators.
-    steps : int, default 2000
-        Number of fixed steps per half-period when *method* is not adaptive.
-    max_attempts: int, default 50
-        Maximum number of correction attempts.
-    tol: float, default 1e-10
-        Convergence tolerance on the residual.
-    forward: int, default 1
-        Direction of propagation.
-    max_delta: float, default 1e-2
-        Maximum step size for the Newton update.
-    line_search_config: _LineSearchConfig | bool | None, default True
-        Configuration for the line search.
-    finite_difference: bool, default False
-        Whether to use finite differences for the Jacobian.
-    """
-    residual_indices: tuple[int, ...]
-    control_indices: tuple[int, ...]
-    extra_jacobian: Callable[[np.ndarray,np.ndarray], np.ndarray] | None = None
-    target: tuple[float, ...] = (0.0,)
-    event_func: Callable[...,tuple[float,np.ndarray]] = _find_y_zero_crossing
-
-    method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy"
-    order: int = 8
-    steps: int = 500
-
-    max_attempts: int = 50
-    tol: float = 1e-10
-    forward: int = 1
-
-    max_delta: float = 1e-2
-
-    line_search_config: _LineSearchConfig | bool | None = True
-
-    finite_difference: bool = False
-
-
-class _ContinuationConfig(NamedTuple):
-    state: S | None
-    amplitude: bool = False
-    getter: Callable[["PeriodicOrbit"], float] | None = None
-    extra_params: dict | None = None
+class S(IntEnum): 
+    X=0
+    Y=1
+    Z=2
+    VX=3
+    VY=4
+    VZ=5
 
 
 class PeriodicOrbit(ABC):
@@ -401,13 +338,13 @@ class PeriodicOrbit(ABC):
 
     @property
     @abstractmethod
-    def _correction_config(self) -> _CorrectionConfig:
+    def _correction_config(self) -> "_OrbitCorrectionConfig":
         """Provides the differential correction configuration for this orbit family."""
         pass
 
     @property
     @abstractmethod
-    def _continuation_config(self) -> _ContinuationConfig:
+    def _continuation_config(self) -> "_OrbitContinuationConfig":
         """Default parameter for family continuation (must be overridden)."""
         raise NotImplementedError
 
@@ -641,28 +578,28 @@ class GenericOrbit(PeriodicOrbit):
     
     def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None):
         super().__init__(libration_point, initial_state)
-        self._custom_correction_config: Optional[_CorrectionConfig] = None
-        self._custom_continuation_config: Optional[_ContinuationConfig] = None
+        self._custom_correction_config: Optional[_OrbitCorrectionConfig] = None
+        self._custom_continuation_config: Optional[_OrbitContinuationConfig] = None
         if self._period is None:
             self._period = np.pi
 
         self._amplitude = None
 
     @property
-    def correction_config(self) -> Optional[_CorrectionConfig]:
+    def correction_config(self) -> Optional["_OrbitCorrectionConfig"]:
         """
         Get or set the user-defined differential correction configuration.
 
-        This property must be set to a valid :py:class:`_CorrectionConfig`
+        This property must be set to a valid :py:class:`_OrbitCorrectionConfig`
         instance before calling :py:meth:`correct` on a
         :py:class:`GenericOrbit` object.
         """
         return self._custom_correction_config
 
     @correction_config.setter
-    def correction_config(self, value: Optional[_CorrectionConfig]):
-        if value is not None and not isinstance(value, _CorrectionConfig):
-            raise TypeError("correction_config must be an instance of _CorrectionConfig or None.")
+    def correction_config(self, value: Optional["_OrbitCorrectionConfig"]):
+        if value is not None and not isinstance(value, _OrbitCorrectionConfig):
+            raise TypeError("correction_config must be an instance of _OrbitCorrectionConfig or None.")
         self._custom_correction_config = value
 
     @property
@@ -670,7 +607,7 @@ class GenericOrbit(PeriodicOrbit):
         return np.nan
 
     @property
-    def _correction_config(self) -> _CorrectionConfig:
+    def _correction_config(self) -> "_OrbitCorrectionConfig":
         """
         Provides the differential correction configuration.
 
@@ -681,7 +618,7 @@ class GenericOrbit(PeriodicOrbit):
             return self.correction_config
         raise NotImplementedError(
             "Differential correction is not defined for a GenericOrbit unless the "
-            "`correction_config` property is set with a valid _CorrectionConfig."
+            "`correction_config` property is set with a valid _OrbitCorrectionConfig."
         )
 
     @property
@@ -694,18 +631,18 @@ class GenericOrbit(PeriodicOrbit):
         self._amplitude = value
 
     @property
-    def continuation_config(self) -> Optional[_ContinuationConfig]:
+    def continuation_config(self) -> Optional["_OrbitContinuationConfig"]:
         """Get or set the continuation parameter for this orbit."""
         return self._custom_continuation_config
 
     @continuation_config.setter
-    def continuation_config(self, cfg: Optional[_ContinuationConfig]):
-        if cfg is not None and not isinstance(cfg, _ContinuationConfig):
-            raise TypeError("continuation_config must be a _ContinuationConfig instance or None")
+    def continuation_config(self, cfg: Optional["_OrbitContinuationConfig"]):
+        if cfg is not None and not isinstance(cfg, _OrbitContinuationConfig):
+            raise TypeError("continuation_config must be a _OrbitContinuationConfig instance or None")
         self._custom_continuation_config = cfg
 
     @property
-    def _continuation_config(self) -> _ContinuationConfig:  # used by engines
+    def _continuation_config(self) -> "_OrbitContinuationConfig":  # used by engines
         if self._custom_continuation_config is None:
             raise NotImplementedError(
                 "GenericOrbit requires 'continuation_config' to be set before using continuation engines."

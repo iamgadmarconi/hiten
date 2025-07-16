@@ -20,7 +20,7 @@ Richardson, D. L. (1980). "Analytic construction of periodic orbits about the
 collinear libration points".
 """
 
-from typing import Literal, Optional, Sequence
+from typing import TYPE_CHECKING, Literal, Optional, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
@@ -28,9 +28,13 @@ from numpy.typing import NDArray
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import (CollinearPoint, L1Point, L2Point,
                                               L3Point)
-from hiten.system.orbits.base import (PeriodicOrbit, S, _ContinuationConfig,
-                                      _CorrectionConfig)
+from hiten.system.orbits.base import PeriodicOrbit, S
 from hiten.utils.log_config import logger
+
+if TYPE_CHECKING:
+    from hiten.algorithms.continuation.interfaces import \
+        _OrbitContinuationConfig
+    from hiten.algorithms.corrector.interfaces import _OrbitCorrectionConfig
 
 
 class HaloOrbit(PeriodicOrbit):
@@ -127,17 +131,19 @@ class HaloOrbit(PeriodicOrbit):
         return float(self._amplitude_z)
 
     @property
-    def _correction_config(self) -> _CorrectionConfig:
+    def _correction_config(self) -> "_OrbitCorrectionConfig":
         """Provides the differential correction configuration for halo orbits."""
-        return _CorrectionConfig(
+        from hiten.algorithms.corrector.interfaces import _OrbitCorrectionConfig
+        return _OrbitCorrectionConfig(
             residual_indices=(S.VX, S.VZ),
             control_indices=(S.X, S.VY),
             extra_jacobian=self._halo_quadratic_term
         )
 
     @property
-    def _continuation_config(self) -> _ContinuationConfig:
-        return _ContinuationConfig(state=S.Z, amplitude=True)
+    def _continuation_config(self) -> "_OrbitContinuationConfig":
+        from hiten.algorithms.continuation.interfaces import _OrbitContinuationConfig
+        return _OrbitContinuationConfig(state=S.Z, amplitude=True)
 
     def _initial_guess(self) -> NDArray[np.float64]:
         r"""

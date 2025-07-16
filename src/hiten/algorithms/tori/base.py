@@ -4,35 +4,27 @@ from typing import Literal, Optional, Sequence, Tuple
 import numba
 import numpy as np
 
+from hiten.algorithms.corrector.base import _BaseCorrectionConfig
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_stm
+from hiten.algorithms.utils.config import FASTMATH
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.log_config import logger
-from hiten.algorithms.utils.config import FASTMATH
 from hiten.utils.plots import plot_invariant_torus
 
 
-@dataclass
-class _ToriCorrectionConfig():
-    """Default numerical parameters for invariant-torus Newton solves."""
+@dataclass(frozen=True, slots=True)
+class _ToriCorrectionConfig(_BaseCorrectionConfig):
+    """Configuration container for invariant-torus Newton solves.
 
-    max_iter: int = 100  # Maximum Newton iterations
-    tol: float = 1e-8  # Convergence tolerance on the residual
-    method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy"
-    order: int = 4
+    Extends the generic :class:`_BaseCorrectionConfig` with additional
+    parameters controlling the integration backend used by the stroboscopic
+    map and variational equations.
+    """
 
-    # Line-search / step-control parameters
-    line_search: bool = False
-    max_delta: float = None
-    alpha_reduction: float = None
-    min_alpha: float = None
-    armijo_c: float = None
-
-    def __post_init__(self):
-        if self.line_search and (self.max_delta is None or self.alpha_reduction is None or self.min_alpha is None or self.armijo_c is None):
-            raise ValueError("Line-search parameters must be provided if line_search is True")
+    delta_s: float = 1e-4
 
 
 @dataclass(slots=True, frozen=True)
@@ -578,39 +570,17 @@ class _InvariantTori:
             out[i] = sol.states[-1]
         return out
 
-
     def _compute_gmos(
         self,
         *,
         epsilon: float = 1e-3,
         n_theta1: int = 64,
         n_theta2: int = 256,
-        max_iter: int | None = None,
-        tol: float | None = None,
-        method: Literal["scipy", "rk", "symplectic", "adaptive"] | None = None,
-        order: int | None = None,
-        max_delta: float | None = None,
-        alpha_reduction: float | None = None,
-        min_alpha: float | None = None,
-        armijo_c: float | None = None,
-        line_search: bool | None = None,
-        delta_s: float = 0.0,
     ) -> np.ndarray:
         """
         Compute quasi-periodic invariant torus using the GMOS algorithm.
         """
-        cfg = _ToriCorrectionConfig()
-
-        max_iter        = cfg.max_iter        if max_iter is None        else max_iter
-        tol             = cfg.tol             if tol is None             else tol
-        method          = cfg.method          if method is None          else method
-        order           = cfg.order           if order is None           else order
-
-        line_search     = cfg.line_search     if line_search is None     else line_search
-        max_delta       = cfg.max_delta       if max_delta is None       else max_delta
-        alpha_reduction = cfg.alpha_reduction if alpha_reduction is None else alpha_reduction
-        min_alpha       = cfg.min_alpha       if min_alpha is None       else min_alpha
-        armijo_c        = cfg.armijo_c        if armijo_c is None        else armijo_c
+        raise NotImplementedError("GMOS algorithm not implemented yet.")
 
     @staticmethod
     def _D(theta_2: np.ndarray) -> np.ndarray:

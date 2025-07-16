@@ -15,7 +15,7 @@ References
 Szebehely, V. (1967). "Theory of Orbits".
 """
 
-from typing import Optional, Sequence
+from typing import TYPE_CHECKING, Optional, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
@@ -24,9 +24,13 @@ from hiten.algorithms.dynamics.utils.geometry import _find_y_zero_crossing
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import (CollinearPoint, L1Point, L2Point,
                                               L3Point)
-from hiten.system.orbits.base import (PeriodicOrbit, S, _ContinuationConfig,
-                                      _CorrectionConfig)
+from hiten.system.orbits.base import PeriodicOrbit, S
 from hiten.utils.log_config import logger
+
+if TYPE_CHECKING:
+    from hiten.algorithms.continuation.interfaces import \
+        _OrbitContinuationConfig
+    from hiten.algorithms.corrector.interfaces import _OrbitCorrectionConfig
 
 
 class LyapunovOrbit(PeriodicOrbit):
@@ -126,9 +130,10 @@ class LyapunovOrbit(PeriodicOrbit):
         return float(self._amplitude_x)
 
     @property
-    def _correction_config(self) -> _CorrectionConfig:
+    def _correction_config(self) -> "_OrbitCorrectionConfig":
         """Provides the differential correction configuration for planar Lyapunov orbits."""
-        return _CorrectionConfig(
+        from hiten.algorithms.corrector.interfaces import _OrbitCorrectionConfig
+        return _OrbitCorrectionConfig(
             residual_indices=(S.VX, S.Z),
             control_indices=(S.VY, S.VZ),
             target=(0.0, 0.0),
@@ -137,8 +142,9 @@ class LyapunovOrbit(PeriodicOrbit):
         )
 
     @property
-    def _continuation_config(self) -> _ContinuationConfig:
-        return _ContinuationConfig(state=S.X, amplitude=True)
+    def _continuation_config(self) -> "_OrbitContinuationConfig":
+        from hiten.algorithms.continuation.interfaces import _OrbitContinuationConfig
+        return _OrbitContinuationConfig(state=S.X, amplitude=True)
 
     def _initial_guess(self) -> NDArray[np.float64]:
         r"""
