@@ -23,7 +23,11 @@ from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.log_config import logger
 
 
-class _PeriodicOrbitContinuationEngine(ABC):
+class _ContinuationEngine(ABC):
+    pass
+
+
+class _PeriodicOrbitContinuationEngine(_ContinuationEngine):
     """Generic predictor-corrector engine for periodic-orbit continuation.
 
     Parameters
@@ -277,3 +281,5 @@ class _PeriodicOrbitContinuationEngine(ABC):
         """
         return np.clip(scale_value, min_scale, max_scale)
 
+class _PseudoArclengthContinuationEngine(_ContinuationEngine):
+    pass
