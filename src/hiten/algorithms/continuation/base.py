@@ -40,11 +40,9 @@ class _ContinuationEngine(ABC):
         self._target_min = np.minimum(target_arr[0], target_arr[1])
         self._target_max = np.maximum(target_arr[0], target_arr[1])
 
-        for i in range(current_param.size):
-            if (current_param[i] < self._target_min[i] and step_arr[i] < 0) or (
-                current_param[i] > self._target_max[i] and step_arr[i] > 0
-            ):
-                step_arr[i] = -step_arr[i]
+        # Direction of the step is handled by specialised subclasses (e.g. natural-parameter
+        # continuation ensures monotone advance toward the target).  The base engine keeps
+        # the user-supplied sign unchanged.
         self._step = step_arr.astype(float)
 
         self._family: list[object] = [initial_solution]
@@ -146,10 +144,11 @@ class _ContinuationEngine(ABC):
         return np.sign(new_step) * clipped_mag
 
     def _stop_condition(self) -> bool:  
-        """Stop when last parameter value exits the target interval."""
+        """Base engine imposes no parameter-based termination.  Subclasses should
+        override this to provide an appropriate stop criterion (e.g. parameter window
+        for natural-parameter continuation, arclength budget for pseudo-arclength)."""
 
-        current = self._param_history[-1]
-        return np.any(current < self._target_min) or np.any(current > self._target_max)
+        return False
 
     @staticmethod
     def _clamp_step(
