@@ -280,6 +280,3 @@ class _PeriodicOrbitContinuationEngine(_ContinuationEngine):
             Clamped scaling factor within reasonable bounds
         """
         return np.clip(scale_value, min_scale, max_scale)
-
-class _PseudoArclengthContinuationEngine(_ContinuationEngine):
-    pass
