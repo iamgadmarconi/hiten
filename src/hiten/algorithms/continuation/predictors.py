@@ -1,20 +1,14 @@
-"""
-hiten.algorithms.continuation.predictors
-===========================================
-
-Concrete predictor classes that plug into
-:pyclass:`hiten.algorithms.continuation.base._PeriodicOrbitContinuationEngine`.
-"""
 from typing import Sequence
 
 import numpy as np
 
-from hiten.algorithms.continuation.base import _PeriodicOrbitContinuationEngine
-from hiten.algorithms.dynamics.utils.energy import crtbp_energy
+from hiten.algorithms.continuation.interfaces import \
+    _PeriodicOrbitContinuationInterface
+from hiten.algorithms.continuation.naturalparameter import _NaturalParameter
 from hiten.system.orbits.base import PeriodicOrbit, S
 
 
-class _StateParameter(_PeriodicOrbitContinuationEngine):
+class _StateParameter(_PeriodicOrbitContinuationInterface, _NaturalParameter):
     """Vary a single coordinate of the seed state by a constant increment.
 
     Examples
@@ -89,7 +83,7 @@ class _StateParameter(_PeriodicOrbitContinuationEngine):
         return new_state
 
 
-class _FixedPeriod(_PeriodicOrbitContinuationEngine):
+class _FixedPeriod(_PeriodicOrbitContinuationInterface, _NaturalParameter):
     def __init__(
         self,
         *,
@@ -115,7 +109,7 @@ class _FixedPeriod(_PeriodicOrbitContinuationEngine):
         raise NotImplementedError("Period continuation is not implemented yet.")
 
 
-class _EnergyLevel(_PeriodicOrbitContinuationEngine):
+class _EnergyLevel(_PeriodicOrbitContinuationInterface, _NaturalParameter):
     def __init__(
         self,
         *,

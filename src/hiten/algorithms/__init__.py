@@ -1,23 +1,28 @@
 """ 
 Public API for the ``algorithms`` package.
 """
-
-from .continuation.base import _PeriodicOrbitContinuationEngine as ContinuationEngine
+from .continuation.interfaces import \
+    _OrbitContinuationConfig as OrbitContinuationConfig
 from .continuation.predictors import _EnergyLevel as EnergyParameter
 from .continuation.predictors import _FixedPeriod as PeriodParameter
 from .continuation.predictors import _StateParameter as StateParameter
+from .corrector.correctors import _NewtonOrbitCorrector as NewtonOrbitCorrector
+from .corrector.interfaces import \
+    _OrbitCorrectionConfig as OrbitCorrectionConfig
+from .corrector.line import _LineSearchConfig as LineSearchConfig
 from .poincare.base import _PoincareMap as PoincareMap
 from .poincare.base import _PoincareMapConfig as PoincareMapConfig
 from .tori.base import _InvariantTori as InvariantTori
-from .corrector.newton import _NewtonCorrector as NewtonCorrector
 
 __all__ = [
-    "ContinuationEngine",
     "StateParameter",
     "PeriodParameter",
     "EnergyParameter",
     "PoincareMap",
     "PoincareMapConfig",
     "InvariantTori",
-    "NewtonCorrector",
+    "NewtonOrbitCorrector",
+    "LineSearchConfig",
+    "OrbitCorrectionConfig",
+    "OrbitContinuationConfig",
 ]

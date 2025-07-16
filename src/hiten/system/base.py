@@ -307,6 +307,14 @@ class System(object):
         # Create and return the CR3BP system
         return cls(primary, secondary, distance)
 
+    @classmethod
+    def from_mu(cls, mu: float) -> "System":
+        """Factory method to build a :class:`System` directly from the mass parameter."""
+        primary = Body("Primary", 1-mu, 1.0e-3)
+        secondary = Body("Secondary", mu, 1.0e-3)
+        distance = 1.0
+        return cls(primary, secondary, distance)
+
     def __getstate__(self):
         """Custom state extractor to enable pickling.
 

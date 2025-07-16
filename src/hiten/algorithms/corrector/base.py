@@ -1,12 +1,29 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Tuple, Any
+from dataclasses import dataclass
+from typing import Any, Callable, Tuple
 
 import numpy as np
 
-# Generic callable signatures
+from hiten.algorithms.corrector.line import _LineSearchConfig
+
 ResidualFn = Callable[[np.ndarray], np.ndarray]
 JacobianFn = Callable[[np.ndarray], np.ndarray]
 NormFn = Callable[[np.ndarray], float]
+
+
+@dataclass(frozen=True, slots=True)
+class _BaseCorrectionConfig:
+    max_attempts: int = 50
+    tol: float = 1e-10
+
+    max_delta: float = 1e-2
+
+    line_search_config: _LineSearchConfig | bool | None = True
+    """If *True* uses the default line-search parameters, *False* disables the
+    line-search, and passing an explicit :class:`_LineSearchConfig` allows full
+    customisation."""
+
+    finite_difference: bool = False  # Force FD approximation even if analytic
 
 
 class _Corrector(ABC):
