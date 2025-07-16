@@ -107,6 +107,12 @@ class _ContinuationEngine(ABC):
 
             logger.info("Accepted member #%d, parameter=%s", len(self._family) - 1, param_val)
 
+            # Call optional hook for subclasses/callbacks after successful acceptance
+            try:
+                self._on_accept(candidate)
+            except Exception as exc:
+                logger.warning("_on_accept hook raised exception: %s", exc)
+
             # Prepare next iteration
             self._step = self._update_step(self._step, success=True)
 
@@ -176,6 +182,16 @@ class _ContinuationEngine(ABC):
             f"{self.__class__.__name__}(n_members={len(self._family)}, step={self._step}, "
             f"target=[[{self._target_min}], [{self._target_max}]])"
         )
+
+    def _on_accept(self, candidate: object) -> None:
+        """Hook executed after a candidate is accepted into the family.
+
+        Subclasses can override this to perform custom bookkeeping (e.g.,
+        updating tangents for pseudo-arclength continuation) without having to
+        reimplement the entire *run()* loop.
+        """
+
+        pass
 
 
 
