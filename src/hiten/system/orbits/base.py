@@ -31,7 +31,8 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
-from hiten.algorithms.corrector.newton import _OrbitCorrector
+from hiten.algorithms.corrector.correctors import _NewtonOrbitCorrector
+from hiten.algorithms.corrector.line import _LineSearchConfig
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import (_compute_monodromy, _compute_stm,
                                             _stability_indices)
@@ -81,6 +82,18 @@ class _CorrectionConfig(NamedTuple):
         Order for the custom integrators.
     steps : int, default 2000
         Number of fixed steps per half-period when *method* is not adaptive.
+    max_attempts: int, default 50
+        Maximum number of correction attempts.
+    tol: float, default 1e-10
+        Convergence tolerance on the residual.
+    forward: int, default 1
+        Direction of propagation.
+    max_delta: float, default 1e-2
+        Maximum step size for the Newton update.
+    line_search_config: _LineSearchConfig | bool | None, default True
+        Configuration for the line search.
+    finite_difference: bool, default False
+        Whether to use finite differences for the Jacobian.
     """
     residual_indices: tuple[int, ...]
     control_indices: tuple[int, ...]
@@ -92,15 +105,13 @@ class _CorrectionConfig(NamedTuple):
     order: int = 8
     steps: int = 500
 
-    max_attempts: int = 25
+    max_attempts: int = 50
     tol: float = 1e-10
     forward: int = 1
 
-    line_search: bool = True
     max_delta: float = 1e-2
-    alpha_reduction: float = 0.5
-    min_alpha: float = 1e-4
-    armijo_c: Optional[float] = 0.02
+
+    line_search_config: _LineSearchConfig | bool | None = True
 
     finite_difference: bool = False
 
@@ -423,17 +434,14 @@ class PeriodicOrbit(ABC):
             tol: float | None = None,
             max_attempts: int | None = None,
             forward: int | None = None,
-            line_search: bool | None = None,
             max_delta: float | None = None,
-            alpha_reduction: float | None = None,
-            min_alpha: float | None = None,
-            armijo_c: Optional[float] | None = None,
+            line_search_config: _LineSearchConfig | bool | None = None,
             finite_difference: bool | None = None,
         ) -> tuple[np.ndarray, float]:
         """Differential correction wrapper.
 
         This method now delegates the heavy lifting to the generic
-        :class:`hiten.algorithms.corrector.newton._OrbitCorrector` which
+        :class:`hiten.algorithms.corrector.newton._NewtonOrbitCorrector` which
         implements a robust Newton-Armijo scheme.
         """
         # Use per-family correction configuration as fallback defaults
@@ -442,23 +450,16 @@ class PeriodicOrbit(ABC):
         _tol = tol if tol is not None else cfg.tol
         _max_attempts = max_attempts if max_attempts is not None else cfg.max_attempts
         _forward = forward if forward is not None else cfg.forward
-        _line_search = line_search if line_search is not None else cfg.line_search
+        _line_search_cfg = line_search_config if line_search_config is not None else cfg.line_search_config
         _max_delta = max_delta if max_delta is not None else cfg.max_delta
-        _alpha_reduction = alpha_reduction if alpha_reduction is not None else cfg.alpha_reduction
-        _min_alpha = min_alpha if min_alpha is not None else cfg.min_alpha
-        _armijo_c = armijo_c if armijo_c is not None else cfg.armijo_c
         _finite_difference = finite_difference if finite_difference is not None else cfg.finite_difference
 
-        return _OrbitCorrector().correct(
+        return _NewtonOrbitCorrector(line_search_config=_line_search_cfg).correct(
             self,
             tol=_tol,
             max_attempts=_max_attempts,
             forward=_forward,
-            line_search=_line_search,
             max_delta=_max_delta,
-            alpha_reduction=_alpha_reduction,
-            min_alpha=_min_alpha,
-            armijo_c=_armijo_c,
             finite_difference=_finite_difference,
         )
 

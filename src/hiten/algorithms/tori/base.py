@@ -3,7 +3,6 @@ from typing import Literal, Optional, Sequence, Tuple
 
 import numba
 import numpy as np
-import scipy as sp
 
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_stm

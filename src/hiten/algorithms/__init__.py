@@ -7,7 +7,8 @@ from .continuation.predictors import _StateParameter as StateParameter
 from .poincare.base import _PoincareMap as PoincareMap
 from .poincare.base import _PoincareMapConfig as PoincareMapConfig
 from .tori.base import _InvariantTori as InvariantTori
-from .corrector.newton import _NewtonCorrector as NewtonCorrector
+from .corrector.correctors import _NewtonOrbitCorrector as NewtonOrbitCorrector
+from .corrector.line import _LineSearchConfig as LineSearchConfig
 
 __all__ = [
     "StateParameter",
@@ -16,5 +17,6 @@ __all__ = [
     "PoincareMap",
     "PoincareMapConfig",
     "InvariantTori",
-    "NewtonCorrector",
+    "NewtonOrbitCorrector",
+    "LineSearchConfig",
 ]
