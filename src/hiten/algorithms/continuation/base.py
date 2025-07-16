@@ -117,6 +117,8 @@ class _ContinuationEngine(ABC):
     def _predict(self, last_solution: object, step: np.ndarray) -> np.ndarray:
         """Return a representation predicted for the next solution."""
 
+        raise NotImplementedError("_predict must be provided by a sub-class")
+
     def _instantiate(self, representation: np.ndarray):
         """Instantiate a domain object from the predicted representation."""
 
