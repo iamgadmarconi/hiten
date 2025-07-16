@@ -40,9 +40,6 @@ class _ContinuationEngine(ABC):
         self._target_min = np.minimum(target_arr[0], target_arr[1])
         self._target_max = np.maximum(target_arr[0], target_arr[1])
 
-        # Direction of the step is handled by specialised subclasses (e.g. natural-parameter
-        # continuation ensures monotone advance toward the target).  The base engine keeps
-        # the user-supplied sign unchanged.
         self._step = step_arr.astype(float)
 
         self._family: list[object] = [initial_solution]
@@ -143,12 +140,11 @@ class _ContinuationEngine(ABC):
         clipped_mag = np.clip(np.abs(new_step), 1e-10, 1.0)
         return np.sign(new_step) * clipped_mag
 
+    @abstractmethod
     def _stop_condition(self) -> bool:  
-        """Base engine imposes no parameter-based termination.  Subclasses should
-        override this to provide an appropriate stop criterion (e.g. parameter window
-        for natural-parameter continuation, arclength budget for pseudo-arclength)."""
+        """Return True to terminate continuation."""
 
-        return False
+        raise NotImplementedError("_stop_condition must be provided by a sub-class")
 
     @staticmethod
     def _clamp_step(
