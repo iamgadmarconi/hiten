@@ -2,10 +2,10 @@ from typing import Sequence
 
 import numpy as np
 
-from hiten.algorithms.continuation._stepstrategy import _NaturalParameterStep
+from hiten.algorithms.continuation.strategies._stepping import _NaturalParameterStep
 from hiten.algorithms.continuation.interfaces import \
     _PeriodicOrbitContinuationInterface
-from hiten.algorithms.continuation.naturalparameter import _NaturalParameter
+from hiten.algorithms.continuation.strategies._algorithms import _NaturalParameter
 from hiten.system.orbits.base import PeriodicOrbit, S
 
 

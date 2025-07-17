@@ -4,7 +4,7 @@ from typing import Callable, Sequence
 import numpy as np
 
 from hiten.utils.log_config import logger
-from hiten.algorithms.continuation._stepinterface import _ContinuationStep, _PlainStep
+from hiten.algorithms.continuation._step_interface import _ContinuationStep, _PlainStep
 
 
 class _ContinuationEngine(ABC):

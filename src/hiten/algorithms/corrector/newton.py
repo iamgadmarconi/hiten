@@ -3,7 +3,7 @@ from typing import Any, Tuple
 
 import numpy as np
 
-from hiten.algorithms.corrector._stepinteface import _ArmijoStepInterface
+from hiten.algorithms.corrector._step_interface import _ArmijoStepInterface
 from hiten.algorithms.corrector.base import (JacobianFn, NormFn, ResidualFn,
                                              _Corrector)
 from hiten.algorithms.corrector.line import _LineSearchConfig
