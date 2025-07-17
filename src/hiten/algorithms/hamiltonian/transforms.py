@@ -499,12 +499,12 @@ def _synodic2local_triangular(point: TriangularPoint, synodic_coords: np.ndarray
     # Allocate output array
     local = np.empty(6, dtype=np.float64)
 
-    # Invert position mapping (remember X and Vx were flipped in forward transform)
+    # Invert position mapping (forward transform shifted X by mu - 0.5 and flipped its sign)
     local[0] = mu - 0.5 - s[0]  # x1
     local[1] = s[1] - sgn * np.sqrt(3) / 2  # x2
     local[2] = s[2]  # x3 (Z)
 
-    # Invert velocity mapping
+    # Invert velocity mapping (forward transform flipped Vx's sign and shifted Vy by mu - 0.5)
     local[3] = sgn * np.sqrt(3) / 2 - s[3]  # px1 from Vx (with sign flip)
     local[4] = s[4] + mu - 0.5  # px2 from Vy
     local[5] = s[5]  # px3 from Vz
