@@ -211,15 +211,10 @@ class _NewtonCore(_Corrector, ABC):
             Step-size scaling employed by the line-search (1.0 if disabled).
         """
         if self._use_line_search:
-            # Create line searcher with functions from current correction call
-            if self._line_search_config is None:
-                config = _LineSearchConfig(residual_fn=residual_fn, norm_fn=norm_fn)
-            else:
-                # Update the config with the current functions
-                config = self._line_search_config._replace(
-                    residual_fn=residual_fn,
-                    norm_fn=norm_fn
-                )
+            config = self._line_search_config._replace(
+                residual_fn=residual_fn,
+                norm_fn=norm_fn,
+            )
             
             line_searcher = _ArmijoLineSearch(config=config)
             return line_searcher(
