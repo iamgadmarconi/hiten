@@ -4,9 +4,12 @@ import sympy as sp
 
 from hiten.algorithms.hamiltonian.hamiltonian import \
     _build_physical_hamiltonian
-from hiten.algorithms.hamiltonian.transforms import (_polylocal2realmodal,
+from hiten.algorithms.hamiltonian.transforms import (_coordlocal2realmodal,
+                                                     _coordrealmodal2local,
                                                      _local2synodic_collinear,
                                                      _local2synodic_triangular,
+                                                     _polylocal2realmodal,
+                                                     _polyrealmodal2local,
                                                      _solve_complex,
                                                      _solve_real,
                                                      _substitute_complex,
@@ -556,5 +559,116 @@ def test_triangular_local_synodic_inverse(seed):
         rtol=1e-13,
         atol=1e-13,
         err_msg=f"Triangular synodic→local→synodic failed for seed {seed}.",
+    )
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_polynomial_local_realmodal_inverse(seed, transforms_test_setup):
+    """Test that polynomial transformations between local and real modal frames are inverses."""
+    psi, clmo, encode_dict, libration_point = transforms_test_setup
+
+    rng = np.random.default_rng(seed)
+
+    # Create a random polynomial in local coordinates
+    x, y, z, px, py, pz = sp.symbols("x y z px py pz")
+    _sympy_vars = (x, y, z, px, py, pz)
+
+    # Generate random polynomial with integer coefficients
+    coeffs = rng.integers(-3, 4, size=15)
+    expr = 0
+    for c in coeffs:
+        exps = rng.integers(0, 3, size=6)
+        if sum(exps) > TEST_MAX_DEG:
+            continue
+        mon = 1
+        for v, k in zip(_sympy_vars, exps):
+            mon *= v**int(k)
+        expr += int(c) * mon
+
+    # Convert to polynomial representation
+    poly_local = sympy2poly(expr, _sympy_vars, psi, clmo, encode_dict)
+    
+    # Ensure proper length
+    while len(poly_local) < TEST_MAX_DEG + 1:
+        poly_local.append(_polynomial_zero_list(len(poly_local), psi)[0])
+
+    # Test round-trip: local -> real modal -> local
+    poly_realmodal = _polylocal2realmodal(libration_point, poly_local, TEST_MAX_DEG, psi, clmo)
+    poly_recovered = _polyrealmodal2local(libration_point, poly_realmodal, TEST_MAX_DEG, psi, clmo)
+
+    # Check that we recover the original polynomial
+    for d in range(TEST_MAX_DEG + 1):
+        np.testing.assert_allclose(
+            poly_recovered[d], poly_local[d], 
+            rtol=1e-13, atol=1e-13,
+            err_msg=f"Polynomial local→realmodal→local round trip failed for seed {seed}, degree {d}"
+        )
+
+    # Test reverse round-trip: real modal -> local -> real modal
+    poly_recovered_realmodal = _polylocal2realmodal(libration_point, poly_recovered, TEST_MAX_DEG, psi, clmo)
+
+    for d in range(TEST_MAX_DEG + 1):
+        np.testing.assert_allclose(
+            poly_recovered_realmodal[d], poly_realmodal[d], 
+            rtol=1e-13, atol=1e-13,
+            err_msg=f"Polynomial realmodal→local→realmodal round trip failed for seed {seed}, degree {d}"
+        )
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_coordinate_local_realmodal_inverse(seed, transforms_test_setup):
+    """Test that coordinate transformations between local and real modal frames are inverses."""
+    _, _, _, libration_point = transforms_test_setup
+
+    rng = np.random.default_rng(seed)
+
+    # Test with various types of coordinates
+    test_coords = [
+        # Unit vectors in each direction
+        np.array([1.0, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float64),  # x1-direction
+        np.array([0.0, 1.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float64),  # x2-direction
+        np.array([0.0, 0.0, 1.0, 0.0, 0.0, 0.0], dtype=np.float64),  # x3-direction
+        np.array([0.0, 0.0, 0.0, 1.0, 0.0, 0.0], dtype=np.float64),  # px1-direction
+        np.array([0.0, 0.0, 0.0, 0.0, 1.0, 0.0], dtype=np.float64),  # px2-direction
+        np.array([0.0, 0.0, 0.0, 0.0, 0.0, 1.0], dtype=np.float64),  # px3-direction
+        # Random small coordinates
+        np.array([0.1, 0.2, 0.3, 0.4, 0.5, 0.6], dtype=np.float64),
+        # Random coordinates with the given seed
+        rng.uniform(-1.0, 1.0, 6).astype(np.float64),
+        rng.uniform(-5.0, 5.0, 6).astype(np.float64),
+    ]
+
+    for i, local_coords in enumerate(test_coords):
+        # Test round-trip: local -> real modal -> local
+        realmodal_coords = _coordlocal2realmodal(libration_point, local_coords)
+        recovered_local = _coordrealmodal2local(libration_point, realmodal_coords)
+
+        np.testing.assert_allclose(
+            recovered_local, local_coords, 
+            rtol=1e-13, atol=1e-13,
+            err_msg=f"Coordinate local→realmodal→local failed for seed {seed}, test case {i}: "
+                   f"input={local_coords}, recovered={recovered_local}"
+        )
+
+        # Test reverse round-trip: real modal -> local -> real modal
+        recovered_realmodal = _coordlocal2realmodal(libration_point, recovered_local)
+
+        np.testing.assert_allclose(
+            recovered_realmodal, realmodal_coords, 
+            rtol=1e-13, atol=1e-13,
+            err_msg=f"Coordinate realmodal→local→realmodal failed for seed {seed}, test case {i}: "
+                   f"realmodal={realmodal_coords}, recovered={recovered_realmodal}"
+        )
+
+    # Additional test starting from real modal coordinates
+    realmodal_start = rng.uniform(-2.0, 2.0, 6).astype(np.float64)
+    local_coords = _coordrealmodal2local(libration_point, realmodal_start)
+    recovered_realmodal = _coordlocal2realmodal(libration_point, local_coords)
+
+    np.testing.assert_allclose(
+        recovered_realmodal, realmodal_start, 
+        rtol=1e-13, atol=1e-13,
+        err_msg=f"Starting from realmodal failed for seed {seed}: "
+               f"input={realmodal_start}, recovered={recovered_realmodal}"
     )
 
