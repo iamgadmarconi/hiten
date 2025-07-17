@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Callable, Optional
+from typing import Callable, Optional, Protocol
 
 import numpy as np
 
@@ -8,6 +8,36 @@ from hiten.algorithms.corrector.line import (_ArmijoLineSearch,
 
 ResidualFn = Callable[[np.ndarray], np.ndarray]
 NormFn = Callable[[np.ndarray], float]
+
+
+class _Stepper(Protocol):
+    """Callable transforming a Newton step into an accepted update.
+
+    Parameters
+    ----------
+    x : ndarray
+        Current iterate.
+    delta : ndarray
+        Newton step direction.
+    current_norm : float
+        Norm of the residual at *x*.
+
+    Returns
+    -------
+    x_new : ndarray
+        Updated iterate.
+    r_norm_new : float
+        Norm of residual at *x_new*.
+    alpha_used : float
+        Step-size scaling actually employed (1.0 means full step).
+    """
+
+    def __call__(
+        self,
+        x: np.ndarray,
+        delta: np.ndarray,
+        current_norm: float,
+    ) -> tuple[np.ndarray, float, float]: ...
 
 
 class _StepInterface(ABC):
@@ -23,8 +53,43 @@ class _StepInterface(ABC):
         self,
         residual_fn: ResidualFn,
         norm_fn: NormFn,
-    ) -> Optional[_ArmijoLineSearch]:
-        """Return a stepper object for the current problem (may be *None*)."""
+        max_delta: float | None,
+    ) -> _Stepper:
+        """Return a :pydata:`_Stepper` object for the current problem."""
+
+
+class _PlainStepInterface(_StepInterface):
+    """Provide plain Newton updates with optional infinity-norm capping."""
+
+    def _make_plain_stepper(
+        self,
+        residual_fn: ResidualFn,
+        norm_fn: NormFn,
+        max_delta: float | None,
+    ) -> _Stepper:
+        """Return a plain stepper closure implementing the safeguard."""
+
+        def _plain_step(x: np.ndarray, delta: np.ndarray, current_norm: float):
+            # Optional safeguard
+            if (max_delta is not None) and (not np.isinf(max_delta)):
+                delta_norm = float(np.linalg.norm(delta, ord=np.inf))
+                if delta_norm > max_delta:
+                    delta = delta * (max_delta / delta_norm)
+
+            x_new = x + delta
+            r_norm_new = norm_fn(residual_fn(x_new))
+            return x_new, r_norm_new, 1.0
+
+        return _plain_step
+
+    # Expose via abstract method name
+    def _build_line_searcher(
+        self,
+        residual_fn: ResidualFn,
+        norm_fn: NormFn,
+        max_delta: float | None,
+    ) -> _Stepper:
+        return self._make_plain_stepper(residual_fn, norm_fn, max_delta)
 
 
 class _ArmijoStepInterface(_StepInterface):
@@ -59,9 +124,26 @@ class _ArmijoStepInterface(_StepInterface):
         self,
         residual_fn: ResidualFn,
         norm_fn: NormFn,
-    ) -> Optional[_ArmijoLineSearch]:
+        max_delta: float | None,
+    ) -> _Stepper:
         if not getattr(self, "_use_line_search", False):
-            return None
+            def _plain_step(x: np.ndarray, delta: np.ndarray, current_norm: float):
+                if (max_delta is not None) and (not np.isinf(max_delta)):
+                    delta_norm = float(np.linalg.norm(delta, ord=np.inf))
+                    if delta_norm > max_delta:
+                        delta *= max_delta / delta_norm
+                x_new = x + delta
+                r_norm_new = norm_fn(residual_fn(x_new))
+                return x_new, r_norm_new, 1.0
+
+            return _plain_step
 
         cfg = self._line_search_config
-        return _ArmijoLineSearch(config=cfg._replace(residual_fn=residual_fn, norm_fn=norm_fn)) 
+        searcher = _ArmijoLineSearch(
+            config=cfg._replace(residual_fn=residual_fn, norm_fn=norm_fn)
+        )
+
+        def _armijo_step(x: np.ndarray, delta: np.ndarray, current_norm: float):
+            return searcher(x0=x, delta=delta, current_norm=current_norm)
+
+        return _armijo_step 
