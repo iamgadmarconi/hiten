@@ -6,6 +6,7 @@ from hiten.utils.log_config import logger
 
 NormFn = Callable[[np.ndarray], float]
 ResidualFn = Callable[[np.ndarray], np.ndarray]
+JacobianFn = Callable[[np.ndarray], np.ndarray]
 
 
 def _default_norm(r: np.ndarray) -> float:
@@ -15,8 +16,14 @@ def _default_norm(r: np.ndarray) -> float:
     """
     return float(np.linalg.norm(r))
 
+def _infinity_norm(r: np.ndarray) -> float:
+    """Return infinity-norm of *r*."""
+    return float(np.linalg.norm(r, ord=np.inf))
+
 class _LineSearchConfig(NamedTuple):
     norm_fn: Optional[NormFn] = None
+    residual_fn: Optional[ResidualFn] = None
+    jacobian_fn: Optional[JacobianFn] = None
     max_delta: float = 1e-2
     alpha_reduction: float = 0.5
     min_alpha: float = 1e-4
@@ -27,6 +34,8 @@ class _ArmijoLineSearch:
 
     def __init__(self, *, config: _LineSearchConfig) -> None:
         self.norm_fn = _default_norm if config.norm_fn is None else config.norm_fn
+        self.residual_fn = config.residual_fn
+        self.jacobian_fn = config.jacobian_fn
         self.max_delta = config.max_delta
         self.alpha_reduction = config.alpha_reduction
         self.min_alpha = config.min_alpha
@@ -37,15 +46,31 @@ class _ArmijoLineSearch:
         *,
         x0: np.ndarray,
         delta: np.ndarray,
-        residual_fn: ResidualFn,
         current_norm: float,
     ) -> Tuple[np.ndarray, float, float]:
         """
         Execute the line-search for the provided Newton step *delta*.
 
-        Returns the updated parameter vector, the residual norm at the new
-        point, and the *alpha* scaling that was ultimately accepted.
+        Parameters
+        ----------
+        x0 : ndarray
+            Current parameter vector.
+        delta : ndarray
+            Newton step direction.
+        current_norm : float
+            Norm of residual at x0.
+
+        Returns
+        -------
+        x_new : ndarray
+            Updated parameter vector.
+        r_norm_new : float
+            Norm of the new residual.
+        alpha_used : float
+            Step-size scaling that was accepted.
         """
+        if self.residual_fn is None:
+            raise ValueError("residual_fn must be provided in _LineSearchConfig")
 
         if (self.max_delta is not None) and (not np.isinf(self.max_delta)):
             delta_norm = np.linalg.norm(delta, ord=np.inf)
@@ -64,7 +89,7 @@ class _ArmijoLineSearch:
 
         while alpha >= self.min_alpha:
             x_trial = x0 + alpha * delta
-            r_trial = residual_fn(x_trial)
+            r_trial = self.residual_fn(x_trial)
             norm_trial = self.norm_fn(r_trial)
 
             # Armijo / sufficient-decrease condition

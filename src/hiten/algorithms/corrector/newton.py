@@ -1,5 +1,5 @@
 from abc import ABC
-from typing import Any, Optional, Tuple
+from typing import Any, Tuple
 
 import numpy as np
 
@@ -43,11 +43,6 @@ class _NewtonCore(_Corrector, ABC):
             # It's a _LineSearchConfig object
             self._line_search_config = line_search_config
             self._use_line_search = True
-        
-        # Initialize line searcher if needed
-        self._line_searcher: Optional[_ArmijoLineSearch] = None
-        if self._use_line_search:
-            self._line_searcher = _ArmijoLineSearch(config=self._line_search_config)
 
     def _on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:  # noqa: D401, N802
         """Hook executed after each Newton iteration.
@@ -216,11 +211,20 @@ class _NewtonCore(_Corrector, ABC):
             Step-size scaling employed by the line-search (1.0 if disabled).
         """
         if self._use_line_search:
-            assert self._line_searcher is not None  # for mypy / type checkers
-            return self._line_searcher(
+            # Create line searcher with functions from current correction call
+            if self._line_search_config is None:
+                config = _LineSearchConfig(residual_fn=residual_fn, norm_fn=norm_fn)
+            else:
+                # Update the config with the current functions
+                config = self._line_search_config._replace(
+                    residual_fn=residual_fn,
+                    norm_fn=norm_fn
+                )
+            
+            line_searcher = _ArmijoLineSearch(config=config)
+            return line_searcher(
                 x0=x,
                 delta=delta,
-                residual_fn=residual_fn,
                 current_norm=r_norm,
             )
 
