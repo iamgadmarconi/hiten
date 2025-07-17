@@ -66,7 +66,7 @@ def _clean_coordinates(coords: np.ndarray, tol: float = 1e-30) -> np.ndarray:
     after = cleaned_real + 1j * cleaned_imag
 
     if np.any(before != after):
-        logger.warning(
+        logger.debug(
             "Cleaned %d coordinates.\nBefore: %s\nAfter:  %s",
             np.sum(before != after), before, after,
         )
