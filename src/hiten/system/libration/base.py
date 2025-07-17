@@ -483,7 +483,7 @@ class LibrationPoint(ABC):
 
         # Direct class provided
         if isinstance(family, type) and issubclass(family, PeriodicOrbit):
-            orbit_cls = family  # type: ignore[arg-type]
+            orbit_cls = family
             return orbit_cls(self, **kwargs)
 
         # String identifier provided

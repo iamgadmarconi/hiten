@@ -3,14 +3,14 @@ from typing import Any, Tuple
 
 import numpy as np
 
+from hiten.algorithms.corrector._step_interface import _ArmijoStepInterface
 from hiten.algorithms.corrector.base import (JacobianFn, NormFn, ResidualFn,
                                              _Corrector)
-from hiten.algorithms.corrector.line import (_ArmijoLineSearch,
-                                             _LineSearchConfig)
+from hiten.algorithms.corrector.line import _LineSearchConfig
 from hiten.utils.log_config import logger
 
 
-class _NewtonCore(_Corrector, ABC):
+class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
 
     def __init__(self, *, line_search_config: _LineSearchConfig | bool | None = None, **kwargs) -> None:
         """Core Newton solver.
@@ -26,25 +26,10 @@ class _NewtonCore(_Corrector, ABC):
             the MRO (currently unused but preserved for future compatibility).
         """
 
-        super().__init__(**kwargs)
+        # Delegate line-search handling to mix-in
+        super().__init__(line_search_config=line_search_config, **kwargs)
 
-        # Process line search configuration
-        if line_search_config is None:
-            self._line_search_config = None
-            self._use_line_search = False
-        elif isinstance(line_search_config, bool):
-            if line_search_config:
-                self._line_search_config = _LineSearchConfig()
-                self._use_line_search = True
-            else:
-                self._line_search_config = None
-                self._use_line_search = False
-        else:
-            # It's a _LineSearchConfig object
-            self._line_search_config = line_search_config
-            self._use_line_search = True
-
-    def _on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:  # noqa: D401, N802
+    def _on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:
         """Hook executed after each Newton iteration.
 
         Subclasses can override this method to perform custom bookkeeping or
@@ -64,7 +49,7 @@ class _NewtonCore(_Corrector, ABC):
 
         pass
 
-    def _on_accept(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:  # noqa: N802
+    def _on_accept(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
         """Hook executed once after the solver *converged*.
 
         This complements :py:meth:`_on_iteration` and allows subclasses to
@@ -83,7 +68,7 @@ class _NewtonCore(_Corrector, ABC):
         """
         pass
 
-    def _on_failure(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:  # noqa: N802
+    def _on_failure(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
         """Hook executed once after the solver *failed*.
 
         This complements :py:meth:`_on_iteration` and allows subclasses to
@@ -189,55 +174,7 @@ class _NewtonCore(_Corrector, ABC):
                 delta = np.linalg.lstsq(J, -r, rcond=None)[0]
         return delta
 
-    def _apply_step(
-        self,
-        x: np.ndarray,
-        delta: np.ndarray,
-        *,
-        residual_fn: ResidualFn,
-        r_norm: float,
-        norm_fn: NormFn,
-        max_delta: float | None,
-    ) -> Tuple[np.ndarray, float, float]:
-        """Apply the Newton update and (optionally) line-search.
-
-        Returns
-        -------
-        x_new : ndarray
-            Updated state.
-        r_norm_new : float
-            Norm of the new residual.
-        alpha_used : float
-            Step-size scaling employed by the line-search (1.0 if disabled).
-        """
-        if self._use_line_search:
-            # Create line searcher with functions from current correction call
-            if self._line_search_config is None:
-                config = _LineSearchConfig(residual_fn=residual_fn, norm_fn=norm_fn)
-            else:
-                # Update the config with the current functions
-                config = self._line_search_config._replace(
-                    residual_fn=residual_fn,
-                    norm_fn=norm_fn
-                )
-            
-            line_searcher = _ArmijoLineSearch(config=config)
-            return line_searcher(
-                x0=x,
-                delta=delta,
-                current_norm=r_norm,
-            )
-
-        # Plain Newton update with optional safeguard on |δ|
-        if (max_delta is not None) and (not np.isinf(max_delta)):
-            delta_norm = np.linalg.norm(delta, ord=np.inf)
-            if delta_norm > max_delta:
-                delta *= max_delta / delta_norm
-                logger.info("Capping Newton step (|delta|=%.2e > %.2e)", delta_norm, max_delta)
-
-        x_new = x + delta
-        r_norm_new = norm_fn(residual_fn(x_new))
-        return x_new, r_norm_new, 1.0
+    # _apply_step removed; step-size control delegated to _Stepper strategy
 
     def correct(
         self,
@@ -256,6 +193,9 @@ class _NewtonCore(_Corrector, ABC):
 
         x = x0.copy()
         info: dict[str, Any] = {}
+
+        # Obtain the stepper callable from the strategy mix-in
+        stepper = self._build_line_searcher(residual_fn, norm_fn, max_delta)
 
         for k in range(max_attempts):
             r = self._compute_residual(x, residual_fn)
@@ -279,14 +219,7 @@ class _NewtonCore(_Corrector, ABC):
             J = self._compute_jacobian(x, residual_fn, jacobian_fn, fd_step)
             delta = self._solve_delta(J, r)
 
-            x_new, r_norm_new, alpha_used = self._apply_step(
-                x,
-                delta,
-                residual_fn=residual_fn,
-                r_norm=r_norm,
-                norm_fn=norm_fn,
-                max_delta=max_delta,
-            )
+            x_new, r_norm_new, alpha_used = stepper(x, delta, r_norm)
 
             logger.debug(
                 "Newton iter %d/%d: |R|=%.2e -> %.2e (alpha=%.2e)",

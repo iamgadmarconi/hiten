@@ -3,6 +3,8 @@ from typing import Callable, Sequence
 
 import numpy as np
 
+from hiten.algorithms.continuation.strategies._step_interface import \
+    _ContinuationStep
 from hiten.utils.log_config import logger
 
 
@@ -48,6 +50,15 @@ class _ContinuationEngine(ABC):
         self._corrector_kwargs = corrector_kwargs or {}
         self._max_iters = int(max_iters)
 
+        # Build stepper strategy (must be provided by subclass or mix-in)
+        self._stepper: _ContinuationStep = self._make_stepper()
+        # Notify strategy initialisation hook if present
+        if hasattr(self._stepper, "on_initialisation"):
+            try:
+                self._stepper.on_initialisation(initial_solution)
+            except Exception as exc:
+                logger.debug("stepper on_initialisation hook error: %s", exc)
+
         logger.info(
             "Continuation initialised: parameter=%s, target=[%s - %s], step=%s, max_iters=%d",
             current_param,
@@ -79,7 +90,10 @@ class _ContinuationEngine(ABC):
                 break
 
             last_sol = self._family[-1]
-            predicted_repr = self._predict(last_sol, self._step)
+
+            predicted_repr, next_step = self._stepper(last_sol, self._step)
+            self._step = next_step.copy()
+
             candidate = self._instantiate(predicted_repr)
 
             try:
@@ -92,6 +106,7 @@ class _ContinuationEngine(ABC):
                     exc,
                     exc_info=exc,
                 )
+                # Notify strategy of failure via _update_step fallback for now
                 self._step = self._update_step(self._step, success=False)
                 attempts_at_current_step += 1
                 if attempts_at_current_step > 10:
@@ -113,17 +128,16 @@ class _ContinuationEngine(ABC):
             except Exception as exc:
                 logger.warning("_on_accept hook raised exception: %s", exc)
 
-            # Prepare next iteration
             self._step = self._update_step(self._step, success=True)
+
+            if hasattr(self._stepper, "on_success"):
+                try:
+                    self._stepper.on_success(candidate)
+                except Exception as exc:
+                    logger.debug("stepper on_success hook error: %s", exc)
 
         logger.info("Continuation finished : generated %d members.", len(self._family))
         return self._family
-
-    @abstractmethod
-    def _predict(self, last_solution: object, step: np.ndarray) -> np.ndarray:
-        """Return a representation predicted for the next solution."""
-
-        raise NotImplementedError("_predict must be provided by a sub-class")
 
     def _instantiate(self, representation: np.ndarray):
         """Instantiate a domain object from the predicted representation."""
@@ -192,6 +206,18 @@ class _ContinuationEngine(ABC):
         """
 
         pass
+
+    @abstractmethod
+    def _make_stepper(self) -> _ContinuationStep:  # noqa: N802
+        """Return the `StepStrategy` for this continuation run.
+
+        Subclasses or mix-ins **must** implement this method (or assign
+        ``self._stepper`` before calling ``super().__init__``) so that the
+        engine knows how to predict the next candidate and possibly adapt the
+        step length.  The deprecated fallback that wrapped ``_predict`` has
+        been removed to enforce the new strategy-based architecture.
+        """
+        raise NotImplementedError
 
 
 

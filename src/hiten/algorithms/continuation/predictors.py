@@ -4,7 +4,10 @@ import numpy as np
 
 from hiten.algorithms.continuation.interfaces import \
     _PeriodicOrbitContinuationInterface
-from hiten.algorithms.continuation.naturalparameter import _NaturalParameter
+from hiten.algorithms.continuation.strategies._algorithms import \
+    _NaturalParameter
+from hiten.algorithms.continuation.strategies._stepping import \
+    _NaturalParameterStep
 from hiten.system.orbits.base import PeriodicOrbit, S
 
 
@@ -64,6 +67,15 @@ class _StateParameter(_PeriodicOrbitContinuationInterface, _NaturalParameter):
             idxs = self._state_indices.copy()
             parameter_getter = lambda orb, idxs=idxs: np.asarray([float(orb.initial_state[i]) for i in idxs])
 
+        # Predictor function that applies the step to selected state indices
+        def _predict_state(orbit, step_vec):
+            new_state = orbit.initial_state.copy()
+            for idx, d in zip(self._state_indices, step_vec):
+                new_state[idx] += d
+            return new_state
+
+        self._predict_state_fn = _predict_state
+
         super().__init__(
             initial_orbit=initial_orbit,
             parameter_getter=parameter_getter,
@@ -73,68 +85,18 @@ class _StateParameter(_PeriodicOrbitContinuationInterface, _NaturalParameter):
             max_orbits=max_orbits,
         )
 
-    def _predict(self, last_orbit: PeriodicOrbit, step: np.ndarray) -> np.ndarray:
-        """Copy the state vector and increment the designated component(s)."""
-        new_state = np.copy(last_orbit.initial_state)
-        for idx, d in zip(self._state_indices, step):
-            # Use base class helper to ensure reasonable step while preserving adaptive reduction
-            d = self._clamp_step(d, reference_value=new_state[idx])
-            new_state[idx] += d
-        return new_state
+    # Override _make_stepper to supply the strategy
+    def _make_stepper(self):
+        return _NaturalParameterStep(self._predict_state_fn)
 
 
 class _FixedPeriod(_PeriodicOrbitContinuationInterface, _NaturalParameter):
-    def __init__(
-        self,
-        *,
-        initial_orbit: PeriodicOrbit,
-        target: "Sequence[float]",
-        step: float = 1e-3,
-        corrector_kwargs: dict | None = None,
-        max_orbits: int = 256,
-    ) -> None:
-        # Continuation parameter (period)
-        parameter_getter = lambda orb: np.asarray([float(orb.period)])
-
-        super().__init__(
-            initial_orbit=initial_orbit,
-            parameter_getter=parameter_getter,
-            target=target,
-            step=step,
-            corrector_kwargs=corrector_kwargs,
-            max_orbits=max_orbits,
-        )
-
-    def _predict(self, last_orbit: PeriodicOrbit, step: np.ndarray) -> np.ndarray:
+    
+    def __init__(self, *args, **kwargs):
         raise NotImplementedError("Period continuation is not implemented yet.")
 
 
 class _EnergyLevel(_PeriodicOrbitContinuationInterface, _NaturalParameter):
-    def __init__(
-        self,
-        *,
-        initial_orbit: PeriodicOrbit,
-        target: "Sequence[float]",
-        step: float = 1e-4,
-        use_jacobi: bool = False,
-        corrector_kwargs: dict | None = None,
-        max_orbits: int = 256,
-    ) -> None:
-        if use_jacobi:
-            parameter_getter = lambda orb: np.asarray([float(orb.jacobi_constant)])
-        else:
-            parameter_getter = lambda orb: np.asarray([float(orb.energy)])
 
-        self._use_jacobi = use_jacobi
-
-        super().__init__(
-            initial_orbit=initial_orbit,
-            parameter_getter=parameter_getter,
-            target=target,
-            step=step,
-            corrector_kwargs=corrector_kwargs,
-            max_orbits=max_orbits,
-        )
-
-    def _predict(self, last_orbit: PeriodicOrbit, step: np.ndarray) -> np.ndarray:
+    def __init__(self, *args, **kwargs):
         raise NotImplementedError("Energy continuation is not implemented yet.")

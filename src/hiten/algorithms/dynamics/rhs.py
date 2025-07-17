@@ -70,7 +70,7 @@ class _RHSSystem(_DynamicalSystem):
         # not, compile it with *nopython* mode so that the integrator kernels
         # can invoke it directly.
         try:
-            from numba.core.registry import CPUDispatcher  # type: ignore
+            from numba.core.registry import CPUDispatcher
 
             is_dispatcher = isinstance(rhs_func, CPUDispatcher)
         except Exception:  # pragma: no cover - very old Numba versions
@@ -82,7 +82,7 @@ class _RHSSystem(_DynamicalSystem):
             # Compile with fastmath setting consistent with global config.
             import numba
 
-            self._rhs_compiled = numba.njit(cache=False, fastmath=FASTMATH)(rhs_func)  # type: ignore[arg-type]
+            self._rhs_compiled = numba.njit(cache=False, fastmath=FASTMATH)(rhs_func)
 
         self.name = name
     
