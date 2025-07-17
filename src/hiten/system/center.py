@@ -103,7 +103,7 @@ class CenterManifold:
             self._synodic2local = _synodic2local_collinear
 
             if isinstance(self._point, L3Point):
-                logger.warning("L3 point is not has not been verified for centre manifold computation!")
+                logger.warning("L3 point has not been verified for centre manifold computation!")
 
         elif isinstance(self._point, TriangularPoint):
             self._local2synodic = _local2synodic_triangular
