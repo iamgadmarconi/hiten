@@ -3,8 +3,8 @@ from typing import Callable, Sequence
 
 import numpy as np
 
-from hiten.algorithms.continuation.strategies._step_interface import (
-    _ContinuationStep, _PlainStep)
+from hiten.algorithms.continuation.strategies._step_interface import \
+    _ContinuationStep
 from hiten.utils.log_config import logger
 
 
@@ -50,7 +50,7 @@ class _ContinuationEngine(ABC):
         self._corrector_kwargs = corrector_kwargs or {}
         self._max_iters = int(max_iters)
 
-        # Build stepper strategy (default wraps legacy _predict logic)
+        # Build stepper strategy (must be provided by subclass or mix-in)
         self._stepper: _ContinuationStep = self._make_stepper()
         # Notify strategy initialisation hook if present
         if hasattr(self._stepper, "on_initialisation"):
@@ -207,18 +207,17 @@ class _ContinuationEngine(ABC):
 
         pass
 
+    @abstractmethod
     def _make_stepper(self) -> _ContinuationStep:  # noqa: N802
-        """Return a stepper strategy for this continuation run.
+        """Return the `StepStrategy` for this continuation run.
 
-        Subclasses can override to supply specialised prediction / step-size
-        control.  The default simply wraps the legacy _predict() and falls
-        back to _update_step for step-length adaptation.
+        Subclasses or mix-ins **must** implement this method (or assign
+        ``self._stepper`` before calling ``super().__init__``) so that the
+        engine knows how to predict the next candidate and possibly adapt the
+        step length.  The deprecated fallback that wrapped ``_predict`` has
+        been removed to enforce the new strategy-based architecture.
         """
-
-        def _predictor(last_solution: object, step: np.ndarray) -> np.ndarray:
-            return self._predict(last_solution, step)
-
-        return _PlainStep(_predictor)
+        raise NotImplementedError
 
 
 

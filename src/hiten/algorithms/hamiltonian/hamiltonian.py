@@ -75,7 +75,7 @@ def _build_T_polynomials(poly_x, poly_y, poly_z, max_deg: int, psi_table, clmo_t
     if max_deg >= 0 and len(poly_T_list_of_polys[0]) > 0 and len(poly_T_list_of_polys[0][0]) > 0:
         poly_T_list_of_polys[0][0][0] = 1.0
     if max_deg >= 1:
-        poly_T_list_of_polys[1] = poly_x # type: ignore 
+        poly_T_list_of_polys[1] = poly_x
 
     for n in range(2, max_deg + 1):
         n_ = float(n)

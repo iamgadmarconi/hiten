@@ -92,7 +92,7 @@ class _PlainStepInterface(_StepInterface):
         return self._make_plain_stepper(residual_fn, norm_fn, max_delta)
 
 
-class _ArmijoStepInterface(_StepInterface):
+class _ArmijoStepInterface(_PlainStepInterface):
 
     _line_search_config: Optional[_LineSearchConfig]
     _use_line_search: bool
@@ -127,16 +127,7 @@ class _ArmijoStepInterface(_StepInterface):
         max_delta: float | None,
     ) -> _Stepper:
         if not getattr(self, "_use_line_search", False):
-            def _plain_step(x: np.ndarray, delta: np.ndarray, current_norm: float):
-                if (max_delta is not None) and (not np.isinf(max_delta)):
-                    delta_norm = float(np.linalg.norm(delta, ord=np.inf))
-                    if delta_norm > max_delta:
-                        delta *= max_delta / delta_norm
-                x_new = x + delta
-                r_norm_new = norm_fn(residual_fn(x_new))
-                return x_new, r_norm_new, 1.0
-
-            return _plain_step
+            return self._make_plain_stepper(residual_fn, norm_fn, max_delta)
 
         cfg = self._line_search_config
         searcher = _ArmijoLineSearch(

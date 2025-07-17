@@ -146,14 +146,14 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         if cache_valid:
             # Reuse cached data
             X_ev_local = self._event_cache.X_event
-            Phi = self._event_cache.Phi  # type: ignore[assignment]
+            Phi = self._event_cache.Phi
         else:
             # Recompute event and STM, then refresh cache
             x_full = self._to_full_state(base_state, control_indices, p_vec)
             t_event, X_ev_local = self._evaluate_event(orbit, x_full, cfg, forward)
 
             _, _, Phi_flat, _ = _compute_stm(
-                orbit.libration_point._var_eq_system,  # pylint: disable=protected-access
+                orbit.libration_point._var_eq_system,
                 x_full,
                 t_event,
                 steps=cfg.steps,

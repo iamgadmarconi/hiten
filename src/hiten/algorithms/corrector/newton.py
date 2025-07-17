@@ -29,7 +29,7 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
         # Delegate line-search handling to mix-in
         super().__init__(line_search_config=line_search_config, **kwargs)
 
-    def _on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:  # noqa: D401, N802
+    def _on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:
         """Hook executed after each Newton iteration.
 
         Subclasses can override this method to perform custom bookkeeping or
@@ -49,7 +49,7 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
 
         pass
 
-    def _on_accept(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:  # noqa: N802
+    def _on_accept(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
         """Hook executed once after the solver *converged*.
 
         This complements :py:meth:`_on_iteration` and allows subclasses to
@@ -68,7 +68,7 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
         """
         pass
 
-    def _on_failure(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:  # noqa: N802
+    def _on_failure(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
         """Hook executed once after the solver *failed*.
 
         This complements :py:meth:`_on_iteration` and allows subclasses to
