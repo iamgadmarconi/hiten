@@ -84,57 +84,12 @@ class _StateParameter(_PeriodicOrbitContinuationInterface, _NaturalParameter):
 
 
 class _FixedPeriod(_PeriodicOrbitContinuationInterface, _NaturalParameter):
-    def __init__(
-        self,
-        *,
-        initial_orbit: PeriodicOrbit,
-        target: "Sequence[float]",
-        step: float = 1e-3,
-        corrector_kwargs: dict | None = None,
-        max_orbits: int = 256,
-    ) -> None:
-        # Continuation parameter (period)
-        parameter_getter = lambda orb: np.asarray([float(orb.period)])
-
-        super().__init__(
-            initial_orbit=initial_orbit,
-            parameter_getter=parameter_getter,
-            target=target,
-            step=step,
-            corrector_kwargs=corrector_kwargs,
-            max_orbits=max_orbits,
-        )
-
-    def _predict(self, last_orbit: PeriodicOrbit, step: np.ndarray) -> np.ndarray:
+    
+    def __init__(self, *args, **kwargs):
         raise NotImplementedError("Period continuation is not implemented yet.")
 
 
 class _EnergyLevel(_PeriodicOrbitContinuationInterface, _NaturalParameter):
-    def __init__(
-        self,
-        *,
-        initial_orbit: PeriodicOrbit,
-        target: "Sequence[float]",
-        step: float = 1e-4,
-        use_jacobi: bool = False,
-        corrector_kwargs: dict | None = None,
-        max_orbits: int = 256,
-    ) -> None:
-        if use_jacobi:
-            parameter_getter = lambda orb: np.asarray([float(orb.jacobi_constant)])
-        else:
-            parameter_getter = lambda orb: np.asarray([float(orb.energy)])
 
-        self._use_jacobi = use_jacobi
-
-        super().__init__(
-            initial_orbit=initial_orbit,
-            parameter_getter=parameter_getter,
-            target=target,
-            step=step,
-            corrector_kwargs=corrector_kwargs,
-            max_orbits=max_orbits,
-        )
-
-    def _predict(self, last_orbit: PeriodicOrbit, step: np.ndarray) -> np.ndarray:
+    def __init__(self, *args, **kwargs):
         raise NotImplementedError("Energy continuation is not implemented yet.")

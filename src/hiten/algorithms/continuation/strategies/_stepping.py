@@ -3,7 +3,7 @@ from typing import Callable, Protocol
 import numpy as np
 
 
-class StepStrategy(Protocol):
+class _StepStrategy(Protocol):
 
     def __call__(
         self,
@@ -59,5 +59,5 @@ class _NaturalParameterStep:
         pass
 
 
-class PseudoArcLengthStep:
+class _PseudoArcLengthStep:
     pass

@@ -3,8 +3,9 @@ from typing import Callable, Sequence
 
 import numpy as np
 
+from hiten.algorithms.continuation.strategies._step_interface import (
+    _ContinuationStep, _PlainStep)
 from hiten.utils.log_config import logger
-from hiten.algorithms.continuation._step_interface import _ContinuationStep, _PlainStep
 
 
 class _ContinuationEngine(ABC):
