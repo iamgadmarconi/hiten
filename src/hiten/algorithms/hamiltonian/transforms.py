@@ -371,7 +371,7 @@ def _synodic2local_collinear(point: CollinearPoint, synodic_coords: np.ndarray, 
     # Allocate output array
     local = np.empty(6, dtype=np.float64)
 
-    # Invert position mapping (remember X and Vx were flipped in forward transform)
+    # Invert position mapping (X was translated and scaled by gamma, with a sign adjustment)
     # X coordinate
     local[0] = (-s[0] - mu - a) / (sgn * gamma)
     # Y coordinate
