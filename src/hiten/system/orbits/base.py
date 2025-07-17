@@ -578,8 +578,8 @@ class GenericOrbit(PeriodicOrbit):
     
     def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None):
         super().__init__(libration_point, initial_state)
-        self._custom_correction_config: Optional[_OrbitCorrectionConfig] = None
-        self._custom_continuation_config: Optional[_OrbitContinuationConfig] = None
+        self._custom_correction_config: Optional["_OrbitCorrectionConfig"] = None
+        self._custom_continuation_config: Optional["_OrbitContinuationConfig"] = None
         if self._period is None:
             self._period = np.pi
 
@@ -598,6 +598,7 @@ class GenericOrbit(PeriodicOrbit):
 
     @correction_config.setter
     def correction_config(self, value: Optional["_OrbitCorrectionConfig"]):
+        from hiten.algorithms.corrector.interfaces import _OrbitCorrectionConfig
         if value is not None and not isinstance(value, _OrbitCorrectionConfig):
             raise TypeError("correction_config must be an instance of _OrbitCorrectionConfig or None.")
         self._custom_correction_config = value
@@ -637,6 +638,7 @@ class GenericOrbit(PeriodicOrbit):
 
     @continuation_config.setter
     def continuation_config(self, cfg: Optional["_OrbitContinuationConfig"]):
+        from hiten.algorithms.continuation.interfaces import _OrbitContinuationConfig
         if cfg is not None and not isinstance(cfg, _OrbitContinuationConfig):
             raise TypeError("continuation_config must be a _OrbitContinuationConfig instance or None")
         self._custom_continuation_config = cfg

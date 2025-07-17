@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Callable, Literal, Optional, Tuple
 import numpy as np
 
 from hiten.algorithms.corrector.base import (JacobianFn, NormFn,
-                                             _BaseCorrectionConfig)
+                                             _BaseCorrectionConfig, _Corrector)
 from hiten.algorithms.dynamics.rtbp import _compute_stm
 from hiten.algorithms.dynamics.utils.geometry import _find_y_zero_crossing
 from hiten.utils.log_config import logger
@@ -31,7 +31,15 @@ class _OrbitCorrectionConfig(_BaseCorrectionConfig):
     forward: int = 1
 
 
-class _PeriodicOrbitCorrectorInterface:
+class _PeriodicOrbitCorrectorInterface(_Corrector):
+    """Interface for periodic orbit differential correction.
+    
+    This class provides orbit-specific correction functionality and is designed
+    to be used as a mixin with a concrete corrector implementation (e.g., _NewtonCore).
+    The orbit-specific correct() method translates orbit parameters to generic
+    corrector parameters and delegates numerical work to the concrete implementation
+    via super().correct().
+    """
 
     def _to_full_state(
         self,
