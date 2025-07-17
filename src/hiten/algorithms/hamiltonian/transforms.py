@@ -149,7 +149,7 @@ def _solve_real(real_coords: np.ndarray) -> np.ndarray:
     """
     return _clean_coordinates(_substitute_coordinates(real_coords, _M())) # [q1r, q2r, q3r, p1r, p2r, p3r]
 
-def _local2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
+def _polylocal2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
     r"""
     Transform a polynomial from local frame to real modal frame.
     
@@ -181,7 +181,40 @@ def _local2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi, clm
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
     return _substitute_linear(poly_local, C, max_deg, psi, clmo, encode_dict_list)
 
-def _realmodal2local(point, modal_coords: np.ndarray) -> np.ndarray:
+def _polyrealmodal2local(point, poly_realmodal: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
+    r"""
+    Transform a polynomial from real modal frame to local frame.
+    
+    Parameters
+    ----------
+    point : object
+        An object with a normal_form_transform method that returns the transformation matrix
+    poly_realmodal : List[numpy.ndarray]
+        Polynomial in real modal coordinates
+    max_deg : int
+        Maximum degree for polynomial representations
+    psi : numpy.ndarray
+        Combinatorial table from _init_index_tables
+    clmo : numba.typed.List
+        List of arrays containing packed multi-indices
+        
+    Returns
+    -------
+    List[numpy.ndarray]
+        Polynomial in local coordinates
+        
+    Notes
+    -----
+    This function transforms a polynomial from real modal coordinates to
+    local coordinates using the inverse of the transformation matrix obtained
+    from the point object.
+    """
+    C, _ = point.normal_form_transform()
+    C_inv = np.linalg.inv(C)
+    encode_dict_list = _create_encode_dict_from_clmo(clmo)
+    return _substitute_linear(poly_realmodal, C_inv, max_deg, psi, clmo, encode_dict_list)
+
+def _coordrealmodal2local(point, modal_coords: np.ndarray) -> np.ndarray:
     r"""
     Transform coordinates from real modal to local frame.
     
@@ -204,6 +237,31 @@ def _realmodal2local(point, modal_coords: np.ndarray) -> np.ndarray:
     """
     C, _ = point.normal_form_transform()
     return _clean_coordinates(C.dot(modal_coords))
+
+def _coordlocal2realmodal(point, local_coords: np.ndarray) -> np.ndarray:
+    r"""
+    Transform coordinates from local to real modal frame.
+    
+    Parameters
+    ----------
+    point : object
+        An object with a normal_form_transform method that returns the transformation matrix
+    local_coords : np.ndarray
+        Coordinates in local frame
+
+    Returns
+    -------
+    np.ndarray
+        Coordinates in real modal frame
+
+    Notes
+    -----
+    - Local coordinates are ordered as [x1, x2, x3, px1, px2, px3].
+    - Modal coordinates are ordered as [q1, q2, q3, px1, px2, px3].
+    """
+    C, _ = point.normal_form_transform()
+    C_inv = np.linalg.inv(C)
+    return _clean_coordinates(C_inv.dot(local_coords))
 
 def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray) -> np.ndarray:
     r"""
@@ -270,6 +328,71 @@ def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray) ->
 
     return syn
 
+def _synodic2local_collinear(point: CollinearPoint, synodic_coords: np.ndarray) -> np.ndarray:
+    r"""
+    Transform coordinates from synodic to local frame for the collinear points.
+
+    This is the exact inverse of :pyfunc:`_local2synodic_collinear`.
+
+    Parameters
+    ----------
+    point : CollinearPoint
+        Collinear libration point providing the geometric parameters ``gamma``,
+        ``mu``, ``sign`` and ``a``.
+    synodic_coords : np.ndarray
+        Coordinates in synodic frame ``[X, Y, Z, Vx, Vy, Vz]``.
+
+    Returns
+    -------
+    np.ndarray
+        Coordinates in local frame ``[x1, x2, x3, px1, px2, px3]``.
+
+    Raises
+    ------
+    ValueError
+        If *synodic_coords* is not a flat array of length 6 or contains an
+        imaginary part larger than the tolerance (``1e-16``).
+    """
+    gamma, mu, sgn, a = point.gamma, point.mu, point.sign, point.a
+
+    tol = 1e-16
+    s_complex = np.asarray(synodic_coords, dtype=np.complex128)
+    if np.any(np.abs(np.imag(s_complex)) > tol):
+        err = (
+            f"_synodic2local_collinear received coords with non-negligible imaginary part; "
+            f"max |Im(coords)| = {np.max(np.abs(np.imag(s_complex))):.3e} > {tol}."
+        )
+        logger.error(err)
+        raise ValueError(err)
+
+    s = s_complex.real.astype(np.float64)
+
+    if s.ndim != 1 or s.size != 6:
+        raise ValueError(
+            f"coords must be a flat array of 6 elements, got shape {s.shape}"
+        )
+
+    # Allocate output array
+    local = np.empty(6, dtype=np.float64)
+
+    # Invert position mapping (remember X and Vx were flipped in forward transform)
+    # X coordinate
+    local[0] = (-s[0] - mu - a) / (sgn * gamma)
+    # Y coordinate
+    local[1] = s[1] / (sgn * gamma)
+    # Z coordinate
+    local[2] = s[2] / gamma
+
+    # Invert velocity mapping
+    # px1 from Vx (note the sign flip on Vx)
+    local[3] = -s[3] / gamma - local[1]
+    # px2 from Vy
+    local[4] = s[4] / gamma + local[0]
+    # px3 from Vz
+    local[5] = s[5] / gamma
+
+    return local
+
 def _local2synodic_triangular(point: TriangularPoint, local_coords: np.ndarray) -> np.ndarray:
     r"""
     Transform coordinates from local to synodic frame for the equilateral points.
@@ -334,3 +457,62 @@ def _local2synodic_triangular(point: TriangularPoint, local_coords: np.ndarray) 
     syn[[0, 3]] *= -1.0
 
     return syn
+
+def _synodic2local_triangular(point: TriangularPoint, synodic_coords: np.ndarray) -> np.ndarray:
+    r"""
+    Transform coordinates from synodic to local frame for the triangular (equilateral) points.
+
+    This is the exact inverse of :pyfunc:`_local2synodic_triangular`.
+
+    Parameters
+    ----------
+    point : TriangularPoint
+        Triangular libration point providing the geometric parameters ``mu``
+        and ``sign``.
+    synodic_coords : np.ndarray
+        Coordinates in synodic frame ``[X, Y, Z, Vx, Vy, Vz]``.
+
+    Returns
+    -------
+    np.ndarray
+        Coordinates in local frame ``[x1, x2, x3, px1, px2, px3]``.
+
+    Raises
+    ------
+    ValueError
+        If *synodic_coords* is not a flat array of length 6 or contains an
+        imaginary part larger than the tolerance (``1e-16``).
+    """
+    mu, sgn = point.mu, point.sign
+
+    tol = 1e-16
+    s_complex = np.asarray(synodic_coords, dtype=np.complex128)
+    if np.any(np.abs(np.imag(s_complex)) > tol):
+        err = (
+            f"_synodic2local_triangular received coords with non-negligible imaginary part; "
+            f"max |Im(coords)| = {np.max(np.abs(np.imag(s_complex))):.3e} > {tol}."
+        )
+        logger.error(err)
+        raise ValueError(err)
+
+    s = s_complex.real.astype(np.float64)
+
+    if s.ndim != 1 or s.size != 6:
+        raise ValueError(
+            f"coords must be a flat array of 6 elements, got shape {s.shape}"
+        )
+
+    # Allocate output array
+    local = np.empty(6, dtype=np.float64)
+
+    # Invert position mapping (remember X and Vx were flipped in forward transform)
+    local[0] = mu - 0.5 - s[0]  # x1
+    local[1] = s[1] - sgn * np.sqrt(3) / 2  # x2
+    local[2] = s[2]  # x3 (Z)
+
+    # Invert velocity mapping
+    local[3] = sgn * np.sqrt(3) / 2 - s[3]  # px1 from Vx (with sign flip)
+    local[4] = s[4] + mu - 0.5  # px2 from Vy
+    local[5] = s[5]  # px3 from Vz
+
+    return local

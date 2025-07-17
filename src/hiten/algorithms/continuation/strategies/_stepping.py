@@ -12,8 +12,6 @@ class _StepStrategy(Protocol):
     ) -> tuple[np.ndarray, np.ndarray]:
         ...
 
-    def on_accept(self, *args, **kwargs) -> None: ...
-
     def on_iteration(self, *args, **kwargs) -> None: ...
 
     def on_reject(self, *args, **kwargs) -> None: ...
@@ -40,7 +38,7 @@ class _NaturalParameterStep:
         return self._predictor(last_solution, step), step
 
     # Optional hooks, kept as no-ops
-    def on_accept(self, *_, **__):
+    def on_success(self, *_, **__):
         pass
 
     def on_iteration(self, *_, **__):
@@ -50,9 +48,6 @@ class _NaturalParameterStep:
         pass
 
     def on_failure(self, *_, **__):
-        pass
-
-    def on_success(self, *_, **__):
         pass
 
     def on_initialisation(self, *_, **__):
@@ -72,7 +67,7 @@ class _SecantStep:
         self._repr_fn = representation_fn
         self._param_fn = parameter_fn
 
-        # History buffers (updated in on_accept)
+        # History buffers (updated in on_success)
         self._repr_hist: list[np.ndarray] = []
         self._param_hist: list[np.ndarray] = []
 
@@ -86,10 +81,11 @@ class _SecantStep:
 
         # If we have a valid tangent use it, otherwise perform small natural step
         if self._tangent is None:
-            # Fallback: small natural-parameter step of magnitude |step|
-            ds = np.asarray(step, dtype=float)
+            # Fallback: small natural-parameter step of magnitude |step|.
+            # Ensure both scalar and vector ``step`` inputs are handled consistently.
+            ds_scalar = float(step) if np.ndim(step) == 0 else float(np.linalg.norm(step))
             n = self._repr_hist[-1].copy()
-            n[0] += float(ds[0])  # naive perturb first component
+            n[0] += ds_scalar  # naive perturb of the first component by |step|
             return n, step
 
         ds_scalar = float(step) if np.ndim(step) == 0 else float(np.linalg.norm(step))
@@ -98,7 +94,10 @@ class _SecantStep:
         new_repr = self._repr_hist[-1] + dr
         return new_repr, step
 
-    def on_accept(self, accepted_solution: object):
+    def _update_history_and_tangent(self, accepted_solution: object):
+        """Private helper that records representation/parameter history and
+        (re)computes the secant tangent vector."""
+
         r = self._repr_fn(accepted_solution)
         p = self._param_fn(accepted_solution)
 
@@ -108,16 +107,18 @@ class _SecantStep:
         if len(self._repr_hist) < 2:
             self._tangent = None
             return
+
         dr = self._repr_hist[-1] - self._repr_hist[-2]
         dp = self._param_hist[-1] - self._param_hist[-2]
         vec = np.concatenate((dr.ravel(), dp.ravel()))
         norm = np.linalg.norm(vec)
-        if norm == 0:
-            self._tangent = None
-        else:
-            self._tangent = vec / norm
+        self._tangent = None if norm == 0 else vec / norm
 
-    # Other hooks no-op for now
+    def on_success(self, accepted_solution: object):
+        """Callback invoked by the continuation engine after a successful step."""
+
+        self._update_history_and_tangent(accepted_solution)
+
     def on_iteration(self, *_, **__):
         pass
 
@@ -125,9 +126,6 @@ class _SecantStep:
         pass
 
     def on_failure(self, *_, **__):
-        pass
-
-    def on_success(self, *_, **__):
         pass
 
     def on_initialisation(self, first_solution: object):

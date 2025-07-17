@@ -19,7 +19,8 @@ manifolds near collinear libration points".
 """
 
 from dataclasses import asdict
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Tuple, Iterable, Union
+from typing import (TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Tuple,
+                    Union)
 
 import numpy as np
 
@@ -32,14 +33,18 @@ from hiten.algorithms.hamiltonian.hamiltonian import \
 # Full ("complete") normal form Lie transform
 from hiten.algorithms.hamiltonian.normal._lie import \
     _lie_transform as _lie_transform_full
-from hiten.algorithms.hamiltonian.transforms import (_local2realmodal,
+from hiten.algorithms.hamiltonian.transforms import (_coordlocal2realmodal,
+                                                     _coordrealmodal2local,
                                                      _local2synodic_collinear,
                                                      _local2synodic_triangular,
-                                                     _realmodal2local,
+                                                     _polylocal2realmodal,
+                                                     _polyrealmodal2local,
                                                      _solve_complex,
                                                      _solve_real,
                                                      _substitute_complex,
-                                                     _substitute_real)
+                                                     _substitute_real,
+                                                     _synodic2local_collinear,
+                                                     _synodic2local_triangular)
 from hiten.algorithms.poincare.config import _get_section_config
 from hiten.algorithms.poincare.map import _solve_missing_coord
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
@@ -95,12 +100,14 @@ class CenterManifold:
 
         if isinstance(self._point, CollinearPoint):
             self._local2synodic = _local2synodic_collinear
+            self._synodic2local = _synodic2local_collinear
 
             if isinstance(self._point, L3Point):
                 logger.warning("L3 point is not has not been verified for centre manifold computation!")
 
         elif isinstance(self._point, TriangularPoint):
             self._local2synodic = _local2synodic_triangular
+            self._synodic2local = _synodic2local_triangular
             err = "Triangular points not implemented for centre manifold computation!"
             logger.error(err)
             raise NotImplementedError(err)
@@ -266,7 +273,7 @@ class CenterManifold:
 
     def _get_real_modal_form(self) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'real_modal')
-        return self._get_or_compute(key, lambda: _local2realmodal(
+        return self._get_or_compute(key, lambda: _polylocal2realmodal(
             self._point, self._get_physical_hamiltonian(), self._max_degree, self._psi, self._clmo
         ))
 
@@ -376,7 +383,7 @@ class CenterManifold:
 
         return self._get_or_compute(key, compute_full_real_normal)
     
-    def _restrict_to_center_manifold(self, poly_H, tol=1e-14):
+    def _restrict_poly_to_center_manifold(self, poly_H, tol=1e-14):
         r"""
         Restrict a Hamiltonian to the center manifold by eliminating hyperbolic variables.
         """
@@ -393,12 +400,15 @@ class CenterManifold:
                     coeff_vec[pos] = 0.0
         return poly_cm
     
+    def _restrict_coord_to_center_manifold(self, coord_6d):
+        return np.array([0, coord_6d[1], coord_6d[2], 0, coord_6d[4], coord_6d[5]])
+    
     def _get_center_manifold_complex(self) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'center_manifold_complex')
         
         def compute_cm_complex():
             poly_trans = self._get_complex_partial_normal_form()
-            return self._restrict_to_center_manifold(poly_trans)
+            return self._restrict_poly_to_center_manifold(poly_trans)
 
         return self._get_or_compute(key, compute_cm_complex)
 
@@ -574,7 +584,7 @@ class CenterManifold:
         )
 
         # Ensure we have the centre-manifold Hamiltonian and Lie generators.
-        poly_cm_real = self.compute()
+        poly_cm_real = self.compute(form="center_manifold_real")
         _, poly_G_total, _ = self._get_partial_lie_results()
 
         config = _get_section_config(section_coord)
@@ -619,11 +629,52 @@ class CenterManifold:
         )
         complex_6d = _evaluate_transform(expansions, complex_6d_cm, self._clmo)
         real_6d = _solve_real(complex_6d)
-        local_6d = _realmodal2local(self._point, real_6d)
+        local_6d = _coordrealmodal2local(self._point, real_6d)
         synodic_6d = self._local2synodic(self._point, local_6d)
 
         logger.info("CM to synodic transformation complete")
         return synodic_6d
+    
+    def cm(self, synodic_6d: np.ndarray) -> np.ndarray:
+        """Return 4-D centre-manifold coordinates (q2, p2, q3, p3) from 6-D synodic ICs.
+
+        This is the exact inverse of :py:meth:`ic` and therefore performs the
+        following steps in *reverse* order::
+
+            synodic -> local -> real modal -> complex modal -> Lie-inverse -> CM.
+
+        Parameters
+        ----------
+        synodic_6d : numpy.ndarray, shape (6,)
+            Synodic coordinates (X, Y, Z, Vx, Vy, Vz).
+
+        Returns
+        -------
+        numpy.ndarray, shape (4,)
+            Centre-manifold real coordinates ``[q2, p2, q3, p3]``.
+        """
+
+        local_6d = self._synodic2local(self._point, synodic_6d)
+
+        real_modal_6d = _coordlocal2realmodal(self._point, local_6d)
+
+        complex_modal_6d = _solve_complex(real_modal_6d)
+
+        _, poly_G_total, _ = self._get_partial_lie_results()
+        expansions = _lie_expansion(poly_G_total, self._max_degree, self._psi, self._clmo,
+                                    1e-30, inverse=True, sign=-1, restrict=False)
+        complex_pnf_6d = _evaluate_transform(expansions, complex_modal_6d, self._clmo)
+        real_pnf_6d = _solve_real(complex_pnf_6d)
+        real_cm_6d = self._restrict_coord_to_center_manifold(real_pnf_6d)
+
+        real_cm_4d = np.array([
+            real_cm_6d[1], # q2
+            real_cm_6d[4], # p2
+            real_cm_6d[2], # q3
+            real_cm_6d[5], # p3
+        ], dtype=np.float64)
+
+        return real_cm_4d
 
     def save(self, dir_path: str):
         r"""

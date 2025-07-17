@@ -2,18 +2,26 @@ import numpy as np
 import pytest
 import sympy as sp
 
-from hiten.algorithms.hamiltonian.hamiltonian import _build_physical_hamiltonian
+from hiten.algorithms.hamiltonian.hamiltonian import \
+    _build_physical_hamiltonian
+from hiten.algorithms.hamiltonian.transforms import (_polylocal2realmodal,
+                                                     _local2synodic_collinear,
+                                                     _local2synodic_triangular,
+                                                     _solve_complex,
+                                                     _solve_real,
+                                                     _substitute_complex,
+                                                     _substitute_linear,
+                                                     _substitute_real,
+                                                     _synodic2local_collinear,
+                                                     _synodic2local_triangular)
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                               _encode_multiindex,
-                                               _init_index_tables)
+                                              _encode_multiindex,
+                                              _init_index_tables)
 from hiten.algorithms.polynomial.conversion import poly2sympy, sympy2poly
 from hiten.algorithms.polynomial.operations import (
     _linear_variable_polys, _polynomial_add_inplace, _polynomial_multiply,
     _polynomial_poisson_bracket, _polynomial_power, _polynomial_variable,
     _polynomial_zero_list)
-from hiten.algorithms.hamiltonian.transforms import (_local2realmodal, _solve_complex,
-                                          _solve_real, _substitute_complex,
-                                          _substitute_linear, _substitute_real)
 from hiten.system.base import System
 from hiten.system.body import Body
 from hiten.utils.constants import Constants
@@ -302,7 +310,7 @@ def test_real_normal_form(transforms_test_setup):
     psi, clmo, _, libration_point = transforms_test_setup
 
     H_phys = _build_physical_hamiltonian(libration_point, TEST_MAX_DEG)
-    H_rn   = _local2realmodal(libration_point, H_phys, TEST_MAX_DEG, psi, clmo)
+    H_rn   = _polylocal2realmodal(libration_point, H_phys, TEST_MAX_DEG, psi, clmo)
 
     x, y, z, px, py, pz = sp.symbols('x y z px py pz')
     expr = poly2sympy(H_rn, (x, y, z, px, py, pz), psi, clmo)
@@ -342,7 +350,7 @@ def test_complex_normal_form(transforms_test_setup):
     psi, clmo, encode_dict, libration_point = transforms_test_setup
 
     H_phys = _build_physical_hamiltonian(libration_point, TEST_MAX_DEG)
-    H_rn   = _local2realmodal(libration_point, H_phys, TEST_MAX_DEG, psi, clmo)
+    H_rn   = _polylocal2realmodal(libration_point, H_phys, TEST_MAX_DEG, psi, clmo)
     H_cn   = _substitute_complex(H_rn, TEST_MAX_DEG, psi, clmo)
 
     q1, q2, q3, p1, p2, p3 = sp.symbols("q1 q2 q3 p1 p2 p3")
@@ -423,7 +431,7 @@ def test_poly_realification_complexification(transforms_test_setup):
     psi, clmo, _, libration_point = transforms_test_setup
 
     H_phys = _build_physical_hamiltonian(libration_point, TEST_MAX_DEG)
-    H_rn   = _local2realmodal(libration_point, H_phys, TEST_MAX_DEG, psi, clmo)
+    H_rn   = _polylocal2realmodal(libration_point, H_phys, TEST_MAX_DEG, psi, clmo)
     H_cn   = _substitute_complex(H_rn, TEST_MAX_DEG, psi, clmo)
     H_back = _substitute_real(H_cn, TEST_MAX_DEG, psi, clmo)
 
@@ -475,3 +483,78 @@ def test_coordinate_realification_complexification(seed):
             err_msg=f"Real->Complex->Real round trip failed for test case {i}: "
                    f"input={real_coords}, recovered={recovered_real_coords}"
         )
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_collinear_local_synodic_inverse(seed, transforms_test_setup):
+    _, _, _, libration_point = transforms_test_setup  # collinear point (L1)
+
+    rng = np.random.default_rng(seed)
+
+    local = rng.uniform(-0.5, 0.5, size=6).astype(np.float64)
+
+    syn = _local2synodic_collinear(libration_point, local)
+    recovered_local = _synodic2local_collinear(libration_point, syn)
+
+    np.testing.assert_allclose(
+        recovered_local,
+        local,
+        rtol=1e-13,
+        atol=1e-13,
+        err_msg=f"Collinear local→synodic→local failed for seed {seed}.",
+    )
+
+    syn_round = _local2synodic_collinear(libration_point, recovered_local)
+    np.testing.assert_allclose(
+        syn_round,
+        syn,
+        rtol=1e-13,
+        atol=1e-13,
+        err_msg=f"Collinear synodic→local→synodic failed for seed {seed}.",
+    )
+
+
+@pytest.mark.parametrize("seed", [0, 1, 2])
+def test_triangular_local_synodic_inverse(seed):
+
+    Earth = Body(
+        "Earth",
+        Constants.bodies["earth"]["mass"],
+        Constants.bodies["earth"]["radius"],
+        "blue",
+    )
+    Moon = Body(
+        "Moon",
+        Constants.bodies["moon"]["mass"],
+        Constants.bodies["moon"]["radius"],
+        "gray",
+        Earth,
+    )
+    distance = Constants.get_orbital_distance("earth", "moon")
+    system = System(Earth, Moon, distance)
+
+    triangular_point = system.get_libration_point(4)  # L4 (Triangular)
+
+    rng = np.random.default_rng(seed + 42)  # Different stream
+    local = rng.uniform(-0.5, 0.5, size=6).astype(np.float64)
+
+    syn = _local2synodic_triangular(triangular_point, local)
+    recovered_local = _synodic2local_triangular(triangular_point, syn)
+
+    np.testing.assert_allclose(
+        recovered_local,
+        local,
+        rtol=1e-13,
+        atol=1e-13,
+        err_msg=f"Triangular local→synodic→local failed for seed {seed}.",
+    )
+
+    syn_round = _local2synodic_triangular(triangular_point, recovered_local)
+    np.testing.assert_allclose(
+        syn_round,
+        syn,
+        rtol=1e-13,
+        atol=1e-13,
+        err_msg=f"Triangular synodic→local→synodic failed for seed {seed}.",
+    )
+
