@@ -457,7 +457,7 @@ def _synodic2local_triangular(point: TriangularPoint, synodic_coords: np.ndarray
     r"""
     Transform coordinates from synodic to local frame for the triangular (equilateral) points.
 
-    This is the exact inverse of :pyfunc:`_local2synodic_triangular`.
+    This is the exact inverse of :func:`_local2synodic_triangular`.
 
     Parameters
     ----------
