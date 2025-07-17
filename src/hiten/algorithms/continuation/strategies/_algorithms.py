@@ -30,6 +30,13 @@ class _NaturalParameter(_ContinuationEngine, ABC):
         current = self._param_history[-1]
         return np.any(current < self._target_min) or np.any(current > self._target_max)
 
+    def _make_stepper(self):
+        raise NotImplementedError(
+            "Natural-parameter continuations must define a StepStrategy by "
+            "overriding _make_stepper() or assigning self._stepper before "
+            "calling super().__init__."
+        )
+
 
 class _PseudoArcLength(_ContinuationEngine, ABC):
     """Abstract base class for pseudo arclength continuation algorithms"""

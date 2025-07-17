@@ -2,10 +2,12 @@ from typing import Sequence
 
 import numpy as np
 
-from hiten.algorithms.continuation.strategies._stepping import _NaturalParameterStep
 from hiten.algorithms.continuation.interfaces import \
     _PeriodicOrbitContinuationInterface
-from hiten.algorithms.continuation.strategies._algorithms import _NaturalParameter
+from hiten.algorithms.continuation.strategies._algorithms import \
+    _NaturalParameter
+from hiten.algorithms.continuation.strategies._stepping import \
+    _NaturalParameterStep
 from hiten.system.orbits.base import PeriodicOrbit, S
 
 
@@ -65,6 +67,15 @@ class _StateParameter(_PeriodicOrbitContinuationInterface, _NaturalParameter):
             idxs = self._state_indices.copy()
             parameter_getter = lambda orb, idxs=idxs: np.asarray([float(orb.initial_state[i]) for i in idxs])
 
+        # Predictor function that applies the step to selected state indices
+        def _predict_state(orbit, step_vec):
+            new_state = orbit.initial_state.copy()
+            for idx, d in zip(self._state_indices, step_vec):
+                new_state[idx] += d
+            return new_state
+
+        self._predict_state_fn = _predict_state
+
         super().__init__(
             initial_orbit=initial_orbit,
             parameter_getter=parameter_getter,
@@ -74,13 +85,9 @@ class _StateParameter(_PeriodicOrbitContinuationInterface, _NaturalParameter):
             max_orbits=max_orbits,
         )
 
-        def _predict_state(orbit, step_vec):
-            new_state = orbit.initial_state.copy()
-            for idx, d in zip(self._state_indices, step_vec):
-                new_state[idx] += d
-            return new_state
-
-        self._stepper = _NaturalParameterStep(_predict_state)
+    # Override _make_stepper to supply the strategy
+    def _make_stepper(self):
+        return _NaturalParameterStep(self._predict_state_fn)
 
 
 class _FixedPeriod(_PeriodicOrbitContinuationInterface, _NaturalParameter):
