@@ -4,6 +4,7 @@ from typing import Callable, Sequence
 import numpy as np
 
 from hiten.utils.log_config import logger
+from hiten.algorithms.continuation._stepinterface import _ContinuationStep, _PlainStep
 
 
 class _ContinuationEngine(ABC):
@@ -48,6 +49,9 @@ class _ContinuationEngine(ABC):
         self._corrector_kwargs = corrector_kwargs or {}
         self._max_iters = int(max_iters)
 
+        # Build stepper strategy (default wraps legacy _predict logic)
+        self._stepper: _ContinuationStep = self._make_stepper()
+
         logger.info(
             "Continuation initialised: parameter=%s, target=[%s - %s], step=%s, max_iters=%d",
             current_param,
@@ -79,7 +83,10 @@ class _ContinuationEngine(ABC):
                 break
 
             last_sol = self._family[-1]
-            predicted_repr = self._predict(last_sol, self._step)
+
+            predicted_repr, next_step = self._stepper(last_sol, self._step)
+            self._step = next_step.copy()
+
             candidate = self._instantiate(predicted_repr)
 
             try:
@@ -92,6 +99,7 @@ class _ContinuationEngine(ABC):
                     exc,
                     exc_info=exc,
                 )
+                # Notify strategy of failure via _update_step fallback for now
                 self._step = self._update_step(self._step, success=False)
                 attempts_at_current_step += 1
                 if attempts_at_current_step > 10:
@@ -113,7 +121,7 @@ class _ContinuationEngine(ABC):
             except Exception as exc:
                 logger.warning("_on_accept hook raised exception: %s", exc)
 
-            # Prepare next iteration
+            # Strategy may wish to adapt step on success as default fallback
             self._step = self._update_step(self._step, success=True)
 
         logger.info("Continuation finished : generated %d members.", len(self._family))
@@ -192,6 +200,19 @@ class _ContinuationEngine(ABC):
         """
 
         pass
+
+    def _make_stepper(self) -> _ContinuationStep:  # noqa: N802
+        """Return a stepper strategy for this continuation run.
+
+        Subclasses can override to supply specialised prediction / step-size
+        control.  The default simply wraps the legacy _predict() and falls
+        back to _update_step for step-length adaptation.
+        """
+
+        def _predictor(last_solution: object, step: np.ndarray) -> np.ndarray:
+            return self._predict(last_solution, step)
+
+        return _PlainStep(_predictor)
 
 
 
