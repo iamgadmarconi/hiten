@@ -329,7 +329,7 @@ def _synodic2local_collinear(point: CollinearPoint, synodic_coords: np.ndarray, 
     r"""
     Transform coordinates from synodic to local frame for the collinear points.
 
-    This is the exact inverse of :pyfunc:`_local2synodic_collinear`.
+    This is the exact inverse of :func:`_local2synodic_collinear`.
 
     Parameters
     ----------
