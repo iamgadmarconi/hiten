@@ -401,7 +401,10 @@ class CenterManifold:
         return poly_cm
     
     def _restrict_coord_to_center_manifold(self, coord_6d):
-        return np.array([0, coord_6d[1], coord_6d[2], 0, coord_6d[4], coord_6d[5]])
+        # Convert complex arrays with zero imaginary parts to real
+        if np.iscomplexobj(coord_6d):
+            coord_6d = np.real(coord_6d)
+        return np.array([0, coord_6d[1], coord_6d[2], 0, coord_6d[4], coord_6d[5]], dtype=np.float64)
     
     def _get_center_manifold_complex(self) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'center_manifold_complex')
@@ -549,7 +552,7 @@ class CenterManifold:
         
         return self._poincare_maps[cache_key]
 
-    def ic(self, poincare_point: np.ndarray, energy: float, section_coord: str = "q3") -> np.ndarray:
+    def ic(self, poincare_point: np.ndarray, energy: float, section_coord: str = "q3", tol=1e-16) -> np.ndarray:
         r"""
         Convert a point on a 2-dimensional centre-manifold section to full ICs.
 
@@ -622,20 +625,20 @@ class CenterManifold:
         real_6d_cm[4] = real_4d_cm[1]  # p2
         real_6d_cm[5] = real_4d_cm[3]  # p3
 
-        complex_6d_cm = _solve_complex(real_6d_cm)
+        complex_6d_cm = _solve_complex(real_6d_cm, tol)
         expansions = _lie_expansion(
-            poly_G_total, self._max_degree, self._psi, self._clmo, 1e-30,
+            poly_G_total, self._max_degree, self._psi, self._clmo, tol,
             inverse=False, sign=1, restrict=False,
         )
         complex_6d = _evaluate_transform(expansions, complex_6d_cm, self._clmo)
-        real_6d = _solve_real(complex_6d)
-        local_6d = _coordrealmodal2local(self._point, real_6d)
-        synodic_6d = self._local2synodic(self._point, local_6d)
+        real_6d = _solve_real(complex_6d, tol)
+        local_6d = _coordrealmodal2local(self._point, real_6d, tol)
+        synodic_6d = self._local2synodic(self._point, local_6d, tol)
 
         logger.info("CM to synodic transformation complete")
         return synodic_6d
     
-    def cm(self, synodic_6d: np.ndarray) -> np.ndarray:
+    def cm(self, synodic_6d: np.ndarray, tol=1e-16) -> np.ndarray:
         """Return 4-D centre-manifold coordinates (q2, p2, q3, p3) from 6-D synodic ICs.
 
         This is the exact inverse of :py:meth:`ic` and therefore performs the
@@ -654,17 +657,18 @@ class CenterManifold:
             Centre-manifold real coordinates ``[q2, p2, q3, p3]``.
         """
 
-        local_6d = self._synodic2local(self._point, synodic_6d)
+        local_6d = self._synodic2local(self._point, synodic_6d, tol)
 
-        real_modal_6d = _coordlocal2realmodal(self._point, local_6d)
+        real_modal_6d = _coordlocal2realmodal(self._point, local_6d, tol)
 
-        complex_modal_6d = _solve_complex(real_modal_6d)
+        complex_modal_6d = _solve_complex(real_modal_6d, tol)
 
         _, poly_G_total, _ = self._get_partial_lie_results()
         expansions = _lie_expansion(poly_G_total, self._max_degree, self._psi, self._clmo,
-                                    1e-30, inverse=True, sign=-1, restrict=False)
+                                    tol, inverse=True, sign=-1, restrict=False)
+
         complex_pnf_6d = _evaluate_transform(expansions, complex_modal_6d, self._clmo)
-        real_pnf_6d = _solve_real(complex_pnf_6d)
+        real_pnf_6d = _solve_real(complex_pnf_6d, tol)
         real_cm_6d = self._restrict_coord_to_center_manifold(real_pnf_6d)
 
         real_cm_4d = np.array([

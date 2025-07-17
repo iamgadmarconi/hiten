@@ -59,7 +59,7 @@ def _M_inv() -> np.ndarray:
     """
     return np.linalg.inv(_M()) # complex = M_inv @ real
 
-def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
+def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-14) -> List[np.ndarray]:
     r"""
     Transform a polynomial from real normal form to complex normal form.
     
@@ -86,9 +86,9 @@ def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo) -> L
     Since complex = M_inv @ real, we use _M_inv() for the transformation.
     """
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return _polynomial_clean(_substitute_linear(poly_rn, _M(), max_deg, psi, clmo, encode_dict_list), 1e-14)
+    return _polynomial_clean(_substitute_linear(poly_rn, _M(), max_deg, psi, clmo, encode_dict_list), tol)
 
-def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
+def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-14) -> List[np.ndarray]:
     r"""
     Transform a polynomial from complex normal form to real normal form.
     
@@ -115,9 +115,9 @@ def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo) -> List
     Since real = M @ complex, we use _M() for the transformation.
     """
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return _polynomial_clean(_substitute_linear(poly_cn, _M_inv(), max_deg, psi, clmo, encode_dict_list), 1e-14)
+    return _polynomial_clean(_substitute_linear(poly_cn, _M_inv(), max_deg, psi, clmo, encode_dict_list), tol)
 
-def _solve_complex(real_coords: np.ndarray) -> np.ndarray:
+def _solve_complex(real_coords: np.ndarray, tol=1e-30) -> np.ndarray:
     r"""
     Return complex coordinates given real coordinates using the map `M_inv`.
 
@@ -131,9 +131,9 @@ def _solve_complex(real_coords: np.ndarray) -> np.ndarray:
     np.ndarray
         Complex coordinates [q1c, q2c, q3c, p1c, p2c, p3c]
     """
-    return _clean_coordinates(_substitute_coordinates(real_coords, _M_inv())) # [q1c, q2c, q3c, p1c, p2c, p3c]
+    return _clean_coordinates(_substitute_coordinates(real_coords, _M_inv()), tol) # [q1c, q2c, q3c, p1c, p2c, p3c]
 
-def _solve_real(real_coords: np.ndarray) -> np.ndarray:
+def _solve_real(real_coords: np.ndarray, tol=1e-30) -> np.ndarray:
     r"""
     Return real coordinates given complex coordinates using the map `M`.
 
@@ -147,7 +147,7 @@ def _solve_real(real_coords: np.ndarray) -> np.ndarray:
     np.ndarray
         Real coordinates [q1r, q2r, q3r, p1r, p2r, p3r]
     """
-    return _clean_coordinates(_substitute_coordinates(real_coords, _M())) # [q1r, q2r, q3r, p1r, p2r, p3r]
+    return _clean_coordinates(_substitute_coordinates(real_coords, _M()), tol) # [q1r, q2r, q3r, p1r, p2r, p3r]
 
 def _polylocal2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
     r"""
@@ -209,12 +209,11 @@ def _polyrealmodal2local(point, poly_realmodal: List[np.ndarray], max_deg: int, 
     local coordinates using the inverse of the transformation matrix obtained
     from the point object.
     """
-    C, _ = point.normal_form_transform()
-    C_inv = np.linalg.inv(C)
+    _, C_inv = point.normal_form_transform()
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
     return _substitute_linear(poly_realmodal, C_inv, max_deg, psi, clmo, encode_dict_list)
 
-def _coordrealmodal2local(point, modal_coords: np.ndarray) -> np.ndarray:
+def _coordrealmodal2local(point, modal_coords: np.ndarray, tol=1e-30) -> np.ndarray:
     r"""
     Transform coordinates from real modal to local frame.
     
@@ -236,9 +235,9 @@ def _coordrealmodal2local(point, modal_coords: np.ndarray) -> np.ndarray:
     - Local coordinates are ordered as [x1, x2, x3, px1, px2, px3].
     """
     C, _ = point.normal_form_transform()
-    return _clean_coordinates(C.dot(modal_coords))
+    return _clean_coordinates(C.dot(modal_coords), tol)
 
-def _coordlocal2realmodal(point, local_coords: np.ndarray) -> np.ndarray:
+def _coordlocal2realmodal(point, local_coords: np.ndarray, tol=1e-30) -> np.ndarray:
     r"""
     Transform coordinates from local to real modal frame.
     
@@ -259,11 +258,10 @@ def _coordlocal2realmodal(point, local_coords: np.ndarray) -> np.ndarray:
     - Local coordinates are ordered as [x1, x2, x3, px1, px2, px3].
     - Modal coordinates are ordered as [q1, q2, q3, px1, px2, px3].
     """
-    C, _ = point.normal_form_transform()
-    C_inv = np.linalg.inv(C)
-    return _clean_coordinates(C_inv.dot(local_coords))
+    _, C_inv = point.normal_form_transform()
+    return _clean_coordinates(C_inv.dot(local_coords), tol)
 
-def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray) -> np.ndarray:
+def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray, tol=1e-16) -> np.ndarray:
     r"""
     Transform coordinates from local to synodic frame for the collinear points.
 
@@ -292,7 +290,6 @@ def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray) ->
     """
     gamma, mu, sgn, a = point.gamma, point.mu, point.sign, point.a
 
-    tol = 1e-16
     c_complex = np.asarray(local_coords, dtype=np.complex128)
     if np.any(np.abs(np.imag(c_complex)) > tol):
         err = f"_local2synodic_collinear received coords with non-negligible imaginary part; max |Im(coords)| = {np.max(np.abs(np.imag(c_complex))):.3e} > {tol}."
@@ -328,7 +325,7 @@ def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray) ->
 
     return syn
 
-def _synodic2local_collinear(point: CollinearPoint, synodic_coords: np.ndarray) -> np.ndarray:
+def _synodic2local_collinear(point: CollinearPoint, synodic_coords: np.ndarray, tol=1e-16) -> np.ndarray:
     r"""
     Transform coordinates from synodic to local frame for the collinear points.
 
@@ -355,7 +352,6 @@ def _synodic2local_collinear(point: CollinearPoint, synodic_coords: np.ndarray) 
     """
     gamma, mu, sgn, a = point.gamma, point.mu, point.sign, point.a
 
-    tol = 1e-16
     s_complex = np.asarray(synodic_coords, dtype=np.complex128)
     if np.any(np.abs(np.imag(s_complex)) > tol):
         err = (
@@ -393,7 +389,7 @@ def _synodic2local_collinear(point: CollinearPoint, synodic_coords: np.ndarray) 
 
     return local
 
-def _local2synodic_triangular(point: TriangularPoint, local_coords: np.ndarray) -> np.ndarray:
+def _local2synodic_triangular(point: TriangularPoint, local_coords: np.ndarray, tol=1e-16) -> np.ndarray:
     r"""
     Transform coordinates from local to synodic frame for the equilateral points.
     
@@ -422,7 +418,6 @@ def _local2synodic_triangular(point: TriangularPoint, local_coords: np.ndarray) 
     """
     mu, sgn = point.mu, point.sign
 
-    tol = 1e-16
     c_complex = np.asarray(local_coords, dtype=np.complex128)
     if np.any(np.abs(np.imag(c_complex)) > tol):
         err = f"_local2synodic_triangular received coords with non-negligible imaginary part; max |Im(coords)| = {np.max(np.abs(np.imag(c_complex))):.3e} > {tol}."
@@ -458,7 +453,7 @@ def _local2synodic_triangular(point: TriangularPoint, local_coords: np.ndarray) 
 
     return syn
 
-def _synodic2local_triangular(point: TriangularPoint, synodic_coords: np.ndarray) -> np.ndarray:
+def _synodic2local_triangular(point: TriangularPoint, synodic_coords: np.ndarray, tol=1e-16) -> np.ndarray:
     r"""
     Transform coordinates from synodic to local frame for the triangular (equilateral) points.
 
@@ -485,7 +480,6 @@ def _synodic2local_triangular(point: TriangularPoint, synodic_coords: np.ndarray
     """
     mu, sgn = point.mu, point.sign
 
-    tol = 1e-16
     s_complex = np.asarray(synodic_coords, dtype=np.complex128)
     if np.any(np.abs(np.imag(s_complex)) > tol):
         err = (
