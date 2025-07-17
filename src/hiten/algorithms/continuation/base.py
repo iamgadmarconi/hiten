@@ -51,6 +51,12 @@ class _ContinuationEngine(ABC):
 
         # Build stepper strategy (default wraps legacy _predict logic)
         self._stepper: _ContinuationStep = self._make_stepper()
+        # Notify strategy initialisation hook if present
+        if hasattr(self._stepper, "on_initialisation"):
+            try:
+                self._stepper.on_initialisation(initial_solution)
+            except Exception as exc:
+                logger.debug("stepper on_initialisation hook error: %s", exc)
 
         logger.info(
             "Continuation initialised: parameter=%s, target=[%s - %s], step=%s, max_iters=%d",
@@ -121,17 +127,16 @@ class _ContinuationEngine(ABC):
             except Exception as exc:
                 logger.warning("_on_accept hook raised exception: %s", exc)
 
-            # Strategy may wish to adapt step on success as default fallback
             self._step = self._update_step(self._step, success=True)
+
+            if hasattr(self._stepper, "on_success"):
+                try:
+                    self._stepper.on_success(candidate)
+                except Exception as exc:
+                    logger.debug("stepper on_success hook error: %s", exc)
 
         logger.info("Continuation finished : generated %d members.", len(self._family))
         return self._family
-
-    @abstractmethod
-    def _predict(self, last_solution: object, step: np.ndarray) -> np.ndarray:
-        """Return a representation predicted for the next solution."""
-
-        raise NotImplementedError("_predict must be provided by a sub-class")
 
     def _instantiate(self, representation: np.ndarray):
         """Instantiate a domain object from the predicted representation."""

@@ -24,11 +24,6 @@ class _NaturalParameter(_ContinuationEngine, ABC):
             ):
                 self._step[i] = -self._step[i]
 
-    @abstractmethod
-    def _predict(self, last_solution: object, step: np.ndarray) -> np.ndarray:
-        """Return a predicted representation for the next solution."""
-        pass
-
     def _stop_condition(self) -> bool:
         """Terminate when the parameter leaves the prescribed [min, max] window."""
 

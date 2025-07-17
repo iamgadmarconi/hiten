@@ -2,6 +2,7 @@ from typing import Sequence
 
 import numpy as np
 
+from hiten.algorithms.continuation._stepstrategy import _NaturalParameterStep
 from hiten.algorithms.continuation.interfaces import \
     _PeriodicOrbitContinuationInterface
 from hiten.algorithms.continuation.naturalparameter import _NaturalParameter
@@ -73,14 +74,13 @@ class _StateParameter(_PeriodicOrbitContinuationInterface, _NaturalParameter):
             max_orbits=max_orbits,
         )
 
-    def _predict(self, last_orbit: PeriodicOrbit, step: np.ndarray) -> np.ndarray:
-        """Copy the state vector and increment the designated component(s)."""
-        new_state = np.copy(last_orbit.initial_state)
-        for idx, d in zip(self._state_indices, step):
-            # Use base class helper to ensure reasonable step while preserving adaptive reduction
-            d = self._clamp_step(d, reference_value=new_state[idx])
-            new_state[idx] += d
-        return new_state
+        def _predict_state(orbit, step_vec):
+            new_state = orbit.initial_state.copy()
+            for idx, d in zip(self._state_indices, step_vec):
+                new_state[idx] += d
+            return new_state
+
+        self._stepper = _NaturalParameterStep(_predict_state)
 
 
 class _FixedPeriod(_PeriodicOrbitContinuationInterface, _NaturalParameter):
