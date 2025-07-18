@@ -106,7 +106,7 @@ class TriangularPoint(LibrationPoint):
         LinearData
             Object containing the linear data for the Libration point
         """
-        # Get cached values
+        # Frequencies and canonical transform
         omega1, omega2, omega_z = self.linear_modes
         C, Cinv = self.normal_form_transform()
         
@@ -128,11 +128,22 @@ class TriangularPoint(LibrationPoint):
         if cached is not None:
             return cached
 
-        omega1, omega2, omega_z = self.linear_modes
+        # Canonical eigenvectors (rows) -> columns after transpose
+        eigvs = self._get_eigvs().T  # shape (6,6), columns are the vectors
 
-        C = np.zeros((6, 6))
+        # Scaling factors s_j
+        s = np.array([self._scaling_factor(0),
+                      self._scaling_factor(1),
+                      self._scaling_factor(2)])
 
+        # Build diagonal scaling matrix for u and v blocks
+        S = np.diag(np.concatenate([s, s]))
+
+        C = eigvs @ np.linalg.inv(S)  # divide each column by its s_j
+
+        # Pre-compute inverse once - safer & cheaper later on
         Cinv = np.linalg.inv(C)
+
         self.cache_set(cache_key, (C, Cinv))
         return C, Cinv
     
@@ -203,15 +214,18 @@ class TriangularPoint(LibrationPoint):
         planar_mags = sorted(planar_freq_groups.keys())
         smaller_mag, larger_mag = planar_mags
         
-        # Apply the convention: omega_1 > 0 with omega_1^2 < 1/2, omega_2 < 0
-        # omega_1 should have omega_1^2 < 1/2, so omega_1 < sqrt(1/2) ≈ 0.707
-        if smaller_mag**2 < 0.5:
-            omega1 = smaller_mag   # positive
-            omega2 = -larger_mag   # negative
-        else:
-            # If both are > sqrt(1/2), take the smaller one as omega_1
-            omega1 = smaller_mag   # positive  
-            omega2 = -larger_mag   # negative
+        # Apply the updated convention described above.
+        # Ideally we have |smaller| < sqrt(1/2) < |larger|, but we still
+        # enforce sign ordering even if the threshold split fails (rare).
+
+        omega1 = larger_mag           # positive, expected > sqrt(1/2)
+        omega2 = -smaller_mag         # negative, expected < -sqrt(1/2)
+
+        # Sanity check - warn (do not fail) if the magnitudes violate the desired split
+        if not (omega1**2 > 0.5 and omega2**2 < 0.5):
+            logger.warning(
+                ("Computed planar frequencies do not strictly satisfy the requested ordering: "
+                 f"omega_1={omega1:.4f}, omega_2={omega2:.4f}."))
 
         return (float(omega1), float(omega2), float(omega_z))
 
@@ -257,6 +271,60 @@ class TriangularPoint(LibrationPoint):
     
     def _rs(self, idx):
         return np.sqrt(self.linear_modes[idx] * (4*self.linear_modes[idx]**4 + self.linear_modes[idx]**2 - 1.5))
+
+    def _get_eigvs(self):
+        """Return the six real eigenvectors (u_1, u_2, u_3, v_1, v_2, v_3)
+        providing a canonical basis of the *centre* sub-space.
+
+        For triangular points the flow decomposes into a planar 2-DOF part
+        and a vertical 1-DOF harmonic oscillator uncoupled from the plane.
+        The planar eigenvectors are constructed analytically following the
+        classical derivation (see Gómez et al., 1993, par3.2).  They live in
+        the first four coordinates (x, y, p_x, p_y).  We simply append two
+        zeros to embed them in the full 6-D phase-space.  The vertical pair
+        is trivial thanks to the decoupling: (z, p_z) already form a
+        canonical coordinate pair.
+        """
+
+        a = self.a
+        omega1, omega2, _ = self.linear_modes  # omega_z == 1
+
+        # The vectors are written in the (x, y, p_x, p_y) ordering used by
+        # _J_hess_H2.  They are then embedded into 6-D by appending zeros
+        # for the vertical coordinates (z, p_z). 
+        u1_planar = np.array([a, -omega1**2 - 0.75, -omega1**2 + 0.75, a])
+        u2_planar = np.array([a, -omega2**2 - 0.75, -omega2**2 + 0.75, a])
+        v1_planar = np.array([2 * omega1, 0.0, a * omega1, -omega1**3 + 1.25 * omega1])
+        v2_planar = np.array([2 * omega2, 0.0, a * omega2, -omega2**3 + 1.25 * omega2])
+
+        # Embed into 6-D phase space (planar block first, then z, p_z)
+        zeros2 = np.zeros(2)
+        u1 = np.concatenate([u1_planar, zeros2])
+        u2 = np.concatenate([u2_planar, zeros2])
+        v1 = np.concatenate([v1_planar, zeros2])
+        v2 = np.concatenate([v2_planar, zeros2])
+
+        omega_z = self.linear_modes[2]
+        sqrt_omega_z = np.sqrt(abs(omega_z))  # positive by construction
+        u3 = np.array([0.0, 0.0, 0.0, 0.0, 1.0 / sqrt_omega_z, 0.0])
+        v3 = np.array([0.0, 0.0, 0.0, 0.0, 0.0, sqrt_omega_z])
+
+        # Stack as rows (will be transposed later as columns)
+        eigv_matrix = np.vstack([u1, u2, u3, v1, v2, v3])
+        return eigv_matrix
+    
+    def _d_omega(self, idx):
+        omegas = self.linear_modes
+        omega = omegas[idx]
+
+        return omega * (2*omega**4+0.5*omega**2-0.75)
+    
+    def _scaling_factor(self, idx):
+        # Planar modes: use Gómez et al. formula.  Vertical mode: already
+        # rescaled directly in the eigenvectors, so the scaling factor is 1.
+        if idx == 2:
+            return 1.0
+        return np.sqrt(self._d_omega(idx))
 
 
 class L4Point(TriangularPoint):
