@@ -8,7 +8,7 @@ from hiten.algorithms.hamiltonian.center._lie import (
     _apply_coord_transform, _evaluate_transform, _get_homogeneous_terms,
     _lie_expansion, _lie_transform, _select_terms_for_elimination)
 from hiten.algorithms.hamiltonian.hamiltonian import \
-    _build_physical_hamiltonian
+    _build_physical_hamiltonian_collinear
 from hiten.algorithms.hamiltonian.lie import (_apply_poly_transform,
                                               _solve_homological_equation)
 from hiten.algorithms.hamiltonian.transforms import (_polylocal2realmodal,
@@ -271,7 +271,7 @@ def test_lie_transform_on_center_manifold(lie_test_setup):
     clmo = cm._clmo
     max_degree = TEST_MAX_DEG
     
-    H_phys = _build_physical_hamiltonian(point, max_degree)
+    H_phys = _build_physical_hamiltonian_collinear(point, max_degree)
     H_rn = _polylocal2realmodal(point, H_phys, max_degree, psi, clmo)
     H_cn = _substitute_complex(H_rn, max_degree, psi, clmo)
     
@@ -322,7 +322,7 @@ def test_lie_expansion_accumulation(lie_test_setup):
     print("-" * 50)
     
     for max_deg in [3, 4, 5, 6]:
-        H_phys = _build_physical_hamiltonian(point, 6)
+        H_phys = _build_physical_hamiltonian_collinear(point, 6)
         H_rn = _polylocal2realmodal(point, H_phys, 6, psi, clmo)
         H_cn = _substitute_complex(H_rn, 6, psi, clmo)
         _, poly_G_total, _ = _lie_transform(point, H_cn, psi, clmo, max_deg)
@@ -423,7 +423,7 @@ def test_lie_expansion_degree_scaling(lie_test_setup):
     clmo = cm._clmo
     
     # Build and normalize Hamiltonian for different degrees
-    H_phys = _build_physical_hamiltonian(point, 6)  # Use max degree 6 for building
+    H_phys = _build_physical_hamiltonian_collinear(point, 6)  # Use max degree 6 for building
     H_rn = _polylocal2realmodal(point, H_phys, 6, psi, clmo)
     H_cn = _substitute_complex(H_rn, 6, psi, clmo)
     
@@ -587,7 +587,7 @@ def test_lie_expansion_symplecticity(lie_test_setup):
     psi = cm._psi
     clmo = cm._clmo
     
-    H_phys = _build_physical_hamiltonian(point, 6)
+    H_phys = _build_physical_hamiltonian_collinear(point, 6)
     H_rn = _polylocal2realmodal(point, H_phys, 6, psi, clmo)
     H_cn = _substitute_complex(H_rn, 6, psi, clmo)
     

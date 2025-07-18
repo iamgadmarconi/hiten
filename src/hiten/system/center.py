@@ -29,7 +29,7 @@ from hiten.algorithms.hamiltonian.center._lie import (_evaluate_transform,
 from hiten.algorithms.hamiltonian.center._lie import \
     _lie_transform as _lie_transform_partial
 from hiten.algorithms.hamiltonian.hamiltonian import \
-    _build_physical_hamiltonian
+    _build_physical_hamiltonian_collinear
 # Full ("complete") normal form Lie transform
 from hiten.algorithms.hamiltonian.normal._lie import \
     _lie_transform as _lie_transform_full
@@ -269,7 +269,7 @@ class CenterManifold:
 
     def _get_physical_hamiltonian(self) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'physical')
-        return self._get_or_compute(key, lambda: _build_physical_hamiltonian(self._point, self._max_degree))
+        return self._get_or_compute(key, lambda: _build_physical_hamiltonian_collinear(self._point, self._max_degree))
 
     def _get_real_modal_form(self) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'real_modal')

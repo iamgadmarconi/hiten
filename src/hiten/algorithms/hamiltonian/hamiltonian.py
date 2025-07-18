@@ -300,7 +300,7 @@ def _build_rotational_terms(poly_x, poly_y, poly_px, poly_py, max_deg: int, psi_
     return poly_rot
 
 
-def _build_physical_hamiltonian(point, max_deg: int) -> List[np.ndarray]:
+def _build_physical_hamiltonian_collinear(point, max_deg: int) -> List[np.ndarray]:
     r"""
     Combine kinetic, potential, and Coriolis parts to obtain the full
     rotating-frame Hamiltonian :math:`H = T + U + C`.
@@ -324,8 +324,8 @@ def _build_physical_hamiltonian(point, max_deg: int) -> List[np.ndarray]:
 
     Examples
     --------
-    >>> from hiten.algorithms.hamiltonian.center.hamiltonian import _build_physical_hamiltonian
-    >>> H = _build_physical_hamiltonian(l1_point, max_deg=6)  # doctest: +SKIP
+    >>> from hiten.algorithms.hamiltonian.center.hamiltonian import _build_physical_hamiltonian_collinear
+    >>> H = _build_physical_hamiltonian_collinear(l1_point, max_deg=6)  # doctest: +SKIP
     """
     psi_table, clmo_table = _init_index_tables(max_deg)
     encode_dict_list = _create_encode_dict_from_clmo(clmo_table)
