@@ -7,14 +7,14 @@ Triangular Libration points (:math:`L_4` and :math:`L_5`) of the Circular Restri
 The module defines:
 
 * :pyclass:`TriangularPoint` - an abstract helper encapsulating the geometry shared by the triangular points.
-* :pyclass:`L4Point` and :pyclass:`L5Point` - concrete equilibria located at ±60° with respect to the line connecting the primaries.
+* :pyclass:`L4Point` and :pyclass:`L5Point` - concrete equilibria located at +-60° with respect to the line connecting the primaries.
 """
 
 from typing import TYPE_CHECKING
 
 import numpy as np
 
-from hiten.system.libration.base import LibrationPoint
+from hiten.system.libration.base import LibrationPoint, LinearData
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
@@ -43,7 +43,7 @@ class TriangularPoint(LibrationPoint):
     sign : int
         +1 for :pyclass:`L4Point`, -1 for :pyclass:`L5Point`.
     a : float
-        Offset used by local ↔ synodic frame transformations.
+        Offset used by local <-> synodic frame transformations.
 
     Notes
     -----
@@ -97,11 +97,166 @@ class TriangularPoint(LibrationPoint):
         logger.info(f"{point_name} position calculated: x = {x:.6f}, y = {y:.6f}")
         return np.array([x, y, 0], dtype=np.float64)
 
-    def _get_linear_data(self):
-        raise NotImplementedError("Not implemented for triangular points.")
+    def _get_linear_data(self) -> LinearData:
+        r"""
+        Get the linear data for the Libration point.
+        
+        Returns
+        -------
+        LinearData
+            Object containing the linear data for the Libration point
+        """
+        # Get cached values
+        omega1, omega2, omega_z = self.linear_modes
+        C, Cinv = self.normal_form_transform()
+        
+        # Create and return the LinearData object
+        return LinearData(
+            mu=self.mu,
+            point=type(self).__name__[:2],  # 'L1', 'L2', 'L3'
+            lambda1=None, 
+            omega1=omega1, 
+            omega2=omega2,
+            omega3=omega_z,
+            C=C, 
+            Cinv=Cinv
+        )
 
     def normal_form_transform(self):
-        raise NotImplementedError("Not implemented for triangular points.")
+        cache_key = ('normal_form_transform',)
+        cached = self.cache_get(cache_key)
+        if cached is not None:
+            return cached
+
+        omega1, omega2, omega_z = self.linear_modes
+
+        C = np.zeros((6, 6))
+
+        Cinv = np.linalg.inv(C)
+        self.cache_set(cache_key, (C, Cinv))
+        return C, Cinv
+    
+    def _compute_linear_modes(self):
+        """Return the three frequencies (omega_1, omega_2, omega_z) following the convention:
+        omega_1 > 0 with omega_1^2 < 1/2, omega_2 < 0, omega_z is vertical frequency = 1."""
+        J_full = self._J_hess_H2()
+        eigvals = np.linalg.eigvals(J_full)
+
+        # Extract purely imaginary eigenvalues (should be 6 values: +- i omega)
+        imag_eigs = eigvals[np.abs(eigvals.real) < 1e-12]
+        omegas_with_sign = imag_eigs.imag  # Keep the signs
+
+        # Get unique frequencies (positive and negative)
+        omegas_unique = []
+        for omega in omegas_with_sign:
+            if not any(np.isclose(omega, existing, atol=1e-12) for existing in omegas_unique):
+                omegas_unique.append(omega)
+
+        if len(omegas_unique) != 6:
+            raise RuntimeError(f"Expected 6 eigenvalues (+-3 frequencies), got {len(omegas_unique)}.")
+
+        # Identify the vertical frequency (close to +-1)
+        # Group frequencies by their absolute values to handle numerical duplicates
+        freq_groups = {}
+        for omega in omegas_unique:
+            abs_omega = abs(omega)
+            found_group = False
+            for key in freq_groups:
+                if np.isclose(abs_omega, key, rtol=1e-10):
+                    freq_groups[key].append(omega)
+                    found_group = True
+                    break
+            if not found_group:
+                freq_groups[abs_omega] = [omega]
+        
+        # Find the group closest to 1.0 (vertical frequency)
+        vertical_group_key = min(freq_groups.keys(), key=lambda x: abs(x - 1.0))
+        if not np.isclose(vertical_group_key, 1.0, rtol=1e-2):
+            raise RuntimeError(f"No frequency group found near 1.0, closest is {vertical_group_key}")
+        
+        omega_z = vertical_group_key
+        vertical_omegas = freq_groups[vertical_group_key]
+        
+        # Get planar frequencies (all other groups)
+        planar_omegas = []
+        for key, omegas_list in freq_groups.items():
+            if not np.isclose(key, vertical_group_key, rtol=1e-10):
+                planar_omegas.extend(omegas_list)
+        
+        # Get the distinct planar frequency magnitudes (should be 2 groups, each with +- pairs)
+        planar_freq_groups = {}
+        for omega in planar_omegas:
+            abs_omega = abs(omega)
+            found_group = False
+            for key in planar_freq_groups:
+                if np.isclose(abs_omega, key, rtol=1e-10):
+                    planar_freq_groups[key].append(omega)
+                    found_group = True
+                    break
+            if not found_group:
+                planar_freq_groups[abs_omega] = [omega]
+        
+        if len(planar_freq_groups) != 2:
+            raise RuntimeError(f"Expected 2 distinct planar frequency groups, got {len(planar_freq_groups)} groups with magnitudes {list(planar_freq_groups.keys())}")
+
+        # Get the two planar frequency magnitudes and sort them
+        planar_mags = sorted(planar_freq_groups.keys())
+        smaller_mag, larger_mag = planar_mags
+        
+        # Apply the convention: omega_1 > 0 with omega_1^2 < 1/2, omega_2 < 0
+        # omega_1 should have omega_1^2 < 1/2, so omega_1 < sqrt(1/2) ≈ 0.707
+        if smaller_mag**2 < 0.5:
+            omega1 = smaller_mag   # positive
+            omega2 = -larger_mag   # negative
+        else:
+            # If both are > sqrt(1/2), take the smaller one as omega_1
+            omega1 = smaller_mag   # positive  
+            omega2 = -larger_mag   # negative
+
+        return (float(omega1), float(omega2), float(omega_z))
+
+    @property
+    def linear_modes(self):
+        r"""
+        Get the linear modes for the Libration point.
+        
+        Returns
+        -------
+        Tuple (omega_1, omega_2, omega_z) where:
+        - omega_1 > 0 with omega_1^2 < 1/2 (small positive planar frequency)
+        - omega_2 < 0 (negative planar frequency)  
+        - omega_z = 1.0 (vertical frequency)
+        For triangular points all eigenvalues are purely imaginary so no
+        hyperbolic mode is present.
+        """
+        cached = self.cache_get(('linear_modes',))
+        if cached is not None:
+            return cached
+            
+        result = self._compute_linear_modes()
+        self.cache_set(('linear_modes',), result)
+        return result
+
+    def _J_hess_H2(self) -> np.ndarray:
+        # Planar 4x4 block (x, y, p_x, p_y)
+        J_planar = np.array([
+            [0.0, 1.0, 1.0, 0.0],
+            [-1.0, 0.0, 0.0, 1.0],
+            [-0.25, self.a, 0.0, 1.0],
+            [self.a, 1.25, -1.0, 0.0],
+        ], dtype=np.float64)
+
+        # Vertical 2x2 block: simple harmonic oscillator with omega_z = 1
+        J_vert = np.array([[0.0, 1.0], [-1.0, 0.0]], dtype=np.float64)
+
+        # Assemble full 6x6 Jacobian
+        J_full = np.zeros((6, 6), dtype=np.float64)
+        J_full[:4, :4] = J_planar
+        J_full[4:, 4:] = J_vert
+        return J_full
+    
+    def _rs(self, idx):
+        return np.sqrt(self.linear_modes[idx] * (4*self.linear_modes[idx]**4 + self.linear_modes[idx]**2 - 1.5))
 
 
 class L4Point(TriangularPoint):

@@ -73,7 +73,7 @@ def _lie_transform(
     systematically eliminates all non-resonant terms degree by degree.
     
     The main differences from the partial normal form are:
-    1. Uses full resonance condition (k,ω) = 0 instead of k[0] = k[3]
+    1. Uses full resonance condition (k,Omega) = 0 instead of k[0] = k[3]
     2. Results in a much sparser normal form containing only resonant terms
     3. Requires careful handling of small divisors
     """

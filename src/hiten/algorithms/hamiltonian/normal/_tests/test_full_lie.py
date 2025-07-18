@@ -224,7 +224,7 @@ def test_lie_transform_removes_nonresonant_terms(center_manifold):
     # Retrieve the 6-dimensional complex modal Hamiltonian (before any Lie NF)
     poly_init = center_manifold._get_complex_modal_form()
 
-    # Extract frequency vector ω from the underlying libration point
+    # Extract frequency vector Omega from the underlying libration point
     lp = center_manifold.point
     lam, w1, w2 = lp.linear_modes
     omega = np.array([lam, -lam, 1j * w1, -1j * w1, 1j * w2, -1j * w2], dtype=np.complex128)

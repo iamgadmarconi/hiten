@@ -351,6 +351,54 @@ def _build_physical_hamiltonian(point, max_deg: int) -> List[np.ndarray]:
 
     return poly_H
 
+def _build_h2_triangular(point) -> List[np.ndarray]:
+    """Return the second-order (quadratic) Hamiltonian around a triangular
+    Libration point (L4/L5).
+    """
+    max_deg = 2
+
+    psi_table, clmo_table = _init_index_tables(max_deg)
+    encode_dict_list = _create_encode_dict_from_clmo(clmo_table)
+
+    poly_x, poly_y, poly_z, poly_px, poly_py, poly_pz = [
+        _polynomial_variable(i, max_deg, psi_table, clmo_table, encode_dict_list)
+        for i in range(6)
+    ]
+
+    poly_H = _polynomial_zero_list(max_deg, psi_table)
+
+    poly_kinetic = _build_kinetic_energy_terms(
+        poly_px, poly_py, poly_pz, max_deg, psi_table, clmo_table, encode_dict_list
+    )
+    _polynomial_add_inplace(poly_H, poly_kinetic, 1.0)
+
+    poly_rot = _build_rotational_terms(
+        poly_x, poly_y, poly_px, poly_py, max_deg, psi_table, clmo_table, encode_dict_list
+    )
+    _polynomial_add_inplace(poly_H, poly_rot, 1.0)
+
+    poly_x_sq = _polynomial_multiply(
+        poly_x, poly_x, max_deg, psi_table, clmo_table, encode_dict_list
+    )
+    poly_y_sq = _polynomial_multiply(
+        poly_y, poly_y, max_deg, psi_table, clmo_table, encode_dict_list
+    )
+    poly_z_sq = _polynomial_multiply(
+        poly_z, poly_z, max_deg, psi_table, clmo_table, encode_dict_list
+    )
+    poly_xy = _polynomial_multiply(
+        poly_x, poly_y, max_deg, psi_table, clmo_table, encode_dict_list
+    )
+
+    a = float(point.a)
+
+    _polynomial_add_inplace(poly_H, poly_x_sq, 1.0 / 8.0)
+    _polynomial_add_inplace(poly_H, poly_y_sq, -5.0 / 8.0)
+    _polynomial_add_inplace(poly_H, poly_xy, -a)
+    _polynomial_add_inplace(poly_H, poly_z_sq, 0.5)
+
+    return poly_H
+
 
 def _translate_hamiltonian_to_triangular(poly_H, point, max_deg: int) -> List[np.ndarray]:
     r"""
@@ -367,7 +415,6 @@ def _translate_hamiltonian_to_triangular(poly_H, point, max_deg: int) -> List[np
     mu = float(point.mu)
     sgn = float(point.sign)
 
-    # Linear part is the identity (old vars equal new vars plus a constant shift)
     C = np.eye(6, dtype=np.float64)
 
     shifts = np.array([
@@ -382,7 +429,6 @@ def _translate_hamiltonian_to_triangular(poly_H, point, max_deg: int) -> List[np
     psi_table, clmo_table = _init_index_tables(max_deg)
     encode_dict_list = _create_encode_dict_from_clmo(clmo_table)
 
-    # Use affine substitution to centre the Hamiltonian around the triangular point
     poly_H_triangular = _substitute_affine(
         poly_H,
         C,

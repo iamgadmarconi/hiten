@@ -72,7 +72,7 @@ class CollinearPoint(LibrationPoint):
     @property
     def sign(self) -> int:
         r"""
-        Sign convention (±1) used for local ↔ synodic transformations.
+        Sign convention (+-1) used for local <-> synodic transformations.
 
         Following the convention adopted in Gómez et al. (2001):
 
@@ -86,8 +86,8 @@ class CollinearPoint(LibrationPoint):
         r"""
         Offset *a* along the x axis used in frame changes.
 
-        The relation x_L = μ + a links the equilibrium x coordinate in
-        synodic coordinates (x_L) with the mass parameter μ.  Using the
+        The relation x_L = mu + a links the equilibrium x coordinate in
+        synodic coordinates (x_L) with the mass parameter mu.  Using the
         distance gamma (``self.gamma``) to the closest primary we obtain:
 
             a = -1 + gamma   (L1)
@@ -118,7 +118,8 @@ class CollinearPoint(LibrationPoint):
             return cached
             
         result = self._compute_linear_modes()
-        return self.cache_set(('linear_modes',), result)
+        self.cache_set(('linear_modes',), result)
+        return result
 
     @property
     @abstractmethod
@@ -265,7 +266,7 @@ class CollinearPoint(LibrationPoint):
         Returns
         -------
         float
-            Value of dΩ/dx at the given x-coordinate
+            Value of dOmega/dx at the given x-coordinate
         """
         mu = self.mu
         # Handle potential division by zero if x coincides with primary positions
@@ -288,50 +289,53 @@ class CollinearPoint(LibrationPoint):
         
         return term1 + term2 + term3
 
+    def _J_hess_H2(self) -> np.ndarray:
+        c2 = self._cn(2)
+        omega2 = np.sqrt(c2)
+
+        J_planar = np.array([
+            [0.0, 1.0, 1.0, 0.0],
+            [-1.0, 0.0, 0.0, 1.0],
+            [2.0 * c2, 0.0, 0.0, 1.0],
+            [0.0, -c2, -1.0, 0.0],
+        ], dtype=np.float64)
+
+        J_vert = np.array([[0.0, omega2], [-omega2, 0.0]], dtype=np.float64)
+
+        J_full = np.zeros((6, 6), dtype=np.float64)
+        J_full[:4, :4] = J_planar
+        J_full[4:, 4:] = J_vert
+
+        return J_full
+
     def _compute_linear_modes(self):
-        r"""
-        Compute the linear modes for the Libration point.
-        
-        Returns
-        -------
-        tuple
-            (lambda1, omega1, omega2) values for the libration point
-        """
-        try:
-            c2_hp = hp(self._cn(2))
-            a_hp = hp(1.0)
-            b_hp = hp(2.0) - c2_hp
-            c_hp = hp(1.0) + c2_hp - hp(2.0) * (c2_hp ** hp(2.0))
-            
-            discriminant_hp = (b_hp ** hp(2.0)) - hp(4.0) * a_hp * c_hp
-            
-            if float(discriminant_hp) < 0:
-                err = f"Discriminant for linear modes is negative: {float(discriminant_hp)}. c2={float(c2_hp)}"
-                logger.error(err)
-                raise RuntimeError(err)
+        J_full = self._J_hess_H2()
+        c2 = self._cn(2)
+        omega2_expected = np.sqrt(c2)
 
-            sqrt_discriminant_hp = discriminant_hp.sqrt()
-            
-            eta1_hp = (-b_hp - sqrt_discriminant_hp) / (hp(2.0) * a_hp)
-            eta2_hp = (-b_hp + sqrt_discriminant_hp) / (hp(2.0) * a_hp)
+        eigvals, _ = np.linalg.eig(J_full)
 
-            # Determine which eta is positive (for lambda1) and which is negative (for omega1)
-            if float(eta1_hp) > float(eta2_hp):
-                lambda1_hp = eta1_hp.sqrt() if float(eta1_hp) > 0 else hp(0.0)
-                omega1_hp = (-eta2_hp).sqrt() if float(eta2_hp) < 0 else hp(0.0)
-            else:
-                lambda1_hp = eta2_hp.sqrt() if float(eta2_hp) > 0 else hp(0.0)
-                omega1_hp = (-eta1_hp).sqrt() if float(eta1_hp) < 0 else hp(0.0)
-            
-            # Vertical frequency
-            omega2_hp = c2_hp.sqrt() if float(c2_hp) >= 0 else hp(0.0)
+        real_mask = np.abs(eigvals.imag) < 1e-12
+        imag_mask = ~real_mask
 
-            return (float(lambda1_hp), float(omega1_hp), float(omega2_hp))
-            
-        except Exception as e:
-            err = f"Failed to calculate linear modes with Number: {e}"
-            logger.error(err)
-            raise RuntimeError(err) from e
+        real_eigs = eigvals[real_mask].real
+        if real_eigs.size == 0:
+            raise RuntimeError("No real eigen-values found while calculating linear modes.")
+        lambda1 = float(np.max(np.abs(real_eigs)))
+
+        imag_eigs = eigvals[imag_mask]
+        omegas = np.unique(np.round(np.abs(imag_eigs.imag), decimals=12))
+        if omegas.size < 2:
+            raise RuntimeError(f"Expected two distinct imaginary frequencies, got {omegas.size}.")
+
+        idx_vert = int(np.argmin(np.abs(omegas - omega2_expected)))
+        omega2_val = float(omegas[idx_vert])
+        omega1_val = float(omegas[1 - idx_vert])  # The other one
+
+        if omega1_val < omega2_val:
+            omega1_val, omega2_val = omega2_val, omega1_val
+
+        return (float(lambda1), float(omega1_val), float(omega2_val))
 
     def _scale_factor(self, lambda1, omega1):
         r"""
@@ -395,6 +399,7 @@ class CollinearPoint(LibrationPoint):
             lambda1=lambda1, 
             omega1=omega1, 
             omega2=omega2,
+            omega3=None,
             C=C, 
             Cinv=Cinv
         )
@@ -417,8 +422,7 @@ class CollinearPoint(LibrationPoint):
 
     def normal_form_transform(self) -> Tuple[np.ndarray, np.ndarray]:
         r"""
-        Build the 6x6 symplectic matrix C of eq. (10) that sends H_2 to
-        lambda_1 x px + (omega_1/2)(y²+p_y²) + (omega_2/2)(z²+p_z²).
+        Build the 6x6 symplectic matrix C that sends H_2 to normal form.
 
         Returns
         -------
@@ -512,7 +516,7 @@ class L1Point(CollinearPoint):
     def _gamma_poly_def(self) -> Tuple[list, tuple]:
         """Quintic polynomial definition for L1's gamma value."""
         mu = self.mu
-        # Coefficients for L1 quintic: x^5 - (3-μ)x^4 + (3-2μ)x^3 - μx^2 + 2μx - μ = 0
+        # Coefficients for L1 quintic: x^5 - (3-mu)x^4 + (3-2mu)x^3 - mux^2 + 2mux - mu = 0
         coeffs = [1, -(3 - mu), (3 - 2 * mu), -mu, 2 * mu, -mu]
         return coeffs, (0, 1)
 
@@ -560,7 +564,7 @@ class L2Point(CollinearPoint):
     def _gamma_poly_def(self) -> Tuple[list, tuple]:
         """Quintic polynomial definition for L2's gamma value."""
         mu = self.mu
-        # Coefficients for L2 quintic: x^5 + (3-μ)x^4 + (3-2μ)x^3 - μx^2 - 2μx - μ = 0
+        # Coefficients for L2 quintic: x^5 + (3-mu)x^4 + (3-2mu)x^3 - mux^2 - 2mux - mu = 0
         coeffs = [1, (3 - mu), (3 - 2 * mu), -mu, -2 * mu, -mu]
         return coeffs, (0, 1)
 
@@ -609,7 +613,7 @@ class L3Point(CollinearPoint):
         """Quintic polynomial definition for L3's gamma value."""
         mu = self.mu
         mu1 = 1 - mu  # mass of larger primary
-        # Coefficients for L3 quintic: x^5 + (2+μ)x^4 + (1+2μ)x^3 - μ₁x^2 - 2μ₁x - μ₁ = 0
+        # Coefficients for L3 quintic: x^5 + (2+mu)x^4 + (1+2mu)x^3 - mu_1x^2 - 2mu_1x - mu_1 = 0
         coeffs = [1, (2 + mu), (1 + 2 * mu), -mu1, -2 * mu1, -mu1]
         return coeffs, (0.5, 1.5)
 

@@ -150,7 +150,7 @@ class _InvariantTori:
         ]
         if not cand_idx:
             raise RuntimeError(
-                "No complex eigenvalue of modulus one found in monodromy matrix - cannot determine ω₂."
+                "No complex eigenvalue of modulus one found in monodromy matrix - cannot determine Omega_2."
             )
 
         idx = max(cand_idx, key=lambda i: np.imag(self._evals[i]))
@@ -178,7 +178,7 @@ class _InvariantTori:
 
         logger.info("Pre-computing STM samples for invariant-torus initialisation (n_theta1=%d)", n_theta1)
 
-        x_series, times, PHI_mats, _ = _compute_stm(
+        x_series, times, _, PHI_flat = _compute_stm(
             self.libration_point._var_eq_system,
             self.orbit.initial_state,
             self.orbit.period,
@@ -187,6 +187,8 @@ class _InvariantTori:
             method=method,
             order=order,
         )
+
+        PHI_mats = PHI_flat[:, :36].reshape((n_theta1, 6, 6))
 
         # Non-dimensional angle \theta_1 along the periodic orbit
         theta1 = 2.0 * np.pi * times / self.orbit.period  # shape (n_theta1,)
@@ -464,7 +466,7 @@ class _InvariantTori:
         jacobi_vals = [_jacobi(state) for state in v_curve_corr]
         ax.plot(theta2_vals, jacobi_vals, "g-")
         ax.axhline(self.jacobi, color="k", linestyle="--", label="Orbit Jacobi")
-        ax.set_xlabel("θ₂")
+        ax.set_xlabel("θ_2")
         ax.set_ylabel("Jacobi constant")
         ax.set_title("Jacobi Constant Variation")
         ax.legend()
@@ -473,7 +475,7 @@ class _InvariantTori:
         ax = axes[1, 0]
         distances = np.linalg.norm(v_curve_corr - self.orbit.initial_state, axis=1)
         ax.plot(theta2_vals, distances, "m-")
-        ax.set_xlabel("θ₂")
+        ax.set_xlabel("θ_2")
         ax.set_ylabel("Distance from periodic orbit")
         ax.set_title("Curve Amplitude")
 
@@ -496,7 +498,7 @@ class _InvariantTori:
             errors.append(np.linalg.norm(sol.states[-1] - v_curve_corr[j_target]))
 
         ax.semilogy(theta2_vals, errors, "c-")
-        ax.set_xlabel("θ₂")
+        ax.set_xlabel("θ_2")
         ax.set_ylabel("Invariance error")
         ax.set_title("Point-wise Invariance Error")
 

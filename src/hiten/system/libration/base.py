@@ -46,13 +46,15 @@ class LinearData:
         Mass ratio :math:`\mu := m_2/(m_1+m_2)` of the primaries.
     point : str
         Identifier of the libration point (``'L1'``, ``'L2'`` or ``'L3'``).
-    lambda1 : float
+    lambda1 : float | None
         Real hyperbolic eigenvalue :math:`\lambda_1>0` associated with the
         saddle behaviour along the centre-saddle subspace.
     omega1 : float
         First elliptic frequency :math:`\omega_1>0` of the centre subspace.
     omega2 : float
         Second elliptic frequency :math:`\omega_2>0` of the centre subspace.
+    omega3: float | None
+        Vertical frequency :math:`\omega_3` of the centre subspace.
     C : numpy.ndarray, shape (6, 6)
         Symplectic change-of-basis matrix such that :math:`C^{-1}AC` is in real
         Jordan canonical form, with :math:`A` the Jacobian of the vector
@@ -68,10 +70,11 @@ class LinearData:
     """
     mu: float
     point: str        # 'L1', 'L2', 'L3'
-    lambda1: float
+    lambda1: float | None
     omega1: float
     omega2: float
-    C: np.ndarray     # 6×6 symplectic transform
+    omega3: float | None
+    C: np.ndarray     # 6x6 symplectic transform
     Cinv: np.ndarray  # inverse
 
 

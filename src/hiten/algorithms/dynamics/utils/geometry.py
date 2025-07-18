@@ -304,7 +304,7 @@ def _find_bracket(f: Callable[[float], float], x0: float, max_expand: int = 500)
     -----
     The function works by:
     1. Starting with a small step size (1e-10)
-    2. Testing points on both sides of x0 (x0±dx)
+    2. Testing points on both sides of x0 (x0+-dx)
     3. If a sign change is detected, applying Brent's method to find the root
     4. If no sign change is found, increasing the step size by sqrt(2) and trying again
     

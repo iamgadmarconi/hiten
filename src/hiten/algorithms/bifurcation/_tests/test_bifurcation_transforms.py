@@ -100,7 +100,7 @@ def test_nf2aa_multi_mode_distinct_indices():
     pos1, psiF = _locate_fourier_index((1, 0, 0, 2, 0, 0))
     pos2, _ = _locate_fourier_index((1, 0, 0, -2, 0, 0))
 
-    deg_aa = 1  # n₁+n₂+n₃
+    deg_aa = 1  # n_1+n_2+n_3
     assert coeffs_aa.shape[0] == psiF[deg_aa]
     assert coeffs_aa[pos1] == pytest.approx(1.0 + 0.0j, rel=1e-12)
     assert coeffs_aa[pos2] == pytest.approx(-1.0 + 0.0j, rel=1e-12)

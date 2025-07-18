@@ -85,7 +85,7 @@ def _init_fourier_tables(max_degree: int, k_max: int):
     Parameters
     ----------
     max_degree : int
-        Maximum total action degree *d = n₁+n₂+n₃* to include.
+        Maximum total action degree *d = n_1+n_2+n_3* to include.
     k_max : int
         Fourier indices kᵢ will be limited to -k_max ... +k_max (k_max ≤ 63).
 

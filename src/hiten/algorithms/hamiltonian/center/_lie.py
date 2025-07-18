@@ -237,7 +237,7 @@ restrict: bool = True) -> List[List[np.ndarray]]:
     for i in range(6):
         poly = _polynomial_zero_list(max_degree, psi)
         poly[1] = np.zeros(6, dtype=np.complex128)
-        poly[1][i] = 1.0 + 0j       # identity for q₁,q₂,q₃,p₁,p₂,p₃
+        poly[1][i] = 1.0 + 0j       # identity for q_1,q_2,q_3,p_1,p_2,p_3
         current_coords.append(poly) # [q1, q2, q3, p1, p2, p3]
     
     if inverse:
