@@ -24,11 +24,12 @@ from numba import njit, types
 from numba.typed import List
 
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                        _init_index_tables)
+                                              _init_index_tables)
 from hiten.algorithms.polynomial.operations import (_polynomial_add_inplace,
-                                              _polynomial_multiply,
-                                              _polynomial_variable,
-                                              _polynomial_zero_list)
+                                                    _polynomial_multiply,
+                                                    _polynomial_variable,
+                                                    _polynomial_zero_list,
+                                                    _substitute_affine)
 from hiten.algorithms.utils.config import FASTMATH
 
 
@@ -300,7 +301,7 @@ def _build_rotational_terms(poly_x, poly_y, poly_px, poly_py, max_deg: int, psi_
     return poly_rot
 
 
-def _build_physical_hamiltonian_collinear(point, max_deg: int) -> List[np.ndarray]:
+def _build_physical_hamiltonian(point, max_deg: int) -> List[np.ndarray]:
     r"""
     Combine kinetic, potential, and Coriolis parts to obtain the full
     rotating-frame Hamiltonian :math:`H = T + U + C`.
@@ -324,8 +325,8 @@ def _build_physical_hamiltonian_collinear(point, max_deg: int) -> List[np.ndarra
 
     Examples
     --------
-    >>> from hiten.algorithms.hamiltonian.center.hamiltonian import _build_physical_hamiltonian_collinear
-    >>> H = _build_physical_hamiltonian_collinear(l1_point, max_deg=6)  # doctest: +SKIP
+    >>> from hiten.algorithms.hamiltonian.center.hamiltonian import _build_physical_hamiltonian
+    >>> H = _build_physical_hamiltonian(l1_point, max_deg=6)  # doctest: +SKIP
     """
     psi_table, clmo_table = _init_index_tables(max_deg)
     encode_dict_list = _create_encode_dict_from_clmo(clmo_table)
@@ -349,6 +350,50 @@ def _build_physical_hamiltonian_collinear(point, max_deg: int) -> List[np.ndarra
     _polynomial_add_inplace(poly_H, poly_U, 1.0)
 
     return poly_H
+
+
+def _translate_hamiltonian_to_triangular(poly_H, point, max_deg: int) -> List[np.ndarray]:
+    r"""
+    Apply the canonical translation that maps the collinear Hamiltonian to the
+    vicinity of the triangular (L4/L5) equilibrium.
+
+    The linear-affine change of variables is (see, e.g., Gómez et al., 2001)::
+
+    where ``s = +1`` for L4 and ``s = -1`` for L5.  Inverting these relations we
+    obtain the *old* (synodic) coordinates in terms of the *new* centred ones
+    which is precisely the form required by :pyfunc:`_substitute_affine`.
+    """
+
+    mu = float(point.mu)
+    sgn = float(point.sign)
+
+    # Linear part is the identity (old vars equal new vars plus a constant shift)
+    C = np.eye(6, dtype=np.float64)
+
+    shifts = np.array([
+        - 0.5 + mu,           # x_old = X - (0.5 - mu)
+        -sgn * np.sqrt(3)/2, # y_old = Y - s*sqrt(3)/2
+        0.0,                # z_old = Z
+        sgn * np.sqrt(3)/2,# p_x_old = P_X + s*sqrt(3)/2
+        - 0.5 + mu,           # p_y_old = P_Y - (0.5 - mu)
+        0.0,                # p_z_old = P_Z
+    ], dtype=np.float64)
+
+    psi_table, clmo_table = _init_index_tables(max_deg)
+    encode_dict_list = _create_encode_dict_from_clmo(clmo_table)
+
+    # Use affine substitution to centre the Hamiltonian around the triangular point
+    poly_H_triangular = _substitute_affine(
+        poly_H,
+        C,
+        shifts,
+        max_deg,
+        psi_table,
+        clmo_table,
+        encode_dict_list,
+    )
+
+    return poly_H_triangular
 
 
 def _build_lindstedt_poincare_rhs_polynomials(point, max_deg: int) -> Tuple[List, List, List]:

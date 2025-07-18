@@ -735,7 +735,7 @@ def _linear_variable_polys(C: np.ndarray, max_deg: int, psi, clmo, encode_dict_l
 
 
 @njit(fastmath=FASTMATH)
-def _substitute_linear(poly_old: List[np.ndarray], C: np.ndarray, max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
+def _substitute_linear(poly_old: List[np.ndarray], C: np.ndarray, max_deg: int, psi, clmo, encode_dict_list, tol: float = 1e-14) -> List[np.ndarray]:
     r"""
     Perform variable substitution in a polynomial using a linear transformation.
     
@@ -795,4 +795,84 @@ def _substitute_linear(poly_old: List[np.ndarray], C: np.ndarray, max_deg: int, 
                 
             _polynomial_add_inplace(poly_new, term, 1.0, max_deg)
 
-    return _polynomial_clean(poly_new, 1e-14)
+    return _polynomial_clean(poly_new, tol)
+
+
+@njit(fastmath=FASTMATH, cache=False)
+def _linear_affine_variable_polys(C: np.ndarray, shifts: np.ndarray, max_deg: int, psi, clmo, encode_dict_list):
+    """Build polynomials for variables after an affine change of variables.
+
+    The transformation implemented is
+        L_i = sum_j C[i,j] * x_j  +  shifts[i]
+
+    Parameters
+    ----------
+    C : np.ndarray, shape (6,6)
+        Linear part of the transformation.
+    shifts : np.ndarray, shape (6,)
+        Constant offsets added to each new variable.  Use 0 for variables that
+        are not shifted.
+    max_deg, psi, clmo, encode_dict_list
+        Same meaning as in `_linear_variable_polys`.
+
+    Returns
+    -------
+    List[List[np.ndarray]]
+        Polynomials for the six transformed variables.
+    """
+    # First build the purely linear part
+    var_polys = _linear_variable_polys(C, max_deg, psi, clmo, encode_dict_list)
+
+    # Inject constant shifts into the degree-0 component of each variable
+    for i in range(6):
+        delta = shifts[i]
+        if delta == 0:
+            continue
+        if len(var_polys[i]) > 0 and var_polys[i][0].size > 0:
+            var_polys[i][0][0] += delta
+    return var_polys
+
+
+@njit(fastmath=FASTMATH, cache=False)
+def _substitute_affine(poly_old: List[np.ndarray], C: np.ndarray, shifts: np.ndarray, max_deg: int, psi, clmo, encode_dict_list, tol: float = 1e-14) -> List[np.ndarray]:
+    """Substitute an *affine* change of variables into a polynomial.
+
+    The old variables (x_old) are expressed in terms of the new variables (x) by
+
+        x_old_i = sum_j C[i,j] * x_j  +  shifts[i].
+
+    This is a thin wrapper around `_substitute_linear`; it first builds the
+    variable polynomials that include the constant shifts and then performs the
+    same expansion/accumulation loop.
+    """
+    # Build affine variable polynomials (linear part + constant shifts)
+    var_polys = _linear_affine_variable_polys(C, shifts, max_deg, psi, clmo, encode_dict_list)
+
+    poly_new = _polynomial_zero_list(max_deg, psi)
+
+    for deg in range(max_deg + 1):
+        p = poly_old[deg]
+        if not p.any():
+            continue
+        for pos, coeff in enumerate(p):
+            if coeff == 0:
+                continue
+            k = _decode_multiindex(pos, deg, clmo)
+
+            # start with the constant coeff
+            term = _polynomial_zero_list(max_deg, psi)
+            if len(term) > 0 and term[0].size > 0:
+                term[0][0] = coeff
+
+            # multiply the required powers of each transformed variable
+            for i_var in range(6):
+                exp_i = k[i_var]
+                if exp_i == 0:
+                    continue
+                pwr = _polynomial_power(var_polys[i_var], exp_i, max_deg, psi, clmo, encode_dict_list)
+                term = _polynomial_multiply(term, pwr, max_deg, psi, clmo, encode_dict_list)
+
+            _polynomial_add_inplace(poly_new, term, 1.0, max_deg)
+
+    # Remove numerical noise
+    return _polynomial_clean(poly_new, tol)

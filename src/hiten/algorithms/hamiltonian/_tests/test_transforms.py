@@ -3,7 +3,7 @@ import pytest
 import sympy as sp
 
 from hiten.algorithms.hamiltonian.hamiltonian import \
-    _build_physical_hamiltonian_collinear
+    _build_physical_hamiltonian
 from hiten.algorithms.hamiltonian.transforms import (_coordlocal2realmodal,
                                                      _coordrealmodal2local,
                                                      _local2synodic_collinear,
@@ -312,7 +312,7 @@ def test_symplectic(transforms_test_setup):
 def test_real_normal_form(transforms_test_setup):
     psi, clmo, _, libration_point = transforms_test_setup
 
-    H_phys = _build_physical_hamiltonian_collinear(libration_point, TEST_MAX_DEG)
+    H_phys = _build_physical_hamiltonian(libration_point, TEST_MAX_DEG)
     H_rn   = _polylocal2realmodal(libration_point, H_phys, TEST_MAX_DEG, psi, clmo)
 
     x, y, z, px, py, pz = sp.symbols('x y z px py pz')
@@ -352,7 +352,7 @@ def test_real_normal_form(transforms_test_setup):
 def test_complex_normal_form(transforms_test_setup):
     psi, clmo, encode_dict, libration_point = transforms_test_setup
 
-    H_phys = _build_physical_hamiltonian_collinear(libration_point, TEST_MAX_DEG)
+    H_phys = _build_physical_hamiltonian(libration_point, TEST_MAX_DEG)
     H_rn   = _polylocal2realmodal(libration_point, H_phys, TEST_MAX_DEG, psi, clmo)
     H_cn   = _substitute_complex(H_rn, TEST_MAX_DEG, psi, clmo)
 
@@ -433,7 +433,7 @@ def test_complex_normal_form(transforms_test_setup):
 def test_poly_realification_complexification(transforms_test_setup):
     psi, clmo, _, libration_point = transforms_test_setup
 
-    H_phys = _build_physical_hamiltonian_collinear(libration_point, TEST_MAX_DEG)
+    H_phys = _build_physical_hamiltonian(libration_point, TEST_MAX_DEG)
     H_rn   = _polylocal2realmodal(libration_point, H_phys, TEST_MAX_DEG, psi, clmo)
     H_cn   = _substitute_complex(H_rn, TEST_MAX_DEG, psi, clmo)
     H_back = _substitute_real(H_cn, TEST_MAX_DEG, psi, clmo)
