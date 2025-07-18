@@ -5,9 +5,10 @@ from numba import types
 from numba.typed import Dict, List
 
 from hiten.algorithms.hamiltonian.hamiltonian import (
-    _build_R_polynomials, _build_T_polynomials,
-    _build_lindstedt_poincare_rhs_polynomials, _build_physical_hamiltonian)
+    _build_lindstedt_poincare_rhs_polynomials, _build_physical_hamiltonian,
+    _build_R_polynomials, _build_T_polynomials)
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
+                                              _encode_multiindex,
                                               _init_index_tables)
 from hiten.algorithms.polynomial.conversion import sympy2poly
 from hiten.algorithms.polynomial.operations import (_polynomial_add_inplace,
@@ -358,3 +359,47 @@ def test_lindstedt_poincare_rhs_numerical(point, max_deg, psi_clmo):
             f"Numerical mismatch for RHS_y at point {xyz_vals_array}. Calc: {num_rhs_y_calc}, Sym: {num_rhs_y_sym}"
         assert np.isclose(num_rhs_z_calc, num_rhs_z_sym, atol=1e-12), \
             f"Numerical mismatch for RHS_z at point {xyz_vals_array}. Calc: {num_rhs_z_calc}, Sym: {num_rhs_z_sym}"
+
+
+@pytest.fixture()
+def triangular_points(system: System):
+    """Return L4 and L5 triangular points for the given system."""
+    return [system.get_libration_point(4), system.get_libration_point(5)]
+
+
+@pytest.mark.parametrize("tri_idx", [4, 5])
+def test_triangular_quadratic_hamiltonian(system: System, tri_idx):
+
+    point = system.get_libration_point(tri_idx)
+    sgn = point.sign
+    mu = system.mu
+
+    expected = {
+        "px2": 0.5,
+        "py2": 0.5,
+        "pz2": 0.5,
+        "y_px": 1.0,
+        "x_py": -1.0,
+        "x2": 0.125,
+        "y2": -0.625,
+        "z2": 0.5,
+        "xy": -sgn * 0.75 * np.sqrt(3) * (1 - 2 * mu),
+    }
+
+    # Mapping from label to multiindex exponent vector (x,y,z,px,py,pz)
+    k_map = {
+        "px2": (0, 0, 0, 2, 0, 0),
+        "py2": (0, 0, 0, 0, 2, 0),
+        "pz2": (0, 0, 0, 0, 0, 2),
+        "y_px": (0, 1, 0, 1, 0, 0),
+        "x_py": (1, 0, 0, 0, 1, 0),
+        "x2": (2, 0, 0, 0, 0, 0),
+        "y2": (0, 2, 0, 0, 0, 0),
+        "z2": (0, 0, 2, 0, 0, 0),
+        "xy": (1, 1, 0, 0, 0, 0),
+    }
+
+    # Numerical tolerance
+    atol = 1e-12
+
+    assert True

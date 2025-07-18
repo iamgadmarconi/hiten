@@ -48,7 +48,7 @@ def _rotating_to_inertial(state, t, mu):
     # Velocity in rotating frame
     vel_rot = np.array([vx, vy, vz])
     
-    # Velocity in inertial frame = R·(v_rot + ω×r)
+    # Velocity in inertial frame = R·(v_rot + Omegaxr)
     vel_inertial = R @ (vel_rot + omega_cross_r)
     
     # Combine position and velocity
@@ -100,7 +100,7 @@ def _inertial_to_rotating(state, t, mu):
     # Velocity in inertial frame
     vel_inertial = np.array([vx, vy, vz])
     
-    # Velocity in rotating frame = R^T·(v_inertial - ω×r)
+    # Velocity in rotating frame = R^T·(v_inertial - Omegaxr)
     vel_rotating = R.T @ (vel_inertial - omega_cross_r)
     
     # Combine position and velocity
@@ -150,8 +150,8 @@ def _get_angular_velocity(primary_mass, secondary_mass, distance):
         
     Notes
     -----
-    This is calculated using Kepler's Third Law: ω² = G(m₁+m₂)/r³
-    where G is the gravitational constant, m₁ and m₂ are the masses,
+    This is calculated using Kepler's Third Law: Omega² = G(m_1+m_2)/r³
+    where G is the gravitational constant, m_1 and m_2 are the masses,
     and r is the distance between the bodies.
     """
     return np.sqrt(Constants.G * (primary_mass + secondary_mass) / distance**3)

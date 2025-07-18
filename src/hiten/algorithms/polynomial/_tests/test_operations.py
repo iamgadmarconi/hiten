@@ -2,17 +2,17 @@ import numpy as np
 import pytest
 from numba.typed import List
 
-from hiten.algorithms.polynomial.base import (_CLMO_GLOBAL, _ENCODE_DICT_GLOBAL,
-                                               _PSI_GLOBAL,
-                                               _create_encode_dict_from_clmo,
-                                               _encode_multiindex,
-                                               _init_index_tables)
+from hiten.algorithms.polynomial.base import (_CLMO_GLOBAL,
+                                              _ENCODE_DICT_GLOBAL, _PSI_GLOBAL,
+                                              _create_encode_dict_from_clmo,
+                                              _encode_multiindex,
+                                              _init_index_tables)
 from hiten.algorithms.polynomial.operations import (
-    _polynomial_add_inplace, _polynomial_clean, _polynomial_degree,
-    _polynomial_differentiate, _polynomial_evaluate, _polynomial_jacobian,
-    _polynomial_multiply, _polynomial_poisson_bracket, _polynomial_power,
-    _polynomial_total_degree, _polynomial_variable, _polynomial_variables_list,
-    _polynomial_zero_list)
+    _linear_affine_variable_polys, _polynomial_add_inplace, _polynomial_clean,
+    _polynomial_degree, _polynomial_differentiate, _polynomial_evaluate,
+    _polynomial_jacobian, _polynomial_multiply, _polynomial_poisson_bracket,
+    _polynomial_power, _polynomial_total_degree, _polynomial_variable,
+    _polynomial_variables_list, _polynomial_zero_list, _substitute_affine)
 from hiten.algorithms.utils.config import N_VARS
 
 TEST_MAX_DEG = 5
@@ -1231,3 +1231,81 @@ def test_polynomial_total_degree():
     else:
         assert _polynomial_total_degree(small_coeff_p, PSI) == -1, \
             "Test Case 9 Failed: Zero polynomial when TEST_MAX_DEG < 1"
+
+
+# -----------------------------------------------------------------------------
+# New tests for affine substitution utilities
+# -----------------------------------------------------------------------------
+
+def test_linear_affine_variable_polys_identity_shifts():
+    """Ensure that affine variable polynomials incorporate linear and shift parts."""
+    max_deg_local = TEST_MAX_DEG
+    # Identity transformation with specific shifts on first two variables
+    C = np.eye(N_VARS)
+    shifts = np.array([1.5, -2.0, 0.0, 0.0, 0.0, 0.0])
+
+    var_polys = _linear_affine_variable_polys(C, shifts, max_deg_local, _PSI_GLOBAL, _CLMO_GLOBAL, _ENCODE_DICT_GLOBAL)
+
+    # Basic sanity
+    assert len(var_polys) == N_VARS
+
+    for i in range(N_VARS):
+        # Degree-0 constant should match the prescribed shift
+        if len(var_polys[i]) > 0 and var_polys[i][0].size > 0:
+            expected_shift = shifts[i]
+            assert var_polys[i][0][0] == expected_shift
+
+        # Degree-1 linear part should reflect the identity matrix
+        k = np.zeros(N_VARS, dtype=np.int64)
+        k[i] = 1
+        idx = _encode_multiindex(k, 1, _ENCODE_DICT_GLOBAL)
+        if len(var_polys[i]) > 1 and idx < var_polys[i][1].shape[0]:
+            assert var_polys[i][1][idx] == 1.0
+        # All other coefficients in degree-1 should be zero
+        tmp = var_polys[i][1].copy()
+        if idx < tmp.shape[0]:
+            tmp[idx] = 0.0
+        assert np.all(tmp == 0.0)
+
+
+def test_substitute_affine_linear_variable():
+    """Substituting a single variable with a shift should add the constant term."""
+    max_deg_local = TEST_MAX_DEG
+    shift_val = 2.5
+    C = np.eye(N_VARS)
+    shifts = np.array([shift_val] + [0.0]*(N_VARS-1))
+
+    # Original polynomial P(x) = x0
+    poly_old = _polynomial_variable(0, max_deg_local, _PSI_GLOBAL, _CLMO_GLOBAL, _ENCODE_DICT_GLOBAL)
+
+    poly_new = _substitute_affine(poly_old, C, shifts, max_deg_local, _PSI_GLOBAL, _CLMO_GLOBAL, _ENCODE_DICT_GLOBAL)
+
+    # Expected polynomial: x0 + shift_val
+    expected_poly = _polynomial_variable(0, max_deg_local, _PSI_GLOBAL, _CLMO_GLOBAL, _ENCODE_DICT_GLOBAL)
+    if len(expected_poly) > 0 and expected_poly[0].size > 0:
+        expected_poly[0][0] += shift_val
+
+    _assert_poly_lists_almost_equal(poly_new, expected_poly, msg="Affine substitution failed for linear polynomial")
+
+
+def test_substitute_affine_product_with_shift():
+    """Substituting an affine shift into a quadratic term should expand correctly."""
+    max_deg_local = TEST_MAX_DEG
+    shift_val = 3.0
+    C = np.eye(N_VARS)
+    shifts = np.array([shift_val] + [0.0]*(N_VARS-1))
+
+    # Original polynomial P(x) = x0 * x1
+    x0_poly = _polynomial_variable(0, max_deg_local, _PSI_GLOBAL, _CLMO_GLOBAL, _ENCODE_DICT_GLOBAL)
+    x1_poly = _polynomial_variable(1, max_deg_local, _PSI_GLOBAL, _CLMO_GLOBAL, _ENCODE_DICT_GLOBAL)
+    poly_old = _polynomial_multiply(x0_poly, x1_poly, max_deg_local, _PSI_GLOBAL, _CLMO_GLOBAL, _ENCODE_DICT_GLOBAL)
+
+    poly_new = _substitute_affine(poly_old, C, shifts, max_deg_local, _PSI_GLOBAL, _CLMO_GLOBAL, _ENCODE_DICT_GLOBAL)
+
+    # Expected polynomial: (x0 + shift_val) * x1 = x0*x1 + shift_val * x1
+    shifted_x0 = _polynomial_variable(0, max_deg_local, _PSI_GLOBAL, _CLMO_GLOBAL, _ENCODE_DICT_GLOBAL)
+    if len(shifted_x0) > 0 and shifted_x0[0].size > 0:
+        shifted_x0[0][0] += shift_val
+    expected_poly = _polynomial_multiply(shifted_x0, x1_poly, max_deg_local, _PSI_GLOBAL, _CLMO_GLOBAL, _ENCODE_DICT_GLOBAL)
+
+    _assert_poly_lists_almost_equal(poly_new, expected_poly, msg="Affine substitution failed for quadratic polynomial")

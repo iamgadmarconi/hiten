@@ -145,7 +145,7 @@ def animate_trajectories(
             ax.view_init(elev=elev, azim=azim)
         
         ax_rot.set_title("Rotating Frame (SI Distances)", color='white' if dark_mode else 'black')
-        ax_inert.set_title("Inertial Frame (Real Time, Real Ω)", color='white' if dark_mode else 'black')
+        ax_inert.set_title("Inertial Frame (Real Time, Real Omega)", color='white' if dark_mode else 'black')
         if dark_mode:
             _set_dark_mode(fig, ax_rot, title=ax_rot.get_title())
             _set_dark_mode(fig, ax_inert, title=ax_inert.get_title())
@@ -234,7 +234,7 @@ def animate_trajectories(
         secondary_center_now = np.array([secondary_x[frame], secondary_y[frame], secondary_z[frame]])
         _plot_body(ax_inert, secondary_center_now, bodies[1].radius, secondary_color, bodies[1].name)
         
-        ax_inert.set_title("Inertial Frame (Real Time, Real Ω)", color='white' if dark_mode else 'black')
+        ax_inert.set_title("Inertial Frame (Real Time, Real Omega)", color='white' if dark_mode else 'black')
         ax_inert.legend()
         
         # Ensure dark-mode styling (including legend) is applied for this frame
@@ -800,7 +800,7 @@ def plot_invariant_torus(
         Characteristic distance (km) - required to scale the body radii.
     figsize, save, dark_mode, filepath : see other plot helpers.
     cmap : str, optional
-        Colormap name used to colour-code the major-angle \theta₁. Default ``"plasma"``.
+        Colormap name used to colour-code the major-angle \theta_1. Default ``"plasma"``.
     elev, azim : float, optional
         Elevation and azimuth view angles passed to ``Axes3D.view_init``.
     equal_axes : bool, default True

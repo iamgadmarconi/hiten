@@ -278,7 +278,7 @@ def test_scale_factors(l1_earth_moon, l2_earth_moon, l3_earth_moon):
     assert s1_l3 > 0, "s1 scale factor should be positive for L3"
     assert s2_l3 > 0, "s2 scale factor should be positive for L3"
 
-def test_normal_form_transform(l1_earth_moon, l2_earth_moon, l3_earth_moon):
+def test_normal_form_transform(l1_earth_moon, l2_earth_moon, l3_earth_moon, l4_earth_moon, l5_earth_moon):
     """Test normal form transform for collinear points."""
     C_l1, Cinv_l1 = l1_earth_moon.normal_form_transform()
     assert is_symplectic(C_l1)
@@ -291,3 +291,11 @@ def test_normal_form_transform(l1_earth_moon, l2_earth_moon, l3_earth_moon):
     C_l3, Cinv_l3 = l3_earth_moon.normal_form_transform()
     assert is_symplectic(C_l3)
     assert is_symplectic(Cinv_l3)
+
+    C_l4, Cinv_l4 = l4_earth_moon.normal_form_transform()
+    assert is_symplectic(C_l4)
+    assert is_symplectic(Cinv_l4)
+
+    C_l5, Cinv_l5 = l5_earth_moon.normal_form_transform()
+    assert is_symplectic(C_l5)
+    assert is_symplectic(Cinv_l5)

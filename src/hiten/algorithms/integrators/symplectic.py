@@ -612,7 +612,7 @@ class _ExtendedSymplectic(_Integrator):
             )
 
         # The sign of time direction is carried by the *system* wrapper via
-        # attribute ``_fwd`` (set to ±1 in _DirectedSystem).  We keep the
+        # attribute ``_fwd`` (set to +-1 in _DirectedSystem).  We keep the
         # user-supplied time grid strictly ascending and inject the sign into
         # the integration through a transformed copy that the low-level
         # integrator sees.  This avoids forcing callers to reverse the grid.

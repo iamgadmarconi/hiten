@@ -122,7 +122,7 @@ def eigenvalue_decomposition(A: np.ndarray, discrete: int = 0, delta: float = 1e
         # Classification: stable/unstable/center
         classification = "center" # Default
         if discrete == 1:
-            # Discrete-time system => compare magnitude to 1 ± delta
+            # Discrete-time system => compare magnitude to 1 +- delta
             mag = abs(val)
             if mag < 1 - delta:
                 classification = "stable"

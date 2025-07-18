@@ -87,7 +87,7 @@ def _nf2aa_ee(poly_nf_complex: np.ndarray) -> np.ndarray:
         # Build n_j and k_j  (action degree & Fourier index) for j = 1..3
         n = [0, 0, 0]
         k = [0, 0, 0]
-        p_tot = 0  # Total p-exponent (for the (−i)^Σb prefactor)
+        p_tot = 0  # Total p-exponent (for the (-i)^Σb prefactor)
 
         valid = True
         for j in range(3):
@@ -108,7 +108,7 @@ def _nf2aa_ee(poly_nf_complex: np.ndarray) -> np.ndarray:
             # This should not occur if deg_aa = deg_nf//2, but guard anyway
             continue
 
-        # Prefactor (−i)^{Σ b_j}
+        # Prefactor (-i)^{Σ b_j}
         pref = ((-1j) ** p_tot) * c
 
         # Encode (n1,n2,n3,k1,k2,k3) into coefficient array position

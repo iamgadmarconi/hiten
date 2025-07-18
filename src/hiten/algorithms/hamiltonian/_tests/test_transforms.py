@@ -504,7 +504,7 @@ def test_collinear_local_synodic_inverse(seed, transforms_test_setup):
         local,
         rtol=1e-13,
         atol=1e-13,
-        err_msg=f"Collinear local→synodic→local failed for seed {seed}.",
+        err_msg=f"Collinear local->synodic->local failed for seed {seed}.",
     )
 
     syn_round = _local2synodic_collinear(libration_point, recovered_local)
@@ -513,7 +513,7 @@ def test_collinear_local_synodic_inverse(seed, transforms_test_setup):
         syn,
         rtol=1e-13,
         atol=1e-13,
-        err_msg=f"Collinear synodic→local→synodic failed for seed {seed}.",
+        err_msg=f"Collinear synodic->local->synodic failed for seed {seed}.",
     )
 
 
@@ -549,7 +549,7 @@ def test_triangular_local_synodic_inverse(seed):
         local,
         rtol=1e-13,
         atol=1e-13,
-        err_msg=f"Triangular local→synodic→local failed for seed {seed}.",
+        err_msg=f"Triangular local->synodic->local failed for seed {seed}.",
     )
 
     syn_round = _local2synodic_triangular(triangular_point, recovered_local)
@@ -558,7 +558,7 @@ def test_triangular_local_synodic_inverse(seed):
         syn,
         rtol=1e-13,
         atol=1e-13,
-        err_msg=f"Triangular synodic→local→synodic failed for seed {seed}.",
+        err_msg=f"Triangular synodic->local->synodic failed for seed {seed}.",
     )
 
 
@@ -601,7 +601,7 @@ def test_polynomial_local_realmodal_inverse(seed, transforms_test_setup):
         np.testing.assert_allclose(
             poly_recovered[d], poly_local[d], 
             rtol=1e-13, atol=1e-13,
-            err_msg=f"Polynomial local→realmodal→local round trip failed for seed {seed}, degree {d}"
+            err_msg=f"Polynomial local->realmodal->local round trip failed for seed {seed}, degree {d}"
         )
 
     # Test reverse round-trip: real modal -> local -> real modal
@@ -611,7 +611,7 @@ def test_polynomial_local_realmodal_inverse(seed, transforms_test_setup):
         np.testing.assert_allclose(
             poly_recovered_realmodal[d], poly_realmodal[d], 
             rtol=1e-13, atol=1e-13,
-            err_msg=f"Polynomial realmodal→local→realmodal round trip failed for seed {seed}, degree {d}"
+            err_msg=f"Polynomial realmodal->local->realmodal round trip failed for seed {seed}, degree {d}"
         )
 
 
@@ -646,7 +646,7 @@ def test_coordinate_local_realmodal_inverse(seed, transforms_test_setup):
         np.testing.assert_allclose(
             recovered_local, local_coords, 
             rtol=1e-13, atol=1e-13,
-            err_msg=f"Coordinate local→realmodal→local failed for seed {seed}, test case {i}: "
+            err_msg=f"Coordinate local->realmodal->local failed for seed {seed}, test case {i}: "
                    f"input={local_coords}, recovered={recovered_local}"
         )
 
@@ -656,7 +656,7 @@ def test_coordinate_local_realmodal_inverse(seed, transforms_test_setup):
         np.testing.assert_allclose(
             recovered_realmodal, realmodal_coords, 
             rtol=1e-13, atol=1e-13,
-            err_msg=f"Coordinate realmodal→local→realmodal failed for seed {seed}, test case {i}: "
+            err_msg=f"Coordinate realmodal->local->realmodal failed for seed {seed}, test case {i}: "
                    f"realmodal={realmodal_coords}, recovered={recovered_realmodal}"
         )
 
