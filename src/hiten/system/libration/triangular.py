@@ -223,9 +223,7 @@ class TriangularPoint(LibrationPoint):
 
         # Sanity check - warn (do not fail) if the magnitudes violate the desired split
         if not (omega1**2 > 0.5 and omega2**2 < 0.5):
-            logger.warning(
-                ("Computed planar frequencies do not strictly satisfy the requested ordering: "
-                 f"omega_1={omega1:.4f}, omega_2={omega2:.4f}."))
+            raise RuntimeError(f"Computed planar frequencies do not strictly satisfy the requested ordering: omega_1={omega1:.4f}, omega_2={omega2:.4f}.")
 
         return (float(omega1), float(omega2), float(omega_z))
 
@@ -270,6 +268,8 @@ class TriangularPoint(LibrationPoint):
         return J_full
     
     def _rs(self, idx):
+        if idx not in [0, 1]:
+            raise ValueError(f"Invalid index {idx} for scaling factor calculation")
         return np.sqrt(self.linear_modes[idx] * (4*self.linear_modes[idx]**4 + self.linear_modes[idx]**2 - 1.5))
 
     def _get_eigvs(self):
@@ -287,7 +287,7 @@ class TriangularPoint(LibrationPoint):
         """
 
         a = self.a
-        omega1, omega2, _ = self.linear_modes  # omega_z == 1
+        omega1, omega2, omega_z = self.linear_modes  # omega_z == 1
 
         # The vectors are written in the (x, y, p_x, p_y) ordering used by
         # _J_hess_H2.  They are then embedded into 6-D by appending zeros
@@ -297,19 +297,26 @@ class TriangularPoint(LibrationPoint):
         v1_planar = np.array([2 * omega1, 0.0, a * omega1, -omega1**3 + 1.25 * omega1])
         v2_planar = np.array([2 * omega2, 0.0, a * omega2, -omega2**3 + 1.25 * omega2])
 
-        # Embed into 6-D phase space (planar block first, then z, p_z)
-        zeros2 = np.zeros(2)
-        u1 = np.concatenate([u1_planar, zeros2])
-        u2 = np.concatenate([u2_planar, zeros2])
-        v1 = np.concatenate([v1_planar, zeros2])
-        v2 = np.concatenate([v2_planar, zeros2])
+        # Build full 6-D vectors with zeros in the vertical coordinates
+        # (z, p_z) = (index 2, 5).
+        u1 = np.zeros(6)
+        u2 = np.zeros(6)
+        v1 = np.zeros(6)
+        v2 = np.zeros(6)
 
-        omega_z = self.linear_modes[2]
+        # Assign planar components.
+        u1[[0, 1, 3, 4]] = u1_planar
+        u2[[0, 1, 3, 4]] = u2_planar
+        v1[[0, 1, 3, 4]] = v1_planar
+        v2[[0, 1, 3, 4]] = v2_planar
+
         sqrt_omega_z = np.sqrt(abs(omega_z))  # positive by construction
-        u3 = np.array([0.0, 0.0, 0.0, 0.0, 1.0 / sqrt_omega_z, 0.0])
-        v3 = np.array([0.0, 0.0, 0.0, 0.0, 0.0, sqrt_omega_z])
+        u3 = np.zeros(6)
+        v3 = np.zeros(6)
+        u3[2] = 1.0 / sqrt_omega_z  # z coordinate
+        v3[5] = sqrt_omega_z        # p_z coordinate
 
-        # Stack as rows (will be transposed later as columns)
+        # Stack as rows.
         eigv_matrix = np.vstack([u1, u2, u3, v1, v2, v3])
         return eigv_matrix
     
