@@ -28,8 +28,8 @@ from hiten.algorithms.hamiltonian.center._lie import (_evaluate_transform,
                                                       _lie_expansion)
 from hiten.algorithms.hamiltonian.center._lie import \
     _lie_transform as _lie_transform_partial
-from hiten.algorithms.hamiltonian.hamiltonian import \
-    _build_physical_hamiltonian
+from hiten.algorithms.hamiltonian.hamiltonian import (
+    _build_h2_triangular, _build_physical_hamiltonian)
 # Full ("complete") normal form Lie transform
 from hiten.algorithms.hamiltonian.normal._lie import \
     _lie_transform as _lie_transform_full
@@ -106,12 +106,13 @@ class CenterManifold:
                 logger.warning("L3 point has not been verified for centre manifold computation!")
 
         elif isinstance(self._point, TriangularPoint):
+            if self._max_degree > 2:
+                logger.warning("Triangular points do not have hyperbolic directions \n"
+                               "for degree > 2. Setting max_degree to 2.")
+                self._max_degree = 2
+
             self._local2synodic = _local2synodic_triangular
             self._synodic2local = _synodic2local_triangular
-            err = "Triangular points not implemented for centre manifold computation!"
-            logger.error(err)
-            raise NotImplementedError(err)
-
         else:
             raise ValueError(f"Unsupported libration point type: {type(self._point)}")
 
@@ -269,7 +270,15 @@ class CenterManifold:
 
     def _get_physical_hamiltonian(self) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'physical')
-        return self._get_or_compute(key, lambda: _build_physical_hamiltonian(self._point, self._max_degree))
+
+        def compute_physical_hamiltonian():
+            if isinstance(self._point, TriangularPoint):
+                return _build_h2_triangular(self._point)
+            
+            elif isinstance(self._point, CollinearPoint):
+                return _build_physical_hamiltonian(self._point, self._max_degree)
+            
+        return self._get_or_compute(key, compute_physical_hamiltonian)
 
     def _get_real_modal_form(self) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'real_modal')
@@ -387,6 +396,16 @@ class CenterManifold:
         r"""
         Restrict a Hamiltonian to the center manifold by eliminating hyperbolic variables.
         """
+        # For triangular points, all directions are centre-type, so we do NOT
+        # eliminate any terms involving (q1, p1).  The original behaviour of
+        # zeroing these terms is only appropriate for collinear points where
+        # (q1, p1) span the hyperbolic sub-space.
+
+        if isinstance(self._point, TriangularPoint):
+            # Simply return a *copy* of the input to avoid accidental mutation
+            return [h.copy() for h in poly_H]
+
+        # Collinear case – remove all terms containing q1 or p1 exponents.
         poly_cm = [h.copy() for h in poly_H]
         for deg, coeff_vec in enumerate(poly_cm):
             if coeff_vec.size == 0:
@@ -401,10 +420,24 @@ class CenterManifold:
         return poly_cm
     
     def _restrict_coord_to_center_manifold(self, coord_6d):
-        # Convert complex arrays with zero imaginary parts to real
+        """Project a 6-D Phase-space coordinate onto the centre manifold.
+
+        For collinear points the hyperbolic pair (q1, p1) is removed.  For
+        triangular points all six variables belong to the centre manifold so
+        the original coordinates are returned unchanged (apart from casting to
+        real dtype and ensuring contiguity).
+        """
+
+        # Always work with real numbers once we reach this stage.
         if np.iscomplexobj(coord_6d):
             coord_6d = np.real(coord_6d)
-        return np.array([0, coord_6d[1], coord_6d[2], 0, coord_6d[4], coord_6d[5]], dtype=np.float64)
+
+        if isinstance(self._point, TriangularPoint):
+            # Nothing to eliminate – return full 6-vector.
+            return np.ascontiguousarray(coord_6d, dtype=np.float64)
+
+        # Collinear case: zero out the hyperbolic coordinates.
+        return np.array([0.0, coord_6d[1], coord_6d[2], 0.0, coord_6d[4], coord_6d[5]], dtype=np.float64)
     
     def _get_center_manifold_complex(self) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'center_manifold_complex')
