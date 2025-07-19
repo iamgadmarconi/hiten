@@ -23,6 +23,7 @@ from hiten.algorithms.poincare.map import _generate_grid
 from hiten.algorithms.poincare.map import _generate_map as _generate_map_cpu
 from hiten.algorithms.poincare.map import _PoincareSection
 from hiten.system.center import CenterManifold
+from hiten.system.libration.triangular import TriangularPoint
 from hiten.system.orbits.base import GenericOrbit
 from hiten.utils.io import (_ensure_dir, _load_poincare_map,
                             _load_poincare_map_inplace, _save_poincare_map)
@@ -78,6 +79,8 @@ class _PoincareMap:
         config: Optional[_PoincareMapConfig] = None,
     ) -> None:
         self.cm: CenterManifold = cm
+        if isinstance(self.cm.point, TriangularPoint):
+            raise ValueError("Poincaré map is not supported for triangular points.")
         self.energy: float = float(energy)
         self.config: _PoincareMapConfig = config or _PoincareMapConfig()
 

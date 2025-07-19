@@ -301,7 +301,6 @@ class CenterManifold:
         bundle_key = ('lie_transform_bundle', self._max_degree)
 
         def compute_partial_lie_bundle():
-            logger.info("Performing partial Lie transformation...")
             poly_cn = self._get_complex_modal_form()
             poly_trans, poly_G_total, poly_elim_total = _lie_transform_partial(
                 self._point, poly_cn, self._psi, self._clmo, self._max_degree
