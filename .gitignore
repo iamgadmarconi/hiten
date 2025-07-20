@@ -181,5 +181,6 @@ results/**
 !results/plots/
 !results/plots/**
 !results/**/.gitkeep
+_debug.py
 
 .cursor/

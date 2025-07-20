@@ -351,12 +351,10 @@ def _build_physical_hamiltonian(point, max_deg: int) -> List[np.ndarray]:
 
     return poly_H
 
-def _build_h2_triangular(point) -> List[np.ndarray]:
+def _build_h2_triangular(point, max_deg: int) -> List[np.ndarray]:
     """Return the second-order (quadratic) Hamiltonian around a triangular
     Libration point (L4/L5).
     """
-    max_deg = 2
-
     psi_table, clmo_table = _init_index_tables(max_deg)
     encode_dict_list = _create_encode_dict_from_clmo(clmo_table)
 

@@ -101,18 +101,17 @@ class CenterManifold:
         if isinstance(self._point, CollinearPoint):
             self._local2synodic = _local2synodic_collinear
             self._synodic2local = _synodic2local_collinear
+            self._build_hamiltonian = _build_physical_hamiltonian
 
             if isinstance(self._point, L3Point):
-                logger.warning("L3 point has not been verified for centre manifold computation!")
+                logger.warning("L3 point has not been verified for centre manifold / normal form computations!")
 
         elif isinstance(self._point, TriangularPoint):
-            if self._max_degree > 2:
-                logger.warning("Triangular points do not have hyperbolic directions \n"
-                               "for degree > 2. Setting max_degree to 2.")
-                self._max_degree = 2
-
+            logger.warning("Triangular points have not been verified for centre manifold / normal form computations!")
             self._local2synodic = _local2synodic_triangular
             self._synodic2local = _synodic2local_triangular
+            self._build_hamiltonian = _build_h2_triangular
+
         else:
             raise ValueError(f"Unsupported libration point type: {type(self._point)}")
 
@@ -270,15 +269,9 @@ class CenterManifold:
 
     def _get_physical_hamiltonian(self) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'physical')
-
-        def compute_physical_hamiltonian():
-            if isinstance(self._point, TriangularPoint):
-                return _build_h2_triangular(self._point)
-            
-            elif isinstance(self._point, CollinearPoint):
-                return _build_physical_hamiltonian(self._point, self._max_degree)
-            
-        return self._get_or_compute(key, compute_physical_hamiltonian)
+        return self._get_or_compute(key, lambda: self._build_hamiltonian(
+            self._point, self._max_degree
+        ))
 
     def _get_real_modal_form(self) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'real_modal')
