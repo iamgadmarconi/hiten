@@ -107,6 +107,8 @@ class CenterManifold:
                 logger.warning("L3 point has not been verified for centre manifold / normal form computations!")
 
         elif isinstance(self._point, TriangularPoint):
+            if self._max_degree != 2:
+                raise ValueError("Triangular points only support degree 2 for centre manifold / normal form computations!")
             logger.warning("Triangular points have not been verified for centre manifold / normal form computations!")
             self._local2synodic = _local2synodic_triangular
             self._synodic2local = _synodic2local_triangular
