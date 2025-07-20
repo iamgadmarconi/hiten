@@ -29,7 +29,8 @@ from hiten.algorithms.hamiltonian.center._lie import (_evaluate_transform,
 from hiten.algorithms.hamiltonian.center._lie import \
     _lie_transform as _lie_transform_partial
 from hiten.algorithms.hamiltonian.hamiltonian import (
-    _build_h2_triangular, _build_physical_hamiltonian_collinear)
+    _build_physical_hamiltonian_collinear,
+    _build_physical_hamiltonian_triangular)
 # Full ("complete") normal form Lie transform
 from hiten.algorithms.hamiltonian.normal._lie import \
     _lie_transform as _lie_transform_full
@@ -107,12 +108,10 @@ class CenterManifold:
                 logger.warning("L3 point has not been verified for centre manifold / normal form computations!")
 
         elif isinstance(self._point, TriangularPoint):
-            if self._max_degree != 2:
-                raise ValueError("Triangular points only support degree 2 for centre manifold / normal form computations!")
             logger.warning("Triangular points have not been verified for centre manifold / normal form computations!")
             self._local2synodic = _local2synodic_triangular
             self._synodic2local = _synodic2local_triangular
-            self._build_hamiltonian = _build_h2_triangular
+            self._build_hamiltonian = _build_physical_hamiltonian_triangular
 
         else:
             raise ValueError(f"Unsupported libration point type: {type(self._point)}")
@@ -427,7 +426,7 @@ class CenterManifold:
             coord_6d = np.real(coord_6d)
 
         if isinstance(self._point, TriangularPoint):
-            # Nothing to eliminate – return full 6-vector.
+            # Nothing to eliminate, return full 6-vector.
             return np.ascontiguousarray(coord_6d, dtype=np.float64)
 
         # Collinear case: zero out the hyperbolic coordinates.
@@ -435,6 +434,10 @@ class CenterManifold:
     
     def _get_center_manifold_complex(self) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'center_manifold_complex')
+
+        if isinstance(self._point, TriangularPoint):
+            logger.warning("Called center manifold method on triangular point, returning normal form.")
+            return self._get_full_complex_normal_form()
         
         def compute_cm_complex():
             poly_trans = self._get_complex_partial_normal_form()
@@ -444,6 +447,10 @@ class CenterManifold:
 
     def _get_center_manifold_real(self) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'center_manifold_real')
+
+        if isinstance(self._point, TriangularPoint):
+            logger.warning("Called center manifold method on triangular point, returning normal form.")
+            return self._get_full_real_normal_form()
 
         def compute_cm_real():
             poly_cm_complex = self._get_center_manifold_complex()
