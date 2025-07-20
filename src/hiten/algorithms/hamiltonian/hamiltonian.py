@@ -24,7 +24,7 @@ from numba import njit, types
 from numba.typed import List
 
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                              _init_index_tables)
+                                              _init_index_tables, _combinations)
 from hiten.algorithms.polynomial.operations import (_polynomial_add_inplace,
                                                     _polynomial_multiply,
                                                     _polynomial_variable,
@@ -301,7 +301,7 @@ def _build_rotational_terms(poly_x, poly_y, poly_px, poly_py, max_deg: int, psi_
     return poly_rot
 
 
-def _build_physical_hamiltonian(point, max_deg: int) -> List[np.ndarray]:
+def _build_physical_hamiltonian_collinear(point, max_deg: int) -> List[np.ndarray]:
     r"""
     Combine kinetic, potential, and Coriolis parts to obtain the full
     rotating-frame Hamiltonian :math:`H = T + U + C`.
@@ -325,8 +325,8 @@ def _build_physical_hamiltonian(point, max_deg: int) -> List[np.ndarray]:
 
     Examples
     --------
-    >>> from hiten.algorithms.hamiltonian.center.hamiltonian import _build_physical_hamiltonian
-    >>> H = _build_physical_hamiltonian(l1_point, max_deg=6)  # doctest: +SKIP
+    >>> from hiten.algorithms.hamiltonian.center.hamiltonian import _build_physical_hamiltonian_collinear
+    >>> H = _build_physical_hamiltonian_collinear(l1_point, max_deg=6)  # doctest: +SKIP
     """
     psi_table, clmo_table = _init_index_tables(max_deg)
     encode_dict_list = _create_encode_dict_from_clmo(clmo_table)
@@ -350,6 +350,136 @@ def _build_physical_hamiltonian(point, max_deg: int) -> List[np.ndarray]:
     _polynomial_add_inplace(poly_H, poly_U, 1.0)
 
     return poly_H
+
+def _build_physical_hamiltonian_triangular(point, max_deg: int) -> List[np.ndarray]:
+    r"""
+    Construct the rotating-frame Hamiltonian expanded around a triangular
+    (L4/L5) equilibrium to arbitrary polynomial degree *max_deg*.
+
+    The starting expression is the (already shifted) Hamiltonian quoted in
+    Gómez et al. (2001, eq. 57):
+
+    :math:`
+        H = \\tfrac12 (p_x^2 + p_y^2 + p_z^2) + y p_x - x p_y 
+            + \\bigl(\tfrac12 - \\mu\\bigr)\\,x \;\pm\; \\tfrac{\\sqrt{3}}{2}\\,y
+            - \\frac{1-\\mu}{r_{PS}} - \\frac{\\mu}{r_{PJ}}`
+
+    where the distances to the primaries written in *local* coordinates are
+
+    :math:`
+        r_{PS}^2 = (x - x_S)^2 + (y - y_S)^2 + z^2,\\,
+        r_{PJ}^2 = (x - x_J)^2 + (y - y_J)^2 + z^2,\\,
+        (x_S, y_S) = \\bigl(\\, +\\tfrac12, \; s \\tfrac{\\sqrt{3}}{2}\\bigr),\\qquad
+        (x_J, y_J) = \\bigl(\\, -\\tfrac12, \; s \\tfrac{\\sqrt{3}}{2}\\bigr)`
+
+    with *s = +1* for L4 and *s = -1* for L5.  At the equilibrium the
+    distances equal one, hence we may expand each inverse distance with the
+    binomial series
+
+    :math:`
+        \\frac{1}{r} = \\bigl(1 + u\\bigr)^{-1/2} = \\sum_{k\\ge 0} \\binom{-1/2}{k}
+        u^k, \\qquad u = r^2 - 1.`
+    """
+    psi_table, clmo_table = _init_index_tables(max_deg)
+    encode_dict_list = _create_encode_dict_from_clmo(clmo_table)
+
+    poly_x, poly_y, poly_z, poly_px, poly_py, poly_pz = [
+        _polynomial_variable(i, max_deg, psi_table, clmo_table, encode_dict_list)
+        for i in range(6)
+    ]
+
+    poly_H = _polynomial_zero_list(max_deg, psi_table)
+
+    poly_T = _build_kinetic_energy_terms(
+        poly_px, poly_py, poly_pz,
+        max_deg, psi_table, clmo_table, encode_dict_list,
+    )
+    _polynomial_add_inplace(poly_H, poly_T, 1.0)
+
+    poly_C = _build_rotational_terms(
+        poly_x, poly_y, poly_px, poly_py,
+        max_deg, psi_table, clmo_table, encode_dict_list,
+    )
+    _polynomial_add_inplace(poly_H, poly_C, 1.0)
+
+    mu = float(point.mu)
+    sgn = float(point.sign)  # +1 for L4, -1 for L5
+
+    poly_linear = _polynomial_zero_list(max_deg, psi_table)
+    _polynomial_add_inplace(poly_linear, poly_x, 0.5 - mu)
+    _polynomial_add_inplace(poly_linear, poly_y, sgn * np.sqrt(3) / 2.0)
+    _polynomial_add_inplace(poly_H, poly_linear, 1.0)
+
+    poly_x2 = _polynomial_multiply(poly_x, poly_x, max_deg, psi_table, clmo_table, encode_dict_list)
+    poly_y2 = _polynomial_multiply(poly_y, poly_y, max_deg, psi_table, clmo_table, encode_dict_list)
+    poly_z2 = _polynomial_multiply(poly_z, poly_z, max_deg, psi_table, clmo_table, encode_dict_list)
+
+    poly_rho2 = _polynomial_zero_list(max_deg, psi_table)
+    _polynomial_add_inplace(poly_rho2, poly_x2, 1.0)
+    _polynomial_add_inplace(poly_rho2, poly_y2, 1.0)
+    _polynomial_add_inplace(poly_rho2, poly_z2, 1.0)
+
+    # Helper to create a *linear* polynomial a*x + b*y
+    def _linear_comb(ax: float, ay: float):
+        poly = _polynomial_zero_list(max_deg, psi_table)
+        if abs(ax) > 0:
+            _polynomial_add_inplace(poly, poly_x, ax)
+        if abs(ay) > 0:
+            _polynomial_add_inplace(poly, poly_y, ay)
+        return poly
+
+    # Linear dot products with the primary offsets
+    d_Sx, d_Sy = 0.5, sgn * np.sqrt(3) / 2.0
+    d_Jx, d_Jy = -0.5, sgn * np.sqrt(3) / 2.0
+
+    poly_dot_S = _linear_comb(d_Sx, d_Sy)   # = d_Sx * x + d_Sy * y
+    poly_dot_J = _linear_comb(d_Jx, d_Jy)
+
+    # u = rho^2 - 2 (d·r)
+    poly_u_S = _polynomial_zero_list(max_deg, psi_table)
+    _polynomial_add_inplace(poly_u_S, poly_rho2, 1.0)
+    _polynomial_add_inplace(poly_u_S, poly_dot_S, -2.0)
+
+    poly_u_J = _polynomial_zero_list(max_deg, psi_table)
+    _polynomial_add_inplace(poly_u_J, poly_rho2, 1.0)
+    _polynomial_add_inplace(poly_u_J, poly_dot_J, -2.0)
+
+    def _inv_sqrt_series(poly_u):
+        """Return polynomial series of (1 + u)^{-1/2} truncated to *max_deg*."""
+        poly_series = _polynomial_zero_list(max_deg, psi_table)
+
+        # poly_pow tracks u^k (starts with k = 0 => 1)
+        poly_pow = _polynomial_zero_list(max_deg, psi_table)
+        # set constant term to 1
+        if len(poly_pow) > 0 and len(poly_pow[0]) > 0:
+            poly_pow[0][0] = 1.0 + 0.0j
+
+        for k in range(0, max_deg + 1):
+            # binomial(-1/2, k) = (-1)^k * (2k choose k) / 4^k
+            coeff = ((-1) ** k) * _combinations(2 * k, k) / (4 ** k)
+            _polynomial_add_inplace(poly_series, poly_pow, coeff)
+
+            # Prepare next power if it could still contribute terms <= max_deg
+            if k == max_deg:
+                break
+            poly_pow = _polynomial_multiply(
+                poly_pow, poly_u, max_deg, psi_table, clmo_table, encode_dict_list
+            )
+            # Quick exit if the multiplication produced all zeros (high degree)
+            if all(arr.size == 0 or np.allclose(arr, 0.0) for arr in poly_pow):
+                break
+        return poly_series
+
+    poly_inv_r_S = _inv_sqrt_series(poly_u_S)
+    poly_inv_r_J = _inv_sqrt_series(poly_u_J)
+
+    poly_U = _polynomial_zero_list(max_deg, psi_table)
+    _polynomial_add_inplace(poly_U, poly_inv_r_S, -(1.0 - mu))
+    _polynomial_add_inplace(poly_U, poly_inv_r_J, -mu)
+    _polynomial_add_inplace(poly_H, poly_U, 1.0)
+
+    return poly_H
+
 
 def _build_h2_triangular(point, max_deg: int) -> List[np.ndarray]:
     """Return the second-order (quadratic) Hamiltonian around a triangular

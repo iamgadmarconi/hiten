@@ -5,7 +5,7 @@ from numba import types
 from numba.typed import Dict, List
 
 from hiten.algorithms.hamiltonian.hamiltonian import (
-    _build_lindstedt_poincare_rhs_polynomials, _build_physical_hamiltonian,
+    _build_lindstedt_poincare_rhs_polynomials, _build_physical_hamiltonian_collinear,
     _build_R_polynomials, _build_T_polynomials)
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                               _encode_multiindex,
@@ -156,7 +156,7 @@ def test_symbolic_identity(point, max_deg):
     psi, clmo = _init_index_tables(max_deg)
     encode_dict = _create_encode_dict_from_clmo(clmo)
     
-    H_build = _build_physical_hamiltonian(point, max_deg)
+    H_build = _build_physical_hamiltonian_collinear(point, max_deg)
 
     H_sympy = _get_symbolic_physical_hamiltonian(point, max_deg)
     H_ref = sympy2poly(H_sympy, _sympy_vars, psi, clmo, encode_dict)
@@ -275,7 +275,7 @@ def test_numerical_evaluation(point, max_deg, psi_clmo):
     """Evaluate both Hamiltonians at random points and compare numerically."""
 
     psi, clmo, _ = psi_clmo
-    H_poly = _build_physical_hamiltonian(point, max_deg) 
+    H_poly = _build_physical_hamiltonian_collinear(point, max_deg) 
     H_sym = _get_symbolic_physical_hamiltonian(point, max_deg)
 
     rng = np.random.default_rng(42)

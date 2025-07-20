@@ -29,7 +29,7 @@ from hiten.algorithms.hamiltonian.center._lie import (_evaluate_transform,
 from hiten.algorithms.hamiltonian.center._lie import \
     _lie_transform as _lie_transform_partial
 from hiten.algorithms.hamiltonian.hamiltonian import (
-    _build_h2_triangular, _build_physical_hamiltonian)
+    _build_h2_triangular, _build_physical_hamiltonian_collinear)
 # Full ("complete") normal form Lie transform
 from hiten.algorithms.hamiltonian.normal._lie import \
     _lie_transform as _lie_transform_full
@@ -101,7 +101,7 @@ class CenterManifold:
         if isinstance(self._point, CollinearPoint):
             self._local2synodic = _local2synodic_collinear
             self._synodic2local = _synodic2local_collinear
-            self._build_hamiltonian = _build_physical_hamiltonian
+            self._build_hamiltonian = _build_physical_hamiltonian_collinear
 
             if isinstance(self._point, L3Point):
                 logger.warning("L3 point has not been verified for centre manifold / normal form computations!")
