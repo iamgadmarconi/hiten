@@ -407,7 +407,7 @@ def _build_physical_hamiltonian_triangular(point, max_deg: int) -> List[np.ndarr
 
     poly_linear = _polynomial_zero_list(max_deg, psi_table)
     _polynomial_add_inplace(poly_linear, poly_x, 0.5 - mu)
-    _polynomial_add_inplace(poly_linear, poly_y, sgn * np.sqrt(3) / 2.0)
+    _polynomial_add_inplace(poly_linear, poly_y, - sgn * np.sqrt(3) / 2.0)
     _polynomial_add_inplace(poly_H, poly_linear, 1.0)
 
     poly_x2 = _polynomial_multiply(poly_x, poly_x, max_deg, psi_table, clmo_table, encode_dict_list)
@@ -429,8 +429,8 @@ def _build_physical_hamiltonian_triangular(point, max_deg: int) -> List[np.ndarr
         return poly
 
     # Linear dot products with the primary offsets
-    d_Sx, d_Sy = 0.5, sgn * np.sqrt(3) / 2.0
-    d_Jx, d_Jy = -0.5, sgn * np.sqrt(3) / 2.0
+    d_Sx, d_Sy = -0.5, sgn * np.sqrt(3) / 2.0    # Primary at negative x
+    d_Jx, d_Jy = 0.5, sgn * np.sqrt(3) / 2.0     # Secondary at positive x
 
     poly_dot_S = _linear_comb(d_Sx, d_Sy)   # = d_Sx * x + d_Sy * y
     poly_dot_J = _linear_comb(d_Jx, d_Jy)
@@ -477,6 +477,10 @@ def _build_physical_hamiltonian_triangular(point, max_deg: int) -> List[np.ndarr
     _polynomial_add_inplace(poly_U, poly_inv_r_S, -(1.0 - mu))
     _polynomial_add_inplace(poly_U, poly_inv_r_J, -mu)
     _polynomial_add_inplace(poly_H, poly_U, 1.0)
+
+    # Remove the constant term (equilibrium potential energy) 
+    if len(poly_H) > 0 and len(poly_H[0]) > 0:
+        poly_H[0][0] = 0.0
 
     return poly_H
 
