@@ -59,7 +59,7 @@ def _M_inv() -> np.ndarray:
     """
     return np.linalg.inv(_M()) # complex = M_inv @ real
 
-def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-14) -> List[np.ndarray]:
+def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-12) -> List[np.ndarray]:
     r"""
     Transform a polynomial from real normal form to complex normal form.
     
@@ -88,7 +88,7 @@ def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo, tol=
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
     return _polynomial_clean(_substitute_linear(poly_rn, _M(), max_deg, psi, clmo, encode_dict_list), tol)
 
-def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-14) -> List[np.ndarray]:
+def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-12) -> List[np.ndarray]:
     r"""
     Transform a polynomial from complex normal form to real normal form.
     
@@ -149,7 +149,7 @@ def _solve_real(real_coords: np.ndarray, tol=1e-30) -> np.ndarray:
     """
     return _clean_coordinates(_substitute_coordinates(real_coords, _M()), tol) # [q1r, q2r, q3r, p1r, p2r, p3r]
 
-def _polylocal2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
+def _polylocal2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-12) -> List[np.ndarray]:
     r"""
     Transform a polynomial from local frame to real modal frame.
     
@@ -179,9 +179,9 @@ def _polylocal2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi,
     """
     C, _ = point.normal_form_transform()
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return _substitute_linear(poly_local, C, max_deg, psi, clmo, encode_dict_list)
+    return _polynomial_clean(_substitute_linear(poly_local, C, max_deg, psi, clmo, encode_dict_list), tol)
 
-def _polyrealmodal2local(point, poly_realmodal: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
+def _polyrealmodal2local(point, poly_realmodal: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-12) -> List[np.ndarray]:
     r"""
     Transform a polynomial from real modal frame to local frame.
     
@@ -211,7 +211,7 @@ def _polyrealmodal2local(point, poly_realmodal: List[np.ndarray], max_deg: int, 
     """
     _, C_inv = point.normal_form_transform()
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return _substitute_linear(poly_realmodal, C_inv, max_deg, psi, clmo, encode_dict_list)
+    return _polynomial_clean(_substitute_linear(poly_realmodal, C_inv, max_deg, psi, clmo, encode_dict_list), tol)
 
 def _coordrealmodal2local(point, modal_coords: np.ndarray, tol=1e-30) -> np.ndarray:
     r"""
