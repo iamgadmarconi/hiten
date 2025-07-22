@@ -349,6 +349,10 @@ def _build_physical_hamiltonian_collinear(point, max_deg: int) -> List[np.ndarra
 
     _polynomial_add_inplace(poly_H, poly_U, 1.0)
 
+    # Remove the constant term (equilibrium potential energy) 
+    if len(poly_H) > 0 and len(poly_H[0]) > 0:
+        poly_H[0][0] = 0.0
+
     return poly_H
 
 def _build_physical_hamiltonian_triangular(point, max_deg: int) -> List[np.ndarray]:
@@ -429,8 +433,8 @@ def _build_physical_hamiltonian_triangular(point, max_deg: int) -> List[np.ndarr
         return poly
 
     # Linear dot products with the primary offsets
-    d_Sx, d_Sy = -0.5, sgn * np.sqrt(3) / 2.0    # Primary at negative x
-    d_Jx, d_Jy = 0.5, sgn * np.sqrt(3) / 2.0     # Secondary at positive x
+    d_Sx, d_Sy = -0.5, -sgn * np.sqrt(3) / 2.0    # Primary at negative x
+    d_Jx, d_Jy = 0.5, -sgn * np.sqrt(3) / 2.0     # Secondary at positive x
 
     poly_dot_S = _linear_comb(d_Sx, d_Sy)   # = d_Sx * x + d_Sy * y
     poly_dot_J = _linear_comb(d_Jx, d_Jy)
@@ -483,95 +487,6 @@ def _build_physical_hamiltonian_triangular(point, max_deg: int) -> List[np.ndarr
         poly_H[0][0] = 0.0
 
     return poly_H
-
-
-def _build_h2_triangular(point, max_deg: int) -> List[np.ndarray]:
-    """Return the second-order (quadratic) Hamiltonian around a triangular
-    Libration point (L4/L5).
-    """
-    psi_table, clmo_table = _init_index_tables(max_deg)
-    encode_dict_list = _create_encode_dict_from_clmo(clmo_table)
-
-    poly_x, poly_y, poly_z, poly_px, poly_py, poly_pz = [
-        _polynomial_variable(i, max_deg, psi_table, clmo_table, encode_dict_list)
-        for i in range(6)
-    ]
-
-    poly_H = _polynomial_zero_list(max_deg, psi_table)
-
-    poly_kinetic = _build_kinetic_energy_terms(
-        poly_px, poly_py, poly_pz, max_deg, psi_table, clmo_table, encode_dict_list
-    )
-    _polynomial_add_inplace(poly_H, poly_kinetic, 1.0)
-
-    poly_rot = _build_rotational_terms(
-        poly_x, poly_y, poly_px, poly_py, max_deg, psi_table, clmo_table, encode_dict_list
-    )
-    _polynomial_add_inplace(poly_H, poly_rot, 1.0)
-
-    poly_x_sq = _polynomial_multiply(
-        poly_x, poly_x, max_deg, psi_table, clmo_table, encode_dict_list
-    )
-    poly_y_sq = _polynomial_multiply(
-        poly_y, poly_y, max_deg, psi_table, clmo_table, encode_dict_list
-    )
-    poly_z_sq = _polynomial_multiply(
-        poly_z, poly_z, max_deg, psi_table, clmo_table, encode_dict_list
-    )
-    poly_xy = _polynomial_multiply(
-        poly_x, poly_y, max_deg, psi_table, clmo_table, encode_dict_list
-    )
-
-    a = float(point.a)
-
-    _polynomial_add_inplace(poly_H, poly_x_sq, 1.0 / 8.0)
-    _polynomial_add_inplace(poly_H, poly_y_sq, -5.0 / 8.0)
-    _polynomial_add_inplace(poly_H, poly_xy, -a)
-    _polynomial_add_inplace(poly_H, poly_z_sq, 0.5)
-
-    return poly_H
-
-
-def _translate_hamiltonian_to_triangular(poly_H, point, max_deg: int) -> List[np.ndarray]:
-    r"""
-    Apply the canonical translation that maps the collinear Hamiltonian to the
-    vicinity of the triangular (L4/L5) equilibrium.
-
-    The linear-affine change of variables is (see, e.g., Gómez et al., 2001)::
-
-    where ``s = +1`` for L4 and ``s = -1`` for L5.  Inverting these relations we
-    obtain the *old* (synodic) coordinates in terms of the *new* centred ones
-    which is precisely the form required by :pyfunc:`_substitute_affine`.
-    """
-
-    mu = float(point.mu)
-    sgn = float(point.sign)
-
-    C = np.eye(6, dtype=np.float64)
-
-    shifts = np.array([
-        - 0.5 + mu,           # x_old = X - (0.5 - mu)
-        -sgn * np.sqrt(3)/2, # y_old = Y - s*sqrt(3)/2
-        0.0,                # z_old = Z
-        sgn * np.sqrt(3)/2,# p_x_old = P_X + s*sqrt(3)/2
-        - 0.5 + mu,           # p_y_old = P_Y - (0.5 - mu)
-        0.0,                # p_z_old = P_Z
-    ], dtype=np.float64)
-
-    psi_table, clmo_table = _init_index_tables(max_deg)
-    encode_dict_list = _create_encode_dict_from_clmo(clmo_table)
-
-    poly_H_triangular = _substitute_affine(
-        poly_H,
-        C,
-        shifts,
-        max_deg,
-        psi_table,
-        clmo_table,
-        encode_dict_list,
-    )
-
-    return poly_H_triangular
 
 
 def _build_lindstedt_poincare_rhs_polynomials(point, max_deg: int) -> Tuple[List, List, List]:
