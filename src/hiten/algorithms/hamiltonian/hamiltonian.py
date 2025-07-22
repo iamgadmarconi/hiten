@@ -355,6 +355,70 @@ def _build_physical_hamiltonian_collinear(point, max_deg: int) -> List[np.ndarra
 
     return poly_H
 
+@njit(fastmath=FASTMATH, cache=False)
+def _build_A_polynomials(poly_x, poly_y, poly_z, d_x: float, d_y: float, max_deg: int, psi_table, clmo_table, encode_dict_list) -> types.ListType:
+    poly_A_list = List()
+    for _ in range(max_deg + 1):
+        poly_A_list.append(_polynomial_zero_list(max_deg, psi_table))
+
+    # A_0 = 1
+    if max_deg >= 0 and len(poly_A_list[0]) > 0 and len(poly_A_list[0][0]) > 0:
+        poly_A_list[0][0][0] = 1.0
+
+    # A_1 = d_x * x + d_y * y  (note: z component of d is zero in planar primaries)
+    if max_deg >= 1:
+        poly_A1 = _polynomial_zero_list(max_deg, psi_table)
+        if d_x != 0.0:
+            _polynomial_add_inplace(poly_A1, poly_x, d_x)
+        if d_y != 0.0:
+            _polynomial_add_inplace(poly_A1, poly_y, d_y)
+        poly_A_list[1] = poly_A1
+
+    if max_deg < 2:
+        return poly_A_list
+
+    # Pre-compute rho^2 = x^2 + y^2 + z^2 and dot = d_x x + d_y y
+    poly_x_sq = _polynomial_multiply(poly_x, poly_x, max_deg, psi_table, clmo_table, encode_dict_list)
+    poly_y_sq = _polynomial_multiply(poly_y, poly_y, max_deg, psi_table, clmo_table, encode_dict_list)
+    poly_z_sq = _polynomial_multiply(poly_z, poly_z, max_deg, psi_table, clmo_table, encode_dict_list)
+
+    poly_rho2 = _polynomial_zero_list(max_deg, psi_table)
+    _polynomial_add_inplace(poly_rho2, poly_x_sq, 1.0)
+    _polynomial_add_inplace(poly_rho2, poly_y_sq, 1.0)
+    _polynomial_add_inplace(poly_rho2, poly_z_sq, 1.0)
+
+    poly_dot = _polynomial_zero_list(max_deg, psi_table)
+    if d_x != 0.0:
+        _polynomial_add_inplace(poly_dot, poly_x, d_x)
+    if d_y != 0.0:
+        _polynomial_add_inplace(poly_dot, poly_y, d_y)
+
+    # Recurrence: A_{n+1} = ((2n+1)/(n+1)) (dot) A_n - (n/(n+1)) rho2 A_{n-1}
+    for n in range(1, max_deg):  # n corresponds to current highest index (A_n)
+        n_ = float(n)
+        coeff1 = (2.0 * n_ + 1.0) / (n_ + 1.0)
+        coeff2 = n_ / (n_ + 1.0)
+
+        # term1 = coeff1 * dot * A_n
+        term1_mult = _polynomial_multiply(poly_dot, poly_A_list[n], max_deg, psi_table, clmo_table, encode_dict_list)
+        term1 = _polynomial_zero_list(max_deg, psi_table)
+        _polynomial_add_inplace(term1, term1_mult, coeff1)
+
+        # term2 = -coeff2 * rho2 * A_{n-1}
+        term2_mult = _polynomial_multiply(poly_rho2, poly_A_list[n - 1], max_deg, psi_table, clmo_table, encode_dict_list)
+        term2 = _polynomial_zero_list(max_deg, psi_table)
+        _polynomial_add_inplace(term2, term2_mult, -coeff2)
+
+        # Combine to obtain A_{n+1}
+        poly_An1 = _polynomial_zero_list(max_deg, psi_table)
+        _polynomial_add_inplace(poly_An1, term1, 1.0)
+        _polynomial_add_inplace(poly_An1, term2, 1.0)
+
+        poly_A_list[n + 1] = poly_An1
+
+    return poly_A_list
+
+
 def _build_physical_hamiltonian_triangular(point, max_deg: int) -> List[np.ndarray]:
     r"""
     Construct the rotating-frame Hamiltonian expanded around a triangular
@@ -436,47 +500,25 @@ def _build_physical_hamiltonian_triangular(point, max_deg: int) -> List[np.ndarr
     d_Sx, d_Sy = -0.5, -sgn * np.sqrt(3) / 2.0    # Primary at negative x
     d_Jx, d_Jy = 0.5, -sgn * np.sqrt(3) / 2.0     # Secondary at positive x
 
-    poly_dot_S = _linear_comb(d_Sx, d_Sy)   # = d_Sx * x + d_Sy * y
-    poly_dot_J = _linear_comb(d_Jx, d_Jy)
+    # Construct inverse distances via Legendre-type homogeneous polynomials
+    poly_A_S = _build_A_polynomials(
+        poly_x, poly_y, poly_z,
+        d_Sx, d_Sy,
+        max_deg, psi_table, clmo_table, encode_dict_list,
+    )
+    poly_A_J = _build_A_polynomials(
+        poly_x, poly_y, poly_z,
+        d_Jx, d_Jy,
+        max_deg, psi_table, clmo_table, encode_dict_list,
+    )
 
-    # u = rho^2 - 2 (d·r)
-    poly_u_S = _polynomial_zero_list(max_deg, psi_table)
-    _polynomial_add_inplace(poly_u_S, poly_rho2, 1.0)
-    _polynomial_add_inplace(poly_u_S, poly_dot_S, -2.0)
+    poly_inv_r_S = _polynomial_zero_list(max_deg, psi_table)
+    poly_inv_r_J = _polynomial_zero_list(max_deg, psi_table)
 
-    poly_u_J = _polynomial_zero_list(max_deg, psi_table)
-    _polynomial_add_inplace(poly_u_J, poly_rho2, 1.0)
-    _polynomial_add_inplace(poly_u_J, poly_dot_J, -2.0)
-
-    def _inv_sqrt_series(poly_u):
-        """Return polynomial series of (1 + u)^{-1/2} truncated to *max_deg*."""
-        poly_series = _polynomial_zero_list(max_deg, psi_table)
-
-        # poly_pow tracks u^k (starts with k = 0 => 1)
-        poly_pow = _polynomial_zero_list(max_deg, psi_table)
-        # set constant term to 1
-        if len(poly_pow) > 0 and len(poly_pow[0]) > 0:
-            poly_pow[0][0] = 1.0 + 0.0j
-
-        for k in range(0, max_deg + 1):
-            # binomial(-1/2, k) = (-1)^k * (2k choose k) / 4^k
-            coeff = ((-1) ** k) * _combinations(2 * k, k) / (4 ** k)
-            _polynomial_add_inplace(poly_series, poly_pow, coeff)
-
-            # Prepare next power if it could still contribute terms <= max_deg
-            if k == max_deg:
-                break
-            poly_pow = _polynomial_multiply(
-                poly_pow, poly_u, max_deg, psi_table, clmo_table, encode_dict_list
-            )
-            # Quick exit if the multiplication produced all zeros (high degree)
-            if all(arr.size == 0 or np.allclose(arr, 0.0) for arr in poly_pow):
-                break
-        return poly_series
-
-    poly_inv_r_S = _inv_sqrt_series(poly_u_S)
-    poly_inv_r_J = _inv_sqrt_series(poly_u_J)
-
+    for n in range(0, max_deg + 1):
+        _polynomial_add_inplace(poly_inv_r_S, poly_A_S[n], 1.0)
+        _polynomial_add_inplace(poly_inv_r_J, poly_A_J[n], 1.0)
+ 
     poly_U = _polynomial_zero_list(max_deg, psi_table)
     _polynomial_add_inplace(poly_U, poly_inv_r_S, -(1.0 - mu))
     _polynomial_add_inplace(poly_U, poly_inv_r_J, -mu)
