@@ -181,8 +181,6 @@ results/**
 !results/plots/
 !results/plots/**
 !results/**/.gitkeep
-_debug.py
-_benchmark.py
-_benchmark_transform.py
 
 .cursor/
+_debug/
