@@ -44,6 +44,8 @@ from hiten.algorithms.hamiltonian.transforms import (_coordlocal2realmodal,
                                                      _solve_real,
                                                      _substitute_complex,
                                                      _substitute_real,
+                                                     _substitute_complex_full,
+                                                     _substitute_real_full,
                                                      _synodic2local_collinear,
                                                      _synodic2local_triangular)
 from hiten.algorithms.poincare.config import _get_section_config
@@ -282,9 +284,14 @@ class CenterManifold:
 
     def _get_complex_modal_form(self) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'complex_modal')
-        return self._get_or_compute(key, lambda: _substitute_complex(
-            self._get_real_modal_form(), self._max_degree, self._psi, self._clmo
-        ))
+        if isinstance(self._point, TriangularPoint):
+            return self._get_or_compute(key, lambda: _substitute_complex_full(
+                self._get_real_modal_form(), self._max_degree, self._psi, self._clmo
+            ))
+        else:
+            return self._get_or_compute(key, lambda: _substitute_complex(
+                self._get_real_modal_form(), self._max_degree, self._psi, self._clmo
+            ))
 
     def _get_partial_lie_results(self) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
         key_trans = ('hamiltonian', self._max_degree, 'complex_partial_normal')
@@ -331,7 +338,10 @@ class CenterManifold:
 
         def compute_normal_form():
             poly_trans = self._get_complex_partial_normal_form()
-            return _substitute_real(poly_trans, self._max_degree, self._psi, self._clmo)
+            if isinstance(self._point, TriangularPoint):
+                return _substitute_real_full(poly_trans, self._max_degree, self._psi, self._clmo)
+            else:
+                return _substitute_real(poly_trans, self._max_degree, self._psi, self._clmo)
 
         return self._get_or_compute(key, compute_normal_form)
 
@@ -379,9 +389,10 @@ class CenterManifold:
 
         def compute_full_real_normal():
             poly_trans = self._get_full_complex_normal_form()
-            return _substitute_real(
-                poly_trans, self._max_degree, self._psi, self._clmo
-            )
+            if isinstance(self._point, TriangularPoint):
+                return _substitute_real_full(poly_trans, self._max_degree, self._psi, self._clmo)
+            else:
+                return _substitute_real(poly_trans, self._max_degree, self._psi, self._clmo)
 
         return self._get_or_compute(key, compute_full_real_normal)
     
@@ -454,7 +465,10 @@ class CenterManifold:
 
         def compute_cm_real():
             poly_cm_complex = self._get_center_manifold_complex()
-            return _substitute_real(poly_cm_complex, self._max_degree, self._psi, self._clmo)
+            if isinstance(self._point, TriangularPoint):
+                return _substitute_real_full(poly_cm_complex, self._max_degree, self._psi, self._clmo)
+            else:
+                return _substitute_real(poly_cm_complex, self._max_degree, self._psi, self._clmo)
 
         return self._get_or_compute(key, compute_cm_real)
 

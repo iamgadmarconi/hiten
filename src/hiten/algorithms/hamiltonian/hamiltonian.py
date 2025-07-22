@@ -515,7 +515,7 @@ def _build_physical_hamiltonian_triangular(point, max_deg: int) -> List[np.ndarr
     poly_inv_r_S = _polynomial_zero_list(max_deg, psi_table)
     poly_inv_r_J = _polynomial_zero_list(max_deg, psi_table)
 
-    for n in range(0, max_deg + 1):
+    for n in range(2, max_deg + 1):      # start at 2 -> no linear duplication
         _polynomial_add_inplace(poly_inv_r_S, poly_A_S[n], 1.0)
         _polynomial_add_inplace(poly_inv_r_J, poly_A_J[n], 1.0)
  

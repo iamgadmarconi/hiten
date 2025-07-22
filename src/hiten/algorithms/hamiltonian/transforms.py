@@ -59,6 +59,44 @@ def _M_inv() -> np.ndarray:
     """
     return np.linalg.inv(_M()) # complex = M_inv @ real
 
+def _M_full() -> np.ndarray:
+    r"""
+    Return the linear map that complexifies *all* three canonical pairs.
+
+    This matrix is required for equilibria whose linearised dynamics is fully
+    elliptic (e.g. the triangular points L4/L5).  It mixes every \((q_j, p_j)\)
+    pair according to
+
+        q_j =  (q_j^c + i p_j^c) / sqrt(2),
+        p_j =  (i q_j^c +     p_j^c) / sqrt(2),
+
+    yielding the real coordinates as a linear combination of the complex ones
+    while preserving the symplectic form.  In block form the map is
+
+        [ 1  0 ]   with  A = 1/sqrt(2) * [[1, i],
+        [ 0  1 ]                         [i, 1]].
+    """
+    half = 1.0 / np.sqrt(2.0)
+    M = np.zeros((6, 6), dtype=np.complex128)
+    for j in range(3):
+        q_idx = j       # q1, q2, q3
+        p_idx = 3 + j   # p1, p2, p3
+
+        # q_j(real)  =  (      q_j^c +   i p_j^c) / sqrt(2)
+        M[q_idx, q_idx] = half
+        M[q_idx, p_idx] = 1j * half
+
+        # p_j(real)  =  (  i q_j^c +       p_j^c) / sqrt(2)
+        M[p_idx, q_idx] = 1j * half
+        M[p_idx, p_idx] = half
+    return M  # real = M_full @ complex
+
+
+def _M_full_inv() -> np.ndarray:
+    """Inverse of :pyfunc:`_M_full`."""
+    return np.linalg.inv(_M_full())
+
+
 def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-12) -> List[np.ndarray]:
     r"""
     Transform a polynomial from real normal form to complex normal form.
@@ -116,6 +154,28 @@ def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-
     """
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
     return _polynomial_clean(_substitute_linear(poly_cn, _M_inv(), max_deg, psi, clmo, encode_dict_list), tol)
+
+def _substitute_complex_full(poly_rn: List[np.ndarray], max_deg: int, psi, clmo, tol: float = 1e-12) -> List[np.ndarray]:
+    """Same as :pyfunc:`_substitute_complex` but uses :pyfunc:`_M_full`.
+
+    This version should be used for equilibria whose linearised dynamics is
+    *fully* elliptic (no hyperbolic directions), such as the triangular
+    Lagrange points.  The only difference is the transformation matrix.
+    """
+    encode_dict_list = _create_encode_dict_from_clmo(clmo)
+    return _polynomial_clean(
+        _substitute_linear(poly_rn, _M_full(), max_deg, psi, clmo, encode_dict_list),
+        tol,
+    )
+
+
+def _substitute_real_full(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol: float = 1e-12) -> List[np.ndarray]:
+    """Inverse transform of :pyfunc:`_substitute_complex_full`."""
+    encode_dict_list = _create_encode_dict_from_clmo(clmo)
+    return _polynomial_clean(
+        _substitute_linear(poly_cn, _M_full_inv(), max_deg, psi, clmo, encode_dict_list),
+        tol,
+    )
 
 def _solve_complex(real_coords: np.ndarray, tol=1e-30) -> np.ndarray:
     r"""
