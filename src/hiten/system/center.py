@@ -19,8 +19,8 @@ manifolds near collinear libration points".
 """
 
 from dataclasses import asdict
-from typing import (TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Tuple,
-                    Union)
+from typing import (TYPE_CHECKING, Any, Callable, Dict, Iterable, List,
+                    Optional, Tuple, Union)
 
 import numpy as np
 
@@ -398,7 +398,7 @@ class CenterManifold:
             # Simply return a *copy* of the input to avoid accidental mutation
             return [h.copy() for h in poly_H]
 
-        # Collinear case – remove all terms containing q1 or p1 exponents.
+        # Collinear case - remove all terms containing q1 or p1 exponents.
         poly_cm = [h.copy() for h in poly_H]
         for deg, coeff_vec in enumerate(poly_cm):
             if coeff_vec.size == 0:
@@ -586,91 +586,192 @@ class CenterManifold:
         
         return self._poincare_maps[cache_key]
 
-    def ic(self, poincare_point: np.ndarray, energy: float, section_coord: str = "q3", tol=1e-16) -> np.ndarray:
-        r"""
-        Convert a point on a 2-dimensional centre-manifold section to full ICs.
+    def _4d_cm_to_ic(self, cm_coords_4d: np.ndarray, tol: float = 1e-16) -> np.ndarray:
+        """Convert 4-D centre-manifold coordinates to 6-D synodic initial conditions.
+
+        This helper assumes *cm_coords_4d* is an array-like object of shape ``(4,)``
+        containing the real centre-manifold variables ``[q2, p2, q3, p3]``.  No
+        root-finding or Hamiltonian energy information is required - the
+        supplied coordinates are taken to lie on the centre manifold already.
+
+        The transformation follows exactly the *second* half of the original
+        :py:meth:`ic` pipeline::
+
+            CM (real) -> CM (complex) -> Lie transform -> real modal -> local -> synodic
+        """
+
+        # Ensure we have the required Lie generators (computed lazily)
+        _, poly_G_total, _ = self._get_partial_lie_results()
+
+        # Construct a 6-D centre-manifold phase-space vector.  By definition the
+        # hyperbolic coordinates (q1, p1) are zero on the CM for collinear
+        # points.  For triangular points *all* variables belong to the centre
+        # manifold so we still embed the 4-D vector into the full 6-D space in
+        # the same fashion - the values of q1, p1 are simply disregarded later
+        # in the forward transform.
+        real_4d_cm = np.asarray(cm_coords_4d, dtype=np.float64).reshape(4)
+
+        real_6d_cm = np.zeros(6, dtype=np.complex128)
+        real_6d_cm[1] = real_4d_cm[0]  # q2
+        real_6d_cm[4] = real_4d_cm[1]  # p2
+        real_6d_cm[2] = real_4d_cm[2]  # q3
+        real_6d_cm[5] = real_4d_cm[3]  # p3
+
+        # Modal (real -> complex) representation
+        complex_6d_cm = _solve_complex(real_6d_cm, tol)
+
+        # Apply the forward Lie transform (centre-manifold → physical variables)
+        expansions = _lie_expansion(
+            poly_G_total,
+            self._max_degree,
+            self._psi,
+            self._clmo,
+            tol,
+            inverse=False,
+            sign=1,
+            restrict=False,
+        )
+        complex_6d = _evaluate_transform(expansions, complex_6d_cm, self._clmo)
+
+        # Back to real modal variables
+        real_6d = _solve_real(complex_6d, tol)
+
+        # Modal (real) -> local -> synodic coordinate chain
+        local_6d = _coordrealmodal2local(self._point, real_6d, tol)
+        synodic_6d = self._local2synodic(self._point, local_6d, tol)
+
+        logger.info("CM→synodic transformation (4-D input) complete")
+        return synodic_6d
+
+    def _2d_cm_to_ic(
+        self,
+        poincare_point: np.ndarray,
+        energy: float,
+        section_coord: str = "q3",
+        tol: float = 1e-16,
+    ) -> np.ndarray:
+        """Original *ic* behaviour - convert a 2-D Poincaré-section point.
+
+        This routine reproduces verbatim the legacy implementation that:
+
+        1. Uses the Hamiltonian energy constraint to solve for the missing
+           coordinate on the chosen section;
+        2. Embeds the resulting 4-D CM coordinates into 6-D phase-space;
+        3. Applies the Lie transform and coordinate conversions to obtain the
+           synodic initial conditions.
+        """
+
+        # Ensure we have the centre-manifold Hamiltonian and Lie generators
+        poly_cm_real = self.compute(form="center_manifold_real")
+
+        # Section configuration specifies which coordinate is fixed to zero and
+        # which one must be solved for
+        config = _get_section_config(section_coord)
+
+        # Known variables on the section
+        known_vars: Dict[str, float] = {config.section_coord: 0.0}
+        known_vars[config.plane_coords[0]] = float(poincare_point[0])
+        known_vars[config.plane_coords[1]] = float(poincare_point[1])
+
+        var_to_solve = config.missing_coord
+
+        # Solve for the missing CM coordinate that satisfies the energy level
+        solved_val = _solve_missing_coord(
+            var_to_solve,
+            known_vars,
+            float(energy),
+            poly_cm_real,
+            self._clmo,
+        )
+
+        # Combine into a full CM coordinate dictionary
+        full_cm_coords = known_vars.copy()
+        full_cm_coords[var_to_solve] = solved_val
+
+        # Sanity check
+        if any(v is None for v in full_cm_coords.values()):
+            err = (
+                "Failed to reconstruct full CM coordinates - root finding "
+                "did not converge."
+            )
+            logger.error(err)
+            raise RuntimeError(err)
+
+        real_4d_cm = np.array(
+            [
+                full_cm_coords["q2"],
+                full_cm_coords["p2"],
+                full_cm_coords["q3"],
+                full_cm_coords["p3"],
+            ],
+            dtype=np.float64,
+        )
+
+        # Delegate the second half of the pipeline to the 4-D helper
+        return self._4d_cm_to_ic(real_4d_cm, tol)
+
+    def ic(
+        self,
+        cm_point: np.ndarray,
+        energy: Optional[float] = None,
+        section_coord: str = "q3",
+        tol: float = 1e-16,
+    ) -> np.ndarray:
+        """Convert centre-manifold coordinates to full synodic ICs.
+
+        The method now supports **two** input formats:
+
+        1. *2-D Poincaré-section* coordinates (legacy behaviour).  In this case
+           *energy* **must** be provided and *section_coord* specifies which CM
+           coordinate is fixed to zero on the section.
+        2. *4-D centre-manifold* coordinates ``[q2, p2, q3, p3]``.  Here the
+           coordinates are assumed to satisfy the Hamiltonian energy
+           constraint already, so *energy* and *section_coord* are ignored.
 
         Parameters
         ----------
-        poincare_point : numpy.ndarray, shape (2,)
-            Coordinates on the chosen Poincaré section.
-        energy : float
-            Hamiltonian energy :math:`h_0` used to solve for the missing coordinate.
+        cm_point : numpy.ndarray, shape (2,) or (4,)
+            Point on the Poincaré section (length-2) **or** full centre-manifold
+            coordinates (length-4).
+        energy : float | None, optional
+            Hamiltonian energy level *h0*.  Required only when *cm_point* is a
+            2-vector.
         section_coord : {'q3', 'p3', 'q2', 'p2'}, default 'q3'
-            Coordinate fixed to zero on the section.
+            Coordinate fixed to zero on the Poincaré section.  Ignored for
+            4-D inputs.
+        tol : float, optional
+            Numerical tolerance used by the various helper routines.
 
         Returns
         -------
         numpy.ndarray, shape (6,)
-            Synodic initial conditions
-            :math:`(q_1, q_2, q_3, p_1, p_2, p_3)`.
-
-        Raises
-        ------
-        RuntimeError
-            If root finding fails or if required Lie generators are missing.
-
-        Examples
-        --------
-        >>> cm = CenterManifold(L1, 8)
-        >>> ic_synodic = cm.ic(np.array([0.01, 0.0]), energy=-1.5, section_coord='q3')
+            Synodic-frame initial conditions ``(q1, q2, q3, p1, p2, p3)``.
         """
-        logger.info(
-            "Converting Poincaré point %s (section=%s) to initial conditions", 
-            poincare_point, section_coord,
-        )
 
-        # Ensure we have the centre-manifold Hamiltonian and Lie generators.
-        poly_cm_real = self.compute(form="center_manifold_real")
-        _, poly_G_total, _ = self._get_partial_lie_results()
+        cm_point = np.asarray(cm_point)
 
-        config = _get_section_config(section_coord)
-        
-        # Build the known variables dictionary using the section configuration
-        known_vars = {config.section_coord: 0.0}  # Section coordinate is zero
-        known_vars[config.plane_coords[0]] = float(poincare_point[0])
-        known_vars[config.plane_coords[1]] = float(poincare_point[1])
-        
-        var_to_solve = config.missing_coord
-        
-        # Solve for the missing coordinate on the centre manifold.
-        solved_val = _solve_missing_coord(var_to_solve, known_vars, float(energy), poly_cm_real, self._clmo)
-        
-        # Combine known and solved variables to form the 4D point on the CM.
-        full_cm_coords = known_vars.copy()
-        full_cm_coords[var_to_solve] = solved_val
+        if cm_point.size == 2:
+            if energy is None:
+                raise ValueError(
+                    "energy must be specified when converting a 2-D Poincaré "
+                    "point to initial conditions."
+                )
+            logger.info(
+                "Converting 2-D Poincaré point %s (section=%s) to synodic ICs",
+                cm_point,
+                section_coord,
+            )
+            return self._2d_cm_to_ic(cm_point, float(energy), section_coord, tol)
 
-        # Validate solution and construct the real 4D vector.
-        if any(v is None for v in full_cm_coords.values()):
-            err = "Failed to reconstruct full CM coordinates - root finding did not converge."
-            logger.error(err)
-            raise RuntimeError(err)
-            
-        real_4d_cm = np.array([
-            full_cm_coords["q2"], 
-            full_cm_coords["p2"], 
-            full_cm_coords["q3"], 
-            full_cm_coords["p3"]
-        ], dtype=np.complex128)
+        elif cm_point.size == 4:
+            logger.info("Converting 4-D CM point %s to synodic ICs", cm_point)
+            return self._4d_cm_to_ic(cm_point, tol)
 
-        real_6d_cm = np.zeros(6, dtype=np.complex128)
-        real_6d_cm[1] = real_4d_cm[0]  # q2
-        real_6d_cm[2] = real_4d_cm[2]  # q3
-        real_6d_cm[4] = real_4d_cm[1]  # p2
-        real_6d_cm[5] = real_4d_cm[3]  # p3
-
-        complex_6d_cm = _solve_complex(real_6d_cm, tol)
-        expansions = _lie_expansion(
-            poly_G_total, self._max_degree, self._psi, self._clmo, tol,
-            inverse=False, sign=1, restrict=False,
-        )
-        complex_6d = _evaluate_transform(expansions, complex_6d_cm, self._clmo)
-        real_6d = _solve_real(complex_6d, tol)
-        local_6d = _coordrealmodal2local(self._point, real_6d, tol)
-        synodic_6d = self._local2synodic(self._point, local_6d, tol)
-
-        logger.info("CM to synodic transformation complete")
-        return synodic_6d
+        else:
+            raise ValueError(
+                "cm_point must be either a 2- or 4-element vector representing "
+                "a Poincaré-section point or full CM coordinates, respectively."
+            )
     
     def cm(self, synodic_6d: np.ndarray, tol=1e-16) -> np.ndarray:
         """Return 4-D centre-manifold coordinates (q2, p2, q3, p3) from 6-D synodic ICs.
