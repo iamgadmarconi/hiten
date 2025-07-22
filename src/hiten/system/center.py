@@ -620,7 +620,7 @@ class CenterManifold:
         # Modal (real -> complex) representation
         complex_6d_cm = _solve_complex(real_6d_cm, tol)
 
-        # Apply the forward Lie transform (centre-manifold → physical variables)
+        # Apply the forward Lie transform (centre-manifold -> physical variables)
         expansions = _lie_expansion(
             poly_G_total,
             self._max_degree,
@@ -640,7 +640,7 @@ class CenterManifold:
         local_6d = _coordrealmodal2local(self._point, real_6d, tol)
         synodic_6d = self._local2synodic(self._point, local_6d, tol)
 
-        logger.info("CM→synodic transformation (4-D input) complete")
+        logger.info("CM->synodic transformation (4-D input) complete")
         return synodic_6d
 
     def _2d_cm_to_ic(
