@@ -22,7 +22,7 @@ import numpy as np
 import numpy.typing as npt
 
 from hiten.algorithms.dynamics.base import _propagate_dynsys
-from hiten.algorithms.dynamics.rtbp import rtbp_dynsys
+from hiten.algorithms.dynamics.rtbp import rtbp_dynsys, variational_dynsys
 from hiten.algorithms.utils.precision import hp
 from hiten.system.body import Body
 from hiten.system.libration.base import LibrationPoint
@@ -84,10 +84,11 @@ class System(object):
         self._mu: float = self._get_mu()
         logger.info(f"Calculated mass parameter mu = {self.mu:.6e}")
 
+        self._dynsys = rtbp_dynsys(self.mu, name=f"RTBP_{self.primary.name}_{self.secondary.name}")
+        self._var_dynsys = variational_dynsys(self.mu, name=f"VarEq_{self.primary.name}_{self.secondary.name}")
+
         self._libration_points: Dict[int, LibrationPoint] = self._compute_libration_points()
         logger.info(f"Computed {len(self.libration_points)} Libration points.")
-
-        self._dynsys = rtbp_dynsys(self.mu, name=self.primary.name + "_" + self.secondary.name)
 
     def __str__(self) -> str:
         return f"System(primary='{self.primary.name}', secondary='{self.secondary.name}', mu={self.mu:.4e})"
@@ -124,6 +125,11 @@ class System(object):
     def dynsys(self):
         """Underlying vector field instance."""
         return self._dynsys
+
+    @property
+    def var_dynsys(self):
+        """Underlying vector field instance."""
+        return self._var_dynsys
 
     def _get_mu(self) -> float:
         r"""

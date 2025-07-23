@@ -44,8 +44,6 @@ from hiten.algorithms.hamiltonian.transforms import (_coordlocal2realmodal,
                                                      _solve_real,
                                                      _substitute_complex,
                                                      _substitute_real,
-                                                     _substitute_complex_full,
-                                                     _substitute_real_full,
                                                      _synodic2local_collinear,
                                                      _synodic2local_triangular)
 from hiten.algorithms.poincare.config import _get_section_config
@@ -105,6 +103,7 @@ class CenterManifold:
             self._local2synodic = _local2synodic_collinear
             self._synodic2local = _synodic2local_collinear
             self._build_hamiltonian = _build_physical_hamiltonian_collinear
+            self._mix_pairs = (1, 2)
 
             if isinstance(self._point, L3Point):
                 logger.warning("L3 point has not been verified for centre manifold / normal form computations!")
@@ -114,6 +113,7 @@ class CenterManifold:
             self._local2synodic = _local2synodic_triangular
             self._synodic2local = _synodic2local_triangular
             self._build_hamiltonian = _build_physical_hamiltonian_triangular
+            self._mix_pairs = (0, 1, 2)
 
         else:
             raise ValueError(f"Unsupported libration point type: {type(self._point)}")
@@ -282,16 +282,11 @@ class CenterManifold:
             self._point, self._get_physical_hamiltonian(), self._max_degree, self._psi, self._clmo
         ))
 
-    def _get_complex_modal_form(self) -> List[np.ndarray]:
+    def _get_complex_modal_form(self, tol=1e-12) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'complex_modal')
-        if isinstance(self._point, TriangularPoint):
-            return self._get_or_compute(key, lambda: _substitute_complex_full(
-                self._get_real_modal_form(), self._max_degree, self._psi, self._clmo
-            ))
-        else:
-            return self._get_or_compute(key, lambda: _substitute_complex(
-                self._get_real_modal_form(), self._max_degree, self._psi, self._clmo
-            ))
+        return self._get_or_compute(key, lambda: _substitute_complex(
+            self._get_real_modal_form(), self._max_degree, self._psi, self._clmo, tol=tol, mix_pairs=self._mix_pairs
+        ))
 
     def _get_partial_lie_results(self) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
         key_trans = ('hamiltonian', self._max_degree, 'complex_partial_normal')
@@ -333,15 +328,12 @@ class CenterManifold:
 
         return self._get_or_compute(key, compute_normal_form)
 
-    def _get_partial_real_normal_form(self) -> List[np.ndarray]:
+    def _get_partial_real_normal_form(self, tol=1e-12) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'real_partial_normal')
 
         def compute_normal_form():
             poly_trans = self._get_complex_partial_normal_form()
-            if isinstance(self._point, TriangularPoint):
-                return _substitute_real_full(poly_trans, self._max_degree, self._psi, self._clmo)
-            else:
-                return _substitute_real(poly_trans, self._max_degree, self._psi, self._clmo)
+            return _substitute_real(poly_trans, self._max_degree, self._psi, self._clmo, tol=tol, mix_pairs=self._mix_pairs)
 
         return self._get_or_compute(key, compute_normal_form)
 
@@ -383,16 +375,13 @@ class CenterManifold:
 
         return self._get_or_compute(key, compute_full_complex_normal)
 
-    def _get_full_real_normal_form(self) -> List[np.ndarray]:
+    def _get_full_real_normal_form(self, tol=1e-12) -> List[np.ndarray]:
         """Return the *full* normal-form Hamiltonian in **real** variables."""
         key = ("hamiltonian", self._max_degree, "real_full_normal")
 
         def compute_full_real_normal():
             poly_trans = self._get_full_complex_normal_form()
-            if isinstance(self._point, TriangularPoint):
-                return _substitute_real_full(poly_trans, self._max_degree, self._psi, self._clmo)
-            else:
-                return _substitute_real(poly_trans, self._max_degree, self._psi, self._clmo)
+            return _substitute_real(poly_trans, self._max_degree, self._psi, self._clmo, tol=tol, mix_pairs=self._mix_pairs)
 
         return self._get_or_compute(key, compute_full_real_normal)
     
@@ -456,19 +445,16 @@ class CenterManifold:
 
         return self._get_or_compute(key, compute_cm_complex)
 
-    def _get_center_manifold_real(self) -> List[np.ndarray]:
+    def _get_center_manifold_real(self, tol=1e-12) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'center_manifold_real')
 
         if isinstance(self._point, TriangularPoint):
             logger.warning("Called center manifold method on triangular point, returning normal form.")
-            return self._get_full_real_normal_form()
+            return self._get_full_real_normal_form(tol=tol)
 
         def compute_cm_real():
             poly_cm_complex = self._get_center_manifold_complex()
-            if isinstance(self._point, TriangularPoint):
-                return _substitute_real_full(poly_cm_complex, self._max_degree, self._psi, self._clmo)
-            else:
-                return _substitute_real(poly_cm_complex, self._max_degree, self._psi, self._clmo)
+            return _substitute_real(poly_cm_complex, self._max_degree, self._psi, self._clmo, tol=tol, mix_pairs=self._mix_pairs)
 
         return self._get_or_compute(key, compute_cm_real)
 
@@ -632,7 +618,7 @@ class CenterManifold:
         real_6d_cm[5] = real_4d_cm[3]  # p3
 
         # Modal (real -> complex) representation
-        complex_6d_cm = _solve_complex(real_6d_cm, tol)
+        complex_6d_cm = _solve_complex(real_6d_cm, tol=tol, mix_pairs=self._mix_pairs)
 
         # Apply the forward Lie transform (centre-manifold -> physical variables)
         expansions = _lie_expansion(
@@ -648,7 +634,7 @@ class CenterManifold:
         complex_6d = _evaluate_transform(expansions, complex_6d_cm, self._clmo)
 
         # Back to real modal variables
-        real_6d = _solve_real(complex_6d, tol)
+        real_6d = _solve_real(complex_6d, tol=tol, mix_pairs=self._mix_pairs)
 
         # Modal (real) -> local -> synodic coordinate chain
         local_6d = _coordrealmodal2local(self._point, real_6d, tol)
@@ -810,14 +796,14 @@ class CenterManifold:
 
         real_modal_6d = _coordlocal2realmodal(self._point, local_6d, tol)
 
-        complex_modal_6d = _solve_complex(real_modal_6d, tol)
+        complex_modal_6d = _solve_complex(real_modal_6d, tol=tol, mix_pairs=self._mix_pairs)
 
         _, poly_G_total, _ = self._get_partial_lie_results()
         expansions = _lie_expansion(poly_G_total, self._max_degree, self._psi, self._clmo,
                                     tol, inverse=True, sign=-1, restrict=False)
 
         complex_pnf_6d = _evaluate_transform(expansions, complex_modal_6d, self._clmo)
-        real_pnf_6d = _solve_real(complex_pnf_6d, tol)
+        real_pnf_6d = _solve_real(complex_pnf_6d, tol=tol, mix_pairs=self._mix_pairs)
         real_cm_6d = self._restrict_coord_to_center_manifold(real_pnf_6d)
 
         real_cm_4d = np.array([

@@ -25,79 +25,51 @@ from hiten.system.libration.triangular import TriangularPoint
 from hiten.utils.log_config import logger
 
 
-def _M() -> np.ndarray:
-    r"""
-    Return the linear map from complex modal to real modal coordinates.
+def _build_complexification_matrix(mix_indices):
 
-    Returns
-    -------
-    numpy.ndarray
-        A :math:`6 x 6` complex-valued matrix :math:`M` such that
-        :math:`\mathbf{z}_{\text{real}} = M\,\mathbf{z}_{\text{complex}}`.
-
-    Notes
-    -----
-    The matrix is unitary up to scaling and preserves the canonical
-    symplectic structure.
-    """
-    return np.array([[1, 0, 0, 0, 0, 0],
-        [0, 1/np.sqrt(2), 0, 0, 1j/np.sqrt(2), 0],
-        [0, 0, 1/np.sqrt(2), 0, 0, 1j/np.sqrt(2)],
-        [0, 0, 0, 1, 0, 0],
-        [0, 1j/np.sqrt(2), 0, 0, 1/np.sqrt(2), 0],
-        [0, 0, 1j/np.sqrt(2), 0, 0, 1/np.sqrt(2)]], dtype=np.complex128) #  real = M @ complex
-
-def _M_inv() -> np.ndarray:
-    r"""
-    Return the inverse transformation :math:`M^{-1}`.
-
-    Returns
-    -------
-    numpy.ndarray
-        The inverse of :pyfunc:`M`, satisfying
-        :math:`\mathbf{z}_{\text{complex}} = M^{-1}\,\mathbf{z}_{\text{real}}`.
-    """
-    return np.linalg.inv(_M()) # complex = M_inv @ real
-
-def _M_full() -> np.ndarray:
-    r"""
-    Return the linear map that complexifies *all* three canonical pairs.
-
-    This matrix is required for equilibria whose linearised dynamics is fully
-    elliptic (e.g. the triangular points L4/L5).  It mixes every \((q_j, p_j)\)
-    pair according to
-
-        q_j =  (q_j^c + i p_j^c) / sqrt(2),
-        p_j =  (i q_j^c +     p_j^c) / sqrt(2),
-
-    yielding the real coordinates as a linear combination of the complex ones
-    while preserving the symplectic form.  In block form the map is
-
-        [ 1  0 ]   with  A = 1/sqrt(2) * [[1, i],
-        [ 0  1 ]                         [i, 1]].
-    """
     half = 1.0 / np.sqrt(2.0)
-    M = np.zeros((6, 6), dtype=np.complex128)
-    for j in range(3):
-        q_idx = j       # q1, q2, q3
-        p_idx = 3 + j   # p1, p2, p3
 
+    # Start with identity (pairs not mixed are left untouched).
+    M = np.eye(6, dtype=np.complex128)
+
+    for j in mix_indices:
+        q_idx = j       # q1, q2, q3  -> indices 0,1,2
+        p_idx = 3 + j   # p1, p2, p3  -> indices 3,4,5
+
+        # Zero-out the rows we are about to overwrite (they currently contain
+        # the identity entries inserted by np.eye).
+        M[q_idx, :] = 0.0
+        M[p_idx, :] = 0.0
+
+        # Fill-in the 2×2 mixing block for the selected canonical pair.
         # q_j(real)  =  (      q_j^c +   i p_j^c) / sqrt(2)
+        # p_j(real)  =  (  i q_j^c +       p_j^c) / sqrt(2)
         M[q_idx, q_idx] = half
         M[q_idx, p_idx] = 1j * half
-
-        # p_j(real)  =  (  i q_j^c +       p_j^c) / sqrt(2)
         M[p_idx, q_idx] = 1j * half
         M[p_idx, p_idx] = half
-    return M  # real = M_full @ complex
+
+    return M
+
+def _M(mix_pairs: tuple[int, int] = (1, 2)) -> np.ndarray:
+    r"""
+    Return the canonical complexification matrix that *only* mixes the second
+    and third canonical pairs, leaving the first pair \((q_1, p_1)\) real.
+
+    This corresponds to the typical linearised dynamics around the collinear
+    libration points, where \( (q_1, p_1) \) is hyperbolic while the other two
+    pairs are elliptic and therefore profit from the complex representation.
+    """
+    return _build_complexification_matrix(mix_pairs)
+
+def _M_inv(mix_pairs: tuple[int, int] = (1, 2)) -> np.ndarray:
+    r"""Inverse of :pyfunc:`_M`.  Because the matrix is unitary we can use the
+    conjugate transpose rather than an explicit matrix inversion."""
+    M = _M(mix_pairs)
+    return M.conjugate().T  # complex = M_inv @ real
 
 
-def _M_full_inv() -> np.ndarray:
-    """Inverse of :pyfunc:`_M_full`."""
-    return np.linalg.inv(_M_full())
-
-
-def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-12) -> List[np.ndarray]:
+def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-12, *, mix_pairs: tuple[int, int] = (1, 2)) -> List[np.ndarray]:
     r"""
     Transform a polynomial from real normal form to complex normal form.
     
@@ -124,9 +96,9 @@ def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo, tol=
     Since complex = M_inv @ real, we use _M_inv() for the transformation.
     """
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return _polynomial_clean(_substitute_linear(poly_rn, _M(), max_deg, psi, clmo, encode_dict_list), tol)
+    return _polynomial_clean(_substitute_linear(poly_rn, _M(mix_pairs), max_deg, psi, clmo, encode_dict_list), tol)
 
-def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-12) -> List[np.ndarray]:
+def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-12, *, mix_pairs: tuple[int, int] = (1, 2)) -> List[np.ndarray]:
     r"""
     Transform a polynomial from complex normal form to real normal form.
     
@@ -153,31 +125,9 @@ def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-
     Since real = M @ complex, we use _M() for the transformation.
     """
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return _polynomial_clean(_substitute_linear(poly_cn, _M_inv(), max_deg, psi, clmo, encode_dict_list), tol)
+    return _polynomial_clean(_substitute_linear(poly_cn, _M_inv(mix_pairs), max_deg, psi, clmo, encode_dict_list), tol)
 
-def _substitute_complex_full(poly_rn: List[np.ndarray], max_deg: int, psi, clmo, tol: float = 1e-12) -> List[np.ndarray]:
-    """Same as :pyfunc:`_substitute_complex` but uses :pyfunc:`_M_full`.
-
-    This version should be used for equilibria whose linearised dynamics is
-    *fully* elliptic (no hyperbolic directions), such as the triangular
-    Lagrange points.  The only difference is the transformation matrix.
-    """
-    encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return _polynomial_clean(
-        _substitute_linear(poly_rn, _M_full(), max_deg, psi, clmo, encode_dict_list),
-        tol,
-    )
-
-
-def _substitute_real_full(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol: float = 1e-12) -> List[np.ndarray]:
-    """Inverse transform of :pyfunc:`_substitute_complex_full`."""
-    encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return _polynomial_clean(
-        _substitute_linear(poly_cn, _M_full_inv(), max_deg, psi, clmo, encode_dict_list),
-        tol,
-    )
-
-def _solve_complex(real_coords: np.ndarray, tol=1e-30) -> np.ndarray:
+def _solve_complex(real_coords: np.ndarray, tol: float = 1e-30, *, mix_pairs: tuple[int, int] = (1, 2)) -> np.ndarray:
     r"""
     Return complex coordinates given real coordinates using the map `M_inv`.
 
@@ -191,9 +141,10 @@ def _solve_complex(real_coords: np.ndarray, tol=1e-30) -> np.ndarray:
     np.ndarray
         Complex coordinates [q1c, q2c, q3c, p1c, p2c, p3c]
     """
-    return _clean_coordinates(_substitute_coordinates(real_coords, _M_inv()), tol) # [q1c, q2c, q3c, p1c, p2c, p3c]
+    return _clean_coordinates(_substitute_coordinates(real_coords, _M_inv(mix_pairs)), tol)
 
-def _solve_real(real_coords: np.ndarray, tol=1e-30) -> np.ndarray:
+
+def _solve_real(real_coords: np.ndarray, tol: float = 1e-30, *, mix_pairs: tuple[int, int] = (1, 2)) -> np.ndarray:
     r"""
     Return real coordinates given complex coordinates using the map `M`.
 
@@ -207,7 +158,8 @@ def _solve_real(real_coords: np.ndarray, tol=1e-30) -> np.ndarray:
     np.ndarray
         Real coordinates [q1r, q2r, q3r, p1r, p2r, p3r]
     """
-    return _clean_coordinates(_substitute_coordinates(real_coords, _M()), tol) # [q1r, q2r, q3r, p1r, p2r, p3r]
+    return _clean_coordinates(_substitute_coordinates(real_coords, _M(mix_pairs)), tol)
+
 
 def _polylocal2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-12) -> List[np.ndarray]:
     r"""

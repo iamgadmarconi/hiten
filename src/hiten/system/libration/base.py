@@ -148,13 +148,25 @@ class LibrationPoint(ABC):
         self._jacobi_constant = None
         self._cache = {}
         self._cm_registry = {}
-        self._var_eq_system = variational_dynsys(self.mu, name=f"CR3BP Variational Equations for {self.__class__.__name__}")
+
+        self._dynsys = system.dynsys
+        self._var_eq_system = system.var_dynsys
     
     def __str__(self) -> str:
         return f"{type(self).__name__}(mu={self.mu:.6e})"
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(mu={self.mu:.6e})"
+
+    @property
+    def dynsys(self):
+        """Underlying vector field instance."""
+        return self._dynsys
+    
+    @property
+    def var_eq_system(self):
+        """Underlying vector field instance."""
+        return self._var_eq_system
 
     @property
     @abstractmethod
