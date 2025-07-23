@@ -24,7 +24,8 @@ from numba import njit, types
 from numba.typed import List
 
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                              _init_index_tables, _combinations)
+                                              _init_index_tables, _combinations,
+                                              _encode_multiindex)
 from hiten.algorithms.polynomial.operations import (_polynomial_add_inplace,
                                                     _polynomial_multiply,
                                                     _polynomial_variable,
@@ -478,27 +479,9 @@ def _build_physical_hamiltonian_triangular(point, max_deg: int) -> List[np.ndarr
     _polynomial_add_inplace(poly_linear, poly_y, - sgn * np.sqrt(3) / 2.0)
     _polynomial_add_inplace(poly_H, poly_linear, 1.0)
 
-    poly_x2 = _polynomial_multiply(poly_x, poly_x, max_deg, psi_table, clmo_table, encode_dict_list)
-    poly_y2 = _polynomial_multiply(poly_y, poly_y, max_deg, psi_table, clmo_table, encode_dict_list)
-    poly_z2 = _polynomial_multiply(poly_z, poly_z, max_deg, psi_table, clmo_table, encode_dict_list)
-
-    poly_rho2 = _polynomial_zero_list(max_deg, psi_table)
-    _polynomial_add_inplace(poly_rho2, poly_x2, 1.0)
-    _polynomial_add_inplace(poly_rho2, poly_y2, 1.0)
-    _polynomial_add_inplace(poly_rho2, poly_z2, 1.0)
-
-    # Helper to create a *linear* polynomial a*x + b*y
-    def _linear_comb(ax: float, ay: float):
-        poly = _polynomial_zero_list(max_deg, psi_table)
-        if abs(ax) > 0:
-            _polynomial_add_inplace(poly, poly_x, ax)
-        if abs(ay) > 0:
-            _polynomial_add_inplace(poly, poly_y, ay)
-        return poly
-
     # Linear dot products with the primary offsets
-    d_Sx, d_Sy = -0.5, -sgn * np.sqrt(3) / 2.0    # Primary at negative x
-    d_Jx, d_Jy = 0.5, -sgn * np.sqrt(3) / 2.0     # Secondary at positive x
+    d_Sx, d_Sy = 0.5, sgn * np.sqrt(3) / 2.0    # Primary at negative x
+    d_Jx, d_Jy = -0.5, sgn * np.sqrt(3) / 2.0     # Secondary at positive x
 
     # Construct inverse distances via Legendre-type homogeneous polynomials
     poly_A_S = _build_A_polynomials(
@@ -512,19 +495,25 @@ def _build_physical_hamiltonian_triangular(point, max_deg: int) -> List[np.ndarr
         max_deg, psi_table, clmo_table, encode_dict_list,
     )
 
+    # The expansion of 1/r_PS is A_0 + A_1 + A_2 + ... 
+    # At equilibrium, A_0 = 1, and we want to subtract the constant part
     poly_inv_r_S = _polynomial_zero_list(max_deg, psi_table)
     poly_inv_r_J = _polynomial_zero_list(max_deg, psi_table)
 
-    for n in range(2, max_deg + 1):      # start at 2 -> no linear duplication
+    # Add all A_n terms for each primary
+    for n in range(0, min(len(poly_A_S), max_deg + 1)):
         _polynomial_add_inplace(poly_inv_r_S, poly_A_S[n], 1.0)
+        
+    for n in range(0, min(len(poly_A_J), max_deg + 1)):
         _polynomial_add_inplace(poly_inv_r_J, poly_A_J[n], 1.0)
- 
+
+    # Construct the potential: -(1-mu)/r_PS - mu/r_PJ
     poly_U = _polynomial_zero_list(max_deg, psi_table)
     _polynomial_add_inplace(poly_U, poly_inv_r_S, -(1.0 - mu))
     _polynomial_add_inplace(poly_U, poly_inv_r_J, -mu)
     _polynomial_add_inplace(poly_H, poly_U, 1.0)
 
-    # Remove the constant term (equilibrium potential energy) 
+    # Remove the constant term (equilibrium potential energy = -1)
     if len(poly_H) > 0 and len(poly_H[0]) > 0:
         poly_H[0][0] = 0.0
 
