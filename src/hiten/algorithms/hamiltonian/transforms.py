@@ -273,7 +273,7 @@ def _coordlocal2realmodal(point, local_coords: np.ndarray, tol=1e-30) -> np.ndar
     _, C_inv = point.normal_form_transform()
     return _clean_coordinates(C_inv.dot(local_coords), tol)
 
-def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray, tol=1e-16) -> np.ndarray:
+def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray, tol=1e-14) -> np.ndarray:
     r"""
     Transform coordinates from local to synodic frame for the collinear points.
 
@@ -337,7 +337,7 @@ def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray, to
 
     return syn
 
-def _synodic2local_collinear(point: CollinearPoint, synodic_coords: np.ndarray, tol=1e-16) -> np.ndarray:
+def _synodic2local_collinear(point: CollinearPoint, synodic_coords: np.ndarray, tol=1e-14) -> np.ndarray:
     r"""
     Transform coordinates from synodic to local frame for the collinear points.
 
@@ -401,7 +401,7 @@ def _synodic2local_collinear(point: CollinearPoint, synodic_coords: np.ndarray, 
 
     return local
 
-def _local2synodic_triangular(point: TriangularPoint, local_coords: np.ndarray, tol=1e-16) -> np.ndarray:
+def _local2synodic_triangular(point: TriangularPoint, local_coords: np.ndarray, tol=1e-14) -> np.ndarray:
     r"""
     Transform coordinates from local to synodic frame for the equilateral points.
     
@@ -465,7 +465,7 @@ def _local2synodic_triangular(point: TriangularPoint, local_coords: np.ndarray, 
 
     return syn
 
-def _synodic2local_triangular(point: TriangularPoint, synodic_coords: np.ndarray, tol=1e-16) -> np.ndarray:
+def _synodic2local_triangular(point: TriangularPoint, synodic_coords: np.ndarray, tol=1e-14) -> np.ndarray:
     r"""
     Transform coordinates from synodic to local frame for the triangular (equilateral) points.
 
