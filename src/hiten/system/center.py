@@ -276,19 +276,19 @@ class CenterManifold:
             self._point, self._max_degree
         ))
 
-    def _get_real_modal_form(self) -> List[np.ndarray]:
+    def _get_real_modal_form(self, tol=1e-12) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'real_modal')
         return self._get_or_compute(key, lambda: _polylocal2realmodal(
-            self._point, self._get_physical_hamiltonian(), self._max_degree, self._psi, self._clmo
+            self._point, self._get_physical_hamiltonian(), self._max_degree, self._psi, self._clmo, tol=tol
         ))
 
     def _get_complex_modal_form(self, tol=1e-12) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'complex_modal')
         return self._get_or_compute(key, lambda: _substitute_complex(
-            self._get_real_modal_form(), self._max_degree, self._psi, self._clmo, tol=tol, mix_pairs=self._mix_pairs
+            self._get_real_modal_form(tol=tol), self._max_degree, self._psi, self._clmo, tol=tol, mix_pairs=self._mix_pairs
         ))
 
-    def _get_partial_lie_results(self) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
+    def _get_partial_lie_results(self, tol_modal=1e-12, tol_lie=1e-30) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
         key_trans = ('hamiltonian', self._max_degree, 'complex_partial_normal')
         key_G = ('generating_functions', self._max_degree)
         key_elim = ('terms_to_eliminate', self._max_degree)
@@ -297,9 +297,9 @@ class CenterManifold:
         bundle_key = ('lie_transform_bundle', self._max_degree)
 
         def compute_partial_lie_bundle():
-            poly_cn = self._get_complex_modal_form()
+            poly_cn = self._get_complex_modal_form(tol=tol_modal)
             poly_trans, poly_G_total, poly_elim_total = _lie_transform_partial(
-                self._point, poly_cn, self._psi, self._clmo, self._max_degree
+                self._point, poly_cn, self._psi, self._clmo, self._max_degree, tol=tol_lie
             )
             
             # Cache individual components as well
@@ -311,7 +311,7 @@ class CenterManifold:
 
         return self._get_or_compute(bundle_key, compute_partial_lie_bundle)
 
-    def _get_complex_partial_normal_form(self) -> List[np.ndarray]:
+    def _get_complex_partial_normal_form(self, tol_modal=1e-12, tol_lie=1e-30) -> List[np.ndarray]:
         """Return the Lie-transformed (normal-form) Hamiltonian in complex variables.
 
         This corresponds to the Hamiltonian obtained *after* the Lie series
@@ -323,21 +323,21 @@ class CenterManifold:
         key = ('hamiltonian', self._max_degree, 'complex_partial_normal')
 
         def compute_normal_form():
-            poly_trans, _, _ = self._get_partial_lie_results()
+            poly_trans, _, _ = self._get_partial_lie_results(tol_modal=tol_modal, tol_lie=tol_lie)
             return poly_trans
 
         return self._get_or_compute(key, compute_normal_form)
 
-    def _get_partial_real_normal_form(self, tol=1e-12) -> List[np.ndarray]:
+    def _get_partial_real_normal_form(self, tol_modal=1e-12, tol_lie=1e-30) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'real_partial_normal')
 
         def compute_normal_form():
-            poly_trans = self._get_complex_partial_normal_form()
-            return _substitute_real(poly_trans, self._max_degree, self._psi, self._clmo, tol=tol, mix_pairs=self._mix_pairs)
+            poly_trans = self._get_complex_partial_normal_form(tol_modal=tol_modal, tol_lie=tol_lie)
+            return _substitute_real(poly_trans, self._max_degree, self._psi, self._clmo, tol=tol_modal, mix_pairs=self._mix_pairs)
 
         return self._get_or_compute(key, compute_normal_form)
 
-    def _get_full_lie_results(self) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
+    def _get_full_lie_results(self, tol_modal=1e-12, tol_lie=1e-30, resonance_tol=1e-30) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
         key_trans = ("hamiltonian", self._max_degree, "complex_full_normal")
         key_G = ("generating_functions_full", self._max_degree)
         key_elim = ("terms_to_eliminate_full", self._max_degree)
@@ -347,13 +347,15 @@ class CenterManifold:
 
         def compute_full_lie_bundle():
             logger.info("Performing full Lie transformation...")
-            poly_cn = self._get_complex_modal_form()
+            poly_cn = self._get_complex_modal_form(tol=tol_modal)
             poly_trans, poly_G_total, poly_elim_total = _lie_transform_full(
                 self._point,
                 poly_cn,
                 self._psi,
                 self._clmo,
                 self._max_degree,
+                tol=tol_lie,
+                resonance_tol=resonance_tol
             )
 
             # cache copies to avoid accidental mutation
@@ -365,23 +367,23 @@ class CenterManifold:
 
         return self._get_or_compute(bundle_key, compute_full_lie_bundle)
 
-    def _get_full_complex_normal_form(self) -> List[np.ndarray]:
+    def _get_full_complex_normal_form(self, tol_modal=1e-12, tol_lie=1e-30, resonance_tol=1e-30) -> List[np.ndarray]:
         """Return the *full* normal-form Hamiltonian in **complex** variables."""
         key = ("hamiltonian", self._max_degree, "complex_full_normal")
 
         def compute_full_complex_normal():
-            poly_trans, _, _ = self._get_full_lie_results()
+            poly_trans, _, _ = self._get_full_lie_results(tol_modal=tol_modal, tol_lie=tol_lie, resonance_tol=resonance_tol)
             return poly_trans
 
         return self._get_or_compute(key, compute_full_complex_normal)
 
-    def _get_full_real_normal_form(self, tol=1e-12) -> List[np.ndarray]:
+    def _get_full_real_normal_form(self, tol_modal=1e-12, tol_lie=1e-30, resonance_tol=1e-30) -> List[np.ndarray]:
         """Return the *full* normal-form Hamiltonian in **real** variables."""
         key = ("hamiltonian", self._max_degree, "real_full_normal")
 
         def compute_full_real_normal():
-            poly_trans = self._get_full_complex_normal_form()
-            return _substitute_real(poly_trans, self._max_degree, self._psi, self._clmo, tol=tol, mix_pairs=self._mix_pairs)
+            poly_trans = self._get_full_complex_normal_form(tol_modal=tol_modal, tol_lie=tol_lie, resonance_tol=resonance_tol)
+            return _substitute_real(poly_trans, self._max_degree, self._psi, self._clmo, tol=tol_modal, mix_pairs=self._mix_pairs)
 
         return self._get_or_compute(key, compute_full_real_normal)
     
