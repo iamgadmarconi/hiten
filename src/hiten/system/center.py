@@ -638,7 +638,7 @@ class CenterManifold:
         
         return self._poincare_maps[cache_key]
 
-    def _4d_cm_to_ic(self, cm_coords_4d: np.ndarray, tol: float = 1e-16) -> np.ndarray:
+    def _4d_cm_to_ic(self, cm_coords_4d: np.ndarray, tol: float = 1e-14) -> np.ndarray:
         """Convert 4-D centre-manifold coordinates to 6-D synodic initial conditions.
 
         This helper assumes *cm_coords_4d* is an array-like object of shape ``(4,)``
@@ -688,7 +688,7 @@ class CenterManifold:
         poincare_point: np.ndarray,
         energy: float,
         section_coord: str = "q3",
-        tol: float = 1e-16,
+        tol: float = 1e-14,
     ) -> np.ndarray:
         """Original *ic* behaviour - convert a 2-D Poincaré-section point.
 
@@ -755,7 +755,7 @@ class CenterManifold:
         cm_point: np.ndarray,
         energy: Optional[float] = None,
         section_coord: str = "q3",
-        tol: float = 1e-16,
+        tol: float = 1e-14,
     ) -> np.ndarray:
         """Convert centre-manifold coordinates to full synodic ICs.
 
@@ -813,7 +813,7 @@ class CenterManifold:
                 "a Poincaré-section point or full CM coordinates, respectively."
             )
     
-    def cm(self, synodic_6d: np.ndarray, tol=1e-16) -> np.ndarray:
+    def cm(self, synodic_6d: np.ndarray, tol=1e-14) -> np.ndarray:
         """Return 4-D centre-manifold coordinates (q2, p2, q3, p3) from 6-D synodic ICs.
 
         This is the exact inverse of :py:meth:`ic` and therefore performs the
