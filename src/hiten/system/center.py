@@ -109,11 +109,13 @@ class CenterManifold:
                 logger.warning("L3 point has not been verified for centre manifold / normal form computations!")
 
         elif isinstance(self._point, TriangularPoint):
+            
             logger.warning("Triangular points have not been verified for centre manifold / normal form computations!")
             self._local2synodic = _local2synodic_triangular
             self._synodic2local = _synodic2local_triangular
             self._build_hamiltonian = _build_physical_hamiltonian_triangular
             self._mix_pairs = (0, 1, 2)
+            raise NotImplementedError("Triangular points are not supported yet.")
 
         else:
             raise ValueError(f"Unsupported libration point type: {type(self._point)}")
@@ -310,6 +312,54 @@ class CenterManifold:
             return poly_trans, poly_G_total, poly_elim_total
 
         return self._get_or_compute(bundle_key, compute_partial_lie_bundle)
+
+    # ---------------------------------------------------------------------
+    # Cached Lie–series coordinate expansions
+    # ---------------------------------------------------------------------
+    def _get_lie_expansions(self, *, inverse: bool, tol: float = 1e-16):
+        """Return (and cache) the six polynomial coordinate expansions that
+        map between centre-manifold variables and complex modal variables.
+
+        For *inverse=False* the forward transform CM -> physical variables is
+        returned (the one used by :py:meth:`_4d_cm_to_ic`).
+        For *inverse=True* the inverse transform is returned (used by
+        :py:meth:`cm`).
+
+        The result of the expensive :py:func:`hiten.algorithms.hamiltonian.center._lie._lie_expansion`
+        call is cached under ``('lie_expansions', max_degree, 'forward'|'inverse', tol)``.
+        Different tolerances therefore lead to independent cache entries.
+        """
+        key = (
+            "lie_expansions",
+            self._max_degree,
+            "inverse" if inverse else "forward",
+            float(tol),
+        )
+
+        cached_val = self.cache_get(key)
+        if cached_val is not None:
+            logger.debug("Using cached Lie expansions (%s)", key)
+            return cached_val
+
+        # Ensure the (cached) generating functions are available
+        _, poly_G_total, _ = self._get_partial_lie_results()
+
+        sign = -1 if inverse else 1
+        logger.debug("Computing Lie expansions (%s)", key)
+        expansions = _lie_expansion(
+            poly_G_total,
+            self._max_degree,
+            self._psi,
+            self._clmo,
+            tol,
+            inverse=inverse,
+            sign=sign,
+            restrict=False,
+        )
+
+        # Cache *without* deep-copying - the expansions are read-only
+        self.cache_set(key, expansions)
+        return expansions
 
     def _get_complex_partial_normal_form(self, tol_modal=1e-12, tol_lie=1e-30) -> List[np.ndarray]:
         """Return the Lie-transformed (normal-form) Hamiltonian in complex variables.
@@ -602,9 +652,6 @@ class CenterManifold:
             CM (real) -> CM (complex) -> Lie transform -> real modal -> local -> synodic
         """
 
-        # Ensure we have the required Lie generators (computed lazily)
-        _, poly_G_total, _ = self._get_partial_lie_results()
-
         # Construct a 6-D centre-manifold phase-space vector.  By definition the
         # hyperbolic coordinates (q1, p1) are zero on the CM for collinear
         # points.  For triangular points *all* variables belong to the centre
@@ -623,16 +670,7 @@ class CenterManifold:
         complex_6d_cm = _solve_complex(real_6d_cm, tol=tol, mix_pairs=self._mix_pairs)
 
         # Apply the forward Lie transform (centre-manifold -> physical variables)
-        expansions = _lie_expansion(
-            poly_G_total,
-            self._max_degree,
-            self._psi,
-            self._clmo,
-            tol,
-            inverse=False,
-            sign=1,
-            restrict=False,
-        )
+        expansions = self._get_lie_expansions(inverse=False, tol=tol)
         complex_6d = _evaluate_transform(expansions, complex_6d_cm, self._clmo)
 
         # Back to real modal variables
@@ -800,9 +838,7 @@ class CenterManifold:
 
         complex_modal_6d = _solve_complex(real_modal_6d, tol=tol, mix_pairs=self._mix_pairs)
 
-        _, poly_G_total, _ = self._get_partial_lie_results()
-        expansions = _lie_expansion(poly_G_total, self._max_degree, self._psi, self._clmo,
-                                    tol, inverse=True, sign=-1, restrict=False)
+        expansions = self._get_lie_expansions(inverse=True, tol=tol)
 
         complex_pnf_6d = _evaluate_transform(expansions, complex_modal_6d, self._clmo)
         real_pnf_6d = _solve_real(complex_pnf_6d, tol=tol, mix_pairs=self._mix_pairs)
@@ -892,3 +928,5 @@ class CenterManifold:
                 return {k: _clone(v) for k, v in obj.items()}
             return obj
         return {k: _clone(v) for k, v in cache_in.items()}
+
+
