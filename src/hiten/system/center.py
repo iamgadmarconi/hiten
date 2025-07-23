@@ -325,7 +325,7 @@ class CenterManifold:
         For *inverse=True* the inverse transform is returned (used by
         :py:meth:`cm`).
 
-        The result of the expensive :pyfunc:`hiten.algorithms.hamiltonian.center._lie._lie_expansion`
+        The result of the expensive :py:func:`hiten.algorithms.hamiltonian.center._lie._lie_expansion`
         call is cached under ``('lie_expansions', max_degree, 'forward'|'inverse', tol)``.
         Different tolerances therefore lead to independent cache entries.
         """
