@@ -5,8 +5,12 @@ from numba import types
 from numba.typed import Dict, List
 
 from hiten.algorithms.hamiltonian.hamiltonian import (
-    _build_lindstedt_poincare_rhs_polynomials, _build_physical_hamiltonian_collinear,
-    _build_R_polynomials, _build_T_polynomials)
+    _build_lindstedt_poincare_rhs_polynomials,
+    _build_physical_hamiltonian_collinear,
+    _build_physical_hamiltonian_triangular,
+    _build_R_polynomials,
+    _build_T_polynomials,
+    _build_A_polynomials)
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                               _encode_multiindex,
                                               _init_index_tables)
@@ -367,39 +371,178 @@ def triangular_points(system: System):
     return [system.get_libration_point(4), system.get_libration_point(5)]
 
 
-@pytest.mark.parametrize("tri_idx", [4, 5])
-def test_triangular_quadratic_hamiltonian(system: System, tri_idx):
+@pytest.mark.parametrize("max_deg", [4, 6, 8])
+@pytest.mark.parametrize("d_vals", [(0.5, np.sqrt(3)/2.0), (-0.5, np.sqrt(3)/2.0)])
+def test_A_polynomial_recursion(max_deg, d_vals, psi_clmo):
+    """Internal `A[n]` sequence must satisfy its three-term recurrence.
 
-    point = system.get_libration_point(tri_idx)
-    sgn = point.sign
-    mu = system.mu
+    The implemented recurrence is (cf. Gómez et al. 2001 Eq. 64)
 
-    expected = {
-        "px2": 0.5,
-        "py2": 0.5,
-        "pz2": 0.5,
-        "y_px": 1.0,
-        "x_py": -1.0,
-        "x2": 0.125,
-        "y2": -0.625,
-        "z2": 0.5,
-        "xy": -sgn * 0.75 * np.sqrt(3) * (1 - 2 * mu),
-    }
+        A_{n+1} = ((2n+1)/(n+1)) (d·r) A_n - (n/(n+1)) (r·r) A_{n-1},
 
-    # Mapping from label to multiindex exponent vector (x,y,z,px,py,pz)
-    k_map = {
-        "px2": (0, 0, 0, 2, 0, 0),
-        "py2": (0, 0, 0, 0, 2, 0),
-        "pz2": (0, 0, 0, 0, 0, 2),
-        "y_px": (0, 1, 0, 1, 0, 0),
-        "x_py": (1, 0, 0, 0, 1, 0),
-        "x2": (2, 0, 0, 0, 0, 0),
-        "y2": (0, 2, 0, 0, 0, 0),
-        "z2": (0, 0, 2, 0, 0, 0),
-        "xy": (1, 1, 0, 0, 0, 0),
-    }
+    where d = (d_x, d_y, 0) gives the primary offset in local coordinates.
+    """
 
-    # Numerical tolerance
-    atol = 1e-12
+    d_x, d_y = d_vals
+    psi, clmo, encode_dict = psi_clmo
 
-    assert True
+    # Coordinate polynomials
+    x_poly, y_poly, z_poly, *_ = [
+        _polynomial_variable(i, max_deg, psi, clmo, encode_dict) for i in range(3)
+    ]
+
+    A_list = _build_A_polynomials(
+        x_poly, y_poly, z_poly,
+        d_x, d_y,
+        max_deg, psi, clmo, encode_dict,
+    )
+
+    # Build auxiliary polynomials ρ² = x² + y² + z² and dot = d·r.
+    rho_sq_poly = _polynomial_zero_list(max_deg, psi)
+    for var_poly in (x_poly, y_poly, z_poly):
+        _polynomial_add_inplace(
+            rho_sq_poly,
+            _polynomial_multiply(var_poly, var_poly, max_deg, psi, clmo, encode_dict),
+            1.0,
+        )
+
+    dot_poly = _polynomial_zero_list(max_deg, psi)
+    if d_x != 0.0:
+        _polynomial_add_inplace(dot_poly, x_poly, d_x)
+    if d_y != 0.0:
+        _polynomial_add_inplace(dot_poly, y_poly, d_y)
+
+    # Verify recurrence from n = 1 up to max_deg - 1
+    for n in range(1, max_deg):
+        n_f = float(n)
+        coeff1 = (2.0 * n_f + 1.0) / (n_f + 1.0)
+        coeff2 = n_f / (n_f + 1.0)
+
+        # Term1: coeff1 * dot * A_n
+        term1 = _polynomial_zero_list(max_deg, psi)
+        _polynomial_add_inplace(
+            term1,
+            _polynomial_multiply(dot_poly, A_list[n], max_deg, psi, clmo, encode_dict),
+            coeff1,
+        )
+
+        # Term2: -coeff2 * rho² * A_{n-1}
+        term2 = _polynomial_zero_list(max_deg, psi)
+        _polynomial_add_inplace(
+            term2,
+            _polynomial_multiply(rho_sq_poly, A_list[n - 1], max_deg, psi, clmo, encode_dict),
+            -coeff2,
+        )
+
+        rhs = _polynomial_zero_list(max_deg, psi)
+        _polynomial_add_inplace(rhs, term1, 1.0)
+        _polynomial_add_inplace(rhs, term2, 1.0)
+
+        lhs = A_list[n + 1]
+
+        for d in range(max_deg + 1):
+            assert np.array_equal(lhs[d], rhs[d]), (
+                f"A_n recurrence failed for n={n}, degree slice d={d}."
+            )
+
+
+@pytest.mark.parametrize("max_deg", [4, 6, 8])
+def test_triangular_inverse_distance_expansion_accuracy(system: System, max_deg):
+    """Polynomial expansion of 1/r should approximate the true value within the expected truncation error O(r^{max_deg+1})."""
+
+    # Use the L5 point (sign = −1)
+    point = system.get_libration_point(5)
+    sgn = point.sign  # Should be -1 for L5
+
+    # Coordinates of primaries in the *shifted* frame used by the expansion
+    d_Sx, d_Sy = 0.5, sgn * np.sqrt(3) / 2.0
+    d_Jx, d_Jy = -0.5, sgn * np.sqrt(3) / 2.0
+
+    # Build basic polynomial infrastructure
+    psi, clmo = _init_index_tables(max_deg)
+    encode_dict = _create_encode_dict_from_clmo(clmo)
+
+    x_poly, y_poly, z_poly = [
+        _polynomial_variable(i, max_deg, psi, clmo, encode_dict) for i in range(3)
+    ]
+
+    # Build A‐polynomial sequences for the two primaries
+    A_S = _build_A_polynomials(
+        x_poly, y_poly, z_poly, d_Sx, d_Sy, max_deg, psi, clmo, encode_dict
+    )
+    A_J = _build_A_polynomials(
+        x_poly, y_poly, z_poly, d_Jx, d_Jy, max_deg, psi, clmo, encode_dict
+    )
+
+    # Inverse-distance polynomial (sum of A_n, n >= 0)
+    inv_r_S_poly = _polynomial_zero_list(max_deg, psi)
+    inv_r_J_poly = _polynomial_zero_list(max_deg, psi)
+
+    for n in range(max_deg + 1):
+        _polynomial_add_inplace(inv_r_S_poly, A_S[n], 1.0)
+        _polynomial_add_inplace(inv_r_J_poly, A_J[n], 1.0)
+
+    # Choose a small displacement from equilibrium (local coords)
+    test_xyz = np.array([2.0e-2, -1.5e-2, 1.0e-2])
+    rho_norm = np.linalg.norm(test_xyz)
+
+    # Polynomial evaluation (need 6-component vector; momenta = 0)
+    full_eval_vec = np.zeros(6)
+    full_eval_vec[:3] = test_xyz
+
+    inv_r_S_eval = _polynomial_evaluate(inv_r_S_poly, full_eval_vec, clmo)
+    inv_r_J_eval = _polynomial_evaluate(inv_r_J_poly, full_eval_vec, clmo)
+
+    # Direct numerical distances in shifted frame
+    x, y, z = test_xyz
+    r_S = np.sqrt((x - d_Sx) ** 2 + (y - d_Sy) ** 2 + z ** 2)
+    r_J = np.sqrt((x - d_Jx) ** 2 + (y - d_Jy) ** 2 + z ** 2)
+
+    inv_r_S_direct = 1.0 / r_S
+    inv_r_J_direct = 1.0 / r_J
+
+    # Expected truncation error order O(rho^{max_deg+1})
+    tol = 10.0 * rho_norm ** (max_deg + 1)
+
+    assert np.abs(inv_r_S_eval - inv_r_S_direct) < tol, (
+        f"Inverse distance expansion for primary S inaccurate: |Δ|={np.abs(inv_r_S_eval - inv_r_S_direct)}, tol={tol}"
+    )
+    assert np.abs(inv_r_J_eval - inv_r_J_direct) < tol, (
+        f"Inverse distance expansion for primary J inaccurate: |Δ|={np.abs(inv_r_J_eval - inv_r_J_direct)}, tol={tol}"
+    )
+
+
+def test_physical_hamiltonian_triangular_convergence(system: System):
+    """Evaluate the triangular Hamiltonian at a fixed point for several truncation degrees and verify convergence."""
+
+    point = system.get_libration_point(5)  # L5
+
+    max_deg_list = [4, 6, 8, 10]
+
+    # Evaluation point (small displacement; momenta zero)
+    eval_vec = np.zeros(6)
+    eval_vec = np.array([0.03, -0.04, 0.015, 1e-4, -1e-5, -1e-6])
+
+    H_vals = []
+    clmo_cache = {}
+
+    for mdeg in max_deg_list:
+        H_poly = _build_physical_hamiltonian_triangular(point, mdeg)
+        # Cache clmo to avoid recomputation overhead
+        if mdeg not in clmo_cache:
+            _, clmo_cache[mdeg] = _init_index_tables(mdeg)
+        val = _polynomial_evaluate(H_poly, eval_vec, clmo_cache[mdeg])
+        H_vals.append(val)
+
+    # Use the highest-degree value as reference
+    H_ref = H_vals[-1]
+
+    # Differences should decrease monotonically with degree
+    prev_err = np.inf
+    for idx, mdeg in enumerate(max_deg_list[:-1]):
+        err = np.abs(H_vals[idx] - H_ref)
+        print(f"Degree {mdeg} error: {err}")
+        assert err < prev_err, (
+            f"Hamiltonian did not converge monotonically: degree {mdeg} error {err} ≥ previous {prev_err}"
+        )
+        prev_err = err
