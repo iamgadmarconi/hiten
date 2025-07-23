@@ -51,7 +51,7 @@ def _build_complexification_matrix(mix_indices):
 
     return M
 
-def _M(mix_pairs: tuple[int, int] = (1, 2)) -> np.ndarray:
+def _M(mix_pairs: tuple[int, ...] = (1, 2)) -> np.ndarray:
     r"""
     Return the canonical complexification matrix that *only* mixes the second
     and third canonical pairs, leaving the first pair \((q_1, p_1)\) real.
@@ -62,14 +62,14 @@ def _M(mix_pairs: tuple[int, int] = (1, 2)) -> np.ndarray:
     """
     return _build_complexification_matrix(mix_pairs)
 
-def _M_inv(mix_pairs: tuple[int, int] = (1, 2)) -> np.ndarray:
+def _M_inv(mix_pairs: tuple[int, ...] = (1, 2)) -> np.ndarray:
     r"""Inverse of :pyfunc:`_M`.  Because the matrix is unitary we can use the
     conjugate transpose rather than an explicit matrix inversion."""
     M = _M(mix_pairs)
     return M.conjugate().T  # complex = M_inv @ real
 
 
-def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-12, *, mix_pairs: tuple[int, int] = (1, 2)) -> List[np.ndarray]:
+def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-12, *, mix_pairs: tuple[int, ...] = (1, 2)) -> List[np.ndarray]:
     r"""
     Transform a polynomial from real normal form to complex normal form.
     
@@ -98,7 +98,7 @@ def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo, tol=
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
     return _polynomial_clean(_substitute_linear(poly_rn, _M(mix_pairs), max_deg, psi, clmo, encode_dict_list), tol)
 
-def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-12, *, mix_pairs: tuple[int, int] = (1, 2)) -> List[np.ndarray]:
+def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-12, *, mix_pairs: tuple[int, ...] = (1, 2)) -> List[np.ndarray]:
     r"""
     Transform a polynomial from complex normal form to real normal form.
     
@@ -127,7 +127,7 @@ def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
     return _polynomial_clean(_substitute_linear(poly_cn, _M_inv(mix_pairs), max_deg, psi, clmo, encode_dict_list), tol)
 
-def _solve_complex(real_coords: np.ndarray, tol: float = 1e-30, *, mix_pairs: tuple[int, int] = (1, 2)) -> np.ndarray:
+def _solve_complex(real_coords: np.ndarray, tol: float = 1e-30, *, mix_pairs: tuple[int, ...] = (1, 2)) -> np.ndarray:
     r"""
     Return complex coordinates given real coordinates using the map `M_inv`.
 
@@ -144,7 +144,7 @@ def _solve_complex(real_coords: np.ndarray, tol: float = 1e-30, *, mix_pairs: tu
     return _clean_coordinates(_substitute_coordinates(real_coords, _M_inv(mix_pairs)), tol)
 
 
-def _solve_real(real_coords: np.ndarray, tol: float = 1e-30, *, mix_pairs: tuple[int, int] = (1, 2)) -> np.ndarray:
+def _solve_real(real_coords: np.ndarray, tol: float = 1e-30, *, mix_pairs: tuple[int, ...] = (1, 2)) -> np.ndarray:
     r"""
     Return real coordinates given complex coordinates using the map `M`.
 
