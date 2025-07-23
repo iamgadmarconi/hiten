@@ -19,8 +19,8 @@ manifolds near collinear libration points".
 """
 
 from dataclasses import asdict
-from typing import (TYPE_CHECKING, Any, Callable, Dict, Iterable, List, Tuple,
-                    Union)
+from typing import (TYPE_CHECKING, Any, Callable, Dict, Iterable, List,
+                    Optional, Tuple, Union)
 
 import numpy as np
 
@@ -28,8 +28,9 @@ from hiten.algorithms.hamiltonian.center._lie import (_evaluate_transform,
                                                       _lie_expansion)
 from hiten.algorithms.hamiltonian.center._lie import \
     _lie_transform as _lie_transform_partial
-from hiten.algorithms.hamiltonian.hamiltonian import \
-    _build_physical_hamiltonian
+from hiten.algorithms.hamiltonian.hamiltonian import (
+    _build_physical_hamiltonian_collinear,
+    _build_physical_hamiltonian_triangular)
 # Full ("complete") normal form Lie transform
 from hiten.algorithms.hamiltonian.normal._lie import \
     _lie_transform as _lie_transform_full
@@ -101,16 +102,18 @@ class CenterManifold:
         if isinstance(self._point, CollinearPoint):
             self._local2synodic = _local2synodic_collinear
             self._synodic2local = _synodic2local_collinear
+            self._build_hamiltonian = _build_physical_hamiltonian_collinear
+            self._mix_pairs = (1, 2)
 
             if isinstance(self._point, L3Point):
-                logger.warning("L3 point has not been verified for centre manifold computation!")
+                logger.warning("L3 point has not been verified for centre manifold / normal form computations!")
 
         elif isinstance(self._point, TriangularPoint):
+            logger.warning("Triangular points have not been verified for centre manifold / normal form computations!")
             self._local2synodic = _local2synodic_triangular
             self._synodic2local = _synodic2local_triangular
-            err = "Triangular points not implemented for centre manifold computation!"
-            logger.error(err)
-            raise NotImplementedError(err)
+            self._build_hamiltonian = _build_physical_hamiltonian_triangular
+            self._mix_pairs = (0, 1, 2)
 
         else:
             raise ValueError(f"Unsupported libration point type: {type(self._point)}")
@@ -269,21 +272,23 @@ class CenterManifold:
 
     def _get_physical_hamiltonian(self) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'physical')
-        return self._get_or_compute(key, lambda: _build_physical_hamiltonian(self._point, self._max_degree))
+        return self._get_or_compute(key, lambda: self._build_hamiltonian(
+            self._point, self._max_degree
+        ))
 
-    def _get_real_modal_form(self) -> List[np.ndarray]:
+    def _get_real_modal_form(self, tol=1e-12) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'real_modal')
         return self._get_or_compute(key, lambda: _polylocal2realmodal(
-            self._point, self._get_physical_hamiltonian(), self._max_degree, self._psi, self._clmo
+            self._point, self._get_physical_hamiltonian(), self._max_degree, self._psi, self._clmo, tol=tol
         ))
 
-    def _get_complex_modal_form(self) -> List[np.ndarray]:
+    def _get_complex_modal_form(self, tol=1e-12) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'complex_modal')
         return self._get_or_compute(key, lambda: _substitute_complex(
-            self._get_real_modal_form(), self._max_degree, self._psi, self._clmo
+            self._get_real_modal_form(tol=tol), self._max_degree, self._psi, self._clmo, tol=tol, mix_pairs=self._mix_pairs
         ))
 
-    def _get_partial_lie_results(self) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
+    def _get_partial_lie_results(self, tol_modal=1e-12, tol_lie=1e-30) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
         key_trans = ('hamiltonian', self._max_degree, 'complex_partial_normal')
         key_G = ('generating_functions', self._max_degree)
         key_elim = ('terms_to_eliminate', self._max_degree)
@@ -292,10 +297,9 @@ class CenterManifold:
         bundle_key = ('lie_transform_bundle', self._max_degree)
 
         def compute_partial_lie_bundle():
-            logger.info("Performing partial Lie transformation...")
-            poly_cn = self._get_complex_modal_form()
+            poly_cn = self._get_complex_modal_form(tol=tol_modal)
             poly_trans, poly_G_total, poly_elim_total = _lie_transform_partial(
-                self._point, poly_cn, self._psi, self._clmo, self._max_degree
+                self._point, poly_cn, self._psi, self._clmo, self._max_degree, tol=tol_lie
             )
             
             # Cache individual components as well
@@ -307,7 +311,7 @@ class CenterManifold:
 
         return self._get_or_compute(bundle_key, compute_partial_lie_bundle)
 
-    def _get_complex_partial_normal_form(self) -> List[np.ndarray]:
+    def _get_complex_partial_normal_form(self, tol_modal=1e-12, tol_lie=1e-30) -> List[np.ndarray]:
         """Return the Lie-transformed (normal-form) Hamiltonian in complex variables.
 
         This corresponds to the Hamiltonian obtained *after* the Lie series
@@ -319,21 +323,21 @@ class CenterManifold:
         key = ('hamiltonian', self._max_degree, 'complex_partial_normal')
 
         def compute_normal_form():
-            poly_trans, _, _ = self._get_partial_lie_results()
+            poly_trans, _, _ = self._get_partial_lie_results(tol_modal=tol_modal, tol_lie=tol_lie)
             return poly_trans
 
         return self._get_or_compute(key, compute_normal_form)
 
-    def _get_partial_real_normal_form(self) -> List[np.ndarray]:
+    def _get_partial_real_normal_form(self, tol_modal=1e-12, tol_lie=1e-30) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'real_partial_normal')
 
         def compute_normal_form():
-            poly_trans = self._get_complex_partial_normal_form()
-            return _substitute_real(poly_trans, self._max_degree, self._psi, self._clmo)
+            poly_trans = self._get_complex_partial_normal_form(tol_modal=tol_modal, tol_lie=tol_lie)
+            return _substitute_real(poly_trans, self._max_degree, self._psi, self._clmo, tol=tol_modal, mix_pairs=self._mix_pairs)
 
         return self._get_or_compute(key, compute_normal_form)
 
-    def _get_full_lie_results(self) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
+    def _get_full_lie_results(self, tol_modal=1e-12, tol_lie=1e-30, resonance_tol=1e-30) -> Tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
         key_trans = ("hamiltonian", self._max_degree, "complex_full_normal")
         key_G = ("generating_functions_full", self._max_degree)
         key_elim = ("terms_to_eliminate_full", self._max_degree)
@@ -343,13 +347,15 @@ class CenterManifold:
 
         def compute_full_lie_bundle():
             logger.info("Performing full Lie transformation...")
-            poly_cn = self._get_complex_modal_form()
+            poly_cn = self._get_complex_modal_form(tol=tol_modal)
             poly_trans, poly_G_total, poly_elim_total = _lie_transform_full(
                 self._point,
                 poly_cn,
                 self._psi,
                 self._clmo,
                 self._max_degree,
+                tol=tol_lie,
+                resonance_tol=resonance_tol
             )
 
             # cache copies to avoid accidental mutation
@@ -361,25 +367,23 @@ class CenterManifold:
 
         return self._get_or_compute(bundle_key, compute_full_lie_bundle)
 
-    def _get_full_complex_normal_form(self) -> List[np.ndarray]:
+    def _get_full_complex_normal_form(self, tol_modal=1e-12, tol_lie=1e-30, resonance_tol=1e-30) -> List[np.ndarray]:
         """Return the *full* normal-form Hamiltonian in **complex** variables."""
         key = ("hamiltonian", self._max_degree, "complex_full_normal")
 
         def compute_full_complex_normal():
-            poly_trans, _, _ = self._get_full_lie_results()
+            poly_trans, _, _ = self._get_full_lie_results(tol_modal=tol_modal, tol_lie=tol_lie, resonance_tol=resonance_tol)
             return poly_trans
 
         return self._get_or_compute(key, compute_full_complex_normal)
 
-    def _get_full_real_normal_form(self) -> List[np.ndarray]:
+    def _get_full_real_normal_form(self, tol_modal=1e-12, tol_lie=1e-30, resonance_tol=1e-30) -> List[np.ndarray]:
         """Return the *full* normal-form Hamiltonian in **real** variables."""
         key = ("hamiltonian", self._max_degree, "real_full_normal")
 
         def compute_full_real_normal():
-            poly_trans = self._get_full_complex_normal_form()
-            return _substitute_real(
-                poly_trans, self._max_degree, self._psi, self._clmo
-            )
+            poly_trans = self._get_full_complex_normal_form(tol_modal=tol_modal, tol_lie=tol_lie, resonance_tol=resonance_tol)
+            return _substitute_real(poly_trans, self._max_degree, self._psi, self._clmo, tol=tol_modal, mix_pairs=self._mix_pairs)
 
         return self._get_or_compute(key, compute_full_real_normal)
     
@@ -387,6 +391,16 @@ class CenterManifold:
         r"""
         Restrict a Hamiltonian to the center manifold by eliminating hyperbolic variables.
         """
+        # For triangular points, all directions are centre-type, so we do NOT
+        # eliminate any terms involving (q1, p1).  The original behaviour of
+        # zeroing these terms is only appropriate for collinear points where
+        # (q1, p1) span the hyperbolic sub-space.
+
+        if isinstance(self._point, TriangularPoint):
+            # Simply return a *copy* of the input to avoid accidental mutation
+            return [h.copy() for h in poly_H]
+
+        # Collinear case - remove all terms containing q1 or p1 exponents.
         poly_cm = [h.copy() for h in poly_H]
         for deg, coeff_vec in enumerate(poly_cm):
             if coeff_vec.size == 0:
@@ -401,13 +415,31 @@ class CenterManifold:
         return poly_cm
     
     def _restrict_coord_to_center_manifold(self, coord_6d):
-        # Convert complex arrays with zero imaginary parts to real
+        """Project a 6-D Phase-space coordinate onto the centre manifold.
+
+        For collinear points the hyperbolic pair (q1, p1) is removed.  For
+        triangular points all six variables belong to the centre manifold so
+        the original coordinates are returned unchanged (apart from casting to
+        real dtype and ensuring contiguity).
+        """
+
+        # Always work with real numbers once we reach this stage.
         if np.iscomplexobj(coord_6d):
             coord_6d = np.real(coord_6d)
-        return np.array([0, coord_6d[1], coord_6d[2], 0, coord_6d[4], coord_6d[5]], dtype=np.float64)
+
+        if isinstance(self._point, TriangularPoint):
+            # Nothing to eliminate, return full 6-vector.
+            return np.ascontiguousarray(coord_6d, dtype=np.float64)
+
+        # Collinear case: zero out the hyperbolic coordinates.
+        return np.array([0.0, coord_6d[1], coord_6d[2], 0.0, coord_6d[4], coord_6d[5]], dtype=np.float64)
     
     def _get_center_manifold_complex(self) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'center_manifold_complex')
+
+        if isinstance(self._point, TriangularPoint):
+            logger.warning("Called center manifold method on triangular point, returning normal form.")
+            return self._get_full_complex_normal_form()
         
         def compute_cm_complex():
             poly_trans = self._get_complex_partial_normal_form()
@@ -415,12 +447,16 @@ class CenterManifold:
 
         return self._get_or_compute(key, compute_cm_complex)
 
-    def _get_center_manifold_real(self) -> List[np.ndarray]:
+    def _get_center_manifold_real(self, tol=1e-12) -> List[np.ndarray]:
         key = ('hamiltonian', self._max_degree, 'center_manifold_real')
+
+        if isinstance(self._point, TriangularPoint):
+            logger.warning("Called center manifold method on triangular point, returning normal form.")
+            return self._get_full_real_normal_form(tol=tol)
 
         def compute_cm_real():
             poly_cm_complex = self._get_center_manifold_complex()
-            return _substitute_real(poly_cm_complex, self._max_degree, self._psi, self._clmo)
+            return _substitute_real(poly_cm_complex, self._max_degree, self._psi, self._clmo, tol=tol, mix_pairs=self._mix_pairs)
 
         return self._get_or_compute(key, compute_cm_real)
 
@@ -552,91 +588,192 @@ class CenterManifold:
         
         return self._poincare_maps[cache_key]
 
-    def ic(self, poincare_point: np.ndarray, energy: float, section_coord: str = "q3", tol=1e-16) -> np.ndarray:
-        r"""
-        Convert a point on a 2-dimensional centre-manifold section to full ICs.
+    def _4d_cm_to_ic(self, cm_coords_4d: np.ndarray, tol: float = 1e-16) -> np.ndarray:
+        """Convert 4-D centre-manifold coordinates to 6-D synodic initial conditions.
+
+        This helper assumes *cm_coords_4d* is an array-like object of shape ``(4,)``
+        containing the real centre-manifold variables ``[q2, p2, q3, p3]``.  No
+        root-finding or Hamiltonian energy information is required - the
+        supplied coordinates are taken to lie on the centre manifold already.
+
+        The transformation follows exactly the *second* half of the original
+        :py:meth:`ic` pipeline::
+
+            CM (real) -> CM (complex) -> Lie transform -> real modal -> local -> synodic
+        """
+
+        # Ensure we have the required Lie generators (computed lazily)
+        _, poly_G_total, _ = self._get_partial_lie_results()
+
+        # Construct a 6-D centre-manifold phase-space vector.  By definition the
+        # hyperbolic coordinates (q1, p1) are zero on the CM for collinear
+        # points.  For triangular points *all* variables belong to the centre
+        # manifold so we still embed the 4-D vector into the full 6-D space in
+        # the same fashion - the values of q1, p1 are simply disregarded later
+        # in the forward transform.
+        real_4d_cm = np.asarray(cm_coords_4d, dtype=np.float64).reshape(4)
+
+        real_6d_cm = np.zeros(6, dtype=np.complex128)
+        real_6d_cm[1] = real_4d_cm[0]  # q2
+        real_6d_cm[4] = real_4d_cm[1]  # p2
+        real_6d_cm[2] = real_4d_cm[2]  # q3
+        real_6d_cm[5] = real_4d_cm[3]  # p3
+
+        # Modal (real -> complex) representation
+        complex_6d_cm = _solve_complex(real_6d_cm, tol=tol, mix_pairs=self._mix_pairs)
+
+        # Apply the forward Lie transform (centre-manifold -> physical variables)
+        expansions = _lie_expansion(
+            poly_G_total,
+            self._max_degree,
+            self._psi,
+            self._clmo,
+            tol,
+            inverse=False,
+            sign=1,
+            restrict=False,
+        )
+        complex_6d = _evaluate_transform(expansions, complex_6d_cm, self._clmo)
+
+        # Back to real modal variables
+        real_6d = _solve_real(complex_6d, tol=tol, mix_pairs=self._mix_pairs)
+
+        # Modal (real) -> local -> synodic coordinate chain
+        local_6d = _coordrealmodal2local(self._point, real_6d, tol)
+        synodic_6d = self._local2synodic(self._point, local_6d, tol)
+
+        logger.info("CM->synodic transformation (4-D input) complete")
+        return synodic_6d
+
+    def _2d_cm_to_ic(
+        self,
+        poincare_point: np.ndarray,
+        energy: float,
+        section_coord: str = "q3",
+        tol: float = 1e-16,
+    ) -> np.ndarray:
+        """Original *ic* behaviour - convert a 2-D Poincaré-section point.
+
+        This routine reproduces verbatim the legacy implementation that:
+
+        1. Uses the Hamiltonian energy constraint to solve for the missing
+           coordinate on the chosen section;
+        2. Embeds the resulting 4-D CM coordinates into 6-D phase-space;
+        3. Applies the Lie transform and coordinate conversions to obtain the
+           synodic initial conditions.
+        """
+
+        # Ensure we have the centre-manifold Hamiltonian and Lie generators
+        poly_cm_real = self.compute(form="center_manifold_real")
+
+        # Section configuration specifies which coordinate is fixed to zero and
+        # which one must be solved for
+        config = _get_section_config(section_coord)
+
+        # Known variables on the section
+        known_vars: Dict[str, float] = {config.section_coord: 0.0}
+        known_vars[config.plane_coords[0]] = float(poincare_point[0])
+        known_vars[config.plane_coords[1]] = float(poincare_point[1])
+
+        var_to_solve = config.missing_coord
+
+        # Solve for the missing CM coordinate that satisfies the energy level
+        solved_val = _solve_missing_coord(
+            var_to_solve,
+            known_vars,
+            float(energy),
+            poly_cm_real,
+            self._clmo,
+        )
+
+        # Combine into a full CM coordinate dictionary
+        full_cm_coords = known_vars.copy()
+        full_cm_coords[var_to_solve] = solved_val
+
+        # Sanity check
+        if any(v is None for v in full_cm_coords.values()):
+            err = (
+                "Failed to reconstruct full CM coordinates - root finding "
+                "did not converge."
+            )
+            logger.error(err)
+            raise RuntimeError(err)
+
+        real_4d_cm = np.array(
+            [
+                full_cm_coords["q2"],
+                full_cm_coords["p2"],
+                full_cm_coords["q3"],
+                full_cm_coords["p3"],
+            ],
+            dtype=np.float64,
+        )
+
+        # Delegate the second half of the pipeline to the 4-D helper
+        return self._4d_cm_to_ic(real_4d_cm, tol)
+
+    def ic(
+        self,
+        cm_point: np.ndarray,
+        energy: Optional[float] = None,
+        section_coord: str = "q3",
+        tol: float = 1e-16,
+    ) -> np.ndarray:
+        """Convert centre-manifold coordinates to full synodic ICs.
+
+        The method now supports **two** input formats:
+
+        1. *2-D Poincaré-section* coordinates (legacy behaviour).  In this case
+           *energy* **must** be provided and *section_coord* specifies which CM
+           coordinate is fixed to zero on the section.
+        2. *4-D centre-manifold* coordinates ``[q2, p2, q3, p3]``.  Here the
+           coordinates are assumed to satisfy the Hamiltonian energy
+           constraint already, so *energy* and *section_coord* are ignored.
 
         Parameters
         ----------
-        poincare_point : numpy.ndarray, shape (2,)
-            Coordinates on the chosen Poincaré section.
-        energy : float
-            Hamiltonian energy :math:`h_0` used to solve for the missing coordinate.
+        cm_point : numpy.ndarray, shape (2,) or (4,)
+            Point on the Poincaré section (length-2) **or** full centre-manifold
+            coordinates (length-4).
+        energy : float | None, optional
+            Hamiltonian energy level *h0*.  Required only when *cm_point* is a
+            2-vector.
         section_coord : {'q3', 'p3', 'q2', 'p2'}, default 'q3'
-            Coordinate fixed to zero on the section.
+            Coordinate fixed to zero on the Poincaré section.  Ignored for
+            4-D inputs.
+        tol : float, optional
+            Numerical tolerance used by the various helper routines.
 
         Returns
         -------
         numpy.ndarray, shape (6,)
-            Synodic initial conditions
-            :math:`(q_1, q_2, q_3, p_1, p_2, p_3)`.
-
-        Raises
-        ------
-        RuntimeError
-            If root finding fails or if required Lie generators are missing.
-
-        Examples
-        --------
-        >>> cm = CenterManifold(L1, 8)
-        >>> ic_synodic = cm.ic(np.array([0.01, 0.0]), energy=-1.5, section_coord='q3')
+            Synodic-frame initial conditions ``(q1, q2, q3, p1, p2, p3)``.
         """
-        logger.info(
-            "Converting Poincaré point %s (section=%s) to initial conditions", 
-            poincare_point, section_coord,
-        )
 
-        # Ensure we have the centre-manifold Hamiltonian and Lie generators.
-        poly_cm_real = self.compute(form="center_manifold_real")
-        _, poly_G_total, _ = self._get_partial_lie_results()
+        cm_point = np.asarray(cm_point)
 
-        config = _get_section_config(section_coord)
-        
-        # Build the known variables dictionary using the section configuration
-        known_vars = {config.section_coord: 0.0}  # Section coordinate is zero
-        known_vars[config.plane_coords[0]] = float(poincare_point[0])
-        known_vars[config.plane_coords[1]] = float(poincare_point[1])
-        
-        var_to_solve = config.missing_coord
-        
-        # Solve for the missing coordinate on the centre manifold.
-        solved_val = _solve_missing_coord(var_to_solve, known_vars, float(energy), poly_cm_real, self._clmo)
-        
-        # Combine known and solved variables to form the 4D point on the CM.
-        full_cm_coords = known_vars.copy()
-        full_cm_coords[var_to_solve] = solved_val
+        if cm_point.size == 2:
+            if energy is None:
+                raise ValueError(
+                    "energy must be specified when converting a 2-D Poincaré "
+                    "point to initial conditions."
+                )
+            logger.info(
+                "Converting 2-D Poincaré point %s (section=%s) to synodic ICs",
+                cm_point,
+                section_coord,
+            )
+            return self._2d_cm_to_ic(cm_point, float(energy), section_coord, tol)
 
-        # Validate solution and construct the real 4D vector.
-        if any(v is None for v in full_cm_coords.values()):
-            err = "Failed to reconstruct full CM coordinates - root finding did not converge."
-            logger.error(err)
-            raise RuntimeError(err)
-            
-        real_4d_cm = np.array([
-            full_cm_coords["q2"], 
-            full_cm_coords["p2"], 
-            full_cm_coords["q3"], 
-            full_cm_coords["p3"]
-        ], dtype=np.complex128)
+        elif cm_point.size == 4:
+            logger.info("Converting 4-D CM point %s to synodic ICs", cm_point)
+            return self._4d_cm_to_ic(cm_point, tol)
 
-        real_6d_cm = np.zeros(6, dtype=np.complex128)
-        real_6d_cm[1] = real_4d_cm[0]  # q2
-        real_6d_cm[2] = real_4d_cm[2]  # q3
-        real_6d_cm[4] = real_4d_cm[1]  # p2
-        real_6d_cm[5] = real_4d_cm[3]  # p3
-
-        complex_6d_cm = _solve_complex(real_6d_cm, tol)
-        expansions = _lie_expansion(
-            poly_G_total, self._max_degree, self._psi, self._clmo, tol,
-            inverse=False, sign=1, restrict=False,
-        )
-        complex_6d = _evaluate_transform(expansions, complex_6d_cm, self._clmo)
-        real_6d = _solve_real(complex_6d, tol)
-        local_6d = _coordrealmodal2local(self._point, real_6d, tol)
-        synodic_6d = self._local2synodic(self._point, local_6d, tol)
-
-        logger.info("CM to synodic transformation complete")
-        return synodic_6d
+        else:
+            raise ValueError(
+                "cm_point must be either a 2- or 4-element vector representing "
+                "a Poincaré-section point or full CM coordinates, respectively."
+            )
     
     def cm(self, synodic_6d: np.ndarray, tol=1e-16) -> np.ndarray:
         """Return 4-D centre-manifold coordinates (q2, p2, q3, p3) from 6-D synodic ICs.
@@ -661,14 +798,14 @@ class CenterManifold:
 
         real_modal_6d = _coordlocal2realmodal(self._point, local_6d, tol)
 
-        complex_modal_6d = _solve_complex(real_modal_6d, tol)
+        complex_modal_6d = _solve_complex(real_modal_6d, tol=tol, mix_pairs=self._mix_pairs)
 
         _, poly_G_total, _ = self._get_partial_lie_results()
         expansions = _lie_expansion(poly_G_total, self._max_degree, self._psi, self._clmo,
                                     tol, inverse=True, sign=-1, restrict=False)
 
         complex_pnf_6d = _evaluate_transform(expansions, complex_modal_6d, self._clmo)
-        real_pnf_6d = _solve_real(complex_pnf_6d, tol)
+        real_pnf_6d = _solve_real(complex_pnf_6d, tol=tol, mix_pairs=self._mix_pairs)
         real_cm_6d = self._restrict_coord_to_center_manifold(real_pnf_6d)
 
         real_cm_4d = np.array([

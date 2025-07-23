@@ -261,11 +261,11 @@ class TriangularPoint(LibrationPoint):
         # Vertical 2x2 block: simple harmonic oscillator with omega_z = 1
         J_vert = np.array([[0.0, 1.0], [-1.0, 0.0]], dtype=np.float64)
 
-        # Assemble full 6x6 Jacobian
+        # Assemble full 6x6 Jacobian 
         J_full = np.zeros((6, 6), dtype=np.float64)
         J_full[:4, :4] = J_planar
         J_full[4:, 4:] = J_vert
-        return J_full
+        return J_full # x, y, p_x, p_y, z, p_z
     
     def _rs(self, idx):
         if idx not in [0, 1]:

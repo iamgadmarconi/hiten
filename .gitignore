@@ -183,3 +183,4 @@ results/**
 !results/**/.gitkeep
 
 .cursor/
+_debug/

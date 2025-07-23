@@ -25,41 +25,51 @@ from hiten.system.libration.triangular import TriangularPoint
 from hiten.utils.log_config import logger
 
 
-def _M() -> np.ndarray:
+def _build_complexification_matrix(mix_indices):
+
+    half = 1.0 / np.sqrt(2.0)
+
+    # Start with identity (pairs not mixed are left untouched).
+    M = np.eye(6, dtype=np.complex128)
+
+    for j in mix_indices:
+        q_idx = j       # q1, q2, q3  -> indices 0,1,2
+        p_idx = 3 + j   # p1, p2, p3  -> indices 3,4,5
+
+        # Zero-out the rows we are about to overwrite (they currently contain
+        # the identity entries inserted by np.eye).
+        M[q_idx, :] = 0.0
+        M[p_idx, :] = 0.0
+
+        # Fill-in the 2×2 mixing block for the selected canonical pair.
+        # q_j(real)  =  (      q_j^c +   i p_j^c) / sqrt(2)
+        # p_j(real)  =  (  i q_j^c +       p_j^c) / sqrt(2)
+        M[q_idx, q_idx] = half
+        M[q_idx, p_idx] = 1j * half
+        M[p_idx, q_idx] = 1j * half
+        M[p_idx, p_idx] = half
+
+    return M
+
+def _M(mix_pairs: tuple[int, ...] = (1, 2)) -> np.ndarray:
     r"""
-    Return the linear map from complex modal to real modal coordinates.
+    Return the canonical complexification matrix that *only* mixes the second
+    and third canonical pairs, leaving the first pair \((q_1, p_1)\) real.
 
-    Returns
-    -------
-    numpy.ndarray
-        A :math:`6 x 6` complex-valued matrix :math:`M` such that
-        :math:`\mathbf{z}_{\text{real}} = M\,\mathbf{z}_{\text{complex}}`.
-
-    Notes
-    -----
-    The matrix is unitary up to scaling and preserves the canonical
-    symplectic structure.
+    This corresponds to the typical linearised dynamics around the collinear
+    libration points, where \( (q_1, p_1) \) is hyperbolic while the other two
+    pairs are elliptic and therefore profit from the complex representation.
     """
-    return np.array([[1, 0, 0, 0, 0, 0],
-        [0, 1/np.sqrt(2), 0, 0, 1j/np.sqrt(2), 0],
-        [0, 0, 1/np.sqrt(2), 0, 0, 1j/np.sqrt(2)],
-        [0, 0, 0, 1, 0, 0],
-        [0, 1j/np.sqrt(2), 0, 0, 1/np.sqrt(2), 0],
-        [0, 0, 1j/np.sqrt(2), 0, 0, 1/np.sqrt(2)]], dtype=np.complex128) #  real = M @ complex
+    return _build_complexification_matrix(mix_pairs)
 
-def _M_inv() -> np.ndarray:
-    r"""
-    Return the inverse transformation :math:`M^{-1}`.
+def _M_inv(mix_pairs: tuple[int, ...] = (1, 2)) -> np.ndarray:
+    r"""Inverse of :pyfunc:`_M`.  Because the matrix is unitary we can use the
+    conjugate transpose rather than an explicit matrix inversion."""
+    M = _M(mix_pairs)
+    return M.conjugate().T  # complex = M_inv @ real
 
-    Returns
-    -------
-    numpy.ndarray
-        The inverse of :pyfunc:`M`, satisfying
-        :math:`\mathbf{z}_{\text{complex}} = M^{-1}\,\mathbf{z}_{\text{real}}`.
-    """
-    return np.linalg.inv(_M()) # complex = M_inv @ real
 
-def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-14) -> List[np.ndarray]:
+def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-12, *, mix_pairs: tuple[int, ...] = (1, 2)) -> List[np.ndarray]:
     r"""
     Transform a polynomial from real normal form to complex normal form.
     
@@ -86,9 +96,9 @@ def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo, tol=
     Since complex = M_inv @ real, we use _M_inv() for the transformation.
     """
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return _polynomial_clean(_substitute_linear(poly_rn, _M(), max_deg, psi, clmo, encode_dict_list), tol)
+    return _polynomial_clean(_substitute_linear(poly_rn, _M(mix_pairs), max_deg, psi, clmo, encode_dict_list), tol)
 
-def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-14) -> List[np.ndarray]:
+def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-12, *, mix_pairs: tuple[int, ...] = (1, 2)) -> List[np.ndarray]:
     r"""
     Transform a polynomial from complex normal form to real normal form.
     
@@ -115,9 +125,9 @@ def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-
     Since real = M @ complex, we use _M() for the transformation.
     """
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return _polynomial_clean(_substitute_linear(poly_cn, _M_inv(), max_deg, psi, clmo, encode_dict_list), tol)
+    return _polynomial_clean(_substitute_linear(poly_cn, _M_inv(mix_pairs), max_deg, psi, clmo, encode_dict_list), tol)
 
-def _solve_complex(real_coords: np.ndarray, tol=1e-30) -> np.ndarray:
+def _solve_complex(real_coords: np.ndarray, tol: float = 1e-30, *, mix_pairs: tuple[int, ...] = (1, 2)) -> np.ndarray:
     r"""
     Return complex coordinates given real coordinates using the map `M_inv`.
 
@@ -131,9 +141,10 @@ def _solve_complex(real_coords: np.ndarray, tol=1e-30) -> np.ndarray:
     np.ndarray
         Complex coordinates [q1c, q2c, q3c, p1c, p2c, p3c]
     """
-    return _clean_coordinates(_substitute_coordinates(real_coords, _M_inv()), tol) # [q1c, q2c, q3c, p1c, p2c, p3c]
+    return _clean_coordinates(_substitute_coordinates(real_coords, _M_inv(mix_pairs)), tol)
 
-def _solve_real(real_coords: np.ndarray, tol=1e-30) -> np.ndarray:
+
+def _solve_real(real_coords: np.ndarray, tol: float = 1e-30, *, mix_pairs: tuple[int, ...] = (1, 2)) -> np.ndarray:
     r"""
     Return real coordinates given complex coordinates using the map `M`.
 
@@ -147,9 +158,10 @@ def _solve_real(real_coords: np.ndarray, tol=1e-30) -> np.ndarray:
     np.ndarray
         Real coordinates [q1r, q2r, q3r, p1r, p2r, p3r]
     """
-    return _clean_coordinates(_substitute_coordinates(real_coords, _M()), tol) # [q1r, q2r, q3r, p1r, p2r, p3r]
+    return _clean_coordinates(_substitute_coordinates(real_coords, _M(mix_pairs)), tol)
 
-def _polylocal2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
+
+def _polylocal2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-12) -> List[np.ndarray]:
     r"""
     Transform a polynomial from local frame to real modal frame.
     
@@ -179,9 +191,9 @@ def _polylocal2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi,
     """
     C, _ = point.normal_form_transform()
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return _substitute_linear(poly_local, C, max_deg, psi, clmo, encode_dict_list)
+    return _polynomial_clean(_substitute_linear(poly_local, C, max_deg, psi, clmo, encode_dict_list), tol)
 
-def _polyrealmodal2local(point, poly_realmodal: List[np.ndarray], max_deg: int, psi, clmo) -> List[np.ndarray]:
+def _polyrealmodal2local(point, poly_realmodal: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-12) -> List[np.ndarray]:
     r"""
     Transform a polynomial from real modal frame to local frame.
     
@@ -211,7 +223,7 @@ def _polyrealmodal2local(point, poly_realmodal: List[np.ndarray], max_deg: int, 
     """
     _, C_inv = point.normal_form_transform()
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
-    return _substitute_linear(poly_realmodal, C_inv, max_deg, psi, clmo, encode_dict_list)
+    return _polynomial_clean(_substitute_linear(poly_realmodal, C_inv, max_deg, psi, clmo, encode_dict_list), tol)
 
 def _coordrealmodal2local(point, modal_coords: np.ndarray, tol=1e-30) -> np.ndarray:
     r"""

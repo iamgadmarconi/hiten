@@ -24,7 +24,8 @@ from numba import njit, types
 from numba.typed import List
 
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
-                                              _init_index_tables)
+                                              _init_index_tables, _combinations,
+                                              _encode_multiindex)
 from hiten.algorithms.polynomial.operations import (_polynomial_add_inplace,
                                                     _polynomial_multiply,
                                                     _polynomial_variable,
@@ -301,7 +302,7 @@ def _build_rotational_terms(poly_x, poly_y, poly_px, poly_py, max_deg: int, psi_
     return poly_rot
 
 
-def _build_physical_hamiltonian(point, max_deg: int) -> List[np.ndarray]:
+def _build_physical_hamiltonian_collinear(point, max_deg: int) -> List[np.ndarray]:
     r"""
     Combine kinetic, potential, and Coriolis parts to obtain the full
     rotating-frame Hamiltonian :math:`H = T + U + C`.
@@ -325,8 +326,8 @@ def _build_physical_hamiltonian(point, max_deg: int) -> List[np.ndarray]:
 
     Examples
     --------
-    >>> from hiten.algorithms.hamiltonian.center.hamiltonian import _build_physical_hamiltonian
-    >>> H = _build_physical_hamiltonian(l1_point, max_deg=6)  # doctest: +SKIP
+    >>> from hiten.algorithms.hamiltonian.center.hamiltonian import _build_physical_hamiltonian_collinear
+    >>> H = _build_physical_hamiltonian_collinear(l1_point, max_deg=6)  # doctest: +SKIP
     """
     psi_table, clmo_table = _init_index_tables(max_deg)
     encode_dict_list = _create_encode_dict_from_clmo(clmo_table)
@@ -349,14 +350,105 @@ def _build_physical_hamiltonian(point, max_deg: int) -> List[np.ndarray]:
 
     _polynomial_add_inplace(poly_H, poly_U, 1.0)
 
+    # Remove the constant term (equilibrium potential energy) 
+    if len(poly_H) > 0 and len(poly_H[0]) > 0:
+        poly_H[0][0] = 0.0
+
     return poly_H
 
-def _build_h2_triangular(point) -> List[np.ndarray]:
-    """Return the second-order (quadratic) Hamiltonian around a triangular
-    Libration point (L4/L5).
-    """
-    max_deg = 2
+@njit(fastmath=FASTMATH, cache=False)
+def _build_A_polynomials(poly_x, poly_y, poly_z, d_x: float, d_y: float, max_deg: int, psi_table, clmo_table, encode_dict_list) -> types.ListType:
+    poly_A_list = List()
+    for _ in range(max_deg + 1):
+        poly_A_list.append(_polynomial_zero_list(max_deg, psi_table))
 
+    # A_0 = 1
+    if max_deg >= 0 and len(poly_A_list[0]) > 0 and len(poly_A_list[0][0]) > 0:
+        poly_A_list[0][0][0] = 1.0
+
+    # A_1 = d_x * x + d_y * y  (note: z component of d is zero in planar primaries)
+    if max_deg >= 1:
+        poly_A1 = _polynomial_zero_list(max_deg, psi_table)
+        if d_x != 0.0:
+            _polynomial_add_inplace(poly_A1, poly_x, d_x)
+        if d_y != 0.0:
+            _polynomial_add_inplace(poly_A1, poly_y, d_y)
+        poly_A_list[1] = poly_A1
+
+    if max_deg < 2:
+        return poly_A_list
+
+    # Pre-compute rho^2 = x^2 + y^2 + z^2 and dot = d_x x + d_y y
+    poly_x_sq = _polynomial_multiply(poly_x, poly_x, max_deg, psi_table, clmo_table, encode_dict_list)
+    poly_y_sq = _polynomial_multiply(poly_y, poly_y, max_deg, psi_table, clmo_table, encode_dict_list)
+    poly_z_sq = _polynomial_multiply(poly_z, poly_z, max_deg, psi_table, clmo_table, encode_dict_list)
+
+    poly_rho2 = _polynomial_zero_list(max_deg, psi_table)
+    _polynomial_add_inplace(poly_rho2, poly_x_sq, 1.0)
+    _polynomial_add_inplace(poly_rho2, poly_y_sq, 1.0)
+    _polynomial_add_inplace(poly_rho2, poly_z_sq, 1.0)
+
+    poly_dot = _polynomial_zero_list(max_deg, psi_table)
+    if d_x != 0.0:
+        _polynomial_add_inplace(poly_dot, poly_x, d_x)
+    if d_y != 0.0:
+        _polynomial_add_inplace(poly_dot, poly_y, d_y)
+
+    # Recurrence: A_{n+1} = ((2n+1)/(n+1)) (dot) A_n - (n/(n+1)) rho2 A_{n-1}
+    for n in range(1, max_deg):  # n corresponds to current highest index (A_n)
+        n_ = float(n)
+        coeff1 = (2.0 * n_ + 1.0) / (n_ + 1.0)
+        coeff2 = n_ / (n_ + 1.0)
+
+        # term1 = coeff1 * dot * A_n
+        term1_mult = _polynomial_multiply(poly_dot, poly_A_list[n], max_deg, psi_table, clmo_table, encode_dict_list)
+        term1 = _polynomial_zero_list(max_deg, psi_table)
+        _polynomial_add_inplace(term1, term1_mult, coeff1)
+
+        # term2 = -coeff2 * rho2 * A_{n-1}
+        term2_mult = _polynomial_multiply(poly_rho2, poly_A_list[n - 1], max_deg, psi_table, clmo_table, encode_dict_list)
+        term2 = _polynomial_zero_list(max_deg, psi_table)
+        _polynomial_add_inplace(term2, term2_mult, -coeff2)
+
+        # Combine to obtain A_{n+1}
+        poly_An1 = _polynomial_zero_list(max_deg, psi_table)
+        _polynomial_add_inplace(poly_An1, term1, 1.0)
+        _polynomial_add_inplace(poly_An1, term2, 1.0)
+
+        poly_A_list[n + 1] = poly_An1
+
+    return poly_A_list
+
+
+def _build_physical_hamiltonian_triangular(point, max_deg: int) -> List[np.ndarray]:
+    r"""
+    Construct the rotating-frame Hamiltonian expanded around a triangular
+    (L4/L5) equilibrium to arbitrary polynomial degree *max_deg*.
+
+    The starting expression is the (already shifted) Hamiltonian quoted in
+    Gómez et al. (2001, eq. 57):
+
+    :math:`
+        H = \\tfrac12 (p_x^2 + p_y^2 + p_z^2) + y p_x - x p_y 
+            + \\bigl(\tfrac12 - \\mu\\bigr)\\,x \;\pm\; \\tfrac{\\sqrt{3}}{2}\\,y
+            - \\frac{1-\\mu}{r_{PS}} - \\frac{\\mu}{r_{PJ}}`
+
+    where the distances to the primaries written in *local* coordinates are
+
+    :math:`
+        r_{PS}^2 = (x - x_S)^2 + (y - y_S)^2 + z^2,\\,
+        r_{PJ}^2 = (x - x_J)^2 + (y - y_J)^2 + z^2,\\,
+        (x_S, y_S) = \\bigl(\\, +\\tfrac12, \; s \\tfrac{\\sqrt{3}}{2}\\bigr),\\qquad
+        (x_J, y_J) = \\bigl(\\, -\\tfrac12, \; s \\tfrac{\\sqrt{3}}{2}\\bigr)`
+
+    with *s = +1* for L4 and *s = -1* for L5.  At the equilibrium the
+    distances equal one, hence we may expand each inverse distance with the
+    binomial series
+
+    :math:`
+        \\frac{1}{r} = \\bigl(1 + u\\bigr)^{-1/2} = \\sum_{k\\ge 0} \\binom{-1/2}{k}
+        u^k, \\qquad u = r^2 - 1.`
+    """
     psi_table, clmo_table = _init_index_tables(max_deg)
     encode_dict_list = _create_encode_dict_from_clmo(clmo_table)
 
@@ -367,79 +459,65 @@ def _build_h2_triangular(point) -> List[np.ndarray]:
 
     poly_H = _polynomial_zero_list(max_deg, psi_table)
 
-    poly_kinetic = _build_kinetic_energy_terms(
-        poly_px, poly_py, poly_pz, max_deg, psi_table, clmo_table, encode_dict_list
+    poly_T = _build_kinetic_energy_terms(
+        poly_px, poly_py, poly_pz,
+        max_deg, psi_table, clmo_table, encode_dict_list,
     )
-    _polynomial_add_inplace(poly_H, poly_kinetic, 1.0)
+    _polynomial_add_inplace(poly_H, poly_T, 1.0)
 
-    poly_rot = _build_rotational_terms(
-        poly_x, poly_y, poly_px, poly_py, max_deg, psi_table, clmo_table, encode_dict_list
+    poly_C = _build_rotational_terms(
+        poly_x, poly_y, poly_px, poly_py,
+        max_deg, psi_table, clmo_table, encode_dict_list,
     )
-    _polynomial_add_inplace(poly_H, poly_rot, 1.0)
-
-    poly_x_sq = _polynomial_multiply(
-        poly_x, poly_x, max_deg, psi_table, clmo_table, encode_dict_list
-    )
-    poly_y_sq = _polynomial_multiply(
-        poly_y, poly_y, max_deg, psi_table, clmo_table, encode_dict_list
-    )
-    poly_z_sq = _polynomial_multiply(
-        poly_z, poly_z, max_deg, psi_table, clmo_table, encode_dict_list
-    )
-    poly_xy = _polynomial_multiply(
-        poly_x, poly_y, max_deg, psi_table, clmo_table, encode_dict_list
-    )
-
-    a = float(point.a)
-
-    _polynomial_add_inplace(poly_H, poly_x_sq, 1.0 / 8.0)
-    _polynomial_add_inplace(poly_H, poly_y_sq, -5.0 / 8.0)
-    _polynomial_add_inplace(poly_H, poly_xy, -a)
-    _polynomial_add_inplace(poly_H, poly_z_sq, 0.5)
-
-    return poly_H
-
-
-def _translate_hamiltonian_to_triangular(poly_H, point, max_deg: int) -> List[np.ndarray]:
-    r"""
-    Apply the canonical translation that maps the collinear Hamiltonian to the
-    vicinity of the triangular (L4/L5) equilibrium.
-
-    The linear-affine change of variables is (see, e.g., Gómez et al., 2001)::
-
-    where ``s = +1`` for L4 and ``s = -1`` for L5.  Inverting these relations we
-    obtain the *old* (synodic) coordinates in terms of the *new* centred ones
-    which is precisely the form required by :pyfunc:`_substitute_affine`.
-    """
+    _polynomial_add_inplace(poly_H, poly_C, 1.0)
 
     mu = float(point.mu)
-    sgn = float(point.sign)
+    sgn = float(point.sign)  # +1 for L4, -1 for L5
 
-    C = np.eye(6, dtype=np.float64)
+    poly_linear = _polynomial_zero_list(max_deg, psi_table)
+    _polynomial_add_inplace(poly_linear, poly_x, 0.5 - mu)
+    _polynomial_add_inplace(poly_linear, poly_y, - sgn * np.sqrt(3) / 2.0)
+    _polynomial_add_inplace(poly_H, poly_linear, 1.0)
 
-    shifts = np.array([
-        - 0.5 + mu,           # x_old = X - (0.5 - mu)
-        -sgn * np.sqrt(3)/2, # y_old = Y - s*sqrt(3)/2
-        0.0,                # z_old = Z
-        sgn * np.sqrt(3)/2,# p_x_old = P_X + s*sqrt(3)/2
-        - 0.5 + mu,           # p_y_old = P_Y - (0.5 - mu)
-        0.0,                # p_z_old = P_Z
-    ], dtype=np.float64)
+    # Linear dot products with the primary offsets
+    d_Sx, d_Sy = 0.5, sgn * np.sqrt(3) / 2.0    # Primary at negative x
+    d_Jx, d_Jy = -0.5, sgn * np.sqrt(3) / 2.0     # Secondary at positive x
 
-    psi_table, clmo_table = _init_index_tables(max_deg)
-    encode_dict_list = _create_encode_dict_from_clmo(clmo_table)
-
-    poly_H_triangular = _substitute_affine(
-        poly_H,
-        C,
-        shifts,
-        max_deg,
-        psi_table,
-        clmo_table,
-        encode_dict_list,
+    # Construct inverse distances via Legendre-type homogeneous polynomials
+    poly_A_S = _build_A_polynomials(
+        poly_x, poly_y, poly_z,
+        d_Sx, d_Sy,
+        max_deg, psi_table, clmo_table, encode_dict_list,
+    )
+    poly_A_J = _build_A_polynomials(
+        poly_x, poly_y, poly_z,
+        d_Jx, d_Jy,
+        max_deg, psi_table, clmo_table, encode_dict_list,
     )
 
-    return poly_H_triangular
+    # The expansion of 1/r_PS is A_0 + A_1 + A_2 + ... 
+    # At equilibrium, A_0 = 1, and we want to subtract the constant part
+    poly_inv_r_S = _polynomial_zero_list(max_deg, psi_table)
+    poly_inv_r_J = _polynomial_zero_list(max_deg, psi_table)
+
+    # Add all A_n terms for each primary
+    for n in range(0, min(len(poly_A_S), max_deg + 1)):
+        _polynomial_add_inplace(poly_inv_r_S, poly_A_S[n], 1.0)
+        
+    for n in range(0, min(len(poly_A_J), max_deg + 1)):
+        _polynomial_add_inplace(poly_inv_r_J, poly_A_J[n], 1.0)
+
+    # Construct the potential: -(1-mu)/r_PS - mu/r_PJ
+    poly_U = _polynomial_zero_list(max_deg, psi_table)
+    _polynomial_add_inplace(poly_U, poly_inv_r_S, -(1.0 - mu))
+    _polynomial_add_inplace(poly_U, poly_inv_r_J, -mu)
+    _polynomial_add_inplace(poly_H, poly_U, 1.0)
+
+    # Remove the constant term (equilibrium potential energy = -1)
+    if len(poly_H) > 0 and len(poly_H[0]) > 0:
+        poly_H[0][0] = 0.0
+
+    return poly_H
 
 
 def _build_lindstedt_poincare_rhs_polynomials(point, max_deg: int) -> Tuple[List, List, List]:
