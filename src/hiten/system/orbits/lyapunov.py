@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Optional, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
-from hiten.algorithms.dynamics.utils.geometry import _find_y_zero_crossing
+from hiten.algorithms.poincare.crossing import _y_plane_crossing
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import (CollinearPoint, L1Point, L2Point,
                                               L3Point)
@@ -138,7 +138,7 @@ class LyapunovOrbit(PeriodicOrbit):
             control_indices=(S.VY, S.VZ),
             target=(0.0, 0.0),
             extra_jacobian=None,
-            event_func=_find_y_zero_crossing,
+            event_func=_y_plane_crossing,
         )
 
     @property

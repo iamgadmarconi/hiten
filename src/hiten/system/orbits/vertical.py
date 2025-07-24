@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Optional, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
-from hiten.algorithms.dynamics.utils.geometry import _find_z_zero_crossing
+from hiten.algorithms.poincare.crossing import _z_plane_crossing
 from hiten.system.libration.collinear import CollinearPoint
 from hiten.system.orbits.base import PeriodicOrbit, S
 
@@ -75,17 +75,19 @@ class VerticalOrbit(PeriodicOrbit):
     @property
     def _correction_config(self) -> "_OrbitCorrectionConfig":
         """Provides the differential correction configuration for vertical orbits."""
-        from hiten.algorithms.corrector.interfaces import _OrbitCorrectionConfig
+        from hiten.algorithms.corrector.interfaces import \
+            _OrbitCorrectionConfig
         return _OrbitCorrectionConfig(
             residual_indices=(S.VX, S.Y),     # Want VX=0 and Y=0
             control_indices=(S.VZ, S.VY),     # Adjust initial VZ and VY
             target=(0.0, 0.0),
             extra_jacobian=None,
-            event_func=_find_z_zero_crossing,
+            event_func=_z_plane_crossing,
         )
 
     @property
     def _continuation_config(self) -> "_OrbitContinuationConfig":
         """Default continuation parameter: vary the out-of-plane amplitude."""
-        from hiten.algorithms.continuation.interfaces import _OrbitContinuationConfig
+        from hiten.algorithms.continuation.interfaces import \
+            _OrbitContinuationConfig
         return _OrbitContinuationConfig(state=S.Z, amplitude=True)
