@@ -40,7 +40,7 @@ class _PoincareMapConfig:
 
     n_seeds: int = 20
     n_iter: int = 40
-    seed_strategy: Literal["single", "axis_aligned", "level_sets", "radial", "random"] = "single"
+    seed_strategy: Literal["single", "axis_aligned", "level_sets", "radial", "random"] = "axis_aligned"
     seed_axis: Optional[Literal["q2", "p2", "q3", "p3"]] = None
     section_coord: Literal["q2", "p2", "q3", "p3"] = "q3"
 
@@ -54,6 +54,9 @@ class _PoincareMapConfig:
         elif self.seed_strategy != 'single':
             if self.seed_axis is not None:
                 logger.warning("seed_axis is ignored when seed_strategy is not 'single'")
+
+        if self.use_gpu:
+            raise NotImplementedError("GPU backend is not implemented yet")
 
 
 class _PoincareMap:
@@ -93,7 +96,7 @@ class _PoincareMap:
 
         # Dictionaries keyed by section coordinate ("q2", "p2", "q3", "p3")
         self._sections: dict[str, _PoincareSection] = {}
-        self._grids: dict[tuple, _PoincareSection] = {} # Changed to tuple for grid key
+        self._grids: dict[tuple, _PoincareSection] = {}
 
         self._backend: str = "cpu" if not self.config.use_gpu else "gpu"
 
@@ -287,7 +290,7 @@ class _PoincareMap:
         if grid_key in self._grids:
             logger.info(f"Using cached Poincaré grid for {section_key} ({Nq}x{Np})")
             self._grid = self._grids[grid_key]  # Update current reference
-            return self._grid.points if not isinstance(self._grid, np.ndarray) else self._grid
+            return self._grid.points
 
         logger.info(
             "Generating *dense-grid* Poincaré map at energy h0=%.6e (section=%s, Nq=%d, Np=%d)",
