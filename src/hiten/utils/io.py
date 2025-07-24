@@ -364,7 +364,7 @@ def _save_poincare_map(pmap: "_PoincareMap", filepath: str, *, compression: str 
                 grid_labels = list(pmap._grid.labels)
             else:
                 grid_pts = np.asarray(pmap._grid)
-                grid_labels = list(pmap._section.labels)  # Best effort fallback
+                grid_labels = list(pmap._section.labels) if pmap._section is not None else []  # Best effort fallback
 
             _write_dataset(f, "grid", grid_pts, compression=compression, level=level)
             f.attrs["grid_labels_json"] = json.dumps(grid_labels)
