@@ -358,8 +358,16 @@ def _save_poincare_map(pmap: "_PoincareMap", filepath: str, *, compression: str 
             f.attrs["labels_json"] = json.dumps(list(pmap._section.labels))
 
         if pmap._grid is not None:
-            _write_dataset(f, "grid", np.asarray(pmap._grid), compression=compression, level=level)
-            f.attrs["grid_labels_json"] = json.dumps(list(pmap._section.labels))
+            # _grid may be a _PoincareSection (new) or a plain ndarray (legacy)
+            if hasattr(pmap._grid, "points"):
+                grid_pts = np.asarray(pmap._grid.points)
+                grid_labels = list(pmap._grid.labels)
+            else:
+                grid_pts = np.asarray(pmap._grid)
+                grid_labels = list(pmap._section.labels) if pmap._section is not None else []  # Best effort fallback
+
+            _write_dataset(f, "grid", grid_pts, compression=compression, level=level)
+            f.attrs["grid_labels_json"] = json.dumps(grid_labels)
 
 
 def _load_poincare_map_inplace(obj: "_PoincareMap", filepath: str) -> None:
@@ -384,15 +392,15 @@ def _load_poincare_map_inplace(obj: "_PoincareMap", filepath: str) -> None:
             pts = f["points"][()]
             labels_json = f.attrs.get("labels_json")
             labels = tuple(json.loads(labels_json)) if labels_json else ("q2", "p2")
-            obj._section = _PoincareSection(pts, labels)
+            obj._section = _PoincareSection(pts, labels, np.full((pts.shape[0], 4), np.nan, dtype=np.float64))
         else:
             obj._section = None
 
         if "grid" in f:
-            obj._grid = f["grid"][()]
+            grid_data = f["grid"][()]
             grid_labels_json = f.attrs.get("grid_labels_json")
             grid_labels = tuple(json.loads(grid_labels_json)) if grid_labels_json else ("q2", "p2")
-            obj._grid_labels = grid_labels
+            obj._grid = _PoincareSection(grid_data, grid_labels, np.full((grid_data.shape[0], 4), np.nan, dtype=np.float64))
         else:
             obj._grid = None
 

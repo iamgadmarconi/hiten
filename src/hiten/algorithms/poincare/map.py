@@ -39,8 +39,9 @@ from hiten.utils.log_config import logger
 
 
 class _PoincareSection(NamedTuple):
-    points: np.ndarray  # shape (n, 2) 
+    points: np.ndarray  # shape (n, 2)
     labels: tuple[str, str]  # coordinate labels for the two columns
+    cm_states: np.ndarray  # shape (n, 4) centre-manifold coords (q2, p2, q3, p3)
 
 
 def _solve_missing_coord(varname: str, fixed_vals: dict[str, float], h0: float, H_blocks: List[np.ndarray], clmo: List[np.ndarray], initial_guess: float = 1e-3, expand_factor: float = 2.0, max_expand: int = 40) -> Optional[float]:
@@ -223,9 +224,10 @@ def _iterate_seed(
     n_dof: int,
     section_coord: str,
     c_omega_heuristic: float,
-) -> List[Tuple[float, float]]:
+) -> Tuple[list[tuple[float, float]], list[np.ndarray]]:
     config = _get_section_config(section_coord)
     pts_accum: List[Tuple[float, float]] = []
+    states_accum: List[np.ndarray] = []
     state = seed
     
     for i in range(n_iter):
@@ -250,6 +252,10 @@ def _iterate_seed(
                 new_state_6d = np.array([0.0, q2p, q3p, 0.0, p2p, p3p])  # (q1, q2, q3, p1, p2, p3)
                 plane_coords = config.extract_plane_coords(new_state_6d)
                 pts_accum.append(plane_coords)
+
+                # Store full 4-D centre-manifold state (q2, p2, q3, p3)
+                cm_state = np.array([q2p, p2p, q3p, p3p], dtype=np.float64)
+                states_accum.append(cm_state)
                 
                 other_coords = config.extract_other_coords(new_state_6d)
                 state = config.build_state(plane_coords, other_coords)
@@ -263,7 +269,7 @@ def _iterate_seed(
             logger.warning(f"Failed to find Poincaré crossing for seed {seed} at iteration {i+1}/{n_iter}: {e}")
             break
 
-    return pts_accum
+    return pts_accum, states_accum
 
 def _process_seed_chunk(
     seed_chunk: List[Tuple[float, float, float, float]],
@@ -277,17 +283,19 @@ def _process_seed_chunk(
     n_dof: int,
     section_coord: str,
     c_omega_heuristic: float,
-) -> List[Tuple[float, float]]:
-    pts_accum: List[Tuple[float, float]] = []
+) -> Tuple[list[tuple[float, float]], list[np.ndarray]]:
+    pts_accum: list[tuple[float, float]] = []
+    states_accum: list[np.ndarray] = []
     
     for seed in seed_chunk:
-        seed_points = _iterate_seed(
+        seed_points, seed_states = _iterate_seed(
             seed, n_iter, dt, jac_H, clmo_table, integrator_order,
             max_steps, use_symplectic, n_dof, section_coord, c_omega_heuristic
         )
         pts_accum.extend(seed_points)
+        states_accum.extend(seed_states)
 
-    return pts_accum
+    return pts_accum, states_accum
 
 def _process_grid_chunk(
     coord_pairs: List[Tuple[float, float]],
@@ -358,6 +366,7 @@ def _generate_map(
     logger.info(f"Using dt={dt:.1e}, calculated max_steps per crossing: {calculated_max_steps}")
 
     pts_accum: list[Tuple[float, float]] = []
+    states_accum: list[np.ndarray] = []
 
     # Always use parallel processing
     n_processes = mp.cpu_count()
@@ -383,19 +392,23 @@ def _generate_map(
         # Collect results from all processes
         for future in as_completed(futures):
             try:
-                chunk_results = future.result()
-                pts_accum.extend(chunk_results)
+                chunk_pts, chunk_states = future.result()
+                pts_accum.extend(chunk_pts)
+                states_accum.extend(chunk_states)
             except Exception as e:
                 logger.error(f"Error in parallel processing: {e}")
                 
     logger.info(f"Parallel processing completed. Generated {len(pts_accum)} map points.")
 
     if len(pts_accum) == 0:
-        # Return empty array with correct shape
+        # Return empty arrays with correct shapes
         points_array = np.empty((0, 2), dtype=np.float64)
+        states_array = np.empty((0, 4), dtype=np.float64)
     else:
         points_array = np.asarray(pts_accum, dtype=np.float64)
-    return _PoincareSection(points_array, config.plane_coords)
+        states_array = np.asarray(states_accum, dtype=np.float64)
+
+    return _PoincareSection(points_array, config.plane_coords, states_array)
 
 def _generate_grid(
     h0: float,
@@ -476,7 +489,11 @@ def _generate_grid(
     logger.info(f"Parallel seed finding completed. Found {len(seeds)} valid seeds out of {total_points} grid points")
 
     if len(seeds) == 0:
-        return _PoincareSection(np.empty((0, 2), dtype=np.float64), config.plane_coords)
+        return _PoincareSection(
+            np.empty((0, 2), dtype=np.float64),
+            config.plane_coords,
+            np.empty((0, 4), dtype=np.float64),
+        )
 
     seeds_arr = np.asarray(seeds, dtype=np.float64)
 
@@ -496,6 +513,7 @@ def _generate_grid(
     logger.info(f"Completed Poincaré map: {n_success} successful seeds out of {len(seeds)}")
 
     map_pts = np.empty((n_success, 2), dtype=np.float64)
+    cm_states = np.empty((n_success, 4), dtype=np.float64)
     idx = 0
     for i in range(success_flags.shape[0]):
         if success_flags[i]:
@@ -503,9 +521,11 @@ def _generate_grid(
             plane_coords = config.extract_plane_coords(state_6d)
             map_pts[idx, 0] = plane_coords[0]
             map_pts[idx, 1] = plane_coords[1]
+
+            cm_states[idx, :] = np.array([q2p_arr[i], p2p_arr[i], q3p_arr[i], p3p_arr[i]], dtype=np.float64)
             idx += 1
 
-    return _PoincareSection(map_pts, config.plane_coords)
+    return _PoincareSection(map_pts, config.plane_coords, cm_states)
 
 @njit(cache=False, fastmath=FASTMATH)
 def _integrate_map(y0: np.ndarray, t_vals: np.ndarray, A: np.ndarray, B: np.ndarray, C: np.ndarray, 
