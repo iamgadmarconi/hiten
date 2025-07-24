@@ -174,7 +174,7 @@ def _generate_map_gpu(
     # 4. Convert seeds to numpy array
     if len(seeds) == 0:
         logger.warning("No valid seeds found")
-        return _PoincareSection(np.empty((0, 2), dtype=np.float64), labels)
+        return _PoincareSection(np.empty((0, 2), dtype=np.float64), labels, np.empty((0, 4), dtype=np.float64))
     
     seeds_array = np.array(seeds, dtype=np.float64)
     
@@ -195,4 +195,4 @@ def _generate_map_gpu(
     logger.info("GPU computation complete: generated %d points from %d seeds", 
                 points.shape[0], len(seeds))
     
-    return _PoincareSection(points, labels)
+    return _PoincareSection(points, labels, np.empty((points.shape[0], 4), dtype=np.float64))

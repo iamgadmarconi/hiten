@@ -41,7 +41,7 @@ class _PoincareMapConfig:
     n_seeds: int = 20
     n_iter: int = 40
     seed_strategy: Literal["single", "axis_aligned", "level_sets", "radial", "random"] = "single"
-    seed_axis: Optional[Literal["q2", "p2", "q3", "p3"]] = "q2"
+    seed_axis: Optional[Literal["q2", "p2", "q3", "p3"]] = None
     section_coord: Literal["q2", "p2", "q3", "p3"] = "q3"
 
     compute_on_init: bool = False
@@ -87,9 +87,14 @@ class _PoincareMap:
         # Derived flags
         self._use_symplectic: bool = self.config.method.lower() == "symplectic"
 
-        # Storage for computed points
-        self._section: Optional[_PoincareSection] = None
-        self._grid: Optional[np.ndarray] = None
+        # Storage for computed sections/grids – allow multiple section planes
+        self._section: Optional[_PoincareSection] = None  # Most-recent section (back-compat)
+        self._grid: Optional[_PoincareSection] = None      # Most-recent grid  (back-compat)
+
+        # Dictionaries keyed by section coordinate ("q2", "p2", "q3", "p3")
+        self._sections: dict[str, _PoincareSection] = {}
+        self._grids: dict[str, _PoincareSection] = {}
+
         self._backend: str = "cpu" if not self.config.use_gpu else "gpu"
 
         if self.config.compute_on_init:
@@ -131,7 +136,14 @@ class _PoincareMap:
             raise RuntimeError(
                 "Poincaré map has not been computed yet.  Call compute() first."
             )
-        return self._grid
+        return self._grid.points
+
+    @property
+    def sections(self) -> dict[str, _PoincareSection]:
+        r"""
+        Return the computed Poincaré sections.
+        """
+        return self._sections
 
     @property
     def section(self) -> _PoincareSection:
@@ -156,7 +168,7 @@ class _PoincareMap:
         orbit.propagate(steps=steps, method=method, order=order)
         return orbit
 
-    def compute(self, **kwargs) -> np.ndarray:
+    def compute(self, section_coord: Optional[str] = None, **kwargs) -> np.ndarray:
         r"""
         Compute the discrete Poincaré return map.
 
@@ -183,9 +195,13 @@ class _PoincareMap:
         reuse the stored data. Parallel processing is enabled automatically for
         CPU computations.
         """
+        # Determine which section coordinate to use (explicit arg overrides config)
+        section_key: str = section_coord or self.config.section_coord
+
         logger.info(
-            "Generating Poincaré map at energy h0=%.6e (method=%s, cpu_parallel=%s)",
+            "Generating Poincaré map at energy h0=%.6e (section=%s, method=%s, cpu_parallel=%s)",
             self.energy,
+            section_key,
             self.config.method,
             self._backend == "cpu",
         )
@@ -209,12 +225,15 @@ class _PoincareMap:
             c_omega_heuristic=self.config.c_omega_heuristic,
             seed_strategy=self.config.seed_strategy,
             seed_axis=self.config.seed_axis,
-            section_coord=self.config.section_coord)
+            section_coord=section_key)
 
-        logger.info("Poincaré map computation complete: %d points", len(self))
+        # Cache by section coordinate
+        self._sections[section_key] = self._section
+
+        logger.info("Poincaré map computation complete: %d points (section=%s)", len(self), section_key)
         return self._section.points
 
-    def compute_grid(self, Nq: int = 201, Np: int = 201, max_steps: int = 20_000, **kwargs) -> np.ndarray:
+    def compute_grid(self, Nq: int = 201, Np: int = 201, max_steps: int = 20_000, section_coord: Optional[str] = None, **kwargs) -> np.ndarray:
         r"""
         Generate a dense rectangular grid of the Poincaré map.
 
@@ -247,9 +266,12 @@ class _PoincareMap:
         if self._backend == "gpu":
             raise ValueError("GPU backend does not support CPU parallel processing.")
             
+        section_key: str = section_coord or self.config.section_coord
+
         logger.info(
-            "Generating *dense-grid* Poincaré map at energy h0=%.6e (Nq=%d, Np=%d)",
+            "Generating *dense-grid* Poincaré map at energy h0=%.6e (section=%s, Nq=%d, Np=%d)",
             self.energy,
+            section_key,
             Nq,
             Np,
         )
@@ -270,11 +292,14 @@ class _PoincareMap:
             Np=Np,
             integrator_order=self.config.integrator_order,
             use_symplectic=self._use_symplectic,
-            section_coord=self.config.section_coord,
+            section_coord=section_key,
             )
 
-        logger.info("Dense-grid Poincaré map computation complete: %d points", len(self))
-        return self._grid
+        # Cache by section coordinate
+        self._grids[section_key] = self._grid
+
+        logger.info("Dense-grid Poincaré map computation complete: %d points (section=%s)", len(self), section_key)
+        return self._grid.points
 
     def ic(self, pt: np.ndarray) -> np.ndarray:
         r"""
