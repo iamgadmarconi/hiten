@@ -24,6 +24,7 @@ from typing import (TYPE_CHECKING, Any, Callable, Dict, Iterable, List,
 
 import numpy as np
 
+from hiten.algorithms.dynamics.hamiltonian import _HamiltonianSystem, create_hamiltonian_system
 from hiten.algorithms.hamiltonian.center._lie import (_evaluate_transform,
                                                       _lie_expansion)
 from hiten.algorithms.hamiltonian.center._lie import \
@@ -123,6 +124,7 @@ class CenterManifold:
         self._psi, self._clmo = _init_index_tables(self._max_degree)
         self._encode_dict_list = _create_encode_dict_from_clmo(self._clmo)
         self._cache = {}
+        self._hamsys = {}
         self._poincare_maps: Dict[Tuple[float, tuple], "_PoincareMap"] = {}
 
     @property
@@ -175,6 +177,76 @@ class CenterManifold:
         self._cache = self._clone_cache(state.get("_cache", {}))
         self._poincare_maps = {}
 
+    def _get_hamsys(self, form: str) -> _HamiltonianSystem:
+        """Return (and cache) a :class:`_HamiltonianSystem` for the requested *form*.
+
+        The method mirrors the behaviour of :py:meth:`compute` for polynomial
+        data, but returns a lightweight dynamical-system wrapper that can be
+        integrated directly with the numerical solvers provided in
+        ``hiten.algorithms.integrators``.
+
+        Parameters
+        ----------
+        form : str
+            Identifier of the polynomial/Hamiltonian representation (same
+            accepted values as :py:meth:`compute`).
+
+        Returns
+        -------
+        _HamiltonianSystem
+            Cached (or newly created) Hamiltonian system.
+        """
+
+        # Key the registry by (*form*, *max_degree*) to remain consistent with
+        # the polynomial cache.  The cache is cleared automatically whenever
+        # ``max_degree`` changes so this is sufficient.
+        key = (form, self._max_degree)
+
+        if key not in self._hamsys:
+            # Ensure the polynomial representation is available.  This call
+            # also populates the polynomial cache if needed.
+            poly_list = self.compute(form)
+
+            # The `compute` call above may already create and cache the
+            # Hamiltonian system via the helper below, but we invoke it
+            # explicitly for robustness (idempotent by construction).
+            self._cache_hamiltonian_system(form, poly_list)
+
+        return self._hamsys[key]
+
+    def _cache_hamiltonian_system(self, form: str, poly_list: List[np.ndarray]) -> _HamiltonianSystem:
+        """Create and cache a :class:`_HamiltonianSystem` for *poly_list*.
+
+        This helper encapsulates the logic required to determine the correct
+        number of degrees of freedom (*n_dof*) and to instantiate the runtime
+        Hamiltonian wrapper via :pyfunc:`create_hamiltonian_system`.
+        """
+
+        key = (form, self._max_degree)
+
+        # Early exit if already present (idempotent behaviour)
+        if key in self._hamsys:
+            return self._hamsys[key]
+
+        # Current runtime representation supports only 3-DoF Hamiltonians.
+        # Even for centre-manifold forms we embed the 4-D state into the full
+        # 6-D phase space by setting the hyperbolic coordinates (q1, p1) to
+        # zero, hence *n_dof* is *always* three.
+        n_dof = 3
+
+        hamsys = create_hamiltonian_system(
+            poly_list,
+            self._max_degree,
+            self._psi,
+            self._clmo,
+            self._encode_dict_list,
+            n_dof=n_dof,
+            name=f"{form} Hamiltonian",
+        )
+
+        self._hamsys[key] = hamsys
+        return hamsys
+
     def coefficients(
         self,
         degree: Union[int, Iterable[int], str, None] = None,
@@ -219,6 +291,7 @@ class CenterManifold:
         """
         logger.debug("Clearing polynomial and Poincaré map caches.")
         self._cache.clear()
+        self._hamsys.clear()
         self._poincare_maps.clear()
 
     def _get_form_dispatch(self) -> Dict[str, Callable[[], List[np.ndarray]]]:
@@ -262,6 +335,18 @@ class CenterManifold:
                 self.cache_set(key, computed_val) # Should not be mutable
             
             return computed_val
+
+        # If the retrieved value corresponds to a Hamiltonian polynomial list
+        # (key[0] == 'hamiltonian') ensure a runtime Hamiltonian system is
+        # cached alongside it.  This mirrors the behaviour of the polynomial
+        # cache whereby *all* intermediate forms acquire an associated
+        # `_HamiltonianSystem`.
+        if key and key[0] == 'hamiltonian':
+            try:
+                form_name = key[2]  # ('hamiltonian', max_deg, form)
+                self._cache_hamiltonian_system(form_name, cached_val)
+            except Exception as exc:
+                logger.debug("Failed to cache Hamiltonian system for %s: %s", key, exc)
 
         logger.debug(f"Cache hit for key {key}.")
         # Return a copy to the caller.
@@ -313,9 +398,6 @@ class CenterManifold:
 
         return self._get_or_compute(bundle_key, compute_partial_lie_bundle)
 
-    # ---------------------------------------------------------------------
-    # Cached Lie–series coordinate expansions
-    # ---------------------------------------------------------------------
     def _get_lie_expansions(self, *, inverse: bool, tol: float = 1e-16):
         """Return (and cache) the six polynomial coordinate expansions that
         map between centre-manifold variables and complex modal variables.
@@ -563,6 +645,12 @@ class CenterManifold:
 
         # Compute (or retrieve from cache) the requested representation.
         result = _form_dispatch[form]()
+
+        # Ensure a dynamical-system wrapper is created and cached alongside
+        # the polynomial representation so downstream code can access it
+        # without repeating the construction overhead.
+        self._cache_hamiltonian_system(form, result)
+
         logger.info(f"Computed {form} coefficients.")
         return result
 
