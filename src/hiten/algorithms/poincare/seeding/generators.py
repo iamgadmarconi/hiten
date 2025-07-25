@@ -4,7 +4,6 @@ import numpy as np
 
 from hiten.algorithms.dynamics.base import _DynamicalSystemProtocol
 from hiten.algorithms.poincare.events import _SurfaceEvent
-from hiten.algorithms.poincare.seeding.base import _CenterManifoldSeedingBase
 
 
 class _SeedGenerator(ABC):
@@ -47,40 +46,3 @@ class _SeedGenerator(ABC):
             seeds).  The core engine passes only *dynsys*, *surface* and
             *n_seeds*; domain-specific wrappers supply the rest.
         """
-
-
-class _CMSeedGenerator(_SeedGenerator):
-    """Bridge between the generic interface and legacy CM seeding strategies."""
-
-    def __init__(
-        self,
-        *,
-        strategy: _CenterManifoldSeedingBase,
-        energy: float,
-        H_blocks,
-        clmo_table,
-        solve_missing_coord_fn,
-    ) -> None:
-        self._strategy = strategy
-        self._h0 = float(energy)
-        self._H_blocks = H_blocks
-        self._clmo = clmo_table
-        self._solve = solve_missing_coord_fn
-
-    def generate(
-        self,
-        *,
-        dynsys: "_DynamicalSystemProtocol",
-        surface: "_SurfaceEvent",
-        n_seeds: int,
-        **kwargs,
-    ) -> "list[np.ndarray]":
-        if n_seeds != self._strategy.n_seeds:
-            self._strategy.n_seeds = n_seeds
-
-        return self._strategy.generate(
-            h0=self._h0,
-            H_blocks=self._H_blocks,
-            clmo_table=self._clmo,
-            solve_missing_coord_fn=self._solve,
-        )

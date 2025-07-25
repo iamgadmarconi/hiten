@@ -5,18 +5,15 @@ hiten.algorithms.poincare.config
 Configuration for Poincaré sections of the centre manifold of the spatial
 circular restricted three body problem.
 
-The module exposes a lightweight dataclass :pyclass:`_PoincareSectionConfig`
-that encapsulates the configuration of a Poincaré section.
+The module exposes a lightweight dataclass :pyclass:`_CenterManifoldSectionConfig`
+that encapsulates the configuration of a Poincaré section for the centre manifold.
 """
-
-from __future__ import annotations
-
 from typing import Tuple
 
 import numpy as np
 
 
-class _PoincareSectionConfig:
+class _CenterManifoldSectionConfig:
 
     _TABLE: dict[str, dict[str, object]] = {
         "q3": dict(
@@ -106,11 +103,11 @@ class _PoincareSectionConfig:
         return out
 
 
-_SECTION_CACHE: dict[str, _PoincareSectionConfig] = {
-    name: _PoincareSectionConfig(name) for name in ("q2", "p2", "q3", "p3")
+_SECTION_CACHE: dict[str, _CenterManifoldSectionConfig] = {
+    name: _CenterManifoldSectionConfig(name) for name in ("q2", "p2", "q3", "p3")
 }
 
-def _get_section_config(section_coord: str) -> _PoincareSectionConfig:
+def _get_section_config(section_coord: str) -> _CenterManifoldSectionConfig:
     try:
         return _SECTION_CACHE[section_coord]
     except KeyError as exc:
