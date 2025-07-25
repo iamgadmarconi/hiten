@@ -64,8 +64,8 @@ def register_conversion(src_name: str, dst: "type[Hamiltonian] | str",
 def _physical_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
     point = kwargs["point"]
     tol = kwargs.get("tol", 1e-12)
-    new_poly = _polylocal2realmodal(point, ham.poly_H, ham.max_degree, ham._psi, ham._clmo, tol=tol)
-    return Hamiltonian(new_poly, ham.max_degree, ham._ndof, name="real_modal")
+    new_poly = _polylocal2realmodal(point, ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol)
+    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="real_modal")
 
 
 @register_conversion("real_modal", "physical", 
@@ -74,8 +74,8 @@ def _physical_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
 def _real_modal_to_physical(ham: Hamiltonian, **kwargs) -> Hamiltonian:
     point = kwargs["point"]
     tol = kwargs.get("tol", 1e-12)
-    new_poly = _polyrealmodal2local(point, ham.poly_H, ham.max_degree, ham._psi, ham._clmo, tol=tol)
-    return Hamiltonian(new_poly, ham.max_degree, ham._ndof, name="physical")
+    new_poly = _polyrealmodal2local(point, ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol)
+    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="physical")
 
 
 @register_conversion("real_modal", "complex_modal", 
@@ -89,8 +89,8 @@ def _real_modal_to_complex_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
         mix_pairs = (0, 1, 2)
 
     tol = kwargs.get("tol", 1e-12)
-    new_poly = _substitute_complex(ham.poly_H, ham.max_degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
-    return Hamiltonian(new_poly, ham.max_degree, ham._ndof, name="complex_modal")
+    new_poly = _substitute_complex(ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
+    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="complex_modal")
 
 
 @register_conversion("complex_modal", "real_modal", 
@@ -104,8 +104,8 @@ def _complex_modal_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
         mix_pairs = (0, 1, 2)
 
     tol = kwargs.get("tol", 1e-12)
-    new_poly = _substitute_real(ham.poly_H, ham.max_degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
-    return Hamiltonian(new_poly, ham.max_degree, ham._ndof, name="real_modal")
+    new_poly = _substitute_real(ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
+    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="real_modal")
 
 
 @register_conversion("complex_modal", "complex_partial_normal", 
@@ -115,10 +115,10 @@ def _complex_modal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -> tupl
     point = kwargs["point"]
     tol_lie = kwargs.get("tol_lie", 1e-30)
     # This returns (poly_trans, poly_G_total, poly_elim_total)
-    new_poly, poly_G_total, poly_elim_total = _lie_transform_partial(point, ham.poly_H, ham._psi, ham._clmo, ham.max_degree, tol=tol_lie)
+    new_poly, poly_G_total, poly_elim_total = _lie_transform_partial(point, ham.poly_H, ham._psi, ham._clmo, ham.degree, tol=tol_lie)
     
-    new_ham = Hamiltonian(new_poly, ham.max_degree, ham._ndof, name="complex_partial_normal")
-    generating_functions = LieGeneratingFunction(poly_G=poly_G_total, poly_elim=poly_elim_total, degree=ham.max_degree, ndof=ham._ndof, name="generating_functions_partial")
+    new_ham = Hamiltonian(new_poly, ham.degree, ham._ndof, name="complex_partial_normal")
+    generating_functions = LieGeneratingFunction(poly_G=poly_G_total, poly_elim=poly_elim_total, degree=ham.degree, ndof=ham._ndof, name="generating_functions_partial")
     
     return new_ham, generating_functions
 
@@ -134,9 +134,9 @@ def _complex_partial_normal_to_real_partial_normal(ham: Hamiltonian, **kwargs) -
         mix_pairs = (0, 1, 2)
 
     tol = kwargs.get("tol", 1e-14)
-    new_poly = _substitute_real(ham.poly_H, ham.max_degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
+    new_poly = _substitute_real(ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
     
-    return Hamiltonian(new_poly, ham.max_degree, ham._ndof, name="real_partial_normal")
+    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="real_partial_normal")
 
 
 @register_conversion("real_partial_normal", "complex_partial_normal", 
@@ -150,8 +150,8 @@ def _real_partial_normal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -
         mix_pairs = (0, 1, 2)
 
     tol = kwargs.get("tol", 1e-14)
-    new_poly = _substitute_complex(ham.poly_H, ham.max_degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
-    return Hamiltonian(new_poly, ham.max_degree, ham._ndof, name="complex_partial_normal")
+    new_poly = _substitute_complex(ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
+    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="complex_partial_normal")
 
 
 @register_conversion("complex_partial_normal", "center_manifold_complex", 
@@ -161,7 +161,7 @@ def _complex_partial_normal_to_center_manifold_complex(ham: Hamiltonian, **kwarg
     point = kwargs["point"]
     tol = kwargs.get("tol", 1e-14)
     new_poly = _restrict_poly_to_center_manifold(point, ham.poly_H, ham._clmo, tol=tol)
-    return Hamiltonian(new_poly, ham.max_degree, ham._ndof, name="center_manifold_complex")
+    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="center_manifold_complex")
 
 
 @register_conversion("center_manifold_complex", "center_manifold_real", 
@@ -175,8 +175,8 @@ def _center_manifold_complex_to_center_manifold_real(ham: Hamiltonian, **kwargs)
         mix_pairs = (0, 1, 2)
 
     tol = kwargs.get("tol", 1e-14)
-    new_poly = _substitute_real(ham.poly_H, ham.max_degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
-    return Hamiltonian(new_poly, ham.max_degree, ham._ndof, name="center_manifold_real")
+    new_poly = _substitute_real(ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
+    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="center_manifold_real")
 
 
 @register_conversion("center_manifold_real", "center_manifold_complex", 
@@ -190,8 +190,8 @@ def _center_manifold_real_to_center_manifold_complex(ham: Hamiltonian, **kwargs)
         mix_pairs = (0, 1, 2)
 
     tol = kwargs.get("tol", 1e-14)
-    new_poly = _substitute_complex(ham.poly_H, ham.max_degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
-    return Hamiltonian(new_poly, ham.max_degree, ham._ndof, name="center_manifold_complex")
+    new_poly = _substitute_complex(ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
+    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="center_manifold_complex")
 
 
 @register_conversion("complex_modal", "complex_full_normal", 
@@ -201,10 +201,10 @@ def _complex_modal_to_complex_full_normal(ham: Hamiltonian, **kwargs) -> tuple[H
     point = kwargs["point"]
     tol_lie = kwargs.get("tol_lie", 1e-30)
     resonance_tol = kwargs.get("resonance_tol", 1e-14)
-    new_poly, poly_G_total, poly_elim_total = _lie_transform_full(point, ham.poly_H, ham._psi, ham._clmo, ham.max_degree, tol=tol_lie, resonance_tol=resonance_tol)
+    new_poly, poly_G_total, poly_elim_total = _lie_transform_full(point, ham.poly_H, ham._psi, ham._clmo, ham.degree, tol=tol_lie, resonance_tol=resonance_tol)
     
-    new_ham = Hamiltonian(new_poly, ham.max_degree, ham._ndof, name="complex_full_normal")
-    generating_functions = LieGeneratingFunction(poly_G=poly_G_total, poly_elim=poly_elim_total, degree=ham.max_degree, ndof=ham._ndof, name="generating_functions_full")
+    new_ham = Hamiltonian(new_poly, ham.degree, ham._ndof, name="complex_full_normal")
+    generating_functions = LieGeneratingFunction(poly_G=poly_G_total, poly_elim=poly_elim_total, degree=ham.degree, ndof=ham._ndof, name="generating_functions_full")
     
     return new_ham, generating_functions
 
@@ -220,8 +220,8 @@ def _complex_full_normal_to_real_full_normal(ham: Hamiltonian, **kwargs) -> Hami
         mix_pairs = (0, 1, 2)
 
     tol = kwargs.get("tol", 1e-14)
-    new_poly = _substitute_real(ham.poly_H, ham.max_degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
-    return Hamiltonian(new_poly, ham.max_degree, ham._ndof, name="real_full_normal")
+    new_poly = _substitute_real(ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
+    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="real_full_normal")
 
 
 @register_conversion("real_full_normal", "complex_full_normal", 
@@ -235,5 +235,5 @@ def _real_full_normal_to_complex_full_normal(ham: Hamiltonian, **kwargs) -> Hami
         mix_pairs = (0, 1, 2)
 
     tol = kwargs.get("tol", 1e-14)
-    new_poly = _substitute_complex(ham.poly_H, ham.max_degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
-    return Hamiltonian(new_poly, ham.max_degree, ham._ndof, name="complex_full_normal")
+    new_poly = _substitute_complex(ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
+    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="complex_full_normal")

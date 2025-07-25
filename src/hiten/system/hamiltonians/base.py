@@ -134,13 +134,13 @@ class Hamiltonian:
             raise NotImplementedError(f"No conversion path from {self.name} to {target_name}")
     
     @staticmethod
-    def _parse_transform(result, kwargs, target_cls):
+    def _parse_transform(result, kwargs, target_name):
             if isinstance(result, tuple):
                 new_ham, generating_functions = result
                 # Store generating functions in pipeline if available
                 pipeline = kwargs.get("_pipeline")
                 if pipeline is not None:
-                    pipeline._store_generating_functions(target_cls.name, generating_functions)
+                    pipeline._store_generating_functions(target_name, generating_functions)
                 return new_ham
             else:
                 return result
