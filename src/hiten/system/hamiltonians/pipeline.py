@@ -1,4 +1,5 @@
 from typing import Dict, Optional
+from collections import deque
 
 from hiten.algorithms.hamiltonian.center._lie import _lie_expansion
 from hiten.algorithms.hamiltonian.center._lie import \
@@ -202,6 +203,35 @@ class HamiltonianPipeline:
         if ("physical", target_form) in _CONVERSION_REGISTRY:
             return "physical"
 
+        # debug: Print available conversions
+        logger.debug(f"Looking for conversion path to '{target_form}'")
+        logger.debug(f"Available conversions in registry: {list(_CONVERSION_REGISTRY.keys())}")
+        
+        queue = deque([("physical", ["physical"])])
+        visited = {"physical"}
+        
+        while queue:
+            current_form, path = queue.popleft()
+            logger.debug(f"Exploring from '{current_form}' with path {path}")
+            
+            # Check all possible conversions from current_form
+            for (src, dst), (_, required_context, _) in _CONVERSION_REGISTRY.items():
+                if src == current_form and dst not in visited:
+                    # Check if we have the required context (point is always available)
+                    if not required_context or "point" in required_context:
+                        visited.add(dst)
+                        new_path = path + [dst]
+                        logger.debug(f"  Found conversion: {src} -> {dst} (context: {required_context})")
+                        
+                        # If we found the target, return the first step in the path
+                        if dst == target_form:
+                            logger.debug(f"  Found target '{target_form}' via path {new_path}")
+                            return new_path[0]  # Return "physical"
+                        
+                        # Continue exploring from this form
+                        queue.append((dst, new_path))
+        
+        logger.debug(f"No conversion path found to '{target_form}'. Visited: {visited}")
         return None
 
     def _get_available_forms(self) -> set[str]:
@@ -284,7 +314,7 @@ class HamiltonianPipeline:
         
         ham = self.get_hamiltonian(form)
         table = _format_poly_table(ham.poly_H, ham._clmo, degree)
-        logger.info(f'{form} coefficients:\n\n{table}\n\n')
+        logger.debug(f'{form} coefficients:\n\n{table}\n\n')
         return table
 
     def cache_clear(self):

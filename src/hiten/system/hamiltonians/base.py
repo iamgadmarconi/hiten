@@ -1,4 +1,4 @@
-from typing import Callable, Dict, Tuple
+from typing import Callable, Dict, Tuple, Union
 
 import numpy as np
 import sympy as sp
@@ -15,9 +15,7 @@ class Hamiltonian:
     """Abstract container for a specific polynomial Hamiltonian representation.
     """
 
-    name: str = "abstract"
-
-    def __init__(self, poly_H: list[np.ndarray], degree: int, ndof: int=3):
+    def __init__(self, poly_H: list[np.ndarray], degree: int, ndof: int=3, name: str = None):
         if degree <= 0:
             raise ValueError("degree must be a positive integer")
 
@@ -28,6 +26,11 @@ class Hamiltonian:
         self._encode_dict_list = _create_encode_dict_from_clmo(self._clmo)
 
         self._hamsys = None
+        self._name: str = name
+
+    @property
+    def name(self) -> str:
+        return self._name
 
     @property
     def poly_H(self) -> list[np.ndarray]:
@@ -96,27 +99,39 @@ class Hamiltonian:
         # Handle tuple return (Hamiltonian, generating_functions)
         return cls._parse_transform(result, kwargs, cls)
 
-    def to_state(self, target_cls: type["Hamiltonian"], **kwargs) -> "Hamiltonian":
-        """Convert *self* into *target_cls* via ``target_cls.from_state``."""
-        if isinstance(self, target_cls):
-            return self
-
-        key = (self.name, target_cls.name)
+    def to_state(self, target_form: Union[type["Hamiltonian"], str], **kwargs) -> "Hamiltonian":
+        """Convert *self* into *target_form* via conversion or ``target_cls.from_state``."""
+        # Handle string form names
+        if isinstance(target_form, str):
+            target_name = target_form
+            # Create a temporary Hamiltonian class for the target form
+            class TempHamiltonian(Hamiltonian):
+                name = target_name
+        else:
+            target_name = target_form.name
+            if isinstance(self, target_form):
+                return self
+        
+        key = (self.name, target_name)
         if key in _CONVERSION_REGISTRY:
             converter, required_context, default_params = _CONVERSION_REGISTRY[key]
             
             # Validate required context
             missing = [key for key in required_context if key not in kwargs]
             if missing:
-                raise ValueError(f"Missing required context for conversion {self.name} -> {target_cls.name}: {missing}")
+                raise ValueError(f"Missing required context for conversion {self.name} -> {target_name}: {missing}")
             
             # Merge defaults with user-provided parameters
             final_kwargs = {**default_params, **kwargs}
             result = converter(self, **final_kwargs)
             
-            return Hamiltonian._parse_transform(result, kwargs, target_cls)
+            return Hamiltonian._parse_transform(result, kwargs, target_name)
 
-        return target_cls.from_state(self, **kwargs)
+        # If no direct conversion, try using from_state
+        if isinstance(target_form, type):
+            return target_form.from_state(self, **kwargs)
+        else:
+            raise NotImplementedError(f"No conversion path from {self.name} to {target_name}")
     
     @staticmethod
     def _parse_transform(result, kwargs, target_cls):
@@ -146,14 +161,12 @@ class Hamiltonian:
 
 class LieGeneratingFunction:
 
-    name: str = "lie_generating_function"
-
-    def __init__(self, poly_G: list[np.ndarray], poly_elim: list[np.ndarray], degree: int, ndof: int=3):
+    def __init__(self, poly_G: list[np.ndarray], poly_elim: list[np.ndarray], degree: int, ndof: int=3, name: str = None):
         self._poly_G: list[np.ndarray] = poly_G
         self._poly_elim: list[np.ndarray] = poly_elim
         self._degree: int = degree
         self._ndof: int = ndof
-        
+        self._name: str = name
         self._psi, self._clmo = _init_index_tables(degree)
         self._encode_dict_list = _create_encode_dict_from_clmo(self._clmo)
 
@@ -175,6 +188,10 @@ class LieGeneratingFunction:
     @property
     def poly_elim(self) -> list[np.ndarray]:
         return self._poly_elim
+
+    @property
+    def name(self) -> str:
+        return self._name
 
 
 # Mapping: (src_name, dst_name) -> (converter_func, required_context, default_params)

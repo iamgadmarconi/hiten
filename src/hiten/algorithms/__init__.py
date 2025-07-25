@@ -25,4 +25,5 @@ __all__ = [
     "LineSearchConfig",
     "OrbitCorrectionConfig",
     "OrbitContinuationConfig",
+    "_CONVERSION_REGISTRY",
 ]
