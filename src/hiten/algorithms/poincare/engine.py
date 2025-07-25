@@ -1,34 +1,23 @@
-from typing import Sequence
+from typing import Literal, Sequence
 
 import numpy as np
 
 from hiten.algorithms.dynamics.base import _DynamicalSystemProtocol
+from hiten.algorithms.poincare.backends import _ReturnMapBackend
 from hiten.algorithms.poincare.crossing import find_crossing
 from hiten.algorithms.poincare.events import _SectionHit, _SurfaceEvent
 from hiten.algorithms.poincare.seeding.generators import _SeedGenerator
 from hiten.utils.log_config import logger
 
 
-class _ReturnMapEngine:
-    """Generic CPU return-map builder.
+class _Section:
+    def __init__(self, pts, st):
+        self.points = pts
+        self.states = st
+        self.labels = ("coord1", "coord2")
 
-    Parameters
-    ----------
-    dynsys
-        Dynamical system providing the RHS for propagation.
-    surface
-        Section definition (zero of *g(state)*).
-    seeder
-        Strategy object that returns initial seeds compatible with *dynsys* and *surface*.
-    n_iter : int, default 40
-        How many successive crossings to record for each seed.
-    forward : {1, -1}, default 1
-        Integration direction.
-    method, order
-        Integration backend passed to :pyfunc:`hiten.algorithms.dynamics.base._propagate_dynsys` via *find_crossing*.
-    pre_steps, refine_steps
-        Step counts for the coarse and refined propagations inside *find_crossing*.
-    """
+class _ReturnMapEngine(_ReturnMapBackend):
+    """Generic CPU return-map builder (implements backend interface)."""
 
     def __init__(
         self,
@@ -39,8 +28,8 @@ class _ReturnMapEngine:
         n_seeds: int = 20,
         n_iter: int = 40,
         forward: int = 1,
-        method: str = "rk",
-        order: int = 8,
+        method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
+        order: int = 4,
         pre_steps: int = 1000,
         refine_steps: int = 3000,
         bracket_dx: float = 1e-10,
@@ -127,3 +116,15 @@ class _ReturnMapEngine:
         if self._hits is None:
             self.compute()
         return iter(self._hits)
+
+    def compute_section(self, *, recompute: bool = False):
+        """Return section-like object with points and states arrays."""
+        if self._hits is None or recompute:
+            self.compute(recompute=recompute)
+
+        points = self.points2d()
+        states = self.states()
+        return _Section(points, states)
+
+    def compute_grid(self, *, recompute: bool = False):
+        raise NotImplementedError("Grid generation not supported by engine backend yet")
