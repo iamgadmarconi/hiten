@@ -11,7 +11,7 @@ instead of navigating the full internal hierarchy (``hiten.system.base``,
 """
 
 # Poincare map
-from ..algorithms.poincare.base import _PoincareMap, _PoincareMapConfig
+from ..algorithms.poincare.base import _PoincareMap, _CenterManifoldMapConfig
 from .base import System
 # Core containers
 from .body import Body
@@ -48,7 +48,7 @@ __all__ = [
     # Center manifold
     "CenterManifold",
     # Poincare map
-    "_PoincareMapConfig",
+    "_CenterManifoldMapConfig",
     "_PoincareMap",
     # Orbits / configs
     "PeriodicOrbit",

@@ -8,9 +8,47 @@ circular restricted three body problem.
 The module exposes a lightweight dataclass :pyclass:`_CenterManifoldSectionConfig`
 that encapsulates the configuration of a Poincaré section for the centre manifold.
 """
-from typing import Tuple
+from dataclasses import dataclass
+from typing import Literal, Optional, Tuple
 
 import numpy as np
+
+from hiten.utils.log_config import logger
+
+
+class _Section:
+    def __init__(self, pts, st, labels):
+        self.points = pts
+        self.states = st
+        self.labels = labels
+
+
+@dataclass
+class _CenterManifoldMapConfig:
+    dt: float = 1e-2
+    method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy"
+    order: int = 8
+    c_omega_heuristic: float = 20.0
+
+    n_seeds: int = 20
+    n_iter: int = 40
+    seed_strategy: Literal[
+        "single",
+        "axis_aligned",
+        "level_sets",
+        "radial",
+        "random",
+    ] = "axis_aligned"
+    seed_axis: Optional[Literal["q2", "p2", "q3", "p3"]] = None
+    section_coord: Literal["q2", "p2", "q3", "p3"] = "q3"
+
+    compute_on_init: bool = False
+
+    def __post_init__(self):
+        if self.seed_strategy == "single" and self.seed_axis is None:
+            raise ValueError("seed_axis must be specified when seed_strategy is 'single'")
+        if self.seed_strategy != "single" and self.seed_axis is not None:
+            logger.warning("seed_axis is ignored when seed_strategy is not 'single'")
 
 
 class _CenterManifoldSectionConfig:

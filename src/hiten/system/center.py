@@ -48,7 +48,6 @@ from hiten.algorithms.hamiltonian.transforms import (_coordlocal2realmodal,
                                                      _synodic2local_collinear,
                                                      _synodic2local_triangular)
 from hiten.algorithms.poincare.config import _get_section_config
-from hiten.algorithms.poincare.map import _solve_missing_coord
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                               _decode_multiindex,
                                               _init_index_tables)
@@ -702,10 +701,10 @@ class CenterManifold:
         Parallel processing is enabled automatically for CPU computations.
         """
         from hiten.algorithms.poincare.base import (_PoincareMap,
-                                                    _PoincareMapConfig)
+                                                    _CenterManifoldMapConfig)
 
         # Separate config kwargs from runtime kwargs (currently none)
-        config_fields = set(_PoincareMapConfig.__dataclass_fields__.keys())
+        config_fields = set(_CenterManifoldMapConfig.__dataclass_fields__.keys())
         
         config_kwargs = {}
         
@@ -715,7 +714,7 @@ class CenterManifold:
             else:
                 raise TypeError(f"'{key}' is not a valid keyword argument for PoincareMap configuration.")
         
-        cfg = _PoincareMapConfig(**config_kwargs)
+        cfg = _CenterManifoldMapConfig(**config_kwargs)
 
         # Create a hashable key from the configuration only (not runtime params)
         config_tuple = tuple(sorted(asdict(cfg).items()))
@@ -804,12 +803,20 @@ class CenterManifold:
         var_to_solve = config.missing_coord
 
         # Solve for the missing CM coordinate that satisfies the energy level
-        solved_val = _solve_missing_coord(
+        # temporary patch
+        from hiten.algorithms.poincare.backends._cmbackend import _CenterManifoldBackend
+        from hiten.algorithms.poincare.events import _PlaneEvent
+
+        backend = _CenterManifoldBackend(
+            dynsys=self._hamsys[('center_manifold_real', self._max_degree)],
+            surface=_PlaneEvent(coord=section_coord, value=0.0, direction=None),
+            section_coord=section_coord,
+            h0=energy,
+        )
+
+        solved_val = backend._solve_missing_coord(
             var_to_solve,
             known_vars,
-            float(energy),
-            poly_cm_real,
-            self._clmo,
         )
 
         # Combine into a full CM coordinate dictionary

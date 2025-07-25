@@ -8,9 +8,7 @@ The module exposes a base class :pyclass:`_CenterManifoldSeedingBase` that defin
 interface for all seeding strategies.
 """
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any, List, Tuple
-
-import numpy as np
+from typing import TYPE_CHECKING, Any, Callable, List, Tuple
 
 if TYPE_CHECKING:
     from hiten.algorithms.poincare.config import _CenterManifoldSectionConfig
@@ -29,15 +27,12 @@ class _CenterManifoldSeedingBase(ABC):
     def plane_coords(self) -> Tuple[str, str]:
         return self._cfg.plane_coords
 
-    def find_turning(self, q_or_p: str, h0: float, H_blocks: List[np.ndarray], clmo: List[np.ndarray], initial_guess: float = 1e-3, expand_factor: float = 2.0, max_expand: int = 40) -> float:
-        return _find_turning(q_or_p, h0, H_blocks, clmo, initial_guess, expand_factor, max_expand)
-
     @abstractmethod
-    def _generate(self, *, h0: float, H_blocks: Any, clmo_table: Any, solve_missing_coord_fn: Any) -> List[Tuple[float, float, float, float]]:
+    def generate(self, *, h0: float, H_blocks: Any, clmo_table: Any, solve_missing_coord_fn: Any, find_turning_fn: Any) -> List[Tuple[float, float, float, float]]:
         pass
 
     def __call__(self, **kwargs):
-        return self._generate(**kwargs)
+        return self.generate(**kwargs)
 
     _cached_limits: dict[tuple[float, int], list[float]] = {}
 
@@ -47,6 +42,7 @@ class _CenterManifoldSeedingBase(ABC):
         h0: float,
         H_blocks: Any,
         clmo_table: Any,
+        find_turning_fn: Callable
     ) -> list[float]:
         """Return turning-point limits (max absolute) for the two plane coords.
 
@@ -57,9 +53,10 @@ class _CenterManifoldSeedingBase(ABC):
         if key in self._cached_limits:
             return self._cached_limits[key]
 
-        limits = [
-            self.find_turning(c, h0, H_blocks, clmo_table) for c in self.plane_coords
-        ]
+        # The backend-specific *find_turning_fn* already carries everything it
+        # needs (energy level, Hamiltonian blocks, etc.) via closure/bound
+        # attributes, therefore we only pass the coordinate identifier.
+        limits = [find_turning_fn(c) for c in self.plane_coords]
         self._cached_limits[key] = limits
         return limits
 
@@ -67,43 +64,32 @@ class _CenterManifoldSeedingBase(ABC):
         self,
         plane_vals: tuple[float, float],
         *,
-        h0: float,
-        H_blocks: Any,
-        clmo_table: Any,
         solve_missing_coord_fn,
-    ) -> tuple[float, float, float, float] | None:
-        """Try to construct full 4-tuple seed from plane coordinates.
+    ) -> tuple[float, float] | None:
+        """Validate *plane_vals* against the Hill boundary.
 
-        Returns *None* when the point lies outside Hill region.
+        The method **no longer** returns a full 4-tuple centre-manifold state.
+        Instead it merely checks that the 2-D point lies inside the allowed
+        region (by solving for the missing coordinate).  On success the same
+        *plane_vals* tuple is returned; *None* indicates the point is outside
+        the Hill region.
         """
+
         cfg = self.config
+
         constraints = cfg.build_constraint_dict(**{
             cfg.plane_coords[0]: plane_vals[0],
             cfg.plane_coords[1]: plane_vals[1],
         })
-        missing_val = solve_missing_coord_fn(
-            cfg.missing_coord, constraints, h0, H_blocks, clmo_table
-        )
+
+        # `_solve_missing_coord` (backend implementation) needs only the
+        # variable name and the dict of fixed values; other parameters are
+        # already bound via the backend instance.  Passing extra positional
+        # arguments corrupts its `initial_guess`, `expand_factor`, etc.
+        missing_val = solve_missing_coord_fn(cfg.missing_coord, constraints)
+
         if missing_val is None:
+            # Point lies outside Hill boundary.
             return None
-        other_vals = [0.0, 0.0]
-        missing_idx = 0 if cfg.missing_coord == cfg.other_coords[0] else 1
-        other_vals[missing_idx] = missing_val
-        return cfg.build_state(plane_vals, tuple(other_vals))
 
-
-def _find_turning(q_or_p: str, h0: float, H_blocks: List[np.ndarray], clmo: List[np.ndarray], initial_guess: float = 1e-3, expand_factor: float = 2.0, max_expand: int = 40) -> float:
-    # Deferred import to avoid circular dependency and ensure availability at runtime
-    from hiten.algorithms.poincare.map import _solve_missing_coord
-
-    fixed_vals = {coord: 0.0 for coord in ("q2", "p2", "q3", "p3") if coord != q_or_p}
-    
-    root = _solve_missing_coord(
-        q_or_p, fixed_vals, h0, H_blocks, clmo, 
-        initial_guess, expand_factor, max_expand
-    )
-    
-    if root is None:
-        raise RuntimeError("Root finding for Hill boundary did not converge.")
-
-    return root
+        return plane_vals

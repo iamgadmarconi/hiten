@@ -1,130 +1,88 @@
-from typing import Literal, Sequence
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 
-from hiten.algorithms.dynamics.base import _DynamicalSystemProtocol
-from hiten.algorithms.poincare.backends import _ReturnMapBackend
-from hiten.algorithms.poincare.crossing import find_crossing
-from hiten.algorithms.poincare.events import _SectionHit, _SurfaceEvent
-from hiten.algorithms.poincare.seeding.generators import _SeedGenerator
+from hiten.algorithms.poincare.backends._cmbackend import \
+    _CenterManifoldBackend
+from hiten.algorithms.poincare.config import _Section
+from hiten.algorithms.poincare.seeding.base import _CenterManifoldSeedingBase
 from hiten.utils.log_config import logger
 
 
-class _Section:
-    def __init__(self, pts, st):
-        self.points = pts
-        self.states = st
-        self.labels = ("coord1", "coord2")
-
-class _ReturnMapEngine(_ReturnMapBackend):
-    """Generic CPU return-map builder (implements backend interface)."""
+class _CenterManifoldEngine:
+    """Driver for centre-manifold return-map generation."""
 
     def __init__(
         self,
+        backend: _CenterManifoldBackend,
+        seed_strategy: _CenterManifoldSeedingBase,
         *,
-        dynsys: _DynamicalSystemProtocol,
-        surface: _SurfaceEvent,
-        seeder: _SeedGenerator,
-        n_seeds: int = 20,
-        n_iter: int = 40,
-        forward: int = 1,
-        method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
-        order: int = 4,
-        pre_steps: int = 1000,
-        refine_steps: int = 3000,
-        bracket_dx: float = 1e-10,
-        max_expand: int = 500,
+        n_iter: int,
+        dt: float,
+        n_workers: int | None = None,
     ) -> None:
-        self._dynsys = dynsys
-        self._surface = surface
-        self._seeder = seeder
-        self._n_seeds = int(n_seeds)
+        self._backend = backend
+        self._strategy = seed_strategy
         self._n_iter = int(n_iter)
-        self._forward = 1 if forward >= 0 else -1
+        self._dt = float(dt)
+        self._n_workers = n_workers or os.cpu_count() or 1
 
-        # numeric controls
-        self._method = method
-        self._order = int(order)
-        self._pre_steps = int(pre_steps)
-        self._refine_steps = int(refine_steps)
-        self._bracket_dx = float(bracket_dx)
-        self._max_expand = int(max_expand)
+        self._section_cache: _Section | None = None
 
-        # storage
-        self._hits: list[_SectionHit] | None = None
-        self._seed_states: list[np.ndarray] | None = None
+    def compute_section(self, *, recompute: bool = False) -> _Section:
+        if self._section_cache is not None and not recompute:
+            return self._section_cache
 
-    def compute(self, *, recompute: bool = False) -> Sequence[_SectionHit]:
-        if self._hits is not None and not recompute:
-            return self._hits
+        logger.info("Generating Poincaré map: seeds=%d, iterations=%d, workers=%d",
+                    self._strategy.n_seeds, self._n_iter, self._n_workers)
 
-        logger.info(
-            "ReturnMapEngine: generating %d seeds via %s", self._n_seeds, self._seeder.__class__.__name__
+        plane_pts = self._strategy.generate(
+            h0=self._backend._h0,
+            H_blocks=self._backend._H_blocks,
+            clmo_table=self._backend._clmo_table,
+            solve_missing_coord_fn=self._backend._solve_missing_coord,
+            find_turning_fn=self._backend._find_turning,
         )
-        seeds = self._seeder.generate(
-            dynsys=self._dynsys,
-            surface=self._surface,
-            n_seeds=self._n_seeds,
+
+        seeds0 = [self._backend._lift_plane_point(p) for p in plane_pts]
+        seeds0 = np.asarray([s for s in seeds0 if s is not None], dtype=np.float64)
+
+        if seeds0.size == 0:
+            raise RuntimeError("Seed strategy produced no valid points inside Hill boundary")
+
+        chunks = np.array_split(seeds0, self._n_workers)
+
+        def _worker(chunk: np.ndarray):
+            pts_accum, states_accum = [], []
+            seeds = chunk
+            for _ in range(self._n_iter):
+                pts, states = self._backend.step_to_section(seeds, dt=self._dt)
+                if pts.size == 0:
+                    break
+                pts_accum.append(pts)
+                states_accum.append(states)
+                seeds = states  # feed back
+            if pts_accum:
+                return np.vstack(pts_accum), np.vstack(states_accum)
+            return np.empty((0, 2)), np.empty((0, 4))
+
+        pts_list, states_list = [], []
+        with ThreadPoolExecutor(max_workers=self._n_workers) as executor:
+            futures = [executor.submit(_worker, c) for c in chunks if c.size]
+            for fut in as_completed(futures):
+                p, s = fut.result()
+                if p.size:
+                    pts_list.append(p)
+                    states_list.append(s)
+
+        pts_np = np.vstack(pts_list) if pts_list else np.empty((0, 2))
+        cms_np = np.vstack(states_list) if states_list else np.empty((0, 4))
+
+        self._section_cache = _Section(
+            pts_np, cms_np, self._backend._section_cfg.plane_coords
         )
-        self._seed_states = list(seeds)
+        return self._section_cache
 
-        hits: list[_SectionHit] = []
-        for k, seed in enumerate(seeds):
-            state_curr = seed.copy()
-            for i in range(self._n_iter):
-                try:
-                    hit = find_crossing(
-                        self._dynsys,
-                        state_curr,
-                        self._surface,
-                        forward=self._forward,
-                        pre_steps=self._pre_steps,
-                        refine_steps=self._refine_steps,
-                        bracket_dx=self._bracket_dx,
-                        max_expand=self._max_expand,
-                        method=self._method,
-                        order=self._order,
-                    )
-                except Exception as exc:
-                    logger.debug("Seed %d iteration %d failed: %s", k, i, exc)
-                    break  # stop iterating this seed
-                hits.append(hit)
-                state_curr = hit.state  # next iteration starts from section point
-        self._hits = hits
-        logger.info("ReturnMapEngine: collected %d section hits", len(hits))
-        return hits
-
-    def points2d(self) -> np.ndarray:
-        if self._hits is None:
-            self.compute()
-        return np.vstack([h.point2d for h in self._hits]) if self._hits else np.empty((0, 2))
-
-    def states(self) -> np.ndarray:
-        if self._hits is None:
-            self.compute()
-        return np.vstack([h.state for h in self._hits]) if self._hits else np.empty((0, self._dynsys.dim))
-
-    def times(self) -> np.ndarray:
-        if self._hits is None:
-            self.compute()
-        return np.asarray([h.time for h in self._hits]) if self._hits else np.empty(0)
-
-    def __len__(self) -> int:
-        return 0 if self._hits is None else len(self._hits)
-
-    def __iter__(self):
-        if self._hits is None:
-            self.compute()
-        return iter(self._hits)
-
-    def compute_section(self, *, recompute: bool = False):
-        """Return section-like object with points and states arrays."""
-        if self._hits is None or recompute:
-            self.compute(recompute=recompute)
-
-        points = self.points2d()
-        states = self.states()
-        return _Section(points, states)
-
-    def compute_grid(self, *, recompute: bool = False):
-        raise NotImplementedError("Grid generation not supported by engine backend yet")
+    def clear_cache(self):
+        self._section_cache = None

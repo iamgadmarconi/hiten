@@ -4,7 +4,7 @@ import tempfile
 import os
 
 from hiten.system.center import CenterManifold
-from hiten.algorithms.poincare.base import _PoincareMap, _PoincareMapConfig
+from hiten.algorithms.poincare.base import _PoincareMap, _CenterManifoldMapConfig
 from hiten.system.base import System
 from hiten.system.body import Body
 from hiten.utils.constants import Constants
@@ -29,7 +29,7 @@ def poincare_test_setup():
     cm = CenterManifold(libration_point, TEST_MAX_DEG)
     cm.compute()
 
-    pmConfig = _PoincareMapConfig(
+    pmConfig = _CenterManifoldMapConfig(
         dt=TEST_DT,
         method="rk",
         integrator_order=4,

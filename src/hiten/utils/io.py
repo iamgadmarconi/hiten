@@ -371,7 +371,7 @@ def _save_poincare_map(pmap: "_PoincareMap", filepath: str, *, compression: str 
 
 
 def _load_poincare_map_inplace(obj: "_PoincareMap", filepath: str) -> None:
-    from hiten.algorithms.poincare.base import _PoincareMapConfig
+    from hiten.algorithms.poincare.base import _CenterManifoldMapConfig
     from hiten.algorithms.poincare.map import _PoincareSection
 
     if not os.path.exists(filepath):
@@ -382,9 +382,9 @@ def _load_poincare_map_inplace(obj: "_PoincareMap", filepath: str) -> None:
         cfg_json = f.attrs.get("config_json", "{}")
         try:
             cfg_dict = json.loads(cfg_json)
-            obj.config = _PoincareMapConfig(**cfg_dict)
+            obj.config = _CenterManifoldMapConfig(**cfg_dict)
         except Exception as exc:
-            obj.config = _PoincareMapConfig()
+            obj.config = _CenterManifoldMapConfig()
 
         obj._use_symplectic = obj.config.method.lower() == "symplectic"
 

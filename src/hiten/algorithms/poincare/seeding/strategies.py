@@ -33,14 +33,15 @@ class _SingleAxisSeeding(_CenterManifoldSeedingBase):
         super().__init__(section_config, n_seeds)
         self._seed_axis = seed_axis
 
-    def _generate(
+    def generate(
         self,
         *,
         h0: float,
         H_blocks: Any,
         clmo_table: Any,
         solve_missing_coord_fn: "Callable",
-    ) -> List[Tuple[float, float, float, float]]:
+        find_turning_fn: "Callable",
+    ) -> List[Tuple[float, float]]:
         cfg = self.config
 
         axis_idx = 0
@@ -50,15 +51,15 @@ class _SingleAxisSeeding(_CenterManifoldSeedingBase):
             except ValueError:
                 logger.warning("seed_axis %s not in plane coords %s - defaulting to first", self._seed_axis, cfg.plane_coords)
 
-        limits = self._hill_boundary_limits(h0=h0, H_blocks=H_blocks, clmo_table=clmo_table)
+        limits = self._hill_boundary_limits(h0=h0, H_blocks=H_blocks, clmo_table=clmo_table, find_turning_fn=find_turning_fn)
         axis_max = limits[axis_idx]
         values = np.linspace(-0.9 * axis_max, 0.9 * axis_max, self.n_seeds)
 
-        seeds: list[tuple[float, float, float, float]] = []
+        seeds: list[tuple[float, float]] = []
         for v in values:
             plane = [0.0, 0.0]
             plane[axis_idx] = float(v)
-            seed = self._build_seed(tuple(plane), h0=h0, H_blocks=H_blocks, clmo_table=clmo_table, solve_missing_coord_fn=solve_missing_coord_fn)
+            seed = self._build_seed(tuple(plane), solve_missing_coord_fn=solve_missing_coord_fn)
             if seed is not None:
                 seeds.append(seed)
 
@@ -71,30 +72,31 @@ class _AxisAlignedSeeding(_CenterManifoldSeedingBase):
     def __init__(self, section_config: "_CenterManifoldSectionConfig", *, n_seeds: int = 20) -> None:
         super().__init__(section_config, n_seeds)
 
-    def _generate(
+    def generate(
         self,
         *,
         h0: float,
         H_blocks: Any,
         clmo_table: Any,
         solve_missing_coord_fn: "Callable",
-    ) -> List[Tuple[float, float, float, float]]:
+        find_turning_fn: "Callable",
+    ) -> List[Tuple[float, float]]:
         cfg = self.config
 
-        plane_maxes = self._hill_boundary_limits(h0=h0, H_blocks=H_blocks, clmo_table=clmo_table)
+        plane_maxes = self._hill_boundary_limits(h0=h0, H_blocks=H_blocks, clmo_table=clmo_table, find_turning_fn=find_turning_fn)
         max1, max2 = plane_maxes
-        seeds: list[tuple[float, float, float, float]] = []
+        seeds: list[tuple[float, float]] = []
 
         seeds_per_axis = max(1, self.n_seeds // 2)
         axis_vals1 = np.linspace(-0.9 * max1, 0.9 * max1, seeds_per_axis)
         for v in axis_vals1:
-            seed = self._build_seed((v, 0.0), h0=h0, H_blocks=H_blocks, clmo_table=clmo_table, solve_missing_coord_fn=solve_missing_coord_fn)
+            seed = self._build_seed((v, 0.0), solve_missing_coord_fn=solve_missing_coord_fn)
             if seed is not None:
                 seeds.append(seed)
 
         axis_vals2 = np.linspace(-0.9 * max2, 0.9 * max2, seeds_per_axis)
         for v in axis_vals2:
-            seed = self._build_seed((0.0, v), h0=h0, H_blocks=H_blocks, clmo_table=clmo_table, solve_missing_coord_fn=solve_missing_coord_fn)
+            seed = self._build_seed((0.0, v), solve_missing_coord_fn=solve_missing_coord_fn)
             if seed is not None:
                 seeds.append(seed)
 
@@ -107,22 +109,22 @@ class _LevelSetsSeeding(_CenterManifoldSeedingBase):
     def __init__(self, section_config: "_CenterManifoldSectionConfig", *, n_seeds: int = 20) -> None:
         super().__init__(section_config, n_seeds)
 
-    def _generate(
+    def generate(
         self,
         *,
         h0: float,
         H_blocks: Any,
         clmo_table: Any,
         solve_missing_coord_fn: "Callable",
-    ) -> List[Tuple[float, float, float, float]]:
+        find_turning_fn: "Callable",
+    ) -> List[Tuple[float, float]]:
         cfg = self.config
-
-        plane_maxes = self._hill_boundary_limits(h0=h0, H_blocks=H_blocks, clmo_table=clmo_table)
+        plane_maxes = self._hill_boundary_limits(h0=h0, H_blocks=H_blocks, clmo_table=clmo_table, find_turning_fn=find_turning_fn)
 
         n_levels = max(2, int(np.sqrt(self.n_seeds)))
         seeds_per_level = max(1, self.n_seeds // (2 * n_levels))
 
-        seeds: List[Tuple[float, float, float, float]] = []
+        seeds: List[Tuple[float, float]] = []
         for i, varying_coord in enumerate(cfg.plane_coords):
             other_coord_idx = 1 - i
             level_vals = np.linspace(
@@ -145,7 +147,7 @@ class _LevelSetsSeeding(_CenterManifoldSeedingBase):
                     plane_vals[i] = float(varying_val)
                     plane_vals[other_coord_idx] = float(level_val)
 
-                    seed = self._build_seed(tuple(plane_vals), h0=h0, H_blocks=H_blocks, clmo_table=clmo_table, solve_missing_coord_fn=solve_missing_coord_fn)
+                    seed = self._build_seed(tuple(plane_vals), solve_missing_coord_fn=solve_missing_coord_fn)
                     if seed is not None:
                         seeds.append(seed)
 
@@ -158,23 +160,23 @@ class _RadialSeeding(_CenterManifoldSeedingBase):
     def __init__(self, section_config: "_CenterManifoldSectionConfig", *, n_seeds: int = 20) -> None:
         super().__init__(section_config, n_seeds)
 
-    def _generate(
+    def generate(
         self,
         *,
         h0: float,
         H_blocks: Any,
         clmo_table: Any,
         solve_missing_coord_fn: "Callable",
-    ) -> List[Tuple[float, float, float, float]]:
+        find_turning_fn: "Callable",
+    ) -> List[Tuple[float, float]]:
         cfg = self.config
-
-        plane_maxes = self._hill_boundary_limits(h0=h0, H_blocks=H_blocks, clmo_table=clmo_table)
+        plane_maxes = self._hill_boundary_limits(h0=h0, H_blocks=H_blocks, clmo_table=clmo_table, find_turning_fn=find_turning_fn)
         max_radius = 0.8 * min(*plane_maxes)
 
         n_radial = max(1, int(np.sqrt(self.n_seeds / (2 * np.pi))))
         n_angular = max(4, self.n_seeds // n_radial)
 
-        seeds: List[Tuple[float, float, float, float]] = []
+        seeds: List[Tuple[float, float]] = []
         for i in range(n_radial):
             r = (i + 1) / n_radial * max_radius
             for j in range(n_angular):
@@ -187,7 +189,7 @@ class _RadialSeeding(_CenterManifoldSeedingBase):
                 ):
                     continue
 
-                seed = self._build_seed((plane_val1, plane_val2), h0=h0, H_blocks=H_blocks, clmo_table=clmo_table, solve_missing_coord_fn=solve_missing_coord_fn)
+                seed = self._build_seed((plane_val1, plane_val2), solve_missing_coord_fn=solve_missing_coord_fn)
                 if seed is not None:
                     seeds.append(seed)
 
@@ -203,19 +205,19 @@ class _RandomSeeding(_CenterManifoldSeedingBase):
     def __init__(self, section_config: "_CenterManifoldSectionConfig", *, n_seeds: int = 20) -> None:
         super().__init__(section_config, n_seeds)
 
-    def _generate(
+    def generate(
         self,
         *,
         h0: float,
         H_blocks: Any,
         clmo_table: Any,
         solve_missing_coord_fn: "Callable",
-    ) -> List[Tuple[float, float, float, float]]:
+        find_turning_fn: "Callable",
+    ) -> List[Tuple[float, float]]:
         cfg = self.config
+        plane_maxes = self._hill_boundary_limits(h0=h0, H_blocks=H_blocks, clmo_table=clmo_table, find_turning_fn=find_turning_fn)
 
-        plane_maxes = self._hill_boundary_limits(h0=h0, H_blocks=H_blocks, clmo_table=clmo_table)
-
-        seeds: List[Tuple[float, float, float, float]] = []
+        seeds: List[Tuple[float, float]] = []
         max_attempts = self.n_seeds * 10
         attempts = 0
 
@@ -225,7 +227,7 @@ class _RandomSeeding(_CenterManifoldSeedingBase):
             plane_val1 = rng.uniform(-0.9 * plane_maxes[0], 0.9 * plane_maxes[0])
             plane_val2 = rng.uniform(-0.9 * plane_maxes[1], 0.9 * plane_maxes[1])
 
-            seed = self._build_seed((plane_val1, plane_val2), h0=h0, H_blocks=H_blocks, clmo_table=clmo_table, solve_missing_coord_fn=solve_missing_coord_fn)
+            seed = self._build_seed((plane_val1, plane_val2), solve_missing_coord_fn=solve_missing_coord_fn)
             if seed is not None:
                 seeds.append(seed)
 

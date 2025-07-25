@@ -11,7 +11,7 @@ from .corrector.interfaces import \
     _OrbitCorrectionConfig as OrbitCorrectionConfig
 from .corrector.line import _LineSearchConfig as LineSearchConfig
 from .poincare.base import _PoincareMap as PoincareMap
-from .poincare.base import _PoincareMapConfig as PoincareMapConfig
+from .poincare.base import _CenterManifoldMapConfig as PoincareMapConfig
 from .tori.base import _InvariantTori as InvariantTori
 
 __all__ = [

@@ -46,3 +46,4 @@ class _SeedGenerator(ABC):
             seeds).  The core engine passes only *dynsys*, *surface* and
             *n_seeds*; domain-specific wrappers supply the rest.
         """
+
