@@ -26,8 +26,8 @@ class _Section:
 @dataclass
 class _CenterManifoldMapConfig:
     dt: float = 1e-2
-    method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy"
-    order: int = 8
+    method: Literal["scipy", "rk", "symplectic", "adaptive"] = "rk"
+    order: int = 4
     c_omega_heuristic: float = 20.0
 
     n_seeds: int = 20

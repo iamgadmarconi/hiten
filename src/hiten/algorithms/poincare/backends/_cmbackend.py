@@ -440,6 +440,18 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         for i in range(flags.shape[0]):
             if flags[i]:
                 state = (q2p_arr[i], p2p_arr[i], q3p_arr[i], p3p_arr[i])
+                # Ensure the returned seed lies EXACTLY on the section plane so that
+                # the following iteration does not detect the same crossing again.
+                # We zero the coordinate that defines the section (q2, p2, q3 or p3)
+                # to avoid re-registering the same hit in subsequent steps.
+                if cfg.section_coord == "q3":
+                    state = (state[0], state[1], 0.0, state[3])
+                elif cfg.section_coord == "p3":
+                    state = (state[0], state[1], state[2], 0.0)
+                elif cfg.section_coord == "q2":
+                    state = (0.0, state[1], state[2], state[3])
+                else:  # "p2"
+                    state = (state[0], 0.0, state[2], state[3])
                 states_list.append(state)
                 if cfg.plane_coords == ("q2", "p2"):
                     pts_list.append((state[0], state[1]))
