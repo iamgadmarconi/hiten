@@ -1,4 +1,4 @@
-from .base import _SeedingStrategy
+from .base import _CenterManifoldSeedingBase
 from .strategies import (_AxisAlignedSeeding, _LevelSetsSeeding,
                          _RadialSeeding, _RandomSeeding, _SingleAxisSeeding)
 
@@ -11,7 +11,7 @@ _STRATEGY_MAP = {
 }
 
 
-def _make_strategy(kind: str, section_config, **kwargs) -> _SeedingStrategy:
+def _make_strategy(kind: str, section_config, **kwargs) -> _CenterManifoldSeedingBase:
     try:
         cls = _STRATEGY_MAP[kind]
     except KeyError as exc:
@@ -19,6 +19,6 @@ def _make_strategy(kind: str, section_config, **kwargs) -> _SeedingStrategy:
     return cls(section_config, **kwargs)
 
 __all__ = [
-    "_SeedingStrategy",
+    "_CenterManifoldSeedingBase",
     "_make_strategy",
 ]

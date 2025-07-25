@@ -4,14 +4,14 @@ hiten.algorithms.poincare.seeding.strategies
 
 Implementation of various Poincaré section seeding strategies.
 
-The module exposes concrete implementations of the :pyclass:`_SeedingStrategy`
+The module exposes concrete implementations of the :pyclass:`_CenterManifoldSeedingBase`
 base class for different seeding strategies.
 """
 from typing import TYPE_CHECKING, Any, List, Optional, Tuple
 
 import numpy as np
 
-from hiten.algorithms.poincare.seeding.base import _SeedingStrategy
+from hiten.algorithms.poincare.seeding.base import _CenterManifoldSeedingBase
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from hiten.algorithms.poincare.config import _PoincareSectionConfig
 
 
-class _SingleAxisSeeding(_SeedingStrategy):
+class _SingleAxisSeeding(_CenterManifoldSeedingBase):
     """Generate seeds varying only one coordinate of the section plane."""
 
     def __init__(
@@ -93,7 +93,7 @@ class _SingleAxisSeeding(_SeedingStrategy):
         return seeds
 
 
-class _AxisAlignedSeeding(_SeedingStrategy):
+class _AxisAlignedSeeding(_CenterManifoldSeedingBase):
     """Generate seeds along each coordinate axis in the section plane."""
 
     def __init__(self, section_config: "_PoincareSectionConfig", *, n_seeds: int = 20) -> None:
@@ -143,7 +143,7 @@ class _AxisAlignedSeeding(_SeedingStrategy):
         return seeds
 
 
-class _LevelSetsSeeding(_SeedingStrategy):
+class _LevelSetsSeeding(_CenterManifoldSeedingBase):
     """Generate seeds along several non-zero level-sets of each plane coordinate."""
 
     def __init__(self, section_config: "_PoincareSectionConfig", *, n_seeds: int = 20) -> None:
@@ -207,7 +207,7 @@ class _LevelSetsSeeding(_SeedingStrategy):
         return seeds
 
 
-class _RadialSeeding(_SeedingStrategy):
+class _RadialSeeding(_CenterManifoldSeedingBase):
     """Generate seeds distributed on concentric circles in the section plane."""
 
     def __init__(self, section_config: "_PoincareSectionConfig", *, n_seeds: int = 20) -> None:
@@ -265,7 +265,7 @@ class _RadialSeeding(_SeedingStrategy):
         return seeds
 
 
-class _RandomSeeding(_SeedingStrategy):
+class _RandomSeeding(_CenterManifoldSeedingBase):
     """Generate seeds by uniform rejection sampling inside the rectangular Hill box."""
 
     def __init__(self, section_config: "_PoincareSectionConfig", *, n_seeds: int = 20) -> None:

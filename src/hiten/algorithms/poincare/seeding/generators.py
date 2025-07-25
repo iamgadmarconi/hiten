@@ -4,7 +4,7 @@ import numpy as np
 
 from hiten.algorithms.dynamics.base import _DynamicalSystemProtocol
 from hiten.algorithms.poincare.events import _SurfaceEvent
-from hiten.algorithms.poincare.seeding.base import _SeedingStrategy
+from hiten.algorithms.poincare.seeding.base import _CenterManifoldSeedingBase
 
 
 class _SeedGenerator(ABC):
@@ -55,7 +55,7 @@ class _CMSeedGenerator(_SeedGenerator):
     def __init__(
         self,
         *,
-        strategy: _SeedingStrategy,
+        strategy: _CenterManifoldSeedingBase,
         energy: float,
         H_blocks,
         clmo_table,

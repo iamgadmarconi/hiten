@@ -4,7 +4,7 @@ hiten.algorithms.poincare.seeding.base
 
 Base class for Poincaré section seeding strategies.
 
-The module exposes a base class :pyclass:`_SeedingStrategy` that defines the
+The module exposes a base class :pyclass:`_CenterManifoldSeedingBase` that defines the
 interface for all seeding strategies.
 """
 from abc import ABC, abstractmethod
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from hiten.algorithms.poincare.config import _PoincareSectionConfig
 
 
-class _SeedingStrategy(ABC):
+class _CenterManifoldSeedingBase(ABC):
     def __init__(self, section_config: "_PoincareSectionConfig", n_seeds: int = 20) -> None:
         self._cfg = section_config
         self.n_seeds = n_seeds
