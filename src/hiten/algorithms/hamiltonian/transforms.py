@@ -15,11 +15,12 @@ Manifolds and First Integrals of Hamiltonian Systems".
 import numpy as np
 from numba.typed import List
 
-from hiten.algorithms.polynomial.base import _create_encode_dict_from_clmo
+from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
+                                              _decode_multiindex)
 from hiten.algorithms.polynomial.coordinates import (_clean_coordinates,
-                                               _substitute_coordinates)
+                                                     _substitute_coordinates)
 from hiten.algorithms.polynomial.operations import (_polynomial_clean,
-                                              _substitute_linear)
+                                                    _substitute_linear)
 from hiten.system.libration.collinear import CollinearPoint
 from hiten.system.libration.triangular import TriangularPoint
 from hiten.utils.log_config import logger
@@ -522,3 +523,31 @@ def _synodic2local_triangular(point: TriangularPoint, synodic_coords: np.ndarray
     local[5] = s[5]  # px3 from Vz
 
     return local
+
+
+def _restrict_poly_to_center_manifold(point, poly_H, clmo, tol=1e-14):
+    r"""
+    Restrict a Hamiltonian to the center manifold by eliminating hyperbolic variables.
+    """
+    # For triangular points, all directions are centre-type, so we do NOT
+    # eliminate any terms involving (q1, p1).  The original behaviour of
+    # zeroing these terms is only appropriate for collinear points where
+    # (q1, p1) span the hyperbolic sub-space.
+
+    if isinstance(point, TriangularPoint):
+        # Simply return a *copy* of the input to avoid accidental mutation
+        return [h.copy() for h in poly_H]
+
+    # Collinear case - remove all terms containing q1 or p1 exponents.
+    poly_cm = [h.copy() for h in poly_H]
+    for deg, coeff_vec in enumerate(poly_cm):
+        if coeff_vec.size == 0:
+            continue
+        for pos, c in enumerate(coeff_vec):
+            if abs(c) <= tol:
+                coeff_vec[pos] = 0.0
+                continue
+            k = _decode_multiindex(pos, deg, clmo)
+            if k[0] != 0 or k[3] != 0:       # q1 or p1 exponent non-zero
+                coeff_vec[pos] = 0.0
+    return poly_cm
