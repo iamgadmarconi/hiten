@@ -133,7 +133,7 @@ class HamiltonianPipeline:
             return  # Don't cache for other forms
         
         self._generating_function_cache[cache_key] = generating_functions
-        logger.info(f"Stored generating functions for {form_name} in cache")
+        logger.debug(f"Stored generating functions for {form_name} in cache")
 
     def _compute_hamiltonian(self, form: str) -> Hamiltonian:
         """
@@ -180,7 +180,7 @@ class HamiltonianPipeline:
         Hamiltonian
             The physical Hamiltonian representation.
         """
-        logger.info(f"Building physical Hamiltonian for {self._point}")
+        logger.debug(f"Building physical Hamiltonian for {self._point}")
         poly_H = self._build_hamiltonian(self._point, self._max_degree)
         return Hamiltonian(poly_H, self._max_degree, ndof=3, name="physical")
 
@@ -208,16 +208,16 @@ class HamiltonianPipeline:
         if ("physical", target_form) in _CONVERSION_REGISTRY:
             return "physical"
 
-        # info: Print available conversions
-        logger.info(f"Looking for conversion path to '{target_form}'")
-        logger.info(f"Available conversions in registry: {list(_CONVERSION_REGISTRY.keys())}")
+        # debug: Print available conversions
+        logger.debug(f"Looking for conversion path to '{target_form}'")
+        logger.debug(f"Available conversions in registry: {list(_CONVERSION_REGISTRY.keys())}")
         
         queue = deque([("physical", ["physical"])])
         visited = {"physical"}
         
         while queue:
             current_form, path = queue.popleft()
-            logger.info(f"Exploring from '{current_form}' with path {path}")
+            logger.debug(f"Exploring from '{current_form}' with path {path}")
             
             # Check all possible conversions from current_form
             for (src, dst), (_, required_context, _) in _CONVERSION_REGISTRY.items():
@@ -226,17 +226,17 @@ class HamiltonianPipeline:
                     if not required_context or "point" in required_context:
                         visited.add(dst)
                         new_path = path + [dst]
-                        logger.info(f"  Found conversion: {src} -> {dst} (context: {required_context})")
+                        logger.debug(f"  Found conversion: {src} -> {dst} (context: {required_context})")
                         
                         # If we found the target, return the first step in the path
                         if dst == target_form:
-                            logger.info(f"  Found target '{target_form}' via path {new_path}")
+                            logger.debug(f"  Found target '{target_form}' via path {new_path}")
                             return new_path[0]  # Return "physical"
                         
                         # Continue exploring from this form
                         queue.append((dst, new_path))
         
-        logger.info(f"No conversion path found to '{target_form}'. Visited: {visited}")
+        logger.debug(f"No conversion path found to '{target_form}'. Visited: {visited}")
         return None
 
     def _follow_conversion_path(self, start_form: str, target_form: str) -> Hamiltonian:
@@ -392,7 +392,7 @@ class HamiltonianPipeline:
         
         ham = self.get_hamiltonian(form)
         table = _format_poly_table(ham.poly_H, ham._clmo, degree)
-        logger.info(f'{form} coefficients:\n\n{table}\n\n')
+        logger.debug(f'{form} coefficients:\n\n{table}\n\n')
         return table
 
     def cache_clear(self):
@@ -402,7 +402,7 @@ class HamiltonianPipeline:
         This forces recomputation of all Hamiltonian representations on
         the next call to :meth:`get_hamiltonian`.
         """
-        logger.info("Clearing Hamiltonian and generating function caches")
+        logger.debug("Clearing Hamiltonian and generating function caches")
         self._hamiltonian_cache.clear()
         self._generating_function_cache.clear()
 
@@ -465,7 +465,7 @@ class HamiltonianPipeline:
         
         # Check if already cached
         if cache_key in self._generating_function_cache:
-            logger.info(f"Using cached generating functions for {transform_type} transform")
+            logger.debug(f"Using cached generating functions for {transform_type} transform")
             return self._generating_function_cache[cache_key]
         
         # Try to trigger computation by requesting the corresponding Hamiltonian
@@ -481,7 +481,7 @@ class HamiltonianPipeline:
             return self._generating_function_cache[cache_key]
         
         # If still not cached, compute explicitly
-        logger.info(f"Computing generating functions for {transform_type} transform explicitly")
+        logger.debug(f"Computing generating functions for {transform_type} transform explicitly")
         self._generating_function_cache[cache_key] = self._compute_generating_functions(transform_type, **kwargs)
         return self._generating_function_cache[cache_key]
 
@@ -507,7 +507,7 @@ class HamiltonianPipeline:
         if transform_type == "partial":
             tol_lie = kwargs.get("tol_lie", 1e-30)
             
-            logger.info(f"Computing partial Lie generating functions (tol_lie={tol_lie})")
+            logger.debug(f"Computing partial Lie generating functions (tol_lie={tol_lie})")
             poly_trans, poly_G_total, poly_elim_total = _lie_transform_partial(
                 self._point, 
                 complex_modal_ham.poly_H, 
@@ -521,7 +521,7 @@ class HamiltonianPipeline:
             tol_lie = kwargs.get("tol_lie", 1e-30)
             resonance_tol = kwargs.get("resonance_tol", 1e-30)
             
-            logger.info(f"Computing full Lie generating functions (tol_lie={tol_lie}, resonance_tol={resonance_tol})")
+            logger.debug(f"Computing full Lie generating functions (tol_lie={tol_lie}, resonance_tol={resonance_tol})")
             poly_trans, poly_G_total, poly_elim_total = _lie_transform_full(
                 self._point,
                 complex_modal_ham.poly_H,
