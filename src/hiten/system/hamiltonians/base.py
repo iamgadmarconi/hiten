@@ -91,7 +91,10 @@ class Hamiltonian:
 
         # Merge defaults with user-provided parameters
         final_kwargs = {**default_params, **kwargs}
-        return converter(other, **final_kwargs)
+        result = converter(other, **final_kwargs)
+        
+        # Handle tuple return (Hamiltonian, generating_functions)
+        return cls._parse_transform(result, kwargs, cls)
 
     def to_state(self, target_cls: type["Hamiltonian"], **kwargs) -> "Hamiltonian":
         """Convert *self* into *target_cls* via ``target_cls.from_state``."""
@@ -109,9 +112,23 @@ class Hamiltonian:
             
             # Merge defaults with user-provided parameters
             final_kwargs = {**default_params, **kwargs}
-            return converter(self, **final_kwargs)
+            result = converter(self, **final_kwargs)
+            
+            return Hamiltonian._parse_transform(result, kwargs, target_cls)
 
         return target_cls.from_state(self, **kwargs)
+    
+    @staticmethod
+    def _parse_transform(result, kwargs, target_cls):
+            if isinstance(result, tuple):
+                new_ham, generating_functions = result
+                # Store generating functions in pipeline if available
+                pipeline = kwargs.get("_pipeline")
+                if pipeline is not None:
+                    pipeline._store_generating_functions(target_cls.name, generating_functions)
+                return new_ham
+            else:
+                return result
 
     def __repr__(self) -> str:
         return (
@@ -161,52 +178,8 @@ class LieGeneratingFunction:
 
 
 # Mapping: (src_name, dst_name) -> (converter_func, required_context, default_params)
-_CONVERSION_REGISTRY: Dict[Tuple[str, str], Tuple[Callable[..., "Hamiltonian"], list, dict]] = {}
+# Converter functions can return either Hamiltonian or (Hamiltonian, LieGeneratingFunction)
+_CONVERSION_REGISTRY: Dict[Tuple[str, str], Tuple[Callable[..., "Hamiltonian | tuple[Hamiltonian, LieGeneratingFunction]"], list, dict]] = {}
 
 
-def register_conversion(src_name: str, dst: "type[Hamiltonian] | str", 
-                       required_context: list = None,
-                       default_params: dict = None):
-    """Decorator to register a *src* -> *dst* conversion.
-
-    Parameters
-    ----------
-    src_name : str
-        The ``Hamiltonian.name`` of the *source* representation.
-    dst : type[Hamiltonian] | str
-        Either the **class** for the destination representation *or* its
-        ``name`` string.  Allowing a string lets you register conversions
-        before defining dedicated subclasses.
-    required_context : list, optional
-        List of required context keys (e.g., ["point"] for LibrationPoint).
-        These must be provided in the conversion call.
-    default_params : dict, optional
-        Default parameter values (e.g., {"tol": 1e-12}).
-
-    Example
-    -------
-    >>> @register_conversion("physical", "real_modal", 
-    ...                     required_context=["point"],
-    ...                     default_params={"tol": 1e-12})
-    ... def _physical_to_real(src: Hamiltonian, **kwargs) -> Hamiltonian:
-    ...     point = kwargs["point"]
-    ...     tol = kwargs.get("tol", 1e-12)
-    ...     ...
-    """
-
-    dst_name: str
-    if isinstance(dst, str):
-        dst_name = dst
-    else:
-        dst_name = dst.name
-
-    def _decorator(func):
-        _CONVERSION_REGISTRY[(src_name, dst_name)] = (
-            func, 
-            required_context or [], 
-            default_params or {}
-        )
-        return func
-
-    return _decorator
 

@@ -5,9 +5,57 @@ from hiten.algorithms.hamiltonian.normal._lie import \
 from hiten.algorithms.hamiltonian.transforms import (
     _polylocal2realmodal, _polyrealmodal2local,
     _restrict_poly_to_center_manifold, _substitute_complex, _substitute_real)
-from hiten.system.hamiltonians.base import Hamiltonian, register_conversion
+from hiten.system.hamiltonians.base import (_CONVERSION_REGISTRY, Hamiltonian,
+                                            LieGeneratingFunction)
 from hiten.system.libration.collinear import CollinearPoint
 from hiten.system.libration.triangular import TriangularPoint
+
+
+def register_conversion(src_name: str, dst: "type[Hamiltonian] | str", 
+                       required_context: list = None,
+                       default_params: dict = None):
+    """Decorator to register a *src* -> *dst* conversion.
+
+    Parameters
+    ----------
+    src_name : str
+        The ``Hamiltonian.name`` of the *source* representation.
+    dst : type[Hamiltonian] | str
+        Either the **class** for the destination representation *or* its
+        ``name`` string.  Allowing a string lets you register conversions
+        before defining dedicated subclasses.
+    required_context : list, optional
+        List of required context keys (e.g., ["point"] for LibrationPoint).
+        These must be provided in the conversion call.
+    default_params : dict, optional
+        Default parameter values (e.g., {"tol": 1e-12}).
+
+    Example
+    -------
+    >>> @register_conversion("physical", "real_modal", 
+    ...                     required_context=["point"],
+    ...                     default_params={"tol": 1e-12})
+    ... def _physical_to_real(src: Hamiltonian, **kwargs) -> Hamiltonian:
+    ...     point = kwargs["point"]
+    ...     tol = kwargs.get("tol", 1e-12)
+    ...     ...
+    """
+
+    dst_name: str
+    if isinstance(dst, str):
+        dst_name = dst
+    else:
+        dst_name = dst.name
+
+    def _decorator(func):
+        _CONVERSION_REGISTRY[(src_name, dst_name)] = (
+            func, 
+            required_context or [], 
+            default_params or {}
+        )
+        return func
+
+    return _decorator
 
 
 @register_conversion("physical", "real_modal", 
@@ -63,12 +111,16 @@ def _complex_modal_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
 @register_conversion("complex_modal", "complex_partial_normal", 
                     required_context=["point"],
                     default_params={"tol_lie": 1e-30})
-def _complex_modal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
+def _complex_modal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -> tuple[Hamiltonian, "LieGeneratingFunction"]:
     point = kwargs["point"]
     tol_lie = kwargs.get("tol_lie", 1e-30)
     # This returns (poly_trans, poly_G_total, poly_elim_total)
-    new_poly, _, _ = _lie_transform_partial(point, ham.poly_H, ham._psi, ham._clmo, ham.max_degree, tol=tol_lie)
-    return Hamiltonian(new_poly, ham.max_degree, ham._ndof, name="complex_partial_normal")
+    new_poly, poly_G_total, poly_elim_total = _lie_transform_partial(point, ham.poly_H, ham._psi, ham._clmo, ham.max_degree, tol=tol_lie)
+    
+    new_ham = Hamiltonian(new_poly, ham.max_degree, ham._ndof, name="complex_partial_normal")
+    generating_functions = LieGeneratingFunction(poly_G=poly_G_total, poly_elim=poly_elim_total, degree=ham.max_degree, ndof=ham._ndof, name="generating_functions_partial")
+    
+    return new_ham, generating_functions
 
 
 @register_conversion("complex_partial_normal", "real_partial_normal", 
@@ -145,12 +197,16 @@ def _center_manifold_real_to_center_manifold_complex(ham: Hamiltonian, **kwargs)
 @register_conversion("complex_modal", "complex_full_normal", 
                     required_context=["point"],
                     default_params={"tol_lie": 1e-30, "resonance_tol": 1e-14})
-def _complex_modal_to_complex_full_normal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
+def _complex_modal_to_complex_full_normal(ham: Hamiltonian, **kwargs) -> tuple[Hamiltonian, "LieGeneratingFunction"]:
     point = kwargs["point"]
     tol_lie = kwargs.get("tol_lie", 1e-30)
     resonance_tol = kwargs.get("resonance_tol", 1e-14)
-    new_poly, _, _ = _lie_transform_full(point, ham.poly_H, ham._psi, ham._clmo, ham.max_degree, tol=tol_lie, resonance_tol=resonance_tol)
-    return Hamiltonian(new_poly, ham.max_degree, ham._ndof, name="complex_full_normal")
+    new_poly, poly_G_total, poly_elim_total = _lie_transform_full(point, ham.poly_H, ham._psi, ham._clmo, ham.max_degree, tol=tol_lie, resonance_tol=resonance_tol)
+    
+    new_ham = Hamiltonian(new_poly, ham.max_degree, ham._ndof, name="complex_full_normal")
+    generating_functions = LieGeneratingFunction(poly_G=poly_G_total, poly_elim=poly_elim_total, degree=ham.max_degree, ndof=ham._ndof, name="generating_functions_full")
+    
+    return new_ham, generating_functions
 
 
 @register_conversion("complex_full_normal", "real_full_normal", 
