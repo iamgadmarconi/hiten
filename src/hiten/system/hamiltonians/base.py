@@ -15,7 +15,7 @@ class Hamiltonian:
     """Abstract container for a specific polynomial Hamiltonian representation.
     """
 
-    def __init__(self, poly_H: list[np.ndarray], degree: int, ndof: int=3, name: str = None):
+    def __init__(self, poly_H: list[np.ndarray], degree: int, ndof: int=3, name: str = "Hamiltonian"):
         if degree <= 0:
             raise ValueError("degree must be a positive integer")
 
@@ -24,9 +24,8 @@ class Hamiltonian:
         self._ndof: int = ndof
         self._psi, self._clmo = _init_index_tables(degree)
         self._encode_dict_list = _create_encode_dict_from_clmo(self._clmo)
-
-        self._hamsys = self._build_hamsys()
         self._name: str = name
+        self._hamsys = self._build_hamsys()
 
     @property
     def name(self) -> str:

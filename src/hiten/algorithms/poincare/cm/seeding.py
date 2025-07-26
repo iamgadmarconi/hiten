@@ -9,13 +9,13 @@ interface for all seeding strategies.
 """
 from typing import Any, Callable
 
-from hiten.algorithms.poincare.cm.config import _CenterManifoldSectionConfig
+from hiten.algorithms.poincare.cm.config import _CenterManifoldSectionConfig, _CenterManifoldMapConfig
 from hiten.algorithms.poincare.core.strategies import _SeedingStrategyBase
 
 
 class _CenterManifoldSeedingBase(_SeedingStrategyBase):
-    def __init__(self, config: _CenterManifoldSectionConfig) -> None:
-        super().__init__(config)
+    def __init__(self, section_config: _CenterManifoldSectionConfig, map_config: _CenterManifoldMapConfig) -> None:
+        super().__init__(section_config, map_config)
 
     def _hill_boundary_limits(
         self,

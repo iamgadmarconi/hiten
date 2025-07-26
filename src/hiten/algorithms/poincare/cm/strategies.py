@@ -11,7 +11,8 @@ from typing import Any, Callable, List, Optional, Tuple
 
 import numpy as np
 
-from hiten.algorithms.poincare.cm.config import _CenterManifoldSectionConfig
+from hiten.algorithms.poincare.cm.config import (_CenterManifoldMapConfig,
+                                                 _CenterManifoldSectionConfig)
 from hiten.algorithms.poincare.cm.seeding import _CenterManifoldSeedingBase
 from hiten.utils.log_config import logger
 
@@ -22,12 +23,13 @@ class _SingleAxisSeeding(_CenterManifoldSeedingBase):
     def __init__(
         self,
         section_config: "_CenterManifoldSectionConfig",
+        map_config: _CenterManifoldMapConfig,
         *,
-        n_seeds: int = 20,
         seed_axis: Optional[str] = None,
     ) -> None:
-        super().__init__(section_config, n_seeds)
-        self._seed_axis = seed_axis
+        super().__init__(section_config, map_config)
+        # seed_axis can be provided explicitly or taken from map_config
+        self._seed_axis = seed_axis or map_config.seed_axis
 
     def generate(
         self,
@@ -65,8 +67,8 @@ class _SingleAxisSeeding(_CenterManifoldSeedingBase):
 class _AxisAlignedSeeding(_CenterManifoldSeedingBase):
     """Generate seeds along each coordinate axis in the section plane."""
 
-    def __init__(self, section_config: "_CenterManifoldSectionConfig", *, n_seeds: int = 20) -> None:
-        super().__init__(section_config, n_seeds)
+    def __init__(self, section_config: "_CenterManifoldSectionConfig", map_config: _CenterManifoldMapConfig) -> None:
+        super().__init__(section_config, map_config)
 
     def generate(
         self,
@@ -102,8 +104,8 @@ class _AxisAlignedSeeding(_CenterManifoldSeedingBase):
 class _LevelSetsSeeding(_CenterManifoldSeedingBase):
     """Generate seeds along several non-zero level-sets of each plane coordinate."""
 
-    def __init__(self, section_config: "_CenterManifoldSectionConfig", *, n_seeds: int = 20) -> None:
-        super().__init__(section_config, n_seeds)
+    def __init__(self, section_config: "_CenterManifoldSectionConfig", map_config: _CenterManifoldMapConfig) -> None:
+        super().__init__(section_config, map_config)
 
     def generate(
         self,
@@ -153,8 +155,8 @@ class _LevelSetsSeeding(_CenterManifoldSeedingBase):
 class _RadialSeeding(_CenterManifoldSeedingBase):
     """Generate seeds distributed on concentric circles in the section plane."""
 
-    def __init__(self, section_config: "_CenterManifoldSectionConfig", *, n_seeds: int = 20) -> None:
-        super().__init__(section_config, n_seeds)
+    def __init__(self, section_config: "_CenterManifoldSectionConfig", map_config: _CenterManifoldMapConfig) -> None:
+        super().__init__(section_config, map_config)
 
     def generate(
         self,
@@ -198,8 +200,8 @@ class _RadialSeeding(_CenterManifoldSeedingBase):
 class _RandomSeeding(_CenterManifoldSeedingBase):
     """Generate seeds by uniform rejection sampling inside the rectangular Hill box."""
 
-    def __init__(self, section_config: "_CenterManifoldSectionConfig", *, n_seeds: int = 20) -> None:
-        super().__init__(section_config, n_seeds)
+    def __init__(self, section_config: "_CenterManifoldSectionConfig", map_config: _CenterManifoldMapConfig) -> None:
+        super().__init__(section_config, map_config)
 
     def generate(
         self,

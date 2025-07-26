@@ -12,12 +12,26 @@ _STRATEGY_MAP = {
 }
 
 
-def _make_strategy(kind: str, section_config, **kwargs) -> _CenterManifoldSeedingBase:
+def _make_strategy(kind: str, section_config, map_config, **kwargs) -> _CenterManifoldSeedingBase:
+    """Factory returning a concrete seeding strategy.
+
+    Parameters
+    ----------
+    kind : str
+        One of the keys in ``_STRATEGY_MAP``.
+    section_config
+        Instance of ``_CenterManifoldSectionConfig`` describing the section.
+    map_config
+        The map-level configuration carrying global parameters such as
+        ``n_seeds`` and ``seed_axis``.
+    kwargs
+        Extra keyword arguments forwarded to the concrete strategy.
+    """
     try:
         cls = _STRATEGY_MAP[kind]
     except KeyError as exc:
         raise ValueError(f"Unknown seed_strategy '{kind}'") from exc
-    return cls(section_config, **kwargs)
+    return cls(section_config, map_config, **kwargs)
 
 __all__ = [
     "_CenterManifoldSeedingBase",

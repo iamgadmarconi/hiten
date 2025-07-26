@@ -13,15 +13,13 @@ def _build_seeding_strategy(section_cfg, config):
     """
 
     strat = config.seed_strategy.lower()
-    n_seeds = config.n_seeds
-    seed_axis = config.seed_axis
 
     factories = {
-        "single": lambda: _SingleAxisSeeding(section_cfg, n_seeds=n_seeds, seed_axis=seed_axis),
-        "axis_aligned": lambda: _AxisAlignedSeeding(section_cfg, n_seeds=n_seeds),
-        "level_sets": lambda: _LevelSetsSeeding(section_cfg, n_seeds=n_seeds),
-        "radial": lambda: _RadialSeeding(section_cfg, n_seeds=n_seeds),
-        "random": lambda: _RandomSeeding(section_cfg, n_seeds=n_seeds),
+        "single": lambda: _SingleAxisSeeding(section_cfg, config, seed_axis=config.seed_axis),
+        "axis_aligned": lambda: _AxisAlignedSeeding(section_cfg, config),
+        "level_sets": lambda: _LevelSetsSeeding(section_cfg, config),
+        "radial": lambda: _RadialSeeding(section_cfg, config),
+        "random": lambda: _RandomSeeding(section_cfg, config),
     }
 
     try:

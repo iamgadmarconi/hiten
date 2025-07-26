@@ -52,11 +52,15 @@ class CenterManifoldMap(_ReturnMapBase):
 
         sec_cfg = _get_section_config(section_coord)
 
+        strategy_kwargs: dict[str, object] = {}
+        if self.config.seed_strategy == "single":
+            strategy_kwargs["seed_axis"] = self.config.seed_axis
+
         strategy = _make_strategy(
             self.config.seed_strategy,
             sec_cfg,
-            n_seeds=self.config.n_seeds,
-            seed_axis=self.config.seed_axis,
+            self.config,
+            **strategy_kwargs,
         )
 
         return strategy
