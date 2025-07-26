@@ -86,10 +86,9 @@ def _read_orbit_group(grp: h5py.Group):
                 break
 
     if orbit_cls is None:
-        from hiten.system.orbits.base import GenericOrbit  # final fallback
-
-        orbit_cls = GenericOrbit
-
+        raise ImportError(
+            f"Orbit class '{cls_name}' not found. Ensure the class is defined and imported correctly."
+        )
     orbit: "PeriodicOrbit" = orbit_cls.__new__(orbit_cls)
 
     orbit._family = str(grp.attrs.get("family", orbit._family))

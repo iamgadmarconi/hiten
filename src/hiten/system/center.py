@@ -136,6 +136,10 @@ class CenterManifold:
             self._max_degree = value
             # Recreate pipeline with new degree
             self._pipeline = HamiltonianPipeline(self._point, value)
+            # Refresh internal Hamiltonian system and dependent caches
+            self._hamsys = self._pipeline.get_hamiltonian("center_manifold_real").hamsys
+            self._poincare_maps.clear()
+            self._backends.clear()
 
     @property
     def pipeline(self) -> HamiltonianPipeline:
@@ -158,7 +162,9 @@ class CenterManifold:
         self._point = state["_point"]
         self._max_degree = state["_max_degree"]
         self._pipeline = HamiltonianPipeline(self._point, self._max_degree)
+        self._hamsys = self._pipeline.get_hamiltonian("center_manifold_real").hamsys
         self._poincare_maps = {}
+        self._backends = {}
         
         # Re-setup coordinate transformation functions
         if isinstance(self._point, CollinearPoint):
@@ -220,6 +226,7 @@ class CenterManifold:
         logger.debug("Clearing all caches.")
         self._pipeline.cache_clear()
         self._poincare_maps.clear()
+        self._backends.clear()
 
     def _restrict_coord_to_center_manifold(self, coord_6d):
         """Project a 6-D Phase-space coordinate onto the centre manifold.
@@ -420,7 +427,7 @@ class CenterManifold:
 
         expansions = self._pipeline.get_lie_expansions(inverse=True, tol=tol)
         complex_pnf_6d = _evaluate_transform(expansions, complex_modal_6d, 
-                                           self._hamsys._clmo)
+                                           self._hamsys.clmo)
         real_pnf_6d = _solve_real(complex_pnf_6d, tol=tol, mix_pairs=self._mix_pairs)
         real_cm_6d = self._restrict_coord_to_center_manifold(real_pnf_6d)
 

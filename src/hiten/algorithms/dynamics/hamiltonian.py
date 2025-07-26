@@ -254,6 +254,10 @@ class _HamiltonianSystem(_DynamicalSystem):
 
         return _rhs_closure
     
+    @property
+    def clmo(self) -> List[np.ndarray]:
+        return self.clmo_H
+    
     def dH_dQ(self, Q: np.ndarray, P: np.ndarray) -> np.ndarray:
         self._validate_coordinates(Q, P)
 

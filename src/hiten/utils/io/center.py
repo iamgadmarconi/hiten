@@ -114,6 +114,8 @@ def load_center_manifold(dir_path: str | Path):
         if "hamiltonians_pickle" in f:
             ham_blob = f["hamiltonians_pickle"][()]
             _deserialize_hamiltonians(ham_blob.tobytes(), cm.pipeline)
+            # Refresh internal Hamiltonian system reference to the deserialized one
+            cm._hamsys = cm.pipeline.get_hamiltonian("center_manifold_real").hamsys
 
     maps_key_file = dir_path / "poincare_maps_keys.json"
     maps_dir = dir_path / "maps"

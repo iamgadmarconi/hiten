@@ -89,8 +89,8 @@ class _SingleHitBackend(_ReturnMapBackend):
             symmetric=True,
         )
 
-    def _cross(self, state0: np.ndarray, *, t_guess: float | None = None):
-        t0_z = float(t_guess) if t_guess is not None else (np.pi / 2.0 - 0.15)
+    def _cross(self, state0: np.ndarray, *, t_guess: float | None = None, t0_offset: float = 0.15):
+        t0_z = float(t_guess) if t_guess is not None else (np.pi / 2.0 - t0_offset)
 
         sol_coarse = _propagate_dynsys(
             self._dynsys,
