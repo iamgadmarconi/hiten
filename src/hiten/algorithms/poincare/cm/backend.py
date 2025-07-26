@@ -13,7 +13,7 @@ from hiten.algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
                                                      _integrate_symplectic)
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
 from hiten.algorithms.poincare.cm.config import _get_section_config
-from hiten.algorithms.poincare.events import _SurfaceEvent
+from hiten.algorithms.poincare.core.events import _SurfaceEvent
 from hiten.algorithms.polynomial.operations import _polynomial_evaluate
 from hiten.algorithms.utils.config import FASTMATH
 from hiten.utils.log_config import logger

@@ -24,7 +24,7 @@ from hiten.algorithms.poincare.cm.config import (_CenterManifoldMapConfig,
                                               _get_section_config)
 from hiten.algorithms.poincare.core.base import _Section
 from hiten.algorithms.poincare.cm.engine import _CenterManifoldEngine
-from hiten.algorithms.poincare.events import _PlaneEvent
+from hiten.algorithms.poincare.core.events import _PlaneEvent
 from hiten.system.center import CenterManifold
 from hiten.system.libration.triangular import TriangularPoint
 from hiten.system.orbits.base import GenericOrbit

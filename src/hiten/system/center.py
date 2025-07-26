@@ -24,7 +24,7 @@ from typing import (TYPE_CHECKING, Dict, Iterable, List,
 
 import numpy as np
 from hiten.algorithms.poincare.cm.backend import _CenterManifoldBackend
-from hiten.algorithms.poincare.events import _PlaneEvent
+from hiten.algorithms.poincare.core.events import _PlaneEvent
 
 from hiten.algorithms.dynamics.hamiltonian import _HamiltonianSystem
 from hiten.algorithms.hamiltonian.center._lie import (_evaluate_transform,

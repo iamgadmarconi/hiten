@@ -4,7 +4,7 @@ from typing import Callable, Literal
 import numpy as np
 
 from hiten.algorithms.dynamics.base import _DynamicalSystemProtocol
-from hiten.algorithms.poincare.events import _SurfaceEvent
+from hiten.algorithms.poincare.core.events import _SurfaceEvent
 
 
 class _ReturnMapBackend(ABC):
