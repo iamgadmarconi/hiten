@@ -204,6 +204,49 @@ class CenterManifoldMap(_ReturnMapBase):
             dark_mode=dark_mode,
         )
 
+    def get_points(
+        self,
+        *,
+        section_coord: str | None = None,
+        axes: tuple[str, str] | None = None,
+    ) -> np.ndarray:
+        """Return 2-D projection, allowing any CM axis combination.
+
+        The base implementation only knows about the two coordinates that span
+        the section plane.  Here we extend it to permit projections mixing the
+        plane coordinates with the *missing* coordinate (solved on the
+        section) by falling back to the stored 4-D centre-manifold states.
+        """
+
+        if axes is None:
+            return super().get_points(section_coord=section_coord)
+
+        key = section_coord or self.config.section_coord
+
+        # Compute on-demand if missing
+        if key not in self._sections:
+            self.compute(section_coord=key)
+
+        sec = self._sections[key]
+
+        # Mapping for full 4-D CM state stored in `sec.states`
+        state_map = {"q2": 0, "p2": 1, "q3": 2, "p3": 3}
+
+        cols = []
+        for ax in axes:
+            if ax in sec.labels:
+                idx = sec.labels.index(ax)
+                cols.append(sec.points[:, idx])
+            elif ax in state_map:
+                cols.append(sec.states[:, state_map[ax]])
+            else:
+                raise ValueError(
+                    f"Axis '{ax}' not recognised; allowed are q2, p2, q3, p3"
+                )
+
+        # Stack the two 1-D arrays column-wise into shape (n, 2)
+        return np.column_stack(cols)
+
     def save(self, filepath: str, **kwargs) -> None:
         _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
         _save_poincare_map(self, filepath)
