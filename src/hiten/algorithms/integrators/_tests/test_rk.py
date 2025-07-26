@@ -82,7 +82,7 @@ def rk_test_data():
     # Create the Hamiltonian system using the new API
     hamiltonian_system = create_hamiltonian_system(
         H_blocks=H_poly_numba,
-        max_degree=TEST_MAX_DEG,
+        degree=TEST_MAX_DEG,
         psi_table=psi_tables,
         clmo_table=clmo_tables_numba,
         encode_dict_list=encode_dict_list,

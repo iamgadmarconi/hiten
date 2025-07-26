@@ -370,7 +370,7 @@ class LibrationPoint(ABC):
         
         return stability_info
 
-    def get_center_manifold(self, max_degree: int) -> "CenterManifold":
+    def get_center_manifold(self, degree: int) -> "CenterManifold":
         r"""
         Return (and lazily construct) a CenterManifold of given degree.
 
@@ -380,9 +380,9 @@ class LibrationPoint(ABC):
         """
         from hiten.system.center import CenterManifold
 
-        if max_degree not in self._cm_registry:
-            self._cm_registry[max_degree] = CenterManifold(self, max_degree)
-        return self._cm_registry[max_degree]
+        if degree not in self._cm_registry:
+            self._cm_registry[degree] = CenterManifold(self, degree)
+        return self._cm_registry[degree]
 
     def hamiltonian(self, max_deg: int) -> dict:
         r"""

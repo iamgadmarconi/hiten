@@ -19,16 +19,11 @@ manifolds near collinear libration points".
 """
 
 from dataclasses import asdict
-from typing import (TYPE_CHECKING, Dict, Iterable, List,
-                    Optional, Tuple, Union)
+from typing import TYPE_CHECKING, Dict, Iterable, List, Optional, Tuple, Union
 
 import numpy as np
-from hiten.algorithms.poincare.cm.backend import _CenterManifoldBackend
-from hiten.algorithms.poincare.core.events import _PlaneEvent
 
-from hiten.algorithms.dynamics.hamiltonian import _HamiltonianSystem
-from hiten.algorithms.hamiltonian.center._lie import (_evaluate_transform,
-                                                      _lie_expansion)
+from hiten.algorithms.hamiltonian.center._lie import _evaluate_transform
 from hiten.algorithms.hamiltonian.transforms import (_coordlocal2realmodal,
                                                      _coordrealmodal2local,
                                                      _local2synodic_collinear,
@@ -37,7 +32,9 @@ from hiten.algorithms.hamiltonian.transforms import (_coordlocal2realmodal,
                                                      _solve_real,
                                                      _synodic2local_collinear,
                                                      _synodic2local_triangular)
+from hiten.algorithms.poincare.cm.backend import _CenterManifoldBackend
 from hiten.algorithms.poincare.cm.config import _get_section_config
+from hiten.algorithms.poincare.core.events import _PlaneEvent
 from hiten.system.hamiltonians.pipeline import HamiltonianPipeline
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import CollinearPoint, L3Point
@@ -47,7 +44,7 @@ from hiten.utils.log_config import logger
 from hiten.utils.printing import _format_poly_table
 
 if TYPE_CHECKING:
-    from hiten.algorithms.poincare.base import _PoincareMap
+    from hiten.algorithms.poincare.cm.base import CenterManifoldMap
 
 
 class CenterManifold:
@@ -63,14 +60,14 @@ class CenterManifold:
     ----------
     point : hiten.system.libration.base.LibrationPoint
         Libration point about which the center manifold is computed.
-    max_degree : int
+    degree : int
         Maximum total degree :math:`N` of the polynomial truncation.
 
     Attributes
     ----------
     point : hiten.system.libration.base.LibrationPoint
         The libration point about which the center manifold is computed.
-    max_degree : int
+    degree : int
         The maximum total degree of the polynomial truncation.
     pipeline : HamiltonianPipeline
         Internal pipeline for managing Hamiltonian computations and caching.
@@ -82,12 +79,12 @@ class CenterManifold:
     because cached results are reused.
     """
     
-    def __init__(self, point: LibrationPoint, max_degree: int):
+    def __init__(self, point: LibrationPoint, degree: int):
         self._point = point
-        self._max_degree = max_degree
+        self._max_degree = degree
         
         # Initialize the Hamiltonian pipeline
-        self._pipeline = HamiltonianPipeline(point, max_degree)
+        self._pipeline = HamiltonianPipeline(point, degree)
         self._hamsys = self._pipeline.get_hamiltonian("center_manifold_real").hamsys
         
         # Set up coordinate transformation functions based on point type
@@ -110,7 +107,7 @@ class CenterManifold:
             raise ValueError(f"Unsupported libration point type: {type(self._point)}")
 
         # Cache for Poincaré maps
-        self._poincare_maps: Dict[Tuple[float, tuple], "_PoincareMap"] = {}
+        self._poincare_maps: Dict[Tuple[float, tuple], "CenterManifoldMap"] = {}
         self._backends: Dict[Tuple[float, str], _CenterManifoldBackend] = {} # energy, section_coord
 
     @property
@@ -119,17 +116,17 @@ class CenterManifold:
         return self._point
 
     @property
-    def max_degree(self) -> int:
+    def degree(self) -> int:
         """The maximum total degree of the polynomial truncation."""
         return self._max_degree
 
-    @max_degree.setter
-    def max_degree(self, value: int):
+    @degree.setter
+    def degree(self, value: int):
         """
         Set a new maximum degree, which invalidates all cached data.
         """
         if not isinstance(value, int) or value <= 0:
-            raise ValueError("max_degree must be a positive integer.")
+            raise ValueError("degree must be a positive integer.")
             
         if value != self._max_degree:
             logger.info(
@@ -146,10 +143,10 @@ class CenterManifold:
         return self._pipeline
 
     def __str__(self):
-        return f"CenterManifold(point={self._point}, max_degree={self._max_degree})" 
+        return f"CenterManifold(point={self._point}, degree={self._max_degree})" 
     
     def __repr__(self):
-        return f"CenterManifold(point={self._point}, max_degree={self._max_degree})"
+        return f"CenterManifold(point={self._point}, degree={self._max_degree})"
     
     def __getstate__(self):
         return {
@@ -436,7 +433,7 @@ class CenterManifold:
 
         return real_cm_4d
 
-    def poincare_map(self, energy: float, **kwargs) -> "_PoincareMap":
+    def poincare_map(self, energy: float, **kwargs) -> "CenterManifoldMap":
         """
         Create a Poincaré map at the specified energy level.
 
@@ -449,7 +446,7 @@ class CenterManifold:
 
         Returns
         -------
-        _PoincareMap
+        CenterManifoldMap
             A Poincaré map object for the given energy and configuration.
 
         Notes
@@ -458,7 +455,8 @@ class CenterManifold:
         configuration, and stored internally. Subsequent calls with the same
         parameters return the cached object.
         """
-        from hiten.algorithms.poincare.base import (_PoincareMap, _CenterManifoldMapConfig)
+        from hiten.algorithms.poincare.cm.config import _CenterManifoldMapConfig
+        from hiten.algorithms.poincare.cm.base import CenterManifoldMap
 
         # Separate config kwargs from runtime kwargs
         config_fields = set(_CenterManifoldMapConfig.__dataclass_fields__.keys())
@@ -477,7 +475,7 @@ class CenterManifold:
         cache_key = (energy, config_tuple)
 
         if cache_key not in self._poincare_maps:
-            self._poincare_maps[cache_key] = _PoincareMap(self, energy, cfg)
+            self._poincare_maps[cache_key] = CenterManifoldMap(self, energy, cfg)
         
         return self._poincare_maps[cache_key]
 

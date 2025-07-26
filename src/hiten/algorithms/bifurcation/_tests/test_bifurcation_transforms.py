@@ -170,7 +170,7 @@ def test_center_manifold_normal_form_exponent_symmetry(reduction_test_setup_tria
     """
     cm = reduction_test_setup_triangular
 
-    H_nf_complex = cm.cache_get(('hamiltonian', cm.max_degree, 'complex_full_normal'))
+    H_nf_complex = cm.cache_get(('hamiltonian', cm.degree, 'complex_full_normal'))
     clmo = cm._clmo
 
     for deg, coeff_vec in enumerate(H_nf_complex):

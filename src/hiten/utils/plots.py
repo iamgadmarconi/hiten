@@ -755,7 +755,7 @@ def plot_poincare_map_interactive(
         if on_select is not None:
             try:
                 selected_payload["orbit"] = on_select(pt)
-            except Exception as exc:  # pragma: no cover
+            except Exception as exc:  
                 raise Exception(f"Error in on_select callback: {exc}")
 
     def _onkey(event):

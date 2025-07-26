@@ -143,7 +143,7 @@ class _HamiltonianSystem(_DynamicalSystem):
     H_blocks : list of numpy.ndarray
         Packed coefficient arrays :math:`[H_0, H_2, \dots, H_N]` returned by the
         centre-manifold pipeline.
-    max_degree : int
+    degree : int
         Maximum total degree :math:`N` represented in *H_blocks*.
     psi_table : numpy.ndarray
         Lookup table mapping monomial exponents to packed indices (see
@@ -178,7 +178,7 @@ class _HamiltonianSystem(_DynamicalSystem):
     def __init__(
         self,
         H_blocks: List[np.ndarray],
-        max_degree: int,
+        degree: int,
         psi_table: np.ndarray,
         clmo_table: List[np.ndarray],
         encode_dict_list: List,
@@ -190,7 +190,7 @@ class _HamiltonianSystem(_DynamicalSystem):
         if n_dof <= 0:
             raise ValueError(f"Number of degrees of freedom must be positive, got {n_dof}")
         
-        jac_H = _polynomial_jacobian(H_blocks, max_degree, psi_table, clmo_table, encode_dict_list)
+        jac_H = _polynomial_jacobian(H_blocks, degree, psi_table, clmo_table, encode_dict_list)
 
         jac_H_typed = List()
         for var_derivs in jac_H:
@@ -207,7 +207,7 @@ class _HamiltonianSystem(_DynamicalSystem):
         self.jac_H = jac_H_typed
         self.clmo_H = clmo_H
         self.H_blocks = H_blocks
-        self.max_degree = max_degree
+        self.degree = degree
         self.psi_table = psi_table
         self.clmo_table = clmo_table
         self.encode_dict_list = encode_dict_list
@@ -279,7 +279,7 @@ class _HamiltonianSystem(_DynamicalSystem):
 
 def create_hamiltonian_system(
     H_blocks: List[np.ndarray],
-    max_degree: int,
+    degree: int,
     psi_table: np.ndarray,
     clmo_table: List[np.ndarray],
     encode_dict_list: List,
@@ -294,7 +294,7 @@ def create_hamiltonian_system(
     H_blocks : list of numpy.ndarray
         Packed coefficient arrays :math:`[H_0, H_2, \dots, H_N]` returned by the
         centre-manifold pipeline.
-    max_degree : int
+    degree : int
         Maximum total degree :math:`N` represented in *H_blocks*.
     psi_table : numpy.ndarray
         Lookup table mapping monomial exponents to packed indices (see
@@ -313,4 +313,4 @@ def create_hamiltonian_system(
     _HamiltonianSystem
         Ready-to-integrate instance wrapping the supplied Hamiltonian.
     """
-    return _HamiltonianSystem(H_blocks, max_degree, psi_table, clmo_table, encode_dict_list, n_dof, name)
+    return _HamiltonianSystem(H_blocks, degree, psi_table, clmo_table, encode_dict_list, n_dof, name)

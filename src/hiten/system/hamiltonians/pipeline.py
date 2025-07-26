@@ -25,14 +25,14 @@ class HamiltonianPipeline:
     ----------
     point : LibrationPoint
         The libration point about which the normal form is computed.
-    max_degree : int
+    degree : int
         Maximum total degree of the polynomial truncation.
 
     Attributes
     ----------
     point : LibrationPoint
         The libration point about which the normal form is computed.
-    max_degree : int
+    degree : int
         The maximum total degree of the polynomial truncation.
     _hamiltonian_cache : dict
         Cache of computed Hamiltonian objects keyed by form name.
@@ -43,12 +43,12 @@ class HamiltonianPipeline:
     parameters are inexpensive.
     """
 
-    def __init__(self, point: LibrationPoint, max_degree: int):
-        if not isinstance(max_degree, int) or max_degree <= 0:
-            raise ValueError("max_degree must be a positive integer")
+    def __init__(self, point: LibrationPoint, degree: int):
+        if not isinstance(degree, int) or degree <= 0:
+            raise ValueError("degree must be a positive integer")
 
         self._point = point
-        self._max_degree = max_degree
+        self._max_degree = degree
         self._hamiltonian_cache: Dict[str, Hamiltonian] = {}
         self._generating_function_cache: Dict[str, LieGeneratingFunction] = {}
 
@@ -68,15 +68,15 @@ class HamiltonianPipeline:
         return self._point
 
     @property
-    def max_degree(self) -> int:
+    def degree(self) -> int:
         """The maximum total degree of the polynomial truncation."""
         return self._max_degree
 
     def __str__(self) -> str:
-        return f"HamiltonianPipeline(point={self._point}, max_degree={self._max_degree})"
+        return f"HamiltonianPipeline(point={self._point}, degree={self._max_degree})"
 
     def __repr__(self) -> str:
-        return f"HamiltonianPipeline(point={self._point!r}, max_degree={self._max_degree})"
+        return f"HamiltonianPipeline(point={self._point!r}, degree={self._max_degree})"
 
     def get_hamiltonian(self, form: str) -> Hamiltonian:
         """

@@ -60,7 +60,7 @@ def test_serialization() -> None:
                   manifold_loaded.generating_orbit.initial_state)
     logger.info("[Manifold] round-trip OK\n")
 
-    cm = CenterManifold(L1, max_degree=4)
+    cm = CenterManifold(L1, degree=4)
     # Trigger polynomial computation so we have concrete data to compare
     poly_cm_original = cm.compute()
     cm_dir = TMP_DIR / "center_manifold"
@@ -68,13 +68,13 @@ def test_serialization() -> None:
     cm.save(cm_dir)
 
     cm_loaded = CenterManifold.load(cm_dir)
-    assert cm_loaded.max_degree == cm.max_degree
+    assert cm_loaded.degree == cm.degree
     _assert_equal("CenterManifold.point.position",
                   cm.point.position,
                   cm_loaded.point.position)
 
     # Retrieve cached polynomials from the *loaded* instance without recomputation
-    poly_cm_loaded = cm_loaded.cache_get(("hamiltonian", cm_loaded.max_degree, "center_manifold_real"))
+    poly_cm_loaded = cm_loaded.cache_get(("hamiltonian", cm_loaded.degree, "center_manifold_real"))
 
     assert poly_cm_loaded is not None, "Loaded CenterManifold lacks cached polynomial data!"
     assert len(poly_cm_original) == len(poly_cm_loaded), "Polynomial block count mismatch"

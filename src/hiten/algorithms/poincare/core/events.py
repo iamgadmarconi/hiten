@@ -5,7 +5,8 @@ import numpy as np
 
 
 class _SurfaceEvent(ABC):
-    """Abstract definition of a surface of section event.
+    r"""
+    Abstract definition of a surface of section event.
 
     Concrete subclasses specify a *signed* scalar function :math:`g(\mathbf x)`
     whose zeros define the 5-D hypersurface in phase-space that we treat as the
@@ -50,7 +51,8 @@ class _SurfaceEvent(ABC):
 
 
 class _SectionHit(NamedTuple):
-    """Container for a single trajectory-section intersection.
+    r"""
+    Container for a single trajectory-section intersection.
 
     Attributes
     ----------

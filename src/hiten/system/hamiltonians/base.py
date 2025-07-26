@@ -77,7 +77,7 @@ class Hamiltonian:
     def from_state(cls, other: "Hamiltonian", **kwargs) -> "Hamiltonian":
         """Create *cls* from *other* by applying the appropriate transform."""
         if other.name == cls.name:
-            return cls(other.poly_H, other.max_degree, other._ndof)
+            return cls(other.poly_H, other.degree, other._ndof)
 
         key = (other.name, cls.name)
         try:
@@ -147,7 +147,7 @@ class Hamiltonian:
 
     def __repr__(self) -> str:
         return (
-            f"{self.__class__.__name__}(name='{self.name}', max_degree={self.max_degree}, "
+            f"{self.__class__.__name__}(name='{self.name}', degree={self.degree}, "
             f"blocks={len(self)})"
         )
     

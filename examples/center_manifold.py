@@ -16,7 +16,7 @@ def main() -> None:
     """Compute and display the centre-manifold Hamiltonian."""
     system = System.from_bodies("sun", "earth")
     l_point = system.get_libration_point(1)
-    cm = l_point.get_center_manifold(max_degree=5)
+    cm = l_point.get_center_manifold(degree=5)
     cm.compute()
 
     cm.coefficients()

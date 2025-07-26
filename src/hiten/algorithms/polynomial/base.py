@@ -98,7 +98,7 @@ def _combinations(n: int, k: int) -> int:
     return res
 
 @njit(fastmath=FASTMATH,cache=False)
-def _init_index_tables(max_degree: int):
+def _init_index_tables(degree: int):
     r"""
     Initialize lookup tables for polynomial multi-index encoding and decoding.
     
@@ -108,14 +108,14 @@ def _init_index_tables(max_degree: int):
     
     Parameters
     ----------
-    max_degree : int
+    degree : int
         Maximum polynomial degree to initialize tables for
         
     Returns
     -------
     psi : numpy.ndarray
         2D array where psi[i, d] contains the number of monomials of degree d 
-        in i variables. Shape is (N_VARS+1, max_degree+1)
+        in i variables. Shape is (N_VARS+1, degree+1)
     
     clmo : numba.typed.List
         List of arrays where clmo[d] contains packed representations of all
@@ -127,9 +127,9 @@ def _init_index_tables(max_degree: int):
     The packing scheme allocates 6 bits for each variable :math:`x_1` through :math:`x_5`,
     with :math:`x_0`'s exponent implicitly determined by the total degree.
     """
-    psi = np.zeros((N_VARS+1, max_degree+1), dtype=np.int64)
+    psi = np.zeros((N_VARS+1, degree+1), dtype=np.int64)
     for i_vars_count in range(1, N_VARS+1):
-        for d_degree in range(max_degree+1):
+        for d_degree in range(degree+1):
             # psi[i, d] = math.comb(d + i - 1, i - 1)
             # n = d + i_vars_count - 1
             # k = i_vars_count - 1
@@ -138,7 +138,7 @@ def _init_index_tables(max_degree: int):
     psi[0, 0] = 1
 
     clmo = List.empty_list(np.uint32[::1]) # Ensure clmo is typed correctly for Numba
-    for d in range(max_degree+1):
+    for d in range(degree+1):
         count = psi[N_VARS, d]
         arr = np.empty(count, dtype=np.uint32)
         idx = 0

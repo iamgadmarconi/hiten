@@ -346,7 +346,7 @@ def _get_degree(p: np.ndarray, psi) -> int:
         return -1 
     
     # N_VARS is imported from hiten.algorithms.variables
-    # psi.shape[1] is max_degree + 1
+    # psi.shape[1] is degree + 1
     for d in range(psi.shape[1]): 
         if psi[N_VARS, d] == num_coeffs:
             return d

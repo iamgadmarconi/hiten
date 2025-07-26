@@ -19,7 +19,7 @@ def main() -> None:
 
     l_point = system.get_libration_point(1)
     logger.info("Generating Poincaré map for L%s of the %s-%s system...", 1, "Earth", "Moon")
-    cm = l_point.get_center_manifold(max_degree=6)
+    cm = l_point.get_center_manifold(degree=6)
     cm.compute()
 
     pm = cm.poincare_map(

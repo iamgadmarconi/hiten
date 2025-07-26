@@ -41,7 +41,7 @@
    system = System.from_bodies("earth", "moon")
    l1 = system.get_libration_point(1)
 
-   cm = l1.get_center_manifold(max_degree=10)
+   cm = l1.get_center_manifold(degree=10)
    cm.compute()
 
    initial_state = cm.ic(poincare_point=[0.0, 0.0], energy=0.6, section_coord="q3")
@@ -110,7 +110,7 @@
    system = System.from_bodies("earth", "moon")
    l1 = system.get_libration_point(1)
 
-   cm = l1.get_center_manifold(max_degree=12)
+   cm = l1.get_center_manifold(degree=12)
    cm.compute()
 
    pm = cm.poincare_map(energy=0.7, section_coord="q2", n_seeds=50, n_iter=100, seed_strategy="axis_aligned")

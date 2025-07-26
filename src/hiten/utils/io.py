@@ -1,18 +1,16 @@
-from __future__ import annotations
-
 import json
 import os
 import pickle
 from dataclasses import asdict
 from importlib import import_module
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import h5py
 import numpy as np
 
 if TYPE_CHECKING:
-    from hiten.algorithms.poincare.base import _PoincareMap
+    from hiten.algorithms.poincare.cm.base import CenterManifoldMap
     from hiten.system.center import CenterManifold
     from hiten.system.manifold import Manifold, ManifoldResult
     from hiten.system.orbits.base import PeriodicOrbit
@@ -344,7 +342,7 @@ def _load_manifold(filepath: str) -> "Manifold":
     return man
 
 
-def _save_poincare_map(pmap: "_PoincareMap", filepath: str, *, compression: str = "gzip", level: int = 4) -> None:
+def _save_poincare_map(pmap: "CenterManifoldMap", filepath: str, *, compression: str = "gzip", level: int = 4) -> None:
     _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
 
     with h5py.File(filepath, "w") as f:
@@ -357,28 +355,21 @@ def _save_poincare_map(pmap: "_PoincareMap", filepath: str, *, compression: str 
             _write_dataset(f, "points", np.asarray(pmap._section.points), compression=compression, level=level)
             f.attrs["labels_json"] = json.dumps(list(pmap._section.labels))
 
-        if pmap._grid is not None:
-            # _grid may be a _PoincareSection (new) or a plain ndarray (legacy)
-            if hasattr(pmap._grid, "points"):
-                grid_pts = np.asarray(pmap._grid.points)
-                grid_labels = list(pmap._grid.labels)
-            else:
-                grid_pts = np.asarray(pmap._grid)
-                grid_labels = list(pmap._section.labels) if pmap._section is not None else []  # Best effort fallback
 
-            _write_dataset(f, "grid", grid_pts, compression=compression, level=level)
-            f.attrs["grid_labels_json"] = json.dumps(grid_labels)
-
-
-def _load_poincare_map_inplace(obj: "_PoincareMap", filepath: str) -> None:
-    from hiten.algorithms.poincare.base import _CenterManifoldMapConfig
+def _load_poincare_map_inplace(obj: "CenterManifoldMap", filepath: str) -> None:
     from hiten.algorithms.poincare.core.base import _Section
+    from hiten.algorithms.poincare.cm.config import _CenterManifoldMapConfig
 
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Poincaré-map file not found: {filepath}")
 
     with h5py.File(filepath, "r") as f:
-        obj.energy = float(f.attrs["energy"])
+        energy_val = float(f.attrs["energy"])
+        if hasattr(obj, "_energy"):
+            obj._energy = energy_val  
+        else:
+            obj.energy = energy_val
+
         cfg_json = f.attrs.get("config_json", "{}")
         try:
             cfg_dict = json.loads(cfg_json)
@@ -386,53 +377,62 @@ def _load_poincare_map_inplace(obj: "_PoincareMap", filepath: str) -> None:
         except Exception as exc:
             obj.config = _CenterManifoldMapConfig()
 
-        obj._use_symplectic = obj.config.method.lower() == "symplectic"
 
         if "points" in f:
             pts = f["points"][()]
             labels_json = f.attrs.get("labels_json")
             labels = tuple(json.loads(labels_json)) if labels_json else ("q2", "p2")
-            obj._section = _Section(pts, np.full((pts.shape[0], 4), np.nan, dtype=np.float64), labels)
+            obj._section = _Section(pts, np.full((pts.shape[0], 4), np.nan, dtype=np.float64), labels) 
         else:
             obj._section = None
 
 
-
-def _load_poincare_map(filepath: str, cm: "CenterManifold") -> "_PoincareMap":
-    from hiten.algorithms.poincare.base import _PoincareMap
+def _load_poincare_map(filepath: str, cm: "CenterManifold") -> "CenterManifoldMap":
+    from hiten.algorithms.poincare.cm.base import \
+        CenterManifoldMap as CenterManifoldMap
 
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Poincaré-map file not found: {filepath}")
 
     with h5py.File(filepath, "r") as f:
         energy = float(f.attrs["energy"])
-        pmap = _PoincareMap(cm, energy)
-        _load_poincare_map_inplace(pmap, filepath)
+    pmap = CenterManifoldMap(cm, energy)
+    _load_poincare_map_inplace(pmap, filepath)
     return pmap
 
 
-def _save_center_manifold(cm: "CenterManifold", dir_path: str | os.PathLike, *, compression: str = "gzip", level: int = 4) -> None:
+def _save_center_manifold(
+    cm: "CenterManifold",
+    dir_path: str | os.PathLike,
+    *,
+    compression: str = "gzip",
+    level: int = 4,
+) -> None:
+    """Serialise a CenterManifold and all cached Poincaré maps.
+
+    Only minimal data required to reconstruct the object is stored:
+    the libration *point* and the polynomial *degree*.  Heavy
+    `HamiltonianPipeline` internals are regenerated on load.
+    """
+
     dir_path = Path(dir_path)
     dir_path.mkdir(parents=True, exist_ok=True)
 
     main_file = dir_path / "manifold.h5"
     with h5py.File(main_file, "w") as f:
         f.attrs["class"] = cm.__class__.__name__
-        f.attrs["format_version"] = "1.0"
-        f.attrs["max_degree"] = int(cm._max_degree)
+        f.attrs["format_version"] = "2.0"  # bumped after refactor
+        f.attrs["degree"] = int(cm._max_degree)
 
         point_blob = pickle.dumps(cm._point, protocol=pickle.HIGHEST_PROTOCOL)
         f.create_dataset("point_pickle", data=np.frombuffer(point_blob, dtype=np.uint8))
 
-        clean_cache = cm.__class__._sanitize_cache(cm._cache)
-        cache_blob = pickle.dumps(clean_cache, protocol=pickle.HIGHEST_PROTOCOL)
-        f.create_dataset("cache_pickle", data=np.frombuffer(cache_blob, dtype=np.uint8), compression=compression, compression_opts=level)
-
+    # Save cached Poincaré maps (if any)
     maps_dir = dir_path / "maps"
     keys_file = dir_path / "poincare_maps_keys.json"
     if cm._poincare_maps:
         maps_dir.mkdir(exist_ok=True)
-        map_keys = []
+        map_keys: list[dict[str, Any]] = []
         for i, (key, pmap) in enumerate(cm._poincare_maps.items()):
             filename = f"map_{i}.h5"
             pmap.save(maps_dir / filename)
@@ -445,11 +445,7 @@ def _save_center_manifold(cm: "CenterManifold", dir_path: str | os.PathLike, *, 
 
 
 def _load_center_manifold(dir_path: str | os.PathLike) -> "CenterManifold":
-    from pathlib import Path
-
-    from hiten.algorithms.poincare.base import _PoincareMap
-    from hiten.algorithms.polynomial.base import (
-        _create_encode_dict_from_clmo, _init_index_tables)
+    from hiten.algorithms.poincare.cm.base import CenterManifoldMap
     from hiten.system.center import CenterManifold
 
     dir_path = Path(dir_path)
@@ -458,19 +454,12 @@ def _load_center_manifold(dir_path: str | os.PathLike) -> "CenterManifold":
         raise FileNotFoundError(main_file)
 
     with h5py.File(main_file, "r") as f:
-        max_deg = int(f.attrs["max_degree"])
+        max_deg = int(f.attrs["degree"])
         point_blob = f["point_pickle"][()]
-        cache_blob = f["cache_pickle"][()]
         point = pickle.loads(point_blob.tobytes())
-        cache = pickle.loads(cache_blob.tobytes())
 
-    # Build blank instance and patch attributes
-    cm = CenterManifold.__new__(CenterManifold)  
-    cm._point = point
-    cm._max_degree = max_deg
-    cm._psi, cm._clmo = _init_index_tables(max_deg)  
-    cm._encode_dict_list = _create_encode_dict_from_clmo(cm._clmo)  
-    cm._cache = cache
+    # Reconstruct through public constructor to ensure internal consistency
+    cm = CenterManifold(point, max_deg)
     cm._poincare_maps = {}
 
     keys_file = dir_path / "poincare_maps_keys.json"
@@ -483,9 +472,8 @@ def _load_center_manifold(dir_path: str | os.PathLike) -> "CenterManifold":
             energy = key_list[0]
             config_tuple = tuple(tuple(item) for item in key_list[1])
             original_key = (energy, config_tuple)
-            pmap = _PoincareMap(cm, energy)  # dummy to allocate
+            pmap = CenterManifoldMap(cm, energy)
             pmap.load(maps_dir / info["file"])
-            pmap.cm = cm
             cm._poincare_maps[original_key] = pmap
 
     return cm

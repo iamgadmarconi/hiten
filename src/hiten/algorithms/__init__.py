@@ -10,16 +10,16 @@ from .corrector.correctors import _NewtonOrbitCorrector as NewtonOrbitCorrector
 from .corrector.interfaces import \
     _OrbitCorrectionConfig as OrbitCorrectionConfig
 from .corrector.line import _LineSearchConfig as LineSearchConfig
-from .poincare.base import _PoincareMap as PoincareMap
-from .poincare.base import _CenterManifoldMapConfig as PoincareMapConfig
+from .poincare.cm.base import CenterManifoldMap
+from .poincare.cm.config import _CenterManifoldMapConfig as CenterManifoldMapConfig
 from .tori.base import _InvariantTori as InvariantTori
 
 __all__ = [
     "StateParameter",
     "PeriodParameter",
     "EnergyParameter",
-    "PoincareMap",
-    "PoincareMapConfig",
+    "CenterManifoldMap",
+    "CenterManifoldMapConfig",
     "InvariantTori",
     "NewtonOrbitCorrector",
     "LineSearchConfig",

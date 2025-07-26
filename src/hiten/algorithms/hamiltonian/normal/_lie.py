@@ -33,7 +33,7 @@ def _lie_transform(
     poly_init: List[np.ndarray], 
     psi: np.ndarray, 
     clmo: np.ndarray, 
-    max_degree: int, 
+    degree: int, 
     tol: float = 1e-30,
     resonance_tol: float = 1e-14
 ) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
@@ -54,7 +54,7 @@ def _lie_transform(
         Combinatorial table from _init_index_tables
     clmo : numpy.ndarray
         List of arrays containing packed multi-indices
-    max_degree : int
+    degree : int
         Maximum degree to include in the normalized Hamiltonian
     tol : float, optional
         Tolerance for cleaning small coefficients, default is 1e-30
@@ -86,13 +86,13 @@ def _lie_transform(
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
 
     poly_trans = [h.copy() for h in poly_init]
-    poly_G_total = _polynomial_zero_list(max_degree, psi)
-    poly_elim_total = _polynomial_zero_list(max_degree, psi)  # Store eliminated terms
+    poly_G_total = _polynomial_zero_list(degree, psi)
+    poly_elim_total = _polynomial_zero_list(degree, psi)  # Store eliminated terms
 
     # Track small divisors encountered
     small_divisors_log = []
 
-    for n in range(3, max_degree+1):
+    for n in range(3, degree+1):
         logger.info(f"Full normalization at order: {n}")
         p_n = poly_trans[n]
         if not p_n.any():
@@ -124,7 +124,7 @@ def _lie_transform(
             poly_trans_typed.append(item_arr)
             
         poly_trans = _apply_poly_transform(
-            poly_trans_typed, p_G_n, n, max_degree, psi, clmo, encode_dict_list, tol
+            poly_trans_typed, p_G_n, n, degree, psi, clmo, encode_dict_list, tol
         )
         
         if n < len(poly_G_total) and poly_G_total[n].shape == p_G_n.shape:

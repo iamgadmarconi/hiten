@@ -73,7 +73,7 @@ class _RHSSystem(_DynamicalSystem):
             from numba.core.registry import CPUDispatcher
 
             is_dispatcher = isinstance(rhs_func, CPUDispatcher)
-        except Exception:  # pragma: no cover - very old Numba versions
+        except Exception:
             is_dispatcher = False
 
         if is_dispatcher:

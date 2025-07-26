@@ -143,7 +143,7 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray
     if max_deg_expr > max_supported_degree:
         raise ValueError(
             f"Expression degree ({max_deg_expr}) exceeds precomputed table limit ({max_supported_degree}). "
-            "Re-initialize psi/clmo with a higher max_degree if needed."
+            "Re-initialize psi/clmo with a higher degree if needed."
         )
 
     # Initialize list of coefficient arrays (one for each degree up to max_deg_expr)
@@ -166,7 +166,7 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray
         pos = _encode_multiindex(k_np, term_degree, encode_dict_list)
 
         if pos == -1:
-            # This can happen if term_degree > max_degree for clmo or other encoding issues
+            # This can happen if term_degree > degree for clmo or other encoding issues
             raise ValueError(
                 f"Failed to encode multi-index {k_np.tolist()} for degree {term_degree}. "
                 "This may indicate an unsupported monomial, a degree outside clmo table range, or an internal error."
