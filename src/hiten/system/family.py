@@ -14,9 +14,6 @@ It offers convenience helpers for iteration, random access, conversion to a
 `pandas.DataFrame`, and basic serialisation to an HDF5 file leveraging the
 existing utilities in :pymod:`hiten.utils.io`.
 """
-
-from __future__ import annotations
-
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -27,8 +24,8 @@ import numpy as np
 import pandas as pd
 
 from hiten.system.orbits.base import PeriodicOrbit
-from hiten.utils.io import (_ensure_dir, _read_periodic_orbit_group,
-                            _write_periodic_orbit_group)
+from hiten.utils.io.common import _ensure_dir
+from hiten.utils.io.orbits import _read_orbit_group, _write_orbit_group
 from hiten.utils.log_config import logger
 from hiten.utils.plots import plot_orbit_family
 
@@ -93,7 +90,7 @@ class OrbitFamily:
             grp = f.create_group("orbits")
             for i, orbit in enumerate(self.orbits):
                 sub = grp.create_group(str(i))
-                _write_periodic_orbit_group(sub, orbit, compression=compression, level=level)
+                _write_orbit_group(sub, orbit, compression=compression, level=level)
 
         logger.info(f"Family saved to {filepath}")
 
@@ -144,7 +141,7 @@ class OrbitFamily:
             orbits: List[PeriodicOrbit] = []
             for key in sorted(f["orbits"], key=lambda s: int(s)):
                 grp = f["orbits"][key]
-                orbits.append(_read_periodic_orbit_group(grp))
+                orbits.append(_read_orbit_group(grp))
         return cls(orbits, param_name, param_vals)
 
     def __repr__(self) -> str:

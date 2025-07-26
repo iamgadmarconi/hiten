@@ -13,7 +13,7 @@ from hiten.algorithms.utils.coordinates import (_get_angular_velocity,
                                                 _rotating_to_inertial,
                                                 _si_time, _to_si_units)
 from hiten.system.body import Body
-from hiten.utils.io import _ensure_dir
+from hiten.utils.io.common import _ensure_dir
 
 
 def animate_trajectories(
@@ -86,9 +86,6 @@ def animate_trajectories(
     
     primary_inert_center = np.array([0, 0, 0])
 
-    # ------------------------------------------------------------------
-    # Pre-compute global axis limits so that zoom/scale is persistent.
-    # ------------------------------------------------------------------
     coords_list = [
         traj_rot,
         traj_inert,
@@ -107,11 +104,6 @@ def animate_trajectories(
     y_limits = (center[1] - half_span, center[1] + half_span)
     z_limits = (center[2] - half_span, center[2] + half_span)
 
-    # Store initial view angles to keep orientation persistent
-    init_elev_rot, init_azim_rot = ax_rot.elev, ax_rot.azim
-    init_elev_inert, init_azim_inert = ax_inert.elev, ax_inert.azim
-
-    # ----- Persisted view state (updated every frame, used by init on repeats) -----
     view_state = {
         'rot_elev': ax_rot.elev,
         'rot_azim': ax_rot.azim,
@@ -170,7 +162,6 @@ def animate_trajectories(
         Updates the plot for the current frame, clearing the axes and
         setting the title and labels.
         """
-        # Capture existing user view/zoom before clearing (ensures persistence)
         elev_rot_prev, azim_rot_prev = ax_rot.elev, ax_rot.azim
         elev_inert_prev, azim_inert_prev = ax_inert.elev, ax_inert.azim
 
@@ -180,7 +171,6 @@ def animate_trajectories(
         ax_rot.cla()
         ax_inert.cla()
 
-        # Restore view/limits captured this frame
         for ax, elev, azim, xl, yl, zl in (
                 (ax_rot, elev_rot_prev, azim_rot_prev, xlim_rot_prev, ylim_rot_prev, zlim_rot_prev),
                 (ax_inert, elev_inert_prev, azim_inert_prev, xlim_inert_prev, ylim_inert_prev, zlim_inert_prev),
@@ -194,7 +184,6 @@ def animate_trajectories(
             ax.set_zlim(zl)
             ax.view_init(elev=elev, azim=azim)
         
-        # Save these settings for the init() function on the next repeat
         view_state['rot_elev'] = elev_rot_prev
         view_state['rot_azim'] = azim_rot_prev
         view_state['inert_elev'] = elev_inert_prev
@@ -237,7 +226,6 @@ def animate_trajectories(
         ax_inert.set_title("Inertial Frame (Real Time, Real Omega)", color='white' if dark_mode else 'black')
         ax_inert.legend()
         
-        # Ensure dark-mode styling (including legend) is applied for this frame
         if dark_mode:
             _set_dark_mode(fig, ax_rot, title=ax_rot.get_title())
             _set_dark_mode(fig, ax_inert, title=ax_inert.get_title())
@@ -300,22 +288,18 @@ def plot_rotating_frame(
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection='3d')
     
-    # Get trajectory data
     x = states[:, 0]
     y = states[:, 1]
     z = states[:, 2]
     
-    # Plot orbit trajectory
     orbit_color = kwargs.get('orbit_color', 'cyan')
     ax.plot(x, y, z, label=f'Orbit', color=orbit_color)
     
-    # Plot primary body (canonical position: -mu, 0, 0)
     primary_pos = np.array([-mu, 0, 0])
     primary_radius = bodies[0].radius / system_distance  # Convert to canonical units
     primary_color = _get_body_color(bodies[0], 'royalblue')
     _plot_body(ax, primary_pos, primary_radius, primary_color, bodies[0].name)
     
-    # Plot secondary body (canonical position: 1-mu, 0, 0)
     secondary_pos = np.array([1-mu, 0, 0])
     secondary_radius = bodies[1].radius / system_distance  # Convert to canonical units
     secondary_color = _get_body_color(bodies[1], 'slategray')
@@ -325,11 +309,9 @@ def plot_rotating_frame(
     ax.set_ylabel('Y [canonical]')
     ax.set_zlabel('Z [canonical]')
     
-    # Create legend and apply styling
     ax.legend()
     _set_axes_equal(ax)
     
-    # Apply dark mode if requested
     if dark_mode:
         _set_dark_mode(fig, ax, title=f'Orbit in Rotating Frame')
     else:
@@ -379,39 +361,32 @@ def plot_inertial_frame(
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection='3d')
     
-    mu = _get_mass_parameter(bodies[0].mass, bodies[1].mass)
-    # Get trajectory data and convert to inertial frame
+    mu = _get_mass_parameter(bodies[0].mass, bodies[1].mass)    
     traj_inertial = []
     
     for state, t in zip(states, times):
-        # Convert rotating frame to inertial frame (canonical units)
         inertial_state = _rotating_to_inertial(state, t, mu)
         traj_inertial.append(inertial_state)
     
     traj_inertial = np.array(traj_inertial)
     x, y, z = traj_inertial[:, 0], traj_inertial[:, 1], traj_inertial[:, 2]
     
-    # Plot orbit trajectory
     orbit_color = kwargs.get('orbit_color', 'red')
     ax.plot(x, y, z, label=f'Orbit', color=orbit_color)
     
-    # Plot primary body at origin
     primary_pos = np.array([0, 0, 0])
     primary_radius = bodies[0].radius / system_distance  # Convert to canonical units
     primary_color = _get_body_color(bodies[0], 'royalblue')
     _plot_body(ax, primary_pos, primary_radius, primary_color, bodies[0].name)
     
-    # Plot secondary's orbit and position
     theta = times  # Time is angle in canonical units
     secondary_x = (1-mu)
     secondary_y = np.zeros_like(theta)
     secondary_z = np.zeros_like(theta)
     
-    # Plot secondary's orbit
     ax.plot(secondary_x, secondary_y, secondary_z, '--', color=bodies[1].color, 
             alpha=0.5, label=f'{bodies[1].name} Orbit')
     
-    # Plot secondary at final position
     secondary_pos = np.array([secondary_x[-1], secondary_y[-1], secondary_z[-1]])
     secondary_radius = bodies[1].radius / system_distance  # Convert to canonical units
     secondary_color = _get_body_color(bodies[1], 'slategray')
@@ -421,11 +396,9 @@ def plot_inertial_frame(
     ax.set_ylabel('Y [canonical]')
     ax.set_zlabel('Z [canonical]')
     
-    # Create legend and apply styling
     ax.legend()
     _set_axes_equal(ax)
     
-    # Apply dark mode if requested
     if dark_mode:
         _set_dark_mode(fig, ax, title=f'Orbit in Inertial Frame')
     else:
@@ -504,7 +477,6 @@ def plot_orbit_family(
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection='3d')
 
-    # Use matplotlib's colour normalisation utilities (not available via `plt`)
     norm = mpl.colors.Normalize(vmin=float(np.min(scalar_param)), vmax=float(np.max(scalar_param)))
     sm = plt.cm.ScalarMappable(cmap=cmap_key, norm=norm)
 
@@ -512,7 +484,6 @@ def plot_orbit_family(
         color = sm.to_rgba(float(val))
         ax.plot(traj[:, 0], traj[:, 1], traj[:, 2], color=color, lw=1.2)
 
-    # plot primaries in rotating frame (-mu,0,0) and (1-mu,0,0)
     primary_pos = np.array([-mu, 0, 0])
     secondary_pos = np.array([1 - mu, 0, 0])
     _plot_body(ax, primary_pos, bodies[0].radius / system_distance, _get_body_color(bodies[0], 'royalblue'), bodies[0].name)
@@ -522,7 +493,6 @@ def plot_orbit_family(
     ax.set_ylabel('Y [canonical]')
     ax.set_zlabel('Z [canonical]')
     
-    # Apply equal axes scaling only if requested
     if equal_axes:
         _set_axes_equal(ax)
     
@@ -755,7 +725,7 @@ def plot_poincare_map_interactive(
         if on_select is not None:
             try:
                 selected_payload["orbit"] = on_select(pt)
-            except Exception as exc:  # pragma: no cover
+            except Exception as exc:  
                 raise Exception(f"Error in on_select callback: {exc}")
 
     def _onkey(event):

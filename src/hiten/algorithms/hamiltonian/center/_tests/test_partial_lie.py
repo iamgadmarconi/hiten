@@ -40,6 +40,44 @@ def lie_test_setup():
 
     cm = CenterManifold(libration_point, TEST_MAX_DEG)
     cm.compute()
+
+    # ------------------------------------------------------------------
+    # Patch legacy attributes expected by the historical test-suite
+    # ------------------------------------------------------------------
+    # The new implementation stores most low-level data inside
+    # ``cm.pipeline``.  To keep changes local to the test we monkey-patch
+    # the individual CenterManifold *instance* instead of the library code.
+
+    _ham = cm.pipeline.get_hamiltonian("center_manifold_real")
+
+    # Legacy private tables (read-only in tests)
+    cm._psi = _ham._psi
+    cm._clmo = _ham._clmo
+    cm._encode_dict_list = _ham._encode_dict_list
+
+    # Legacy cache_get helper used by a handful of unit tests
+    def _cache_get(key):
+        if not isinstance(key, tuple):
+            raise KeyError("cache_get expects a tuple key")
+
+        if key[0] == "hamiltonian":
+            # ('hamiltonian', degree, form)
+            _, deg, form = key
+            if deg != cm.degree:
+                cm.degree = int(deg)
+            return cm.pipeline.get_hamiltonian(form).poly_H
+
+        if key[0] == "generating_functions":
+            # ('generating_functions', degree)
+            _, deg = key
+            if deg != cm.degree:
+                cm.degree = int(deg)
+            return cm.pipeline.get_generating_functions("partial").poly_G
+
+        raise KeyError(f"Unsupported cache key: {key}")
+
+    cm.cache_get = _cache_get
+
     return cm
 
 
@@ -269,13 +307,13 @@ def test_lie_transform_on_center_manifold(lie_test_setup):
     point = cm.point
     psi = cm._psi
     clmo = cm._clmo
-    max_degree = TEST_MAX_DEG
+    degree = TEST_MAX_DEG
     
-    H_phys = _build_physical_hamiltonian_collinear(point, max_degree)
-    H_rn = _polylocal2realmodal(point, H_phys, max_degree, psi, clmo)
-    H_cn = _substitute_complex(H_rn, max_degree, psi, clmo)
+    H_phys = _build_physical_hamiltonian_collinear(point, degree)
+    H_rn = _polylocal2realmodal(point, H_phys, degree, psi, clmo)
+    H_cn = _substitute_complex(H_rn, degree, psi, clmo)
     
-    poly_trans, _, _ = _lie_transform(point, H_cn, psi, clmo, max_degree)
+    poly_trans, _, _ = _lie_transform(point, H_cn, psi, clmo, degree)
     
     print("\nAnalyzing transformed Hamiltonian on center manifold:")
     print("="*60)
@@ -345,7 +383,7 @@ def test_lie_expansion_application(lie_test_setup):
     cm = lie_test_setup
     psi = cm._psi
     clmo = cm._clmo
-    max_degree = TEST_MAX_DEG
+    degree = TEST_MAX_DEG
 
     poly_G_total = cm.cache_get(('generating_functions', TEST_MAX_DEG))
     
@@ -359,7 +397,7 @@ def test_lie_expansion_application(lie_test_setup):
     # Start with identity transformation
     identity_coords = []
     for i in range(6):
-        poly = _polynomial_zero_list(max_degree, psi)
+        poly = _polynomial_zero_list(degree, psi)
         poly[1][i] = 1.0
         identity_coords.append(poly)
     
@@ -371,13 +409,13 @@ def test_lie_expansion_application(lie_test_setup):
         print(f"\nApplying only G_{n}:")
         
         # Create polynomial for this generator only
-        test_G = _polynomial_zero_list(max_degree, psi)
+        test_G = _polynomial_zero_list(degree, psi)
         test_G[n] = poly_G_total[n].copy()
         
         # Apply to q1 coordinate (index 0)
         encode_dict_list = _create_encode_dict_from_clmo(clmo)
         transformed_q1 = _apply_coord_transform(
-            identity_coords[0], test_G, max_degree, psi, clmo, encode_dict_list, 1e-15
+            identity_coords[0], test_G, degree, psi, clmo, encode_dict_list, 1e-15
         )
         
         # Evaluate the transformation at the test point
@@ -470,10 +508,10 @@ def test_lie_expansion_amplitude_scaling(lie_test_setup):
     poly_G_total = cm.cache_get(('generating_functions', TEST_MAX_DEG))
     psi = cm._psi
     clmo = cm._clmo
-    max_degree = TEST_MAX_DEG
+    degree = TEST_MAX_DEG
     
     # Generate the coordinate transformation expansions
-    expansions = _lie_expansion(poly_G_total, max_degree, psi, clmo, tol=1e-15, inverse=False)
+    expansions = _lie_expansion(poly_G_total, degree, psi, clmo, tol=1e-15, inverse=False)
     
     # Test different amplitudes (scaling the base coordinates)
     base_coords = np.array([0, 1+1j, 0.5+0.2j,   # q1,q2,q3
@@ -549,7 +587,7 @@ def test_lie_expansion_amplitude_scaling(lie_test_setup):
 
 
 def test_lie_expansion_symplecticity(lie_test_setup):
-    def poisson_matrix(expansions, clmo, psi, max_degree, test_point):
+    def poisson_matrix(expansions, clmo, psi, degree, test_point):
         """Return the 6x6 matrix M_ij = {Phi_i, Phi_j}(point)."""
         encode_dict_list = _create_encode_dict_from_clmo(clmo)
         n = 6
@@ -558,7 +596,7 @@ def test_lie_expansion_symplecticity(lie_test_setup):
         for i in range(n):
             for j in range(i+1, n):
                 bracket = _polynomial_poisson_bracket(
-                    expansions[i], expansions[j], max_degree, psi, clmo, encode_dict_list
+                    expansions[i], expansions[j], degree, psi, clmo, encode_dict_list
                 )
                 val = _polynomial_evaluate(bracket, test_point, clmo)
                 M[i, j] = val

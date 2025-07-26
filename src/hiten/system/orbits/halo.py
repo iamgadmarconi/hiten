@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Literal, Optional, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
+from hiten.algorithms.poincare.sh.backend import _y_plane_crossing
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import (CollinearPoint, L1Point, L2Point,
                                               L3Point)
@@ -133,8 +134,10 @@ class HaloOrbit(PeriodicOrbit):
     @property
     def _correction_config(self) -> "_OrbitCorrectionConfig":
         """Provides the differential correction configuration for halo orbits."""
-        from hiten.algorithms.corrector.interfaces import _OrbitCorrectionConfig
+        from hiten.algorithms.corrector.interfaces import \
+            _OrbitCorrectionConfig
         return _OrbitCorrectionConfig(
+            event_func=_y_plane_crossing,
             residual_indices=(S.VX, S.VZ),
             control_indices=(S.X, S.VY),
             extra_jacobian=self._halo_quadratic_term
@@ -142,7 +145,8 @@ class HaloOrbit(PeriodicOrbit):
 
     @property
     def _continuation_config(self) -> "_OrbitContinuationConfig":
-        from hiten.algorithms.continuation.interfaces import _OrbitContinuationConfig
+        from hiten.algorithms.continuation.interfaces import \
+            _OrbitContinuationConfig
         return _OrbitContinuationConfig(state=S.Z, amplitude=True)
 
     def _initial_guess(self) -> NDArray[np.float64]:

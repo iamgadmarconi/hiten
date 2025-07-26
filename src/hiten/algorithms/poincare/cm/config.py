@@ -5,18 +5,41 @@ hiten.algorithms.poincare.config
 Configuration for Poincaré sections of the centre manifold of the spatial
 circular restricted three body problem.
 
-The module exposes a lightweight dataclass :pyclass:`_PoincareSectionConfig`
-that encapsulates the configuration of a Poincaré section.
+The module exposes a lightweight dataclass :pyclass:`_CenterManifoldSectionConfig`
+that encapsulates the configuration of a Poincaré section for the centre manifold.
 """
-
-from __future__ import annotations
-
-from typing import Tuple
+from dataclasses import dataclass
+from typing import Literal, Optional, Tuple
 
 import numpy as np
 
+from hiten.algorithms.poincare.core.config import (_ReturnMapConfig,
+                                                   _SectionConfig)
+from hiten.utils.log_config import logger
 
-class _PoincareSectionConfig:
+
+@dataclass
+class _CenterManifoldMapConfig(_ReturnMapConfig):
+
+    seed_strategy: Literal[
+        "single",
+        "axis_aligned",
+        "level_sets",
+        "radial",
+        "random",
+    ] = "axis_aligned"
+
+    seed_axis: Optional[Literal["q2", "p2", "q3", "p3"]] = None
+    section_coord: Literal["q2", "p2", "q3", "p3"] = "q3"
+
+    def __post_init__(self):
+        if self.seed_strategy == "single" and self.seed_axis is None:
+            raise ValueError("seed_axis must be specified when seed_strategy is 'single'")
+        if self.seed_strategy != "single" and self.seed_axis is not None:
+            logger.warning("seed_axis is ignored when seed_strategy is not 'single'")
+
+
+class _CenterManifoldSectionConfig(_SectionConfig):
 
     _TABLE: dict[str, dict[str, object]] = {
         "q3": dict(
@@ -106,11 +129,11 @@ class _PoincareSectionConfig:
         return out
 
 
-_SECTION_CACHE: dict[str, _PoincareSectionConfig] = {
-    name: _PoincareSectionConfig(name) for name in ("q2", "p2", "q3", "p3")
+_SECTION_CACHE: dict[str, _CenterManifoldSectionConfig] = {
+    name: _CenterManifoldSectionConfig(name) for name in ("q2", "p2", "q3", "p3")
 }
 
-def _get_section_config(section_coord: str) -> _PoincareSectionConfig:
+def _get_section_config(section_coord: str) -> _CenterManifoldSectionConfig:
     try:
         return _SECTION_CACHE[section_coord]
     except KeyError as exc:

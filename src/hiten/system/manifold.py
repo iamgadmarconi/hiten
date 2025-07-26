@@ -32,7 +32,8 @@ from hiten.algorithms.dynamics.utils.geometry import surface_of_section
 from hiten.algorithms.dynamics.utils.linalg import (_totime,
                                                     eigenvalue_decomposition)
 from hiten.system.orbits.base import PeriodicOrbit
-from hiten.utils.io import _ensure_dir, _load_manifold, _save_manifold
+from hiten.utils.io.common import _ensure_dir
+from hiten.utils.io.manifold import load_manifold, save_manifold
 from hiten.utils.log_config import logger
 from hiten.utils.plots import plot_manifold
 
@@ -492,12 +493,11 @@ class Manifold:
         logger.info(f"Manifold data successfully exported to {filepath}")
 
     def save(self, filepath: str, **kwargs) -> None:
-        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
-        _save_manifold(self, filepath)
+        save_manifold(self, filepath, **kwargs)
         return
 
     @classmethod
     def load(cls, filepath: str) -> "Manifold":
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Manifold file not found: {filepath}")
-        return _load_manifold(filepath)
+        return load_manifold(filepath)

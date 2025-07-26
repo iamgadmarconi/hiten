@@ -2,8 +2,7 @@ import logging
 import os
 import sys
 from datetime import datetime
-
-from hiten.utils.io import _ensure_dir
+from pathlib import Path
 
 
 def setup_logging(level=logging.INFO, format_string='%(asctime)s - %(name)s - %(levelname)s - %(message)s', 
@@ -22,8 +21,8 @@ def setup_logging(level=logging.INFO, format_string='%(asctime)s - %(name)s - %(
     log_dir : str
         Directory to save log files (default: 'results')
     """
-    _ensure_dir(log_dir)
-
+    Path(log_dir).mkdir(parents=True, exist_ok=True)
+    
     # Create formatter
     formatter = logging.Formatter(format_string)
     

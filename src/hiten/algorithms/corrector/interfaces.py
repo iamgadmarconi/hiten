@@ -7,7 +7,7 @@ import numpy as np
 from hiten.algorithms.corrector.base import (JacobianFn, NormFn,
                                              _BaseCorrectionConfig, _Corrector)
 from hiten.algorithms.dynamics.rtbp import _compute_stm
-from hiten.algorithms.dynamics.utils.geometry import _find_y_zero_crossing
+from hiten.algorithms.poincare.sh.backend import _y_plane_crossing
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
@@ -22,7 +22,7 @@ class _OrbitCorrectionConfig(_BaseCorrectionConfig):
     extra_jacobian: Callable[[np.ndarray, np.ndarray], np.ndarray] | None = None
     target: tuple[float, ...] = (0.0,)  # Desired residual values
 
-    event_func: Callable[..., tuple[float, np.ndarray]] = _find_y_zero_crossing
+    event_func: Callable[..., tuple[float, np.ndarray]] = _y_plane_crossing
 
     method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy"
     order: int = 8

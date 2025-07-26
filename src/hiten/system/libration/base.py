@@ -10,16 +10,14 @@ The module introduces two primary abstractions:
 * :pyclass:`LibrationPoint` - an abstract base class encapsulating geometry, energetic properties, linear stability analysis and lazy construction of centre-manifold normal forms. 
    Concrete subclasses implement the specific coordinates of the collinear (:math:`L_1`, :math:`L_2`, :math:`L_3`) and triangular (:math:`L_4`, :math:`L_5`) points.
 """
-
-from __future__ import annotations
-
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Tuple
 
 import numpy as np
 
-from hiten.algorithms.dynamics.rtbp import _jacobian_crtbp, variational_dynsys
+from hiten.algorithms.dynamics.hamiltonian import _HamiltonianSystem
+from hiten.algorithms.dynamics.rtbp import _jacobian_crtbp
 from hiten.algorithms.dynamics.utils.energy import (crtbp_energy,
                                                     energy_to_jacobi)
 from hiten.algorithms.dynamics.utils.linalg import eigenvalue_decomposition
@@ -372,7 +370,7 @@ class LibrationPoint(ABC):
         
         return stability_info
 
-    def get_center_manifold(self, max_degree: int) -> "CenterManifold":
+    def get_center_manifold(self, degree: int) -> "CenterManifold":
         r"""
         Return (and lazily construct) a CenterManifold of given degree.
 
@@ -382,9 +380,9 @@ class LibrationPoint(ABC):
         """
         from hiten.system.center import CenterManifold
 
-        if max_degree not in self._cm_registry:
-            self._cm_registry[max_degree] = CenterManifold(self, max_degree)
-        return self._cm_registry[max_degree]
+        if degree not in self._cm_registry:
+            self._cm_registry[degree] = CenterManifold(self, degree)
+        return self._cm_registry[degree]
 
     def hamiltonian(self, max_deg: int) -> dict:
         r"""
@@ -409,6 +407,13 @@ class LibrationPoint(ABC):
             if data is not None:
                 reprs[label] = [arr.copy() for arr in data]
         return reprs
+
+    def hamiltonian_system(self, form: str, max_deg: int) -> _HamiltonianSystem:
+        r"""
+        Return the Hamiltonian system for the given form.
+        """
+        cm = self.get_center_manifold(max_deg)
+        return cm._get_hamsys(form)
 
     def generating_functions(self, max_deg: int):
         r"""

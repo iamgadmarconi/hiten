@@ -33,7 +33,7 @@ point,
 poly_init: List[np.ndarray], 
 psi: np.ndarray, 
 clmo: np.ndarray, 
-max_degree: int, 
+degree: int, 
 tol: float = 1e-30) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
     r"""
     Perform a partial Lie transformation to normalize a Hamiltonian.
@@ -52,7 +52,7 @@ tol: float = 1e-30) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray
         Combinatorial table from _init_index_tables
     clmo : numpy.ndarray
         List of arrays containing packed multi-indices
-    max_degree : int
+    degree : int
         Maximum degree to include in the normalized Hamiltonian
     tol : float, optional
         Tolerance for cleaning small coefficients, default is 1e-30
@@ -83,10 +83,10 @@ tol: float = 1e-30) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
 
     poly_trans = [h.copy() for h in poly_init]
-    poly_G_total = _polynomial_zero_list(max_degree, psi)
-    poly_elim_total = _polynomial_zero_list(max_degree, psi)  # Store eliminated terms
+    poly_G_total = _polynomial_zero_list(degree, psi)
+    poly_elim_total = _polynomial_zero_list(degree, psi)  # Store eliminated terms
 
-    for n in range(3, max_degree+1):
+    for n in range(3, degree+1):
         logger.info(f"Normalizing at order: {n}")
         p_n = poly_trans[n]
         if not p_n.any():
@@ -115,7 +115,7 @@ tol: float = 1e-30) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray
         for item_arr in poly_trans:
             poly_trans_typed.append(item_arr)
         # _apply_poly_transform expects a Numba List for poly_H and returns a Python list
-        poly_trans = _apply_poly_transform(poly_trans_typed, p_G_n, n, max_degree, psi, clmo, encode_dict_list, tol)
+        poly_trans = _apply_poly_transform(poly_trans_typed, p_G_n, n, degree, psi, clmo, encode_dict_list, tol)
         
         if n < len(poly_G_total) and poly_G_total[n].shape == p_G_n.shape:
             poly_G_total[n] += p_G_n
@@ -203,7 +203,7 @@ clmo: np.ndarray) -> np.ndarray:
 
 def _lie_expansion(
 poly_G_total: List[np.ndarray], 
-max_degree: int, psi: np.ndarray, 
+degree: int, psi: np.ndarray, 
 clmo: np.ndarray, 
 tol: float = 1e-30,
 inverse: bool = False, # If False, Generators are applied in ascending order. If True, Generators are applied in descending order.
@@ -216,7 +216,7 @@ restrict: bool = True) -> List[List[np.ndarray]]:
     ----------
     poly_G_total : List[np.ndarray]
         List of generating functions for the Lie transformation
-    max_degree : int
+    degree : int
         Maximum polynomial degree for the transformation
     psi : np.ndarray
         Combinatorial table from _init_index_tables
@@ -235,19 +235,19 @@ restrict: bool = True) -> List[List[np.ndarray]]:
 
     current_coords = []
     for i in range(6):
-        poly = _polynomial_zero_list(max_degree, psi)
+        poly = _polynomial_zero_list(degree, psi)
         poly[1] = np.zeros(6, dtype=np.complex128)
         poly[1][i] = 1.0 + 0j       # identity for q_1,q_2,q_3,p_1,p_2,p_3
         current_coords.append(poly) # [q1, q2, q3, p1, p2, p3]
     
     if inverse:
-        start = max_degree
+        start = degree
         stop = 2
         step = -1
         sign = -1 if sign is None else sign
     else:
         start = 3
-        stop = max_degree + 1
+        stop = degree + 1
         step = 1
         sign = 1 if sign is None else sign
 
@@ -256,7 +256,7 @@ restrict: bool = True) -> List[List[np.ndarray]]:
             continue
 
         G_n = sign * poly_G_total[n]
-        poly_G = _polynomial_zero_list(max_degree, psi)
+        poly_G = _polynomial_zero_list(degree, psi)
         poly_G[n] = G_n.copy()
         
         new_coords = []
@@ -266,7 +266,7 @@ restrict: bool = True) -> List[List[np.ndarray]]:
                 current_poly_typed.append(arr)
 
             new_poly = _apply_coord_transform(
-                current_poly_typed, poly_G, max_degree, psi, clmo, encode_dict_list, tol
+                current_poly_typed, poly_G, degree, psi, clmo, encode_dict_list, tol
             )
             new_coords.append(new_poly)
         

@@ -32,7 +32,7 @@ def _random_valid_index(max_deg: int, k_max: int):
     return (n1, n2, n3, k1, k2, k3), d
 
 def test_init_fourier_tables():
-    # psiF should have length max_degree + 1
+    # psiF should have length degree + 1
     assert PSI_F.shape == (TEST_MAX_DEG + 1,)
 
     # clmoF list length should match degrees and each array size equals psiF[d]

@@ -78,20 +78,20 @@ def _decode_fourier_index(key: np.uint64):
 
 
 @njit(fastmath=FASTMATH, cache=False)
-def _init_fourier_tables(max_degree: int, k_max: int):  
+def _init_fourier_tables(degree: int, k_max: int):  
     """
     Build *psiF* and *clmoF* lookup tables for Fourier polynomials.
 
     Parameters
     ----------
-    max_degree : int
+    degree : int
         Maximum total action degree *d = n_1+n_2+n_3* to include.
     k_max : int
         Fourier indices kᵢ will be limited to -k_max ... +k_max (k_max ≤ 63).
 
     Returns
     -------
-    psiF : numpy.ndarray  (shape ``(max_degree+1,)``)
+    psiF : numpy.ndarray  (shape ``(degree+1,)``)
         psiF[d] = number of terms with total action degree *d*.
     clmoF : numba.typed.List
         For each degree *d*, an array of packed indices (dtype uint64) of size psiF[d].
@@ -102,10 +102,10 @@ def _init_fourier_tables(max_degree: int, k_max: int):
     num_fourier = 2 * k_max + 1  # count per angle dimension
     num_fourier_cubed = num_fourier * num_fourier * num_fourier
 
-    psiF = np.zeros(max_degree + 1, dtype=np.int64)
+    psiF = np.zeros(degree + 1, dtype=np.int64)
     clmoF = List.empty_list(np.uint64[::1])
 
-    for d in range(max_degree + 1):
+    for d in range(degree + 1):
         # number of (n1,n2,n3) with sum d = C(d+2,2)
         count_actions = (d + 2) * (d + 1) // 2
         count_terms = count_actions * num_fourier_cubed

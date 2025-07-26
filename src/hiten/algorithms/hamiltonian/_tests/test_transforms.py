@@ -435,8 +435,8 @@ def test_poly_realification_complexification(transforms_test_setup):
 
     H_phys = _build_physical_hamiltonian_collinear(libration_point, TEST_MAX_DEG)
     H_rn   = _polylocal2realmodal(libration_point, H_phys, TEST_MAX_DEG, psi, clmo)
-    H_cn   = _substitute_complex(H_rn, TEST_MAX_DEG, psi, clmo)
-    H_back = _substitute_real(H_cn, TEST_MAX_DEG, psi, clmo)
+    H_cn   = _substitute_complex(H_rn, TEST_MAX_DEG, psi, clmo, tol=1e-14)
+    H_back = _substitute_real(H_cn, TEST_MAX_DEG, psi, clmo, tol=1e-14)
 
     for d in range(TEST_MAX_DEG+1):
         assert np.allclose(H_back[d], H_rn[d], atol=1e-14, rtol=1e-14), f"degree {d} mismatch"
