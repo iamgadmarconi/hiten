@@ -1,4 +1,3 @@
-import os
 from typing import Literal, Optional, Sequence
 
 import numpy as np
@@ -10,8 +9,8 @@ from hiten.algorithms.poincare.cm.engine import _CenterManifoldEngine
 from hiten.algorithms.poincare.core.base import _ReturnMapBase
 from hiten.system.center import CenterManifold
 from hiten.system.orbits.base import GenericOrbit
-from hiten.utils.io import (_ensure_dir, _load_poincare_map,
-                            _load_poincare_map_inplace, _save_poincare_map)
+from hiten.utils.io.map import (load_poincare_map, load_poincare_map_inplace,
+                                save_poincare_map)
 from hiten.utils.log_config import logger
 from hiten.utils.plots import plot_poincare_map, plot_poincare_map_interactive
 
@@ -248,11 +247,10 @@ class CenterManifoldMap(_ReturnMapBase):
         return np.column_stack(cols)
 
     def save(self, filepath: str, **kwargs) -> None:
-        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
-        _save_poincare_map(self, filepath)
+        save_poincare_map(self, filepath, **kwargs)
 
     def load_inplace(self, filepath: str, **kwargs) -> None:
-        _load_poincare_map_inplace(self, filepath)
+        load_poincare_map_inplace(self, filepath, **kwargs)
 
     @classmethod
     def load(
@@ -261,4 +259,4 @@ class CenterManifoldMap(_ReturnMapBase):
         cm: CenterManifold,
         **kwargs,
     ) -> "CenterManifoldMap":
-        return _load_poincare_map(filepath, cm)
+        return load_poincare_map(filepath, cm, **kwargs)

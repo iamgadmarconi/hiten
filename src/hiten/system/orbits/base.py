@@ -39,16 +39,19 @@ from hiten.algorithms.dynamics.utils.energy import (crtbp_energy,
                                                     energy_to_jacobi)
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
-from hiten.utils.io import (_ensure_dir, _load_periodic_orbit,
-                            _load_periodic_orbit_inplace, _save_periodic_orbit)
+from hiten.utils.io.common import _ensure_dir
+from hiten.utils.io.orbits import (load_periodic_orbit,
+                                   load_periodic_orbit_inplace,
+                                   save_periodic_orbit)
 from hiten.utils.log_config import logger
 from hiten.utils.plots import (animate_trajectories, plot_inertial_frame,
                                plot_rotating_frame)
 
 if TYPE_CHECKING:
-    from hiten.system.manifold import Manifold
+    from hiten.algorithms.continuation.interfaces import \
+        _OrbitContinuationConfig
     from hiten.algorithms.corrector.interfaces import _OrbitCorrectionConfig
-    from hiten.algorithms.continuation.interfaces import _OrbitContinuationConfig
+    from hiten.system.manifold import Manifold
 
 
 class S(IntEnum): 
@@ -526,15 +529,14 @@ class PeriodicOrbit(ABC):
         logger.info(f"Orbit trajectory successfully exported to {filepath}")
 
     def save(self, filepath: str, **kwargs) -> None:
-        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
-        _save_periodic_orbit(self, filepath)
+        save_periodic_orbit(self, filepath, **kwargs)
         return
 
     def load_inplace(self, filepath: str, **kwargs) -> None:
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Orbit file not found: {filepath}")
 
-        _load_periodic_orbit_inplace(self, filepath)
+        load_periodic_orbit_inplace(self, filepath, **kwargs)
         return
 
     @classmethod
@@ -542,7 +544,7 @@ class PeriodicOrbit(ABC):
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Orbit file not found: {filepath}")
 
-        return _load_periodic_orbit(filepath)
+        return load_periodic_orbit(filepath, **kwargs)
 
     def __setstate__(self, state):
         """Restore the PeriodicOrbit instance after unpickling.
@@ -598,7 +600,8 @@ class GenericOrbit(PeriodicOrbit):
 
     @correction_config.setter
     def correction_config(self, value: Optional["_OrbitCorrectionConfig"]):
-        from hiten.algorithms.corrector.interfaces import _OrbitCorrectionConfig
+        from hiten.algorithms.corrector.interfaces import \
+            _OrbitCorrectionConfig
         if value is not None and not isinstance(value, _OrbitCorrectionConfig):
             raise TypeError("correction_config must be an instance of _OrbitCorrectionConfig or None.")
         self._custom_correction_config = value
@@ -638,7 +641,8 @@ class GenericOrbit(PeriodicOrbit):
 
     @continuation_config.setter
     def continuation_config(self, cfg: Optional["_OrbitContinuationConfig"]):
-        from hiten.algorithms.continuation.interfaces import _OrbitContinuationConfig
+        from hiten.algorithms.continuation.interfaces import \
+            _OrbitContinuationConfig
         if cfg is not None and not isinstance(cfg, _OrbitContinuationConfig):
             raise TypeError("continuation_config must be a _OrbitContinuationConfig instance or None")
         self._custom_continuation_config = cfg

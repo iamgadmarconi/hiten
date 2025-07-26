@@ -3,7 +3,7 @@ import os
 import sys
 from datetime import datetime
 
-from hiten.utils.io import _ensure_dir
+from hiten.utils.io.common import _ensure_dir
 
 
 def setup_logging(level=logging.INFO, format_string='%(asctime)s - %(name)s - %(levelname)s - %(message)s', 

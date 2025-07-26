@@ -39,7 +39,7 @@ from hiten.system.hamiltonians.pipeline import HamiltonianPipeline
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import CollinearPoint, L3Point
 from hiten.system.libration.triangular import TriangularPoint
-from hiten.utils.io import _load_center_manifold, _save_center_manifold
+from hiten.utils.io.center import load_center_manifold, save_center_manifold
 from hiten.utils.log_config import logger
 from hiten.utils.printing import _format_poly_table
 
@@ -455,8 +455,9 @@ class CenterManifold:
         configuration, and stored internally. Subsequent calls with the same
         parameters return the cached object.
         """
-        from hiten.algorithms.poincare.cm.config import _CenterManifoldMapConfig
         from hiten.algorithms.poincare.cm.base import CenterManifoldMap
+        from hiten.algorithms.poincare.cm.config import \
+            _CenterManifoldMapConfig
 
         # Separate config kwargs from runtime kwargs
         config_fields = set(_CenterManifoldMapConfig.__dataclass_fields__.keys())
@@ -479,7 +480,7 @@ class CenterManifold:
         
         return self._poincare_maps[cache_key]
 
-    def save(self, dir_path: str):
+    def save(self, dir_path: str, **kwargs):
         """
         Save the CenterManifold instance to a directory.
 
@@ -492,10 +493,10 @@ class CenterManifold:
         dir_path : str or path-like object
             The path to the directory where the data will be saved.
         """
-        _save_center_manifold(self, dir_path)
+        save_center_manifold(self, dir_path, **kwargs)
 
     @classmethod
-    def load(cls, dir_path: str) -> "CenterManifold":
+    def load(cls, dir_path: str, **kwargs) -> "CenterManifold":
         """
         Load a CenterManifold instance from a directory.
 
@@ -512,7 +513,7 @@ class CenterManifold:
         CenterManifold
             The loaded CenterManifold instance with its Poincare maps.
         """
-        return _load_center_manifold(dir_path)
+        return load_center_manifold(dir_path, **kwargs)
 
 
 

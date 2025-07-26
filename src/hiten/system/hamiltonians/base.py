@@ -7,8 +7,7 @@ from hiten.algorithms.dynamics.hamiltonian import create_hamiltonian_system
 from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
                                               _init_index_tables)
 from hiten.algorithms.polynomial.conversion import poly2sympy
-from hiten.algorithms.polynomial.operations import (_polynomial_evaluate,
-                                                    _polynomial_jacobian)
+from hiten.algorithms.polynomial.operations import _polynomial_evaluate
 
 
 class Hamiltonian:
