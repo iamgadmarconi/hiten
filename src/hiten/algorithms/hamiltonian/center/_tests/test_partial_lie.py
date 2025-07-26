@@ -40,6 +40,44 @@ def lie_test_setup():
 
     cm = CenterManifold(libration_point, TEST_MAX_DEG)
     cm.compute()
+
+    # ------------------------------------------------------------------
+    # Patch legacy attributes expected by the historical test-suite
+    # ------------------------------------------------------------------
+    # The new implementation stores most low-level data inside
+    # ``cm.pipeline``.  To keep changes local to the test we monkey-patch
+    # the individual CenterManifold *instance* instead of the library code.
+
+    _ham = cm.pipeline.get_hamiltonian("center_manifold_real")
+
+    # Legacy private tables (read-only in tests)
+    cm._psi = _ham._psi
+    cm._clmo = _ham._clmo
+    cm._encode_dict_list = _ham._encode_dict_list
+
+    # Legacy cache_get helper used by a handful of unit tests
+    def _cache_get(key):
+        if not isinstance(key, tuple):
+            raise KeyError("cache_get expects a tuple key")
+
+        if key[0] == "hamiltonian":
+            # ('hamiltonian', degree, form)
+            _, deg, form = key
+            if deg != cm.degree:
+                cm.degree = int(deg)
+            return cm.pipeline.get_hamiltonian(form).poly_H
+
+        if key[0] == "generating_functions":
+            # ('generating_functions', degree)
+            _, deg = key
+            if deg != cm.degree:
+                cm.degree = int(deg)
+            return cm.pipeline.get_generating_functions("partial").poly_G
+
+        raise KeyError(f"Unsupported cache key: {key}")
+
+    cm.cache_get = _cache_get
+
     return cm
 
 

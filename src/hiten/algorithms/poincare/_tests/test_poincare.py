@@ -4,7 +4,8 @@ import tempfile
 import os
 
 from hiten.system.center import CenterManifold
-from hiten.algorithms.poincare.base import _PoincareMap, _CenterManifoldMapConfig
+from hiten.algorithms.poincare.cm.base import CenterManifoldMap
+from hiten.algorithms.poincare.cm.config import _CenterManifoldMapConfig
 from hiten.system.base import System
 from hiten.system.body import Body
 from hiten.utils.constants import Constants
@@ -32,16 +33,15 @@ def poincare_test_setup():
     pmConfig = _CenterManifoldMapConfig(
         dt=TEST_DT,
         method="rk",
-        integrator_order=4,
+        order=4,
         c_omega_heuristic=20.0,
         n_seeds=TEST_N_SEEDS,
         n_iter=TEST_N_ITER,
         seed_axis=TEST_SEED_AXIS,
         compute_on_init=True,
-        use_gpu=False,
     )
 
-    pm = _PoincareMap(cm, TEST_H0, pmConfig)
+    pm = CenterManifoldMap(cm, TEST_H0, pmConfig)
     return cm, pmConfig, pm
 
 def test_poincaremap_save_load(poincare_test_setup):
@@ -54,7 +54,7 @@ def test_poincaremap_save_load(poincare_test_setup):
         pm.save(filepath)
 
         # Create a new map instance (with same CM, config, but do not compute)
-        pm_loaded = _PoincareMap(cm, 0.0, pmConfig)  # energy will be overwritten by load
+        pm_loaded = CenterManifoldMap(cm, 0.0, pmConfig)  # energy will be overwritten by load
         pm_loaded.load_inplace(filepath)
 
         # Check energy
@@ -62,7 +62,13 @@ def test_poincaremap_save_load(poincare_test_setup):
         # Check config
         assert pm.config == pm_loaded.config, f"Config mismatch: {pm.config} vs {pm_loaded.config}"
         # Check points
-        np.testing.assert_allclose(pm.points, pm_loaded.points, atol=1e-12, rtol=1e-12, err_msg="Loaded points do not match saved points")
+        np.testing.assert_allclose(
+            pm.get_points(),
+            pm_loaded.get_points(),
+            atol=1e-12,
+            rtol=1e-12,
+            err_msg="Loaded points do not match saved points",
+        )
     finally:
         if os.path.exists(filepath):
             os.remove(filepath)

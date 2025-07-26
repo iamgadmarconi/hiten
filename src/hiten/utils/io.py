@@ -39,10 +39,6 @@ def _save_periodic_orbit(orbit: "PeriodicOrbit", filepath: str, *, compression: 
 
         _write_dataset(f, "initial_state", np.asarray(orbit._initial_state))
 
-        # ------------------------------------------------------------------
-        # Lightweight metadata needed to reconstruct the dynamical context
-        # (System + LibrationPoint) without serialising numba objects.
-        # ------------------------------------------------------------------
         if getattr(orbit, "_system", None) is not None:
             f.attrs["primary"] = orbit._system.primary.name
             f.attrs["secondary"] = orbit._system.secondary.name
@@ -342,21 +338,62 @@ def _load_manifold(filepath: str) -> "Manifold":
     return man
 
 
-def _save_poincare_map(pmap: "CenterManifoldMap", filepath: str, *, compression: str = "gzip", level: int = 4) -> None:
+def _save_poincare_map(
+    pmap: "CenterManifoldMap",
+    filepath: str,
+    *,
+    compression: str = "gzip",
+    level: int = 4,
+) -> None:
+    """Serialise *all* cached Poincaré sections of *pmap*.
+
+    The on-disk layout is::
+
+        /               (root)
+            ├─ attr: class            – fully-qualified class name
+            ├─ attr: format_version   – currently "2.0"
+            ├─ attr: energy           – Hamiltonian energy level (float)
+            ├─ attr: config_json      – JSON-encoded dataclass of map config
+            └─ sections/              – one subgroup per cached section
+                   └─ <coord>/
+                        ├─ points     – (n,2) plane coordinates
+                        ├─ states     – (n,4) 4-D CM states (optional)
+                        └─ attr: labels_json – axis labels
+
+    Only sections present in ``pmap._sections`` are stored.  If the caller
+    never triggered a computation the helper ensures at least the default
+    section (``pmap.config.section_coord``) is generated and saved.
+    """
+
+    # Ensure at least the default slice exists so that the file captures a
+    # usable map.
+    if not pmap._sections:
+        pmap.compute()
+
     _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
 
     with h5py.File(filepath, "w") as f:
         f.attrs["class"] = pmap.__class__.__name__
-        f.attrs["format_version"] = "1.0"
+        f.attrs["format_version"] = "2.0"
         f.attrs["energy"] = float(pmap.energy)
         f.attrs["config_json"] = json.dumps(asdict(pmap.config))
 
-        if pmap._section is not None:
-            _write_dataset(f, "points", np.asarray(pmap._section.points), compression=compression, level=level)
-            f.attrs["labels_json"] = json.dumps(list(pmap._section.labels))
+        sec_root = f.create_group("sections")
 
+        for coord, sec in pmap._sections.items():
+            g = sec_root.create_group(str(coord))
+            _write_dataset(g, "points", np.asarray(sec.points), compression=compression, level=level)
+            # Store states if available to enable lossless round-trip
+            if sec.states is not None:
+                _write_dataset(g, "states", np.asarray(sec.states), compression=compression, level=level)
+            g.attrs["labels_json"] = json.dumps(list(sec.labels))
+ 
 
 def _load_poincare_map_inplace(obj: "CenterManifoldMap", filepath: str) -> None:
+    """Restore a `CenterManifoldMap` previously saved with
+    :func:`_save_poincare_map`.
+    """
+
     from hiten.algorithms.poincare.core.base import _Section
     from hiten.algorithms.poincare.cm.config import _CenterManifoldMapConfig
 
@@ -364,32 +401,34 @@ def _load_poincare_map_inplace(obj: "CenterManifoldMap", filepath: str) -> None:
         raise FileNotFoundError(f"Poincaré-map file not found: {filepath}")
 
     with h5py.File(filepath, "r") as f:
-        energy_val = float(f.attrs["energy"])
-        if hasattr(obj, "_energy"):
-            obj._energy = energy_val  
-        else:
-            obj.energy = energy_val
+        # -- Scalar attributes -------------------------------------------------
+        obj._energy = float(f["/"].attrs["energy"])
 
-        cfg_json = f.attrs.get("config_json", "{}")
-        try:
-            cfg_dict = json.loads(cfg_json)
-            obj.config = _CenterManifoldMapConfig(**cfg_dict)
-        except Exception as exc:
-            obj.config = _CenterManifoldMapConfig()
+        cfg_json = f["/"].attrs.get("config_json", "{}")
+        obj.config = _CenterManifoldMapConfig(**json.loads(cfg_json))
 
+        # -- Sections ----------------------------------------------------------
+        obj._sections.clear()
 
-        if "points" in f:
-            pts = f["points"][()]
-            labels_json = f.attrs.get("labels_json")
+        sec_root = f["sections"]
+        for coord in sec_root.keys():
+            g = sec_root[coord]
+            pts = g["points"][()]
+            if "states" in g:
+                sts = g["states"][()]
+            else:
+                sts = np.full((pts.shape[0], 4), np.nan, dtype=np.float64)
+            labels_json = g.attrs.get("labels_json")
             labels = tuple(json.loads(labels_json)) if labels_json else ("q2", "p2")
-            obj._section = _Section(pts, np.full((pts.shape[0], 4), np.nan, dtype=np.float64), labels) 
-        else:
-            obj._section = None
+
+            obj._sections[str(coord)] = _Section(pts, sts, labels)
+
+        # Select default section (may raise KeyError if missing)
+        obj._section = obj._sections[obj.config.section_coord]
 
 
 def _load_poincare_map(filepath: str, cm: "CenterManifold") -> "CenterManifoldMap":
-    from hiten.algorithms.poincare.cm.base import \
-        CenterManifoldMap as CenterManifoldMap
+    from hiten.algorithms.poincare.cm.base import CenterManifoldMap
 
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Poincaré-map file not found: {filepath}")

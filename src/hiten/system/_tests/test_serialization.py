@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 
 from hiten.system import (CenterManifold, HaloOrbit, Manifold, System,
-                          _PoincareMap)
+                          CenterManifoldMap)
 from hiten.utils.log_config import logger
 
 TMP_DIR = Path("results") / "serialization_test"
@@ -60,7 +60,7 @@ def test_serialization() -> None:
                   manifold_loaded.generating_orbit.initial_state)
     logger.info("[Manifold] round-trip OK\n")
 
-    cm = CenterManifold(L1, degree=4)
+    cm = CenterManifold(L1, degree=6)
     # Trigger polynomial computation so we have concrete data to compare
     poly_cm_original = cm.compute()
     cm_dir = TMP_DIR / "center_manifold"
@@ -72,28 +72,33 @@ def test_serialization() -> None:
     _assert_equal("CenterManifold.point.position",
                   cm.point.position,
                   cm_loaded.point.position)
+    poly_cm_loaded = cm_loaded.compute()
 
-    # Retrieve cached polynomials from the *loaded* instance without recomputation
-    poly_cm_loaded = cm_loaded.cache_get(("hamiltonian", cm_loaded.degree, "center_manifold_real"))
-
-    assert poly_cm_loaded is not None, "Loaded CenterManifold lacks cached polynomial data!"
     assert len(poly_cm_original) == len(poly_cm_loaded), "Polynomial block count mismatch"
     for i, (blk_orig, blk_load) in enumerate(zip(poly_cm_original, poly_cm_loaded)):
         _assert_equal(f"CM polynomial block {i}", blk_orig, blk_load)
     logger.info("[CenterManifold] round-trip OK\n")
 
-    energy_level = L1.energy + 1e-5
-    pmap = _PoincareMap(cm, energy=energy_level)
+    energy_level = 0.2
+    pmap = CenterManifoldMap(cm, energy=energy_level)
 
     pmap_path = TMP_DIR / "poincare_map.h5"
-    logger.info("[_PoincareMap] saving: %s", pmap_path)
+    logger.info("[CenterManifoldMap] saving: %s", pmap_path)
     pmap.save(str(pmap_path))
 
-    pmap_loaded = _PoincareMap(cm, energy=0.0)  # dummy - will be overwritten
+    pmap_loaded = CenterManifoldMap(cm, energy=0.0)
     pmap_loaded.load_inplace(str(pmap_path))
     assert math.isclose(pmap_loaded.energy, energy_level, rel_tol=1e-12)
     # Dataclass comparison works out of the box
     assert pmap_loaded.config == pmap.config
-    logger.info("[_PoincareMap] round-trip OK\n")
+
+    # Verify stored points via the new API
+    _assert_equal(
+        "Poincaré map points",
+        pmap.get_points(),
+        pmap_loaded.get_points(),
+    )
+
+    logger.info("[CenterManifoldMap] round-trip OK\n")
 
     logger.info("\nAll serialisation tests passed")

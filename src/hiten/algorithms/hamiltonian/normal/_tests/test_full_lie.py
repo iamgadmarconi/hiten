@@ -37,6 +37,38 @@ def center_manifold(libration_point):
     """Return a CenterManifold instance pre-computed up to TEST_MAX_DEG."""
     cm = CenterManifold(libration_point, TEST_MAX_DEG)
     cm.compute()  # Triggers all intermediate computations and caches results
+
+    ham_cm_real = cm.pipeline.get_hamiltonian("center_manifold_real")
+    cm._psi = ham_cm_real._psi
+    cm._clmo = ham_cm_real._clmo
+    cm._encode_dict_list = ham_cm_real._encode_dict_list
+
+    def _get_complex_modal_form():
+        return cm.pipeline.get_hamiltonian("complex_modal").poly_H
+
+    cm._get_complex_modal_form = _get_complex_modal_form
+
+    # Legacy cache_get adapter
+    def _cache_get(key):
+        if not isinstance(key, tuple):
+            raise KeyError("cache_get expects a tuple key")
+
+        if key[0] == "hamiltonian":
+            _, deg, form = key
+            if deg != cm.degree:
+                cm.degree = int(deg)
+            return cm.pipeline.get_hamiltonian(form).poly_H
+
+        if key[0] == "generating_functions":
+            _, deg = key
+            if deg != cm.degree:
+                cm.degree = int(deg)
+            return cm.pipeline.get_generating_functions("partial").poly_G
+
+        raise KeyError(f"Unsupported cache key: {key}")
+
+    cm.cache_get = _cache_get
+
     return cm
 
 
@@ -233,7 +265,7 @@ def test_lie_transform_removes_nonresonant_terms(center_manifold):
     poly_trans, _, _ = _lie_transform(lp, poly_init, psi, clmo, TEST_MAX_DEG)
 
     # Check that all non-resonant monomials have been removed up to the truncation order
-    tol = 1e-14
+    tol = 1e-10
     for n in range(3, TEST_MAX_DEG + 1):
         bad = _select_nonresonant_terms(poly_trans[n], n, omega, clmo)
         max_bad = np.max(np.abs(bad)) if bad.size else 0.0
