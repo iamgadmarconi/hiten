@@ -102,20 +102,58 @@ class _ReturnMapBase(ABC):
         self._engines.clear()
         self._section = None
 
-    def get_points(self, *, section_coord: str | None = None) -> np.ndarray:
-        """Return the stored 2-D points for *section_coord* (compute on-demand)."""
+    def _axis_index(self, section: "_Section", axis: str) -> int:
+        """Return the column index corresponding to *axis*.
+
+        The default implementation assumes a 1-1 mapping between the
+        ``section.labels`` tuple and columns of ``section.points``.  Concrete
+        subclasses can override this method if their mapping differs or if
+        axis-based projection is not supported.
+        """
+        try:
+            return section.labels.index(axis)
+        except ValueError as exc:
+            raise ValueError(
+                f"Axis '{axis}' not available; valid labels are {section.labels}"
+            ) from exc
+
+    def get_points(
+        self,
+        *,
+        section_coord: str | None = None,
+        axes: tuple[str, str] | None = None,
+    ) -> np.ndarray:
+        """Return cached points for *section_coord* (compute on-demand).
+
+        Parameters
+        ----------
+        section_coord
+            Which stored section to retrieve (default ``self.config.section_coord``).
+        axes
+            Optional tuple of two axis labels (e.g. ("q3", "p2")) requesting a
+            different 2-D projection of the stored state.  If *axes* is not
+            given the raw stored projection is returned.
+        """
 
         key = section_coord or self.config.section_coord
 
         if key not in self._sections:
             self.compute(section_coord=key)
 
-        return self._sections[key].points
+        sec = self._sections[key]
 
-    def __len__(self):  
+        if axes is None:
+            return sec.points
+
+        idx1 = self._axis_index(sec, axes[0])
+        idx2 = self._axis_index(sec, axes[1])
+
+        return sec.points[:, (idx1, idx2)]
+
+    def __len__(self):
         return 0 if self._section is None else len(self._section)
 
-    def __repr__(self):  
+    def __repr__(self):
         return (
             f"{self.__class__.__name__}(sections={len(self._sections)}, "
             f"config={self.config})"
