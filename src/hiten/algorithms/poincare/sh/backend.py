@@ -5,7 +5,7 @@ from scipy.optimize import root_scalar
 
 from hiten.algorithms.dynamics.base import (_DynamicalSystemProtocol,
                                             _propagate_dynsys)
-from hiten.algorithms.poincare.backends.base import _ReturnMapBackend
+from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
 from hiten.algorithms.poincare.events import (_PlaneEvent, _SectionHit,
                                               _SurfaceEvent)
 

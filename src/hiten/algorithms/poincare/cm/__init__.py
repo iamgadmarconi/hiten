@@ -1,4 +1,5 @@
-from .base import _CenterManifoldSeedingBase
+from .config import _CenterManifoldSectionConfig
+from .seeding import _CenterManifoldSeedingBase
 from .strategies import (_AxisAlignedSeeding, _LevelSetsSeeding,
                          _RadialSeeding, _RandomSeeding, _SingleAxisSeeding)
 
@@ -21,4 +22,10 @@ def _make_strategy(kind: str, section_config, **kwargs) -> _CenterManifoldSeedin
 __all__ = [
     "_CenterManifoldSeedingBase",
     "_make_strategy",
+    "_CenterManifoldSectionConfig",
+    "_AxisAlignedSeeding",
+    "_LevelSetsSeeding",
+    "_RadialSeeding",
+    "_RandomSeeding",
+    "_SingleAxisSeeding",
 ]

@@ -372,7 +372,7 @@ def _save_poincare_map(pmap: "_PoincareMap", filepath: str, *, compression: str 
 
 def _load_poincare_map_inplace(obj: "_PoincareMap", filepath: str) -> None:
     from hiten.algorithms.poincare.base import _CenterManifoldMapConfig
-    from hiten.algorithms.poincare.base import _Section
+    from hiten.algorithms.poincare.core.base import _Section
 
     if not os.path.exists(filepath):
         raise FileNotFoundError(f"Poincaré-map file not found: {filepath}")

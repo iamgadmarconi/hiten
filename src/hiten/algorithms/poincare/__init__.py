@@ -1,7 +1,8 @@
-from hiten.algorithms.poincare.seeding import (_AxisAlignedSeeding,
-                                               _LevelSetsSeeding,
-                                               _RadialSeeding, _RandomSeeding,
-                                               _SingleAxisSeeding)
+from hiten.algorithms.poincare.cm.strategies import (_AxisAlignedSeeding,
+                                                     _LevelSetsSeeding,
+                                                     _RadialSeeding,
+                                                     _RandomSeeding,
+                                                     _SingleAxisSeeding)
 
 
 def _build_seeding_strategy(section_cfg, config):

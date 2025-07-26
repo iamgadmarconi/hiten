@@ -23,7 +23,7 @@ from typing import (TYPE_CHECKING, Dict, Iterable, List,
                     Optional, Tuple, Union)
 
 import numpy as np
-from hiten.algorithms.poincare.backends._cmbackend import _CenterManifoldBackend
+from hiten.algorithms.poincare.cm.backend import _CenterManifoldBackend
 from hiten.algorithms.poincare.events import _PlaneEvent
 
 from hiten.algorithms.dynamics.hamiltonian import _HamiltonianSystem
@@ -37,7 +37,7 @@ from hiten.algorithms.hamiltonian.transforms import (_coordlocal2realmodal,
                                                      _solve_real,
                                                      _synodic2local_collinear,
                                                      _synodic2local_triangular)
-from hiten.algorithms.poincare.config import _get_section_config
+from hiten.algorithms.poincare.cm.config import _get_section_config
 from hiten.system.hamiltonians.pipeline import HamiltonianPipeline
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import CollinearPoint, L3Point
@@ -88,6 +88,7 @@ class CenterManifold:
         
         # Initialize the Hamiltonian pipeline
         self._pipeline = HamiltonianPipeline(point, max_degree)
+        self._hamsys = self._pipeline.get_hamiltonian("center_manifold_real").hamsys
         
         # Set up coordinate transformation functions based on point type
         if isinstance(self._point, CollinearPoint):
@@ -215,59 +216,6 @@ class CenterManifold:
         logger.info(f'{form} coefficients:\n\n{table}\n\n')
         return table
 
-    def get_hamsys(self, form: str) -> _HamiltonianSystem:
-        """
-        Return a runtime HamiltonianSystem for the requested form.
-
-        Parameters
-        ----------
-        form : str
-            Identifier of the polynomial/Hamiltonian representation.
-
-        Returns
-        -------
-        _HamiltonianSystem
-            Cached (or newly created) Hamiltonian system.
-        """
-        return self._pipeline.get_hamiltonian(form).hamsys
-
-    def get_generating_functions(self, transform_type: str = "partial", **kwargs):
-        """
-        Get Lie generating functions for coordinate transformations.
-
-        Parameters
-        ----------
-        transform_type : str, optional
-            Type of Lie transform ("partial" or "full").
-        **kwargs
-            Additional parameters for the Lie transform.
-
-        Returns
-        -------
-        LieGeneratingFunction
-            The generating functions and eliminated terms.
-        """
-        return self._pipeline.get_generating_functions(transform_type, **kwargs)
-
-    def get_lie_expansions(self, inverse: bool = False, tol: float = 1e-16) -> list:
-        """
-        Get Lie coordinate expansions for forward/inverse transformations.
-
-        Parameters
-        ----------
-        inverse : bool, default False
-            If True, return inverse expansions (for coordinate reconstruction).
-            If False, return forward expansions (for initial condition generation).
-        tol : float, default 1e-16
-            Numerical tolerance for the expansion computation.
-
-        Returns
-        -------
-        list
-            List of polynomial expansions for each coordinate.
-        """
-        return self._pipeline.get_lie_expansions(inverse=inverse, tol=tol)
-
     def cache_clear(self):
         """
         Clear all caches (Hamiltonian pipeline and Poincaré maps).
@@ -299,7 +247,7 @@ class CenterManifold:
         """Get or create a backend for the given section coordinate and energy."""
         cache_key = (energy, section_coord)
         if cache_key not in self._backends:
-            cm_hamsys = self.get_hamsys("center_manifold_real")
+            cm_hamsys = self._hamsys
             self._backends[cache_key] = _CenterManifoldBackend(
                                     dynsys=cm_hamsys,
                                     surface=_PlaneEvent(coord=section_coord, value=0.0, direction=None),
@@ -335,8 +283,8 @@ class CenterManifold:
         complex_6d_cm = _solve_complex(real_6d_cm, tol=tol, mix_pairs=self._mix_pairs)
 
         # Apply the forward Lie transform (centre-manifold -> physical variables)
-        expansions = self.get_lie_expansions(inverse=False, tol=tol)
-        complex_6d = _evaluate_transform(expansions, complex_6d_cm, self._pipeline.get_hamiltonian("complex_modal")._clmo)
+        expansions = self._pipeline.get_lie_expansions(inverse=False, tol=tol)
+        complex_6d = _evaluate_transform(expansions, complex_6d_cm, self._hamsys.clmo_H)
 
         # Back to real modal variables
         real_6d = _solve_real(complex_6d, tol=tol, mix_pairs=self._mix_pairs)
@@ -473,9 +421,9 @@ class CenterManifold:
         real_modal_6d = _coordlocal2realmodal(self._point, local_6d, tol)
         complex_modal_6d = _solve_complex(real_modal_6d, tol=tol, mix_pairs=self._mix_pairs)
 
-        expansions = self.get_lie_expansions(inverse=True, tol=tol)
+        expansions = self._pipeline.get_lie_expansions(inverse=True, tol=tol)
         complex_pnf_6d = _evaluate_transform(expansions, complex_modal_6d, 
-                                           self._pipeline.get_hamiltonian("complex_modal")._clmo)
+                                           self._hamsys._clmo)
         real_pnf_6d = _solve_real(complex_pnf_6d, tol=tol, mix_pairs=self._mix_pairs)
         real_cm_6d = self._restrict_coord_to_center_manifold(real_pnf_6d)
 

@@ -18,11 +18,12 @@ from typing import Literal, Optional, Sequence
 import numpy as np
 
 from hiten.algorithms.poincare import _build_seeding_strategy
-from hiten.algorithms.poincare.backends._cmbackend import \
+from hiten.algorithms.poincare.cm.backend import \
     _CenterManifoldBackend
-from hiten.algorithms.poincare.config import (_CenterManifoldMapConfig,
-                                              _get_section_config, _Section)
-from hiten.algorithms.poincare.engine import _CenterManifoldEngine
+from hiten.algorithms.poincare.cm.config import (_CenterManifoldMapConfig,
+                                              _get_section_config)
+from hiten.algorithms.poincare.core.base import _Section
+from hiten.algorithms.poincare.cm.engine import _CenterManifoldEngine
 from hiten.algorithms.poincare.events import _PlaneEvent
 from hiten.system.center import CenterManifold
 from hiten.system.libration.triangular import TriangularPoint

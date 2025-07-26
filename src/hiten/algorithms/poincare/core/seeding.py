@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from typing import Protocol, runtime_checkable
 
 import numpy as np
 
@@ -6,7 +6,8 @@ from hiten.algorithms.dynamics.base import _DynamicalSystemProtocol
 from hiten.algorithms.poincare.events import _SurfaceEvent
 
 
-class _SeedGenerator(ABC):
+@runtime_checkable
+class _SeedingProtocol(Protocol):
     """Problem-agnostic seed generator.
 
     The role of a *seed generator* is to provide one or more initial states
@@ -20,7 +21,6 @@ class _SeedGenerator(ABC):
     strategies can be *adapted* with a thin wrapper rather than rewritten.
     """
 
-    @abstractmethod
     def generate(
         self,
         *,
@@ -46,4 +46,5 @@ class _SeedGenerator(ABC):
             seeds).  The core engine passes only *dynsys*, *surface* and
             *n_seeds*; domain-specific wrappers supply the rest.
         """
+        ...
 

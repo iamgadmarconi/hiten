@@ -1,34 +1,27 @@
-import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 
-from hiten.algorithms.poincare.backends._cmbackend import \
-    _CenterManifoldBackend
-from hiten.algorithms.poincare.config import _Section
-from hiten.algorithms.poincare.seeding.base import _CenterManifoldSeedingBase
+from hiten.algorithms.poincare.cm.backend import _CenterManifoldBackend
+from hiten.algorithms.poincare.cm.config import _CenterManifoldMapConfig
+from hiten.algorithms.poincare.cm.seeding import _CenterManifoldSeedingBase
+from hiten.algorithms.poincare.core.base import _Section
+from hiten.algorithms.poincare.core.engine import _ReturnMapEngine
 from hiten.utils.log_config import logger
 
 
-class _CenterManifoldEngine:
+class _CenterManifoldEngine(_ReturnMapEngine):
     """Driver for centre-manifold return-map generation."""
 
     def __init__(
         self,
         backend: _CenterManifoldBackend,
         seed_strategy: _CenterManifoldSeedingBase,
+        map_config: _CenterManifoldMapConfig,
         *,
-        n_iter: int,
-        dt: float,
         n_workers: int | None = None,
     ) -> None:
-        self._backend = backend
-        self._strategy = seed_strategy
-        self._n_iter = int(n_iter)
-        self._dt = float(dt)
-        self._n_workers = n_workers or os.cpu_count() or 1
-
-        self._section_cache: _Section | None = None
+        super().__init__(backend, seed_strategy, map_config, n_workers)
 
     def compute_section(self, *, recompute: bool = False) -> _Section:
         if self._section_cache is not None and not recompute:
@@ -84,5 +77,3 @@ class _CenterManifoldEngine:
         )
         return self._section_cache
 
-    def clear_cache(self):
-        self._section_cache = None

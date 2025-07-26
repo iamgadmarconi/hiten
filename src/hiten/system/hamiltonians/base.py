@@ -25,7 +25,7 @@ class Hamiltonian:
         self._psi, self._clmo = _init_index_tables(degree)
         self._encode_dict_list = _create_encode_dict_from_clmo(self._clmo)
 
-        self._hamsys = None
+        self._hamsys = self._build_hamsys()
         self._name: str = name
 
     @property
@@ -60,7 +60,7 @@ class Hamiltonian:
     
     @property
     def jacobian(self) -> np.ndarray:
-        return _polynomial_jacobian(self._poly_H, self._degree, self._psi, self._clmo, self._encode_dict_list)
+        return self._hamsys.jac_H
 
     @property
     def hamsys(self):
@@ -105,7 +105,7 @@ class Hamiltonian:
         if isinstance(target_form, str):
             target_name = target_form
             # Create a temporary Hamiltonian class for the target form
-            class TempHamiltonian(Hamiltonian):
+            class _Hamiltonian(Hamiltonian):
                 name = target_name
         else:
             target_name = target_form.name

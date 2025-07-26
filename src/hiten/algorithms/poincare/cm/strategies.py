@@ -7,17 +7,13 @@ Implementation of various Poincaré section seeding strategies.
 The module exposes concrete implementations of the :pyclass:`_CenterManifoldSeedingBase`
 base class for different seeding strategies.
 """
-from typing import TYPE_CHECKING, Any, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
 
 import numpy as np
 
-from hiten.algorithms.poincare.seeding.base import _CenterManifoldSeedingBase
+from hiten.algorithms.poincare.cm.config import _CenterManifoldSectionConfig
+from hiten.algorithms.poincare.cm.seeding import _CenterManifoldSeedingBase
 from hiten.utils.log_config import logger
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-    from hiten.algorithms.poincare.config import _CenterManifoldSectionConfig
 
 
 class _SingleAxisSeeding(_CenterManifoldSeedingBase):
