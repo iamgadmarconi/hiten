@@ -13,6 +13,7 @@ class _SeedingStrategyBase(ABC):
         self._section_cfg = section_cfg
         self._map_cfg = map_cfg
 
+    @property
     def config(self) -> "_SectionConfig":
         return self._section_cfg
 

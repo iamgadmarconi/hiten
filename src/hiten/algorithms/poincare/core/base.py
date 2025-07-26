@@ -54,6 +54,12 @@ class _ReturnMapBase(ABC):
     def _build_seeding_strategy(self, section_coord: str) -> _SeedingStrategyBase:
         """Return a seeding strategy suitable for *section_coord*."""
 
+    def _build_engine(self, backend: _ReturnMapBackend, strategy: _SeedingStrategyBase) -> "_ReturnMapEngine":
+
+        if _ReturnMapEngine.__abstractmethods__:
+            raise TypeError("Sub-class must implement _build_engine to return a concrete _ReturnMapEngine")
+        return _ReturnMapEngine(backend=backend, seed_strategy=strategy, map_config=self.config)
+
     def compute(self, *, section_coord: str | None = None):
         """Compute (or retrieve from cache) the return map on `section_coord`."""
 
@@ -69,11 +75,8 @@ class _ReturnMapBase(ABC):
             backend = self._build_backend(key)
             strategy = self._build_seeding_strategy(key)
 
-            self._engines[key] = _ReturnMapEngine(
-                backend=backend,
-                seed_strategy=strategy,
-                map_config=self.config,
-            )
+            # Let the subclass decide which engine to use.
+            self._engines[key] = self._build_engine(backend, strategy)
 
         # Delegate compute to engine
         self._section = self._engines[key].compute_section()

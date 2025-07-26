@@ -6,6 +6,7 @@ import numpy as np
 from hiten.algorithms.poincare.cm import _make_strategy
 from hiten.algorithms.poincare.cm.config import (_CenterManifoldMapConfig,
                                                  _get_section_config)
+from hiten.algorithms.poincare.cm.engine import _CenterManifoldEngine
 from hiten.algorithms.poincare.core.base import _ReturnMapBase
 from hiten.system.center import CenterManifold
 from hiten.system.orbits.base import GenericOrbit
@@ -64,6 +65,14 @@ class CenterManifoldMap(_ReturnMapBase):
         )
 
         return strategy
+
+    def _build_engine(self, backend, strategy):
+        """Instantiate the concrete engine for centre-manifold maps."""
+        return _CenterManifoldEngine(
+            backend=backend,
+            seed_strategy=strategy,
+            map_config=self.config,
+        )
 
     def ic(self, pt: np.ndarray, *, section_coord: str | None = None) -> np.ndarray:
         key = section_coord or self.config.section_coord
