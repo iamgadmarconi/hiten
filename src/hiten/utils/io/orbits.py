@@ -56,23 +56,11 @@ def _write_orbit_group(
 
 _ORBIT_CLASSES: dict[str, type] = {}
 
+
 def register_orbit_class(cls):
-    """Decorator that registers *cls* for deserialisation.*"""
+    """Decorator that registers *cls* for deserialisation"""
     _ORBIT_CLASSES[cls.__name__] = cls
     return cls
-
-
-try:
-    from hiten.system.orbits.base import GenericOrbit 
-    from hiten.system.orbits.halo import HaloOrbit  
-    from hiten.system.orbits.lyapunov import LyapunovOrbit
-except ModuleNotFoundError:
-    pass
-
-for _cls in ["HaloOrbit", "LyapunovOrbit", "GenericOrbit"]:
-    globals_ref = globals()
-    if _cls in globals_ref:
-        _ORBIT_CLASSES[_cls] = globals_ref[_cls]
 
 
 def _read_orbit_group(grp: h5py.Group):

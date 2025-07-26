@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Callable, Dict, Tuple, Union
 
 import numpy as np
@@ -155,7 +156,25 @@ class Hamiltonian:
 
     def __bool__(self):
         return bool(self._poly_H)
-    
+
+    def save(self, filepath: str | Path, **kwargs) -> None:
+        """Serialise this Hamiltonian to *filepath* (HDF5)."""
+        from hiten.utils.io.hamiltonian import save_hamiltonian
+
+        save_hamiltonian(self, filepath, **kwargs)
+
+    @classmethod
+    def load(cls, filepath: str | Path, **kwargs):
+        """Load a Hamiltonian from *filepath* and return it.
+
+        The *cls* argument is ignored - the loader determines the correct
+        concrete class from the file metadata and returns an instance of that
+        class.
+        """
+        from hiten.utils.io.hamiltonian import load_hamiltonian
+
+        return load_hamiltonian(filepath, **kwargs)
+
 
 class LieGeneratingFunction:
 

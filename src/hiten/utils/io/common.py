@@ -18,7 +18,6 @@ def _ensure_dir(path: str | os.PathLike) -> None:
     Path(path).mkdir(parents=True, exist_ok=True)
 
 
-
 def _write_dataset(
     group: h5py.Group,
     name: str,
