@@ -9,6 +9,8 @@ Run with
 import os
 import sys
 
+import numpy as np
+
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from hiten.system import System
@@ -21,13 +23,12 @@ def main() -> None:
     halo_orbit = l_point.create_orbit('halo', amplitude_z=0.3, zenith='northern')
     halo_orbit.correct()
     halo_orbit.propagate()
-    halo_orbit.plot()
 
     direction, stability = ['positive', 'negative'], [True, False]
     for d in direction:
         for s in stability:
             manifold = halo_orbit.manifold(stable=s, direction=d)
-            manifold.compute()
+            manifold.compute(integration_fraction=1, dt=1e-3)
             manifold.plot()
 
 if __name__ == "__main__":
