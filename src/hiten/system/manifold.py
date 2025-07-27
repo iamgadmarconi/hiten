@@ -292,7 +292,7 @@ class Manifold:
 
         return x0W
 
-    def compute(self, step: float = 0.02, integration_fraction: float = 0.75, NN: int = 1, displacement: float = 1e-8, **kwargs):
+    def compute(self, step: float = 0.02, integration_fraction: float = 0.75, NN: int = 1, displacement: float = 1e-6, **kwargs):
         r"""
         Generate manifold trajectories and build a Poincaré map.
 
