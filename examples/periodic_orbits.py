@@ -1,6 +1,5 @@
 """Example script: generation of several families of periodic orbits (Vertical,
-Halo, planar Lyapunov) around an Earth-Moon libration point, together with their
-stable manifolds.
+Halo, planar Lyapunov) around an Earth-Moon libration point.
 
 Run with
     python examples/periodic_orbits.py
@@ -59,11 +58,6 @@ def main() -> None:
         orbit.correct(max_attempts=spec["diff_corr_attempts"], finite_difference=spec["finite_difference"])
         orbit.propagate(steps=1000)
         orbit.plot("rotating")
-
-        manifold = orbit.manifold(stable=True, direction="positive")
-        manifold.compute()
-        manifold.plot()
-
 
 if __name__ == "__main__":
     main()
