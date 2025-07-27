@@ -53,7 +53,7 @@ def _max_rel_energy_error(states: np.ndarray, mu: float) -> float:
         if rel_err > max_err:
             max_err = rel_err
 
-    return max_err 
+    return max_err
 
 
 def crtbp_energy(state: Sequence[float], mu: float) -> float:

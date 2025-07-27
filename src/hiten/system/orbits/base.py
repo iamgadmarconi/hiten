@@ -472,9 +472,9 @@ class PeriodicOrbit(ABC):
         
         return stability
 
-    def manifold(self, stable: bool = True, direction: Literal["positive", "negative"] = "positive", method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 6) -> "Manifold":
+    def manifold(self, stable: bool = True, direction: Literal["positive", "negative"] = "positive") -> "Manifold":
         from hiten.system.manifold import Manifold
-        return Manifold(self, stable=stable, direction=direction, method=method, order=order)
+        return Manifold(self, stable=stable, direction=direction)
 
     def plot(self, frame: Literal["rotating", "inertial"] = "rotating", dark_mode: bool = True, save: bool = False, filepath: str = f'orbit.svg', **kwargs):
         if self._trajectory is None:

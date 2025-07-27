@@ -123,16 +123,12 @@ class Manifold:
             generating_orbit: PeriodicOrbit, 
             stable: bool = True, 
             direction: Literal["positive", "negative"] = "positive", 
-            method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", 
-            order: int = 6
         ):
         self._generating_orbit = generating_orbit
         self._libration_point = self._generating_orbit.libration_point
         self._stable = 1 if stable else -1
         self._direction = 1 if direction == "positive" else -1
         self._mu = self._generating_orbit.system.mu
-        self._method = method
-        self._order = order
 
         self._forward = -self._stable
         self._successes = 0
@@ -166,24 +162,6 @@ class Manifold:
         return self._mu
 
     @property
-    def method(self) -> str:
-        """Backend integrator used for propagation."""
-        return self._method
-    
-    @method.setter
-    def method(self, value: Literal["rk", "scipy", "symplectic", "adaptive"]):
-        self._method = value
-
-    @property
-    def order(self) -> int:
-        """Integration order for fixed-step Runge-Kutta methods."""
-        return self._order
-    
-    @order.setter
-    def order(self, value: int):
-        self._order = value
-
-    @property
     def manifold_result(self) -> ManifoldResult:
         """Cached result from the last successful compute call."""
         return self._manifold_result
@@ -209,58 +187,42 @@ class Manifold:
 
         return real_vals_arr, real_vecs_arr
 
-    def _compute_manifold_section(self, state: np.ndarray, period: float, fraction: float, NN: int = 1, forward: int = 1, displacement: float = 1e-6):
+    def _compute_manifold_section(
+        self,
+        period: float,
+        fraction: float,
+        displacement: float,
+        xx: np.ndarray,
+        tt: np.ndarray,
+        PHI: np.ndarray,
+        eigvec: np.ndarray,
+    ):
         r"""
         Compute a section of the invariant manifold.
 
         Parameters
         ----------
-        state : numpy.ndarray
-            Initial state of the periodic orbit.
         period : float
             Period of the periodic orbit.
         fraction : float
             Fraction of the period to compute the section at.
-        NN : int, default 1
-            Index of the eigenvector to compute the section for.
-        forward : int, default 1
-            Direction of integration.
-        displacement : float, default 1e-6
-            Displacement applied along the eigenvector.
+        xx, tt, PHI, phi_T : numpy.ndarray
+            Output of a previous `_compute_stm` call for the same periodic orbit.
+            Supplying these arrays lets the function skip the expensive STM
+            propagation.
+        eigvec : numpy.ndarray
+            Pre-selected eigenvector of the monodromy matrix.
 
         Returns
         -------
         numpy.ndarray
-            Initial condition for the manifold section.
+            Initial condition displaced along the invariant-manifold branch.
 
         Raises
         ------
         ValueError
             If the requested eigenvector is not available.
         """
-        xx, tt, phi_T, PHI = _compute_stm(self._libration_point._var_eq_system, state, period, steps=2000, forward=forward, method=self._method, order=self._order)
-
-        sn, un, _, Ws, Wu, _ = eigenvalue_decomposition(phi_T, discrete=1)
-
-        snreal_vals, snreal_vecs = self._get_real_eigenvectors(Ws, sn)
-        unreal_vals, unreal_vecs = self._get_real_eigenvectors(Wu, un)
-
-        col_idx = NN - 1
-
-        if self._stable == 1:
-            if snreal_vecs.shape[1] <= col_idx or col_idx < 0:
-                raise ValueError(f"Requested stable eigenvector {NN} not available. Only {snreal_vecs.shape[1]} real stable eigenvectors found.")
-            eigval = np.real(snreal_vals[col_idx])
-            eigvec = snreal_vecs[:, col_idx]
-            logger.debug(f"Using stable manifold direction with eigenvalue {eigval:.6f} for {NN}th eigenvector")
-
-        else:  # unstable
-            if unreal_vecs.shape[1] <= col_idx or col_idx < 0:
-                raise ValueError(f"Requested unstable eigenvector {NN} not available. Only {unreal_vecs.shape[1]} real unstable eigenvectors found.")
-            eigval = np.real(unreal_vals[col_idx])
-            eigvec = unreal_vecs[:, col_idx]
-            logger.debug(f"Using unstable manifold direction with eigenvalue {eigval:.6f} for {NN}th eigenvector")
-
         mfrac = _totime(tt, fraction * period)
         
         if np.isscalar(mfrac):
@@ -292,7 +254,7 @@ class Manifold:
 
         return x0W
 
-    def compute(self, step: float = 0.02, integration_fraction: float = 0.75, NN: int = 1, displacement: float = 1e-6, **kwargs):
+    def compute(self, step: float = 0.02, integration_fraction: float = 0.75, NN: int = 1, displacement: float = 1e-6, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 6, **kwargs):
         r"""
         Generate manifold trajectories and build a Poincaré map.
 
@@ -324,7 +286,7 @@ class Manifold:
                 Maximum relative variation of the Jacobi constant allowed along a trajectory.
                 Larger deviations indicate numerical error (often triggered by near-singular
                 passages) and cause the trajectory to be discarded.
-            safe_distance : float, default 1.1
+            safe_distance : float, default 2.0
                 Safety multiplier applied to the physical radii of both primaries.  A trajectory
                 is rejected if it ever comes within ``safe_distance x radius`` of either body.
 
@@ -340,18 +302,20 @@ class Manifold:
 
         Examples
         --------
-        >>> from hiten.system import System, Manifold, HaloOrbit
+        >>> from hiten.system import System, Manifold
         >>> system = System.from_bodies("earth", "moon")
         >>> L2 = system.get_libration_point(2)
-        >>> halo_L2 = HaloOrbit(system, L2, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0)
-        >>> man = Manifold(halo_L2)
-        >>> result = man.compute(step=0.05)
+        >>> halo_L2 = L2.create_orbit('halo', amplitude_z=0.3, zenith='northern')
+        >>> halo_L2.correct()
+        >>> halo_L2.propagate()
+        >>> manifold = halo_L2.manifold(stable=True, direction='positive')
+        >>> result = manifold.compute(step=0.05)
         >>> print(f"Success rate: {result.success_rate:.0%}")
         """
         kwargs.setdefault("show_progress", True)
         kwargs.setdefault("dt", 1e-3)
         kwargs.setdefault("energy_tol", 1e-6)
-        kwargs.setdefault("safe_distance", 1.3)
+        kwargs.setdefault("safe_distance", 2.0)
 
         dist_m = self._generating_orbit.system.distance * 1e3
         pr_nd = self._generating_orbit.system.primary.radius / dist_m
@@ -385,8 +349,8 @@ class Manifold:
                 self._generating_orbit.period,
                 steps=2000,
                 forward=self._forward,
-                method=self._method,
-                order=self._order,
+                method=method,
+                order=order,
             )
         except Exception as e:
             logger.error(f"Failed to propagate STM once: {e}")
@@ -436,35 +400,15 @@ class Manifold:
 
             try:
 
-                mfrac_idx = _totime(tt, fraction * self._generating_orbit.period)
-                if not np.isscalar(mfrac_idx):
-                    mfrac_idx = mfrac_idx[0]
-
-                phi_frac_flat = PHI[mfrac_idx, :36]
-                phi_frac = phi_frac_flat.reshape((6, 6))
-
-                MAN = self._direction * (phi_frac @ eigvec)
-
-                disp_magnitude = np.linalg.norm(MAN[0:3])
-                if disp_magnitude < 1e-14:
-                    logger.warning(
-                        f"Very small displacement magnitude: {disp_magnitude:.2e}, setting to 1.0"
-                    )
-                    disp_magnitude = 1.0
-                d = displacement / disp_magnitude
-
-                fracH = xx[mfrac_idx, :].copy()
-
-                x0W = fracH + d * MAN.real
-                x0W = x0W.flatten()
-
-                if abs(x0W[2]) < 1.0e-15:
-                    x0W[2] = 0.0
-                if abs(x0W[5]) < 1.0e-15:
-                    x0W[5] = 0.0
-
-                x0W = x0W.astype(np.float64)
-
+                x0W = self._compute_manifold_section(
+                    period=self._generating_orbit.period,
+                    fraction=fraction,
+                    displacement=displacement,
+                    xx=xx,
+                    tt=tt,
+                    PHI=PHI,
+                    eigvec=eigvec,
+                ).astype(np.float64)
                 tf = integration_fraction * 2 * np.pi
                 dt = abs(kwargs["dt"])
                 steps = max(int(abs(tf) / dt) + 1, 100)
@@ -476,8 +420,8 @@ class Manifold:
                     tf=tf,
                     forward=self._forward,
                     steps=steps,
-                    method=self._method,
-                    order=self._order,
+                    method=method,
+                    order=order,
                     flip_indices=slice(0, 6),
                 )
                 states, times = sol.states, sol.times

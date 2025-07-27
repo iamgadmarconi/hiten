@@ -28,7 +28,7 @@ def main() -> None:
     for d in direction:
         for s in stability:
             manifold = halo_orbit.manifold(stable=s, direction=d)
-            manifold.compute(integration_fraction=np.pi, dt=1e-3)
+            manifold.compute(integration_fraction=1, dt=1e-3)
             manifold.plot()
 
 if __name__ == "__main__":
