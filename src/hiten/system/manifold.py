@@ -324,6 +324,9 @@ class Manifold:
                 Maximum relative variation of the Jacobi constant allowed along a trajectory.
                 Larger deviations indicate numerical error (often triggered by near-singular
                 passages) and cause the trajectory to be discarded.
+            safe_distance : float, default 1.1
+                Safety multiplier applied to the physical radii of both primaries.  A trajectory
+                is rejected if it ever comes within ``safe_distance x radius`` of either body.
 
         Returns
         -------
@@ -348,11 +351,19 @@ class Manifold:
         kwargs.setdefault("show_progress", True)
         kwargs.setdefault("dt", 1e-3)
         kwargs.setdefault("energy_tol", 1e-6)
+        kwargs.setdefault("safe_distance", 1.3)
+
+        dist_m = self._generating_orbit.system.distance * 1e3
+        pr_nd = self._generating_orbit.system.primary.radius / dist_m
+        sr_nd = self._generating_orbit.system.secondary.radius / dist_m
+        safe_r1 = kwargs["safe_distance"] * pr_nd
+        safe_r2 = kwargs["safe_distance"] * sr_nd
         current_params = {
             "step": step,
             "integration_fraction": integration_fraction,
             "NN": NN,
             "displacement": displacement,
+            "safe_distance": kwargs["safe_distance"],
             **kwargs,
         }
 
@@ -470,6 +481,19 @@ class Manifold:
                     flip_indices=slice(0, 6),
                 )
                 states, times = sol.states, sol.times
+
+                x = states[:, 0]
+                y = states[:, 1]
+                z = states[:, 2]
+
+                r1 = np.sqrt((x + self._mu) ** 2 + y ** 2 + z ** 2)
+                r2 = np.sqrt((x - 1 + self._mu) ** 2 + y ** 2 + z ** 2)
+
+                if (r1.min() < safe_r1) or (r2.min() < safe_r2):
+                    logger.debug(
+                        f"Fraction {fraction:.3f}: Trajectory discarded due to body-radius proximity (min(r1)={r1.min():.2e}, min(r2)={r2.min():.2e})"
+                    )
+                    continue
 
                 max_energy_err = _max_rel_energy_error(states, self._mu)
 
