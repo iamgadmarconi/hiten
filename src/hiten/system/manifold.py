@@ -186,20 +186,18 @@ class Manifold:
         return self.__str__()
 
     def _get_real_eigenvectors(self, vectors: np.ndarray, values: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Filter for real eigenvalues and their corresponding eigenvectors."""
-        real_vals = []
-        real_vecs_list = []
-        for k in range(len(values)):
-            if np.isreal(values[k]):
-                real_vals.append(values[k])
-                real_vecs_list.append(vectors[:, k])
-        
-        real_vals_arr = np.array(real_vals, dtype=np.complex128)
-        if real_vecs_list:
-            real_vecs_arr = np.column_stack(real_vecs_list)
+        """Return eigenvalues/eigenvectors with zero imaginary part (vectorised)."""
+        mask = np.isreal(values)
+
+        # Eigenvalues that are real within numerical precision
+        real_vals_arr = values[mask].astype(np.complex128)
+
+        # Corresponding eigenvectors (may be none)
+        if np.any(mask):
+            real_vecs_arr = vectors[:, mask]
         else:
             real_vecs_arr = np.zeros((vectors.shape[0], 0), dtype=np.complex128)
-            
+
         return real_vals_arr, real_vecs_arr
 
     def _compute_manifold_section(self, state: np.ndarray, period: float, fraction: float, NN: int = 1, forward: int = 1, displacement: float = 1e-6):
@@ -351,8 +349,52 @@ class Manifold:
         self._successes = 0
         self._attempts = 0
 
-
         initial_state = self._generating_orbit._initial_state
+
+        try:
+            xx, tt, phi_T, PHI = _compute_stm(
+                self._libration_point._var_eq_system,
+                initial_state,
+                self._generating_orbit.period,
+                steps=2000,
+                forward=self._forward,
+                method=self._method,
+                order=self._order,
+            )
+        except Exception as e:
+            logger.error(f"Failed to propagate STM once: {e}")
+            raise
+
+        # Eigen-decomposition performed once
+        sn, un, _, Ws, Wu, _ = eigenvalue_decomposition(phi_T, discrete=1)
+
+        # Helper to extract real eigenvectors only once
+        snreal_vals, snreal_vecs = self._get_real_eigenvectors(Ws, sn)
+        unreal_vals, unreal_vecs = self._get_real_eigenvectors(Wu, un)
+
+        col_idx = NN - 1  # convert 1-based to 0-based
+        if self._stable == 1:
+            if snreal_vecs.shape[1] <= col_idx or col_idx < 0:
+                raise ValueError(
+                    f"Requested stable eigenvector {NN} not available. "
+                    f"Only {snreal_vecs.shape[1]} real stable eigenvectors found."
+                )
+            eigvec = snreal_vecs[:, col_idx]
+            eigval = np.real(snreal_vals[col_idx])
+            logger.debug(
+                f"Using stable manifold direction with eigenvalue {eigval:.6f} for {NN}th eigenvector (cached)"
+            )
+        else:
+            if unreal_vecs.shape[1] <= col_idx or col_idx < 0:
+                raise ValueError(
+                    f"Requested unstable eigenvector {NN} not available. "
+                    f"Only {unreal_vecs.shape[1]} real unstable eigenvectors found."
+                )
+            eigvec = unreal_vecs[:, col_idx]
+            eigval = np.real(unreal_vals[col_idx])
+            logger.debug(
+                f"Using unstable manifold direction with eigenvalue {eigval:.6f} for {NN}th eigenvector (cached)"
+            )
 
         ysos, dysos, states_list, times_list = [], [], [], []
 
@@ -368,45 +410,72 @@ class Manifold:
             self._attempts += 1
 
             try:
-                x0W = self._compute_manifold_section(
-                    initial_state,
-                    self._generating_orbit.period,
-                    fraction,
-                    NN=NN,
-                    forward=self._forward,
-                    displacement=displacement
-                )
-                x0W = x0W.flatten().astype(np.float64)
+
+                # Index of the snapshot closest to the requested fraction
+                mfrac_idx = _totime(tt, fraction * self._generating_orbit.period)
+                if not np.isscalar(mfrac_idx):
+                    mfrac_idx = mfrac_idx[0]
+
+                # STM at that snapshot
+                phi_frac_flat = PHI[mfrac_idx, :36]
+                phi_frac = phi_frac_flat.reshape((6, 6))
+
+                # Direction vector in phase-space
+                MAN = self._direction * (phi_frac @ eigvec)
+
+                disp_magnitude = np.linalg.norm(MAN[0:3])
+                if disp_magnitude < 1e-14:
+                    logger.warning(
+                        f"Very small displacement magnitude: {disp_magnitude:.2e}, setting to 1.0"
+                    )
+                    disp_magnitude = 1.0
+                d = displacement / disp_magnitude
+
+                # Reference state on the periodic orbit at the same fraction
+                fracH = xx[mfrac_idx, :].copy()
+
+                x0W = fracH + d * MAN.real
+                x0W = x0W.flatten()
+
+                # Zero-out tiny numerical noise in z / vz
+                if abs(x0W[2]) < 1.0e-15:
+                    x0W[2] = 0.0
+                if abs(x0W[5]) < 1.0e-15:
+                    x0W[5] = 0.0
+
+                # Ensure dtype for Numba / integrators
+                x0W = x0W.astype(np.float64)
+
                 tf = integration_fraction * 2 * np.pi
-
                 dt = abs(kwargs["dt"])
-
                 steps = max(int(abs(tf) / dt) + 1, 100)
 
                 sol = _propagate_dynsys(
                     dynsys=self._generating_orbit.system._dynsys,
-                    state0=x0W, 
-                    t0=0.0, 
+                    state0=x0W,
+                    t0=0.0,
                     tf=tf,
                     forward=self._forward,
                     steps=steps,
-                    method=self._method, 
+                    method=self._method,
                     order=self._order,
-                    flip_indices=slice(0, 6)
+                    flip_indices=slice(0, 6),
                 )
                 states, times = sol.states, sol.times
 
                 states_list.append(states)
                 times_list.append(times)
 
+                # Intersect with Poincaré section
                 Xy0, _ = surface_of_section(states, times, self._mu, M=2, C=0)
-
                 if len(Xy0) > 0:
                     Xy0 = Xy0.flatten()
                     ysos.append(Xy0[1])
                     dysos.append(Xy0[4])
                     self._successes += 1
-                    logger.debug(f"Fraction {fraction:.3f}: Found Poincaré section point at y={Xy0[1]:.6f}, vy={Xy0[4]:.6f}")
+                    logger.debug(
+                        f"Fraction {fraction:.3f}: Found Poincaré section point at y={Xy0[1]:.6f}, vy={Xy0[4]:.6f}"
+                    )
 
             except Exception as e:
                 err = f"Error computing manifold: {e}"
@@ -416,9 +485,13 @@ class Manifold:
         if self._attempts > 0 and self._successes < self._attempts:
             failed_attempts = self._attempts - self._successes
             failure_rate = (failed_attempts / self._attempts) * 100
-            logger.warning(f"Failed to find {failure_rate:.1f}% ({failed_attempts}/{self._attempts}) Poincaré section crossings")
-            
-        self._manifold_result = ManifoldResult(ysos, dysos, states_list, times_list, self._successes, self._attempts)
+            logger.warning(
+                f"Failed to find {failure_rate:.1f}% ({failed_attempts}/{self._attempts}) Poincaré section crossings"
+            )
+        
+        self._manifold_result = ManifoldResult(
+            ysos, dysos, states_list, times_list, self._successes, self._attempts
+        )
         self._last_compute_params = current_params
         return self._manifold_result
 
