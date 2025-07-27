@@ -17,6 +17,44 @@ import numpy as np
 
 from hiten.utils.log_config import logger
 
+from numba import njit
+
+from hiten.algorithms.utils.config import FASTMATH
+
+
+@njit(cache=True, fastmath=FASTMATH)
+def _max_rel_energy_error(states: np.ndarray, mu: float) -> float:
+    """Return the maximum relative deviation of the Jacobi constant along *states*.
+    """
+
+    mu1 = 1.0 - mu
+    mu2 = mu
+
+    def _jacobi(x, y, z, vx, vy, vz):
+        r1 = ((x + mu2) ** 2 + y * y + z * z) ** 0.5
+        r2 = ((x - mu1) ** 2 + y * y + z * z) ** 0.5
+        return x * x + y * y + 2.0 * (mu1 / r1 + mu2 / r2) - (vx * vx + vy * vy + vz * vz)
+
+    x0, y0, z0, vx0, vy0, vz0 = states[0]
+    C0 = _jacobi(x0, y0, z0, vx0, vy0, vz0)
+
+    absC0 = abs(C0)
+    max_err = 0.0
+
+    for i in range(1, states.shape[0]):
+        x, y, z, vx, vy, vz = states[i]
+        Ci = _jacobi(x, y, z, vx, vy, vz)
+
+        if absC0 > 1e-14:
+            rel_err = abs(Ci - C0) / absC0
+        else:
+            rel_err = abs(Ci - C0)
+
+        if rel_err > max_err:
+            max_err = rel_err
+
+    return max_err 
+
 
 def crtbp_energy(state: Sequence[float], mu: float) -> float:
     r"""

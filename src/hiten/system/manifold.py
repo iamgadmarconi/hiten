@@ -28,6 +28,7 @@ from tqdm import tqdm
 
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_stm
+from hiten.algorithms.dynamics.utils.energy import _max_rel_energy_error
 from hiten.algorithms.dynamics.utils.geometry import surface_of_section
 from hiten.algorithms.dynamics.utils.linalg import (_totime,
                                                     eigenvalue_decomposition)
@@ -168,11 +169,19 @@ class Manifold:
     def method(self) -> str:
         """Backend integrator used for propagation."""
         return self._method
+    
+    @method.setter
+    def method(self, value: Literal["rk", "scipy", "symplectic", "adaptive"]):
+        self._method = value
 
     @property
     def order(self) -> int:
         """Integration order for fixed-step Runge-Kutta methods."""
         return self._order
+    
+    @order.setter
+    def order(self, value: int):
+        self._order = value
 
     @property
     def manifold_result(self) -> ManifoldResult:
@@ -283,7 +292,7 @@ class Manifold:
 
         return x0W
 
-    def compute(self, step: float = 0.02, integration_fraction: float = 0.75, NN: int = 1, displacement: float = 1e-6, **kwargs):
+    def compute(self, step: float = 0.02, integration_fraction: float = 0.75, NN: int = 1, displacement: float = 1e-8, **kwargs):
         r"""
         Generate manifold trajectories and build a Poincaré map.
 
@@ -311,6 +320,10 @@ class Manifold:
                 Display a :pydata:`tqdm` progress bar.
             dt : float, default 1e-3
                 Nominal time step for fixed-step integrators.
+            energy_tol : float, default 1e-6
+                Maximum relative variation of the Jacobi constant allowed along a trajectory.
+                Larger deviations indicate numerical error (often triggered by near-singular
+                passages) and cause the trajectory to be discarded.
 
         Returns
         -------
@@ -332,11 +345,15 @@ class Manifold:
         >>> result = man.compute(step=0.05)
         >>> print(f"Success rate: {result.success_rate:.0%}")
         """
-        # Create a canonical representation of the parameters for comparison.
         kwargs.setdefault("show_progress", True)
         kwargs.setdefault("dt", 1e-3)
+        kwargs.setdefault("energy_tol", 1e-6)
         current_params = {
-            "step": step, "integration_fraction": integration_fraction, "NN": NN, "displacement": displacement, **kwargs
+            "step": step,
+            "integration_fraction": integration_fraction,
+            "NN": NN,
+            "displacement": displacement,
+            **kwargs,
         }
 
         if self._manifold_result is not None and self._last_compute_params == current_params:
@@ -344,7 +361,6 @@ class Manifold:
             return self._manifold_result
 
         logger.info("New computation parameters detected or first run, computing manifold.")
-        # Invalidate cache and reset counters for a new computation
         self._manifold_result = None
         self._successes = 0
         self._attempts = 0
@@ -365,10 +381,8 @@ class Manifold:
             logger.error(f"Failed to propagate STM once: {e}")
             raise
 
-        # Eigen-decomposition performed once
         sn, un, _, Ws, Wu, _ = eigenvalue_decomposition(phi_T, discrete=1)
 
-        # Helper to extract real eigenvectors only once
         snreal_vals, snreal_vecs = self._get_real_eigenvectors(Ws, sn)
         unreal_vals, unreal_vecs = self._get_real_eigenvectors(Wu, un)
 
@@ -411,16 +425,13 @@ class Manifold:
 
             try:
 
-                # Index of the snapshot closest to the requested fraction
                 mfrac_idx = _totime(tt, fraction * self._generating_orbit.period)
                 if not np.isscalar(mfrac_idx):
                     mfrac_idx = mfrac_idx[0]
 
-                # STM at that snapshot
                 phi_frac_flat = PHI[mfrac_idx, :36]
                 phi_frac = phi_frac_flat.reshape((6, 6))
 
-                # Direction vector in phase-space
                 MAN = self._direction * (phi_frac @ eigvec)
 
                 disp_magnitude = np.linalg.norm(MAN[0:3])
@@ -431,19 +442,16 @@ class Manifold:
                     disp_magnitude = 1.0
                 d = displacement / disp_magnitude
 
-                # Reference state on the periodic orbit at the same fraction
                 fracH = xx[mfrac_idx, :].copy()
 
                 x0W = fracH + d * MAN.real
                 x0W = x0W.flatten()
 
-                # Zero-out tiny numerical noise in z / vz
                 if abs(x0W[2]) < 1.0e-15:
                     x0W[2] = 0.0
                 if abs(x0W[5]) < 1.0e-15:
                     x0W[5] = 0.0
 
-                # Ensure dtype for Numba / integrators
                 x0W = x0W.astype(np.float64)
 
                 tf = integration_fraction * 2 * np.pi
@@ -463,10 +471,17 @@ class Manifold:
                 )
                 states, times = sol.states, sol.times
 
+                max_energy_err = _max_rel_energy_error(states, self._mu)
+
+                if max_energy_err > kwargs["energy_tol"]:
+                    logger.warning(
+                        f"Fraction {fraction:.3f}: Trajectory discarded due to energy drift (|C(t)|/|C(0)|={max_energy_err:.2e} > {kwargs['energy_tol']:.1e})"
+                    )
+                    continue
+
                 states_list.append(states)
                 times_list.append(times)
 
-                # Intersect with Poincaré section
                 Xy0, _ = surface_of_section(states, times, self._mu, M=2, C=0)
                 if len(Xy0) > 0:
                     Xy0 = Xy0.flatten()
