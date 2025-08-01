@@ -31,8 +31,6 @@ def save_manifold(
         f.attrs["class"] = manifold.__class__.__name__
         f.attrs["stable"] = bool(manifold._stable == 1)
         f.attrs["direction"] = "positive" if manifold._direction == 1 else "negative"
-        f.attrs["method"] = manifold._method
-        f.attrs["order"] = int(manifold._order)
 
         ggrp = f.create_group("generating_orbit")
         _write_orbit_group(ggrp, manifold._generating_orbit, compression=compression, level=level)
@@ -63,8 +61,6 @@ def load_manifold(path: str | Path):
     with h5py.File(path, "r") as f:
         stable_flag = bool(f.attrs.get("stable", True))
         direction_str = f.attrs.get("direction", "positive")
-        method = f.attrs.get("method", "scipy")
-        order = int(f.attrs.get("order", 6))
 
         ggrp = f["generating_orbit"]
         gen_orbit = _read_orbit_group(ggrp)
@@ -73,8 +69,6 @@ def load_manifold(path: str | Path):
             generating_orbit=gen_orbit,
             stable=stable_flag,
             direction=direction_str,
-            method=method,
-            order=order,
         )
 
         if "result" in f:
