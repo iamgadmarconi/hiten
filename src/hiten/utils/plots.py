@@ -1,5 +1,5 @@
 import os
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 import matplotlib as mpl
 import matplotlib.animation as animation
@@ -14,6 +14,9 @@ from hiten.algorithms.utils.coordinates import (_get_angular_velocity,
                                                 _si_time, _to_si_units)
 from hiten.system.body import Body
 from hiten.utils.io.common import _ensure_dir
+
+if TYPE_CHECKING:
+    from hiten.system.manifold import Manifold
 
 
 def animate_trajectories(
@@ -821,6 +824,116 @@ def plot_invariant_torus(
 
     plt.show()
     plt.close(fig)
+    return fig, ax
+
+def plot_manifolds(
+        manifolds: List["Manifold"],
+        *,
+        figsize: Tuple[int, int] = (10, 8),
+        save: bool = False,
+        dark_mode: bool = True,
+        filepath: str = "manifolds.svg",
+        labels: Optional[List[str]] = None,
+        colors: Optional[List[str]] = None,
+        cmap: str = "tab10",
+        alpha: float = 0.6,
+        equal_axes: bool = True,
+        **kwargs):
+    """Plot several invariant manifolds on the same 3-D axes.
+
+    Parameters
+    ----------
+    manifolds : list[hiten.system.manifold.Manifold]
+        Collection of previously-computed `Manifold` objects.  Each item must
+        have a non-empty :pyattr:`~hiten.system.manifold.Manifold.manifold_result`.
+    figsize : tuple[int, int], default (10, 8)
+        Size of the matplotlib figure.
+    save : bool, default False
+        Save the figure to *filepath*.
+    dark_mode : bool, default True
+        Apply the dark colour scheme.
+    filepath : str, default "manifolds.svg"
+        Output path used if *save* is *True*.
+    labels : list[str] or None, optional
+        Custom legend labels.  Must match ``len(manifolds)`` when supplied.
+    colors : list[str] or None, optional
+        Override the automatically-generated colours (one per manifold).
+    cmap : str, default "tab10"
+        Matplotlib colormap used when *colors* is *None*.
+    alpha : float, default 0.6
+        Line opacity for manifold trajectories (0 < alpha ≤ 1).
+    equal_axes : bool, default True
+        Enforce identical scaling on all axes.
+    **kwargs
+        Reserved for future extensions.
+    """
+    if not manifolds:
+        raise ValueError("'manifolds' must contain at least one element.")
+
+    if labels is not None and len(labels) != len(manifolds):
+        raise ValueError("'labels' length must match number of manifolds.")
+
+    if colors is not None and len(colors) != len(manifolds):
+        raise ValueError("'colors' length must match number of manifolds.")
+
+    if not (0.0 < alpha <= 1.0):
+        raise ValueError("'alpha' must be in the interval (0, 1].")
+
+    if colors is None:
+        cmap_obj = plt.get_cmap(cmap)
+        colors = [cmap_obj(i % cmap_obj.N) for i in range(len(manifolds))]
+
+    if labels is None:
+        labels = [f"Manifold {i + 1}" for i in range(len(manifolds))]
+
+    first_mfld = manifolds[0]
+    bodies = [first_mfld.generating_orbit._system.primary,
+              first_mfld.generating_orbit._system.secondary]
+    system_distance = first_mfld.generating_orbit._system.distance
+
+    mu = _get_mass_parameter(bodies[0].mass, bodies[1].mass)
+
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111, projection='3d')
+
+    for mfld, col, lab in zip(manifolds, colors, labels):
+        if mfld.manifold_result is None:
+            raise ValueError(f"Manifold '{mfld}' has not been computed yet.")
+
+        for traj in mfld.manifold_result.states_list:
+            ax.plot(traj[:, 0], traj[:, 1], traj[:, 2], color=col, lw=1.5, alpha=alpha)
+
+        # Put a label only once per manifold (for legend clarity)
+        ax.plot([], [], [], color=col, label=lab)
+
+    primary_pos = np.array([-mu, 0, 0])
+    secondary_pos = np.array([1 - mu, 0, 0])
+
+    _plot_body(ax, primary_pos, bodies[0].radius / system_distance,
+               _get_body_color(bodies[0], 'royalblue'), bodies[0].name)
+    _plot_body(ax, secondary_pos, bodies[1].radius / system_distance,
+               _get_body_color(bodies[1], 'slategray'), bodies[1].name)
+
+    ax.set_xlabel('X [canonical]')
+    ax.set_ylabel('Y [canonical]')
+    ax.set_zlabel('Z [canonical]')
+
+    if equal_axes:
+        _set_axes_equal(ax)
+
+    ax.legend()
+    ax.set_title('Multiple invariant manifolds')
+
+    if dark_mode:
+        _set_dark_mode(fig, ax, title=ax.get_title())
+
+    if save:
+        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+        plt.savefig(filepath)
+
+    plt.show()
+    plt.close(fig)
+
     return fig, ax
 
 def _get_body_color(body: Body, default_color: str) -> str:
