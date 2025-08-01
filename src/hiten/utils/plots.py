@@ -881,7 +881,7 @@ def plot_manifolds(
 
     if colors is None:
         cmap_obj = plt.get_cmap(cmap)
-        colors = [cmap_obj(i % cmap_obj.N) for i in range(len(manifolds))]
+        colors = [cmap_obj(i / len(manifolds)) for i in range(len(manifolds))]
 
     if labels is None:
         labels = [f"Manifold {i + 1}" for i in range(len(manifolds))]
