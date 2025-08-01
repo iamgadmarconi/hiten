@@ -959,7 +959,7 @@ def _get_body_color(body: Body, default_color: str) -> str:
         return body.color
     return default_color
 
-def _plot_body(ax, center, radius, color, name, u_res=40, v_res=15):
+def _plot_body(ax, center, radius, color, name, u_res=40, v_res=15, *, label=True):
     """
     Helper method to plot a celestial body as a sphere.
     
@@ -988,15 +988,16 @@ def _plot_body(ax, center, radius, color, name, u_res=40, v_res=15):
     
     ax.scatter(center[0], center[1], center[2], color=color, s=20)
     
-    text_obj = ax.text(center[0], center[1], center[2] + 1.5*radius, name, 
-                       color='white',
-                       fontweight='bold',
-                       fontsize=12,
-                       ha='center')
+    if label:
+        text_obj = ax.text(center[0], center[1], center[2] + 1.5*radius, name, 
+                        color='white',
+                        fontweight='bold',
+                        fontsize=12,
+                        ha='center')
     
-    text_obj.set_path_effects([
-        patheffects.withStroke(linewidth=1.5, foreground='black')
-    ])
+        text_obj.set_path_effects([
+            patheffects.withStroke(linewidth=1.5, foreground='black')
+        ])
 
 
 def _set_axes_equal(ax):
