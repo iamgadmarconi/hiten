@@ -900,12 +900,14 @@ def plot_manifolds(
         if mfld.manifold_result is None:
             raise ValueError(f"Manifold '{mfld}' has not been computed yet.")
 
-        for traj in mfld.manifold_result.states_list:
-            ax.plot(traj[:, 0], traj[:, 1], traj[:, 2], color=col, lw=1.5, alpha=alpha)
+        # Collect all trajectory segments for this manifold
+        segments = [traj for traj in mfld.manifold_result.states_list]
+        # Line3DCollection expects a list of (N, 3) arrays
+        lc = Line3DCollection(segments, colors=[col], linewidths=1.5, alpha=alpha)
+        ax.add_collection3d(lc)
 
         # Put a label only once per manifold (for legend clarity)
         ax.plot([], [], [], color=col, label=lab)
-
     primary_pos = np.array([-mu, 0, 0])
     secondary_pos = np.array([1 - mu, 0, 0])
 
