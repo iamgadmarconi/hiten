@@ -14,6 +14,7 @@ class _ReturnMapConfig(ABC):
     n_iter: int = 40
 
     compute_on_init: bool = False
+    n_workers: int | None = None
 
 
 class _SectionConfig(ABC):

@@ -65,12 +65,13 @@ class CenterManifoldMap(_ReturnMapBase):
 
         return strategy
 
-    def _build_engine(self, backend, strategy):
+    def _build_engine(self, backend, strategy, **kwargs):
         """Instantiate the concrete engine for centre-manifold maps."""
         return _CenterManifoldEngine(
             backend=backend,
             seed_strategy=strategy,
             map_config=self.config,
+            n_workers=kwargs.get("n_workers"),
         )
 
     def ic(self, pt: np.ndarray, *, section_coord: str | None = None) -> np.ndarray:
