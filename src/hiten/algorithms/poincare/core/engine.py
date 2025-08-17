@@ -14,14 +14,14 @@ class _ReturnMapEngine(ABC):
 
     def __init__(self, backend: _ReturnMapBackend, 
                  seed_strategy: _SeedingStrategyBase,
-                 map_config: _ReturnMapConfig,
-                n_workers: int | None = None) -> None:
+                 map_config: _ReturnMapConfig) -> None:
         self._backend = backend
         self._strategy = seed_strategy
         self._map_config = map_config
         self._n_iter = int(self._map_config.n_iter)
         self._dt = float(self._map_config.dt)
-        self._n_workers = n_workers or os.cpu_count() or 1
+        # Use configuration value for workers, falling back to CPU count
+        self._n_workers = self._map_config.n_workers or os.cpu_count() or 1
 
         self._section_cache: "_Section" | None = None
 
