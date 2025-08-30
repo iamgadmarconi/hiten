@@ -3,13 +3,13 @@ from typing import Literal, Sequence, Tuple
 
 import numpy as np
 
-from hiten.algorithms.poincare.core.config import _SectionConfig
-from hiten.algorithms.poincare.core.events import _PlaneEvent
+from hiten.algorithms.poincare.core.config import (_ReturnMapBaseConfig,
+                                                   _SectionConfig)
 from hiten.algorithms.poincare.synodic.events import _AffinePlaneEvent
 
 
 @dataclass
-class _SynodicMapConfig:
+class _SynodicMapConfig(_ReturnMapBaseConfig):
 
     section_axis: str | int | None = "x"  # ignored if section_normal provided
     section_offset: float = 0.0
@@ -23,9 +23,6 @@ class _SynodicMapConfig:
     dedup_time_tol: float = 1e-9
     dedup_point_tol: float = 1e-12
     max_hits_per_traj: int | None = None
-
-    compute_on_init: bool = False
-    n_workers: int | None = None
 
 
 class _SynodicSectionConfig(_SectionConfig):

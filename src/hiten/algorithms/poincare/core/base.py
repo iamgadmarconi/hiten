@@ -4,7 +4,7 @@ from typing import Optional
 import numpy as np
 
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
-from hiten.algorithms.poincare.core.config import _ReturnMapConfig
+from hiten.algorithms.poincare.core.config import _ReturnMapBaseConfig
 from hiten.algorithms.poincare.core.engine import _ReturnMapEngine
 from hiten.algorithms.poincare.core.strategies import _SeedingStrategyBase
 
@@ -35,8 +35,8 @@ class _ReturnMapBase(ABC):
     4. *(optionally)* overrides for plotting or advanced projections.
     """
 
-    def __init__(self, config: _ReturnMapConfig) -> None:
-        self.config: _ReturnMapConfig = config
+    def __init__(self, config: _ReturnMapBaseConfig) -> None:
+        self.config: _ReturnMapBaseConfig = config
 
         # Run-time caches
         self._sections: dict[str, _Section] = {}
