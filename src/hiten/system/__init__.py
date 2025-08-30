@@ -10,6 +10,7 @@ instead of navigating the full internal hierarchy (``hiten.system.base``,
 ``hiten.system.libration.collinear`` ...).
 """
 
+from ..algorithms.utils.types import SynodicState
 from ..algorithms.poincare.centermanifold.base import CenterManifoldMap
 from ..algorithms.poincare.centermanifold.config import _CenterManifoldMapConfig
 from .base import System
@@ -24,7 +25,7 @@ from .libration.collinear import CollinearPoint, L1Point, L2Point, L3Point
 from .libration.triangular import L4Point, L5Point, TriangularPoint
 from .manifold import Manifold, ManifoldResult
 # Orbits
-from .orbits.base import GenericOrbit, PeriodicOrbit, S
+from .orbits.base import GenericOrbit, PeriodicOrbit
 from .orbits.halo import HaloOrbit
 from .orbits.lyapunov import LyapunovOrbit
 from .orbits.vertical import VerticalOrbit
@@ -56,7 +57,7 @@ __all__ = [
     "HaloOrbit",
     "LyapunovOrbit",
     "VerticalOrbit",
-    "S",
+    "SynodicState",
     # Family
     "OrbitFamily",
 ]

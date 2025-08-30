@@ -11,7 +11,7 @@ import pytest
 from hiten.algorithms import EnergyParameter, PeriodParameter, StateParameter
 from hiten.system import System
 from hiten.system.family import OrbitFamily
-from hiten.system.orbits.base import S
+from hiten.algorithms.utils.types import SynodicState
 
 
 def _make_seed_orbit():
@@ -74,7 +74,7 @@ def _run_engine(engine_cls, save_figure=False, figure_name=None, **kwargs):
 
 def test_state_parameter():
     seed = _make_seed_orbit()
-    x0 = float(seed.initial_state[S.X])
+    x0 = float(seed.initial_state[SynodicState.X])
     amp0 = float(seed.amplitude)
     max_orbits = 10  # Match what _run_engine uses
     # With max_orbits=10, we get: seed + 9 new orbits = 10 total
@@ -84,7 +84,7 @@ def test_state_parameter():
     # Target +0.004 canonical units along X (absolute coordinate)
     fig, ax = _run_engine(
         StateParameter,
-        state=S.X,
+        state=SynodicState.X,
         amplitude=True,
         target=(amp0, amp0 * 3),
         step=step,

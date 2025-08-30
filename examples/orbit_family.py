@@ -13,7 +13,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from hiten import OrbitFamily, System
 from hiten.algorithms import StateParameter
-from hiten.system.orbits.base import S
+from hiten.algorithms.utils.types import SynodicState
 
 
 def main() -> None:
@@ -30,8 +30,8 @@ def main() -> None:
     halo_seed = l1.create_orbit('halo', amplitude_z= 0.2, zenith='southern')
     halo_seed.correct(max_attempts=25, max_delta=1e-3)
     # --- two-parameter continuation: vary absolute X (in-plane) and Z (out-of-plane) ---
-    current_x = halo_seed.initial_state[S.X]
-    current_z = halo_seed.initial_state[S.Z]  # 0 for planar Lyapunov halo_seed
+    current_x = halo_seed.initial_state[SynodicState.X]
+    current_z = halo_seed.initial_state[SynodicState.Z]  # 0 for planar Lyapunov halo_seed
     # --- Target displacements (CRTBP canonical units) ---
     target_x = current_x + 0.01   # small shift along X
     target_z = current_z + 0.3   # introduce out-of-plane Z
@@ -41,7 +41,7 @@ def main() -> None:
     # --- Build engine and run ---
     state_engine = StateParameter(
         initial_orbit=halo_seed,
-        state=(S.X, S.Z),   # vary absolute coordinates, not amplitudes
+        state=(SynodicState.X, SynodicState.Z),   # vary absolute coordinates, not amplitudes
         amplitude=False,
         target=(
             [current_x, current_z],

@@ -21,8 +21,9 @@ import numpy as np
 from numpy.typing import NDArray
 
 from hiten.algorithms.poincare.singlehit.backend import _z_plane_crossing
+from hiten.algorithms.utils.types import SynodicState
 from hiten.system.libration.collinear import CollinearPoint
-from hiten.system.orbits.base import PeriodicOrbit, S
+from hiten.system.orbits.base import PeriodicOrbit
 
 if TYPE_CHECKING:
     from hiten.algorithms.continuation.interfaces import \
@@ -64,7 +65,7 @@ class VerticalOrbit(PeriodicOrbit):
     def amplitude(self) -> float:
         """(Read-only) Current z-amplitude of the vertical orbit."""
         if getattr(self, "_initial_state", None) is not None:
-            return float(abs(self._initial_state[S.Z]))
+            return float(abs(self._initial_state[SynodicState.Z]))
         return float(self._amplitude_z)
 
     @property
@@ -78,8 +79,8 @@ class VerticalOrbit(PeriodicOrbit):
         from hiten.algorithms.corrector.interfaces import \
             _OrbitCorrectionConfig
         return _OrbitCorrectionConfig(
-            residual_indices=(S.VX, S.Y),     # Want VX=0 and Y=0
-            control_indices=(S.VZ, S.VY),     # Adjust initial VZ and VY
+            residual_indices=(SynodicState.VX, SynodicState.Y),     # Want VX=0 and Y=0
+            control_indices=(SynodicState.VZ, SynodicState.VY),     # Adjust initial VZ and VY
             target=(0.0, 0.0),
             extra_jacobian=None,
             event_func=_z_plane_crossing,
@@ -90,4 +91,4 @@ class VerticalOrbit(PeriodicOrbit):
         """Default continuation parameter: vary the out-of-plane amplitude."""
         from hiten.algorithms.continuation.interfaces import \
             _OrbitContinuationConfig
-        return _OrbitContinuationConfig(state=S.Z, amplitude=True)
+        return _OrbitContinuationConfig(state=SynodicState.Z, amplitude=True)

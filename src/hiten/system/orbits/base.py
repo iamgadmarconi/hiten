@@ -23,7 +23,6 @@ Bodies".
 """
 import os
 from abc import ABC, abstractmethod
-from enum import IntEnum
 from typing import TYPE_CHECKING, Literal, Optional, Sequence, Tuple
 
 import numpy as np
@@ -52,15 +51,6 @@ if TYPE_CHECKING:
         _OrbitContinuationConfig
     from hiten.algorithms.corrector.interfaces import _OrbitCorrectionConfig
     from hiten.system.manifold import Manifold
-
-
-class S(IntEnum): 
-    X=0
-    Y=1
-    Z=2
-    VX=3
-    VY=4
-    VZ=5
 
 
 class PeriodicOrbit(ABC):
