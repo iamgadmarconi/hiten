@@ -3,11 +3,13 @@ from typing import Literal, Optional, Sequence
 import numpy as np
 
 from hiten.algorithms.poincare.core.base import _ReturnMapBase, _Section
+from hiten.algorithms.poincare.synodic.backend import _NoOpBackend
 from hiten.algorithms.poincare.synodic.config import (_get_section_config,
                                                       _SynodicMapConfig,
                                                       _SynodicSectionConfig)
 from hiten.algorithms.poincare.synodic.engine import (
-    _NoOpBackend, _NoOpStrategy, _SynodicEngine, _SynodicEngineConfigAdapter)
+    _SynodicEngine, _SynodicEngineConfigAdapter)
+from hiten.algorithms.poincare.synodic.strategies import _NoOpStrategy
 from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.plots import plot_poincare_map
 

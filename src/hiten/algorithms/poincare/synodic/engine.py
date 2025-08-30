@@ -112,26 +112,6 @@ def detect_batch(
     return out
 
 
-class _NoOpBackend(_ReturnMapBackend):
-    """Placeholder backend; never used by the synodic engine."""
-
-    def __init__(self) -> None:
-        # Pass inert placeholders; engine will not use backend.
-        class _NullSurface(_SurfaceEvent):
-            def value(self, state: np.ndarray) -> float:  # type: ignore[override]
-                return 0.0
-
-        super().__init__(dynsys=None, surface=_NullSurface())  # type: ignore[arg-type]
-
-    def step_to_section(self, seeds: "np.ndarray", *, dt: float = 1e-2) -> tuple["np.ndarray", "np.ndarray"]:  # type: ignore[override]
-        raise NotImplementedError("Synodic engine does not propagate seeds")
-
-
-class _NoOpStrategy(_SeedingStrategyBase):
-    def generate(self, *, h0, H_blocks, clmo_table, solve_missing_coord_fn, find_turning_fn):  # type: ignore[override]
-        raise NotImplementedError("Synodic engine does not generate seeds")
-
-
 class _SynodicEngineConfigAdapter:
     """Adapter providing dt/n_iter expected by the base engine."""
 
