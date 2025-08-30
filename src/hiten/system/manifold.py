@@ -29,7 +29,6 @@ from tqdm import tqdm
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_stm
 from hiten.algorithms.dynamics.utils.energy import _max_rel_energy_error
-from hiten.algorithms.dynamics.utils.geometry import surface_of_section
 from hiten.algorithms.dynamics.utils.linalg import (_totime,
                                                     eigenvalue_decomposition)
 from hiten.system.orbits.base import PeriodicOrbit
@@ -450,27 +449,15 @@ class Manifold:
                 states_list.append(states)
                 times_list.append(times)
 
-                Xy0, _ = surface_of_section(states, times, self._mu, M=2, C=0)
-                if len(Xy0) > 0:
-                    Xy0 = Xy0.flatten()
-                    ysos.append(Xy0[1])
-                    dysos.append(Xy0[4])
-                    self._successes += 1
-                    logger.debug(
-                        f"Fraction {fraction:.3f}: Found Poincaré section point at y={Xy0[1]:.6f}, vy={Xy0[4]:.6f}"
-                    )
+                # Section-of-section hits (Poincaré map points) are no longer
+                # extracted here. This logic will be handled by the poincare module.
 
             except Exception as e:
                 err = f"Error computing manifold: {e}"
                 logger.error(err)
                 continue
         
-        if self._attempts > 0 and self._successes < self._attempts:
-            failed_attempts = self._attempts - self._successes
-            failure_rate = (failed_attempts / self._attempts) * 100
-            logger.warning(
-                f"Failed to find {failure_rate:.1f}% ({failed_attempts}/{self._attempts}) Poincaré section crossings"
-            )
+        # Note: success/failure of section hits is no longer tracked here.
         
         self._manifold_result = ManifoldResult(
             ysos, dysos, states_list, times_list, self._successes, self._attempts
