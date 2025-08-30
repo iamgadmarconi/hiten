@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Optional, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
-from hiten.algorithms.poincare.sh.backend import _z_plane_crossing
+from hiten.algorithms.poincare.singlehit.backend import _z_plane_crossing
 from hiten.system.libration.collinear import CollinearPoint
 from hiten.system.orbits.base import PeriodicOrbit, S
 

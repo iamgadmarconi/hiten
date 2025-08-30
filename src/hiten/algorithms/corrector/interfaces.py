@@ -7,7 +7,7 @@ import numpy as np
 from hiten.algorithms.corrector.base import (JacobianFn, NormFn,
                                              _BaseCorrectionConfig, _Corrector)
 from hiten.algorithms.dynamics.rtbp import _compute_stm
-from hiten.algorithms.poincare.sh.backend import _y_plane_crossing
+from hiten.algorithms.poincare.singlehit.backend import _y_plane_crossing
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
