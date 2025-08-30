@@ -10,8 +10,8 @@ from .corrector.correctors import _NewtonOrbitCorrector as NewtonOrbitCorrector
 from .corrector.interfaces import \
     _OrbitCorrectionConfig as OrbitCorrectionConfig
 from .corrector.line import _LineSearchConfig as LineSearchConfig
-from .poincare.cm.base import CenterManifoldMap
-from .poincare.cm.config import _CenterManifoldMapConfig as CenterManifoldMapConfig
+from .poincare.centermanifold.base import CenterManifoldMap
+from .poincare.centermanifold.config import _CenterManifoldMapConfig as CenterManifoldMapConfig
 from .tori.base import _InvariantTori as InvariantTori
 
 __all__ = [

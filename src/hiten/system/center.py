@@ -32,8 +32,8 @@ from hiten.algorithms.hamiltonian.transforms import (_coordlocal2realmodal,
                                                      _solve_real,
                                                      _synodic2local_collinear,
                                                      _synodic2local_triangular)
-from hiten.algorithms.poincare.cm.backend import _CenterManifoldBackend
-from hiten.algorithms.poincare.cm.config import _get_section_config
+from hiten.algorithms.poincare.centermanifold.backend import _CenterManifoldBackend
+from hiten.algorithms.poincare.centermanifold.config import _get_section_config
 from hiten.algorithms.poincare.core.events import _PlaneEvent
 from hiten.system.hamiltonians.pipeline import HamiltonianPipeline
 from hiten.system.libration.base import LibrationPoint
@@ -44,7 +44,7 @@ from hiten.utils.log_config import logger
 from hiten.utils.printing import _format_poly_table
 
 if TYPE_CHECKING:
-    from hiten.algorithms.poincare.cm.base import CenterManifoldMap
+    from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
 
 
 class CenterManifold:
@@ -462,8 +462,8 @@ class CenterManifold:
         configuration, and stored internally. Subsequent calls with the same
         parameters return the cached object.
         """
-        from hiten.algorithms.poincare.cm.base import CenterManifoldMap
-        from hiten.algorithms.poincare.cm.config import \
+        from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
+        from hiten.algorithms.poincare.centermanifold.config import \
             _CenterManifoldMapConfig
 
         # Separate config kwargs from runtime kwargs

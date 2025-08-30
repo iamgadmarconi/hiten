@@ -9,7 +9,7 @@ import numpy as np
 from hiten.utils.io.common import _ensure_dir, _write_dataset
 
 if TYPE_CHECKING:
-    from hiten.algorithms.poincare.cm.base import CenterManifoldMap
+    from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
     from hiten.system.center import CenterManifold
 
 
@@ -53,7 +53,7 @@ def load_poincare_map_inplace(
 ) -> None:
     """Populate *obj* with data stored at *path*."""
 
-    from hiten.algorithms.poincare.cm.config import _CenterManifoldMapConfig
+    from hiten.algorithms.poincare.centermanifold.config import _CenterManifoldMapConfig
     from hiten.algorithms.poincare.core.base import _Section
 
     path = Path(path)
@@ -82,7 +82,7 @@ def load_poincare_map_inplace(
 
 def load_poincare_map(path: str | Path, cm: "CenterManifold"):
     """Return a new :class:`CenterManifoldMap` loaded from *path*."""
-    from hiten.algorithms.poincare.cm.base import CenterManifoldMap
+    from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
 
     path = Path(path)
     if not path.exists():

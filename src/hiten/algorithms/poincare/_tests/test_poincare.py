@@ -4,8 +4,8 @@ import tempfile
 import os
 
 from hiten.system.center import CenterManifold
-from hiten.algorithms.poincare.cm.base import CenterManifoldMap
-from hiten.algorithms.poincare.cm.config import _CenterManifoldMapConfig
+from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
+from hiten.algorithms.poincare.centermanifold.config import _CenterManifoldMapConfig
 from hiten.system.base import System
 from hiten.system.body import Body
 from hiten.utils.constants import Constants

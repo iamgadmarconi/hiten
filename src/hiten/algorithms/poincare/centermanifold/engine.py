@@ -2,9 +2,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 
-from hiten.algorithms.poincare.cm.backend import _CenterManifoldBackend
-from hiten.algorithms.poincare.cm.config import _CenterManifoldMapConfig
-from hiten.algorithms.poincare.cm.seeding import _CenterManifoldSeedingBase
+from hiten.algorithms.poincare.centermanifold.backend import _CenterManifoldBackend
+from hiten.algorithms.poincare.centermanifold.config import _CenterManifoldMapConfig
+from hiten.algorithms.poincare.centermanifold.seeding import _CenterManifoldSeedingBase
 from hiten.algorithms.poincare.core.base import _Section
 from hiten.algorithms.poincare.core.engine import _ReturnMapEngine
 from hiten.utils.log_config import logger

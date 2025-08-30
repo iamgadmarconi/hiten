@@ -10,8 +10,8 @@ instead of navigating the full internal hierarchy (``hiten.system.base``,
 ``hiten.system.libration.collinear`` ...).
 """
 
-from ..algorithms.poincare.cm.base import CenterManifoldMap
-from ..algorithms.poincare.cm.config import _CenterManifoldMapConfig
+from ..algorithms.poincare.centermanifold.base import CenterManifoldMap
+from ..algorithms.poincare.centermanifold.config import _CenterManifoldMapConfig
 from .base import System
 # Core containers
 from .body import Body

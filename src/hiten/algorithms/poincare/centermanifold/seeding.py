@@ -9,7 +9,7 @@ interface for all seeding strategies.
 """
 from typing import Any, Callable
 
-from hiten.algorithms.poincare.cm.config import _CenterManifoldSectionConfig, _CenterManifoldMapConfig
+from hiten.algorithms.poincare.centermanifold.config import _CenterManifoldSectionConfig, _CenterManifoldMapConfig
 from hiten.algorithms.poincare.core.strategies import _SeedingStrategyBase
 
 

@@ -11,7 +11,7 @@ from hiten.utils.io.map import save_poincare_map, load_poincare_map
 
 if TYPE_CHECKING:
     from hiten.system.center import CenterManifold
-    from hiten.algorithms.poincare.cm.base import CenterManifoldMap
+    from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
     from hiten.system.hamiltonians.pipeline import HamiltonianPipeline
 
 __all__ = ["save_center_manifold", "load_center_manifold"]

@@ -1,4 +1,4 @@
-from hiten.algorithms.poincare.cm.strategies import (_AxisAlignedSeeding,
+from hiten.algorithms.poincare.centermanifold.strategies import (_AxisAlignedSeeding,
                                                      _LevelSetsSeeding,
                                                      _RadialSeeding,
                                                      _RandomSeeding,
