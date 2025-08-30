@@ -30,7 +30,7 @@ class _CenterManifoldSeedingBase(_SeedingStrategyBase):
         Results are cached per energy level to avoid recomputing when multiple
         strategies are used with identical parameters.
         """
-        key = (float(h0), id(H_blocks))
+        key = (self.plane_coords, float(h0), id(H_blocks))
         if key in self._cached_limits:
             return self._cached_limits[key]
 

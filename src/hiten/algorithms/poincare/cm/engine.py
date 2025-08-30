@@ -18,10 +18,8 @@ class _CenterManifoldEngine(_ReturnMapEngine):
         backend: _CenterManifoldBackend,
         seed_strategy: _CenterManifoldSeedingBase,
         map_config: _CenterManifoldMapConfig,
-        *,
-        n_workers: int | None = None,
     ) -> None:
-        super().__init__(backend, seed_strategy, map_config, n_workers)
+        super().__init__(backend, seed_strategy, map_config)
 
     def compute_section(self, *, recompute: bool = False) -> _Section:
         if self._section_cache is not None and not recompute:
