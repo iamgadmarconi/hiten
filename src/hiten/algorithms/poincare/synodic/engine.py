@@ -159,7 +159,7 @@ class _SynodicEngine(_ReturnMapEngine):
         self.clear_cache()
         return self
 
-    def compute_section(self, *, recompute: bool = False) -> _Section:  # type: ignore[override]
+    def compute_section(self, *, recompute: bool = False) -> _Section:  
         if self._section_cache is not None and not recompute:
             return self._section_cache
 
