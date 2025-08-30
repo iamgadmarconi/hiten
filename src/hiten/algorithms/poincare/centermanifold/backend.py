@@ -12,7 +12,7 @@ from hiten.algorithms.integrators.rk import (RK4_A, RK4_B, RK4_C, RK6_A, RK6_B,
 from hiten.algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
                                                      _integrate_symplectic)
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
-from hiten.algorithms.poincare.cm.config import _get_section_config
+from hiten.algorithms.poincare.centermanifold.config import _get_section_config
 from hiten.algorithms.poincare.core.events import _SurfaceEvent
 from hiten.algorithms.polynomial.operations import _polynomial_evaluate
 from hiten.algorithms.utils.config import FASTMATH

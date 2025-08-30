@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
-from hiten.algorithms.poincare.core.config import _ReturnMapConfig
+from hiten.algorithms.poincare.core.config import _EngineConfigLike
 from hiten.algorithms.poincare.core.strategies import _SeedingStrategyBase
 
 if TYPE_CHECKING:
@@ -14,7 +14,7 @@ class _ReturnMapEngine(ABC):
 
     def __init__(self, backend: _ReturnMapBackend, 
                  seed_strategy: _SeedingStrategyBase,
-                 map_config: _ReturnMapConfig) -> None:
+                 map_config: _EngineConfigLike) -> None:
         self._backend = backend
         self._strategy = seed_strategy
         self._map_config = map_config

@@ -2,11 +2,12 @@ from typing import Callable, NamedTuple, Sequence
 
 import numpy as np
 
-from hiten.system.orbits.base import PeriodicOrbit, S
+from hiten.algorithms.utils.types import SynodicState
+from hiten.system.orbits.base import PeriodicOrbit
 
 
 class _OrbitContinuationConfig(NamedTuple):
-    state: S | None
+    state: SynodicState | None
     amplitude: bool = False
     getter: Callable[["PeriodicOrbit"], float] | None = None
     extra_params: dict | None = None

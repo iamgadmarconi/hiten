@@ -20,11 +20,12 @@ from typing import TYPE_CHECKING, Optional, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
-from hiten.algorithms.poincare.sh.backend import _y_plane_crossing
+from hiten.algorithms.poincare.singlehit.backend import _y_plane_crossing
+from hiten.algorithms.utils.types import SynodicState
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import (CollinearPoint, L1Point, L2Point,
                                               L3Point)
-from hiten.system.orbits.base import PeriodicOrbit, S
+from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
@@ -115,7 +116,7 @@ class LyapunovOrbit(PeriodicOrbit):
         # Ensure amplitude_x is consistent with the state if it was provided directly.
         if initial_state is not None and self._amplitude_x is None:
             # Infer amplitude from state so _initial_guess works in property logic
-            self._amplitude_x = self._initial_state[S.X] - self.libration_point.position[0]
+            self._amplitude_x = self._initial_state[SynodicState.X] - self.libration_point.position[0]
 
     @property
     def eccentricity(self) -> float:
@@ -126,7 +127,7 @@ class LyapunovOrbit(PeriodicOrbit):
     def amplitude(self) -> float:
         """(Read-only) Current x-amplitude relative to the libration point."""
         if getattr(self, "_initial_state", None) is not None:
-            return float(self._initial_state[S.X] - self.libration_point.position[0])
+            return float(self._initial_state[SynodicState.X] - self.libration_point.position[0])
         return float(self._amplitude_x)
 
     @property
@@ -134,8 +135,8 @@ class LyapunovOrbit(PeriodicOrbit):
         """Provides the differential correction configuration for planar Lyapunov orbits."""
         from hiten.algorithms.corrector.interfaces import _OrbitCorrectionConfig
         return _OrbitCorrectionConfig(
-            residual_indices=(S.VX, S.Z),
-            control_indices=(S.VY, S.VZ),
+            residual_indices=(SynodicState.VX, SynodicState.Z),
+            control_indices=(SynodicState.VY, SynodicState.VZ),
             target=(0.0, 0.0),
             extra_jacobian=None,
             event_func=_y_plane_crossing,
@@ -144,7 +145,7 @@ class LyapunovOrbit(PeriodicOrbit):
     @property
     def _continuation_config(self) -> "_OrbitContinuationConfig":
         from hiten.algorithms.continuation.interfaces import _OrbitContinuationConfig
-        return _OrbitContinuationConfig(state=S.X, amplitude=True)
+        return _OrbitContinuationConfig(state=SynodicState.X, amplitude=True)
 
     def _initial_guess(self) -> NDArray[np.float64]:
         r"""

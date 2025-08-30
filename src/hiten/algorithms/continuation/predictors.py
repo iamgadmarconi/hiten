@@ -8,7 +8,8 @@ from hiten.algorithms.continuation.strategies._algorithms import \
     _NaturalParameter
 from hiten.algorithms.continuation.strategies._stepping import \
     _NaturalParameterStep
-from hiten.system.orbits.base import PeriodicOrbit, S
+from hiten.algorithms.utils.types import SynodicState
+from hiten.system.orbits.base import PeriodicOrbit
 
 
 class _StateParameter(_PeriodicOrbitContinuationInterface, _NaturalParameter):
@@ -30,7 +31,7 @@ class _StateParameter(_PeriodicOrbitContinuationInterface, _NaturalParameter):
         self,
         *,
         initial_orbit: PeriodicOrbit,
-        state: S | Sequence[S] | None = None,
+        state: SynodicState | Sequence[SynodicState] | None = None,
         amplitude: bool | None = None,
         target: Sequence[float],
         step: float | Sequence[float] = 1e-4,
@@ -38,7 +39,7 @@ class _StateParameter(_PeriodicOrbitContinuationInterface, _NaturalParameter):
         max_orbits: int = 256,
     ) -> None:
         # Normalise *state* to a list
-        if isinstance(state, S):
+        if isinstance(state, SynodicState):
             state_list = [state]
         elif state is None:
             raise ValueError("state cannot be None after resolution")
@@ -55,7 +56,7 @@ class _StateParameter(_PeriodicOrbitContinuationInterface, _NaturalParameter):
         if amplitude and len(state_list) != 1:
             raise ValueError("Amplitude continuation supports exactly one state component.")
 
-        if amplitude and state_list[0] not in (S.X, S.Y, S.Z):
+        if amplitude and state_list[0] not in (SynodicState.X, SynodicState.Y, SynodicState.Z):
             raise ValueError("Amplitude continuation is only supported for positional coordinates (X, Y, Z).")
 
         self._state_indices = np.array([s.value for s in state_list], dtype=int)

@@ -25,11 +25,12 @@ from typing import TYPE_CHECKING, Literal, Optional, Sequence
 import numpy as np
 from numpy.typing import NDArray
 
-from hiten.algorithms.poincare.sh.backend import _y_plane_crossing
+from hiten.algorithms.poincare.singlehit.backend import _y_plane_crossing
+from hiten.algorithms.utils.types import SynodicState
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import (CollinearPoint, L1Point, L2Point,
                                               L3Point)
-from hiten.system.orbits.base import PeriodicOrbit, S
+from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
@@ -119,16 +120,16 @@ class HaloOrbit(PeriodicOrbit):
         if initial_state is not None:
             # Infer missing zenith
             if self.zenith is None:
-                self.zenith = "northern" if self._initial_state[S.Z] > 0 else "southern"
+                self.zenith = "northern" if self._initial_state[SynodicState.Z] > 0 else "southern"
             # Infer missing amplitude
             if self._amplitude_z is None:
-                self._amplitude_z = self._initial_state[S.Z]
+                self._amplitude_z = self._initial_state[SynodicState.Z]
 
     @property
     def amplitude(self) -> float:
         """(Read-only) Current z-amplitude of the orbit in the synodic frame."""
         if getattr(self, "_initial_state", None) is not None:
-            return float(self._initial_state[S.Z])
+            return float(self._initial_state[SynodicState.Z])
         return float(self._amplitude_z)
 
     @property
@@ -138,8 +139,8 @@ class HaloOrbit(PeriodicOrbit):
             _OrbitCorrectionConfig
         return _OrbitCorrectionConfig(
             event_func=_y_plane_crossing,
-            residual_indices=(S.VX, S.VZ),
-            control_indices=(S.X, S.VY),
+            residual_indices=(SynodicState.VX, SynodicState.VZ),
+            control_indices=(SynodicState.X, SynodicState.VY),
             extra_jacobian=self._halo_quadratic_term
         )
 
@@ -147,7 +148,7 @@ class HaloOrbit(PeriodicOrbit):
     def _continuation_config(self) -> "_OrbitContinuationConfig":
         from hiten.algorithms.continuation.interfaces import \
             _OrbitContinuationConfig
-        return _OrbitContinuationConfig(state=S.Z, amplitude=True)
+        return _OrbitContinuationConfig(state=SynodicState.Z, amplitude=True)
 
     def _initial_guess(self) -> NDArray[np.float64]:
         r"""
@@ -388,10 +389,7 @@ class HaloOrbit(PeriodicOrbit):
         X_ev : numpy.ndarray, shape (6,)
             State vector at the event time (half-period).
         Phi : numpy.ndarray
-            State-transition matrix evaluated at the same event; only the
-            row corresponding to :pyattr:`S.Y` and the columns
-            :pyattr:`S.X`, :pyattr:`S.VY` are used.
-
+            State-transition matrix evaluated at the same event
         Returns
         -------
         numpy.ndarray, shape (2, 2)
@@ -411,7 +409,7 @@ class HaloOrbit(PeriodicOrbit):
             logger.warning(f"Denominator 'vy' is very small ({vy:.2e}). Correction step may be inaccurate.")
             vy = np.sign(vy) * 1e-9 if vy != 0 else 1e-9
             
-        return np.array([[DDx],[DDz]]) @ Phi[[S.Y],:][:, (S.X,S.VY)] / vy
+        return np.array([[DDx],[DDz]]) @ Phi[[SynodicState.Y],:][:, (SynodicState.X,SynodicState.VY)] / vy
 
     def eccentricity(self) -> float:
         """Eccentricity is not a well-defined concept for halo orbits."""

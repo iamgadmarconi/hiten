@@ -1,0 +1,399 @@
+from enum import IntEnum
+from typing import Iterator, Sequence, Tuple, Union, overload
+
+import numpy as np
+import numpy.typing as npt
+
+
+class SynodicState(IntEnum):
+    X=0
+    Y=1
+    Z=2
+    VX=3
+    VY=4
+    VZ=5
+
+class CenterManifoldState(IntEnum):
+    q1=0
+    q2=1
+    q3=2
+    p1=3
+    p2=4
+    p3=5
+
+class RestrictedCenterManifoldState(IntEnum):
+    q2=0
+    p2=1
+    q3=2
+    p3=3
+
+class _BaseStateContainer:
+    r"""
+    Minimal mutable container for a single state vector, indexed by an IntEnum.
+
+    Subclasses must set ``_enum`` to the corresponding IntEnum class and can
+    optionally expose convenience properties (e.g., ``x``, ``y``, ``vx``).
+    """
+
+    _enum: type[IntEnum] = None  # to be set by subclasses
+
+    def __init__(self, values: Sequence[float] | None = None, **kwargs):
+        if self._enum is None:
+            raise TypeError("_BaseStateContainer cannot be instantiated directly; subclass and set _enum")
+
+        size = len(self._enum)  # type: ignore[arg-type]
+
+        if values is not None:
+            arr = np.asarray(values, dtype=np.float64)
+            if arr.ndim != 1:
+                raise ValueError("values must be a 1D sequence")
+            if arr.shape[0] != size:
+                raise ValueError(f"values must have length {size}")
+            self._values: npt.NDArray[np.float64] = arr.copy()
+        else:
+            self._values = np.zeros((size,), dtype=np.float64)
+
+        # Allow initialization via named fields, e.g., x=..., y=...,
+        # or using enum member names (case-insensitive).
+        for key, val in kwargs.items():
+            self._assign_by_name(key, float(val))
+
+    # -----------------------
+    # Core utilities
+    # -----------------------
+    @property
+    def array(self) -> npt.NDArray[np.float64]:
+        """Return a writable 1D numpy array of the state values."""
+        return self._values
+
+    def to_numpy(self, copy: bool = True) -> npt.NDArray[np.float64]:
+        """Return the underlying data as numpy array; copy by default."""
+        return self._values.copy() if copy else self._values
+
+    def copy(self):
+        """Deep copy of the container preserving the concrete subclass type."""
+        return self.__class__(self._values.copy())
+
+    @property
+    def dim(self) -> int:
+        return self._values.shape[0]
+
+    def as_tuple(self) -> Tuple[float, ...]:
+        return tuple(float(v) for v in self._values.tolist())
+
+    def as_dict(self) -> dict:
+        members = type(self)._enum  # type: ignore[attr-defined]
+        return {name.lower(): float(self._values[members[name]]) for name in members.__members__.keys()}  # type: ignore[index]
+
+    # -----------------------
+    # Indexing and item access
+    # -----------------------
+    def _resolve_index(self, key: Union[int, str, IntEnum]) -> int:
+        if isinstance(key, int):
+            return key
+        if isinstance(key, IntEnum):
+            return int(key)
+        if isinstance(key, str):
+            members = type(self)._enum  # type: ignore[attr-defined]
+            name = key.upper()
+            if name in members.__members__:
+                return int(members[name])  # type: ignore[index]
+        raise TypeError("key must be int, IntEnum member, or a valid field name")
+
+    def _assign_by_name(self, name: str, value: float) -> None:
+        idx = self._resolve_index(name)
+        self._values[idx] = value
+
+    @overload
+    def __getitem__(self, key: int) -> float: ...
+
+    @overload
+    def __getitem__(self, key: str) -> float: ...
+
+    @overload
+    def __getitem__(self, key: IntEnum) -> float: ...
+
+    def __getitem__(self, key: Union[int, str, IntEnum]) -> float:
+        idx = self._resolve_index(key)
+        return float(self._values[idx])
+
+    @overload
+    def __setitem__(self, key: int, value: float) -> None: ...
+
+    @overload
+    def __setitem__(self, key: str, value: float) -> None: ...
+
+    @overload
+    def __setitem__(self, key: IntEnum, value: float) -> None: ...
+
+    def __setitem__(self, key: Union[int, str, IntEnum], value: float) -> None:
+        idx = self._resolve_index(key)
+        self._values[idx] = float(value)
+
+    def __len__(self) -> int:
+        return self.dim
+
+    def __iter__(self) -> Iterator[float]:
+        for v in self._values:
+            yield float(v)
+
+    def __repr__(self) -> str:
+        cls_name = self.__class__.__name__
+        items = ", ".join(f"{k}={v:.6g}" for k, v in self.as_dict().items())
+        return f"{cls_name}({items})"
+
+
+class SynodicStateVector(_BaseStateContainer):
+    _enum = SynodicState
+
+    @property
+    def x(self) -> float:
+        return float(self._values[SynodicState.X])
+
+    @x.setter
+    def x(self, value: float) -> None:
+        self._values[SynodicState.X] = float(value)
+
+    @property
+    def y(self) -> float:
+        return float(self._values[SynodicState.Y])
+
+    @y.setter
+    def y(self, value: float) -> None:
+        self._values[SynodicState.Y] = float(value)
+
+    @property
+    def z(self) -> float:
+        return float(self._values[SynodicState.Z])
+
+    @z.setter
+    def z(self, value: float) -> None:
+        self._values[SynodicState.Z] = float(value)
+
+    @property
+    def vx(self) -> float:
+        return float(self._values[SynodicState.VX])
+
+    @vx.setter
+    def vx(self, value: float) -> None:
+        self._values[SynodicState.VX] = float(value)
+
+    @property
+    def vy(self) -> float:
+        return float(self._values[SynodicState.VY])
+
+    @vy.setter
+    def vy(self, value: float) -> None:
+        self._values[SynodicState.VY] = float(value)
+
+    @property
+    def vz(self) -> float:
+        return float(self._values[SynodicState.VZ])
+
+    @vz.setter
+    def vz(self, value: float) -> None:
+        self._values[SynodicState.VZ] = float(value)
+
+
+class CenterManifoldStateVector(_BaseStateContainer):
+    _enum = CenterManifoldState
+
+    @property
+    def q1(self) -> float:
+        return float(self._values[CenterManifoldState.q1])
+
+    @q1.setter
+    def q1(self, value: float) -> None:
+        self._values[CenterManifoldState.q1] = float(value)
+
+    @property
+    def q2(self) -> float:
+        return float(self._values[CenterManifoldState.q2])
+
+    @q2.setter
+    def q2(self, value: float) -> None:
+        self._values[CenterManifoldState.q2] = float(value)
+
+    @property
+    def q3(self) -> float:
+        return float(self._values[CenterManifoldState.q3])
+
+    @q3.setter
+    def q3(self, value: float) -> None:
+        self._values[CenterManifoldState.q3] = float(value)
+
+    @property
+    def p1(self) -> float:
+        return float(self._values[CenterManifoldState.p1])
+
+    @p1.setter
+    def p1(self, value: float) -> None:
+        self._values[CenterManifoldState.p1] = float(value)
+
+    @property
+    def p2(self) -> float:
+        return float(self._values[CenterManifoldState.p2])
+
+    @p2.setter
+    def p2(self, value: float) -> None:
+        self._values[CenterManifoldState.p2] = float(value)
+
+    @property
+    def p3(self) -> float:
+        return float(self._values[CenterManifoldState.p3])
+
+    @p3.setter
+    def p3(self, value: float) -> None:
+        self._values[CenterManifoldState.p3] = float(value)
+
+
+class RestrictedCenterManifoldStateVector(_BaseStateContainer):
+    _enum = RestrictedCenterManifoldState
+
+    @property
+    def q2(self) -> float:
+        return float(self._values[RestrictedCenterManifoldState.q2])
+
+    @q2.setter
+    def q2(self, value: float) -> None:
+        self._values[RestrictedCenterManifoldState.q2] = float(value)
+
+    @property
+    def p2(self) -> float:
+        return float(self._values[RestrictedCenterManifoldState.p2])
+
+    @p2.setter
+    def p2(self, value: float) -> None:
+        self._values[RestrictedCenterManifoldState.p2] = float(value)
+
+    @property
+    def q3(self) -> float:
+        return float(self._values[RestrictedCenterManifoldState.q3])
+
+    @q3.setter
+    def q3(self, value: float) -> None:
+        self._values[RestrictedCenterManifoldState.q3] = float(value)
+
+    @property
+    def p3(self) -> float:
+        return float(self._values[RestrictedCenterManifoldState.p3])
+
+    @p3.setter
+    def p3(self, value: float) -> None:
+        self._values[RestrictedCenterManifoldState.p3] = float(value)
+
+class Trajectory:
+    r"""
+    Lightweight container for trajectory data: a time array and matching state vectors.
+
+    Parameters
+    ----------
+    times : Sequence[float]
+        Monotonically ordered time grid of length N.
+    states : Sequence[Sequence[float]]
+        State matrix of shape (N, D) with D-dimensional states corresponding to each time.
+
+    Notes
+    -----
+    - The container is read-only by convention; create a new instance for slices or transformations.
+    - Time values may be strictly increasing or strictly decreasing, but must be strictly monotonic.
+    """
+
+    def __init__(self, times: Sequence[float], states: Sequence[Sequence[float]]):
+        t_arr = np.asarray(times, dtype=np.float64)
+        x_arr = np.asarray(states, dtype=np.float64)
+
+        if t_arr.ndim != 1:
+            raise ValueError("times must be a 1D sequence")
+        if x_arr.ndim != 2:
+            raise ValueError("states must be a 2D array-like of shape (N, D)")
+        if len(t_arr) != len(x_arr):
+            raise ValueError(
+                f"times and states must have the same length: {len(t_arr)} != {len(x_arr)}"
+            )
+        if len(t_arr) < 2:
+            raise ValueError("trajectory must contain at least two samples")
+
+        dt = np.diff(t_arr)
+        if not (np.all(dt > 0.0) or np.all(dt < 0.0)):
+            raise ValueError("times must be strictly monotonic (all increasing or all decreasing)")
+
+        self._times: npt.NDArray[np.float64] = t_arr
+        self._states: npt.NDArray[np.float64] = x_arr
+
+    @property
+    def times(self) -> npt.NDArray[np.float64]:
+        return self._times
+
+    @property
+    def states(self) -> npt.NDArray[np.float64]:
+        return self._states
+
+    @property
+    def n_samples(self) -> int:
+        """Number of stored samples N."""
+        return self._times.shape[0]
+
+    @property
+    def dim(self) -> int:
+        """State-space dimension D."""
+        return self._states.shape[1]
+
+    @property
+    def t0(self) -> float:
+        """Initial time."""
+        return float(self._times[0])
+
+    @property
+    def tf(self) -> float:
+        """Final time."""
+        return float(self._times[-1])
+
+    @property
+    def duration(self) -> float:
+        """Total elapsed time tf - t0 (can be negative if times are decreasing)."""
+        return float(self._times[-1] - self._times[0])
+
+    def as_arrays(self) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        """Return the underlying arrays as a tuple (times, states)."""
+        return self._times, self._states
+
+    def __len__(self) -> int:
+        return self.n_samples
+
+    def __iter__(self) -> Iterator[Tuple[float, npt.NDArray[np.float64]]]:
+        for i in range(self.n_samples):
+            yield float(self._times[i]), self._states[i]
+
+    @overload
+    def __getitem__(self, key: int) -> Tuple[float, npt.NDArray[np.float64]]: ...
+
+    @overload
+    def __getitem__(self, key: slice) -> "Trajectory": ...
+
+    def __getitem__(self, key: Union[int, slice]):
+        if isinstance(key, int):
+            return float(self._times[key]), self._states[key]
+        if isinstance(key, slice):
+            return Trajectory(self._times[key], self._states[key])
+        raise TypeError("indices must be integers or slices")
+
+    def __repr__(self) -> str:
+        direction = "increasing" if self._times[1] > self._times[0] else "decreasing"
+        return (
+            f"Trajectory(N={self.n_samples}, D={self.dim}, "
+            f"t0={self.t0:.6g}, tf={self.tf:.6g}, {direction})"
+        )
+
+    @classmethod
+    def from_arrays(
+        cls,
+        times: npt.NDArray[np.float64],
+        states: npt.NDArray[np.float64],
+    ) -> "Trajectory":
+        """Construct from numpy arrays (validated)."""
+        return cls(times, states)
+
+    def reversed(self) -> "Trajectory":
+        """Return a new trajectory with reversed time order."""
+        return Trajectory(self._times[::-1].copy(), self._states[::-1].copy())

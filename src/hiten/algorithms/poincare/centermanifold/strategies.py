@@ -11,9 +11,10 @@ from typing import Any, Callable, List, Optional, Tuple
 
 import numpy as np
 
-from hiten.algorithms.poincare.cm.config import (_CenterManifoldMapConfig,
-                                                 _CenterManifoldSectionConfig)
-from hiten.algorithms.poincare.cm.seeding import _CenterManifoldSeedingBase
+from hiten.algorithms.poincare.centermanifold.config import (
+    _CenterManifoldMapConfig, _CenterManifoldSectionConfig)
+from hiten.algorithms.poincare.centermanifold.seeding import \
+    _CenterManifoldSeedingBase
 from hiten.utils.log_config import logger
 
 

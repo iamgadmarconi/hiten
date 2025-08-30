@@ -13,13 +13,16 @@ from typing import Literal, Optional, Tuple
 
 import numpy as np
 
-from hiten.algorithms.poincare.core.config import (_ReturnMapConfig,
-                                                   _SectionConfig)
+from hiten.algorithms.poincare.core.config import (_IntegrationConfig,
+                                                   _IterationConfig,
+                                                   _ReturnMapBaseConfig,
+                                                   _SectionConfig,
+                                                   _SeedingConfig)
 from hiten.utils.log_config import logger
 
 
 @dataclass
-class _CenterManifoldMapConfig(_ReturnMapConfig):
+class _CenterManifoldMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _IterationConfig, _SeedingConfig):
 
     seed_strategy: Literal[
         "single",
