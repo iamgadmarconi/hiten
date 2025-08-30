@@ -11,25 +11,6 @@ from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.plots import plot_poincare_map
 
 
-def _from_manifold_result(manifold_result) -> "list[tuple[np.ndarray, np.ndarray]]":
-    """Extract list of (times, states) from a ManifoldResult-like object."""
-    trajs: "list[tuple[np.ndarray, np.ndarray]]" = []
-    for times, states in zip(getattr(manifold_result, "times_list", []), getattr(manifold_result, "states_list", [])):
-        if times is None or states is None:
-            continue
-        t_arr = np.asarray(times, dtype=np.float64)
-        x_arr = np.asarray(states, dtype=np.float64)
-        if t_arr.ndim == 1 and x_arr.ndim == 2 and len(t_arr) == len(x_arr) and x_arr.shape[1] == 6:
-            trajs.append((t_arr, x_arr))
-    return trajs
-
-
-def _from_orbit(orbit: PeriodicOrbit) -> "tuple[np.ndarray, np.ndarray]":
-    if orbit.times is None or orbit.trajectory is None:
-        raise ValueError("Orbit must be propagated before extracting trajectories")
-    return np.asarray(orbit.times, dtype=np.float64), np.asarray(orbit.trajectory, dtype=np.float64)
-
-
 class SynodicMap(_ReturnMapBase):
     """Driver for synodic section detection on precomputed trajectories.
 
@@ -67,7 +48,7 @@ class SynodicMap(_ReturnMapBase):
     def _build_engine(self) -> _SynodicEngine:
         return _SynodicEngine(section_cfg=self._section_cfg, map_cfg=self.config, n_workers=(self.config.n_workers or 1))
 
-    def compute_from_trajectories(
+    def from_trajectories(
         self,
         trajectories: "Sequence[tuple[np.ndarray, np.ndarray]]",
         *,
@@ -81,12 +62,20 @@ class SynodicMap(_ReturnMapBase):
         self._section = sec
         return sec
 
-    def compute_from_orbit(self, orbit: PeriodicOrbit, *, direction: Literal[1, -1, None] = None, recompute: bool = False) -> _Section:
-        traj = [_from_orbit(orbit)]
+    def from_orbit(self, orbit: PeriodicOrbit, *, direction: Literal[1, -1, None] = None, recompute: bool = False) -> _Section:
+        traj = [np.asarray(orbit.times, dtype=np.float64), np.asarray(orbit.trajectory, dtype=np.float64)]
         return self.compute_from_trajectories(traj, direction=direction, recompute=recompute)
 
-    def compute_from_manifold(self, manifold_result, *, direction: Literal[1, -1, None] = None, recompute: bool = False) -> _Section:
-        trajs = _from_manifold_result(manifold_result)
+    def from_manifold(self, manifold_result, *, direction: Literal[1, -1, None] = None, recompute: bool = False) -> _Section:
+        trajs = []
+        for times, states in zip(getattr(manifold_result, "times_list", []), getattr(manifold_result, "states_list", [])):
+            if times is None or states is None:
+                continue
+            t_arr = np.asarray(times, dtype=np.float64)
+            x_arr = np.asarray(states, dtype=np.float64)
+            if t_arr.ndim == 1 and x_arr.ndim == 2 and len(t_arr) == len(x_arr) and x_arr.shape[1] == 6:
+                trajs.append((t_arr, x_arr))
+
         if not trajs:
             raise ValueError("Manifold result contains no valid trajectories")
         return self.compute_from_trajectories(trajs, direction=direction, recompute=recompute)
