@@ -6,6 +6,9 @@ import numpy as np
 from hiten.algorithms.poincare.core.base import _Section
 from hiten.algorithms.poincare.core.events import (_PlaneEvent, _SectionHit,
                                                    _SurfaceEvent)
+from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
+from hiten.algorithms.poincare.core.engine import _ReturnMapEngine
+from hiten.algorithms.poincare.core.strategies import _SeedingStrategyBase
 from hiten.algorithms.poincare.synodic.config import (_SynodicMapConfig,
                                                       _SynodicSectionConfig)
 
@@ -109,46 +112,90 @@ def detect_batch(
     return out
 
 
-class _SynodicEngine:
-    """Thin orchestrator for synodic section detection on precomputed trajectories.
+class _NoOpBackend(_ReturnMapBackend):
+    """Placeholder backend; never used by the synodic engine."""
 
-    This class mirrors the structure of other return-map engines but delegates
-    all numerical work to interpolation-based detection functions.
+    def __init__(self) -> None:
+        # Pass inert placeholders; engine will not use backend.
+        class _NullSurface(_SurfaceEvent):
+            def value(self, state: np.ndarray) -> float:  # type: ignore[override]
+                return 0.0
+
+        super().__init__(dynsys=None, surface=_NullSurface())  # type: ignore[arg-type]
+
+    def step_to_section(self, seeds: "np.ndarray", *, dt: float = 1e-2) -> tuple["np.ndarray", "np.ndarray"]:  # type: ignore[override]
+        raise NotImplementedError("Synodic engine does not propagate seeds")
+
+
+class _NoOpStrategy(_SeedingStrategyBase):
+    def generate(self, *, h0, H_blocks, clmo_table, solve_missing_coord_fn, find_turning_fn):  # type: ignore[override]
+        raise NotImplementedError("Synodic engine does not generate seeds")
+
+
+class _SynodicEngineConfigAdapter:
+    """Adapter providing dt/n_iter expected by the base engine."""
+
+    def __init__(self, cfg: _SynodicMapConfig) -> None:
+        self._cfg = cfg
+        self.dt = 0.0
+        self.n_iter = 1
+        self.n_workers = cfg.n_workers
+        # Satisfy _SeedingConfigLike for the no-op strategy
+        self.n_seeds = 0
+
+    def __repr__(self) -> str:
+        return f"SynodicEngineConfigAdapter(n_workers={self.n_workers})"
+
+
+class _SynodicEngine(_ReturnMapEngine):
+    """Engine for synodic section detection on precomputed trajectories.
+
+    Subclasses the generic engine to reuse worker/count plumbing and caching.
     """
 
     def __init__(
         self,
         *,
+        backend: _ReturnMapBackend,
+        seed_strategy: _SeedingStrategyBase,
+        map_config: _SynodicEngineConfigAdapter,
         section_cfg: _SynodicSectionConfig,
-        map_cfg: _SynodicMapConfig,
-        n_workers: int | None = None,
     ) -> None:
+        super().__init__(backend=backend, seed_strategy=seed_strategy, map_config=map_config)
         self._section_cfg = section_cfg
-        self._detect_cfg = map_cfg
-        self._n_workers = int(n_workers or 1)
-        self._cache: _Section | None = None
+        self._detect_cfg: _SynodicMapConfig = map_config._cfg
+        # Runtime state
+        self._trajectories: "Sequence[tuple[np.ndarray, np.ndarray]]" | None = None
+        self._direction: int | None = None
 
-    def compute_section(
+    def set_trajectories(
         self,
         trajectories: "Sequence[tuple[np.ndarray, np.ndarray]]",
         *,
-        direction: int | None = None,
-        recompute: bool = False,
-    ) -> _Section:
-        if self._cache is not None and not recompute:
-            return self._cache
+        direction: Literal[1, -1, None] | None = None,
+    ) -> "_SynodicEngine":
+        self._trajectories = trajectories
+        self._direction = direction
+        self.clear_cache()
+        return self
 
-        evt = self._section_cfg.build_event(direction=direction)
+    def compute_section(self, *, recompute: bool = False) -> _Section:  # type: ignore[override]
+        if self._section_cache is not None and not recompute:
+            return self._section_cache
+
+        if self._trajectories is None:
+            raise ValueError("No trajectories set. Call set_trajectories(...) first.")
+
+        evt = self._section_cfg.build_event(direction=self._direction)
         proj = self._section_cfg.plane_coords
 
-        if self._n_workers <= 1 or len(trajectories) <= 1:
-            hits_lists = detect_batch(trajectories, event=evt, proj=proj, cfg=self._detect_cfg)
+        if self._n_workers <= 1 or len(self._trajectories) <= 1:
+            hits_lists = detect_batch(self._trajectories, event=evt, proj=proj, cfg=self._detect_cfg)
         else:
-            # Parallelize by trajectory chunks
-            chunks = np.array_split(np.arange(len(trajectories)), self._n_workers)
+            chunks = np.array_split(np.arange(len(self._trajectories)), self._n_workers)
 
             def _worker(idx_arr: np.ndarray):
-                subset = [trajectories[i] for i in idx_arr.tolist()]
+                subset = [self._trajectories[i] for i in idx_arr.tolist()]  # type: ignore[index]
                 return detect_batch(subset, event=evt, proj=proj, cfg=self._detect_cfg)
 
             parts: list[list[list]] = []
@@ -156,10 +203,8 @@ class _SynodicEngine:
                 futs = [ex.submit(_worker, idxs) for idxs in chunks if len(idxs)]
                 for fut in as_completed(futs):
                     parts.append(fut.result())
-            # Flatten preserving input order approximately
             hits_lists = [hits for part in parts for hits in part]
 
-        # Assemble points and states stacked across all trajectories
         pts, sts = [], []
         for hits in hits_lists:
             for h in hits:
@@ -169,5 +214,5 @@ class _SynodicEngine:
         pts_np = np.asarray(pts, dtype=float) if pts else np.empty((0, 2))
         sts_np = np.asarray(sts, dtype=float) if sts else np.empty((0, 6))
 
-        self._cache = _Section(pts_np, sts_np, self._section_cfg.plane_coords)
-        return self._cache
+        self._section_cache = _Section(pts_np, sts_np, self._section_cfg.plane_coords)
+        return self._section_cache

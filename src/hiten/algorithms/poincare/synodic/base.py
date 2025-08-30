@@ -6,7 +6,8 @@ from hiten.algorithms.poincare.core.base import _ReturnMapBase, _Section
 from hiten.algorithms.poincare.synodic.config import (_get_section_config,
                                                       _SynodicMapConfig,
                                                       _SynodicSectionConfig)
-from hiten.algorithms.poincare.synodic.engine import _SynodicEngine
+from hiten.algorithms.poincare.synodic.engine import (
+    _NoOpBackend, _NoOpStrategy, _SynodicEngine, _SynodicEngineConfigAdapter)
 from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.plots import plot_poincare_map
 
@@ -46,7 +47,15 @@ class SynodicMap(_ReturnMapBase):
         return _get_section_config(normal=normal, offset=cfg.section_offset, plane_coords=cfg.plane_coords)
 
     def _build_engine(self) -> _SynodicEngine:
-        return _SynodicEngine(section_cfg=self._section_cfg, map_cfg=self.config, n_workers=(self.config.n_workers or 1))
+        adapter = _SynodicEngineConfigAdapter(self.config)
+        backend = _NoOpBackend()
+        strategy = _NoOpStrategy(self._section_cfg, adapter)
+        return _SynodicEngine(
+            backend=backend,
+            seed_strategy=strategy,
+            map_config=adapter,
+            section_cfg=self._section_cfg,
+        )
 
     def from_trajectories(
         self,
@@ -55,7 +64,7 @@ class SynodicMap(_ReturnMapBase):
         direction: Literal[1, -1, None] = None,
         recompute: bool = False,
     ) -> _Section:
-        sec = self._engine.compute_section(trajectories, direction=direction, recompute=recompute)
+        sec = self._engine.set_trajectories(trajectories, direction=direction).compute_section(recompute=recompute)
         # Bridge into the base-class caching for consistent downstream APIs
         key = self._section_key()
         self._sections[key] = sec
@@ -63,8 +72,10 @@ class SynodicMap(_ReturnMapBase):
         return sec
 
     def from_orbit(self, orbit: PeriodicOrbit, *, direction: Literal[1, -1, None] = None, recompute: bool = False) -> _Section:
-        traj = [np.asarray(orbit.times, dtype=np.float64), np.asarray(orbit.trajectory, dtype=np.float64)]
-        return self.compute_from_trajectories(traj, direction=direction, recompute=recompute)
+        if orbit.times is None or orbit.trajectory is None:
+            raise ValueError("Orbit must be propagated before extracting trajectories")
+        traj = [(np.asarray(orbit.times, dtype=np.float64), np.asarray(orbit.trajectory, dtype=np.float64))]
+        return self.from_trajectories(traj, direction=direction, recompute=recompute)
 
     def from_manifold(self, manifold_result, *, direction: Literal[1, -1, None] = None, recompute: bool = False) -> _Section:
         trajs = []
@@ -78,7 +89,7 @@ class SynodicMap(_ReturnMapBase):
 
         if not trajs:
             raise ValueError("Manifold result contains no valid trajectories")
-        return self.compute_from_trajectories(trajs, direction=direction, recompute=recompute)
+        return self.from_trajectories(trajs, direction=direction, recompute=recompute)
 
     def _section_key(self) -> str:
         """Stable cache key mirroring CM's `section_coord` semantics.
@@ -102,7 +113,7 @@ class SynodicMap(_ReturnMapBase):
     ):
         """Render a 2-D Poincaré map for the last computed synodic section.
 
-        Requires that `compute_from_orbit` or `compute_from_manifold` has been
+        Requires that `from_orbit` or `from_manifold` has been
         called to populate the cached section.
         """
         if self._section is None:
