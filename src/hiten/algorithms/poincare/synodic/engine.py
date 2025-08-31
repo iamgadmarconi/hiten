@@ -76,15 +76,17 @@ class _SynodicEngine(_ReturnMapEngine):
                     parts.append(fut.result())
             hits_lists = [hits for part in parts for hits in part]
 
-        pts, sts = [], []
+        pts, sts, ts = [], [], []
         for hits in hits_lists:
             for h in hits:
                 pts.append(h.point2d)
                 sts.append(h.state)
+                ts.append(h.time)
 
         pts_np = np.asarray(pts, dtype=float) if pts else np.empty((0, 2))
         sts_np = np.asarray(sts, dtype=float) if sts else np.empty((0, 6))
+        ts_np = np.asarray(ts, dtype=float) if ts else None
 
         labels = getattr(self._backend, "_section_cfg").plane_coords
-        self._section_cache = _Section(pts_np, sts_np, labels)
+        self._section_cache = _Section(pts_np, sts_np, labels, ts_np)
         return self._section_cache
