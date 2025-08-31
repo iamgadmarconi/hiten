@@ -11,9 +11,10 @@ from hiten.algorithms.integrators.rk import (RK4_A, RK4_B, RK4_C, RK6_A, RK6_B,
                                              RK6_C, RK8_A, RK8_B, RK8_C)
 from hiten.algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
                                                      _integrate_symplectic)
-from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
 from hiten.algorithms.poincare.centermanifold.config import _get_section_config
+from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
 from hiten.algorithms.poincare.core.events import _SurfaceEvent
+from hiten.algorithms.poincare.utils import _hermite_scalar
 from hiten.algorithms.polynomial.operations import _polynomial_evaluate
 from hiten.algorithms.utils.config import FASTMATH
 from hiten.utils.log_config import logger
@@ -53,15 +54,6 @@ def _detect_crossing(section_coord: str, state_old: np.ndarray, state_new: np.nd
 
     alpha = f_old / (f_old - f_new)
     return True, alpha
-
-
-@njit(cache=False, fastmath=FASTMATH, inline="always")
-def _hermite_scalar(alpha: float, y0: float, y1: float, dy0: float, dy1: float, dt: float) -> float:
-    h00 = (1.0 + 2.0 * alpha) * (1.0 - alpha) ** 2
-    h10 = alpha * (1.0 - alpha) ** 2
-    h01 = alpha ** 2 * (3.0 - 2.0 * alpha)
-    h11 = alpha ** 2 * (alpha - 1.0)
-    return h00 * y0 + h10 * dy0 * dt + h01 * y1 + h11 * dy1 * dt
 
 
 @njit(cache=False, fastmath=FASTMATH)
@@ -142,6 +134,7 @@ def _poincare_step(q2: float, p2: float, q3: float, p3: float, dt: float,
     state_old[n_dof + 1] = p2
     state_old[n_dof + 2] = p3
 
+    elapsed = 0.0
     for _ in range(max_steps):
         c_A, c_B, c_C = _get_rk_coefficients(order)
         traj = _integrate_map(y0=state_old, t_vals=np.array([0.0, dt]), A=c_A, B=c_B, C=c_C,
@@ -160,11 +153,13 @@ def _poincare_step(q2: float, p2: float, q3: float, p3: float, dt: float,
             q3p = _hermite_scalar(alpha, state_old[2],       state_new[2],       rhs_old[2],       rhs_new[2],       dt)
             p3p = _hermite_scalar(alpha, state_old[n_dof+2], state_new[n_dof+2], rhs_old[n_dof+2], rhs_new[n_dof+2], dt)
 
-            return 1, q2p, p2p, q3p, p3p
+            t_cross = elapsed + alpha * dt
+            return 1, q2p, p2p, q3p, p3p, t_cross
 
         state_old = state_new
+        elapsed += dt
 
-    return 0, 0.0, 0.0, 0.0, 0.0
+    return 0, 0.0, 0.0, 0.0, 0.0, 0.0
 
 
 @njit(parallel=True, cache=False)
@@ -177,11 +172,12 @@ def _poincare_map(seeds: np.ndarray, dt: float, jac_H, clmo, order: int, max_ste
     p2p_out = np.empty(n_seeds, dtype=np.float64)
     q3p_out = np.empty(n_seeds, dtype=np.float64)
     p3p_out = np.empty(n_seeds, dtype=np.float64)
+    t_out = np.empty(n_seeds, dtype=np.float64)
 
     for i in prange(n_seeds):
         q2, p2, q3, p3 = seeds[i, 0], seeds[i, 1], seeds[i, 2], seeds[i, 3]
 
-        flag, q2_new, p2_new, q3_new, p3_new = _poincare_step(
+        flag, q2_new, p2_new, q3_new, p3_new, t_cross = _poincare_step(
             q2, p2, q3, p3, dt, jac_H, clmo, order, max_steps, use_symplectic,
             n_dof, section_coord, c_omega_heuristic
         )
@@ -192,8 +188,9 @@ def _poincare_map(seeds: np.ndarray, dt: float, jac_H, clmo, order: int, max_ste
             p2p_out[i] = p2_new
             q3p_out[i] = q3_new
             p3p_out[i] = p3_new
+            t_out[i] = t_cross
 
-    return success, q2p_out, p2p_out, q3p_out, p3p_out
+    return success, q2p_out, p2p_out, q3p_out, p3p_out, t_out
 
 
 class _CenterManifoldBackend(_ReturnMapBackend):
@@ -399,7 +396,7 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         seeds: np.ndarray,
         *,
         dt: float = 1e-2,
-    ) -> tuple[np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Propagate every CM seed until the next section crossing.
 
         Parameters
@@ -416,11 +413,16 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         """
 
         if seeds.size == 0:
-            return np.empty((0, 2)), np.empty((0, 4))
+            return (
+                np.empty((0, 2)),
+                np.empty((0, 4)),
+                np.empty((0,)),
+                np.empty((0,), dtype=np.int64),
+            )
 
         max_steps = int(np.ceil(20.0 / dt))
 
-        flags, q2p_arr, p2p_arr, q3p_arr, p3p_arr = _poincare_map(
+        flags, q2p_arr, p2p_arr, q3p_arr, p3p_arr, t_arr = _poincare_map(
             np.ascontiguousarray(seeds, dtype=np.float64),
             dt,
             self._jac_H,
@@ -436,6 +438,7 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         cfg = self._section_cfg
         pts_list: list[tuple[float, float]] = []
         states_list: list[tuple[float, float, float, float]] = []
+        times_list: list[float] = []
 
         for i in range(flags.shape[0]):
             if flags[i]:
@@ -457,8 +460,11 @@ class _CenterManifoldBackend(_ReturnMapBackend):
                     pts_list.append((state[0], state[1]))
                 else:
                     pts_list.append((state[2], state[3]))
+                times_list.append(float(t_arr[i]))
 
         return (
             np.asarray(pts_list, dtype=np.float64),
             np.asarray(states_list, dtype=np.float64),
+            np.asarray(times_list, dtype=np.float64),
+            np.asarray(flags, dtype=np.int64),
         )

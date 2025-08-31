@@ -12,16 +12,17 @@ from hiten.algorithms.poincare.core.strategies import _SeedingStrategyBase
 class _Section:
     """Lightweight immutable container for a single 2-D return-map slice."""
 
-    def __init__(self, points: np.ndarray, states: np.ndarray, labels: tuple[str, str]):
+    def __init__(self, points: np.ndarray, states: np.ndarray, labels: tuple[str, str], times: np.ndarray | None = None):
         self.points: np.ndarray = points       # (n, 2) plane coordinates
         self.states: np.ndarray = states       # (n, k) backend-specific state vectors
         self.labels: tuple[str, str] = labels  # axis labels (e.g. ("q2", "p2"))
+        self.times: np.ndarray | None = times  # (n,) absolute integration times (optional)
 
     def __len__(self):
         return self.points.shape[0]
 
     def __repr__(self):
-        return f"_Section(points={len(self)}, labels={self.labels})"
+        return f"_Section(points={len(self)}, labels={self.labels}, times={'yes' if self.times is not None else 'no'})"
 
 
 class _ReturnMapBase(ABC):

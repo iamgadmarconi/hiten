@@ -48,33 +48,36 @@ class _CenterManifoldEngine(_ReturnMapEngine):
         chunks = np.array_split(seeds0, self._n_workers)
 
         def _worker(chunk: np.ndarray):
-            pts_accum, states_accum = [], []
+            pts_accum, states_accum, times_accum = [], [], []
             seeds = chunk
             for _ in range(self._n_iter):
-                pts, states = self._backend.step_to_section(seeds, dt=self._dt)
+                pts, states, times, flags = self._backend.step_to_section(seeds, dt=self._dt)
                 if pts.size == 0:
                     break
                 pts_accum.append(pts)
                 states_accum.append(states)
+                times_accum.append(times)
                 seeds = states  # feed back
             if pts_accum:
-                return np.vstack(pts_accum), np.vstack(states_accum)
-            return np.empty((0, 2)), np.empty((0, 4))
+                return np.vstack(pts_accum), np.vstack(states_accum), np.concatenate(times_accum)
+            return np.empty((0, 2)), np.empty((0, 4)), np.empty((0,))
 
-        pts_list, states_list = [], []
+        pts_list, states_list, times_list = [], [], []
         with ThreadPoolExecutor(max_workers=self._n_workers) as executor:
             futures = [executor.submit(_worker, c) for c in chunks if c.size]
             for fut in as_completed(futures):
-                p, s = fut.result()
+                p, s, t = fut.result()
                 if p.size:
                     pts_list.append(p)
                     states_list.append(s)
+                    times_list.append(t)
 
         pts_np = np.vstack(pts_list) if pts_list else np.empty((0, 2))
         cms_np = np.vstack(states_list) if states_list else np.empty((0, 4))
+        times_np = np.concatenate(times_list) if times_list else None
 
         self._section_cache = _Section(
-            pts_np, cms_np, self._backend._section_cfg.plane_coords
+            pts_np, cms_np, self._backend._section_cfg.plane_coords, times_np
         )
         return self._section_cache
 
