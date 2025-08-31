@@ -3,7 +3,7 @@ from typing import Literal, Optional, Sequence
 import numpy as np
 
 from hiten.algorithms.poincare.core.base import _ReturnMapBase, _Section
-from hiten.algorithms.poincare.synodic.backend import _NoOpBackend
+from hiten.algorithms.poincare.synodic.backend import _SynodicDetectionBackend
 from hiten.algorithms.poincare.synodic.config import (_get_section_config,
                                                       _SynodicMapConfig,
                                                       _SynodicSectionConfig)
@@ -27,7 +27,7 @@ class SynodicMap(_ReturnMapBase):
         self._section_cfg = self._build_section_config(cfg)
         self._engine = self._build_engine()
 
-    # These are unused but required by the abstract base; we do not build a backend/strategy.
+    # These are unused but required by the abstract base; we do not build a propagation backend/strategy.
     def _build_backend(self, section_coord: str):
         raise NotImplementedError("SynodicMap does not use a propagation backend")
 
@@ -50,13 +50,12 @@ class SynodicMap(_ReturnMapBase):
 
     def _build_engine(self) -> _SynodicEngine:
         adapter = _SynodicEngineConfigAdapter(self.config)
-        backend = _NoOpBackend()
+        backend = _SynodicDetectionBackend(section_cfg=self._section_cfg, map_cfg=adapter._cfg)
         strategy = _NoOpStrategy(self._section_cfg, adapter)
         return _SynodicEngine(
             backend=backend,
             seed_strategy=strategy,
             map_config=adapter,
-            section_cfg=self._section_cfg,
         )
 
     def from_trajectories(
