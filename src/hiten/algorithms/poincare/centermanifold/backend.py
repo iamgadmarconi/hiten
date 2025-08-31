@@ -11,9 +11,10 @@ from hiten.algorithms.integrators.rk import (RK4_A, RK4_B, RK4_C, RK6_A, RK6_B,
                                              RK6_C, RK8_A, RK8_B, RK8_C)
 from hiten.algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
                                                      _integrate_symplectic)
-from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
 from hiten.algorithms.poincare.centermanifold.config import _get_section_config
+from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
 from hiten.algorithms.poincare.core.events import _SurfaceEvent
+from hiten.algorithms.poincare.utils import _hermite_scalar
 from hiten.algorithms.polynomial.operations import _polynomial_evaluate
 from hiten.algorithms.utils.config import FASTMATH
 from hiten.utils.log_config import logger
@@ -53,15 +54,6 @@ def _detect_crossing(section_coord: str, state_old: np.ndarray, state_new: np.nd
 
     alpha = f_old / (f_old - f_new)
     return True, alpha
-
-
-@njit(cache=False, fastmath=FASTMATH, inline="always")
-def _hermite_scalar(alpha: float, y0: float, y1: float, dy0: float, dy1: float, dt: float) -> float:
-    h00 = (1.0 + 2.0 * alpha) * (1.0 - alpha) ** 2
-    h10 = alpha * (1.0 - alpha) ** 2
-    h01 = alpha ** 2 * (3.0 - 2.0 * alpha)
-    h11 = alpha ** 2 * (alpha - 1.0)
-    return h00 * y0 + h10 * dy0 * dt + h01 * y1 + h11 * dy1 * dt
 
 
 @njit(cache=False, fastmath=FASTMATH)
