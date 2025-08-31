@@ -23,6 +23,7 @@ class _SynodicMapConfig(_ReturnMapBaseConfig):
     dedup_time_tol: float = 1e-9
     dedup_point_tol: float = 1e-12
     max_hits_per_traj: int | None = None
+    newton_max_iter: int = 4
 
 
 class _SynodicSectionConfig(_SectionConfig):

@@ -87,6 +87,6 @@ class _SynodicEngine(_ReturnMapEngine):
         sts_np = np.asarray(sts, dtype=float) if sts else np.empty((0, 6))
         ts_np = np.asarray(ts, dtype=float) if ts else None
 
-        labels = getattr(self._backend, "_section_cfg").plane_coords
+        labels = self._backend.plane_coords
         self._section_cache = _Section(pts_np, sts_np, labels, ts_np)
         return self._section_cache

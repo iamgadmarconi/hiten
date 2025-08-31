@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from typing import Callable, Literal, Sequence
 
 import numpy as np
@@ -8,6 +9,42 @@ from hiten.algorithms.poincare.core.events import (_PlaneEvent, _SectionHit,
 from hiten.algorithms.poincare.synodic.config import (_SynodicMapConfig,
                                                       _SynodicSectionConfig)
 from hiten.algorithms.poincare.utils import _hermite_der, _hermite_scalar
+
+
+@dataclass
+class _DetectionSettings:
+    """Cached numerical/settings knobs to avoid repeated getattr lookups.
+
+    These values are derived once from the map/section configuration and reused
+    during detection/refinement routines.
+    """
+
+    use_cubic: bool
+    segment_refine: int
+    tol_on_surface: float
+    dedup_time_tol: float
+    dedup_point_tol: float
+    max_hits_per_traj: int | None
+    proj: "tuple[str, str]"
+    newton_max_iter: int
+
+    @classmethod
+    def from_config(
+        cls,
+        *,
+        map_cfg: "_SynodicMapConfig",
+        plane_coords: "tuple[str, str]",
+    ) -> "_DetectionSettings":
+        return cls(
+            use_cubic=(getattr(map_cfg, "interp_kind", "linear") == "cubic"),
+            segment_refine=int(getattr(map_cfg, "segment_refine", 0)),
+            tol_on_surface=float(getattr(map_cfg, "tol_on_surface", 1e-12)),
+            dedup_time_tol=float(getattr(map_cfg, "dedup_time_tol", 1e-9)),
+            dedup_point_tol=float(getattr(map_cfg, "dedup_point_tol", 1e-12)),
+            max_hits_per_traj=getattr(map_cfg, "max_hits_per_traj", None),
+            proj=(str(plane_coords[0]), str(plane_coords[1])),
+            newton_max_iter=int(getattr(map_cfg, "newton_max_iter", 4)),
+        )
 
 
 def _project_batch(
@@ -23,11 +60,29 @@ def _project_batch(
 
 
 def _compute_event_values(event: "_SurfaceEvent", states: "np.ndarray") -> "np.ndarray":
-    n_vec = getattr(event, "normal", None)
-    c_off = getattr(event, "offset", None)
-    if isinstance(n_vec, np.ndarray) and np.ndim(n_vec) == 1 and n_vec.size == states.shape[1] and isinstance(c_off, (float, int)):
+    ok, n_vec, c_off = _is_vectorizable_plane_event(event, states.shape[1])
+    if ok and n_vec is not None and c_off is not None:
         return states @ n_vec.astype(float, copy=False) - float(c_off)
     return np.fromiter((float(event.value(states[k])) for k in range(states.shape[0])), dtype=float, count=states.shape[0])
+
+
+def _is_vectorizable_plane_event(event: "_SurfaceEvent", n_cols: int) -> "tuple[bool, np.ndarray | None, float | None]":
+    """Return True and cached (normal, offset) if event supports vectorised evaluation.
+
+    We can vectorise when the event exposes a 1-D normal vector with length
+    matching the state dimension, and a scalar offset.
+    """
+    n_vec = getattr(event, "normal", None)
+    c_off = getattr(event, "offset", None)
+    ok = (
+        isinstance(n_vec, np.ndarray)
+        and np.ndim(n_vec) == 1
+        and n_vec.size == int(n_cols)
+        and isinstance(c_off, (float, int))
+    )
+    if ok:
+        return True, n_vec, float(c_off)
+    return False, None, None
 
 
 def _on_surface_indices(g_all: "np.ndarray", tol: float, direction: "Literal[1, -1, None]") -> "np.ndarray":
@@ -86,6 +141,8 @@ def _refine_hits_cubic(
     g_all: "np.ndarray",
     cr_idx: "np.ndarray",
     alpha: "np.ndarray",
+    *,
+    max_iter: int,
 ) -> tuple["np.ndarray", "np.ndarray"]:
     N = times.shape[0]
     if cr_idx.size == 0:
@@ -111,7 +168,7 @@ def _refine_hits_cubic(
                 d1 = (g_all[k + 1] - g_all[k]) / (times[k + 1] - times[k])
 
             # Newton refinement on s in [0,1]
-            for _ in range(4):
+            for _ in range(max_iter):
                 f = _hermite_scalar(s_star, float(g_all[k]), float(g_all[k + 1]), float(d0), float(d1), dt_seg)
                 df = _hermite_der(s_star, float(g_all[k]), float(g_all[k + 1]), float(d0), float(d1), dt_seg)
                 if df == 0.0:
@@ -155,7 +212,9 @@ def _order_and_dedup_hits(
     cand_states: "list[np.ndarray]",
     proj: "tuple[str, str] | Callable[[np.ndarray], tuple[float, float]]",
     seg_order: "np.ndarray",
-    cfg: "_SynodicMapConfig",
+    dedup_time_tol: float,
+    dedup_point_tol: float,
+    max_hits_per_traj: int | None,
 ) -> "list[_SectionHit]":
     if not cand_times:
         return []
@@ -173,14 +232,14 @@ def _order_and_dedup_hits(
         pt = cand_pts_np[k]
         if hits:
             prev = hits[-1]
-            if abs(th - prev.time) <= cfg.dedup_time_tol:
+            if abs(th - prev.time) <= dedup_time_tol:
                 continue
             du = pt[0] - prev.point2d[0]
             dv = pt[1] - prev.point2d[1]
-            if (du * du + dv * dv) <= (cfg.dedup_point_tol * cfg.dedup_point_tol):
+            if (du * du + dv * dv) <= (dedup_point_tol * dedup_point_tol):
                 continue
         hits.append(_SectionHit(time=th, state=st, point2d=pt))
-        if cfg.max_hits_per_traj is not None and len(hits) >= cfg.max_hits_per_traj:
+        if max_hits_per_traj is not None and len(hits) >= max_hits_per_traj:
             break
     return hits
 
@@ -192,15 +251,15 @@ def _detect_with_segment_refine(
     *,
     event: "_SurfaceEvent",
     proj: "tuple[str, str] | Callable[[np.ndarray], tuple[float, float]]",
-    cfg: "_SynodicMapConfig",
+    settings: "_DetectionSettings",
 ) -> "list[_SectionHit]":
     N = times.shape[0]
-    r = int(getattr(cfg, "segment_refine", 0))
+    r = int(settings.segment_refine)
     if r <= 0 or N < 2:
         return []
 
     step = 1.0 / (r + 1)
-    use_cubic = getattr(cfg, "interp_kind", "linear") == "cubic"
+    use_cubic = settings.use_cubic
 
     cand_times: list[float] = []
     cand_states: list[np.ndarray] = []
@@ -228,7 +287,7 @@ def _detect_with_segment_refine(
 
         # Direction-aware on-surface at s=0
         accept_left = False
-        if abs(gk) < cfg.tol_on_surface:
+        if abs(gk) < settings.tol_on_surface:
             if event.direction is None:
                 accept_left = True
             elif event.direction == 1:
@@ -283,7 +342,7 @@ def _detect_with_segment_refine(
 
             # Optional Newton refinement on the full base segment (cubic g)
             if use_cubic and dt > 0.0:
-                for _ in range(4):
+                for _ in range(settings.newton_max_iter):
                     f = _hermite_scalar(s_star, gk, gk1, d0, d1, dt)
                     df = _hermite_der(s_star, gk, gk1, d0, d1, dt)
                     if df == 0.0:
@@ -322,7 +381,15 @@ def _detect_with_segment_refine(
             seg_order_list.append(k)
 
     seg_order = np.asarray(seg_order_list, dtype=int) if seg_order_list else np.empty((0,), dtype=int)
-    return _order_and_dedup_hits(cand_times, cand_states, proj, seg_order, cfg)
+    return _order_and_dedup_hits(
+        cand_times,
+        cand_states,
+        proj,
+        seg_order,
+        settings.dedup_time_tol,
+        settings.dedup_point_tol,
+        settings.max_hits_per_traj,
+    )
 
 
 class _SynodicDetectionBackend(_ReturnMapBackend):
@@ -338,6 +405,8 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         super().__init__(dynsys=None, surface=section_cfg.build_event(direction=None))
         self._section_cfg = section_cfg
         self._cfg = map_cfg
+        # Cache frequently used numeric settings and projection axes
+        self._settings = _DetectionSettings.from_config(map_cfg=map_cfg, plane_coords=section_cfg.plane_coords)
 
     # Required by abstract base, but unused for synodic
     def step_to_section(self, seeds: "np.ndarray", *, dt: float = 1e-2) -> tuple["np.ndarray", "np.ndarray"]:
@@ -347,14 +416,14 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         if times.size < 2:
             return []
         event = self._section_cfg.build_event(direction=direction)
-        proj = self._section_cfg.plane_coords
-        cfg = self._cfg
+        proj = self._settings.proj
+        settings = self._settings
 
         g_all = _compute_event_values(event, states)
 
         # Segment refinement path (optional)
-        if int(getattr(cfg, "segment_refine", 0)) > 0:
-            return _detect_with_segment_refine(times, states, g_all, event=event, proj=proj, cfg=cfg)
+        if int(settings.segment_refine) > 0:
+            return _detect_with_segment_refine(times, states, g_all, event=event, proj=proj, settings=settings)
 
         g0 = g_all[:-1]
         g1 = g_all[1:]
@@ -363,7 +432,7 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         x0 = states[:-1]
         x1 = states[1:]
 
-        on_idx = _on_surface_indices(g_all, cfg.tol_on_surface, event.direction)
+        on_idx = _on_surface_indices(g_all, settings.tol_on_surface, event.direction)
         on_mask = np.zeros_like(g0, dtype=bool)
         on_mask[on_idx] = True
 
@@ -375,9 +444,9 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
 
         cr_idx, alpha = _crossing_indices_and_alpha(g0, g1, on_mask=on_mask, direction=event.direction)
         if cr_idx.size:
-            use_cubic = getattr(cfg, "interp_kind", "linear") == "cubic"
+            use_cubic = settings.use_cubic
             if use_cubic:
-                thit, xhit = _refine_hits_cubic(times, states, g_all, cr_idx, alpha)
+                thit, xhit = _refine_hits_cubic(times, states, g_all, cr_idx, alpha, max_iter=settings.newton_max_iter)
             else:
                 thit, xhit = _refine_hits_linear(t0, t1, x0, x1, cr_idx, alpha)
             cand_times.extend(thit.tolist())
@@ -387,11 +456,25 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
             return []
 
         seg_order = np.concatenate((on_idx, cr_idx)) if on_idx.size or cr_idx.size else np.empty((0,), dtype=int)
-        return _order_and_dedup_hits(cand_times, cand_states, proj, seg_order, cfg)
+        return _order_and_dedup_hits(
+            cand_times,
+            cand_states,
+            proj,
+            seg_order,
+            settings.dedup_time_tol,
+            settings.dedup_point_tol,
+            settings.max_hits_per_traj,
+        )
 
     def detect_batch(self, trajectories: "Sequence[tuple[np.ndarray, np.ndarray]]", *, direction: Literal[1, -1, None] | None = None) -> "list[list[_SectionHit]]":
         out: "list[list[_SectionHit]]" = []
         for (times, states) in trajectories:
             out.append(self.detect_on_trajectory(times, states, direction=direction))
         return out
+
+    @property
+    def plane_coords(self) -> "tuple[str, str]":
+        """Public accessor for the configured projection axes of the section.
+        """
+        return self._section_cfg.plane_coords
 
