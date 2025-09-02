@@ -81,7 +81,7 @@ class _PlaneEvent(_SurfaceEvent):
     Parameters
     ----------
     coord : str | int
-        Coordinate identifier.  A string is resolved via a built-in name → index
+        Coordinate identifier.  A string is resolved via a built-in name -> index
         map (supports both synodic and CM names such as ``'x'``, ``'q3'``); an
         *int* is interpreted directly as an index into the state vector.
     value : float, default 0.0

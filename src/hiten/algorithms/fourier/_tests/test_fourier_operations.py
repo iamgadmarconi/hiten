@@ -157,7 +157,7 @@ def test_fpoly_poisson_constant():
 
 
 def test_fpoly_poisson_canonical_relations():
-    """Canonical relations: {I_i, I_j}=0, {theta_i, theta_j}=0, {I_i, e^{itheta_j}} = -1j δ_{ij} e^{itheta_j}."""
+    """Canonical relations: {I_i, I_j}=0, {theta_i, theta_j}=0, {I_i, e^{itheta_j}} = -1j delta _{ij} e^{itheta_j}."""
 
     # Loop over i, j in {0,1,2}
     for i in range(3):

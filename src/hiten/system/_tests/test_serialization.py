@@ -20,7 +20,7 @@ def _reset_tmp_dir() -> None:
 
 def _assert_equal(name: str, left: np.ndarray, right: np.ndarray, atol: float = 1e-12) -> None:
     if not np.allclose(left, right, atol=atol):
-        raise AssertionError(f"{name}: round-trip mismatch (max |Δ| = {np.abs(left-right).max():.2e})")
+        raise AssertionError(f"{name}: round-trip mismatch (max |delta | = {np.abs(left-right).max():.2e})")
 
 def test_serialization() -> None:
     _reset_tmp_dir()

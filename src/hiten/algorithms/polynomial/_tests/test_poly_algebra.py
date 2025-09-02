@@ -1295,7 +1295,7 @@ def test_poisson_constant():
         assert abs(f_one[i]) < 1e-10
 
 def test_poisson_canonical_relations():
-    """Test canonical _poly_poisson bracket relations: {q_i,q_j}=0, {p_i,p_j}=0, {q_i,p_j}=δ_ij"""
+    """Test canonical _poly_poisson bracket relations: {q_i,q_j}=0, {p_i,p_j}=0, {q_i,p_j}=delta _ij"""
     # Test for the first few position and momentum variables
     for i in range(3):  # Test x0, x1, x2
         for j in range(3):  # Test x0, x1, x2
@@ -1348,7 +1348,7 @@ def test_poisson_canonical_relations():
             for k in range(pi_pj.shape[0]):
                 assert abs(pi_pj[k]) < 1e-10
             
-            # Test {q_i, p_j} = δ_ij (Kronecker delta)
+            # Test {q_i, p_j} = delta _ij (Kronecker delta)
             qi_pj = _poly_poisson(qi, deg_q, pj, deg_q, PSI, CLMO, _ENCODE_DICT_GLOBAL)
             
             if i == j:

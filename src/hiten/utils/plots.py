@@ -654,6 +654,73 @@ def plot_poincare_map(
 
     return fig, ax
 
+
+def plot_poincare_connections_map(
+        points_src: np.ndarray,
+        points_tgt: np.ndarray,
+        labels: List[str] | Tuple[str, str],
+        *,
+        match_points: Optional[np.ndarray] = None,
+        match_values: Optional[np.ndarray] = None,
+        ballistic: bool = True,
+        figsize: Tuple[int, int] = (8, 7),
+        save: bool = False,
+        dark_mode: bool = True,
+        filepath: str = 'connections_poincare.svg',
+        src_color: str = 'C0',
+        tgt_color: str = 'C1',
+        cmap: str = 'viridis',
+    ):
+    """Plot source/target section sets and candidate matches.
+
+    Parameters
+    ----------
+    points_src, points_tgt : array-like (N,2)
+        2D section points for source and target.
+    labels : (str, str)
+        Axes labels for the section projection.
+    match_points : array-like (M,2), optional
+        2D coordinates of candidate meet points.
+    match_values : array-like (M,), optional
+        Quality metric at each meet (angle in rad for ballistic; |Δv| for impulsive).
+    ballistic : bool
+        If True, colorbar label shows angle (rad); else shows |Δv|.
+    """
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111)
+
+    ax.scatter(points_src[:, 0], points_src[:, 1], s=6.0, c=src_color, alpha=0.6, label='source')
+    ax.scatter(points_tgt[:, 0], points_tgt[:, 1], s=6.0, c=tgt_color, alpha=0.6, label='target')
+
+    if match_points is not None and match_points.size:
+        mp = np.asarray(match_points, dtype=float)
+        if match_values is None:
+            cv = np.zeros(mp.shape[0], dtype=float)
+        else:
+            cv = np.asarray(match_values, dtype=float)
+        sc = ax.scatter(mp[:, 0], mp[:, 1], s=36.0, c=cv, cmap=cmap, edgecolor='k', linewidths=0.3, label='matches')
+        cbar = fig.colorbar(sc, ax=ax)
+        cbar.set_label('angle (rad)' if ballistic else '|Δv|')
+
+    ax.set_xlabel(labels[0])
+    ax.set_ylabel(labels[1])
+    ax.set_aspect('equal', adjustable='box')
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc='best')
+
+    if dark_mode:
+        _set_dark_mode(fig, ax, title='Poincaré map (connections)')
+    else:
+        ax.set_title('Poincaré map (connections)')
+
+    if save:
+        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+        plt.savefig(filepath, bbox_inches='tight')
+
+    plt.show()
+    plt.close(fig)
+    return fig, ax
+
 def plot_poincare_map_interactive(
         points: np.ndarray,
         labels: List[str],

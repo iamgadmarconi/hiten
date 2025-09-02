@@ -58,9 +58,6 @@ class _BaseStateContainer:
         for key, val in kwargs.items():
             self._assign_by_name(key, float(val))
 
-    # -----------------------
-    # Core utilities
-    # -----------------------
     @property
     def array(self) -> npt.NDArray[np.float64]:
         """Return a writable 1D numpy array of the state values."""
@@ -85,9 +82,6 @@ class _BaseStateContainer:
         members = type(self)._enum  # type: ignore[attr-defined]
         return {name.lower(): float(self._values[members[name]]) for name in members.__members__.keys()}  # type: ignore[index]
 
-    # -----------------------
-    # Indexing and item access
-    # -----------------------
     def _resolve_index(self, key: Union[int, str, IntEnum]) -> int:
         if isinstance(key, int):
             return key
