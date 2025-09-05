@@ -1,8 +1,12 @@
-from hiten.algorithms.poincare.centermanifold.strategies import (_AxisAlignedSeeding,
-                                                     _LevelSetsSeeding,
-                                                     _RadialSeeding,
-                                                     _RandomSeeding,
-                                                     _SingleAxisSeeding)
+from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
+from hiten.algorithms.poincare.centermanifold.config import \
+    _CenterManifoldMapConfig as CenterManifoldMapConfig
+from hiten.algorithms.poincare.centermanifold.strategies import (
+    _AxisAlignedSeeding, _LevelSetsSeeding, _RadialSeeding, _RandomSeeding,
+    _SingleAxisSeeding)
+from hiten.algorithms.poincare.synodic.base import SynodicMap
+from hiten.algorithms.poincare.synodic.config import \
+    _SynodicMapConfig as SynodicMapConfig
 
 
 def _build_seeding_strategy(section_cfg, config):
@@ -28,4 +32,15 @@ def _build_seeding_strategy(section_cfg, config):
         raise ValueError(f"Unknown seed strategy '{strat}'") from exc
 
 
-__all__ = ["_build_seeding_strategy", "_SingleAxisSeeding", "_AxisAlignedSeeding", "_LevelSetsSeeding", "_RadialSeeding", "_RandomSeeding"]
+__all__ = [
+    "_build_seeding_strategy",
+    "_SingleAxisSeeding", 
+    "_AxisAlignedSeeding", 
+    "_LevelSetsSeeding", 
+    "_RadialSeeding", 
+    "_RandomSeeding",
+    "CenterManifoldMap",   
+    "CenterManifoldMapConfig",
+    "SynodicMap",
+    "SynodicMapConfig",
+]

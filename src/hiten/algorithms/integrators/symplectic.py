@@ -204,8 +204,8 @@ def _phi_H_a_update_poly(
     Notes
     -----
     Implements the symplectic update step:
-    - P ← P - δ·∂H/∂Q(Q,Y)
-    - X ← X + δ·∂H/∂P(Q,Y)
+    - P ← P - delta ·∂H/∂Q(Q,Y)
+    - X ← X + delta ·∂H/∂P(Q,Y)
     
     This modifies q_ext in-place through views/slices.
     Q, P, X, Y are now N_SYMPLECTIC_DOF dimensional.
@@ -248,8 +248,8 @@ def _phi_H_b_update_poly(
     Notes
     -----
     Implements the symplectic update step:
-    - Q ← Q + δ·∂H/∂P(X,P)
-    - Y ← Y - δ·∂H/∂Q(X,P)
+    - Q ← Q + delta ·∂H/∂P(X,P)
+    - Y ← Y - delta ·∂H/∂Q(X,P)
     
     This modifies q_ext in-place through views/slices.
     Q, P, X, Y are now N_SYMPLECTIC_DOF dimensional.
@@ -349,7 +349,7 @@ def _recursive_update_poly(
     Notes
     -----
     For order=2, applies the basic second-order symplectic scheme:
-        φₐ(δ/2) ∘ φᵦ(δ/2) ∘ φᶜ(δ) ∘ φᵦ(δ/2) ∘ φₐ(δ/2)
+        φₐ(delta /2) ∘ φᵦ(delta /2) ∘ φᶜ(delta ) ∘ φᵦ(delta /2) ∘ φₐ(delta /2)
     
     For higher orders, applies a recursive composition method with
     carefully chosen substeps to achieve the desired order of accuracy.

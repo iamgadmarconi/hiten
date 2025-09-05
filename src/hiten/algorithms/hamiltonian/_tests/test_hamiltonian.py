@@ -505,10 +505,10 @@ def test_triangular_inverse_distance_expansion_accuracy(system: System, max_deg)
     tol = 10.0 * rho_norm ** (max_deg + 1)
 
     assert np.abs(inv_r_S_eval - inv_r_S_direct) < tol, (
-        f"Inverse distance expansion for primary S inaccurate: |Δ|={np.abs(inv_r_S_eval - inv_r_S_direct)}, tol={tol}"
+        f"Inverse distance expansion for primary S inaccurate: |delta |={np.abs(inv_r_S_eval - inv_r_S_direct)}, tol={tol}"
     )
     assert np.abs(inv_r_J_eval - inv_r_J_direct) < tol, (
-        f"Inverse distance expansion for primary J inaccurate: |Δ|={np.abs(inv_r_J_eval - inv_r_J_direct)}, tol={tol}"
+        f"Inverse distance expansion for primary J inaccurate: |delta |={np.abs(inv_r_J_eval - inv_r_J_direct)}, tol={tol}"
     )
 
 

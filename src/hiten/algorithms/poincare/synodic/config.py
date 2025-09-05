@@ -25,6 +25,11 @@ class _SynodicMapConfig(_ReturnMapBaseConfig):
     max_hits_per_traj: int | None = None
     newton_max_iter: int = 4
 
+    def __post_init__(self) -> None:
+        # Synodic maps do not support computing on init because trajectories
+        # must be supplied via from_orbit/from_manifold. Ignore any user value.
+        self.compute_on_init = False
+
 
 class _SynodicSectionConfig(_SectionConfig):
     """

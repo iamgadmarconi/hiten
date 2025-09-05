@@ -287,6 +287,15 @@ def _si_time(T_dimless, m1, m2, distance):
     return T_dimless / n
 
 
+def _velocity_scale_si_per_canonical(m1: float, m2: float, distance: float) -> float:
+    """Return the scale factor to convert canonical CRTBP velocities to SI (m/s).
+
+    v_SI = v_canonical * distance * n, where n = sqrt(G (m1+m2) / distance^3).
+    """
+    n = _get_angular_velocity(m1, m2, distance)
+    return distance * n
+
+
 def _get_distance(state_1_nondim, state_0_nondim, system_distance):
     """
     Calculate physical distance between two bodies in meters.

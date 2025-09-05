@@ -166,7 +166,7 @@ class Manifold:
         return self._manifold_result
 
     def __str__(self):
-        return f"Manifold(stable={self._stable}, direction={self._direction}) of {self._libration_point}-{self._generating_orbit}"
+        return f"Manifold(stable={self._stable}, direction={self._direction}) of {self._generating_orbit}"
     
     def __repr__(self):
         return self.__str__()
