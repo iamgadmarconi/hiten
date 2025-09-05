@@ -3,7 +3,7 @@ from typing import Tuple
 import numpy as np
 from numba import njit
 
-from hiten.algorithms.connections.results import ConnectionResult
+from hiten.algorithms.connections.results import _ConnectionResult
 
 
 @njit(cache=False)
@@ -273,7 +273,7 @@ class _ConnectionsBackend:
         pairs_np = np.asarray(pairs, dtype=np.int64)
         rstar, u0, u1, s0, s1, sval, tval, valid = _refine_pairs_on_section(pu, ps, pairs_np, nn_u, nn_s)
 
-        results: list[ConnectionResult] = []
+        results: list[_ConnectionResult] = []
         for k in range(pairs_np.shape[0]):
             i = int(pairs_np[k, 0]); j = int(pairs_np[k, 1])
             if valid[k] and (u0[k] != u1[k]) and (s0[k] != s1[k]):
@@ -285,7 +285,7 @@ class _ConnectionsBackend:
                 if dv <= dv_tol:
                     kind = "ballistic" if dv <= bal_tol else "impulsive"
                     pt = (float(rstar[k, 0]), float(rstar[k, 1]))
-                    results.append(ConnectionResult(kind=kind, delta_v=dv, point2d=pt, state_u=Xu_seg.copy(), state_s=Xs_seg.copy(), index_u=int(i), index_s=int(j)))
+                    results.append(_ConnectionResult(kind=kind, delta_v=dv, point2d=pt, state_u=Xu_seg.copy(), state_s=Xs_seg.copy(), index_u=int(i), index_s=int(j)))
             else:
                 vu = Xu[i, 3:6]
                 vs = Xs[j, 3:6]
@@ -293,7 +293,7 @@ class _ConnectionsBackend:
                 if dv <= dv_tol:
                     kind = "ballistic" if dv <= bal_tol else "impulsive"
                     pt = (float(pu[i, 0]), float(pu[i, 1]))
-                    results.append(ConnectionResult(kind=kind, delta_v=dv, point2d=pt, state_u=Xu[i].copy(), state_s=Xs[j].copy(), index_u=int(i), index_s=int(j)))
+                    results.append(_ConnectionResult(kind=kind, delta_v=dv, point2d=pt, state_u=Xu[i].copy(), state_s=Xs[j].copy(), index_u=int(i), index_s=int(j)))
 
         results.sort(key=lambda r: r.delta_v)
         return results

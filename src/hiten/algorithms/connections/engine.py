@@ -6,7 +6,7 @@ import numpy as np
 from hiten.algorithms.connections.backends import _ConnectionsBackend
 from hiten.algorithms.connections.config import _SearchConfig
 from hiten.algorithms.connections.interfaces import _ManifoldInterface
-from hiten.algorithms.connections.results import ConnectionResult
+from hiten.algorithms.connections.results import _ConnectionResult
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
 
 
@@ -27,7 +27,7 @@ class _ConnectionEngine:
     full pipeline.
     """
 
-    def solve(self, problem: _ConnectionProblem) -> list[ConnectionResult]:
+    def solve(self, problem: _ConnectionProblem) -> list[_ConnectionResult]:
         # Delegate to backend for matching/refinement/ΔV computation
         backend = _ConnectionsBackend()
         return backend.solve(problem)

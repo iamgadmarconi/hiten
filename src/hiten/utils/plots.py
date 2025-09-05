@@ -702,7 +702,7 @@ def plot_poincare_connections_map(
         sc = ax.scatter(mp[:, 0], mp[:, 1], s=36.0, c=cv, cmap=cmap, edgecolor='k', linewidths=0.3)
         cbar = fig.colorbar(sc, ax=ax)
         # Display velocities in the gradient
-        cbar.set_label('|Δv| (m/s)')
+        cbar.set_label('|Δv| (canonical units)')
         # Improve visibility in dark mode
         if dark_mode:
             cbar.ax.yaxis.set_tick_params(colors='w')
