@@ -66,6 +66,7 @@
    ```python
    from hiten import System
    from hiten.algorithms import StateParameter
+   from hiten.algorithms.utils.types import SynodicState
 
     system = System.from_bodies("earth", "moon")
     l1 = system.get_libration_point(1)
@@ -82,8 +83,8 @@
 
     engine = StateParameter(
         initial_orbit=seed,
-        state=(S.X),     # underlying coordinate that gets nudged
-        amplitude=True,  # but the continuation parameter is A_x
+        state=(SynodicState.X), # underlying coordinate that gets nudged
+        amplitude=True,         # but the continuation parameter is A_x
         target=(current_amp, target_amp),
         step=step,
         corrector_kwargs=dict(max_attempts=50, tol=1e-13),
@@ -102,7 +103,7 @@
 
 3. **Generating Poincaré maps**
 
-   The toolkit can generate Poincaré maps for the centre manifold over various sections.
+   The toolkit can generate Poincaré maps for arbitrary sections. For example, the centre manifold of the Earth-Moon \(L_1\) libration point:
 
    ```python
    from hiten import System
@@ -122,7 +123,103 @@
 
    *Figure&nbsp;4 - Poincaré map of the centre manifold of the Earth-Moon \(L_1\) libration point using the \(q_2=0\) section.*
 
-4. **Generating invariant tori**
+   Or the synodic section of a vertical orbit manifold:
+
+   ```python
+   from hiten import System
+   from hiten.algorithms import SynodicMap
+
+   system = System.from_bodies("earth", "moon")
+   l_point = system.get_libration_point(1)
+
+   cm = l_point.get_center_manifold(degree=6)
+   cm.compute()
+
+   ic_seed = cm.ic([0.0, 0.0], 0.6, "q3") # Good initial guess from CM
+
+   orbit = VerticalOrbit(l_point, initial_state=ic_seed)
+   orbit.correct(max_attempts=100, finite_difference=True)
+   orbit.propagate(steps=1000)
+
+   manifold = orbit.manifold(stable=True, direction="positive")
+   manifold.compute(step=0.005)
+   manifold.plot()
+
+   section_cfg = SynodicMapConfig(
+      section_axis="y",
+      section_offset=0.0,
+      plane_coords=("x", "z"),
+      interp_kind="cubic",
+      segment_refine=30,
+      newton_max_iter=10,
+   )
+   synodic_map = SynodicMap(section_cfg)
+   synodic_map.from_manifold(manifold)
+   synodic_map.plot()
+   ```
+
+   ![Synodic map](results/plots/synodic_map.svg)
+
+   *Figure&nbsp;5 - Synodic map of the stable manifold of an Earth-Moon \(L_1\) vertical orbit.*
+
+4. **Detecting heteroclinic connections**
+
+   The toolkit can detect heteroclinic connections between two manifolds.
+
+   ```python
+   from hiten.algorithms.connections import Connection, SearchConfig
+   from hiten.algorithms.poincare import SynodicMapConfig
+   from hiten.system import System
+
+   system = System.from_bodies("earth", "moon")
+   mu = system.mu
+
+   l1 = system.get_libration_point(1)
+   l2 = system.get_libration_point(2)
+
+   halo_l1 = l1.create_orbit('halo', amplitude_z=0.5, zenith='southern')
+   halo_l1.correct()
+   halo_l1.propagate()
+
+   halo_l2 = l2.create_orbit('halo', amplitude_z=0.3663368, zenith='northern')
+   halo_l2.correct()
+   halo_l2.propagate()
+
+   manifold_l1 = halo_l1.manifold(stable=True, direction='positive')
+   manifold_l1.compute(integration_fraction=0.9, step=0.005)
+
+   manifold_l2 = halo_l2.manifold(stable=False, direction='negative')
+   manifold_l2.compute(integration_fraction=1.0, step=0.005)
+
+   section_cfg = SynodicMapConfig(
+      section_axis="x",
+      section_offset=1 - mu,
+      plane_coords=("y", "z"),
+      interp_kind="cubic",
+      segment_refine=30,
+      tol_on_surface=1e-9,
+      dedup_time_tol=1e-9,
+      dedup_point_tol=1e-9,
+      max_hits_per_traj=None,
+      n_workers=None,
+   )
+
+   conn = Connection(
+      section=section_cfg,
+      direction=None,
+      search_cfg=SearchConfig(delta_v_tol=1, ballistic_tol=1e-8, eps2d=1e-3),
+   )
+
+   conn.solve(manifold_l1, manifold_l2)
+   print(conn)
+   conn.plot(dark_mode=True)
+   ```
+
+   ![Heteroclinic connection](results/plots/heteroclinic_connection.svg)
+
+   *Figure&nbsp;6 - Heteroclinic connection between the stable manifold of an Earth-Moon \(L_1\) halo orbit and the unstable manifold of an Earth-Moon \(L_2\) halo orbit.*
+
+5. **Generating invariant tori**
 
    Hiten can generate invariant tori for periodic orbits.
 

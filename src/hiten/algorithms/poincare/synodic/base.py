@@ -78,7 +78,8 @@ class SynodicMap(_ReturnMapBase):
         traj = [(np.asarray(orbit.times, dtype=np.float64), np.asarray(orbit.trajectory, dtype=np.float64))]
         return self.from_trajectories(traj, direction=direction, recompute=recompute)
 
-    def from_manifold(self, manifold_result, *, direction: Literal[1, -1, None] = None, recompute: bool = False) -> _Section:
+    def from_manifold(self, manifold, *, direction: Literal[1, -1, None] = None, recompute: bool = False) -> _Section:
+        manifold_result = manifold.manifold_result
         trajs = []
         for times, states in zip(getattr(manifold_result, "times_list", []), getattr(manifold_result, "states_list", [])):
             if times is None or states is None:

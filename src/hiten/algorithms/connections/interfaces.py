@@ -40,5 +40,5 @@ class _ManifoldInterface:
 
         cfg = config or _SynodicMapConfig()
         syn = SynodicMap(cfg)
-        return syn.from_manifold(self.manifold.manifold_result, direction=direction)
+        return syn.from_manifold(self.manifold, direction=direction)
 
