@@ -8,6 +8,39 @@
 
 **HITEN** is a research-oriented Python library that provides an extensible implementation of high-order analytical and numerical techniques for the circular restricted three-body problem (CR3BP).
 
+## Installation
+
+HITEN is published on PyPI. A recent Python version (3.9+) is required.
+
+```bash
+py -m pip install hiten
+```
+
+Optional dev tools (formatting, linting, tests):
+
+```bash
+py -m pip install "hiten[dev]"
+```
+
+## Quickstart
+
+Compute a halo orbit around Earth–Moon L1 and plot a branch of its stable manifold:
+
+```python
+from hiten import System
+
+system = System.from_bodies("earth", "moon")
+l1 = system.get_libration_point(1)
+
+orbit = l1.create_orbit("halo", amplitude_z=0.2, zenith="southern")
+orbit.correct(max_attempts=25)
+orbit.propagate(steps=1000)
+
+manifold = orbit.manifold(stable=True, direction="positive")
+manifold.compute()
+manifold.plot()
+```
+
 ## Examples
 
 1. **Parameterisation of periodic orbits and their invariant manifolds**
@@ -64,38 +97,38 @@
    The toolkit can generate families of periodic orbits by continuation.
 
    ```python
-   from hiten import System
+   from hiten import System, OrbitFamily
    from hiten.algorithms import StateParameter
    from hiten.algorithms.utils.types import SynodicState
 
-    system = System.from_bodies("earth", "moon")
-    l1 = system.get_libration_point(1)
+   system = System.from_bodies("earth", "moon")
+   l1 = system.get_libration_point(1)
 
-    seed = l1.create_orbit('lyapunov', amplitude_x= 1e-3)
-    seed.correct(max_attempts=25)
+   seed = l1.create_orbit('lyapunov', amplitude_x=1e-3)
+   seed.correct(max_attempts=25)
 
-    target_amp = 1e-2 # grow A_x from 0.001 to 0.01 (relative amplitude)
-    current_amp = seed.amplitude
-    num_orbits = 10
+   target_amp = 1e-2  # grow A_x from 0.001 to 0.01 (relative amplitude)
+   current_amp = seed.amplitude
+   num_orbits = 10
 
-    # Step in amplitude space (predictor still tweaks X component)
-    step = (target_amp - current_amp) / (num_orbits - 1)
+   # Step in amplitude space (predictor still tweaks X component)
+   step = (target_amp - current_amp) / (num_orbits - 1)
 
-    engine = StateParameter(
-        initial_orbit=seed,
-        state=(SynodicState.X), # underlying coordinate that gets nudged
-        amplitude=True,         # but the continuation parameter is A_x
-        target=(current_amp, target_amp),
-        step=step,
-        corrector_kwargs=dict(max_attempts=50, tol=1e-13),
-        max_orbits=num_orbits,
-    )
-    engine.run()
+   engine = StateParameter(
+       initial_orbit=seed,
+       state=SynodicState.X,   # underlying coordinate that gets nudged
+       amplitude=True,         # but the continuation parameter is A_x
+       target=(current_amp, target_amp),
+       step=step,
+       corrector_kwargs=dict(max_attempts=50, tol=1e-13),
+       max_orbits=num_orbits,
+   )
+   engine.run()
 
-    family = OrbitFamily.from_engine(engine)
-    family.propagate()
-    family.plot()
-    ```
+   family = OrbitFamily.from_engine(engine)
+   family.propagate()
+   family.plot()
+   ```
 
     ![Lyapunov orbit family](results/plots/lyapunov_family.svg)
 
@@ -126,8 +159,8 @@
    Or the synodic section of a vertical orbit manifold:
 
    ```python
-   from hiten import System
-   from hiten.algorithms import SynodicMap
+   from hiten import System, VerticalOrbit
+   from hiten.algorithms import SynodicMap, SynodicMapConfig
 
    system = System.from_bodies("earth", "moon")
    l_point = system.get_libration_point(1)
@@ -241,4 +274,29 @@
 
    ![Invariant tori](results/plots/invariant_tori.svg)
 
-   *Figure&nbsp;5 - Invariant torus of an Earth-Moon \(L_1\) quasi-halo orbit.*
+   *Figure&nbsp;7 - Invariant torus of an Earth-Moon \(L_1\) quasi-halo orbit.*
+
+## Run the examples
+
+Example scripts are in the `examples` directory. From the project root:
+
+```powershell
+py -m pip install -e .
+python examples\periodic_orbits.py
+python examples\orbit_family.py
+python examples\synodic_map.py
+python examples\heteroclinic_connection.py
+```
+
+## Contributing
+
+Issues and pull requests are welcome. For local development:
+
+```powershell
+py -m pip install -e .[dev]
+python -m pytest -q
+```
+
+## License
+
+This project is licensed under the terms of the MIT License. See `LICENSE`.

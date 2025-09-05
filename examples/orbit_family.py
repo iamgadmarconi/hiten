@@ -4,8 +4,6 @@ Run with
     python examples/orbit_family.py
 """
 
-from __future__ import annotations
-
 import os
 import sys
 
