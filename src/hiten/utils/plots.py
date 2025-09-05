@@ -698,9 +698,11 @@ def plot_poincare_connections_map(
             cv = np.zeros(mp.shape[0], dtype=float)
         else:
             cv = np.asarray(match_values, dtype=float)
-        sc = ax.scatter(mp[:, 0], mp[:, 1], s=36.0, c=cv, cmap=cmap, edgecolor='k', linewidths=0.3, label='matches')
+        # Do not include matches in the legend; color encodes velocity magnitude
+        sc = ax.scatter(mp[:, 0], mp[:, 1], s=36.0, c=cv, cmap=cmap, edgecolor='k', linewidths=0.3)
         cbar = fig.colorbar(sc, ax=ax)
-        cbar.set_label('angle (rad)' if ballistic else '|Δv|')
+        # Display velocities in the gradient
+        cbar.set_label('|v|')
 
     ax.set_xlabel(labels[0])
     ax.set_ylabel(labels[1])
