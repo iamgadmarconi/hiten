@@ -9,30 +9,21 @@ section adapters, configuration, a unified engine, and result containers.
 This module currently exposes light-weight stubs that will be filled incrementally.
 """
 
-from .config import (_BallisticConfig, _ConnectionEngineConfig,
-                     _ImpulsiveConfig, _SearchConfig, _SectionUseConfig)
-from .endpoints import LPRef, ManifoldRef, OrbitRef
-from .engine import ConnectionEngine, ConnectionProblem
-from .section.base import _SectionAdapter
-from .results import ConnectionResult
 from .base import Connections
+from .config import _SearchConfig
+from .engine import _ConnectionEngine, _ConnectionProblem
+from .interfaces import _ManifoldInterface
+from .results import ConnectionResult
 
 __all__ = [
     # Configs
-    "_ConnectionEngineConfig",
-    "_SectionUseConfig",
-    "_BallisticConfig",
-    "_ImpulsiveConfig",
+    "_ConnectionConfig",
     "_SearchConfig",
     # Endpoints
-    "OrbitRef",
-    "ManifoldRef",
-    "LPRef",
-    # Section adapter
-    "_SectionAdapter",
+    "_ManifoldInterface",
     # Engine / problem / results
-    "ConnectionProblem",
-    "ConnectionEngine",
+    "_ConnectionProblem",
+    "_ConnectionEngine",
     "ConnectionResult",
     "Connections",
 ]
