@@ -1,21 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal, Optional, Sequence, Tuple
-
-
-@dataclass
-class _ConnectionEngineConfig:
-    """Engine-level execution settings.
-
-    - n_workers: degree of parallelism
-    - cache: enable memoization of intermediate artifacts
-    - random_seed: seed for stochastic planners (e.g., GA)
-    - log_level: optional logging verbosity hint
-    """
-
-    n_workers: int = 1
-    cache: bool = True
-    random_seed: Optional[int] = None
-    log_level: Optional[str] = None
+from typing import Literal, Sequence, Tuple, Optional
 
 
 @dataclass
@@ -31,34 +15,24 @@ class _SectionUseConfig:
     direction: Literal[1, -1, None] = None
     axis: str | int | None = "x"
     normal: Sequence[float] | None = None
-    offset: float = 0.0
-    offset_sweep: Sequence[float] | None = None
+    offset: Optional[float] = 0.0
 
-
-@dataclass
-class _BallisticConfig:
-    """Settings for ballistic (no-impulse) connections."""
-
-    same_energy_required: bool = True
-    tol_intersection: float = 1e-8
-    tol_refine: float = 1e-8
-    max_candidates: int = 256
-    newton_max_iters: int = 5
-    newton_tol: float = 1e-8
-    tau_min: float = 1e-4
-    tau_max: float | None = None  # default to arc_time if None
-
-
-@dataclass
-class _ImpulsiveConfig:
-    """Settings for impulsive connections (single or two impulses)."""
-
-    impulse_model: Literal["one", "two"] = "one"
-    max_total_dv: float = 0.0
-    dv_weight: float = 1.0
-    tof_weight: float = 0.0
-    coast_time_bounds: Tuple[float, float] | None = None
-
+    def __post_init__(self):
+        # If a 6D normal is not provided but an axis is, infer a canonical one-hot normal
+        if self.normal is None and (self.axis is not None):
+            idx_map = {"x": 0, "y": 1, "z": 2, "vx": 3, "vy": 4, "vz": 5}
+            try:
+                if isinstance(self.axis, str):
+                    k = idx_map.get(self.axis.lower(), None)
+                else:
+                    k = int(self.axis)
+                if k is not None and 0 <= int(k) <= 5:
+                    n = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+                    n[int(k)] = 1.0
+                    self.normal = tuple(n)
+            except Exception:
+                # Do not fail; leave normal as None
+                pass
 
 @dataclass
 class _SearchConfig:
@@ -73,4 +47,5 @@ class _SearchConfig:
     segment_step_source: int = 1
     segment_step_target: int = 1
 
-
+class ConnectionConfig(_SectionUseConfig, _SearchConfig):
+    n_workers: int = 1
