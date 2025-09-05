@@ -662,7 +662,6 @@ def plot_poincare_connections_map(
         *,
         match_points: Optional[np.ndarray] = None,
         match_values: Optional[np.ndarray] = None,
-        ballistic: bool = True,
         figsize: Tuple[int, int] = (8, 7),
         save: bool = False,
         dark_mode: bool = True,
@@ -682,9 +681,7 @@ def plot_poincare_connections_map(
     match_points : array-like (M,2), optional
         2D coordinates of candidate meet points.
     match_values : array-like (M,), optional
-        Quality metric at each meet (angle in rad for ballistic; |Δv| for impulsive).
-    ballistic : bool
-        If True, colorbar label shows angle (rad); else shows |Δv|.
+        Quality metric at each meet
     """
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)

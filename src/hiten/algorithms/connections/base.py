@@ -67,7 +67,7 @@ class Connection:
 
     def __str__(self) -> str:
         header = self.__repr__()
-        res_str = str(self.result)
+        res_str = str(self.results)
         return f"{header}\n{res_str}"
 
     def plot(self, **kwargs):
@@ -103,6 +103,5 @@ class Connection:
             labels=labels,
             match_points=match_pts,
             match_values=match_vals,
-            ballistic=False,
             **kwargs,
         )

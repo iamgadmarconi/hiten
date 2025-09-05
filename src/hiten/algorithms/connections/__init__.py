@@ -10,23 +10,12 @@ This module currently exposes light-weight stubs that will be filled incremental
 """
 
 from .base import Connection
-from .config import _SearchConfig
-from .engine import _ConnectionEngine, _ConnectionProblem
-from .interfaces import _ManifoldInterface
-from .results import _ConnectionResult
+from .config import _SearchConfig as SearchConfig
 
 __all__ = [
     # Configs
-    "_ConnectionConfig",
-    "_SearchConfig",
-    # Endpoints
-    "_ManifoldInterface",
-    # Engine / problem / results
-    "_ConnectionProblem",
-    "_ConnectionEngine",
-    "_ConnectionResult",
+    "SearchConfig",
     "Connection",
-    "Connections",
 ]
 
 
