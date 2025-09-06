@@ -1,3 +1,4 @@
+"""Butcher tableau for the Dormand-Prince 4(5) Runge-Kutta method."""
 import numpy as np
 
 C = np.array([0, 1/5, 3/10, 4/5, 8/9, 1])

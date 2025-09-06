@@ -1,15 +1,29 @@
-r"""
-hamiltonian.center._lie
-==========
+r"""Lie series transformations for Hamiltonian normal form computation.
 
-Numba-accelerated helpers for Lie-series based normalization of polynomial
-Hamiltonians in the center-manifold reduction of the spatial restricted three-body
-problem (RTBP).
+This module provides JIT-compiled routines for performing Lie series transformations
+to compute normal forms of polynomial Hamiltonian systems. The implementation follows
+the methodology for center manifold reduction in the spatial Circular Restricted
+Three-Body Problem (CR3BP).
+
+Key components:
+- Lie series normalization to eliminate non-resonant terms
+- Homological equation solving for generating functions
+- Inverse transformations from center manifold to original coordinates
+- Coordinate restriction to center manifold subspace
+- Polynomial evaluation and manipulation utilities
+
+The normalization process systematically eliminates non-resonant terms degree by
+degree using Lie series transformations, resulting in simplified Hamiltonian
+systems that retain the essential dynamics while being more amenable to analysis.
+
+All functions are optimized with Numba JIT compilation for high-performance
+numerical computation of high-order polynomial transformations.
 
 References
 ----------
-Jorba, À. (1999). "A Methodology for the Numerical Computation of Normal Forms, Centre
-Manifolds and First Integrals of Hamiltonian Systems".
+Jorba, A. (1999). A methodology for the numerical computation of normal forms,
+centre manifolds and first integrals of Hamiltonian systems.
+*Experimental Mathematics*, 8(2), 155-195.
 """
 
 import numpy as np
@@ -35,47 +49,60 @@ psi: np.ndarray,
 clmo: np.ndarray, 
 degree: int, 
 tol: float = 1e-30) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
-    r"""
-    Perform a partial Lie transformation to normalize a Hamiltonian.
+    r"""Perform Lie series normalization of polynomial Hamiltonian.
 
-    This implements the partial normal form algorithm from Jorba (1999), which
-    systematically eliminates all non-resonant terms according to the resonance condition
-    
+    Implements the partial normal form algorithm that systematically eliminates
+    non-resonant terms from a polynomial Hamiltonian using Lie series transformations.
+    The process preserves the Hamiltonian structure while simplifying the dynamics.
+
     Parameters
     ----------
     point : object
-        Object containing information about the linearized dynamics
-        (eigenvalues and frequencies)
-    poly_init : List[np.ndarray]
-        Initial polynomial Hamiltonian to normalize
-    psi : numpy.ndarray
-        Combinatorial table from _init_index_tables
-    clmo : numpy.ndarray
-        List of arrays containing packed multi-indices
+        Linear dynamics object containing eigenvalues and frequencies of the
+        linearized system. Must have a `linear_modes` attribute with
+        (lambda, omega1, omega2) values.
+    poly_init : List[ndarray]
+        Initial polynomial Hamiltonian coefficients organized by degree.
+        Each element contains coefficients for homogeneous terms of that degree.
+    psi : ndarray
+        Combinatorial lookup table from polynomial indexing system.
+    clmo : ndarray
+        Coefficient layout mapping objects for polynomial operations.
     degree : int
-        Maximum degree to include in the normalized Hamiltonian
+        Maximum polynomial degree to include in normalization.
     tol : float, optional
-        Tolerance for cleaning small coefficients, default is 1e-30
+        Tolerance for cleaning small coefficients. Default is 1e-30.
         
     Returns
     -------
-    tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]
-        A tuple containing:
-        - The normalized Hamiltonian
-        - The generating function for the normalization
-        - The eliminated terms at each degree (for testing homological equation)
+    poly_trans : List[ndarray]
+        Normalized Hamiltonian with non-resonant terms eliminated.
+    poly_G_total : List[ndarray]
+        Complete generating function used for the normalization.
+    poly_elim_total : List[ndarray]
+        Eliminated terms at each degree (useful for verification).
         
     Notes
     -----
-    This function implements Lie series normalization, which systematically 
-    eliminates non-resonant terms in the Hamiltonian degree by degree.
-    At each degree n, it:
-    1. Identifies non-resonant terms to eliminate
-    2. Solves the homological equation to find a generating function
-    3. Applies the Lie transform to modify the Hamiltonian
+    The normalization process operates degree by degree:
     
-    The transformation preserves the dynamical structure while simplifying
-    the equations of motion.
+    1. **Term Selection**: Identifies non-resonant terms using resonance condition
+    2. **Homological Equation**: Solves for generating function to eliminate these terms
+    3. **Lie Transform**: Applies transformation to modify all polynomial terms
+    4. **Iteration**: Continues until all degrees are processed
+    
+    A term is considered resonant if k[0] = k[3] where k is the multi-index
+    of exponents. Non-resonant terms are systematically eliminated while
+    preserving the essential dynamics captured by resonant terms.
+    
+    The transformation is canonical, preserving the symplectic structure
+    of the Hamiltonian system.
+    
+    See Also
+    --------
+    :func:`_select_terms_for_elimination` : Identifies non-resonant terms
+    :func:`hiten.algorithms.hamiltonian.lie._solve_homological_equation` : Solves for generators
+    :func:`hiten.algorithms.hamiltonian.lie._apply_poly_transform` : Applies Lie transform
     """
     lam, om1, om2 = point.linear_modes
     eta = np.array([lam, 1j*om1, 1j*om2], dtype=np.complex128)
@@ -135,27 +162,35 @@ def _get_homogeneous_terms(
 poly_H: List[np.ndarray],
 n: int, 
 psi: np.ndarray) -> np.ndarray:
-    r"""
-    Extract the homogeneous terms of degree n from a polynomial.
+    r"""Extract homogeneous terms of specified degree from polynomial.
+    
+    JIT-compiled function that extracts the coefficient array corresponding
+    to homogeneous terms of a specific degree from a polynomial representation.
     
     Parameters
     ----------
-    poly_H : List[numpy.ndarray]
-        List of coefficient arrays representing a polynomial
+    poly_H : List[ndarray]
+        Polynomial represented as list of coefficient arrays by degree.
     n : int
-        Degree of the homogeneous terms to extract
-    psi : numpy.ndarray
-        Combinatorial table from _init_index_tables
+        Degree of homogeneous terms to extract.
+    psi : ndarray
+        Combinatorial lookup table for polynomial indexing.
         
     Returns
     -------
-    numpy.ndarray
-        Coefficient array for the homogeneous part of degree n
+    ndarray
+        Coefficient array for degree-n homogeneous terms.
+        Returns appropriately-sized zero array if degree n is not present.
         
     Notes
     -----
-    If the polynomial doesn't have terms of degree n, an empty array
-    of the appropriate size is returned.
+    - Used internally by normalization routines to access specific degrees
+    - Handles cases where polynomial doesn't contain the requested degree
+    - JIT-compiled for efficient repeated access during normalization
+    
+    See Also
+    --------
+    :func:`hiten.algorithms.polynomial.base._make_poly` : Creates zero polynomial arrays
     """
     if n < len(poly_H):
         result = poly_H[n].copy()
@@ -169,28 +204,46 @@ def _select_terms_for_elimination(
 p_n: np.ndarray, 
 n: int, 
 clmo: np.ndarray) -> np.ndarray:
-    r"""
-    Select terms to be eliminated by the Lie transform.
+    r"""Identify non-resonant terms for elimination in Lie normalization.
+    
+    JIT-compiled function that selects polynomial terms to be eliminated
+    based on resonance conditions. Terms are classified as resonant or
+    non-resonant according to their multi-index structure.
     
     Parameters
     ----------
-    p_n : numpy.ndarray
-        Coefficient array for the homogeneous part of degree n
+    p_n : ndarray
+        Coefficient array for homogeneous polynomial terms of degree n.
     n : int
-        Degree of the homogeneous terms
-    clmo : numba.typed.List
-        List of arrays containing packed multi-indices
+        Degree of the homogeneous terms being processed.
+    clmo : ndarray
+        Coefficient layout mapping objects for multi-index decoding.
         
     Returns
     -------
-    numpy.ndarray
-        Coefficient array containing only the non-resonant terms
+    ndarray
+        Coefficient array containing only non-resonant terms to eliminate.
+        Resonant terms are set to zero in the returned array.
         
     Notes
     -----
-    This function identifies "bad" monomials which are non-resonant terms
-    that need to be eliminated. A term is resonant if k[0] = k[3],
-    meaning the powers of the center variables are equal.
+    **Resonance Condition**: A monomial with multi-index k = [k0, k1, k2, k3, k4, k5]
+    is considered resonant if k[0] = k[3], where:
+    
+    - k[0], k[3] correspond to the hyperbolic (center) mode exponents
+    - k[1], k[2], k[4], k[5] correspond to the elliptic mode exponents
+    
+    Non-resonant terms (k[0] != k[3]) are "bad" monomials that can be
+    eliminated through canonical transformations without affecting the
+    essential dynamics.
+    
+    The function creates an independent copy to avoid modifying the input
+    and processes each coefficient individually for thread safety.
+    
+    See Also
+    --------
+    :func:`hiten.algorithms.polynomial.base._decode_multiindex` : Multi-index decoding
+    :func:`_lie_transform` : Uses this function for term selection
     """
     p_elim = p_n.copy()           # independent buffer
     for i in range(p_n.shape[0]):
@@ -206,29 +259,66 @@ poly_G_total: List[np.ndarray],
 degree: int, psi: np.ndarray, 
 clmo: np.ndarray, 
 tol: float = 1e-30,
-inverse: bool = False, # If False, Generators are applied in ascending order. If True, Generators are applied in descending order.
-sign: int = None, # If None, the sign is determined by the inverse flag. If not None, the sign is used to determine sign of the generator.
+inverse: bool = False,
+sign: int = None,
 restrict: bool = True) -> List[List[np.ndarray]]:
-    r"""
-    Perform inverse Lie transformation from center manifold coordinates to complex-diagonalized coordinates.
+    r"""Compute coordinate transformations using Lie series expansions.
+    
+    Performs Lie series transformations to compute polynomial expansions
+    that relate center manifold coordinates to the original (or intermediate)
+    coordinate system. Can operate in forward or inverse mode.
     
     Parameters
     ----------
-    poly_G_total : List[np.ndarray]
-        List of generating functions for the Lie transformation
+    poly_G_total : List[ndarray]
+        Complete set of generating functions for the Lie transformation,
+        organized by polynomial degree.
     degree : int
-        Maximum polynomial degree for the transformation
-    psi : np.ndarray
-        Combinatorial table from _init_index_tables
-    clmo : np.ndarray
-        List of arrays containing packed multi-indices
+        Maximum polynomial degree for the transformation series.
+    psi : ndarray
+        Combinatorial lookup table for polynomial indexing.
+    clmo : ndarray
+        Coefficient layout mapping objects for polynomial operations.
     tol : float, optional
-        Tolerance for cleaning small coefficients
-
+        Tolerance for cleaning small coefficients. Default is 1e-30.
+    inverse : bool, optional
+        Transformation direction. If False, applies generators in ascending
+        order (forward). If True, applies in descending order (inverse).
+        Default is False.
+    sign : int or None, optional
+        Sign for generator application. If None, determined by inverse flag:
+        +1 for forward, -1 for inverse. Default is None.
+    restrict : bool, optional
+        Whether to restrict results to center manifold by eliminating
+        terms containing q1 or p1. Default is True.
+        
     Returns
     -------
-    List[List[np.ndarray]]
-        Six polynomial expansions for [q1, q2, q3, p1, p2, p3]
+    List[List[ndarray]]
+        Six polynomial expansions representing the coordinate transformation:
+        [q1_expansion, q2_expansion, q3_expansion, p1_expansion, p2_expansion, p3_expansion]
+        Each expansion is a list of coefficient arrays by degree.
+        
+    Notes
+    -----
+    **Lie Series Method**: The transformation uses the Lie series expansion:
+    
+    exp(L_G) * X = X + {X,G} + (1/2!){{X,G},G} + (1/3!){{X,G},G},G} + ...
+    
+    where L_G is the Lie derivative operator, {*,*} denotes Poisson brackets,
+    and G is the generating function.
+    
+    **Coordinate Systems**:
+    
+    - **Forward Mode**: From normalized to original coordinates
+    - **Inverse Mode**: From original to normalized coordinates
+    - **Restriction**: Eliminates dependence on hyperbolic variables (q1, p1)
+    
+    See Also
+    --------
+    :func:`_apply_coord_transform` : Applies transformation to single coordinate
+    :func:`_zero_q1p1` : Restricts expansions to center manifold
+    :func:`_evaluate_transform` : Evaluates expansions at specific points
     """
     # Create encode_dict_list from clmo
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
@@ -293,26 +383,61 @@ psi: np.ndarray,
 clmo: np.ndarray, 
 encode_dict_list: List[dict], 
 tol: float) -> List[np.ndarray]:
-    r"""
-    Apply inverse Lie series transformation to a coordinate polynomial.
+    r"""Apply Lie series transformation to single coordinate polynomial.
+    
+    JIT-compiled function that applies a Lie series transformation to transform
+    a coordinate polynomial using a generating function. Implements the series
+    expansion with automatic truncation and factorial coefficients.
     
     Parameters
     ----------
-    poly_X : List[np.ndarray]
-        Current coordinate polynomial
-    poly_G : List[np.ndarray]
-        Generating function polynomial
+    poly_X : List[ndarray]
+        Input coordinate polynomial to transform, organized by degree.
+    poly_G : List[ndarray]
+        Generating function polynomial for the transformation.
     N_max : int
-        Maximum degree for the result
-    psi, clmo, encode_dict_list : arrays
-        Polynomial indexing structures
+        Maximum polynomial degree for the output series.
+    psi : ndarray
+        Combinatorial lookup table for polynomial indexing.
+    clmo : ndarray
+        Coefficient layout mapping objects.
+    encode_dict_list : List[dict]
+        Encoding dictionaries for polynomial operations.
     tol : float
-        Tolerance for cleaning
+        Tolerance for coefficient cleaning during computation.
         
     Returns
     -------
-    list[np.ndarray]
-        Transformed coordinate polynomial
+    List[ndarray]
+        Transformed coordinate polynomial with same degree structure as input.
+        
+    Notes
+    -----
+    **Lie Series Formula**: Computes the transformation:
+    
+    exp(L_G) * X = X + {X,G} + (1/2!){{X,G},G} + (1/3!){{X,G},G},G} + ...
+    
+    where:
+    
+    - L_G is the Lie derivative operator generated by G
+    - {*,*} denotes the Poisson bracket operation
+    - Factorial coefficients ensure proper series convergence
+    
+    **Algorithm Steps**:
+    
+    1. Initialize result with input polynomial X
+    2. Iteratively compute higher-order Poisson brackets
+    3. Apply factorial coefficients (1/k!) for k-th order terms
+    4. Accumulate contributions up to maximum degree
+    5. Clean small coefficients at each step
+    
+    **Truncation**: Series is automatically truncated when terms would exceed
+    N_max degree or when the generating function degree limits further terms.
+    
+    See Also
+    --------
+    :func:`hiten.algorithms.polynomial.operations._polynomial_poisson_bracket` : Poisson bracket computation
+    :func:`hiten.algorithms.polynomial.base._factorial` : Factorial computation
     """
 
     poly_result = List()
@@ -365,22 +490,48 @@ def _evaluate_transform(
 expansions: List[List[np.ndarray]], 
 coords_cm_complex: np.ndarray, 
 clmo: np.ndarray) -> np.ndarray:
-    r"""
-    Evaluate the six polynomial expansions at given center manifold values.
+    r"""Evaluate coordinate transformation at specific center manifold point.
+    
+    JIT-compiled function that evaluates six polynomial expansions representing
+    coordinate transformations at a given point in center manifold coordinates.
+    Used to convert between coordinate systems.
     
     Parameters
     ----------
-    expansions : List[List[np.ndarray]]
-        Six polynomial expansions from inverse_lie_transform
-    coords_cm_complex : np.ndarray
-        Center manifold coordinates [q1, q2, q3, p1, p2, p3]
-    clmo : np.ndarray
-        List of arrays containing packed multi-indices
+    expansions : List[List[ndarray]]
+        Six polynomial expansions from Lie series transformation:
+        [q1_expansion, q2_expansion, q3_expansion, p1_expansion, p2_expansion, p3_expansion]
+        Each expansion is organized by polynomial degree.
+    coords_cm_complex : ndarray, shape (6,)
+        Center manifold coordinates [q1, q2, q3, p1, p2, p3] where evaluation
+        is performed. Complex-valued for generality.
+    clmo : ndarray
+        Coefficient layout mapping objects for polynomial evaluation.
         
     Returns
     -------
-    np.ndarray
-        Complex array of shape (6,) containing [q̃1, q̃2, q̃3, p̃1, p̃2, p̃3]
+    ndarray, shape (6,)
+        Transformed coordinates [q1_tilde, q2_tilde, q3_tilde, p1_tilde, p2_tilde, p3_tilde]
+        Complex-valued result from polynomial evaluation.
+        
+    Notes
+    -----
+    **Evaluation Process**: For each coordinate i = 0, 1, ..., 5:
+    
+    1. Takes the i-th polynomial expansion from the transformation
+    2. Evaluates this polynomial at the given center manifold point
+    3. Returns the complex result as the i-th transformed coordinate
+    
+    **Coordinate Mapping**:
+    
+    - Input: Center manifold coordinates (usually restricted to q2, p2, q3, p3)
+    - Output: Transformed coordinates in original or intermediate system
+    - Complex arithmetic preserves full generality of the transformation
+    
+    See Also
+    --------
+    :func:`hiten.algorithms.polynomial.operations._polynomial_evaluate` : Core polynomial evaluation
+    :func:`_lie_expansion` : Generates the expansions used here
     """
 
     result = np.zeros(6, dtype=np.complex128) # [q1, q2, q3, p1, p2, p3]
@@ -389,7 +540,7 @@ clmo: np.ndarray) -> np.ndarray:
         # Evaluate each polynomial at the given point
         result[i] = _polynomial_evaluate(expansions[i], coords_cm_complex, clmo)
     
-    return result # [q̃1, q̃2, q̃3, p̃1, p̃2, p̃3]
+    return result # [q1_tilde, q2_tilde, q3_tilde, p1_tilde, p2_tilde, p3_tilde]
 
 
 def _zero_q1p1(
@@ -397,12 +548,50 @@ def _zero_q1p1(
     clmo: np.ndarray, 
     tol: float = 1e-30
 ) -> List[List[np.ndarray]]:
-    r"""
-    Restrict coordinate expansions to the center manifold by eliminating 
-    terms containing q1 or p1.
+    r"""Restrict polynomial expansions to center manifold subspace.
     
-    After this restriction, all 6 coordinate expansions will depend only 
-    on the 4 center manifold variables (q2, p2, q3, p3).
+    Eliminates all terms in coordinate expansions that depend on the hyperbolic
+    variables q1 or p1, effectively restricting the expansions to the center
+    manifold. This produces parameterizations that depend only on the stable
+    center manifold coordinates.
+    
+    Parameters
+    ----------
+    expansions : List[List[ndarray]]
+        Six coordinate expansions to restrict. Each expansion is organized
+        by polynomial degree.
+    clmo : ndarray
+        Coefficient layout mapping objects for multi-index operations.
+    tol : float, optional
+        Tolerance for coefficient cleaning. Default is 1e-30.
+        
+    Returns
+    -------
+    List[List[ndarray]]
+        Restricted coordinate expansions depending only on (q2, p2, q3, p3).
+        Structure matches input but with hyperbolic terms eliminated.
+        
+    Notes
+    -----
+    **Center Manifold Restriction**: The center manifold in CR3BP applications
+    typically corresponds to the stable/neutral directions associated with
+    the elliptic modes, while q1, p1 correspond to the hyperbolic mode.
+    
+    **Term Elimination**: For each polynomial term with multi-index k:
+    
+    - If k[0] != 0 or k[3] != 0: Term depends on q1 or p1 -> eliminate
+    - Otherwise: Term depends only on (q2, p2, q3, p3) -> keep
+    
+    **Result Properties**:
+    
+    - All six coordinate expansions become functions of 4 variables only
+    - Expansions represent the center manifold embedding in full phase space
+    - Suitable for reduced-order modeling and long-term dynamics analysis
+    
+    See Also
+    --------
+    :func:`hiten.algorithms.polynomial.base._decode_multiindex` : Multi-index decoding
+    :func:`_lie_expansion` : Often used with restrict=True to call this function
     """
     restricted_expansions = List()
     

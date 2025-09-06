@@ -638,8 +638,15 @@ class _ExtendedSymplectic(_Integrator):
 
 
 class ExtendedSymplectic:
+    """Factory for extended symplectic integrators.
+
+    Examples
+    --------
+    >>> integrator = ExtendedSymplectic(order=6)
+    >>> solution = integrator.integrate(hamiltonian_system, y0, t_vals)
+    """
     _map = {2: _ExtendedSymplectic, 4: _ExtendedSymplectic, 6: _ExtendedSymplectic, 8: _ExtendedSymplectic}
-    def __new__(cls, order=5, **opts):
+    def __new__(cls, order=6, **opts):
         if order not in cls._map:
             raise ValueError("Extended symplectic order not supported")
-        return cls._map[order](**opts)
+        return cls._map[order](order=order, **opts)
