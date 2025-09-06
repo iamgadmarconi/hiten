@@ -1,11 +1,8 @@
-r"""
-hiten.algorithms.integrators.rk
-=========================
+"""Explicit Runge-Kutta integrators used throughout the project.
 
-Explicit Runge-Kutta integrators used throughout the project.  Both fixed
-and adaptive step-size variants are provided together with small convenience
-factories that select an appropriate implementation given the desired
-formal order of accuracy.
+Both fixed and adaptive step-size variants are provided together with small
+convenience factories that select an appropriate implementation given the
+desired formal order of accuracy.
 
 The concrete schemes implemented are:
 
@@ -13,7 +10,7 @@ The concrete schemes implemented are:
 * Adaptive embedded: _RK45 (Dormand-Prince) and _DOP853 (Dormand-Prince 8(5,3))
 
 Internally the module also defines helper routines to evaluate Hamiltonian
-vector fields with :pyfunc:`numba.njit` and to wrap right-hand side (RHS)
+vector fields with :func:`numba.njit` and to wrap right-hand side (RHS)
 callables into a uniform signature accepted by the integrators.
 
 References
@@ -64,26 +61,25 @@ from hiten.utils.log_config import logger
 
 
 class _RungeKuttaBase(_Integrator):
-    r"""
-    Shared functionality of explicit Runge-Kutta schemes.
+    """Shared functionality of explicit Runge-Kutta schemes.
 
     The class stores a Butcher tableau and provides a single low level helper
-    :pyfunc:`_rk_embedded_step` that advances one macro time step and, when a
+    :func:`_rk_embedded_step` that advances one macro time step and, when a
     second set of weights is available, returns an error estimate suitable
     for adaptive step-size control.
 
     Attributes
     ----------
     _A : numpy.ndarray of shape (s, s)
-        Strictly lower triangular array of stage coefficients :math:`a_{ij}`.
+        Strictly lower triangular array of stage coefficients a_ij.
     _B_HIGH : numpy.ndarray of shape (s,)
         Weights of the high order solution.
     _B_LOW : numpy.ndarray or None
         Weights of the lower order solution, optional.  When *None* no error
-        estimate is produced and :pyfunc:`_rk_embedded_step` falls back to
+        estimate is produced and :func:`_rk_embedded_step` falls back to
         the high order result for both outputs.
     _C : numpy.ndarray of shape (s,)
-        Nodes :math:`c_i` measured in units of the step size.
+        Nodes c_i measured in units of the step size.
     _p : int
         Formal order of accuracy of the high order scheme.
 
@@ -101,6 +97,31 @@ class _RungeKuttaBase(_Integrator):
     _p: int = 0
 
     def _rk_embedded_step(self, f, t, y, h):
+        """Perform one embedded Runge-Kutta step with error estimation.
+        
+        This method implements a single step of an embedded Runge-Kutta method,
+        computing both high-order and low-order solutions for error estimation.
+        
+        Parameters
+        ----------
+        f : callable
+            Right-hand side function f(t, y) that returns the derivative.
+        t : float
+            Current time.
+        y : numpy.ndarray
+            Current state vector.
+        h : float
+            Step size.
+            
+        Returns
+        -------
+        y_high : numpy.ndarray
+            High-order solution at t + h.
+        y_low : numpy.ndarray
+            Low-order solution at t + h (for error estimation).
+        err_vec : numpy.ndarray
+            Error estimate vector (y_high - y_low).
+        """
         s = self._B_HIGH.size
         k = np.empty((s, y.size), dtype=np.float64)
 
@@ -124,26 +145,43 @@ class _RungeKuttaBase(_Integrator):
 
 
 class _FixedStepRK(_RungeKuttaBase):
-    r"""Explicit fixed-step Runge-Kutta scheme.
+    """Explicit fixed-step Runge-Kutta scheme.
 
     Parameters
     ----------
     name : str
         Human readable identifier of the scheme (e.g. ``"_RK4"``).
     A, B, C : numpy.ndarray
-        Butcher tableau as returned by :pymod:`hiten.algorithms.integrators.coefficients.*`.
+        Butcher tableau as returned by :mod:`hiten.algorithms.integrators.coefficients.*`.
     order : int
-        Formal order of accuracy :math:`p` of the method.
+        Formal order of accuracy p of the method.
     **options
-        Additional keyword options forwarded to the base :class:`_Integrator`.
+        Additional keyword options forwarded to the base :class:`hiten.algorithms.integrators.base._Integrator`.
 
     Notes
     -----
     The step size is assumed to be **constant** and is inferred from the
-    spacing of the *t_vals* array supplied to :pyfunc:`integrate`.
+    spacing of the *t_vals* array supplied to :func:`integrate`.
     """
 
     def __init__(self, name: str, A: np.ndarray, B: np.ndarray, C: np.ndarray, order: int, **options):
+        """Initialize a fixed-step Runge-Kutta integrator.
+        
+        Parameters
+        ----------
+        name : str
+            Human readable identifier of the scheme.
+        A : numpy.ndarray
+            Butcher tableau A matrix (stage coefficients).
+        B : numpy.ndarray
+            Butcher tableau B vector (weights).
+        C : numpy.ndarray
+            Butcher tableau C vector (nodes).
+        order : int
+            Formal order of accuracy of the method.
+        **options
+            Additional keyword options forwarded to the base :class:`hiten.algorithms.integrators.base._Integrator`.
+        """
         self._A = A
         self._B_HIGH = B
         self._B_LOW = None
@@ -153,6 +191,13 @@ class _FixedStepRK(_RungeKuttaBase):
 
     @property
     def order(self) -> int:
+        """Return the formal order of accuracy of the method.
+        
+        Returns
+        -------
+        int
+            The order of accuracy of the Runge-Kutta method.
+        """
         return self._p
 
     def integrate(
@@ -162,6 +207,27 @@ class _FixedStepRK(_RungeKuttaBase):
         t_vals: np.ndarray,
         **kwargs,
     ) -> _Solution:
+        """Integrate a dynamical system using a fixed-step Runge-Kutta method.
+        
+        This method performs integration with constant step size determined by
+        the spacing of the provided time values.
+        
+        Parameters
+        ----------
+        system : _DynamicalSystem
+            The dynamical system to integrate.
+        y0 : numpy.ndarray
+            Initial state vector.
+        t_vals : numpy.ndarray
+            Array of time points at which to evaluate the solution.
+        **kwargs
+            Additional integration options (unused for fixed-step methods).
+            
+        Returns
+        -------
+        :class:`hiten.algorithms.integrators.base._Solution`
+            Integration results containing times, states, and derivatives.
+        """
         self.validate_inputs(system, y0, t_vals)
 
         rhs_wrapped = _build_rhs_wrapper(system)
@@ -195,40 +261,55 @@ class _FixedStepRK(_RungeKuttaBase):
 
 
 class _RK4(_FixedStepRK):
+    """Classical 4th-order Runge-Kutta method.
+    
+    This is the standard 4th-order explicit Runge-Kutta method, also known
+    as RK4 or the "classical" Runge-Kutta method. It uses 4 function
+    evaluations per step and has order 4.
+    """
     def __init__(self, **opts):
         super().__init__("_RK4", RK4_A, RK4_B, RK4_C, 4, **opts)
 
 
 class _RK6(_FixedStepRK):
+    """6th-order Runge-Kutta method.
+    
+    A 6th-order explicit Runge-Kutta method that provides higher accuracy
+    than RK4 at the cost of more function evaluations per step.
+    """
     def __init__(self, **opts):
         super().__init__("_RK6", RK6_A, RK6_B, RK6_C, 6, **opts)
 
 
 class _RK8(_FixedStepRK):
+    """8th-order Runge-Kutta method.
+    
+    An 8th-order explicit Runge-Kutta method that provides very high accuracy
+    for applications requiring precise numerical integration.
+    """
     def __init__(self, **opts):
         super().__init__("_RK8", RK8_A, RK8_B, RK8_C, 8, **opts)
 
 
 class _AdaptiveStepRK(_RungeKuttaBase):
-    r"""
-    Embedded adaptive Runge-Kutta integrator with PI controller.
+    """Embedded adaptive Runge-Kutta integrator with PI controller.
 
     The class implements proportional-integral (PI) step-size control using
-    the error estimates returned by :pyfunc:`_rk_embedded_step`.  Two safety
+    the error estimates returned by :func:`_rk_embedded_step`.  Two safety
     factors are used:
 
     * *rtol*, *atol*  - user requested relative and absolute tolerances
-    * :pyattr:`SAFETY` - hard coded damping on the acceptance criterion.
+    * :attr:`SAFETY` - hard coded damping on the acceptance criterion.
 
     Parameters
     ----------
     name : str, default "AdaptiveRK"
-        Identifier passed to the :class:`_Integrator` base class.
+        Identifier passed to the :class:`hiten.algorithms.integrators.base._Integrator` base class.
     rtol, atol : float, optional
         Relative and absolute error tolerances.  Defaults are read from
-        :pydata:`hiten.utils.config.TOL`.
+        :data:`hiten.utils.config.TOL`.
     max_step : float, optional
-        Upper bound on the step size.  :math:`\infty` by default.
+        Upper bound on the step size.  infinity by default.
     min_step : float or None, optional
         Lower bound on the step size.  When *None* the value is derived from
         machine precision.
@@ -257,6 +338,23 @@ class _AdaptiveStepRK(_RungeKuttaBase):
                  max_step: float = np.inf,
                  min_step: Optional[float] = None,
                  **options):
+        """Initialize an adaptive step-size Runge-Kutta integrator.
+        
+        Parameters
+        ----------
+        name : str, default "AdaptiveRK"
+            Identifier passed to the :class:`hiten.algorithms.integrators.base._Integrator` base class.
+        rtol, atol : float, optional
+            Relative and absolute error tolerances.  Defaults are read from
+            :data:`hiten.utils.config.TOL`.
+        max_step : float, optional
+            Upper bound on the step size.  infinity by default.
+        min_step : float or None, optional
+            Lower bound on the step size.  When *None* the value is derived from
+            machine precision.
+        **options
+            Additional keyword options forwarded to the base :class:`hiten.algorithms.integrators.base._Integrator`.
+        """
         super().__init__(name, **options)
         self._rtol = rtol
         self._atol = atol
@@ -270,11 +368,17 @@ class _AdaptiveStepRK(_RungeKuttaBase):
 
     @property
     def order(self) -> int:
+        """Return the formal order of accuracy of the method.
+        
+        Returns
+        -------
+        int
+            The order of accuracy of the Runge-Kutta method.
+        """
         return self._p
 
     def integrate(self, system: _DynamicalSystem, y0: np.ndarray, t_vals: np.ndarray, **kwargs) -> _Solution:
-        r"""
-        Integrate a dynamical system using an adaptive Runge-Kutta method.
+        """Integrate a dynamical system using an adaptive Runge-Kutta method.
         """
         self.validate_inputs(system, y0, t_vals)
 
@@ -385,8 +489,7 @@ class _AdaptiveStepRK(_RungeKuttaBase):
         return _Solution(times=t_eval.copy(), states=y_eval, derivatives=derivs_out)
 
     def _select_initial_step(self, f, t0, y0, tf):
-        r"""
-        Choose an initial step size following Hairer et al. / SciPy heuristics.
+        """Choose an initial step size following Hairer et al. / SciPy heuristics.
 
         The strategy tries to obtain a first step that keeps the truncation
         error around the requested tolerance.  A too-small *h* makes the
@@ -426,10 +529,31 @@ class _AdaptiveStepRK(_RungeKuttaBase):
         return h
 
     def _update_factor(self, err_norm):
+        """Compute step size update factor based on error norm.
+        
+        This method implements the PI controller for adaptive step size control,
+        computing a factor to adjust the step size based on the current error norm.
+        
+        Parameters
+        ----------
+        err_norm : float
+            Normalized error estimate from the embedded method.
+            
+        Returns
+        -------
+        float
+            Step size update factor, clipped to :attr:`MIN_FACTOR` and :attr:`MAX_FACTOR`.
+        """
         return np.clip(self.SAFETY * err_norm ** (-self._err_exp), self.MIN_FACTOR, self.MAX_FACTOR)
 
 
 class _RK45(_AdaptiveStepRK):
+    """Dormand-Prince 5(4) adaptive Runge-Kutta method.
+    
+    This is the Dormand-Prince 5th-order adaptive Runge-Kutta method with
+    4th-order error estimation. It provides a good balance between accuracy
+    and computational efficiency for most applications.
+    """
     _A = RK45_A
     _B_HIGH = RK45_B_HIGH
     _B_LOW = None
@@ -442,6 +566,32 @@ class _RK45(_AdaptiveStepRK):
         super().__init__("_RK45", **opts)
 
     def _rk_embedded_step(self, f, t, y, h):
+        """Perform one Dormand-Prince 5(4) embedded step with error estimation.
+        
+        This method implements the specific Dormand-Prince 5(4) embedded
+        Runge-Kutta step, computing both 5th-order and 4th-order solutions
+        for error estimation.
+        
+        Parameters
+        ----------
+        f : callable
+            Right-hand side function f(t, y) that returns the derivative.
+        t : float
+            Current time.
+        y : numpy.ndarray
+            Current state vector.
+        h : float
+            Step size.
+            
+        Returns
+        -------
+        y_high : numpy.ndarray
+            5th-order solution at t + h.
+        y_low : numpy.ndarray
+            4th-order solution at t + h (for error estimation).
+        err_vec : numpy.ndarray
+            Error estimate vector (y_high - y_low).
+        """
         s = 6
         k = np.empty((s + 1, y.size))
         k[0] = f(t, y)
@@ -456,6 +606,12 @@ class _RK45(_AdaptiveStepRK):
 
 
 class _DOP853(_AdaptiveStepRK):
+    """Dormand-Prince 8(5,3) adaptive Runge-Kutta method.
+    
+    This is the Dormand-Prince 8th-order adaptive Runge-Kutta method with
+    5th and 3rd-order error estimation. It provides very high accuracy
+    for applications requiring precise numerical integration.
+    """
     _A = DOP853_A[:DOP853_N_STAGES, :DOP853_N_STAGES]
     _B_HIGH = DOP853_B[:DOP853_N_STAGES]
     _B_LOW = None
@@ -472,6 +628,32 @@ class _DOP853(_AdaptiveStepRK):
         super().__init__("_DOP853", **opts)
 
     def _rk_embedded_step(self, f, t, y, h):
+        """Perform one Dormand-Prince 8(5,3) embedded step with error estimation.
+        
+        This method implements the specific Dormand-Prince 8(5,3) embedded
+        Runge-Kutta step, computing both 8th-order and 5th/3rd-order solutions
+        for error estimation.
+        
+        Parameters
+        ----------
+        f : callable
+            Right-hand side function f(t, y) that returns the derivative.
+        t : float
+            Current time.
+        y : numpy.ndarray
+            Current state vector.
+        h : float
+            Step size.
+            
+        Returns
+        -------
+        y_high : numpy.ndarray
+            8th-order solution at t + h.
+        y_low : numpy.ndarray
+            Lower-order solution at t + h (for error estimation).
+        err_vec : numpy.ndarray
+            Error estimate vector computed using :func:`_estimate_error`.
+        """
         s = self._N_STAGES
         k = np.empty((s + 1, y.size), dtype=np.float64)
         k[0] = f(t, y)
@@ -493,6 +675,23 @@ class _DOP853(_AdaptiveStepRK):
         return y_high, y_low, err_vec
 
     def _estimate_error(self, K, h):
+        """Estimate error using Dormand-Prince 8(5,3) error coefficients.
+        
+        This method computes the error estimate using both 5th and 3rd-order
+        error estimates with a correction factor to improve robustness.
+        
+        Parameters
+        ----------
+        K : numpy.ndarray
+            Matrix of stage derivatives from the Runge-Kutta step.
+        h : float
+            Step size.
+            
+        Returns
+        -------
+        numpy.ndarray
+            Error estimate vector for each component of the state.
+        """
         err5 = np.dot(K.T, self._E5)
         err3 = np.dot(K.T, self._E3)
         denom = np.hypot(np.abs(err5), 0.1 * np.abs(err3))
@@ -502,6 +701,25 @@ class _DOP853(_AdaptiveStepRK):
         return h * err5 * correction_factor
 
     def _estimate_error_norm(self, K, h, scale):
+        """Estimate normalized error norm for Dormand-Prince 8(5,3) method.
+        
+        This method computes a normalized error norm using both 5th and 3rd-order
+        error estimates, suitable for step size control.
+        
+        Parameters
+        ----------
+        K : numpy.ndarray
+            Matrix of stage derivatives from the Runge-Kutta step.
+        h : float
+            Step size.
+        scale : numpy.ndarray
+            Scaling factors for error normalization.
+            
+        Returns
+        -------
+        float
+            Normalized error norm for step size control.
+        """
         err5 = np.dot(K.T, self._E5) / scale
         err3 = np.dot(K.T, self._E3) / scale
         err5_norm_2 = np.linalg.norm(err5) ** 2
@@ -513,30 +731,88 @@ class _DOP853(_AdaptiveStepRK):
 
 
 class RungeKutta:
+    """Factory class for creating fixed-step Runge-Kutta integrators.
+    
+    This factory provides convenient access to fixed-step Runge-Kutta methods
+    of different orders. The available orders are 4, 6, and 8.
+    
+    Examples
+    --------
+    >>> rk4 = RungeKutta(order=4)
+    >>> rk6 = RungeKutta(order=6)
+    >>> rk8 = RungeKutta(order=8)
+    """
     _map = {4: _RK4, 6: _RK6, 8: _RK8}
     def __new__(cls, order=4, **opts):
+        """Create a fixed-step Runge-Kutta integrator of specified order.
+        
+        Parameters
+        ----------
+        order : int, default 4
+            Order of the Runge-Kutta method. Must be 4, 6, or 8.
+        **opts
+            Additional options passed to the integrator constructor.
+            
+        Returns
+        -------
+        :class:`hiten.algorithms.integrators.rk._FixedStepRK`
+            A fixed-step Runge-Kutta integrator instance.
+            
+        Raises
+        ------
+        ValueError
+            If the specified order is not supported.
+        """
         if order not in cls._map:
             raise ValueError("RK order must be 4, 6, or 8")
         return cls._map[order](**opts)
 
 class AdaptiveRK:
+    """Factory class for creating adaptive step-size Runge-Kutta integrators.
+    
+    This factory provides convenient access to adaptive step-size Runge-Kutta
+    methods. The available orders are 5 (Dormand-Prince 5(4)) and 8 (Dormand-Prince 8(5,3)).
+    
+    Examples
+    --------
+    >>> rk45 = AdaptiveRK(order=5)
+    >>> dop853 = AdaptiveRK(order=8)
+    """
     _map = {5: _RK45, 8: _DOP853}
     def __new__(cls, order=5, **opts):
+        """Create an adaptive step-size Runge-Kutta integrator of specified order.
+        
+        Parameters
+        ----------
+        order : int, default 5
+            Order of the Runge-Kutta method. Must be 5 or 8.
+        **opts
+            Additional options passed to the integrator constructor.
+            
+        Returns
+        -------
+        :class:`hiten.algorithms.integrators.rk._AdaptiveStepRK`
+            An adaptive step-size Runge-Kutta integrator instance.
+            
+        Raises
+        ------
+        ValueError
+            If the specified order is not supported.
+        """
         if order not in cls._map:
             raise ValueError("Adaptive RK order not supported")
         return cls._map[order](**opts)
 
 
 def _build_rhs_wrapper(system: _DynamicalSystem) -> Callable[[float, np.ndarray], np.ndarray]:
-    r"""
-    Return a JIT friendly wrapper around :pyfunc:`hiten.system.rhs`.
+    """Return a JIT friendly wrapper around :func:`hiten.system.rhs`.
 
     The dynamical systems implemented in the code base expose their vector
     field either as ``rhs(t, y)`` or, for autonomous systems, as ``rhs(y)``.
     The integrator layer expects the non autonomous signature and therefore
     needs to adapt the call site on the fly. This helper inspects the right
-    hand side via :pyfunc:`inspect.signature` and generates a small
-    :pyfunc:`numba.njit` compiled closure with the correct arity.
+    hand side via :func:`inspect.signature` and generates a small
+    :func:`numba.njit` compiled closure with the correct arity.
 
     Parameters
     ----------

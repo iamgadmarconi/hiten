@@ -1,15 +1,11 @@
-r"""
-hiten.algorithms.integrators.base
-===========================
+"""Abstract interfaces for numerical time integration.
 
-Abstract interfaces for numerical time integration.
+This module provides two core abstractions:
 
-The module provides two core abstractions:
-
-* :pyclass:`_Solution` - an immutable container that stores a time grid, the
+* :class:`_Solution` - an immutable container that stores a time grid, the
   associated state vectors, and, optionally, the vector field evaluations so
   that the trajectory can be queried by cubic Hermite interpolation.
-* :pyclass:`_Integrator` - an abstract base class that prescribes the public
+* :class:`_Integrator` - an abstract base class that prescribes the public
   API for every concrete one-step or multi-step integrator.
 
 References
@@ -29,19 +25,18 @@ from hiten.algorithms.dynamics.base import _DynamicalSystemProtocol
 
 @dataclass
 class _Solution:
-    r"""
-    Discrete solution returned by an integrator.
+    """Discrete solution returned by an integrator.
 
     Parameters
     ----------
-    times : numpy.ndarray, shape (:math:`n`,)
+    times : numpy.ndarray, shape (n,)
         Monotonically ordered time grid.
-    states : numpy.ndarray, shape (:math:`n`, :math:`d`)
+    states : numpy.ndarray, shape (n, d)
         State vectors corresponding to *times*.
-    derivatives : numpy.ndarray or None, optional, shape (:math:`n`, :math:`d`)
-        Evaluations of :math:`f(t,\mathbf y)` at the stored nodes. When
+    derivatives : numpy.ndarray or None, optional, shape (n, d)
+        Evaluations of f(t,y) at the stored nodes. When
         available a cubic Hermite interpolant is employed by
-        :pyfunc:`_Solution.interpolate`; otherwise linear interpolation is used.
+        :func:`_Solution.interpolate`; otherwise linear interpolation is used.
 
     Attributes
     ----------
@@ -55,7 +50,7 @@ class _Solution:
 
     Notes
     -----
-    The class is a :pyclass:`dataclasses.dataclass` and behaves like an
+    The class is a :class:`dataclasses.dataclass` and behaves like an
     immutable record.
     """
     times: np.ndarray
@@ -63,6 +58,17 @@ class _Solution:
     derivatives: Optional[np.ndarray] = None
     
     def __post_init__(self):
+        """Validate the consistency of times, states, and derivatives arrays.
+        
+        This method is automatically called after dataclass initialization
+        to ensure that all arrays have compatible dimensions.
+        
+        Raises
+        ------
+        ValueError
+            If the lengths of times, states, or derivatives (when provided)
+            are inconsistent.
+        """
         if len(self.times) != len(self.states):
             raise ValueError(
                 f"Times and states must have same length: "
@@ -75,10 +81,9 @@ class _Solution:
             )
 
     def interpolate(self, t: Union[np.ndarray, float]) -> np.ndarray:
-        r"""
-        Evaluate the trajectory at intermediate time points.
+        """Evaluate the trajectory at intermediate time points.
 
-        If :pyattr:`_Solution.derivatives` are provided a cubic Hermite scheme
+        If :attr:`_Solution.derivatives` are provided a cubic Hermite scheme
         of order three is employed on every step; otherwise straight linear
         interpolation is used.
 
@@ -86,13 +91,13 @@ class _Solution:
         ----------
         t : float or array_like
             Query time or array of times contained in
-            :math:`[\text{times}[0],\,\text{times}[-1]]`.
+            [times[0], times[-1]].
 
         Returns
         -------
         numpy.ndarray
-            Interpolated state with shape (:math:`d`,) when *t* is scalar or
-            (:math:`m`, :math:`d`) when *t* comprises :math:`m` points.
+            Interpolated state with shape (d,) when *t* is scalar or
+            (m, d) when *t* comprises m points.
 
         Raises
         ------
@@ -154,8 +159,7 @@ class _Solution:
 
 
 class _Integrator(ABC):
-    r"""
-    Minimal interface that every concrete integrator must satisfy.
+    """Minimal interface that every concrete integrator must satisfy.
 
     Parameters
     ----------
@@ -163,7 +167,7 @@ class _Integrator(ABC):
         Human-readable identifier of the method.
     **options
         Extra keyword arguments left untouched and stored in
-        :pyattr:`options` for later use by subclasses.
+        :attr:`options` for later use by subclasses.
 
     Attributes
     ----------
@@ -174,8 +178,8 @@ class _Integrator(ABC):
 
     Notes
     -----
-    Subclasses *must* implement the abstract members :pyfunc:`order` and
-    :pyfunc:`integrate`.
+    Subclasses *must* implement the abstract members :func:`order` and
+    :func:`integrate`.
 
     Examples
     --------
@@ -195,14 +199,23 @@ class _Integrator(ABC):
     """
     
     def __init__(self, name: str, **options):
+        """Initialize the integrator with a name and optional parameters.
+        
+        Parameters
+        ----------
+        name : str
+            Human-readable identifier of the method.
+        **options
+            Extra keyword arguments left untouched and stored in
+            :attr:`options` for later use by subclasses.
+        """
         self.name = name
         self.options = options
     
     @property
     @abstractmethod
     def order(self) -> Optional[int]:
-        r"""
-        Order of accuracy of the integrator.
+        """Order of accuracy of the integrator.
         
         Returns
         -------
@@ -219,8 +232,7 @@ class _Integrator(ABC):
         t_vals: np.ndarray,
         **kwargs
     ) -> _Solution:
-        r"""
-        Integrate the dynamical system from initial conditions.
+        """Integrate the dynamical system from initial conditions.
         
         Parameters
         ----------
@@ -235,7 +247,7 @@ class _Integrator(ABC):
             
         Returns
         -------
-        _Solution
+        :class:`hiten.algorithms.integrators.base._Solution`
             Integration results containing times and states
             
         Raises
@@ -246,8 +258,7 @@ class _Integrator(ABC):
         pass
     
     def validate_system(self, system: _DynamicalSystemProtocol) -> None:
-        r"""
-        Check that *system* complies with :pyclass:`_DynamicalSystemProtocol`.
+        """Check that *system* complies with :class:`hiten.algorithms.dynamics.base._DynamicalSystemProtocol`.
 
         Parameters
         ----------
@@ -257,7 +268,7 @@ class _Integrator(ABC):
         Raises
         ------
         ValueError
-            If the required attribute :pyattr:`rhs` is absent.
+            If the required attribute :attr:`rhs` is absent.
         """
         if not hasattr(system, 'rhs'):
             raise ValueError(f"System must implement 'rhs' method for {self.name}")
@@ -268,15 +279,14 @@ class _Integrator(ABC):
         y0: np.ndarray,
         t_vals: np.ndarray
     ) -> None:
-        r"""
-        Validate that the input arguments form a consistent integration task.
+        """Validate that the input arguments form a consistent integration task.
 
         Parameters
         ----------
         system : _DynamicalSystemProtocol
             System to be integrated.
         y0 : numpy.ndarray
-            Initial state vector of length :pyattr:`hiten.system.dim`.
+            Initial state vector of length :attr:`hiten.system.dim`.
         t_vals : numpy.ndarray
             Strictly monotonic array of time nodes with at least two entries.
 
@@ -284,7 +294,7 @@ class _Integrator(ABC):
         ------
         ValueError
             If any of the following conditions holds:
-            * ``len(y0)`` differs from :pyattr:`hiten.system.dim`.
+            * ``len(y0)`` differs from :attr:`hiten.system.dim`.
             * ``t_vals`` contains fewer than two points.
             * ``t_vals`` is not strictly monotonic.
         """
