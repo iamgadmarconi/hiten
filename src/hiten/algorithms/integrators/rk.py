@@ -10,7 +10,7 @@ The concrete schemes implemented are:
 * Adaptive embedded: _RK45 (Dormand-Prince) and _DOP853 (Dormand-Prince 8(5,3))
 
 Internally the module also defines helper routines to evaluate Hamiltonian
-vector fields with :func:`numba.njit` and to wrap right-hand side (RHS)
+vector fields with numba acceleration and to wrap right-hand side (RHS)
 callables into a uniform signature accepted by the integrators.
 
 References
@@ -214,7 +214,7 @@ class _FixedStepRK(_RungeKuttaBase):
         
         Parameters
         ----------
-        system : _DynamicalSystem
+        system : :class:`hiten.algorithms.dynamics.base._DynamicalSystem`
             The dynamical system to integrate.
         y0 : numpy.ndarray
             Initial state vector.
@@ -811,12 +811,12 @@ def _build_rhs_wrapper(system: _DynamicalSystem) -> Callable[[float, np.ndarray]
     field either as ``rhs(t, y)`` or, for autonomous systems, as ``rhs(y)``.
     The integrator layer expects the non autonomous signature and therefore
     needs to adapt the call site on the fly. This helper inspects the right
-    hand side via :func:`inspect.signature` and generates a small
-    :func:`numba.njit` compiled closure with the correct arity.
+    hand side via inspect.signature and generates a small
+    numba compiled closure with the correct arity.
 
     Parameters
     ----------
-    system : _DynamicalSystem
+    system : :class:`hiten.algorithms.dynamics.base._DynamicalSystem`
         Instance providing the original vector field.
 
     Returns
