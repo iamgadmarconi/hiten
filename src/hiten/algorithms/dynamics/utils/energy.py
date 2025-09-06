@@ -1,30 +1,54 @@
-r"""
-dynamics.hiten.utils.energy
-=====================
+r"""Energy and potential functions for the Circular Restricted Three-Body Problem.
 
-Numerical helpers for evaluating energies, potentials and zero-velocity 
-curves in the spatial circular restricted three-body problem (CRTBP).  All 
-quantities are nondimensional and expressed in the rotating (synodic) frame.
+This module provides numerical routines for computing energies, potentials,
+and zero-velocity curves in the spatial Circular Restricted Three-Body Problem
+(CR3BP). All quantities are nondimensional and expressed in the rotating
+(synodic) frame.
+
+The module includes functions for:
+- Hamiltonian energy and Jacobi constant calculations
+- Hill region computation for forbidden motion analysis
+- Kinetic and potential energy components
+- Distance calculations to primary and secondary bodies
+
+All functions use the standard CR3BP nondimensional units where the
+primary-secondary separation is 1 and the orbital period is 2*pi.
 
 References
 ----------
-Szebehely, V. (1967). "Theory of Orbits".
+Szebehely, V. (1967). *Theory of Orbits: The Restricted Problem of Three Bodies*.
+Academic Press.
 """
 
 from typing import Sequence, Tuple
 
 import numpy as np
-
-from hiten.utils.log_config import logger
-
 from numba import njit
 
 from hiten.algorithms.utils.config import FASTMATH
+from hiten.utils.log_config import logger
 
 
 @njit(cache=True, fastmath=FASTMATH)
 def _max_rel_energy_error(states: np.ndarray, mu: float) -> float:
-    """Return the maximum relative deviation of the Jacobi constant along *states*.
+    """Compute maximum relative deviation of Jacobi constant along trajectory.
+    
+    Parameters
+    ----------
+    states : ndarray, shape (N, 6)
+        Array of state vectors [x, y, z, vx, vy, vz] along trajectory.
+    mu : float
+        Mass parameter of the CR3BP system.
+        
+    Returns
+    -------
+    float
+        Maximum relative error in Jacobi constant preservation.
+        
+    Notes
+    -----
+    Uses the first state as reference for computing relative errors.
+    For near-zero Jacobi constants (|C0| < 1e-14), uses absolute error.
     """
 
     mu1 = 1.0 - mu
@@ -57,36 +81,42 @@ def _max_rel_energy_error(states: np.ndarray, mu: float) -> float:
 
 
 def crtbp_energy(state: Sequence[float], mu: float) -> float:
-    r"""
-    Compute the Hamiltonian energy :math:`E` of a single state in the CRTBP.
+    r"""Compute Hamiltonian energy of a state in the CR3BP.
 
-    The definition is
-    :math:`E = T + U_{\mathrm{eff}}`, where :math:`T` is the kinetic energy
-    and :math:`U_{\mathrm{eff}}` the effective potential.  The Jacobi
-    constant is linked through :math:`C = -2E`.
+    The Hamiltonian energy is defined as E = T + U_eff, where T is the
+    kinetic energy and U_eff is the effective potential. The Jacobi
+    constant is related through C = -2E.
 
     Parameters
     ----------
-    state : Sequence[float]
-        Six-component vector :math:`(x, y, z, \dot{x}, \dot{y}, \dot{z})`.
+    state : Sequence[float], length 6
+        State vector [x, y, z, vx, vy, vz] in nondimensional rotating frame.
     mu : float
-        Mass parameter :math:`\mu \in (0, 1)`.
+        Mass parameter mu = m2/(m1+m2), where m1 and m2 are the primary
+        and secondary masses.
 
     Returns
     -------
     float
-        Energy of the given state.
+        Hamiltonian energy E (nondimensional).
 
     Raises
     ------
     ValueError
-        If *state* cannot be unpacked into six elements.
+        If state cannot be unpacked into six components.
 
     Examples
     --------
-    >>> from hiten.algorithms.dynamics.hiten.utils.energy import crtbp_energy
+    >>> from hiten.algorithms.dynamics.utils.energy import crtbp_energy
+    >>> # Earth-Moon system L1 point vicinity
     >>> crtbp_energy([1.0, 0.0, 0.0, 0.0, 0.5, 0.0], 0.01215)  # doctest: +ELLIPSIS
     -1.51...
+    
+    See Also
+    --------
+    :func:`energy_to_jacobi` : Convert energy to Jacobi constant
+    :func:`kinetic_energy` : Compute kinetic energy component
+    :func:`effective_potential` : Compute effective potential component
     """
     logger.debug(f"Computing energy for state={state}, mu={mu}")
     
@@ -116,45 +146,48 @@ def hill_region(
     y_range: Tuple[float, float] = (-1.5, 1.5), 
     n_grid: int = 400
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    r"""
-    Compute the Hill region associated with a Jacobi constant.
+    r"""Compute Hill region for zero-velocity surface analysis.
 
-    The Hill region corresponds to the projection on the synodic
-    :math:`(x, y)` plane of the zero-velocity surface defined by
-    :math:`E = -C/2`.
+    The Hill region represents the projection onto the synodic (x,y) plane
+    of the zero-velocity surface defined by the Jacobi constant. Regions
+    where Omega - C/2 > 0 are forbidden for motion.
 
     Parameters
     ----------
     mu : float
-        Mass parameter, see :pyfunc:`crtbp_energy`.
+        Mass parameter of the CR3BP system.
     C : float
-        Jacobi constant.
+        Jacobi constant (nondimensional).
     x_range : Tuple[float, float], optional
-        Bounds for :math:`x`.  Default is ``(-1.5, 1.5)``.
+        Coordinate bounds for x-axis. Default is (-1.5, 1.5).
     y_range : Tuple[float, float], optional
-        Bounds for :math:`y`.  Default is ``(-1.5, 1.5)``.
-    n_grid : int, default 400
-        Number of grid points per axis.
+        Coordinate bounds for y-axis. Default is (-1.5, 1.5).
+    n_grid : int, optional
+        Number of grid points per axis. Default is 400.
 
     Returns
     -------
-    X : numpy.ndarray
-        Meshgrid of x-coordinates, shape ``(n_grid, n_grid)``.
-    Y : numpy.ndarray
-        Meshgrid of y-coordinates, shape ``(n_grid, n_grid)``.
-    Z : numpy.ndarray
-        Values of :math:`\Omega - C/2`; positive entries mark forbidden
-        motion.
+    X : ndarray, shape (n_grid, n_grid)
+        Meshgrid of x-coordinates.
+    Y : ndarray, shape (n_grid, n_grid)
+        Meshgrid of y-coordinates.
+    Z : ndarray, shape (n_grid, n_grid)
+        Values of Omega - C/2. Positive values indicate forbidden motion.
 
     Raises
     ------
     ValueError
-        If *n_grid* is smaller than 2.
+        If n_grid is less than 2.
 
     Notes
     -----
-    No attempt is made to handle singularities near the primaries; users may
-    wish to mask those regions.
+    Singularities near the primary bodies are not handled. Users should
+    mask regions near (-mu, 0) and (1-mu, 0) as needed.
+    
+    See Also
+    --------
+    :func:`crtbp_energy` : Compute Hamiltonian energy
+    :func:`pseudo_potential_at_point` : Evaluate pseudo-potential
     """
     logger.info(f"Computing Hill region for mu={mu}, C={C}, grid={n_grid}x{n_grid}")
     logger.debug(f"x_range={x_range}, y_range={y_range}")
@@ -174,22 +207,22 @@ def hill_region(
     return X, Y, Z
 
 def energy_to_jacobi(energy: float) -> float:
-    r"""
-    Convert Hamiltonian energy to Jacobi constant.
+    r"""Convert Hamiltonian energy to Jacobi constant.
 
     Parameters
     ----------
     energy : float
-        Energy :math:`E`.
+        Hamiltonian energy E (nondimensional).
 
     Returns
     -------
     float
-        Jacobi constant :math:`C = -2E`.
-
-    Raises
-    ------
-    None
+        Jacobi constant C = -2E (nondimensional).
+        
+    See Also
+    --------
+    :func:`jacobi_to_energy` : Inverse conversion
+    :func:`crtbp_energy` : Compute Hamiltonian energy
     """
     jacobi = -2 * energy
     logger.debug(f"Converted energy {energy} to Jacobi constant {jacobi}")
@@ -197,22 +230,22 @@ def energy_to_jacobi(energy: float) -> float:
 
 
 def jacobi_to_energy(jacobi: float) -> float:
-    r"""
-    Convert Jacobi constant to Hamiltonian energy.
+    r"""Convert Jacobi constant to Hamiltonian energy.
 
     Parameters
     ----------
     jacobi : float
-        Jacobi constant :math:`C`.
+        Jacobi constant C (nondimensional).
 
     Returns
     -------
     float
-        Energy :math:`E = -C/2`.
-
-    Raises
-    ------
-    None
+        Hamiltonian energy E = -C/2 (nondimensional).
+        
+    See Also
+    --------
+    :func:`energy_to_jacobi` : Inverse conversion
+    :func:`crtbp_energy` : Compute Hamiltonian energy
     """
     energy = -jacobi / 2
     logger.debug(f"Converted Jacobi constant {jacobi} to energy {energy}")
@@ -220,26 +253,29 @@ def jacobi_to_energy(jacobi: float) -> float:
 
 
 def kinetic_energy(state: Sequence[float]) -> float:
-    r"""
-    Return the kinetic energy :math:`T` of a state.
+    r"""Compute kinetic energy of a state.
 
-    The definition is
-    :math:`T = \tfrac12 (\dot{x}^2 + \dot{y}^2 + \dot{z}^2)`.
+    The kinetic energy is defined as T = (1/2) * (vx^2 + vy^2 + vz^2).
 
     Parameters
     ----------
-    state : Sequence[float]
-        State vector.
+    state : Sequence[float], length 6
+        State vector [x, y, z, vx, vy, vz] in nondimensional rotating frame.
 
     Returns
     -------
     float
-        Kinetic energy.
+        Kinetic energy T (nondimensional).
 
     Raises
     ------
     ValueError
-        If *state* cannot be unpacked into six elements.
+        If state cannot be unpacked into six components.
+        
+    See Also
+    --------
+    :func:`effective_potential` : Compute potential energy component
+    :func:`crtbp_energy` : Compute total Hamiltonian energy
     """
     x, y, z, vx, vy, vz = state
     
@@ -249,30 +285,39 @@ def kinetic_energy(state: Sequence[float]) -> float:
 
 
 def effective_potential(state: Sequence[float], mu: float) -> float:
-    r"""
-    Compute the effective potential :math:`U_{\mathrm{eff}}` in the CRTBP.
+    r"""Compute effective potential in the CR3BP rotating frame.
+
+    The effective potential includes gravitational and centrifugal terms:
+    U_eff = -(1/2)*(x^2 + y^2 + z^2) + U_grav, where U_grav is the
+    gravitational potential from both primary bodies.
 
     Parameters
     ----------
-    state : Sequence[float]
-        Six-component state vector.
+    state : Sequence[float], length 6
+        State vector [x, y, z, vx, vy, vz] in nondimensional rotating frame.
     mu : float
-        Mass parameter.
+        Mass parameter of the CR3BP system.
 
     Returns
     -------
     float
-        Effective potential value.
+        Effective potential U_eff (nondimensional).
 
     Raises
     ------
     ValueError
-        If *state* cannot be unpacked into six elements.
+        If state cannot be unpacked into six components.
 
     Notes
     -----
-    Internally relies on :pyfunc:`primary_distance` and
-    :pyfunc:`secondary_distance`.
+    Uses :func:`primary_distance` and :func:`secondary_distance` for
+    distance calculations. Warns when approaching singularities.
+    
+    See Also
+    --------
+    :func:`gravitational_potential` : Gravitational component only
+    :func:`kinetic_energy` : Kinetic energy component
+    :func:`crtbp_energy` : Total Hamiltonian energy
     """
     logger.debug(f"Computing effective potential for state={state}, mu={mu}")
     
@@ -294,28 +339,30 @@ def effective_potential(state: Sequence[float], mu: float) -> float:
 
 
 def pseudo_potential_at_point(x: float, y: float, mu: float) -> float:
-    r"""
-    Evaluate the pseudo-potential :math:`\Omega` at a planar point.
+    r"""Evaluate pseudo-potential Omega at a planar point.
+
+    The pseudo-potential is defined as:
+    Omega = (1/2)*(x^2 + y^2) + (1-mu)/r1 + mu/r2,
+    where r1 and r2 are distances to the primary and secondary bodies.
 
     Parameters
     ----------
-    x, y : float
-        Synodic coordinates.
+    x : float
+        x-coordinate in nondimensional rotating frame.
+    y : float
+        y-coordinate in nondimensional rotating frame.
     mu : float
-        Mass parameter.
+        Mass parameter of the CR3BP system.
 
     Returns
     -------
     float
-        Value of :math:`\Omega(x, y)`.
-
-    Raises
-    ------
-    None
-
-    Notes
-    -----
-    :math:`\Omega = \tfrac12 (x^2 + y^2) + (1-\mu)/r_1 + \mu/r_2`.
+        Pseudo-potential value Omega(x,y) (nondimensional).
+        
+    See Also
+    --------
+    :func:`hill_region` : Compute Hill regions using pseudo-potential
+    :func:`effective_potential` : 3D effective potential
     """
     logger.debug(f"Computing pseudo-potential at point x={x}, y={y}, mu={mu}")
     r1 = np.sqrt((x + mu)**2 + y**2)
@@ -324,25 +371,33 @@ def pseudo_potential_at_point(x: float, y: float, mu: float) -> float:
 
 
 def gravitational_potential(state: Sequence[float], mu: float) -> float:
-    r"""
-    Gravitational potential energy of the test particle.
+    r"""Compute gravitational potential energy of test particle.
+
+    The gravitational potential includes contributions from both primary
+    bodies: U = -(1-mu)/r1 - mu/r2 - (1/2)*mu*(1-mu).
 
     Parameters
     ----------
-    state : Sequence[float]
-        Six-component state vector.
+    state : Sequence[float], length 6
+        State vector [x, y, z, vx, vy, vz] in nondimensional rotating frame.
     mu : float
-        Mass parameter.
+        Mass parameter of the CR3BP system.
 
     Returns
     -------
     float
-        Gravitational potential :math:`U`.
+        Gravitational potential U (nondimensional).
 
     Raises
     ------
     ValueError
-        If *state* cannot be unpacked into six elements.
+        If state cannot be unpacked into six components.
+        
+    See Also
+    --------
+    :func:`effective_potential` : Effective potential including centrifugal terms
+    :func:`primary_distance` : Distance to primary body
+    :func:`secondary_distance` : Distance to secondary body
     """
     logger.debug(f"Computing gravitational potential for state={state}, mu={mu}")
     
@@ -356,25 +411,31 @@ def gravitational_potential(state: Sequence[float], mu: float) -> float:
 
 
 def primary_distance(state: Sequence[float], mu: float) -> float:
-    r"""
-    Distance from the particle to the primary body.
+    r"""Compute distance from test particle to primary body.
+
+    The primary body is located at (-mu, 0, 0) in the rotating frame.
 
     Parameters
     ----------
-    state : Sequence[float]
-        Six-component state vector.
+    state : Sequence[float], length 6
+        State vector [x, y, z, vx, vy, vz] in nondimensional rotating frame.
     mu : float
-        Mass parameter.
+        Mass parameter of the CR3BP system.
 
     Returns
     -------
     float
-        Distance :math:`r_1`.
+        Distance r1 to primary body (nondimensional).
 
     Raises
     ------
     ValueError
-        If *state* cannot be unpacked into six elements.
+        If state cannot be unpacked into six components.
+        
+    See Also
+    --------
+    :func:`secondary_distance` : Distance to secondary body
+    :func:`gravitational_potential` : Uses both distance calculations
     """
     # This is a simple helper function, so we'll just use debug level log
     logger.debug(f"Computing primary distance for state={state}, mu={mu}")
@@ -385,25 +446,31 @@ def primary_distance(state: Sequence[float], mu: float) -> float:
 
 
 def secondary_distance(state: Sequence[float], mu: float) -> float:
-    r"""
-    Distance from the particle to the secondary body.
+    r"""Compute distance from test particle to secondary body.
+
+    The secondary body is located at (1-mu, 0, 0) in the rotating frame.
 
     Parameters
     ----------
-    state : Sequence[float]
-        Six-component state vector.
+    state : Sequence[float], length 6
+        State vector [x, y, z, vx, vy, vz] in nondimensional rotating frame.
     mu : float
-        Mass parameter.
+        Mass parameter of the CR3BP system.
 
     Returns
     -------
     float
-        Distance :math:`r_2`.
+        Distance r2 to secondary body (nondimensional).
 
     Raises
     ------
     ValueError
-        If *state* cannot be unpacked into six elements.
+        If state cannot be unpacked into six components.
+        
+    See Also
+    --------
+    :func:`primary_distance` : Distance to primary body
+    :func:`gravitational_potential` : Uses both distance calculations
     """
     # This is a simple helper function, so we'll just use debug level log
     logger.debug(f"Computing secondary distance for state={state}, mu={mu}")

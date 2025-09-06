@@ -1,3 +1,26 @@
+"""Backend routines for discovering connections between synodic sections in CR3BP.
+
+This module provides the computational backend for the connections algorithm,
+which discovers ballistic and impulsive transfers between synodic sections in
+the Circular Restricted Three-Body Problem (CR3BP).
+
+Key Features
+------------
+- Radius-based 2D pairing of points on two sections
+- Mutual-nearest-neighbor filtering to prune candidates
+- On-section refinement of matched pairs using local segment geometry
+- Delta-V computation and classification of transfers (ballistic vs impulsive)
+
+All coordinates are in nondimensional CR3BP rotating-frame units.
+
+See Also
+--------
+:mod:`hiten.algorithms.connections.results`
+    Result classes for connection data.
+:mod:`hiten.algorithms.connections.engine`
+    High-level connection engine interface.
+"""
+
 from typing import Tuple
 
 import numpy as np
@@ -8,6 +31,27 @@ from hiten.algorithms.connections.results import _ConnectionResult
 
 @njit(cache=False)
 def _pair_counts(query: np.ndarray, ref: np.ndarray, r2: float) -> np.ndarray:
+    """Return, for each query point, the number of reference points within radius^2.
+
+    Parameters
+    ----------
+    query : ndarray, shape (N, 2)
+        2D coordinates of query points.
+    ref : ndarray, shape (M, 2)
+        2D coordinates of reference points.
+    r2 : float
+        Radius squared for distance comparison.
+
+    Returns
+    -------
+    ndarray, shape (N,)
+        For each query point, the count of reference points with distance^2 <= r2.
+
+    Notes
+    -----
+    Used by :func:`_radpair2d` to efficiently allocate storage for pairs.
+    """
+    
     n_q = query.shape[0]
     n_r = ref.shape[0]
     counts = np.zeros(n_q, dtype=np.int64)
@@ -26,6 +70,22 @@ def _pair_counts(query: np.ndarray, ref: np.ndarray, r2: float) -> np.ndarray:
 
 @njit(cache=False)
 def _exclusive_prefix_sum(a: np.ndarray) -> np.ndarray:
+    """Compute exclusive prefix sum of an integer array.
+
+    Parameters
+    ----------
+    a : ndarray
+        Input integer array of length N.
+
+    Returns
+    -------
+    ndarray, shape (N+1,)
+        Exclusive prefix sums where out[0] = 0 and out[i+1] = sum_{k=0}^{i} a[k].
+
+    Notes
+    -----
+    Used by :func:`_radpair2d` to determine memory offsets for storing pairs.
+    """
     n = a.size
     out = np.empty(n + 1, dtype=np.int64)
     out[0] = 0
@@ -38,6 +98,27 @@ def _exclusive_prefix_sum(a: np.ndarray) -> np.ndarray:
 
 @njit(cache=False)
 def _radpair2d(query: np.ndarray, ref: np.ndarray, radius: float) -> np.ndarray:
+    """Find all pairs (i,j) where distance(query[i], ref[j]) <= radius in 2D.
+
+    Parameters
+    ----------
+    query : ndarray, shape (N, 2)
+        Query points in 2D.
+    ref : ndarray, shape (M, 2)
+        Reference points in 2D.
+    radius : float
+        Matching radius in the same units as query/ref coordinates.
+
+    Returns
+    -------
+    ndarray, shape (total, 2)
+        Each row is a pair (i, j) indicating a match between query[i] and ref[j].
+
+    Notes
+    -----
+    Uses :func:`_pair_counts` and :func:`_exclusive_prefix_sum` to efficiently
+    allocate and populate the output array.
+    """
     r2 = float(radius) * float(radius)
     counts = _pair_counts(query, ref, r2)
     offs = _exclusive_prefix_sum(counts)
@@ -65,10 +146,22 @@ def _radius_pairs_2d(query: np.ndarray, ref: np.ndarray, radius: float) -> np.nd
 
     Parameters
     ----------
-    query, ref : (N,2) and (M,2) float arrays
-        2D plane coordinates.
+    query : ndarray, shape (N, 2)
+        2D plane coordinates of query points.
+    ref : ndarray, shape (M, 2)
+        2D plane coordinates of reference points.
     radius : float
-        Match radius.
+        Match radius in nondimensional CR3BP units.
+
+    Returns
+    -------
+    ndarray, shape (total, 2)
+        Each row is a pair (i, j) indicating a match between query[i] and ref[j].
+
+    Notes
+    -----
+    This is the main entry point for 2D radius-based pairing. It prepares
+    contiguous arrays and delegates to the numba-accelerated :func:`_radpair2d`.
     """
     q = np.ascontiguousarray(query, dtype=np.float64)
     r = np.ascontiguousarray(ref, dtype=np.float64)
@@ -77,6 +170,23 @@ def _radius_pairs_2d(query: np.ndarray, ref: np.ndarray, radius: float) -> np.nd
 
 @njit(cache=False)
 def _nearest_neighbor_2d_numba(points: np.ndarray) -> np.ndarray:
+    """Find the nearest neighbor for each point in a 2D array (numba-accelerated).
+
+    Parameters
+    ----------
+    points : ndarray, shape (N, 2)
+        2D coordinates of points.
+
+    Returns
+    -------
+    ndarray, shape (N,)
+        For each point i, the index j of its nearest neighbor (j != i).
+        Returns -1 if no valid neighbor exists.
+
+    Notes
+    -----
+    This is the numba-accelerated implementation used by :func:`_nearest_neighbor_2d`.
+    """
     n = points.shape[0]
     out = np.full(n, -1, dtype=np.int64)
     for i in range(n):
@@ -98,6 +208,24 @@ def _nearest_neighbor_2d_numba(points: np.ndarray) -> np.ndarray:
 
 
 def _nearest_neighbor_2d(points: np.ndarray) -> np.ndarray:
+    """Find the nearest neighbor for each point in a 2D array.
+
+    Parameters
+    ----------
+    points : ndarray, shape (N, 2)
+        2D coordinates of points.
+
+    Returns
+    -------
+    ndarray, shape (N,)
+        For each point i, the index j of its nearest neighbor (j != i).
+        Returns -1 if no valid neighbor exists.
+
+    Notes
+    -----
+    This function prepares data and delegates to the numba-accelerated
+    :func:`_nearest_neighbor_2d_numba`.
+    """
     p = np.ascontiguousarray(points, dtype=np.float64)
     return _nearest_neighbor_2d_numba(p)
 
@@ -105,6 +233,35 @@ def _nearest_neighbor_2d(points: np.ndarray) -> np.ndarray:
 @njit(cache=False)
 def _closest_points_on_segments_2d(a0x: float, a0y: float, a1x: float, a1y: float,
                                    b0x: float, b0y: float, b1x: float, b1y: float) -> Tuple[float, float, float, float, float, float]:
+    """Find the closest points between two 2D line segments.
+
+    Parameters
+    ----------
+    a0x, a0y : float
+        Start point of first segment.
+    a1x, a1y : float
+        End point of first segment.
+    b0x, b0y : float
+        Start point of second segment.
+    b1x, b1y : float
+        End point of second segment.
+
+    Returns
+    -------
+    s : float
+        Parameter along first segment (0 <= s <= 1).
+    t : float
+        Parameter along second segment (0 <= t <= 1).
+    px, py : float
+        Closest point on first segment.
+    qx, qy : float
+        Closest point on second segment.
+
+    Notes
+    -----
+    Used by :func:`_refine_pairs_on_section` for geometric refinement of
+    matched pairs between synodic sections.
+    """
     ux = a1x - a0x
     uy = a1y - a0y
     vx = b1x - b0x
@@ -163,12 +320,38 @@ def _refine_pairs_on_section(pu: np.ndarray, ps: np.ndarray, pairs: np.ndarray, 
                              *, max_seg_len: float = 1e9) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Refine matched pairs using closest points between local segments.
 
+    Parameters
+    ----------
+    pu : ndarray, shape (N, 2)
+        2D points on the unstable (source) section.
+    ps : ndarray, shape (M, 2)
+        2D points on the stable (target) section.
+    pairs : ndarray, shape (k, 2)
+        Initial matched pairs as (i, j) indices.
+    nn_u : ndarray, shape (N,)
+        Nearest neighbor indices for unstable section points.
+    nn_s : ndarray, shape (M,)
+        Nearest neighbor indices for stable section points.
+    max_seg_len : float, optional
+        Maximum allowed segment length for refinement (default: 1e9).
+
     Returns
     -------
-    rstar : (m,2) ndarray refined common points (midpoint of segment closest points)
-    u_idx0, u_idx1, s_idx0, s_idx1 : (m,) int arrays endpoints used
-    sval, tval : (m,) float arrays interpolation parameters on U and S segments
-    valid : (m,) bool mask for pairs where refinement was performed
+    rstar : ndarray, shape (k, 2)
+        Refined common points (midpoint of segment closest points).
+    u_idx0, u_idx1 : ndarray, shape (k,)
+        Endpoint indices used on the unstable section.
+    s_idx0, s_idx1 : ndarray, shape (k,)
+        Endpoint indices used on the stable section.
+    sval, tval : ndarray, shape (k,)
+        Interpolation parameters on U and S segments.
+    valid : ndarray, shape (k,)
+        Boolean mask indicating pairs where refinement was performed.
+
+    Notes
+    -----
+    Uses :func:`_closest_points_on_segments_2d` to find optimal intersection
+    points between local segments formed by nearest neighbors.
     """
     m = pairs.shape[0]
     rstar = np.empty((m, 2), dtype=np.float64)
@@ -221,9 +404,44 @@ def _refine_pairs_on_section(pu: np.ndarray, ps: np.ndarray, pairs: np.ndarray, 
 
 
 class _ConnectionsBackend:
-    """Encapsulates matching/refinement and ΔV computation for connections."""
+    """Encapsulates matching/refinement and Delta-V computation for connections.
+
+    This backend orchestrates the end-to-end process for discovering
+    ballistic/impulsive transfers between two synodic sections within the
+    CR3BP. It builds coarse hits, applies radius-based pairing and mutual-nearest
+    filtering, refines matched pairs using local segment geometry, and finally
+    computes the Delta-V required for each candidate transfer.
+
+    See Also
+    --------
+    :class:`hiten.algorithms.connections.results._ConnectionResult`
+        Result objects returned by the solve method.
+    """
 
     def solve(self, problem):
+        """Compute possible connections for a given problem specification.
+
+        Parameters
+        ----------
+        problem : object
+            Problem specification containing source/target sections, search parameters,
+            and synodic section definition.
+
+        Returns
+        -------
+        list of :class:`hiten.algorithms.connections.results._ConnectionResult`
+            Connection results sorted by increasing delta_v (velocity change)
+            required for the transfer.
+
+        Notes
+        -----
+        The algorithm performs these steps:
+        1. Build section hits using ``problem.source.to_section()`` and ``problem.target.to_section()``
+        2. Coarse 2D radius pairing via :func:`_radius_pairs_2d`
+        3. Mutual-nearest filtering to reduce false positives
+        4. On-section refinement via :func:`_refine_pairs_on_section`
+        5. Delta-V computation and classification (ballistic vs impulsive)
+        """
         # Lazy imports to avoid circulars at module import tim
         # 1) Build section hits on the provided synodic section
         sec_u = problem.source.to_section(problem.section, direction=problem.direction)
@@ -237,7 +455,6 @@ class _ConnectionsBackend:
         if pu.size == 0 or ps.size == 0:
             return []
 
-        # 2) Coarse 2D radius pairing
         eps = float(getattr(problem.search, "eps2d", 1e-4)) if problem.search else 1e-4
         dv_tol = float(getattr(problem.search, "delta_v_tol", 1e-3)) if problem.search else 1e-3
         bal_tol = float(getattr(problem.search, "ballistic_tol", 1e-8)) if problem.search else 1e-8
@@ -246,7 +463,6 @@ class _ConnectionsBackend:
         if pairs_arr.size == 0:
             return []
 
-        # 3) Mutual-nearest filtering among candidate pairs
         di = pu[pairs_arr[:, 0]] - ps[pairs_arr[:, 1]]
         d2 = np.sum(di * di, axis=1)
         best_for_i = {}
@@ -267,7 +483,6 @@ class _ConnectionsBackend:
         if not pairs:
             return []
 
-        # 4) On-section refinement using local segments; interpolate 6D and compute ΔV
         nn_u = _nearest_neighbor_2d(pu) if pu.shape[0] >= 2 else np.full(pu.shape[0], -1, dtype=int)
         nn_s = _nearest_neighbor_2d(ps) if ps.shape[0] >= 2 else np.full(ps.shape[0], -1, dtype=int)
         pairs_np = np.asarray(pairs, dtype=np.int64)

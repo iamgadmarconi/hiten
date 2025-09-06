@@ -1,3 +1,11 @@
+"""Domain-specific interfaces for correction algorithms.
+
+This module provides interface classes that adapt generic correction algorithms
+to specific problem domains. These interfaces handle the translation between
+domain objects (orbits, manifolds) and the abstract vector representations
+expected by the correction algorithms.
+"""
+
 from dataclasses import dataclass
 from functools import partial
 from typing import TYPE_CHECKING, Callable, Literal, Optional, Tuple
@@ -16,6 +24,32 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class _OrbitCorrectionConfig(_BaseCorrectionConfig):
+    """Configuration for periodic orbit correction.
+
+    Extends the base correction configuration with orbit-specific parameters
+    for constraint selection, integration settings, and event detection.
+
+    Parameters
+    ----------
+    residual_indices : tuple of int, default=()
+        State components used to build the residual vector.
+    control_indices : tuple of int, default=()
+        State components allowed to change during correction.
+    extra_jacobian : callable or None, default=None
+        Additional Jacobian contribution function.
+    target : tuple of float, default=(0.0,)
+        Target values for the residual components.
+    event_func : callable, default=_y_plane_crossing
+        Function to detect Poincare section crossings.
+    method : str, default="scipy"
+        Integration method for trajectory computation.
+    order : int, default=8
+        Integration order for numerical methods.
+    steps : int, default=500
+        Number of integration steps.
+    forward : int, default=1
+        Integration direction (1 for forward, -1 for backward).
+    """
 
     residual_indices: tuple[int, ...] = ()  # Components used to build R(x)
     control_indices: tuple[int, ...] = ()   # Components allowed to change
@@ -34,14 +68,25 @@ class _OrbitCorrectionConfig(_BaseCorrectionConfig):
 class _PeriodicOrbitCorrectorInterface(_Corrector):
     """Interface for periodic orbit differential correction.
     
-    This class provides orbit-specific correction functionality and is designed
-    to be used as a mixin with a concrete corrector implementation (e.g., _NewtonCore).
-    The orbit-specific correct() method translates orbit parameters to generic
-    corrector parameters and delegates numerical work to the concrete implementation
-    via super().correct().
+    Provides orbit-specific correction functionality designed to be used as a
+    mixin with concrete corrector implementations. Handles parameter extraction,
+    constraint formulation, and Jacobian computation for periodic orbits.
     """
     @dataclass(slots=True)
     class _EventCache:
+        """Cache for expensive event and STM computations.
+        
+        Attributes
+        ----------
+        p_vec : ndarray
+            Parameter vector for which cache is valid.
+        t_event : float
+            Time of Poincare section crossing.
+        X_event : ndarray
+            State at Poincare section crossing.
+        Phi : ndarray or None
+            State transition matrix (None for finite-difference mode).
+        """
         p_vec: np.ndarray
         t_event: float
         X_event: np.ndarray
@@ -51,6 +96,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
     _fd_mode: bool = False  # finite-difference mode flag set per correction
 
     def __init__(self, *args, **kwargs):
+        """Initialize interface with clean cache state."""
         super().__init__(*args, **kwargs)
         # Ensure cache is reset for every new corrector instance
         self._event_cache = None
@@ -61,7 +107,22 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         control_indices: list[int],
         p_vec: np.ndarray,
     ) -> np.ndarray:
-        """Insert the parameter vector *p_vec* back into the full 6-D state."""
+        """Reconstruct full state from base state and parameter vector.
+        
+        Parameters
+        ----------
+        base_state : ndarray
+            Base 6D state vector.
+        control_indices : list of int
+            Indices of components to update.
+        p_vec : ndarray
+            Parameter vector with new values.
+            
+        Returns
+        -------
+        ndarray
+            Full 6D state with updated components.
+        """
         x_full = base_state.copy()
         x_full[control_indices] = p_vec
         return x_full
@@ -73,7 +134,26 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         cfg,
         forward: int,
     ) -> Tuple[float, np.ndarray]:
-        """Call the section event and return (t_event, X_event)."""
+        """Evaluate Poincare section crossing.
+        
+        Parameters
+        ----------
+        orbit : PeriodicOrbit
+            Orbit object containing system information.
+        x_full : ndarray
+            Initial state for integration.
+        cfg : _OrbitCorrectionConfig
+            Configuration with event function.
+        forward : int
+            Integration direction.
+            
+        Returns
+        -------
+        t_event : float
+            Time of section crossing.
+        X_event : ndarray
+            State at section crossing.
+        """
         return cfg.event_func(
             dynsys=orbit.system._dynsys,
             x0=x_full,
@@ -94,7 +174,35 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         cfg,
         forward: int,
     ) -> np.ndarray:
-        """Default residual: event state minus target on selected indices."""
+        """Compute residual vector for orbit correction.
+        
+        Evaluates the difference between the actual state at Poincare section
+        crossing and the target values for selected components.
+        
+        Parameters
+        ----------
+        p_vec : ndarray
+            Current parameter vector.
+        orbit : PeriodicOrbit
+            Orbit being corrected.
+        base_state : ndarray
+            Base state vector.
+        control_indices : list of int
+            Indices of parameters being optimized.
+        residual_indices : list of int
+            Indices of state components in residual.
+        target_vec : ndarray
+            Target values for residual components.
+        cfg : _OrbitCorrectionConfig
+            Correction configuration.
+        forward : int
+            Integration direction.
+            
+        Returns
+        -------
+        ndarray
+            Residual vector (actual - target).
+        """
         x_full = self._to_full_state(base_state, control_indices, p_vec)
 
         # Evaluate event section
@@ -135,8 +243,34 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         cfg,
         forward: int,
     ) -> np.ndarray:
-        """Analytical Jacobian using the state-transition matrix."""
-
+        """Compute analytical Jacobian using state transition matrix.
+        
+        Uses cached STM when available or computes new STM and updates cache.
+        Extracts the relevant submatrix corresponding to residual and control
+        indices.
+        
+        Parameters
+        ----------
+        p_vec : ndarray
+            Current parameter vector.
+        orbit : PeriodicOrbit
+            Orbit being corrected.
+        base_state : ndarray
+            Base state vector.
+        control_indices : list of int
+            Indices of parameters being optimized.
+        residual_indices : list of int
+            Indices of state components in residual.
+        cfg : _OrbitCorrectionConfig
+            Correction configuration.
+        forward : int
+            Integration direction.
+            
+        Returns
+        -------
+        ndarray
+            Jacobian matrix of residual with respect to parameters.
+        """
         cache_valid = (
             self._event_cache is not None
             and np.array_equal(self._event_cache.p_vec, p_vec)
@@ -169,7 +303,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
                 Phi=Phi.copy(),
             )
 
-        # Phi is already 2-D array
+        # Extract relevant submatrix
         J_red = Phi[np.ix_(residual_indices, control_indices)]
 
         if cfg.extra_jacobian is not None:
@@ -187,8 +321,34 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         max_delta: float | None = 1e-2,
         finite_difference: bool = False,
     ) -> Tuple[np.ndarray, float]:
-        """Differential correction driver."""
-
+        """Correct periodic orbit to satisfy Poincare section constraints.
+        
+        Main entry point for orbit correction. Extracts parameters from orbit
+        configuration, builds residual and Jacobian functions, delegates to
+        numerical corrector, and updates the orbit with corrected values.
+        
+        Parameters
+        ----------
+        orbit : PeriodicOrbit
+            Orbit to be corrected.
+        tol : float, default=1e-10
+            Convergence tolerance for residual norm.
+        max_attempts : int, default=25
+            Maximum number of correction iterations.
+        forward : int, default=1
+            Integration direction (1 for forward, -1 for backward).
+        max_delta : float or None, default=1e-2
+            Maximum step size for numerical stability.
+        finite_difference : bool, default=False
+            Use finite-difference Jacobian instead of analytical.
+            
+        Returns
+        -------
+        x_corr : ndarray
+            Corrected initial state.
+        t_event : float
+            Half-period (time to Poincare section crossing).
+        """
         cfg = orbit._correction_config
 
         residual_indices = list(cfg.residual_indices)
@@ -268,4 +428,9 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
 
 
 class _InvariantToriCorrectorInterface:
+    """Interface for invariant tori correction (placeholder).
+    
+    Reserved for future implementation of invariant tori correction
+    algorithms.
+    """
     pass

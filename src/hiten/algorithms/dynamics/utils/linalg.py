@@ -1,13 +1,25 @@
-r"""
-dynamics.hiten.utils.linalg
-=====================
+r"""Linear algebra utilities for dynamical systems analysis.
 
-Linear-algebra helpers for the dynamical-systems sub-package. The routines
-are pure NumPy and therefore portable, vectorised and JIT-friendly.
+This module provides specialized linear algebra routines for analyzing
+dynamical systems, particularly in the context of the Circular Restricted
+Three-Body Problem (CR3BP). The functions focus on eigenvalue analysis,
+stability classification, and matrix decompositions relevant to periodic
+orbits and manifold computations.
+
+Key capabilities include:
+- Eigenvalue decomposition with stability classification
+- Floquet stability analysis for periodic orbits
+- Numerical cleanup routines for eigenvectors and eigenvalues
+- Time array indexing utilities
+
+All routines use pure NumPy for portability and are designed to be
+vectorized and JIT-friendly where applicable.
 
 References
 ----------
-Koon, W. S., Lo, M. W., Marsden, J. E., Ross, S. D. (2000) "Dynamical Systems, the Three-Body Problem and Space Mission Design".
+Koon, W. S., Lo, M. W., Marsden, J. E., Ross, S. D. (2000).
+*Dynamical Systems, the Three-Body Problem and Space Mission Design*.
+Caltech.
 """
 from typing import Set, Tuple
 
@@ -17,58 +29,74 @@ from hiten.utils.log_config import logger
 
 
 def eigenvalue_decomposition(A: np.ndarray, discrete: int = 0, delta: float = 1e-4) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    r"""
-    Classify eigen-pairs into stable, unstable and centre subspaces.
+    r"""Classify eigenvalue-eigenvector pairs into stable, unstable, and center subspaces.
+
+    Performs eigenvalue decomposition and classifies the spectrum based on
+    stability criteria for either continuous-time or discrete-time dynamical
+    systems. Each eigenvector is pivot-normalized for consistent representation.
 
     Parameters
     ----------
     A : ndarray, shape (n, n)
-        Real or complex square matrix whose spectrum is to be analysed.
-    discrete : int, default 0
-        Classification mode.
-        * ``0`` - treat :pyfunc:`A` as a continuous-time Jacobian and use
-          :math:`\operatorname{sign}(\Re\{\lambda\})`.
-        * ``1`` - treat :pyfunc:`A` as a discrete map and use
-          :math:`|\lambda|` with a neutral band of width ``delta``.
-    delta : float, default 1e-4
-        Half-width of the neutral band around the stability threshold.
+        Real or complex square matrix to analyze.
+    discrete : int, optional
+        Classification mode. Default is 0.
+        
+        * 0 : Continuous-time system (Jacobian matrix)
+              Uses sign(Re{lambda}) for classification
+        * 1 : Discrete-time system (map matrix)
+              Uses |lambda| with neutral band for classification
+    delta : float, optional
+        Half-width of neutral band around stability threshold. Default is 1e-4.
+        For continuous systems: |Re{lambda}| < delta -> center
+        For discrete systems: ||lambda| - 1| < delta -> center
 
     Returns
     -------
     sn : ndarray
-        Stable eigenvalues (:math:`\Re\{\lambda\}<0` or
-        :math:`|\lambda|<1-\delta`).
+        Stable eigenvalues. For continuous: Re{lambda} < -delta.
+        For discrete: |lambda| < 1-delta.
     un : ndarray
-        Unstable eigenvalues (:math:`\Re\{\lambda\}>0` or
-        :math:`|\lambda|>1+\delta`).
+        Unstable eigenvalues. For continuous: Re{lambda} > +delta.
+        For discrete: |lambda| > 1+delta.
     cn : ndarray
-        Centre eigenvalues (neutral spectrum).
+        Center eigenvalues (neutral spectrum within delta band).
     Ws : ndarray, shape (n, n_s)
         Stable eigenvectors stacked column-wise.
     Wu : ndarray, shape (n, n_u)
-        Unstable eigenvectors.
+        Unstable eigenvectors stacked column-wise.
     Wc : ndarray, shape (n, n_c)
-        Centre eigenvectors.
+        Center eigenvectors stacked column-wise.
 
     Raises
     ------
     numpy.linalg.LinAlgError
-        If the eigen-decomposition fails.
+        If eigenvalue decomposition fails. Returns empty arrays in this case.
 
     Notes
     -----
-    Each eigenvector is *pivot-normalised* so that its first non-zero entry
-    equals 1. Infinitesimal imaginary parts are discarded with a tolerance of
-    ``1e-14``.
-
+    - Eigenvectors are pivot-normalized: first non-zero entry equals 1
+    - Small imaginary parts (< 1e-14) are set to zero for numerical stability
+    - Empty subspaces return zero-column matrices with correct dimensions
+    
     Examples
     --------
     >>> import numpy as np
-    >>> from hiten.algorithms.dynamics.hiten.utils.linalg import eigenvalue_decomposition
+    >>> from hiten.algorithms.dynamics.utils.linalg import eigenvalue_decomposition
+    >>> # Continuous-time system with stable, center, unstable eigenvalues
     >>> A = np.diag([-2.0, 0.0, 0.5])
     >>> sn, un, cn, Ws, Wu, Wc = eigenvalue_decomposition(A)
     >>> sn
     array([-2.])
+    >>> un
+    array([0.5])
+    >>> cn
+    array([0.])
+    
+    See Also
+    --------
+    :func:`_stability_indices` : Floquet stability analysis for periodic orbits
+    :func:`_zero_small_imag_part` : Cleanup utility for eigenvalues
     """
     logger.debug(f"Starting eigenvalue decomposition for matrix A with shape {A.shape}, discrete={discrete}, delta={delta}")
     # Compute eigen-decomposition
@@ -170,52 +198,61 @@ def eigenvalue_decomposition(A: np.ndarray, discrete: int = 0, delta: float = 1e
 
 
 def _stability_indices(M: np.ndarray, tol: float = 1e-8) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    r"""
-    Compute the three Floquet stability indices of a periodic orbit.
+    r"""Compute Floquet stability indices for periodic orbit analysis.
+
+    Calculates the three stability indices nu_i = (lambda_i + 1/lambda_i)/2
+    from the monodromy matrix of a periodic orbit. For symplectic systems,
+    eigenvalues occur in reciprocal pairs (lambda, 1/lambda), and this
+    function explicitly searches for such pairs.
 
     Parameters
     ----------
     M : ndarray, shape (6, 6)
-        Monodromy matrix returned by a one-period state transition
-        integration.
-    tol : float, default 1e-8
-        Pairing tolerance used for
-        :pyfunc:`numpy.isclose` when matching reciprocal eigenvalues and
-        detecting unit-modulus values.
+        Monodromy matrix from one-period state transition matrix integration.
+        Expected to be symplectic for CR3BP applications.
+    tol : float, optional
+        Tolerance for reciprocal eigenvalue pairing and unit-magnitude
+        detection. Default is 1e-8.
 
     Returns
     -------
     nu : ndarray, shape (3,)
-        Stability indices :math:`\nu_i = (\lambda_i + 1/\lambda_i)/2`.
-        Entries are :pydata:`numpy.nan` if a reciprocal pair cannot be
-        identified.
+        Stability indices nu_i = (lambda_i + 1/lambda_i)/2.
+        Contains np.nan for unpaired eigenvalues.
     eigvals : ndarray, shape (6,)
-        Eigenvalues of :pyfunc:`M` sorted by decreasing magnitude.
+        Eigenvalues sorted by decreasing magnitude.
     eigvecs : ndarray, shape (6, 6)
         Corresponding eigenvectors.
 
     Raises
     ------
     ValueError
-        If :pyfunc:`M` is not of shape ``(6, 6)``.
+        If M is not shape (6, 6).
     numpy.linalg.LinAlgError
-        If the eigen-decomposition fails.
+        If eigenvalue computation fails. Returns NaN arrays in this case.
 
     Notes
     -----
-    The input matrix is assumed (but not required) to be symplectic so that
-    the spectrum occurs in reciprocal pairs :math:`(\lambda, 1/\lambda)`.
-    The algorithm searches these pairs explicitly and is therefore robust to
-    small symmetry-breaking numerical errors.
-
+    - Assumes symplectic structure with reciprocal eigenvalue pairs
+    - Robust to small numerical symmetry-breaking errors
+    - Identifies trivial pairs (magnitude near 1) first
+    - Warns if expected number of pairs (3) cannot be found
+    
+    For stable periodic orbits, all |nu_i| should be <= 1.
+    
     Examples
     --------
     >>> import numpy as np
-    >>> from hiten.algorithms.dynamics.hiten.utils.linalg import _stability_indices
+    >>> from hiten.algorithms.dynamics.utils.linalg import _stability_indices
+    >>> # Identity matrix (trivial case)
     >>> M = np.eye(6)
-    >>> nu, *_ = _stability_indices(M)
+    >>> nu, eigvals, eigvecs = _stability_indices(M)
     >>> np.allclose(nu, 1.0)
     True
+    
+    See Also
+    --------
+    :func:`eigenvalue_decomposition` : General eigenvalue classification
     """
     logger.info(f"Calculating stability indices for matrix M with shape {M.shape}, tolerance={tol}")
 
@@ -374,30 +411,27 @@ def _stability_indices(M: np.ndarray, tol: float = 1e-8) -> Tuple[np.ndarray, np
 
 
 def _remove_infinitesimals_in_place(vec: np.ndarray, tol: float = 1e-14) -> None:
-    r"""
-    Replace very small real and imaginary parts with exact zeros in-place.
-    
-    This function modifies the input vector by setting real and imaginary parts
-    that are smaller than the tolerance to exactly zero. This helps prevent
-    numerical noise from affecting calculations.
-    
+    r"""Remove numerical noise from complex vector components in-place.
+
+    Sets real and imaginary parts smaller than tolerance to exactly zero,
+    helping prevent numerical artifacts from affecting downstream calculations.
+
     Parameters
     ----------
-    vec : array_like
-        Complex vector to be modified in-place
+    vec : ndarray
+        Complex vector to clean in-place.
     tol : float, optional
-        Tolerance level below which values are set to zero.
-        Default is 1e-14.
-    
-    Returns
-    -------
-    None
-        The input vector is modified in-place.
-    
+        Tolerance below which components are zeroed. Default is 1e-14.
+
     Notes
     -----
-    This function is particularly useful for cleaning up eigenvectors that might
-    have tiny numerical artifacts in their components.
+    Modifies the input vector directly. Particularly useful for cleaning
+    eigenvectors that may contain tiny numerical artifacts.
+    
+    See Also
+    --------
+    :func:`_remove_infinitesimals_array` : Non-destructive version
+    :func:`_zero_small_imag_part` : Cleanup for scalar complex values
     """
     for i in range(len(vec)):
         re = vec[i].real
@@ -409,54 +443,54 @@ def _remove_infinitesimals_in_place(vec: np.ndarray, tol: float = 1e-14) -> None
         vec[i] = re + 1j*im
 
 def _remove_infinitesimals_array(vec: np.ndarray, tol: float = 1e-12) -> np.ndarray:
-    r"""
-    Create a copy of a vector with very small values replaced by exact zeros.
-    
-    This function creates a copy of the input vector and then calls
-    _remove_infinitesimals_in_place on the copy. This preserves the original
-    vector while returning a "cleaned" version.
-    
+    r"""Create cleaned copy of vector with numerical noise removed.
+
+    Returns a copy of the input vector with real and imaginary components
+    smaller than tolerance set to exactly zero. Preserves the original vector.
+
     Parameters
     ----------
-    vec : array_like
-        Complex vector to be cleaned
+    vec : ndarray
+        Complex vector to clean.
     tol : float, optional
-        Tolerance level below which values are set to zero.
-        Default is 1e-12.
-    
+        Tolerance below which components are zeroed. Default is 1e-12.
+
     Returns
     -------
     ndarray
-        A copy of the input vector with small values replaced by zeros
+        Copy of input vector with small values replaced by exact zeros.
     
     See Also
     --------
-    _remove_infinitesimals_in_place : The in-place version of this function
+    :func:`_remove_infinitesimals_in_place` : In-place version
+    :func:`_zero_small_imag_part` : Cleanup for scalar complex values
     """
     vcopy = vec.copy()
     _remove_infinitesimals_in_place(vcopy, tol)
     return vcopy
 
 def _zero_small_imag_part(eig_val: complex, tol: float = 1e-12) -> complex:
-    r"""
-    Set the imaginary part of a complex number to zero if it's very small.
-    
-    This function is useful for cleaning up eigenvalues that should be real
-    but might have tiny imaginary components due to numerical precision issues.
-    
+    r"""Remove small imaginary part from complex number.
+
+    Sets imaginary part to zero if smaller than tolerance. Useful for
+    cleaning eigenvalues that should be real but have numerical artifacts.
+
     Parameters
     ----------
     eig_val : complex
-        Complex value to be checked and potentially modified
+        Complex value to clean.
     tol : float, optional
-        Tolerance level below which the imaginary part is set to zero.
-        Default is 1e-12.
-    
+        Tolerance below which imaginary part is zeroed. Default is 1e-12.
+
     Returns
     -------
     complex
-        The input value with its imaginary part set to zero if it was smaller
-        than the tolerance
+        Cleaned complex value with small imaginary part removed.
+        
+    See Also
+    --------
+    :func:`_remove_infinitesimals_array` : Vector version for arrays
+    :func:`_remove_infinitesimals_in_place` : In-place vector cleanup
     """
     if abs(eig_val.imag) < tol:
         return complex(eig_val.real, 0.0)
@@ -464,43 +498,45 @@ def _zero_small_imag_part(eig_val: complex, tol: float = 1e-12) -> complex:
 
 
 def _totime(t, tf):
-    r"""
-    Find indices in a time array that are closest to specified target times.
-    
-    This function searches through a time array and finds the indices where
-    the time values are closest to the specified target times.
-    
+    r"""Find indices of closest time values in array.
+
+    Searches time array for indices where values are closest to specified
+    target times. Useful for extracting trajectory points at specific times.
+
     Parameters
     ----------
     t : array_like
-        Array of time values to search through
+        Time array to search.
     tf : float or array_like
-        Target time value(s) to find in the array
-    
+        Target time value(s) to locate.
+
     Returns
     -------
     ndarray
-        Array of indices where the values in 't' are closest to the
-        corresponding values in 'tf'
-    
+        Indices where t values are closest to corresponding tf values.
+
     Notes
     -----
-    This function is particularly useful when trying to find the point in a
-    trajectory closest to a specific time, such as when identifying positions
-    at specific fractions of a periodic orbit.
+    - Uses absolute time values, so signs are ignored
+    - Particularly useful for periodic orbit analysis
+    - Returns single index for scalar tf, array of indices for array tf
     
-    The function works with absolute time values, so the sign of the input times
-    does not affect the results.
+    Examples
+    --------
+    >>> import numpy as np
+    >>> from hiten.algorithms.dynamics.utils.linalg import _totime
+    >>> t = np.linspace(0, 10, 101)  # Time array
+    >>> tf = [2.5, 7.1]  # Target times
+    >>> indices = _totime(t, tf)
+    >>> t[indices]  # Closest actual times
+    array([2.5, 7.1])
     """
-    # Convert t to its absolute values.
+    # Convert to absolute values and ensure tf is array
     t = np.abs(t)
-    # Ensure tf is an array (handles scalar input as well).
     tf = np.atleast_1d(tf)
     
-    # Preallocate an array to hold the indices.
+    # Find closest indices
     I = np.empty(tf.shape, dtype=int)
-    
-    # For each target value in tf, find the index in t closest to it.
     for k, target in enumerate(tf):
         diff = np.abs(target - t)
         I[k] = np.argmin(diff)
