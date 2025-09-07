@@ -493,13 +493,13 @@ class _ExtendedSymplectic(_Integrator):
     -----
     The target *system* must expose three public attributes:
 
-    * **jac_H** - Jacobian of the Hamiltonian given as a nested list of
-      polynomial coefficient arrays compatible with
-      :func:`hiten.algorithms.polynomial.operations._polynomial_evaluate`.
-    * **clmo_H** - co-efficient layout mapping objects for the same
-      polynomials.
-    * **n_dof** - number of degrees of freedom (must equal 3 for this
-      implementation).
+    - **jac_H** - Jacobian of the Hamiltonian given as a nested list of
+        polynomial coefficient arrays compatible with
+        :func:`hiten.algorithms.polynomial.operations._polynomial_evaluate`.
+    - **clmo_H** - co-efficient layout mapping objects for the same
+        polynomials.
+    - **n_dof** - number of degrees of freedom (must equal 3 for this
+        implementation).
     """
     
     def __init__(self, order: int = 6, c_omega_heuristic: float = 20.0, **options):

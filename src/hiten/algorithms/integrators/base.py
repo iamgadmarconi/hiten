@@ -286,9 +286,9 @@ class _Integrator(ABC):
         ------
         ValueError
             If any of the following conditions holds:
-            * ``len(y0)`` differs from :attr:`hiten.system.dim`.
-            * ``t_vals`` contains fewer than two points.
-            * ``t_vals`` is not strictly monotonic.
+            - ``len(y0)`` differs from :attr:`hiten.system.dim`.
+            - ``t_vals`` contains fewer than two points.
+            - ``t_vals`` is not strictly monotonic.
         """
         self.validate_system(system)
         

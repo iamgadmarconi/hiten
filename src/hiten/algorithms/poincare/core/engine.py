@@ -1,3 +1,26 @@
+"""
+Abstract base class for Poincare return map engines.
+
+This module provides the abstract base class for implementing Poincare
+return map engines in the hiten framework. Engines coordinate backends
+and seeding strategies to compute complete return maps.
+
+The main class :class:`_ReturnMapEngine` defines the interface that all
+concrete engines must implement, including the core `compute_section`
+method and common functionality for caching and configuration.
+
+The engine layer sits between the high-level return map interface
+and the low-level numerical integration, providing a clean separation
+of concerns and enabling different computational strategies.
+
+References
+----------
+Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
+
+Guckenheimer, J. & Holmes, P. (1983). *Nonlinear Oscillations, Dynamical
+Systems, and Bifurcations of Vector Fields*. Springer.
+"""
+
 import os
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
@@ -10,7 +33,51 @@ if TYPE_CHECKING:
     from hiten.algorithms.poincare.core.base import _Section
 
 class _ReturnMapEngine(ABC):
-    
+    """Abstract base class for Poincare return map engines.
+
+    This class defines the interface that all concrete return map
+    engines must implement. It coordinates backends and seeding
+    strategies to compute complete return maps efficiently.
+
+    Parameters
+    ----------
+    backend : :class:`hiten.algorithms.poincare.core.backend._ReturnMapBackend`
+        The backend for numerical integration and section crossing
+        detection.
+    seed_strategy : :class:`hiten.algorithms.poincare.core.strategies._SeedingStrategyBase`
+        The seeding strategy for generating initial conditions
+        on the section plane.
+    map_config : :class:`hiten.algorithms.poincare.core.config._EngineConfigLike`
+        Configuration object containing engine parameters such as
+        iteration count, time step, and worker count.
+
+    Attributes
+    ----------
+    _backend : :class:`hiten.algorithms.poincare.core.backend._ReturnMapBackend`
+        The numerical integration backend.
+    _strategy : :class:`hiten.algorithms.poincare.core.strategies._SeedingStrategyBase`
+        The seeding strategy for initial conditions.
+    _map_config : :class:`hiten.algorithms.poincare.core.config._EngineConfigLike`
+        The engine configuration.
+    _n_iter : int
+        Number of return map iterations to compute.
+    _dt : float
+        Integration time step (nondimensional units).
+    _n_workers : int
+        Number of parallel workers for computation.
+    _section_cache : :class:`hiten.algorithms.poincare.core.base._Section` or None
+        Cache for the computed section to avoid redundant computation.
+
+    Notes
+    -----
+    The engine coordinates the computation process by:
+    1. Using the seeding strategy to generate initial conditions
+    2. Using the backend to integrate trajectories and find section crossings
+    3. Iterating the process to build up the complete return map
+    4. Managing caching and parallel computation for efficiency
+
+    All time units are in nondimensional units unless otherwise specified.
+    """
 
     def __init__(self, backend: _ReturnMapBackend, 
                  seed_strategy: _SeedingStrategyBase,
@@ -27,13 +94,79 @@ class _ReturnMapEngine(ABC):
 
     @abstractmethod
     def compute_section(self, *, recompute: bool = False) -> "_Section":
+        """Compute the Poincare section using the configured backend and strategy.
+
+        This abstract method must be implemented by concrete engines to
+        define how the complete return map is computed. The method should
+        coordinate the seeding strategy and backend to generate the
+        section data.
+
+        Parameters
+        ----------
+        recompute : bool, default=False
+            If True, forces recomputation even if the section is cached.
+            If False, returns the cached section if available.
+
+        Returns
+        -------
+        :class:`hiten.algorithms.poincare.core.base._Section`
+            The computed Poincare section containing points, states,
+            labels, and optional times.
+
+        Notes
+        -----
+        This method is the core of the engine's functionality. It should:
+        1. Generate initial conditions using the seeding strategy
+        2. Use the backend to integrate trajectories and find crossings
+        3. Iterate the process to build up the complete return map
+        4. Handle caching and parallel computation as appropriate
+        5. Return a properly formatted section object
+
+        The implementation should be efficient and handle edge cases
+        such as trajectories that don't reach the section.
+        """
         pass
 
     def clear_cache(self):
+        """Clear the cached section data.
+
+        Notes
+        -----
+        This method clears the internal section cache, forcing
+        recomputation on the next call to compute_section. Use
+        this method to free memory or force fresh computation
+        with updated parameters.
+        """
         self._section_cache = None
 
     def __repr__(self) -> str:
+        """Return a string representation of the engine.
+
+        Returns
+        -------
+        str
+            String representation showing the class name and key
+            configuration parameters.
+
+        Notes
+        -----
+        This method provides a concise string representation useful
+        for debugging and interactive exploration.
+        """
         return f"{self.__class__.__name__}(n_iter={self._n_iter}, dt={self._dt}, n_workers={self._n_workers})"
 
     def __str__(self) -> str:
+        """Return a string representation of the engine.
+
+        Returns
+        -------
+        str
+            String representation showing the class name and key
+            configuration parameters.
+
+        Notes
+        -----
+        This method provides a user-friendly string representation
+        for display purposes.
+        """
         return f"{self.__class__.__name__}(n_iter={self._n_iter}, dt={self._dt}, n_workers={self._n_workers})"

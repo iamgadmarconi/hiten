@@ -1,12 +1,17 @@
-r"""
-hiten.algorithms.poincare.config
-===============================
+"""
+Configuration for center manifold Poincare sections in the CR3BP.
 
-Configuration for Poincaré sections of the centre manifold of the spatial
-circular restricted three body problem.
+This module provides configuration classes for computing Poincare sections
+restricted to center manifolds of collinear libration points in the Circular
+Restricted Three-Body Problem (CR3BP).
 
-The module exposes a lightweight dataclass :pyclass:`_CenterManifoldSectionConfig`
-that encapsulates the configuration of a Poincaré section for the centre manifold.
+References
+----------
+Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
+
+Jorba, A. & Masdemont, J. (1999). Dynamics in the center manifold
+of the collinear points of the restricted three body problem.
+*Physica D*, 132(1-2), 189-213.
 """
 from dataclasses import dataclass
 from typing import Literal, Optional, Tuple
@@ -23,6 +28,38 @@ from hiten.utils.log_config import logger
 
 @dataclass
 class _CenterManifoldMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _IterationConfig, _SeedingConfig):
+    """Configuration for center manifold Poincare maps.
+
+    This dataclass combines configuration from multiple base classes to provide
+    comprehensive settings for center manifold map computation, including
+    integration parameters, seeding strategies, and iteration controls.
+
+    Parameters
+    ----------
+    seed_strategy : {'single', 'axis_aligned', 'level_sets', 'radial', 'random'}, default='axis_aligned'
+        Strategy for generating initial conditions on the center manifold.
+        - 'single': Single axis seeding along one coordinate direction
+        - 'axis_aligned': Seeding aligned with coordinate axes
+        - 'level_sets': Seeding based on level sets of the Hamiltonian
+        - 'radial': Radial seeding pattern from the periodic orbit
+        - 'random': Random seeding within specified bounds
+    seed_axis : {'q2', 'p2', 'q3', 'p3'}, optional
+        Coordinate axis for single-axis seeding strategy. Required when
+        seed_strategy='single', ignored otherwise.
+    section_coord : {'q2', 'p2', 'q3', 'p3'}, default='q3'
+        Coordinate defining the Poincare section (set to zero).
+
+    Notes
+    -----
+    The configuration inherits from multiple base classes:
+    - :class:`hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`: Basic return map settings
+    - :class:`hiten.algorithms.poincare.core.config._IntegrationConfig`: Integration method and parameters
+    - :class:`hiten.algorithms.poincare.core.config._IterationConfig`: Iteration control parameters
+    - :class:`hiten.algorithms.poincare.core.config._SeedingConfig`: Seeding strategy parameters
+
+    All coordinates are in nondimensional units with the primary-secondary
+    separation as the length unit.
+    """
 
     seed_strategy: Literal[
         "single",
@@ -43,6 +80,57 @@ class _CenterManifoldMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _Iterat
 
 
 class _CenterManifoldSectionConfig(_SectionConfig):
+    """Configuration for center manifold Poincare sections.
+
+    This class provides configuration data for Poincare sections defined by
+    setting one coordinate to zero in the center manifold phase space.
+    It includes mappings between coordinate names and indices, and methods
+    for extracting and building state vectors.
+
+    Parameters
+    ----------
+    section_coord : str
+        Coordinate defining the section ('q2', 'p2', 'q3', or 'p3').
+
+    Attributes
+    ----------
+    section_coord : str
+        The coordinate defining the section.
+    section_index : int
+        Index of the section coordinate in the state vector.
+    section_value : float
+        Value of the section coordinate (always 0.0).
+    plane_coords : tuple[str, str]
+        Coordinates spanning the section plane.
+    plane_indices : tuple[int, int]
+        Indices of the plane coordinates in the state vector.
+    missing_coord : str
+        Coordinate that must be solved for on the section.
+    missing_index : int
+        Index of the missing coordinate in the state vector.
+    momentum_check_index : int
+        Index for momentum direction checking.
+    momentum_check_sign : float
+        Sign for momentum direction checking.
+    deriv_index : int
+        Index for derivative computation.
+    other_coords : tuple[str, str]
+        The two coordinates not in the plane.
+    other_indices : tuple[int, int]
+        Indices of the other coordinates in the state vector.
+
+    Notes
+    -----
+    The state vector is ordered as [q1, q2, q3, p1, p2, p3] in the rotating
+    synodic frame. For center manifold trajectories, q1=0, so the effective
+    state vector is [q2, q3, p2, p3].
+
+    The four supported section types are:
+    - q3=0: Plane spanned by (q2, p2), solve for p3
+    - p3=0: Plane spanned by (q2, p2), solve for q3  
+    - q2=0: Plane spanned by (q3, p3), solve for p2
+    - p2=0: Plane spanned by (q3, p3), solve for q2
+    """
 
     _TABLE: dict[str, dict[str, object]] = {
         "q3": dict(
@@ -91,13 +179,49 @@ class _CenterManifoldSectionConfig(_SectionConfig):
             setattr(self, k, v)
 
     def get_section_value(self, state: np.ndarray) -> float:
+        """Get the value of the section coordinate from a state vector.
+
+        Parameters
+        ----------
+        state : ndarray, shape (6,)
+            State vector [q1, q2, q3, p1, p2, p3].
+
+        Returns
+        -------
+        float
+            Value of the section coordinate.
+        """
         return float(state[self.section_index])
 
     def extract_plane_coords(self, state: np.ndarray) -> Tuple[float, float]:
+        """Extract the plane coordinates from a state vector.
+
+        Parameters
+        ----------
+        state : ndarray, shape (6,)
+            State vector [q1, q2, q3, p1, p2, p3].
+
+        Returns
+        -------
+        tuple[float, float]
+            The two coordinates spanning the section plane.
+        """
         i, j = self.plane_indices 
         return float(state[i]), float(state[j])
 
     def extract_other_coords(self, state: np.ndarray) -> Tuple[float, float]:
+        """Extract the other coordinates from a state vector.
+
+        Parameters
+        ----------
+        state : ndarray, shape (6,)
+            State vector [q1, q2, q3, p1, p2, p3].
+
+        Returns
+        -------
+        tuple[float, float]
+            The two coordinates not in the section plane.
+        """
         i, j = self.other_indices
         return float(state[i]), float(state[j])
 
@@ -106,6 +230,26 @@ class _CenterManifoldSectionConfig(_SectionConfig):
         plane_vals: Tuple[float, float],
         other_vals: Tuple[float, float],
     ) -> Tuple[float, float, float, float]:
+        """Build a center manifold state vector from coordinate values.
+
+        Parameters
+        ----------
+        plane_vals : tuple[float, float]
+            Values for the plane coordinates.
+        other_vals : tuple[float, float]
+            Values for the other coordinates.
+
+        Returns
+        -------
+        tuple[float, float, float, float]
+            Center manifold state (q2, p2, q3, p3) with the section
+            coordinate set to its section value.
+
+        Notes
+        -----
+        The section coordinate is automatically set to its section value
+        (typically 0.0) regardless of the input values.
+        """
         q2 = p2 = q3 = p3 = 0.0
         if self.plane_coords == ("q2", "p2"):
             q2, p2 = plane_vals
@@ -125,6 +269,25 @@ class _CenterManifoldSectionConfig(_SectionConfig):
         return q2, p2, q3, p3
 
     def build_constraint_dict(self, **kwargs) -> dict[str, float]:
+        """Build a constraint dictionary for root finding.
+
+        Parameters
+        ----------
+        **kwargs
+            Additional coordinate values to include in the constraints.
+
+        Returns
+        -------
+        dict[str, float]
+            Dictionary mapping coordinate names to their values, including
+            the section coordinate set to its section value.
+
+        Notes
+        -----
+        The section coordinate is automatically included with its section
+        value. Only valid coordinate names ('q1', 'q2', 'q3', 'p1', 'p2', 'p3')
+        from the keyword arguments are included in the output.
+        """
         out: dict[str, float] = {self.section_coord: self.section_value} 
         for k, v in kwargs.items():
             if k in {"q1", "q2", "q3", "p1", "p2", "p3"}:
@@ -137,6 +300,29 @@ _SECTION_CACHE: dict[str, _CenterManifoldSectionConfig] = {
 }
 
 def _get_section_config(section_coord: str) -> _CenterManifoldSectionConfig:
+    """Get a cached section configuration for the specified coordinate.
+
+    Parameters
+    ----------
+    section_coord : str
+        Section coordinate identifier ('q2', 'p2', 'q3', or 'p3').
+
+    Returns
+    -------
+    :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+        Cached configuration for the specified section coordinate.
+
+    Raises
+    ------
+    ValueError
+        If section_coord is not one of the supported values.
+
+    Notes
+    -----
+    This function uses a cache to avoid recreating configuration objects
+    for the same section coordinate. The cache is populated at module
+    import time with all four supported section types.
+    """
     try:
         return _SECTION_CACHE[section_coord]
     except KeyError as exc:

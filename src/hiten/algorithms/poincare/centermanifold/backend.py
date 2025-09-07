@@ -1,3 +1,29 @@
+"""
+Center manifold backend for efficient Poincare map computations.
+
+This module provides Numba-compiled kernels for computing center manifold
+trajectories in the Circular Restricted Three-Body Problem (CR3BP). The
+backend implements both Runge-Kutta and symplectic integration methods
+with parallel processing capabilities for high-performance computation
+of Poincare maps.
+
+The main class :class:`_CenterManifoldBackend` provides the interface
+for center manifold computations, while the Numba-compiled functions
+handle the low-level numerical integration and section crossing detection.
+
+References
+----------
+Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
+
+Jorba, A. & Masdemont, J. (1999). Dynamics in the center manifold
+of the collinear points of the restricted three body problem.
+*Physica D*, 132(1-2), 189-213.
+
+Koon, W. S., Lo, M. W., Marsden, J. E., & Ross, S. D. (2011).
+*Dynamical Systems, the Three-Body Problem and Space Mission
+Design*. Springer.
+"""
+
 from typing import Callable, Literal, Optional, Tuple
 
 import numpy as np
@@ -22,6 +48,28 @@ from hiten.utils.log_config import logger
 
 @njit(cache=False, fastmath=FASTMATH, inline="always")
 def _detect_crossing(section_coord: str, state_old: np.ndarray, state_new: np.ndarray, rhs_new: np.ndarray, n_dof: int) -> Tuple[bool, float]:
+    """Detect if trajectory crossed the Poincare section.
+
+    Parameters
+    ----------
+    section_coord : str
+        Section coordinate identifier ('q2', 'p2', 'q3', or 'p3').
+    state_old : ndarray, shape (2*n_dof,)
+        Previous state vector [q1, q2, q3, p1, p2, p3].
+    state_new : ndarray, shape (2*n_dof,)
+        Current state vector [q1, q2, q3, p1, p2, p3].
+    rhs_new : ndarray, shape (2*n_dof,)
+        Current right-hand side of Hamiltonian equations.
+    n_dof : int
+        Number of degrees of freedom (typically 3 for CR3BP).
+
+    Returns
+    -------
+    bool
+        True if section crossing detected.
+    float
+        Interpolation parameter alpha for crossing time.
+    """
     if section_coord == "q3":
         f_old = state_old[2]
         f_new = state_new[2]
@@ -58,6 +106,22 @@ def _detect_crossing(section_coord: str, state_old: np.ndarray, state_new: np.nd
 
 @njit(cache=False, fastmath=FASTMATH)
 def _get_rk_coefficients(order: int):
+    """Return Runge-Kutta coefficients for specified order.
+
+    Parameters
+    ----------
+    order : int
+        Integration order (4, 6, or 8).
+
+    Returns
+    -------
+    A : ndarray
+        Runge-Kutta A matrix.
+    B : ndarray
+        Runge-Kutta B vector.
+    C : ndarray
+        Runge-Kutta C vector.
+    """
     if order == 4:
         return RK4_A, RK4_B, RK4_C
     elif order == 6:
@@ -68,6 +132,30 @@ def _get_rk_coefficients(order: int):
 
 @njit(cache=False, fastmath=FASTMATH)
 def _integrate_rk_ham(y0: np.ndarray, t_vals: np.ndarray, A: np.ndarray, B: np.ndarray, C: np.ndarray, jac_H, clmo_H):
+    """Integrate Hamiltonian system using Runge-Kutta method.
+
+    Parameters
+    ----------
+    y0 : ndarray, shape (2*n_dof,)
+        Initial state vector [q1, q2, q3, p1, p2, p3].
+    t_vals : ndarray, shape (n_steps,)
+        Time values for integration.
+    A : ndarray
+        Runge-Kutta A matrix.
+    B : ndarray
+        Runge-Kutta B vector.
+    C : ndarray
+        Runge-Kutta C vector.
+    jac_H : ndarray
+        Jacobian of Hamiltonian polynomial.
+    clmo_H : ndarray
+        CLMO table for polynomial evaluation.
+
+    Returns
+    -------
+    traj : ndarray, shape (n_steps, 2*n_dof)
+        Integrated trajectory.
+    """
     n_steps = t_vals.shape[0]
     dim = y0.shape[0]
     n_stages = B.shape[0]
@@ -114,6 +202,36 @@ def _integrate_rk_ham(y0: np.ndarray, t_vals: np.ndarray, A: np.ndarray, B: np.n
 @njit(cache=False, fastmath=FASTMATH)
 def _integrate_map(y0: np.ndarray, t_vals: np.ndarray, A: np.ndarray, B: np.ndarray, C: np.ndarray,
                    jac_H, clmo_H, order: int, c_omega_heuristic: float = 20.0, use_symplectic: bool = False):
+    """Integrate Hamiltonian system using specified method.
+
+    Parameters
+    ----------
+    y0 : ndarray, shape (2*n_dof,)
+        Initial state vector [q1, q2, q3, p1, p2, p3].
+    t_vals : ndarray, shape (n_steps,)
+        Time values for integration.
+    A : ndarray
+        Runge-Kutta A matrix.
+    B : ndarray
+        Runge-Kutta B vector.
+    C : ndarray
+        Runge-Kutta C vector.
+    jac_H : ndarray
+        Jacobian of Hamiltonian polynomial.
+    clmo_H : ndarray
+        CLMO table for polynomial evaluation.
+    order : int
+        Integration order.
+    c_omega_heuristic : float, default=20.0
+        Heuristic parameter for symplectic integration.
+    use_symplectic : bool, default=False
+        If True, use symplectic integration; otherwise use Runge-Kutta.
+
+    Returns
+    -------
+    traj : ndarray, shape (n_steps, 2*n_dof)
+        Integrated trajectory.
+    """
 
     if use_symplectic:
         traj = _integrate_symplectic(y0, t_vals, jac_H, clmo_H, order, c_omega_heuristic)
@@ -127,6 +245,52 @@ def _integrate_map(y0: np.ndarray, t_vals: np.ndarray, A: np.ndarray, B: np.ndar
 def _poincare_step(q2: float, p2: float, q3: float, p3: float, dt: float,
                    jac_H, clmo, order: int, max_steps: int, use_symplectic: bool,
                    n_dof: int, section_coord: str, c_omega_heuristic: float = 20.0):
+    """Perform one Poincare map step for center manifold integration.
+
+    Parameters
+    ----------
+    q2 : float
+        q2 coordinate (nondimensional units).
+    p2 : float
+        p2 coordinate (nondimensional units).
+    q3 : float
+        q3 coordinate (nondimensional units).
+    p3 : float
+        p3 coordinate (nondimensional units).
+    dt : float
+        Integration time step (nondimensional units).
+    jac_H : ndarray
+        Jacobian of Hamiltonian polynomial.
+    clmo : ndarray
+        CLMO table for polynomial evaluation.
+    order : int
+        Integration order.
+    max_steps : int
+        Maximum number of integration steps.
+    use_symplectic : bool
+        If True, use symplectic integration.
+    n_dof : int
+        Number of degrees of freedom.
+    section_coord : str
+        Section coordinate identifier.
+    c_omega_heuristic : float, default=20.0
+        Heuristic parameter for symplectic integration.
+
+    Returns
+    -------
+    flag : int
+        1 if section crossing found, 0 otherwise.
+    q2p : float
+        q2 coordinate at crossing.
+    p2p : float
+        p2 coordinate at crossing.
+    q3p : float
+        q3 coordinate at crossing.
+    p3p : float
+        p3 coordinate at crossing.
+    t_cross : float
+        Time of section crossing.
+    """
 
     state_old = np.zeros(2 * n_dof, dtype=np.float64)
     state_old[1] = q2
@@ -165,6 +329,46 @@ def _poincare_step(q2: float, p2: float, q3: float, p3: float, dt: float,
 @njit(parallel=True, cache=False)
 def _poincare_map(seeds: np.ndarray, dt: float, jac_H, clmo, order: int, max_steps: int,
                   use_symplectic: bool, n_dof: int, section_coord: str, c_omega_heuristic: float):
+    """Compute Poincare map for multiple center manifold seeds in parallel.
+
+    Parameters
+    ----------
+    seeds : ndarray, shape (n_seeds, 4)
+        Array of initial seeds [q2, p2, q3, p3] (nondimensional units).
+    dt : float
+        Integration time step (nondimensional units).
+    jac_H : ndarray
+        Jacobian of Hamiltonian polynomial.
+    clmo : ndarray
+        CLMO table for polynomial evaluation.
+    order : int
+        Integration order.
+    max_steps : int
+        Maximum number of integration steps.
+    use_symplectic : bool
+        If True, use symplectic integration.
+    n_dof : int
+        Number of degrees of freedom.
+    section_coord : str
+        Section coordinate identifier.
+    c_omega_heuristic : float
+        Heuristic parameter for symplectic integration.
+
+    Returns
+    -------
+    success : ndarray, shape (n_seeds,)
+        Success flags (1 if crossing found, 0 otherwise).
+    q2p_out : ndarray, shape (n_seeds,)
+        q2 coordinates at crossings.
+    p2p_out : ndarray, shape (n_seeds,)
+        p2 coordinates at crossings.
+    q3p_out : ndarray, shape (n_seeds,)
+        q3 coordinates at crossings.
+    p3p_out : ndarray, shape (n_seeds,)
+        p3 coordinates at crossings.
+    t_out : ndarray, shape (n_seeds,)
+        Times of section crossings.
+    """
 
     n_seeds = seeds.shape[0]
     success = np.zeros(n_seeds, dtype=np.int64)
@@ -194,18 +398,45 @@ def _poincare_map(seeds: np.ndarray, dt: float, jac_H, clmo, order: int, max_ste
 
 
 class _CenterManifoldBackend(_ReturnMapBackend):
-    """Backend that delegates computation to the fast Centre-Manifold kernels.
+    """Backend for center manifold computations in the CR3BP.
+
+    This backend provides efficient computation of center manifold trajectories
+    using Numba-compiled kernels for Hamiltonian integration and Poincare map
+    evaluation. It supports both Runge-Kutta and symplectic integration methods.
 
     Parameters
     ----------
-    generate_map_kwargs
-        Arguments forwarded verbatim to
-        :func:`hiten.algorithms.poincare.map._generate_map`.
-    generate_grid_kwargs, optional
-        Arguments forwarded to
-        :func:`hiten.algorithms.poincare.map._generate_grid`.  If *None* the
-        backend will raise ``NotImplementedError`` when
-        :py:meth:`compute_grid` is requested.
+    dynsys : :class:`hiten.algorithms.dynamics.hamiltonian._HamiltonianSystemProtocol`
+        Hamiltonian system providing polynomial representation and CLMO tables.
+    surface : :class:`hiten.algorithms.poincare.core.events._SurfaceEvent`
+        Poincare section surface definition.
+    section_coord : str
+        Section coordinate identifier ('q2', 'p2', 'q3', or 'p3').
+    h0 : float
+        Energy level for center manifold (nondimensional units).
+    forward : int, default=1
+        Integration direction (1 for forward, -1 for backward).
+    max_steps : int, default=2000
+        Maximum integration steps per trajectory.
+    method : {'scipy', 'rk', 'symplectic', 'adaptive'}, default='scipy'
+        Integration method.
+    order : int, default=8
+        Integration order for Runge-Kutta methods.
+    pre_steps : int, default=1000
+        Pre-integration steps for trajectory stabilization.
+    refine_steps : int, default=3000
+        Refinement steps for root finding.
+    bracket_dx : float, default=1e-10
+        Initial bracket size for root finding.
+    max_expand : int, default=500
+        Maximum bracket expansion iterations.
+    c_omega_heuristic : float, default=20.0
+        Heuristic parameter for symplectic integration.
+
+    Notes
+    -----
+    The center manifold is computed in the rotating synodic frame of the CR3BP.
+    State vectors are ordered as [q1, q2, q3, p1, p2, p3].
     """
 
     def __init__(
@@ -249,7 +480,19 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         self._c_omega_heuristic = c_omega_heuristic
 
     def _lift_plane_point(self, plane: tuple[float, float]) -> Optional[tuple[float, float, float, float]]:
-        """Convert a 2-D plane point into a 4-tuple CM state if inside Hill box."""
+        """Convert a 2-D plane point into a 4-tuple center manifold state.
+
+        Parameters
+        ----------
+        plane : tuple[float, float]
+            Plane coordinates (q2, p2) or (q3, p3) depending on section.
+
+        Returns
+        -------
+        tuple[float, float, float, float] or None
+            Center manifold state (q2, p2, q3, p3) if valid, None if outside
+            Hill box or root finding failed.
+        """
 
         cfg = self._section_cfg
 
@@ -284,7 +527,30 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         method: str = "brentq",
         xtol: float = 1e-12,
     ) -> Optional[float]:
-        """Return a positive root of *f* bracketed between 0 and some *x_hi*."""
+        """Find a positive root of function f using bracketing and root finding.
+
+        Parameters
+        ----------
+        f : callable
+            Function to find root of.
+        initial : float, default=1e-3
+            Initial bracket size.
+        factor : float, default=2.0
+            Bracket expansion factor.
+        max_expand : int, default=40
+            Maximum expansion iterations.
+        symmetric : bool, default=False
+            If True, use symmetric bracketing.
+        method : str, default='brentq'
+            Root finding method.
+        xtol : float, default=1e-12
+            Root finding tolerance.
+
+        Returns
+        -------
+        float or None
+            Root value if found, None otherwise.
+        """
 
         # We require f(0) <= 0 so that a root can lie in (0, x).
         if f(0.0) > 0.0:
@@ -318,7 +584,36 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         method: str = "brentq",
         xtol: float = 1e-12,
     ) -> Optional[float]:
-        """Solve for the *turning-point* value of one CM coordinate.
+        """Solve for the turning-point value of one center manifold coordinate.
+
+        Parameters
+        ----------
+        varname : str
+            Variable name to solve for ('q1', 'q2', 'q3', 'p1', 'p2', 'p3').
+        fixed_vals : dict[str, float]
+            Dictionary of fixed coordinate values.
+        initial_guess : float, default=1e-3
+            Initial guess for root finding.
+        expand_factor : float, default=2.0
+            Bracket expansion factor.
+        max_expand : int, default=40
+            Maximum expansion iterations.
+        symmetric : bool, default=False
+            If True, use symmetric bracketing.
+        method : str, default='brentq'
+            Root finding method.
+        xtol : float, default=1e-12
+            Root finding tolerance.
+
+        Returns
+        -------
+        float or None
+            Turning-point coordinate value if found, None otherwise.
+
+        Notes
+        -----
+        The turning point is found by solving H(q,p) = h0 for the specified
+        coordinate, where H is the Hamiltonian and h0 is the energy level.
         """
 
         var_indices = {
@@ -370,7 +665,40 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         method: str = "brentq",
         xtol: float = 1e-12,
     ) -> float:
-        """Return the absolute turning-point value for *q_or_p* coordinate."""
+        """Find the absolute turning-point value for specified coordinate.
+
+        Parameters
+        ----------
+        q_or_p : str
+            Coordinate name ('q2', 'p2', 'q3', or 'p3').
+        initial_guess : float, default=1e-3
+            Initial guess for root finding.
+        expand_factor : float, default=2.0
+            Bracket expansion factor.
+        max_expand : int, default=40
+            Maximum expansion iterations.
+        symmetric : bool, default=False
+            If True, use symmetric bracketing.
+        method : str, default='brentq'
+            Root finding method.
+        xtol : float, default=1e-12
+            Root finding tolerance.
+
+        Returns
+        -------
+        float
+            Absolute turning-point coordinate value.
+
+        Raises
+        ------
+        RuntimeError
+            If root finding fails to converge.
+
+        Notes
+        -----
+        This method finds the turning point for the Hill boundary of the
+        center manifold, where all other coordinates are set to zero.
+        """
 
         fixed_vals = {coord: 0.0 for coord in ("q2", "p2", "q3", "p3") if coord != q_or_p}
 
@@ -397,19 +725,31 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         *,
         dt: float = 1e-2,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """Propagate every CM seed until the next section crossing.
+        """Propagate center manifold seeds until the next Poincare section crossing.
 
         Parameters
         ----------
-        seeds
-            Array of shape (m, 4) with (q2, p2, q3, p3) states.
+        seeds : ndarray, shape (n_seeds, 4)
+            Array of initial seeds [q2, p2, q3, p3] (nondimensional units).
+        dt : float, default=1e-2
+            Integration time step (nondimensional units).
 
         Returns
         -------
-        pts : (k, 2) ndarray
-            Plane coordinates of the crossings.
-        cm_states : (k, 4) ndarray
-            Centre-manifold coordinates of the crossings.
+        pts : ndarray, shape (n_crossings, 2)
+            Plane coordinates of the section crossings.
+        cm_states : ndarray, shape (n_crossings, 4)
+            Center manifold coordinates of the crossings.
+        times : ndarray, shape (n_crossings,)
+            Times of section crossings.
+        flags : ndarray, shape (n_seeds,)
+            Success flags (1 if crossing found, 0 otherwise).
+
+        Notes
+        -----
+        This method uses parallel Numba compilation for efficient computation
+        of multiple trajectories. The integration continues until either a
+        section crossing is detected or the maximum number of steps is reached.
         """
 
         if seeds.size == 0:

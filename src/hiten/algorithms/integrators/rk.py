@@ -290,11 +290,7 @@ class _AdaptiveStepRK(_RungeKuttaBase):
     """Embedded adaptive Runge-Kutta integrator with PI controller.
 
     The class implements proportional-integral (PI) step-size control using
-    the error estimates returned by :func:`_rk_embedded_step`.  Two safety
-    factors are used:
-
-    * *rtol*, *atol*  - user requested relative and absolute tolerances
-    * :attr:`SAFETY` - hard coded damping on the acceptance criterion.
+    the error estimates returned by :func:`_rk_embedded_step`. 
 
     Parameters
     ----------
