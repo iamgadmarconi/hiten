@@ -1,22 +1,39 @@
-r"""
-polynomial.base
-===============
-
+"""
 Low-level helpers for manipulating multivariate polynomial coefficient arrays
-used throughout the library.  The routines defined here are performance-critical
-Numba-JIT compiled kernels that:
+used throughout the library.
 
-* build combinatorial lookup tables (:pyfunc:`_init_index_tables`) for fast
-  encoding/decoding of monomial multi-indices,
-* provide packing/unpacking utilities for exponents in a compact
-  32-bit representation (:pyfunc:`_pack_multiindex`,
-  :pyfunc:`_decode_multiindex`, :pyfunc:`_encode_multiindex`,
-  :pyfunc:`_fill_exponents`),
-* expose lightweight algebraic helpers such as factorial and binomial
-  coefficients (:pyfunc:`_factorial`, :pyfunc:`_combinations`), and
-* create suitably-shaped zero coefficient arrays (:pyfunc:`_make_poly`).
+This module provides performance-critical Numba-JIT compiled kernels for
+polynomial operations in the circular restricted three-body problem.
 
-The module is intentionally dependency-light (only *NumPy* and *Numba*) so that
+The routines defined here are performance-critical Numba-JIT compiled kernels that:
+
+- build combinatorial lookup tables (:func:`_init_index_tables`) for fast
+    encoding/decoding of monomial multi-indices
+- provide packing/unpacking utilities for exponents in a compact
+    32-bit representation (:func:`_pack_multiindex`,
+    :func:`_decode_multiindex`, :func:`_encode_multiindex`,
+    :func:`_fill_exponents`)
+- expose lightweight algebraic helpers such as factorial and binomial
+    coefficients (:func:`_factorial`, :func:`_combinations`)
+- create suitably-shaped zero coefficient arrays (:func:`_make_poly`)
+
+Mathematical Background
+----------------------
+The module implements efficient storage and manipulation of multivariate
+polynomials in the 6D phase space (q1, q2, q3, p1, p2, p3) of the circular
+restricted three-body problem. Polynomials are represented as coefficient
+arrays using compressed monomial ordering for optimal performance.
+
+The packing scheme allocates 6 bits for each variable x1 through x5,
+with x0's exponent implicitly determined by the total degree constraint.
+
+References
+----------
+Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
+
+Notes
+-----
+The module is intentionally dependency-light (only NumPy and Numba) so that
 these utilities can be reused by both CPU and GPU back-ends without circular
 dependencies.
 """
@@ -47,7 +64,7 @@ def _factorial(n: int) -> int:
     Returns
     -------
     int
-        The factorial :math:`n! = n * (n-1) * ... * 2 * 1`
+        The factorial n! = n * (n-1) * ... * 2 * 1
         
     Notes
     -----
@@ -63,7 +80,7 @@ def _factorial(n: int) -> int:
 @njit(fastmath=FASTMATH, cache=False)
 def _combinations(n: int, k: int) -> int:
     r"""
-    Calculate the binomial coefficient :math:`C(n,k) = n! / (k! * (n-k)!)`.
+    Calculate the binomial coefficient C(n,k) = n! / (k! * (n-k)!).
     
     Parameters
     ----------
@@ -76,7 +93,7 @@ def _combinations(n: int, k: int) -> int:
     -------
     int
         The number of ways to choose k items from n items,
-        which equals :math:`n! / (k! * (n-k)!)`
+        which equals n! / (k! * (n-k)!)
         
     Notes
     -----
@@ -124,8 +141,8 @@ def _init_index_tables(degree: int):
         
     Notes
     -----
-    The packing scheme allocates 6 bits for each variable :math:`x_1` through :math:`x_5`,
-    with :math:`x_0`'s exponent implicitly determined by the total degree.
+    The packing scheme allocates 6 bits for each variable x1 through x5,
+    with x0's exponent implicitly determined by the total degree.
     """
     psi = np.zeros((N_VARS+1, degree+1), dtype=np.int64)
     for i_vars_count in range(1, N_VARS+1):

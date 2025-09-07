@@ -1,32 +1,50 @@
-r"""
-hiten.algorithms.polynomial.algebra
-============================
-
+"""
 Numba accelerated helpers for algebraic manipulation of multivariate
-polynomial coefficient arrays in :math:`6` canonical variables
-:math:`(q_{1}, q_{2}, q_{3}, p_{1}, p_{2}, p_{3})`.
+polynomial coefficient arrays in 6 canonical variables
+(q1, q2, q3, p1, p2, p3).
 
-The module supplies low level kernels for
+This module provides low-level kernels for polynomial operations in
+the circular restricted three-body problem, optimized for high
+performance using Numba JIT compilation.
 
-* Element wise arithmetic (:pyfunc:`_poly_add`, :pyfunc:`_poly_scale`)
-* Dense convolution style multiplication (:pyfunc:`_poly_mul`)
-* Partial differentiation and Poisson brackets (:pyfunc:`_poly_diff`,
-  :pyfunc:`_poly_poisson`)
-* Numerical evaluation, integration and coefficient cleaning
-  (:pyfunc:`_poly_evaluate`, :pyfunc:`_poly_integrate`,
-  :pyfunc:`_poly_clean`, :pyfunc:`_poly_clean_inplace`).
+The module supplies low level kernels for:
+
+- Element wise arithmetic (:func:`_poly_add`, :func:`_poly_scale`)
+- Dense convolution style multiplication (:func:`_poly_mul`)
+- Partial differentiation and Poisson brackets (:func:`_poly_diff`,
+    :func:`_poly_poisson`)
+- Numerical evaluation, integration and coefficient cleaning
+    (:func:`_poly_evaluate`, :func:`_poly_integrate`,
+    :func:`_poly_clean`, :func:`_poly_clean_inplace`)
 
 All routines operate on one-dimensional coefficient arrays that follow
 the compressed monomial ordering provided by
-:pyfunc:`hiten.algorithms.polynomial.base._init_index_tables`.  Kernels are
-compiled in nopython mode with :pyfunc:`numba.njit`; computationally
-intensive operations additionally exploit :pyfunc:`numba.prange` for
+:func:`hiten.algorithms.polynomial.base._init_index_tables`. Kernels are
+compiled in nopython mode with :func:`numba.njit`; computationally
+intensive operations additionally exploit :func:`numba.prange` for
 parallelism.
+
+Mathematical Background
+----------------------
+The module implements polynomial operations in the 6D phase space
+(q1, q2, q3, p1, p2, p3) of the circular restricted three-body problem.
+Polynomials are represented as coefficient arrays using compressed
+monomial ordering for efficient storage and computation.
+
+The Poisson bracket implementation follows the standard definition:
+{p, q} = sum_{i=1}^3 (dp/dq_i * dq/dp_i - dp/dp_i * dq/dq_i)
+
+References
+----------
+Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
+
+Press, W. H., Teukolsky, S. A., Vetterling, W. T., & Flannery, B. P. (2007).
+*Numerical Recipes: The Art of Scientific Computing*. Cambridge University Press.
 
 Notes
 -----
 These helpers are primarily intended for internal use by higher-level
-abstractions in :pymod:`hiten.algorithms.polynomial`.  Inputs are assumed to
+abstractions in :mod:`hiten.algorithms.polynomial`. Inputs are assumed to
 be well-formed; minimal validation is performed at runtime to maximise
 performance.
 """
@@ -263,7 +281,7 @@ def _poly_poisson(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clm
     -----
     The Poisson bracket {p, q} is defined as:
     
-    {p, q} = Σ_{i=1}^3 (∂p/∂q_i * ∂q/∂p_i - ∂p/∂p_i * ∂q/∂q_i)
+    {p, q} = sum_{i=1}^3 (dp/dq_i * dq/dp_i - dp/dp_i * dq/dq_i)
     
     where q_i are position variables and p_i are momentum variables.
     
@@ -509,16 +527,16 @@ def _evaluate_reduced_monomial(
     -------
     numpy.complex128
         The value of the modified monomial evaluated at the given coordinates.
-        Returns complex zero if any coordinate is effectively zero (|coord| ≤ 1e-15)
+        Returns complex zero if any coordinate is effectively zero (|coord| <= 1e-15)
         but has a positive exponent in the monomial.
         
     Notes
     -----
     The function computes the product:
     
-    :math:`\prod_{i=0}^{5} coords[i]^{exp_i}`
+        prod_{i=0}^{5} coords[i]^{exp_i}
     
-    where :math:`exp_i = k[i]` for :math:`i \neq var_idx`, and :math:`exp_{var_idx} = k[var_idx] + exp_change`.
+    where exp_i = k[i] for i != var_idx, and exp_{var_idx} = k[var_idx] + exp_change.
     """
     result = 1.0 + 0.0j
     

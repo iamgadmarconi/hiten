@@ -1,3 +1,28 @@
+"""
+High-level utilities for computing invariant tori in the circular restricted
+three-body problem.
+
+This module provides comprehensive tools for computing 2D invariant tori that
+bifurcate from periodic orbits in the circular restricted three-body problem.
+The implementation supports both linear approximation methods and advanced
+algorithms like GMOS (Generalized Method of Characteristics) and KKG.
+
+The torus is parameterized by two angles:
+- theta1: longitudinal angle along the periodic orbit
+- theta2: latitudinal angle in the transverse direction
+
+The torus surface is given by:
+u(theta1, theta2) = ubar(theta1) + epsilon * (cos(theta2) * Re(y(theta1)) - sin(theta2) * Im(y(theta1)))
+
+where ubar is the periodic orbit trajectory and y is the complex eigenvector field.
+
+Notes
+-----
+The module implements both linear approximation methods and advanced algorithms
+for computing invariant tori. The linear approximation provides a good starting
+point for more sophisticated methods.
+"""
+
 from dataclasses import dataclass
 from typing import Literal, Optional, Sequence, Tuple
 
@@ -19,9 +44,21 @@ from hiten.utils.plots import plot_invariant_torus
 class _ToriCorrectionConfig(_BaseCorrectionConfig):
     """Configuration container for invariant-torus Newton solves.
 
-    Extends the generic :class:`_BaseCorrectionConfig` with additional
+    Extends the generic :class:`hiten.algorithms.corrector.base._BaseCorrectionConfig` with additional
     parameters controlling the integration backend used by the stroboscopic
     map and variational equations.
+
+    Parameters
+    ----------
+    delta_s : float, default 1e-4
+        Step size for numerical differentiation in the Newton solver.
+        Used in finite difference approximations for the Jacobian matrix.
+
+    Notes
+    -----
+    This configuration is specifically tailored for invariant torus computations
+    in the circular restricted three-body problem, where the stroboscopic map
+    and variational equations require careful numerical treatment.
     """
 
     delta_s: float = 1e-4
@@ -29,19 +66,33 @@ class _ToriCorrectionConfig(_BaseCorrectionConfig):
 
 @dataclass(slots=True, frozen=True)
 class _Torus:
-    r"""
+    """
     Immutable representation of a 2-D invariant torus.
+
+    This class represents a 2D invariant torus in the circular restricted
+    three-body problem, parameterized by two angular coordinates theta1 and theta2.
+    The torus is defined by a grid of state vectors and fundamental frequencies.
 
     Parameters
     ----------
-    grid : np.ndarray
+    grid : numpy.ndarray
         Real 6-state samples of shape (n_theta1, n_theta2, 6).
-    omega : np.ndarray
-        Fundamental frequencies (omega_1, omega_2).
+        Each point represents a state vector on the torus surface.
+    omega : numpy.ndarray
+        Fundamental frequencies (omega_1, omega_2) in nondimensional units.
+        omega_1 is the longitudinal frequency, omega_2 is the latitudinal frequency.
     C0 : float
-        Jacobi constant (fixed along the torus family).
+        Jacobi constant (fixed along the torus family) in nondimensional units.
     system : System
         Parent CR3BP system (useful for downstream algorithms).
+
+    Notes
+    -----
+    The torus is parameterized by two angles:
+    - theta1: longitudinal angle along the periodic orbit
+    - theta2: latitudinal angle in the transverse direction
+
+    The fundamental frequencies determine the quasi-periodic motion on the torus.
     """
 
     grid: np.ndarray
@@ -51,19 +102,47 @@ class _Torus:
 
 
 class _InvariantTori:
+    """
+    Linear approximation of a 2-D invariant torus bifurcating from a
+    centre component of a periodic orbit.
+
+    This class implements the computation of invariant tori in the circular
+    restricted three-body problem using linear approximation methods. The torus
+    is constructed from a periodic orbit by analyzing the monodromy matrix
+    and computing the associated eigenvector field.
+
+    Mathematical Background
+    ----------------------
+    The invariant torus is parameterized by two angles:
+    - theta1: longitudinal angle along the periodic orbit
+    - theta2: latitudinal angle in the transverse direction
+
+    The torus surface is given by:
+    u(theta1, theta2) = ubar(theta1) + epsilon * (cos(theta2) * Re(y(theta1)) - sin(theta2) * Im(y(theta1)))
+
+    where ubar is the periodic orbit trajectory and y is the complex eigenvector field.
+
+    References
+    ----------
+    Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
+    """
 
     def __init__(self, orbit: PeriodicOrbit):
-        r"""
-        Linear approximation of a 2-D invariant torus bifurcating from a
-        centre component of a periodic orbit.
+        """
+        Initialize the invariant torus computation.
 
         Parameters
         ----------
         orbit : PeriodicOrbit
-            *Corrected* periodic orbit about which the torus is constructed. The
-            orbit must expose a valid `period` attribute - no propagation is
-            performed here; we only integrate the *variational* equations to
-            obtain the _state-transition matrices required by the algorithm.
+            Corrected periodic orbit about which the torus is constructed. The
+            orbit must expose a valid period attribute - no propagation is
+            performed here; we only integrate the variational equations to
+            obtain the state-transition matrices required by the algorithm.
+
+        Raises
+        ------
+        ValueError
+            If the orbit period is None (orbit not corrected).
         """
         if orbit.period is None:
             raise ValueError("The generating orbit must be corrected first (period is None).")
@@ -91,22 +170,27 @@ class _InvariantTori:
 
     @property
     def orbit(self) -> PeriodicOrbit:
+        """Periodic orbit about which the torus is constructed."""
         return self._orbit
 
     @property
     def libration_point(self) -> LibrationPoint:
+        """Libration point anchoring the family."""
         return self._orbit.libration_point
 
     @property
     def system(self) -> System:
+        """Parent CR3BP system."""
         return self._orbit.system
     
     @property
     def dynsys(self):
+        """Dynamical system."""
         return self._dynsys
     
     @property
     def grid(self) -> np.ndarray:
+        """Invariant torus grid."""
         if self._grid is None:
             err = 'Invariant torus grid not computed. Call `compute()` first.'
             logger.error(err)
@@ -116,10 +200,12 @@ class _InvariantTori:
     
     @property
     def period(self) -> float:
+        """Orbit period."""
         return float(self.orbit.period)
     
     @property
     def jacobi(self) -> float:
+        """Jacobi constant."""
         return float(self.orbit.jacobi_constant)
 
     @property
@@ -128,13 +214,25 @@ class _InvariantTori:
         return getattr(self, "_rotation_number", None)
     
     def as_state(self) -> _Torus:
-        r"""
+        """
         Return an immutable :class:`_Torus` view of the current grid.
 
         The fundamental frequencies are derived from the generating periodic
-        orbit: :math:`\omega_1 = 2 \pi / T` (longitudinal) and 
-        :math:`\omega_2 = \arg(\lambda) / T` where :math:`\lambda` is the
+        orbit: omega_1 = 2 * pi / T (longitudinal) and 
+        omega_2 = arg(lambda) / T where lambda is the
         complex unit-circle eigenvalue of the monodromy matrix.
+
+        Returns
+        -------
+        _Torus
+            Immutable torus representation with computed fundamental frequencies.
+
+        Raises
+        ------
+        ValueError
+            If the torus grid has not been computed yet.
+        RuntimeError
+            If no suitable complex eigenvalue is found in the monodromy matrix.
         """
 
         # Ensure a torus grid is available.
@@ -165,12 +263,27 @@ class _InvariantTori:
         return _Torus(grid=self._grid.copy(), omega=omega, C0=C0, system=self.system)
 
     def _prepare(self, n_theta1: int = 256, *, method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy", order: int = 8) -> None:
-        r"""
-        Compute the trajectory, STM samples :math:`\Phi_{\theta_1}(0)` and the rotated
-        eigen-vector field :math:`y(\theta_1)` required by the torus parameterisation.
+        """
+        Compute the trajectory, STM samples Phi_theta1(0) and the rotated
+        eigen-vector field y(theta1) required by the torus parameterisation.
 
         This routine is executed once and cached; subsequent calls with the
-        same *n_theta1* return immediately.
+        same n_theta1 return immediately.
+
+        Parameters
+        ----------
+        n_theta1 : int, default 256
+            Number of discretization points along the periodic orbit.
+        method : {'scipy', 'rk', 'symplectic', 'adaptive'}, default 'scipy'
+            Integration method for computing the state transition matrix.
+        order : int, default 8
+            Order of the integration method.
+
+        Notes
+        -----
+        This method computes the state transition matrix samples and the
+        complex eigenvector field required for the torus parameterization.
+        The results are cached to avoid recomputation.
         """
         if self._theta1 is not None and len(self._theta1) == n_theta1:
             # Cached - nothing to do.
@@ -226,13 +339,32 @@ class _InvariantTori:
         logger.info("Cached STM and eigen-vector field for torus initialisation.")
 
     def _state(self, theta1: float, theta2: float, epsilon: float = 1e-4) -> np.ndarray:
-        r"""
-        Return the 6-_state vector :math:`u_grid(\theta_1, \theta_2)` given by equation (15).
+        """
+        Return the 6-state vector u_grid(theta1, theta2) given by equation (15).
 
-        The angle inputs may lie outside :math:`[0, 2\pi)`; they are wrapped
-        automatically. Interpolation is performed along :math:`\theta_1` using the cached
+        The angle inputs may lie outside [0, 2*pi); they are wrapped
+        automatically. Interpolation is performed along theta1 using the cached
         trajectory samples (linear interpolation is adequate for small torus
         amplitudes).
+
+        Parameters
+        ----------
+        theta1 : float
+            Longitudinal angle along the periodic orbit.
+        theta2 : float
+            Latitudinal angle in the transverse direction.
+        epsilon : float, default 1e-4
+            Amplitude parameter for the torus.
+
+        Returns
+        -------
+        numpy.ndarray
+            6D state vector on the torus surface.
+
+        Notes
+        -----
+        The state vector is computed using linear interpolation along the
+        periodic orbit and the complex eigenvector field.
         """
         # Ensure preparation with default resolution
         self._prepare()
@@ -293,7 +425,7 @@ class _InvariantTori:
         n_theta2: int,
         phi_idx: int = 0,
     ) -> tuple[np.ndarray, float]:
-        """Return initial curve *v*(theta2) on the surface of section theta1 = phi.
+        """Return initial curve v(theta2) on the surface of section theta1 = phi.
 
         Parameters
         ----------
@@ -307,11 +439,17 @@ class _InvariantTori:
 
         Returns
         -------
-        v_curve : numpy.ndarray, shape *(n_theta2, 6)*
+        v_curve : numpy.ndarray, shape (n_theta2, 6)
             The initial invariant curve obtained from the linear torus model.
         rho : float
             Initial estimate of the rotation number rho obtained from the
             complex eigenvalue of the monodromy matrix.
+
+        Notes
+        -----
+        This method computes the initial invariant curve on a Poincare section
+        defined by theta1 = phi. The curve is obtained from the linear
+        approximation of the torus.
         """
         # Ensure the STM and eigenvector field are ready so we can access
         # self._ubar and self._y_series.
@@ -400,14 +538,27 @@ class _InvariantTori:
         filepath: str = "invariant_torus.svg",
         **kwargs,
     ):
-        r"""
-        Render the invariant torus using :pyfunc:`hiten.utils.plots.plot_invariant_torus`.
+        """
+        Render the invariant torus using :func:`hiten.utils.plots.plot_invariant_torus`.
 
         Parameters
         ----------
-        figsize, save, dark_mode, filepath : forwarded to the plotting helper.
-        **kwargs : Additional keyword arguments accepted by
-            :pyfunc:`hiten.utils.plots.plot_invariant_torus`.
+        figsize : Tuple[int, int], default (10, 8)
+            Figure size in inches.
+        save : bool, default False
+            Whether to save the plot to a file.
+        dark_mode : bool, default True
+            Whether to use dark mode styling.
+        filepath : str, default "invariant_torus.svg"
+            File path for saving the plot.
+        **kwargs : dict
+            Additional keyword arguments accepted by
+            :func:`hiten.utils.plots.plot_invariant_torus`.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The generated figure object.
         """
         return plot_invariant_torus(
             self.grid,

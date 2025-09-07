@@ -1,19 +1,14 @@
-r"""
-polynomial.coordinates
-======================
-
+"""
 Lightweight helpers for manipulating 6-D complex phase-space vectors
-:math:`(q_{1}, q_{2}, q_{3}, p_{1}, p_{2}, p_{3})` that appear in the
-polynomial normal-form machinery.
+(q1, q2, q3, p1, p2, p3) that appear in the polynomial normal-form machinery.
+
+This module provides coordinate manipulation utilities for polynomial operations
+in the circular restricted three-body problem, optimized for performance-critical
+Numba-accelerated kernels.
 
 The routines are deliberately minimal and allocation-friendly because they
 are frequently invoked from performance-critical, Numba-accelerated kernels
-in :pymod:`hiten.algorithms.polynomial`.
-
-* :pyfunc:`_clean_coordinates` removes numerical noise below a configurable
-  tolerance from both the real and imaginary parts of a complex vector.
-* :pyfunc:`_substitute_coordinates` applies a linear change of variables
-  represented by a :math:`6\times 6` substitution matrix.
+in :mod:`hiten.algorithms.polynomial`.
 """
 
 import numpy as np
@@ -39,13 +34,13 @@ def _clean_coordinates(coords: np.ndarray, tol: float = 1e-30) -> np.ndarray:
     Returns
     -------
     numpy.ndarray
-        Cleaned copy of *coords* with the same dtype as
-        :pydata:`numpy.complex128`.
+        Cleaned copy of coords with the same dtype as
+        numpy.complex128.
 
     Notes
     -----
     The routine operates element-wise. If any changes are made, a warning is
-    emitted via :pyfunc:`hiten.utils.log_config.logger`.
+    emitted via :func:`hiten.utils.log_config.logger`.
 
     Examples
     --------
@@ -80,10 +75,9 @@ def _substitute_coordinates(coords: np.ndarray, matrix: np.ndarray) -> np.ndarra
 
     The operation performed is
 
-    :math:`y_{i} = \sum_{j=1}^{6} M_{ij}\,x_{j},`
+    y_i = sum_{j=1}^6 M_ij * x_j
 
-    where :math:`M` is *matrix*, :math:`x` is *coords* and the result
-    :math:`y` is returned.
+    where M is matrix, x is coords and the result y is returned.
 
     Parameters
     ----------
@@ -97,7 +91,7 @@ def _substitute_coordinates(coords: np.ndarray, matrix: np.ndarray) -> np.ndarra
     Returns
     -------
     numpy.ndarray
-        Transformed coordinates with dtype :pydata:`numpy.complex128`.
+        Transformed coordinates with dtype numpy.complex128.
 
     Raises
     ------

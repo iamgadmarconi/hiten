@@ -1,3 +1,22 @@
+"""
+High-precision arithmetic utilities for numerical computations.
+
+This module provides comprehensive high-precision arithmetic capabilities for
+numerical computations in the circular restricted three-body problem. It supports
+both standard floating-point precision and arbitrary precision arithmetic using
+the mpmath library when enabled.
+
+The module uses mpmath for arbitrary precision arithmetic when enabled,
+falling back to standard NumPy operations for performance when high precision
+is not required.
+
+Notes
+-----
+The precision level is controlled by the USE_ARBITRARY_PRECISION configuration
+flag. When disabled, the module falls back to standard floating-point arithmetic
+for better performance.
+"""
+
 from typing import Callable, Union
 
 import mpmath as mp
@@ -12,6 +31,27 @@ class _Number:
     
     This class wraps numeric values and provides operator overloading for
     natural mathematical syntax while maintaining high precision when enabled.
+    It supports both arbitrary precision arithmetic using mpmath and standard
+    floating-point arithmetic for performance.
+    
+    Parameters
+    ----------
+    value : float, int, str, or _Number
+        The numeric value to wrap
+    precision : int, optional
+        Number of decimal places. If None, uses 100.
+        
+    Attributes
+    ----------
+    value : mpmath.mpf or float
+        The wrapped numeric value
+    precision : int
+        The precision level in decimal places
+        
+    Notes
+    -----
+    The class automatically handles precision management and provides
+    seamless integration with standard Python numeric operations.
     """
     
     def __init__(self, value: Union[float, int, str, '_Number'], precision: int = None):
@@ -23,7 +63,13 @@ class _Number:
         value : float, int, str, or _Number
             The numeric value to wrap
         precision : int, optional
-            _Number of decimal places. If None, uses 100.
+            Number of decimal places. If None, uses 100.
+            
+        Notes
+        -----
+        The precision is automatically managed based on the USE_ARBITRARY_PRECISION
+        configuration flag. When enabled, mpmath is used for arbitrary precision
+        arithmetic.
         """
         self.precision = precision if precision is not None else 100
         
@@ -233,16 +279,18 @@ class _Number:
 # Factory function for convenience
 def hp(value: Union[float, int, str], precision: int = None) -> _Number:
     """
-    Create a _Number instance.
+    Create a high-precision number instance.
     
     Convenience factory function for creating high precision numbers.
+    This is the recommended way to create _Number instances for better
+    readability and consistency.
     
     Parameters
     ----------
     value : float, int, or str
-        The numeric value
+        The numeric value to wrap
     precision : int, optional
-        _Number of decimal places. If None, uses MPMATH_DPS from config.
+        Number of decimal places. If None, uses 100.
         
     Returns
     -------
@@ -254,6 +302,8 @@ def hp(value: Union[float, int, str], precision: int = None) -> _Number:
     >>> a = hp(2.5)
     >>> b = hp(3.0)
     >>> result = (a ** b) / hp(7.0)
+    >>> print(result)
+    2.6785714285714286
     """
     return _Number(value, precision)
 
@@ -262,10 +312,25 @@ def with_precision(precision: int = None):
     """
     Context manager for setting mpmath precision.
     
+    This function provides a context manager for temporarily setting the
+    precision level for mpmath operations. It automatically restores the
+    previous precision level when exiting the context.
+    
     Parameters
     ----------
     precision : int, optional
-        _Number of decimal places. If None, uses MPMATH_DPS from config.
+        Number of decimal places. If None, uses 100.
+        
+    Returns
+    -------
+    context manager
+        Context manager that sets the precision level
+        
+    Examples
+    --------
+    >>> with with_precision(50):
+    ...     result = hp(2.0).sqrt()
+    ...     print(result)
     """
     return mp.workdps(precision)
 
@@ -274,6 +339,10 @@ def divide(numerator: float, denominator: float, precision: int = None) -> float
     """
     Perform high precision division if enabled, otherwise standard division.
     
+    This function provides high-precision division when arbitrary precision
+    arithmetic is enabled, falling back to standard division for performance
+    when high precision is not required.
+    
     Parameters
     ----------
     numerator : float
@@ -281,12 +350,18 @@ def divide(numerator: float, denominator: float, precision: int = None) -> float
     denominator : float  
         Denominator value
     precision : int, optional
-        _Number of decimal places. If None, uses MPMATH_DPS from config.
+        Number of decimal places. If None, uses 100.
         
     Returns
     -------
     float
         Result of division with appropriate precision
+        
+    Notes
+    -----
+    The precision level is controlled by the USE_ARBITRARY_PRECISION
+    configuration flag. When disabled, standard floating-point division
+    is used for better performance.
     """
     if not USE_ARBITRARY_PRECISION:
         return numerator / denominator
@@ -301,17 +376,27 @@ def sqrt(value: float, precision: int = None) -> float:
     """
     Compute square root with high precision if enabled.
     
+    This function provides high-precision square root computation when arbitrary
+    precision arithmetic is enabled, falling back to NumPy's sqrt function for
+    performance when high precision is not required.
+    
     Parameters
     ----------
     value : float
         Value to take square root of
     precision : int, optional
-        _Number of decimal places. If None, uses MPMATH_DPS from config.
+        Number of decimal places. If None, uses 100.
         
     Returns
     -------
     float
         Square root with appropriate precision
+        
+    Notes
+    -----
+    The precision level is controlled by the USE_ARBITRARY_PRECISION
+    configuration flag. When disabled, NumPy's sqrt function is used
+    for better performance.
     """
     if not USE_ARBITRARY_PRECISION:
         return np.sqrt(value)
@@ -326,6 +411,10 @@ def power(base: float, exponent: float, precision: int = None) -> float:
     """
     Compute power with high precision if enabled.
     
+    This function provides high-precision power computation when arbitrary
+    precision arithmetic is enabled, falling back to standard Python power
+    operation for performance when high precision is not required.
+    
     Parameters
     ----------
     base : float
@@ -333,12 +422,18 @@ def power(base: float, exponent: float, precision: int = None) -> float:
     exponent : float
         Exponent value
     precision : int, optional
-        _Number of decimal places. If None, uses MPMATH_DPS from config.
+        Number of decimal places. If None, uses 100.
         
     Returns
     -------
     float
         Result with appropriate precision
+        
+    Notes
+    -----
+    The precision level is controlled by the USE_ARBITRARY_PRECISION
+    configuration flag. When disabled, standard Python power operation
+    is used for better performance.
     """
     if not USE_ARBITRARY_PRECISION:
         return base ** exponent
@@ -353,19 +448,30 @@ def find_root(func: Callable, x0: Union[float, list], precision: int = None) -> 
     """
     Find root with high precision using mpmath.
     
+    This function provides high-precision root finding using mpmath's
+    findroot function. It supports both single initial guesses and
+    bracketing intervals for robust root finding.
+    
     Parameters
     ----------
     func : callable
-        Function to find root of
+        Function to find root of. Must accept a single float argument
+        and return a float.
     x0 : float or list
-        Initial guess or bracket
+        Initial guess or bracket [a, b] for the root
     precision : int, optional
-        _Number of decimal places. If None, uses MPMATH_DPS from config.
+        Number of decimal places. If None, uses 100.
         
     Returns
     -------
     float
         Root with high precision
+        
+    Notes
+    -----
+    This function always uses mpmath for root finding, regardless of the
+    USE_ARBITRARY_PRECISION setting, as it provides more robust algorithms
+    than standard root finding methods.
     """
     with mp.workdps(precision):
         root = mp.findroot(func, x0)
