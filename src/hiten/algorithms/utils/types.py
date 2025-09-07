@@ -1,3 +1,18 @@
+"""
+Type definitions and state vector containers for the CR3BP.
+
+This module provides comprehensive type definitions and state vector containers
+for the circular restricted three-body problem. It includes enumerations for
+different coordinate systems and state vector containers with convenient
+property access and validation.
+
+Notes
+-----
+All state vector containers provide both array-like access and property access
+for convenience. The containers are mutable and support validation of input
+data to ensure consistency with the expected coordinate system.
+"""
+
 from enum import IntEnum
 from typing import Iterator, Sequence, Tuple, Union, overload
 
@@ -6,6 +21,34 @@ import numpy.typing as npt
 
 
 class SynodicState(IntEnum):
+    """
+    Enumeration for synodic frame coordinates.
+    
+    This enumeration defines the indices for the 6D state vector in the
+    rotating synodic frame of the circular restricted three-body problem.
+    The coordinates are ordered as position components followed by velocity
+    components.
+    
+    Attributes
+    ----------
+    X : int
+        X position component (index 0)
+    Y : int
+        Y position component (index 1)
+    Z : int
+        Z position component (index 2)
+    VX : int
+        X velocity component (index 3)
+    VY : int
+        Y velocity component (index 4)
+    VZ : int
+        Z velocity component (index 5)
+        
+    Notes
+    -----
+    The synodic frame rotates with the primary bodies, so the coordinates
+    represent position and velocity in the rotating reference frame.
+    """
     X=0
     Y=1
     Z=2
@@ -14,6 +57,34 @@ class SynodicState(IntEnum):
     VZ=5
 
 class CenterManifoldState(IntEnum):
+    """
+    Enumeration for center manifold coordinates.
+    
+    This enumeration defines the indices for the 6D state vector in the
+    center manifold coordinate system. The coordinates are ordered as
+    position components (q1, q2, q3) followed by momentum components
+    (p1, p2, p3).
+    
+    Attributes
+    ----------
+    q1 : int
+        First position component (index 0)
+    q2 : int
+        Second position component (index 1)
+    q3 : int
+        Third position component (index 2)
+    p1 : int
+        First momentum component (index 3)
+    p2 : int
+        Second momentum component (index 4)
+    p3 : int
+        Third momentum component (index 5)
+        
+    Notes
+    -----
+    The center manifold coordinates are canonical coordinates that
+    preserve the Hamiltonian structure of the system.
+    """
     q1=0
     q2=1
     q3=2
@@ -22,17 +93,66 @@ class CenterManifoldState(IntEnum):
     p3=5
 
 class RestrictedCenterManifoldState(IntEnum):
+    """
+    Enumeration for restricted center manifold coordinates.
+    
+    This enumeration defines the indices for the 4D state vector in the
+    restricted center manifold coordinate system. The coordinates are
+    ordered as position components (q2, q3) followed by momentum components
+    (p2, p3).
+    
+    Attributes
+    ----------
+    q2 : int
+        Second position component (index 0)
+    p2 : int
+        Second momentum component (index 1)
+    q3 : int
+        Third position component (index 2)
+    p3 : int
+        Third momentum component (index 3)
+        
+    Notes
+    -----
+    The restricted center manifold coordinates are a reduced set of
+    canonical coordinates that capture the essential dynamics while
+    reducing computational complexity.
+    """
     q2=0
     p2=1
     q3=2
     p3=3
 
 class _BaseStateContainer:
-    r"""
+    """
     Minimal mutable container for a single state vector, indexed by an IntEnum.
+
+    This is the base class for all state vector containers. It provides
+    array-like access, property access, and validation for state vectors
+    in different coordinate systems.
 
     Subclasses must set ``_enum`` to the corresponding IntEnum class and can
     optionally expose convenience properties (e.g., ``x``, ``y``, ``vx``).
+
+    Parameters
+    ----------
+    values : Sequence[float], optional
+        Initial values for the state vector. If None, initializes to zeros.
+    **kwargs
+        Named parameters for individual components (e.g., x=1.0, y=2.0).
+
+    Attributes
+    ----------
+    _enum : type[IntEnum]
+        The enumeration class defining the coordinate indices
+    _values : npt.NDArray[np.float64]
+        The underlying state vector data
+
+    Notes
+    -----
+    The container supports both array-like access (e.g., state[0]) and
+    property access (e.g., state.x) for convenience. All values are
+    stored as 64-bit floating-point numbers.
     """
 
     _enum: type[IntEnum] = None  # to be set by subclasses
@@ -138,6 +258,40 @@ class _BaseStateContainer:
 
 
 class SynodicStateVector(_BaseStateContainer):
+    """
+    Container for synodic frame state vectors.
+    
+    This class provides a convenient container for 6D state vectors in the
+    rotating synodic frame of the circular restricted three-body problem.
+    It supports both array-like access and property access for all components.
+    
+    Parameters
+    ----------
+    values : Sequence[float], optional
+        Initial values for the state vector. If None, initializes to zeros.
+    **kwargs
+        Named parameters for individual components (e.g., x=1.0, y=2.0, vx=0.5).
+
+    Attributes
+    ----------
+    x : float
+        X position component
+    y : float
+        Y position component
+    z : float
+        Z position component
+    vx : float
+        X velocity component
+    vy : float
+        Y velocity component
+    vz : float
+        Z velocity component
+        
+    Notes
+    -----
+    The synodic frame rotates with the primary bodies, so the coordinates
+    represent position and velocity in the rotating reference frame.
+    """
     _enum = SynodicState
 
     @property
@@ -190,6 +344,40 @@ class SynodicStateVector(_BaseStateContainer):
 
 
 class CenterManifoldStateVector(_BaseStateContainer):
+    """
+    Container for center manifold state vectors.
+    
+    This class provides a convenient container for 6D state vectors in the
+    center manifold coordinate system. It supports both array-like access
+    and property access for all canonical coordinates.
+    
+    Parameters
+    ----------
+    values : Sequence[float], optional
+        Initial values for the state vector. If None, initializes to zeros.
+    **kwargs
+        Named parameters for individual components (e.g., q1=1.0, q2=2.0, p1=0.5).
+
+    Attributes
+    ----------
+    q1 : float
+        First position component
+    q2 : float
+        Second position component
+    q3 : float
+        Third position component
+    p1 : float
+        First momentum component
+    p2 : float
+        Second momentum component
+    p3 : float
+        Third momentum component
+        
+    Notes
+    -----
+    The center manifold coordinates are canonical coordinates that
+    preserve the Hamiltonian structure of the system.
+    """
     _enum = CenterManifoldState
 
     @property
@@ -242,6 +430,37 @@ class CenterManifoldStateVector(_BaseStateContainer):
 
 
 class RestrictedCenterManifoldStateVector(_BaseStateContainer):
+    """
+    Container for restricted center manifold state vectors.
+    
+    This class provides a convenient container for 4D state vectors in the
+    restricted center manifold coordinate system. It supports both array-like
+    access and property access for the reduced set of canonical coordinates.
+    
+    Parameters
+    ----------
+    values : Sequence[float], optional
+        Initial values for the state vector. If None, initializes to zeros.
+    **kwargs
+        Named parameters for individual components (e.g., q2=1.0, q3=2.0, p2=0.5).
+
+    Attributes
+    ----------
+    q2 : float
+        Second position component
+    p2 : float
+        Second momentum component
+    q3 : float
+        Third position component
+    p3 : float
+        Third momentum component
+        
+    Notes
+    -----
+    The restricted center manifold coordinates are a reduced set of
+    canonical coordinates that capture the essential dynamics while
+    reducing computational complexity.
+    """
     _enum = RestrictedCenterManifoldState
 
     @property
@@ -277,8 +496,12 @@ class RestrictedCenterManifoldStateVector(_BaseStateContainer):
         self._values[RestrictedCenterManifoldState.p3] = float(value)
 
 class Trajectory:
-    r"""
+    """
     Lightweight container for trajectory data: a time array and matching state vectors.
+
+    This class provides a convenient container for storing trajectory data
+    with time and state arrays. It supports array-like access, slicing,
+    and iteration over time-state pairs.
 
     Parameters
     ----------
@@ -287,10 +510,28 @@ class Trajectory:
     states : Sequence[Sequence[float]]
         State matrix of shape (N, D) with D-dimensional states corresponding to each time.
 
+    Attributes
+    ----------
+    times : npt.NDArray[np.float64]
+        Time array of length N
+    states : npt.NDArray[np.float64]
+        State matrix of shape (N, D)
+    n_samples : int
+        Number of stored samples N
+    dim : int
+        State-space dimension D
+    t0 : float
+        Initial time
+    tf : float
+        Final time
+    duration : float
+        Total elapsed time tf - t0
+
     Notes
     -----
     - The container is read-only by convention; create a new instance for slices or transformations.
     - Time values may be strictly increasing or strictly decreasing, but must be strictly monotonic.
+    - All data is stored as 64-bit floating-point numbers for consistency.
     """
 
     def __init__(self, times: Sequence[float], states: Sequence[Sequence[float]]):
