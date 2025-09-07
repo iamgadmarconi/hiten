@@ -1,8 +1,4 @@
-"""
-hiten.algorithms.connections
-===========================
-
-Connection discovery framework for manifold transfers in the CR3BP.
+"""Connection discovery framework for manifold transfers in the CR3BP.
 
 This package provides a comprehensive framework for discovering ballistic and
 impulsive transfers between manifolds in the Circular Restricted Three-Body
