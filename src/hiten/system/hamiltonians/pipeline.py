@@ -1,3 +1,23 @@
+"""
+Hamiltonian transformation pipeline for the CR3BP.
+
+This module provides the HamiltonianPipeline class that manages the transformation
+pipeline for different Hamiltonian representations in the circular restricted
+three-body problem. It handles caching, conversion between representations,
+and computation of Lie generating functions.
+
+The pipeline uses Lie generating functions G(q, p) to perform canonical
+transformations that preserve the Hamiltonian structure while simplifying
+the dynamics.
+
+
+Notes
+-----
+The pipeline caches all computed Hamiltonians to avoid redundant computation.
+Conversion between representations uses a registry-based system with
+automatic path finding for multi-step transformations.
+"""
+
 from typing import Dict, Optional
 from collections import deque
 
@@ -18,32 +38,61 @@ from hiten.utils.log_config import logger
 
 
 class HamiltonianPipeline:
-    r"""
+    """
     Manages the transformation pipeline for Hamiltonian representations.
+
+    This class provides a comprehensive pipeline for computing and converting
+    between different Hamiltonian representations in the circular restricted
+    three-body problem. It handles caching, automatic path finding for
+    multi-step conversions, and computation of Lie generating functions.
 
     Parameters
     ----------
     point : LibrationPoint
-        The libration point about which the normal form is computed.
+        The libration point about which the normal form is computed
     degree : int
-        Maximum total degree of the polynomial truncation.
+        Maximum total degree of the polynomial truncation
 
     Attributes
     ----------
     point : LibrationPoint
-        The libration point about which the normal form is computed.
+        The libration point about which the normal form is computed
     degree : int
-        The maximum total degree of the polynomial truncation.
+        The maximum total degree of the polynomial truncation
     _hamiltonian_cache : dict
-        Cache of computed Hamiltonian objects keyed by form name.
+        Cache of computed Hamiltonian objects keyed by form name
+    _generating_function_cache : dict
+        Cache of computed Lie generating functions
 
     Notes
     -----
     All heavy computations are cached and subsequent calls with the same
-    parameters are inexpensive.
+    parameters are inexpensive. The pipeline automatically finds the shortest
+    conversion path between any two Hamiltonian representations.
     """
 
     def __init__(self, point: LibrationPoint, degree: int):
+        """
+        Initialize the Hamiltonian transformation pipeline.
+        
+        Parameters
+        ----------
+        point : LibrationPoint
+            The libration point about which the normal form is computed
+        degree : int
+            Maximum total degree of the polynomial truncation
+            
+        Raises
+        ------
+        ValueError
+            If degree is not a positive integer
+            
+        Notes
+        -----
+        The pipeline automatically determines the appropriate Hamiltonian
+        builder function based on the type of libration point (collinear
+        or triangular).
+        """
         if not isinstance(degree, int) or degree <= 0:
             raise ValueError("degree must be a positive integer")
 
@@ -82,12 +131,15 @@ class HamiltonianPipeline:
         """
         Get a specific Hamiltonian representation.
 
+        This method retrieves a Hamiltonian in the requested representation,
+        computing it if necessary and caching the result for future use.
+
         Parameters
         ----------
         form : str
             The desired Hamiltonian form. Supported forms include:
-            - "physical": Physical coordinates
-            - "real_modal": Real modal coordinates
+            - "physical": Physical coordinates in the rotating frame
+            - "real_modal": Real modal coordinates (diagonalized linear system)
             - "complex_modal": Complex modal coordinates
             - "complex_partial_normal": Complex partial normal form
             - "real_partial_normal": Real partial normal form
@@ -99,14 +151,20 @@ class HamiltonianPipeline:
         Returns
         -------
         Hamiltonian
-            The requested Hamiltonian representation.
+            The requested Hamiltonian representation
 
         Raises
         ------
         ValueError
-            If the requested form is not supported.
+            If the requested form is not supported
         NotImplementedError
-            If no conversion path exists to the requested form.
+            If no conversion path exists to the requested form
+
+        Notes
+        -----
+        The method automatically finds the shortest conversion path from
+        any available form to the requested form. All computations are
+        cached to avoid redundant work.
         """
         if form not in self._hamiltonian_cache:
             self._hamiltonian_cache[form] = self._compute_hamiltonian(form)
@@ -120,9 +178,15 @@ class HamiltonianPipeline:
         Parameters
         ----------
         form_name : str
-            The Hamiltonian form name (e.g., "complex_partial_normal").
+            The Hamiltonian form name (e.g., "complex_partial_normal")
         generating_functions : LieGeneratingFunction
-            The LieGeneratingFunction object to cache.
+            The LieGeneratingFunction object to cache
+            
+        Notes
+        -----
+        This method is called internally by the conversion system when
+        generating functions are computed as part of a transformation.
+        Only partial and full normal form generating functions are cached.
         """
         # Map form names to cache keys
         if form_name == "complex_partial_normal":
@@ -139,15 +203,29 @@ class HamiltonianPipeline:
         """
         Compute a Hamiltonian representation, using conversion if needed.
 
+        This method handles the computation of Hamiltonian representations,
+        either by building them directly or by converting from existing forms.
+
         Parameters
         ----------
         form : str
-            The desired Hamiltonian form.
+            The desired Hamiltonian form
 
         Returns
         -------
         Hamiltonian
-            The computed Hamiltonian representation.
+            The computed Hamiltonian representation
+
+        Raises
+        ------
+        NotImplementedError
+            If no conversion path exists to the requested form
+
+        Notes
+        -----
+        The method first checks if the form can be built directly (e.g., "physical").
+        If not, it finds a suitable source form and performs the conversion,
+        potentially through multiple intermediate steps.
         """
         # Check if we can build this form directly
         if form == "physical":
@@ -175,10 +253,20 @@ class HamiltonianPipeline:
         """
         Build the physical Hamiltonian from scratch.
 
+        This method constructs the physical Hamiltonian in the rotating
+        synodic frame using the appropriate builder function for the
+        libration point type.
+
         Returns
         -------
         Hamiltonian
-            The physical Hamiltonian representation.
+            The physical Hamiltonian representation
+
+        Notes
+        -----
+        The physical Hamiltonian is built using the point-specific builder
+        function determined during initialization. It represents the full
+        6D system in the rotating synodic frame.
         """
         logger.debug(f"Building physical Hamiltonian for {self._point}")
         poly_H = self._build_hamiltonian(self._point, self._max_degree)
@@ -188,16 +276,24 @@ class HamiltonianPipeline:
         """
         Find a source form that can be converted to the target form.
 
+        This method uses breadth-first search to find the shortest conversion
+        path from any available form to the target form.
+
         Parameters
         ----------
         target_form : str
-            The target form to find a conversion source for.
+            The target form to find a conversion source for
 
         Returns
         -------
         str or None
             The source form that can be converted to target_form, or None if
-            no conversion path exists.
+            no conversion path exists
+
+        Notes
+        -----
+        The method first checks for direct conversions from cached forms,
+        then explores the conversion graph using BFS to find the shortest path.
         """
         # Check if we have a direct conversion from any existing form
         for source_form in self._hamiltonian_cache:
@@ -243,17 +339,30 @@ class HamiltonianPipeline:
         """
         Follow a multi-step conversion path from start_form to target_form.
         
+        This method uses breadth-first search to find and execute the shortest
+        conversion path between two Hamiltonian representations.
+        
         Parameters
         ----------
         start_form : str
-            The starting form (e.g., "physical").
+            The starting form (e.g., "physical")
         target_form : str
-            The target form (e.g., "center_manifold_real").
+            The target form (e.g., "center_manifold_real")
             
         Returns
         -------
         Hamiltonian
-            The converted Hamiltonian.
+            The converted Hamiltonian
+            
+        Raises
+        ------
+        NotImplementedError
+            If no conversion path exists from start_form to target_form
+            
+        Notes
+        -----
+        The method finds the shortest path using BFS and then executes each
+        conversion step, caching intermediate results for efficiency.
         """
         # Use BFS to find the shortest path
         from collections import deque
@@ -286,15 +395,24 @@ class HamiltonianPipeline:
         """
         Execute a series of conversions along the given path.
         
+        This method performs the actual conversions along a pre-computed
+        path, caching intermediate results for efficiency.
+        
         Parameters
         ----------
         path : list[str]
-            List of form names representing the conversion path.
+            List of form names representing the conversion path
             
         Returns
         -------
         Hamiltonian
-            The final converted Hamiltonian.
+            The final converted Hamiltonian
+            
+        Notes
+        -----
+        Each conversion step is performed using the to_state method of the
+        current Hamiltonian, and intermediate results are cached to avoid
+        redundant computation.
         """
         # Start with the first form
         current_ham = self.get_hamiltonian(path[0])
@@ -316,10 +434,18 @@ class HamiltonianPipeline:
         """
         Get all available Hamiltonian forms.
 
+        This method determines which Hamiltonian forms can be computed
+        based on the conversion registry and available context.
+
         Returns
         -------
         set[str]
-            Set of all available form names.
+            Set of all available form names
+
+        Notes
+        -----
+        The method checks the conversion registry for forms that can be
+        converted from "physical" with the available context (point).
         """
         available = {"physical"}  # Always available
         
@@ -342,17 +468,18 @@ class HamiltonianPipeline:
         Parameters
         ----------
         form : str, optional
-            The desired Hamiltonian form. Defaults to "center_manifold_real".
+            The desired Hamiltonian form. Defaults to "center_manifold_real"
 
         Returns
         -------
         Hamiltonian
-            The requested Hamiltonian representation.
+            The requested Hamiltonian representation
 
         Notes
         -----
         This method is equivalent to :meth:`get_hamiltonian` but provides
         a familiar interface for users migrating from the old CenterManifold.
+        It is maintained for backward compatibility.
         """
         return self.get_hamiltonian(form)
 
@@ -360,15 +487,23 @@ class HamiltonianPipeline:
         """
         Get the runtime Hamiltonian system for a specific form.
 
+        This method retrieves the runtime Hamiltonian system that can be used
+        for evaluation and integration of the Hamiltonian equations of motion.
+
         Parameters
         ----------
         form : str
-            The Hamiltonian form to get the system for.
+            The Hamiltonian form to get the system for
 
         Returns
         -------
         _HamiltonianSystem
-            The runtime Hamiltonian system.
+            The runtime Hamiltonian system
+
+        Notes
+        -----
+        The runtime system is built lazily and cached for efficiency.
+        It provides the actual integration interface for the Hamiltonian.
         """
         return self.get_hamiltonian(form).hamsys
 
@@ -376,17 +511,26 @@ class HamiltonianPipeline:
         """
         Get a formatted string representation of the Hamiltonian coefficients.
 
+        This method provides a human-readable representation of the polynomial
+        coefficients in the requested Hamiltonian form.
+
         Parameters
         ----------
         form : str, optional
-            The Hamiltonian form to get coefficients for.
+            The Hamiltonian form to get coefficients for
         degree : int or iterable, optional
-            Degree filter for the coefficients.
+            Degree filter for the coefficients
 
         Returns
         -------
         str
-            Formatted coefficient table.
+            Formatted coefficient table
+
+        Notes
+        -----
+        The coefficient table shows the polynomial terms and their coefficients
+        in a formatted table. The degree parameter can be used to filter
+        specific degree terms.
         """
         from hiten.utils.printing import _format_poly_table
         
@@ -401,6 +545,12 @@ class HamiltonianPipeline:
 
         This forces recomputation of all Hamiltonian representations on
         the next call to :meth:`get_hamiltonian`.
+
+        Notes
+        -----
+        This method clears both the Hamiltonian cache and the generating
+        function cache. Use this when you need to force recomputation
+        with different parameters or after modifying the pipeline state.
         """
         logger.debug("Clearing Hamiltonian and generating function caches")
         self._hamiltonian_cache.clear()
@@ -410,10 +560,18 @@ class HamiltonianPipeline:
         """
         List all available Hamiltonian forms.
 
+        This method returns a list of all Hamiltonian forms that can be
+        computed with the current pipeline configuration.
+
         Returns
         -------
         list[str]
-            List of available form names.
+            List of available form names
+
+        Notes
+        -----
+        The list includes all forms that can be converted from "physical"
+        with the available context (point).
         """
         return list(self._get_available_forms())
 
@@ -421,21 +579,33 @@ class HamiltonianPipeline:
         """
         Check if a specific form is available.
 
+        This method checks whether a given Hamiltonian form can be computed
+        with the current pipeline configuration.
+
         Parameters
         ----------
         form : str
-            The form to check.
+            The form to check
 
         Returns
         -------
         bool
-            True if the form is available, False otherwise.
+            True if the form is available, False otherwise
+
+        Notes
+        -----
+        The method checks if the form can be converted from "physical"
+        with the available context (point).
         """
         return form in self._get_available_forms()
 
     def get_generating_functions(self, transform_type: str = "partial", **kwargs) -> LieGeneratingFunction:
         """
         Get Lie generating functions for coordinate transformations.
+
+        This method retrieves the Lie generating functions used in canonical
+        transformations for normal form calculations. The functions are cached
+        for efficiency.
 
         Parameters
         ----------
@@ -451,12 +621,18 @@ class HamiltonianPipeline:
         Returns
         -------
         LieGeneratingFunction
-            The generating functions and eliminated terms.
+            The generating functions and eliminated terms
 
         Raises
         ------
         ValueError
-            If transform_type is not supported.
+            If transform_type is not supported
+
+        Notes
+        -----
+        The generating functions are computed using Lie transform methods
+        and are essential for canonical transformations that preserve the
+        Hamiltonian structure.
         """
         if transform_type not in ["partial", "full"]:
             raise ValueError(f"Unsupported transform_type: {transform_type}. Use 'partial' or 'full'.")
@@ -489,17 +665,26 @@ class HamiltonianPipeline:
         """
         Compute Lie generating functions.
 
+        This method performs the actual computation of Lie generating functions
+        using the appropriate Lie transform algorithm.
+
         Parameters
         ----------
         transform_type : str
-            Type of Lie transform ("partial" or "full").
+            Type of Lie transform ("partial" or "full")
         **kwargs
-            Additional parameters.
+            Additional parameters for the Lie transform
 
         Returns
         -------
         LieGeneratingFunction
-            The computed generating functions.
+            The computed generating functions
+
+        Notes
+        -----
+        The method uses the complex modal Hamiltonian as the starting point
+        and applies the appropriate Lie transform algorithm based on the
+        transform type.
         """
         # Get the complex modal Hamiltonian as starting point
         complex_modal_ham = self.get_hamiltonian("complex_modal")
@@ -543,18 +728,27 @@ class HamiltonianPipeline:
         """
         Get Lie coordinate expansions for forward/inverse transformations.
 
+        This method computes the polynomial expansions for coordinate
+        transformations using Lie generating functions.
+
         Parameters
         ----------
         inverse : bool, default False
             If True, return inverse expansions (for coordinate reconstruction).
-            If False, return forward expansions (for initial condition generation).
+            If False, return forward expansions (for initial condition generation)
         tol : float, default 1e-16
-            Numerical tolerance for the expansion computation.
+            Numerical tolerance for the expansion computation
 
         Returns
         -------
         list
-            List of polynomial expansions for each coordinate.
+            List of polynomial expansions for each coordinate
+
+        Notes
+        -----
+        The expansions are computed using the partial Lie generating functions
+        and provide the coordinate transformation polynomials for both forward
+        and inverse transformations.
         """
         # Get generating functions
         gen_funcs = self.get_generating_functions("partial")
