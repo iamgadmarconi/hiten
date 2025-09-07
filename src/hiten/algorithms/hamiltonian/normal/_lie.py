@@ -5,22 +5,9 @@ of polynomial Hamiltonian systems using Lie series transformations. Unlike
 partial normal forms used for center manifold reduction, full normalization
 eliminates all non-resonant terms according to the complete resonance condition.
 
-Key components:
-- Full Lie series normalization with complete resonance analysis
-- Small divisor handling for near-resonant terms
-- Non-resonant term identification using frequency vectors
-- Comprehensive elimination of secular terms
-- Verification of normalization completeness
-
 The full normal form produces maximally simplified Hamiltonian systems where
 only resonant terms remain, providing the sparsest possible representation
 while preserving all essential dynamical features.
-
-Differences from partial normal form:
-- Uses complete resonance condition (k, omega) = 0
-- Eliminates more terms, resulting in sparser normal forms
-- Requires careful small divisor analysis
-- Produces globally valid simplifications
 
 All functions are optimized with Numba JIT compilation for high-performance
 numerical computation of high-order polynomial transformations.

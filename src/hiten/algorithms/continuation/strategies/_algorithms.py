@@ -5,13 +5,6 @@ algorithm strategies by extending the generic continuation engine. Each strategy
 defines a particular approach to parameter continuation with specialized stepping
 logic, stopping criteria, and parameter handling.
 
-The strategies implement common continuation methods used in dynamical systems:
-- Natural parameter continuation: vary parameters monotonically
-- Pseudo-arclength continuation: follow solution curves in extended space
-
-All numerical computations use nondimensional units appropriate for the specific
-dynamical system being studied.
-
 See Also
 --------
 :mod:`hiten.algorithms.continuation.base`

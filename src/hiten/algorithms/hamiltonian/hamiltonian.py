@@ -5,21 +5,8 @@ Problem (CR3BP) Hamiltonian around collinear and triangular equilibrium points.
 The routines generate multivariate polynomial expansions that encode the rotating-frame
 Hamiltonian up to a prescribed truncation degree in nondimensional units.
 
-Key Features
-------------
-- Chebyshev polynomial expansions for collinear points (L1, L2, L3)
-- Legendre-type polynomial expansions for triangular points (L4, L5)
-- Kinetic, potential, and Coriolis term construction
-- Lindstedt-Poincare right-hand side polynomials
-- JIT-compiled routines for computational efficiency
-
 The polynomial objects form the algebraic foundation for center-manifold reductions,
 normal-form computations, and invariant manifold analyses throughout the package.
-
-All coordinates are in nondimensional CR3BP rotating-frame units where:
-- Distance unit: primary-secondary separation = 1
-- Time unit: normalized by orbital period / (2*pi)
-- Mass parameter: mu = m2 / (m1 + m2)
 
 See Also
 --------

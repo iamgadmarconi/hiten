@@ -5,50 +5,10 @@ correction algorithms used throughout the hiten framework. These algorithms
 solve nonlinear systems of equations that arise in dynamical systems analysis,
 such as finding periodic orbits, invariant manifolds, and fixed points.
 
-The module follows a separation of concerns design:
-
-- **Abstract interfaces**: Define the contract for correction algorithms
-- **Configuration classes**: Encapsulate algorithm parameters and settings
-- **Type aliases**: Provide clear signatures for function interfaces
-
 The correction framework is designed to work with abstract vector representations,
 allowing domain-specific objects (orbits, manifolds, etc.) to be corrected
 using the same underlying algorithms. This promotes code reuse and enables
 consistent numerical behavior across different problem domains.
-
-Key Features
-------------
-- Generic correction interface independent of problem domain
-- Flexible configuration with sensible defaults
-- Support for both analytic and finite-difference Jacobians
-- Configurable line search and step-size control
-- Extensible architecture for different correction strategies
-
-The algorithms are particularly suited for problems in the Circular Restricted
-Three-Body Problem (CR3BP) where high precision and robust convergence are
-essential for mission design and dynamical systems analysis.
-
-All numerical computations use nondimensional units appropriate for the
-specific dynamical system being studied.
-
-Type Aliases
-------------
-ResidualFn
-    Function signature for computing residual vectors.
-JacobianFn
-    Function signature for computing Jacobian matrices.
-NormFn
-    Function signature for computing vector norms.
-
-Configuration Classes
----------------------
-_BaseCorrectionConfig
-    Base configuration for correction algorithm parameters.
-
-Abstract Base Classes
----------------------
-_Corrector
-    Abstract interface for iterative correction algorithms.
 
 See Also
 --------

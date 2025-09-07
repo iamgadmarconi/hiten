@@ -1,13 +1,5 @@
 """Abstract interfaces for numerical time integration.
 
-This module provides two core abstractions:
-
-* :class:`_Solution` - an immutable container that stores a time grid, the
-  associated state vectors, and, optionally, the vector field evaluations so
-  that the trajectory can be queried by cubic Hermite interpolation.
-* :class:`_Integrator` - an abstract base class that prescribes the public
-  API for every concrete one-step or multi-step integrator.
-
 References
 ----------
 Hairer, E., Nørsett, S. P., & Wanner, G. (1993). "Solving Ordinary

@@ -4,36 +4,6 @@ This package provides a comprehensive framework for defining, analyzing, and
 integrating dynamical systems with emphasis on applications in astrodynamics,
 particularly the Circular Restricted Three-Body Problem (CR3BP).
 
-The framework follows a layered architecture:
-
-Core Framework
---------------
-- Abstract base classes and protocols for dynamical systems
-- Generic adapters for arbitrary right-hand side functions  
-- Directional wrappers for forward/backward time integration
-- Integration with multiple numerical backends (SciPy, Runge-Kutta, symplectic)
-
-Specialized Systems
--------------------
-- CR3BP equations of motion with JIT compilation
-- Variational equations for state transition matrix propagation
-- Polynomial Hamiltonian systems for center manifold dynamics
-- Jacobian evaluation systems for linearization analysis
-
-Analysis Tools
---------------
-- Energy and potential function computations
-- Linear algebra utilities for eigenvalue analysis
-- Stability indices and monodromy matrix computation
-- State transition matrix and fundamental solution propagation
-
-------------
-
-All systems use nondimensional CR3BP units where:
-- Distance unit: primary-secondary separation = 1
-- Time unit: orbital period / (2*pi) = 1  
-- Mass parameter: mu = m2/(m1+m2)
-
 Examples
 --------
 Create and integrate a CR3BP system:

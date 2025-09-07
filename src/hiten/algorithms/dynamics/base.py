@@ -5,18 +5,6 @@ interface between dynamical systems and numerical integrators. The design
 allows integrators to work with any system that implements the minimal
 required interface, independent of the underlying physical model.
 
-Key components:
-- Protocol definitions for type checking and structural typing
-- Abstract base classes with common functionality
-- Directional wrappers for forward/backward time integration
-- Generic propagation utilities supporting multiple integration methods
-- State validation and normalization routines
-
-The abstractions support various integration scenarios including:
-- Forward and backward time propagation
-- Hamiltonian systems with momentum sign handling
-- Multiple numerical integration backends (SciPy, Runge-Kutta, symplectic)
-
 References
 ----------
 Hairer, E.; Norsett, S.; Wanner, G. (1993).

@@ -8,13 +8,6 @@ The module transforms packed polynomial coefficient blocks from the normal-form
 pipeline into lightweight, JIT-compiled dynamical systems suitable for both
 explicit Runge-Kutta and symplectic integrators.
 
-Key components:
-- Protocol definitions for Hamiltonian system interfaces
-- Polynomial Hamiltonian system implementation with JIT compilation
-- Automatic Jacobian computation for Hamilton's equations
-- Factory functions for system creation from polynomial data
-- Integration with both general ODE and symplectic integrators
-
 The heavy symbolic computations are delegated to the polynomial operations
 module, while Numba compilation ensures efficient runtime evaluation.
 

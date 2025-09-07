@@ -4,11 +4,6 @@ Both fixed and adaptive step-size variants are provided together with small
 convenience factories that select an appropriate implementation given the
 desired formal order of accuracy.
 
-The concrete schemes implemented are:
-
-* Fixed step: _RK4, _RK6, _RK8
-* Adaptive embedded: _RK45 (Dormand-Prince) and _DOP853 (Dormand-Prince 8(5,3))
-
 Internally the module also defines helper routines to evaluate Hamiltonian
 vector fields with numba acceleration and to wrap right-hand side (RHS)
 callables into a uniform signature accepted by the integrators.

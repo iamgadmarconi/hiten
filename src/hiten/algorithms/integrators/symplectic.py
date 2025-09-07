@@ -2,11 +2,6 @@
 systems with n_dof=3.  The module provides two layers of
 functionality:
 
-* Low-level, numba accelerated kernels that implement the
-  extended phase-space method of Tao for non-separable Hamiltonians.
-* A high-level :class:`_ExtendedSymplectic` wrapper compatible with the
-  abstract :class:`hiten.algorithms.integrators.base._Integrator` interface.
-
 The implementation follows the recursive operator-splitting strategy
 originally proposed by Tao and yields a family of even-order schemes that
 exactly preserve the symplectic structure and exhibit excellent long-term

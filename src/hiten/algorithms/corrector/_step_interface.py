@@ -11,41 +11,6 @@ computation logic from the overall Newton iteration framework, allowing
 for flexible combinations of different stepping strategies with various
 correction algorithms.
 
-Step-size control is crucial for the robustness and convergence properties
-of Newton methods, especially when dealing with:
-
-- Poorly conditioned problems
-- Initial guesses far from the solution
-- Nonlinear systems with complex solution landscapes
-- Problems requiring guaranteed convergence properties
-
-All numerical computations use nondimensional units appropriate for the
-specific dynamical system being studied.
-
-Type Aliases
-------------
-ResidualFn
-    Callable that computes residual vectors from state vectors.
-NormFn
-    Callable that computes scalar norms from residual vectors.
-
-Protocols
----------
-_Stepper
-    Protocol for step transformation functions.
-
-Abstract Interfaces
--------------------
-_StepInterface
-    Abstract base class for step-size control strategies.
-
-Concrete Implementations
-------------------------
-_PlainStepInterface
-    Simple Newton steps with optional step size capping.
-_ArmijoStepInterface
-    Armijo line search with backtracking for robust convergence.
-
 See Also
 --------
 :mod:`hiten.algorithms.corrector.line`

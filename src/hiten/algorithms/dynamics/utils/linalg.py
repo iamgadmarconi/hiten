@@ -6,12 +6,6 @@ Three-Body Problem (CR3BP). The functions focus on eigenvalue analysis,
 stability classification, and matrix decompositions relevant to periodic
 orbits and manifold computations.
 
-Key capabilities include:
-- Eigenvalue decomposition with stability classification
-- Floquet stability analysis for periodic orbits
-- Numerical cleanup routines for eigenvectors and eigenvalues
-- Time array indexing utilities
-
 All routines use pure NumPy for portability and are designed to be
 vectorized and JIT-friendly where applicable.
 

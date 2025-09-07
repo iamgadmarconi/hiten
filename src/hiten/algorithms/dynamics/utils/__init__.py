@@ -4,16 +4,6 @@ This submodule provides specialized utility functions for analyzing dynamical
 systems, with particular focus on the Circular Restricted Three-Body Problem
 (CR3BP) and general stability analysis.
 
-Key Components
---------------
-- **Energy Functions**: Hamiltonian energy, Jacobi constant, and potential computations
-- **Linear Algebra**: Eigenvalue analysis and stability classification
-- **Geometric Analysis**: Hill regions and zero-velocity curves
-- **Distance Calculations**: Primary and secondary body distances
-
-All energy and potential functions use nondimensional CR3BP units where the
-primary-secondary separation is 1 and the orbital period is 2*pi.
-
 Examples
 --------
 Energy analysis:

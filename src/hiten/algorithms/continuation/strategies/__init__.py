@@ -25,43 +25,7 @@ structures in the Circular Restricted Three-Body Problem (CR3BP).
 All numerical computations use nondimensional units appropriate for the
 specific dynamical system being studied.
 
-Algorithm Strategies
---------------------
-The algorithm strategies define the overall approach to continuation:
-
-:class:`~hiten.algorithms.continuation.strategies._algorithms._NaturalParameter`
-    Simple continuation where one parameter is varied directly.
-:class:`~hiten.algorithms.continuation.strategies._algorithms._SecantArcLength`
-    Sophisticated pseudo-arclength continuation for navigating bifurcations.
-
-These classes extend the base :class:`~hiten.algorithms.continuation.base._ContinuationEngine`
-with specific algorithmic logic for different continuation scenarios.
-
-Stepping Methods
-----------------
-The stepping methods handle the prediction phase of continuation:
-
-:class:`~hiten.algorithms.continuation.strategies._stepping._NaturalParameterStep`
-    Simple stepping with user-supplied predictor functions.
-:class:`~hiten.algorithms.continuation.strategies._stepping._SecantStep`
-    Sophisticated secant-based stepping with tangent vector maintenance.
-
-These classes implement the :class:`~hiten.algorithms.continuation.strategies._stepping._StepStrategy`
-protocol and provide the prediction logic used by continuation algorithms.
-
-Interface Protocols
---------------------
-The interface protocols define consistent APIs:
-
-:class:`~hiten.algorithms.continuation.strategies._step_interface._ContinuationStep`
-    Basic protocol for stepping strategies.
-:class:`~hiten.algorithms.continuation.strategies._stepping._StepStrategy`
-    Extended protocol with event hooks for sophisticated strategies.
-
-Protocol implementations ensure that different stepping strategies can be
-used interchangeably within continuation algorithms.
-
-Typical Usage
+Examples
 -------------
 The strategies are typically used through higher-level interfaces in the
 :mod:`hiten.algorithms.continuation` package, but can be combined directly
@@ -85,17 +49,6 @@ See Also
     Domain-specific interfaces for different problem types.
 :mod:`hiten.algorithms.continuation.predictors`
     High-level predictor classes for common continuation tasks.
-
-Notes
------
-This package focuses on the core algorithmic components rather than
-user-facing interfaces. Most users should work with the higher-level
-classes in :mod:`hiten.algorithms.continuation.predictors` which combine
-these strategies in convenient ways.
-
-The strategies are designed to be composable and extensible, allowing
-for sophisticated continuation algorithms tailored to specific dynamical
-systems and problem requirements.
 """
 
 # Algorithm strategy classes

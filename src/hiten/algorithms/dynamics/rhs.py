@@ -4,20 +4,9 @@ This module provides lightweight adapters that convert arbitrary Python callable
 representing ODEs into objects compatible with the dynamical systems framework.
 The adapters handle automatic JIT compilation for performance optimization.
 
-Key functionality:
-- Automatic Numba JIT compilation of RHS functions
-- Detection and reuse of pre-compiled Numba dispatchers
-- Integration with the base dynamical system interface
-- Factory functions for functional-style system creation
-
 The primary use case is wrapping user-defined ODE functions dy/dt = f(t, y)
 into the standardized dynamical system interface, enabling them to work
 seamlessly with various numerical integrators.
-
-Performance considerations:
-- Functions are compiled with Numba for efficient execution in nopython mode
-- Pre-compiled functions are detected and reused to avoid redundant compilation
-- Global fast-math settings are applied for optimal numerical performance
 """
 
 from typing import Callable

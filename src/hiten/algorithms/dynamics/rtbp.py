@@ -5,20 +5,6 @@ systems for the Circular Restricted Three-Body Problem in the synodic (rotating)
 frame. All implementations are optimized with Numba for high-performance numerical
 integration and stability analysis.
 
-Key components:
-- JIT-compiled CR3BP equations of motion and accelerations
-- Analytical Jacobian matrix computation for linearization
-- Variational equations for state transition matrix (STM) propagation
-- Monodromy matrix computation for periodic orbit stability analysis
-- Lightweight dynamical system wrappers for different equation types
-- Factory functions for system creation with specified mass parameters
-
-All systems use nondimensional units where:
-- Distance unit: primary-secondary separation = 1
-- Time unit: orbital period / (2*pi) = 1
-- Mass unit: total system mass = 1
-- Mass parameter: mu = m2/(m1+m2) where m1, m2 are primary/secondary masses
-
 The implementation supports both forward and backward time integration with
 appropriate handling of momentum variables for time-reversible systems.
 

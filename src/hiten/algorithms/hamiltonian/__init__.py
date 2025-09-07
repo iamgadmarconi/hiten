@@ -5,24 +5,9 @@ of Hamiltonian systems around equilibrium points in the Circular Restricted Thre
 Problem (CR3BP). It implements the complete pipeline from physical Hamiltonians
 through coordinate transformations to normal forms and center manifold reductions.
 
-Key Features
-------------
-- Polynomial Hamiltonian construction around collinear and triangular points
-- Lie series transformations for canonical coordinate changes
-- Coordinate system transformations (physical, modal, complex)
-- Partial and full normal form computations
-- Center manifold dimensional reduction
-- Registry-based conversion system for automatic transformations
-
 The package supports analysis around all five libration points (L1-L5) with
 appropriate handling of hyperbolic directions at collinear points and elliptic
 directions at triangular points.
-
-All computations use nondimensional CR3BP units where:
-- Distance: primary-secondary separation = 1
-- Time: normalized by orbital period / (2*pi)
-- Mass: total system mass = 1
-- Energy: normalized by characteristic energy scale
 
 Modules
 -------

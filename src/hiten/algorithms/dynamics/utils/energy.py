@@ -5,12 +5,6 @@ and zero-velocity curves in the spatial Circular Restricted Three-Body Problem
 (CR3BP). All quantities are nondimensional and expressed in the rotating
 (synodic) frame.
 
-The module includes functions for:
-- Hamiltonian energy and Jacobi constant calculations
-- Hill region computation for forbidden motion analysis
-- Kinetic and potential energy components
-- Distance calculations to primary and secondary bodies
-
 All functions use the standard CR3BP nondimensional units where the
 primary-secondary separation is 1 and the orbital period is 2*pi.
 

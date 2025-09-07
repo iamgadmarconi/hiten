@@ -5,13 +5,6 @@ to compute normal forms of polynomial Hamiltonian systems. The implementation fo
 the methodology for center manifold reduction in the spatial Circular Restricted
 Three-Body Problem (CR3BP).
 
-Key components:
-- Lie series normalization to eliminate non-resonant terms
-- Homological equation solving for generating functions
-- Inverse transformations from center manifold to original coordinates
-- Coordinate restriction to center manifold subspace
-- Polynomial evaluation and manipulation utilities
-
 The normalization process systematically eliminates non-resonant terms degree by
 degree using Lie series transformations, resulting in simplified Hamiltonian
 systems that retain the essential dynamics while being more amenable to analysis.

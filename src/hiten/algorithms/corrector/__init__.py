@@ -12,61 +12,7 @@ The package implements a modular architecture that separates algorithmic
 components from domain-specific logic, enabling flexible combinations of
 different correction strategies with various problem types.
 
-Main Components
----------------
-
-Ready-to-Use Correctors
-~~~~~~~~~~~~~~~~~~~~~~~
-:class:`_NewtonOrbitCorrector`
-    Complete Newton-Raphson corrector for periodic orbits.
-
-Core Algorithms
-~~~~~~~~~~~~~~~
-:class:`_NewtonCore`
-    Newton-Raphson algorithm with robust linear algebra.
-:class:`_ArmijoLineSearch`
-    Armijo line search with backtracking.
-
-Configuration Classes
-~~~~~~~~~~~~~~~~~~~~~
-:class:`_BaseCorrectionConfig`
-    Base configuration for correction parameters.
-:class:`_OrbitCorrectionConfig`
-    Orbit-specific correction configuration.
-:class:`_LineSearchConfig`
-    Line search parameter configuration.
-
-Domain Interfaces
-~~~~~~~~~~~~~~~~~
-:class:`_PeriodicOrbitCorrectorInterface`
-    Interface for periodic orbit correction.
-:class:`_InvariantToriCorrectorInterface`
-    Interface for invariant tori correction (placeholder).
-
-Step Control Interfaces
-~~~~~~~~~~~~~~~~~~~~~~~
-:class:`_StepInterface`
-    Abstract base for step-size control strategies.
-:class:`_PlainStepInterface`
-    Simple Newton steps with optional capping.
-:class:`_ArmijoStepInterface`
-    Armijo line search step control.
-
-Architecture
-------------
-The package uses a composition pattern where:
-
-1. **Core Algorithms** provide numerical methods (Newton-Raphson, line search)
-2. **Domain Interfaces** handle problem-specific logic (orbit constraints, 
-   parameter extraction)
-3. **Step Control** manages step sizes and convergence robustness
-4. **Configuration Classes** encapsulate algorithm parameters
-
-This design enables flexible combinations through multiple inheritance,
-allowing users to create specialized correctors by mixing different
-components.
-
-Typical Usage
+Examples
 -------------
 Most users will work with the ready-to-use correctors:
 

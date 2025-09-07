@@ -6,24 +6,9 @@ Problem (CR3BP). It implements transformations between multiple coordinate
 systems including local, modal, complex, and synodic frames around both
 collinear and triangular equilibrium points.
 
-Key Features
-------------
-- Real/complex coordinate transformations for normal form analysis
-- Local to synodic frame transformations for both collinear and triangular points
-- Modal coordinate transformations using eigenvector bases
-- Polynomial transformations between coordinate systems
-- Center manifold restriction for hyperbolic variable elimination
-- Complexification matrices for elliptic coordinate pairs
-
 The transformation pipeline enables the construction of normal forms by working
 in the most appropriate coordinate system at each stage of the computation,
 from physical coordinates through modal coordinates to complex normal forms.
-
-All coordinates are in nondimensional CR3BP rotating-frame units where:
-- Positions: primary-secondary separation = 1
-- Velocities: normalized by sqrt(mu * n^2 * a^3)
-- Time: normalized by orbital period / (2*pi)
-- Momenta: conjugate to position coordinates
 
 Coordinate Systems
 ------------------

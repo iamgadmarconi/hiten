@@ -5,15 +5,6 @@ algorithms used to trace families of solutions in dynamical systems. The continu
 engine implements a generic predict-correct framework that can be specialized for
 different types of problems (periodic orbits, equilibria, manifolds, etc.).
 
-The continuation algorithm follows the standard pattern:
-1. Predict the next solution using a stepping strategy
-2. Correct the prediction using a problem-specific corrector
-3. Accept or reject based on convergence and constraints
-4. Adapt step size for efficiency and robustness
-
-All numerical computations use nondimensional units appropriate for the specific
-dynamical system being studied.
-
 See Also
 --------
 :mod:`hiten.algorithms.continuation.strategies`

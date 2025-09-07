@@ -9,30 +9,6 @@ impulsive transfers between manifolds in the Circular Restricted Three-Body
 Problem (CR3BP). It orchestrates the complete pipeline from manifold intersection
 with synodic sections to geometric analysis and Delta-V computation.
 
-The framework supports:
-
-- **Connection Discovery**: Find transfers between unstable and stable manifolds
-- **Transfer Classification**: Distinguish ballistic vs impulsive transfers
-- **Geometric Analysis**: Synodic section intersections and refinement
-- **Visualization**: Poincare maps with connection overlays
-- **Flexible Configuration**: Tolerances, search parameters, and computational settings
-
-All coordinates are in nondimensional CR3BP rotating-frame units.
-
-Main Classes
-------------
-:class:`Connection`
-    High-level interface for connection discovery and visualization.
-:class:`SearchConfig`
-    Configuration for search tolerances and geometric parameters.
-
-Typical Workflow
-----------------
-1. Create manifolds from periodic orbits or libration points
-2. Configure synodic section and search parameters
-3. Use :class:`Connection` to discover transfers
-4. Analyze results and create visualizations
-
 Examples
 --------
 >>> from hiten.algorithms.connections import Connection, SearchConfig

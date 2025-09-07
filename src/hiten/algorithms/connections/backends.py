@@ -4,13 +4,6 @@ This module provides the computational backend for the connections algorithm,
 which discovers ballistic and impulsive transfers between synodic sections in
 the Circular Restricted Three-Body Problem (CR3BP).
 
-Key Features
-------------
-- Radius-based 2D pairing of points on two sections
-- Mutual-nearest-neighbor filtering to prune candidates
-- On-section refinement of matched pairs using local segment geometry
-- Delta-V computation and classification of transfers (ballistic vs impulsive)
-
 All coordinates are in nondimensional CR3BP rotating-frame units.
 
 See Also
