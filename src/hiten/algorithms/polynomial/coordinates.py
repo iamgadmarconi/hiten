@@ -1,5 +1,4 @@
-"""
-Lightweight helpers for manipulating 6-D complex phase-space vectors
+"""Lightweight helpers for manipulating 6-D complex phase-space vectors
 (q1, q2, q3, p1, p2, p3) that appear in the polynomial normal-form machinery.
 
 This module provides coordinate manipulation utilities for polynomial operations
@@ -17,7 +16,7 @@ from hiten.utils.log_config import logger
 
 
 def _clean_coordinates(coords: np.ndarray, tol: float = 1e-30) -> np.ndarray:
-    r"""
+    """
     Remove tiny numerical artefacts from a complex coordinate vector.
 
     Parameters
@@ -70,7 +69,7 @@ def _clean_coordinates(coords: np.ndarray, tol: float = 1e-30) -> np.ndarray:
 
 
 def _substitute_coordinates(coords: np.ndarray, matrix: np.ndarray) -> np.ndarray:
-    r"""
+    """
     Apply a linear substitution matrix to a coordinate vector.
 
     The operation performed is

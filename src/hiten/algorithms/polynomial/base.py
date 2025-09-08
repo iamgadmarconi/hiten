@@ -1,24 +1,9 @@
-"""
-Low-level helpers for manipulating multivariate polynomial coefficient arrays
+"""Low-level helpers for manipulating multivariate polynomial coefficient arrays
 used throughout the library.
 
 This module provides performance-critical Numba-JIT compiled kernels for
 polynomial operations in the circular restricted three-body problem.
 
-The routines defined here are performance-critical Numba-JIT compiled kernels that:
-
-- build combinatorial lookup tables (:func:`_init_index_tables`) for fast
-    encoding/decoding of monomial multi-indices
-- provide packing/unpacking utilities for exponents in a compact
-    32-bit representation (:func:`_pack_multiindex`,
-    :func:`_decode_multiindex`, :func:`_encode_multiindex`,
-    :func:`_fill_exponents`)
-- expose lightweight algebraic helpers such as factorial and binomial
-    coefficients (:func:`_factorial`, :func:`_combinations`)
-- create suitably-shaped zero coefficient arrays (:func:`_make_poly`)
-
-Mathematical Background
-----------------------
 The module implements efficient storage and manipulation of multivariate
 polynomials in the 6D phase space (q1, q2, q3, p1, p2, p3) of the circular
 restricted three-body problem. Polynomials are represented as coefficient
@@ -26,10 +11,6 @@ arrays using compressed monomial ordering for optimal performance.
 
 The packing scheme allocates 6 bits for each variable x1 through x5,
 with x0's exponent implicitly determined by the total degree constraint.
-
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
 
 Notes
 -----
@@ -53,7 +34,7 @@ from hiten.algorithms.utils.config import FASTMATH, N_VARS
 
 @njit(fastmath=FASTMATH,cache=False)
 def _factorial(n: int) -> int:
-    r"""
+    """
     Calculate the factorial of a non-negative integer.
     
     Parameters
@@ -79,7 +60,7 @@ def _factorial(n: int) -> int:
 
 @njit(fastmath=FASTMATH, cache=False)
 def _combinations(n: int, k: int) -> int:
-    r"""
+    """
     Calculate the binomial coefficient C(n,k) = n! / (k! * (n-k)!).
     
     Parameters
@@ -116,7 +97,7 @@ def _combinations(n: int, k: int) -> int:
 
 @njit(fastmath=FASTMATH,cache=False)
 def _init_index_tables(degree: int):
-    r"""
+    """
     Initialize lookup tables for polynomial multi-index encoding and decoding.
     
     This function creates two data structures essential for polynomial operations:
@@ -204,7 +185,7 @@ for clmo_arr in _CLMO_GLOBAL:
 
 @njit(fastmath=FASTMATH, cache=False)
 def _pack_multiindex(k: np.ndarray) -> np.uint32:
-    r"""
+    """
     Pack the exponents k_1 through k_5 into a 32-bit integer.
     
     Parameters
@@ -239,7 +220,7 @@ def _pack_multiindex(k: np.ndarray) -> np.uint32:
 
 @njit(fastmath=FASTMATH, cache=False)
 def _decode_multiindex(pos: int, degree: int, clmo) -> np.ndarray:
-    r"""
+    """
     Decode a packed multi-index from its position in the lookup table.
     
     Parameters
@@ -290,7 +271,7 @@ def _fill_exponents(pos, degree, clmo, out):
 
 @njit(fastmath=FASTMATH, cache=False)
 def _encode_multiindex(k: np.ndarray, degree: int, encode_dict_list: List) -> int:
-    r"""
+    """
     Encode a multi-index to find its position in the coefficient array.
     
     Parameters
@@ -332,7 +313,7 @@ def _encode_multiindex(k: np.ndarray, degree: int, encode_dict_list: List) -> in
 
 @njit(fastmath=FASTMATH, cache=False)
 def _make_poly(degree: int, psi) -> np.ndarray:
-    r"""
+    """
     Create a new polynomial coefficient array of specified degree with complex128 dtype.
     
     Parameters
@@ -361,7 +342,7 @@ def _make_poly(degree: int, psi) -> np.ndarray:
 # Helper to create encode_dict_list from clmo_table
 @njit(fastmath=FASTMATH, cache=False)
 def _create_encode_dict_from_clmo(clmo_table: List) -> List:
-    r"""
+    """
     Create a list of dictionaries mapping packed multi-indices to their positions.
     
     Parameters

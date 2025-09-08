@@ -1,5 +1,4 @@
-"""
-Numba accelerated helpers for algebraic manipulation of multivariate
+"""Numba accelerated helpers for algebraic manipulation of multivariate
 polynomial coefficient arrays in 6 canonical variables
 (q1, q2, q3, p1, p2, p3).
 
@@ -7,39 +6,12 @@ This module provides low-level kernels for polynomial operations in
 the circular restricted three-body problem, optimized for high
 performance using Numba JIT compilation.
 
-The module supplies low level kernels for:
-
-- Element wise arithmetic (:func:`_poly_add`, :func:`_poly_scale`)
-- Dense convolution style multiplication (:func:`_poly_mul`)
-- Partial differentiation and Poisson brackets (:func:`_poly_diff`,
-    :func:`_poly_poisson`)
-- Numerical evaluation, integration and coefficient cleaning
-    (:func:`_poly_evaluate`, :func:`_poly_integrate`,
-    :func:`_poly_clean`, :func:`_poly_clean_inplace`)
-
 All routines operate on one-dimensional coefficient arrays that follow
 the compressed monomial ordering provided by
 :func:`hiten.algorithms.polynomial.base._init_index_tables`. Kernels are
 compiled in nopython mode with :func:`numba.njit`; computationally
 intensive operations additionally exploit :func:`numba.prange` for
 parallelism.
-
-Mathematical Background
-----------------------
-The module implements polynomial operations in the 6D phase space
-(q1, q2, q3, p1, p2, p3) of the circular restricted three-body problem.
-Polynomials are represented as coefficient arrays using compressed
-monomial ordering for efficient storage and computation.
-
-The Poisson bracket implementation follows the standard definition:
-{p, q} = sum_{i=1}^3 (dp/dq_i * dq/dp_i - dp/dp_i * dq/dq_i)
-
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
-
-Press, W. H., Teukolsky, S. A., Vetterling, W. T., & Flannery, B. P. (2007).
-*Numerical Recipes: The Art of Scientific Computing*. Cambridge University Press.
 
 Notes
 -----
@@ -60,7 +32,7 @@ from hiten.algorithms.utils.config import FASTMATH, N_VARS
 
 @njit(fastmath=FASTMATH, cache=False)
 def _poly_add(p: np.ndarray, q: np.ndarray, out: np.ndarray) -> None:
-    r"""
+    """
     Add two polynomial coefficient arrays element-wise.
     
     Parameters
@@ -87,7 +59,7 @@ def _poly_add(p: np.ndarray, q: np.ndarray, out: np.ndarray) -> None:
 
 @njit(fastmath=FASTMATH, cache=False)
 def _poly_scale(p: np.ndarray, alpha, out: np.ndarray) -> None:
-    r"""
+    """
     Scale a polynomial coefficient array by a constant factor.
     
     Parameters
@@ -114,7 +86,7 @@ def _poly_scale(p: np.ndarray, alpha, out: np.ndarray) -> None:
 
 @njit(fastmath=FASTMATH, cache=False, parallel=True)
 def _poly_mul(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clmo, encode_dict_list) -> np.ndarray:
-    r"""
+    """
     Multiply two polynomials using their coefficient arrays.
     
     Parameters
@@ -181,7 +153,7 @@ def _poly_mul(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clmo, e
 
 @njit(fastmath=FASTMATH, cache=False, parallel=True)
 def _poly_diff(p: np.ndarray, var: int, degree: int, psi, clmo, encode_dict_list) -> np.ndarray:
-    r"""
+    """
     Compute the partial derivative of a polynomial with respect to a variable.
     
     Parameters
@@ -252,7 +224,7 @@ def _poly_diff(p: np.ndarray, var: int, degree: int, psi, clmo, encode_dict_list
 
 @njit(fastmath=FASTMATH, cache=False)
 def _poly_poisson(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clmo, encode_dict_list) -> np.ndarray:
-    r"""
+    """
     Compute the Poisson bracket of two polynomials.
     
     Parameters
@@ -338,7 +310,7 @@ def _poly_poisson(p: np.ndarray, deg_p: int, q: np.ndarray, deg_q: int, psi, clm
 
 @njit(fastmath=FASTMATH, cache=False)
 def _get_degree(p: np.ndarray, psi) -> int:
-    r"""
+    """
     Determine the degree of a polynomial from its coefficient array length.
     
     Parameters
@@ -372,7 +344,7 @@ def _get_degree(p: np.ndarray, psi) -> int:
 
 @njit(fastmath=FASTMATH, cache=False)
 def _poly_clean_inplace(p: np.ndarray, tol: float) -> None:
-    r"""
+    """
     Set coefficients with absolute value below tolerance to zero (in-place).
     
     Parameters
@@ -399,7 +371,7 @@ def _poly_clean_inplace(p: np.ndarray, tol: float) -> None:
 
 @njit(fastmath=FASTMATH, cache=False)
 def _poly_clean(p: np.ndarray, tol: float, out: np.ndarray) -> None:
-    r"""
+    """
     Set coefficients with absolute value below tolerance to zero (out-of-place).
     
     Parameters
@@ -434,7 +406,7 @@ def _poly_evaluate(
     point: np.ndarray, 
     clmo: List[np.ndarray]
 ) -> np.complex128:
-    r"""
+    """
     Evaluate a polynomial at a specific point.
     
     Parameters
@@ -495,7 +467,7 @@ def _evaluate_reduced_monomial(
     var_idx: int,
     exp_change: int
 ) -> np.complex128:
-    r"""
+    """
     Evaluate a monomial with modified exponent at specified coordinates.
     
     This function computes the value of a monomial x^k at given coordinates,
@@ -556,7 +528,7 @@ def _evaluate_reduced_monomial(
 
 @njit(fastmath=FASTMATH, cache=False)
 def _poly_integrate(p: np.ndarray, var: int, degree: int, psi, clmo, encode_dict_list) -> np.ndarray:
-    r"""
+    """
     Integrate a polynomial with respect to one variable.
     
     Parameters

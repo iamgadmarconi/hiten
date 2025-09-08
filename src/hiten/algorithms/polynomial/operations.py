@@ -1,55 +1,10 @@
-"""
-High-level utilities for manipulating multivariate polynomials that appear in
+"""High-level utilities for manipulating multivariate polynomials that appear in
 normal-form and centre-manifold calculations of the spatial circular
 restricted three-body problem.
 
 This module provides comprehensive polynomial operations for the circular
 restricted three-body problem, optimized for performance using Numba JIT
 compilation and parallel processing.
-
-The module operates on the packed-coefficient representation returned by
-:func:`hiten.algorithms.polynomial.base._init_index_tables`. A polynomial
-P(q, p) is stored as a Numba typed list [P_0, P_1, ... , P_N]
-where P_d is a numpy.ndarray containing the complex coefficients
-of the homogeneous part of total degree d in the canonical variables
-(q1, q2, q3, p1, p2, p3).
-
-Function categories
--------------------
-- Construction helpers - :func:`_polynomial_zero_list`,
-    :func:`_polynomial_variable`, :func:`_polynomial_variables_list`
-- In-place algebra - :func:`_polynomial_add_inplace`
-- Binary operations - :func:`_polynomial_multiply`,
-    :func:`_polynomial_power`, :func:`_polynomial_poisson_bracket`
-- Analysis - :func:`_polynomial_clean`, :func:`_polynomial_degree`,
-    :func:`_polynomial_total_degree`
-- Calculus - :func:`_polynomial_differentiate`, :func:`_polynomial_jacobian`,
-    :func:`_polynomial_integrate`
-- Evaluation and substitution - :func:`_polynomial_evaluate`,
-    :func:`_substitute_linear`
-
-Mathematical Background
-----------------------
-The module implements polynomial operations in the 6D phase space
-(q1, q2, q3, p1, p2, p3) of the circular restricted three-body problem.
-Polynomials are represented as lists of homogeneous parts, where each part
-contains coefficients for monomials of a specific degree.
-
-The Poisson bracket implementation follows the standard definition:
-{p, q} = sum_{i=1}^3 (dp/dq_i * dq/dp_i - dp/dp_i * dq/dq_i)
-
-Attributes
-----------
-FASTMATH : bool
-    Flag propagated to numba.njit that enables unsafe
-    floating-point optimisations.
-N_VARS : int
-    Number of canonical variables (six for the CRTBP).
-
-Notes
------
-Every public routine is compiled with numba.njit; the most expensive kernels
-are parallelised with numba.prange.
 """
 
 import numpy as np
@@ -67,7 +22,7 @@ from hiten.algorithms.utils.config import FASTMATH, N_VARS
 
 @njit(fastmath=FASTMATH, cache=False)
 def _polynomial_zero_list(max_deg: int, psi) -> List[np.ndarray]:
-    r"""
+    """
     Create a list of zero polynomial coefficient arrays up to a maximum degree.
     
     Parameters
@@ -97,7 +52,7 @@ def _polynomial_zero_list(max_deg: int, psi) -> List[np.ndarray]:
 
 @njit(fastmath=FASTMATH, cache=False)
 def _polynomial_variable(idx: int, max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
-    r"""
+    """
     Create a polynomial representing a single variable.
     
     Parameters
@@ -135,7 +90,7 @@ def _polynomial_variable(idx: int, max_deg: int, psi, clmo, encode_dict_list) ->
 
 @njit(fastmath=FASTMATH, cache=False)
 def _polynomial_variables_list(max_deg: int, psi, clmo, encode_dict_list) -> List[List[np.ndarray]]:
-    r"""
+    """
     Create a list of polynomials for each variable in the hiten.system.
     
     Parameters
@@ -167,7 +122,7 @@ def _polynomial_variables_list(max_deg: int, psi, clmo, encode_dict_list) -> Lis
 
 @njit(fastmath=FASTMATH, cache=False)
 def _polynomial_add_inplace(poly_p: List[np.ndarray], poly_q: List[np.ndarray], scale=1.0, max_deg: int = -1):
-    r"""
+    """
     Add or subtract one polynomial to/from another in-place.
     
     Parameters
@@ -211,7 +166,7 @@ def _polynomial_add_inplace(poly_p: List[np.ndarray], poly_q: List[np.ndarray], 
 
 @njit(fastmath=FASTMATH, cache=False)
 def _polynomial_multiply(poly_p: List[np.ndarray], poly_q: List[np.ndarray], max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
-    r"""
+    """
     Multiply two polynomials.
     
     Parameters
@@ -257,7 +212,7 @@ def _polynomial_multiply(poly_p: List[np.ndarray], poly_q: List[np.ndarray], max
 
 @njit(fastmath=FASTMATH, cache=False)
 def _polynomial_power(poly_p: List[np.ndarray], k: int, max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
-    r"""
+    """
     Raise a polynomial to a power using binary exponentiation.
     
     Parameters
@@ -313,7 +268,7 @@ def _polynomial_power(poly_p: List[np.ndarray], k: int, max_deg: int, psi, clmo,
 
 @njit(fastmath=FASTMATH, cache=False)
 def _polynomial_poisson_bracket(poly_p: List[np.ndarray], poly_q: List[np.ndarray], max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
-    r"""
+    """
     Compute the Poisson bracket of two polynomials.
     
     Parameters
@@ -366,7 +321,7 @@ def _polynomial_poisson_bracket(poly_p: List[np.ndarray], poly_q: List[np.ndarra
 
 @njit(fastmath=FASTMATH, cache=False)
 def _polynomial_clean(poly_p: List[np.ndarray], tol: float) -> List[np.ndarray]:
-    r"""
+    """
     Create a new polynomial with small coefficients set to zero.
     
     Parameters
@@ -397,7 +352,7 @@ def _polynomial_clean(poly_p: List[np.ndarray], tol: float) -> List[np.ndarray]:
 
 @njit(fastmath=FASTMATH, cache=False)
 def _polynomial_degree(poly_p: List[np.ndarray]) -> int:
-    r"""
+    """
     Get the degree of a polynomial represented as a list of homogeneous parts.
 
     The degree is the highest index d for which poly_p[d] contains non-zero coefficients.
@@ -421,7 +376,7 @@ def _polynomial_degree(poly_p: List[np.ndarray]) -> int:
 
 @njit(fastmath=FASTMATH, cache=False)
 def _polynomial_total_degree(poly_p: List[np.ndarray], psi) -> int:
-    r"""
+    """
     Get the total degree of a polynomial using the _get_degree kernel function.
     
     This function uses the _get_degree kernel to verify the degree of each 
@@ -481,7 +436,7 @@ def _polynomial_differentiate(
     derivative_clmo_table: List[np.ndarray],
     encode_dict_list: List
 ):
-    r"""
+    """
     Compute the partial derivative of a polynomial with respect to a variable.
     
     Parameters
@@ -548,7 +503,7 @@ def _polynomial_jacobian(
     clmo_table: List[np.ndarray],
     encode_dict_list: List
 ) -> List[List[np.ndarray]]:
-    r"""
+    """
     Compute the Jacobian matrix of a polynomial.
     
     Parameters
@@ -598,7 +553,7 @@ def _polynomial_evaluate(
     point: np.ndarray, 
     clmo: List[np.ndarray] # Typically _CLMO_GLOBAL
 ) -> np.complex128:
-    r"""
+    """
     Evaluate a polynomial at a specific point.
     
     Parameters
@@ -639,7 +594,7 @@ def _polynomial_integrate(
     integral_clmo_table: List[np.ndarray],
     encode_dict_list: List
 ) -> tuple[List[np.ndarray], int]:
-    r"""
+    """
     Integrate a polynomial with respect to one variable.
     
     Parameters
@@ -705,7 +660,7 @@ def _polynomial_integrate(
 
 @njit(fastmath=FASTMATH, cache=False)
 def _linear_variable_polys(C: np.ndarray, max_deg: int, psi, clmo, encode_dict_list) -> List[np.ndarray]:
-    r"""
+    """
     Create polynomials for new variables after a linear transformation.
     
     Parameters
@@ -747,7 +702,7 @@ def _linear_variable_polys(C: np.ndarray, max_deg: int, psi, clmo, encode_dict_l
 
 @njit(fastmath=FASTMATH)
 def _substitute_linear(poly_old: List[np.ndarray], C: np.ndarray, max_deg: int, psi, clmo, encode_dict_list, tol: float = 1e-14) -> List[np.ndarray]:
-    r"""
+    """
     Perform variable substitution in a polynomial using a linear transformation.
     
     Parameters

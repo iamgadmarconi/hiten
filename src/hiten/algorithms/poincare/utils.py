@@ -1,17 +1,9 @@
-"""
-Utility functions for Poincare section computations.
+"""Utility functions for Poincare section computations.
 
 This module provides optimized utility functions for interpolation
 and numerical computations used in Poincare section detection and
 refinement. The functions are optimized using Numba JIT compilation
 for high performance in numerical computations.
-
-References
-----------
-Press, W. H., Teukolsky, S. A., Vetterling, W. T., & Flannery, B. P. (2007).
-*Numerical Recipes: The Art of Scientific Computing*. Cambridge University Press.
-
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
 """
 
 import numpy as np
