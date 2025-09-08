@@ -58,6 +58,7 @@ class _DynamicalSystemProtocol(Protocol):
     
     @property
     def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
+        """Right-hand side function for ODE integration."""
         ...
             
 
@@ -67,21 +68,6 @@ class _DynamicalSystem(ABC):
     Provides common functionality and interface definition for concrete
     dynamical system implementations. Handles state space dimension
     validation and provides utilities for state vector checking.
-
-    Parameters
-    ----------
-    dim : int
-        Dimension of the state space (must be >= 1).
-
-    Attributes
-    ----------
-    dim : int
-        State space dimension.
-
-    Raises
-    ------
-    ValueError
-        If dim is not positive.
 
     Notes
     -----
@@ -119,6 +105,7 @@ class _DynamicalSystem(ABC):
     @property
     @abstractmethod
     def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
+        """Right-hand side function for ODE integration."""
         pass
     
     def validate_state(self, y: np.ndarray) -> None:
@@ -182,9 +169,9 @@ class _DirectedSystem(_DynamicalSystem):
     Notes
     -----
     - The wrapper post-processes vector field output without modifying
-      the original system
+        the original system
     - Supports both composition (wrapping existing systems) and inheritance
-      (subclassing with custom rhs implementation)
+        (subclassing with custom rhs implementation)
     - Attribute access is delegated to the wrapped system when available
     
     Examples

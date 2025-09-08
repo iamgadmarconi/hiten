@@ -12,6 +12,21 @@ integrating dynamical systems with emphasis on applications in astrodynamics.
 
 .. currentmodule:: hiten.algorithms.dynamics
 
+Core Framework
+~~~~~~~~~~~~~~
+
+.. autoclass:: _DynamicalSystem
+   :members:
+   :undoc-members:
+
+.. autoclass:: _DirectedSystem
+   :members:
+   :undoc-members:
+
+.. autoclass:: _DynamicalSystemProtocol
+   :members:
+   :undoc-members:
+
 Integrators
 -----------
 
