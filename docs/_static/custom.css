@@ -1,0 +1,133 @@
+/* Custom CSS for HITEN documentation */
+
+/* Override theme colors */
+:root {
+    --pst-color-primary: #2980B9;
+    --pst-color-secondary: #34495E;
+    --pst-color-accent: #E74C3C;
+    --pst-color-info: #3498DB;
+    --pst-color-success: #27AE60;
+    --pst-color-warning: #F39C12;
+    --pst-color-danger: #E74C3C;
+}
+
+/* Custom styling for code blocks */
+.highlight {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 0.375rem;
+    padding: 1rem;
+}
+
+/* Math equations */
+.math {
+    font-size: 1.1em;
+}
+
+/* API documentation styling */
+.py.class {
+    border-left: 4px solid var(--pst-color-primary);
+    padding-left: 1rem;
+    margin-left: -1rem;
+}
+
+.py.function {
+    border-left: 4px solid var(--pst-color-success);
+    padding-left: 1rem;
+    margin-left: -1rem;
+}
+
+.py.method {
+    border-left: 4px solid var(--pst-color-info);
+    padding-left: 1rem;
+    margin-left: -1rem;
+}
+
+/* Parameter lists */
+.field-list dt {
+    font-weight: bold;
+    color: var(--pst-color-primary);
+}
+
+.field-list dd {
+    margin-left: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+/* Admonitions */
+.admonition {
+    border-radius: 0.375rem;
+    border-left: 4px solid;
+}
+
+.admonition.note {
+    border-left-color: var(--pst-color-info);
+}
+
+.admonition.warning {
+    border-left-color: var(--pst-color-warning);
+}
+
+.admonition.danger {
+    border-left-color: var(--pst-color-danger);
+}
+
+/* Table styling */
+table.docutils {
+    border-collapse: collapse;
+    border-spacing: 0;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    overflow: hidden;
+}
+
+table.docutils th {
+    background-color: var(--pst-color-primary);
+    color: white;
+    font-weight: bold;
+    padding: 0.75rem;
+    text-align: left;
+}
+
+table.docutils td {
+    padding: 0.75rem;
+    border-top: 1px solid #dee2e6;
+}
+
+table.docutils tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+/* Navigation */
+.navbar-brand {
+    font-weight: bold;
+    font-size: 1.25rem;
+}
+
+/* Footer */
+.footer {
+    border-top: 1px solid #dee2e6;
+    margin-top: 2rem;
+    padding-top: 1rem;
+    text-align: center;
+    color: #6c757d;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .py.class,
+    .py.function,
+    .py.method {
+        margin-left: 0;
+        padding-left: 0.5rem;
+    }
+    
+    table.docutils {
+        font-size: 0.875rem;
+    }
+    
+    table.docutils th,
+    table.docutils td {
+        padding: 0.5rem;
+    }
+}
