@@ -1,4 +1,4 @@
-"""Abstract base classes for different continuation algorithm strategies.
+"""Provide abstract base classes for different continuation algorithm strategies.
 
 This module provides abstract base classes that implement specific continuation
 algorithm strategies by extending the generic continuation engine. Each strategy
@@ -24,7 +24,7 @@ from hiten.algorithms.continuation.strategies._stepping import _SecantStep
 
 
 class _NaturalParameter(_ContinuationEngine, ABC):
-    """Abstract base class for natural parameter continuation algorithms.
+    """Provide an abstract base class for natural parameter continuation algorithms.
 
     This class implements the natural parameter continuation strategy, where
     one or more parameters are varied monotonically within specified target
@@ -76,7 +76,7 @@ class _NaturalParameter(_ContinuationEngine, ABC):
 
     See Also
     --------
-    :class:`_SecantArcLength`
+    :class:`hiten.algorithms.continuation.strategies._algorithms._SecantArcLength`
         Alternative strategy for pseudo-arclength continuation.
     :class:`hiten.algorithms.continuation.base._ContinuationEngine`
         Base continuation engine that this class extends.
@@ -171,7 +171,7 @@ class _NaturalParameter(_ContinuationEngine, ABC):
 
 
 class _SecantArcLength(_ContinuationEngine, ABC):
-    """Abstract base class for pseudo-arclength continuation algorithms.
+    """Provide an abstract base class for pseudo-arclength continuation algorithms.
 
     This class implements the pseudo-arclength continuation strategy, which
     follows solution curves in an extended parameter-solution space. This
@@ -223,7 +223,7 @@ class _SecantArcLength(_ContinuationEngine, ABC):
 
     See Also
     --------
-    :class:`_NaturalParameter`
+    :class:`hiten.algorithms.continuation.strategies._algorithms._NaturalParameter`
         Simpler strategy for monotonic parameter continuation.
     :class:`hiten.algorithms.continuation.strategies._stepping._SecantStep`
         Stepping strategy used by this algorithm.
@@ -247,7 +247,8 @@ class _SecantArcLength(_ContinuationEngine, ABC):
         Notes
         -----
         The initialization automatically creates and configures a
-        :class:`_SecantStep` strategy using the abstract :meth:`_representation`
+        :class:`hiten.algorithms.continuation.strategies._stepping._SecantStep` strategy 
+        using the abstract :meth:`hiten.algorithms.continuation.strategies._algorithms._SecantArcLength._representation`
         method that must be implemented by subclasses.
         """
         super().__init__(*args, **kwargs)
@@ -329,7 +330,7 @@ class _SecantArcLength(_ContinuationEngine, ABC):
         return np.any(current < self._target_min) or np.any(current > self._target_max)
 
     def _on_accept(self, member: object) -> None:
-        """Hook for additional processing after solution acceptance.
+        """Provide a hook for additional processing after solution acceptance.
 
         This method provides an extension point for subclasses to perform
         custom processing after a solution is accepted. In pseudo-arclength
@@ -344,7 +345,8 @@ class _SecantArcLength(_ContinuationEngine, ABC):
         Notes
         -----
         The default implementation does nothing since tangent vector
-        maintenance is handled automatically by the :class:`_SecantStep`
+        maintenance is handled automatically by the 
+        :class:`hiten.algorithms.continuation.strategies._stepping._SecantStep`
         strategy. Subclasses can override this method for:
         
         - Computing additional solution properties

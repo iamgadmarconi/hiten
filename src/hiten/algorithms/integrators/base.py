@@ -1,4 +1,4 @@
-"""Abstract interfaces for numerical time integration.
+"""Provide abstract interfaces for numerical time integration.
 
 References
 ----------
@@ -17,7 +17,7 @@ from hiten.algorithms.dynamics.base import _DynamicalSystemProtocol
 
 @dataclass
 class _Solution:
-    """Discrete solution returned by an integrator.
+    """Store a discrete solution returned by an integrator.
 
     Parameters
     ----------
@@ -28,7 +28,7 @@ class _Solution:
     derivatives : numpy.ndarray or None, optional, shape (n, d)
         Evaluations of f(t,y) at the stored nodes. When
         available a cubic Hermite interpolant is employed by
-        :func:`_Solution.interpolate`; otherwise linear interpolation is used.
+        :func:`hiten.algorithms.integrators.base._Solution.interpolate`; otherwise linear interpolation is used.
 
     Attributes
     ----------
@@ -151,7 +151,7 @@ class _Solution:
 
 
 class _Integrator(ABC):
-    """Minimal interface that every concrete integrator must satisfy.
+    """Define the minimal interface that every concrete integrator must satisfy.
 
     Parameters
     ----------
@@ -170,8 +170,8 @@ class _Integrator(ABC):
 
     Notes
     -----
-    Subclasses *must* implement the abstract members :func:`order` and
-    :func:`integrate`.
+    Subclasses *must* implement the abstract members :func:`hiten.algorithms.integrators.base._Integrator.order` and
+    :func:`hiten.algorithms.integrators.base._Integrator.integrate`.
 
     Examples
     --------
@@ -254,7 +254,7 @@ class _Integrator(ABC):
 
         Parameters
         ----------
-        system : _DynamicalSystemProtocol
+        system : :class:`hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
             Candidate system whose suitability is being tested.
 
         Raises
@@ -275,7 +275,7 @@ class _Integrator(ABC):
 
         Parameters
         ----------
-        system : _DynamicalSystemProtocol
+        system : :class:`hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
             System to be integrated.
         y0 : numpy.ndarray
             Initial state vector of length :attr:`hiten.system.dim`.

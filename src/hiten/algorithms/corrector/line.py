@@ -1,4 +1,4 @@
-"""Line search implementations for robust Newton-type methods.
+"""Provide line search implementations for robust Newton-type methods.
 
 This module provides Armijo line search with backtracking for Newton-type
 correction algorithms. Line search ensures sufficient decrease in the residual
@@ -53,7 +53,7 @@ def _infinity_norm(r: np.ndarray) -> float:
     return float(np.linalg.norm(r, ord=np.inf))
 
 class _LineSearchConfig(NamedTuple):
-    """Configuration parameters for Armijo line search.
+    """Define configuration parameters for Armijo line search.
     
     Parameters
     ----------
@@ -82,7 +82,7 @@ class _LineSearchConfig(NamedTuple):
 
 
 class _ArmijoLineSearch:
-    """Armijo line search with backtracking for Newton methods.
+    """Implement Armijo line search with backtracking for Newton methods.
     
     Implements the Armijo rule for sufficient decrease, ensuring that
     each step reduces the residual norm by a sufficient amount proportional

@@ -1,4 +1,4 @@
-"""Hamiltonian conversion registry and transformation wrappers for CR3BP normal forms.
+"""Provide a Hamiltonian conversion registry and transformation wrappers.
 
 This module provides a comprehensive conversion system for transforming polynomial
 Hamiltonians between different coordinate systems and normal form representations
@@ -287,7 +287,7 @@ def _complex_modal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -> tupl
     --------
     :func:`hiten.algorithms.hamiltonian.center._lie._lie_transform`
         Underlying partial normal form computation.
-    :func:`_complex_modal_to_complex_full_normal`
+    :func:`hiten.algorithms.hamiltonian.wrappers._complex_modal_to_complex_full_normal`
         Complete normal form transformation.
     :class:`hiten.system.hamiltonians.base.LieGeneratingFunction`
         Container for generating function data.
@@ -382,7 +382,7 @@ def _complex_partial_normal_to_center_manifold_complex(ham: Hamiltonian, **kwarg
     --------
     :func:`hiten.algorithms.hamiltonian.transforms._restrict_poly_to_center_manifold`
         Underlying center manifold restriction function.
-    :func:`_center_manifold_complex_to_center_manifold_real`
+    :func:`hiten.algorithms.hamiltonian.wrappers._center_manifold_complex_to_center_manifold_real`
         Conversion to real center manifold coordinates.
 
     References

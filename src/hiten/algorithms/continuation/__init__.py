@@ -1,6 +1,4 @@
-"""
-hiten.algorithms.continuation
-=============================
+"""Provide a comprehensive framework for numerical continuation.
 
 The `hiten.algorithms.continuation` package provides a comprehensive framework
 for numerical continuation of dynamical systems solutions. This package

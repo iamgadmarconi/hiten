@@ -1,4 +1,4 @@
-"""Concrete implementations of continuation stepping strategies.
+"""Provide concrete implementations of continuation stepping strategies.
 
 This module provides concrete implementations of stepping strategies used in
 continuation algorithms. These strategies handle the prediction phase of the
@@ -28,7 +28,7 @@ import numpy as np
 
 
 class _StepStrategy(Protocol):
-    """Extended protocol for stepping strategies with event hooks.
+    """Define an extended protocol for stepping strategies with event hooks.
 
     This protocol extends the basic stepping interface with event hooks
     that allow strategies to respond to various continuation events.
@@ -70,9 +70,9 @@ class _StepStrategy(Protocol):
 
     See Also
     --------
-    :class:`_NaturalParameterStep`
+    :class:`hiten.algorithms.continuation.strategies._stepping._NaturalParameterStep`
         Simple implementation with no-op hooks.
-    :class:`_SecantStep`
+    :class:`hiten.algorithms.continuation.strategies._stepping._SecantStep`
         Sophisticated implementation using success hooks.
     """
 
@@ -151,7 +151,7 @@ class _StepStrategy(Protocol):
 
 
 class _NaturalParameterStep:
-    """Natural parameter stepping strategy with user-supplied predictor.
+    """Implement a natural parameter stepping strategy with user-supplied predictor.
 
     This class implements a simple stepping strategy for natural parameter
     continuation. It delegates prediction to a user-supplied function and
@@ -200,9 +200,9 @@ class _NaturalParameterStep:
 
     See Also
     --------
-    :class:`_SecantStep`
+    :class:`hiten.algorithms.continuation.strategies._stepping._SecantStep`
         More sophisticated stepping with tangent vector maintenance.
-    :class:`_StepStrategy`
+    :class:`hiten.algorithms.continuation.strategies._stepping._StepStrategy`
         Protocol that this class implements.
     """
 
@@ -284,7 +284,7 @@ class _NaturalParameterStep:
 
 
 class _SecantStep:
-    """Secant-based stepping strategy for pseudo-arclength continuation.
+    """Implement a secant-based stepping strategy for pseudo-arclength continuation.
 
     This class implements a sophisticated stepping strategy that maintains
     solution history and computes tangent vectors for pseudo-arclength
@@ -347,7 +347,7 @@ class _SecantStep:
 
     See Also
     --------
-    :class:`_NaturalParameterStep`
+    :class:`hiten.algorithms.continuation.strategies._stepping._NaturalParameterStep`
         Simpler stepping strategy for natural parameter continuation.
     :class:`hiten.algorithms.continuation.strategies._algorithms._SecantArcLength`
         Algorithm class that uses this stepping strategy.

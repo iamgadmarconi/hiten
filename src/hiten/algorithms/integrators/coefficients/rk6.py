@@ -1,4 +1,4 @@
-"""Butcher tableau for a sixth-order Runge-Kutta method."""
+"""Provide the Butcher tableau for a sixth-order Runge-Kutta method."""
 import numpy as np
 
 A = np.array([

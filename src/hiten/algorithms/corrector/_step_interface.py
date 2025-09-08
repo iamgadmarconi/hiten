@@ -1,4 +1,4 @@
-"""Step-size control interfaces for Newton-type correction algorithms.
+"""Define step-size control interfaces for Newton-type correction algorithms.
 
 This module provides abstract interfaces and concrete implementations for
 step-size control strategies used in Newton-type iterative methods. These
@@ -66,7 +66,7 @@ NormFn = Callable[[np.ndarray], float]
 
 
 class _Stepper(Protocol):
-    """Protocol for step transformation functions in Newton-type methods.
+    """Define the protocol for step transformation functions in Newton-type methods.
 
     This protocol defines the interface for functions that transform a
     computed Newton step into an accepted update. Different implementations
@@ -169,7 +169,7 @@ class _Stepper(Protocol):
 
 
 class _StepInterface(ABC):
-    """Abstract base class for step-size control strategy interfaces.
+    """Provide an abstract base class for step-size control strategy interfaces.
 
     This class provides the foundation for implementing different step-size
     control strategies in Newton-type correction algorithms. It defines the
@@ -258,7 +258,7 @@ class _StepInterface(ABC):
 
         Returns
         -------
-        stepper : _Stepper
+        stepper : :class:`_Stepper`
             Step transformation function configured for this problem.
 
         Notes
@@ -275,7 +275,7 @@ class _StepInterface(ABC):
 
 
 class _PlainStepInterface(_StepInterface):
-    """Step interface providing plain Newton updates with safeguards.
+    """Provide a step interface for plain Newton updates with safeguards.
 
     This class implements the simplest step-size control strategy: taking
     full Newton steps with optional step size capping for numerical stability.
@@ -404,7 +404,7 @@ class _PlainStepInterface(_StepInterface):
 
 
 class _ArmijoStepInterface(_PlainStepInterface):
-    """Step interface with Armijo line search for robust convergence.
+    """Provide a step interface with Armijo line search for robust convergence.
 
     This class extends the plain step interface with optional Armijo line
     search capabilities. It provides a more robust stepping strategy that
@@ -495,7 +495,7 @@ class _ArmijoStepInterface(_PlainStepInterface):
 
         Parameters
         ----------
-        line_search_config : _LineSearchConfig, bool, or None, optional
+        line_search_config : :class:`_LineSearchConfig`, bool, or None, optional
             Line search configuration:
             - None: Disable line search, use plain Newton steps
             - True: Enable line search with default parameters

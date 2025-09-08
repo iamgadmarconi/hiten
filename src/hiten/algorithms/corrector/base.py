@@ -1,4 +1,4 @@
-"""Base classes and configuration for iterative correction algorithms.
+"""Provide base classes and configuration for iterative correction algorithms.
 
 This module provides the foundational components for implementing iterative
 correction algorithms used throughout the hiten framework. These algorithms
@@ -115,7 +115,7 @@ NormFn = Callable[[np.ndarray], float]
 
 @dataclass(frozen=True, slots=True)
 class _BaseCorrectionConfig:
-    """Base configuration class for correction algorithm parameters.
+    """Define a base configuration class for correction algorithm parameters.
 
     This dataclass encapsulates the common configuration parameters used
     by correction algorithms throughout the hiten framework. It provides
@@ -240,7 +240,7 @@ class _BaseCorrectionConfig:
 
 
 class _Corrector(ABC):
-    """Abstract base class for iterative correction algorithms.
+    """Define an abstract base class for iterative correction algorithms.
 
     This class defines the interface for iterative correction algorithms
     used throughout the hiten framework to solve nonlinear systems of

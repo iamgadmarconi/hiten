@@ -1,4 +1,4 @@
-r"""Full normal form computation using Lie series transformations.
+"""Provide full normal form computation using Lie series transformations.
 
 This module provides JIT-compiled routines for computing full normal forms
 of polynomial Hamiltonian systems using Lie series transformations. Unlike
@@ -85,7 +85,7 @@ def _lie_transform(
     
     See Also
     --------
-    :func:`_select_nonresonant_terms` : Term selection
+    :func:`hiten.algorithms.hamiltonian.normal._lie._select_nonresonant_terms` : Term selection
     :func:`hiten.algorithms.hamiltonian.center._lie._lie_transform` : Partial version
     """
 

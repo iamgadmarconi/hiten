@@ -1,4 +1,4 @@
-"""Polynomial Hamiltonian construction for CR3BP equilibrium points.
+"""Provide polynomial Hamiltonian construction for CR3BP equilibrium points.
 
 This module provides polynomial representations of the Circular Restricted Three-Body
 Problem (CR3BP) Hamiltonian around collinear and triangular equilibrium points.
@@ -82,9 +82,9 @@ def _build_T_polynomials(poly_x, poly_y, poly_z, max_deg: int, psi_table, clmo_t
 
     See Also
     --------
-    :func:`_build_R_polynomials`
+    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_R_polynomials`
         Auxiliary polynomials for Lindstedt-Poincare formulation.
-    :func:`_build_potential_U`
+    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_potential_U`
         Gravitational potential construction using Chebyshev polynomials.
 
     References
@@ -171,9 +171,9 @@ def _build_R_polynomials(poly_x, poly_y, poly_z, poly_T: types.ListType, max_deg
 
     See Also
     --------
-    :func:`_build_T_polynomials`
+    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_T_polynomials`
         Chebyshev polynomials used in this computation.
-    :func:`_build_lindstedt_poincare_rhs_polynomials`
+    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_lindstedt_poincare_rhs_polynomials`
         Final right-hand side construction using R_n polynomials.
 
     References
@@ -281,9 +281,9 @@ def _build_potential_U(poly_T, point, max_deg: int, psi_table) -> List[np.ndarra
 
     See Also
     --------
-    :func:`_build_T_polynomials`
+    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_T_polynomials`
         Chebyshev polynomials used in this expansion.
-    :func:`_build_physical_hamiltonian_collinear`
+    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_physical_hamiltonian_collinear`
         Complete Hamiltonian construction using this potential.
 
     References
@@ -334,9 +334,9 @@ def _build_kinetic_energy_terms(poly_px, poly_py, poly_pz, max_deg: int, psi_tab
 
     See Also
     --------
-    :func:`_build_rotational_terms`
+    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_rotational_terms`
         Coriolis terms that couple with kinetic energy in rotating frame.
-    :func:`_build_physical_hamiltonian_collinear`
+    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_physical_hamiltonian_collinear`
         Complete Hamiltonian assembly including kinetic energy.
     """
     poly_kinetic = _polynomial_zero_list(max_deg, psi_table)
@@ -388,9 +388,9 @@ def _build_rotational_terms(poly_x, poly_y, poly_px, poly_py, max_deg: int, psi_
 
     See Also
     --------
-    :func:`_build_kinetic_energy_terms`
+    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_kinetic_energy_terms`
         Kinetic energy terms that couple with Coriolis terms.
-    :func:`_build_physical_hamiltonian_collinear`
+    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_physical_hamiltonian_collinear`
         Complete Hamiltonian including Coriolis terms.
 
     References
@@ -448,13 +448,13 @@ def _build_physical_hamiltonian_collinear(point, max_deg: int) -> List[np.ndarra
 
     See Also
     --------
-    :func:`_build_kinetic_energy_terms`
+    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_kinetic_energy_terms`
         Kinetic energy polynomial construction.
-    :func:`_build_potential_U`
+    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_potential_U`
         Gravitational potential using Chebyshev expansion.
-    :func:`_build_rotational_terms`
+    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_rotational_terms`
         Coriolis terms for rotating frame.
-    :func:`_build_physical_hamiltonian_triangular`
+    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_physical_hamiltonian_triangular`
         Hamiltonian construction for triangular points.
 
     Examples
@@ -536,9 +536,9 @@ def _build_A_polynomials(poly_x, poly_y, poly_z, d_x: float, d_y: float, max_deg
 
     See Also
     --------
-    :func:`_build_physical_hamiltonian_triangular`
+    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_physical_hamiltonian_triangular`
         Triangular point Hamiltonian using these polynomials.
-    :func:`_build_T_polynomials`
+    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_T_polynomials`
         Analogous Chebyshev polynomials for collinear points.
 
     References
@@ -659,9 +659,9 @@ def _build_physical_hamiltonian_triangular(point, max_deg: int) -> List[np.ndarr
 
     See Also
     --------
-    :func:`_build_A_polynomials`
+    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_A_polynomials`
         Legendre-type polynomials for inverse distance expansions.
-    :func:`_build_physical_hamiltonian_collinear`
+    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_physical_hamiltonian_collinear`
         Analogous Hamiltonian for collinear points.
 
     References
@@ -779,9 +779,9 @@ def _build_lindstedt_poincare_rhs_polynomials(point, max_deg: int) -> Tuple[List
 
     See Also
     --------
-    :func:`_build_T_polynomials`
+    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_T_polynomials`
         Chebyshev polynomials used in x-equation.
-    :func:`_build_R_polynomials`
+    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_R_polynomials`
         Auxiliary polynomials used in y,z-equations.
 
     Examples

@@ -1,6 +1,4 @@
-"""
-hiten.algorithms.continuation.strategies
-========================================
+"""Provide the core algorithmic components for numerical continuation.
 
 The `hiten.algorithms.continuation.strategies` package provides the core
 algorithmic components for numerical continuation in dynamical systems.

@@ -1,4 +1,4 @@
-r"""Generic right-hand side function adapters for dynamical systems.
+r"""Provide generic right-hand side function adapters for dynamical systems.
 
 This module provides lightweight adapters that convert arbitrary Python callables
 representing ODEs into objects compatible with the dynamical systems framework.
@@ -18,7 +18,7 @@ from hiten.algorithms.dynamics.base import _DynamicalSystem
 
 
 class _RHSSystem(_DynamicalSystem):
-    r"""Adapter for generic right-hand side functions.
+    r"""Provide an adapter for generic right-hand side functions.
 
     Converts arbitrary Python callables representing ODE systems dy/dt = f(t, y)
     into objects compatible with the dynamical systems framework. Automatically
@@ -67,7 +67,7 @@ class _RHSSystem(_DynamicalSystem):
     See Also
     --------
     :class:`hiten.algorithms.dynamics.base._DynamicalSystem` : Base class
-    :func:`create_rhs_system` : Factory function
+    :func:`hiten.algorithms.dynamics.rhs.create_rhs_system` : Factory function
     :func:`numba.njit` : JIT compilation used internally
     """
 

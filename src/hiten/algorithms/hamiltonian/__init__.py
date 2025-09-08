@@ -1,4 +1,4 @@
-"""Hamiltonian normal form algorithms for CR3BP equilibrium point analysis.
+"""Provide Hamiltonian normal form algorithms for CR3BP equilibrium point analysis.
 
 This package provides comprehensive tools for constructing polynomial normal forms
 of Hamiltonian systems around equilibrium points in the Circular Restricted Three-Body

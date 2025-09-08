@@ -1,4 +1,4 @@
-"""Coordinate transformations for CR3BP normal form computations.
+"""Provide coordinate transformations for CR3BP normal form computations.
 
 This module provides comprehensive coordinate transformation utilities for the
 center manifold normal form pipeline in the Circular Restricted Three-Body
@@ -114,9 +114,9 @@ def _M(mix_pairs: tuple[int, ...] = (1, 2)) -> np.ndarray:
 
     See Also
     --------
-    :func:`_M_inv`
+    :func:`hiten.algorithms.hamiltonian.transforms._M_inv`
         Inverse transformation from complex to real coordinates.
-    :func:`_substitute_complex`
+    :func:`hiten.algorithms.hamiltonian.transforms._substitute_complex`
         Apply complexification to polynomial expressions.
 
     References
@@ -156,9 +156,9 @@ def _M_inv(mix_pairs: tuple[int, ...] = (1, 2)) -> np.ndarray:
 
     See Also
     --------
-    :func:`_M`
+    :func:`hiten.algorithms.hamiltonian.transforms._M`
         Forward complexification transformation.
-    :func:`_substitute_real`
+    :func:`hiten.algorithms.hamiltonian.transforms._substitute_real`
         Apply inverse complexification to polynomial expressions.
     """
     M = _M(mix_pairs)
@@ -207,9 +207,9 @@ def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo, tol=
 
     See Also
     --------
-    :func:`_substitute_real`
+    :func:`hiten.algorithms.hamiltonian.transforms._substitute_real`
         Inverse transformation from complex to real coordinates.
-    :func:`_M`
+    :func:`hiten.algorithms.hamiltonian.transforms._M`
         Complexification matrix used in the transformation.
     """
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
@@ -246,7 +246,7 @@ def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-
 
     Notes
     -----
-    This is the inverse of :func:`_substitute_complex`, using the inverse
+    This is the inverse of :func:`hiten.algorithms.hamiltonian.transforms._substitute_complex`, using the inverse
     complexification matrix M_inv to recover real polynomial expressions
     from their complex representations.
 
@@ -256,9 +256,9 @@ def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-
 
     See Also
     --------
-    :func:`_substitute_complex`
+    :func:`hiten.algorithms.hamiltonian.transforms._substitute_complex`
         Forward transformation from real to complex coordinates.
-    :func:`_M_inv`
+    :func:`hiten.algorithms.hamiltonian.transforms._M_inv`
         Inverse complexification matrix used in the transformation.
     """
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
@@ -297,9 +297,9 @@ def _solve_complex(real_coords: np.ndarray, tol: float = 1e-30, *, mix_pairs: tu
 
     See Also
     --------
-    :func:`_solve_real`
+    :func:`hiten.algorithms.hamiltonian.transforms._solve_real`
         Inverse transformation from complex to real coordinates.
-    :func:`_M_inv`
+    :func:`hiten.algorithms.hamiltonian.transforms._M_inv`
         Complexification matrix used in this transformation.
     """
     return _clean_coordinates(_substitute_coordinates(real_coords, _M_inv(mix_pairs)), tol)
@@ -480,7 +480,7 @@ def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray, to
 
     See Also
     --------
-    :func:`_synodic2local_collinear`
+    :func:`hiten.algorithms.hamiltonian.transforms._synodic2local_collinear`
         Inverse transformation from synodic to local coordinates.
     :class:`hiten.system.libration.collinear.CollinearPoint`
         Collinear point class providing transformation parameters.
@@ -530,7 +530,7 @@ def _synodic2local_collinear(point: CollinearPoint, synodic_coords: np.ndarray, 
     r"""
     Transform coordinates from synodic to local frame for the collinear points.
 
-    This is the exact inverse of :func:`_local2synodic_collinear`.
+    This is the exact inverse of :func:`hiten.algorithms.hamiltonian.transforms._local2synodic_collinear`.
 
     Parameters
     ----------
@@ -658,7 +658,7 @@ def _synodic2local_triangular(point: TriangularPoint, synodic_coords: np.ndarray
     r"""
     Transform coordinates from synodic to local frame for the triangular (equilateral) points.
 
-    This is the exact inverse of :func:`_local2synodic_triangular`.
+    This is the exact inverse of :func:`hiten.algorithms.hamiltonian.transforms._local2synodic_triangular`.
 
     Parameters
     ----------

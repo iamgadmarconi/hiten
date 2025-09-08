@@ -1,4 +1,4 @@
-"""Connection engine for orchestrating manifold transfer discovery in CR3BP.
+"""Provide a connection engine for orchestrating manifold transfer discovery in CR3BP.
 
 This module provides the core engine that coordinates the connection discovery
 process between manifolds in the Circular Restricted Three-Body Problem (CR3BP).
@@ -33,7 +33,7 @@ from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
 
 @dataclass
 class _ConnectionProblem:
-    """Problem specification for connection discovery between two manifolds.
+    """Define a problem specification for connection discovery between two manifolds.
 
     This dataclass encapsulates all the parameters needed to define a connection
     discovery problem, including the source and target manifolds, the synodic
@@ -84,7 +84,7 @@ class _ConnectionProblem:
 
     See Also
     --------
-    :class:`_ConnectionEngine`
+    :class:`hiten.algorithms.connections.engine._ConnectionEngine`
         Engine class that processes this problem specification.
     :class:`hiten.algorithms.connections.base.Connection`
         High-level class that creates these problem specifications.
@@ -97,7 +97,7 @@ class _ConnectionProblem:
 
 
 class _ConnectionEngine:
-    """Main engine for orchestrating connection discovery between manifolds.
+    """Provide the main engine for orchestrating connection discovery between manifolds.
 
     This class serves as the central coordinator for the connection discovery
     process. It takes a problem specification and orchestrates the various
@@ -128,7 +128,7 @@ class _ConnectionEngine:
 
     See Also
     --------
-    :class:`_ConnectionProblem`
+    :class:`hiten.algorithms.connections.engine._ConnectionProblem`
         Problem specification structure processed by this engine.
     :class:`hiten.algorithms.connections.backends._ConnectionsBackend`
         Backend algorithms that perform the actual computations.
@@ -144,7 +144,7 @@ class _ConnectionEngine:
 
         Parameters
         ----------
-        problem : :class:`_ConnectionProblem`
+        problem : :class:`hiten.algorithms.connections.engine._ConnectionProblem`
             Complete problem specification including source/target manifolds,
             synodic section configuration, crossing direction, and search parameters.
 

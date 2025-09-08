@@ -1,6 +1,4 @@
-"""
-hiten.algorithms.corrector
-==========================
+"""Provide robust iterative correction algorithms for solving nonlinear systems.
 
 The `hiten.algorithms.corrector` package provides robust iterative correction
 algorithms for solving nonlinear systems arising in dynamical systems analysis.

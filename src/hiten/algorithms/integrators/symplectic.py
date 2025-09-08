@@ -1,4 +1,4 @@
-"""High-order explicit symplectic integrators for polynomial Hamiltonian
+"""Provide high-order explicit symplectic integrators for polynomial Hamiltonian systems.
 systems with n_dof=3.  The module provides two layers of
 functionality:
 
@@ -523,7 +523,7 @@ class _ExtendedSymplectic(_Integrator):
         
         Parameters
         ----------
-        system : _DynamicalSystem
+        system : :class:`hiten.algorithms.dynamics.base._DynamicalSystem`
             The system to validate
             
         Raises
@@ -561,7 +561,7 @@ class _ExtendedSymplectic(_Integrator):
         
         Parameters
         ----------
-        system : _DynamicalSystem
+        system : :class:`hiten.algorithms.dynamics.base._DynamicalSystem`
             The Hamiltonian system to integrate (must provide polynomial structure)
         y0 : numpy.ndarray
             Initial state vector [Q, P], shape (2*n_dof,)
@@ -629,7 +629,7 @@ class _ExtendedSymplectic(_Integrator):
 
 
 class ExtendedSymplectic:
-    """Factory for extended symplectic integrators.
+    """Implement a factory for extended symplectic integrators.
 
     This factory class provides a convenient way to create symplectic
     integrators of different orders without directly instantiating the

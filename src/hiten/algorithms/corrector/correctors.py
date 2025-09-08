@@ -1,4 +1,4 @@
-r"""Concrete corrector implementations for specific problem domains.
+"""Provide concrete corrector implementations for specific problem domains.
 
 This module provides ready-to-use corrector classes that combine generic
 correction algorithms with domain-specific interfaces through multiple
@@ -11,7 +11,7 @@ from hiten.algorithms.corrector.newton import _NewtonCore
 
 
 class _NewtonOrbitCorrector(_PeriodicOrbitCorrectorInterface, _NewtonCore):
-    """Newton-Raphson corrector for periodic orbits.
+    """Implement a Newton-Raphson corrector for periodic orbits.
 
     Combines :class:`~hiten.algorithms.corrector.interfaces._PeriodicOrbitCorrectorInterface`
     with :class:`~hiten.algorithms.corrector.newton._NewtonCore` to provide

@@ -1,4 +1,4 @@
-"""Interface classes for domain-specific continuation algorithms.
+"""Provide interface classes for domain-specific continuation algorithms.
 
 This module provides interface classes that adapt the generic continuation
 engine to specific problem domains in dynamical systems. These interfaces
@@ -30,7 +30,7 @@ from hiten.system.orbits.base import PeriodicOrbit
 
 
 class _OrbitContinuationConfig(NamedTuple):
-    """Configuration parameters for periodic orbit continuation.
+    """Define configuration parameters for periodic orbit continuation.
 
     This named tuple encapsulates configuration options specific to
     periodic orbit continuation, including state initialization,
@@ -46,7 +46,7 @@ class _OrbitContinuationConfig(NamedTuple):
         natural parameter continuation.
     getter : callable or None
         Function to extract continuation parameter from periodic orbit.
-        Should take a :class:`PeriodicOrbit` and return float.
+        Should take a :class:`hiten.system.orbits.base.PeriodicOrbit` and return float.
         If None, uses default parameter extraction.
     extra_params : dict or None
         Additional parameters passed to orbit correction methods.
@@ -74,7 +74,7 @@ class _OrbitContinuationConfig(NamedTuple):
 
 
 class _PeriodicOrbitContinuationInterface:
-    """Interface for periodic orbit continuation in the CR3BP.
+    """Provide an interface for periodic orbit continuation in the CR3BP.
 
     This class provides the domain-specific implementation of continuation
     methods for periodic orbits. It serves as a mix-in that implements
@@ -108,9 +108,12 @@ class _PeriodicOrbitContinuationInterface:
     -----
     This interface implements the required abstract methods:
     
-    - :meth:`_instantiate`: Create orbit from predicted state vector
-    - :meth:`_correct`: Apply orbit-specific correction algorithm
-    - :meth:`_parameter`: Extract continuation parameter from orbit
+    - :meth:`hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface._instantiate`: 
+        Create orbit from predicted state vector
+    - :meth:`hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface._correct`: 
+        Apply orbit-specific correction algorithm
+    - :meth:`hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface._parameter`: 
+        Extract continuation parameter from orbit
     
     The interface preserves the orbit class and libration point from
     the initial orbit, ensuring consistent family generation.
@@ -118,7 +121,7 @@ class _PeriodicOrbitContinuationInterface:
     Examples
     --------
     >>> # This interface is typically used as a mix-in
-    >>> class HaloContinuation(_PeriodicOrbitContinuationInterface, _ContinuationEngine):
+    >>> class HaloContinuation(_PeriodicOrbitContinuationInterface, hiten.algorithms.continuation.base._ContinuationEngine):
     ...     def _make_stepper(self):
     ...         return NaturalParameterStep()
     ...     
@@ -253,7 +256,7 @@ class _PeriodicOrbitContinuationInterface:
     
 
 class _InvariantToriContinuationInterface:
-    """Interface for invariant tori continuation (placeholder).
+    """Provide an interface for invariant tori continuation (placeholder).
 
     This class is reserved for future implementation of continuation
     algorithms for invariant tori in the CR3BP. Invariant tori are
@@ -271,12 +274,12 @@ class _InvariantToriContinuationInterface:
     - Continuation along torus families
     
     The interface will follow the same pattern as
-    :class:`_PeriodicOrbitContinuationInterface` but adapted
+    :class:`hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface` but adapted
     for the higher-dimensional nature of invariant tori.
 
     See Also
     --------
-    :class:`_PeriodicOrbitContinuationInterface`
+    :class:`hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface`
         Similar interface for periodic orbit continuation.
     :mod:`hiten.algorithms.tori`
         Future module for invariant tori algorithms.

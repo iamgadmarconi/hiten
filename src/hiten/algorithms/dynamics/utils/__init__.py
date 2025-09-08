@@ -1,4 +1,4 @@
-r"""Utility functions for dynamical systems analysis.
+"""Provide utility functions for dynamical systems analysis.
 
 This submodule provides specialized utility functions for analyzing dynamical
 systems, with particular focus on the Circular Restricted Three-Body Problem

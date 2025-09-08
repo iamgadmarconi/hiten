@@ -1,4 +1,4 @@
-r"""Core abstractions for dynamical systems integration.
+r"""Provide core abstractions for dynamical systems integration.
 
 This module provides abstract base classes and protocols that define the
 interface between dynamical systems and numerical integrators. The design
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 
 @runtime_checkable
 class _DynamicalSystemProtocol(Protocol):
-    r"""Protocol defining the minimal interface for dynamical systems.
+    r"""Define the protocol for the minimal interface for dynamical systems.
 
     This protocol specifies the required attributes that any dynamical system
     must implement to be compatible with the integrator framework. It uses
@@ -62,7 +62,7 @@ class _DynamicalSystemProtocol(Protocol):
             
 
 class _DynamicalSystem(ABC):
-    r"""Abstract base class for dynamical systems.
+    r"""Provide an abstract base class for dynamical systems.
 
     Provides common functionality and interface definition for concrete
     dynamical system implementations. Handles state space dimension
@@ -85,13 +85,13 @@ class _DynamicalSystem(ABC):
 
     Notes
     -----
-    Subclasses must implement the abstract :attr:`rhs` property to provide
-    the vector field function compatible with :class:`_DynamicalSystemProtocol`.
+    Subclasses must implement the abstract :attr:`hiten.algorithms.dynamics.base._DynamicalSystem.rhs` property to provide
+    the vector field function compatible with :class:`hiten.algorithms.dynamics.base._DynamicalSystemProtocol`.
     
     See Also
     --------
-    :class:`_DynamicalSystemProtocol` : Interface specification
-    :class:`_DirectedSystem` : Directional wrapper implementation
+    :class:`hiten.algorithms.dynamics.base._DynamicalSystemProtocol` : Interface specification
+    :class:`hiten.algorithms.dynamics.base._DirectedSystem` : Directional wrapper implementation
     """
     
     def __init__(self, dim: int):
@@ -143,7 +143,7 @@ class _DynamicalSystem(ABC):
 
 
 class _DirectedSystem(_DynamicalSystem):
-    r"""Directional wrapper for forward/backward time integration.
+    r"""Provide a directional wrapper for forward/backward time integration.
 
     Wraps another dynamical system to enable forward or backward time
     integration with selective component sign handling. Particularly useful
@@ -198,8 +198,8 @@ class _DirectedSystem(_DynamicalSystem):
     
     See Also
     --------
-    :class:`_DynamicalSystem` : Base class for dynamical systems
-    :func:`_propagate_dynsys` : Generic propagation using DirectedSystem
+    :class:`hiten.algorithms.dynamics.base._DynamicalSystem` : Base class for dynamical systems
+    :func:`hiten.algorithms.dynamics.base._propagate_dynsys` : Generic propagation using DirectedSystem
     """
 
     def __init__(self,

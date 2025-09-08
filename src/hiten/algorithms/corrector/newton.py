@@ -1,4 +1,4 @@
-"""Newton-Raphson correction algorithm with robust linear algebra.
+"""Provide a Newton-Raphson correction algorithm with robust linear algebra.
 
 This module provides the core Newton-Raphson implementation with automatic
 handling of ill-conditioned systems, finite-difference Jacobians, and
@@ -18,7 +18,7 @@ from hiten.utils.log_config import logger
 
 
 class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
-    """Newton-Raphson algorithm with robust linear algebra and step control.
+    """Implement the Newton-Raphson algorithm with robust linear algebra and step control.
     
     Combines Newton-Raphson iteration with Armijo line search, automatic
     handling of ill-conditioned Jacobians, and extensible hooks for

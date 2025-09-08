@@ -1,4 +1,4 @@
-"""Explicit Runge-Kutta integrators used throughout the project.
+"""Provide explicit Runge-Kutta integrators used throughout the project.
 
 Both fixed and adaptive step-size variants are provided together with small
 convenience factories that select an appropriate implementation given the
@@ -56,10 +56,10 @@ from hiten.utils.log_config import logger
 
 
 class _RungeKuttaBase(_Integrator):
-    """Shared functionality of explicit Runge-Kutta schemes.
+    """Provide shared functionality of explicit Runge-Kutta schemes.
 
     The class stores a Butcher tableau and provides a single low level helper
-    :func:`_rk_embedded_step` that advances one macro time step and, when a
+    :func:`hiten.algorithms.integrators.rk._RungeKuttaBase._rk_embedded_step` that advances one macro time step and, when a
     second set of weights is available, returns an error estimate suitable
     for adaptive step-size control.
 
@@ -140,7 +140,7 @@ class _RungeKuttaBase(_Integrator):
 
 
 class _FixedStepRK(_RungeKuttaBase):
-    """Explicit fixed-step Runge-Kutta scheme.
+    """Implement an explicit fixed-step Runge-Kutta scheme.
 
     Parameters
     ----------
@@ -156,7 +156,7 @@ class _FixedStepRK(_RungeKuttaBase):
     Notes
     -----
     The step size is assumed to be **constant** and is inferred from the
-    spacing of the *t_vals* array supplied to :func:`integrate`.
+    spacing of the *t_vals* array supplied to :func:`hiten.algorithms.integrators.rk._FixedStepRK.integrate`.
     """
 
     def __init__(self, name: str, A: np.ndarray, B: np.ndarray, C: np.ndarray, order: int, **options):
@@ -256,7 +256,7 @@ class _FixedStepRK(_RungeKuttaBase):
 
 
 class _RK4(_FixedStepRK):
-    """Classical 4th-order Runge-Kutta method.
+    """Implement the classical 4th-order Runge-Kutta method.
     
     This is the standard 4th-order explicit Runge-Kutta method, also known
     as RK4 or the "classical" Runge-Kutta method. It uses 4 function
@@ -267,7 +267,7 @@ class _RK4(_FixedStepRK):
 
 
 class _RK6(_FixedStepRK):
-    """6th-order Runge-Kutta method.
+    """Implement a 6th-order Runge-Kutta method.
     
     A 6th-order explicit Runge-Kutta method that provides higher accuracy
     than RK4 at the cost of more function evaluations per step.
@@ -277,7 +277,7 @@ class _RK6(_FixedStepRK):
 
 
 class _RK8(_FixedStepRK):
-    """8th-order Runge-Kutta method.
+    """Implement an 8th-order Runge-Kutta method.
     
     An 8th-order explicit Runge-Kutta method that provides very high accuracy
     for applications requiring precise numerical integration.
@@ -287,10 +287,10 @@ class _RK8(_FixedStepRK):
 
 
 class _AdaptiveStepRK(_RungeKuttaBase):
-    """Embedded adaptive Runge-Kutta integrator with PI controller.
+    """Implement an embedded adaptive Runge-Kutta integrator with PI controller.
 
     The class implements proportional-integral (PI) step-size control using
-    the error estimates returned by :func:`_rk_embedded_step`. 
+    the error estimates returned by :func:`hiten.algorithms.integrators.rk._RungeKuttaBase._rk_embedded_step`. 
 
     Parameters
     ----------
@@ -539,7 +539,7 @@ class _AdaptiveStepRK(_RungeKuttaBase):
 
 
 class _RK45(_AdaptiveStepRK):
-    """Dormand-Prince 5(4) adaptive Runge-Kutta method.
+    """Implement the Dormand-Prince 5(4) adaptive Runge-Kutta method.
     
     This is the Dormand-Prince 5th-order adaptive Runge-Kutta method with
     4th-order error estimation. It provides a good balance between accuracy
@@ -597,7 +597,7 @@ class _RK45(_AdaptiveStepRK):
 
 
 class _DOP853(_AdaptiveStepRK):
-    """Dormand-Prince 8(5,3) adaptive Runge-Kutta method.
+    """Implement the Dormand-Prince 8(5,3) adaptive Runge-Kutta method.
     
     This is the Dormand-Prince 8th-order adaptive Runge-Kutta method with
     5th and 3rd-order error estimation. It provides very high accuracy
@@ -722,7 +722,7 @@ class _DOP853(_AdaptiveStepRK):
 
 
 class RungeKutta:
-    """Factory class for creating fixed-step Runge-Kutta integrators.
+    """Implement a factory class for creating fixed-step Runge-Kutta integrators.
     
     This factory provides convenient access to fixed-step Runge-Kutta methods
     of different orders. The available orders are 4, 6, and 8.
@@ -759,7 +759,7 @@ class RungeKutta:
         return cls._map[order](**opts)
 
 class AdaptiveRK:
-    """Factory class for creating adaptive step-size Runge-Kutta integrators.
+    """Implement a factory class for creating adaptive step-size Runge-Kutta integrators.
     
     This factory provides convenient access to adaptive step-size Runge-Kutta
     methods. The available orders are 5 (Dormand-Prince 5(4)) and 8 (Dormand-Prince 8(5,3)).

@@ -1,4 +1,4 @@
-"""Domain-specific interfaces for correction algorithms.
+"""Provide domain-specific interfaces for correction algorithms.
 
 This module provides interface classes that adapt generic correction algorithms
 to specific problem domains. These interfaces handle the translation between
@@ -24,7 +24,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True, slots=True)
 class _OrbitCorrectionConfig(_BaseCorrectionConfig):
-    """Configuration for periodic orbit correction.
+    """Define a configuration for periodic orbit correction.
 
     Extends the base correction configuration with orbit-specific parameters
     for constraint selection, integration settings, and event detection.
@@ -66,7 +66,7 @@ class _OrbitCorrectionConfig(_BaseCorrectionConfig):
 
 
 class _PeriodicOrbitCorrectorInterface(_Corrector):
-    """Interface for periodic orbit differential correction.
+    """Provide an interface for periodic orbit differential correction.
     
     Provides orbit-specific correction functionality designed to be used as a
     mixin with concrete corrector implementations. Handles parameter extraction,
@@ -428,7 +428,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
 
 
 class _InvariantToriCorrectorInterface:
-    """Interface for invariant tori correction (placeholder).
+    """Provide an interface for invariant tori correction (placeholder).
     
     Reserved for future implementation of invariant tori correction
     algorithms.

@@ -1,4 +1,4 @@
-"""Base classes for numerical continuation algorithms in dynamical systems.
+"""Provide base classes for numerical continuation algorithms in dynamical systems.
 
 This module provides the foundational abstract base class for numerical continuation
 algorithms used to trace families of solutions in dynamical systems. The continuation
@@ -26,7 +26,7 @@ from hiten.utils.log_config import logger
 
 
 class _ContinuationEngine(ABC):
-    """Abstract base class for numerical continuation algorithms.
+    """Provide an abstract base class for numerical continuation algorithms.
 
     This class provides a generic framework for tracing families of solutions
     in dynamical systems using numerical continuation methods. It implements
@@ -171,7 +171,7 @@ class _ContinuationEngine(ABC):
 
     @property
     def family(self) -> Sequence[object]:  
-        """Read-only view of the generated solution family.
+        """Return a read-only view of the generated solution family.
 
         Returns
         -------
@@ -190,7 +190,7 @@ class _ContinuationEngine(ABC):
 
     @property
     def parameter_values(self) -> Sequence[np.ndarray]:
-        """Parameter values corresponding to each family member.
+        """Return parameter values corresponding to each family member.
 
         Returns
         -------
@@ -516,7 +516,7 @@ class _ContinuationEngine(ABC):
         return float(np.clip(scale_value, min_scale, max_scale))
 
     def __repr__(self) -> str:
-        """Return string representation of the continuation engine.
+        """Return a string representation of the continuation engine.
 
         Returns
         -------
@@ -529,7 +529,7 @@ class _ContinuationEngine(ABC):
         )
 
     def _on_accept(self, candidate: object) -> None:
-        """Hook executed after a candidate is accepted into the family.
+        """Execute a hook after a candidate is accepted into the family.
 
         This method provides an extension point for subclasses to perform
         custom processing after successful solution acceptance without

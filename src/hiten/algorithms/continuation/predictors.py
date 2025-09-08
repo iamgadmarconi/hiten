@@ -1,4 +1,4 @@
-"""Predictor classes for specific types of periodic orbit continuation.
+"""Provide predictor classes for specific types of periodic orbit continuation.
 
 This module provides concrete implementations of continuation algorithms for
 periodic orbits in the CR3BP, each specialized for different continuation
@@ -38,7 +38,7 @@ from hiten.system.orbits.base import PeriodicOrbit
 
 
 class _StateParameter(_PeriodicOrbitContinuationInterface, _NaturalParameter):
-    """Natural parameter continuation varying initial state components.
+    """Implement natural parameter continuation varying initial state components.
 
     This class implements continuation of periodic orbit families by varying
     one or more components of the initial state vector. It supports both
@@ -131,9 +131,9 @@ class _StateParameter(_PeriodicOrbitContinuationInterface, _NaturalParameter):
         Base interface for orbit continuation.
     :class:`hiten.algorithms.utils.types.SynodicState`
         Enumeration of state vector components.
-    :class:`_FixedPeriod`
+    :class:`hiten.algorithms.continuation.predictors._FixedPeriod`
         Period-based continuation (future implementation).
-    :class:`_EnergyLevel`
+    :class:`hiten.algorithms.continuation.predictors._EnergyLevel`
         Energy-based continuation (future implementation).
     """
 
@@ -215,7 +215,7 @@ class _StateParameter(_PeriodicOrbitContinuationInterface, _NaturalParameter):
 
 
 class _FixedPeriod(_PeriodicOrbitContinuationInterface, _NaturalParameter):
-    """Fixed-period continuation for periodic orbits (placeholder).
+    """Provide a placeholder for fixed-period continuation for periodic orbits.
 
     This class is reserved for future implementation of continuation
     algorithms that vary orbit families while maintaining a fixed period.
@@ -239,9 +239,9 @@ class _FixedPeriod(_PeriodicOrbitContinuationInterface, _NaturalParameter):
 
     See Also
     --------
-    :class:`_StateParameter`
+    :class:`hiten.algorithms.continuation.predictors._StateParameter`
         Implemented state-based continuation.
-    :class:`_EnergyLevel`
+    :class:`hiten.algorithms.continuation.predictors._EnergyLevel`
         Future energy-based continuation.
     :mod:`hiten.algorithms.corrector`
         Correction algorithms that could support period constraints.
@@ -259,7 +259,7 @@ class _FixedPeriod(_PeriodicOrbitContinuationInterface, _NaturalParameter):
 
 
 class _EnergyLevel(_PeriodicOrbitContinuationInterface, _NaturalParameter):
-    """Energy-level continuation for periodic orbits (placeholder).
+    """Provide a placeholder for energy-level continuation for periodic orbits.
 
     This class is reserved for future implementation of continuation
     algorithms that trace orbit families along constant energy surfaces
@@ -289,9 +289,9 @@ class _EnergyLevel(_PeriodicOrbitContinuationInterface, _NaturalParameter):
 
     See Also
     --------
-    :class:`_StateParameter`
+    :class:`hiten.algorithms.continuation.predictors._StateParameter`
         Implemented state-based continuation.
-    :class:`_FixedPeriod`
+    :class:`hiten.algorithms.continuation.predictors._FixedPeriod`
         Future period-based continuation.
     :mod:`hiten.system`
         System classes that compute Jacobi constants.

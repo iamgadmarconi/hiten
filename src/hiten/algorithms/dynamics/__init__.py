@@ -1,4 +1,4 @@
-r"""Dynamical systems framework for astrodynamics and orbital mechanics.
+"""Provide a dynamical systems framework for astrodynamics and orbital mechanics.
 
 This package provides a comprehensive framework for defining, analyzing, and
 integrating dynamical systems with emphasis on applications in astrodynamics,

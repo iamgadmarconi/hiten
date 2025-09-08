@@ -1,4 +1,4 @@
-"""Protocol and base classes for continuation stepping strategies.
+"""Define protocol and base classes for continuation stepping strategies.
 
 This module defines the interface protocol for continuation stepping strategies
 and provides basic implementations. Stepping strategies are responsible for
@@ -28,7 +28,7 @@ import numpy as np
 
 
 class _ContinuationStep(Protocol):
-    """Protocol defining the interface for continuation stepping strategies.
+    """Define the protocol for continuation stepping strategies.
 
     This protocol specifies the required interface for all stepping strategies
     used in continuation algorithms. Stepping strategies are responsible for
@@ -72,7 +72,7 @@ class _ContinuationStep(Protocol):
 
     See Also
     --------
-    :class:`_PlainStep`
+    :class:`hiten.algorithms.continuation.strategies._step_interface._PlainStep`
         Simple implementation of this protocol.
     :class:`hiten.algorithms.continuation.strategies._stepping._NaturalParameterStep`
         Natural parameter stepping implementation.
@@ -119,10 +119,11 @@ class _ContinuationStep(Protocol):
 
 
 class _PlainStep:
-    """Simple stepping strategy using a provided predictor function.
+    """Implement a simple stepping strategy using a provided predictor function.
 
-    This class implements the :class:`_ContinuationStep` protocol using
-    a simple predictor function without step size adaptation. It serves
+    This class implements the 
+    :class:`hiten.algorithms.continuation.strategies._step_interface._ContinuationStep` 
+    protocol using a simple predictor function without step size adaptation. It serves
     as a basic building block for continuation algorithms that don't
     require sophisticated prediction or adaptive stepping.
 
@@ -160,7 +161,7 @@ class _PlainStep:
 
     See Also
     --------
-    :class:`_ContinuationStep`
+    :class:`hiten.algorithms.continuation.strategies._step_interface._ContinuationStep`
         Protocol that this class implements.
     :class:`hiten.algorithms.continuation.strategies._stepping._NaturalParameterStep`
         More sophisticated natural parameter stepping.

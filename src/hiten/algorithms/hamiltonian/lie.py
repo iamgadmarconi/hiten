@@ -1,4 +1,4 @@
-"""Lie series transformations for polynomial normal form computations.
+"""Provide Lie series transformations for polynomial normal form computations.
 
 This module provides the core implementation of Lie series-based normalization
 for polynomial Hamiltonians in the Circular Restricted Three-Body Problem (CR3BP).
@@ -12,6 +12,8 @@ points by eliminating non-resonant terms.
 
 See Also
 --------
+:func:`hiten.algorithms.hamiltonian.lie._apply_poly_transform`
+    Apply the computed generating function via Lie series.
 :mod:`hiten.algorithms.hamiltonian.center`
     Center manifold normal forms using these Lie transformations.
 :mod:`hiten.algorithms.hamiltonian.normal`
@@ -90,7 +92,7 @@ clmo: np.ndarray) -> np.ndarray:
 
     See Also
     --------
-    :func:`_apply_poly_transform`
+    :func:`hiten.algorithms.hamiltonian.lie._apply_poly_transform`
         Apply the computed generating function via Lie series.
     :func:`hiten.algorithms.polynomial.base._decode_multiindex`
         Decode packed multi-indices used in coefficient computation.
@@ -179,7 +181,7 @@ tol: float) -> List[np.ndarray]:
 
     See Also
     --------
-    :func:`_solve_homological_equation`
+    :func:`hiten.algorithms.hamiltonian.lie._solve_homological_equation`
         Compute generating function coefficients for term elimination.
     :func:`hiten.algorithms.polynomial.operations._polynomial_poisson_bracket`
         Poisson bracket computation used in the Lie series.

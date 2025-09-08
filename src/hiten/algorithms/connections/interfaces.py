@@ -1,4 +1,4 @@
-"""Interface classes for manifold data access in connection discovery.
+"""Provide interface classes for manifold data access in connection discovery.
 
 This module provides interface classes that abstract manifold data access
 for the connection discovery system. These interfaces handle the conversion
@@ -32,7 +32,7 @@ from hiten.system.manifold import Manifold
 
 @dataclass
 class _ManifoldInterface:
-    """Interface for accessing manifold data in connection discovery.
+    """Provide an interface for accessing manifold data in connection discovery.
 
     This class provides a clean interface for extracting synodic section
     intersections from manifolds. It handles the conversion between manifold

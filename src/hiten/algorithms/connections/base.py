@@ -1,4 +1,4 @@
-"""User-facing interface for discovering connections between manifolds in CR3BP.
+"""Provide a user-facing interface for discovering connections between manifolds in CR3BP.
 
 This module provides the main :class:`Connection` class, which serves as a
 high-level facade for the connection discovery algorithm. It wraps the lower-level
@@ -40,7 +40,7 @@ from hiten.utils.plots import plot_poincare_connections_map
 
 @dataclass
 class Connection:
-    """User-facing facade for connection discovery and plotting in CR3BP.
+    """Provide a user-facing facade for connection discovery and plotting in CR3BP.
 
     This class provides a high-level interface for discovering ballistic and
     impulsive transfers between manifolds in the Circular Restricted Three-Body
@@ -213,8 +213,8 @@ class Connection:
         Notes
         -----
         This property provides access to cached results from the most recent
-        call to :meth:`solve`. The :class:`ConnectionResults` wrapper provides
-        enhanced formatting and filtering capabilities.
+        call to :meth:`solve`. The :class:`hiten.algorithms.connections.results.ConnectionResults` 
+        wrapper provides enhanced formatting and filtering capabilities.
 
         Examples
         --------

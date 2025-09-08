@@ -1,4 +1,4 @@
-"""Result classes for connection discovery data in CR3BP.
+"""Provide result classes for connection discovery data in CR3BP.
 
 This module provides data structures for storing and presenting the results
 of connection discovery between manifolds in the Circular Restricted Three-Body
@@ -29,7 +29,7 @@ import numpy as np
 
 @dataclass
 class _ConnectionResult:
-    """Individual connection result between two manifolds.
+    """Store an individual connection result between two manifolds.
 
     This dataclass stores all the information about a single discovered
     connection between source and target manifolds, including the transfer
@@ -85,7 +85,7 @@ class _ConnectionResult:
 
     See Also
     --------
-    :class:`ConnectionResults`
+    :class:`hiten.algorithms.connections.results.ConnectionResults`
         Collection class for multiple connection results.
     :class:`hiten.algorithms.connections.config._SearchConfig`
         Configuration that determines ballistic vs impulsive classification.
@@ -100,17 +100,17 @@ class _ConnectionResult:
 
 
 class ConnectionResults:
-    """Collection of connection results with convenient access and formatting.
+    """Provide a collection of connection results with convenient access and formatting.
 
     This class provides a read-only sequence-like interface over a collection
-    of :class:`_ConnectionResult` objects, with enhanced formatting capabilities
+    of :class:`hiten.algorithms.connections.results._ConnectionResult` objects, with enhanced formatting capabilities
     for analysis and presentation. It behaves like a standard Python sequence
     while providing specialized string representations optimized for connection
     data.
 
     Parameters
     ----------
-    results : sequence of :class:`_ConnectionResult` or None
+    results : sequence of :class:`hiten.algorithms.connections.results._ConnectionResult` or None
         Collection of connection results to wrap. If None or empty,
         creates an empty results collection.
 
@@ -147,7 +147,7 @@ class ConnectionResults:
 
     See Also
     --------
-    :class:`_ConnectionResult`
+    :class:`hiten.algorithms.connections.results._ConnectionResult`
         Individual connection result data structure.
     :class:`hiten.algorithms.connections.base.Connection`
         Main class that produces these result collections.
@@ -158,7 +158,7 @@ class ConnectionResults:
 
         Parameters
         ----------
-        results : sequence of :class:`_ConnectionResult` or None
+        results : sequence of :class:`hiten.algorithms.connections.results._ConnectionResult` or None
             Connection results to store. If None, creates empty collection.
         """
         self._results: list[_ConnectionResult] = list(results) if results else []
@@ -179,13 +179,13 @@ class ConnectionResults:
 
         Yields
         ------
-        :class:`_ConnectionResult`
+        :class:`hiten.algorithms.connections.results._ConnectionResult`
             Individual connection results in order (typically sorted by Delta-V).
         """
         return iter(self._results)
 
     def __getitem__(self, idx: int) -> _ConnectionResult:
-        """Access connection result by index.
+        """Access a connection result by index.
 
         Parameters
         ----------
@@ -194,7 +194,7 @@ class ConnectionResults:
 
         Returns
         -------
-        :class:`_ConnectionResult`
+        :class:`hiten.algorithms.connections.results._ConnectionResult`
             Connection result at the specified index.
 
         Raises
@@ -216,7 +216,7 @@ class ConnectionResults:
 
     # Pretty printing
     def __repr__(self) -> str:
-        """Return concise string representation with summary statistics.
+        """Return a concise string representation with summary statistics.
 
         Returns
         -------
@@ -231,7 +231,7 @@ class ConnectionResults:
         )
 
     def __str__(self) -> str:
-        """Return formatted table representation of all connection results.
+        """Return a formatted table representation of all connection results.
 
         Returns
         -------

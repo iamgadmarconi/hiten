@@ -1,4 +1,4 @@
-"""Backend routines for discovering connections between synodic sections in CR3BP.
+"""Provide backend routines for discovering connections between synodic sections in CR3BP.
 
 This module provides the computational backend for the connections algorithm,
 which discovers ballistic and impulsive transfers between synodic sections in
@@ -24,7 +24,7 @@ from hiten.algorithms.connections.results import _ConnectionResult
 
 @njit(cache=False)
 def _pair_counts(query: np.ndarray, ref: np.ndarray, r2: float) -> np.ndarray:
-    """Return, for each query point, the number of reference points within radius^2.
+    """Return for each query point the number of reference points within radius^2.
 
     Parameters
     ----------
@@ -397,7 +397,7 @@ def _refine_pairs_on_section(pu: np.ndarray, ps: np.ndarray, pairs: np.ndarray, 
 
 
 class _ConnectionsBackend:
-    """Encapsulates matching/refinement and Delta-V computation for connections.
+    """Encapsulate matching/refinement and Delta-V computation for connections.
 
     This backend orchestrates the end-to-end process for discovering
     ballistic/impulsive transfers between two synodic sections within the

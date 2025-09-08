@@ -1,4 +1,4 @@
-r"""Polynomial Hamiltonian systems for center manifold dynamics.
+r"""Provide polynomial Hamiltonian systems for center manifold dynamics.
 
 This module provides utilities for constructing and integrating finite-dimensional
 polynomial Hamiltonian systems that arise from center-manifold reduction of the
@@ -73,7 +73,7 @@ def _hamiltonian_rhs(
     See Also
     --------
     :func:`hiten.algorithms.polynomial.operations._polynomial_evaluate` : Polynomial evaluation
-    :class:`_HamiltonianSystem` : Uses this function for RHS computation
+    :class:`hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem` : Uses this function for RHS computation
     """
 
     dH_dQ = np.empty(n_dof)
@@ -90,7 +90,7 @@ def _hamiltonian_rhs(
 
 @runtime_checkable
 class _HamiltonianSystemProtocol(_DynamicalSystemProtocol, Protocol):
-    r"""Protocol defining interface for Hamiltonian dynamical systems.
+    r"""Define the protocol for the interface for Hamiltonian dynamical systems.
     
     Extends the base dynamical system protocol with Hamiltonian-specific
     methods required by symplectic integrators. Provides access to partial
@@ -99,7 +99,7 @@ class _HamiltonianSystemProtocol(_DynamicalSystemProtocol, Protocol):
     See Also
     --------
     :class:`hiten.algorithms.dynamics.base._DynamicalSystemProtocol` : Base protocol
-    :class:`_HamiltonianSystem` : Concrete implementation
+    :class:`hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem` : Concrete implementation
     """
     
     @property
@@ -160,7 +160,7 @@ class _HamiltonianSystemProtocol(_DynamicalSystemProtocol, Protocol):
 
 
 class _HamiltonianSystem(_DynamicalSystem):
-    r"""Polynomial Hamiltonian system for numerical integration.
+    r"""Define a polynomial Hamiltonian system for numerical integration.
 
     Implements a dynamical system based on a polynomial Hamiltonian function.
     Stores the Jacobian in packed form and provides both standard ODE interface
@@ -181,7 +181,7 @@ class _HamiltonianSystem(_DynamicalSystem):
         Lookup table mapping monomial exponents to packed array indices.
     clmo_table : List[ndarray]
         Coefficient-layout mapping objects for each polynomial degree.
-    encode_dict_list : List[dict]
+    encode_back_dict_list : List[dict]
         Encoder dictionaries for polynomial Jacobian computation.
     n_dof : int
         Number of degrees of freedom. Total state dimension is 2 * n_dof.
@@ -221,9 +221,9 @@ class _HamiltonianSystem(_DynamicalSystem):
     
     See Also
     --------
-    :class:`_HamiltonianSystemProtocol` : Interface specification
-    :func:`create_hamiltonian_system` : Factory function
-    :func:`_hamiltonian_rhs` : JIT-compiled RHS computation
+    :class:`hiten.algorithms.dynamics.hamiltonian._HamiltonianSystemProtocol` : Interface specification
+    :func:`hiten.algorithms.dynamics.hamiltonian.create_hamiltonian_system` : Factory function
+    :func:`hiten.algorithms.dynamics.hamiltonian._hamiltonian_rhs` : JIT-compiled RHS computation
     """
 
     def __init__(

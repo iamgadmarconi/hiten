@@ -1,4 +1,4 @@
-"""Configuration classes for connection discovery parameters in CR3BP.
+"""Provide configuration classes for connection discovery parameters in CR3BP.
 
 This module provides configuration classes that control the behavior of the
 connection discovery algorithm. These classes define tolerances, search parameters,
@@ -20,7 +20,7 @@ from dataclasses import dataclass
 
 @dataclass
 class _SearchConfig:
-    """Configuration for connection search parameters and tolerances.
+    """Define search parameters and tolerances for connection discovery.
 
     This class defines the tolerances and geometric parameters used during
     the connection discovery process. It controls which candidate connections
@@ -75,7 +75,7 @@ class _SearchConfig:
 
     See Also
     --------
-    :class:`ConnectionConfig`
+    :class:`hiten.algorithms.connections.config.ConnectionConfig`
         Extended configuration including computational parameters.
     :class:`hiten.algorithms.connections.base.Connection`
         Main class that uses this configuration.
@@ -89,9 +89,9 @@ class _SearchConfig:
     eps2d: float = 1e-4
 
 class ConnectionConfig(_SearchConfig):
-    """Extended configuration including computational parameters.
+    """Define an extended configuration including computational parameters.
 
-    This class extends :class:`_SearchConfig` with additional parameters
+    This class extends :class:`hiten.algorithms.connections.config._SearchConfig` with additional parameters
     for controlling the computational aspects of connection discovery,
     such as parallel processing.
 
@@ -103,7 +103,7 @@ class ConnectionConfig(_SearchConfig):
         parallel processing of manifold intersections and connection searches.
         
     **kwargs
-        All parameters from :class:`_SearchConfig` are also available:
+        All parameters from :class:`hiten.algorithms.connections.config._SearchConfig` are also available:
         delta_v_tol, ballistic_tol, eps2d.
 
     Notes
@@ -131,7 +131,7 @@ class ConnectionConfig(_SearchConfig):
 
     See Also
     --------
-    :class:`_SearchConfig`
+    :class:`hiten.algorithms.connections.config._SearchConfig`
         Base class with search and tolerance parameters.
     :class:`hiten.algorithms.connections.base.Connection`
         Main class that uses this configuration.
