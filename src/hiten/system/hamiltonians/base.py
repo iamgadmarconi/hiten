@@ -1,5 +1,4 @@
-"""
-Base classes for Hamiltonian representations in the CR3BP.
+"""Base classes for Hamiltonian representations in the CR3BP.
 
 This module provides the fundamental classes for representing and manipulating
 Hamiltonian functions in the circular restricted three-body problem. It includes
@@ -58,7 +57,7 @@ class Hamiltonian:
         Name of the Hamiltonian representation
     jacobian : np.ndarray
         Jacobian matrix of the Hamiltonian
-    hamsys : _HamiltonianSystem
+    hamsys : :class:`hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem`
         Runtime Hamiltonian system for evaluation
         
     Notes
@@ -157,13 +156,13 @@ class Hamiltonian:
 
     @property
     def hamsys(self):
-        """Return a runtime :class:`_HamiltonianSystem`, build lazily."""
+        """Return a runtime :class:`hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem`, build lazily."""
         if self._hamsys is None:
             self._hamsys = self._build_hamsys()
         return self._hamsys
 
     def _build_hamsys(self):
-        """Sub-classes must convert *poly_H* into a `_HamiltonianSystem`."""
+        """Sub-classes must convert *poly_H* into a :class:`hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem`."""
         return create_hamiltonian_system(self._poly_H, self._degree, self._psi, self._clmo, self._encode_dict_list, self._ndof, self.name)
 
     @classmethod
@@ -173,14 +172,14 @@ class Hamiltonian:
         
         Parameters
         ----------
-        other : Hamiltonian
+        other : :class:`hiten.system.hamiltonians.base.Hamiltonian`
             Source Hamiltonian to transform from
         **kwargs
             Additional parameters required for the transformation
             
         Returns
         -------
-        Hamiltonian
+        :class:`hiten.system.hamiltonians.base.Hamiltonian`
             New Hamiltonian in the target representation
             
         Raises
@@ -224,14 +223,14 @@ class Hamiltonian:
         
         Parameters
         ----------
-        target_form : type[Hamiltonian] or str
+        target_form : type[:class:`hiten.system.hamiltonians.base.Hamiltonian`] or str
             Target Hamiltonian class or name to convert to
         **kwargs
             Additional parameters required for the transformation
             
         Returns
         -------
-        Hamiltonian
+        :class:`hiten.system.hamiltonians.base.Hamiltonian`
             New Hamiltonian in the target representation
             
         Raises
@@ -286,7 +285,7 @@ class Hamiltonian:
         
         Parameters
         ----------
-        result : Hamiltonian or tuple
+        result : :class:`hiten.system.hamiltonians.base.Hamiltonian` or tuple
             Result of the transformation, either a Hamiltonian or a tuple
             containing (Hamiltonian, LieGeneratingFunction)
         kwargs : dict
@@ -296,7 +295,7 @@ class Hamiltonian:
             
         Returns
         -------
-        Hamiltonian
+        :class:`hiten.system.hamiltonians.base.Hamiltonian`
             The transformed Hamiltonian
             
         Notes
@@ -361,7 +360,7 @@ class Hamiltonian:
             
         Returns
         -------
-        Hamiltonian
+        :class:`hiten.system.hamiltonians.base.Hamiltonian`
             Loaded Hamiltonian instance
             
         Notes

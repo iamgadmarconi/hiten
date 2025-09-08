@@ -1,6 +1,6 @@
 """Provide robust iterative correction algorithms for solving nonlinear systems.
 
-The `hiten.algorithms.corrector` package provides robust iterative correction
+The :mod:`hiten.algorithms.corrector` package provides robust iterative correction
 algorithms for solving nonlinear systems arising in dynamical systems analysis.
 These algorithms are essential for refining approximate solutions to high
 precision, particularly for periodic orbits, invariant manifolds, and other

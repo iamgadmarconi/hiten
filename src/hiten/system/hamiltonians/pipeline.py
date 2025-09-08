@@ -1,5 +1,4 @@
-"""
-Hamiltonian transformation pipeline for the CR3BP.
+"""Hamiltonian transformation pipeline for the CR3BP.
 
 This module provides the HamiltonianPipeline class that manages the transformation
 pipeline for different Hamiltonian representations in the circular restricted
@@ -18,8 +17,8 @@ Conversion between representations uses a registry-based system with
 automatic path finding for multi-step transformations.
 """
 
-from typing import Dict, Optional
 from collections import deque
+from typing import Dict, Optional
 
 from hiten.algorithms.hamiltonian.center._lie import _lie_expansion
 from hiten.algorithms.hamiltonian.center._lie import \
@@ -48,14 +47,14 @@ class HamiltonianPipeline:
 
     Parameters
     ----------
-    point : LibrationPoint
+    point : :class:`hiten.system.libration.base.LibrationPoint`
         The libration point about which the normal form is computed
     degree : int
         Maximum total degree of the polynomial truncation
 
     Attributes
     ----------
-    point : LibrationPoint
+    point : :class:`hiten.system.libration.base.LibrationPoint`
         The libration point about which the normal form is computed
     degree : int
         The maximum total degree of the polynomial truncation
@@ -77,7 +76,7 @@ class HamiltonianPipeline:
         
         Parameters
         ----------
-        point : LibrationPoint
+        point : :class:`hiten.system.libration.base.LibrationPoint`
             The libration point about which the normal form is computed
         degree : int
             Maximum total degree of the polynomial truncation
@@ -179,7 +178,7 @@ class HamiltonianPipeline:
         ----------
         form_name : str
             The Hamiltonian form name (e.g., "complex_partial_normal")
-        generating_functions : LieGeneratingFunction
+        generating_functions : :class:`hiten.system.hamiltonians.base.LieGeneratingFunction`
             The LieGeneratingFunction object to cache
             
         Notes
@@ -472,7 +471,7 @@ class HamiltonianPipeline:
 
         Returns
         -------
-        Hamiltonian
+        :class:`hiten.system.hamiltonians.base.Hamiltonian`
             The requested Hamiltonian representation
 
         Notes
@@ -620,7 +619,7 @@ class HamiltonianPipeline:
 
         Returns
         -------
-        LieGeneratingFunction
+        :class:`hiten.system.hamiltonians.base.LieGeneratingFunction`
             The generating functions and eliminated terms
 
         Raises
@@ -677,7 +676,7 @@ class HamiltonianPipeline:
 
         Returns
         -------
-        LieGeneratingFunction
+        :class:`hiten.system.hamiltonians.base.LieGeneratingFunction`
             The computed generating functions
 
         Notes
