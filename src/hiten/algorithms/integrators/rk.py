@@ -9,8 +9,8 @@ formal order of accuracy.
 
 The concrete schemes implemented are:
 
-* Fixed step: _RK4, _RK6, _RK8
-* Adaptive embedded: _RK45 (Dormand-Prince) and _DOP853 (Dormand-Prince 8(5,3))
+- Fixed step: _RK4, _RK6, _RK8
+- Adaptive embedded: _RK45 (Dormand-Prince) and _DOP853 (Dormand-Prince 8(5,3))
 
 Internally the module also defines helper routines to evaluate Hamiltonian
 vector fields with :pyfunc:`numba.njit` and to wrap right-hand side (RHS)
@@ -75,7 +75,7 @@ class _RungeKuttaBase(_Integrator):
     Attributes
     ----------
     _A : numpy.ndarray of shape (s, s)
-        Strictly lower triangular array of stage coefficients :math:`a_{ij}`.
+        Strictly lower triangular array of stage coefficients a_ij.
     _B_HIGH : numpy.ndarray of shape (s,)
         Weights of the high order solution.
     _B_LOW : numpy.ndarray or None
@@ -83,7 +83,7 @@ class _RungeKuttaBase(_Integrator):
         estimate is produced and :pyfunc:`_rk_embedded_step` falls back to
         the high order result for both outputs.
     _C : numpy.ndarray of shape (s,)
-        Nodes :math:`c_i` measured in units of the step size.
+        Nodes c_i measured in units of the step size.
     _p : int
         Formal order of accuracy of the high order scheme.
 
@@ -131,9 +131,9 @@ class _FixedStepRK(_RungeKuttaBase):
     name : str
         Human readable identifier of the scheme (e.g. ``"_RK4"``).
     A, B, C : numpy.ndarray
-        Butcher tableau as returned by :pymod:`hiten.algorithms.integrators.coefficients.*`.
+        Butcher tableau as returned by the coefficients modules.
     order : int
-        Formal order of accuracy :math:`p` of the method.
+        Formal order of accuracy p of the method.
     **options
         Additional keyword options forwarded to the base :class:`_Integrator`.
 
@@ -217,7 +217,7 @@ class _AdaptiveStepRK(_RungeKuttaBase):
     the error estimates returned by :pyfunc:`_rk_embedded_step`.  Two safety
     factors are used:
 
-    * *rtol*, *atol*  - user requested relative and absolute tolerances
+    - rtol, atol  - user requested relative and absolute tolerances
     * :pyattr:`SAFETY` - hard coded damping on the acceptance criterion.
 
     Parameters
@@ -228,7 +228,7 @@ class _AdaptiveStepRK(_RungeKuttaBase):
         Relative and absolute error tolerances.  Defaults are read from
         :pydata:`hiten.utils.config.TOL`.
     max_step : float, optional
-        Upper bound on the step size.  :math:`\infty` by default.
+        Upper bound on the step size.  Infinity by default.
     min_step : float or None, optional
         Lower bound on the step size.  When *None* the value is derived from
         machine precision.

@@ -42,9 +42,7 @@ class _DynamicalSystemProtocol(Protocol):
     dim : int
         Dimension of the state vector.
     rhs : Callable[[float, numpy.ndarray], numpy.ndarray]
-        Vector field :math:`f(t,\,\mathbf y)` returning
-        :math:`\dot{\mathbf y}` evaluated at time *t* and state
-        :math:`\mathbf y`.
+        Vector field f(t, y) returning dy/dt evaluated at time t and state y.
     """
     
     @property
@@ -65,7 +63,7 @@ class _DynamicalSystem(ABC):
     Parameters
     ----------
     dim : int
-        Dimension :math:`n \ge 1` of the state space.
+        Dimension n >= 1 of the state space.
 
     Attributes
     ----------

@@ -6,9 +6,9 @@ Abstract helpers to model Libration points of the Circular Restricted Three-Body
 
 The module introduces two primary abstractions:
 
-* :pyclass:`LinearData` - an immutable record storing the salient linear characteristics (eigenfrequencies and canonical basis) of the flow linearised at a libration point.
-* :pyclass:`LibrationPoint` - an abstract base class encapsulating geometry, energetic properties, linear stability analysis and lazy construction of centre-manifold normal forms. 
-   Concrete subclasses implement the specific coordinates of the collinear (:math:`L_1`, :math:`L_2`, :math:`L_3`) and triangular (:math:`L_4`, :math:`L_5`) points.
+- :pyclass:`LinearData` - an immutable record storing the salient linear characteristics (eigenfrequencies and canonical basis) of the flow linearised at a libration point.
+- :pyclass:`LibrationPoint` - an abstract base class encapsulating geometry, energetic properties, linear stability analysis and lazy construction of center-manifold normal forms. 
+   Concrete subclasses implement the specific coordinates of the collinear (L1, L2, L3) and triangular (L4, L5) points.
 """
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
@@ -41,21 +41,21 @@ class LinearData:
     Parameters
     ----------
     mu : float
-        Mass ratio :math:`\mu := m_2/(m_1+m_2)` of the primaries.
+        Mass ratio mu := m2/(m1+m2) of the primaries.
     point : str
         Identifier of the libration point (``'L1'``, ``'L2'`` or ``'L3'``).
     lambda1 : float | None
-        Real hyperbolic eigenvalue :math:`\lambda_1>0` associated with the
+        Real hyperbolic eigenvalue lambda_1 > 0 associated with the
         saddle behaviour along the centre-saddle subspace.
     omega1 : float
-        First elliptic frequency :math:`\omega_1>0` of the centre subspace.
+        First elliptic frequency omega_1 > 0 of the center subspace.
     omega2 : float
-        Second elliptic frequency :math:`\omega_2>0` of the centre subspace.
+        Second elliptic frequency omega_2 > 0 of the center subspace.
     omega3: float | None
-        Vertical frequency :math:`\omega_3` of the centre subspace.
+        Vertical frequency omega_3 of the center subspace.
     C : numpy.ndarray, shape (6, 6)
-        Symplectic change-of-basis matrix such that :math:`C^{-1}AC` is in real
-        Jordan canonical form, with :math:`A` the Jacobian of the vector
+        Symplectic change-of-basis matrix such that C^{-1} A C is in real
+        Jordan canonical form, with A the Jacobian of the vector
         field evaluated at the libration point.
     Cinv : numpy.ndarray, shape (6, 6)
         Precomputed inverse of :pyattr:`C`.
@@ -83,13 +83,13 @@ class LibrationPoint(ABC):
     Parameters
     ----------
     system : hiten.system.base.System
-        Parent CR3BP model providing the mass ratio :math:`\mu` and utility
+        Parent CR3BP model providing the mass ratio mu and utility
         functions.
 
     Attributes
     ----------
     mu : float
-        Mass ratio :math:`\mu` of the primaries (copied from *system*).
+        Mass ratio mu of the primaries (copied from *system*).
     system : hiten.system.base.System
         Reference to the owner hiten.system.
     position : numpy.ndarray, shape (3,)
@@ -99,7 +99,7 @@ class LibrationPoint(ABC):
         Dimensionless mechanical energy evaluated via
         :pyfunc:`hiten.algorithms.dynamics.hiten.utils.energy.crtbp_energy`.
     jacobi_constant : float
-        Jacobi integral :math:`C_J = -2E` corresponding to
+        Jacobi integral C_J = -2E corresponding to
         :pyattr:`energy`.
     is_stable : bool
         True if all eigenvalues returned by :pyfunc:`analyze_stability` lie

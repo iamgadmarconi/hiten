@@ -153,9 +153,9 @@ def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["scipy",
         Dynamical system exposing the 42-dimensional variational
         equations of the CR3BP.
     x0 : array_like, shape (6,)
-        Initial phase-space state :math:`(x, y, z, \dot x, \dot y, \dot z)`.
+        Initial phase-space state [x, y, z, x_dot, y_dot, z_dot].
     tf : float
-        Final integration time :math:`t_{\mathrm f}`.
+        Final integration time t_f.
     steps : int, default 2000
         Number of output points equally spaced in time.
     forward : int, {1, -1}, default 1
@@ -181,7 +181,7 @@ def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["scipy",
     Notes
     -----
     The STM is embedded into a 42-dimensional vector composed of the 36
-    independent entries of :math:`\Phi(t)` followed by the phase-space
+    independent entries of Phi(t) followed by the phase-space
     variables.  The combined system is then advanced with the selected
     integrator.
     """
@@ -222,12 +222,12 @@ def _compute_monodromy(dynsys, x0, period):
     x0 : array_like, shape (6,)
         Initial state on the periodic orbit.
     period : float
-        Orbital period :math:`T`.
+        Orbital period T.
 
     Returns
     -------
     numpy.ndarray
-        Monodromy matrix :math:`\Phi(T)` of shape *(6, 6)*.
+        Monodromy matrix Phi(T) of shape *(6, 6)*.
     """
     _, _, M, _ = _compute_stm(dynsys, x0, period)
     return M
@@ -245,11 +245,11 @@ def _stability_indices(monodromy):
     Returns
     -------
     tuple
-        Pair :math:`(\nu_1, \nu_2)` where each index is defined as
-        :math:`\nu_i = \tfrac{1}{2}(\lambda_i + 1/\lambda_i)` with
-        :math:`\lambda_i` the corresponding eigenvalue.
+        Pair (nu1, nu2) where each index is defined as
+        nu_i = 0.5 * (lambda_i + 1/lambda_i) with lambda_i the corresponding
+        eigenvalue.
     numpy.ndarray
-        Eigenvalues of *monodromy* sorted by absolute value (descending).
+        Eigenvalues of monodromy sorted by absolute value (descending).
     """
     eigs = np.linalg.eigvals(monodromy)
     
@@ -268,7 +268,7 @@ class _JacobianRHS(_DynamicalSystem):
     Parameters
     ----------
     mu : float
-        Mass parameter :math:`\mu \in (0, 1)`.
+        Mass parameter mu in (0, 1).
     name : str, default 'CR3BP Jacobian'
         Human-readable identifier.
 
@@ -356,7 +356,7 @@ class _RTBPRHS(_DynamicalSystem):
     dim : int
         Always 6.
     rhs : Callable[[float, numpy.ndarray], numpy.ndarray]
-        Vector field :math:`f(t,\mathbf x)`.
+        Vector field f(t, x).
     """
     def __init__(self, mu: float, name: str = "RTBP"):
         super().__init__(dim=6)

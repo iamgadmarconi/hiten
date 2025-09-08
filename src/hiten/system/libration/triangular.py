@@ -2,12 +2,12 @@ r"""
 hiten.system.libration.triangular
 ==========================
 
-Triangular Libration points (:math:`L_4` and :math:`L_5`) of the Circular Restricted Three-Body Problem (CR3BP).
+Triangular Libration points (L4 and L5) of the Circular Restricted Three-Body Problem (CR3BP).
 
 The module defines:
 
-* :pyclass:`TriangularPoint` - an abstract helper encapsulating the geometry shared by the triangular points.
-* :pyclass:`L4Point` and :pyclass:`L5Point` - concrete equilibria located at +-60° with respect to the line connecting the primaries.
+- :pyclass:`TriangularPoint` - an abstract helper encapsulating the geometry shared by the triangular points.
+- :pyclass:`L4Point` and :pyclass:`L5Point` - concrete equilibria located at +-60 deg with respect to the line connecting the primaries.
 """
 
 from typing import TYPE_CHECKING
@@ -26,20 +26,20 @@ class TriangularPoint(LibrationPoint):
     Abstract helper for the triangular Libration points.
 
     The triangular points form equilateral triangles with the two primary
-    bodies. They behave as centre-type equilibria when the mass ratio
-    :math:`\mu` is below Routh's critical value.
+    bodies. They behave as center-type equilibria when the mass ratio
+    mu is below Routh's critical value.
 
     Parameters
     ----------
     system : System
-        CR3BP model supplying the mass parameter :math:`\mu`.
+        CR3BP model supplying the mass parameter mu.
 
     Attributes
     ----------
     mu : float
-        Mass ratio :math:`\mu = m_2 / (m_1 + m_2)` taken from *system*.
+        Mass ratio mu = m2 / (m1 + m2) taken from *system*.
     ROUTH_CRITICAL_MU : float
-        Critical value :math:`\mu_R` delimiting linear stability.
+        Critical value mu_R delimiting linear stability.
     sign : int
         +1 for :pyclass:`L4Point`, -1 for :pyclass:`L5Point`.
     a : float
@@ -47,7 +47,7 @@ class TriangularPoint(LibrationPoint):
 
     Notes
     -----
-    A warning is logged if :math:`\mu > \mu_R`.
+    A warning is logged if mu > mu_R.
     """
     ROUTH_CRITICAL_MU = (1.0 - np.sqrt(1.0 - (1.0/27.0))) / 2.0 # approx 0.03852
     

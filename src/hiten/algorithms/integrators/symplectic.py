@@ -3,7 +3,7 @@ hiten.algorithms.integrators.symplectic
 ================================
 
 High-order explicit symplectic integrators for polynomial Hamiltonian
-systems with :math:`n_\text{dof}=3`.  The module provides two layers of
+systems with n_dof=3.  The module provides two layers of
 functionality:
 
 * Low-level, :pyfunc:`numba.njit` accelerated kernels that implement the
@@ -128,7 +128,7 @@ def _eval_dH_dQ(
     Returns
     -------
     numpy.ndarray
-        Vector of partial derivatives ∂H/∂Q (e.g., [∂H/∂q1, ∂H/∂q2, ∂H/∂q3])
+        Vector of partial derivatives dH/dQ (e.g., [dH/dq1, dH/dq2, dH/dq3])
     """
     eval_point_6d = _construct_6d_eval_point(Q_eval_ndof, P_eval_ndof)
     
@@ -166,7 +166,7 @@ def _eval_dH_dP(
     Returns
     -------
     numpy.ndarray
-        Vector of partial derivatives ∂H/∂P (e.g., [∂H/∂p1, ∂H/∂p2, ∂H/∂p3])
+        Vector of partial derivatives dH/dP (e.g., [dH/dp1, dH/dp2, dH/dp3])
     """
     eval_point_6d = _construct_6d_eval_point(Q_eval_ndof, P_eval_ndof)
     
@@ -188,7 +188,7 @@ def _phi_H_a_update_poly(
     clmo_H: List[np.ndarray]
     ):
     r"""
-    Apply the first Hamiltonian splitting operator (φₐ) in the symplectic scheme.
+    Apply the first Hamiltonian splitting operator (phi_a) in the symplectic scheme.
     
     Parameters
     ----------
@@ -204,8 +204,8 @@ def _phi_H_a_update_poly(
     Notes
     -----
     Implements the symplectic update step:
-    - P ← P - delta ·∂H/∂Q(Q,Y)
-    - X ← X + delta ·∂H/∂P(Q,Y)
+    - P <- P - delta * dH/dQ(Q, Y)
+    - X <- X + delta * dH/dP(Q, Y)
     
     This modifies q_ext in-place through views/slices.
     Q, P, X, Y are now N_SYMPLECTIC_DOF dimensional.
@@ -232,7 +232,7 @@ def _phi_H_b_update_poly(
     clmo_H: List[np.ndarray]
     ):
     r"""
-    Apply the second Hamiltonian splitting operator (φᵦ) in the symplectic scheme.
+    Apply the second Hamiltonian splitting operator (phi_b) in the symplectic scheme.
     
     Parameters
     ----------
@@ -248,8 +248,8 @@ def _phi_H_b_update_poly(
     Notes
     -----
     Implements the symplectic update step:
-    - Q ← Q + delta ·∂H/∂P(X,P)
-    - Y ← Y - delta ·∂H/∂Q(X,P)
+    - Q <- Q + delta * dH/dP(X, P)
+    - Y <- Y - delta * dH/dQ(X, P)
     
     This modifies q_ext in-place through views/slices.
     Q, P, X, Y are now N_SYMPLECTIC_DOF dimensional.
@@ -271,7 +271,7 @@ def _phi_H_b_update_poly(
 @njit(cache=False, fastmath=FASTMATH)
 def _phi_omega_H_c_update_poly(q_ext: np.ndarray, delta: float, omega: float):
     r"""
-    Apply the rotation operator (φᶜ) in the symplectic scheme.
+    Apply the rotation operator (phi_c) in the symplectic scheme.
     
     Parameters
     ----------
@@ -349,7 +349,7 @@ def _recursive_update_poly(
     Notes
     -----
     For order=2, applies the basic second-order symplectic scheme:
-        φₐ(delta /2) ∘ φᵦ(delta /2) ∘ φᶜ(delta ) ∘ φᵦ(delta /2) ∘ φₐ(delta /2)
+        phi_a(delta/2) o phi_b(delta/2) o phi_c(delta) o phi_b(delta/2) o phi_a(delta/2)
     
     For higher orders, applies a recursive composition method with
     carefully chosen substeps to achieve the desired order of accuracy.

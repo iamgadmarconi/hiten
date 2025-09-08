@@ -2,7 +2,7 @@ r"""
 hiten.system.libration.collinear
 ==========================
 
-Collinear libration points :math:`L_1`, :math:`L_2` and :math:`L_3` of the circular restricted three body problem (CR3BP).
+Collinear libration points L1, L2 and L3 of the circular restricted three body problem (CR3BP).
 
 The module defines:
 
