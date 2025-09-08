@@ -39,7 +39,7 @@ class _NaturalParameter(_ContinuationEngine, ABC):
     Parameters
     ----------
     *args, **kwargs
-        Arguments passed to the base :class:`_ContinuationEngine`.
+        Arguments passed to the base :class:`hiten.algorithms.continuation.base._ContinuationEngine`.
         See base class documentation for parameter details.
 
     Notes
@@ -58,7 +58,8 @@ class _NaturalParameter(_ContinuationEngine, ABC):
     - Bifurcations or fold points are not expected
 
     For more complex scenarios with turning points or bifurcations,
-    consider using :class:`_SecantArcLength` continuation instead.
+    consider using :class:`hiten.algorithms.continuation.strategies._algorithms._SecantArcLength` 
+    continuation instead.
 
     Examples
     --------
@@ -156,7 +157,8 @@ class _NaturalParameter(_ContinuationEngine, ABC):
         -----
         Subclasses must implement this method to specify how predictions
         are generated for the specific problem type. Common implementations
-        include :class:`_NaturalParameterStep` for state-based continuation.
+        include :class:`hiten.algorithms.continuation.strategies._stepping._NaturalParameterStep` 
+        for state-based continuation.
 
         Examples
         --------
@@ -186,7 +188,7 @@ class _SecantArcLength(_ContinuationEngine, ABC):
     Parameters
     ----------
     *args, **kwargs
-        Arguments passed to the base :class:`_ContinuationEngine`.
+        Arguments passed to the base :class:`hiten.algorithms.continuation.base._ContinuationEngine`.
         See base class documentation for parameter details.
 
     Notes
@@ -377,7 +379,8 @@ class _SecantArcLength(_ContinuationEngine, ABC):
         -----
         Unlike natural parameter continuation, pseudo-arclength continuation
         automatically configures its stepping strategy during initialization.
-        The :class:`_SecantStep` strategy is created with the representation
+        The :class:`hiten.algorithms.continuation.strategies._stepping._SecantStep` 
+        strategy is created with the representation
         and parameter functions provided by the subclass.
         """
         raise NotImplementedError(

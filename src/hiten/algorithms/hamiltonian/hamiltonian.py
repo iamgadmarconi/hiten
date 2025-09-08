@@ -142,7 +142,7 @@ def _build_R_polynomials(poly_x, poly_y, poly_z, poly_T: types.ListType, max_deg
         Polynomial representations of coordinates x, y, z in nondimensional
         distance units.
     poly_T : List[List[ndarray]]
-        Chebyshev polynomials from :func:`_build_T_polynomials`.
+        Chebyshev polynomials from :func:`hiten.algorithms.hamiltonian.hamiltonian._build_T_polynomials`.
     max_deg : int
         Maximum polynomial degree for R_n computation.
     psi_table : ndarray
@@ -254,7 +254,7 @@ def _build_potential_U(poly_T, point, max_deg: int, psi_table) -> List[np.ndarra
     Parameters
     ----------
     poly_T : List[List[ndarray]]
-        Chebyshev polynomials T_n from :func:`_build_T_polynomials`.
+        Chebyshev polynomials T_n from :func:`hiten.algorithms.hamiltonian.hamiltonian._build_T_polynomials`.
     point : object
         Libration point object with method _cn(k) returning the potential
         coefficient c_k (dimensionless).

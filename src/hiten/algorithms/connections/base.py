@@ -1,6 +1,6 @@
 """Provide a user-facing interface for discovering connections between manifolds in CR3BP.
 
-This module provides the main :class:`Connection` class, which serves as a
+This module provides the main :class:`hiten.algorithms.connections.base.Connection` class, which serves as a
 high-level facade for the connection discovery algorithm. It wraps the lower-level
 connection engine and provides convenient methods for solving connection problems
 and visualizing results.
@@ -167,8 +167,10 @@ class Connection:
 
         Notes
         -----
-        Results are cached internally for convenient access via the :attr:`results`
-        property and for plotting with the :meth:`plot` method.
+        Results are cached internally for convenient access via the 
+        :attr:`hiten.algorithms.connections.base.Connection.results`
+        property and for plotting with the
+        :meth:`hiten.algorithms.connections.base.Connection.plot` method.
 
         The algorithm performs these steps:
         1. Convert manifolds to section interfaces
@@ -207,13 +209,15 @@ class Connection:
         -------
         :class:`hiten.algorithms.connections.results.ConnectionResults`
             A view over the latest results with friendly printing and
-            convenient access methods. Returns an empty view if :meth:`solve`
+            convenient access methods. Returns an empty view if 
+            :meth:`hiten.algorithms.connections.base.Connection.solve`
             has not been called yet.
 
         Notes
         -----
         This property provides access to cached results from the most recent
-        call to :meth:`solve`. The :class:`hiten.algorithms.connections.results.ConnectionResults` 
+        call to :meth:`hiten.algorithms.connections.base.Connection.solve`. 
+        The :class:`hiten.algorithms.connections.results.ConnectionResults` 
         wrapper provides enhanced formatting and filtering capabilities.
 
         Examples
@@ -270,7 +274,8 @@ class Connection:
         Raises
         ------
         ValueError
-            If :meth:`solve` has not been called yet (no cached data to plot).
+            If :meth:`hiten.algorithms.connections.base.Connection.solve` 
+            has not been called yet (no cached data to plot).
 
         Notes
         -----

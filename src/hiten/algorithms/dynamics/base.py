@@ -136,7 +136,7 @@ class _DynamicalSystem(ABC):
             
         See Also
         --------
-        :func:`_validate_initial_state` : Module-level validation utility
+        :func:`hiten.algorithms.dynamics.base._validate_initial_state` : Module-level validation utility
         """
         if len(y) != self.dim:
             raise ValueError(f"State vector dimension {len(y)} != system dimension {self.dim}")
@@ -323,15 +323,15 @@ def _propagate_dynsys(
 
     Notes
     -----
-    - Automatically applies :class:`_DirectedSystem` wrapper for direction handling
+    - Automatically applies :class:`hiten.algorithms.dynamics.base._DirectedSystem` wrapper for direction handling
     - Validates initial state dimension against system requirements
     - Supports multiple backends: SciPy (DOP853), Runge-Kutta, symplectic, adaptive
     - Time array is adjusted for integration direction in output
     
     See Also
     --------
-    :class:`_DirectedSystem` : Directional wrapper used internally
-    :func:`_validate_initial_state` : State validation utility
+    :class:`hiten.algorithms.dynamics.base._DirectedSystem` : Directional wrapper used internally
+    :func:`hiten.algorithms.dynamics.base._validate_initial_state` : State validation utility
     """
     from hiten.algorithms.integrators.base import _Solution
     from hiten.algorithms.integrators.rk import AdaptiveRK, RungeKutta
@@ -407,8 +407,8 @@ def _validate_initial_state(state, expected_dim=6):
         
     See Also
     --------
-    :meth:`_DynamicalSystem.validate_state` : Instance method for validation
-    :func:`_propagate_dynsys` : Uses this function for state validation
+    :meth:`hiten.algorithms.dynamics.base._DynamicalSystem.validate_state` : Instance method for validation
+    :func:`hiten.algorithms.dynamics.base._propagate_dynsys` : Uses this function for state validation
     """
     state_np = np.asarray(state, dtype=np.float64)
     if state_np.shape != (expected_dim,):

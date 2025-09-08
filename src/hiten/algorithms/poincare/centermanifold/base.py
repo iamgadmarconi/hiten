@@ -5,9 +5,9 @@ This module provides the main user-facing interface for computing and
 analyzing Poincare maps restricted to center manifolds of collinear
 libration points in the Circular Restricted Three-Body Problem (CR3BP).
 
-The :class:`CenterManifoldMap` class extends the base return map
-functionality with center manifold-specific seeding strategies and
-visualization capabilities.
+The :class:`hiten.algorithms.poincare.centermanifold.base.CenterManifoldMap` 
+class extends the base return map functionality with center manifold-specific seeding 
+strategies and visualization capabilities.
 
 References
 ----------
@@ -509,7 +509,7 @@ class CenterManifoldMap(_ReturnMapBase):
 
         Returns
         -------
-        :class:`CenterManifoldMap`
+        :class:`hiten.algorithms.poincare.centermanifold.base.CenterManifoldMap`
             Loaded center manifold map instance.
         """
         return load_poincare_map(filepath, cm, **kwargs)

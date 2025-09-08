@@ -202,7 +202,7 @@ class _BaseCorrectionConfig:
     --------
     :class:`hiten.algorithms.corrector.line._LineSearchConfig`
         Configuration class for line search parameters.
-    :class:`_Corrector`
+    :class:`hiten.algorithms.corrector.base._Corrector`
         Abstract base class that uses this configuration.
     """
     max_attempts: int = 50
@@ -282,7 +282,7 @@ class _Corrector(ABC):
 
     Notes
     -----
-    Subclasses must implement the :meth:`correct` method and are expected
+    Subclasses must implement the :meth:`hiten.algorithms.corrector.base._Corrector.correct` method and are expected
     to document any additional keyword arguments specific to their
     correction strategy (maximum iterations, tolerances, step control
     parameters, etc.).
@@ -310,7 +310,7 @@ class _Corrector(ABC):
 
     See Also
     --------
-    :class:`_BaseCorrectionConfig`
+    :class:`hiten.algorithms.corrector.base._BaseCorrectionConfig`
         Configuration class for correction parameters.
     :mod:`hiten.algorithms.corrector.newton`
         Concrete Newton-Raphson implementations.

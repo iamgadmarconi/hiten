@@ -62,9 +62,9 @@ class SynodicMap(_ReturnMapBase):
     complexity of the underlying detection and refinement algorithms.
 
     The class supports multiple input methods:
-    - Custom trajectories via :meth:`from_trajectories`
-    - Periodic orbits via :meth:`from_orbit`
-    - Manifold structures via :meth:`from_manifold`
+    - Custom trajectories via :meth:`hiten.algorithms.poincare.synodic.base.SynodicMap.from_trajectories`
+    - Periodic orbits via :meth:`hiten.algorithms.poincare.synodic.base.SynodicMap.from_orbit`
+    - Manifold structures via :meth:`hiten.algorithms.poincare.synodic.base.SynodicMap.from_manifold`
 
     All time units are in nondimensional units unless otherwise specified.
     """

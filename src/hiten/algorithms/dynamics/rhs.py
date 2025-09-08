@@ -68,7 +68,7 @@ class _RHSSystem(_DynamicalSystem):
     --------
     :class:`hiten.algorithms.dynamics.base._DynamicalSystem` : Base class
     :func:`hiten.algorithms.dynamics.rhs.create_rhs_system` : Factory function
-    :func:`numba.njit` : JIT compilation used internally
+    numba.njit : JIT compilation used internally
     """
 
     def __init__(self, rhs_func: Callable[[float, np.ndarray], np.ndarray], dim: int, name: str = "Generic RHS"):
@@ -177,7 +177,7 @@ def create_rhs_system(rhs_func: Callable[[float, np.ndarray], np.ndarray], dim: 
     
     See Also
     --------
-    :class:`_RHSSystem` : Direct constructor interface
+    :class:`hiten.algorithms.dynamics.rhs._RHSSystem` : Direct constructor interface
     :class:`hiten.algorithms.dynamics.base._DynamicalSystem` : Base interface
     """
     return _RHSSystem(rhs_func, dim, name)

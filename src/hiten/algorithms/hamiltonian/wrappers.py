@@ -190,7 +190,7 @@ def _physical_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
     --------
     :func:`hiten.algorithms.hamiltonian.transforms._polylocal2realmodal`
         Underlying transformation function.
-    :func:`_real_modal_to_physical`
+    :func:`hiten.algorithms.hamiltonian.wrappers._real_modal_to_physical`
         Inverse transformation back to physical coordinates.
     """
     point = kwargs["point"]

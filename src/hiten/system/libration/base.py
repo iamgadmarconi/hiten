@@ -92,7 +92,8 @@ class LibrationPoint(ABC):
     jacobi_constant : float
         Jacobi integral CJ = -2E corresponding to energy (dimensionless).
     is_stable : bool
-        True if all eigenvalues returned by :meth:`analyze_stability` lie
+        True if all eigenvalues returned by 
+        :meth:`hiten.system.libration.base.LibrationPoint.analyze_stability` lie
         inside the unit circle (discrete case) or have non-positive real
         part (continuous case).
     eigenvalues : tuple(numpy.ndarray, numpy.ndarray, numpy.ndarray)

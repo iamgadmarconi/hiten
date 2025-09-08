@@ -304,7 +304,7 @@ def effective_potential(state: Sequence[float], mu: float) -> float:
 
     Notes
     -----
-    Uses :func:`primary_distance` and :func:`secondary_distance` for
+    Uses :func:`hiten.algorithms.dynamics.utils.energy.primary_distance` and :func:`hiten.algorithms.dynamics.utils.energy.secondary_distance` for
     distance calculations. Warns when approaching singularities.
     
     See Also

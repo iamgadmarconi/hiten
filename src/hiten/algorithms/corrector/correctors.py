@@ -13,8 +13,8 @@ from hiten.algorithms.corrector.newton import _NewtonCore
 class _NewtonOrbitCorrector(_PeriodicOrbitCorrectorInterface, _NewtonCore):
     """Implement a Newton-Raphson corrector for periodic orbits.
 
-    Combines :class:`~hiten.algorithms.corrector.interfaces._PeriodicOrbitCorrectorInterface`
-    with :class:`~hiten.algorithms.corrector.newton._NewtonCore` to provide
+    Combines :class:`hiten.algorithms.corrector.interfaces._PeriodicOrbitCorrectorInterface`
+    with :class:`hiten.algorithms.corrector.newton._NewtonCore` to provide
     a complete corrector for periodic orbits using Newton-Raphson iteration.
 
     Parameters
@@ -39,9 +39,9 @@ class _NewtonOrbitCorrector(_PeriodicOrbitCorrectorInterface, _NewtonCore):
 
     See Also
     --------
-    :class:`~hiten.algorithms.corrector.interfaces._PeriodicOrbitCorrectorInterface`
+    :class:`hiten.algorithms.corrector.interfaces._PeriodicOrbitCorrectorInterface`
         Orbit-specific correction interface.
-    :class:`~hiten.algorithms.corrector.newton._NewtonCore`
+    :class:`hiten.algorithms.corrector.newton._NewtonCore`
         Newton-Raphson algorithm implementation.
     """
 

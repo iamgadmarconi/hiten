@@ -476,8 +476,9 @@ class HamiltonianPipeline:
 
         Notes
         -----
-        This method is equivalent to :meth:`get_hamiltonian` but provides
-        a familiar interface for users migrating from the old CenterManifold.
+        This method is equivalent to 
+        :meth:`hiten.system.hamiltonians.pipeline.HamiltonianPipeline.get_hamiltonian` 
+        but provides a familiar interface for users migrating from the old CenterManifold.
         It is maintained for backward compatibility.
         """
         return self.get_hamiltonian(form)
@@ -543,7 +544,7 @@ class HamiltonianPipeline:
         Clear the Hamiltonian cache.
 
         This forces recomputation of all Hamiltonian representations on
-        the next call to :meth:`get_hamiltonian`.
+        the next call to :meth:`hiten.system.hamiltonians.pipeline.HamiltonianPipeline.get_hamiltonian`.
 
         Notes
         -----

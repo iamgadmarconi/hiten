@@ -6,9 +6,9 @@ Restricted Three-Body Problem (CR3BP). The engine coordinates the seeding
 strategy, numerical integration, and parallel processing to efficiently
 compute return maps.
 
-The main class :class:`_CenterManifoldEngine` extends the base return map
-engine with center manifold-specific functionality and parallel processing
-capabilities.
+The main class :class:`hiten.algorithms.poincare.centermanifold.engine._CenterManifoldEngine` 
+extends the base return map engine with center manifold-specific functionality and parallel 
+processing capabilities.
 
 References
 ----------

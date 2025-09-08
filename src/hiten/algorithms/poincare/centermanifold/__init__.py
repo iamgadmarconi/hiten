@@ -5,8 +5,8 @@ on center manifolds of periodic orbits in the Circular Restricted
 Three-Body Problem (CR3BP). The strategies are used to generate 
 initial conditions for computing center manifold trajectories.
 
-The module exports a factory function :func:`_make_strategy` that creates
-concrete seeding strategy instances based on a string identifier.
+The module exports a factory function :func:`hiten.algorithms.poincare.centermanifold._make_strategy` 
+that creates concrete seeding strategy instances based on a string identifier.
 """
 
 from .config import _CenterManifoldSectionConfig, _CenterManifoldMapConfig

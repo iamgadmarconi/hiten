@@ -42,7 +42,8 @@ def _pair_counts(query: np.ndarray, ref: np.ndarray, r2: float) -> np.ndarray:
 
     Notes
     -----
-    Used by :func:`_radpair2d` to efficiently allocate storage for pairs.
+    Used by :func:`hiten.algorithms.connections.backends._radpair2d` to 
+    efficiently allocate storage for pairs.
     """
     
     n_q = query.shape[0]
@@ -77,7 +78,8 @@ def _exclusive_prefix_sum(a: np.ndarray) -> np.ndarray:
 
     Notes
     -----
-    Used by :func:`_radpair2d` to determine memory offsets for storing pairs.
+    Used by :func:`hiten.algorithms.connections.backends._radpair2d` 
+    to determine memory offsets for storing pairs.
     """
     n = a.size
     out = np.empty(n + 1, dtype=np.int64)
@@ -109,8 +111,9 @@ def _radpair2d(query: np.ndarray, ref: np.ndarray, radius: float) -> np.ndarray:
 
     Notes
     -----
-    Uses :func:`_pair_counts` and :func:`_exclusive_prefix_sum` to efficiently
-    allocate and populate the output array.
+    Uses :func:`hiten.algorithms.connections.backends._pair_counts` and 
+    :func:`hiten.algorithms.connections.backends._exclusive_prefix_sum` 
+    to efficiently allocate and populate the output array.
     """
     r2 = float(radius) * float(radius)
     counts = _pair_counts(query, ref, r2)
@@ -154,7 +157,8 @@ def _radius_pairs_2d(query: np.ndarray, ref: np.ndarray, radius: float) -> np.nd
     Notes
     -----
     This is the main entry point for 2D radius-based pairing. It prepares
-    contiguous arrays and delegates to the numba-accelerated :func:`_radpair2d`.
+    contiguous arrays and delegates to the numba-accelerated 
+    :func:`hiten.algorithms.connections.backends._radpair2d`.
     """
     q = np.ascontiguousarray(query, dtype=np.float64)
     r = np.ascontiguousarray(ref, dtype=np.float64)
@@ -178,7 +182,8 @@ def _nearest_neighbor_2d_numba(points: np.ndarray) -> np.ndarray:
 
     Notes
     -----
-    This is the numba-accelerated implementation used by :func:`_nearest_neighbor_2d`.
+    This is the numba-accelerated implementation used by 
+    :func:`hiten.algorithms.connections.backends._nearest_neighbor_2d`.
     """
     n = points.shape[0]
     out = np.full(n, -1, dtype=np.int64)
@@ -217,7 +222,7 @@ def _nearest_neighbor_2d(points: np.ndarray) -> np.ndarray:
     Notes
     -----
     This function prepares data and delegates to the numba-accelerated
-    :func:`_nearest_neighbor_2d_numba`.
+    :func:`hiten.algorithms.connections.backends._nearest_neighbor_2d_numba`.
     """
     p = np.ascontiguousarray(points, dtype=np.float64)
     return _nearest_neighbor_2d_numba(p)
@@ -252,8 +257,8 @@ def _closest_points_on_segments_2d(a0x: float, a0y: float, a1x: float, a1y: floa
 
     Notes
     -----
-    Used by :func:`_refine_pairs_on_section` for geometric refinement of
-    matched pairs between synodic sections.
+    Used by :func:`hiten.algorithms.connections.backends._refine_pairs_on_section` 
+    for geometric refinement of matched pairs between synodic sections.
     """
     ux = a1x - a0x
     uy = a1y - a0y
@@ -343,8 +348,9 @@ def _refine_pairs_on_section(pu: np.ndarray, ps: np.ndarray, pairs: np.ndarray, 
 
     Notes
     -----
-    Uses :func:`_closest_points_on_segments_2d` to find optimal intersection
-    points between local segments formed by nearest neighbors.
+    Uses :func:`hiten.algorithms.connections.backends._closest_points_on_segments_2d` 
+    to find optimal intersection points between local segments formed by 
+    nearest neighbors.
     """
     m = pairs.shape[0]
     rstar = np.empty((m, 2), dtype=np.float64)
@@ -430,9 +436,9 @@ class _ConnectionsBackend:
         -----
         The algorithm performs these steps:
         1. Build section hits using ``problem.source.to_section()`` and ``problem.target.to_section()``
-        2. Coarse 2D radius pairing via :func:`_radius_pairs_2d`
+        2. Coarse 2D radius pairing via :func:`hiten.algorithms.connections.backends._radius_pairs_2d`
         3. Mutual-nearest filtering to reduce false positives
-        4. On-section refinement via :func:`_refine_pairs_on_section`
+        4. On-section refinement via :func:`hiten.algorithms.connections.backends._refine_pairs_on_section`
         5. Delta-V computation and classification (ballistic vs impulsive)
         """
         # Lazy imports to avoid circulars at module import tim

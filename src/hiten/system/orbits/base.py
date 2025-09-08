@@ -90,7 +90,7 @@ class PeriodicOrbit(ABC):
     Notes
     -----
     Instantiating the class does not perform any propagation. Users must
-    call :meth:`correct` (or manually set
+    call :meth:`hiten.system.orbits.base.PeriodicOrbit.correct` (or manually set
     period) followed by :meth:`hiten.system.orbits.base.PeriodicOrbit.propagate`.
     """
     
@@ -698,7 +698,7 @@ class PeriodicOrbit(ABC):
             
         Returns
         -------
-        :class:`PeriodicOrbit`
+        :class:`hiten.system.orbits.base.PeriodicOrbit`
             The loaded orbit instance.
             
         Raises
@@ -790,8 +790,8 @@ class GenericOrbit(PeriodicOrbit):
         Get or set the user-defined differential correction configuration.
 
         This property must be set to a valid :class:`hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`
-        instance before calling :meth:`correct` on a
-        :class:`GenericOrbit` object.
+        instance before calling :meth:`hiten.system.orbits.base.PeriodicOrbit.correct` on a
+        :class:`hiten.system.orbits.base.GenericOrbit` object.
         
         Returns
         -------

@@ -87,7 +87,7 @@ class _DetectionSettings:
 
         Returns
         -------
-        :class:`_DetectionSettings`
+        :class:`hiten.algorithms.poincare.synodic.backend._DetectionSettings`
             Configured detection settings object.
 
         Notes
@@ -559,7 +559,7 @@ def _detect_with_segment_refine(
         The surface event defining the Poincare section.
     proj : tuple[str, str] or callable
         Projection specification for 2D coordinates.
-    settings : :class:`_DetectionSettings`
+    settings : :class:`hiten.algorithms.poincare.synodic.backend._DetectionSettings`
         Detection settings including refinement parameters.
 
     Returns
@@ -744,7 +744,7 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         The section configuration.
     _cfg : :class:`hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
         The map configuration.
-    _settings : :class:`_DetectionSettings`
+    _settings : :class:`hiten.algorithms.poincare.synodic.backend._DetectionSettings`
         Cached detection settings for efficient access.
 
     Notes

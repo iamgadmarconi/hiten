@@ -168,7 +168,7 @@ def _nf2aa_sc(poly_nf_complex: np.ndarray) -> np.ndarray:
         
     Notes
     -----
-    Currently delegates to :func:`_nf2aa_ee` since the transformation
+    Currently delegates to :func:`hiten.algorithms.bifurcation.transforms._nf2aa_ee` since the transformation
     rules for center directions are identical. Future extensions could
     implement saddle-center specific processing (e.g., filtering
     hyperbolic Fourier harmonics) without affecting the API.

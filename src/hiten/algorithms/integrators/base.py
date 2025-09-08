@@ -75,9 +75,9 @@ class _Solution:
     def interpolate(self, t: Union[np.ndarray, float]) -> np.ndarray:
         """Evaluate the trajectory at intermediate time points.
 
-        If :attr:`_Solution.derivatives` are provided a cubic Hermite scheme
-        of order three is employed on every step; otherwise straight linear
-        interpolation is used.
+        If :attr:`hiten.algorithms.integrators.base._Solution.derivatives` 
+        are provided a cubic Hermite scheme of order three is employed on every step; 
+        otherwise straight linear interpolation is used.
 
         Parameters
         ----------
@@ -159,7 +159,7 @@ class _Integrator(ABC):
         Human-readable identifier of the method.
     **options
         Extra keyword arguments left untouched and stored in
-        :attr:`options` for later use by subclasses.
+        :attr:`hiten.algorithms.integrators.base._Integrator.options` for later use by subclasses.
 
     Attributes
     ----------
@@ -199,7 +199,7 @@ class _Integrator(ABC):
             Human-readable identifier of the method.
         **options
             Extra keyword arguments left untouched and stored in
-            :attr:`options` for later use by subclasses.
+            :attr:`hiten.algorithms.integrators.base._Integrator.options` for later use by subclasses.
         """
         self.name = name
         self.options = options
@@ -260,7 +260,7 @@ class _Integrator(ABC):
         Raises
         ------
         ValueError
-            If the required attribute :attr:`rhs` is absent.
+            If the required attribute :attr:`hiten.algorithms.integrators.base._DynamicalSystem.rhs` is absent.
         """
         if not hasattr(system, 'rhs'):
             raise ValueError(f"System must implement 'rhs' method for {self.name}")

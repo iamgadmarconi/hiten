@@ -71,7 +71,7 @@ class _RungeKuttaBase(_Integrator):
         Weights of the high order solution.
     _B_LOW : numpy.ndarray or None
         Weights of the lower order solution, optional.  When *None* no error
-        estimate is produced and :func:`_rk_embedded_step` falls back to
+        estimate is produced and :func:`hiten.algorithms.integrators.rk._rk_embedded_step` falls back to
         the high order result for both outputs.
     _C : numpy.ndarray of shape (s,)
         Nodes c_i measured in units of the step size.
@@ -533,7 +533,8 @@ class _AdaptiveStepRK(_RungeKuttaBase):
         Returns
         -------
         float
-            Step size update factor, clipped to :attr:`MIN_FACTOR` and :attr:`MAX_FACTOR`.
+            Step size update factor, clipped to :attr:`hiten.algorithms.integrators.rk.AdaptiveRK.MIN_FACTOR` 
+            and :attr:`hiten.algorithms.integrators.rk.AdaptiveRK.MAX_FACTOR`.
         """
         return np.clip(self.SAFETY * err_norm ** (-self._err_exp), self.MIN_FACTOR, self.MAX_FACTOR)
 
@@ -643,7 +644,8 @@ class _DOP853(_AdaptiveStepRK):
         y_low : numpy.ndarray
             Lower-order solution at t + h (for error estimation).
         err_vec : numpy.ndarray
-            Error estimate vector computed using :func:`_estimate_error`.
+            Error estimate vector computed using 
+            :func:`hiten.algorithms.integrators.rk.AdaptiveRK._estimate_error`.
         """
         s = self._N_STAGES
         k = np.empty((s + 1, y.size), dtype=np.float64)

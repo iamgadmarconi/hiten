@@ -11,11 +11,11 @@ stability when the mass ratio is below Routh's critical value.
 
 Classes
 -------
-:class:`TriangularPoint`
+:class:`hiten.system.libration.triangular.TriangularPoint`
     Abstract base class for triangular libration points.
-:class:`L4Point`
+:class:`hiten.system.libration.triangular.L4Point`
     L4 libration point located above the x-axis (positive y).
-:class:`L5Point`
+:class:`hiten.system.libration.triangular.L5Point`
     L5 libration point located below the x-axis (negative y).
 
 Notes
@@ -55,7 +55,8 @@ class TriangularPoint(LibrationPoint):
     ROUTH_CRITICAL_MU : float
         Critical value mu_R delimiting linear stability (dimensionless).
     sign : int
-        +1 for :class:`L4Point`, -1 for :class:`L5Point`.
+        +1 for :class:`hiten.system.libration.triangular.L4Point`, -1 
+        for :class:`hiten.system.libration.triangular.L5Point`.
     a : float
         Offset used by local <-> synodic frame transformations (dimensionless).
 
@@ -87,7 +88,7 @@ class TriangularPoint(LibrationPoint):
         Returns
         -------
         int
-            +1 for :class:`L4Point`, -1 for :class:`L5Point`.
+            +1 for :class:`hiten.system.libration.triangular.L4Point`, -1 for :class:`hiten.system.libration.triangular.L5Point`.
         """
         return 1 if isinstance(self, L4Point) else -1
     

@@ -362,7 +362,7 @@ class CenterManifold:
         supplied coordinates are taken to lie on the centre manifold already.
 
         The transformation follows exactly the second half of the original
-        :meth:`ic` pipeline:
+        :meth:`hiten.system.center.CenterManifold.ic` pipeline:
 
             CM (real) -> CM (complex) -> Lie transform -> real modal -> local -> synodic
             
@@ -533,7 +533,7 @@ class CenterManifold:
     def cm(self, synodic_6d: np.ndarray, tol=1e-14) -> np.ndarray:
         """Return 4-D centre-manifold coordinates (q2, p2, q3, p3) from 6-D synodic ICs.
 
-        This is the exact inverse of :meth:`ic` and therefore performs the
+        This is the exact inverse of :meth:`hiten.system.center.CenterManifold.ic` and therefore performs the
         following steps in reverse order:
 
             synodic -> local -> real modal -> complex modal -> Lie-inverse -> CM.

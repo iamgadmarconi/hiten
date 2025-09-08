@@ -133,9 +133,9 @@ class _Stepper(Protocol):
 
     See Also
     --------
-    :class:`_PlainStepInterface`
+    :class:`hiten.algorithms.corrector._step_interface._PlainStepInterface`
         Simple implementation with optional step size capping.
-    :class:`_ArmijoStepInterface`
+    :class:`hiten.algorithms.corrector._step_interface._ArmijoStepInterface`
         Line search implementation using Armijo conditions.
     """
 
@@ -194,8 +194,8 @@ class _StepInterface(ABC):
     allowing correction algorithms to mix step interfaces with other
     capabilities (convergence monitoring, Jacobian computation, etc.).
 
-    The abstract method :meth:`_build_line_searcher` is responsible for
-    creating :class:`_Stepper` objects that encapsulate the step
+    The abstract method :meth:`hiten.algorithms.corrector._step_interface._StepInterface._build_line_searcher` is responsible for
+    creating :class:`hiten.algorithms.corrector._step_interface._Stepper` objects that encapsulate the step
     transformation logic for specific problems.
 
     Examples
@@ -212,11 +212,11 @@ class _StepInterface(ABC):
 
     See Also
     --------
-    :class:`_PlainStepInterface`
+    :class:`hiten.algorithms.corrector._step_interface._PlainStepInterface`
         Concrete implementation for simple Newton steps.
-    :class:`_ArmijoStepInterface`
+    :class:`hiten.algorithms.corrector._step_interface._ArmijoStepInterface`
         Concrete implementation with Armijo line search.
-    :class:`_Stepper`
+    :class:`hiten.algorithms.corrector._step_interface._Stepper`
         Protocol for step transformation functions.
     """
 
@@ -241,7 +241,7 @@ class _StepInterface(ABC):
     ) -> _Stepper:
         """Build a step transformation function for the current problem.
 
-        This method creates a :class:`_Stepper` object that encapsulates
+        This method creates a :class:`hiten.algorithms.corrector._step_interface._Stepper` object that encapsulates
         the step-size control logic for a specific nonlinear system.
         The stepper uses the provided residual and norm functions to
         evaluate candidate steps and determine appropriate step sizes.
@@ -258,7 +258,7 @@ class _StepInterface(ABC):
 
         Returns
         -------
-        stepper : :class:`_Stepper`
+        stepper : :class:`hiten.algorithms.corrector._step_interface._Stepper`
             Step transformation function configured for this problem.
 
         Notes
@@ -311,9 +311,9 @@ class _PlainStepInterface(_StepInterface):
 
     See Also
     --------
-    :class:`_ArmijoStepInterface`
+    :class:`hiten.algorithms.corrector._step_interface._ArmijoStepInterface`
         More sophisticated interface with line search capabilities.
-    :class:`_StepInterface`
+    :class:`hiten.algorithms.corrector._step_interface._StepInterface`
         Abstract base class that this class extends.
     """
 
@@ -474,7 +474,7 @@ class _ArmijoStepInterface(_PlainStepInterface):
 
     See Also
     --------
-    :class:`_PlainStepInterface`
+    :class:`hiten.algorithms.corrector._step_interface._PlainStepInterface`
         Parent class providing plain Newton step capabilities.
     :class:`hiten.algorithms.corrector.line._ArmijoLineSearch`
         Line search implementation used by this interface.
@@ -495,7 +495,7 @@ class _ArmijoStepInterface(_PlainStepInterface):
 
         Parameters
         ----------
-        line_search_config : :class:`_LineSearchConfig`, bool, or None, optional
+        line_search_config : :class:`hiten.algorithms.corrector.line._LineSearchConfig`, bool, or None, optional
             Line search configuration:
             - None: Disable line search, use plain Newton steps
             - True: Enable line search with default parameters

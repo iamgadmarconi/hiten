@@ -6,8 +6,8 @@ backend implements both Runge-Kutta and symplectic integration methods
 with parallel processing capabilities for high-performance computation
 of Poincare maps.
 
-The main class :class:`_CenterManifoldBackend` provides the interface
-for center manifold computations, while the Numba-compiled functions
+The main class :class:`hiten.algorithms.poincare.centermanifold.backend._CenterManifoldBackend` 
+provides the interface for center manifold computations, while the Numba-compiled functions
 handle the low-level numerical integration and section crossing detection.
 """
 

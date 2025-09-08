@@ -77,11 +77,11 @@ class _ContinuationEngine(ABC):
     6. **Termination**: Check stopping condition and iteration limit
     
     Subclasses must implement:
-    - :meth:`_make_stepper`: Create stepping strategy
-    - :meth:`_stop_condition`: Define termination criteria
-    - :meth:`_instantiate`: Convert predictions to domain objects
-    - :meth:`_correct`: Problem-specific correction
-    - :meth:`_parameter`: Extract parameters from solutions
+    - :meth:`hiten.algorithms.continuation.base._ContinuationEngine._make_stepper`: Create stepping strategy
+    - :meth:`hiten.algorithms.continuation.base._ContinuationEngine._stop_condition`: Define termination criteria
+    - :meth:`hiten.algorithms.continuation.base._ContinuationEngine._instantiate`: Convert predictions to domain objects
+    - :meth:`hiten.algorithms.continuation.base._ContinuationEngine._correct`: Problem-specific correction
+    - :meth:`hiten.algorithms.continuation.base._ContinuationEngine._parameter`: Extract parameters from solutions
 
     Examples
     --------
@@ -183,8 +183,8 @@ class _ContinuationEngine(ABC):
         Notes
         -----
         This property provides immutable access to the solution family.
-        Solutions are added during the :meth:`run` method as continuation
-        progresses and corrections succeed.
+        Solutions are added during the :meth:`hiten.algorithms.continuation.base._ContinuationEngine.run`
+        method as continuation progresses and corrections succeed.
         """
         return tuple(self._family)
 
@@ -202,7 +202,8 @@ class _ContinuationEngine(ABC):
         -----
         Parameter values are extracted using the parameter_getter function
         provided during initialization. The values correspond one-to-one
-        with solutions in the :attr:`family` property.
+        with solutions in the :attr:`hiten.algorithms.continuation.base._ContinuationEngine.family` 
+        property.
         """
         return tuple(self._param_history)
 
@@ -339,7 +340,8 @@ class _ContinuationEngine(ABC):
         Parameters
         ----------
         obj : object
-            Domain object to be corrected (from :meth:`_instantiate`).
+            Domain object to be corrected (from 
+            :meth:`hiten.algorithms.continuation.base._ContinuationEngine._instantiate`).
         **kwargs
             Additional correction parameters passed from corrector_kwargs.
 

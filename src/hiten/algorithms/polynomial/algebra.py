@@ -9,8 +9,8 @@ performance using Numba JIT compilation.
 All routines operate on one-dimensional coefficient arrays that follow
 the compressed monomial ordering provided by
 :func:`hiten.algorithms.polynomial.base._init_index_tables`. Kernels are
-compiled in nopython mode with :func:`numba.njit`; computationally
-intensive operations additionally exploit :func:`numba.prange` for
+compiled in nopython mode with numba.njit; computationally
+intensive operations additionally exploit numba.prange for
 parallelism.
 
 Notes

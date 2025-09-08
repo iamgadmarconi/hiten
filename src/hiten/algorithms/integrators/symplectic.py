@@ -469,7 +469,8 @@ class _ExtendedSymplectic(_Integrator):
         Even order of the underlying scheme (>= 2). Default is 6.
     c_omega_heuristic : float, optional
         Scaling coefficient used in the heuristic
-        :func:`_get_tao_omega` frequency.  Default is 20.0.
+        :func:`hiten.algorithms.integrators.symplectic._get_tao_omega` frequency.  
+        Default is 20.0.
     **options
         Additional keyword options stored verbatim in
         :attr:`hiten.algorithms.integrators.base._Integrator.options`.

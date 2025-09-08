@@ -91,7 +91,7 @@ class _PeriodicOrbitContinuationInterface:
         Starting orbit for the continuation family.
     parameter_getter : callable
         Function that extracts continuation parameter from an orbit.
-        Should take a :class:`PeriodicOrbit` and return float or ndarray.
+        Should take a :class:`hiten.system.orbits.base.PeriodicOrbit` and return float or ndarray.
     target : sequence
         Target parameter range(s) for continuation. For 1D: (min, max).
         For multi-dimensional: (2, m) array.
@@ -177,8 +177,9 @@ class _PeriodicOrbitContinuationInterface:
         Notes
         -----
         The created orbit is not yet corrected and may not satisfy
-        periodicity constraints. The :meth:`_correct` method will
-        be called subsequently to refine the orbit.
+        periodicity constraints. The 
+        :meth:`hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface._correct` 
+        method will be called subsequently to refine the orbit.
         """
         return self._orbit_class(
             libration_point=self._libration_point,
@@ -195,7 +196,8 @@ class _PeriodicOrbitContinuationInterface:
         Parameters
         ----------
         obj : :class:`hiten.system.orbits.base.PeriodicOrbit`
-            Orbit object to be corrected (from :meth:`_instantiate`).
+            Orbit object to be corrected (from 
+            :meth:`hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface._instantiate`).
         **kwargs
             Additional correction parameters, typically including:
             - tol: convergence tolerance
