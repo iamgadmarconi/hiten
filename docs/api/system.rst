@@ -7,55 +7,48 @@ dynamical systems in the Circular Restricted Three-Body Problem (CR3BP).
 Body
 ----
 
-.. automodule:: hiten.system.body
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The body module provides classes for representing celestial bodies.
+
+.. currentmodule:: hiten.system.body
 
 Center
 ------
 
-.. automodule:: hiten.system.center
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The center module provides classes for center manifold analysis.
+
+.. currentmodule:: hiten.system.center
 
 Family
 ------
 
-.. automodule:: hiten.system.family
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The family module provides classes for orbit families.
+
+.. currentmodule:: hiten.system.family
 
 Manifold
 --------
 
-.. automodule:: hiten.system.manifold
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The manifold module provides classes for stable and unstable manifolds.
+
+.. currentmodule:: hiten.system.manifold
 
 Orbits
 ------
 
-.. automodule:: hiten.system.orbits
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The orbits module provides classes for periodic orbits.
+
+.. currentmodule:: hiten.system.orbits
 
 Libration Points
 ----------------
 
-.. automodule:: hiten.system.libration
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The libration module provides classes for libration points.
+
+.. currentmodule:: hiten.system.libration
 
 Hamiltonians
 ------------
 
-.. automodule:: hiten.system.hamiltonians
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The hamiltonians module provides classes for Hamiltonian systems.
+
+.. currentmodule:: hiten.system.hamiltonians

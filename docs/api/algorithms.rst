@@ -7,95 +7,85 @@ systems analysis in the CR3BP.
 Dynamics
 --------
 
-.. automodule:: hiten.algorithms.dynamics
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The dynamics module provides a comprehensive framework for defining, analyzing, and
+integrating dynamical systems with emphasis on applications in astrodynamics.
+
+.. currentmodule:: hiten.algorithms.dynamics
 
 Integrators
 -----------
 
-.. automodule:: hiten.algorithms.integrators
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The integrators module provides numerical integration methods for dynamical systems.
+
+.. currentmodule:: hiten.algorithms.integrators
 
 Continuation
 ------------
 
-.. automodule:: hiten.algorithms.continuation
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The continuation module provides methods for numerical continuation of solutions.
+
+.. currentmodule:: hiten.algorithms.continuation
 
 Corrector
 ---------
 
-.. automodule:: hiten.algorithms.corrector
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The corrector module provides methods for correcting approximate solutions.
+
+.. currentmodule:: hiten.algorithms.corrector
 
 Bifurcation
 -----------
 
-.. automodule:: hiten.algorithms.bifurcation
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The bifurcation module provides methods for detecting and analyzing bifurcations.
+
+.. currentmodule:: hiten.algorithms.bifurcation
 
 Connections
 -----------
 
-.. automodule:: hiten.algorithms.connections
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The connections module provides functionality for discovering ballistic and impulsive 
+transfers between manifolds in the CR3BP.
+
+.. currentmodule:: hiten.algorithms.connections
 
 Fourier
 -------
 
-.. automodule:: hiten.algorithms.fourier
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The Fourier module provides methods for Fourier analysis of periodic solutions.
+
+.. currentmodule:: hiten.algorithms.fourier
 
 Hamiltonian
 -----------
 
-.. automodule:: hiten.algorithms.hamiltonian
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The Hamiltonian module provides methods for Hamiltonian systems analysis.
+
+.. currentmodule:: hiten.algorithms.hamiltonian
 
 Poincare Maps
 -------------
 
-.. automodule:: hiten.algorithms.poincare
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The Poincare module provides methods for Poincare maps and center manifolds.
+
+.. currentmodule:: hiten.algorithms.poincare
 
 Polynomial
 ----------
 
-.. automodule:: hiten.algorithms.polynomial
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The polynomial module provides methods for polynomial operations in Hamiltonian systems.
+
+.. currentmodule:: hiten.algorithms.polynomial
 
 Tori
 ----
 
-.. automodule:: hiten.algorithms.tori
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The tori module provides methods for invariant tori analysis.
+
+.. currentmodule:: hiten.algorithms.tori
 
 Utilities
 ---------
 
-.. automodule:: hiten.algorithms.utils
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The utils module provides utility functions for algorithms.
+
+.. currentmodule:: hiten.algorithms.utils

@@ -79,7 +79,7 @@ class CollinearPoint(LibrationPoint):
         Gamma is defined as the distance from the libration point to the nearest primary,
         normalized by the distance between the primaries.
         - For L1 and L2, gamma = |x_L - (1-mu)|
-        - For L3, gamma = |x_L - (-mu)| 
+        - For L3, gamma = |x_L + mu| 
         (Note: This is equivalent to the root of the specific polynomial for each point).
 
         Returns

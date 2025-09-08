@@ -11,9 +11,9 @@ vectorized and JIT-friendly where applicable.
 
 References
 ----------
-Koon, W. S., Lo, M. W., Marsden, J. E., Ross, S. D. (2000).
-*Dynamical Systems, the Three-Body Problem and Space Mission Design*.
-Caltech.
+.. [Koon2011] Koon, W. S., Lo, M. W., Marsden, J. E., Ross, S. D. (2011).
+   *Dynamical Systems, the Three-Body Problem and Space Mission Design*.
+   Springer.
 """
 from typing import Set, Tuple
 
@@ -37,22 +37,22 @@ def eigenvalue_decomposition(A: np.ndarray, discrete: int = 0, delta: float = 1e
         Classification mode. Default is 0.
         
         * 0 : Continuous-time system (Jacobian matrix)
-              Uses sign(Re{lambda}) for classification
+              Uses sign of real part of lambda for classification
         * 1 : Discrete-time system (map matrix)
-              Uses |lambda| with neutral band for classification
+              Uses absolute value of lambda with neutral band for classification
     delta : float, optional
         Half-width of neutral band around stability threshold. Default is 1e-4.
-        For continuous systems: |Re{lambda}| < delta -> center
-        For discrete systems: ||lambda| - 1| < delta -> center
+        For continuous systems: absolute value of real part of lambda < delta -> center
+        For discrete systems: absolute value of (absolute value of lambda - 1) < delta -> center
 
     Returns
     -------
     sn : ndarray
-        Stable eigenvalues. For continuous: Re{lambda} < -delta.
-        For discrete: |lambda| < 1-delta.
+        Stable eigenvalues. For continuous: real part of lambda < -delta.
+        For discrete: absolute value of lambda < 1-delta.
     un : ndarray
-        Unstable eigenvalues. For continuous: Re{lambda} > +delta.
-        For discrete: |lambda| > 1+delta.
+        Unstable eigenvalues. For continuous: real part of lambda > +delta.
+        For discrete: absolute value of lambda > 1+delta.
     cn : ndarray
         Center eigenvalues (neutral spectrum within delta band).
     Ws : ndarray, shape (n, n_s)

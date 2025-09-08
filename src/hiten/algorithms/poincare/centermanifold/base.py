@@ -53,13 +53,6 @@ class CenterManifoldMap(_ReturnMapBase):
         Configuration object specifying computation parameters. If None,
         default configuration is used.
 
-    Attributes
-    ----------
-    cm : :class:`hiten.system.center.CenterManifold`
-        The underlying center manifold object.
-    energy : float
-        Energy level of the center manifold.
-
     Notes
     -----
     State vectors are ordered as [q1, q2, q3, p1, p2, p3] where q1=0 for

@@ -58,15 +58,6 @@ class Connection:
         Configuration for connection search parameters including tolerances
         and geometric constraints (default: None).
 
-    Attributes
-    ----------
-    section : :class:`hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
-        Synodic section configuration.
-    direction : {1, -1, None}
-        Section crossing direction.
-    search_cfg : :class:`hiten.algorithms.connections.config._SearchConfig` or None
-        Search configuration parameters.
-
     Examples
     --------
 

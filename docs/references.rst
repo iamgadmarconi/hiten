@@ -4,6 +4,11 @@ References
 This page contains references to the literature and resources used in the 
 development of HITEN.
 
+.. note::
+   This page contains a comprehensive bibliography. Not all references are 
+   cited in the documentation text, but they represent the foundational 
+   literature for the methods implemented in HITEN.
+
 Primary References
 ------------------
 
@@ -20,7 +25,7 @@ Primary References
 .. [Richardson1980] Richardson, D. L. (1980). *Analytic Construction of Periodic Orbits About the Collinear Points*. Celestial Mechanics, 22(3), 241-253.
 
 Mathematical Foundations
------------------------
+-------------------------
 
 .. [Arnold1989] Arnold, V. I. (1989). *Mathematical Methods of Classical Mechanics*. Springer.
 
@@ -52,8 +57,6 @@ Bifurcation Theory
 
 Hamiltonian Systems
 -------------------
-
-.. [Meyer2009] Meyer, K. R., Hall, G. R., & Offin, D. (2009). *Introduction to Hamiltonian Dynamical Systems and the N-Body Problem*. Springer.
 
 .. [Celletti2010] Celletti, A. (2010). *Stability and Chaos in Celestial Mechanics*. Springer.
 

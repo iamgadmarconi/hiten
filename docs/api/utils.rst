@@ -7,47 +7,41 @@ in dynamical systems analysis.
 Constants
 ---------
 
-.. automodule:: hiten.utils.constants
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The constants module provides physical constants and celestial body data.
+
+.. currentmodule:: hiten.utils.constants
 
 Plotting
 --------
 
-.. automodule:: hiten.utils.plots
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The plots module provides visualization functions for dynamical systems.
+
+.. currentmodule:: hiten.utils.plots
 
 Printing
 --------
 
-.. automodule:: hiten.utils.printing
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The printing module provides formatted output utilities.
+
+.. currentmodule:: hiten.utils.printing
 
 Testing
 -------
 
-.. automodule:: hiten.utils.tests
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The tests module provides testing utilities.
+
+.. currentmodule:: hiten.utils.tests
 
 Input/Output
 ------------
 
-.. automodule:: hiten.utils.io
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The io module provides serialization and file I/O utilities.
+
+.. currentmodule:: hiten.utils.io
 
 Logging
 -------
 
-.. automodule:: hiten.utils.log_config
-   :members:
-   :undoc-members:
-   :show-inheritance:
+The log_config module provides logging configuration utilities.
+
+.. currentmodule:: hiten.utils.log_config

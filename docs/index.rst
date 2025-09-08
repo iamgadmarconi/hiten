@@ -93,6 +93,7 @@ Contents
 
    developer/contributing
    developer/changelog
+   readme
 
 .. toctree::
    :maxdepth: 1
