@@ -1,3 +1,5 @@
+"""Tests for Fourier-Taylor operations (evaluation, gradients, Hessians)."""
+
 import numpy as np
 import pytest
 from numba.typed import List

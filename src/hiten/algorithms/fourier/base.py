@@ -1,9 +1,14 @@
-"""
-hiten.algorithms.fourier.base
-===================================
+"""Low-level helpers for Fourier-Taylor coefficient indexing.
 
-Low-level helpers for working with *Fourier-Taylor* coefficient arrays
-in action-angle variables
+Provide numba-compatible utilities to pack and unpack exponents and
+Fourier indices into 64-bit keys, and to build lookup tables required
+by the algebra and evaluation routines in :mod:`hiten.algorithms.fourier`.
+
+Notes
+-----
+- Use ASCII-only text and plain-text math. Example: use ``sqrt(a^2+b^2)``.
+- The packed key layout dedicates 6 bits to each action exponent and 7 bits
+  to each Fourier index after a +64 shift. See inline comments below.
 """
 
 from __future__ import annotations
@@ -34,7 +39,20 @@ _MAX_K = _K_OFFSET - 1
 
 @njit(fastmath=FASTMATH, cache=False)
 def _pack_fourier_index(n1: int, n2: int, n3: int, k1: int, k2: int, k3: int) -> np.uint64:  
-    """Pack exponents into a 64-bit key for constant-time lookup."""
+    """Pack exponents into a 64-bit key for constant-time lookup.
+
+    Parameters
+    ----------
+    n1, n2, n3 : int
+        Non-negative action exponents, each in [0, _MAX_N].
+    k1, k2, k3 : int
+        Fourier indices in [-_K_OFFSET, _MAX_K].
+
+    Returns
+    -------
+    numpy.uint64
+        Packed key, or ``0xFFFFFFFFFFFFFFFF`` as an invalid sentinel.
+    """
 
     if (n1 < 0 or n1 > _MAX_N or
         n2 < 0 or n2 > _MAX_N or
@@ -63,7 +81,19 @@ def _pack_fourier_index(n1: int, n2: int, n3: int, k1: int, k2: int, k3: int) ->
 
 @njit(fastmath=FASTMATH, cache=False)
 def _decode_fourier_index(key: np.uint64):  
-    """Inverse of :pyfunc:`_pack_fourier_index`."""
+    """Decode a packed key back into exponents and Fourier indices.
+
+    Parameters
+    ----------
+    key : numpy.uint64
+        Packed key produced by
+        :func:`hiten.algorithms.fourier.base._pack_fourier_index`.
+
+    Returns
+    -------
+    tuple
+        ``(n1, n2, n3, k1, k2, k3)`` integers.
+    """
     key_int = int(key)
 
     n1 = key_int & _N_MASK
@@ -79,22 +109,23 @@ def _decode_fourier_index(key: np.uint64):
 
 @njit(fastmath=FASTMATH, cache=False)
 def _init_fourier_tables(degree: int, k_max: int):  
-    """
-    Build *psiF* and *clmoF* lookup tables for Fourier polynomials.
+    """Build lookup tables for Fourier-Taylor monomials up to a degree.
 
     Parameters
     ----------
     degree : int
-        Maximum total action degree *d = n_1+n_2+n_3* to include.
+        Maximum total action degree d = n1 + n2 + n3 to include.
     k_max : int
-        Fourier indices kᵢ will be limited to -k_max ... +k_max (k_max ≤ 63).
+        Limit Fourier indices to the range [-k_max, +k_max] (k_max <= 63).
 
     Returns
     -------
-    psiF : numpy.ndarray  (shape ``(degree+1,)``)
-        psiF[d] = number of terms with total action degree *d*.
+    psiF : numpy.ndarray
+        Array of length ``degree + 1`` where ``psiF[d]`` gives the number of
+        monomials with total action degree ``d``.
     clmoF : numba.typed.List
-        For each degree *d*, an array of packed indices (dtype uint64) of size psiF[d].
+        For each degree ``d``, an array of packed indices (dtype ``uint64``)
+        of length ``psiF[d]``.
     """
     if k_max > _MAX_K:
         k_max = _MAX_K  # silently truncate to hard limit
@@ -132,7 +163,19 @@ def _init_fourier_tables(degree: int, k_max: int):
 
 @njit(fastmath=FASTMATH, cache=False)
 def _create_encode_dict_fourier(clmoF: List):  
-    """Create a list of dictionaries mapping packed index -> position for each degree."""
+    """Create index-to-position maps for each degree array in ``clmoF``.
+
+    Parameters
+    ----------
+    clmoF : numba.typed.List
+        Packed index arrays per degree.
+
+    Returns
+    -------
+    numba.typed.List
+        For each degree, a ``Dict[int64, int32]`` mapping packed key to array
+        position to support constant-time lookup.
+    """
     encode_list = List()
     for arr in clmoF:
         d_map = Dict.empty(key_type=types.int64, value_type=types.int32)
@@ -144,6 +187,23 @@ def _create_encode_dict_fourier(clmoF: List):
 
 @njit(fastmath=FASTMATH, cache=False)
 def _encode_fourier_index(idx_tuple, degree: int, encode_dict_list):  
+    """Return position of an index tuple within a degree block.
+
+    Parameters
+    ----------
+    idx_tuple : tuple
+        ``(n1, n2, n3, k1, k2, k3)``.
+    degree : int
+        Target degree block.
+    encode_dict_list : numba.typed.List
+        List of maps returned by
+        :func:`hiten.algorithms.fourier.base._create_encode_dict_fourier`.
+
+    Returns
+    -------
+    int
+        Zero-based position if present; -1 if invalid or not found.
+    """
     n1, n2, n3, k1, k2, k3 = idx_tuple
     key = _pack_fourier_index(n1, n2, n3, k1, k2, k3)
     if key == np.uint64(0xFFFFFFFFFFFFFFFF):

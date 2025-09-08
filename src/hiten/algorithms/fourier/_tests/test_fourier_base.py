@@ -1,3 +1,8 @@
+"""Tests for Fourier-Taylor base indexing utilities.
+
+Keep docstrings minimal and ASCII-only per project guide.
+"""
+
 import random
 
 import numpy as np

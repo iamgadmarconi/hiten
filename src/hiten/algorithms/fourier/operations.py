@@ -1,3 +1,11 @@
+"""High-level operations on Fourier-Taylor polynomials.
+
+Provide construction, evaluation, gradient, and Hessian routines for
+lists of homogeneous blocks representing Fourier-Taylor polynomials in
+action-angle variables. The low-level kernels live in
+:mod:`hiten.algorithms.fourier.algebra`.
+"""
+
 import numpy as np
 from numba import njit
 
@@ -9,6 +17,21 @@ from hiten.algorithms.utils.config import FASTMATH
 
 @njit(fastmath=FASTMATH, cache=False)
 def _make_fourier_poly(degree: int, psiF: np.ndarray):  
+    """Create a zero-initialized homogeneous block of a given degree.
+
+    Parameters
+    ----------
+    degree : int
+        Total action degree of the block.
+    psiF : numpy.ndarray
+        Lookup array where ``psiF[d]`` is the size of the degree ``d`` block.
+
+    Returns
+    -------
+    numpy.ndarray
+        Zero-filled coefficient array of length ``psiF[degree]`` with dtype
+        ``complex128``.
+    """
     size = psiF[degree]
     return np.zeros(size, dtype=np.complex128)
 
@@ -20,6 +43,24 @@ def _fourier_evaluate(
     theta_vals: np.ndarray,
     clmoF,
 ):
+    """Evaluate a Fourier-Taylor polynomial at ``(I, theta)``.
+
+    Parameters
+    ----------
+    coeffs_list : numba.typed.List
+        List of homogeneous blocks by degree starting at 0.
+    I_vals : numpy.ndarray
+        Actions ``[I1, I2, I3]``.
+    theta_vals : numpy.ndarray
+        Angles ``[theta1, theta2, theta3]``.
+    clmoF : numba.typed.List
+        Packed index arrays per degree.
+
+    Returns
+    -------
+    complex
+        Complex value at the specified point.
+    """
     val = 0.0 + 0.0j
     max_deg = len(coeffs_list) - 1
     for d in range(max_deg + 1):
@@ -36,6 +77,25 @@ def _fourier_evaluate_with_grad(
     theta_vals: np.ndarray,
     clmoF,
 ):
+    """Evaluate value and gradients of a polynomial at ``(I, theta)``.
+
+    Parameters
+    ----------
+    coeffs_list : numba.typed.List
+        List of homogeneous blocks by degree starting at 0.
+    I_vals : numpy.ndarray
+        Actions ``[I1, I2, I3]``.
+    theta_vals : numpy.ndarray
+        Angles ``[theta1, theta2, theta3]``.
+    clmoF : numba.typed.List
+        Packed index arrays per degree.
+
+    Returns
+    -------
+    tuple
+        ``(val, gI, gT)`` where ``val`` is complex, and ``gI``, ``gT`` are
+        arrays of shape ``(3,)`` with dtype ``complex128``.
+    """
     val = 0.0 + 0.0j
     gI = np.zeros(3, dtype=np.complex128)
     gT = np.zeros(3, dtype=np.complex128)
@@ -60,6 +120,26 @@ def _fourier_hessian(
     theta_vals: np.ndarray,
     clmoF,
 ):
+    """Compute the 6x6 Hessian at ``(I, theta)`` for a polynomial.
+
+    Variables are ordered ``[I1, I2, I3, theta1, theta2, theta3]``.
+
+    Parameters
+    ----------
+    coeffs_list : numba.typed.List
+        List of homogeneous blocks by degree starting at 0.
+    I_vals : numpy.ndarray
+        Actions ``[I1, I2, I3]``.
+    theta_vals : numpy.ndarray
+        Angles ``[theta1, theta2, theta3]``.
+    clmoF : numba.typed.List
+        Packed index arrays per degree.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(6, 6)`` complex Hessian matrix.
+    """
     H_total = np.zeros((6, 6), dtype=np.complex128)
     max_deg = len(coeffs_list) - 1
     for d in range(max_deg + 1):

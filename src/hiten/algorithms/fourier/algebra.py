@@ -1,3 +1,17 @@
+"""Fourier-Taylor algebra kernels on coefficient arrays.
+
+These helpers implement numba-accelerated primitives for working with
+homogeneous Fourier-Taylor blocks in action-angle variables. Operations
+include addition, scaling, multiplication, differentiation with respect
+to actions and angles, Poisson brackets, and evaluation/derivatives.
+
+Notes
+-----
+- Coefficients are stored as ``numpy.ndarray`` with dtype ``complex128``.
+- All functions are compiled with numba for speed.
+- Index encoding/decoding utilities live in
+  :mod:`hiten.algorithms.fourier.base`.
+"""
 from __future__ import annotations
 
 import numpy as np
@@ -12,12 +26,42 @@ from hiten.algorithms.utils.config import FASTMATH
 
 @njit(fastmath=FASTMATH, cache=False)
 def _fpoly_add(p: np.ndarray, q: np.ndarray, out: np.ndarray) -> None:
+    """Add two homogeneous Fourier blocks elementwise into ``out``.
+
+    Parameters
+    ----------
+    p : numpy.ndarray
+        Input coefficients array.
+    q : numpy.ndarray
+        Input coefficients array to add to ``p``.
+    out : numpy.ndarray
+        Output array receiving ``p + q``. Must have the same shape as ``p``.
+
+    Returns
+    -------
+    None
+    """
     for i in range(p.shape[0]):
         out[i] = p[i] + q[i]
 
 
 @njit(fastmath=FASTMATH, cache=False)
 def _fpoly_scale(p: np.ndarray, alpha, out: np.ndarray) -> None:
+    """Scale a homogeneous Fourier block by ``alpha`` into ``out``.
+
+    Parameters
+    ----------
+    p : numpy.ndarray
+        Input coefficients array.
+    alpha : complex or float
+        Scalar multiplier.
+    out : numpy.ndarray
+        Output array receiving ``alpha * p``. Must match ``p`` shape.
+
+    Returns
+    -------
+    None
+    """
     for i in range(p.shape[0]):
         out[i] = alpha * p[i]
 
@@ -32,6 +76,35 @@ def _fpoly_mul(
     clmoF,
     encodeF,
 ) -> np.ndarray:
+    """Multiply two homogeneous Fourier-Taylor blocks.
+
+    Computes the convolution over action exponents and Fourier indices
+    to produce a block of total degree ``deg_p + deg_q``.
+
+    Parameters
+    ----------
+    p : numpy.ndarray
+        Coefficients for degree ``deg_p`` (dtype ``complex128``).
+    deg_p : int
+        Total action degree of ``p``.
+    q : numpy.ndarray
+        Coefficients for degree ``deg_q`` (dtype ``complex128``).
+    deg_q : int
+        Total action degree of ``q``.
+    psiF : numpy.ndarray
+        Lookup table where ``psiF[d]`` is the size of the degree-``d`` block.
+    clmoF : numba.typed.List
+        Packed index arrays for each degree (see
+        :func:`hiten.algorithms.fourier.base._decode_fourier_index`).
+    encodeF : numba.typed.List
+        Mapping from packed index to position for each degree (see
+        :func:`hiten.algorithms.fourier.base._encode_fourier_index`).
+
+    Returns
+    -------
+    numpy.ndarray
+        Degree-``deg_p + deg_q`` coefficients array (dtype ``complex128``).
+    """
     deg_r = deg_p + deg_q
     out_len = psiF[deg_r]
     out = np.zeros(out_len, dtype=np.complex128)
@@ -72,6 +145,32 @@ def _fpoly_diff_action(
     clmoF,
     encodeF,
 ) -> np.ndarray:
+    """Differentiate a homogeneous block w.r.t. an action variable.
+
+    Computes ``d/dI_j`` where ``j=action_idx in {0,1,2}``.
+
+    Parameters
+    ----------
+    p : numpy.ndarray
+        Degree-``deg_p`` coefficients.
+    deg_p : int
+        Total action degree of ``p``.
+    action_idx : int
+        Index of the action variable (0, 1, or 2).
+    psiF : numpy.ndarray
+        Lookup table where ``psiF[d]`` is the size of the degree-``d`` block.
+    clmoF : numba.typed.List
+        Packed index arrays (see
+        :func:`hiten.algorithms.fourier.base._decode_fourier_index`).
+    encodeF : numba.typed.List
+        Encode dictionaries per degree (see
+        :func:`hiten.algorithms.fourier.base._encode_fourier_index`).
+
+    Returns
+    -------
+    numpy.ndarray
+        Degree-``deg_p-1`` coefficients array (zero if ``deg_p==0``).
+    """
     if deg_p == 0:
         return np.zeros_like(p)
 
@@ -103,6 +202,27 @@ def _fpoly_diff_angle(
     angle_idx: int,
     clmoF,
 ) -> np.ndarray:
+    """Differentiate a homogeneous block w.r.t. an angle variable.
+
+    Computes ``d/dtheta_j`` where ``j=angle_idx in {0,1,2}``.
+
+    Parameters
+    ----------
+    p : numpy.ndarray
+        Degree-``deg_p`` coefficients.
+    deg_p : int
+        Total action degree of ``p``.
+    angle_idx : int
+        Index of the angle variable (0, 1, or 2).
+    clmoF : numba.typed.List
+        Packed index arrays (see
+        :func:`hiten.algorithms.fourier.base._decode_fourier_index`).
+
+    Returns
+    -------
+    numpy.ndarray
+        Degree-``deg_p`` coefficients array for the angle derivative.
+    """
     out = np.zeros_like(p)
 
     for i in range(p.shape[0]):
@@ -132,6 +252,32 @@ def _fpoly_poisson(
     clmoF,
     encodeF,
 ) -> np.ndarray:
+    """Compute the Poisson bracket of two Fourier-Taylor blocks.
+
+    Uses the canonical structure in action-angle variables:
+
+    ``{p, q} = sum_j ( d p / d theta_j * d q / d I_j
+                      - d p / d I_j      * d q / d theta_j )``.
+
+    Parameters
+    ----------
+    p, q : numpy.ndarray
+        Input coefficient blocks for degrees ``deg_p`` and ``deg_q``.
+    deg_p, deg_q : int
+        Total action degrees of ``p`` and ``q``.
+    psiF : numpy.ndarray
+        Lookup table for block sizes.
+    clmoF : numba.typed.List
+        Packed index arrays per degree.
+    encodeF : numba.typed.List
+        Encode dictionaries per degree.
+
+    Returns
+    -------
+    numpy.ndarray
+        Degree ``deg_p + deg_q - 1`` coefficients array. Returns zeros if
+        the output degree is outside the precomputed tables.
+    """
     if deg_p == 0 and deg_q == 0:
         return np.zeros(psiF[0], dtype=np.complex128)
 
@@ -175,6 +321,26 @@ def _fpoly_block_evaluate(
     theta_vals: np.ndarray,
     clmoF,
 ):
+    """Evaluate a single homogeneous block at ``(I, theta)``.
+
+    Parameters
+    ----------
+    coeffs_block : numpy.ndarray
+        Coefficients for a fixed total action degree ``degree``.
+    degree : int
+        Total action degree of the block.
+    I_vals : numpy.ndarray
+        Actions ``[I1, I2, I3]``.
+    theta_vals : numpy.ndarray
+        Angles ``[theta1, theta2, theta3]``.
+    clmoF : numba.typed.List
+        Packed index arrays for each degree.
+
+    Returns
+    -------
+    complex
+        Complex value of the block at the specified point.
+    """
     if coeffs_block.shape[0] == 0:
         return 0.0 + 0.0j
 
@@ -217,6 +383,27 @@ def _fpoly_block_gradient(
     theta_vals: np.ndarray,
     clmoF,
 ):
+    """Evaluate value and gradients of a block at ``(I, theta)``.
+
+    Parameters
+    ----------
+    coeffs_block : numpy.ndarray
+        Coefficients for total action degree ``degree``.
+    degree : int
+        Total action degree of the block.
+    I_vals : numpy.ndarray
+        Actions ``[I1, I2, I3]``.
+    theta_vals : numpy.ndarray
+        Angles ``[theta1, theta2, theta3]``.
+    clmoF : numba.typed.List
+        Packed index arrays for each degree.
+
+    Returns
+    -------
+    tuple
+        ``(val, gI, gT)`` where ``val`` is complex, and ``gI``, ``gT`` are
+        arrays of shape ``(3,)`` with dtype ``complex128``.
+    """
     if coeffs_block.shape[0] == 0:
         return 0.0 + 0.0j, np.zeros(3, dtype=np.complex128), np.zeros(3, dtype=np.complex128)
 
@@ -273,6 +460,28 @@ def _fpoly_block_hessian(
     theta_vals: np.ndarray,
     clmoF,
 ):
+    """Evaluate the 6x6 Hessian of a block at ``(I, theta)``.
+
+    The variables are ordered as ``[I1, I2, I3, theta1, theta2, theta3]``.
+
+    Parameters
+    ----------
+    coeffs_block : numpy.ndarray
+        Coefficients for total action degree ``degree``.
+    degree : int
+        Total action degree of the block.
+    I_vals : numpy.ndarray
+        Actions ``[I1, I2, I3]``.
+    theta_vals : numpy.ndarray
+        Angles ``[theta1, theta2, theta3]``.
+    clmoF : numba.typed.List
+        Packed index arrays for each degree.
+
+    Returns
+    -------
+    numpy.ndarray
+        ``(6, 6)`` complex Hessian matrix.
+    """
     H = np.zeros((6, 6), dtype=np.complex128)
 
     if coeffs_block.shape[0] == 0:
