@@ -1,17 +1,15 @@
-"""hiten.system.libration
-====================
-Convenience re-exports for libration-point classes.
+"""Convenience re-exports for libration-point classes.
 
 This shortcut allows users to do for example::
 
-    from hiten.system.libration import L1Point, L4Point
-
-instead of the longer ``from hiten.system.libration.collinear import L1Point``.
+>>> from hiten.system.libration import L1Point, L4Point
+>>> L1 = L1Point(system)
+>>> L4 = L4Point(system)
 """
 
-from .base import LinearData, LibrationPoint
+from .base import LibrationPoint, LinearData
 from .collinear import CollinearPoint, L1Point, L2Point, L3Point
-from .triangular import TriangularPoint, L4Point, L5Point
+from .triangular import L4Point, L5Point, TriangularPoint
 
 __all__ = [
     "LinearData",

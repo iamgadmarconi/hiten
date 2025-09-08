@@ -1,3 +1,22 @@
+"""
+Coordinate transformation utilities for the circular restricted three-body problem.
+
+This module provides comprehensive coordinate transformation functions for
+converting between different reference frames and unit systems in the circular
+restricted three-body problem. It handles conversions between rotating and
+inertial frames, SI and nondimensional units, and provides mass parameter
+calculations.
+
+References
+----------
+Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
+
+Notes
+-----
+All functions handle the standard 6D state vector format [x, y, z, vx, vy, vz]
+and maintain consistency with the project's nondimensionalization scheme.
+"""
+
 import numpy as np
 
 from hiten.utils.constants import Constants
@@ -108,22 +127,22 @@ def _inertial_to_rotating(state, t, mu):
 
 def _get_mass_parameter(primary_mass, secondary_mass):
     """
-    Calculate the mass parameter :math:`\mu` for the CR3BP.
+    Calculate the mass parameter mu for the CR3BP.
     
-    The mass parameter :math:`\mu` is defined as the ratio of the secondary mass
-    to the total system mass: :math:`\mu = m_2/(m_1 + m_2)`.
+    The mass parameter mu is defined as the ratio of the secondary mass
+    to the total system mass: mu = m2/(m1 + m2).
     
     Parameters
     ----------
     primary_mass : float
-        Mass of the primary body :math:`m_1` in kilograms
+        Mass of the primary body m1 in kilograms
     secondary_mass : float
-        Mass of the secondary body :math:`m_2` in kilograms
+        Mass of the secondary body m2 in kilograms
     
     Returns
     -------
     float
-        Mass parameter :math:`\mu` (dimensionless)
+        Mass parameter mu (dimensionless)
     """
     return secondary_mass / (primary_mass + secondary_mass)
 
@@ -150,14 +169,14 @@ def _get_angular_velocity(primary_mass, secondary_mass, distance):
         
     Notes
     -----
-    This is calculated using Kepler's Third Law: Omega² = G(m_1+m_2)/r³
-    where G is the gravitational constant, m_1 and m_2 are the masses,
+    This is calculated using Kepler's Third Law: Omega^2 = G(m1+m2)/r^3
+    where G is the gravitational constant, m1 and m2 are the masses,
     and r is the distance between the bodies.
     """
     return np.sqrt(Constants.G * (primary_mass + secondary_mass) / distance**3)
 
 def _to_crtbp_units(state_si, m1, m2, distance):
-    r"""
+    """
     Convert an SI-state vector into the dimensionless state used by crtbp_accel.
     
     Parameters
@@ -165,9 +184,9 @@ def _to_crtbp_units(state_si, m1, m2, distance):
     state_si  : array-like of shape (6,)
         [x, y, z, vx, vy, vz] in meters and meters/sec, all in Earth-centered coordinates.
     m1        : float
-        Mass of primary :math:`m_1` in kilograms.
+        Mass of primary m1 in kilograms.
     m2        : float
-        Mass of secondary :math:`m_2` in kilograms.
+        Mass of secondary m2 in kilograms.
     distance  : float
         Distance between the two main bodies in meters.
         
@@ -176,7 +195,7 @@ def _to_crtbp_units(state_si, m1, m2, distance):
     state_dimless : np.ndarray of shape (6,)
         The dimensionless state vector suitable for crtbp_accel.
     mu            : float
-        Dimensionless mass parameter :math:`\mu = m_2 / (m_1 + m_2)`.
+        Dimensionless mass parameter mu = m2 / (m1 + m2).
     """
     # Mean motion (rad/s) => in CRTBP, we want n = 1, so we scale by this factor.
     n = _get_angular_velocity(m1, m2, distance)
@@ -206,9 +225,9 @@ def _to_si_units(state_dimless, m1, m2, distance):
     state_dimless : np.ndarray of shape (6,)
         The dimensionless state vector suitable for crtbp_accel.
     m1        : float
-        Mass of primary :math:`m_1` in kilograms.
+        Mass of primary m1 in kilograms.
     m2        : float
-        Mass of secondary :math:`m_2` in kilograms.
+        Mass of secondary m2 in kilograms.
     distance  : float
         Distance between the two main bodies in meters.
 
@@ -238,9 +257,9 @@ def _dimless_time(T, m1, m2, distance):
     T : float
         Time in seconds
     m1 : float
-        Mass of primary body :math:`m_1` in kilograms
+        Mass of primary body m1 in kilograms
     m2 : float
-        Mass of secondary body :math:`m_2` in kilograms
+        Mass of secondary body m2 in kilograms
     distance : float
         Distance between the two bodies in meters
         
@@ -268,9 +287,9 @@ def _si_time(T_dimless, m1, m2, distance):
     T_dimless : float
         Time in dimensionless CR3BP units
     m1 : float
-        Mass of primary body :math:`m_1` in kilograms
+        Mass of primary body m1 in kilograms
     m2 : float
-        Mass of secondary body :math:`m_2` in kilograms
+        Mass of secondary body m2 in kilograms
     distance : float
         Distance between the two bodies in meters
         

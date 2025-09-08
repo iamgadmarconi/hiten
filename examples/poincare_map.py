@@ -1,4 +1,4 @@
-"""Example script: generating and displaying a Poincaré map for the Earth-Moon hiten.system.
+"""Example script: generating and displaying a Poincare map for the Earth-Moon hiten.system.
 
 python examples/poincare_map.py
 """
@@ -13,12 +13,12 @@ from hiten.utils.log_config import logger
 
 
 def main() -> None:
-    """Generate and interactively display a Poincaré map."""
+    """Generate and interactively display a Poincare map."""
 
     system = System.from_bodies("earth", "moon")
 
     l_point = system.get_libration_point(1)
-    logger.info("Generating Poincaré map for L%s of the %s-%s system...", 1, "Earth", "Moon")
+    logger.info("Generating Poincare map for L%s of the %s-%s system...", 1, "Earth", "Moon")
     cm = l_point.get_center_manifold(degree=6)
     cm.compute()
 

@@ -1,15 +1,6 @@
-r"""
-hiten.algorithms.integrators.symplectic
-================================
-
-High-order explicit symplectic integrators for polynomial Hamiltonian
-systems with :math:`n_\text{dof}=3`.  The module provides two layers of
+"""High-order explicit symplectic integrators for polynomial Hamiltonian
+systems with n_dof=3.  The module provides two layers of
 functionality:
-
-* Low-level, :pyfunc:`numba.njit` accelerated kernels that implement the
-  extended phase-space method of Tao for non-separable Hamiltonians.
-* A high-level :pyclass:`_ExtendedSymplectic` wrapper compatible with the
-  abstract :pyclass:`~hiten.algorithms.integrators.base._Integrator` interface.
 
 The implementation follows the recursive operator-splitting strategy
 originally proposed by Tao and yields a family of even-order schemes that
@@ -39,7 +30,7 @@ P_POLY_INDICES = np.array([3, 4, 5], dtype=np.int64)
 
 @njit(fastmath=FASTMATH, cache=False)
 def _get_tao_omega (delta: float, order: int, c: float = 10.0) -> float:
-    r"""
+    """
     Calculate the frequency parameter for the symplectic integrator.
     
     Parameters
@@ -66,7 +57,7 @@ def _get_tao_omega (delta: float, order: int, c: float = 10.0) -> float:
 
 @njit(cache=False, fastmath=FASTMATH)
 def _construct_6d_eval_point(Q_current_ndof: np.ndarray, P_current_ndof: np.ndarray) -> np.ndarray:
-    r"""
+    """
     Construct a 6D evaluation point from N-DOF position and momentum vectors.
     Assumes N_SYMPLECTIC_DOF is 3 for this specific 6D polynomial evaluation context.
     
@@ -111,7 +102,7 @@ def _eval_dH_dQ(
     jac_H: List[List[np.ndarray]],
     clmo_H: List[np.ndarray]
 ) -> np.ndarray:
-    r"""
+    """
     Evaluate derivatives of Hamiltonian with respect to generalized position variables.
     
     Parameters
@@ -128,7 +119,7 @@ def _eval_dH_dQ(
     Returns
     -------
     numpy.ndarray
-        Vector of partial derivatives ∂H/∂Q (e.g., [∂H/∂q1, ∂H/∂q2, ∂H/∂q3])
+        Vector of partial derivatives dH/dQ (e.g., [dH/dq1, dH/dq2, dH/dq3])
     """
     eval_point_6d = _construct_6d_eval_point(Q_eval_ndof, P_eval_ndof)
     
@@ -149,7 +140,7 @@ def _eval_dH_dP(
     jac_H: List[List[np.ndarray]],
     clmo_H: List[np.ndarray]
 ) -> np.ndarray:
-    r"""
+    """
     Evaluate derivatives of Hamiltonian with respect to generalized momentum variables.
 
     Parameters
@@ -166,7 +157,7 @@ def _eval_dH_dP(
     Returns
     -------
     numpy.ndarray
-        Vector of partial derivatives ∂H/∂P (e.g., [∂H/∂p1, ∂H/∂p2, ∂H/∂p3])
+        Vector of partial derivatives dH/dP (e.g., [dH/dp1, dH/dp2, dH/dp3])
     """
     eval_point_6d = _construct_6d_eval_point(Q_eval_ndof, P_eval_ndof)
     
@@ -187,8 +178,8 @@ def _phi_H_a_update_poly(
     jac_H: List[List[np.ndarray]], 
     clmo_H: List[np.ndarray]
     ):
-    r"""
-    Apply the first Hamiltonian splitting operator (φₐ) in the symplectic scheme.
+    """
+    Apply the first Hamiltonian splitting operator (phi_a) in the symplectic scheme.
     
     Parameters
     ----------
@@ -204,8 +195,8 @@ def _phi_H_a_update_poly(
     Notes
     -----
     Implements the symplectic update step:
-    - P ← P - delta ·∂H/∂Q(Q,Y)
-    - X ← X + delta ·∂H/∂P(Q,Y)
+    - P <- P - delta * dH/dQ(Q,Y)
+    - X <- X + delta * dH/dP(Q,Y)
     
     This modifies q_ext in-place through views/slices.
     Q, P, X, Y are now N_SYMPLECTIC_DOF dimensional.
@@ -231,8 +222,8 @@ def _phi_H_b_update_poly(
     jac_H: List[List[np.ndarray]], 
     clmo_H: List[np.ndarray]
     ):
-    r"""
-    Apply the second Hamiltonian splitting operator (φᵦ) in the symplectic scheme.
+    """
+    Apply the second Hamiltonian splitting operator (phi_b) in the symplectic scheme.
     
     Parameters
     ----------
@@ -248,8 +239,8 @@ def _phi_H_b_update_poly(
     Notes
     -----
     Implements the symplectic update step:
-    - Q ← Q + delta ·∂H/∂P(X,P)
-    - Y ← Y - delta ·∂H/∂Q(X,P)
+    - Q <- Q + delta * dH/dP(X,P)
+    - Y <- Y - delta * dH/dQ(X,P)
     
     This modifies q_ext in-place through views/slices.
     Q, P, X, Y are now N_SYMPLECTIC_DOF dimensional.
@@ -270,8 +261,8 @@ def _phi_H_b_update_poly(
 
 @njit(cache=False, fastmath=FASTMATH)
 def _phi_omega_H_c_update_poly(q_ext: np.ndarray, delta: float, omega: float):
-    r"""
-    Apply the rotation operator (φᶜ) in the symplectic scheme.
+    """
+    Apply the rotation operator (phi_c) in the symplectic scheme.
     
     Parameters
     ----------
@@ -328,7 +319,7 @@ def _recursive_update_poly(
     jac_H: List[List[np.ndarray]], 
     clmo_H: List[np.ndarray]
     ):
-    r"""
+    """
     Apply recursive symplectic update of specified order.
     
     Parameters
@@ -349,7 +340,7 @@ def _recursive_update_poly(
     Notes
     -----
     For order=2, applies the basic second-order symplectic scheme:
-        φₐ(delta /2) ∘ φᵦ(delta /2) ∘ φᶜ(delta ) ∘ φᵦ(delta /2) ∘ φₐ(delta /2)
+        phi_a(delta/2) o phi_b(delta/2) o phi_c(delta) o phi_b(delta/2) o phi_a(delta/2)
     
     For higher orders, applies a recursive composition method with
     carefully chosen substeps to achieve the desired order of accuracy.
@@ -383,7 +374,7 @@ def _integrate_symplectic(
     order: int,
     c_omega_heuristic: float = 20.0
     ) -> np.ndarray:
-    r"""
+    """
     Integrate Hamilton's equations using a high-order symplectic integrator
     for a system with N_SYMPLECTIC_DOF degrees of freedom (e.g., 3 DOF for a 6D phase space).
     
@@ -468,20 +459,20 @@ def _integrate_symplectic(
 
 
 class _ExtendedSymplectic(_Integrator):
-    r"""
+    """
     High-order explicit Tao symplectic integrator for polynomial
     Hamiltonian systems.
 
     Parameters
     ----------
     order : int, optional
-        Even order of the underlying scheme (:math:`\ge 2`). Default is 6.
+        Even order of the underlying scheme (>= 2). Default is 6.
     c_omega_heuristic : float, optional
         Scaling coefficient used in the heuristic
-        :pyfunc:`_get_tao_omega` frequency.  Default is 20.0.
+        :func:`_get_tao_omega` frequency.  Default is 20.0.
     **options
         Additional keyword options stored verbatim in
-        :pyattr:`~hiten.algorithms.integrators.base._Integrator.options`.
+        :attr:`hiten.algorithms.integrators.base._Integrator.options`.
 
     Attributes
     ----------
@@ -502,13 +493,13 @@ class _ExtendedSymplectic(_Integrator):
     -----
     The target *system* must expose three public attributes:
 
-    * **jac_H** - Jacobian of the Hamiltonian given as a nested list of
-      polynomial coefficient arrays compatible with
-      :pyfunc:`hiten.algorithms.polynomial.operations._polynomial_evaluate`.
-    * **clmo_H** - co-efficient layout mapping objects for the same
-      polynomials.
-    * **n_dof** - number of degrees of freedom (must equal 3 for this
-      implementation).
+    - **jac_H** - Jacobian of the Hamiltonian given as a nested list of
+        polynomial coefficient arrays compatible with
+        :func:`hiten.algorithms.polynomial.operations._polynomial_evaluate`.
+    - **clmo_H** - co-efficient layout mapping objects for the same
+        polynomials.
+    - **n_dof** - number of degrees of freedom (must equal 3 for this
+        implementation).
     """
     
     def __init__(self, order: int = 6, c_omega_heuristic: float = 20.0, **options):
@@ -521,13 +512,13 @@ class _ExtendedSymplectic(_Integrator):
     
     @property
     def order(self) -> int:
-        r"""
+        """
         Order of accuracy of the symplectic method.
         """
         return self._order
     
     def validate_system(self, system: _DynamicalSystem) -> None:
-        r"""
+        """
         Validate that the system is compatible with symplectic integration.
         
         Parameters
@@ -565,7 +556,7 @@ class _ExtendedSymplectic(_Integrator):
         t_vals: np.ndarray,
         **kwargs
     ) -> _Solution:
-        r"""
+        """
         Integrate the Hamiltonian system using symplectic method.
         
         Parameters
@@ -581,7 +572,7 @@ class _ExtendedSymplectic(_Integrator):
             
         Returns
         -------
-        _Solution
+        :class:`hiten.algorithms.integrators.base._Solution`
             Integration results containing times and states
             
         Notes
@@ -638,8 +629,55 @@ class _ExtendedSymplectic(_Integrator):
 
 
 class ExtendedSymplectic:
+    """Factory for extended symplectic integrators.
+
+    This factory class provides a convenient way to create symplectic
+    integrators of different orders without directly instantiating the
+    underlying implementation classes.
+
+    Parameters
+    ----------
+    order : int, default 6
+        Order of the symplectic method. Must be 2, 4, 6, or 8.
+    **opts
+        Additional options passed to the integrator constructor.
+
+    Returns
+    -------
+    :class:`hiten.algorithms.integrators.symplectic._ExtendedSymplectic`
+        A symplectic integrator instance of the specified order.
+
+    Raises
+    ------
+    ValueError
+        If the specified order is not supported.
+
+    Examples
+    --------
+    >>> integrator = ExtendedSymplectic(order=6)
+    >>> solution = integrator.integrate(hamiltonian_system, y0, t_vals)
+    """
     _map = {2: _ExtendedSymplectic, 4: _ExtendedSymplectic, 6: _ExtendedSymplectic, 8: _ExtendedSymplectic}
-    def __new__(cls, order=5, **opts):
+    def __new__(cls, order=6, **opts):
+        """Create a symplectic integrator of the specified order.
+        
+        Parameters
+        ----------
+        order : int, default 6
+            Order of the symplectic method. Must be 2, 4, 6, or 8.
+        **opts
+            Additional options passed to the integrator constructor.
+            
+        Returns
+        -------
+        :class:`hiten.algorithms.integrators.symplectic._ExtendedSymplectic`
+            A symplectic integrator instance of the specified order.
+            
+        Raises
+        ------
+        ValueError
+            If the specified order is not supported.
+        """
         if order not in cls._map:
             raise ValueError("Extended symplectic order not supported")
-        return cls._map[order](**opts)
+        return cls._map[order](order=order, **opts)

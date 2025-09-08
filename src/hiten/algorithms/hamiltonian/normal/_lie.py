@@ -1,17 +1,22 @@
-r"""
-hamiltonian.normal._lie
-====================
+r"""Full normal form computation using Lie series transformations.
 
-Numba-accelerated helpers for Lie-series based full normalization of polynomial
-Hamiltonians, following the algorithm described in Jorba (1999).
+This module provides JIT-compiled routines for computing full normal forms
+of polynomial Hamiltonian systems using Lie series transformations. Unlike
+partial normal forms used for center manifold reduction, full normalization
+eliminates all non-resonant terms according to the complete resonance condition.
 
-This implements the full normal form, eliminating all non-resonant terms
-rather than just the partial normal form used for center manifold reduction.
+The full normal form produces maximally simplified Hamiltonian systems where
+only resonant terms remain, providing the sparsest possible representation
+while preserving all essential dynamical features.
+
+All functions are optimized with Numba JIT compilation for high-performance
+numerical computation of high-order polynomial transformations.
 
 References
 ----------
-Jorba, À. (1999). "A Methodology for the Numerical Computation of Normal Forms, Centre
-Manifolds and First Integrals of Hamiltonian Systems".
+Jorba, A. (1999). A methodology for the numerical computation of normal forms,
+centre manifolds and first integrals of Hamiltonian systems.
+*Experimental Mathematics*, 8(2), 155-195.
 """
 
 import numpy as np
@@ -37,45 +42,51 @@ def _lie_transform(
     tol: float = 1e-30,
     resonance_tol: float = 1e-14
 ) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]:
-    r"""
-    Perform a full Lie transformation to normalize a Hamiltonian.
-    
-    This implements the full normal form, eliminating all non-resonant terms
-    according to the resonance condition :math:`(k, \omega) = 0`.
-    
+    r"""Perform full Lie series normalization of polynomial Hamiltonian.
+
+    Eliminates all non-resonant terms using the complete resonance condition
+    (k, omega) = 0, producing the maximally simplified canonical form.
+
     Parameters
     ----------
     point : object
-        Object containing information about the linearized dynamics
-        (eigenvalues and frequencies)
-    poly_init : List[np.ndarray]
-        Initial polynomial Hamiltonian to normalize
-    psi : numpy.ndarray
-        Combinatorial table from _init_index_tables
-    clmo : numpy.ndarray
-        List of arrays containing packed multi-indices
+        Linear dynamics object with `linear_modes` attribute containing
+        (lambda, omega1, omega2) frequency values.
+    poly_init : List[ndarray]
+        Initial polynomial Hamiltonian coefficients by degree.
+    psi : ndarray
+        Combinatorial lookup table from polynomial indexing.
+    clmo : ndarray
+        Coefficient layout mapping objects.
     degree : int
-        Maximum degree to include in the normalized Hamiltonian
+        Maximum polynomial degree to include.
     tol : float, optional
-        Tolerance for cleaning small coefficients, default is 1e-30
+        Tolerance for cleaning small coefficients. Default is 1e-30.
+    resonance_tol : float, optional
+        Tolerance for identifying resonant terms. Default is 1e-14.
         
     Returns
     -------
-    tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray]]
-        A tuple containing:
-        - The normalized Hamiltonian (containing only resonant terms)
-        - The generating function for the normalization
-        - The eliminated terms at each degree (for testing homological equation)
+    poly_trans : List[ndarray]
+        Fully normalized Hamiltonian containing only resonant terms.
+    poly_G_total : List[ndarray]
+        Complete generating function for the normalization.
+    poly_elim_total : List[ndarray]
+        Eliminated terms at each degree.
         
     Notes
     -----
-    This implements the full normal form algorithm from Jorba (1999), which
-    systematically eliminates all non-resonant terms degree by degree.
+    Uses the full resonance condition (k, omega) = 0 where k is the multi-index
+    and omega = [lambda, -lambda, i*omega1, -i*omega1, i*omega2, -i*omega2].
     
-    The main differences from the partial normal form are:
-    1. Uses full resonance condition (k,Omega) = 0 instead of k[0] = k[3]
-    2. Results in a much sparser normal form containing only resonant terms
-    3. Requires careful handling of small divisors
+    Differs from partial normal form by eliminating all non-resonant terms
+    rather than just those with k[0] != k[3]. May encounter small divisor
+    problems for nearly resonant terms.
+    
+    See Also
+    --------
+    :func:`_select_nonresonant_terms` : Term selection
+    :func:`hiten.algorithms.hamiltonian.center._lie._lie_transform` : Partial version
     """
 
     # Extract frequencies - for full normal form we need all frequencies
@@ -153,31 +164,50 @@ def _select_nonresonant_terms(
     omega: np.ndarray,
     clmo: np.ndarray,
     resonance_tol: float = 1e-14) -> np.ndarray:
-    r"""
-    Select non-resonant terms to be eliminated by the full normal form.
+    r"""Identify non-resonant terms using full resonance condition.
+    
+    JIT-compiled function that selects terms for elimination based on
+    the complete frequency analysis (k, omega) = 0.
     
     Parameters
     ----------
-    p_n : numpy.ndarray
-        Coefficient array for the homogeneous part of degree n
+    p_n : ndarray
+        Coefficient array for homogeneous terms of degree n.
     n : int
-        Degree of the homogeneous terms
-    omega : numpy.ndarray
-        Array of frequencies :math:`[\omega_1, -\omega_1, \omega_2, -\omega_2, \omega_3, -\omega_3]`
-    clmo : numba.typed.List
-        List of arrays containing packed multi-indices
-    resonance_tol : float
-        Tolerance for identifying resonant terms
+        Degree of the homogeneous terms.
+    omega : ndarray, shape (6,)
+        Frequency vector [lambda, -lambda, i*omega1, -i*omega1, 
+        i*omega2, -i*omega2].
+    clmo : ndarray
+        Coefficient layout mapping objects.
+    resonance_tol : float, optional
+        Tolerance for identifying resonant terms. Default is 1e-14.
         
     Returns
     -------
-    numpy.ndarray
-        Coefficient array containing only the non-resonant terms
+    ndarray
+        Coefficient array with only non-resonant terms.
+        
+    Notes
+    -----
+    A term with multi-index k = [k0, k1, k2, k3, k4, k5] is resonant if:
+    
+    (k, omega) = (k3-k0)*lambda + (k4-k1)*i*omega1 + (k5-k2)*i*omega2 ~ 0
+    
+    Unlike partial normalization (k[0] = k[3]), this considers all frequency
+    combinations for more complete term elimination.
+    
+    See Also
+    --------
+    :func:`hiten.algorithms.polynomial.base._decode_multiindex` : Multi-index decoding
+    :func:`hiten.algorithms.hamiltonian.center._lie._select_terms_for_elimination` : Partial version
     """
     p_elim = p_n.copy()
     for i in range(p_n.shape[0]):
         if p_elim[i] != 0.0:
             k = _decode_multiindex(i, n, clmo)
+            # Compute full resonance condition: (k, omega)
+            # = (k3-k0)*lambda + (k4-k1)*i*omega1 + (k5-k2)*i*omega2
             resonance_value = ((k[3] - k[0]) * omega[0] + 
                              (k[4] - k[1]) * omega[2] + 
                              (k[5] - k[2]) * omega[4])

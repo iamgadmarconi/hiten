@@ -1,3 +1,23 @@
+"""
+Engine classes for synodic Poincare section detection.
+
+This module provides the engine classes that coordinate the detection
+and refinement of synodic Poincare sections on precomputed trajectories.
+It implements parallel processing capabilities for efficient batch
+detection across multiple trajectories.
+
+The implementation provides high-accuracy detection using advanced
+numerical techniques including cubic Hermite interpolation and
+Newton refinement for precise crossing detection.
+
+References
+----------
+Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
+
+Guckenheimer, J. & Holmes, P. (1983). *Nonlinear Oscillations, Dynamical
+Systems, and Bifurcations of Vector Fields*. Springer.
+"""
+
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Literal, Sequence
 
@@ -11,9 +31,60 @@ from hiten.algorithms.poincare.synodic.strategies import _NoOpStrategy
 
 
 class _SynodicEngineConfigAdapter:
-    """Adapter providing dt/n_iter expected by the base engine."""
+    """Configuration adapter for synodic Poincare engine.
+
+    This adapter class provides the interface expected by the base
+    return map engine while adapting the synodic map configuration
+    to the required format. It handles the translation between
+    synodic-specific parameters and the generic engine interface.
+
+    Parameters
+    ----------
+    cfg : :class:`hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+        The synodic map configuration to adapt.
+
+    Attributes
+    ----------
+    _cfg : :class:`hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+        The original synodic map configuration.
+    dt : float
+        Time step (set to 0.0 for synodic maps since they use precomputed trajectories).
+    n_iter : int
+        Number of iterations (set to 1 for synodic maps).
+    n_workers : int
+        Number of parallel workers for batch processing.
+    n_seeds : int
+        Number of seeds (set to 0 for synodic maps since they use precomputed trajectories).
+
+    Notes
+    -----
+    This adapter is necessary because synodic Poincare maps operate on
+    precomputed trajectories rather than integrating from initial conditions.
+    The adapter provides the interface expected by the base engine while
+    setting appropriate values for the synodic use case.
+
+    All time units are in nondimensional units unless otherwise specified.
+    """
 
     def __init__(self, cfg: _SynodicMapConfig) -> None:
+        """Initialize the configuration adapter.
+
+        Parameters
+        ----------
+        cfg : :class:`hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+            The synodic map configuration to adapt.
+
+        Notes
+        -----
+        This constructor initializes the adapter by setting appropriate
+        values for the synodic use case. Since synodic maps use precomputed
+        trajectories, the time step and iteration count are set to values
+        that reflect this workflow.
+
+        The adapter extracts the number of workers from the configuration
+        and sets the number of seeds to 0 since synodic maps don't use
+        seeding strategies.
+        """
         self._cfg = cfg
         self.dt = 0.0
         self.n_iter = 1
@@ -22,13 +93,52 @@ class _SynodicEngineConfigAdapter:
         self.n_seeds = 0
 
     def __repr__(self) -> str:
+        """Return a string representation of the adapter.
+
+        Returns
+        -------
+        str
+            String representation showing the number of workers.
+        """
         return f"SynodicEngineConfigAdapter(n_workers={self.n_workers})"
 
 
 class _SynodicEngine(_ReturnMapEngine):
-    """Engine for synodic section detection on precomputed trajectories.
+    """Engine for synodic Poincare section detection on precomputed trajectories.
 
-    Subclasses the generic engine to reuse worker/count plumbing and caching.
+    This engine coordinates the detection and refinement of synodic Poincare
+    sections across multiple precomputed trajectories. It extends the base
+    return map engine to provide specialized functionality for synodic sections
+    while reusing the worker management and caching infrastructure.
+
+    Parameters
+    ----------
+    backend : :class:`hiten.algorithms.poincare.synodic.backend._SynodicDetectionBackend`
+        The detection backend for synodic sections.
+    seed_strategy : :class:`hiten.algorithms.poincare.synodic.strategies._NoOpStrategy`
+        The seeding strategy (no-op for synodic maps).
+    map_config : :class:`_SynodicEngineConfigAdapter`
+        The configuration adapter for the engine.
+
+    Attributes
+    ----------
+    _trajectories : sequence of tuple[ndarray, ndarray] or None
+        The precomputed trajectories to analyze.
+    _direction : int or None
+        The crossing direction filter for detection.
+
+    Notes
+    -----
+    This engine provides parallel processing capabilities for efficient
+    batch detection across multiple trajectories. It automatically
+    chooses between serial and parallel processing based on the number
+    of workers and trajectories.
+
+    The engine caches computed sections to avoid redundant computation
+    and provides a fluent interface for setting trajectories and
+    computing sections.
+
+    All time units are in nondimensional units unless otherwise specified.
     """
 
     def __init__(
@@ -37,6 +147,27 @@ class _SynodicEngine(_ReturnMapEngine):
         seed_strategy: _NoOpStrategy,
         map_config: _SynodicEngineConfigAdapter,
     ) -> None:
+        """Initialize the synodic Poincare engine.
+
+        Parameters
+        ----------
+        backend : :class:`hiten.algorithms.poincare.synodic.backend._SynodicDetectionBackend`
+            The detection backend for synodic sections.
+        seed_strategy : :class:`hiten.algorithms.poincare.synodic.strategies._NoOpStrategy`
+            The seeding strategy (no-op for synodic maps).
+        map_config : :class:`_SynodicEngineConfigAdapter`
+            The configuration adapter for the engine.
+
+        Notes
+        -----
+        This constructor initializes the engine with the required components
+        for synodic Poincare section detection. The engine is configured
+        with a detection backend, a no-op seeding strategy (since synodic
+        maps use precomputed trajectories), and a configuration adapter.
+
+        The engine starts with no trajectories set and will raise an error
+        if `compute_section` is called before trajectories are provided.
+        """
         super().__init__(backend, seed_strategy, map_config)
         self._trajectories: "Sequence[tuple[np.ndarray, np.ndarray]]" | None = None
         self._direction: int | None = None
@@ -47,12 +178,76 @@ class _SynodicEngine(_ReturnMapEngine):
         *,
         direction: Literal[1, -1, None] | None = None,
     ) -> "_SynodicEngine":
+        """Set the trajectories to analyze and return self for chaining.
+
+        Parameters
+        ----------
+        trajectories : sequence of tuple[ndarray, ndarray]
+            Sequence of (times, states) tuples for each trajectory.
+            Each tuple contains:
+            - times: ndarray, shape (n,) - Time points (nondimensional units)
+            - states: ndarray, shape (n, 6) - State vectors at each time point
+        direction : {1, -1, None}, optional
+            Crossing direction filter. If None, uses the default
+            direction from the section configuration.
+
+        Returns
+        -------
+        :class:`_SynodicEngine`
+            Self for method chaining.
+
+        Notes
+        -----
+        This method sets the trajectories to analyze and clears any
+        cached results. It provides a fluent interface for chaining
+        method calls.
+
+        The method automatically clears the section cache when new
+        trajectories are set to ensure fresh computation.
+        """
         self._trajectories = trajectories
         self._direction = direction
         self.clear_cache()
         return self
 
-    def compute_section(self, *, recompute: bool = False) -> _Section:  
+    def compute_section(self, *, recompute: bool = False) -> _Section:
+        """Compute the synodic Poincare section from the set trajectories.
+
+        Parameters
+        ----------
+        recompute : bool, default False
+            Whether to recompute the section even if it's already cached.
+
+        Returns
+        -------
+        :class:`hiten.algorithms.poincare.core.base._Section`
+            The computed synodic Poincare section containing:
+            - points: 2D projected coordinates
+            - states: Full 6D state vectors
+            - times: Crossing times
+            - labels: Coordinate labels for the projection
+
+        Raises
+        ------
+        ValueError
+            If no trajectories have been set.
+
+        Notes
+        -----
+        This method computes the synodic Poincare section from the
+        previously set trajectories. It uses parallel processing when
+        beneficial and caches the result for future use.
+
+        The method automatically chooses between serial and parallel
+        processing based on the number of workers and trajectories.
+        For small trajectory sets or single-worker configurations,
+        it uses serial processing for efficiency.
+
+        The computed section is cached and returned on subsequent
+        calls unless recompute is True.
+
+        All time units are in nondimensional units.
+        """  
         if self._section_cache is not None and not recompute:
             return self._section_cache
 

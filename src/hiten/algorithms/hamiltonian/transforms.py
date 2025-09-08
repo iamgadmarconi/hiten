@@ -1,15 +1,41 @@
-r"""
-hamiltonian.transforms
-=================
+"""Coordinate transformations for CR3BP normal form computations.
 
-Linear coordinate transformations and helper utilities used in the centre
-manifold normal-form pipeline of the spatial circular restricted three body
-problem (CRTBP).
+This module provides comprehensive coordinate transformation utilities for the
+center manifold normal form pipeline in the Circular Restricted Three-Body
+Problem (CR3BP). It implements transformations between multiple coordinate
+systems including local, modal, complex, and synodic frames around both
+collinear and triangular equilibrium points.
+
+The transformation pipeline enables the construction of normal forms by working
+in the most appropriate coordinate system at each stage of the computation,
+from physical coordinates through modal coordinates to complex normal forms.
+
+Coordinate Systems
+------------------
+- **Local**: Coordinates centered at equilibrium point
+- **Synodic**: Standard CR3BP rotating frame coordinates
+- **Modal**: Coordinates aligned with linear stability eigenvectors
+- **Complex**: Complexified coordinates for elliptic directions
+
+See Also
+--------
+:mod:`hiten.algorithms.hamiltonian.center`
+    Center manifold computations using these transformations.
+:mod:`hiten.algorithms.hamiltonian.normal`
+    Normal form computations in various coordinate systems.
+:mod:`hiten.system.libration.collinear`
+    Collinear libration point classes with transformation methods.
+:mod:`hiten.system.libration.triangular`
+    Triangular libration point classes with transformation methods.
 
 References
 ----------
-Jorba, À. (1999). "A Methodology for the Numerical Computation of Normal Forms, Centre
-Manifolds and First Integrals of Hamiltonian Systems".
+Jorba, A. (1999). A methodology for the numerical computation of normal forms,
+centre manifolds and first integrals of Hamiltonian systems. Experimental
+Mathematics, 8(2), 155-195.
+
+Gomez, G., Llibre, J., Martinez, R., Simo, C. (2001). Dynamics and Mission Design
+Near Libration Points. World Scientific, Chapter 3.
 """
 
 import numpy as np
@@ -53,94 +79,228 @@ def _build_complexification_matrix(mix_indices):
     return M
 
 def _M(mix_pairs: tuple[int, ...] = (1, 2)) -> np.ndarray:
-    r"""
-    Return the canonical complexification matrix that *only* mixes the second
-    and third canonical pairs, leaving the first pair \((q_1, p_1)\) real.
+    """Return complexification transformation matrix for canonical coordinate pairs.
 
-    This corresponds to the typical linearised dynamics around the collinear
-    libration points, where \( (q_1, p_1) \) is hyperbolic while the other two
-    pairs are elliptic and therefore profit from the complex representation.
+    Generate the unitary transformation matrix that converts real canonical
+    coordinates to complex coordinates for specified coordinate pairs, typically
+    used to complexify elliptic directions while leaving hyperbolic directions real.
+
+    Parameters
+    ----------
+    mix_pairs : tuple of int, default (1, 2)
+        Indices of canonical coordinate pairs to complexify. Each index j
+        corresponds to the pair (q_{j+1}, p_{j+1}) where j=0,1,2 maps to
+        pairs (q1,p1), (q2,p2), (q3,p3) respectively.
+
+    Returns
+    -------
+    ndarray, shape (6, 6), complex
+        Unitary complexification matrix M where complex_coords = M @ real_coords.
+        The matrix is structured as 2x2 blocks for each canonical pair.
+
+    Notes
+    -----
+    For each coordinate pair j in mix_pairs, the transformation is:
+    q_j(complex) = (q_j(real) + i*p_j(real)) / sqrt(2)
+    p_j(complex) = (i*q_j(real) + p_j(real)) / sqrt(2)
+
+    This complexification is particularly useful for collinear libration points
+    where (q1, p1) corresponds to the hyperbolic direction (left real) while
+    (q2, p2) and (q3, p3) correspond to elliptic directions (complexified).
+
+    The transformation preserves the canonical structure and enables efficient
+    normal form computations in the complex domain where elliptic motion
+    becomes purely rotational.
+
+    See Also
+    --------
+    :func:`_M_inv`
+        Inverse transformation from complex to real coordinates.
+    :func:`_substitute_complex`
+        Apply complexification to polynomial expressions.
+
+    References
+    ----------
+    Meyer, K.R., Hall, G.R. (1992). Introduction to Hamiltonian Dynamical
+    Systems and the N-Body Problem. Springer-Verlag, Section 4.3.
     """
     return _build_complexification_matrix(mix_pairs)
 
 def _M_inv(mix_pairs: tuple[int, ...] = (1, 2)) -> np.ndarray:
-    r"""Inverse of :pyfunc:`_M`.  Because the matrix is unitary we can use the
-    conjugate transpose rather than an explicit matrix inversion."""
+    """Return inverse complexification matrix for real coordinate recovery.
+
+    Compute the inverse of the complexification matrix M, which transforms
+    complex canonical coordinates back to real coordinates. Since M is unitary,
+    the inverse is computed as the conjugate transpose.
+
+    Parameters
+    ----------
+    mix_pairs : tuple of int, default (1, 2)
+        Indices of canonical coordinate pairs that were complexified.
+        Must match the mix_pairs used in the forward transformation.
+
+    Returns
+    -------
+    ndarray, shape (6, 6), complex
+        Inverse complexification matrix M_inv where real_coords = M_inv @ complex_coords.
+        Computed as the conjugate transpose of M due to unitarity.
+
+    Notes
+    -----
+    The inverse transformation recovers real coordinates from complex coordinates:
+    q_j(real) = Re(q_j(complex)) * sqrt(2)
+    p_j(real) = Im(q_j(complex)) * sqrt(2)
+
+    This is used to convert results from complex normal form computations
+    back to real coordinates for physical interpretation and integration.
+
+    See Also
+    --------
+    :func:`_M`
+        Forward complexification transformation.
+    :func:`_substitute_real`
+        Apply inverse complexification to polynomial expressions.
+    """
     M = _M(mix_pairs)
     return M.conjugate().T  # complex = M_inv @ real
 
 
 def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-12, *, mix_pairs: tuple[int, ...] = (1, 2)) -> List[np.ndarray]:
-    r"""
-    Transform a polynomial from real normal form to complex normal form.
-    
+    """Transform polynomial from real to complex coordinates.
+
+    Apply complexification transformation to a polynomial expressed in real
+    normal form coordinates, converting it to complex coordinates suitable
+    for elliptic normal form analysis.
+
     Parameters
     ----------
-    poly_rn : List[numpy.ndarray]
-        Polynomial in real normal form coordinates
+    poly_rn : List[ndarray]
+        Polynomial coefficients in real normal form coordinates, organized
+        by degree, in nondimensional energy units.
     max_deg : int
-        Maximum degree for polynomial representations
-    psi : numpy.ndarray
-        Combinatorial table from _init_index_tables
-    clmo : numba.typed.List
-        List of arrays containing packed multi-indices
-        
+        Maximum polynomial degree to retain in the transformation.
+    psi : ndarray
+        Combinatorial index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+    clmo : List[ndarray]
+        Packed multi-index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+    tol : float, default 1e-12
+        Numerical tolerance for cleaning small coefficients after transformation.
+    mix_pairs : tuple of int, default (1, 2)
+        Canonical coordinate pairs to complexify.
+
     Returns
     -------
-    List[numpy.ndarray]
-        Polynomial in complex normal form coordinates
-        
+    List[ndarray]
+        Polynomial coefficients in complex coordinates, organized by degree,
+        in nondimensional energy units.
+
     Notes
     -----
-    This function transforms a polynomial from real normal form coordinates
-    to complex normal form coordinates using the predefined transformation matrix _M_inv().
-    Since complex = M_inv @ real, we use _M_inv() for the transformation.
+    The transformation uses the complexification matrix M to convert polynomial
+    expressions from real to complex coordinates. This enables efficient
+    computation of normal forms around elliptic equilibria where the complex
+    representation naturally captures rotational motion.
+
+    The transformation preserves polynomial structure and energy scaling,
+    with complex coordinates maintaining the same physical units as their
+    real counterparts.
+
+    See Also
+    --------
+    :func:`_substitute_real`
+        Inverse transformation from complex to real coordinates.
+    :func:`_M`
+        Complexification matrix used in the transformation.
     """
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
     return _polynomial_clean(_substitute_linear(poly_rn, _M(mix_pairs), max_deg, psi, clmo, encode_dict_list), tol)
 
 def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-12, *, mix_pairs: tuple[int, ...] = (1, 2)) -> List[np.ndarray]:
-    r"""
-    Transform a polynomial from complex normal form to real normal form.
-    
+    """Transform polynomial from complex to real coordinates.
+
+    Apply inverse complexification transformation to convert a polynomial from
+    complex coordinates back to real normal form coordinates for physical
+    interpretation and further analysis.
+
     Parameters
     ----------
-    poly_cn : List[numpy.ndarray]
-        Polynomial in complex normal form coordinates
+    poly_cn : List[ndarray]
+        Polynomial coefficients in complex coordinates, organized by degree,
+        in nondimensional energy units.
     max_deg : int
-        Maximum degree for polynomial representations
-    psi : numpy.ndarray
-        Combinatorial table from _init_index_tables
-    clmo : numba.typed.List
-        List of arrays containing packed multi-indices
-        
+        Maximum polynomial degree to retain in the transformation.
+    psi : ndarray
+        Combinatorial index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+    clmo : List[ndarray]
+        Packed multi-index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+    tol : float, default 1e-12
+        Numerical tolerance for cleaning small coefficients after transformation.
+    mix_pairs : tuple of int, default (1, 2)
+        Canonical coordinate pairs that were complexified.
+
     Returns
     -------
-    List[numpy.ndarray]
-        Polynomial in real normal form coordinates
-        
+    List[ndarray]
+        Polynomial coefficients in real coordinates, organized by degree,
+        in nondimensional energy units.
+
     Notes
     -----
-    This function transforms a polynomial from complex normal form coordinates
-    to real normal form coordinates using the predefined transformation matrix _M().
-    Since real = M @ complex, we use _M() for the transformation.
+    This is the inverse of :func:`_substitute_complex`, using the inverse
+    complexification matrix M_inv to recover real polynomial expressions
+    from their complex representations.
+
+    The transformation is essential for converting normal form results back
+    to real coordinates for physical interpretation, trajectory integration,
+    and comparison with numerical simulations.
+
+    See Also
+    --------
+    :func:`_substitute_complex`
+        Forward transformation from real to complex coordinates.
+    :func:`_M_inv`
+        Inverse complexification matrix used in the transformation.
     """
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
     return _polynomial_clean(_substitute_linear(poly_cn, _M_inv(mix_pairs), max_deg, psi, clmo, encode_dict_list), tol)
 
 def _solve_complex(real_coords: np.ndarray, tol: float = 1e-30, *, mix_pairs: tuple[int, ...] = (1, 2)) -> np.ndarray:
-    r"""
-    Return complex coordinates given real coordinates using the map `M_inv`.
+    """Transform real coordinates to complex coordinates.
+
+    Convert a real coordinate vector to complex coordinates using the
+    complexification transformation, typically for elliptic normal form analysis.
 
     Parameters
     ----------
-    real_coords : np.ndarray
-        Real coordinates [q1, q2, q3, p1, p2, p3]
+    real_coords : ndarray, shape (6,)
+        Real canonical coordinates [q1, q2, q3, p1, p2, p3] in nondimensional
+        position and momentum units.
+    tol : float, default 1e-30
+        Tolerance for cleaning small imaginary parts in the result.
+    mix_pairs : tuple of int, default (1, 2)
+        Canonical coordinate pairs to complexify.
 
     Returns
     -------
-    np.ndarray
-        Complex coordinates [q1c, q2c, q3c, p1c, p2c, p3c]
+    ndarray, shape (6,), complex
+        Complex coordinates [q1c, q2c, q3c, p1c, p2c, p3c] where complexified
+        pairs are in complex units and unmixed pairs remain real.
+
+    Notes
+    -----
+    This transformation is used to convert initial conditions or intermediate
+    results from real coordinates to the complex representation needed for
+    normal form analysis around elliptic equilibria.
+
+    The transformation preserves the canonical structure and maintains
+    appropriate scaling for further computations.
+
+    See Also
+    --------
+    :func:`_solve_real`
+        Inverse transformation from complex to real coordinates.
+    :func:`_M_inv`
+        Complexification matrix used in this transformation.
     """
     return _clean_coordinates(_substitute_coordinates(real_coords, _M_inv(mix_pairs)), tol)
 
@@ -275,31 +435,59 @@ def _coordlocal2realmodal(point, local_coords: np.ndarray, tol=1e-30) -> np.ndar
     return _clean_coordinates(C_inv.dot(local_coords), tol)
 
 def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray, tol=1e-14) -> np.ndarray:
-    r"""
-    Transform coordinates from local to synodic frame for the collinear points.
+    """Transform coordinates from local to synodic frame for collinear points.
+
+    Convert coordinates from the local frame centered at a collinear equilibrium
+    point to the standard CR3BP synodic rotating frame coordinates.
 
     Parameters
     ----------
-    point : object
-        An object with a normal_form_transform method that returns the transformation matrix
-    local_coords : np.ndarray
-        Coordinates in local frame
+    point : CollinearPoint
+        Collinear libration point object providing geometric parameters gamma,
+        mu, sign, and a for the coordinate transformation.
+    local_coords : ndarray, shape (6,)
+        Local coordinates [x1, x2, x3, px1, px2, px3] in nondimensional units
+        where positions are in distance units and momenta are canonical.
+    tol : float, default 1e-14
+        Tolerance for detecting non-negligible imaginary parts in input coordinates.
 
     Returns
     -------
-    np.ndarray
-        Coordinates in synodic frame
-
-    Notes
-    -----
-    - Local coordinates are ordered as [x1, x2, x3, px1, px2, px3].
-    - Synodic coordinates are ordered as [X, Y, Z, Vx, Vy, Vz].
+    ndarray, shape (6,)
+        Synodic coordinates [X, Y, Z, Vx, Vy, Vz] in nondimensional CR3BP units
+        where positions are distances and velocities are time derivatives.
 
     Raises
     ------
     ValueError
-        If *local_coords* is not a flat array of length 6 or contains an
-        imaginary part larger than the tolerance (``1e-16``).
+        If local_coords is not a flat array of length 6 or contains imaginary
+        parts larger than the specified tolerance.
+
+    Notes
+    -----
+    The transformation implements the mapping from local coordinates centered
+    at the equilibrium point to the standard synodic frame where the primaries
+    are located at (-mu, 0, 0) and (1-mu, 0, 0).
+
+    The coordinate transformation includes:
+    - Position scaling by the characteristic length gamma
+    - Translation by the equilibrium point offset (mu + a)
+    - Momentum to velocity conversion with Coriolis terms
+    - Sign convention adjustments for NASA/Szebehely compatibility
+
+    Local frame: centered at equilibrium, canonical coordinates
+    Synodic frame: standard CR3BP rotating frame, Cartesian coordinates
+
+    See Also
+    --------
+    :func:`_synodic2local_collinear`
+        Inverse transformation from synodic to local coordinates.
+    :class:`hiten.system.libration.collinear.CollinearPoint`
+        Collinear point class providing transformation parameters.
+
+    References
+    ----------
+    Szebehely, V. (1967). Theory of Orbits. Academic Press, Chapter 7.
     """
     gamma, mu, sgn, a = point.gamma, point.mu, point.sign, point.a
 
@@ -526,8 +714,59 @@ def _synodic2local_triangular(point: TriangularPoint, synodic_coords: np.ndarray
 
 
 def _restrict_poly_to_center_manifold(point, poly_H, clmo, tol=1e-14):
-    r"""
-    Restrict a Hamiltonian to the center manifold by eliminating hyperbolic variables.
+    """Restrict polynomial Hamiltonian to center manifold by eliminating hyperbolic terms.
+
+    Project a polynomial Hamiltonian onto the center manifold by removing all
+    terms that depend on hyperbolic variables, retaining only the dynamics
+    within the center-stable/center-unstable subspace.
+
+    Parameters
+    ----------
+    point : CollinearPoint or TriangularPoint
+        Libration point object determining the manifold structure.
+    poly_H : List[ndarray]
+        Polynomial Hamiltonian coefficients organized by degree, in
+        nondimensional energy units.
+    clmo : List[ndarray]
+        Packed multi-index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+    tol : float, default 1e-14
+        Tolerance for zeroing small coefficients during restriction.
+
+    Returns
+    -------
+    List[ndarray]
+        Restricted polynomial with hyperbolic terms eliminated, maintaining
+        the same degree structure as the input.
+
+    Notes
+    -----
+    For collinear points, the first canonical pair (q1, p1) corresponds to
+    the hyperbolic direction, so all terms with non-zero exponents in these
+    variables are eliminated. This leaves only the center manifold dynamics
+    in the (q2, p2, q3, p3) subspace.
+
+    For triangular points, all directions are elliptic (center-type), so
+    the function returns a copy of the original polynomial without restriction.
+
+    This restriction is fundamental to center manifold theory, which reduces
+    the dimensionality of the dynamics by focusing on the neutrally stable
+    directions while eliminating the exponentially growing/decaying modes.
+
+    See Also
+    --------
+    :func:`hiten.algorithms.polynomial.base._decode_multiindex`
+        Multi-index decoding used to identify hyperbolic terms.
+    :class:`hiten.system.libration.collinear.CollinearPoint`
+        Collinear points with hyperbolic directions.
+    :class:`hiten.system.libration.triangular.TriangularPoint`
+        Triangular points with all elliptic directions.
+
+    References
+    ----------
+    Carr, J. (1981). Applications of Centre Manifold Theory. Springer-Verlag.
+
+    Jorba, A., Masdemont, J. (1999). Dynamics in the center manifold of the
+    collinear points. Physica D, 132(1-2), 189-213.
     """
     # For triangular points, all directions are centre-type, so we do NOT
     # eliminate any terms involving (q1, p1).  The original behaviour of

@@ -1,3 +1,10 @@
+"""Newton-Raphson correction algorithm with robust linear algebra.
+
+This module provides the core Newton-Raphson implementation with automatic
+handling of ill-conditioned systems, finite-difference Jacobians, and
+extensible hooks for customization.
+"""
+
 from abc import ABC
 from typing import Any, Tuple
 
@@ -11,96 +18,114 @@ from hiten.utils.log_config import logger
 
 
 class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
+    """Newton-Raphson algorithm with robust linear algebra and step control.
+    
+    Combines Newton-Raphson iteration with Armijo line search, automatic
+    handling of ill-conditioned Jacobians, and extensible hooks for
+    customization. Uses multiple inheritance to separate step control
+    from core Newton logic.
+    """
 
     def __init__(self, *, line_search_config: _LineSearchConfig | bool | None = None, **kwargs) -> None:
-        """Core Newton solver.
+        """Initialize Newton solver with line search configuration.
 
         Parameters
         ----------
         line_search_config : _LineSearchConfig, bool, or None, optional
-            Armijo back-tracking line search configuration. If passed, the
-            line-search will be used for the correction. If passed as a boolean,
-            the line-search will be used with default parameters, otherwise not.
+            Armijo line search configuration:
+            - _LineSearchConfig: Custom line search parameters
+            - True: Use default line search parameters
+            - False/None: Disable line search (use full Newton steps)
         **kwargs
-            Remaining keyword arguments are forwarded to the mix-ins upper in
-            the MRO (currently unused but preserved for future compatibility).
+            Additional arguments passed to parent classes.
         """
-
         # Delegate line-search handling to mix-in
         super().__init__(line_search_config=line_search_config, **kwargs)
 
     def _on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:
-        """Hook executed after each Newton iteration.
+        """Hook called after each iteration for custom processing.
 
-        Subclasses can override this method to perform custom bookkeeping or
-        adaptive strategies (e.g. trust-region radius updates, dynamic
-        tolerances, detailed logging) without touching the core solver. The
-        default implementation is a *no-op*.
+        Override for custom bookkeeping, adaptive strategies, or detailed
+        logging without modifying the core solver.
 
         Parameters
         ----------
         k : int
             Current iteration index (starting at 0).
         x : ndarray
-            Current estimate of the solution.
+            Current solution estimate.
         r_norm : float
-            Norm of the residual vector at *x*.
+            Residual norm at current estimate.
         """
-
         pass
 
     def _on_accept(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
-        """Hook executed once after the solver *converged*.
+        """Hook called once after successful convergence.
 
-        This complements :py:meth:`_on_iteration` and allows subclasses to
-        perform post-processing that should only happen *once* (e.g. cache
-        factorisations, update trust-region radii, record convergence stats)
-        without adding conditional logic to the per-iteration hook.
+        Override for post-processing that should happen only once after
+        convergence (caching, statistics, cleanup).
 
         Parameters
         ----------
         x : ndarray
             Converged solution vector.
         iterations : int
-            Total number of iterations performed (zero-based count).
+            Total iterations performed.
         residual_norm : float
-            Norm of the residual at convergence (≤ *tol*).
+            Final residual norm (≤ tolerance).
         """
         pass
 
     def _on_failure(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
-        """Hook executed once after the solver *failed*.
+        """Hook called once after convergence failure.
 
-        This complements :py:meth:`_on_iteration` and allows subclasses to
-        perform post-processing that should only happen *once* (e.g. cache
-        factorisations, update trust-region radii, record convergence stats)
-        without adding conditional logic to the per-iteration hook.
+        Override for post-processing that should happen only once after
+        failure (cleanup, diagnostics, fallback strategies).
 
         Parameters
         ----------
         x : ndarray
-            Failed solution vector.
+            Final solution vector.
         iterations : int
-            Total number of iterations performed (zero-based count).
+            Total iterations performed.
         residual_norm : float
-            Norm of the residual at failure (≥ *tol*).
+            Final residual norm (≥ tolerance).
         """
         pass
 
     def _compute_residual(self, x: np.ndarray, residual_fn: ResidualFn) -> np.ndarray:
-        """Compute the residual vector R(x).
+        """Compute residual vector R(x).
 
-        Isolated in a separate method so that subclasses can override or
-        accelerate this step (e.g. with numba) without touching the overall
-        solver logic.
+        Separated for easy overriding or acceleration (e.g., with numba).
+
+        Parameters
+        ----------
+        x : ndarray
+            Current parameter vector.
+        residual_fn : ResidualFn
+            Function to compute residual.
+            
+        Returns
+        -------
+        ndarray
+            Residual vector R(x).
         """
         return residual_fn(x)
 
     def _compute_norm(self, residual: np.ndarray, norm_fn: NormFn) -> float:
-        """Compute the norm of the residual vector.
+        """Compute residual norm for convergence checking.
 
-        Extracted to its own method for easier customisation of the convergence
-        metric.
+        Parameters
+        ----------
+        residual : ndarray
+            Residual vector.
+        norm_fn : NormFn
+            Function to compute norm.
+            
+        Returns
+        -------
+        float
+            Scalar norm value.
         """
         return norm_fn(residual)
 
@@ -111,12 +136,27 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
         jacobian_fn: JacobianFn | None,
         fd_step: float,
     ) -> np.ndarray:
-        """Return the Jacobian matrix J(x).
+        """Compute Jacobian matrix J(x) = dR/dx.
 
-        By default this method uses the supplied *jacobian_fn* when available
-        and falls back to a second-order central finite-difference
-        approximation otherwise.  Subclasses may override this method to
-        provide analytical Jacobians or accelerated implementations.
+        Uses analytical Jacobian if provided, otherwise computes central
+        finite-difference approximation with O(h²) accuracy.
+
+        Parameters
+        ----------
+        x : ndarray
+            Current parameter vector.
+        residual_fn : ResidualFn
+            Function to compute residual.
+        jacobian_fn : JacobianFn or None
+            Analytical Jacobian function, if available.
+        fd_step : float
+            Step size for finite-difference approximation.
+            
+        Returns
+        -------
+        ndarray
+            Jacobian matrix with shape (m, n) where m is residual size
+            and n is parameter size.
         """
         if jacobian_fn is not None:
             return jacobian_fn(x)
@@ -134,13 +174,26 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
         return J
 
     def _solve_delta(self, J: np.ndarray, r: np.ndarray, cond_threshold: float = 1e8) -> np.ndarray:
-        """Solve the linear Newton system.
+        """Solve linear Newton system J * delta = -r.
 
-        The default implementation applies light Tikhonov regularisation when
-        the Jacobian is ill-conditioned or singular and automatically switches
-        to least-squares solutions for rectangular systems.  Overriding this
-        method enables alternative linear solvers (e.g. GPU-accelerated or
-        iterative Krylov methods).
+        Handles ill-conditioned and rectangular systems automatically:
+        - Applies Tikhonov regularization for ill-conditioned square systems
+        - Uses least-squares for rectangular systems
+        - Falls back to SVD for singular systems
+
+        Parameters
+        ----------
+        J : ndarray
+            Jacobian matrix.
+        r : ndarray
+            Residual vector.
+        cond_threshold : float, default=1e8
+            Condition number threshold for regularization.
+            
+        Returns
+        -------
+        ndarray
+            Newton step vector delta.
         """
         try:
             cond_J = np.linalg.cond(J)
@@ -188,6 +241,39 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
         max_delta: float | None = 1e-2,
         fd_step: float = 1e-8,
     ) -> Tuple[np.ndarray, dict[str, Any]]:
+        """Solve nonlinear system using Newton-Raphson method.
+
+        Parameters
+        ----------
+        x0 : ndarray
+            Initial guess.
+        residual_fn : ResidualFn
+            Function to compute residual vector R(x).
+        jacobian_fn : JacobianFn or None, optional
+            Function to compute Jacobian dR/dx. Uses finite-difference if None.
+        norm_fn : NormFn or None, optional
+            Function to compute residual norm. Uses L2 norm if None.
+        tol : float, default=1e-10
+            Convergence tolerance for residual norm.
+        max_attempts : int, default=25
+            Maximum number of Newton iterations.
+        max_delta : float or None, default=1e-2
+            Maximum step size for numerical stability.
+        fd_step : float, default=1e-8
+            Step size for finite-difference Jacobian.
+            
+        Returns
+        -------
+        x_solution : ndarray
+            Converged solution vector.
+        info : dict
+            Convergence information with keys 'iterations' and 'residual_norm'.
+            
+        Raises
+        ------
+        RuntimeError
+            If Newton method fails to converge within max_attempts.
+        """
         if norm_fn is None:
             norm_fn = lambda r: float(np.linalg.norm(r))
 

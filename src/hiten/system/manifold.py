@@ -1,16 +1,17 @@
-r"""
-hiten.system.manifold
-===============
-
-Stable/unstable invariant manifolds of periodic orbits in the spatial circular
+"""Stable/unstable invariant manifolds of periodic orbits in the spatial circular
 restricted three-body problem.
 
-The module offers a high-level interface (:pyclass:`Manifold`) that, given a
-generating :pyclass:`PeriodicOrbit`, launches trajectory
+The module offers a high-level interface (:class:`Manifold`) that, given a
+generating :class:`hiten.system.orbits.base.PeriodicOrbit`, launches trajectory
 integrations along the selected eigen-directions, records their intersections
-with the canonical Poincaré section, provides quick 3-D visualisation, and
-handles (de)serialisation through :pyfunc:`Manifold.save` /
-:pyfunc:`Manifold.load`.
+with the canonical Poincare section, provides quick 3-D visualisation, and
+handles (de)serialisation through :meth:`Manifold.save` /
+:meth:`Manifold.load`.
+
+Notes
+-----
+All positions and velocities are expressed in nondimensional units where the
+distance between the primaries is unity and the orbital period is 2*pi.
 
 References
 ----------
@@ -40,28 +41,28 @@ from hiten.utils.plots import plot_manifold
 
 @dataclass
 class ManifoldResult:
-    r"""
-    Output container produced by :pyfunc:`Manifold.compute`.
+    """
+    Output container produced by :meth:`Manifold.compute`.
 
-    Attributes
+    Parameters
     ----------
     ysos : list[float]
-        :math:`y`-coordinates of Poincaré section crossings.
+        y-coordinates of Poincare section crossings in nondimensional units.
     dysos : list[float]
-        Corresponding :math:`\dot y` values.
+        Corresponding y-velocity values in nondimensional units.
     states_list : list[numpy.ndarray]
         Propagated state arrays, one per trajectory.
     times_list : list[numpy.ndarray]
-        Time grids associated with *states_list*.
+        Time grids associated with states_list in nondimensional units.
     _successes : int
         Number of trajectories that intersected the section.
     _attempts : int
         Total number of trajectories launched.
 
-    Notes
-    -----
-    The :pyattr:`success_rate` property returns
-    :math:`\frac{_successes}{\max(1,\,_attempts)}`.
+    Attributes
+    ----------
+    success_rate : float
+        Success rate as _successes / max(1, _attempts).
     """
     ysos: List[float]
     dysos: List[float]
@@ -72,49 +73,58 @@ class ManifoldResult:
 
     @property
     def success_rate(self) -> float:
+        """Success rate of manifold computation.
+        
+        Returns
+        -------
+        float
+            Success rate as _successes / max(1, _attempts).
+        """
         return self._successes / max(self._attempts, 1)
     
     def __iter__(self):
+        """Return an iterator over the manifold data.
+        
+        Returns
+        -------
+        iterator
+            Iterator over (ysos, dysos, states_list, times_list).
+        """
         return iter((self.ysos, self.dysos, self.states_list, self.times_list))
 
 
 class Manifold:
-    r"""
+    """
     Compute and cache the invariant manifold of a periodic orbit.
 
     Parameters
     ----------
-    generating_orbit : :pyclass:`PeriodicOrbit`
+    generating_orbit : :class:`hiten.system.orbits.base.PeriodicOrbit`
         Orbit that seeds the manifold.
     stable : bool, default True
-        ``True`` selects the stable manifold, ``False`` the unstable one.
-    direction : {{'positive', 'negative'}}, default 'positive'
+        True selects the stable manifold, False the unstable one.
+    direction : {'positive', 'negative'}, default 'positive'
         Sign of the eigenvector used to initialise the manifold branch.
-    method : {{'rk', 'scipy', 'symplectic', 'adaptive'}}, default 'scipy'
-        Backend integrator passed to :pyfunc:`_propagate_dynsys`.
-    order : int, default 6
-        Integration order for fixed-step Runge-Kutta methods.
 
     Attributes
     ----------
-    generating_orbit : :pyclass:`PeriodicOrbit`
+    generating_orbit : :class:`hiten.system.orbits.base.PeriodicOrbit`
         Orbit that seeds the manifold.
-    libration_point : :pyclass:`LibrationPoint`
-        Libration point associated with *generating_orbit*.
-    stable, direction : int
-        Encoded form of the options in :pyclass:`Manifold`.
+    libration_point : :class:`hiten.system.libration.base.LibrationPoint`
+        Libration point associated with generating_orbit.
+    stable : int
+        Encoded stability: 1 for stable, -1 for unstable.
+    direction : int
+        Encoded direction: 1 for 'positive', -1 for 'negative'.
     mu : float
-        Mass ratio of the underlying CRTBP system.
-    method, order
-        Numerical integration settings.
-    manifold_result : :pyclass:`ManifoldResult` or None
-        Cached result returned by the last successful
-        :pyfunc:`compute` call.
+        Mass ratio of the underlying CRTBP system (dimensionless).
+    manifold_result : :class:`ManifoldResult` or None
+        Cached result returned by the last successful compute call.
 
     Notes
     -----
-    Re-invoking :pyfunc:`compute` after a successful run returns the cached
-    :pyclass:`ManifoldResult` without recomputation.
+    Re-invoking compute after a successful run returns the cached
+    ManifoldResult without recomputation.
     """
 
     def __init__(
@@ -123,6 +133,17 @@ class Manifold:
             stable: bool = True, 
             direction: Literal["positive", "negative"] = "positive", 
         ):
+        """Initialize a Manifold instance.
+        
+        Parameters
+        ----------
+        generating_orbit : :class:`hiten.system.orbits.base.PeriodicOrbit`
+            The periodic orbit that seeds the manifold.
+        stable : bool, default True
+            Whether to compute the stable (True) or unstable (False) manifold.
+        direction : {'positive', 'negative'}, default 'positive'
+            Direction of the eigenvector for manifold initialization.
+        """
         self._generating_orbit = generating_orbit
         self._libration_point = self._generating_orbit.libration_point
         self._stable = 1 if stable else -1
@@ -137,42 +158,105 @@ class Manifold:
 
     @property
     def generating_orbit(self) -> PeriodicOrbit:
-        """Orbit that seeds the manifold."""
+        """Orbit that seeds the manifold.
+        
+        Returns
+        -------
+        :class:`hiten.system.orbits.base.PeriodicOrbit`
+            The generating periodic orbit.
+        """
         return self._generating_orbit
 
     @property
     def libration_point(self):
-        """Libration point associated with the generating orbit."""
+        """Libration point associated with the generating orbit.
+        
+        Returns
+        -------
+        :class:`hiten.system.libration.base.LibrationPoint`
+            The libration point associated with the generating orbit.
+        """
         return self._libration_point
 
     @property
     def stable(self) -> int:
-        """Encoded stability: 1 for stable, -1 for unstable."""
+        """Encoded stability: 1 for stable, -1 for unstable.
+        
+        Returns
+        -------
+        int
+            Encoded stability: 1 for stable, -1 for unstable.
+        """
         return self._stable
 
     @property
     def direction(self) -> int:
-        """Encoded direction: 1 for 'positive', -1 for 'negative'."""
+        """Encoded direction: 1 for 'positive', -1 for 'negative'.
+        
+        Returns
+        -------
+        int
+            Encoded direction: 1 for 'positive', -1 for 'negative'.
+        """
         return self._direction
 
     @property
     def mu(self) -> float:
-        """Mass ratio of the underlying CRTBP system."""
+        """Mass ratio of the underlying CRTBP system.
+        
+        Returns
+        -------
+        float
+            Mass ratio mu = m2 / (m1 + m2) (dimensionless).
+        """
         return self._mu
 
     @property
     def manifold_result(self) -> ManifoldResult:
-        """Cached result from the last successful compute call."""
+        """Cached result from the last successful compute call.
+        
+        Returns
+        -------
+        :class:`ManifoldResult` or None
+            The cached manifold result, or None if not computed.
+        """
         return self._manifold_result
 
     def __str__(self):
+        """Return a string representation of the Manifold.
+        
+        Returns
+        -------
+        str
+            String representation of the Manifold.
+        """
         return f"Manifold(stable={self._stable}, direction={self._direction}) of {self._generating_orbit}"
     
     def __repr__(self):
+        """Return a detailed string representation of the Manifold.
+        
+        Returns
+        -------
+        str
+            Detailed string representation of the Manifold.
+        """
         return self.__str__()
 
     def _get_real_eigenvectors(self, vectors: np.ndarray, values: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Return eigenvalues/eigenvectors with zero imaginary part (vectorised)."""
+        """Return eigenvalues/eigenvectors with zero imaginary part (vectorised).
+        
+        Parameters
+        ----------
+        vectors : numpy.ndarray
+            Eigenvectors matrix.
+        values : numpy.ndarray
+            Eigenvalues array.
+            
+        Returns
+        -------
+        tuple of numpy.ndarray
+            Tuple of (real_eigenvalues, real_eigenvectors).
+        """
         mask = np.isreal(values)
 
         # Eigenvalues that are real within numerical precision
@@ -196,26 +280,31 @@ class Manifold:
         PHI: np.ndarray,
         eigvec: np.ndarray,
     ):
-        r"""
+        """
         Compute a section of the invariant manifold.
 
         Parameters
         ----------
         period : float
-            Period of the periodic orbit.
+            Period of the periodic orbit in nondimensional units.
         fraction : float
             Fraction of the period to compute the section at.
-        xx, tt, PHI, phi_T : numpy.ndarray
-            Output of a previous `_compute_stm` call for the same periodic orbit.
-            Supplying these arrays lets the function skip the expensive STM
-            propagation.
+        displacement : float
+            Displacement magnitude in nondimensional units.
+        xx : numpy.ndarray
+            State trajectory from STM computation.
+        tt : numpy.ndarray
+            Time grid from STM computation.
+        PHI : numpy.ndarray
+            State transition matrix from STM computation.
         eigvec : numpy.ndarray
             Pre-selected eigenvector of the monodromy matrix.
 
         Returns
         -------
         numpy.ndarray
-            Initial condition displaced along the invariant-manifold branch.
+            Initial condition displaced along the invariant-manifold branch
+            in nondimensional units.
 
         Raises
         ------
@@ -254,50 +343,54 @@ class Manifold:
         return x0W
 
     def compute(self, step: float = 0.02, integration_fraction: float = 0.75, NN: int = 1, displacement: float = 1e-6, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 6, **kwargs):
-        r"""
-        Generate manifold trajectories and build a Poincaré map.
+        """
+        Generate manifold trajectories and build a Poincare map.
 
         The routine samples the generating orbit at equally spaced fractions
-        of its period, displaces each point by *displacement* along the
+        of its period, displaces each point by displacement along the
         selected eigenvector and integrates the resulting initial condition
-        for *integration_fraction* of one synodic period.
+        for integration_fraction of one synodic period.
 
         Parameters
         ----------
-        step : float, optional
-            Increment of the dimensionless fraction along the orbit. Default
-            0.02 (i.e. 50 samples per orbit).
-        integration_fraction : float, optional
-            Portion of :math:`2\pi` non-dimensional time units to integrate
-            each trajectory. Default 0.75.
+        step : float, default 0.02
+            Increment of the dimensionless fraction along the orbit (i.e. 50 samples per orbit).
+        integration_fraction : float, default 0.75
+            Portion of 2*pi nondimensional time units to integrate
+            each trajectory.
         NN : int, default 1
             Index of the real eigenvector to follow (1-based).
         displacement : float, default 1e-6
             Dimensionless displacement applied along the eigenvector.
+        method : {'rk', 'scipy', 'symplectic', 'adaptive'}, default 'scipy'
+            Integration method to use.
+        order : int, default 6
+            Integration order for fixed-step methods.
         **kwargs
             Additional options:
 
             show_progress : bool, default True
-                Display a :pydata:`tqdm` progress bar.
+                Display a tqdm progress bar.
             dt : float, default 1e-3
-                Nominal time step for fixed-step integrators.
+                Nominal time step for fixed-step integrators in nondimensional units.
             energy_tol : float, default 1e-6
                 Maximum relative variation of the Jacobi constant allowed along a trajectory.
                 Larger deviations indicate numerical error (often triggered by near-singular
                 passages) and cause the trajectory to be discarded.
             safe_distance : float, default 2.0
-                Safety multiplier applied to the physical radii of both primaries.  A trajectory
-                is rejected if it ever comes within ``safe_distance x radius`` of either body.
+                Safety multiplier applied to the physical radii of both primaries. A trajectory
+                is rejected if it ever comes within safe_distance x radius of either body.
 
         Returns
         -------
-        ManifoldResult
-            See above.
+        :class:`ManifoldResult`
+            The computed manifold result containing trajectories and Poincare section data.
 
         Raises
         ------
         ValueError
-            If called after a previous run with incompatible settings.
+            If called after a previous run with incompatible settings or if requested
+            eigenvector is not available.
 
         Examples
         --------
@@ -449,7 +542,7 @@ class Manifold:
                 states_list.append(states)
                 times_list.append(times)
 
-                # Section-of-section hits (Poincaré map points) are no longer
+                # Section-of-section hits (Poincare map points) are no longer
                 # extracted here. This logic will be handled by the poincare module.
 
             except Exception as e:
@@ -466,18 +559,29 @@ class Manifold:
         return self._manifold_result
 
     def plot(self, dark_mode: bool = True, save: bool = False, filepath: str = 'manifold.svg', **kwargs):
-        r"""
+        """
         Render a 3-D plot of the computed manifold.
 
         Parameters
         ----------
         dark_mode : bool, default True
             Apply a dark colour scheme.
+        save : bool, default False
+            Whether to save the plot to a file.
+        filepath : str, default 'manifold.svg'
+            Path where to save the plot if save=True.
+        **kwargs
+            Additional keyword arguments passed to the plotting function.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The generated plot figure.
 
         Raises
         ------
         ValueError
-            If :pyattr:`manifold_result` is *None*.
+            If manifold_result is None.
         """
         if self._manifold_result is None:
             err = "Manifold result not computed. Please compute the manifold first."
@@ -496,7 +600,7 @@ class Manifold:
         )
 
     def to_csv(self, filepath: str, **kwargs):
-        r"""
+        """
         Export manifold trajectory data to a CSV file.
 
         Each row in the CSV file represents a point in a trajectory,
@@ -514,7 +618,7 @@ class Manifold:
         Raises
         ------
         ValueError
-            If :pyattr:`manifold_result` is `None`.
+            If manifold_result is None.
         """
         if self._manifold_result is None:
             err = "Manifold result not computed. Please compute the manifold first."
@@ -536,11 +640,37 @@ class Manifold:
         logger.info(f"Manifold data successfully exported to {filepath}")
 
     def save(self, filepath: str, **kwargs) -> None:
+        """Save the manifold to a file.
+        
+        Parameters
+        ----------
+        filepath : str
+            Path where to save the manifold data.
+        **kwargs
+            Additional keyword arguments for the save operation.
+        """
         save_manifold(self, filepath, **kwargs)
         return
 
     @classmethod
     def load(cls, filepath: str) -> "Manifold":
+        """Load a manifold from a file.
+        
+        Parameters
+        ----------
+        filepath : str
+            Path to the file containing the saved manifold.
+            
+        Returns
+        -------
+        :class:`Manifold`
+            The loaded Manifold instance.
+            
+        Raises
+        ------
+        FileNotFoundError
+            If the file does not exist.
+        """
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Manifold file not found: {filepath}")
         return load_manifold(filepath)

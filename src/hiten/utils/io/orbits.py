@@ -1,3 +1,17 @@
+"""Input/output utilities for periodic orbit data.
+
+This module provides functions for serializing and deserializing periodic orbit
+objects and their associated data to/from HDF5 files. It includes utilities
+for saving and loading orbits, their trajectories, stability information, and
+system context.
+
+Notes
+-----
+All data is stored in HDF5 format with version tracking. The module supports
+compression and handles both in-place loading and new object creation. Orbit
+classes are automatically registered for deserialization.
+"""
+
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -10,6 +24,7 @@ if TYPE_CHECKING:
     from hiten.system.orbits.base import PeriodicOrbit
 
 HDF5_VERSION = "1.0"
+"""HDF5 format version for periodic orbit data."""
 
 
 def _write_orbit_group(
@@ -19,11 +34,27 @@ def _write_orbit_group(
     compression: str = "gzip",
     level: int = 4,
 ) -> None:
-    """Serialise *orbit* into *grp*.
+    """Serialize periodic orbit data into HDF5 group.
 
-    The HDF5 *grp* may be the root file object or a subgroup - the helper does
+    Parameters
+    ----------
+    grp : h5py.Group
+        The HDF5 group to write orbit data to.
+    orbit : :class:`hiten.system.orbits.base.PeriodicOrbit`
+        The periodic orbit object to serialize.
+    compression : str, default "gzip"
+        Compression algorithm to use for HDF5 files.
+    level : int, default 4
+        Compression level (0-9, higher means better compression).
+        
+    Notes
+    -----
+    The HDF5 group may be the root file object or a subgroup - the helper does
     not make any assumptions about hierarchy, making it re-usable for nested
     structures (e.g. manifolds that embed a generating orbit).
+    
+    The function serializes orbit attributes, trajectory data, stability
+    information, and system context if available.
     """
 
     grp.attrs["format_version"] = HDF5_VERSION
@@ -55,16 +86,63 @@ def _write_orbit_group(
 
 
 _ORBIT_CLASSES: dict[str, type] = {}
+"""Registry of orbit classes for deserialization."""
 
 
 def register_orbit_class(cls):
-    """Decorator that registers *cls* for deserialisation"""
+    """Decorator that registers orbit class for deserialization.
+    
+    Parameters
+    ----------
+    cls : type
+        The orbit class to register.
+        
+    Returns
+    -------
+    type
+        The same class (for use as decorator).
+        
+    Notes
+    -----
+    This decorator registers orbit classes so they can be automatically
+    deserialized from HDF5 files. Classes are identified by their name
+    and stored in the global registry.
+    
+    Examples
+    --------
+    >>> @register_orbit_class
+    ... class MyOrbit(PeriodicOrbit):
+    ...     pass
+    """
     _ORBIT_CLASSES[cls.__name__] = cls
     return cls
 
 
-def _read_orbit_group(grp: h5py.Group):
-    """Reconstruct and return a PeriodicOrbit instance from *grp*."""
+def _read_orbit_group(grp: h5py.Group) -> "PeriodicOrbit":
+    """Reconstruct and return a PeriodicOrbit instance from HDF5 group.
+    
+    Parameters
+    ----------
+    grp : h5py.Group
+        The HDF5 group containing orbit data.
+        
+    Returns
+    -------
+    :class:`hiten.system.orbits.base.PeriodicOrbit`
+        The reconstructed periodic orbit object.
+        
+    Raises
+    ------
+    ImportError
+        If the orbit class cannot be found or imported.
+        
+    Notes
+    -----
+    This function reconstructs a periodic orbit from serialized data,
+    including trajectory, stability information, and system context.
+    The orbit class is determined from the stored class name and
+    automatically imported if not already registered.
+    """
     cls_name = grp.attrs.get("class", "GenericOrbit")
     orbit_cls = _ORBIT_CLASSES.get(cls_name)
 
@@ -159,7 +237,33 @@ def save_periodic_orbit(
     compression: str = "gzip",
     level: int = 4,
 ) -> None:
-    """Serialise *orbit* to *path* (HDF5)."""
+    """Serialize periodic orbit to HDF5 file.
+
+    Parameters
+    ----------
+    orbit : :class:`hiten.system.orbits.base.PeriodicOrbit`
+        The periodic orbit object to serialize.
+    path : str or pathlib.Path
+        File path where to save the orbit data.
+    compression : str, default "gzip"
+        Compression algorithm to use for HDF5 files.
+    level : int, default 4
+        Compression level (0-9, higher means better compression).
+        
+    Notes
+    -----
+    The function saves the orbit's attributes, trajectory data, stability
+    information, and system context to an HDF5 file.
+    
+    Examples
+    --------
+    >>> from hiten.system import System
+    >>> from hiten.system.orbits.halo import HaloOrbit
+    >>> system = System.from_bodies("earth", "moon")
+    >>> L2 = system.get_libration_point(2)
+    >>> orbit = L2.create_orbit('halo', amplitude_z=0.3)
+    >>> save_periodic_orbit(orbit, "my_orbit.h5")
+    """
     path = Path(path)
     _ensure_dir(path.parent)
 
@@ -171,7 +275,34 @@ def load_periodic_orbit_inplace(
     obj: "PeriodicOrbit",
     path: str | Path,
 ) -> None:
-    """In-place deserialisation: patch *obj* with data stored at *path*."""
+    """Load periodic orbit data into existing object.
+    
+    Parameters
+    ----------
+    obj : :class:`hiten.system.orbits.base.PeriodicOrbit`
+        The periodic orbit object to populate with data.
+    path : str or pathlib.Path
+        File path containing the orbit data.
+        
+    Raises
+    ------
+    FileNotFoundError
+        If the specified file does not exist.
+    ValueError
+        If the file contains data for a different orbit class.
+        
+    Notes
+    -----
+    This function loads data into an existing periodic orbit object,
+    replacing all its attributes with the loaded data. The object's
+    class must match the class stored in the file.
+    
+    Examples
+    --------
+    >>> from hiten.system.orbits.halo import HaloOrbit
+    >>> orbit = HaloOrbit()
+    >>> load_periodic_orbit_inplace(orbit, "my_orbit.h5")
+    """
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(path)
@@ -186,8 +317,37 @@ def load_periodic_orbit_inplace(
         obj.__dict__.update(tmp.__dict__)
 
 
-def load_periodic_orbit(path: str | Path):
-    """Return a *new* :class:`PeriodicOrbit` loaded from *path*."""
+def load_periodic_orbit(path: str | Path) -> "PeriodicOrbit":
+    """Load a periodic orbit from an HDF5 file.
+    
+    Parameters
+    ----------
+    path : str or pathlib.Path
+        File path containing the orbit data.
+        
+    Returns
+    -------
+    :class:`hiten.system.orbits.base.PeriodicOrbit`
+        The reconstructed periodic orbit object.
+        
+    Raises
+    ------
+    FileNotFoundError
+        If the specified file does not exist.
+    ImportError
+        If the orbit class cannot be found or imported.
+        
+    Notes
+    -----
+    This function creates a new periodic orbit object and loads data into it.
+    The orbit class is determined from the stored class name and
+    automatically imported if not already registered.
+    
+    Examples
+    --------
+    >>> orbit = load_periodic_orbit("my_orbit.h5")
+    >>> print(f"Loaded orbit: {orbit.family}, period={orbit.period}")
+    """
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(path)

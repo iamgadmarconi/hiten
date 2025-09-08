@@ -1,11 +1,17 @@
-r"""
-hiten.algorithms.poincare.seeding.strategies
-===========================================
+"""
+Concrete implementations of center manifold seeding strategies.
 
-Implementation of various Poincaré section seeding strategies.
+This module provides concrete implementations of seeding strategies for
+generating initial conditions on center manifolds of collinear libration
+points in the Circular Restricted Three-Body Problem (CR3BP).
 
-The module exposes concrete implementations of the :pyclass:`_CenterManifoldSeedingBase`
-base class for different seeding strategies.
+References
+----------
+Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
+
+Jorba, A. & Masdemont, J. (1999). Dynamics in the center manifold
+of the collinear points of the restricted three body problem.
+*Physica D*, 132(1-2), 189-213.
 """
 from typing import Any, Callable, List, Optional, Tuple
 
@@ -19,7 +25,31 @@ from hiten.utils.log_config import logger
 
 
 class _SingleAxisSeeding(_CenterManifoldSeedingBase):
-    """Generate seeds varying only one coordinate of the section plane."""
+    """Single axis seeding strategy.
+
+    This strategy generates seeds by varying only one coordinate of the
+    section plane while keeping the other coordinate fixed at zero.
+    This creates a line of seeds along one axis of the Poincare section.
+
+    Parameters
+    ----------
+    section_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+        Configuration for the Poincare section.
+    map_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
+        Configuration for the center manifold map.
+    seed_axis : str, optional
+        Coordinate axis to vary ('q2', 'p2', 'q3', or 'p3'). If None,
+        uses the seed_axis from map_config.
+
+    Notes
+    -----
+    This strategy is useful for exploring the center manifold along
+    specific coordinate directions. The seeds are distributed linearly
+    along the chosen axis within the Hill boundary limits.
+
+    All coordinates are in nondimensional units with the primary-secondary
+    separation as the length unit.
+    """
 
     def __init__(
         self,
@@ -41,6 +71,32 @@ class _SingleAxisSeeding(_CenterManifoldSeedingBase):
         solve_missing_coord_fn: "Callable",
         find_turning_fn: "Callable",
     ) -> List[Tuple[float, float]]:
+        """Generate seeds along a single axis of the section plane.
+
+        Parameters
+        ----------
+        h0 : float
+            Energy level for the center manifold (nondimensional units).
+        H_blocks : Any
+            Hamiltonian polynomial blocks for energy computation.
+        clmo_table : Any
+            CLMO table for polynomial evaluation.
+        solve_missing_coord_fn : callable
+            Function to solve for the missing coordinate given constraints.
+        find_turning_fn : callable
+            Function to find turning points for a given coordinate.
+
+        Returns
+        -------
+        list[tuple[float, float]]
+            List of valid seed points on the section plane.
+
+        Notes
+        -----
+        The seeds are distributed linearly along the chosen axis from
+        -0.9 * axis_max to 0.9 * axis_max, where axis_max is the Hill
+        boundary limit for that coordinate.
+        """
         cfg = self.config
 
         axis_idx = 0
@@ -66,7 +122,29 @@ class _SingleAxisSeeding(_CenterManifoldSeedingBase):
 
 
 class _AxisAlignedSeeding(_CenterManifoldSeedingBase):
-    """Generate seeds along each coordinate axis in the section plane."""
+    """Axis-aligned seeding strategy.
+
+    This strategy generates seeds along each coordinate axis of the
+    section plane. It creates two lines of seeds: one along each axis,
+    providing good coverage of the coordinate directions.
+
+    Parameters
+    ----------
+    section_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+        Configuration for the Poincare section.
+    map_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
+        Configuration for the center manifold map.
+
+    Notes
+    -----
+    This strategy is useful for exploring the center manifold along
+    both coordinate directions. The seeds are distributed linearly
+    along each axis within the Hill boundary limits, with approximately
+    half the seeds on each axis.
+
+    All coordinates are in nondimensional units with the primary-secondary
+    separation as the length unit.
+    """
 
     def __init__(self, section_config: "_CenterManifoldSectionConfig", map_config: _CenterManifoldMapConfig) -> None:
         super().__init__(section_config, map_config)
@@ -80,6 +158,31 @@ class _AxisAlignedSeeding(_CenterManifoldSeedingBase):
         solve_missing_coord_fn: "Callable",
         find_turning_fn: "Callable",
     ) -> List[Tuple[float, float]]:
+        """Generate seeds along both coordinate axes of the section plane.
+
+        Parameters
+        ----------
+        h0 : float
+            Energy level for the center manifold (nondimensional units).
+        H_blocks : Any
+            Hamiltonian polynomial blocks for energy computation.
+        clmo_table : Any
+            CLMO table for polynomial evaluation.
+        solve_missing_coord_fn : callable
+            Function to solve for the missing coordinate given constraints.
+        find_turning_fn : callable
+            Function to find turning points for a given coordinate.
+
+        Returns
+        -------
+        list[tuple[float, float]]
+            List of valid seed points on the section plane.
+
+        Notes
+        -----
+        The seeds are distributed along both axes, with approximately
+        half the seeds on each axis within the Hill boundary limits.
+        """
         cfg = self.config
 
         plane_maxes = self._hill_boundary_limits(h0=h0, H_blocks=H_blocks, clmo_table=clmo_table, find_turning_fn=find_turning_fn)
@@ -103,7 +206,29 @@ class _AxisAlignedSeeding(_CenterManifoldSeedingBase):
 
 
 class _LevelSetsSeeding(_CenterManifoldSeedingBase):
-    """Generate seeds along several non-zero level-sets of each plane coordinate."""
+    """Level sets seeding strategy.
+
+    This strategy generates seeds along several non-zero level sets of
+    each plane coordinate. It creates a grid-like pattern of seeds
+    covering the section plane more uniformly than axis-aligned strategies.
+
+    Parameters
+    ----------
+    section_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+        Configuration for the Poincare section.
+    map_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
+        Configuration for the center manifold map.
+
+    Notes
+    -----
+    This strategy provides good coverage of the section plane by creating
+    a grid of seeds. The number of level sets is determined by the square
+    root of the total number of seeds, and near-zero levels are skipped
+    to avoid redundancy with axis-aligned strategies.
+
+    All coordinates are in nondimensional units with the primary-secondary
+    separation as the length unit.
+    """
 
     def __init__(self, section_config: "_CenterManifoldSectionConfig", map_config: _CenterManifoldMapConfig) -> None:
         super().__init__(section_config, map_config)
@@ -117,6 +242,32 @@ class _LevelSetsSeeding(_CenterManifoldSeedingBase):
         solve_missing_coord_fn: "Callable",
         find_turning_fn: "Callable",
     ) -> List[Tuple[float, float]]:
+        """Generate seeds along level sets of each plane coordinate.
+
+        Parameters
+        ----------
+        h0 : float
+            Energy level for the center manifold (nondimensional units).
+        H_blocks : Any
+            Hamiltonian polynomial blocks for energy computation.
+        clmo_table : Any
+            CLMO table for polynomial evaluation.
+        solve_missing_coord_fn : callable
+            Function to solve for the missing coordinate given constraints.
+        find_turning_fn : callable
+            Function to find turning points for a given coordinate.
+
+        Returns
+        -------
+        list[tuple[float, float]]
+            List of valid seed points on the section plane.
+
+        Notes
+        -----
+        The seeds are distributed in a grid pattern along level sets
+        of each coordinate, with near-zero levels skipped to avoid
+        redundancy with axis-aligned strategies.
+        """
         cfg = self.config
         plane_maxes = self._hill_boundary_limits(h0=h0, H_blocks=H_blocks, clmo_table=clmo_table, find_turning_fn=find_turning_fn)
 
@@ -154,7 +305,32 @@ class _LevelSetsSeeding(_CenterManifoldSeedingBase):
 
 
 class _RadialSeeding(_CenterManifoldSeedingBase):
-    """Generate seeds distributed on concentric circles in the section plane."""
+    """Radial seeding strategy.
+
+    This strategy generates seeds distributed on concentric circles in the
+    section plane. It creates a radial pattern of seeds that provides
+    good coverage of the section plane in polar coordinates.
+
+    Parameters
+    ----------
+    section_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+        Configuration for the Poincare section.
+    map_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
+        Configuration for the center manifold map.
+
+    Notes
+    -----
+    This strategy is useful for exploring the center manifold in a radial
+    pattern. The seeds are distributed on concentric circles with uniform
+    angular spacing, providing good coverage of the section plane.
+
+    The number of radial and angular points is determined by the total
+    number of seeds, with the radial count based on the square root of
+    the total seeds divided by 2*pi.
+
+    All coordinates are in nondimensional units with the primary-secondary
+    separation as the length unit.
+    """
 
     def __init__(self, section_config: "_CenterManifoldSectionConfig", map_config: _CenterManifoldMapConfig) -> None:
         super().__init__(section_config, map_config)
@@ -168,6 +344,31 @@ class _RadialSeeding(_CenterManifoldSeedingBase):
         solve_missing_coord_fn: "Callable",
         find_turning_fn: "Callable",
     ) -> List[Tuple[float, float]]:
+        """Generate seeds distributed on concentric circles in the section plane.
+
+        Parameters
+        ----------
+        h0 : float
+            Energy level for the center manifold (nondimensional units).
+        H_blocks : Any
+            Hamiltonian polynomial blocks for energy computation.
+        clmo_table : Any
+            CLMO table for polynomial evaluation.
+        solve_missing_coord_fn : callable
+            Function to solve for the missing coordinate given constraints.
+        find_turning_fn : callable
+            Function to find turning points for a given coordinate.
+
+        Returns
+        -------
+        list[tuple[float, float]]
+            List of valid seed points on the section plane.
+
+        Notes
+        -----
+        The seeds are distributed on concentric circles with uniform
+        angular spacing, providing good coverage in polar coordinates.
+        """
         cfg = self.config
         plane_maxes = self._hill_boundary_limits(h0=h0, H_blocks=H_blocks, clmo_table=clmo_table, find_turning_fn=find_turning_fn)
         max_radius = 0.8 * min(*plane_maxes)
@@ -199,7 +400,32 @@ class _RadialSeeding(_CenterManifoldSeedingBase):
 
 
 class _RandomSeeding(_CenterManifoldSeedingBase):
-    """Generate seeds by uniform rejection sampling inside the rectangular Hill box."""
+    """Random seeding strategy.
+
+    This strategy generates seeds by uniform rejection sampling inside the
+    rectangular Hill box. It creates a random distribution of seeds that
+    provides good coverage of the section plane through statistical sampling.
+
+    Parameters
+    ----------
+    section_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+        Configuration for the Poincare section.
+    map_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
+        Configuration for the center manifold map.
+
+    Notes
+    -----
+    This strategy uses rejection sampling to generate random seeds within
+    the Hill boundary. It attempts to generate the requested number of
+    seeds, but may produce fewer if many random points fall outside the
+    valid region.
+
+    The strategy uses a maximum of 10 * n_seeds attempts to avoid infinite
+    loops when the valid region is small relative to the Hill box.
+
+    All coordinates are in nondimensional units with the primary-secondary
+    separation as the length unit.
+    """
 
     def __init__(self, section_config: "_CenterManifoldSectionConfig", map_config: _CenterManifoldMapConfig) -> None:
         super().__init__(section_config, map_config)
@@ -213,6 +439,31 @@ class _RandomSeeding(_CenterManifoldSeedingBase):
         solve_missing_coord_fn: "Callable",
         find_turning_fn: "Callable",
     ) -> List[Tuple[float, float]]:
+        """Generate seeds using uniform rejection sampling within the Hill box.
+
+        Parameters
+        ----------
+        h0 : float
+            Energy level for the center manifold (nondimensional units).
+        H_blocks : Any
+            Hamiltonian polynomial blocks for energy computation.
+        clmo_table : Any
+            CLMO table for polynomial evaluation.
+        solve_missing_coord_fn : callable
+            Function to solve for the missing coordinate given constraints.
+        find_turning_fn : callable
+            Function to find turning points for a given coordinate.
+
+        Returns
+        -------
+        list[tuple[float, float]]
+            List of valid seed points on the section plane.
+
+        Notes
+        -----
+        Uses rejection sampling with a maximum of 10 * n_seeds attempts
+        to avoid infinite loops when the valid region is small.
+        """
         cfg = self.config
         plane_maxes = self._hill_boundary_limits(h0=h0, H_blocks=H_blocks, clmo_table=clmo_table, find_turning_fn=find_turning_fn)
 

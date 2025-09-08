@@ -1,3 +1,18 @@
+"""
+Base classes for Hamiltonian representations in the CR3BP.
+
+This module provides the fundamental classes for representing and manipulating
+Hamiltonian functions in the circular restricted three-body problem. It includes
+the base Hamiltonian class and Lie generating function class for canonical
+transformations.
+
+Notes
+-----
+The Hamiltonian class supports conversion between different representations
+through a registry-based system. All polynomial coefficients are stored as
+NumPy arrays for efficient computation.
+"""
+
 from pathlib import Path
 from typing import Callable, Dict, Tuple, Union
 
@@ -12,10 +27,73 @@ from hiten.algorithms.polynomial.operations import _polynomial_evaluate
 
 
 class Hamiltonian:
-    """Abstract container for a specific polynomial Hamiltonian representation.
+    """
+    Abstract container for a specific polynomial Hamiltonian representation.
+    
+    This class provides the base functionality for representing and manipulating
+    polynomial Hamiltonian functions in the circular restricted three-body problem.
+    It supports evaluation, conversion between different representations, and
+    serialization to/from files.
+    
+    Parameters
+    ----------
+    poly_H : list[np.ndarray]
+        Packed coefficient blocks [H_0, H_2, ..., H_N] representing the Hamiltonian
+    degree : int
+        Maximum total degree N represented in poly_H
+    ndof : int, optional
+        Number of degrees of freedom, by default 3
+    name : str, optional
+        Name of the Hamiltonian representation, by default "Hamiltonian"
+        
+    Attributes
+    ----------
+    poly_H : list[np.ndarray]
+        Packed coefficient blocks [H_0, H_2, ..., H_N]
+    degree : int
+        Maximum total degree N represented in poly_H
+    ndof : int
+        Number of degrees of freedom
+    name : str
+        Name of the Hamiltonian representation
+    jacobian : np.ndarray
+        Jacobian matrix of the Hamiltonian
+    hamsys : _HamiltonianSystem
+        Runtime Hamiltonian system for evaluation
+        
+    Notes
+    -----
+    The Hamiltonian is represented as a polynomial in canonical coordinates
+    (q1, q2, q3, p1, p2, p3) with coefficients stored in packed format for
+    efficient computation.
     """
 
     def __init__(self, poly_H: list[np.ndarray], degree: int, ndof: int=3, name: str = "Hamiltonian"):
+        """
+        Initialize a polynomial Hamiltonian representation.
+        
+        Parameters
+        ----------
+        poly_H : list[np.ndarray]
+            Packed coefficient blocks [H_0, H_2, ..., H_N] representing the Hamiltonian
+        degree : int
+            Maximum total degree N represented in poly_H
+        ndof : int, optional
+            Number of degrees of freedom, by default 3
+        name : str, optional
+            Name of the Hamiltonian representation, by default "Hamiltonian"
+            
+        Raises
+        ------
+        ValueError
+            If degree is not a positive integer
+            
+        Notes
+        -----
+        The polynomial coefficients are stored in packed format for efficient
+        computation. The degree parameter determines the maximum order of
+        terms in the polynomial representation.
+        """
         if degree <= 0:
             raise ValueError("degree must be a positive integer")
 
@@ -53,7 +131,23 @@ class Hamiltonian:
         return self._poly_H[key]
 
     def __call__(self, coords: np.ndarray) -> float:
-        """Evaluate the Hamiltonian at the supplied phase-space coordinate.
+        """
+        Evaluate the Hamiltonian at the supplied phase-space coordinate.
+        
+        Parameters
+        ----------
+        coords : np.ndarray
+            Phase-space coordinates (q1, q2, q3, p1, p2, p3)
+            
+        Returns
+        -------
+        float
+            Value of the Hamiltonian at the given coordinates
+            
+        Notes
+        -----
+        The coordinates should be in the canonical coordinate system
+        (q1, q2, q3, p1, p2, p3) for proper evaluation.
         """
         return _polynomial_evaluate(self._poly_H, coords, self._clmo)
     
@@ -74,7 +168,33 @@ class Hamiltonian:
 
     @classmethod
     def from_state(cls, other: "Hamiltonian", **kwargs) -> "Hamiltonian":
-        """Create *cls* from *other* by applying the appropriate transform."""
+        """
+        Create a new Hamiltonian from another by applying the appropriate transform.
+        
+        Parameters
+        ----------
+        other : Hamiltonian
+            Source Hamiltonian to transform from
+        **kwargs
+            Additional parameters required for the transformation
+            
+        Returns
+        -------
+        Hamiltonian
+            New Hamiltonian in the target representation
+            
+        Raises
+        ------
+        NotImplementedError
+            If no conversion path is registered from other.name to cls.name
+        ValueError
+            If required context parameters are missing
+            
+        Notes
+        -----
+        This method uses the conversion registry to find and apply the
+        appropriate transformation between different Hamiltonian representations.
+        """
         if other.name == cls.name:
             return cls(other.poly_H, other.degree, other._ndof)
 
@@ -99,7 +219,34 @@ class Hamiltonian:
         return cls._parse_transform(result, kwargs, cls)
 
     def to_state(self, target_form: Union[type["Hamiltonian"], str], **kwargs) -> "Hamiltonian":
-        """Convert *self* into *target_form* via conversion or ``target_cls.from_state``."""
+        """
+        Convert this Hamiltonian into the target form.
+        
+        Parameters
+        ----------
+        target_form : type[Hamiltonian] or str
+            Target Hamiltonian class or name to convert to
+        **kwargs
+            Additional parameters required for the transformation
+            
+        Returns
+        -------
+        Hamiltonian
+            New Hamiltonian in the target representation
+            
+        Raises
+        ------
+        NotImplementedError
+            If no conversion path is available to the target form
+        ValueError
+            If required context parameters are missing
+            
+        Notes
+        -----
+        This method first tries to find a direct conversion path in the
+        registry. If none is found, it attempts to use the target class's
+        from_state method.
+        """
         # Handle string form names
         if isinstance(target_form, str):
             target_name = target_form
@@ -134,15 +281,38 @@ class Hamiltonian:
     
     @staticmethod
     def _parse_transform(result, kwargs, target_name):
-            if isinstance(result, tuple):
-                new_ham, generating_functions = result
-                # Store generating functions in pipeline if available
-                pipeline = kwargs.get("_pipeline")
-                if pipeline is not None:
-                    pipeline._store_generating_functions(target_name, generating_functions)
-                return new_ham
-            else:
-                return result
+        """
+        Parse the result of a Hamiltonian transformation.
+        
+        Parameters
+        ----------
+        result : Hamiltonian or tuple
+            Result of the transformation, either a Hamiltonian or a tuple
+            containing (Hamiltonian, LieGeneratingFunction)
+        kwargs : dict
+            Keyword arguments passed to the transformation
+        target_name : str
+            Name of the target Hamiltonian representation
+            
+        Returns
+        -------
+        Hamiltonian
+            The transformed Hamiltonian
+            
+        Notes
+        -----
+        If the result is a tuple containing generating functions, they are
+        stored in the pipeline if available for later use.
+        """
+        if isinstance(result, tuple):
+            new_ham, generating_functions = result
+            # Store generating functions in pipeline if available
+            pipeline = kwargs.get("_pipeline")
+            if pipeline is not None:
+                pipeline._store_generating_functions(target_name, generating_functions)
+            return new_ham
+        else:
+            return result
 
     def __repr__(self) -> str:
         return (
@@ -158,18 +328,47 @@ class Hamiltonian:
         return bool(self._poly_H)
 
     def save(self, filepath: str | Path, **kwargs) -> None:
-        """Serialise this Hamiltonian to *filepath* (HDF5)."""
+        """
+        Serialize this Hamiltonian to a file.
+        
+        Parameters
+        ----------
+        filepath : str or Path
+            Path to save the Hamiltonian to (HDF5 format)
+        **kwargs
+            Additional parameters for serialization
+            
+        Notes
+        -----
+        The Hamiltonian is saved in HDF5 format for efficient storage and
+        retrieval. The file includes all polynomial coefficients and metadata.
+        """
         from hiten.utils.io.hamiltonian import save_hamiltonian
 
         save_hamiltonian(self, filepath, **kwargs)
 
     @classmethod
     def load(cls, filepath: str | Path, **kwargs):
-        """Load a Hamiltonian from *filepath* and return it.
-
-        The *cls* argument is ignored - the loader determines the correct
+        """
+        Load a Hamiltonian from a file.
+        
+        Parameters
+        ----------
+        filepath : str or Path
+            Path to load the Hamiltonian from (HDF5 format)
+        **kwargs
+            Additional parameters for loading
+            
+        Returns
+        -------
+        Hamiltonian
+            Loaded Hamiltonian instance
+            
+        Notes
+        -----
+        The cls argument is ignored - the loader determines the correct
         concrete class from the file metadata and returns an instance of that
-        class.
+        class. The file must be in HDF5 format as saved by the save method.
         """
         from hiten.utils.io.hamiltonian import load_hamiltonian
 
@@ -177,8 +376,70 @@ class Hamiltonian:
 
 
 class LieGeneratingFunction:
+    """
+    Class for Lie generating functions in canonical transformations.
+    
+    This class represents a Lie generating function G(q, p) that generates
+    canonical transformations preserving the Hamiltonian structure of the
+    system. It is used in normal form calculations and center manifold
+    reductions.
+    
+    Parameters
+    ----------
+    poly_G : list[np.ndarray]
+        Packed coefficient blocks [G_0, G_2, ..., G_N] representing the generating function
+    poly_elim : list[np.ndarray]
+        Packed coefficient blocks for elimination terms
+    degree : int
+        Maximum total degree N represented in poly_G
+    ndof : int, optional
+        Number of degrees of freedom, by default 3
+    name : str, optional
+        Name of the generating function, by default None
+        
+    Attributes
+    ----------
+    poly_G : list[np.ndarray]
+        Packed coefficient blocks [G_0, G_2, ..., G_N]
+    poly_elim : list[np.ndarray]
+        Packed coefficient blocks for elimination terms
+    degree : int
+        Maximum total degree N represented in poly_G
+    ndof : int
+        Number of degrees of freedom
+    name : str
+        Name of the generating function
+        
+    Notes
+    -----
+    Lie generating functions are essential for canonical transformations
+    that preserve the Hamiltonian structure. They are used in normal form
+    calculations to simplify the Hamiltonian representation.
+    """
 
     def __init__(self, poly_G: list[np.ndarray], poly_elim: list[np.ndarray], degree: int, ndof: int=3, name: str = None):
+        """
+        Initialize a Lie generating function.
+        
+        Parameters
+        ----------
+        poly_G : list[np.ndarray]
+            Packed coefficient blocks [G_0, G_2, ..., G_N] representing the generating function
+        poly_elim : list[np.ndarray]
+            Packed coefficient blocks for elimination terms
+        degree : int
+            Maximum total degree N represented in poly_G
+        ndof : int, optional
+            Number of degrees of freedom, by default 3
+        name : str, optional
+            Name of the generating function, by default None
+            
+        Notes
+        -----
+        The polynomial coefficients are stored in packed format for efficient
+        computation. The degree parameter determines the maximum order of
+        terms in the polynomial representation.
+        """
         self._poly_G: list[np.ndarray] = poly_G
         self._poly_elim: list[np.ndarray] = poly_elim
         self._degree: int = degree

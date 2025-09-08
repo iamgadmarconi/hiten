@@ -1,3 +1,4 @@
+"""Butcher tableau for the Dormand-Prince 8(5,3) Runge-Kutta method."""
 import numpy as np
 
 N_STAGES = 12

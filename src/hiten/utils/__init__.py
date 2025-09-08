@@ -1,12 +1,10 @@
-"""utils
-========
-Convenient re-exports for the most frequently accessed helper utilities.
+"""Convenient re-exports for the most frequently accessed helper utilities.
 
 Typical usage examples::
 
-    from utils import Constants
+>>> from utils import Constants
 
-    mass_earth = Constants.get_mass("earth")
+>>> mass_earth = Constants.get_mass("earth")
 """
 
 from .constants import Constants, G

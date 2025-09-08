@@ -1,3 +1,23 @@
+"""
+Center manifold Poincare map interface for the CR3BP.
+
+This module provides the main user-facing interface for computing and
+analyzing Poincare maps restricted to center manifolds of collinear
+libration points in the Circular Restricted Three-Body Problem (CR3BP).
+
+The :class:`CenterManifoldMap` class extends the base return map
+functionality with center manifold-specific seeding strategies and
+visualization capabilities.
+
+References
+----------
+Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
+
+Jorba, A. & Masdemont, J. (1999). Dynamics in the center manifold
+of the collinear points of the restricted three body problem.
+*Physica D*, 132(1-2), 189-213.
+"""
+
 from typing import Literal, Optional, Sequence
 
 import numpy as np
@@ -17,7 +37,54 @@ from hiten.utils.plots import plot_poincare_map, plot_poincare_map_interactive
 
 
 class CenterManifoldMap(_ReturnMapBase):
-    """Poincaré return map restricted to the centre manifold of a collinear L-point."""
+    """Poincare return map restricted to the center manifold of a collinear libration point.
+
+    This class provides the main interface for computing and analyzing Poincare
+    maps on center manifolds in the CR3BP. It supports various seeding strategies
+    and provides visualization capabilities for understanding the local dynamics.
+
+    Parameters
+    ----------
+    cm : :class:`hiten.system.center.CenterManifold`
+        Center manifold object providing the underlying dynamical system.
+    energy : float
+        Energy level for the center manifold (nondimensional units).
+    config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`, optional
+        Configuration object specifying computation parameters. If None,
+        default configuration is used.
+
+    Attributes
+    ----------
+    cm : :class:`hiten.system.center.CenterManifold`
+        The underlying center manifold object.
+    energy : float
+        Energy level of the center manifold.
+
+    Notes
+    -----
+    The center manifold is computed in the rotating synodic frame of the CR3BP.
+    State vectors are ordered as [q1, q2, q3, p1, p2, p3] where q1=0 for
+    center manifold trajectories. All coordinates are in nondimensional units
+    with the primary-secondary separation as the length unit.
+
+    Examples
+    --------
+    >>> from hiten.system.center import CenterManifold
+    >>> from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
+    >>> 
+    >>> # Create center manifold for L1 point
+    >>> cm = CenterManifold("L1")
+    >>> 
+    >>> # Create Poincare map at specific energy
+    >>> energy = -1.5
+    >>> poincare_map = CenterManifoldMap(cm, energy)
+    >>> 
+    >>> # Compute the map
+    >>> poincare_map.compute()
+    >>> 
+    >>> # Plot the results
+    >>> poincare_map.plot()
+    """
 
     def __init__(
         self,
@@ -35,10 +102,28 @@ class CenterManifoldMap(_ReturnMapBase):
 
     @property
     def energy(self) -> float:
+        """Energy level of the center manifold.
+
+        Returns
+        -------
+        float
+            Energy level in nondimensional units.
+        """
         return self._energy
 
     def _build_backend(self, section_coord: str):
-        """Return (and cache) a CM backend via the owning `CenterManifold`."""
+        """Return (and cache) a center manifold backend via the owning CenterManifold.
+
+        Parameters
+        ----------
+        section_coord : str
+            Section coordinate identifier ('q2', 'p2', 'q3', or 'p3').
+
+        Returns
+        -------
+        :class:`hiten.algorithms.poincare.centermanifold.backend._CenterManifoldBackend`
+            Configured backend for center manifold computations.
+        """
 
         return self.cm._get_or_create_backend(
             self._energy,
@@ -49,7 +134,18 @@ class CenterManifoldMap(_ReturnMapBase):
         )
 
     def _build_seeding_strategy(self, section_coord: str):
-        """Return a seeding strategy configured for *section_coord*."""
+        """Return a seeding strategy configured for the specified section coordinate.
+
+        Parameters
+        ----------
+        section_coord : str
+            Section coordinate identifier ('q2', 'p2', 'q3', or 'p3').
+
+        Returns
+        -------
+        :class:`hiten.algorithms.poincare.centermanifold.seeding._CenterManifoldSeedingBase`
+            Configured seeding strategy for generating initial conditions.
+        """
 
         sec_cfg = _get_section_config(section_coord)
 
@@ -67,7 +163,20 @@ class CenterManifoldMap(_ReturnMapBase):
         return strategy
 
     def _build_engine(self, backend, strategy):
-        """Instantiate the concrete engine for centre-manifold maps."""
+        """Instantiate the concrete engine for center manifold maps.
+
+        Parameters
+        ----------
+        backend : :class:`hiten.algorithms.poincare.centermanifold.backend._CenterManifoldBackend`
+            Backend for numerical computations.
+        strategy : :class:`hiten.algorithms.poincare.centermanifold.seeding._CenterManifoldSeedingBase`
+            Seeding strategy for initial conditions.
+
+        Returns
+        -------
+        :class:`hiten.algorithms.poincare.centermanifold.engine._CenterManifoldEngine`
+            Configured engine for center manifold map computation.
+        """
         return _CenterManifoldEngine(
             backend=backend,
             seed_strategy=strategy,
@@ -75,6 +184,21 @@ class CenterManifoldMap(_ReturnMapBase):
         )
 
     def ic(self, pt: np.ndarray, *, section_coord: str | None = None) -> np.ndarray:
+        """Convert a plane point to initial conditions for integration.
+
+        Parameters
+        ----------
+        pt : ndarray, shape (2,)
+            Point on the Poincare section plane.
+        section_coord : str, optional
+            Section coordinate identifier. If None, uses the default
+            section coordinate from configuration.
+
+        Returns
+        -------
+        ndarray, shape (6,)
+            Initial conditions [q1, q2, q3, p1, p2, p3] for integration.
+        """
         key = section_coord or self.config.section_coord
         return self.cm.ic(pt, self._energy, section_coord=key)
 
@@ -87,6 +211,26 @@ class CenterManifoldMap(_ReturnMapBase):
         method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy",
         order=6,
     ):
+        """Propagate a trajectory from a center manifold point.
+
+        Parameters
+        ----------
+        cm_point : ndarray, shape (2,)
+            Point on the center manifold section.
+        energy : float
+            Energy level for the trajectory (nondimensional units).
+        steps : int, default=1000
+            Number of integration steps.
+        method : {'rk', 'scipy', 'symplectic', 'adaptive'}, default='scipy'
+            Integration method.
+        order : int, default=6
+            Integration order for Runge-Kutta methods.
+
+        Returns
+        -------
+        :class:`hiten.system.orbits.base.GenericOrbit`
+            Propagated orbit object.
+        """
         ic = self.cm.ic(cm_point, energy, section_coord=self.config.section_coord)
         logger.info("Initial conditions: %s", ic)
         orbit = GenericOrbit(self.cm.point, ic)
@@ -105,6 +249,28 @@ class CenterManifoldMap(_ReturnMapBase):
         axes: Sequence[str] | None = None,
         **kwargs,
     ):
+        """Plot the Poincare map.
+
+        Parameters
+        ----------
+        section_coord : str, optional
+            Section coordinate identifier. If None, uses the default section.
+        dark_mode : bool, default=True
+            If True, use dark mode styling.
+        save : bool, default=False
+            If True, save the plot to file.
+        filepath : str, default='poincare_map.svg'
+            File path for saving the plot.
+        axes : Sequence[str], optional
+            Axes to plot. If None, uses the section plane coordinates.
+        **kwargs
+            Additional keyword arguments passed to the plotting function.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The generated plot figure.
+        """
         # Determine section
         if section_coord is not None:
             if not self.has_section(section_coord):
@@ -149,6 +315,35 @@ class CenterManifoldMap(_ReturnMapBase):
         axes: Sequence[str] | None = None,
         section_coord: str | None = None,
     ):
+        """Create an interactive plot of the Poincare map.
+
+        Parameters
+        ----------
+        steps : int, default=1000
+            Number of integration steps for trajectory propagation.
+        method : {'rk', 'scipy', 'symplectic', 'adaptive'}, default='scipy'
+            Integration method for trajectory propagation.
+        order : int, default=6
+            Integration order for Runge-Kutta methods.
+        frame : str, default='rotating'
+            Reference frame for trajectory visualization.
+        dark_mode : bool, default=True
+            If True, use dark mode styling.
+        axes : Sequence[str], optional
+            Axes to plot. If None, uses the section plane coordinates.
+        section_coord : str, optional
+            Section coordinate identifier. If None, uses the default section.
+
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The interactive plot figure.
+
+        Notes
+        -----
+        Clicking on points in the plot will propagate trajectories from
+        those points and display the resulting orbits.
+        """
         # Ensure section exists
         if section_coord is not None:
             if not self.has_section(section_coord):
@@ -210,12 +405,36 @@ class CenterManifoldMap(_ReturnMapBase):
         section_coord: str | None = None,
         axes: tuple[str, str] | None = None,
     ) -> np.ndarray:
-        """Return 2-D projection, allowing any CM axis combination.
+        """Return 2-D projection of the Poincare map points.
 
+        This method extends the base implementation to allow projections
+        mixing plane coordinates with the missing coordinate by using the
+        stored 4-D center manifold states.
+
+        Parameters
+        ----------
+        section_coord : str, optional
+            Section coordinate identifier. If None, uses the default section.
+        axes : tuple[str, str], optional
+            Two coordinate axes to project onto. If None, uses the section
+            plane coordinates. Allowed values are 'q2', 'p2', 'q3', 'p3'.
+
+        Returns
+        -------
+        ndarray, shape (n_points, 2)
+            Projected points in the specified coordinate system.
+
+        Raises
+        ------
+        ValueError
+            If an invalid axis name is specified.
+
+        Notes
+        -----
         The base implementation only knows about the two coordinates that span
-        the section plane.  Here we extend it to permit projections mixing the
-        plane coordinates with the *missing* coordinate (solved on the
-        section) by falling back to the stored 4-D centre-manifold states.
+        the section plane. This method extends it to permit projections mixing
+        the plane coordinates with the missing coordinate by falling back to
+        the stored 4-D center manifold states.
         """
 
         if axes is None:
@@ -248,9 +467,27 @@ class CenterManifoldMap(_ReturnMapBase):
         return np.column_stack(cols)
 
     def save(self, filepath: str, **kwargs) -> None:
+        """Save the Poincare map to file.
+
+        Parameters
+        ----------
+        filepath : str
+            Path to save the map data.
+        **kwargs
+            Additional keyword arguments passed to the save function.
+        """
         save_poincare_map(self, filepath, **kwargs)
 
     def load_inplace(self, filepath: str, **kwargs) -> None:
+        """Load Poincare map data from file in place.
+
+        Parameters
+        ----------
+        filepath : str
+            Path to load the map data from.
+        **kwargs
+            Additional keyword arguments passed to the load function.
+        """
         load_poincare_map_inplace(self, filepath, **kwargs)
 
     @classmethod
@@ -260,4 +497,20 @@ class CenterManifoldMap(_ReturnMapBase):
         cm: CenterManifold,
         **kwargs,
     ) -> "CenterManifoldMap":
+        """Load a Poincare map from file.
+
+        Parameters
+        ----------
+        filepath : str
+            Path to load the map data from.
+        cm : :class:`hiten.system.center.CenterManifold`
+            Center manifold object for the loaded map.
+        **kwargs
+            Additional keyword arguments passed to the load function.
+
+        Returns
+        -------
+        :class:`CenterManifoldMap`
+            Loaded center manifold map instance.
+        """
         return load_poincare_map(filepath, cm, **kwargs)

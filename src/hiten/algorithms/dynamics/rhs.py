@@ -1,15 +1,12 @@
-r"""
-dynamics.rhs
-============
+r"""Generic right-hand side function adapters for dynamical systems.
 
-Lightweight wrappers for arbitrary right-hand side functions.
+This module provides lightweight adapters that convert arbitrary Python callables
+representing ODEs into objects compatible with the dynamical systems framework.
+The adapters handle automatic JIT compilation for performance optimization.
 
-This module offers a thin adapter class :pyclass:`_RHSSystem` that converts a
-plain Python callable representing the ODE :math:`\dot y = f(t, y)` into an
-object compatible with the internal :pyclass:`~hiten.algorithms.dynamics.base._DynamicalSystem`
-interface.  The adapter takes care of JIT-compiling the callable with
-:pyfunc:`numba.njit` (unless it is already a Numba :pyclass:`~numba.core.registry.CPUDispatcher`) 
-so that it can be invoked from nopython kernels without performance penalties.
+The primary use case is wrapping user-defined ODE functions dy/dt = f(t, y)
+into the standardized dynamical system interface, enabling them to work
+seamlessly with various numerical integrators.
 """
 
 from typing import Callable
@@ -21,104 +18,167 @@ from hiten.algorithms.dynamics.base import _DynamicalSystem
 
 
 class _RHSSystem(_DynamicalSystem):
-    r"""
-    Lightweight wrapper around an RHS callable.
+    r"""Adapter for generic right-hand side functions.
+
+    Converts arbitrary Python callables representing ODE systems dy/dt = f(t, y)
+    into objects compatible with the dynamical systems framework. Automatically
+    handles JIT compilation for optimal performance in numerical integrators.
 
     Parameters
     ----------
-    rhs_func : Callable[[float, numpy.ndarray], numpy.ndarray]
-        Callable implementing the dynamical system :math:`\dot y = f(t, y)`.
-        The signature must be ``(t, y)`` where *t* is time (float) and *y* is
-        the state vector (one-dimensional :pyclass:`numpy.ndarray`).
+    rhs_func : Callable[[float, ndarray], ndarray]
+        Function implementing the ODE system dy/dt = f(t, y).
+        Must accept time t (float) and state y (1D ndarray) and return
+        the time derivative as a 1D ndarray of the same shape.
     dim : int
-        Dimension :math:`n` of the state space.
+        Dimension of the state space (length of state vector).
     name : str, optional
-        Human-readable identifier for the system, used only for
-        :pyfunc:`__repr__`.  Defaults to ``"Generic RHS"``.
+        Human-readable system identifier. Default is "Generic RHS".
 
     Attributes
     ----------
     dim : int
-        Inherited from :pyclass:`_DynamicalSystem`.  Equal to *dim*.
+        State space dimension (inherited from base class).
     name : str
-        Identifier provided at construction time.
-    rhs : Callable[[float, numpy.ndarray], numpy.ndarray]
-        JIT-compiled RHS callable.  Can be used inside :pyfunc:`numba.njit`
-        functions without falling back to object mode.
+        System identifier string.
+    rhs : Callable[[float, ndarray], ndarray]
+        JIT-compiled RHS function compatible with Numba nopython mode.
+
+    Raises
+    ------
+    ValueError
+        If dim is not positive (inherited from base class).
 
     Notes
     -----
-    * If *rhs_func* is already a Numba :pyclass:`CPUDispatcher`, it is reused
-      directly.  Otherwise it is compiled with :pyfunc:`numba.njit` using the
-      global fast-math setting :pydata:`hiten.utils.config.FASTMATH`.
-    * Any error raised by the parent constructor (e.g., if *dim* is not
-      positive) propagates unchanged.
+    - Automatically detects pre-compiled Numba dispatchers and reuses them
+    - Compiles plain Python functions with Numba JIT for performance
+    - Uses global fast-math setting for numerical optimization
+    - Compatible with all integrators that accept _DynamicalSystem objects
+    
+    Examples
+    --------
+    >>> import numpy as np
+    >>> def harmonic_oscillator(t, y):
+    ...     return np.array([y[1], -y[0]])  # dy/dt = [v, -x]
+    >>> sys = _RHSSystem(harmonic_oscillator, dim=2, name="Harmonic Oscillator")
+    >>> derivative = sys.rhs(0.0, np.array([1.0, 0.0]))
+    
+    See Also
+    --------
+    :class:`hiten.algorithms.dynamics.base._DynamicalSystem` : Base class
+    :func:`create_rhs_system` : Factory function
+    :func:`numba.njit` : JIT compilation used internally
     """
 
     def __init__(self, rhs_func: Callable[[float, np.ndarray], np.ndarray], dim: int, name: str = "Generic RHS"):
-        r"""
-        Wrap an arbitrary RHS into a _DynamicalSystem instance.
+        r"""Initialize RHS system with automatic JIT compilation.
 
-        The supplied *rhs_func* is automatically JIT-compiled (if it is not a
-        Numba dispatcher already) so that it can be called from inside
-        `@njit` kernels without falling back to object mode.
+        The provided RHS function is automatically JIT-compiled for performance
+        unless it's already a compiled Numba dispatcher. This ensures efficient
+        execution within numerical integrator kernels.
+
+        Parameters
+        ----------
+        rhs_func : Callable[[float, ndarray], ndarray]
+            Right-hand side function to wrap.
+        dim : int
+            State space dimension.
+        name : str, optional
+            System identifier. Default is "Generic RHS".
+            
+        Notes
+        -----
+        Compilation uses the global FASTMATH setting for numerical optimization.
+        Pre-compiled Numba dispatchers are detected and reused to avoid
+        redundant compilation overhead.
         """
 
         super().__init__(dim)
 
-        # Detect whether the function is already a Numba dispatcher.  If it is
-        # not, compile it with *nopython* mode so that the integrator kernels
-        # can invoke it directly.
+        # Detect pre-compiled Numba dispatchers to avoid redundant compilation
         try:
             from numba.core.registry import CPUDispatcher
-
             is_dispatcher = isinstance(rhs_func, CPUDispatcher)
         except Exception:
             is_dispatcher = False
 
         if is_dispatcher:
-            self._rhs_compiled = rhs_func  # Already compiled
+            # Function is already compiled, reuse it directly
+            self._rhs_compiled = rhs_func
         else:
-            # Compile with fastmath setting consistent with global config.
+            # Compile with global fast-math setting for performance
             import numba
-
             self._rhs_compiled = numba.njit(cache=False, fastmath=FASTMATH)(rhs_func)
 
         self.name = name
     
     @property
     def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        r"""
-        Return the compiled RHS callable.
+        r"""JIT-compiled right-hand side function.
+
+        Returns the RHS function compiled for efficient execution in Numba
+        nopython mode. Maintains the same mathematical semantics as the
+        original function while providing optimal performance.
 
         Returns
         -------
-        Callable[[float, numpy.ndarray], numpy.ndarray]
-            A Numba-compiled function with the same semantics as the original
-            *rhs_func* passed at construction.
+        Callable[[float, ndarray], ndarray]
+            Compiled function f(t, y) -> dy/dt with signature identical
+            to the original but optimized for numerical integration.
+            
+        Notes
+        -----
+        The returned function can be safely called from within other
+        Numba-compiled functions without performance penalties.
         """
         return self._rhs_compiled
     
     def __repr__(self) -> str:
+        """String representation of the RHS system.
+        
+        Returns
+        -------
+        str
+            Formatted string showing system name and dimension.
+        """
         return f"_RHSSystem(name='{self.name}', dim={self.dim})"
 
 
 def create_rhs_system(rhs_func: Callable[[float, np.ndarray], np.ndarray], dim: int, name: str = "Generic RHS"):
-    r"""
-    Factory helper that mirrors :pyfunc:`_RHSSystem`.
+    r"""Create RHS system using functional interface.
 
-    This convenience function exists mainly to enable a functional style
-    when the object-oriented interface of :pyclass:`_RHSSystem` is not needed.
+    Factory function that provides a functional alternative to the
+    object-oriented _RHSSystem constructor. Useful for creating systems
+    in a more concise, functional programming style.
 
     Parameters
     ----------
-    rhs_func, dim, name
-        Forwarded verbatim to the :pyfunc:`_RHSSystem` constructor.
+    rhs_func : Callable[[float, ndarray], ndarray]
+        Right-hand side function implementing dy/dt = f(t, y).
+    dim : int
+        State space dimension.
+    name : str, optional
+        System identifier. Default is "Generic RHS".
 
     Returns
     -------
     _RHSSystem
-        Instance wrapping *rhs_func*.
+        Configured RHS system ready for integration.
+        
+    Examples
+    --------
+    >>> import numpy as np
+    >>> def pendulum(t, y):
+    ...     theta, omega = y
+    ...     return np.array([omega, -np.sin(theta)])
+    >>> sys = create_rhs_system(pendulum, dim=2, name="Nonlinear Pendulum")
+    >>> # Use with any integrator that accepts _DynamicalSystem
+    
+    See Also
+    --------
+    :class:`_RHSSystem` : Direct constructor interface
+    :class:`hiten.algorithms.dynamics.base._DynamicalSystem` : Base interface
     """
     return _RHSSystem(rhs_func, dim, name)
 

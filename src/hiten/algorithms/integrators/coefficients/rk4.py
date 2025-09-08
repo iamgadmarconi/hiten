@@ -1,3 +1,4 @@
+"""Butcher tableau for the classical fourth-order Runge-Kutta method."""
 import numpy as np
 
 A = np.array([

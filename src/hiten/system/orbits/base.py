@@ -1,20 +1,14 @@
-r"""
-hiten.system.orbits.base
-===================
-
-Abstract definitions and convenience utilities for periodic orbit computation
+"""Abstract definitions and convenience utilities for periodic orbit computation
 in the circular restricted three-body problem (CR3BP).
 
-The module provides:
+This module provides the foundational classes for working with periodic orbits
+in the CR3BP, including abstract base classes and concrete implementations
+for various orbit families.
 
-* :pyclass:`PeriodicOrbit` - an abstract base class that implements common
-  functionality such as energy evaluation, propagation wrappers, plotting and
-  differential correction.
-* :pyclass:`GenericOrbit` - a minimal concrete implementation useful for
-  arbitrary initial conditions when no analytical guess or specific correction
-  is required.
-* Light-weight configuration containers (:pyclass:`_OrbitCorrectionConfig`) that 
-  encapsulate user input for differential correction settings.
+Notes
+-----
+All positions and velocities are expressed in nondimensional units where the
+distance between the primaries is unity and the orbital period is 2*pi.
 
 References
 ----------
@@ -54,50 +48,50 @@ if TYPE_CHECKING:
 
 
 class PeriodicOrbit(ABC):
-    r"""
+    """
     Abstract base-class that encapsulates a CR3BP periodic orbit.
 
     The constructor either accepts a user supplied initial state or derives an
-    analytical first guess via :pyfunc:`PeriodicOrbit._initial_guess` (to be
+    analytical first guess via :meth:`_initial_guess` (to be
     implemented by subclasses). All subsequent high-level operations
     (propagation, plotting, stability analysis, differential correction) build
     upon this initial description.
 
     Parameters
     ----------
-    libration_point : LibrationPoint
+    libration_point : :class:`hiten.system.libration.base.LibrationPoint`
         The libration point instance that anchors the family.
     initial_state : Sequence[float] or None, optional
         Initial condition in rotating canonical units
-        :math:`[x, y, z, \dot x, \dot y, \dot z]`. When *None* an analytical
+        [x, y, z, vx, vy, vz]. When None an analytical
         approximation is attempted.
 
     Attributes
     ----------
     family : str
         Orbit family name (settable property with class-specific defaults).
-    libration_point : LibrationPoint
+    libration_point : :class:`hiten.system.libration.base.LibrationPoint`
         Libration point anchoring the family.
-    system : System
-        Parent CR3BP hiten.system.
+    system : :class:`hiten.system.base.System`
+        Parent CR3BP system.
     mu : float
-        Mass ratio of the system, accessed as :pyattr:`System.mu`.
+        Mass ratio of the system, accessed as system.mu (dimensionless).
     initial_state : ndarray, shape (6,)
-        Current initial condition.
+        Current initial condition in nondimensional units.
     period : float or None
-        Orbit period, set after a successful correction.
+        Orbit period, set after a successful correction (nondimensional units).
     trajectory : ndarray or None, shape (N, 6)
-        Stored trajectory after :pyfunc:`PeriodicOrbit.propagate`.
+        Stored trajectory after :meth:`propagate`.
     times : ndarray or None, shape (N,)
-        Time vector associated with *trajectory*.
+        Time vector associated with trajectory (nondimensional units).
     stability_info : tuple or None
-        Output of :pyfunc:`hiten.algorithms.dynamics.rtbp._stability_indices`.
+        Output of :func:`hiten.algorithms.dynamics.rtbp._stability_indices`.
 
     Notes
     -----
-    Instantiating the class does **not** perform any propagation. Users must
-    call :pyfunc:`PeriodicOrbit.correct` (or manually set
-    :pyattr:`period`) followed by :pyfunc:`PeriodicOrbit.propagate`.
+    Instantiating the class does not perform any propagation. Users must
+    call :meth:`correct` (or manually set
+    period) followed by :meth:`propagate`.
     """
     
     # This should be overridden by subclasses
@@ -141,36 +135,42 @@ class PeriodicOrbit(ABC):
 
     @property
     def family(self) -> str:
-        r"""
+        """
         Get the orbit family name.
         
         Returns
         -------
         str
-            The orbit family name
+            The orbit family name.
         """
         return self._family
 
     @property
     def libration_point(self) -> LibrationPoint:
-        """The libration point instance that anchors the family."""
+        """The libration point instance that anchors the family.
+        
+        Returns
+        -------
+        :class:`hiten.system.libration.base.LibrationPoint`
+            The libration point instance.
+        """
         return self._libration_point
 
     @property
     def initial_state(self) -> npt.NDArray[np.float64]:
-        r"""
+        """
         Get the initial state vector of the orbit.
         
         Returns
         -------
-        numpy.ndarray
-            The initial state vector [x, y, z, vx, vy, vz]
+        numpy.ndarray, shape (6,)
+            The initial state vector [x, y, z, vx, vy, vz] in nondimensional units.
         """
         return self._initial_state
     
     @property
     def trajectory(self) -> Optional[npt.NDArray[np.float64]]:
-        r"""
+        """
         Get the computed trajectory points.
         
         Returns
@@ -185,13 +185,14 @@ class PeriodicOrbit(ABC):
     
     @property
     def times(self) -> Optional[npt.NDArray[np.float64]]:
-        r"""
+        """
         Get the time points corresponding to the trajectory.
         
         Returns
         -------
         numpy.ndarray or None
-            Array of time points, or None if the trajectory hasn't been computed yet.
+            Array of time points in nondimensional units, or None if the trajectory
+            hasn't been computed yet.
         """
         if self._times is None:
             logger.warning("Time points not computed. Call propagate() first.")
@@ -199,7 +200,7 @@ class PeriodicOrbit(ABC):
     
     @property
     def stability_info(self) -> Optional[Tuple]:
-        r"""
+        """
         Get the stability information for the orbit.
         
         Returns
@@ -220,7 +221,13 @@ class PeriodicOrbit(ABC):
 
     @property
     def period(self) -> Optional[float]:
-        """Orbit period, set after a successful correction."""
+        """Orbit period, set after a successful correction.
+        
+        Returns
+        -------
+        float or None
+            The orbit period in nondimensional units, or None if not set.
+        """
         return self._period
 
     @period.setter
@@ -231,6 +238,16 @@ class PeriodicOrbit(ABC):
         to override the value obtained via differential correction. Any time
         the period changes we must invalidate cached trajectory, time array
         and stability information so they can be recomputed consistently.
+        
+        Parameters
+        ----------
+        value : float or None
+            The orbit period in nondimensional units, or None to clear.
+            
+        Raises
+        ------
+        ValueError
+            If value is not positive.
         """
         # Basic validation: positive period or None
         if value is not None and value <= 0:
@@ -256,22 +273,35 @@ class PeriodicOrbit(ABC):
 
     @property
     def system(self) -> System:
+        """Get the parent CR3BP system.
+        
+        Returns
+        -------
+        :class:`hiten.system.base.System`
+            The parent CR3BP system.
+        """
         return self._system
 
     @property
     def mu(self) -> float:
-        """Mass ratio of the system."""
+        """Mass ratio of the system.
+        
+        Returns
+        -------
+        float
+            The mass ratio (dimensionless).
+        """
         return self._mu
 
     @property
     def is_stable(self) -> bool:
-        r"""
+        """
         Check if the orbit is linearly stable.
         
         Returns
         -------
         bool
-            True if all stability indices have magnitude <= 1, False otherwise
+            True if all stability indices have magnitude <= 1, False otherwise.
         """
         if self._stability_info is None:
             logger.info("Computing stability for stability check")
@@ -284,13 +314,13 @@ class PeriodicOrbit(ABC):
 
     @property
     def energy(self) -> float:
-        r"""
+        """
         Compute the energy of the orbit at the initial state.
         
         Returns
         -------
         float
-            The energy value
+            The energy value in nondimensional units.
         """
         energy_val = crtbp_energy(self._initial_state, self.mu)
         logger.debug(f"Computed orbit energy: {energy_val}")
@@ -298,25 +328,30 @@ class PeriodicOrbit(ABC):
     
     @property
     def jacobi_constant(self) -> float:
-        r"""
+        """
         Compute the Jacobi constant of the orbit.
         
         Returns
         -------
         float
-            The Jacobi constant value
+            The Jacobi constant value (dimensionless).
         """
         return energy_to_jacobi(self.energy)
     
     @property
     def monodromy(self) -> np.ndarray:
-        r"""
+        """
         Compute the monodromy matrix of the orbit.
         
         Returns
         -------
-        numpy.ndarray
-            The monodromy matrix
+        numpy.ndarray, shape (6, 6)
+            The monodromy matrix.
+            
+        Raises
+        ------
+        ValueError
+            If period is not set.
         """
         if self.period is None:
             raise ValueError("Period must be set before computing monodromy")
@@ -342,7 +377,7 @@ class PeriodicOrbit(ABC):
         raise NotImplementedError
 
     def _reset(self) -> None:
-        r"""
+        """
         Reset all computed properties when the initial state is changed.
         Called internally after differential correction or any other operation
         that modifies the initial state.
@@ -373,6 +408,26 @@ class PeriodicOrbit(ABC):
         This method now delegates the heavy lifting to the generic
         :class:`hiten.algorithms.corrector.newton._NewtonOrbitCorrector` which
         implements a robust Newton-Armijo scheme.
+        
+        Parameters
+        ----------
+        tol : float, optional
+            Convergence tolerance for the correction.
+        max_attempts : int, optional
+            Maximum number of correction attempts.
+        forward : int, optional
+            Forward integration direction.
+        max_delta : float, optional
+            Maximum step size for corrections.
+        line_search_config : :class:`hiten.algorithms.corrector.line._LineSearchConfig` or bool, optional
+            Line search configuration.
+        finite_difference : bool, optional
+            Whether to use finite difference for Jacobian.
+            
+        Returns
+        -------
+        tuple
+            (corrected_state, period) in nondimensional units.
         """
         # Use per-family correction configuration as fallback defaults
         cfg = self._correction_config
@@ -394,7 +449,7 @@ class PeriodicOrbit(ABC):
         )
 
     def propagate(self, steps: int = 1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 8) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
-        r"""
+        """
         Propagate the orbit for one period.
         
         Parameters
@@ -402,14 +457,20 @@ class PeriodicOrbit(ABC):
         steps : int, optional
             Number of time steps. Default is 1000.
         method : str, optional
-            Integration method. Default is "rk".
-        **options
-            Additional keyword arguments for the integration method
+            Integration method. Default is "scipy".
+        order : int, optional
+            Integration order. Default is 8.
             
         Returns
         -------
         tuple
-            (t, trajectory) containing the time and state arrays
+            (times, trajectory) containing the time and state arrays in
+            nondimensional units.
+            
+        Raises
+        ------
+        ValueError
+            If period is not set.
         """
         if self.period is None:
             raise ValueError("Period must be set before propagation")
@@ -431,18 +492,23 @@ class PeriodicOrbit(ABC):
         return self._times, self._trajectory
 
     def compute_stability(self, **kwargs) -> Tuple:
-        r"""
+        """
         Compute stability information for the orbit.
         
         Parameters
         ----------
         **kwargs
-            Additional keyword arguments passed to the STM computation
+            Additional keyword arguments passed to the STM computation.
             
         Returns
         -------
         tuple
-            (_stability_indices, eigenvalues, eigenvectors) from the monodromy matrix
+            (_stability_indices, eigenvalues, eigenvectors) from the monodromy matrix.
+            
+        Raises
+        ------
+        ValueError
+            If period is not set.
         """
         if self.period is None:
             msg = "Period must be set before stability analysis"
@@ -463,10 +529,51 @@ class PeriodicOrbit(ABC):
         return stability
 
     def manifold(self, stable: bool = True, direction: Literal["positive", "negative"] = "positive") -> "Manifold":
+        """Create a manifold object for this orbit.
+        
+        Parameters
+        ----------
+        stable : bool, optional
+            Whether to create a stable manifold. Default is True.
+        direction : str, optional
+            Direction of the manifold ("positive" or "negative"). Default is "positive".
+            
+        Returns
+        -------
+        :class:`hiten.system.manifold.Manifold`
+            The manifold object.
+        """
         from hiten.system.manifold import Manifold
         return Manifold(self, stable=stable, direction=direction)
 
     def plot(self, frame: Literal["rotating", "inertial"] = "rotating", dark_mode: bool = True, save: bool = False, filepath: str = f'orbit.svg', **kwargs):
+        """Plot the orbit trajectory.
+        
+        Parameters
+        ----------
+        frame : str, optional
+            Reference frame for plotting ("rotating" or "inertial"). Default is "rotating".
+        dark_mode : bool, optional
+            Whether to use dark mode for plotting. Default is True.
+        save : bool, optional
+            Whether to save the plot to file. Default is False.
+        filepath : str, optional
+            Path to save the plot. Default is "orbit.svg".
+        **kwargs
+            Additional keyword arguments passed to the plotting function.
+            
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The plot figure.
+            
+        Raises
+        ------
+        RuntimeError
+            If trajectory is not computed.
+        ValueError
+            If frame is invalid.
+        """
         if self._trajectory is None:
             msg = "No trajectory to plot. Call propagate() first."
             logger.error(msg)
@@ -498,6 +605,18 @@ class PeriodicOrbit(ABC):
             raise ValueError(msg)
         
     def animate(self, **kwargs):
+        """Create an animation of the orbit trajectory.
+        
+        Parameters
+        ----------
+        **kwargs
+            Additional keyword arguments passed to the animation function.
+            
+        Returns
+        -------
+        tuple or None
+            Animation objects, or None if trajectory is not computed.
+        """
         if self._trajectory is None:
             logger.warning("No trajectory to animate. Call propagate() first.")
             return None, None
@@ -505,6 +624,20 @@ class PeriodicOrbit(ABC):
         return animate_trajectories(self._trajectory, self._times, [self._system.primary, self._system.secondary], self._system.distance, **kwargs)
 
     def to_csv(self, filepath: str, **kwargs):
+        """Export the orbit trajectory to a CSV file.
+        
+        Parameters
+        ----------
+        filepath : str
+            Path to save the CSV file.
+        **kwargs
+            Additional keyword arguments passed to pandas.DataFrame.to_csv.
+            
+        Raises
+        ------
+        ValueError
+            If trajectory is not computed.
+        """
         if self._trajectory is None or self._times is None:
             err = "Trajectory not computed. Please call propagate() first."
             logger.error(err)
@@ -519,10 +652,33 @@ class PeriodicOrbit(ABC):
         logger.info(f"Orbit trajectory successfully exported to {filepath}")
 
     def save(self, filepath: str, **kwargs) -> None:
+        """Save the orbit to a file.
+        
+        Parameters
+        ----------
+        filepath : str
+            Path to save the orbit file.
+        **kwargs
+            Additional keyword arguments passed to the save function.
+        """
         save_periodic_orbit(self, filepath, **kwargs)
         return
 
     def load_inplace(self, filepath: str, **kwargs) -> None:
+        """Load orbit data from a file in place.
+        
+        Parameters
+        ----------
+        filepath : str
+            Path to the orbit file.
+        **kwargs
+            Additional keyword arguments passed to the load function.
+            
+        Raises
+        ------
+        FileNotFoundError
+            If the file does not exist.
+        """
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Orbit file not found: {filepath}")
 
@@ -531,6 +687,25 @@ class PeriodicOrbit(ABC):
 
     @classmethod
     def load(cls, filepath: str, **kwargs) -> "PeriodicOrbit":
+        """Load an orbit from a file.
+        
+        Parameters
+        ----------
+        filepath : str
+            Path to the orbit file.
+        **kwargs
+            Additional keyword arguments passed to the load function.
+            
+        Returns
+        -------
+        :class:`PeriodicOrbit`
+            The loaded orbit instance.
+            
+        Raises
+        ------
+        FileNotFoundError
+            If the file does not exist.
+        """
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Orbit file not found: {filepath}")
 
@@ -542,9 +717,14 @@ class PeriodicOrbit(ABC):
         The cached dynamical system used for high-performance propagation is
         removed before pickling (it may contain numba objects) and recreated
         lazily on first access after unpickling.
+        
+        Parameters
+        ----------
+        state : dict
+            The object state dictionary from pickling.
         """
         # Simply update the dictionary - the cached dynamical system will be
-        # rebuilt lazily when :pyfunc:`_cr3bp_system` is first invoked.
+        # rebuilt lazily when needed.
         self.__dict__.update(state)
 
     def __getstate__(self):
@@ -553,6 +733,11 @@ class PeriodicOrbit(ABC):
         We strip attributes that might keep references to non-pickleable numba
         objects (e.g. the cached dynamical system) while leaving all the
         essential orbital data untouched.
+        
+        Returns
+        -------
+        dict
+            The object state dictionary with unpickleable objects removed.
         """
         state = self.__dict__.copy()
         # Remove the cached CR3BP dynamical system wrapper
@@ -562,13 +747,35 @@ class PeriodicOrbit(ABC):
 
 
 class GenericOrbit(PeriodicOrbit):
-    r"""
-    A minimal concrete orbit class for arbitrary initial conditions, with no correction or special guess logic.
+    """
+    A minimal concrete orbit class for arbitrary initial conditions.
+    
+    This class provides a basic implementation of PeriodicOrbit that can be
+    used with arbitrary initial conditions. It requires manual configuration
+    of correction and continuation parameters.
+    
+    Parameters
+    ----------
+    libration_point : :class:`hiten.system.libration.base.LibrationPoint`
+        The libration point around which the orbit is computed.
+    initial_state : Sequence[float], optional
+        Initial state vector [x, y, z, vx, vy, vz] in nondimensional units.
+        If None, a default period of pi is set.
     """
     
     _family = "generic"
     
     def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None):
+        """Initialize a GenericOrbit.
+        
+        Parameters
+        ----------
+        libration_point : :class:`hiten.system.libration.base.LibrationPoint`
+            The libration point around which the orbit is computed.
+        initial_state : Sequence[float], optional
+            Initial state vector [x, y, z, vx, vy, vz] in nondimensional units.
+            If None, a default period of pi is set.
+        """
         super().__init__(libration_point, initial_state)
         self._custom_correction_config: Optional["_OrbitCorrectionConfig"] = None
         self._custom_continuation_config: Optional["_OrbitContinuationConfig"] = None
@@ -582,14 +789,31 @@ class GenericOrbit(PeriodicOrbit):
         """
         Get or set the user-defined differential correction configuration.
 
-        This property must be set to a valid :py:class:`_OrbitCorrectionConfig`
-        instance before calling :py:meth:`correct` on a
-        :py:class:`GenericOrbit` object.
+        This property must be set to a valid :class:`_OrbitCorrectionConfig`
+        instance before calling :meth:`correct` on a
+        :class:`GenericOrbit` object.
+        
+        Returns
+        -------
+        :class:`hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig` or None
+            The correction configuration, or None if not set.
         """
         return self._custom_correction_config
 
     @correction_config.setter
     def correction_config(self, value: Optional["_OrbitCorrectionConfig"]):
+        """Set the correction configuration.
+        
+        Parameters
+        ----------
+        value : :class:`hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig` or None
+            The correction configuration to set.
+            
+        Raises
+        ------
+        TypeError
+            If value is not an instance of _OrbitCorrectionConfig or None.
+        """
         from hiten.algorithms.corrector.interfaces import \
             _OrbitCorrectionConfig
         if value is not None and not isinstance(value, _OrbitCorrectionConfig):
@@ -598,6 +822,13 @@ class GenericOrbit(PeriodicOrbit):
 
     @property
     def eccentricity(self):
+        """Eccentricity is not well-defined for generic orbits.
+        
+        Returns
+        -------
+        float
+            NaN since eccentricity is not defined for generic orbits.
+        """
         return np.nan
 
     @property
@@ -607,6 +838,16 @@ class GenericOrbit(PeriodicOrbit):
 
         For GenericOrbit, this must be set via the `correction_config` property
         to enable differential correction.
+        
+        Returns
+        -------
+        :class:`hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`
+            The correction configuration.
+            
+        Raises
+        ------
+        NotImplementedError
+            If correction_config is not set.
         """
         if self.correction_config is not None:
             return self.correction_config
@@ -617,20 +858,51 @@ class GenericOrbit(PeriodicOrbit):
 
     @property
     def amplitude(self) -> float:
-        """(Read-only) Current amplitude of the orbit."""
+        """(Read-only) Current amplitude of the orbit.
+        
+        Returns
+        -------
+        float or None
+            The orbit amplitude in nondimensional units, or None if not set.
+        """
         return self._amplitude
 
     @amplitude.setter
     def amplitude(self, value: float):
+        """Set the orbit amplitude.
+        
+        Parameters
+        ----------
+        value : float
+            The orbit amplitude in nondimensional units.
+        """
         self._amplitude = value
 
     @property
     def continuation_config(self) -> Optional["_OrbitContinuationConfig"]:
-        """Get or set the continuation parameter for this orbit."""
+        """Get or set the continuation parameter for this orbit.
+        
+        Returns
+        -------
+        :class:`hiten.algorithms.continuation.interfaces._OrbitContinuationConfig` or None
+            The continuation configuration, or None if not set.
+        """
         return self._custom_continuation_config
 
     @continuation_config.setter
     def continuation_config(self, cfg: Optional["_OrbitContinuationConfig"]):
+        """Set the continuation configuration.
+        
+        Parameters
+        ----------
+        cfg : :class:`hiten.algorithms.continuation.interfaces._OrbitContinuationConfig` or None
+            The continuation configuration to set.
+            
+        Raises
+        ------
+        TypeError
+            If cfg is not an instance of _OrbitContinuationConfig or None.
+        """
         from hiten.algorithms.continuation.interfaces import \
             _OrbitContinuationConfig
         if cfg is not None and not isinstance(cfg, _OrbitContinuationConfig):
@@ -639,6 +911,18 @@ class GenericOrbit(PeriodicOrbit):
 
     @property
     def _continuation_config(self) -> "_OrbitContinuationConfig":  # used by engines
+        """Provides the continuation configuration for engines.
+        
+        Returns
+        -------
+        :class:`hiten.algorithms.continuation.interfaces._OrbitContinuationConfig`
+            The continuation configuration.
+            
+        Raises
+        ------
+        NotImplementedError
+            If continuation_config is not set.
+        """
         if self._custom_continuation_config is None:
             raise NotImplementedError(
                 "GenericOrbit requires 'continuation_config' to be set before using continuation engines."
@@ -646,6 +930,23 @@ class GenericOrbit(PeriodicOrbit):
         return self._custom_continuation_config
 
     def _initial_guess(self, **kwargs):
+        """Generate initial guess for GenericOrbit.
+        
+        Parameters
+        ----------
+        **kwargs
+            Additional keyword arguments (unused).
+            
+        Returns
+        -------
+        numpy.ndarray, shape (6,)
+            The initial state vector in nondimensional units.
+            
+        Raises
+        ------
+        ValueError
+            If no initial state is provided.
+        """
         if hasattr(self, '_initial_state') and self._initial_state is not None:
             return self._initial_state
         raise ValueError("No initial state provided for GenericOrbit.")

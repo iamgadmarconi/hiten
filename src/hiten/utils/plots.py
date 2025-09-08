@@ -1,3 +1,16 @@
+"""Comprehensive plotting utilities for the hiten package.
+
+This module provides a wide range of visualization functions for orbits, manifolds,
+Poincare maps, and other dynamical system visualizations in the Circular Restricted
+Three-Body Problem (CR3BP).
+
+Notes
+-----
+All plotting functions support both light and dark modes, and most functions
+include options for saving plots to files. Coordinate systems are clearly
+labeled with appropriate units.
+"""
+
 import os
 from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
@@ -29,23 +42,30 @@ def animate_trajectories(
         save: bool = False, 
         dark_mode: bool = True, 
         filepath: str = 'trajectory.mp4'
-    ):
+    ) -> animation.FuncAnimation:
     """
     Create an animated comparison of trajectories in rotating and inertial frames.
     
     Parameters
     ----------
-    sol : integration result
-    bodies : list
+    states : numpy.ndarray, shape (n, 6)
+        State vectors [x, y, z, vx, vy, vz] in nondimensional units.
+    times : numpy.ndarray, shape (n,)
+        Time array in nondimensional units.
+    bodies : list of :class:`hiten.system.body.Body`
         List of celestial body objects with properties like mass, radius, and name.
     system_distance : float
         Characteristic distance of the system in meters.
-    interval : int, default=20
+    interval : int, default 10
         Time interval between animation frames in milliseconds.
-    figsize : tuple, default=(14, 6)
+    figsize : tuple, default (14, 6)
         Figure size in inches (width, height).
-    save : bool, default=False
+    save : bool, default False
         Whether to save the animation as an MP4 file.
+    dark_mode : bool, default True
+        Whether to use dark mode for the animation.
+    filepath : str, default 'trajectory.mp4'
+        Path where to save the animation if save=True.
         
     Returns
     -------
@@ -265,22 +285,34 @@ def plot_rotating_frame(
         *,
         block: bool = True,
         close_after: bool = True,
-        **kwargs):
-    r"""
+        **kwargs) -> Tuple[plt.Figure, plt.Axes]:
+    """
     Plot the orbit trajectory in the rotating reference frame.
     
     Parameters
     ----------
-    states : array-like
-        The states to plot.
-    times : array-like
-        The times corresponding to the states.
-    bodies : list
-        The bodies to plot.
+    states : numpy.ndarray, shape (n, 6)
+        State vectors [x, y, z, vx, vy, vz] in nondimensional units.
+    times : numpy.ndarray, shape (n,)
+        Time array in nondimensional units.
+    bodies : list of :class:`hiten.system.body.Body`
+        The celestial bodies to plot.
     system_distance : float
-        The distance between the bodies.
-    figsize : tuple, optional
-        Figure size in inches (width, height). Default is (10, 8).
+        The distance between the bodies in meters.
+    figsize : tuple, default (10, 8)
+        Figure size in inches (width, height).
+    save : bool, default False
+        Whether to save the plot to a file.
+    dark_mode : bool, default True
+        Whether to use dark mode for the plot.
+    filepath : str, default 'rotating_frame.svg'
+        Path where to save the plot if save=True.
+    block : bool, default True
+        Whether to block execution while displaying the plot.
+    close_after : bool, default True
+        Whether to close the figure after displaying.
+    **kwargs
+        Additional keyword arguments for plot customization.
         
     Returns
     -------
@@ -343,16 +375,32 @@ def plot_inertial_frame(
         *,
         block: bool = True,
         close_after: bool = True,
-        **kwargs):
-    r"""
+        **kwargs) -> Tuple[plt.Figure, plt.Axes]:
+    """
     Plot the orbit trajectory in the primary-centered inertial reference frame.
     
     Parameters
     ----------
-    show : bool, optional
-        Whether to call plt.show() after creating the plot. Default is True.
-    figsize : tuple, optional
-        Figure size in inches (width, height). Default is (10, 8).
+    states : numpy.ndarray, shape (n, 6)
+        State vectors [x, y, z, vx, vy, vz] in nondimensional units.
+    times : numpy.ndarray, shape (n,)
+        Time array in nondimensional units.
+    bodies : list of :class:`hiten.system.body.Body`
+        The celestial bodies to plot.
+    system_distance : float
+        The distance between the bodies in meters.
+    figsize : tuple, default (10, 8)
+        Figure size in inches (width, height).
+    save : bool, default False
+        Whether to save the plot to a file.
+    dark_mode : bool, default True
+        Whether to use dark mode for the plot.
+    filepath : str, default 'inertial_frame.svg'
+        Path where to save the plot if save=True.
+    block : bool, default True
+        Whether to block execution while displaying the plot.
+    close_after : bool, default True
+        Whether to close the figure after displaying.
     **kwargs
         Additional keyword arguments for plot customization.
         
@@ -429,25 +477,48 @@ def plot_orbit_family(
         save: bool = False,
         dark_mode: bool = True,
         filepath: str = "orbit_family.svg",
-        **kwargs):
-    r"""
+        **kwargs) -> Tuple[plt.Figure, plt.Axes]:
+    """
     Visualise a family of periodic orbits (rotating-frame trajectories).
 
     Parameters
     ----------
-    states_list, times_list : list[array]
-        Trajectory arrays for each family member.
-    parameter_values : array-like
+    states_list : list of numpy.ndarray
+        Trajectory arrays for each family member in nondimensional units.
+    times_list : list of numpy.ndarray
+        Time arrays for each family member in nondimensional units.
+    parameter_values : numpy.ndarray
         Scalar parameter associated with each orbit (used for colour-coding).
-    bodies : list[Body]
+    bodies : list of :class:`hiten.system.body.Body`
         Primary and secondary bodies of the system.
     system_distance : float
-        Characteristic distance (km) - needed to scale body radii.
-    figsize, save, dark_mode, filepath, cmap : see other plot helpers.
-    elev, azim : float, optional
-        Elevation and azimuth angles for 3D view.
-    equal_axes : bool, optional
-        Whether to use equal scaling for all axes. Default is True.
+        Characteristic distance in meters - needed to scale body radii.
+    figsize : tuple, default (10, 8)
+        Figure size in inches (width, height).
+    save : bool, default False
+        Whether to save the plot to a file.
+    dark_mode : bool, default True
+        Whether to use dark mode for the plot.
+    filepath : str, default "orbit_family.svg"
+        Path where to save the plot if save=True.
+    **kwargs
+        Additional keyword arguments:
+        
+        cmap : str, default "plasma"
+            Colormap for parameter color-coding.
+        elev : float, optional
+            Elevation angle for 3D view.
+        azim : float, optional
+            Azimuth angle for 3D view.
+        equal_axes : bool, default True
+            Whether to use equal scaling for all axes.
+        param_index : int, optional
+            Index of parameter to use for color-coding when parameter_values is 2D.
+            
+    Returns
+    -------
+    tuple
+        (fig, ax) containing the figure and axis objects for further customization
     """
 
     cmap_key = kwargs.get('cmap', 'plasma')
@@ -531,26 +602,30 @@ def plot_manifold(
         save: bool = False, 
         dark_mode: bool = True, 
         filepath: str = 'manifold.svg',
-        **kwargs):
-    r"""
-    Plot the manifold.
+        **kwargs) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot the manifold trajectories.
     
     Parameters
     ----------
-    states_list : list
-        The states to plot.
-    times_list : list
-        The times corresponding to the states.
-    bodies : list
-        The bodies to plot.
+    states_list : list of numpy.ndarray
+        List of state arrays for each manifold trajectory in nondimensional units.
+    times_list : list of numpy.ndarray
+        List of time arrays for each manifold trajectory in nondimensional units.
+    bodies : list of :class:`hiten.system.body.Body`
+        The celestial bodies to plot.
     system_distance : float
-        The distance between the bodies.
-    figsize : tuple, optional
-        Figure size in inches (width, height). Default is (10, 8).
-    save : bool, optional
-        Whether to save the plot to a file. Default is False.
-    dark_mode : bool, optional
-        Whether to use dark mode for the plot. Default is True.
+        The distance between the bodies in meters.
+    figsize : tuple, default (10, 8)
+        Figure size in inches (width, height).
+    save : bool, default False
+        Whether to save the plot to a file.
+    dark_mode : bool, default True
+        Whether to use dark mode for the plot.
+    filepath : str, default 'manifold.svg'
+        Path where to save the plot if save=True.
+    **kwargs
+        Additional keyword arguments for plot customization.
 
     Returns
     -------
@@ -605,7 +680,32 @@ def plot_poincare_map(
         save: bool = False,
         dark_mode: bool = True,
         filepath: str = 'poincare_map.svg',
-        **kwargs):
+        **kwargs) -> Tuple[plt.Figure, plt.Axes]:
+    """
+    Plot a Poincare map.
+    
+    Parameters
+    ----------
+    points : numpy.ndarray, shape (n, 2)
+        Poincare section points in nondimensional units.
+    labels : list of str
+        Axis labels for the plot.
+    figsize : tuple, default (10, 8)
+        Figure size in inches (width, height).
+    save : bool, default False
+        Whether to save the plot to a file.
+    dark_mode : bool, default True
+        Whether to use dark mode for the plot.
+    filepath : str, default 'poincare_map.svg'
+        Path where to save the plot if save=True.
+    **kwargs
+        Additional keyword arguments for plot customization.
+        
+    Returns
+    -------
+    tuple
+        (fig, ax) containing the figure and axis objects for further customization
+    """
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
 
@@ -616,7 +716,7 @@ def plot_poincare_map(
         ax.set_ylim(-1, 1)
         ax.set_xticks([])
         ax.set_yticks([])
-        title_text = "Poincaré Map (No Data)"
+        title_text = "Poincare Map (No Data)"
 
     else:
         n_pts = points.shape[0]
@@ -633,7 +733,7 @@ def plot_poincare_map(
         
         ax.set_xlabel(f"${labels[0]}'$")
         ax.set_ylabel(f"${labels[1]}'$")
-        title_text = f"Poincaré Map"
+        title_text = f"Poincare Map"
 
     ax.set_aspect("equal", adjustable="box")
     ax.grid(True, alpha=0.3)
@@ -669,19 +769,40 @@ def plot_poincare_connections_map(
         src_color: str = 'C0',
         tgt_color: str = 'C1',
         cmap: str = 'viridis',
-    ):
+    ) -> Tuple[plt.Figure, plt.Axes]:
     """Plot source/target section sets and candidate matches.
 
     Parameters
     ----------
-    points_src, points_tgt : array-like (N,2)
-        2D section points for source and target.
-    labels : (str, str)
+    points_src : numpy.ndarray, shape (N, 2)
+        2D section points for source in nondimensional units.
+    points_tgt : numpy.ndarray, shape (N, 2)
+        2D section points for target in nondimensional units.
+    labels : list or tuple of str
         Axes labels for the section projection.
-    match_points : array-like (M,2), optional
-        2D coordinates of candidate meet points.
-    match_values : array-like (M,), optional
-        Quality metric at each meet
+    match_points : numpy.ndarray, shape (M, 2), optional
+        2D coordinates of candidate meet points in nondimensional units.
+    match_values : numpy.ndarray, shape (M,), optional
+        Quality metric at each meet point.
+    figsize : tuple, default (8, 7)
+        Figure size in inches (width, height).
+    save : bool, default False
+        Whether to save the plot to a file.
+    dark_mode : bool, default True
+        Whether to use dark mode for the plot.
+    filepath : str, default 'connections_poincare.svg'
+        Path where to save the plot if save=True.
+    src_color : str, default 'C0'
+        Color for source points.
+    tgt_color : str, default 'C1'
+        Color for target points.
+    cmap : str, default 'viridis'
+        Colormap for match values.
+        
+    Returns
+    -------
+    tuple
+        (fig, ax) containing the figure and axis objects for further customization
     """
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111)
@@ -712,9 +833,9 @@ def plot_poincare_connections_map(
     ax.legend(loc='best')
 
     if dark_mode:
-        _set_dark_mode(fig, ax, title='Poincaré map (connections)')
+        _set_dark_mode(fig, ax, title='Poincare map (connections)')
     else:
-        ax.set_title('Poincaré map (connections)')
+        ax.set_title('Poincare map (connections)')
 
     if save:
         _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
@@ -730,26 +851,31 @@ def plot_poincare_map_interactive(
         on_select: Optional[Callable[[np.ndarray], Any]] = None,
         figsize: Tuple[int, int] = (10, 8),
         dark_mode: bool = True,
-        **kwargs):
-    """Interactive Poincaré-map viewer.
+        **kwargs) -> Any:
+    """Interactive Poincare-map viewer.
 
     Parameters
     ----------
     points : numpy.ndarray, shape (n, 2)
-        Collection of Poincaré-section points to visualise.
-    labels : list[str]
-        Axis labels corresponding to *points* (e.g. ["q2", "p2"]).
+        Collection of Poincare-section points to visualise in nondimensional units.
+    labels : list of str
+        Axis labels corresponding to points (e.g. ["q2", "p2"]).
     on_select : callable, optional
         Callback executed when a point is selected with the left mouse button.
-        It receives the coordinates of the selected point *(2,)* and may return
-        an arbitrary object (e.g. a `GenericOrbit`).  The last returned value is
+        It receives the coordinates of the selected point (2,) and may return
+        an arbitrary object (e.g. a GenericOrbit). The last returned value is
         also the return value of this function.
-    figsize : tuple[int, int], default (10, 8)
+    figsize : tuple, default (10, 8)
         Figure size in inches.
     dark_mode : bool, default True
         Use a dark colour scheme.
     **kwargs
-        Currently ignored.  Reserved for future extensions.
+        Currently ignored. Reserved for future extensions.
+        
+    Returns
+    -------
+    Any
+        The return value from the last on_select callback, or None if no callback.
     """
 
     fig = plt.figure(figsize=figsize)
@@ -761,11 +887,11 @@ def plot_poincare_map_interactive(
     n_pts_int = pts.shape[0]
     adaptive_ps = max(0.2, min(4.0, 4000.0 / max(n_pts_int, 1)))
 
-    # Scatter plot of the Poincaré set
+    # Scatter plot of the Poincare set
     ax.scatter(pts[:, 0], pts[:, 1], s=adaptive_ps, alpha=0.7)
     ax.set_xlabel(f"${labels[0]}'$")
     ax.set_ylabel(f"${labels[1]}'$")
-    ax.set_title("Select a point on the Poincaré Map\n(Press 'q' to quit)")
+    ax.set_title("Select a point on the Poincare Map\n(Press 'q' to quit)")
     ax.set_aspect("equal", adjustable="box")
     ax.grid(True, alpha=0.3)
 
@@ -829,27 +955,41 @@ def plot_invariant_torus(
         elev: Optional[float] = None,
         azim: Optional[float] = None,
         equal_axes: bool = True,
-        **kwargs):
+        **kwargs) -> Tuple[plt.Figure, plt.Axes]:
     """Visualise an invariant torus in the rotating frame.
 
     Parameters
     ----------
-    u_grid : numpy.ndarray
-        Grid of state vectors with shape (n_theta1, n_theta2, 6) returned by
-        :pyfunc:`_InvariantTori.sample_grid`.
-    bodies : list[Body]
+    u_grid : numpy.ndarray, shape (n_theta1, n_theta2, 6)
+        Grid of state vectors returned by _InvariantTori.sample_grid
+        in nondimensional units.
+    bodies : list of :class:`hiten.system.body.Body`
         Primary and secondary bodies of the CR3BP.
     system_distance : float
-        Characteristic distance (km) - required to scale the body radii.
-    figsize, save, dark_mode, filepath : see other plot helpers.
-    cmap : str, optional
-        Colormap name used to colour-code the major-angle \theta_1. Default ``"plasma"``.
-    elev, azim : float, optional
-        Elevation and azimuth view angles passed to ``Axes3D.view_init``.
+        Characteristic distance in meters - required to scale the body radii.
+    figsize : tuple, default (10, 8)
+        Figure size in inches (width, height).
+    save : bool, default False
+        Whether to save the plot to a file.
+    dark_mode : bool, default True
+        Whether to use dark mode for the plot.
+    filepath : str, default "invariant_torus.svg"
+        Path where to save the plot if save=True.
+    cmap : str, default "plasma"
+        Colormap name used to colour-code the major-angle theta_1.
+    elev : float, optional
+        Elevation view angle passed to Axes3D.view_init.
+    azim : float, optional
+        Azimuth view angle passed to Axes3D.view_init.
     equal_axes : bool, default True
         If True, enforce identical scaling on all axes.
     **kwargs
         Additional keyword arguments reserved for future extensions.
+        
+    Returns
+    -------
+    tuple
+        (fig, ax) containing the figure and axis objects for further customization
     """
     n_theta1, n_theta2, _ = u_grid.shape
 
@@ -908,34 +1048,44 @@ def plot_manifolds(
         cmap: str = "tab10",
         alpha: float = 0.6,
         equal_axes: bool = True,
-        **kwargs):
+        **kwargs) -> Tuple[plt.Figure, plt.Axes]:
     """Plot several invariant manifolds on the same 3-D axes.
 
     Parameters
     ----------
-    manifolds : list[hiten.system.manifold.Manifold]
-        Collection of previously-computed `Manifold` objects.  Each item must
-        have a non-empty :pyattr:`~hiten.system.manifold.Manifold.manifold_result`.
-    figsize : tuple[int, int], default (10, 8)
-        Size of the matplotlib figure.
+    manifolds : list of :class:`hiten.system.manifold.Manifold`
+        Collection of previously-computed Manifold objects. Each item must
+        have a non-empty manifold_result.
+    figsize : tuple, default (10, 8)
+        Size of the matplotlib figure in inches.
     save : bool, default False
-        Save the figure to *filepath*.
+        Save the figure to filepath.
     dark_mode : bool, default True
         Apply the dark colour scheme.
     filepath : str, default "manifolds.svg"
-        Output path used if *save* is *True*.
-    labels : list[str] or None, optional
-        Custom legend labels.  Must match ``len(manifolds)`` when supplied.
-    colors : list[str] or None, optional
+        Output path used if save is True.
+    labels : list of str or None, optional
+        Custom legend labels. Must match len(manifolds) when supplied.
+    colors : list of str or None, optional
         Override the automatically-generated colours (one per manifold).
     cmap : str, default "tab10"
-        Matplotlib colormap used when *colors* is *None*.
+        Matplotlib colormap used when colors is None.
     alpha : float, default 0.6
-        Line opacity for manifold trajectories (0 < alpha ≤ 1).
+        Line opacity for manifold trajectories (0 < alpha <= 1).
     equal_axes : bool, default True
         Enforce identical scaling on all axes.
     **kwargs
         Reserved for future extensions.
+        
+    Returns
+    -------
+    tuple
+        (fig, ax) containing the figure and axis objects for further customization
+        
+    Raises
+    ------
+    ValueError
+        If manifolds list is empty, labels/colors length mismatch, or alpha out of range.
     """
     if not manifolds:
         raise ValueError("'manifolds' must contain at least one element.")
@@ -1007,15 +1157,15 @@ def plot_manifolds(
 
 def _get_body_color(body: Body, default_color: str) -> str:
     """
-    Determines the color for a celestial body in a plot.
+    Determine the color for a celestial body in a plot.
 
-    It returns the color specified in the `Body` object, unless the color is
+    It returns the color specified in the Body object, unless the color is
     the default black ("#000000"), in which case it returns a specified default
     color. This ensures visibility in both light and dark modes.
 
     Parameters
     ----------
-    body : Body
+    body : :class:`hiten.system.body.Body`
         The celestial body object.
     default_color : str
         The color to use if the body's color is the default black.
@@ -1029,7 +1179,8 @@ def _get_body_color(body: Body, default_color: str) -> str:
         return body.color
     return default_color
 
-def _plot_body(ax, center, radius, color, name, u_res=40, v_res=15, *, label=True):
+def _plot_body(ax: plt.Axes, center: np.ndarray, radius: float, color: str, name: str, 
+               u_res: int = 40, v_res: int = 15, *, label: bool = True) -> None:
     """
     Helper method to plot a celestial body as a sphere.
     
@@ -1037,18 +1188,20 @@ def _plot_body(ax, center, radius, color, name, u_res=40, v_res=15, *, label=Tru
     ----------
     ax : matplotlib.axes.Axes
         The 3D axes to plot on.
-    center : array-like
-        The (x, y, z) coordinates of the body center.
+    center : numpy.ndarray, shape (3,)
+        The (x, y, z) coordinates of the body center in nondimensional units.
     radius : float
-        The radius of the body in canonical units.
+        The radius of the body in nondimensional units.
     color : str
         The color to use for the body.
     name : str
         The name of the body to use in the label.
-    u_res : int, optional
-        Resolution around the circumference (longitude). Default is 40.
-    v_res : int, optional
-        Resolution from pole to pole (latitude). Default is 30.
+    u_res : int, default 40
+        Resolution around the circumference (longitude).
+    v_res : int, default 15
+        Resolution from pole to pole (latitude).
+    label : bool, default True
+        Whether to add a text label for the body.
     """
     u, v = np.mgrid[0:2*np.pi:u_res*1j, 0:np.pi:v_res*1j]
     x = center[0] + radius * np.cos(u) * np.sin(v)
@@ -1070,7 +1223,7 @@ def _plot_body(ax, center, radius, color, name, u_res=40, v_res=15, *, label=Tru
         ])
 
 
-def _set_axes_equal(ax):
+def _set_axes_equal(ax: plt.Axes) -> None:
     """
     Set 3D plot axes to equal scale.
     
@@ -1093,10 +1246,11 @@ def _set_axes_equal(ax):
     ax.set_zlim3d([origin[2] - radius, origin[2] + radius])
 
 
-def _set_dark_mode(fig: plt.Figure, ax: plt.Axes, title: Optional[str] = None):
+def _set_dark_mode(fig: plt.Figure, ax: plt.Axes, title: Optional[str] = None) -> None:
     """
     Apply dark mode styling to the figure and axes.
-    Handles both 2D and 3D axes.
+    
+    Handles both 2D and 3D axes with appropriate styling for each type.
     
     Parameters
     ----------

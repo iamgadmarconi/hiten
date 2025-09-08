@@ -1,19 +1,19 @@
-r"""
-hiten.algorithms.dynamics.base
-========================
+r"""Core abstractions for dynamical systems integration.
 
-Core abstractions for time-continuous dynamical systems used by the
-integrator framework. The definitions collected here allow numerical
-integrators to interact with a system through a minimal, yet explicit,
-interface that is independent of the underlying physical model.
+This module provides abstract base classes and protocols that define the
+interface between dynamical systems and numerical integrators. The design
+allows integrators to work with any system that implements the minimal
+required interface, independent of the underlying physical model.
 
 References
 ----------
-Hairer, E.; Nørsett, S.; Wanner, G. (1993). "Solving Ordinary Differential
-Equations I". Springer.
+Hairer, E.; Norsett, S.; Wanner, G. (1993).
+*Solving Ordinary Differential Equations I: Nonstiff Problems*.
+Springer-Verlag.
 
-Koon, W. S.; Lo, M. W.; Marsden, J. E.; Ross, S. D. (2011). "Dynamical
-Systems, the Three-Body Problem and Space Mission Design".
+Koon, W. S.; Lo, M. W.; Marsden, J. E.; Ross, S. D. (2011).
+*Dynamical Systems, the Three-Body Problem and Space Mission Design*.
+Caltech.
 """
 
 from abc import ABC, abstractmethod
@@ -31,20 +31,24 @@ if TYPE_CHECKING:
 
 @runtime_checkable
 class _DynamicalSystemProtocol(Protocol):
-    r"""
-    Lightweight structural type understood by the integrator layer.
+    r"""Protocol defining the minimal interface for dynamical systems.
 
-    The protocol declares the minimal read-only attributes that a concrete
-    dynamical system must expose.
+    This protocol specifies the required attributes that any dynamical system
+    must implement to be compatible with the integrator framework. It uses
+    structural typing to allow duck typing while maintaining type safety.
 
     Attributes
     ----------
     dim : int
-        Dimension of the state vector.
-    rhs : Callable[[float, numpy.ndarray], numpy.ndarray]
-        Vector field :math:`f(t,\,\mathbf y)` returning
-        :math:`\dot{\mathbf y}` evaluated at time *t* and state
-        :math:`\mathbf y`.
+        Dimension of the state space (number of state variables).
+    rhs : Callable[[float, ndarray], ndarray]
+        Right-hand side function f(t, y) that computes the time derivative
+        dy/dt given time t and state vector y.
+        
+    Notes
+    -----
+    The @runtime_checkable decorator allows isinstance() checks against
+    this protocol at runtime, enabling flexible type validation.
     """
     
     @property
@@ -58,39 +62,50 @@ class _DynamicalSystemProtocol(Protocol):
             
 
 class _DynamicalSystem(ABC):
-    r"""
-    Abstract base class implementing common functionality for concrete
-    dynamical systems.
+    r"""Abstract base class for dynamical systems.
+
+    Provides common functionality and interface definition for concrete
+    dynamical system implementations. Handles state space dimension
+    validation and provides utilities for state vector checking.
 
     Parameters
     ----------
     dim : int
-        Dimension :math:`n \ge 1` of the state space.
+        Dimension of the state space (must be >= 1).
 
     Attributes
     ----------
     dim : int
-        Same as the *dim* parameter.
+        State space dimension.
 
     Raises
     ------
     ValueError
-        If *dim* is not positive.
+        If dim is not positive.
 
     Notes
     -----
-    Subclasses must override :pyattr:`rhs` with a callable complying with
-    :pyclass:`_DynamicalSystemProtocol`.
+    Subclasses must implement the abstract :attr:`rhs` property to provide
+    the vector field function compatible with :class:`_DynamicalSystemProtocol`.
+    
+    See Also
+    --------
+    :class:`_DynamicalSystemProtocol` : Interface specification
+    :class:`_DirectedSystem` : Directional wrapper implementation
     """
     
     def __init__(self, dim: int):
-        """
-        Initialize the dynamical hiten.system.
+        """Initialize the dynamical system.
         
         Parameters
         ----------
         dim : int
-            Dimension of the state space
+            Dimension of the state space (must be positive).
+            
+        Raises
+        ------
+        ValueError
+            If dim is not positive.
         """
         if dim <= 0:
             raise ValueError(f"Dimension must be positive, got {dim}")
@@ -107,62 +122,84 @@ class _DynamicalSystem(ABC):
         pass
     
     def validate_state(self, y: np.ndarray) -> None:
-        """Check that *y* has the correct dimension.
+        """Validate state vector dimension.
 
         Parameters
         ----------
-        y : numpy.ndarray
-            State vector.
+        y : ndarray
+            State vector to validate.
 
         Raises
         ------
         ValueError
-            If the size of *y* differs from :pyattr:`dim`.
+            If state vector length differs from system dimension.
+            
+        See Also
+        --------
+        :func:`_validate_initial_state` : Module-level validation utility
         """
         if len(y) != self.dim:
             raise ValueError(f"State vector dimension {len(y)} != system dimension {self.dim}")
 
 
 class _DirectedSystem(_DynamicalSystem):
-    r"""
-    Directional wrapper around another dynamical hiten.system.
+    r"""Directional wrapper for forward/backward time integration.
 
-    The wrapper permits integration forward or backward in time and can
-    selectively negate derivatives of specified state components. This is
-    particularly handy for Hamiltonian systems written in
-    :math:`\mathbf{q},\,\mathbf{p}` form where momentum variables change sign
-    under time reversal.
+    Wraps another dynamical system to enable forward or backward time
+    integration with selective component sign handling. Particularly useful
+    for Hamiltonian systems where momentum variables change sign under
+    time reversal.
 
     Parameters
     ----------
-    base_or_dim : _DynamicalSystem | int
-        A concrete system instance to be wrapped or, alternatively, the state
-        dimension expected from a subclass that will implement
-        :pyattr:`rhs`.
-    fwd : int, default 1
-        Direction flag. A positive value keeps the original direction while a
-        negative value integrates backward in time.
-    flip_indices : slice | Sequence[int] | None, optional
-        Indices of components whose derivatives must be negated when *fwd* is
-        negative. If *None*, all components are flipped.
+    base_or_dim : _DynamicalSystem or int
+        Either a concrete system instance to wrap, or the state dimension
+        for subclasses that implement their own rhs property.
+    fwd : int, optional
+        Direction flag. Positive values integrate forward in time,
+        negative values integrate backward. Default is 1.
+    flip_indices : slice or Sequence[int] or None, optional
+        Indices of state components whose derivatives should be negated
+        when fwd < 0. If None, all components are flipped. Default is None.
 
     Attributes
     ----------
     dim : int
-        Dimension of the underlying hiten.system.
+        Dimension of the underlying system.
     _fwd : int
-        Normalised copy of *fwd* that is either +1 or -1.
+        Normalized direction flag (+1 or -1).
+    _base : _DynamicalSystem or None
+        Wrapped system instance (None for subclass usage).
+    _flip_idx : slice or Sequence[int] or None
+        Component indices to flip for backward integration.
 
     Raises
     ------
     AttributeError
-        If :pyattr:`rhs` is accessed while no base system was supplied and the
-        subclass did not implement its own :pyattr:`rhs`.
+        If rhs is accessed when no base system was provided and the
+        subclass doesn't implement its own rhs property.
 
     Notes
     -----
-    The wrapper leaves the original vector field untouched and only
-    post-processes its output.
+    - The wrapper post-processes vector field output without modifying
+      the original system
+    - Supports both composition (wrapping existing systems) and inheritance
+      (subclassing with custom rhs implementation)
+    - Attribute access is delegated to the wrapped system when available
+    
+    Examples
+    --------
+    >>> # Forward integration (default)
+    >>> forward_sys = _DirectedSystem(base_system)
+    >>> # Backward integration
+    >>> backward_sys = _DirectedSystem(base_system, fwd=-1)
+    >>> # Backward with selective momentum flipping
+    >>> hamiltonian_backward = _DirectedSystem(ham_sys, fwd=-1, flip_indices=[3,4,5])
+    
+    See Also
+    --------
+    :class:`_DynamicalSystem` : Base class for dynamical systems
+    :func:`_propagate_dynsys` : Generic propagation using DirectedSystem
     """
 
     def __init__(self,
@@ -207,10 +244,34 @@ class _DirectedSystem(_DynamicalSystem):
         return _rhs
 
     def __repr__(self):
+        """String representation of DirectedSystem.
+        
+        Returns
+        -------
+        str
+            Formatted string showing system parameters.
+        """
         return (f"DirectedSystem(dim={self.dim}, fwd={self._fwd}, "
                 f"flip_idx={self._flip_idx})")
 
     def __getattr__(self, item):
+        """Delegate attribute access to wrapped system.
+        
+        Parameters
+        ----------
+        item : str
+            Attribute name to access.
+            
+        Returns
+        -------
+        Any
+            Attribute value from wrapped system.
+            
+        Raises
+        ------
+        AttributeError
+            If no wrapped system exists or attribute not found.
+        """
         if self._base is None:
             raise AttributeError(item)
         return getattr(self._base, item)
@@ -227,12 +288,50 @@ def _propagate_dynsys(
     order: int = 6,
     flip_indices: Sequence[int] | None = None,
 ) -> "_Solution":
-    r"""
-    Generic propagation routine shared by public helpers.
+    r"""Generic trajectory propagation for dynamical systems.
 
-    This is an internal utility.  It normalises *state0*, applies the
-    :pyclass:`_DirectedSystem` wrapper and delegates the actual
-    integration to the requested backend.
+    Internal utility that handles state validation, directional wrapping,
+    and delegation to various integration backends. Supports multiple
+    numerical methods with consistent interface.
+
+    Parameters
+    ----------
+    dynsys : _DynamicalSystem
+        Dynamical system to integrate.
+    state0 : Sequence[float]
+        Initial state vector.
+    t0 : float
+        Initial time.
+    tf : float
+        Final time.
+    forward : int, optional
+        Integration direction (+1 forward, -1 backward). Default is 1.
+    steps : int, optional
+        Number of time steps for output. Default is 1000.
+    method : {'scipy', 'rk', 'symplectic', 'adaptive'}, optional
+        Integration method to use. Default is 'scipy'.
+    order : int, optional
+        Integration order for non-scipy methods. Default is 6.
+    flip_indices : Sequence[int] or None, optional
+        State component indices to flip for backward integration.
+        Default is None.
+
+    Returns
+    -------
+    _Solution
+        Integration solution containing times and states.
+
+    Notes
+    -----
+    - Automatically applies :class:`_DirectedSystem` wrapper for direction handling
+    - Validates initial state dimension against system requirements
+    - Supports multiple backends: SciPy (DOP853), Runge-Kutta, symplectic, adaptive
+    - Time array is adjusted for integration direction in output
+    
+    See Also
+    --------
+    :class:`_DirectedSystem` : Directional wrapper used internally
+    :func:`_validate_initial_state` : State validation utility
     """
     from hiten.algorithms.integrators.base import _Solution
     from hiten.algorithms.integrators.rk import AdaptiveRK, RungeKutta
@@ -283,14 +382,33 @@ def _propagate_dynsys(
     return _Solution(times_signed, states)
 
 
-def _validate_initial_state(state, expected_dim=6): 
-    r"""
-    Validate shape of *state*.
+def _validate_initial_state(state, expected_dim=6):
+    r"""Validate and normalize initial state vector.
+
+    Converts input to numpy array and validates dimension against expected
+    system requirements. Used internally by propagation routines.
+
+    Parameters
+    ----------
+    state : array_like
+        Initial state vector to validate.
+    expected_dim : int, optional
+        Expected state vector dimension. Default is 6 (typical for CR3BP).
+
+    Returns
+    -------
+    ndarray
+        Validated state vector as float64 numpy array.
 
     Raises
     ------
     ValueError
-        If length of *state* does not equal *expected_dim*.
+        If state vector dimension doesn't match expected_dim.
+        
+    See Also
+    --------
+    :meth:`_DynamicalSystem.validate_state` : Instance method for validation
+    :func:`_propagate_dynsys` : Uses this function for state validation
     """
     state_np = np.asarray(state, dtype=np.float64)
     if state_np.shape != (expected_dim,):

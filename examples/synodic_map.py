@@ -1,4 +1,4 @@
-"""Example script: Generating a Poincaré map for the synodic section of a vertical orbit manifold.
+"""Example script: Generating a Poincare map for the synodic section of a vertical orbit manifold.
 
 Run with
     python examples/heteroclinic_connection.py

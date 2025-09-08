@@ -1,3 +1,20 @@
+"""Base classes for numerical continuation algorithms in dynamical systems.
+
+This module provides the foundational abstract base class for numerical continuation
+algorithms used to trace families of solutions in dynamical systems. The continuation
+engine implements a generic predict-correct framework that can be specialized for
+different types of problems (periodic orbits, equilibria, manifolds, etc.).
+
+See Also
+--------
+:mod:`hiten.algorithms.continuation.strategies`
+    Stepping strategies for different continuation methods.
+:mod:`hiten.algorithms.corrector`
+    Corrector algorithms for solution refinement.
+:mod:`hiten.system`
+    Dynamical system definitions that use continuation.
+"""
+
 from abc import ABC, abstractmethod
 from typing import Callable, Sequence
 
@@ -9,6 +26,90 @@ from hiten.utils.log_config import logger
 
 
 class _ContinuationEngine(ABC):
+    """Abstract base class for numerical continuation algorithms.
+
+    This class provides a generic framework for tracing families of solutions
+    in dynamical systems using numerical continuation methods. It implements
+    the standard predict-correct algorithm with adaptive step size control
+    and flexible stopping criteria.
+
+    The engine is designed to be subclassed with problem-specific implementations
+    of key methods like correction, parameter extraction, and stopping conditions.
+    It uses a strategy pattern for prediction steps to support different
+    continuation methods (natural parameter, pseudo-arclength, etc.).
+
+    Parameters
+    ----------
+    initial_solution : object
+        Starting solution for the continuation (e.g., periodic orbit, equilibrium).
+        The type depends on the specific problem domain.
+    parameter_getter : callable
+        Function that extracts continuation parameter(s) from a solution object.
+        Should return float or ndarray.
+    target : sequence
+        Target parameter range(s) for continuation. For 1D: (min, max).
+        For multi-dimensional: (2, m) array where each column specifies
+        (min, max) for one parameter.
+    step : float or sequence of float, default 1e-4
+        Initial step size(s) for continuation parameters. If scalar,
+        uses same step for all parameters.
+    corrector_kwargs : dict, optional
+        Additional keyword arguments passed to the corrector method.
+    max_iters : int, default 256
+        Maximum number of continuation steps before termination.
+
+    Attributes
+    ----------
+    family : sequence of object
+        Read-only view of generated solution family.
+    parameter_values : sequence of ndarray
+        Parameter values corresponding to each family member.
+
+    Notes
+    -----
+    The continuation algorithm implements these steps:
+    
+    1. **Prediction**: Use stepping strategy to predict next solution
+    2. **Instantiation**: Convert predicted representation to domain object
+    3. **Correction**: Refine solution using problem-specific corrector
+    4. **Acceptance**: Add to family if correction succeeds
+    5. **Adaptation**: Adjust step size based on success/failure
+    6. **Termination**: Check stopping condition and iteration limit
+    
+    Subclasses must implement:
+    - :meth:`_make_stepper`: Create stepping strategy
+    - :meth:`_stop_condition`: Define termination criteria
+    - :meth:`_instantiate`: Convert predictions to domain objects
+    - :meth:`_correct`: Problem-specific correction
+    - :meth:`_parameter`: Extract parameters from solutions
+
+    Examples
+    --------
+    >>> # Subclass implementation example
+    >>> class OrbitContinuation(_ContinuationEngine):
+    ...     def _make_stepper(self):
+    ...         return NaturalParameterStep()
+    ...     
+    ...     def _stop_condition(self):
+    ...         current = self._parameter(self._family[-1])
+    ...         return np.any(current >= self._target_max)
+    ...     
+    ...     def _instantiate(self, repr):
+    ...         return Orbit.from_state(repr)
+    ...     
+    ...     def _correct(self, orbit, **kwargs):
+    ...         return orbit.correct(**kwargs)
+    ...     
+    ...     def _parameter(self, orbit):
+    ...         return orbit.energy
+
+    See Also
+    --------
+    :class:`hiten.algorithms.continuation.strategies._step_interface._ContinuationStep`
+        Base class for stepping strategies.
+    :mod:`hiten.algorithms.corrector`
+        Corrector algorithms for solution refinement.
+    """
 
     def __init__(self, *,  initial_solution: object, parameter_getter: Callable[[object], "np.ndarray | float"],
                 target: Sequence[Sequence[float] | float], step: float | Sequence[float] = 1e-4,
@@ -70,17 +171,81 @@ class _ContinuationEngine(ABC):
 
     @property
     def family(self) -> Sequence[object]:  
-        """Read-only view of the generated solution list (seed is index 0)."""
+        """Read-only view of the generated solution family.
 
+        Returns
+        -------
+        sequence of object
+            Tuple containing all solutions in the continuation family.
+            The initial solution is at index 0, with subsequent solutions
+            ordered by continuation step.
+
+        Notes
+        -----
+        This property provides immutable access to the solution family.
+        Solutions are added during the :meth:`run` method as continuation
+        progresses and corrections succeed.
+        """
         return tuple(self._family)
 
     @property
     def parameter_values(self) -> Sequence[np.ndarray]:
-        """Parameter value associated with each family member."""
+        """Parameter values corresponding to each family member.
 
+        Returns
+        -------
+        sequence of ndarray
+            Tuple containing parameter values for each solution in the family.
+            Each array has shape matching the continuation parameter dimension.
+
+        Notes
+        -----
+        Parameter values are extracted using the parameter_getter function
+        provided during initialization. The values correspond one-to-one
+        with solutions in the :attr:`family` property.
+        """
         return tuple(self._param_history)
 
     def run(self) -> list[object]:
+        """Execute the continuation algorithm to generate solution family.
+
+        This method implements the main continuation loop, repeatedly applying
+        the predict-correct algorithm until a stopping condition is met or
+        the maximum iteration limit is reached.
+
+        Returns
+        -------
+        list of object
+            Complete solution family including the initial solution.
+            Solutions are ordered by continuation step.
+
+        Notes
+        -----
+        The algorithm performs these steps in each iteration:
+        
+        1. Check stopping condition and iteration limit
+        2. Use stepping strategy to predict next solution
+        3. Instantiate domain object from prediction
+        4. Apply corrector to refine the solution
+        5. Accept solution if correction succeeds
+        6. Adapt step size based on success/failure
+        7. Call optional hooks for custom processing
+        
+        Failed corrections trigger step size reduction and retry up to
+        10 attempts before aborting. Successful steps may increase step size
+        for efficiency.
+
+        Examples
+        --------
+        >>> engine = OrbitContinuation(
+        ...     initial_solution=orbit0,
+        ...     parameter_getter=lambda o: o.energy,
+        ...     target=(3.0, 4.0),
+        ...     step=0.01
+        ... )
+        >>> family = engine.run()
+        >>> print(f"Generated {len(family)} orbits")
+        """
         logger.info("Starting continuation loop ...")
         attempts_at_current_step = 0
 
@@ -140,23 +305,117 @@ class _ContinuationEngine(ABC):
         return self._family
 
     def _instantiate(self, representation: np.ndarray):
-        """Instantiate a domain object from the predicted representation."""
+        """Instantiate a domain object from the predicted representation.
 
+        This method converts the numerical representation produced by the
+        stepping strategy into a domain-specific object that can be corrected.
+
+        Parameters
+        ----------
+        representation : ndarray
+            Numerical representation of the predicted solution, typically
+            state vectors or other parametric data.
+
+        Returns
+        -------
+        object
+            Domain-specific object (e.g., Orbit, Equilibrium) ready for correction.
+
+        Notes
+        -----
+        This is an abstract method that must be implemented by subclasses
+        or domain-specific mix-ins. The representation format depends on
+        the stepping strategy being used.
+        """
         raise NotImplementedError("_instantiate must be provided by a domain mix-in")
 
     def _correct(self, obj: object, **kwargs):  
-        """Apply a problem-specific corrector returning the refined object."""
+        """Apply problem-specific corrector to refine the predicted solution.
 
+        This method takes a predicted domain object and applies appropriate
+        correction algorithms to satisfy the problem constraints (e.g.,
+        periodicity, equilibrium conditions).
+
+        Parameters
+        ----------
+        obj : object
+            Domain object to be corrected (from :meth:`_instantiate`).
+        **kwargs
+            Additional correction parameters passed from corrector_kwargs.
+
+        Returns
+        -------
+        object
+            Corrected domain object satisfying problem constraints.
+
+        Raises
+        ------
+        Exception
+            If correction fails to converge or constraints cannot be satisfied.
+            The engine will catch these exceptions and reduce step size.
+
+        Notes
+        -----
+        This is an abstract method that must be implemented by subclasses.
+        Common correctors include Newton-Raphson for periodic orbits and
+        fixed-point iteration for equilibria.
+        """
         raise NotImplementedError("_correct must be implemented by a domain mix-in")
 
     def _parameter(self, obj: object) -> np.ndarray:  
-        """Return the continuation parameter value for the given object."""
+        """Extract continuation parameter value from a domain object.
 
+        This method extracts the current value of the continuation parameter(s)
+        from a corrected solution object.
+
+        Parameters
+        ----------
+        obj : object
+            Domain object (e.g., corrected orbit or equilibrium).
+
+        Returns
+        -------
+        ndarray
+            Current parameter value(s) with shape matching the continuation
+            parameter dimension.
+
+        Notes
+        -----
+        This is an abstract method that must be implemented by subclasses.
+        The parameter extraction should be consistent with the parameter_getter
+        function provided during initialization.
+        """
         raise NotImplementedError("_parameter must be implemented by a domain mix-in")
 
     def _update_step(self, current_step: np.ndarray, *, success: bool) -> np.ndarray:  
-        """Default component-wise multiplicative adaption (*2 on success, *0.5 on failure)."""
+        """Adapt step size based on correction success or failure.
 
+        This method implements the default step size adaptation strategy,
+        increasing step size after successful corrections and decreasing
+        it after failures to maintain algorithm efficiency and robustness.
+
+        Parameters
+        ----------
+        current_step : ndarray
+            Current step size(s) for continuation parameters.
+        success : bool
+            True if the last correction succeeded, False if it failed.
+
+        Returns
+        -------
+        ndarray
+            Adapted step size(s) with same shape as current_step.
+
+        Notes
+        -----
+        The default strategy uses multiplicative adaptation:
+        - Success: multiply by 2.0 (increase efficiency)
+        - Failure: multiply by 0.5 (improve robustness)
+        
+        Step magnitudes are clamped to [1e-10, 1.0] to prevent numerical
+        issues while preserving step direction. Subclasses can override
+        this method for more sophisticated adaptation strategies.
+        """
         factor = 2.0 if success else 0.5
         new_step = current_step * factor
         clipped_mag = np.clip(np.abs(new_step), 1e-10, 1.0)
@@ -164,8 +423,26 @@ class _ContinuationEngine(ABC):
 
     @abstractmethod
     def _stop_condition(self) -> bool:  
-        """Return True to terminate continuation."""
+        """Check if continuation should terminate.
 
+        This method evaluates problem-specific termination criteria such as
+        reaching target parameter values, detecting bifurcations, or
+        encountering solution boundaries.
+
+        Returns
+        -------
+        bool
+            True if continuation should stop, False to continue.
+
+        Notes
+        -----
+        This is an abstract method that must be implemented by subclasses.
+        Common stopping criteria include:
+        - Parameter reaching target range boundaries
+        - Solution stability changes (bifurcations)
+        - Physical constraints (e.g., energy limits)
+        - Convergence to known solutions
+        """
         raise NotImplementedError("_stop_condition must be provided by a sub-class")
 
     @staticmethod
@@ -176,8 +453,33 @@ class _ContinuationEngine(ABC):
         min_relative: float = 1e-6,
         min_absolute: float = 1e-8,
     ) -> float:
-        """Sign-preserving clamp that enforces a minimum step magnitude."""
+        """Clamp step size to enforce minimum magnitude while preserving sign.
 
+        This utility method ensures step sizes don't become too small to
+        make numerical progress while preserving the continuation direction.
+
+        Parameters
+        ----------
+        step_value : float
+            Step size to be clamped.
+        reference_value : float, default 1.0
+            Reference value for relative minimum calculation.
+        min_relative : float, default 1e-6
+            Minimum step as fraction of reference value.
+        min_absolute : float, default 1e-8
+            Absolute minimum step size.
+
+        Returns
+        -------
+        float
+            Clamped step value with same sign as input.
+
+        Notes
+        -----
+        The minimum step is the larger of min_absolute and
+        min_relative * |reference_value|. This ensures progress
+        in both absolute and relative terms.
+        """
         if step_value == 0:
             return min_absolute
 
@@ -187,11 +489,40 @@ class _ContinuationEngine(ABC):
 
     @staticmethod
     def _clamp_scale(scale_value: float, *, min_scale: float = 1e-3, max_scale: float = 1e3) -> float:
-        """Clamp multiplicative scaling factors into a safe range."""
+        """Clamp multiplicative scaling factors to prevent extreme adaptations.
 
+        This utility method bounds scaling factors used in step size adaptation
+        to maintain numerical stability and reasonable continuation behavior.
+
+        Parameters
+        ----------
+        scale_value : float
+            Scaling factor to be clamped.
+        min_scale : float, default 1e-3
+            Minimum allowed scaling factor.
+        max_scale : float, default 1e3
+            Maximum allowed scaling factor.
+
+        Returns
+        -------
+        float
+            Clamped scaling factor in [min_scale, max_scale].
+
+        Notes
+        -----
+        This prevents extreme step size changes that could destabilize
+        the continuation algorithm or cause numerical overflow/underflow.
+        """
         return float(np.clip(scale_value, min_scale, max_scale))
 
-    def __repr__(self) -> str:  
+    def __repr__(self) -> str:
+        """Return string representation of the continuation engine.
+
+        Returns
+        -------
+        str
+            Compact representation showing current state and configuration.
+        """  
         return (
             f"{self.__class__.__name__}(n_members={len(self._family)}, step={self._step}, "
             f"target=[[{self._target_min}], [{self._target_max}]])"
@@ -200,22 +531,58 @@ class _ContinuationEngine(ABC):
     def _on_accept(self, candidate: object) -> None:
         """Hook executed after a candidate is accepted into the family.
 
-        Subclasses can override this to perform custom bookkeeping (e.g.,
-        updating tangents for pseudo-arclength continuation) without having to
-        reimplement the entire *run()* loop.
-        """
+        This method provides an extension point for subclasses to perform
+        custom processing after successful solution acceptance without
+        reimplementing the main continuation loop.
 
+        Parameters
+        ----------
+        candidate : object
+            The corrected solution that was just accepted into the family.
+
+        Notes
+        -----
+        Common uses for this hook include:
+        - Updating tangent vectors for pseudo-arclength continuation
+        - Computing stability information
+        - Saving intermediate results
+        - Triggering bifurcation detection
+        
+        The default implementation does nothing. Exceptions raised by
+        this method are caught and logged but do not stop continuation.
+        """
         pass
 
     @abstractmethod
-    def _make_stepper(self) -> _ContinuationStep:  # noqa: N802
-        """Return the `StepStrategy` for this continuation run.
+    def _make_stepper(self) -> _ContinuationStep:
+        """Create the stepping strategy for this continuation run.
 
-        Subclasses or mix-ins **must** implement this method (or assign
-        ``self._stepper`` before calling ``super().__init__``) so that the
-        engine knows how to predict the next candidate and possibly adapt the
-        step length.  The deprecated fallback that wrapped ``_predict`` has
-        been removed to enforce the new strategy-based architecture.
+        This method must return a stepping strategy object that implements
+        the prediction phase of the continuation algorithm. The strategy
+        determines how to predict the next solution based on the current
+        solution and step size.
+
+        Returns
+        -------
+        :class:`hiten.algorithms.continuation.strategies._step_interface._ContinuationStep`
+            Stepping strategy instance for solution prediction.
+
+        Notes
+        -----
+        This is an abstract method that must be implemented by subclasses.
+        Common stepping strategies include:
+        
+        - Natural parameter continuation: vary one parameter linearly
+        - Pseudo-arclength continuation: follow solution curve in extended space
+        - Tangent prediction: use solution derivatives for prediction
+        
+        The stepping strategy should be compatible with the domain objects
+        and parameter structure used by the continuation problem.
+
+        Examples
+        --------
+        >>> def _make_stepper(self):
+        ...     return NaturalParameterStep(parameter_index=0)
         """
         raise NotImplementedError
 

@@ -1,3 +1,16 @@
+"""Printing and formatting utilities for the hiten package.
+
+This module provides functions for formatting mathematical expressions,
+polynomial coefficients, and other numerical data for display purposes.
+It includes utilities for formatting monomials, complex coefficients,
+and polynomial tables.
+
+Notes
+-----
+All formatting functions are designed to produce clean, readable output
+for mathematical expressions and numerical data.
+"""
+
 from typing import List, Union, Iterable, Optional
 
 import numpy as np
@@ -12,12 +25,12 @@ def _monomial_to_string(exps: tuple[int, ...]) -> str:
     Parameters
     ----------
     exps : tuple[int, ...]
-        Tuple of exponents for each variable (q1, q2, q3, p1, p2, p3)
+        Tuple of exponents for each variable (q1, q2, q3, p1, p2, p3).
         
     Returns
     -------
     str
-        Formatted string representation of the monomial
+        Formatted string representation of the monomial.
         
     Notes
     -----
@@ -27,7 +40,12 @@ def _monomial_to_string(exps: tuple[int, ...]) -> str:
     - Variables are separated by spaces
     - If all exponents are zero, returns "1"
     
-    Example: (1, 2, 0, 0, 0, 3) becomes "q1 q2^2 p3^3"
+    Examples
+    --------
+    >>> _monomial_to_string((1, 2, 0, 0, 0, 3))
+    'q1 q2^2 p3^3'
+    >>> _monomial_to_string((0, 0, 0, 0, 0, 0))
+    '1'
     """
     out: list[str] = []
     names = ("q1", "q2", "q3", "p1", "p2", "p3")
@@ -48,14 +66,14 @@ def _fmt_coeff(c: complex, width: int = 25) -> str:
     Parameters
     ----------
     c : complex
-        Complex coefficient to format
-    width : int, optional
-        Width of the resulting string, default is 25
+        Complex coefficient to format.
+    width : int, default 25
+        Width of the resulting string.
         
     Returns
     -------
     str
-        Formatted string representation of the complex coefficient
+        Formatted string representation of the complex coefficient.
         
     Notes
     -----
@@ -66,6 +84,13 @@ def _fmt_coeff(c: complex, width: int = 25) -> str:
     
     All numbers use scientific notation with 16 digits of precision.
     The result is right-justified to the specified width.
+    
+    Examples
+    --------
+    >>> _fmt_coeff(1.23 + 4.56j, width=15)
+    '  1.230000e+00+4.560000e+00i'
+    >>> _fmt_coeff(2.5, width=10)
+    '  2.500000e+00'
     """
     s: str
     if abs(c.imag) < 1e-14:  # Effectively real
@@ -88,18 +113,33 @@ def _format_poly_table(poly: List[np.ndarray], clmo: np.ndarray, degree: Optiona
     
     Parameters
     ----------
-    poly : List[numpy.ndarray]
-        List of coefficient arrays reduced to the center manifold
+    poly : list of numpy.ndarray
+        List of coefficient arrays reduced to the center manifold.
+        Each array contains coefficients for a specific degree.
     clmo : numpy.ndarray
-        List of arrays containing packed multi-indices
+        Array containing packed multi-indices for coefficient lookup.
+    degree : int, Iterable[int], str, or None, optional
+        Degree filter for the coefficient table. If None or "all",
+        includes all available degrees. If int, includes only that degree.
+        If Iterable[int], includes the specified degrees.
         
     Returns
     -------
     str
-        Formatted string table of Hamiltonian coefficients
+        Formatted string table of Hamiltonian coefficients.
         
-    Each row shows the exponents (k1, k2, k3, k4) and the corresponding coefficient (hk)
-    in scientific notation.
+    Notes
+    -----
+    Each row shows the exponents (q1, p1, q2, p2, q3, p3) and the corresponding
+    coefficient (hk) in scientific notation. The table is formatted in two
+    columns for better readability.
+    
+    Examples
+    --------
+    >>> poly = [np.array([]), np.array([]), np.array([1.0, 2.0])]
+    >>> clmo = np.array([[0, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0]])
+    >>> _format_poly_table(poly, clmo, degree=2)
+    'q1  p1  q2  p2  q3  p3  hk\n...'
     """
     # Each entry: (degree, (k_q1, k_q2, k_q3, k_p1, k_p2, k_p3), coeff)
     structured_terms: list[tuple[int, tuple[int, int, int, int, int, int], complex]] = []

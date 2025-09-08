@@ -1,3 +1,21 @@
+"""
+Base classes for Poincare return map implementations.
+
+This module provides the foundational classes for implementing Poincare
+return maps in the hiten framework. It defines the core interfaces and
+data structures used across all Poincare map implementations.
+
+References
+----------
+Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
+
+Guckenheimer, J. & Holmes, P. (1983). *Nonlinear Oscillations, Dynamical
+Systems, and Bifurcations of Vector Fields*. Springer.
+
+Wiggins, S. (2003). *Introduction to Applied Nonlinear Dynamical Systems
+and Chaos*. Springer.
+"""
+
 from abc import ABC, abstractmethod
 from typing import Optional
 
@@ -10,7 +28,43 @@ from hiten.algorithms.poincare.core.strategies import _SeedingStrategyBase
 
 
 class _Section:
-    """Lightweight immutable container for a single 2-D return-map slice."""
+    """Immutable container for a single 2D return map slice.
+
+    This class holds the data for a computed Poincare section, including
+    the intersection points, state vectors, axis labels, and optional
+    integration times.
+
+    Parameters
+    ----------
+    points : ndarray, shape (n, 2)
+        Array of 2D intersection points in the section plane.
+    states : ndarray, shape (n, k)
+        Array of state vectors at the intersection points. The number
+        of columns k depends on the backend implementation.
+    labels : tuple[str, str]
+        Labels for the two axes in the section plane (e.g., ("q2", "p2")).
+    times : ndarray, optional, shape (n,)
+        Array of absolute integration times at each intersection point.
+        If None, times are not available.
+
+    Attributes
+    ----------
+    points : ndarray, shape (n, 2)
+        The 2D intersection points.
+    states : ndarray, shape (n, k)
+        The state vectors at intersections.
+    labels : tuple[str, str]
+        The axis labels.
+    times : ndarray or None, shape (n,)
+        The integration times, if available.
+
+    Notes
+    -----
+    This class is immutable after construction. All data is stored in
+    NumPy arrays for efficient access and manipulation. The class
+    provides basic functionality for accessing the data and determining
+    the number of points in the section.
+    """
 
     def __init__(self, points: np.ndarray, states: np.ndarray, labels: tuple[str, str], times: np.ndarray | None = None):
         self.points: np.ndarray = points       # (n, 2) plane coordinates
@@ -19,21 +73,66 @@ class _Section:
         self.times: np.ndarray | None = times  # (n,) absolute integration times (optional)
 
     def __len__(self):
+        """Return the number of points in the section.
+
+        Returns
+        -------
+        int
+            Number of intersection points in the section.
+        """
         return self.points.shape[0]
 
     def __repr__(self):
+        """Return a string representation of the section.
+
+        Returns
+        -------
+        str
+            String representation showing the number of points, labels,
+            and whether times are available.
+        """
         return f"_Section(points={len(self)}, labels={self.labels}, times={'yes' if self.times is not None else 'no'})"
 
 
 class _ReturnMapBase(ABC):
-    """Reference-frame-agnostic façade for discrete Poincaré maps.
+    """Abstract base class for Poincare return map implementations.
 
-    Concrete subclasses supply ONLY four pieces of information:
+    This class provides a reference-frame-agnostic facade for discrete
+    Poincare maps. It handles caching, section management, and provides
+    a unified interface for different types of return maps.
 
-    1. `_build_backend(section_coord)` -> _ReturnMapBackend
-    2. `_build_seeding_strategy(section_coord)` -> _SeedingStrategyBase
-    3. `ic(pt, section_coord)` -> 6-D initial conditions in the problem frame
-    4. *(optionally)* overrides for plotting or advanced projections.
+    Concrete subclasses must implement four key methods:
+
+    1. :meth:`_build_backend` -> :class:`hiten.algorithms.poincare.core.backend._ReturnMapBackend`
+    2. :meth:`_build_seeding_strategy` -> :class:`hiten.algorithms.poincare.core.strategies._SeedingStrategyBase`
+    3. :meth:`ic` -> 6D initial conditions in the problem frame
+    4. *(optionally)* overrides for plotting or advanced projections
+
+    Parameters
+    ----------
+    config : :class:`hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`
+        Configuration object containing section parameters and settings.
+
+    Attributes
+    ----------
+    config : :class:`hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`
+        The configuration object.
+    _sections : dict[str, :class:`_Section`]
+        Cache of computed sections, keyed by section coordinate.
+    _engines : dict[str, :class:`hiten.algorithms.poincare.core.engine._ReturnMapEngine`]
+        Cache of engines, keyed by section coordinate.
+    _section : :class:`_Section` or None
+        The most recently accessed section.
+
+    Notes
+    -----
+    The class provides automatic caching of computed sections and engines
+    to avoid redundant computation. Sections are computed on-demand and
+    cached for subsequent access. The framework supports multiple section
+    coordinates and provides projection capabilities for different views
+    of the return map data.
+
+    All time units are in nondimensional units unless otherwise specified.
     """
 
     def __init__(self, config: _ReturnMapBaseConfig) -> None:
@@ -49,21 +148,104 @@ class _ReturnMapBase(ABC):
 
     @abstractmethod
     def _build_backend(self, section_coord: str) -> _ReturnMapBackend:
-        """Return a backend capable of single-step propagation to *section_coord*."""
+        """Build a backend for the specified section coordinate.
+
+        Parameters
+        ----------
+        section_coord : str
+            The section coordinate identifier (e.g., "q2", "p2").
+
+        Returns
+        -------
+        :class:`hiten.algorithms.poincare.core.backend._ReturnMapBackend`
+            A backend capable of single-step propagation to the section.
+
+        Notes
+        -----
+        This method must be implemented by concrete subclasses to provide
+        the appropriate backend for the given section coordinate. The
+        backend handles the numerical integration and section crossing
+        detection.
+        """
 
     @abstractmethod
     def _build_seeding_strategy(self, section_coord: str) -> _SeedingStrategyBase:
-        """Return a seeding strategy suitable for *section_coord*."""
+        """Build a seeding strategy for the specified section coordinate.
+
+        Parameters
+        ----------
+        section_coord : str
+            The section coordinate identifier (e.g., "q2", "p2").
+
+        Returns
+        -------
+        :class:`hiten.algorithms.poincare.core.strategies._SeedingStrategyBase`
+            A seeding strategy suitable for the section coordinate.
+
+        Notes
+        -----
+        This method must be implemented by concrete subclasses to provide
+        the appropriate seeding strategy for generating initial conditions
+        on the section plane.
+        """
 
     def _build_engine(self, backend: _ReturnMapBackend, strategy: _SeedingStrategyBase) -> "_ReturnMapEngine":
+        """Build an engine from a backend and seeding strategy.
 
+        Parameters
+        ----------
+        backend : :class:`hiten.algorithms.poincare.core.backend._ReturnMapBackend`
+            The backend for numerical integration.
+        strategy : :class:`hiten.algorithms.poincare.core.strategies._SeedingStrategyBase`
+            The seeding strategy for generating initial conditions.
+
+        Returns
+        -------
+        :class:`hiten.algorithms.poincare.core.engine._ReturnMapEngine`
+            A concrete engine instance.
+
+        Raises
+        ------
+        TypeError
+            If the engine class is still abstract and must be implemented
+            by a subclass.
+
+        Notes
+        -----
+        This method creates an engine that coordinates the backend and
+        seeding strategy to compute the return map. If the engine class
+        is abstract, subclasses must override this method to provide
+        a concrete implementation.
+        """
         if _ReturnMapEngine.__abstractmethods__:
             raise TypeError("Sub-class must implement _build_engine to return a concrete _ReturnMapEngine")
         return _ReturnMapEngine(backend=backend, seed_strategy=strategy, map_config=self.config)
 
     def compute(self, *, section_coord: str | None = None):
-        """Compute (or retrieve from cache) the return map on `section_coord`."""
+        """Compute or retrieve the return map for the specified section.
 
+        Parameters
+        ----------
+        section_coord : str, optional
+            The section coordinate to compute. If None, uses the default
+            section coordinate from the configuration.
+
+        Returns
+        -------
+        ndarray, shape (n, 2)
+            Array of 2D points in the section plane.
+
+        Notes
+        -----
+        This method implements a caching strategy to avoid redundant
+        computation. If the section has already been computed, it returns
+        the cached result. Otherwise, it builds the necessary backend
+        and engine, computes the section, and caches the result.
+
+        The method handles lazy initialization of engines and provides
+        a unified interface for section computation across different
+        return map implementations.
+        """
         key: str = section_coord or self.config.section_coord
 
         # Fast path - already cached
@@ -85,6 +267,29 @@ class _ReturnMapBase(ABC):
         return self._section.points
 
     def get_section(self, section_coord: str) -> _Section:
+        """Get a computed section by coordinate.
+
+        Parameters
+        ----------
+        section_coord : str
+            The section coordinate identifier.
+
+        Returns
+        -------
+        :class:`_Section`
+            The computed section data.
+
+        Raises
+        ------
+        KeyError
+            If the section has not been computed.
+
+        Notes
+        -----
+        This method returns the full section data including points,
+        states, labels, and times. Use this method when you need
+        access to the complete section information.
+        """
         if section_coord not in self._sections:
             raise KeyError(
                 f"Section '{section_coord}' has not been computed. "
@@ -93,23 +298,79 @@ class _ReturnMapBase(ABC):
         return self._sections[section_coord]
 
     def list_sections(self) -> list[str]:
+        """List all computed section coordinates.
+
+        Returns
+        -------
+        list[str]
+            List of section coordinate identifiers that have been computed.
+
+        Notes
+        -----
+        This method returns the keys of the internal section cache,
+        indicating which sections are available for access.
+        """
         return list(self._sections.keys())
 
     def has_section(self, section_coord: str) -> bool:
+        """Check if a section has been computed.
+
+        Parameters
+        ----------
+        section_coord : str
+            The section coordinate identifier to check.
+
+        Returns
+        -------
+        bool
+            True if the section has been computed, False otherwise.
+
+        Notes
+        -----
+        This method provides a safe way to check section availability
+        before attempting to access it.
+        """
         return section_coord in self._sections
 
     def clear_cache(self):
+        """Clear all cached sections and engines.
+
+        Notes
+        -----
+        This method clears the internal caches for sections and engines,
+        forcing recomputation on the next access. Use this method to
+        free memory or force fresh computation with updated parameters.
+        """
         self._sections.clear()
         self._engines.clear()
         self._section = None
 
     def _axis_index(self, section: "_Section", axis: str) -> int:
-        """Return the column index corresponding to *axis*.
+        """Return the column index corresponding to an axis label.
 
+        Parameters
+        ----------
+        section : :class:`_Section`
+            The section containing the axis labels.
+        axis : str
+            The axis label to find.
+
+        Returns
+        -------
+        int
+            The column index of the axis in the section points.
+
+        Raises
+        ------
+        ValueError
+            If the axis label is not found in the section labels.
+
+        Notes
+        -----
         The default implementation assumes a 1-1 mapping between the
-        ``section.labels`` tuple and columns of ``section.points``.  Concrete
-        subclasses can override this method if their mapping differs or if
-        axis-based projection is not supported.
+        section.labels tuple and columns of section.points. Concrete
+        subclasses can override this method if their mapping differs
+        or if axis-based projection is not supported.
         """
         try:
             return section.labels.index(axis)
@@ -124,18 +385,31 @@ class _ReturnMapBase(ABC):
         section_coord: str | None = None,
         axes: tuple[str, str] | None = None,
     ) -> np.ndarray:
-        """Return cached points for *section_coord* (compute on-demand).
+        """Return cached points for a section with optional axis projection.
 
         Parameters
         ----------
-        section_coord
-            Which stored section to retrieve (default ``self.config.section_coord``).
-        axes
-            Optional tuple of two axis labels (e.g. ("q3", "p2")) requesting a
-            different 2-D projection of the stored state.  If *axes* is not
-            given the raw stored projection is returned.
-        """
+        section_coord : str, optional
+            Which stored section to retrieve. If None, uses the default
+            section coordinate from the configuration.
+        axes : tuple[str, str], optional
+            Optional tuple of two axis labels (e.g., ("q3", "p2")) requesting
+            a different 2D projection of the stored state. If None, returns
+            the raw stored projection.
 
+        Returns
+        -------
+        ndarray, shape (n, 2)
+            Array of 2D points in the section plane, either the raw points
+            or a projection onto the specified axes.
+
+        Notes
+        -----
+        This method provides access to the computed section points with
+        optional axis projection. If the section hasn't been computed,
+        it triggers computation automatically. The axis projection allows
+        viewing the section data from different coordinate perspectives.
+        """
         key = section_coord or self.config.section_coord
 
         if key not in self._sections:
@@ -152,9 +426,35 @@ class _ReturnMapBase(ABC):
         return sec.points[:, (idx1, idx2)]
 
     def __len__(self):
+        """Return the number of points in the most recently accessed section.
+
+        Returns
+        -------
+        int
+            Number of points in the section, or 0 if no section has been
+            accessed yet.
+
+        Notes
+        -----
+        This method returns the length of the most recently accessed section.
+        If no section has been computed or accessed, it returns 0.
+        """
         return 0 if self._section is None else len(self._section)
 
     def __repr__(self):
+        """Return a string representation of the return map.
+
+        Returns
+        -------
+        str
+            String representation showing the class name, number of computed
+            sections, and configuration object.
+
+        Notes
+        -----
+        This method provides a concise string representation useful for
+        debugging and interactive exploration.
+        """
         return (
             f"{self.__class__.__name__}(sections={len(self._sections)}, "
             f"config={self.config})"

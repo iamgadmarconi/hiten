@@ -1,44 +1,55 @@
-r"""
-polynomial.operations
-=====================
-
+"""
 High-level utilities for manipulating multivariate polynomials that appear in
 normal-form and centre-manifold calculations of the spatial circular
 restricted three-body problem.
 
+This module provides comprehensive polynomial operations for the circular
+restricted three-body problem, optimized for performance using Numba JIT
+compilation and parallel processing.
+
 The module operates on the packed-coefficient representation returned by
-:pyfunc:`hiten.algorithms.polynomial.base._init_index_tables`. A polynomial
-:math:`P(q, p)` is stored as a Numba typed list ``[P_0, P_1, ... , P_N]``
-where ``P_d`` is a :class:`numpy.ndarray` containing the complex coefficients
-of the homogeneous part of total degree :math:`d` in the canonical variables
-:math:`(q_1, q_2, q_3, p_1, p_2, p_3)`.
+:func:`hiten.algorithms.polynomial.base._init_index_tables`. A polynomial
+P(q, p) is stored as a Numba typed list [P_0, P_1, ... , P_N]
+where P_d is a numpy.ndarray containing the complex coefficients
+of the homogeneous part of total degree d in the canonical variables
+(q1, q2, q3, p1, p2, p3).
 
 Function categories
 -------------------
-* Construction helpers - :pyfunc:`_polynomial_zero_list`,
-  :pyfunc:`_polynomial_variable`, :pyfunc:`_polynomial_variables_list`.
-* In-place algebra - :pyfunc:`_polynomial_add_inplace`.
-* Binary operations - :pyfunc:`_polynomial_multiply`,
-  :pyfunc:`_polynomial_power`, :pyfunc:`_polynomial_poisson_bracket`.
-* Analysis - :pyfunc:`_polynomial_clean`, :pyfunc:`_polynomial_degree`,
-  :pyfunc:`_polynomial_total_degree`.
-* Calculus - :pyfunc:`_polynomial_differentiate`, :pyfunc:`_polynomial_jacobian`,
-  :pyfunc:`_polynomial_integrate`.
-* Evaluation and substitution - :pyfunc:`_polynomial_evaluate`,
-  :pyfunc:`_substitute_linear`.
+- Construction helpers - :func:`_polynomial_zero_list`,
+    :func:`_polynomial_variable`, :func:`_polynomial_variables_list`
+- In-place algebra - :func:`_polynomial_add_inplace`
+- Binary operations - :func:`_polynomial_multiply`,
+    :func:`_polynomial_power`, :func:`_polynomial_poisson_bracket`
+- Analysis - :func:`_polynomial_clean`, :func:`_polynomial_degree`,
+    :func:`_polynomial_total_degree`
+- Calculus - :func:`_polynomial_differentiate`, :func:`_polynomial_jacobian`,
+    :func:`_polynomial_integrate`
+- Evaluation and substitution - :func:`_polynomial_evaluate`,
+    :func:`_substitute_linear`
+
+Mathematical Background
+----------------------
+The module implements polynomial operations in the 6D phase space
+(q1, q2, q3, p1, p2, p3) of the circular restricted three-body problem.
+Polynomials are represented as lists of homogeneous parts, where each part
+contains coefficients for monomials of a specific degree.
+
+The Poisson bracket implementation follows the standard definition:
+{p, q} = sum_{i=1}^3 (dp/dq_i * dq/dp_i - dp/dp_i * dq/dq_i)
 
 Attributes
 ----------
 FASTMATH : bool
-    Flag propagated to :pyfunc:`numba.njit(fastmath=True)` that enables unsafe
+    Flag propagated to numba.njit that enables unsafe
     floating-point optimisations.
 N_VARS : int
     Number of canonical variables (six for the CRTBP).
 
 Notes
 -----
-Every public routine is compiled with `numba.njit`; the most expensive kernels
-are parallelised with :pyfunc:`numba.prange`.
+Every public routine is compiled with numba.njit; the most expensive kernels
+are parallelised with numba.prange.
 """
 
 import numpy as np
@@ -64,7 +75,7 @@ def _polynomial_zero_list(max_deg: int, psi) -> List[np.ndarray]:
     max_deg : int
         Maximum degree of the polynomials to create
     psi : numpy.ndarray
-        Combinatorial table from _init_index_tables
+        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
         
     Returns
     -------
@@ -96,7 +107,7 @@ def _polynomial_variable(idx: int, max_deg: int, psi, clmo, encode_dict_list) ->
     max_deg : int
         Maximum degree to allocate for the polynomial
     psi : numpy.ndarray
-        Combinatorial table from _init_index_tables
+        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -132,7 +143,7 @@ def _polynomial_variables_list(max_deg: int, psi, clmo, encode_dict_list) -> Lis
     max_deg : int
         Maximum degree to allocate for each polynomial
     psi : numpy.ndarray
-        Combinatorial table from _init_index_tables
+        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -212,7 +223,7 @@ def _polynomial_multiply(poly_p: List[np.ndarray], poly_q: List[np.ndarray], max
     max_deg : int
         Maximum degree for the result
     psi : numpy.ndarray
-        Combinatorial table from _init_index_tables
+        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -258,7 +269,7 @@ def _polynomial_power(poly_p: List[np.ndarray], k: int, max_deg: int, psi, clmo,
     max_deg : int
         Maximum degree for the result
     psi : numpy.ndarray
-        Combinatorial table from _init_index_tables
+        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -314,7 +325,7 @@ def _polynomial_poisson_bracket(poly_p: List[np.ndarray], poly_q: List[np.ndarra
     max_deg : int
         Maximum degree for the result
     psi : numpy.ndarray
-        Combinatorial table from _init_index_tables
+        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -423,7 +434,7 @@ def _polynomial_total_degree(poly_p: List[np.ndarray], psi) -> int:
         A list where poly_p[d] is a NumPy array of coefficients for the
         homogeneous part of degree d.
     psi : numpy.ndarray
-        Combinatorial table from _init_index_tables
+        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
         
     Returns
     -------
@@ -547,7 +558,7 @@ def _polynomial_jacobian(
     max_deg : int
         Maximum degree of the input polynomial
     psi_table : numpy.ndarray
-        Combinatorial table from _init_index_tables
+        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
     clmo_table : List[numpy.ndarray]
         List of arrays containing packed multi-indices
     encode_dict_list : List
@@ -704,7 +715,7 @@ def _linear_variable_polys(C: np.ndarray, max_deg: int, psi, clmo, encode_dict_l
     max_deg : int
         Maximum degree for polynomial representations
     psi : numpy.ndarray
-        Combinatorial table from _init_index_tables
+        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -719,7 +730,7 @@ def _linear_variable_polys(C: np.ndarray, max_deg: int, psi, clmo, encode_dict_l
     Notes
     -----
     This function computes the linear transformation of variables:
-    L_i = ∑_j C[i,j] * var_j
+    L_i = sum_j C[i,j] * var_j
     where var_j are the original variables and L_i are the transformed variables.
     """
     new_basis = [_polynomial_variable(j, max_deg, psi, clmo, encode_dict_list) for j in range(6)]
@@ -748,7 +759,7 @@ def _substitute_linear(poly_old: List[np.ndarray], C: np.ndarray, max_deg: int, 
     max_deg : int
         Maximum degree for polynomial representations
     psi : numpy.ndarray
-        Combinatorial table from _init_index_tables
+        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -803,7 +814,7 @@ def _linear_affine_variable_polys(C: np.ndarray, shifts: np.ndarray, max_deg: in
     """Build polynomials for variables after an affine change of variables.
 
     The transformation implemented is
-        L_i = sum_j C[i,j] * x_j  +  shifts[i]
+        L_i = sum_j C[i,j] * x_j + shifts[i]
 
     Parameters
     ----------
@@ -839,7 +850,7 @@ def _substitute_affine(poly_old: List[np.ndarray], C: np.ndarray, shifts: np.nda
 
     The old variables (x_old) are expressed in terms of the new variables (x) by
 
-        x_old_i = sum_j C[i,j] * x_j  +  shifts[i].
+        x_old_i = sum_j C[i,j] * x_j + shifts[i]
 
     This is a thin wrapper around `_substitute_linear`; it first builds the
     variable polynomials that include the constant shifts and then performs the

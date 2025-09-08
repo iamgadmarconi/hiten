@@ -1,18 +1,10 @@
-r"""
-hiten.system.orbits.halo
-==================
-
-Generation and refinement of halo periodic orbits about the collinear
+"""Generation and refinement of halo periodic orbits about the collinear
 libration points of the Circular Restricted Three-Body Problem (CRTBP).
 
-The module provides the :pyclass:`HaloOrbit` class which
-
-* synthesises an initial state from the third-order analytic expansion of
-  Richardson (1980), yielding a fast and robust first guess for the full
-  nonlinear halo orbit;
-* refines this guess through a differential-correction procedure that
-  enforces the periodicity conditions by solving a reduced :math:`2\times2` boundary
-  value problem.
+Notes
+-----
+All positions and velocities are expressed in nondimensional units where the
+distance between the primaries is unity and the orbital period is 2*pi.
 
 References
 ----------
@@ -40,41 +32,38 @@ if TYPE_CHECKING:
 
 
 class HaloOrbit(PeriodicOrbit):
-    r"""
+    """
     Halo orbit class.
 
     Parameters
     ----------
-    libration_point : CollinearPoint
-        Target :pyclass:`hiten.system.libration.collinear.CollinearPoint` around
-        which the halo orbit is computed.
+    libration_point : :class:`hiten.system.libration.collinear.CollinearPoint`
+        Target collinear libration point around which the halo orbit is computed.
     amplitude_z : float, optional
-        :math:`z`-amplitude of the halo orbit in the synodic frame. Required if
-        *initial_state* is None.
+        z-amplitude of the halo orbit in the synodic frame (nondimensional units).
+        Required if initial_state is None.
     zenith : {'northern', 'southern'}, optional
-        Indicates the symmetry branch with respect to the :math:`x\,y`-plane.
-        Required if *initial_state* is None.
+        Indicates the symmetry branch with respect to the xy-plane.
+        Required if initial_state is None.
     initial_state : Sequence[float] or None, optional
-        Six-dimensional state vector
-        :math:`[x,\,y,\,z,\,\dot{x},\,\dot{y},\,\dot{z}]` in the rotating
-        synodic frame. When *None* an analytical initial guess is generated
-        from *amplitude_z* and *zenith*.
+        Six-dimensional state vector [x, y, z, vx, vy, vz] in the rotating
+        synodic frame. When None an analytical initial guess is generated
+        from amplitude_z and zenith.
 
     Attributes
     ----------
     amplitude_z : float or None
-        :math:`z`-amplitude of the halo orbit in the synodic frame.
+        z-amplitude of the halo orbit in the synodic frame (nondimensional units).
     zenith : {'northern', 'southern'} or None
-        Indicates the symmetry branch with respect to the :math:`x\,y`-plane.
+        Indicates the symmetry branch with respect to the xy-plane.
 
     Raises
     ------
     ValueError
-        If the required amplitude or branch is missing and *initial_state*
-        is *None*.
+        If the required amplitude or branch is missing and initial_state
+        is None.
     TypeError
-        If *libration_point* is not an instance of
-        :pyclass:`CollinearPoint`.
+        If libration_point is not an instance of CollinearPoint.
     """
     
     _family = "halo"
@@ -89,6 +78,26 @@ class HaloOrbit(PeriodicOrbit):
             zenith: Optional[Literal["northern", "southern"]] = None,
             initial_state: Optional[Sequence[float]] = None
         ):
+        """Initialize a Halo orbit.
+        
+        Parameters
+        ----------
+        libration_point : :class:`hiten.system.libration.base.LibrationPoint`
+            The libration point around which the halo orbit is computed.
+        amplitude_z : float, optional
+            z-amplitude of the halo orbit in nondimensional units.
+        zenith : {'northern', 'southern'}, optional
+            Symmetry branch with respect to the xy-plane.
+        initial_state : Sequence[float], optional
+            Initial state vector [x, y, z, vx, vy, vz] in nondimensional units.
+            
+        Raises
+        ------
+        ValueError
+            If required parameters are missing or conflicting parameters provided.
+        TypeError
+            If libration_point is not a CollinearPoint.
+        """
 
         # Validate constructor parameters
         if initial_state is not None and (amplitude_z is not None or zenith is not None):
@@ -127,14 +136,26 @@ class HaloOrbit(PeriodicOrbit):
 
     @property
     def amplitude(self) -> float:
-        """(Read-only) Current z-amplitude of the orbit in the synodic frame."""
+        """(Read-only) Current z-amplitude of the orbit in the synodic frame.
+        
+        Returns
+        -------
+        float
+            The z-amplitude in nondimensional units.
+        """
         if getattr(self, "_initial_state", None) is not None:
             return float(self._initial_state[SynodicState.Z])
         return float(self._amplitude_z)
 
     @property
     def _correction_config(self) -> "_OrbitCorrectionConfig":
-        """Provides the differential correction configuration for halo orbits."""
+        """Provides the differential correction configuration for halo orbits.
+        
+        Returns
+        -------
+        :class:`hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`
+            The correction configuration for halo orbits.
+        """
         from hiten.algorithms.corrector.interfaces import \
             _OrbitCorrectionConfig
         return _OrbitCorrectionConfig(
@@ -146,28 +167,34 @@ class HaloOrbit(PeriodicOrbit):
 
     @property
     def _continuation_config(self) -> "_OrbitContinuationConfig":
+        """Provides the continuation configuration for halo orbits.
+        
+        Returns
+        -------
+        :class:`hiten.algorithms.continuation.interfaces._OrbitContinuationConfig`
+            The continuation configuration for halo orbits.
+        """
         from hiten.algorithms.continuation.interfaces import \
             _OrbitContinuationConfig
         return _OrbitContinuationConfig(state=SynodicState.Z, amplitude=True)
 
     def _initial_guess(self) -> NDArray[np.float64]:
-        r"""
+        """
         Richardson third-order analytical approximation.
 
         The method evaluates the closed-form expressions published by
-        Richardson to obtain an :math:`O(\!\epsilon^{3})` approximation of the halo
-        orbit where :math:`\epsilon` is the amplitude ratio.
+        Richardson to obtain an O(epsilon^3) approximation of the halo
+        orbit where epsilon is the amplitude ratio.
 
         Returns
         -------
-        numpy.ndarray
-            State vector of shape (6,) containing
-            :math:`[x,\,y,\,z,\,\dot{x},\,\dot{y},\,\dot{z}]` in the synodic
-            frame and normalised CRTBP units.
+        numpy.ndarray, shape (6,)
+            State vector containing [x, y, z, vx, vy, vz] in the synodic
+            frame and normalized CRTBP units.
 
         Notes
         -----
-        The computation follows [Richardson1980]_.
+        The computation follows Richardson (1980).
 
         Examples
         --------
@@ -381,20 +408,21 @@ class HaloOrbit(PeriodicOrbit):
         return np.array([rx, ry, rz, vx, vy, vz], dtype=np.float64)
 
     def _halo_quadratic_term(self, X_ev, Phi):
-        r"""
+        """
         Evaluate the quadratic part of the Jacobian for differential correction.
 
         Parameters
         ----------
         X_ev : numpy.ndarray, shape (6,)
-            State vector at the event time (half-period).
+            State vector at the event time (half-period) in nondimensional units.
         Phi : numpy.ndarray
-            State-transition matrix evaluated at the same event
+            State-transition matrix evaluated at the same event.
+            
         Returns
         -------
         numpy.ndarray, shape (2, 2)
             Reduced Jacobian matrix employed by the
-            :pyfunc:`hiten.system.orbits.base.PeriodicOrbit.correct`
+            :meth:`hiten.system.orbits.base.PeriodicOrbit.correct`
             solver.
         """
         x, y, z, vx, vy, vz = X_ev
@@ -412,5 +440,11 @@ class HaloOrbit(PeriodicOrbit):
         return np.array([[DDx],[DDz]]) @ Phi[[SynodicState.Y],:][:, (SynodicState.X,SynodicState.VY)] / vy
 
     def eccentricity(self) -> float:
-        """Eccentricity is not a well-defined concept for halo orbits."""
+        """Eccentricity is not a well-defined concept for halo orbits.
+        
+        Returns
+        -------
+        float
+            NaN since eccentricity is not defined for halo orbits.
+        """
         return np.nan

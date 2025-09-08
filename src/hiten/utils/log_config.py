@@ -1,3 +1,13 @@
+"""Logging configuration utilities for the hiten package.
+
+This module provides centralized logging configuration for the entire hiten
+package, including console and file output with timestamped log files.
+
+Notes
+-----
+Logging is automatically configured when this module is imported.
+"""
+
 import logging
 import os
 import sys
@@ -5,21 +15,32 @@ from datetime import datetime
 from pathlib import Path
 
 
-def setup_logging(level=logging.INFO, format_string='%(asctime)s - %(name)s - %(levelname)s - %(message)s', 
-                  save_to_file=True, log_dir=r'results/logs'):
+def setup_logging(level: int = logging.INFO, 
+                  format_string: str = '%(asctime)s - %(name)s - %(levelname)s - %(message)s', 
+                  save_to_file: bool = True, 
+                  log_dir: str = r'results/logs') -> None:
     """
-    Configures logging to stdout and optionally to a file.
+    Configure logging to stdout and optionally to a file.
+    
+    This function sets up the root logger with both console and file handlers.
+    It clears any existing handlers to avoid duplicates and creates timestamped
+    log files when file logging is enabled.
     
     Parameters
     ----------
-    level : int
-        Logging level (default: logging.INFO)
-    format_string : str
-        Format string for log messages
-    save_to_file : bool
-        Whether to save logs to a file (default: True)
-    log_dir : str
-        Directory to save log files (default: 'results')
+    level : int, default logging.INFO
+        Logging level (e.g., logging.DEBUG, logging.INFO, logging.WARNING, logging.ERROR).
+    format_string : str, default '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        Format string for log messages using standard logging format codes.
+    save_to_file : bool, default True
+        Whether to save logs to a file in addition to console output.
+    log_dir : str, default 'results/logs'
+        Directory path where log files will be saved. Will be created if it doesn't exist.
+        
+    Notes
+    -----
+    The function automatically creates the log directory if it doesn't exist.
+    Log files are named with timestamps in the format 'run_YYYYMMDD_HHMMSS.txt'.
     """
     Path(log_dir).mkdir(parents=True, exist_ok=True)
     
@@ -64,3 +85,8 @@ setup_logging()
 
 # Create a logger instance for other modules to import
 logger = logging.getLogger(__name__)
+"""Logger instance for use throughout the hiten package.
+
+This logger is automatically configured with the settings from setup_logging()
+and can be imported by other modules for consistent logging across the package.
+"""

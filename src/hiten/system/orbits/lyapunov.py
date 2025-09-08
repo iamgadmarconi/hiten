@@ -1,14 +1,14 @@
-r"""
-hiten.system.orbits.lyapunov
-======================
+"""Periodic Lyapunov orbits of the circular restricted three-body problem.
 
-Periodic Lyapunov orbits of the circular restricted three-body problem.
-
-This module supplies concrete realisations of :pyclass:`hiten.system.orbits.base.PeriodicOrbit`
+This module supplies concrete realisations of :class:`hiten.system.orbits.base.PeriodicOrbit`
 corresponding to the planar families around the collinear libration points
-:math:`L_1` and :math:`L_2`.  Each class provides an analytical
-first guess together with a customised differential corrector that exploits the
-symmetries of the family.
+L1 and L2. Each class provides an analytical first guess together with a
+customised differential corrector that exploits the symmetries of the family.
+
+Notes
+-----
+All positions and velocities are expressed in nondimensional units where the
+distance between the primaries is unity and the orbital period is 2*pi.
 
 References
 ----------
@@ -35,30 +35,30 @@ if TYPE_CHECKING:
 
 
 class LyapunovOrbit(PeriodicOrbit):
-    r"""
+    """
     Planar Lyapunov family around a collinear libration point.
 
-    The orbit lies in the :math:`(x, y)` plane and is symmetric with respect to
-    the :math:`x`-axis.  A linear analytical approximation is used to build the
+    The orbit lies in the (x, y) plane and is symmetric with respect to
+    the x-axis. A linear analytical approximation is used to build the
     initial guess which is subsequently refined by a differential corrector.
 
     Parameters
     ----------
     libration_point : CollinearPoint
-        Target :pyclass:`hiten.system.libration.collinear.CollinearPoint` around
+        Target collinear libration point around
         which the orbit is computed.
     amplitude_x : float, optional
-        Requested amplitude :math:`A_x` along the :math:`x`-direction. Required if
-        *initial_state* is None.
+        Requested amplitude Ax along the x-direction in nondimensional units.
+        Required if initial_state is None.
     initial_state : Sequence[float] or None, optional
         Six-dimensional state vector
-        :math:`(x, y, z, \\dot x, \\dot y, \\dot z)` expressed in synodic
-        coordinates.  If *None*, an analytical guess is generated.
+        (x, y, z, vx, vy, vz) expressed in synodic
+        coordinates in nondimensional units. If None, an analytical guess is generated.
 
     Attributes
     ----------
     amplitude_x : float
-        Requested amplitude :math:`A_x` along the :math:`x`-direction.
+        Requested amplitude Ax along the x-direction (nondimensional units).
     libration_point : hiten.system.libration.collinear.CollinearPoint
         Equilibrium point about which the orbit is continued.
 
@@ -66,10 +66,12 @@ class LyapunovOrbit(PeriodicOrbit):
     ------
     TypeError
         If *libration_point* is not an instance of
-        :pyclass:`hiten.system.libration.collinear.CollinearPoint`.
+        CollinearPoint.
     NotImplementedError
-        If the selected point corresponds to :math:`L_3`, which is not
+        If the selected point corresponds to L3, which is not
         supported for Lyapunov orbits.
+    ValueError
+        If conflicting parameters are provided or required parameters are missing.
     """
     
     _family = "lyapunov"
@@ -82,6 +84,26 @@ class LyapunovOrbit(PeriodicOrbit):
             amplitude_x: Optional[float] = None,
             initial_state: Optional[Sequence[float]] = None
         ):
+        """Initialize a Lyapunov orbit.
+        
+        Parameters
+        ----------
+        libration_point : :class:`hiten.system.libration.base.LibrationPoint`
+            The libration point around which the Lyapunov orbit is computed.
+        amplitude_x : float, optional
+            x-amplitude of the Lyapunov orbit in nondimensional units.
+        initial_state : Sequence[float], optional
+            Initial state vector [x, y, z, vx, vy, vz] in nondimensional units.
+            
+        Raises
+        ------
+        ValueError
+            If conflicting parameters are provided or required parameters are missing.
+        TypeError
+            If libration_point is not a CollinearPoint.
+        NotImplementedError
+            If L3 libration point is used.
+        """
         
         # Validate constructor parameters
         if initial_state is not None and amplitude_x is not None:
@@ -120,19 +142,37 @@ class LyapunovOrbit(PeriodicOrbit):
 
     @property
     def eccentricity(self) -> float:
-        """Eccentricity is not a well-defined concept for Lyapunov orbits."""
+        """Eccentricity is not a well-defined concept for Lyapunov orbits.
+        
+        Returns
+        -------
+        float
+            NaN since eccentricity is not defined for Lyapunov orbits.
+        """
         return np.nan
 
     @property
     def amplitude(self) -> float:
-        """(Read-only) Current x-amplitude relative to the libration point."""
+        """(Read-only) Current x-amplitude relative to the libration point.
+        
+        Returns
+        -------
+        float
+            The x-amplitude in nondimensional units.
+        """
         if getattr(self, "_initial_state", None) is not None:
             return float(self._initial_state[SynodicState.X] - self.libration_point.position[0])
         return float(self._amplitude_x)
 
     @property
     def _correction_config(self) -> "_OrbitCorrectionConfig":
-        """Provides the differential correction configuration for planar Lyapunov orbits."""
+        """Provides the differential correction configuration for planar Lyapunov orbits.
+        
+        Returns
+        -------
+        :class:`hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`
+            The correction configuration for Lyapunov orbits.
+        """
         from hiten.algorithms.corrector.interfaces import _OrbitCorrectionConfig
         return _OrbitCorrectionConfig(
             residual_indices=(SynodicState.VX, SynodicState.Z),
@@ -144,32 +184,39 @@ class LyapunovOrbit(PeriodicOrbit):
 
     @property
     def _continuation_config(self) -> "_OrbitContinuationConfig":
+        """Provides the continuation configuration for Lyapunov orbits.
+        
+        Returns
+        -------
+        :class:`hiten.algorithms.continuation.interfaces._OrbitContinuationConfig`
+            The continuation configuration for Lyapunov orbits.
+        """
         from hiten.algorithms.continuation.interfaces import _OrbitContinuationConfig
         return _OrbitContinuationConfig(state=SynodicState.X, amplitude=True)
 
     def _initial_guess(self) -> NDArray[np.float64]:
-        r"""
+        """
         Return an analytical first guess for the planar Lyapunov orbit.
 
         The guess is derived from the linearised equations of motion around the
-        collinear point.  Given the user-supplied amplitude :math:`A_x`, the
+        collinear point. Given the user-supplied amplitude Ax, the
         displacement vector is built as
 
-        :math:`\Delta\mathbf x = A_x\,(1, 0, 0, \lambda\tau, 0, 0),`
+        Delta_x = Ax * (1, 0, 0, lambda*tau, 0, 0),
 
-        where :math:`\lambda` is the in-plane eigenvalue and :math:`\tau` is a
+        where lambda is the in-plane eigenvalue and tau is a
         constant that relates the position and velocity components in the
         linear approximation.
 
         Returns
         -------
-        numpy.ndarray
-            Array of shape ``(6,)`` containing the synodic state vector.
+        numpy.ndarray, shape (6,)
+            Array containing the synodic state vector in nondimensional units.
 
         Raises
         ------
         ValueError
-            If the auxiliary quantity *mu_bar* computed during the linear
+            If the auxiliary quantity mu_bar computed during the linear
             analysis becomes negative, indicating an invalid parameter regime.
         """
         L_i = self.libration_point.position
