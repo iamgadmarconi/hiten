@@ -85,7 +85,7 @@ class OrbitFamily:
             
         Returns
         -------
-        :class:`OrbitFamily`
+        :class:`hiten.system.family.OrbitFamily`
             A new OrbitFamily instance containing the orbits from the engine.
         """
         if parameter_name is None:
@@ -237,13 +237,13 @@ class OrbitFamily:
             
         Returns
         -------
-        :class:`OrbitFamily`
+        :class:`hiten.system.family.OrbitFamily`
             The loaded OrbitFamily instance.
             
         Raises
         ------
         ValueError
-            If the file does not contain a valid OrbitFamily object.
+            If the file does not contain a valid :class:`hiten.system.family.OrbitFamily` object.
         """
         with h5py.File(filepath, "r") as f:
             if str(f.attrs.get("class", "")) != "OrbitFamily":

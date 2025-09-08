@@ -52,7 +52,7 @@ class PeriodicOrbit(ABC):
     Abstract base-class that encapsulates a CR3BP periodic orbit.
 
     The constructor either accepts a user supplied initial state or derives an
-    analytical first guess via :meth:`_initial_guess` (to be
+    analytical first guess via :meth:`hiten.system.orbits.base.PeriodicOrbit._initial_guess` (to be
     implemented by subclasses). All subsequent high-level operations
     (propagation, plotting, stability analysis, differential correction) build
     upon this initial description.
@@ -81,7 +81,7 @@ class PeriodicOrbit(ABC):
     period : float or None
         Orbit period, set after a successful correction (nondimensional units).
     trajectory : ndarray or None, shape (N, 6)
-        Stored trajectory after :meth:`propagate`.
+        Stored trajectory after :meth:`hiten.system.orbits.base.PeriodicOrbit.propagate`.
     times : ndarray or None, shape (N,)
         Time vector associated with trajectory (nondimensional units).
     stability_info : tuple or None
@@ -91,7 +91,7 @@ class PeriodicOrbit(ABC):
     -----
     Instantiating the class does not perform any propagation. Users must
     call :meth:`correct` (or manually set
-    period) followed by :meth:`propagate`.
+    period) followed by :meth:`hiten.system.orbits.base.PeriodicOrbit.propagate`.
     """
     
     # This should be overridden by subclasses
@@ -789,7 +789,7 @@ class GenericOrbit(PeriodicOrbit):
         """
         Get or set the user-defined differential correction configuration.
 
-        This property must be set to a valid :class:`_OrbitCorrectionConfig`
+        This property must be set to a valid :class:`hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`
         instance before calling :meth:`correct` on a
         :class:`GenericOrbit` object.
         
@@ -901,7 +901,7 @@ class GenericOrbit(PeriodicOrbit):
         Raises
         ------
         TypeError
-            If cfg is not an instance of _OrbitContinuationConfig or None.
+            If cfg is not an instance of :class:`hiten.algorithms.continuation.interfaces._OrbitContinuationConfig` or None.
         """
         from hiten.algorithms.continuation.interfaces import \
             _OrbitContinuationConfig

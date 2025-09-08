@@ -1,12 +1,12 @@
 """Stable/unstable invariant manifolds of periodic orbits in the spatial circular
 restricted three-body problem.
 
-The module offers a high-level interface (:class:`Manifold`) that, given a
+The module offers a high-level interface (:class:`hiten.system.manifold.Manifold`) that, given a
 generating :class:`hiten.system.orbits.base.PeriodicOrbit`, launches trajectory
 integrations along the selected eigen-directions, records their intersections
 with the canonical Poincare section, provides quick 3-D visualisation, and
-handles (de)serialisation through :meth:`Manifold.save` /
-:meth:`Manifold.load`.
+handles (de)serialisation through :meth:`hiten.system.manifold.Manifold.save` and
+:meth:`hiten.system.manifold.Manifold.load`.
 
 Notes
 -----
@@ -42,7 +42,7 @@ from hiten.utils.plots import plot_manifold
 @dataclass
 class ManifoldResult:
     """
-    Output container produced by :meth:`Manifold.compute`.
+    Output container produced by :meth:`hiten.system.manifold.Manifold.compute`.
 
     Parameters
     ----------
@@ -118,13 +118,13 @@ class Manifold:
         Encoded direction: 1 for 'positive', -1 for 'negative'.
     mu : float
         Mass ratio of the underlying CRTBP system (dimensionless).
-    manifold_result : :class:`ManifoldResult` or None
+    manifold_result : :class:`hiten.system.manifold.ManifoldResult` or None
         Cached result returned by the last successful compute call.
 
     Notes
     -----
     Re-invoking compute after a successful run returns the cached
-    ManifoldResult without recomputation.
+    :class:`hiten.system.manifold.ManifoldResult` without recomputation.
     """
 
     def __init__(
@@ -217,7 +217,7 @@ class Manifold:
         
         Returns
         -------
-        :class:`ManifoldResult` or None
+        :class:`hiten.system.manifold.ManifoldResult` or None
             The cached manifold result, or None if not computed.
         """
         return self._manifold_result
@@ -228,7 +228,7 @@ class Manifold:
         Returns
         -------
         str
-            String representation of the Manifold.
+            String representation of the :class:`hiten.system.manifold.Manifold`.
         """
         return f"Manifold(stable={self._stable}, direction={self._direction}) of {self._generating_orbit}"
     
@@ -238,7 +238,7 @@ class Manifold:
         Returns
         -------
         str
-            Detailed string representation of the Manifold.
+            Detailed string representation of the :class:`hiten.system.manifold.Manifold`.
         """
         return self.__str__()
 
@@ -383,7 +383,7 @@ class Manifold:
 
         Returns
         -------
-        :class:`ManifoldResult`
+        :class:`hiten.system.manifold.ManifoldResult`
             The computed manifold result containing trajectories and Poincare section data.
 
         Raises
@@ -663,7 +663,7 @@ class Manifold:
             
         Returns
         -------
-        :class:`Manifold`
+        :class:`hiten.system.manifold.Manifold`
             The loaded Manifold instance.
             
         Raises

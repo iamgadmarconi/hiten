@@ -1,6 +1,6 @@
+"""Abstract helpers to model Libration points of the Circular Restricted Three-Body Problem (CR3BP).
 """
-Abstract helpers to model Libration points of the Circular Restricted Three-Body Problem (CR3BP).
-"""
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Tuple
@@ -99,7 +99,7 @@ class LibrationPoint(ABC):
         Arrays of stable, unstable and centre eigenvalues.
     eigenvectors : tuple(numpy.ndarray, numpy.ndarray, numpy.ndarray)
         Bases of the corresponding invariant subspaces.
-    linear_data : :class:`LinearData`
+    linear_data : :class:`hiten.system.libration.base.LinearData`
         Record with canonical invariants and symplectic basis returned by the
         normal-form computation.
 
@@ -107,10 +107,10 @@ class LibrationPoint(ABC):
     -----
     The class is abstract. Concrete subclasses must implement:
 
-    - :meth:`idx`
-    - :meth:`_calculate_position`
-    - :meth:`_get_linear_data`
-    - :meth:`normal_form_transform`
+    - :meth:`hiten.system.libration.base.LibrationPoint.idx`
+    - :meth:`hiten.system.libration.base.LibrationPoint._calculate_position`
+    - :meth:`hiten.system.libration.base.LibrationPoint._get_linear_data`
+    - :meth:`hiten.system.libration.base.LibrationPoint.normal_form_transform`
 
     Heavy algebraic objects produced by the centre-manifold normal-form
     procedure are cached inside a dedicated
@@ -252,7 +252,7 @@ class LibrationPoint(ABC):
         
         Returns
         -------
-        :class:`LinearData`
+        :class:`hiten.system.libration.base.LinearData`
             The linear data containing eigenvalues and eigenvectors.
         """
         if self._linear_data is None:
@@ -385,7 +385,7 @@ class LibrationPoint(ABC):
         
         Returns
         -------
-        :class:`LinearData`
+        :class:`hiten.system.libration.base.LinearData`
             The linear data containing eigenvalues and eigenvectors.
         """
         pass
@@ -398,8 +398,8 @@ class LibrationPoint(ABC):
         ----------
         discrete : int, optional
             Classification mode for eigenvalues:
-            * CONTINUOUS_SYSTEM (0): continuous-time system (classify by real part sign)
-            * DISCRETE_SYSTEM (1): discrete-time system (classify by magnitude relative to 1)
+            - CONTINUOUS_SYSTEM (0): continuous-time system (classify by real part sign)
+            - DISCRETE_SYSTEM (1): discrete-time system (classify by magnitude relative to 1)
         delta : float, optional
             Tolerance for classification (dimensionless).
             
@@ -609,7 +609,7 @@ class LibrationPoint(ABC):
 
         Parameters
         ----------
-        family : str or PeriodicOrbit subclass
+        family : str or :class:`hiten.system.orbits.base.PeriodicOrbit` subclass
             Identifier of the orbit family or an explicit subclass type.
             Accepted strings (case-insensitive): "halo", "lyapunov",
             "vertical_lyapunov" and "generic".  If a subclass is

@@ -3,10 +3,7 @@
 This module re-exports the most frequently used classes so that users can
 simply write::
 
-    from system import System, Body, L1Point, HaloOrbit
-
-instead of navigating the full internal hierarchy (``hiten.system.base``,
-``hiten.system.libration.collinear`` ...).
+>>> from hiten.system import System, Body, L1Point, HaloOrbit
 """
 
 from ..algorithms.utils.types import SynodicState

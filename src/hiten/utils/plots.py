@@ -1,4 +1,4 @@
-"""Comprehensive plotting utilities for the hiten package.
+"""Plotting utilities for the hiten package.
 
 This module provides a wide range of visualization functions for orbits, manifolds,
 Poincare maps, and other dynamical system visualizations in the Circular Restricted

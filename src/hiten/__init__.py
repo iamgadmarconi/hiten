@@ -1,15 +1,9 @@
 """Top-level public API for the *hiten* package.
 
 This module re-exports the most frequently used symbols from the
-sub-packages so that user code can simply write, for example::
+sub-packages so that user code can simply write, for example:
 
-    >>> from hiten import Constants, CenterManifold
-
-instead of navigating the full internal hierarchy (``hiten.utils``,
-``hiten.system`` ...).
-
-The full sub-packages remain accessible under their canonical names
-(``hiten.utils``, ``hiten.system``, ``hiten.algorithms``).
+>>> from hiten import Constants, CenterManifold
 """
 
 from __future__ import annotations

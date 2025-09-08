@@ -1,6 +1,6 @@
 """Convenient re-exports for the most frequently accessed helper utilities.
 
-Typical usage examples::
+Typical usage examples:
 
 >>> from utils import Constants
 

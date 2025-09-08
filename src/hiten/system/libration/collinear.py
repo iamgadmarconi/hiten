@@ -166,7 +166,8 @@ class CollinearPoint(LibrationPoint):
     @property
     @abstractmethod
     def _position_search_interval(self) -> list:
-        """Defines the search interval for finding the x-position.
+        """
+        Defines the search interval for finding the x-position.
         
         Returns
         -------
@@ -493,7 +494,7 @@ class CollinearPoint(LibrationPoint):
         
         Returns
         -------
-        :class:`LinearData`
+        :class:`hiten.system.libration.LinearData`
             Object containing the linear data for the Libration point.
         """
         # Get cached values
@@ -631,7 +632,8 @@ class L1Point(CollinearPoint):
 
     @property
     def idx(self) -> int:
-        """Get the libration point index.
+        """
+        Get the libration point index.
         
         Returns
         -------
@@ -642,7 +644,8 @@ class L1Point(CollinearPoint):
 
     @property
     def _position_search_interval(self) -> list:
-        """Search interval for L1's x-position.
+        """
+        Search interval for L1's x-position.
         
         Returns
         -------
@@ -655,7 +658,8 @@ class L1Point(CollinearPoint):
 
     @property
     def _gamma_poly_def(self) -> Tuple[list, tuple]:
-        """Quintic polynomial definition for L1's gamma value.
+        """
+        Quintic polynomial definition for L1's gamma value.
         
         Returns
         -------
@@ -730,7 +734,8 @@ class L2Point(CollinearPoint):
 
     @property
     def _position_search_interval(self) -> list:
-        """Search interval for L2's x-position.
+        """
+        Search interval for L2's x-position.
         
         Returns
         -------
@@ -743,7 +748,8 @@ class L2Point(CollinearPoint):
 
     @property
     def _gamma_poly_def(self) -> Tuple[list, tuple]:
-        """Quintic polynomial definition for L2's gamma value.
+        """
+        Quintic polynomial definition for L2's gamma value.
         
         Returns
         -------
@@ -807,7 +813,8 @@ class L3Point(CollinearPoint):
 
     @property
     def idx(self) -> int:
-        """Get the libration point index.
+        """
+        Get the libration point index.
         
         Returns
         -------
@@ -818,7 +825,8 @@ class L3Point(CollinearPoint):
 
     @property
     def _position_search_interval(self) -> list:
-        """Search interval for L3's x-position.
+        """
+        Search interval for L3's x-position.
         
         Returns
         -------
@@ -831,7 +839,8 @@ class L3Point(CollinearPoint):
 
     @property
     def _gamma_poly_def(self) -> Tuple[list, tuple]:
-        """Quintic polynomial definition for L3's gamma value.
+        """
+        Quintic polynomial definition for L3's gamma value.
         
         Returns
         -------

@@ -326,13 +326,13 @@ class System(object):
     @classmethod
     def from_bodies(cls, primary_name: str, secondary_name: str) -> "System":
         """
-        Factory method to build a :class:`System` directly from body names.
+        Factory method to build a :class:`hiten.system.base.System` directly from body names.
 
         This helper retrieves the masses, radii and characteristic orbital
         distance of the selected primary/secondary pair from
         :class:`hiten.utils.constants.Constants` and instantiates the
         corresponding :class:`hiten.system.body.Body` objects before finally returning the
-        fully-initialised :class:`System` instance.
+        fully-initialised :class:`hiten.system.base.System` instance.
 
         Parameters
         ----------
@@ -343,7 +343,7 @@ class System(object):
 
         Returns
         -------
-        :class:`System`
+        :class:`hiten.system.base.System`
             Newly created CR3BP system.
             
         Raises
@@ -379,7 +379,8 @@ class System(object):
 
     @classmethod
     def from_mu(cls, mu: float) -> "System":
-        """Factory method to build a :class:`System` directly from the mass parameter.
+        """Factory method to build a :class:`hiten.system.base.System` 
+        directly from the mass parameter.
         
         Parameters
         ----------
@@ -388,7 +389,7 @@ class System(object):
             
         Returns
         -------
-        :class:`System`
+        :class:`hiten.system.base.System`
             Newly created CR3BP system with the specified mass parameter.
         """
         primary = Body("Primary", 1-mu, 1.0e-3)

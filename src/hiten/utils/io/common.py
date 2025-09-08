@@ -25,7 +25,7 @@ def _ensure_dir(path: str | os.PathLike) -> None:
     ----------
     path : str or os.PathLike
         Directory path that should exist after this call. Accepts any object
-        supported by :class:`pathlib.Path`.
+        supported by pathlib.Path.
         
     Notes
     -----

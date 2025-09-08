@@ -12,7 +12,7 @@ distance between the primaries is unity and the orbital period is 2*pi.
 
 References
 ----------
-Jorba, À. (1999). "A Methodology for the Numerical Computation of Normal Forms, Centre
+Jorba, A. (1999). "A Methodology for the Numerical Computation of Normal Forms, Centre
 Manifolds and First Integrals of Hamiltonian Systems".
 
 Zhang, H. Q., Li, S. (2001). "Improved semi-analytical computation of center
@@ -189,7 +189,7 @@ class CenterManifold:
         Returns
         -------
         str
-            String representation of the CenterManifold.
+            String representation of the :class:`hiten.system.center.CenterManifold`.
         """
         return f"CenterManifold(point={self._point}, degree={self._max_degree})" 
     
@@ -199,7 +199,7 @@ class CenterManifold:
         Returns
         -------
         str
-            Detailed string representation of the CenterManifold.
+            Detailed string representation of the :class:`hiten.system.center.CenterManifold`.
         """
         return f"CenterManifold(point={self._point}, degree={self._max_degree})"
     
@@ -245,8 +245,8 @@ class CenterManifold:
         """
         Compute and return a specific polynomial representation of the Hamiltonian.
 
-        This method delegates to the internal HamiltonianPipeline for all
-        Hamiltonian computations and caching.
+        This method delegates to the internal :class:`hiten.system.hamiltonians.pipeline.HamiltonianPipeline`
+        for all Hamiltonian computations and caching.
 
         Parameters
         ----------
@@ -618,7 +618,7 @@ class CenterManifold:
 
     def save(self, dir_path: str, **kwargs):
         """
-        Save the CenterManifold instance to a directory.
+        Save the :class:`hiten.system.center.CenterManifold` instance to a directory.
 
         This method serializes the main object to 'manifold.pkl' and saves
         each associated Poincare map to a separate file within a 'poincare_maps'
@@ -636,7 +636,7 @@ class CenterManifold:
     @classmethod
     def load(cls, dir_path: str, **kwargs) -> "CenterManifold":
         """
-        Load a CenterManifold instance from a directory.
+        Load a :class:`hiten.system.center.CenterManifold` instance from a directory.
 
         This class method deserializes a CenterManifold object and its
         associated Poincare maps that were saved with the save method.
@@ -650,7 +650,7 @@ class CenterManifold:
 
         Returns
         -------
-        :class:`CenterManifold`
+        :class:`hiten.system.center.CenterManifold`
             The loaded CenterManifold instance with its Poincare maps.
         """
         return load_center_manifold(dir_path, **kwargs)

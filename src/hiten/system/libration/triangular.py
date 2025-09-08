@@ -127,7 +127,7 @@ class TriangularPoint(LibrationPoint):
         
         Returns
         -------
-        :class:`LinearData`
+        :class:`hiten.system.libration.LinearData`
             Object containing the linear data for the Libration point.
         """
         # Frequencies and canonical transform

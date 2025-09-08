@@ -44,7 +44,7 @@ class LyapunovOrbit(PeriodicOrbit):
 
     Parameters
     ----------
-    libration_point : CollinearPoint
+    libration_point : :class:`hiten.system.libration.collinear.CollinearPoint`
         Target collinear libration point around
         which the orbit is computed.
     amplitude_x : float, optional
@@ -59,14 +59,14 @@ class LyapunovOrbit(PeriodicOrbit):
     ----------
     amplitude_x : float
         Requested amplitude Ax along the x-direction (nondimensional units).
-    libration_point : hiten.system.libration.collinear.CollinearPoint
+    libration_point : :class:`hiten.system.libration.collinear.CollinearPoint`
         Equilibrium point about which the orbit is continued.
 
     Raises
     ------
     TypeError
         If *libration_point* is not an instance of
-        CollinearPoint.
+        :class:`hiten.system.libration.collinear.CollinearPoint`.
     NotImplementedError
         If the selected point corresponds to L3, which is not
         supported for Lyapunov orbits.
@@ -100,7 +100,7 @@ class LyapunovOrbit(PeriodicOrbit):
         ValueError
             If conflicting parameters are provided or required parameters are missing.
         TypeError
-            If libration_point is not a CollinearPoint.
+            If libration_point is not a :class:`hiten.system.libration.collinear.CollinearPoint`.
         NotImplementedError
             If L3 libration point is used.
         """
