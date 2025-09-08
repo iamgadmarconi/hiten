@@ -194,7 +194,7 @@ def _poly_diff(p: np.ndarray, var: int, degree: int, psi, clmo, encode_dict_list
     nT = get_num_threads()
     scratch = np.zeros((nT, out_size), dtype=p.dtype)
 
-    scratch_exp = np.empty(6, dtype=np.int64)           # ← NEW  (one per thread chunk)
+    scratch_exp = np.empty(6, dtype=np.int64)           # <- NEW  (one per thread chunk)
     for i in prange(p.shape[0]):
         tid = get_thread_id()
 
@@ -487,7 +487,7 @@ def _evaluate_reduced_monomial(
         Array of shape (6,) containing the coordinate values where the monomial
         should be evaluated. Must correspond to the same variable ordering as k.
     var_idx : int
-        Index of the variable (0 ≤ var_idx < 6) whose exponent should be modified.
+        Index of the variable (0 <= var_idx < 6) whose exponent should be modified.
         - 0, 1, 2 correspond to position variables q1, q2, q3
         - 3, 4, 5 correspond to momentum variables p1, p2, p3
     exp_change : int

@@ -1357,7 +1357,7 @@ def test_poisson_canonical_relations():
                 assert qi_pj.shape[0] == 1  # Degree 0 polynomial (constant)
                 assert abs(qi_pj[0] - 1.0) < 1e-10
             else:
-                # {q_i, p_j} should be 0 for i ≠ j
+                # {q_i, p_j} should be 0 for i != j
                 for k in range(qi_pj.shape[0]):
                     assert abs(qi_pj[k]) < 1e-10
 

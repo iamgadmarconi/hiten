@@ -744,7 +744,7 @@ def _substitute_linear(poly_old: List[np.ndarray], C: np.ndarray, max_deg: int, 
                 continue
             k = _decode_multiindex(pos, deg, clmo)
             
-            # build product  Π_i  (var_polys[i] ** k_i)
+            # build product  Pi_i  (var_polys[i] ** k_i)
             term = _polynomial_zero_list(max_deg, psi)
             
             # Fix: Preserve the full complex value instead of just the real part

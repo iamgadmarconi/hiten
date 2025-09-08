@@ -72,7 +72,7 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
         iterations : int
             Total iterations performed.
         residual_norm : float
-            Final residual norm (≤ tolerance).
+            Final residual norm (<= tolerance).
         """
         pass
 
@@ -89,7 +89,7 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
         iterations : int
             Total iterations performed.
         residual_norm : float
-            Final residual norm (≥ tolerance).
+            Final residual norm (>= tolerance).
         """
         pass
 
@@ -139,7 +139,7 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
         """Compute Jacobian matrix J(x) = dR/dx.
 
         Uses analytical Jacobian if provided, otherwise computes central
-        finite-difference approximation with O(h²) accuracy.
+        finite-difference approximation with O(h^2) accuracy.
 
         Parameters
         ----------

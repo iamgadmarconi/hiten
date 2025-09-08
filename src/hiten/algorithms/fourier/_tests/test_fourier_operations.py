@@ -152,8 +152,8 @@ def test_fpoly_poisson_constant():
     bracket2 = _fpoly_poisson(F, 1, const, 0, PSIF, CLMOF, ENCODEF)
 
     zeros0 = _zero_like(0)
-    _assert_array_close(bracket1, zeros0, "{1, F} ≠ 0")
-    _assert_array_close(bracket2, zeros0, "{F, 1} ≠ 0")
+    _assert_array_close(bracket1, zeros0, "{1, F} != 0")
+    _assert_array_close(bracket2, zeros0, "{F, 1} != 0")
 
 
 def test_fpoly_poisson_canonical_relations():
@@ -179,12 +179,12 @@ def test_fpoly_poisson_canonical_relations():
 
             # {I_i, I_j} should be zero
             bracket_II = _fpoly_poisson(I_i, 1, I_j, 1, PSIF, CLMOF, ENCODEF)
-            _assert_array_close(bracket_II, _zero_like(1), f"{{I{i+1}, I{j+1}}} ≠ 0")
+            _assert_array_close(bracket_II, _zero_like(1), f"{{I{i+1}, I{j+1}}} != 0")
 
             # {Theta_i, Theta_j} should be zero
             Theta_i = _make_monomial(0, (0, 0, 0, (1 if i == 0 else 0), (1 if i == 1 else 0), (1 if i == 2 else 0)), 1.0)
             bracket_tt = _fpoly_poisson(Theta_i, 0, Theta_j, 0, PSIF, CLMOF, ENCODEF)
-            _assert_array_close(bracket_tt, _zero_like(0), f"{{theta{i+1}, theta{j+1}}} ≠ 0")
+            _assert_array_close(bracket_tt, _zero_like(0), f"{{theta{i+1}, theta{j+1}}} != 0")
 
             # {I_i, Theta_j}
             bracket_ITheta = _fpoly_poisson(I_i, 1, Theta_j, 0, PSIF, CLMOF, ENCODEF)

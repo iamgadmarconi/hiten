@@ -122,7 +122,7 @@ class _SynodicSectionConfig(_SectionConfig):
         Hyperplane normal vector in synodic coordinates (nondimensional units).
         Must be a 1D array of length 6 with finite values.
     offset : float, default 0.0
-        Hyperplane offset so that the section is defined by n · state = offset
+        Hyperplane offset so that the section is defined by n * state = offset
         (nondimensional units).
     plane_coords : tuple[str, str], default ("y", "vy")
         Names of the 2D axes used for reporting section points.
@@ -185,7 +185,7 @@ class _SynodicSectionConfig(_SectionConfig):
         of all geometric parameters. The normal vector is converted to a
         numpy array and validated for correct dimensions and finite values.
 
-        The section is defined by the equation n · state = offset, where
+        The section is defined by the equation n * state = offset, where
         n is the normal vector and state is the 6D state vector.
         """
 

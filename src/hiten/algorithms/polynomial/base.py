@@ -27,10 +27,10 @@ from hiten.algorithms.utils.config import FASTMATH, N_VARS
 
 #  6 bits for each exponent (0 ... 63)
 #
-#  ┌─────────┬────────┬────────┬────────┬────────┬────────┬────────┐
-#  │ bits    │ 0-5    │ 6-11   │ 12-17  │ 18-23  │ 24-29  │  impl. │
-#  │ field   │ n1     │ n2     │ n3     │ n4     │ n5     │ n6     │
-#  └─────────┴────────┴────────┴────────┴────────┴────────┴────────┘
+#  +---------+--------+--------+--------+--------+--------+--------+
+#  | bits    | 0-5    | 6-11   | 12-17  | 18-23  | 24-29  |  impl. |
+#  | field   | n1     | n2     | n3     | n4     | n5     | n6     |
+#  +---------+--------+--------+--------+--------+--------+--------+
 
 @njit(fastmath=FASTMATH,cache=False)
 def _factorial(n: int) -> int:
@@ -164,7 +164,7 @@ def _init_index_tables(degree: int):
 _PSI_GLOBAL, _CLMO_GLOBAL = _init_index_tables(30)  # default; will be overwritten
 
 # -----------------------------------------------------------------------------
-# Build a Numba‐typed lookup: for each degree d, a dict mapping
+# Build a Numba-typed lookup: for each degree d, a dict mapping
 # packed_exponent -> index in _CLMO_GLOBAL[d]
 # -----------------------------------------------------------------------------
 _ENCODE_DICT_GLOBAL = List.empty_list(

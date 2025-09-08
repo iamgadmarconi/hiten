@@ -376,9 +376,9 @@ def triangular_points(system: System):
 def test_A_polynomial_recursion(max_deg, d_vals, psi_clmo):
     """Internal `A[n]` sequence must satisfy its three-term recurrence.
 
-    The implemented recurrence is (cf. Gómez et al. 2001 Eq. 64)
+    The implemented recurrence is (cf. Gomez et al. 2001 Eq. 64)
 
-        A_{n+1} = ((2n+1)/(n+1)) (d·r) A_n - (n/(n+1)) (r·r) A_{n-1},
+        A_{n+1} = ((2n+1)/(n+1)) (d*r) A_n - (n/(n+1)) (r*r) A_{n-1},
 
     where d = (d_x, d_y, 0) gives the primary offset in local coordinates.
     """
@@ -397,7 +397,7 @@ def test_A_polynomial_recursion(max_deg, d_vals, psi_clmo):
         max_deg, psi, clmo, encode_dict,
     )
 
-    # Build auxiliary polynomials ρ² = x² + y² + z² and dot = d·r.
+    # Build auxiliary polynomials rho^2 = x^2 + y^2 + z^2 and dot = d*r.
     rho_sq_poly = _polynomial_zero_list(max_deg, psi)
     for var_poly in (x_poly, y_poly, z_poly):
         _polynomial_add_inplace(
@@ -426,7 +426,7 @@ def test_A_polynomial_recursion(max_deg, d_vals, psi_clmo):
             coeff1,
         )
 
-        # Term2: -coeff2 * rho² * A_{n-1}
+        # Term2: -coeff2 * rho^2 * A_{n-1}
         term2 = _polynomial_zero_list(max_deg, psi)
         _polynomial_add_inplace(
             term2,
@@ -450,7 +450,7 @@ def test_A_polynomial_recursion(max_deg, d_vals, psi_clmo):
 def test_triangular_inverse_distance_expansion_accuracy(system: System, max_deg):
     """Polynomial expansion of 1/r should approximate the true value within the expected truncation error O(r^{max_deg+1})."""
 
-    # Use the L5 point (sign = −1)
+    # Use the L5 point (sign = -1)
     point = system.get_libration_point(5)
     sgn = point.sign  # Should be -1 for L5
 
@@ -466,7 +466,7 @@ def test_triangular_inverse_distance_expansion_accuracy(system: System, max_deg)
         _polynomial_variable(i, max_deg, psi, clmo, encode_dict) for i in range(3)
     ]
 
-    # Build A‐polynomial sequences for the two primaries
+    # Build A-polynomial sequences for the two primaries
     A_S = _build_A_polynomials(
         x_poly, y_poly, z_poly, d_Sx, d_Sy, max_deg, psi, clmo, encode_dict
     )
@@ -543,6 +543,6 @@ def test_physical_hamiltonian_triangular_convergence(system: System):
         err = np.abs(H_vals[idx] - H_ref)
         print(f"Degree {mdeg} error: {err}")
         assert err < prev_err, (
-            f"Hamiltonian did not converge monotonically: degree {mdeg} error {err} ≥ previous {prev_err}"
+            f"Hamiltonian did not converge monotonically: degree {mdeg} error {err} >= previous {prev_err}"
         )
         prev_err = err

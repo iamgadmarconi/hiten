@@ -307,7 +307,7 @@ def _fpoly_block_hessian(
         I = (I1, I2, I3)
         k = (k1, k2, k3)
 
-        # Action-action second derivatives ∂²H/∂I_a∂I_b
+        # Action-action second derivatives d^2H/dI_a dI_b
         for a in range(3):
             na = n[a]
             Ia = I[a]
@@ -329,7 +329,7 @@ def _fpoly_block_hessian(
                 H[a, b] += contrib
                 H[b, a] += contrib  # symmetry
 
-        # Action-angle mixed derivatives ∂²H/∂I_a∂theta_b
+        # Action-angle mixed derivatives d^2H/dI_a dtheta_b
         for a in range(3):
             na = n[a]
             Ia = I[a]
@@ -344,7 +344,7 @@ def _fpoly_block_hessian(
                 H[a, 3 + b] += contrib
                 H[3 + b, a] += contrib  # symmetry
 
-        # Angle-angle second derivatives ∂²H/∂theta_a∂theta_b
+        # Angle-angle second derivatives d^2H/dtheta_a dtheta_b
         for a in range(3):
             ka = k[a]
             if ka == 0:

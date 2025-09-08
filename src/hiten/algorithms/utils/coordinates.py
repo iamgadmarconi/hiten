@@ -66,7 +66,7 @@ def _rotating_to_inertial(state, t, mu):
     # Velocity in rotating frame
     vel_rot = np.array([vx, vy, vz])
     
-    # Velocity in inertial frame = R·(v_rot + Omegaxr)
+    # Velocity in inertial frame = R*(v_rot + Omegaxr)
     vel_inertial = R @ (vel_rot + omega_cross_r)
     
     # Combine position and velocity
@@ -118,7 +118,7 @@ def _inertial_to_rotating(state, t, mu):
     # Velocity in inertial frame
     vel_inertial = np.array([vx, vy, vz])
     
-    # Velocity in rotating frame = R^T·(v_inertial - Omegaxr)
+    # Velocity in rotating frame = R^T*(v_inertial - Omegaxr)
     vel_rotating = R.T @ (vel_inertial - omega_cross_r)
     
     # Combine position and velocity

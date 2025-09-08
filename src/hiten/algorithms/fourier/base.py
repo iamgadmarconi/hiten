@@ -17,15 +17,15 @@ from hiten.algorithms.utils.config import FASTMATH
 #  6 bits for each action exponent (0 ... 63)
 #  7 bits for each Fourier index shifted by +64  (-64 ... +63)
 #
-#  ┌─────────┬────────┬────────┬────────┬────────┬────────┬────────┐
-#  │ bits    │ 0-5    │ 6-11   │ 12-17  │ 18-24  │ 25-31  │ 32-38  │
-#  │ field   │ n1     │ n2     │ n3     │ k1     │ k2     │ k3     │
-#  └─────────┴────────┴────────┴────────┴────────┴────────┴────────┘
+#  +---------+--------+--------+--------+--------+--------+--------+
+#  | bits    | 0-5    | 6-11   | 12-17  | 18-24  | 25-31  | 32-38  |
+#  | field   | n1     | n2     | n3     | k1     | k2     | k3     |
+#  +---------+--------+--------+--------+--------+--------+--------+
 #  (remaining higher bits unused for now)
 
 _N_MASK = 0x3F              # 6 bits
 _K_MASK = 0x7F              # 7 bits
-_K_OFFSET = 64              # shift applied to store signed kᵢ as unsigned
+_K_OFFSET = 64              # shift applied to store signed k_i as unsigned
 
 # upper bounds hard-wired by bit-width
 _MAX_N = _N_MASK
@@ -87,7 +87,7 @@ def _init_fourier_tables(degree: int, k_max: int):
     degree : int
         Maximum total action degree *d = n_1+n_2+n_3* to include.
     k_max : int
-        Fourier indices kᵢ will be limited to -k_max ... +k_max (k_max ≤ 63).
+        Fourier indices k_i will be limited to -k_max ... +k_max (k_max <= 63).
 
     Returns
     -------

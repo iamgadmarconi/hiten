@@ -322,7 +322,7 @@ class _InvariantTori:
         # Normalise the eigenvector
         y0 = y0 / np.linalg.norm(y0)
 
-        # Angle α such that \lambda = e^{iα}
+        # Angle alpha such that \lambda = e^{i*alpha}
         alpha = np.angle(lam_c)
 
         phase = np.exp(-1j * alpha * theta1 / (2.0 * np.pi))  # shape (n_theta1,)
@@ -616,7 +616,7 @@ class _InvariantTori:
         jacobi_vals = [_jacobi(state) for state in v_curve_corr]
         ax.plot(theta2_vals, jacobi_vals, "g-")
         ax.axhline(self.jacobi, color="k", linestyle="--", label="Orbit Jacobi")
-        ax.set_xlabel("θ_2")
+        ax.set_xlabel("theta_2")
         ax.set_ylabel("Jacobi constant")
         ax.set_title("Jacobi Constant Variation")
         ax.legend()
@@ -625,7 +625,7 @@ class _InvariantTori:
         ax = axes[1, 0]
         distances = np.linalg.norm(v_curve_corr - self.orbit.initial_state, axis=1)
         ax.plot(theta2_vals, distances, "m-")
-        ax.set_xlabel("θ_2")
+        ax.set_xlabel("theta_2")
         ax.set_ylabel("Distance from periodic orbit")
         ax.set_title("Curve Amplitude")
 
@@ -648,7 +648,7 @@ class _InvariantTori:
             errors.append(np.linalg.norm(sol.states[-1] - v_curve_corr[j_target]))
 
         ax.semilogy(theta2_vals, errors, "c-")
-        ax.set_xlabel("θ_2")
+        ax.set_xlabel("theta_2")
         ax.set_ylabel("Invariance error")
         ax.set_title("Point-wise Invariance Error")
 
@@ -740,7 +740,7 @@ class _InvariantTori:
         if N % 2 == 0:
             raise ValueError("N must be odd for symmetric k-range indexing")
             
-        # Sample points theta_2,i = 2πi/N for i = 0, 1, ..., N-1
+        # Sample points theta_2,i = 2*pi*i/N for i = 0, 1, ..., N-1
         theta_2 = 2.0 * np.pi * np.arange(N) / N
         
         # Wavenumbers k = -(N-1)/2, ..., (N-1)/2

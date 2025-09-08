@@ -68,7 +68,7 @@ def _build_complexification_matrix(mix_indices):
         M[q_idx, :] = 0.0
         M[p_idx, :] = 0.0
 
-        # Fill-in the 2×2 mixing block for the selected canonical pair.
+        # Fill-in the 2x2 mixing block for the selected canonical pair.
         # q_j(real)  =  (      q_j^c +   i p_j^c) / sqrt(2)
         # p_j(real)  =  (  i q_j^c +       p_j^c) / sqrt(2)
         M[q_idx, q_idx] = half

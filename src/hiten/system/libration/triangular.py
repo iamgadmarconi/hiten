@@ -352,7 +352,7 @@ class TriangularPoint(LibrationPoint):
         For triangular points the flow decomposes into a planar 2-DOF part
         and a vertical 1-DOF harmonic oscillator uncoupled from the plane.
         The planar eigenvectors are constructed analytically following the
-        classical derivation (see Gómez et al., 1993, par3.2).  They live in
+        classical derivation (see Gomez et al., 1993, par3.2).  They live in
         the first four coordinates (x, y, p_x, p_y).  We simply append two
         zeros to embed them in the full 6-D phase-space.  The vertical pair
         is trivial thanks to the decoupling: (z, p_z) already form a
@@ -431,7 +431,7 @@ class TriangularPoint(LibrationPoint):
         float
             The scaling factor (dimensionless).
         """
-        # Planar modes: use Gómez et al. formula.  Vertical mode: already
+        # Planar modes: use Gomez et al. formula.  Vertical mode: already
         # rescaled directly in the eigenvectors, so the scaling factor is 1.
         if idx == 2:
             return 1.0

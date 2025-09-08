@@ -10,7 +10,7 @@ callables into a uniform signature accepted by the integrators.
 
 References
 ----------
-Hairer, E.; Nørsett, S.; Wanner, G. (1993). "Solving Ordinary Differential
+Hairer, E.; Norsett, S.; Wanner, G. (1993). "Solving Ordinary Differential
 Equations I".
 
 Dormand, J. R.; Prince, P. J. (1980). "A family of embedded Runge-Kutta

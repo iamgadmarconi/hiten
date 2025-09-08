@@ -24,7 +24,7 @@ py -m pip install "hiten[dev]"
 
 ## Quickstart
 
-Compute a halo orbit around Earth–Moon L1 and plot a branch of its stable manifold:
+Compute a halo orbit around Earth-Moon L1 and plot a branch of its stable manifold:
 
 ```python
 from hiten import System
@@ -134,9 +134,9 @@ manifold.plot()
 
     *Figure&nbsp;3 - Family of Earth-Moon \(L_1\) Lyapunov orbits.*
 
-3. **Generating Poincaré maps**
+3. **Generating Poincare maps**
 
-   The toolkit can generate Poincaré maps for arbitrary sections. For example, the centre manifold of the Earth-Moon \(L_1\) libration point:
+   The toolkit can generate Poincare maps for arbitrary sections. For example, the centre manifold of the Earth-Moon \(L_1\) libration point:
 
    ```python
    from hiten import System
@@ -152,9 +152,9 @@ manifold.plot()
    pm.plot()
    ```
 
-   ![Poincaré map](results/plots/poincare_map.svg)
+   ![Poincare map](results/plots/poincare_map.svg)
 
-   *Figure&nbsp;4 - Poincaré map of the centre manifold of the Earth-Moon \(L_1\) libration point using the \(q_2=0\) section.*
+   *Figure&nbsp;4 - Poincare map of the centre manifold of the Earth-Moon \(L_1\) libration point using the \(q_2=0\) section.*
 
    Or the synodic section of a vertical orbit manifold:
 

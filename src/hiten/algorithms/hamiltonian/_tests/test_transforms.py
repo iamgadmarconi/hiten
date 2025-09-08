@@ -207,7 +207,7 @@ def test_identity(transforms_test_setup):
     I = np.eye(6)
     _sympy_vars = sp.symbols("x y z px py pz")
 
-    # random polynomial with integer coefficients in [‑3, 3]
+    # random polynomial with integer coefficients in [-3, 3]
     rng = np.random.default_rng(0)
     coeffs = rng.integers(-3, 4, size=20)  # 20 random terms
 

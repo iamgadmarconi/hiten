@@ -2,7 +2,7 @@
 
 References
 ----------
-Hairer, E., Nørsett, S. P., & Wanner, G. (1993). "Solving Ordinary
+Hairer, E., Norsett, S. P., & Wanner, G. (1993). "Solving Ordinary
 Differential Equations I: Non-stiff Problems".
 """
 
@@ -120,7 +120,7 @@ class _Solution:
         y1 = self.states[idxs + 1]
 
         h = (t1 - t0)
-        s = (t_arr - t0) / h  # Normalised position in interval, 0 ≤ s ≤ 1
+        s = (t_arr - t0) / h  # Normalised position in interval, 0 <= s <= 1
 
         if self.derivatives is None:
             # Linear interpolation.
