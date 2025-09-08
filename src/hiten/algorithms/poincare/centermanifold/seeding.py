@@ -1,5 +1,4 @@
-"""
-Base class for center manifold seeding strategies.
+"""Base class for center manifold seeding strategies.
 
 This module provides the base class for seeding strategies used to generate
 initial conditions on center manifolds of collinear libration points in the

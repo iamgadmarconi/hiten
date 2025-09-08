@@ -62,7 +62,6 @@ class CenterManifoldMap(_ReturnMapBase):
 
     Notes
     -----
-    The center manifold is computed in the rotating synodic frame of the CR3BP.
     State vectors are ordered as [q1, q2, q3, p1, p2, p3] where q1=0 for
     center manifold trajectories. All coordinates are in nondimensional units
     with the primary-secondary separation as the length unit.

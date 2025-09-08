@@ -1,5 +1,4 @@
-"""
-Center manifold Poincare map computation engine.
+"""Center manifold Poincare map computation engine.
 
 This module provides the computation engine for generating Poincare maps
 restricted to center manifolds of collinear libration points in the Circular

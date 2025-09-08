@@ -1,5 +1,4 @@
-"""
-Center manifold seeding strategies for Poincare maps.
+"""Center manifold seeding strategies for Poincare maps.
 
 This module provides various strategies for seeding initial conditions
 on center manifolds of periodic orbits in the Circular Restricted 
@@ -10,7 +9,7 @@ The module exports a factory function :func:`_make_strategy` that creates
 concrete seeding strategy instances based on a string identifier.
 """
 
-from .config import _CenterManifoldSectionConfig
+from .config import _CenterManifoldSectionConfig, _CenterManifoldMapConfig
 from .seeding import _CenterManifoldSeedingBase
 from .strategies import (_AxisAlignedSeeding, _LevelSetsSeeding,
                          _RadialSeeding, _RandomSeeding, _SingleAxisSeeding)
@@ -25,7 +24,7 @@ _STRATEGY_MAP = {
 
 
 def _make_strategy(kind: str, section_config: _CenterManifoldSectionConfig, 
-                   map_config, **kwargs) -> _CenterManifoldSeedingBase:
+                   map_config: _CenterManifoldMapConfig, **kwargs) -> _CenterManifoldSeedingBase:
     """Factory returning a concrete seeding strategy.
 
     Parameters
@@ -35,7 +34,7 @@ def _make_strategy(kind: str, section_config: _CenterManifoldSectionConfig,
         'level_sets', 'radial', or 'random'.
     section_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
         Configuration describing the Poincare section parameters.
-    map_config
+    map_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Map-level configuration containing global parameters such as
         ``n_seeds`` and ``seed_axis``.
     **kwargs

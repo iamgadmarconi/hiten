@@ -1,5 +1,4 @@
-"""
-Center manifold backend for efficient Poincare map computations.
+"""Center manifold backend for efficient Poincare map computations.
 
 This module provides Numba-compiled kernels for computing center manifold
 trajectories in the Circular Restricted Three-Body Problem (CR3BP). The
@@ -10,18 +9,6 @@ of Poincare maps.
 The main class :class:`_CenterManifoldBackend` provides the interface
 for center manifold computations, while the Numba-compiled functions
 handle the low-level numerical integration and section crossing detection.
-
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
-
-Jorba, A. & Masdemont, J. (1999). Dynamics in the center manifold
-of the collinear points of the restricted three body problem.
-*Physica D*, 132(1-2), 189-213.
-
-Koon, W. S., Lo, M. W., Marsden, J. E., & Ross, S. D. (2011).
-*Dynamical Systems, the Three-Body Problem and Space Mission
-Design*. Springer.
 """
 
 from typing import Callable, Literal, Optional, Tuple
@@ -435,7 +422,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
 
     Notes
     -----
-    The center manifold is computed in the rotating synodic frame of the CR3BP.
     State vectors are ordered as [q1, q2, q3, p1, p2, p3].
     """
 

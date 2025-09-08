@@ -1,5 +1,4 @@
-"""
-Concrete implementations of center manifold seeding strategies.
+"""Concrete implementations of center manifold seeding strategies.
 
 This module provides concrete implementations of seeding strategies for
 generating initial conditions on center manifolds of collinear libration

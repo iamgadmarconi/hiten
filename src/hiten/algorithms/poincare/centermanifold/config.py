@@ -1,5 +1,4 @@
-"""
-Configuration for center manifold Poincare sections in the CR3BP.
+"""Configuration for center manifold Poincare sections in the CR3BP.
 
 This module provides configuration classes for computing Poincare sections
 restricted to center manifolds of collinear libration points in the Circular
