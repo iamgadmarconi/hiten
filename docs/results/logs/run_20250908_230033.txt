@@ -1,3 +1,0 @@
-2025-09-08 23:00:33,833 - root - INFO - Log file created: results/logs\run_20250908_230033.txt
-2025-09-08 23:01:01,341 - numexpr.utils - INFO - Note: NumExpr detected 20 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 16.
-2025-09-08 23:01:01,342 - numexpr.utils - INFO - NumExpr defaulting to 16 threads.

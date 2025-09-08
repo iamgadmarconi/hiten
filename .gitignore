@@ -184,3 +184,5 @@ results/**
 
 .cursor/
 _debug/
+/docs/_build/
+/docs/results/

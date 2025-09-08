@@ -81,7 +81,9 @@ def setup_logging(level: int = logging.INFO,
         root_logger.info(f"Log file created: {log_filepath}")
 
 # Setup logging when this module is imported
-setup_logging()
+# Check environment variable to control file logging
+save_to_file = os.getenv('HITEN_LOG_TO_FILE', 'false').lower() in ('true', '1', 'yes')
+setup_logging(save_to_file=save_to_file)
 
 # Create a logger instance for other modules to import
 logger = logging.getLogger(__name__)

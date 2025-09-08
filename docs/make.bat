@@ -27,6 +27,7 @@ goto end
 goto end
 
 :livehtml
+cd /d "%~dp0"
 sphinx-autobuild -b html %SPHINXOPTS% %SOURCEDIR% %BUILDDIR%\html
 goto end
 
