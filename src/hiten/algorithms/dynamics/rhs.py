@@ -68,7 +68,7 @@ class _RHSSystem(_DynamicalSystem):
     --------
     :class:`hiten.algorithms.dynamics.base._DynamicalSystem` : Base class
     :func:`create_rhs_system` : Factory function
-    :func:`numba.njit` : JIT compilation used internally
+    numba njit : JIT compilation used internally
     """
 
     def __init__(self, rhs_func: Callable[[float, np.ndarray], np.ndarray], dim: int, name: str = "Generic RHS"):

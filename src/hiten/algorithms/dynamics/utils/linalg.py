@@ -36,10 +36,10 @@ def eigenvalue_decomposition(A: np.ndarray, discrete: int = 0, delta: float = 1e
     discrete : int, optional
         Classification mode. Default is 0.
         
-        * 0 : Continuous-time system (Jacobian matrix)
-              Uses sign(Re{lambda}) for classification
-        * 1 : Discrete-time system (map matrix)
-              Uses |lambda| with neutral band for classification
+        - 0 : Continuous-time system (Jacobian matrix)
+          Uses sign(Re{lambda}) for classification
+        - 1 : Discrete-time system (map matrix)
+          Uses |lambda| with neutral band for classification
     delta : float, optional
         Half-width of neutral band around stability threshold. Default is 1e-4.
         For continuous systems: |Re{lambda}| < delta -> center
