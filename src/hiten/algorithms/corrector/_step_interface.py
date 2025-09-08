@@ -469,7 +469,7 @@ class _ArmijoStepInterface(_PlainStepInterface):
     >>> interface = _ArmijoStepInterface(line_search_config=False)
     >>>
     >>> # Custom line search configuration
-    >>> config = _LineSearchConfig(c1=1e-4, rho=0.5, max_iter=20)
+    >>> config = _LineSearchConfig(armijo_c=1e-4, alpha_reduction=0.5, min_alpha=1e-4)
     >>> interface = _ArmijoStepInterface(line_search_config=config)
 
     See Also

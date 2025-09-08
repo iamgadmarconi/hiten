@@ -31,11 +31,11 @@ class _NewtonOrbitCorrector(_PeriodicOrbitCorrectorInterface, _NewtonCore):
     Examples
     --------
     >>> corrector = _NewtonOrbitCorrector()
-    >>> corrected_orbit = corrector.correct_orbit(initial_orbit)
+    >>> x_corr, t_half = corrector.correct(initial_orbit)
     >>>
     >>> # High-precision correction
     >>> corrector = _NewtonOrbitCorrector(tol=1e-12, max_attempts=100)
-    >>> precise_orbit = corrector.correct_orbit(orbit)
+    >>> x_corr, t_half = corrector.correct(orbit)
 
     See Also
     --------

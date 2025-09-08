@@ -18,7 +18,7 @@ Most users will work with the ready-to-use correctors:
 
 >>> from hiten.algorithms.corrector import _NewtonOrbitCorrector
 >>> corrector = _NewtonOrbitCorrector()
->>> corrected_orbit = corrector.correct(orbit)
+>>> x_corr, t_half = corrector.correct(orbit)
 
 Advanced users can create custom correctors by combining components:
 

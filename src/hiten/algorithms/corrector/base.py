@@ -143,11 +143,11 @@ class _BaseCorrectionConfig:
         safeguard against excessively large steps that could cause numerical
         overflow or move far from the solution. Particularly important for
         poorly conditioned problems or bad initial guesses.
-    line_search_config : _LineSearchConfig, bool, or None, default=True
+    line_search_config : :class:`hiten.algorithms.corrector.line._LineSearchConfig`, bool, or None, default=True
         Configuration for line search behavior:
         - True: Enable line search with default parameters
         - False or None: Disable line search (use full Newton steps)
-        - _LineSearchConfig: Enable line search with custom parameters
+        - :class:`hiten.algorithms.corrector.line._LineSearchConfig`: Enable line search with custom parameters
         Line search improves robustness for challenging problems at the
         cost of additional function evaluations.
     finite_difference : bool, default=False
@@ -185,7 +185,7 @@ class _BaseCorrectionConfig:
     >>>
     >>> # Robust configuration with custom line search
     >>> from hiten.algorithms.corrector.line import _LineSearchConfig
-    >>> ls_config = _LineSearchConfig(c1=1e-4, rho=0.5)
+    >>> ls_config = _LineSearchConfig(armijo_c=1e-4, alpha_reduction=0.5)
     >>> config = _BaseCorrectionConfig(
     ...     line_search_config=ls_config,
     ...     max_delta=1e-3
@@ -216,7 +216,7 @@ class _BaseCorrectionConfig:
     Controls the line search behavior for step-size control:
     - True: Use default line search parameters for robust convergence
     - False or None: Disable line search, use full Newton steps
-    - _LineSearchConfig: Use custom line search parameters
+    - :class:`hiten.algorithms.corrector.line._LineSearchConfig`: Use custom line search parameters
     
     Line search is generally recommended for production use as it
     significantly improves convergence robustness, especially for

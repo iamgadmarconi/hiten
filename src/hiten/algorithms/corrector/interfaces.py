@@ -39,7 +39,7 @@ class _OrbitCorrectionConfig(_BaseCorrectionConfig):
         Additional Jacobian contribution function.
     target : tuple of float, default=(0.0,)
         Target values for the residual components.
-    event_func : callable, default=_y_plane_crossing
+    event_func : :func:`hiten.algorithms.poincare.singlehit.backend._y_plane_crossing`, default=_y_plane_crossing
         Function to detect Poincare section crossings.
     method : str, default="scipy"
         Integration method for trajectory computation.
@@ -138,7 +138,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         
         Parameters
         ----------
-        orbit : PeriodicOrbit
+        orbit : :class:`hiten.system.orbits.base.PeriodicOrbit`
             Orbit object containing system information.
         x_full : ndarray
             Initial state for integration.
@@ -183,7 +183,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         ----------
         p_vec : ndarray
             Current parameter vector.
-        orbit : PeriodicOrbit
+        orbit : :class:`hiten.system.orbits.base.PeriodicOrbit`
             Orbit being corrected.
         base_state : ndarray
             Base state vector.
@@ -253,7 +253,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         ----------
         p_vec : ndarray
             Current parameter vector.
-        orbit : PeriodicOrbit
+        orbit : :class:`hiten.system.orbits.base.PeriodicOrbit`
             Orbit being corrected.
         base_state : ndarray
             Base state vector.
@@ -329,7 +329,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         
         Parameters
         ----------
-        orbit : PeriodicOrbit
+        orbit : :class:`hiten.system.orbits.base.PeriodicOrbit`
             Orbit to be corrected.
         tol : float, default=1e-10
             Convergence tolerance for residual norm.
