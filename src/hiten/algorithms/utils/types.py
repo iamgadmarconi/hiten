@@ -1,5 +1,4 @@
-"""
-Type definitions and state vector containers for the CR3BP.
+"""Type definitions and state vector containers for the CR3BP.
 
 This module provides comprehensive type definitions and state vector containers
 for the circular restricted three-body problem. It includes enumerations for

@@ -1,5 +1,4 @@
-"""
-High-level utilities for computing invariant tori in the circular restricted
+"""High-level utilities for computing invariant tori in the circular restricted
 three-body problem.
 
 This module provides comprehensive tools for computing 2D invariant tori that
@@ -133,7 +132,7 @@ class _InvariantTori:
 
         Parameters
         ----------
-        orbit : PeriodicOrbit
+        orbit : :class:`hiten.system.orbits.base.PeriodicOrbit`
             Corrected periodic orbit about which the torus is constructed. The
             orbit must expose a valid period attribute - no propagation is
             performed here; we only integrate the variational equations to
@@ -215,7 +214,7 @@ class _InvariantTori:
     
     def as_state(self) -> _Torus:
         """
-        Return an immutable :class:`_Torus` view of the current grid.
+        Return an immutable :class:`hiten.algorithms.tori.base._Torus` view of the current grid.
 
         The fundamental frequencies are derived from the generating periodic
         orbit: omega_1 = 2 * pi / T (longitudinal) and 
@@ -224,7 +223,7 @@ class _InvariantTori:
 
         Returns
         -------
-        _Torus
+        :class:`hiten.algorithms.tori.base._Torus`
             Immutable torus representation with computed fundamental frequencies.
 
         Raises

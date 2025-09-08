@@ -1,6 +1,6 @@
-""" 
-Public API for the ``algorithms`` package.
+""" Public API for the :mod:`hiten.algorithms` package.
 """
+
 from .continuation.interfaces import \
     _OrbitContinuationConfig as OrbitContinuationConfig
 from .continuation.predictors import _EnergyLevel as EnergyParameter
@@ -15,7 +15,8 @@ from .poincare.centermanifold.config import \
     _CenterManifoldMapConfig as CenterManifoldMapConfig
 from .poincare.synodic.base import SynodicMap
 from .poincare.synodic.config import _SynodicMapConfig as SynodicMapConfig
-from .poincare.synodic.config import _SynodicSectionConfig as SynodicSectionConfig
+from .poincare.synodic.config import \
+    _SynodicSectionConfig as SynodicSectionConfig
 from .tori.base import _InvariantTori as InvariantTori
 
 __all__ = [

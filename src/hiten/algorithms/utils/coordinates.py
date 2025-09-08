@@ -1,5 +1,4 @@
-"""
-Coordinate transformation utilities for the circular restricted three-body problem.
+"""Coordinate transformation utilities for the circular restricted three-body problem.
 
 This module provides comprehensive coordinate transformation functions for
 converting between different reference frames and unit systems in the circular

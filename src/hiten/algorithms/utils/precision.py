@@ -1,5 +1,4 @@
-"""
-High-precision arithmetic utilities for numerical computations.
+"""High-precision arithmetic utilities for numerical computations.
 
 This module provides comprehensive high-precision arithmetic capabilities for
 numerical computations in the circular restricted three-body problem. It supports
