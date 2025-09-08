@@ -46,7 +46,7 @@ class _OrbitContinuationConfig(NamedTuple):
         natural parameter continuation.
     getter : callable or None
         Function to extract continuation parameter from periodic orbit.
-        Should take a :class:`PeriodicOrbit` and return float.
+        Should take a :class:`hiten.system.orbits.base.PeriodicOrbit` and return float.
         If None, uses default parameter extraction.
     extra_params : dict or None
         Additional parameters passed to orbit correction methods.
@@ -91,7 +91,7 @@ class _PeriodicOrbitContinuationInterface:
         Starting orbit for the continuation family.
     parameter_getter : callable
         Function that extracts continuation parameter from an orbit.
-        Should take a :class:`PeriodicOrbit` and return float or ndarray.
+        Should take a :class:`hiten.system.orbits.base.PeriodicOrbit` and return float or ndarray.
     target : sequence
         Target parameter range(s) for continuation. For 1D: (min, max).
         For multi-dimensional: (2, m) array.

@@ -1,45 +1,14 @@
-"""
-hiten.algorithms.continuation.strategies
-========================================
+"""Strategy and stepping components for continuation algorithms.
 
-The `hiten.algorithms.continuation.strategies` package provides the core
-algorithmic components for numerical continuation in dynamical systems.
-This package implements various continuation strategies, stepping methods,
-and protocol definitions that form the foundation of the continuation
-framework.
+This package provides abstract strategy classes and concrete stepping
+implementations that integrate with the base continuation engine. It also
+exposes protocol definitions for implementing custom stepping logic.
 
-The package is organized into three main components:
+The components are grouped as:
 
-1. **Algorithm Strategies**: Abstract base classes that implement different
-   continuation approaches (natural parameter, pseudo-arclength).
-2. **Stepping Methods**: Concrete implementations of prediction strategies
-   used within continuation algorithms.
-3. **Interface Protocols**: Protocol definitions that ensure consistent
-   interfaces across different stepping strategies.
-
-These components work together to provide a flexible and extensible
-framework for tracing families of solutions in parameter space, with
-applications to periodic orbits, invariant manifolds, and other dynamical
-structures in the Circular Restricted Three-Body Problem (CR3BP).
-
-All numerical computations use nondimensional units appropriate for the
-specific dynamical system being studied.
-
-Examples
--------------
-The strategies are typically used through higher-level interfaces in the
-:mod:`hiten.algorithms.continuation` package, but can be combined directly
-for custom continuation scenarios:
-
->>> from hiten.algorithms.continuation.strategies._algorithms import _NaturalParameter
->>> from hiten.algorithms.continuation.strategies._stepping import _NaturalParameterStep
->>> from hiten.algorithms.continuation.interfaces import _PeriodicOrbitContinuationInterface
->>>
->>> # Create a custom continuation algorithm
->>> class CustomOrbitContinuation(_NaturalParameter, _PeriodicOrbitContinuationInterface):
->>>     def __init__(self, predictor_fn, **kwargs):
->>>         stepper = _NaturalParameterStep(predictor_fn)
->>>         super().__init__(stepper, **kwargs)
+- **Algorithm strategies**: natural parameter and pseudo-arclength.
+- **Stepping methods**: natural parameter and secant-based steppers.
+- **Protocols**: interfaces that stepping implementations should follow.
 
 See Also
 --------

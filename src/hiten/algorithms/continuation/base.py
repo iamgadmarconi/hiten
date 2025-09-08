@@ -86,20 +86,23 @@ class _ContinuationEngine(ABC):
     Examples
     --------
     >>> # Subclass implementation example
+    >>> from hiten.algorithms.continuation.strategies import _NaturalParameterStep
     >>> class OrbitContinuation(_ContinuationEngine):
     ...     def _make_stepper(self):
-    ...         return NaturalParameterStep()
-    ...     
+    ...         def predict(solution, step):
+    ...             return solution  # placeholder prediction
+    ...         return _NaturalParameterStep(predict)
+    ...
     ...     def _stop_condition(self):
     ...         current = self._parameter(self._family[-1])
     ...         return np.any(current >= self._target_max)
-    ...     
+    ...
     ...     def _instantiate(self, repr):
     ...         return Orbit.from_state(repr)
-    ...     
+    ...
     ...     def _correct(self, orbit, **kwargs):
     ...         return orbit.correct(**kwargs)
-    ...     
+    ...
     ...     def _parameter(self, orbit):
     ...         return orbit.energy
 
@@ -582,7 +585,8 @@ class _ContinuationEngine(ABC):
         Examples
         --------
         >>> def _make_stepper(self):
-        ...     return NaturalParameterStep(parameter_index=0)
+        ...     from hiten.algorithms.continuation.strategies import _NaturalParameterStep
+        ...     return _NaturalParameterStep(self._predict_fn)
         """
         raise NotImplementedError
 

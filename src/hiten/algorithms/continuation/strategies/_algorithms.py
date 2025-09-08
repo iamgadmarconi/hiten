@@ -63,8 +63,9 @@ class _NaturalParameter(_ContinuationEngine, ABC):
     Examples
     --------
     >>> # Natural parameter continuation is typically used via concrete classes
-    >>> class OrbitContinuation(_PeriodicOrbitInterface, _NaturalParameter):
+    >>> class OrbitContinuation(_PeriodicOrbitContinuationInterface, _NaturalParameter):
     ...     def _make_stepper(self):
+    ...         from hiten.algorithms.continuation.strategies import _NaturalParameterStep
     ...         return _NaturalParameterStep(self._predict_fn)
     ...
     >>> engine = OrbitContinuation(
@@ -156,11 +157,13 @@ class _NaturalParameter(_ContinuationEngine, ABC):
         -----
         Subclasses must implement this method to specify how predictions
         are generated for the specific problem type. Common implementations
-        include :class:`_NaturalParameterStep` for state-based continuation.
+        include :class:`hiten.algorithms.continuation.strategies._stepping._NaturalParameterStep`
+        for state-based continuation.
 
         Examples
         --------
         >>> def _make_stepper(self):
+        ...     from hiten.algorithms.continuation.strategies import _NaturalParameterStep
         ...     return _NaturalParameterStep(self._predict_function)
         """
         raise NotImplementedError(
@@ -210,7 +213,7 @@ class _SecantArcLength(_ContinuationEngine, ABC):
     Examples
     --------
     >>> # Pseudo-arclength continuation via concrete implementation
-    >>> class OrbitArcLength(_PeriodicOrbitInterface, _SecantArcLength):
+    >>> class OrbitArcLength(_PeriodicOrbitContinuationInterface, _SecantArcLength):
     ...     def _representation(self, orbit):
     ...         return orbit.initial_state
     ...
