@@ -13,11 +13,11 @@ All coordinates are in nondimensional CR3BP rotating-frame units.
 
 See Also
 --------
-:mod:`hiten.algorithms.continuation.base`
+:mod:`~hiten.algorithms.continuation.base`
     Base continuation engine that these interfaces extend.
-:mod:`hiten.system.orbits`
+:mod:`~hiten.system.orbits`
     Periodic orbit classes used by orbit continuation.
-:mod:`hiten.algorithms.corrector`
+:mod:`~hiten.algorithms.corrector`
     Correction algorithms used by continuation interfaces.
 """
 
@@ -38,7 +38,7 @@ class _OrbitContinuationConfig(NamedTuple):
 
     Parameters
     ----------
-    state : :class:`hiten.algorithms.utils.types.SynodicState` or None
+    state : :class:`~hiten.algorithms.utils.types.SynodicState` or None
         Initial state for orbit construction. If None, uses default
         state from the orbit class.
     amplitude : bool, default False
@@ -46,7 +46,7 @@ class _OrbitContinuationConfig(NamedTuple):
         natural parameter continuation.
     getter : callable or None
         Function to extract continuation parameter from periodic orbit.
-        Should take a :class:`hiten.system.orbits.base.PeriodicOrbit` and return float.
+        Should take a :class:`~hiten.system.orbits.base.PeriodicOrbit` and return float.
         If None, uses default parameter extraction.
     extra_params : dict or None
         Additional parameters passed to orbit correction methods.
@@ -87,11 +87,11 @@ class _PeriodicOrbitContinuationInterface:
 
     Parameters
     ----------
-    initial_orbit : :class:`hiten.system.orbits.base.PeriodicOrbit`
+    initial_orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
         Starting orbit for the continuation family.
     parameter_getter : callable
         Function that extracts continuation parameter from an orbit.
-        Should take a :class:`hiten.system.orbits.base.PeriodicOrbit` and return float or ndarray.
+        Should take a :class:`~hiten.system.orbits.base.PeriodicOrbit` and return float or ndarray.
     target : sequence
         Target parameter range(s) for continuation. For 1D: (min, max).
         For multi-dimensional: (2, m) array.
@@ -108,11 +108,11 @@ class _PeriodicOrbitContinuationInterface:
     -----
     This interface implements the required abstract methods:
     
-    - :meth:`hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface._instantiate`: 
+    - :meth:`~hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface._instantiate`: 
         Create orbit from predicted state vector
-    - :meth:`hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface._correct`: 
+    - :meth:`~hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface._correct`: 
         Apply orbit-specific correction algorithm
-    - :meth:`hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface._parameter`: 
+    - :meth:`~hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface._parameter`: 
         Extract continuation parameter from orbit
     
     The interface preserves the orbit class and libration point from
@@ -131,9 +131,9 @@ class _PeriodicOrbitContinuationInterface:
 
     See Also
     --------
-    :class:`hiten.algorithms.continuation.base._ContinuationEngine`
+    :class:`~hiten.algorithms.continuation.base._ContinuationEngine`
         Base continuation engine that this interface extends.
-    :class:`hiten.system.orbits.base.PeriodicOrbit`
+    :class:`~hiten.system.orbits.base.PeriodicOrbit`
         Orbit class used for continuation.
     """
     def __init__(self, *, initial_orbit: PeriodicOrbit, parameter_getter: Callable[[PeriodicOrbit], "np.ndarray | float"],
@@ -169,7 +169,7 @@ class _PeriodicOrbitContinuationInterface:
 
         Returns
         -------
-        :class:`hiten.system.orbits.base.PeriodicOrbit`
+        :class:`~hiten.system.orbits.base.PeriodicOrbit`
             New orbit object with the predicted initial state.
             The orbit class and libration point are preserved from
             the initial orbit.
@@ -178,7 +178,7 @@ class _PeriodicOrbitContinuationInterface:
         -----
         The created orbit is not yet corrected and may not satisfy
         periodicity constraints. The 
-        :meth:`hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface._correct` 
+        :meth:`~hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface._correct` 
         method will be called subsequently to refine the orbit.
         """
         return self._orbit_class(
@@ -195,9 +195,9 @@ class _PeriodicOrbitContinuationInterface:
 
         Parameters
         ----------
-        obj : :class:`hiten.system.orbits.base.PeriodicOrbit`
+        obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             Orbit object to be corrected (from 
-            :meth:`hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface._instantiate`).
+            :meth:`~hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface._instantiate`).
         **kwargs
             Additional correction parameters, typically including:
             - tol: convergence tolerance
@@ -206,7 +206,7 @@ class _PeriodicOrbitContinuationInterface:
 
         Returns
         -------
-        :class:`hiten.system.orbits.base.PeriodicOrbit`
+        :class:`~hiten.system.orbits.base.PeriodicOrbit`
             The corrected orbit object satisfying periodicity constraints.
 
         Raises
@@ -233,7 +233,7 @@ class _PeriodicOrbitContinuationInterface:
 
         Parameters
         ----------
-        obj : :class:`hiten.system.orbits.base.PeriodicOrbit`
+        obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             Corrected periodic orbit object.
 
         Returns
@@ -276,14 +276,14 @@ class _InvariantToriContinuationInterface:
     - Continuation along torus families
     
     The interface will follow the same pattern as
-    :class:`hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface` but adapted
+    :class:`~hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface` but adapted
     for the higher-dimensional nature of invariant tori.
 
     See Also
     --------
-    :class:`hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface`
+    :class:`~hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface`
         Similar interface for periodic orbit continuation.
-    :mod:`hiten.algorithms.tori`
+    :mod:`~hiten.algorithms.tori`
         Future module for invariant tori algorithms.
     """
     pass

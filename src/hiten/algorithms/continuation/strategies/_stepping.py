@@ -14,11 +14,11 @@ dynamical system being studied.
 
 See Also
 --------
-:mod:`hiten.algorithms.continuation.strategies._step_interface`
+:mod:`~hiten.algorithms.continuation.strategies._step_interface`
     Protocol definitions for stepping strategies.
-:mod:`hiten.algorithms.continuation.strategies._algorithms`
+:mod:`~hiten.algorithms.continuation.strategies._algorithms`
     Algorithm classes that use these stepping strategies.
-:mod:`hiten.algorithms.continuation.base`
+:mod:`~hiten.algorithms.continuation.base`
     Base continuation engine that coordinates with stepping strategies.
 """
 
@@ -70,9 +70,9 @@ class _StepStrategy(Protocol):
 
     See Also
     --------
-    :class:`hiten.algorithms.continuation.strategies._stepping._NaturalParameterStep`
+    :class:`~hiten.algorithms.continuation.strategies._stepping._NaturalParameterStep`
         Simple implementation with no-op hooks.
-    :class:`hiten.algorithms.continuation.strategies._stepping._SecantStep`
+    :class:`~hiten.algorithms.continuation.strategies._stepping._SecantStep`
         Sophisticated implementation using success hooks.
     """
 
@@ -200,9 +200,9 @@ class _NaturalParameterStep:
 
     See Also
     --------
-    :class:`hiten.algorithms.continuation.strategies._stepping._SecantStep`
+    :class:`~hiten.algorithms.continuation.strategies._stepping._SecantStep`
         More sophisticated stepping with tangent vector maintenance.
-    :class:`hiten.algorithms.continuation.strategies._stepping._StepStrategy`
+    :class:`~hiten.algorithms.continuation.strategies._stepping._StepStrategy`
         Protocol that this class implements.
     """
 
@@ -347,9 +347,9 @@ class _SecantStep:
 
     See Also
     --------
-    :class:`hiten.algorithms.continuation.strategies._stepping._NaturalParameterStep`
+    :class:`~hiten.algorithms.continuation.strategies._stepping._NaturalParameterStep`
         Simpler stepping strategy for natural parameter continuation.
-    :class:`hiten.algorithms.continuation.strategies._algorithms._SecantArcLength`
+    :class:`~hiten.algorithms.continuation.strategies._algorithms._SecantArcLength`
         Algorithm class that uses this stepping strategy.
     """
 

@@ -51,10 +51,10 @@ class _CenterManifoldMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _Iterat
     Notes
     -----
     The configuration inherits from multiple base classes:
-    - :class:`hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`: Basic return map settings
-    - :class:`hiten.algorithms.poincare.core.config._IntegrationConfig`: Integration method and parameters
-    - :class:`hiten.algorithms.poincare.core.config._IterationConfig`: Iteration control parameters
-    - :class:`hiten.algorithms.poincare.core.config._SeedingConfig`: Seeding strategy parameters
+    - :class:`~hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`: Basic return map settings
+    - :class:`~hiten.algorithms.poincare.core.config._IntegrationConfig`: Integration method and parameters
+    - :class:`~hiten.algorithms.poincare.core.config._IterationConfig`: Iteration control parameters
+    - :class:`~hiten.algorithms.poincare.core.config._SeedingConfig`: Seeding strategy parameters
 
     All coordinates are in nondimensional units with the primary-secondary
     separation as the length unit.
@@ -308,7 +308,7 @@ def _get_section_config(section_coord: str) -> _CenterManifoldSectionConfig:
 
     Returns
     -------
-    :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+    :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
         Cached configuration for the specified section coordinate.
 
     Raises

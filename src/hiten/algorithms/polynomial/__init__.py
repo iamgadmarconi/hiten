@@ -10,8 +10,8 @@ restricted three-body problem using compressed monomial ordering.
 
 See Also
 --------
-:mod:`hiten.algorithms.hamiltonian`
+:mod:`~hiten.algorithms.hamiltonian`
     Hamiltonian normal form computations using polynomial algebra
-:mod:`hiten.algorithms.fourier`
+:mod:`~hiten.algorithms.fourier`
     Fourier analysis that builds on polynomial operations
 """

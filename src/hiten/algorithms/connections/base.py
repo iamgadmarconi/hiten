@@ -1,6 +1,6 @@
 """Provide a user-facing interface for discovering connections between manifolds in CR3BP.
 
-This module provides the main :class:`hiten.algorithms.connections.base.Connection` class, which serves as a
+This module provides the main :class:`~hiten.algorithms.connections.base.Connection` class, which serves as a
 high-level facade for the connection discovery algorithm. It wraps the lower-level
 connection engine and provides convenient methods for solving connection problems
 and visualizing results.
@@ -13,11 +13,11 @@ All coordinates are in nondimensional CR3BP rotating-frame units.
 
 See Also
 --------
-:mod:`hiten.algorithms.connections.engine`
+:mod:`~hiten.algorithms.connections.engine`
     Lower-level connection engine implementation.
-:mod:`hiten.algorithms.connections.results`
+:mod:`~hiten.algorithms.connections.results`
     Result classes for connection data.
-:mod:`hiten.system.manifold`
+:mod:`~hiten.system.manifold`
     Manifold classes for CR3BP invariant structures.
 """
 
@@ -49,12 +49,12 @@ class Connection:
 
     Parameters
     ----------
-    section : :class:`hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+    section : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
         Configuration for the synodic section where manifolds are intersected.
     direction : {1, -1, None}, optional
         Direction for section crossings. 1 for positive, -1 for negative,
         None for both directions (default: None).
-    search_cfg : :class:`hiten.algorithms.connections.config._SearchConfig`, optional
+    search_cfg : :class:`~hiten.algorithms.connections.config._SearchConfig`, optional
         Configuration for connection search parameters including tolerances
         and geometric constraints (default: None).
 
@@ -118,9 +118,9 @@ class Connection:
 
     See Also
     --------
-    :class:`hiten.algorithms.connections.engine._ConnectionEngine`
+    :class:`~hiten.algorithms.connections.engine._ConnectionEngine`
         Lower-level engine that performs the actual computation.
-    :class:`hiten.algorithms.connections.results.ConnectionResults`
+    :class:`~hiten.algorithms.connections.results.ConnectionResults`
         Container for connection results with convenient access methods.
     """
     # User-provided single section configuration and direction
@@ -144,14 +144,14 @@ class Connection:
 
         Parameters
         ----------
-        source : :class:`hiten.system.manifold.Manifold`
+        source : :class:`~hiten.system.manifold.Manifold`
             Source manifold (e.g., unstable manifold of a periodic orbit).
-        target : :class:`hiten.system.manifold.Manifold`
+        target : :class:`~hiten.system.manifold.Manifold`
             Target manifold (e.g., stable manifold of another periodic orbit).
 
         Returns
         -------
-        list of :class:`hiten.algorithms.connections.results._ConnectionResult`
+        list of :class:`~hiten.algorithms.connections.results._ConnectionResult`
             Connection results sorted by increasing Delta-V requirement.
             Each result contains transfer type, Delta-V, intersection points,
             and 6D states at the connection.
@@ -159,14 +159,14 @@ class Connection:
         Notes
         -----
         Results are cached internally for convenient access via the 
-        :attr:`hiten.algorithms.connections.base.Connection.results`
+        :attr:`~hiten.algorithms.connections.base.Connection.results`
         property and for plotting with the
-        :meth:`hiten.algorithms.connections.base.Connection.plot` method.
+        :meth:`~hiten.algorithms.connections.base.Connection.plot` method.
 
         The algorithm performs these steps:
         1. Convert manifolds to section interfaces
         2. Create connection problem specification
-        3. Delegate to :class:`hiten.algorithms.connections.engine._ConnectionEngine`
+        3. Delegate to :class:`~hiten.algorithms.connections.engine._ConnectionEngine`
         4. Cache results for later use
 
         Examples
@@ -198,17 +198,17 @@ class Connection:
 
         Returns
         -------
-        :class:`hiten.algorithms.connections.results.ConnectionResults`
+        :class:`~hiten.algorithms.connections.results.ConnectionResults`
             A view over the latest results with friendly printing and
             convenient access methods. Returns an empty view if 
-            :meth:`hiten.algorithms.connections.base.Connection.solve`
+            :meth:`~hiten.algorithms.connections.base.Connection.solve`
             has not been called yet.
 
         Notes
         -----
         This property provides access to cached results from the most recent
-        call to :meth:`hiten.algorithms.connections.base.Connection.solve`. 
-        The :class:`hiten.algorithms.connections.results.ConnectionResults` 
+        call to :meth:`~hiten.algorithms.connections.base.Connection.solve`. 
+        The :class:`~hiten.algorithms.connections.results.ConnectionResults` 
         wrapper provides enhanced formatting and filtering capabilities.
 
         Examples
@@ -254,7 +254,7 @@ class Connection:
         ----------
         **kwargs
             Additional keyword arguments passed to
-            :func:`hiten.utils.plots.plot_poincare_connections_map`.
+            :func:`~hiten.utils.plots.plot_poincare_connections_map`.
             Common options include figure size, color maps, and styling parameters.
 
         Returns
@@ -265,7 +265,7 @@ class Connection:
         Raises
         ------
         ValueError
-            If :meth:`hiten.algorithms.connections.base.Connection.solve` 
+            If :meth:`~hiten.algorithms.connections.base.Connection.solve` 
             has not been called yet (no cached data to plot).
 
         Notes
@@ -284,7 +284,7 @@ class Connection:
 
         See Also
         --------
-        :func:`hiten.utils.plots.plot_poincare_connections_map`
+        :func:`~hiten.utils.plots.plot_poincare_connections_map`
             Underlying plotting function with detailed parameter documentation.
         """
         # Use cached artifacts; user should call solve() first

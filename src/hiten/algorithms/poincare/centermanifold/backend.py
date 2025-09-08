@@ -6,7 +6,7 @@ backend implements both Runge-Kutta and symplectic integration methods
 with parallel processing capabilities for high-performance computation
 of Poincare maps.
 
-The main class :class:`hiten.algorithms.poincare.centermanifold.backend._CenterManifoldBackend` 
+The main class :class:`~hiten.algorithms.poincare.centermanifold.backend._CenterManifoldBackend` 
 provides the interface for center manifold computations, while the Numba-compiled functions
 handle the low-level numerical integration and section crossing detection.
 """
@@ -393,9 +393,9 @@ class _CenterManifoldBackend(_ReturnMapBackend):
 
     Parameters
     ----------
-    dynsys : :class:`hiten.algorithms.dynamics.hamiltonian._HamiltonianSystemProtocol`
+    dynsys : :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystemProtocol`
         Hamiltonian system providing polynomial representation and CLMO tables.
-    surface : :class:`hiten.algorithms.poincare.core.events._SurfaceEvent`
+    surface : :class:`~hiten.algorithms.poincare.core.events._SurfaceEvent`
         Poincare section surface definition.
     section_coord : str
         Section coordinate identifier ('q2', 'p2', 'q3', or 'p3').

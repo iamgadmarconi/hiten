@@ -469,11 +469,11 @@ class _ExtendedSymplectic(_Integrator):
         Even order of the underlying scheme (>= 2). Default is 6.
     c_omega_heuristic : float, optional
         Scaling coefficient used in the heuristic
-        :func:`hiten.algorithms.integrators.symplectic._get_tao_omega` frequency.  
+        :func:`~hiten.algorithms.integrators.symplectic._get_tao_omega` frequency.  
         Default is 20.0.
     **options
         Additional keyword options stored verbatim in
-        :attr:`hiten.algorithms.integrators.base._Integrator.options`.
+        :attr:`~hiten.algorithms.integrators.base._Integrator.options`.
 
     Attributes
     ----------
@@ -496,7 +496,7 @@ class _ExtendedSymplectic(_Integrator):
 
     - **jac_H** - Jacobian of the Hamiltonian given as a nested list of
         polynomial coefficient arrays compatible with
-        :func:`hiten.algorithms.polynomial.operations._polynomial_evaluate`.
+        :func:`~hiten.algorithms.polynomial.operations._polynomial_evaluate`.
     - **clmo_H** - co-efficient layout mapping objects for the same
         polynomials.
     - **n_dof** - number of degrees of freedom (must equal 3 for this
@@ -524,7 +524,7 @@ class _ExtendedSymplectic(_Integrator):
         
         Parameters
         ----------
-        system : :class:`hiten.algorithms.dynamics.base._DynamicalSystem`
+        system : :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
             The system to validate
             
         Raises
@@ -562,7 +562,7 @@ class _ExtendedSymplectic(_Integrator):
         
         Parameters
         ----------
-        system : :class:`hiten.algorithms.dynamics.base._DynamicalSystem`
+        system : :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
             The Hamiltonian system to integrate (must provide polynomial structure)
         y0 : numpy.ndarray
             Initial state vector [Q, P], shape (2*n_dof,)
@@ -573,7 +573,7 @@ class _ExtendedSymplectic(_Integrator):
             
         Returns
         -------
-        :class:`hiten.algorithms.integrators.base._Solution`
+        :class:`~hiten.algorithms.integrators.base._Solution`
             Integration results containing times and states
             
         Notes
@@ -645,7 +645,7 @@ class ExtendedSymplectic:
 
     Returns
     -------
-    :class:`hiten.algorithms.integrators.symplectic._ExtendedSymplectic`
+    :class:`~hiten.algorithms.integrators.symplectic._ExtendedSymplectic`
         A symplectic integrator instance of the specified order.
 
     Raises
@@ -671,7 +671,7 @@ class ExtendedSymplectic:
             
         Returns
         -------
-        :class:`hiten.algorithms.integrators.symplectic._ExtendedSymplectic`
+        :class:`~hiten.algorithms.integrators.symplectic._ExtendedSymplectic`
             A symplectic integrator instance of the specified order.
             
         Raises

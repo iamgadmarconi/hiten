@@ -57,8 +57,8 @@ def _crtbp_accel(state, mu):
     
     See Also
     --------
-    :class:`hiten.algorithms.dynamics.rtbp._RTBPRHS` : Dynamical system wrapper for these equations
-    :func:`hiten.algorithms.dynamics.rtbp._jacobian_crtbp` : Analytical Jacobian of these equations
+    :class:`~hiten.algorithms.dynamics.rtbp._RTBPRHS` : Dynamical system wrapper for these equations
+    :func:`~hiten.algorithms.dynamics.rtbp._jacobian_crtbp` : Analytical Jacobian of these equations
     """
     x, y, z, vx, vy, vz = state
 
@@ -103,9 +103,9 @@ def _jacobian_crtbp(x, y, z, mu):
     
     See Also
     --------
-    :func:`hiten.algorithms.dynamics.rtbp._var_equations` : Uses this Jacobian for STM propagation
-    :class:`hiten.algorithms.dynamics.rtbp._JacobianRHS` : Dynamical system wrapper for Jacobian evaluation
-    :func:`hiten.algorithms.dynamics.rtbp._crtbp_accel` : Vector field that this function differentiates
+    :func:`~hiten.algorithms.dynamics.rtbp._var_equations` : Uses this Jacobian for STM propagation
+    :class:`~hiten.algorithms.dynamics.rtbp._JacobianRHS` : Dynamical system wrapper for Jacobian evaluation
+    :func:`~hiten.algorithms.dynamics.rtbp._crtbp_accel` : Vector field that this function differentiates
     """
     mu2 = 1.0 - mu
 
@@ -193,10 +193,10 @@ def _var_equations(t, PHI_vec, mu):
     
     See Also
     --------
-    :func:`hiten.algorithms.dynamics.rtbp._jacobian_crtbp` : Provides Jacobian matrix F for STM evolution
-    :func:`hiten.algorithms.dynamics.rtbp._crtbp_accel` : Base dynamics for physical state evolution
-    :class:`hiten.algorithms.dynamics.rtbp._VarEqRHS` : Dynamical system wrapper for these equations
-    :func:`hiten.algorithms.dynamics.rtbp._compute_stm` : Uses this function for STM propagation
+    :func:`~hiten.algorithms.dynamics.rtbp._jacobian_crtbp` : Provides Jacobian matrix F for STM evolution
+    :func:`~hiten.algorithms.dynamics.rtbp._crtbp_accel` : Base dynamics for physical state evolution
+    :class:`~hiten.algorithms.dynamics.rtbp._VarEqRHS` : Dynamical system wrapper for these equations
+    :func:`~hiten.algorithms.dynamics.rtbp._compute_stm` : Uses this function for STM propagation
     """
     phi_flat = PHI_vec[:36]
     x_vec    = PHI_vec[36:]  # [x, y, z, vx, vy, vz]
@@ -293,9 +293,9 @@ def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["scipy",
     
     See Also
     --------
-    :func:`hiten.algorithms.dynamics.rtbp._var_equations` : Variational equations used for integration
-    :class:`hiten.algorithms.dynamics.rtbp._VarEqRHS` : Dynamical system for variational equations
-    :func:`hiten.algorithms.dynamics.rtbp._compute_monodromy` : Specialized version for periodic orbits
+    :func:`~hiten.algorithms.dynamics.rtbp._var_equations` : Variational equations used for integration
+    :class:`~hiten.algorithms.dynamics.rtbp._VarEqRHS` : Dynamical system for variational equations
+    :func:`~hiten.algorithms.dynamics.rtbp._compute_monodromy` : Specialized version for periodic orbits
     """
     PHI0 = np.zeros(42, dtype=np.float64)
     PHI0[:36] = np.eye(6, dtype=np.float64).ravel()
@@ -352,8 +352,8 @@ def _compute_monodromy(dynsys, x0, period):
     
     See Also
     --------
-    :func:`hiten.algorithms.dynamics.rtbp._compute_stm` : General STM computation used internally
-    :func:`hiten.algorithms.dynamics.utils.linalg._stability_indices` : Compute stability indices from monodromy matrix
+    :func:`~hiten.algorithms.dynamics.rtbp._compute_stm` : General STM computation used internally
+    :func:`~hiten.algorithms.dynamics.utils.linalg._stability_indices` : Compute stability indices from monodromy matrix
     """
     _, _, M, _ = _compute_stm(dynsys, x0, period)
     return M
@@ -388,8 +388,8 @@ def _stability_indices(monodromy):
     
     See Also
     --------
-    :func:`hiten.algorithms.dynamics.rtbp._compute_monodromy` : Provides monodromy matrix input
-    :func:`hiten.algorithms.dynamics.utils.linalg._stability_indices` : More robust version
+    :func:`~hiten.algorithms.dynamics.rtbp._compute_monodromy` : Provides monodromy matrix input
+    :func:`~hiten.algorithms.dynamics.utils.linalg._stability_indices` : More robust version
     """
     eigs = np.linalg.eigvals(monodromy)
     
@@ -433,9 +433,9 @@ class _JacobianRHS(_DynamicalSystem):
     
     See Also
     --------
-    :func:`hiten.algorithms.dynamics.rtbp._jacobian_crtbp` : Core Jacobian computation function
-    :class:`hiten.algorithms.dynamics.rtbp._RTBPRHS` : Main CR3BP equations of motion
-    :class:`hiten.algorithms.dynamics.rtbp._VarEqRHS` : Variational equations using this Jacobian
+    :func:`~hiten.algorithms.dynamics.rtbp._jacobian_crtbp` : Core Jacobian computation function
+    :class:`~hiten.algorithms.dynamics.rtbp._RTBPRHS` : Main CR3BP equations of motion
+    :class:`~hiten.algorithms.dynamics.rtbp._VarEqRHS` : Variational equations using this Jacobian
     """
     def __init__(self, mu: float, name: str = "CR3BP Jacobian"):
         super().__init__(3)
@@ -500,9 +500,9 @@ class _VarEqRHS(_DynamicalSystem):
     
     See Also
     --------
-    :func:`hiten.algorithms.dynamics.rtbp._var_equations` : Core variational equations implementation
-    :func:`hiten.algorithms.dynamics.rtbp._compute_stm` : Uses this system for STM computation
-    :class:`hiten.algorithms.dynamics.rtbp._RTBPRHS` : Base CR3BP dynamics
+    :func:`~hiten.algorithms.dynamics.rtbp._var_equations` : Core variational equations implementation
+    :func:`~hiten.algorithms.dynamics.rtbp._compute_stm` : Uses this system for STM computation
+    :class:`~hiten.algorithms.dynamics.rtbp._RTBPRHS` : Base CR3BP dynamics
     """
     def __init__(self, mu: float, name: str = "CR3BP Variational Equations"):
         super().__init__(42)
@@ -568,9 +568,9 @@ class _RTBPRHS(_DynamicalSystem):
     
     See Also
     --------
-    :func:`hiten.algorithms.dynamics.rtbp._crtbp_accel` : Core equations of motion implementation
-    :func:`hiten.algorithms.dynamics.rtbp.rtbp_dynsys` : Factory function for creating instances
-    :class:`hiten.algorithms.dynamics.rtbp._VarEqRHS` : Variational equations based on this system
+    :func:`~hiten.algorithms.dynamics.rtbp._crtbp_accel` : Core equations of motion implementation
+    :func:`~hiten.algorithms.dynamics.rtbp.rtbp_dynsys` : Factory function for creating instances
+    :class:`~hiten.algorithms.dynamics.rtbp._VarEqRHS` : Variational equations based on this system
     """
     def __init__(self, mu: float, name: str = "RTBP"):
         super().__init__(dim=6)
@@ -614,7 +614,7 @@ def rtbp_dynsys(mu: float, name: str = "RTBP") -> _RTBPRHS:
         
     See Also
     --------
-    :class:`hiten.algorithms.dynamics.rtbp._RTBPRHS` : Direct constructor interface
+    :class:`~hiten.algorithms.dynamics.rtbp._RTBPRHS` : Direct constructor interface
     """
     return _RTBPRHS(mu=mu, name=name)
 
@@ -638,7 +638,7 @@ def jacobian_dynsys(mu: float, name: str="Jacobian") -> _JacobianRHS:
         
     See Also
     --------
-    :class:`hiten.algorithms.dynamics.rtbp._JacobianRHS` : Direct constructor interface
+    :class:`~hiten.algorithms.dynamics.rtbp._JacobianRHS` : Direct constructor interface
     """
     return _JacobianRHS(mu=mu, name=name)
 
@@ -662,7 +662,7 @@ def variational_dynsys(mu: float, name: str = "VarEq") -> _VarEqRHS:
         
     See Also
     --------
-    :class:`hiten.algorithms.dynamics.rtbp._VarEqRHS` : Direct constructor interface
-    :func:`hiten.algorithms.dynamics.rtbp._compute_stm` : Uses this system for STM computation
+    :class:`~hiten.algorithms.dynamics.rtbp._VarEqRHS` : Direct constructor interface
+    :func:`~hiten.algorithms.dynamics.rtbp._compute_stm` : Uses this system for STM computation
     """
     return _VarEqRHS(mu=mu, name=name)

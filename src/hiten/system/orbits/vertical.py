@@ -1,6 +1,6 @@
 """Periodic vertical orbits of the circular restricted three-body problem.
 
-This module supplies concrete realisations of :class:`hiten.system.orbits.base.PeriodicOrbit`
+This module supplies concrete realisations of :class:`~hiten.system.orbits.base.PeriodicOrbit`
 corresponding to the vertical family around the collinear libration points
 L1 and L2. Each class provides an analytical first guess together with a
 customised differential corrector that exploits the symmetries of the family.
@@ -41,7 +41,7 @@ class VerticalOrbit(PeriodicOrbit):
 
     Parameters
     ----------
-    libration_point : :class:`hiten.system.libration.collinear.CollinearPoint`
+    libration_point : :class:`~hiten.system.libration.collinear.CollinearPoint`
         Target collinear libration point around which the orbit is computed.
     initial_state : Sequence[float] or None, optional
         Six-dimensional initial state vector [x, y, z, vx, vy, vz] in
@@ -65,7 +65,7 @@ class VerticalOrbit(PeriodicOrbit):
         
         Parameters
         ----------
-        libration_point : :class:`hiten.system.libration.collinear.CollinearPoint`
+        libration_point : :class:`~hiten.system.libration.collinear.CollinearPoint`
             The libration point around which the vertical orbit is computed.
         initial_state : Sequence[float], optional
             Initial state vector [x, y, z, vx, vy, vz] in nondimensional units.
@@ -120,7 +120,7 @@ class VerticalOrbit(PeriodicOrbit):
         
         Returns
         -------
-        :class:`hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`
+        :class:`~hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`
             The correction configuration for vertical orbits.
         """
         from hiten.algorithms.corrector.interfaces import \
@@ -139,7 +139,7 @@ class VerticalOrbit(PeriodicOrbit):
         
         Returns
         -------
-        :class:`hiten.algorithms.continuation.interfaces._OrbitContinuationConfig`
+        :class:`~hiten.algorithms.continuation.interfaces._OrbitContinuationConfig`
             The continuation configuration for vertical orbits.
         """
         from hiten.algorithms.continuation.interfaces import \

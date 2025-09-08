@@ -26,14 +26,14 @@ def _build_seeding_strategy(section_cfg, config):
 
     Parameters
     ----------
-    section_cfg : :class:`hiten.algorithms.poincare.core.config._SectionConfig`
+    section_cfg : :class:`~hiten.algorithms.poincare.core.config._SectionConfig`
         The section configuration object.
-    config : :class:`hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`
+    config : :class:`~hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`
         The map configuration containing the seed strategy specification.
 
     Returns
     -------
-    :class:`hiten.algorithms.poincare.core.strategies._SeedingStrategyBase`
+    :class:`~hiten.algorithms.poincare.core.strategies._SeedingStrategyBase`
         The instantiated seeding strategy.
 
     Raises

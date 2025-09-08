@@ -63,7 +63,7 @@ def _pack_fourier_index(n1: int, n2: int, n3: int, k1: int, k2: int, k3: int) ->
 
 @njit(fastmath=FASTMATH, cache=False)
 def _decode_fourier_index(key: np.uint64):  
-    """Inverse of :pyfunc:`_pack_fourier_index`."""
+    """Inverse of :pyfunc:`~_pack_fourier_index`."""
     key_int = int(key)
 
     n1 = key_int & _N_MASK

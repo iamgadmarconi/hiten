@@ -38,7 +38,7 @@ def _serialize_hamiltonians(pipeline: "HamiltonianPipeline") -> bytes:
     
     Parameters
     ----------
-    pipeline : :class:`hiten.system.hamiltonians.pipeline.HamiltonianPipeline`
+    pipeline : :class:`~hiten.system.hamiltonians.pipeline.HamiltonianPipeline`
         The Hamiltonian pipeline containing the cache to serialize.
         
     Returns
@@ -69,7 +69,7 @@ def _deserialize_hamiltonians(blob: bytes, pipeline: "HamiltonianPipeline") -> N
     ----------
     blob : bytes
         Pickled representation of the Hamiltonian cache data.
-    pipeline : :class:`hiten.system.hamiltonians.pipeline.HamiltonianPipeline`
+    pipeline : :class:`~hiten.system.hamiltonians.pipeline.HamiltonianPipeline`
         The Hamiltonian pipeline to populate with the deserialized data.
         
     Notes
@@ -97,7 +97,7 @@ def save_center_manifold(
 
     Parameters
     ----------
-    cm : :class:`hiten.system.center.CenterManifold`
+    cm : :class:`~hiten.system.center.CenterManifold`
         The center manifold object to serialize.
     dir_path : str or pathlib.Path
         Directory path where to save the center manifold data.
@@ -172,7 +172,7 @@ def load_center_manifold(dir_path: str | Path) -> "CenterManifold":
         
     Returns
     -------
-    :class:`hiten.system.center.CenterManifold`
+    :class:`~hiten.system.center.CenterManifold`
         The reconstructed center manifold object.
         
     Raises

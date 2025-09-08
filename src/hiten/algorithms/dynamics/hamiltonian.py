@@ -72,8 +72,8 @@ def _hamiltonian_rhs(
     
     See Also
     --------
-    :func:`hiten.algorithms.polynomial.operations._polynomial_evaluate` : Polynomial evaluation
-    :class:`hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem` : Uses this function for RHS computation
+    :func:`~hiten.algorithms.polynomial.operations._polynomial_evaluate` : Polynomial evaluation
+    :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem` : Uses this function for RHS computation
     """
 
     dH_dQ = np.empty(n_dof)
@@ -98,8 +98,8 @@ class _HamiltonianSystemProtocol(_DynamicalSystemProtocol, Protocol):
     
     See Also
     --------
-    :class:`hiten.algorithms.dynamics.base._DynamicalSystemProtocol` : Base protocol
-    :class:`hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem` : Concrete implementation
+    :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol` : Base protocol
+    :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem` : Concrete implementation
     """
     
     @property
@@ -221,9 +221,9 @@ class _HamiltonianSystem(_DynamicalSystem):
     
     See Also
     --------
-    :class:`hiten.algorithms.dynamics.hamiltonian._HamiltonianSystemProtocol` : Interface specification
-    :func:`hiten.algorithms.dynamics.hamiltonian.create_hamiltonian_system` : Factory function
-    :func:`hiten.algorithms.dynamics.hamiltonian._hamiltonian_rhs` : JIT-compiled RHS computation
+    :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystemProtocol` : Interface specification
+    :func:`~hiten.algorithms.dynamics.hamiltonian.create_hamiltonian_system` : Factory function
+    :func:`~hiten.algorithms.dynamics.hamiltonian._hamiltonian_rhs` : JIT-compiled RHS computation
     """
 
     def __init__(
@@ -311,14 +311,14 @@ class _HamiltonianSystem(_DynamicalSystem):
 
         Notes
         -----
-        - Uses JIT-compiled :func:`hiten.algorithms.dynamics.hamiltonian._hamiltonian_rhs` for numerical computation
+        - Uses JIT-compiled :func:`~hiten.algorithms.dynamics.hamiltonian._hamiltonian_rhs` for numerical computation
         - Maintains Python wrapper to ensure Numba compatibility and pickling
         - Marginal wrapper overhead is negligible for high-order polynomials
         - Compatible with SciPy ODE solvers and custom integrators
         
         See Also
         --------
-        :func:`hiten.algorithms.dynamics.hamiltonian._hamiltonian_rhs` : JIT-compiled computation engine
+        :func:`~hiten.algorithms.dynamics.hamiltonian._hamiltonian_rhs` : JIT-compiled computation engine
         """
 
         jac_H, clmo_H, n_dof = self.jac_H, self.clmo_H, self.n_dof
@@ -341,7 +341,7 @@ class _HamiltonianSystem(_DynamicalSystem):
             
         See Also
         --------
-        :func:`hiten.algorithms.polynomial.operations._polynomial_evaluate` : Uses these objects
+        :func:`~hiten.algorithms.polynomial.operations._polynomial_evaluate` : Uses these objects
         """
         return self.clmo_H
     
@@ -367,8 +367,8 @@ class _HamiltonianSystem(_DynamicalSystem):
             
         See Also
         --------
-        :func:`hiten.algorithms.integrators.symplectic._eval_dH_dQ` : Implementation
-        :meth:`hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem.dH_dP` : Momentum derivatives
+        :func:`~hiten.algorithms.integrators.symplectic._eval_dH_dQ` : Implementation
+        :meth:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem.dH_dP` : Momentum derivatives
         """
         self._validate_coordinates(Q, P)
         return _eval_dH_dQ(Q, P, self.jac_H, self.clmo_H)
@@ -395,8 +395,8 @@ class _HamiltonianSystem(_DynamicalSystem):
             
         See Also
         --------
-        :func:`hiten.algorithms.integrators.symplectic._eval_dH_dP` : Implementation
-        :meth:`hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem.dH_dQ` : Position derivatives
+        :func:`~hiten.algorithms.integrators.symplectic._eval_dH_dP` : Implementation
+        :meth:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem.dH_dQ` : Position derivatives
         """
         self._validate_coordinates(Q, P)
         return _eval_dH_dP(Q, P, self.jac_H, self.clmo_H)
@@ -412,7 +412,7 @@ class _HamiltonianSystem(_DynamicalSystem):
             
         See Also
         --------
-        :func:`hiten.algorithms.dynamics.hamiltonian.create_hamiltonian_system` : Uses these blocks for system creation
+        :func:`~hiten.algorithms.dynamics.hamiltonian.create_hamiltonian_system` : Uses these blocks for system creation
         """
         return self.H_blocks
     
@@ -495,7 +495,7 @@ def create_hamiltonian_system(
     
     See Also
     --------
-    :class:`hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem` : Underlying system implementation
-    :func:`hiten.algorithms.polynomial.operations._polynomial_jacobian` : Jacobian computation
+    :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem` : Underlying system implementation
+    :func:`~hiten.algorithms.polynomial.operations._polynomial_jacobian` : Jacobian computation
     """
     return _HamiltonianSystem(H_blocks, degree, psi_table, clmo_table, encode_dict_list, n_dof, name)

@@ -41,7 +41,7 @@ def save_poincare_map(
 
     Parameters
     ----------
-    pmap : :class:`hiten.algorithms.poincare.centermanifold.base.CenterManifoldMap`
+    pmap : :class:`~hiten.algorithms.poincare.centermanifold.base.CenterManifoldMap`
         The Poincare map object to serialize.
     path : str or pathlib.Path
         File path where to save the Poincare map data.
@@ -97,7 +97,7 @@ def load_poincare_map_inplace(
     
     Parameters
     ----------
-    obj : :class:`hiten.algorithms.poincare.centermanifold.base.CenterManifoldMap`
+    obj : :class:`~hiten.algorithms.poincare.centermanifold.base.CenterManifoldMap`
         The Poincare map object to populate with data.
     path : str or pathlib.Path
         File path containing the Poincare map data.
@@ -153,12 +153,12 @@ def load_poincare_map(path: str | Path, cm: "CenterManifold") -> "CenterManifold
     ----------
     path : str or pathlib.Path
         File path containing the Poincare map data.
-    cm : :class:`hiten.system.center.CenterManifold`
+    cm : :class:`~hiten.system.center.CenterManifold`
         The center manifold object to associate with the map.
         
     Returns
     -------
-    :class:`hiten.algorithms.poincare.centermanifold.base.CenterManifoldMap`
+    :class:`~hiten.algorithms.poincare.centermanifold.base.CenterManifoldMap`
         The reconstructed Poincare map object.
         
     Raises

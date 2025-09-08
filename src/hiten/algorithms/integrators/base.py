@@ -28,7 +28,7 @@ class _Solution:
     derivatives : numpy.ndarray or None, optional, shape (n, d)
         Evaluations of f(t,y) at the stored nodes. When
         available a cubic Hermite interpolant is employed by
-        :func:`hiten.algorithms.integrators.base._Solution.interpolate`; otherwise linear interpolation is used.
+        :func:`~hiten.algorithms.integrators.base._Solution.interpolate`; otherwise linear interpolation is used.
 
     Attributes
     ----------
@@ -42,7 +42,7 @@ class _Solution:
 
     Notes
     -----
-    The class is a :class:`dataclasses.dataclass` and behaves like an
+    The class is a :class:`~dataclasses.dataclass` and behaves like an
     immutable record.
     """
     times: np.ndarray
@@ -75,7 +75,7 @@ class _Solution:
     def interpolate(self, t: Union[np.ndarray, float]) -> np.ndarray:
         """Evaluate the trajectory at intermediate time points.
 
-        If :attr:`hiten.algorithms.integrators.base._Solution.derivatives` 
+        If :attr:`~hiten.algorithms.integrators.base._Solution.derivatives` 
         are provided a cubic Hermite scheme of order three is employed on every step; 
         otherwise straight linear interpolation is used.
 
@@ -159,7 +159,7 @@ class _Integrator(ABC):
         Human-readable identifier of the method.
     **options
         Extra keyword arguments left untouched and stored in
-        :attr:`hiten.algorithms.integrators.base._Integrator.options` for later use by subclasses.
+        :attr:`~hiten.algorithms.integrators.base._Integrator.options` for later use by subclasses.
 
     Attributes
     ----------
@@ -170,8 +170,8 @@ class _Integrator(ABC):
 
     Notes
     -----
-    Subclasses *must* implement the abstract members :func:`hiten.algorithms.integrators.base._Integrator.order` and
-    :func:`hiten.algorithms.integrators.base._Integrator.integrate`.
+    Subclasses *must* implement the abstract members :func:`~hiten.algorithms.integrators.base._Integrator.order` and
+    :func:`~hiten.algorithms.integrators.base._Integrator.integrate`.
 
     Examples
     --------
@@ -199,7 +199,7 @@ class _Integrator(ABC):
             Human-readable identifier of the method.
         **options
             Extra keyword arguments left untouched and stored in
-            :attr:`hiten.algorithms.integrators.base._Integrator.options` for later use by subclasses.
+            :attr:`~hiten.algorithms.integrators.base._Integrator.options` for later use by subclasses.
         """
         self.name = name
         self.options = options
@@ -239,7 +239,7 @@ class _Integrator(ABC):
             
         Returns
         -------
-        :class:`hiten.algorithms.integrators.base._Solution`
+        :class:`~hiten.algorithms.integrators.base._Solution`
             Integration results containing times and states
             
         Raises
@@ -250,17 +250,17 @@ class _Integrator(ABC):
         pass
     
     def validate_system(self, system: _DynamicalSystemProtocol) -> None:
-        """Check that *system* complies with :class:`hiten.algorithms.dynamics.base._DynamicalSystemProtocol`.
+        """Check that *system* complies with :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`.
 
         Parameters
         ----------
-        system : :class:`hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+        system : :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
             Candidate system whose suitability is being tested.
 
         Raises
         ------
         ValueError
-            If the required attribute :attr:`hiten.algorithms.integrators.base._DynamicalSystem.rhs` is absent.
+            If the required attribute :attr:`~hiten.algorithms.integrators.base._DynamicalSystem.rhs` is absent.
         """
         if not hasattr(system, 'rhs'):
             raise ValueError(f"System must implement 'rhs' method for {self.name}")
@@ -275,10 +275,10 @@ class _Integrator(ABC):
 
         Parameters
         ----------
-        system : :class:`hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+        system : :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
             System to be integrated.
         y0 : numpy.ndarray
-            Initial state vector of length :attr:`hiten.system.dim`.
+            Initial state vector of length :attr:`~hiten.system.dim`.
         t_vals : numpy.ndarray
             Strictly monotonic array of time nodes with at least two entries.
 
@@ -286,7 +286,7 @@ class _Integrator(ABC):
         ------
         ValueError
             If any of the following conditions holds:
-            - ``len(y0)`` differs from :attr:`hiten.system.dim`.
+            - ``len(y0)`` differs from :attr:`~hiten.system.dim`.
             - ``t_vals`` contains fewer than two points.
             - ``t_vals`` is not strictly monotonic.
         """

@@ -43,7 +43,7 @@ from hiten.utils.plots import plot_invariant_torus
 class _ToriCorrectionConfig(_BaseCorrectionConfig):
     """Configuration container for invariant-torus Newton solves.
 
-    Extends the generic :class:`hiten.algorithms.corrector.base._BaseCorrectionConfig` with additional
+    Extends the generic :class:`~hiten.algorithms.corrector.base._BaseCorrectionConfig` with additional
     parameters controlling the integration backend used by the stroboscopic
     map and variational equations.
 
@@ -132,7 +132,7 @@ class _InvariantTori:
 
         Parameters
         ----------
-        orbit : :class:`hiten.system.orbits.base.PeriodicOrbit`
+        orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             Corrected periodic orbit about which the torus is constructed. The
             orbit must expose a valid period attribute - no propagation is
             performed here; we only integrate the variational equations to
@@ -214,7 +214,7 @@ class _InvariantTori:
     
     def as_state(self) -> _Torus:
         """
-        Return an immutable :class:`hiten.algorithms.tori.base._Torus` view of the current grid.
+        Return an immutable :class:`~hiten.algorithms.tori.base._Torus` view of the current grid.
 
         The fundamental frequencies are derived from the generating periodic
         orbit: omega_1 = 2 * pi / T (longitudinal) and 
@@ -223,7 +223,7 @@ class _InvariantTori:
 
         Returns
         -------
-        :class:`hiten.algorithms.tori.base._Torus`
+        :class:`~hiten.algorithms.tori.base._Torus`
             Immutable torus representation with computed fundamental frequencies.
 
         Raises
@@ -538,7 +538,7 @@ class _InvariantTori:
         **kwargs,
     ):
         """
-        Render the invariant torus using :func:`hiten.utils.plots.plot_invariant_torus`.
+        Render the invariant torus using :func:`~hiten.utils.plots.plot_invariant_torus`.
 
         Parameters
         ----------
@@ -552,7 +552,7 @@ class _InvariantTori:
             File path for saving the plot.
         **kwargs : dict
             Additional keyword arguments accepted by
-            :func:`hiten.utils.plots.plot_invariant_torus`.
+            :func:`~hiten.utils.plots.plot_invariant_torus`.
 
         Returns
         -------

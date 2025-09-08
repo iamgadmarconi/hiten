@@ -36,13 +36,13 @@ Coordinate Representations
 
 See Also
 --------
-:mod:`hiten.algorithms.hamiltonian.center`
+:mod:`~hiten.algorithms.hamiltonian.center`
     Partial normal form computations for center manifold analysis.
-:mod:`hiten.algorithms.hamiltonian.normal`
+:mod:`~hiten.algorithms.hamiltonian.normal`
     Full normal form computations for complete dynamical reduction.
-:mod:`hiten.algorithms.hamiltonian.transforms`
+:mod:`~hiten.algorithms.hamiltonian.transforms`
     Coordinate transformation utilities used by these wrappers.
-:mod:`hiten.system.hamiltonians.base`
+:mod:`~hiten.system.hamiltonians.base`
     Base Hamiltonian classes and conversion registry infrastructure.
 
 References
@@ -114,9 +114,9 @@ def register_conversion(src_name: str, dst: "type[Hamiltonian] | str",
 
     See Also
     --------
-    :class:`hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
         Base Hamiltonian class used in conversions.
-    :func:`hiten.system.hamiltonians.base._CONVERSION_REGISTRY`
+    :func:`~hiten.system.hamiltonians.base._CONVERSION_REGISTRY`
         Global registry storing conversion functions.
 
     Examples
@@ -188,9 +188,9 @@ def _physical_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
 
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.transforms._polylocal2realmodal`
+    :func:`~hiten.algorithms.hamiltonian.transforms._polylocal2realmodal`
         Underlying transformation function.
-    :func:`hiten.algorithms.hamiltonian.wrappers._real_modal_to_physical`
+    :func:`~hiten.algorithms.hamiltonian.wrappers._real_modal_to_physical`
         Inverse transformation back to physical coordinates.
     """
     point = kwargs["point"]
@@ -285,11 +285,11 @@ def _complex_modal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -> tupl
 
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.center._lie._lie_transform`
+    :func:`~hiten.algorithms.hamiltonian.center._lie._lie_transform`
         Underlying partial normal form computation.
-    :func:`hiten.algorithms.hamiltonian.wrappers._complex_modal_to_complex_full_normal`
+    :func:`~hiten.algorithms.hamiltonian.wrappers._complex_modal_to_complex_full_normal`
         Complete normal form transformation.
-    :class:`hiten.system.hamiltonians.base.LieGeneratingFunction`
+    :class:`~hiten.system.hamiltonians.base.LieGeneratingFunction`
         Container for generating function data.
     """
     point = kwargs["point"]
@@ -380,9 +380,9 @@ def _complex_partial_normal_to_center_manifold_complex(ham: Hamiltonian, **kwarg
 
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.transforms._restrict_poly_to_center_manifold`
+    :func:`~hiten.algorithms.hamiltonian.transforms._restrict_poly_to_center_manifold`
         Underlying center manifold restriction function.
-    :func:`hiten.algorithms.hamiltonian.wrappers._center_manifold_complex_to_center_manifold_real`
+    :func:`~hiten.algorithms.hamiltonian.wrappers._center_manifold_complex_to_center_manifold_real`
         Conversion to real center manifold coordinates.
 
     References

@@ -40,7 +40,7 @@ def _write_orbit_group(
     ----------
     grp : h5py.Group
         The HDF5 group to write orbit data to.
-    orbit : :class:`hiten.system.orbits.base.PeriodicOrbit`
+    orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
         The periodic orbit object to serialize.
     compression : str, default "gzip"
         Compression algorithm to use for HDF5 files.
@@ -128,7 +128,7 @@ def _read_orbit_group(grp: h5py.Group) -> "PeriodicOrbit":
         
     Returns
     -------
-    :class:`hiten.system.orbits.base.PeriodicOrbit`
+    :class:`~hiten.system.orbits.base.PeriodicOrbit`
         The reconstructed periodic orbit object.
         
     Raises
@@ -241,7 +241,7 @@ def save_periodic_orbit(
 
     Parameters
     ----------
-    orbit : :class:`hiten.system.orbits.base.PeriodicOrbit`
+    orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
         The periodic orbit object to serialize.
     path : str or pathlib.Path
         File path where to save the orbit data.
@@ -279,7 +279,7 @@ def load_periodic_orbit_inplace(
     
     Parameters
     ----------
-    obj : :class:`hiten.system.orbits.base.PeriodicOrbit`
+    obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
         The periodic orbit object to populate with data.
     path : str or pathlib.Path
         File path containing the orbit data.
@@ -327,7 +327,7 @@ def load_periodic_orbit(path: str | Path) -> "PeriodicOrbit":
         
     Returns
     -------
-    :class:`hiten.system.orbits.base.PeriodicOrbit`
+    :class:`~hiten.system.orbits.base.PeriodicOrbit`
         The reconstructed periodic orbit object.
         
     Raises

@@ -52,7 +52,7 @@ def animate_trajectories(
         State vectors [x, y, z, vx, vy, vz] in nondimensional units.
     times : numpy.ndarray, shape (n,)
         Time array in nondimensional units.
-    bodies : list of :class:`hiten.system.body.Body`
+    bodies : list of :class:`~hiten.system.body.Body`
         List of celestial body objects with properties like mass, radius, and name.
     system_distance : float
         Characteristic distance of the system in meters.
@@ -295,7 +295,7 @@ def plot_rotating_frame(
         State vectors [x, y, z, vx, vy, vz] in nondimensional units.
     times : numpy.ndarray, shape (n,)
         Time array in nondimensional units.
-    bodies : list of :class:`hiten.system.body.Body`
+    bodies : list of :class:`~hiten.system.body.Body`
         The celestial bodies to plot.
     system_distance : float
         The distance between the bodies in meters.
@@ -385,7 +385,7 @@ def plot_inertial_frame(
         State vectors [x, y, z, vx, vy, vz] in nondimensional units.
     times : numpy.ndarray, shape (n,)
         Time array in nondimensional units.
-    bodies : list of :class:`hiten.system.body.Body`
+    bodies : list of :class:`~hiten.system.body.Body`
         The celestial bodies to plot.
     system_distance : float
         The distance between the bodies in meters.
@@ -489,7 +489,7 @@ def plot_orbit_family(
         Time arrays for each family member in nondimensional units.
     parameter_values : numpy.ndarray
         Scalar parameter associated with each orbit (used for colour-coding).
-    bodies : list of :class:`hiten.system.body.Body`
+    bodies : list of :class:`~hiten.system.body.Body`
         Primary and secondary bodies of the system.
     system_distance : float
         Characteristic distance in meters - needed to scale body radii.
@@ -612,7 +612,7 @@ def plot_manifold(
         List of state arrays for each manifold trajectory in nondimensional units.
     times_list : list of numpy.ndarray
         List of time arrays for each manifold trajectory in nondimensional units.
-    bodies : list of :class:`hiten.system.body.Body`
+    bodies : list of :class:`~hiten.system.body.Body`
         The celestial bodies to plot.
     system_distance : float
         The distance between the bodies in meters.
@@ -963,7 +963,7 @@ def plot_invariant_torus(
     u_grid : numpy.ndarray, shape (n_theta1, n_theta2, 6)
         Grid of state vectors returned by _InvariantTori.sample_grid
         in nondimensional units.
-    bodies : list of :class:`hiten.system.body.Body`
+    bodies : list of :class:`~hiten.system.body.Body`
         Primary and secondary bodies of the CR3BP.
     system_distance : float
         Characteristic distance in meters - required to scale the body radii.
@@ -1053,7 +1053,7 @@ def plot_manifolds(
 
     Parameters
     ----------
-    manifolds : list of :class:`hiten.system.manifold.Manifold`
+    manifolds : list of :class:`~hiten.system.manifold.Manifold`
         Collection of previously-computed Manifold objects. Each item must
         have a non-empty manifold_result.
     figsize : tuple, default (10, 8)
@@ -1165,7 +1165,7 @@ def _get_body_color(body: Body, default_color: str) -> str:
 
     Parameters
     ----------
-    body : :class:`hiten.system.body.Body`
+    body : :class:`~hiten.system.body.Body`
         The celestial body object.
     default_color : str
         The color to use if the body's color is the default black.

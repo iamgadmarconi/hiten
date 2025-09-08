@@ -1,6 +1,6 @@
 """Periodic Lyapunov orbits of the circular restricted three-body problem.
 
-This module supplies concrete realisations of :class:`hiten.system.orbits.base.PeriodicOrbit`
+This module supplies concrete realisations of :class:`~hiten.system.orbits.base.PeriodicOrbit`
 corresponding to the planar families around the collinear libration points
 L1 and L2. Each class provides an analytical first guess together with a
 customised differential corrector that exploits the symmetries of the family.
@@ -44,7 +44,7 @@ class LyapunovOrbit(PeriodicOrbit):
 
     Parameters
     ----------
-    libration_point : :class:`hiten.system.libration.collinear.CollinearPoint`
+    libration_point : :class:`~hiten.system.libration.collinear.CollinearPoint`
         Target collinear libration point around
         which the orbit is computed.
     amplitude_x : float, optional
@@ -59,14 +59,14 @@ class LyapunovOrbit(PeriodicOrbit):
     ----------
     amplitude_x : float
         Requested amplitude Ax along the x-direction (nondimensional units).
-    libration_point : :class:`hiten.system.libration.collinear.CollinearPoint`
+    libration_point : :class:`~hiten.system.libration.collinear.CollinearPoint`
         Equilibrium point about which the orbit is continued.
 
     Raises
     ------
     TypeError
         If *libration_point* is not an instance of
-        :class:`hiten.system.libration.collinear.CollinearPoint`.
+        :class:`~hiten.system.libration.collinear.CollinearPoint`.
     NotImplementedError
         If the selected point corresponds to L3, which is not
         supported for Lyapunov orbits.
@@ -88,7 +88,7 @@ class LyapunovOrbit(PeriodicOrbit):
         
         Parameters
         ----------
-        libration_point : :class:`hiten.system.libration.base.LibrationPoint`
+        libration_point : :class:`~hiten.system.libration.base.LibrationPoint`
             The libration point around which the Lyapunov orbit is computed.
         amplitude_x : float, optional
             x-amplitude of the Lyapunov orbit in nondimensional units.
@@ -100,7 +100,7 @@ class LyapunovOrbit(PeriodicOrbit):
         ValueError
             If conflicting parameters are provided or required parameters are missing.
         TypeError
-            If libration_point is not a :class:`hiten.system.libration.collinear.CollinearPoint`.
+            If libration_point is not a :class:`~hiten.system.libration.collinear.CollinearPoint`.
         NotImplementedError
             If L3 libration point is used.
         """
@@ -170,7 +170,7 @@ class LyapunovOrbit(PeriodicOrbit):
         
         Returns
         -------
-        :class:`hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`
+        :class:`~hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`
             The correction configuration for Lyapunov orbits.
         """
         from hiten.algorithms.corrector.interfaces import _OrbitCorrectionConfig
@@ -188,7 +188,7 @@ class LyapunovOrbit(PeriodicOrbit):
         
         Returns
         -------
-        :class:`hiten.algorithms.continuation.interfaces._OrbitContinuationConfig`
+        :class:`~hiten.algorithms.continuation.interfaces._OrbitContinuationConfig`
             The continuation configuration for Lyapunov orbits.
         """
         from hiten.algorithms.continuation.interfaces import _OrbitContinuationConfig

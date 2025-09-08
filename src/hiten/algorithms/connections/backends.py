@@ -8,9 +8,9 @@ All coordinates are in nondimensional CR3BP rotating-frame units.
 
 See Also
 --------
-:mod:`hiten.algorithms.connections.results`
+:mod:`~hiten.algorithms.connections.results`
     Result classes for connection data.
-:mod:`hiten.algorithms.connections.engine`
+:mod:`~hiten.algorithms.connections.engine`
     High-level connection engine interface.
 """
 
@@ -42,7 +42,7 @@ def _pair_counts(query: np.ndarray, ref: np.ndarray, r2: float) -> np.ndarray:
 
     Notes
     -----
-    Used by :func:`hiten.algorithms.connections.backends._radpair2d` to 
+    Used by :func:`~hiten.algorithms.connections.backends._radpair2d` to 
     efficiently allocate storage for pairs.
     """
     
@@ -78,7 +78,7 @@ def _exclusive_prefix_sum(a: np.ndarray) -> np.ndarray:
 
     Notes
     -----
-    Used by :func:`hiten.algorithms.connections.backends._radpair2d` 
+    Used by :func:`~hiten.algorithms.connections.backends._radpair2d` 
     to determine memory offsets for storing pairs.
     """
     n = a.size
@@ -111,8 +111,8 @@ def _radpair2d(query: np.ndarray, ref: np.ndarray, radius: float) -> np.ndarray:
 
     Notes
     -----
-    Uses :func:`hiten.algorithms.connections.backends._pair_counts` and 
-    :func:`hiten.algorithms.connections.backends._exclusive_prefix_sum` 
+    Uses :func:`~hiten.algorithms.connections.backends._pair_counts` and 
+    :func:`~hiten.algorithms.connections.backends._exclusive_prefix_sum` 
     to efficiently allocate and populate the output array.
     """
     r2 = float(radius) * float(radius)
@@ -158,7 +158,7 @@ def _radius_pairs_2d(query: np.ndarray, ref: np.ndarray, radius: float) -> np.nd
     -----
     This is the main entry point for 2D radius-based pairing. It prepares
     contiguous arrays and delegates to the numba-accelerated 
-    :func:`hiten.algorithms.connections.backends._radpair2d`.
+    :func:`~hiten.algorithms.connections.backends._radpair2d`.
     """
     q = np.ascontiguousarray(query, dtype=np.float64)
     r = np.ascontiguousarray(ref, dtype=np.float64)
@@ -183,7 +183,7 @@ def _nearest_neighbor_2d_numba(points: np.ndarray) -> np.ndarray:
     Notes
     -----
     This is the numba-accelerated implementation used by 
-    :func:`hiten.algorithms.connections.backends._nearest_neighbor_2d`.
+    :func:`~hiten.algorithms.connections.backends._nearest_neighbor_2d`.
     """
     n = points.shape[0]
     out = np.full(n, -1, dtype=np.int64)
@@ -222,7 +222,7 @@ def _nearest_neighbor_2d(points: np.ndarray) -> np.ndarray:
     Notes
     -----
     This function prepares data and delegates to the numba-accelerated
-    :func:`hiten.algorithms.connections.backends._nearest_neighbor_2d_numba`.
+    :func:`~hiten.algorithms.connections.backends._nearest_neighbor_2d_numba`.
     """
     p = np.ascontiguousarray(points, dtype=np.float64)
     return _nearest_neighbor_2d_numba(p)
@@ -257,7 +257,7 @@ def _closest_points_on_segments_2d(a0x: float, a0y: float, a1x: float, a1y: floa
 
     Notes
     -----
-    Used by :func:`hiten.algorithms.connections.backends._refine_pairs_on_section` 
+    Used by :func:`~hiten.algorithms.connections.backends._refine_pairs_on_section` 
     for geometric refinement of matched pairs between synodic sections.
     """
     ux = a1x - a0x
@@ -348,7 +348,7 @@ def _refine_pairs_on_section(pu: np.ndarray, ps: np.ndarray, pairs: np.ndarray, 
 
     Notes
     -----
-    Uses :func:`hiten.algorithms.connections.backends._closest_points_on_segments_2d` 
+    Uses :func:`~hiten.algorithms.connections.backends._closest_points_on_segments_2d` 
     to find optimal intersection points between local segments formed by 
     nearest neighbors.
     """
@@ -413,7 +413,7 @@ class _ConnectionsBackend:
 
     See Also
     --------
-    :class:`hiten.algorithms.connections.results._ConnectionResult`
+    :class:`~hiten.algorithms.connections.results._ConnectionResult`
         Result objects returned by the solve method.
     """
 
@@ -428,7 +428,7 @@ class _ConnectionsBackend:
 
         Returns
         -------
-        list of :class:`hiten.algorithms.connections.results._ConnectionResult`
+        list of :class:`~hiten.algorithms.connections.results._ConnectionResult`
             Connection results sorted by increasing delta_v (velocity change)
             required for the transfer.
 
@@ -436,9 +436,9 @@ class _ConnectionsBackend:
         -----
         The algorithm performs these steps:
         1. Build section hits using ``problem.source.to_section()`` and ``problem.target.to_section()``
-        2. Coarse 2D radius pairing via :func:`hiten.algorithms.connections.backends._radius_pairs_2d`
+        2. Coarse 2D radius pairing via :func:`~hiten.algorithms.connections.backends._radius_pairs_2d`
         3. Mutual-nearest filtering to reduce false positives
-        4. On-section refinement via :func:`hiten.algorithms.connections.backends._refine_pairs_on_section`
+        4. On-section refinement via :func:`~hiten.algorithms.connections.backends._refine_pairs_on_section`
         5. Delta-V computation and classification (ballistic vs impulsive)
         """
         # Lazy imports to avoid circulars at module import tim

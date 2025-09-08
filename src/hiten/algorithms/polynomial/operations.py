@@ -30,7 +30,7 @@ def _polynomial_zero_list(max_deg: int, psi) -> List[np.ndarray]:
     max_deg : int
         Maximum degree of the polynomials to create
     psi : numpy.ndarray
-        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
+        Combinatorial table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`
         
     Returns
     -------
@@ -62,7 +62,7 @@ def _polynomial_variable(idx: int, max_deg: int, psi, clmo, encode_dict_list) ->
     max_deg : int
         Maximum degree to allocate for the polynomial
     psi : numpy.ndarray
-        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
+        Combinatorial table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -98,7 +98,7 @@ def _polynomial_variables_list(max_deg: int, psi, clmo, encode_dict_list) -> Lis
     max_deg : int
         Maximum degree to allocate for each polynomial
     psi : numpy.ndarray
-        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
+        Combinatorial table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -178,7 +178,7 @@ def _polynomial_multiply(poly_p: List[np.ndarray], poly_q: List[np.ndarray], max
     max_deg : int
         Maximum degree for the result
     psi : numpy.ndarray
-        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
+        Combinatorial table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -224,7 +224,7 @@ def _polynomial_power(poly_p: List[np.ndarray], k: int, max_deg: int, psi, clmo,
     max_deg : int
         Maximum degree for the result
     psi : numpy.ndarray
-        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
+        Combinatorial table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -280,7 +280,7 @@ def _polynomial_poisson_bracket(poly_p: List[np.ndarray], poly_q: List[np.ndarra
     max_deg : int
         Maximum degree for the result
     psi : numpy.ndarray
-        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
+        Combinatorial table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -389,7 +389,7 @@ def _polynomial_total_degree(poly_p: List[np.ndarray], psi) -> int:
         A list where poly_p[d] is a NumPy array of coefficients for the
         homogeneous part of degree d.
     psi : numpy.ndarray
-        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
+        Combinatorial table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`
         
     Returns
     -------
@@ -513,7 +513,7 @@ def _polynomial_jacobian(
     max_deg : int
         Maximum degree of the input polynomial
     psi_table : numpy.ndarray
-        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
+        Combinatorial table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`
     clmo_table : List[numpy.ndarray]
         List of arrays containing packed multi-indices
     encode_dict_list : List
@@ -670,7 +670,7 @@ def _linear_variable_polys(C: np.ndarray, max_deg: int, psi, clmo, encode_dict_l
     max_deg : int
         Maximum degree for polynomial representations
     psi : numpy.ndarray
-        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
+        Combinatorial table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List
@@ -714,7 +714,7 @@ def _substitute_linear(poly_old: List[np.ndarray], C: np.ndarray, max_deg: int, 
     max_deg : int
         Maximum degree for polynomial representations
     psi : numpy.ndarray
-        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
+        Combinatorial table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`
     clmo : numba.typed.List
         List of arrays containing packed multi-indices
     encode_dict_list : numba.typed.List

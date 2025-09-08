@@ -26,11 +26,11 @@ normal
 
 See Also
 --------
-:mod:`hiten.system.libration`
+:mod:`~hiten.system.libration`
     Libration point classes providing equilibrium point data.
-:mod:`hiten.algorithms.polynomial`
+:mod:`~hiten.algorithms.polynomial`
     Polynomial algebra operations used throughout the package.
-:mod:`hiten.system.hamiltonians`
+:mod:`~hiten.system.hamiltonians`
     Base Hamiltonian classes and data structures.
 
 References

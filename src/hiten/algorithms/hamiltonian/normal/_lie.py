@@ -85,8 +85,8 @@ def _lie_transform(
     
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.normal._lie._select_nonresonant_terms` : Term selection
-    :func:`hiten.algorithms.hamiltonian.center._lie._lie_transform` : Partial version
+    :func:`~hiten.algorithms.hamiltonian.normal._lie._select_nonresonant_terms` : Term selection
+    :func:`~hiten.algorithms.hamiltonian.center._lie._lie_transform` : Partial version
     """
 
     # Extract frequencies - for full normal form we need all frequencies
@@ -199,8 +199,8 @@ def _select_nonresonant_terms(
     
     See Also
     --------
-    :func:`hiten.algorithms.polynomial.base._decode_multiindex` : Multi-index decoding
-    :func:`hiten.algorithms.hamiltonian.center._lie._select_terms_for_elimination` : Partial version
+    :func:`~hiten.algorithms.polynomial.base._decode_multiindex` : Multi-index decoding
+    :func:`~hiten.algorithms.hamiltonian.center._lie._select_terms_for_elimination` : Partial version
     """
     p_elim = p_n.copy()
     for i in range(p_n.shape[0]):

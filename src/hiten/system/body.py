@@ -1,9 +1,9 @@
 """Light-weight representation of a celestial body participating in a circular 
 restricted three body problem (CR3BP) or standalone dynamical simulation.
 
-The module defines the :class:`hiten.system.body.Body` class, a minimal container that stores
+The module defines the :class:`~hiten.system.body.Body` class, a minimal container that stores
 basic physical quantities and plotting attributes while preserving the
-hierarchical relation to a central body through the :attr:`hiten.system.body.Body.parent`
+hierarchical relation to a central body through the :attr:`~hiten.system.body.Body.parent`
 attribute. Instances are used across the project to compute the mass
 parameter mu and to provide readable identifiers in logs, plots and
 high-precision calculations.
@@ -36,7 +36,7 @@ class Body(object):
         Mean equatorial radius in metres.
     color : str, optional
         Hexadecimal RGB string used for visualisation. Default is "#000000".
-    _parent_input : :class:`hiten.system.body.Body`, optional
+    _parent_input : :class:`~hiten.system.body.Body`, optional
         Internal parameter for parent body specification. If None, the
         object is treated as the primary and parent is set to the
         instance itself.
@@ -51,7 +51,7 @@ class Body(object):
         Mean equatorial radius in metres.
     color : str
         Colour assigned for plotting purposes.
-    parent : :class:`hiten.system.body.Body`
+    parent : :class:`~hiten.system.body.Body`
         Central body around which this instance revolves.
 
     Notes
@@ -112,7 +112,7 @@ class Body(object):
         Returns
         -------
         str
-            Python expression that describes the :class:`hiten.system.body.Body` instance.
+            Python expression that describes the :class:`~hiten.system.body.Body` instance.
         """
         # For the parent, we show its name to avoid recursion.
         # This makes the repr not perfectly eval-able for secondaries, but it's safe.

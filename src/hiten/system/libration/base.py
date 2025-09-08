@@ -73,7 +73,7 @@ class LibrationPoint(ABC):
 
     Parameters
     ----------
-    system : :class:`hiten.system.base.System`
+    system : :class:`~hiten.system.base.System`
         Parent CR3BP model providing the mass ratio mu and utility
         functions.
 
@@ -81,26 +81,26 @@ class LibrationPoint(ABC):
     ----------
     mu : float
         Mass ratio mu of the primaries (copied from system, dimensionless).
-    system : :class:`hiten.system.base.System`
+    system : :class:`~hiten.system.base.System`
         Reference to the owner system.
     position : numpy.ndarray, shape (3,)
         Cartesian coordinates in the synodic rotating frame (nondimensional units).
         Evaluated on first access and cached thereafter.
     energy : float
         Dimensionless mechanical energy evaluated via
-        :func:`hiten.algorithms.dynamics.utils.energy.crtbp_energy`.
+        :func:`~hiten.algorithms.dynamics.utils.energy.crtbp_energy`.
     jacobi_constant : float
         Jacobi integral CJ = -2E corresponding to energy (dimensionless).
     is_stable : bool
         True if all eigenvalues returned by 
-        :meth:`hiten.system.libration.base.LibrationPoint.analyze_stability` lie
+        :meth:`~hiten.system.libration.base.LibrationPoint.analyze_stability` lie
         inside the unit circle (discrete case) or have non-positive real
         part (continuous case).
     eigenvalues : tuple(numpy.ndarray, numpy.ndarray, numpy.ndarray)
         Arrays of stable, unstable and centre eigenvalues.
     eigenvectors : tuple(numpy.ndarray, numpy.ndarray, numpy.ndarray)
         Bases of the corresponding invariant subspaces.
-    linear_data : :class:`hiten.system.libration.base.LinearData`
+    linear_data : :class:`~hiten.system.libration.base.LinearData`
         Record with canonical invariants and symplectic basis returned by the
         normal-form computation.
 
@@ -108,14 +108,14 @@ class LibrationPoint(ABC):
     -----
     The class is abstract. Concrete subclasses must implement:
 
-    - :meth:`hiten.system.libration.base.LibrationPoint.idx`
-    - :meth:`hiten.system.libration.base.LibrationPoint._calculate_position`
-    - :meth:`hiten.system.libration.base.LibrationPoint._get_linear_data`
-    - :meth:`hiten.system.libration.base.LibrationPoint.normal_form_transform`
+    - :meth:`~hiten.system.libration.base.LibrationPoint.idx`
+    - :meth:`~hiten.system.libration.base.LibrationPoint._calculate_position`
+    - :meth:`~hiten.system.libration.base.LibrationPoint._get_linear_data`
+    - :meth:`~hiten.system.libration.base.LibrationPoint.normal_form_transform`
 
     Heavy algebraic objects produced by the centre-manifold normal-form
     procedure are cached inside a dedicated
-    :class:`hiten.system.center.CenterManifold` instance to avoid memory
+    :class:`~hiten.system.center.CenterManifold` instance to avoid memory
     bloat.
 
     Examples
@@ -153,7 +153,7 @@ class LibrationPoint(ABC):
         
         Returns
         -------
-        :class:`hiten.algorithms.dynamics.base._DynamicalSystem`
+        :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
             The dynamical system instance for this libration point.
         """
         return self._dynsys
@@ -164,7 +164,7 @@ class LibrationPoint(ABC):
         
         Returns
         -------
-        :class:`hiten.algorithms.dynamics.base._DynamicalSystem`
+        :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
             The variational equations system for this libration point.
         """
         return self._var_eq_system
@@ -253,7 +253,7 @@ class LibrationPoint(ABC):
         
         Returns
         -------
-        :class:`hiten.system.libration.base.LinearData`
+        :class:`~hiten.system.libration.base.LinearData`
             The linear data containing eigenvalues and eigenvectors.
         """
         if self._linear_data is None:
@@ -386,7 +386,7 @@ class LibrationPoint(ABC):
         
         Returns
         -------
-        :class:`hiten.system.libration.base.LinearData`
+        :class:`~hiten.system.libration.base.LinearData`
             The linear data containing eigenvalues and eigenvectors.
         """
         pass
@@ -457,7 +457,7 @@ class LibrationPoint(ABC):
             
         Returns
         -------
-        :class:`hiten.system.center.CenterManifold`
+        :class:`~hiten.system.center.CenterManifold`
             The center manifold instance.
         """
         from hiten.system.center import CenterManifold
@@ -512,7 +512,7 @@ class LibrationPoint(ABC):
             
         Returns
         -------
-        :class:`hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem`
+        :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem`
             The Hamiltonian system instance.
         """
         cm = self.get_center_manifold(max_deg)
@@ -600,7 +600,7 @@ class LibrationPoint(ABC):
         Create a periodic orbit family anchored at this libration point.
 
         The helper transparently instantiates the appropriate concrete
-        subclass of :class:`hiten.system.orbits.base.PeriodicOrbit` and
+        subclass of :class:`~hiten.system.orbits.base.PeriodicOrbit` and
         returns it.  The mapping is based on the family string or directly
         on a subclass type::
 
@@ -610,7 +610,7 @@ class LibrationPoint(ABC):
 
         Parameters
         ----------
-        family : str or :class:`hiten.system.orbits.base.PeriodicOrbit` subclass
+        family : str or :class:`~hiten.system.orbits.base.PeriodicOrbit` subclass
             Identifier of the orbit family or an explicit subclass type.
             Accepted strings (case-insensitive): "halo", "lyapunov",
             "vertical_lyapunov" and "generic".  If a subclass is
@@ -620,7 +620,7 @@ class LibrationPoint(ABC):
 
         Returns
         -------
-        :class:`hiten.system.orbits.base.PeriodicOrbit`
+        :class:`~hiten.system.orbits.base.PeriodicOrbit`
             Newly created orbit instance.
         """
 

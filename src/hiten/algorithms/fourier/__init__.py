@@ -24,8 +24,8 @@ Basic Fourier analysis of a periodic orbit:
 
 See Also
 --------
-:mod:`hiten.algorithms.polynomial`
+:mod:`~hiten.algorithms.polynomial`
     Polynomial operations used in Fourier analysis
-:mod:`hiten.system.orbits`
+:mod:`~hiten.system.orbits`
     Periodic orbit classes that can be analyzed
 """

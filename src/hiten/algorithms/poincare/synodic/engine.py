@@ -32,12 +32,12 @@ class _SynodicEngineConfigAdapter:
 
     Parameters
     ----------
-    cfg : :class:`hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+    cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
         The synodic map configuration to adapt.
 
     Attributes
     ----------
-    _cfg : :class:`hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+    _cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
         The original synodic map configuration.
     dt : float
         Time step (set to 0.0 for synodic maps since they use precomputed trajectories).
@@ -63,7 +63,7 @@ class _SynodicEngineConfigAdapter:
 
         Parameters
         ----------
-        cfg : :class:`hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+        cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
             The synodic map configuration to adapt.
 
         Notes
@@ -105,11 +105,11 @@ class _SynodicEngine(_ReturnMapEngine):
 
     Parameters
     ----------
-    backend : :class:`hiten.algorithms.poincare.synodic.backend._SynodicDetectionBackend`
+    backend : :class:`~hiten.algorithms.poincare.synodic.backend._SynodicDetectionBackend`
         The detection backend for synodic sections.
-    seed_strategy : :class:`hiten.algorithms.poincare.synodic.strategies._NoOpStrategy`
+    seed_strategy : :class:`~hiten.algorithms.poincare.synodic.strategies._NoOpStrategy`
         The seeding strategy (no-op for synodic maps).
-    map_config : :class:`hiten.algorithms.poincare.synodic.engine._SynodicEngineConfigAdapter`
+    map_config : :class:`~hiten.algorithms.poincare.synodic.engine._SynodicEngineConfigAdapter`
         The configuration adapter for the engine.
 
     Attributes
@@ -143,11 +143,11 @@ class _SynodicEngine(_ReturnMapEngine):
 
         Parameters
         ----------
-        backend : :class:`hiten.algorithms.poincare.synodic.backend._SynodicDetectionBackend`
+        backend : :class:`~hiten.algorithms.poincare.synodic.backend._SynodicDetectionBackend`
             The detection backend for synodic sections.
-        seed_strategy : :class:`hiten.algorithms.poincare.synodic.strategies._NoOpStrategy`
+        seed_strategy : :class:`~hiten.algorithms.poincare.synodic.strategies._NoOpStrategy`
             The seeding strategy (no-op for synodic maps).
-        map_config : :class:`hiten.algorithms.poincare.synodic.engine._SynodicEngineConfigAdapter`
+        map_config : :class:`~hiten.algorithms.poincare.synodic.engine._SynodicEngineConfigAdapter`
             The configuration adapter for the engine.
 
         Notes
@@ -185,7 +185,7 @@ class _SynodicEngine(_ReturnMapEngine):
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.synodic.engine._SynodicEngine`
+        :class:`~hiten.algorithms.poincare.synodic.engine._SynodicEngine`
             Self for method chaining.
 
         Notes
@@ -212,7 +212,7 @@ class _SynodicEngine(_ReturnMapEngine):
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.core.base._Section`
+        :class:`~hiten.algorithms.poincare.core.base._Section`
             The computed synodic Poincare section containing:
             - points: 2D projected coordinates
             - states: Full 6D state vectors

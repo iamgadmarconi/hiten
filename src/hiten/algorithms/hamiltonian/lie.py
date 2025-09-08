@@ -12,13 +12,13 @@ points by eliminating non-resonant terms.
 
 See Also
 --------
-:func:`hiten.algorithms.hamiltonian.lie._apply_poly_transform`
+:func:`~hiten.algorithms.hamiltonian.lie._apply_poly_transform`
     Apply the computed generating function via Lie series.
-:mod:`hiten.algorithms.hamiltonian.center`
+:mod:`~hiten.algorithms.hamiltonian.center`
     Center manifold normal forms using these Lie transformations.
-:mod:`hiten.algorithms.hamiltonian.normal`
+:mod:`~hiten.algorithms.hamiltonian.normal`
     Complete normal form computations around equilibrium points.
-:mod:`hiten.algorithms.polynomial.operations`
+:mod:`~hiten.algorithms.polynomial.operations`
     Polynomial operations including Poisson brackets.
 
 References
@@ -66,7 +66,7 @@ clmo: np.ndarray) -> np.ndarray:
         the real eigenvalue and omega1, omega2 are imaginary frequencies, all
         in nondimensional frequency units.
     clmo : ndarray
-        Packed multi-index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+        Packed multi-index table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`.
 
     Returns
     -------
@@ -92,9 +92,9 @@ clmo: np.ndarray) -> np.ndarray:
 
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.lie._apply_poly_transform`
+    :func:`~hiten.algorithms.hamiltonian.lie._apply_poly_transform`
         Apply the computed generating function via Lie series.
-    :func:`hiten.algorithms.polynomial.base._decode_multiindex`
+    :func:`~hiten.algorithms.polynomial.base._decode_multiindex`
         Decode packed multi-indices used in coefficient computation.
 
     References
@@ -146,9 +146,9 @@ tol: float) -> List[np.ndarray]:
     N_max : int
         Maximum polynomial degree to retain in the transformed Hamiltonian.
     psi : ndarray
-        Combinatorial index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+        Combinatorial index table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`.
     clmo : ndarray
-        Packed multi-index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+        Packed multi-index table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`.
     encode_dict_list : List[dict]
         Lookup dictionaries mapping multi-indices to coefficient positions.
     tol : float
@@ -181,9 +181,9 @@ tol: float) -> List[np.ndarray]:
 
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.lie._solve_homological_equation`
+    :func:`~hiten.algorithms.hamiltonian.lie._solve_homological_equation`
         Compute generating function coefficients for term elimination.
-    :func:`hiten.algorithms.polynomial.operations._polynomial_poisson_bracket`
+    :func:`~hiten.algorithms.polynomial.operations._polynomial_poisson_bracket`
         Poisson bracket computation used in the Lie series.
 
     References

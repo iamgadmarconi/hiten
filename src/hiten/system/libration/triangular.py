@@ -11,11 +11,11 @@ stability when the mass ratio is below Routh's critical value.
 
 Classes
 -------
-:class:`hiten.system.libration.triangular.TriangularPoint`
+:class:`~hiten.system.libration.triangular.TriangularPoint`
     Abstract base class for triangular libration points.
-:class:`hiten.system.libration.triangular.L4Point`
+:class:`~hiten.system.libration.triangular.L4Point`
     L4 libration point located above the x-axis (positive y).
-:class:`hiten.system.libration.triangular.L5Point`
+:class:`~hiten.system.libration.triangular.L5Point`
     L5 libration point located below the x-axis (negative y).
 
 Notes
@@ -45,7 +45,7 @@ class TriangularPoint(LibrationPoint):
 
     Parameters
     ----------
-    system : :class:`hiten.system.base.System`
+    system : :class:`~hiten.system.base.System`
         CR3BP model supplying the mass parameter mu.
 
     Attributes
@@ -55,8 +55,8 @@ class TriangularPoint(LibrationPoint):
     ROUTH_CRITICAL_MU : float
         Critical value mu_R delimiting linear stability (dimensionless).
     sign : int
-        +1 for :class:`hiten.system.libration.triangular.L4Point`, -1 
-        for :class:`hiten.system.libration.triangular.L5Point`.
+        +1 for :class:`~hiten.system.libration.triangular.L4Point`, -1 
+        for :class:`~hiten.system.libration.triangular.L5Point`.
     a : float
         Offset used by local <-> synodic frame transformations (dimensionless).
 
@@ -72,7 +72,7 @@ class TriangularPoint(LibrationPoint):
         
         Parameters
         ----------
-        system : :class:`hiten.system.base.System`
+        system : :class:`~hiten.system.base.System`
             The CR3BP system containing the mass parameter mu.
         """
         super().__init__(system)
@@ -88,7 +88,7 @@ class TriangularPoint(LibrationPoint):
         Returns
         -------
         int
-            +1 for :class:`hiten.system.libration.triangular.L4Point`, -1 for :class:`hiten.system.libration.triangular.L5Point`.
+            +1 for :class:`~hiten.system.libration.triangular.L4Point`, -1 for :class:`~hiten.system.libration.triangular.L5Point`.
         """
         return 1 if isinstance(self, L4Point) else -1
     
@@ -128,7 +128,7 @@ class TriangularPoint(LibrationPoint):
         
         Returns
         -------
-        :class:`hiten.system.libration.LinearData`
+        :class:`~hiten.system.libration.LinearData`
             Object containing the linear data for the Libration point.
         """
         # Frequencies and canonical transform
@@ -449,7 +449,7 @@ class L4Point(TriangularPoint):
     
     Parameters
     ----------
-    system : :class:`hiten.system.base.System`
+    system : :class:`~hiten.system.base.System`
         The CR3BP system containing the mass parameter mu.
     """
     
@@ -459,7 +459,7 @@ class L4Point(TriangularPoint):
         
         Parameters
         ----------
-        system : :class:`hiten.system.base.System`
+        system : :class:`~hiten.system.base.System`
             The CR3BP system containing the mass parameter mu.
         """
         super().__init__(system)
@@ -487,7 +487,7 @@ class L5Point(TriangularPoint):
     
     Parameters
     ----------
-    system : :class:`hiten.system.base.System`
+    system : :class:`~hiten.system.base.System`
         The CR3BP system containing the mass parameter mu.
     """
     
@@ -497,7 +497,7 @@ class L5Point(TriangularPoint):
         
         Parameters
         ----------
-        system : :class:`hiten.system.base.System`
+        system : :class:`~hiten.system.base.System`
             The CR3BP system containing the mass parameter mu.
         """
         super().__init__(system)

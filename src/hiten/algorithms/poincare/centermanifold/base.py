@@ -5,7 +5,7 @@ This module provides the main user-facing interface for computing and
 analyzing Poincare maps restricted to center manifolds of collinear
 libration points in the Circular Restricted Three-Body Problem (CR3BP).
 
-The :class:`hiten.algorithms.poincare.centermanifold.base.CenterManifoldMap` 
+The :class:`~hiten.algorithms.poincare.centermanifold.base.CenterManifoldMap` 
 class extends the base return map functionality with center manifold-specific seeding 
 strategies and visualization capabilities.
 
@@ -45,11 +45,11 @@ class CenterManifoldMap(_ReturnMapBase):
 
     Parameters
     ----------
-    cm : :class:`hiten.system.center.CenterManifold`
+    cm : :class:`~hiten.system.center.CenterManifold`
         Center manifold object providing the underlying dynamical system.
     energy : float
         Energy level for the center manifold (nondimensional units).
-    config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`, optional
+    config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`, optional
         Configuration object specifying computation parameters. If None,
         default configuration is used.
 
@@ -113,7 +113,7 @@ class CenterManifoldMap(_ReturnMapBase):
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.centermanifold.backend._CenterManifoldBackend`
+        :class:`~hiten.algorithms.poincare.centermanifold.backend._CenterManifoldBackend`
             Configured backend for center manifold computations.
         """
 
@@ -135,7 +135,7 @@ class CenterManifoldMap(_ReturnMapBase):
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.centermanifold.seeding._CenterManifoldSeedingBase`
+        :class:`~hiten.algorithms.poincare.centermanifold.seeding._CenterManifoldSeedingBase`
             Configured seeding strategy for generating initial conditions.
         """
 
@@ -159,14 +159,14 @@ class CenterManifoldMap(_ReturnMapBase):
 
         Parameters
         ----------
-        backend : :class:`hiten.algorithms.poincare.centermanifold.backend._CenterManifoldBackend`
+        backend : :class:`~hiten.algorithms.poincare.centermanifold.backend._CenterManifoldBackend`
             Backend for numerical computations.
-        strategy : :class:`hiten.algorithms.poincare.centermanifold.seeding._CenterManifoldSeedingBase`
+        strategy : :class:`~hiten.algorithms.poincare.centermanifold.seeding._CenterManifoldSeedingBase`
             Seeding strategy for initial conditions.
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.centermanifold.engine._CenterManifoldEngine`
+        :class:`~hiten.algorithms.poincare.centermanifold.engine._CenterManifoldEngine`
             Configured engine for center manifold map computation.
         """
         return _CenterManifoldEngine(
@@ -220,7 +220,7 @@ class CenterManifoldMap(_ReturnMapBase):
 
         Returns
         -------
-        :class:`hiten.system.orbits.base.GenericOrbit`
+        :class:`~hiten.system.orbits.base.GenericOrbit`
             Propagated orbit object.
         """
         ic = self.cm.ic(cm_point, energy, section_coord=self.config.section_coord)
@@ -495,14 +495,14 @@ class CenterManifoldMap(_ReturnMapBase):
         ----------
         filepath : str
             Path to load the map data from.
-        cm : :class:`hiten.system.center.CenterManifold`
+        cm : :class:`~hiten.system.center.CenterManifold`
             Center manifold object for the loaded map.
         **kwargs
             Additional keyword arguments passed to the load function.
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.centermanifold.base.CenterManifoldMap`
+        :class:`~hiten.algorithms.poincare.centermanifold.base.CenterManifoldMap`
             Loaded center manifold map instance.
         """
         return load_poincare_map(filepath, cm, **kwargs)

@@ -39,9 +39,9 @@ Analyze energy and stability:
 
 See Also
 --------
-:mod:`hiten.algorithms.integrators` : Numerical integration methods
-:mod:`hiten.algorithms.polynomial` : Polynomial operations for Hamiltonian systems
-:mod:`hiten.system` : High-level system definitions and orbital mechanics
+:mod:`~hiten.algorithms.integrators` : Numerical integration methods
+:mod:`~hiten.algorithms.polynomial` : Polynomial operations for Hamiltonian systems
+:mod:`~hiten.system` : High-level system definitions and orbital mechanics
 
 References
 ----------

@@ -13,13 +13,13 @@ All coordinates are in nondimensional CR3BP rotating-frame units.
 
 See Also
 --------
-:mod:`hiten.algorithms.continuation.base`
+:mod:`~hiten.algorithms.continuation.base`
     Base continuation engine framework.
-:mod:`hiten.algorithms.continuation.interfaces`
+:mod:`~hiten.algorithms.continuation.interfaces`
     Domain-specific continuation interfaces.
-:mod:`hiten.algorithms.continuation.strategies`
+:mod:`~hiten.algorithms.continuation.strategies`
     Stepping strategies for different continuation methods.
-:mod:`hiten.system.orbits`
+:mod:`~hiten.system.orbits`
     Periodic orbit classes used by these predictors.
 """
 
@@ -51,9 +51,9 @@ class _StateParameter(_PeriodicOrbitContinuationInterface, _NaturalParameter):
 
     Parameters
     ----------
-    initial_orbit : :class:`hiten.system.orbits.base.PeriodicOrbit`
+    initial_orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
         Starting orbit for the continuation family.
-    state : :class:`hiten.algorithms.utils.types.SynodicState` or sequence of SynodicState
+    state : :class:`~hiten.algorithms.utils.types.SynodicState` or sequence of SynodicState
         State component(s) to vary during continuation. Can be a single
         component or a sequence for multi-parameter continuation.
     amplitude : bool, optional
@@ -127,13 +127,13 @@ class _StateParameter(_PeriodicOrbitContinuationInterface, _NaturalParameter):
 
     See Also
     --------
-    :class:`hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface`
+    :class:`~hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface`
         Base interface for orbit continuation.
-    :class:`hiten.algorithms.utils.types.SynodicState`
+    :class:`~hiten.algorithms.utils.types.SynodicState`
         Enumeration of state vector components.
-    :class:`hiten.algorithms.continuation.predictors._FixedPeriod`
+    :class:`~hiten.algorithms.continuation.predictors._FixedPeriod`
         Period-based continuation (future implementation).
-    :class:`hiten.algorithms.continuation.predictors._EnergyLevel`
+    :class:`~hiten.algorithms.continuation.predictors._EnergyLevel`
         Energy-based continuation (future implementation).
     """
 
@@ -201,7 +201,7 @@ class _StateParameter(_PeriodicOrbitContinuationInterface, _NaturalParameter):
 
         Returns
         -------
-        :class:`hiten.algorithms.continuation.strategies._stepping._NaturalParameterStep`
+        :class:`~hiten.algorithms.continuation.strategies._stepping._NaturalParameterStep`
             Stepping strategy that applies incremental changes to the
             specified state components.
 
@@ -239,11 +239,11 @@ class _FixedPeriod(_PeriodicOrbitContinuationInterface, _NaturalParameter):
 
     See Also
     --------
-    :class:`hiten.algorithms.continuation.predictors._StateParameter`
+    :class:`~hiten.algorithms.continuation.predictors._StateParameter`
         Implemented state-based continuation.
-    :class:`hiten.algorithms.continuation.predictors._EnergyLevel`
+    :class:`~hiten.algorithms.continuation.predictors._EnergyLevel`
         Future energy-based continuation.
-    :mod:`hiten.algorithms.corrector`
+    :mod:`~hiten.algorithms.corrector`
         Correction algorithms that could support period constraints.
     """
     
@@ -289,11 +289,11 @@ class _EnergyLevel(_PeriodicOrbitContinuationInterface, _NaturalParameter):
 
     See Also
     --------
-    :class:`hiten.algorithms.continuation.predictors._StateParameter`
+    :class:`~hiten.algorithms.continuation.predictors._StateParameter`
         Implemented state-based continuation.
-    :class:`hiten.algorithms.continuation.predictors._FixedPeriod`
+    :class:`~hiten.algorithms.continuation.predictors._FixedPeriod`
         Future period-based continuation.
-    :mod:`hiten.system`
+    :mod:`~hiten.system`
         System classes that compute Jacobi constants.
     """
 

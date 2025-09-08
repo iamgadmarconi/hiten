@@ -2,7 +2,7 @@
 
 This module bundles the physical information of a binary system, computes the
 mass parameter mu, instantiates the underlying vector field via
-:func:`hiten.algorithms.dynamics.rtbp.rtbp_dynsys`, and pre-computes the five
+:func:`~hiten.algorithms.dynamics.rtbp.rtbp_dynsys`, and pre-computes the five
 classical Lagrange (libration) points.
 
 Notes
@@ -39,23 +39,23 @@ class System(object):
 
     The class stores the physical properties of the primaries, computes the
     dimensionless mass parameter mu = m2 / (m1 + m2), instantiates
-    the CR3BP vector field through :func:`hiten.algorithms.dynamics.rtbp.rtbp_dynsys`,
+    the CR3BP vector field through :func:`~hiten.algorithms.dynamics.rtbp.rtbp_dynsys`,
     and caches the five Lagrange points.
 
     Parameters
     ----------
-    primary : :class:`hiten.system.body.Body`
+    primary : :class:`~hiten.system.body.Body`
         Primary gravitating body.
-    secondary : :class:`hiten.system.body.Body`
+    secondary : :class:`~hiten.system.body.Body`
         Secondary gravitating body.
     distance : float
         Characteristic separation between the bodies in km.
 
     Attributes
     ----------
-    primary : :class:`hiten.system.body.Body`
+    primary : :class:`~hiten.system.body.Body`
         Primary gravitating body.
-    secondary : :class:`hiten.system.body.Body`
+    secondary : :class:`~hiten.system.body.Body`
         Secondary gravitating body.
     distance : float
         Characteristic separation between the bodies in km.
@@ -64,10 +64,10 @@ class System(object):
     libration_points : dict[int, LibrationPoint]
         Mapping from integer identifiers {1,...,5} to the corresponding
         libration point objects.
-    dynsys : :class:`hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+    dynsys : :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
         Underlying vector field instance compatible with the integrators
-        defined in :mod:`hiten.algorithms.integrators`.
-    var_dynsys : :class:`hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+        defined in :mod:`~hiten.algorithms.integrators`.
+    var_dynsys : :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
         Underlying variational equations system.
 
     Notes
@@ -80,9 +80,9 @@ class System(object):
         
         Parameters
         ----------
-        primary : :class:`hiten.system.body.Body`
+        primary : :class:`~hiten.system.body.Body`
             The primary gravitating body.
-        secondary : :class:`hiten.system.body.Body`
+        secondary : :class:`~hiten.system.body.Body`
             The secondary gravitating body.
         distance : float
             Characteristic separation between the bodies in km.
@@ -115,7 +115,7 @@ class System(object):
         
         Returns
         -------
-        :class:`hiten.system.body.Body`
+        :class:`~hiten.system.body.Body`
             The primary gravitating body.
         """
         return self._primary
@@ -126,7 +126,7 @@ class System(object):
         
         Returns
         -------
-        :class:`hiten.system.body.Body`
+        :class:`~hiten.system.body.Body`
             The secondary gravitating body.
         """
         return self._secondary
@@ -170,7 +170,7 @@ class System(object):
         
         Returns
         -------
-        :class:`hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+        :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
             The underlying vector field instance.
         """
         return self._dynsys
@@ -181,7 +181,7 @@ class System(object):
         
         Returns
         -------
-        :class:`hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+        :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
             The underlying variational equations system.
         """
         return self._var_dynsys
@@ -198,7 +198,7 @@ class System(object):
         Notes
         -----
         The calculation is performed in high precision using
-        :func:`hiten.utils.precision.hp` to mitigate numerical cancellation when
+        :func:`~hiten.utils.precision.hp` to mitigate numerical cancellation when
         m1 approximately equals m2.
         """
         logger.debug(f"Calculating mu: {self.secondary.mass} / ({self.primary.mass} + {self.secondary.mass})")
@@ -220,7 +220,7 @@ class System(object):
         Returns
         -------
         dict[int, LibrationPoint]
-            Mapping {1,...,5} to :class:`hiten.system.libration.base.LibrationPoint`
+            Mapping {1,...,5} to :class:`~hiten.system.libration.base.LibrationPoint`
             objects.
         """
         logger.debug(f"Computing Libration points for mu={self.mu}")
@@ -245,7 +245,7 @@ class System(object):
 
         Returns
         -------
-        :class:`hiten.system.libration.base.LibrationPoint`
+        :class:`~hiten.system.libration.base.LibrationPoint`
             Requested libration point instance.
 
         Raises
@@ -279,8 +279,8 @@ class System(object):
         Propagate arbitrary initial conditions in the CR3BP.
 
         This helper is a thin wrapper around
-        :func:`hiten.algorithms.dynamics.rtbp._propagate_dynsys` that avoids
-        the need to instantiate a :class:`hiten.system.orbits.base.PeriodicOrbit`.
+        :func:`~hiten.algorithms.dynamics.rtbp._propagate_dynsys` that avoids
+        the need to instantiate a :class:`~hiten.system.orbits.base.PeriodicOrbit`.
 
         Parameters
         ----------
@@ -326,13 +326,13 @@ class System(object):
     @classmethod
     def from_bodies(cls, primary_name: str, secondary_name: str) -> "System":
         """
-        Factory method to build a :class:`hiten.system.base.System` directly from body names.
+        Factory method to build a :class:`~hiten.system.base.System` directly from body names.
 
         This helper retrieves the masses, radii and characteristic orbital
         distance of the selected primary/secondary pair from
-        :class:`hiten.utils.constants.Constants` and instantiates the
-        corresponding :class:`hiten.system.body.Body` objects before finally returning the
-        fully-initialised :class:`hiten.system.base.System` instance.
+        :class:`~hiten.utils.constants.Constants` and instantiates the
+        corresponding :class:`~hiten.system.body.Body` objects before finally returning the
+        fully-initialised :class:`~hiten.system.base.System` instance.
 
         Parameters
         ----------
@@ -343,7 +343,7 @@ class System(object):
 
         Returns
         -------
-        :class:`hiten.system.base.System`
+        :class:`~hiten.system.base.System`
             Newly created CR3BP system.
             
         Raises
@@ -379,7 +379,7 @@ class System(object):
 
     @classmethod
     def from_mu(cls, mu: float) -> "System":
-        """Factory method to build a :class:`hiten.system.base.System` 
+        """Factory method to build a :class:`~hiten.system.base.System` 
         directly from the mass parameter.
         
         Parameters
@@ -389,7 +389,7 @@ class System(object):
             
         Returns
         -------
-        :class:`hiten.system.base.System`
+        :class:`~hiten.system.base.System`
             Newly created CR3BP system with the specified mass parameter.
         """
         primary = Body("Primary", 1-mu, 1.0e-3)

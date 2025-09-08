@@ -4,7 +4,7 @@ This module provides the abstract base class for implementing return map
 backends in the Poincare section framework. Backends handle the numerical
 integration and section crossing detection for computing Poincare maps.
 
-The main class :class:`hiten.algorithms.poincare.core.backend._ReturnMapBackend` 
+The main class :class:`~hiten.algorithms.poincare.core.backend._ReturnMapBackend` 
 defines the interface that all concrete backends must implement, including the 
 core `step_to_section` method and common functionality for root finding and bracket 
 expansion.
@@ -28,9 +28,9 @@ class _ReturnMapBackend(ABC):
 
     Parameters
     ----------
-    dynsys : :class:`hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+    dynsys : :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
         Dynamical system providing the equations of motion.
-    surface : :class:`hiten.algorithms.poincare.core.events._SurfaceEvent`
+    surface : :class:`~hiten.algorithms.poincare.core.events._SurfaceEvent`
         Poincare section surface definition.
     forward : int, default=1
         Integration direction (1 for forward, -1 for backward).

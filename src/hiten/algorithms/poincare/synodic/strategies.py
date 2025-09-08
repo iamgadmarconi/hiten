@@ -5,7 +5,7 @@ detection. Since synodic maps operate on precomputed trajectories rather
 than generating initial conditions, the strategies are minimal and serve
 as placeholders to satisfy the engine interface.
 
-The main class :class:`hiten.algorithms.poincare.synodic.strategies._NoOpStrategy` 
+The main class :class:`~hiten.algorithms.poincare.synodic.strategies._NoOpStrategy` 
 implements a no-operation seeding strategy that raises NotImplementedError when called, 
 since synodic maps do not require seed generation.
 
@@ -28,9 +28,9 @@ class _NoOpStrategy(_SeedingStrategyBase):
 
     Parameters
     ----------
-    section_cfg : :class:`hiten.algorithms.poincare.synodic.config._SynodicSectionConfig`
+    section_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicSectionConfig`
         The section configuration (unused).
-    map_cfg : :class:`hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+    map_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
         The map configuration (unused).
 
     Notes

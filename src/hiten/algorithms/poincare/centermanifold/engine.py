@@ -6,7 +6,7 @@ Restricted Three-Body Problem (CR3BP). The engine coordinates the seeding
 strategy, numerical integration, and parallel processing to efficiently
 compute return maps.
 
-The main class :class:`hiten.algorithms.poincare.centermanifold.engine._CenterManifoldEngine` 
+The main class :class:`~hiten.algorithms.poincare.centermanifold.engine._CenterManifoldEngine` 
 extends the base return map engine with center manifold-specific functionality and parallel 
 processing capabilities.
 
@@ -43,11 +43,11 @@ class _CenterManifoldEngine(_ReturnMapEngine):
 
     Parameters
     ----------
-    backend : :class:`hiten.algorithms.poincare.centermanifold.backend._CenterManifoldBackend`
+    backend : :class:`~hiten.algorithms.poincare.centermanifold.backend._CenterManifoldBackend`
         Backend providing numerical integration and section crossing detection.
-    seed_strategy : :class:`hiten.algorithms.poincare.centermanifold.seeding._CenterManifoldSeedingBase`
+    seed_strategy : :class:`~hiten.algorithms.poincare.centermanifold.seeding._CenterManifoldSeedingBase`
         Strategy for generating initial conditions on the center manifold.
-    map_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
+    map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Configuration specifying computation parameters.
 
     Notes
@@ -89,7 +89,7 @@ class _CenterManifoldEngine(_ReturnMapEngine):
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.core.base._Section`
+        :class:`~hiten.algorithms.poincare.core.base._Section`
             Computed Poincare section containing points, states, and metadata.
 
         Raises

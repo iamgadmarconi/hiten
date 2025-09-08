@@ -13,11 +13,11 @@ All coordinates and velocities are in nondimensional CR3BP rotating-frame units.
 
 See Also
 --------
-:mod:`hiten.algorithms.connections.base`
+:mod:`~hiten.algorithms.connections.base`
     Main Connection class that produces these results.
-:mod:`hiten.algorithms.connections.engine`
+:mod:`~hiten.algorithms.connections.engine`
     Connection engine that generates result objects.
-:mod:`hiten.algorithms.connections.backends`
+:mod:`~hiten.algorithms.connections.backends`
     Backend algorithms that compute connection data.
 """
 
@@ -85,9 +85,9 @@ class _ConnectionResult:
 
     See Also
     --------
-    :class:`hiten.algorithms.connections.results.ConnectionResults`
+    :class:`~hiten.algorithms.connections.results.ConnectionResults`
         Collection class for multiple connection results.
-    :class:`hiten.algorithms.connections.config._SearchConfig`
+    :class:`~hiten.algorithms.connections.config._SearchConfig`
         Configuration that determines ballistic vs impulsive classification.
     """
     kind: Literal["impulsive", "ballistic"]
@@ -103,14 +103,14 @@ class ConnectionResults:
     """Provide a collection of connection results with convenient access and formatting.
 
     This class provides a read-only sequence-like interface over a collection
-    of :class:`hiten.algorithms.connections.results._ConnectionResult` objects, with enhanced formatting capabilities
+    of :class:`~hiten.algorithms.connections.results._ConnectionResult` objects, with enhanced formatting capabilities
     for analysis and presentation. It behaves like a standard Python sequence
     while providing specialized string representations optimized for connection
     data.
 
     Parameters
     ----------
-    results : sequence of :class:`hiten.algorithms.connections.results._ConnectionResult` or None
+    results : sequence of :class:`~hiten.algorithms.connections.results._ConnectionResult` or None
         Collection of connection results to wrap. If None or empty,
         creates an empty results collection.
 
@@ -147,9 +147,9 @@ class ConnectionResults:
 
     See Also
     --------
-    :class:`hiten.algorithms.connections.results._ConnectionResult`
+    :class:`~hiten.algorithms.connections.results._ConnectionResult`
         Individual connection result data structure.
-    :class:`hiten.algorithms.connections.base.Connection`
+    :class:`~hiten.algorithms.connections.base.Connection`
         Main class that produces these result collections.
     """
 
@@ -158,7 +158,7 @@ class ConnectionResults:
 
         Parameters
         ----------
-        results : sequence of :class:`hiten.algorithms.connections.results._ConnectionResult` or None
+        results : sequence of :class:`~hiten.algorithms.connections.results._ConnectionResult` or None
             Connection results to store. If None, creates empty collection.
         """
         self._results: list[_ConnectionResult] = list(results) if results else []
@@ -179,7 +179,7 @@ class ConnectionResults:
 
         Yields
         ------
-        :class:`hiten.algorithms.connections.results._ConnectionResult`
+        :class:`~hiten.algorithms.connections.results._ConnectionResult`
             Individual connection results in order (typically sorted by Delta-V).
         """
         return iter(self._results)
@@ -194,7 +194,7 @@ class ConnectionResults:
 
         Returns
         -------
-        :class:`hiten.algorithms.connections.results._ConnectionResult`
+        :class:`~hiten.algorithms.connections.results._ConnectionResult`
             Connection result at the specified index.
 
         Raises

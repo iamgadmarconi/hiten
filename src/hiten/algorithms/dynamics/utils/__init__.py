@@ -28,8 +28,8 @@ Stability analysis:
 
 See Also
 --------
-:mod:`hiten.algorithms.dynamics` : Main dynamical systems framework
-:mod:`hiten.system` : High-level system definitions
+:mod:`~hiten.algorithms.dynamics` : Main dynamical systems framework
+:mod:`~hiten.system` : High-level system definitions
 """
 
 # Energy and potential functions

@@ -47,14 +47,14 @@ class HamiltonianPipeline:
 
     Parameters
     ----------
-    point : :class:`hiten.system.libration.base.LibrationPoint`
+    point : :class:`~hiten.system.libration.base.LibrationPoint`
         The libration point about which the normal form is computed
     degree : int
         Maximum total degree of the polynomial truncation
 
     Attributes
     ----------
-    point : :class:`hiten.system.libration.base.LibrationPoint`
+    point : :class:`~hiten.system.libration.base.LibrationPoint`
         The libration point about which the normal form is computed
     degree : int
         The maximum total degree of the polynomial truncation
@@ -76,7 +76,7 @@ class HamiltonianPipeline:
         
         Parameters
         ----------
-        point : :class:`hiten.system.libration.base.LibrationPoint`
+        point : :class:`~hiten.system.libration.base.LibrationPoint`
             The libration point about which the normal form is computed
         degree : int
             Maximum total degree of the polynomial truncation
@@ -149,7 +149,7 @@ class HamiltonianPipeline:
 
         Returns
         -------
-        :class:`hiten.system.hamiltonians.base.Hamiltonian`
+        :class:`~hiten.system.hamiltonians.base.Hamiltonian`
             The requested Hamiltonian representation
 
         Raises
@@ -178,7 +178,7 @@ class HamiltonianPipeline:
         ----------
         form_name : str
             The Hamiltonian form name (e.g., "complex_partial_normal")
-        generating_functions : :class:`hiten.system.hamiltonians.base.LieGeneratingFunction`
+        generating_functions : :class:`~hiten.system.hamiltonians.base.LieGeneratingFunction`
             The LieGeneratingFunction object to cache
             
         Notes
@@ -212,7 +212,7 @@ class HamiltonianPipeline:
 
         Returns
         -------
-        :class:`hiten.system.hamiltonians.base.Hamiltonian`
+        :class:`~hiten.system.hamiltonians.base.Hamiltonian`
             The computed Hamiltonian representation
 
         Raises
@@ -258,7 +258,7 @@ class HamiltonianPipeline:
 
         Returns
         -------
-        :class:`hiten.system.hamiltonians.base.Hamiltonian`
+        :class:`~hiten.system.hamiltonians.base.Hamiltonian`
             The physical Hamiltonian representation
 
         Notes
@@ -350,7 +350,7 @@ class HamiltonianPipeline:
             
         Returns
         -------
-        :class:`hiten.system.hamiltonians.base.Hamiltonian`
+        :class:`~hiten.system.hamiltonians.base.Hamiltonian`
             The converted Hamiltonian
             
         Raises
@@ -404,7 +404,7 @@ class HamiltonianPipeline:
             
         Returns
         -------
-        :class:`hiten.system.hamiltonians.base.Hamiltonian`
+        :class:`~hiten.system.hamiltonians.base.Hamiltonian`
             The final converted Hamiltonian
             
         Notes
@@ -471,13 +471,13 @@ class HamiltonianPipeline:
 
         Returns
         -------
-        :class:`hiten.system.hamiltonians.base.Hamiltonian`
+        :class:`~hiten.system.hamiltonians.base.Hamiltonian`
             The requested Hamiltonian representation
 
         Notes
         -----
         This method is equivalent to 
-        :meth:`hiten.system.hamiltonians.pipeline.HamiltonianPipeline.get_hamiltonian` 
+        :meth:`~hiten.system.hamiltonians.pipeline.HamiltonianPipeline.get_hamiltonian` 
         but provides a familiar interface for users migrating from the old CenterManifold.
         It is maintained for backward compatibility.
         """
@@ -497,7 +497,7 @@ class HamiltonianPipeline:
 
         Returns
         -------
-        :class:`hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem`
+        :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem`
             The runtime Hamiltonian system
 
         Notes
@@ -544,7 +544,7 @@ class HamiltonianPipeline:
         Clear the Hamiltonian cache.
 
         This forces recomputation of all Hamiltonian representations on
-        the next call to :meth:`hiten.system.hamiltonians.pipeline.HamiltonianPipeline.get_hamiltonian`.
+        the next call to :meth:`~hiten.system.hamiltonians.pipeline.HamiltonianPipeline.get_hamiltonian`.
 
         Notes
         -----
@@ -620,7 +620,7 @@ class HamiltonianPipeline:
 
         Returns
         -------
-        :class:`hiten.system.hamiltonians.base.LieGeneratingFunction`
+        :class:`~hiten.system.hamiltonians.base.LieGeneratingFunction`
             The generating functions and eliminated terms
 
         Raises
@@ -677,7 +677,7 @@ class HamiltonianPipeline:
 
         Returns
         -------
-        :class:`hiten.system.hamiltonians.base.LieGeneratingFunction`
+        :class:`~hiten.system.hamiltonians.base.LieGeneratingFunction`
             The computed generating functions
 
         Notes

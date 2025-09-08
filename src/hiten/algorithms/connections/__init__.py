@@ -28,11 +28,11 @@ Examples
 
 See Also
 --------
-:mod:`hiten.system.manifold`
+:mod:`~hiten.system.manifold`
     Manifold classes for CR3BP invariant structures.
-:mod:`hiten.algorithms.poincare`
+:mod:`~hiten.algorithms.poincare`
     Poincare map functionality for section intersections.
-:mod:`hiten.system`
+:mod:`~hiten.system`
     CR3BP system definition and libration points.
 """
 

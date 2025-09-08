@@ -5,7 +5,7 @@ for synodic Poincare sections. It implements detection and refinement
 algorithms for finding trajectory-section intersections on precomputed
 trajectories.
 
-The main class :class:`hiten.algorithms.poincare.synodic.backend._SynodicDetectionBackend` 
+The main class :class:`~hiten.algorithms.poincare.synodic.backend._SynodicDetectionBackend` 
 extends the abstract base class to provide detection capabilities on precomputed trajectory data,
 including cubic interpolation and Newton refinement for high accuracy.
 """
@@ -80,14 +80,14 @@ class _DetectionSettings:
 
         Parameters
         ----------
-        map_cfg : :class:`hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+        map_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
             Map configuration containing detection parameters.
         plane_coords : tuple[str, str]
             Plane coordinate labels for projection.
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.synodic.backend._DetectionSettings`
+        :class:`~hiten.algorithms.poincare.synodic.backend._DetectionSettings`
             Configured detection settings object.
 
         Notes
@@ -150,7 +150,7 @@ def _compute_event_values(event: "_SurfaceEvent", states: "np.ndarray") -> "np.n
 
     Parameters
     ----------
-    event : :class:`hiten.algorithms.poincare.core.events._SurfaceEvent`
+    event : :class:`~hiten.algorithms.poincare.core.events._SurfaceEvent`
         The surface event defining the Poincare section.
     states : ndarray, shape (n, m)
         Array of state vectors to evaluate.
@@ -181,7 +181,7 @@ def _is_vectorizable_plane_event(event: "_SurfaceEvent", n_cols: int) -> "tuple[
 
     Parameters
     ----------
-    event : :class:`hiten.algorithms.poincare.core.events._SurfaceEvent`
+    event : :class:`~hiten.algorithms.poincare.core.events._SurfaceEvent`
         The surface event to check.
     n_cols : int
         Number of columns in the state vector.
@@ -493,7 +493,7 @@ def _order_and_dedup_hits(
 
     Returns
     -------
-    list[:class:`hiten.algorithms.poincare.core.events._SectionHit`]
+    list[:class:`~hiten.algorithms.poincare.core.events._SectionHit`]
         List of ordered and deduplicated section hits.
 
     Notes
@@ -555,16 +555,16 @@ def _detect_with_segment_refine(
         Array of state vectors.
     g_all : ndarray, shape (n,)
         Array of surface function values.
-    event : :class:`hiten.algorithms.poincare.core.events._SurfaceEvent`
+    event : :class:`~hiten.algorithms.poincare.core.events._SurfaceEvent`
         The surface event defining the Poincare section.
     proj : tuple[str, str] or callable
         Projection specification for 2D coordinates.
-    settings : :class:`hiten.algorithms.poincare.synodic.backend._DetectionSettings`
+    settings : :class:`~hiten.algorithms.poincare.synodic.backend._DetectionSettings`
         Detection settings including refinement parameters.
 
     Returns
     -------
-    list[:class:`hiten.algorithms.poincare.core.events._SectionHit`]
+    list[:class:`~hiten.algorithms.poincare.core.events._SectionHit`]
         List of detected section hits.
 
     Notes
@@ -733,18 +733,18 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
 
     Parameters
     ----------
-    section_cfg : :class:`hiten.algorithms.poincare.synodic.config._SynodicSectionConfig`
+    section_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicSectionConfig`
         Section configuration containing section parameters and projection axes.
-    map_cfg : :class:`hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+    map_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
         Map configuration containing detection and refinement parameters.
 
     Attributes
     ----------
-    _section_cfg : :class:`hiten.algorithms.poincare.synodic.config._SynodicSectionConfig`
+    _section_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicSectionConfig`
         The section configuration.
-    _cfg : :class:`hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+    _cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
         The map configuration.
-    _settings : :class:`hiten.algorithms.poincare.synodic.backend._DetectionSettings`
+    _settings : :class:`~hiten.algorithms.poincare.synodic.backend._DetectionSettings`
         Cached detection settings for efficient access.
 
     Notes
@@ -784,7 +784,7 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
 
         Returns
         -------
-        list[:class:`hiten.algorithms.poincare.core.events._SectionHit`]
+        list[:class:`~hiten.algorithms.poincare.core.events._SectionHit`]
             List of detected section hits, ordered by time and deduplicated.
 
         Notes
@@ -863,7 +863,7 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
 
         Returns
         -------
-        list[list[:class:`hiten.algorithms.poincare.core.events._SectionHit`]]
+        list[list[:class:`~hiten.algorithms.poincare.core.events._SectionHit`]]
             List of section hit lists, one for each trajectory.
 
         Notes

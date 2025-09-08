@@ -7,7 +7,7 @@ Numba-accelerated kernels.
 
 The routines are deliberately minimal and allocation-friendly because they
 are frequently invoked from performance-critical, Numba-accelerated kernels
-in :mod:`hiten.algorithms.polynomial`.
+in :mod:`~hiten.algorithms.polynomial`.
 """
 
 import numpy as np
@@ -39,7 +39,7 @@ def _clean_coordinates(coords: np.ndarray, tol: float = 1e-30) -> np.ndarray:
     Notes
     -----
     The routine operates element-wise. If any changes are made, a warning is
-    emitted via :func:`hiten.utils.log_config.logger`.
+    emitted via :func:`~hiten.utils.log_config.logger`.
 
     Examples
     --------

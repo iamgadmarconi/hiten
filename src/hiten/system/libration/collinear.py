@@ -35,7 +35,7 @@ class CollinearPoint(LibrationPoint):
     
     Parameters
     ----------
-    system : :class:`hiten.system.base.System`
+    system : :class:`~hiten.system.base.System`
         The CR3BP system containing the mass parameter mu.
         
     Attributes
@@ -58,7 +58,7 @@ class CollinearPoint(LibrationPoint):
         
         Parameters
         ----------
-        system : :class:`hiten.system.base.System`
+        system : :class:`~hiten.system.base.System`
             The CR3BP system containing the mass parameter mu.
             
         Raises
@@ -494,7 +494,7 @@ class CollinearPoint(LibrationPoint):
         
         Returns
         -------
-        :class:`hiten.system.libration.LinearData`
+        :class:`~hiten.system.libration.LinearData`
             Object containing the linear data for the Libration point.
         """
         # Get cached values
@@ -615,7 +615,7 @@ class L1Point(CollinearPoint):
     
     Parameters
     ----------
-    system : :class:`hiten.system.base.System`
+    system : :class:`~hiten.system.base.System`
         The CR3BP system containing the mass parameter mu.
     """
     
@@ -625,7 +625,7 @@ class L1Point(CollinearPoint):
         
         Parameters
         ----------
-        system : :class:`hiten.system.base.System`
+        system : :class:`~hiten.system.base.System`
             The CR3BP system containing the mass parameter mu.
         """
         super().__init__(system)
@@ -706,7 +706,7 @@ class L2Point(CollinearPoint):
     
     Parameters
     ----------
-    system : :class:`hiten.system.base.System`
+    system : :class:`~hiten.system.base.System`
         The CR3BP system containing the mass parameter mu.
     """
     
@@ -716,7 +716,7 @@ class L2Point(CollinearPoint):
         
         Parameters
         ----------
-        system : :class:`hiten.system.base.System`
+        system : :class:`~hiten.system.base.System`
             The CR3BP system containing the mass parameter mu.
         """
         super().__init__(system)
@@ -796,7 +796,7 @@ class L3Point(CollinearPoint):
     
     Parameters
     ----------
-    system : :class:`hiten.system.base.System`
+    system : :class:`~hiten.system.base.System`
         The CR3BP system containing the mass parameter mu.
     """
     
@@ -806,7 +806,7 @@ class L3Point(CollinearPoint):
         
         Parameters
         ----------
-        system : :class:`hiten.system.base.System`
+        system : :class:`~hiten.system.base.System`
             The CR3BP system containing the mass parameter mu.
         """
         super().__init__(system)

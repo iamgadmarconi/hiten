@@ -3,7 +3,7 @@ continuation engine.
 
 It offers convenience helpers for iteration, random access, conversion to a
 pandas.DataFrame, and basic serialisation to an HDF5 file leveraging the
-existing utilities in :mod:`hiten.utils.io`.
+existing utilities in :mod:`~hiten.utils.io`.
 
 Notes
 -----
@@ -32,7 +32,7 @@ class OrbitFamily:
     
     Parameters
     ----------
-    orbits : list of :class:`hiten.system.orbits.base.PeriodicOrbit`
+    orbits : list of :class:`~hiten.system.orbits.base.PeriodicOrbit`
         List of periodic orbits in ascending continuation order.
     parameter_name : str, default "param"
         Name of the continuation parameter for labelling.
@@ -42,7 +42,7 @@ class OrbitFamily:
     
     Attributes
     ----------
-    orbits : list of :class:`hiten.system.orbits.base.PeriodicOrbit`
+    orbits : list of :class:`~hiten.system.orbits.base.PeriodicOrbit`
         List of periodic orbits in the family.
     parameter_name : str
         Name of the continuation parameter.
@@ -85,7 +85,7 @@ class OrbitFamily:
             
         Returns
         -------
-        :class:`hiten.system.family.OrbitFamily`
+        :class:`~hiten.system.family.OrbitFamily`
             A new OrbitFamily instance containing the orbits from the engine.
         """
         if parameter_name is None:
@@ -107,7 +107,7 @@ class OrbitFamily:
         
         Returns
         -------
-        Iterator[:class:`hiten.system.orbits.base.PeriodicOrbit`]
+        Iterator[:class:`~hiten.system.orbits.base.PeriodicOrbit`]
             Iterator over the orbits in the family.
         """
         return iter(self.orbits)
@@ -122,7 +122,7 @@ class OrbitFamily:
             
         Returns
         -------
-        :class:`hiten.system.orbits.base.PeriodicOrbit` or list
+        :class:`~hiten.system.orbits.base.PeriodicOrbit` or list
             The orbit(s) at the specified index(es).
         """
         return self.orbits[idx]
@@ -199,7 +199,7 @@ class OrbitFamily:
         filepath : str
             Destination CSV file path.
         **kwargs
-            Extra keyword arguments passed to :meth:`hiten.system.orbits.base.PeriodicOrbit.propagate`.
+            Extra keyword arguments passed to :meth:`~hiten.system.orbits.base.PeriodicOrbit.propagate`.
 
         Raises
         ------
@@ -237,13 +237,13 @@ class OrbitFamily:
             
         Returns
         -------
-        :class:`hiten.system.family.OrbitFamily`
+        :class:`~hiten.system.family.OrbitFamily`
             The loaded OrbitFamily instance.
             
         Raises
         ------
         ValueError
-            If the file does not contain a valid :class:`hiten.system.family.OrbitFamily` object.
+            If the file does not contain a valid :class:`~hiten.system.family.OrbitFamily` object.
         """
         with h5py.File(filepath, "r") as f:
             if str(f.attrs.get("class", "")) != "OrbitFamily":

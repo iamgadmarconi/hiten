@@ -8,9 +8,9 @@ Three-Body Problem (CR3BP). It includes:
 - High-order symplectic integrators for Hamiltonian systems
 
 The main user-facing classes are the factories:
-- :class:`hiten.algorithms.integrators.rk.RungeKutta` for fixed-step methods
-- :class:`hiten.algorithms.integrators.rk.AdaptiveRK` for adaptive step-size methods
-- :class:`hiten.algorithms.integrators.symplectic.ExtendedSymplectic` for symplectic integration
+- :class:`~hiten.algorithms.integrators.rk.RungeKutta` for fixed-step methods
+- :class:`~hiten.algorithms.integrators.rk.AdaptiveRK` for adaptive step-size methods
+- :class:`~hiten.algorithms.integrators.symplectic.ExtendedSymplectic` for symplectic integration
 """
 
 from .rk import AdaptiveRK, RungeKutta

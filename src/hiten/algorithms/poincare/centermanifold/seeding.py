@@ -4,7 +4,7 @@ This module provides the base class for seeding strategies used to generate
 initial conditions on center manifolds of collinear libration points in the
 Circular Restricted Three-Body Problem (CR3BP).
 
-The main class :class:`hiten.algorithms.poincare.centermanifold.seeding._CenterManifoldSeedingBase` 
+The main class :class:`~hiten.algorithms.poincare.centermanifold.seeding._CenterManifoldSeedingBase` 
 defines the interface for all seeding strategies and provides common functionality for Hill
 boundary validation and seed generation.
 
@@ -33,9 +33,9 @@ class _CenterManifoldSeedingBase(_SeedingStrategyBase):
 
     Parameters
     ----------
-    section_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
         Configuration for the Poincare section.
-    map_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
+    map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Configuration for the center manifold map.
 
     Notes

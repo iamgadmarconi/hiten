@@ -69,9 +69,9 @@ class _SynodicMapConfig(_ReturnMapBaseConfig):
 
     The class automatically sets `compute_on_init = False` since synodic
     maps require precomputed trajectories to be supplied explicitly via
-    :meth:`hiten.algorithms.poincare.synodic.base.SynodicMap.from_orbit`, 
-    :meth:`hiten.algorithms.poincare.synodic.base.SynodicMap.from_manifold`, 
-    or :meth:`hiten.algorithms.poincare.synodic.base.SynodicMap.from_trajectories`.
+    :meth:`~hiten.algorithms.poincare.synodic.base.SynodicMap.from_orbit`, 
+    :meth:`~hiten.algorithms.poincare.synodic.base.SynodicMap.from_manifold`, 
+    or :meth:`~hiten.algorithms.poincare.synodic.base.SynodicMap.from_trajectories`.
 
     All tolerances and offsets are in nondimensional units unless
     otherwise specified.
@@ -98,9 +98,9 @@ class _SynodicMapConfig(_ReturnMapBaseConfig):
         -----
         This method automatically sets `compute_on_init = False` since
         synodic maps require precomputed trajectories to be supplied
-        explicitly via :meth:`hiten.algorithms.poincare.synodic.base.SynodicMap.from_orbit`, 
-        :meth:`hiten.algorithms.poincare.synodic.base.SynodicMap.from_manifold`, 
-        or :meth:`hiten.algorithms.poincare.synodic.base.SynodicMap.from_trajectories`.
+        explicitly via :meth:`~hiten.algorithms.poincare.synodic.base.SynodicMap.from_orbit`, 
+        :meth:`~hiten.algorithms.poincare.synodic.base.SynodicMap.from_manifold`, 
+        or :meth:`~hiten.algorithms.poincare.synodic.base.SynodicMap.from_trajectories`.
         The user-provided value for `compute_on_init` is ignored.
         """
         # Synodic maps do not support computing on init because trajectories
@@ -213,7 +213,7 @@ class _SynodicSectionConfig(_SectionConfig):
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.synodic.events._AffinePlaneEvent`
+        :class:`~hiten.algorithms.poincare.synodic.events._AffinePlaneEvent`
             An affine plane event configured with this section's geometry
             and the specified crossing direction.
 
@@ -257,7 +257,7 @@ def _get_section_config(
 
     Returns
     -------
-    :class:`hiten.algorithms.poincare.synodic.config._SynodicSectionConfig`
+    :class:`~hiten.algorithms.poincare.synodic.config._SynodicSectionConfig`
         A cached section configuration object with the specified geometry.
 
     Notes

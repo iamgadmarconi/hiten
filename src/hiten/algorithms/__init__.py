@@ -1,4 +1,4 @@
-""" Public API for the :mod:`hiten.algorithms` package.
+""" Public API for the :mod:`~hiten.algorithms` package.
 """
 
 from .continuation.interfaces import \

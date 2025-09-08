@@ -5,7 +5,7 @@ on center manifolds of periodic orbits in the Circular Restricted
 Three-Body Problem (CR3BP). The strategies are used to generate 
 initial conditions for computing center manifold trajectories.
 
-The module exports a factory function :func:`hiten.algorithms.poincare.centermanifold._make_strategy` 
+The module exports a factory function :func:`~hiten.algorithms.poincare.centermanifold._make_strategy` 
 that creates concrete seeding strategy instances based on a string identifier.
 """
 
@@ -32,9 +32,9 @@ def _make_strategy(kind: str, section_config: _CenterManifoldSectionConfig,
     kind : str
         Strategy identifier. Must be one of: 'single', 'axis_aligned', 
         'level_sets', 'radial', or 'random'.
-    section_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
         Configuration describing the Poincare section parameters.
-    map_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
+    map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Map-level configuration containing global parameters such as
         ``n_seeds`` and ``seed_axis``.
     **kwargs
@@ -43,7 +43,7 @@ def _make_strategy(kind: str, section_config: _CenterManifoldSectionConfig,
 
     Returns
     -------
-    :class:`hiten.algorithms.poincare.centermanifold.seeding._CenterManifoldSeedingBase`
+    :class:`~hiten.algorithms.poincare.centermanifold.seeding._CenterManifoldSeedingBase`
         Concrete seeding strategy instance.
 
     Raises

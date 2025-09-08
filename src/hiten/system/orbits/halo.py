@@ -37,7 +37,7 @@ class HaloOrbit(PeriodicOrbit):
 
     Parameters
     ----------
-    libration_point : :class:`hiten.system.libration.collinear.CollinearPoint`
+    libration_point : :class:`~hiten.system.libration.collinear.CollinearPoint`
         Target collinear libration point around which the halo orbit is computed.
     amplitude_z : float, optional
         z-amplitude of the halo orbit in the synodic frame (nondimensional units).
@@ -82,7 +82,7 @@ class HaloOrbit(PeriodicOrbit):
         
         Parameters
         ----------
-        libration_point : :class:`hiten.system.libration.base.LibrationPoint`
+        libration_point : :class:`~hiten.system.libration.base.LibrationPoint`
             The libration point around which the halo orbit is computed.
         amplitude_z : float, optional
             z-amplitude of the halo orbit in nondimensional units.
@@ -153,7 +153,7 @@ class HaloOrbit(PeriodicOrbit):
         
         Returns
         -------
-        :class:`hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`
+        :class:`~hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`
             The correction configuration for halo orbits.
         """
         from hiten.algorithms.corrector.interfaces import \
@@ -171,7 +171,7 @@ class HaloOrbit(PeriodicOrbit):
         
         Returns
         -------
-        :class:`hiten.algorithms.continuation.interfaces._OrbitContinuationConfig`
+        :class:`~hiten.algorithms.continuation.interfaces._OrbitContinuationConfig`
             The continuation configuration for halo orbits.
         """
         from hiten.algorithms.continuation.interfaces import \
@@ -422,7 +422,7 @@ class HaloOrbit(PeriodicOrbit):
         -------
         numpy.ndarray, shape (2, 2)
             Reduced Jacobian matrix employed by the
-            :meth:`hiten.system.orbits.base.PeriodicOrbit.correct`
+            :meth:`~hiten.system.orbits.base.PeriodicOrbit.correct`
             solver.
         """
         x, y, z, vx, vy, vz = X_ev

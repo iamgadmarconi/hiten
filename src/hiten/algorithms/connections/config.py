@@ -9,9 +9,9 @@ All distance and velocity tolerances are in nondimensional CR3BP rotating-frame 
 
 See Also
 --------
-:mod:`hiten.algorithms.connections.base`
+:mod:`~hiten.algorithms.connections.base`
     Main Connection class that uses these configuration objects.
-:mod:`hiten.algorithms.connections.engine`
+:mod:`~hiten.algorithms.connections.engine`
     Connection engine that applies these parameters during computation.
 """
 
@@ -75,9 +75,9 @@ class _SearchConfig:
 
     See Also
     --------
-    :class:`hiten.algorithms.connections.config.ConnectionConfig`
+    :class:`~hiten.algorithms.connections.config.ConnectionConfig`
         Extended configuration including computational parameters.
-    :class:`hiten.algorithms.connections.base.Connection`
+    :class:`~hiten.algorithms.connections.base.Connection`
         Main class that uses this configuration.
     """
 
@@ -91,7 +91,7 @@ class _SearchConfig:
 class ConnectionConfig(_SearchConfig):
     """Define an extended configuration including computational parameters.
 
-    This class extends :class:`hiten.algorithms.connections.config._SearchConfig` with additional parameters
+    This class extends :class:`~hiten.algorithms.connections.config._SearchConfig` with additional parameters
     for controlling the computational aspects of connection discovery,
     such as parallel processing.
 
@@ -103,7 +103,7 @@ class ConnectionConfig(_SearchConfig):
         parallel processing of manifold intersections and connection searches.
         
     **kwargs
-        All parameters from :class:`hiten.algorithms.connections.config._SearchConfig` are also available:
+        All parameters from :class:`~hiten.algorithms.connections.config._SearchConfig` are also available:
         delta_v_tol, ballistic_tol, eps2d.
 
     Notes
@@ -131,9 +131,9 @@ class ConnectionConfig(_SearchConfig):
 
     See Also
     --------
-    :class:`hiten.algorithms.connections.config._SearchConfig`
+    :class:`~hiten.algorithms.connections.config._SearchConfig`
         Base class with search and tolerance parameters.
-    :class:`hiten.algorithms.connections.base.Connection`
+    :class:`~hiten.algorithms.connections.base.Connection`
         Main class that uses this configuration.
     """
     n_workers: int = 1

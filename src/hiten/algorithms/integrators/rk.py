@@ -59,7 +59,7 @@ class _RungeKuttaBase(_Integrator):
     """Provide shared functionality of explicit Runge-Kutta schemes.
 
     The class stores a Butcher tableau and provides a single low level helper
-    :func:`hiten.algorithms.integrators.rk._RungeKuttaBase._rk_embedded_step` that advances one macro time step and, when a
+    :func:`~hiten.algorithms.integrators.rk._RungeKuttaBase._rk_embedded_step` that advances one macro time step and, when a
     second set of weights is available, returns an error estimate suitable
     for adaptive step-size control.
 
@@ -71,7 +71,7 @@ class _RungeKuttaBase(_Integrator):
         Weights of the high order solution.
     _B_LOW : numpy.ndarray or None
         Weights of the lower order solution, optional.  When *None* no error
-        estimate is produced and :func:`hiten.algorithms.integrators.rk._rk_embedded_step` falls back to
+        estimate is produced and :func:`~hiten.algorithms.integrators.rk._rk_embedded_step` falls back to
         the high order result for both outputs.
     _C : numpy.ndarray of shape (s,)
         Nodes c_i measured in units of the step size.
@@ -82,7 +82,7 @@ class _RungeKuttaBase(_Integrator):
     -----
     The class is **not** intended to be used directly.  Concrete subclasses
     define the specific coefficients and expose a public interface compliant
-    with :class:`hiten.algorithms.integrators.base._Integrator`.
+    with :class:`~hiten.algorithms.integrators.base._Integrator`.
     """
 
     _A: np.ndarray = None
@@ -147,16 +147,16 @@ class _FixedStepRK(_RungeKuttaBase):
     name : str
         Human readable identifier of the scheme (e.g. ``"_RK4"``).
     A, B, C : numpy.ndarray
-        Butcher tableau as returned by :mod:`hiten.algorithms.integrators.coefficients.*`.
+        Butcher tableau as returned by :mod:`~hiten.algorithms.integrators.coefficients.*`.
     order : int
         Formal order of accuracy p of the method.
     **options
-        Additional keyword options forwarded to the base :class:`hiten.algorithms.integrators.base._Integrator`.
+        Additional keyword options forwarded to the base :class:`~hiten.algorithms.integrators.base._Integrator`.
 
     Notes
     -----
     The step size is assumed to be **constant** and is inferred from the
-    spacing of the *t_vals* array supplied to :func:`hiten.algorithms.integrators.rk._FixedStepRK.integrate`.
+    spacing of the *t_vals* array supplied to :func:`~hiten.algorithms.integrators.rk._FixedStepRK.integrate`.
     """
 
     def __init__(self, name: str, A: np.ndarray, B: np.ndarray, C: np.ndarray, order: int, **options):
@@ -175,7 +175,7 @@ class _FixedStepRK(_RungeKuttaBase):
         order : int
             Formal order of accuracy of the method.
         **options
-            Additional keyword options forwarded to the base :class:`hiten.algorithms.integrators.base._Integrator`.
+            Additional keyword options forwarded to the base :class:`~hiten.algorithms.integrators.base._Integrator`.
         """
         self._A = A
         self._B_HIGH = B
@@ -209,7 +209,7 @@ class _FixedStepRK(_RungeKuttaBase):
         
         Parameters
         ----------
-        system : :class:`hiten.algorithms.dynamics.base._DynamicalSystem`
+        system : :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
             The dynamical system to integrate.
         y0 : numpy.ndarray
             Initial state vector.
@@ -220,7 +220,7 @@ class _FixedStepRK(_RungeKuttaBase):
             
         Returns
         -------
-        :class:`hiten.algorithms.integrators.base._Solution`
+        :class:`~hiten.algorithms.integrators.base._Solution`
             Integration results containing times, states, and derivatives.
         """
         self.validate_inputs(system, y0, t_vals)
@@ -290,15 +290,15 @@ class _AdaptiveStepRK(_RungeKuttaBase):
     """Implement an embedded adaptive Runge-Kutta integrator with PI controller.
 
     The class implements proportional-integral (PI) step-size control using
-    the error estimates returned by :func:`hiten.algorithms.integrators.rk._RungeKuttaBase._rk_embedded_step`. 
+    the error estimates returned by :func:`~hiten.algorithms.integrators.rk._RungeKuttaBase._rk_embedded_step`. 
 
     Parameters
     ----------
     name : str, default "AdaptiveRK"
-        Identifier passed to the :class:`hiten.algorithms.integrators.base._Integrator` base class.
+        Identifier passed to the :class:`~hiten.algorithms.integrators.base._Integrator` base class.
     rtol, atol : float, optional
         Relative and absolute error tolerances.  Defaults are read from
-        :data:`hiten.utils.config.TOL`.
+        :data:`~hiten.utils.config.TOL`.
     max_step : float, optional
         Upper bound on the step size.  infinity by default.
     min_step : float or None, optional
@@ -334,17 +334,17 @@ class _AdaptiveStepRK(_RungeKuttaBase):
         Parameters
         ----------
         name : str, default "AdaptiveRK"
-            Identifier passed to the :class:`hiten.algorithms.integrators.base._Integrator` base class.
+            Identifier passed to the :class:`~hiten.algorithms.integrators.base._Integrator` base class.
         rtol, atol : float, optional
             Relative and absolute error tolerances.  Defaults are read from
-            :data:`hiten.utils.config.TOL`.
+            :data:`~hiten.utils.config.TOL`.
         max_step : float, optional
             Upper bound on the step size.  infinity by default.
         min_step : float or None, optional
             Lower bound on the step size.  When *None* the value is derived from
             machine precision.
         **options
-            Additional keyword options forwarded to the base :class:`hiten.algorithms.integrators.base._Integrator`.
+            Additional keyword options forwarded to the base :class:`~hiten.algorithms.integrators.base._Integrator`.
         """
         super().__init__(name, **options)
         self._rtol = rtol
@@ -533,8 +533,8 @@ class _AdaptiveStepRK(_RungeKuttaBase):
         Returns
         -------
         float
-            Step size update factor, clipped to :attr:`hiten.algorithms.integrators.rk.AdaptiveRK.MIN_FACTOR` 
-            and :attr:`hiten.algorithms.integrators.rk.AdaptiveRK.MAX_FACTOR`.
+            Step size update factor, clipped to :attr:`~hiten.algorithms.integrators.rk.AdaptiveRK.MIN_FACTOR` 
+            and :attr:`~hiten.algorithms.integrators.rk.AdaptiveRK.MAX_FACTOR`.
         """
         return np.clip(self.SAFETY * err_norm ** (-self._err_exp), self.MIN_FACTOR, self.MAX_FACTOR)
 
@@ -645,7 +645,7 @@ class _DOP853(_AdaptiveStepRK):
             Lower-order solution at t + h (for error estimation).
         err_vec : numpy.ndarray
             Error estimate vector computed using 
-            :func:`hiten.algorithms.integrators.rk.AdaptiveRK._estimate_error`.
+            :func:`~hiten.algorithms.integrators.rk.AdaptiveRK._estimate_error`.
         """
         s = self._N_STAGES
         k = np.empty((s + 1, y.size), dtype=np.float64)
@@ -748,7 +748,7 @@ class RungeKutta:
             
         Returns
         -------
-        :class:`hiten.algorithms.integrators.rk._FixedStepRK`
+        :class:`~hiten.algorithms.integrators.rk._FixedStepRK`
             A fixed-step Runge-Kutta integrator instance.
             
         Raises
@@ -784,7 +784,7 @@ class AdaptiveRK:
             
         Returns
         -------
-        :class:`hiten.algorithms.integrators.rk._AdaptiveStepRK`
+        :class:`~hiten.algorithms.integrators.rk._AdaptiveStepRK`
             An adaptive step-size Runge-Kutta integrator instance.
             
         Raises
@@ -798,7 +798,7 @@ class AdaptiveRK:
 
 
 def _build_rhs_wrapper(system: _DynamicalSystem) -> Callable[[float, np.ndarray], np.ndarray]:
-    """Return a JIT friendly wrapper around :func:`hiten.system.rhs`.
+    """Return a JIT friendly wrapper around :func:`~hiten.system.rhs`.
 
     The dynamical systems implemented in the code base expose their vector
     field either as ``rhs(t, y)`` or, for autonomous systems, as ``rhs(y)``.
@@ -809,7 +809,7 @@ def _build_rhs_wrapper(system: _DynamicalSystem) -> Callable[[float, np.ndarray]
 
     Parameters
     ----------
-    system : :class:`hiten.algorithms.dynamics.base._DynamicalSystem`
+    system : :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
         Instance providing the original vector field.
 
     Returns

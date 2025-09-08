@@ -93,9 +93,9 @@ tol: float = 1e-30) -> tuple[List[np.ndarray], List[np.ndarray], List[np.ndarray
     
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.center._lie._select_terms_for_elimination` : Identifies non-resonant terms
-    :func:`hiten.algorithms.hamiltonian.lie._solve_homological_equation` : Solves for generators
-    :func:`hiten.algorithms.hamiltonian.lie._apply_poly_transform` : Applies Lie transform
+    :func:`~hiten.algorithms.hamiltonian.center._lie._select_terms_for_elimination` : Identifies non-resonant terms
+    :func:`~hiten.algorithms.hamiltonian.lie._solve_homological_equation` : Solves for generators
+    :func:`~hiten.algorithms.hamiltonian.lie._apply_poly_transform` : Applies Lie transform
     """
     lam, om1, om2 = point.linear_modes
     eta = np.array([lam, 1j*om1, 1j*om2], dtype=np.complex128)
@@ -183,7 +183,7 @@ psi: np.ndarray) -> np.ndarray:
     
     See Also
     --------
-    :func:`hiten.algorithms.polynomial.base._make_poly` : Creates zero polynomial arrays
+    :func:`~hiten.algorithms.polynomial.base._make_poly` : Creates zero polynomial arrays
     """
     if n < len(poly_H):
         result = poly_H[n].copy()
@@ -235,8 +235,8 @@ clmo: np.ndarray) -> np.ndarray:
     
     See Also
     --------
-    :func:`hiten.algorithms.polynomial.base._decode_multiindex` : Multi-index decoding
-    :func:`hiten.algorithms.hamiltonian.center._lie._lie_transform` : Uses this function for term selection
+    :func:`~hiten.algorithms.polynomial.base._decode_multiindex` : Multi-index decoding
+    :func:`~hiten.algorithms.hamiltonian.center._lie._lie_transform` : Uses this function for term selection
     """
     p_elim = p_n.copy()           # independent buffer
     for i in range(p_n.shape[0]):
@@ -309,9 +309,9 @@ restrict: bool = True) -> List[List[np.ndarray]]:
     
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.center._lie._apply_coord_transform` : Applies transformation to single coordinate
-    :func:`hiten.algorithms.hamiltonian.center._lie._zero_q1p1` : Restricts expansions to center manifold
-    :func:`hiten.algorithms.hamiltonian.center._lie._evaluate_transform` : Evaluates expansions at specific points
+    :func:`~hiten.algorithms.hamiltonian.center._lie._apply_coord_transform` : Applies transformation to single coordinate
+    :func:`~hiten.algorithms.hamiltonian.center._lie._zero_q1p1` : Restricts expansions to center manifold
+    :func:`~hiten.algorithms.hamiltonian.center._lie._evaluate_transform` : Evaluates expansions at specific points
     """
     # Create encode_dict_list from clmo
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
@@ -429,8 +429,8 @@ tol: float) -> List[np.ndarray]:
     
     See Also
     --------
-    :func:`hiten.algorithms.polynomial.operations._polynomial_poisson_bracket` : Poisson bracket computation
-    :func:`hiten.algorithms.polynomial.base._factorial` : Factorial computation
+    :func:`~hiten.algorithms.polynomial.operations._polynomial_poisson_bracket` : Poisson bracket computation
+    :func:`~hiten.algorithms.polynomial.base._factorial` : Factorial computation
     """
 
     poly_result = List()
@@ -523,8 +523,8 @@ clmo: np.ndarray) -> np.ndarray:
     
     See Also
     --------
-    :func:`hiten.algorithms.polynomial.operations._polynomial_evaluate` : Core polynomial evaluation
-    :func:`hiten.algorithms.hamiltonian.center._lie._lie_expansion` : Generates the expansions used here
+    :func:`~hiten.algorithms.polynomial.operations._polynomial_evaluate` : Core polynomial evaluation
+    :func:`~hiten.algorithms.hamiltonian.center._lie._lie_expansion` : Generates the expansions used here
     """
 
     result = np.zeros(6, dtype=np.complex128) # [q1, q2, q3, p1, p2, p3]
@@ -583,8 +583,8 @@ def _zero_q1p1(
     
     See Also
     --------
-    :func:`hiten.algorithms.polynomial.base._decode_multiindex` : Multi-index decoding
-    :func:`hiten.algorithms.hamiltonian.center._lie._lie_expansion` : Often used with restrict=True to call this function
+    :func:`~hiten.algorithms.polynomial.base._decode_multiindex` : Multi-index decoding
+    :func:`~hiten.algorithms.hamiltonian.center._lie._lie_expansion` : Often used with restrict=True to call this function
     """
     restricted_expansions = List()
     

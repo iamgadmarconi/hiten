@@ -34,7 +34,7 @@ def poly2sympy(poly_p: List[np.ndarray], vars_list: typing.List[sp.Symbol], psi:
     vars_list : typing.List[sympy.Symbol]
         List of SymPy symbols used as variables in the expression
     psi : numpy.ndarray
-        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
+        Combinatorial table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`
     clmo : numpy.ndarray
         List of arrays containing packed multi-indices
         
@@ -51,7 +51,7 @@ def poly2sympy(poly_p: List[np.ndarray], vars_list: typing.List[sp.Symbol], psi:
     Notes
     -----
     This function converts each homogeneous part of the polynomial separately 
-    with :func:`hiten.algorithms.polynomial.conversion.hpoly2sympy`, then combines them into a single SymPy expression.
+    with :func:`~hiten.algorithms.polynomial.conversion.hpoly2sympy`, then combines them into a single SymPy expression.
     """
     if len(vars_list) != N_VARS:
         raise ValueError(f"Expected {N_VARS} symbols in vars_list, but got {len(vars_list)}.")
@@ -76,7 +76,7 @@ def sympy2poly(expr: sp.Expr, vars_list: typing.List[sp.Symbol], psi: np.ndarray
     vars_list : typing.List[sympy.Symbol]
         List of SymPy symbols used as variables in the expression
     psi : numpy.ndarray
-        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
+        Combinatorial table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`
     clmo : numpy.ndarray
         List of arrays containing packed multi-indices
     encode_dict_list : List
@@ -215,7 +215,7 @@ def hpoly2sympy(p: np.ndarray, vars_list: typing.List[sp.Symbol], psi: np.ndarra
     vars_list : typing.List[sympy.Symbol]
         List of SymPy symbols used as variables in the expression
     psi : numpy.ndarray
-        Combinatorial table from :func:`hiten.algorithms.polynomial.base._init_index_tables`
+        Combinatorial table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`
     clmo : numpy.ndarray
         List of arrays containing packed multi-indices
         
@@ -233,7 +233,7 @@ def hpoly2sympy(p: np.ndarray, vars_list: typing.List[sp.Symbol], psi: np.ndarra
     Notes
     -----
     This function converts each term of the homogeneous polynomial by decoding
-    the multi-index with :func:`hiten.algorithms.polynomial.base._decode_multiindex` to determine the
+    the multi-index with :func:`~hiten.algorithms.polynomial.base._decode_multiindex` to determine the
     exponents, constructing the corresponding monomial, and multiplying it by
     the coefficient.
     """

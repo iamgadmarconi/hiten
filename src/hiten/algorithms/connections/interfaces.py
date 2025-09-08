@@ -13,11 +13,11 @@ All coordinates are in nondimensional CR3BP rotating-frame units.
 
 See Also
 --------
-:mod:`hiten.system.manifold`
+:mod:`~hiten.system.manifold`
     Manifold classes that these interfaces wrap.
-:mod:`hiten.algorithms.poincare.synodic.base`
+:mod:`~hiten.algorithms.poincare.synodic.base`
     Synodic map functionality used for section intersections.
-:mod:`hiten.algorithms.connections.engine`
+:mod:`~hiten.algorithms.connections.engine`
     Connection engine that uses these interfaces.
 """
 
@@ -41,12 +41,12 @@ class _ManifoldInterface:
 
     Parameters
     ----------
-    manifold : :class:`hiten.system.manifold.Manifold`
+    manifold : :class:`~hiten.system.manifold.Manifold`
         The manifold object containing computed trajectory data.
 
     Attributes
     ----------
-    manifold : :class:`hiten.system.manifold.Manifold`
+    manifold : :class:`~hiten.system.manifold.Manifold`
         The wrapped manifold object.
 
     Notes
@@ -76,11 +76,11 @@ class _ManifoldInterface:
 
     See Also
     --------
-    :class:`hiten.system.manifold.Manifold`
+    :class:`~hiten.system.manifold.Manifold`
         Manifold class that this interface wraps.
-    :class:`hiten.algorithms.poincare.synodic.base.SynodicMap`
+    :class:`~hiten.algorithms.poincare.synodic.base.SynodicMap`
         Synodic map used for computing section intersections.
-    :class:`hiten.algorithms.connections.engine._ConnectionProblem`
+    :class:`~hiten.algorithms.connections.engine._ConnectionProblem`
         Problem specification that uses these interfaces.
     """
     manifold: Manifold
@@ -99,7 +99,7 @@ class _ManifoldInterface:
 
         Parameters
         ----------
-        config : :class:`hiten.algorithms.poincare.synodic.config._SynodicMapConfig`, optional
+        config : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`, optional
             Configuration for the synodic section geometry and detection settings.
             Includes section axis, offset, coordinate system, interpolation method,
             and numerical tolerances. If not provided, default settings are used.
@@ -110,7 +110,7 @@ class _ManifoldInterface:
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.core.base._Section`
+        :class:`~hiten.algorithms.poincare.core.base._Section`
             Section object containing intersection data with attributes:
             
             - points : 2D coordinates on the section plane
@@ -126,7 +126,7 @@ class _ManifoldInterface:
 
         Notes
         -----
-        This method delegates to :class:`hiten.algorithms.poincare.synodic.base.SynodicMap`
+        This method delegates to :class:`~hiten.algorithms.poincare.synodic.base.SynodicMap`
         for the actual intersection computation. The synodic map handles:
         
         - Trajectory interpolation and root finding
@@ -155,11 +155,11 @@ class _ManifoldInterface:
 
         See Also
         --------
-        :class:`hiten.algorithms.poincare.synodic.base.SynodicMap`
+        :class:`~hiten.algorithms.poincare.synodic.base.SynodicMap`
             Underlying synodic map implementation.
-        :class:`hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+        :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
             Configuration class for section parameters.
-        :meth:`hiten.system.manifold.Manifold.compute`
+        :meth:`~hiten.system.manifold.Manifold.compute`
             Method to compute manifold data before section extraction.
         """
 

@@ -26,7 +26,7 @@ specific dynamical system being studied.
 Examples
 -------------
 The strategies are typically used through higher-level interfaces in the
-:mod:`hiten.algorithms.continuation` package, but can be combined directly
+:mod:`~hiten.algorithms.continuation` package, but can be combined directly
 for custom continuation scenarios:
 
 >>> from hiten.algorithms.continuation.strategies._algorithms import _NaturalParameter
@@ -41,11 +41,11 @@ for custom continuation scenarios:
 
 See Also
 --------
-:mod:`hiten.algorithms.continuation.base`
+:mod:`~hiten.algorithms.continuation.base`
     Base continuation engine that coordinates with strategies.
-:mod:`hiten.algorithms.continuation.interfaces`
+:mod:`~hiten.algorithms.continuation.interfaces`
     Domain-specific interfaces for different problem types.
-:mod:`hiten.algorithms.continuation.predictors`
+:mod:`~hiten.algorithms.continuation.predictors`
     High-level predictor classes for common continuation tasks.
 """
 

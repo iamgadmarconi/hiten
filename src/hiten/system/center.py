@@ -59,18 +59,18 @@ class CenterManifold:
 
     Parameters
     ----------
-    point : :class:`hiten.system.libration.base.LibrationPoint`
+    point : :class:`~hiten.system.libration.base.LibrationPoint`
         Libration point about which the center manifold is computed.
     degree : int
         Maximum total degree N of the polynomial truncation.
 
     Attributes
     ----------
-    point : :class:`hiten.system.libration.base.LibrationPoint`
+    point : :class:`~hiten.system.libration.base.LibrationPoint`
         The libration point about which the center manifold is computed.
     degree : int
         The maximum total degree of the polynomial truncation.
-    pipeline : :class:`hiten.system.hamiltonians.pipeline.HamiltonianPipeline`
+    pipeline : :class:`~hiten.system.hamiltonians.pipeline.HamiltonianPipeline`
         Internal pipeline for managing Hamiltonian computations and caching.
 
     Notes
@@ -85,7 +85,7 @@ class CenterManifold:
         
         Parameters
         ----------
-        point : :class:`hiten.system.libration.base.LibrationPoint`
+        point : :class:`~hiten.system.libration.base.LibrationPoint`
             The libration point about which the center manifold is computed.
         degree : int
             Maximum total degree of the polynomial truncation.
@@ -126,7 +126,7 @@ class CenterManifold:
         
         Returns
         -------
-        :class:`hiten.system.libration.base.LibrationPoint`
+        :class:`~hiten.system.libration.base.LibrationPoint`
             The libration point about which the center manifold is computed.
         """
         return self._point
@@ -178,7 +178,7 @@ class CenterManifold:
         
         Returns
         -------
-        :class:`hiten.system.hamiltonians.pipeline.HamiltonianPipeline`
+        :class:`~hiten.system.hamiltonians.pipeline.HamiltonianPipeline`
             The internal Hamiltonian pipeline.
         """
         return self._pipeline
@@ -189,7 +189,7 @@ class CenterManifold:
         Returns
         -------
         str
-            String representation of the :class:`hiten.system.center.CenterManifold`.
+            String representation of the :class:`~hiten.system.center.CenterManifold`.
         """
         return f"CenterManifold(point={self._point}, degree={self._max_degree})" 
     
@@ -199,7 +199,7 @@ class CenterManifold:
         Returns
         -------
         str
-            Detailed string representation of the :class:`hiten.system.center.CenterManifold`.
+            Detailed string representation of the :class:`~hiten.system.center.CenterManifold`.
         """
         return f"CenterManifold(point={self._point}, degree={self._max_degree})"
     
@@ -245,7 +245,7 @@ class CenterManifold:
         """
         Compute and return a specific polynomial representation of the Hamiltonian.
 
-        This method delegates to the internal :class:`hiten.system.hamiltonians.pipeline.HamiltonianPipeline`
+        This method delegates to the internal :class:`~hiten.system.hamiltonians.pipeline.HamiltonianPipeline`
         for all Hamiltonian computations and caching.
 
         Parameters
@@ -338,7 +338,7 @@ class CenterManifold:
             
         Returns
         -------
-        :class:`hiten.algorithms.poincare.centermanifold.backend._CenterManifoldBackend`
+        :class:`~hiten.algorithms.poincare.centermanifold.backend._CenterManifoldBackend`
             The backend instance.
         """
         cache_key = (energy, section_coord)
@@ -362,7 +362,7 @@ class CenterManifold:
         supplied coordinates are taken to lie on the centre manifold already.
 
         The transformation follows exactly the second half of the original
-        :meth:`hiten.system.center.CenterManifold.ic` pipeline:
+        :meth:`~hiten.system.center.CenterManifold.ic` pipeline:
 
             CM (real) -> CM (complex) -> Lie transform -> real modal -> local -> synodic
             
@@ -533,7 +533,7 @@ class CenterManifold:
     def cm(self, synodic_6d: np.ndarray, tol=1e-14) -> np.ndarray:
         """Return 4-D centre-manifold coordinates (q2, p2, q3, p3) from 6-D synodic ICs.
 
-        This is the exact inverse of :meth:`hiten.system.center.CenterManifold.ic` and therefore performs the
+        This is the exact inverse of :meth:`~hiten.system.center.CenterManifold.ic` and therefore performs the
         following steps in reverse order:
 
             synodic -> local -> real modal -> complex modal -> Lie-inverse -> CM.
@@ -582,7 +582,7 @@ class CenterManifold:
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.centermanifold.base.CenterManifoldMap`
+        :class:`~hiten.algorithms.poincare.centermanifold.base.CenterManifoldMap`
             A Poincare map object for the given energy and configuration.
 
         Notes
@@ -618,7 +618,7 @@ class CenterManifold:
 
     def save(self, dir_path: str, **kwargs):
         """
-        Save the :class:`hiten.system.center.CenterManifold` instance to a directory.
+        Save the :class:`~hiten.system.center.CenterManifold` instance to a directory.
 
         This method serializes the main object to 'manifold.pkl' and saves
         each associated Poincare map to a separate file within a 'poincare_maps'
@@ -636,7 +636,7 @@ class CenterManifold:
     @classmethod
     def load(cls, dir_path: str, **kwargs) -> "CenterManifold":
         """
-        Load a :class:`hiten.system.center.CenterManifold` instance from a directory.
+        Load a :class:`~hiten.system.center.CenterManifold` instance from a directory.
 
         This class method deserializes a CenterManifold object and its
         associated Poincare maps that were saved with the save method.
@@ -650,7 +650,7 @@ class CenterManifold:
 
         Returns
         -------
-        :class:`hiten.system.center.CenterManifold`
+        :class:`~hiten.system.center.CenterManifold`
             The loaded CenterManifold instance with its Poincare maps.
         """
         return load_center_manifold(dir_path, **kwargs)

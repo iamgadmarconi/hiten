@@ -1,6 +1,6 @@
 """Provide robust iterative correction algorithms for solving nonlinear systems.
 
-The :mod:`hiten.algorithms.corrector` package provides robust iterative correction
+The :mod:`~hiten.algorithms.corrector` package provides robust iterative correction
 algorithms for solving nonlinear systems arising in dynamical systems analysis.
 These algorithms are essential for refining approximate solutions to high
 precision, particularly for periodic orbits, invariant manifolds, and other
@@ -33,9 +33,9 @@ astrodynamics and mission design.
 
 See Also
 --------
-:mod:`hiten.system.orbits`
+:mod:`~hiten.system.orbits`
     Orbit classes that can be corrected using these algorithms.
-:mod:`hiten.algorithms.continuation`
+:mod:`~hiten.algorithms.continuation`
     Continuation algorithms that use correction for family generation.
 """
 

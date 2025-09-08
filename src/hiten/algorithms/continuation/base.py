@@ -7,11 +7,11 @@ different types of problems (periodic orbits, equilibria, manifolds, etc.).
 
 See Also
 --------
-:mod:`hiten.algorithms.continuation.strategies`
+:mod:`~hiten.algorithms.continuation.strategies`
     Stepping strategies for different continuation methods.
-:mod:`hiten.algorithms.corrector`
+:mod:`~hiten.algorithms.corrector`
     Corrector algorithms for solution refinement.
-:mod:`hiten.system`
+:mod:`~hiten.system`
     Dynamical system definitions that use continuation.
 """
 
@@ -77,11 +77,11 @@ class _ContinuationEngine(ABC):
     6. **Termination**: Check stopping condition and iteration limit
     
     Subclasses must implement:
-    - :meth:`hiten.algorithms.continuation.base._ContinuationEngine._make_stepper`: Create stepping strategy
-    - :meth:`hiten.algorithms.continuation.base._ContinuationEngine._stop_condition`: Define termination criteria
-    - :meth:`hiten.algorithms.continuation.base._ContinuationEngine._instantiate`: Convert predictions to domain objects
-    - :meth:`hiten.algorithms.continuation.base._ContinuationEngine._correct`: Problem-specific correction
-    - :meth:`hiten.algorithms.continuation.base._ContinuationEngine._parameter`: Extract parameters from solutions
+    - :meth:`~hiten.algorithms.continuation.base._ContinuationEngine._make_stepper`: Create stepping strategy
+    - :meth:`~hiten.algorithms.continuation.base._ContinuationEngine._stop_condition`: Define termination criteria
+    - :meth:`~hiten.algorithms.continuation.base._ContinuationEngine._instantiate`: Convert predictions to domain objects
+    - :meth:`~hiten.algorithms.continuation.base._ContinuationEngine._correct`: Problem-specific correction
+    - :meth:`~hiten.algorithms.continuation.base._ContinuationEngine._parameter`: Extract parameters from solutions
 
     Examples
     --------
@@ -105,9 +105,9 @@ class _ContinuationEngine(ABC):
 
     See Also
     --------
-    :class:`hiten.algorithms.continuation.strategies._step_interface._ContinuationStep`
+    :class:`~hiten.algorithms.continuation.strategies._step_interface._ContinuationStep`
         Base class for stepping strategies.
-    :mod:`hiten.algorithms.corrector`
+    :mod:`~hiten.algorithms.corrector`
         Corrector algorithms for solution refinement.
     """
 
@@ -183,7 +183,7 @@ class _ContinuationEngine(ABC):
         Notes
         -----
         This property provides immutable access to the solution family.
-        Solutions are added during the :meth:`hiten.algorithms.continuation.base._ContinuationEngine.run`
+        Solutions are added during the :meth:`~hiten.algorithms.continuation.base._ContinuationEngine.run`
         method as continuation progresses and corrections succeed.
         """
         return tuple(self._family)
@@ -202,7 +202,7 @@ class _ContinuationEngine(ABC):
         -----
         Parameter values are extracted using the parameter_getter function
         provided during initialization. The values correspond one-to-one
-        with solutions in the :attr:`hiten.algorithms.continuation.base._ContinuationEngine.family` 
+        with solutions in the :attr:`~hiten.algorithms.continuation.base._ContinuationEngine.family` 
         property.
         """
         return tuple(self._param_history)
@@ -341,7 +341,7 @@ class _ContinuationEngine(ABC):
         ----------
         obj : object
             Domain object to be corrected (from 
-            :meth:`hiten.algorithms.continuation.base._ContinuationEngine._instantiate`).
+            :meth:`~hiten.algorithms.continuation.base._ContinuationEngine._instantiate`).
         **kwargs
             Additional correction parameters passed from corrector_kwargs.
 
@@ -566,7 +566,7 @@ class _ContinuationEngine(ABC):
 
         Returns
         -------
-        :class:`hiten.algorithms.continuation.strategies._step_interface._ContinuationStep`
+        :class:`~hiten.algorithms.continuation.strategies._step_interface._ContinuationStep`
             Stepping strategy instance for solution prediction.
 
         Notes

@@ -5,7 +5,7 @@ surface in the synodic CRTBP frame. It generalizes axis-aligned planes
 by allowing arbitrary normals in the 6D state space, providing
 flexibility for defining complex section geometries.
 
-The main class :class:`hiten.algorithms.poincare.synodic.events._AffinePlaneEvent` 
+The main class :class:`~hiten.algorithms.poincare.synodic.events._AffinePlaneEvent` 
 extends the base surface event to provide specialized functionality for synodic 
 Poincare sections, including support for arbitrary hyperplane orientations 
 and convenient axis-aligned plane construction.
@@ -180,7 +180,7 @@ class _AffinePlaneEvent(_SurfaceEvent):
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.synodic.events._AffinePlaneEvent`
+        :class:`~hiten.algorithms.poincare.synodic.events._AffinePlaneEvent`
             An affine plane event with axis-aligned normal.
 
         Raises

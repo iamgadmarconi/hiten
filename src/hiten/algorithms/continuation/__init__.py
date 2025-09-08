@@ -57,11 +57,11 @@ For advanced users, the framework supports custom continuation algorithms:
 
 See Also
 --------
-:mod:`hiten.system.orbits`
+:mod:`~hiten.system.orbits`
     Orbit classes that can be continued using this framework.
-:mod:`hiten.system.manifold`
+:mod:`~hiten.system.manifold`
     Manifold classes for continuation of invariant manifolds.
-:mod:`hiten.algorithms.corrector`
+:mod:`~hiten.algorithms.corrector`
     Correction algorithms used in the predict-correct framework.
 
 Notes

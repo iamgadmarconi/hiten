@@ -70,11 +70,11 @@ class _SeedingProtocol(Protocol):
 
         Parameters
         ----------
-        dynsys : :class:`hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+        dynsys : :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
             The dynamical system that will be used for propagation.
             The seeding strategy may use system properties to inform
             the distribution of initial conditions.
-        surface : :class:`hiten.algorithms.poincare.core.events._SurfaceEvent`
+        surface : :class:`~hiten.algorithms.poincare.core.events._SurfaceEvent`
             Target Poincare section. The generator may use the section
             definition to align seeds conveniently with the crossing plane
             or to ensure good coverage of the section.

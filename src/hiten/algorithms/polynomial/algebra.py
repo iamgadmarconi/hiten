@@ -8,7 +8,7 @@ performance using Numba JIT compilation.
 
 All routines operate on one-dimensional coefficient arrays that follow
 the compressed monomial ordering provided by
-:func:`hiten.algorithms.polynomial.base._init_index_tables`. Kernels are
+:func:`~hiten.algorithms.polynomial.base._init_index_tables`. Kernels are
 compiled in nopython mode with numba.njit; computationally
 intensive operations additionally exploit numba.prange for
 parallelism.
@@ -16,7 +16,7 @@ parallelism.
 Notes
 -----
 These helpers are primarily intended for internal use by higher-level
-abstractions in :mod:`hiten.algorithms.polynomial`. Inputs are assumed to
+abstractions in :mod:`~hiten.algorithms.polynomial`. Inputs are assumed to
 be well-formed; minimal validation is performed at runtime to maximise
 performance.
 """

@@ -14,11 +14,11 @@ dynamical system being studied.
 
 See Also
 --------
-:mod:`hiten.algorithms.continuation.base`
+:mod:`~hiten.algorithms.continuation.base`
     Base continuation engine that uses these stepping strategies.
-:mod:`hiten.algorithms.continuation.strategies._algorithms`
+:mod:`~hiten.algorithms.continuation.strategies._algorithms`
     Algorithm classes that create and use stepping strategies.
-:mod:`hiten.algorithms.continuation.strategies._stepping`
+:mod:`~hiten.algorithms.continuation.strategies._stepping`
     Concrete stepping strategy implementations.
 """
 
@@ -72,11 +72,11 @@ class _ContinuationStep(Protocol):
 
     See Also
     --------
-    :class:`hiten.algorithms.continuation.strategies._step_interface._PlainStep`
+    :class:`~hiten.algorithms.continuation.strategies._step_interface._PlainStep`
         Simple implementation of this protocol.
-    :class:`hiten.algorithms.continuation.strategies._stepping._NaturalParameterStep`
+    :class:`~hiten.algorithms.continuation.strategies._stepping._NaturalParameterStep`
         Natural parameter stepping implementation.
-    :class:`hiten.algorithms.continuation.strategies._stepping._SecantStep`
+    :class:`~hiten.algorithms.continuation.strategies._stepping._SecantStep`
         Secant-based stepping implementation.
     """
 
@@ -122,7 +122,7 @@ class _PlainStep:
     """Implement a simple stepping strategy using a provided predictor function.
 
     This class implements the 
-    :class:`hiten.algorithms.continuation.strategies._step_interface._ContinuationStep` 
+    :class:`~hiten.algorithms.continuation.strategies._step_interface._ContinuationStep` 
     protocol using a simple predictor function without step size adaptation. It serves
     as a basic building block for continuation algorithms that don't
     require sophisticated prediction or adaptive stepping.
@@ -161,9 +161,9 @@ class _PlainStep:
 
     See Also
     --------
-    :class:`hiten.algorithms.continuation.strategies._step_interface._ContinuationStep`
+    :class:`~hiten.algorithms.continuation.strategies._step_interface._ContinuationStep`
         Protocol that this class implements.
-    :class:`hiten.algorithms.continuation.strategies._stepping._NaturalParameterStep`
+    :class:`~hiten.algorithms.continuation.strategies._stepping._NaturalParameterStep`
         More sophisticated natural parameter stepping.
     """
 

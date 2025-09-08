@@ -4,7 +4,7 @@ This module provides the abstract base class for implementing Poincare
 return map engines in the hiten framework. Engines coordinate backends
 and seeding strategies to compute complete return maps.
 
-The main class :class:`hiten.algorithms.poincare.core.engine._ReturnMapEngine` 
+The main class :class:`~hiten.algorithms.poincare.core.engine._ReturnMapEngine` 
 defines the interface that all concrete engines must implement, including 
 the core `compute_section` method and common functionality for caching and 
 configuration.
@@ -34,23 +34,23 @@ class _ReturnMapEngine(ABC):
 
     Parameters
     ----------
-    backend : :class:`hiten.algorithms.poincare.core.backend._ReturnMapBackend`
+    backend : :class:`~hiten.algorithms.poincare.core.backend._ReturnMapBackend`
         The backend for numerical integration and section crossing
         detection.
-    seed_strategy : :class:`hiten.algorithms.poincare.core.strategies._SeedingStrategyBase`
+    seed_strategy : :class:`~hiten.algorithms.poincare.core.strategies._SeedingStrategyBase`
         The seeding strategy for generating initial conditions
         on the section plane.
-    map_config : :class:`hiten.algorithms.poincare.core.config._EngineConfigLike`
+    map_config : :class:`~hiten.algorithms.poincare.core.config._EngineConfigLike`
         Configuration object containing engine parameters such as
         iteration count, time step, and worker count.
 
     Attributes
     ----------
-    _backend : :class:`hiten.algorithms.poincare.core.backend._ReturnMapBackend`
+    _backend : :class:`~hiten.algorithms.poincare.core.backend._ReturnMapBackend`
         The numerical integration backend.
-    _strategy : :class:`hiten.algorithms.poincare.core.strategies._SeedingStrategyBase`
+    _strategy : :class:`~hiten.algorithms.poincare.core.strategies._SeedingStrategyBase`
         The seeding strategy for initial conditions.
-    _map_config : :class:`hiten.algorithms.poincare.core.config._EngineConfigLike`
+    _map_config : :class:`~hiten.algorithms.poincare.core.config._EngineConfigLike`
         The engine configuration.
     _n_iter : int
         Number of return map iterations to compute.
@@ -58,7 +58,7 @@ class _ReturnMapEngine(ABC):
         Integration time step (nondimensional units).
     _n_workers : int
         Number of parallel workers for computation.
-    _section_cache : :class:`hiten.algorithms.poincare.core.base._Section` or None
+    _section_cache : :class:`~hiten.algorithms.poincare.core.base._Section` or None
         Cache for the computed section to avoid redundant computation.
 
     Notes
@@ -102,7 +102,7 @@ class _ReturnMapEngine(ABC):
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.core.base._Section`
+        :class:`~hiten.algorithms.poincare.core.base._Section`
             The computed Poincare section containing points, states,
             labels, and optional times.
 

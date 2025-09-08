@@ -13,11 +13,11 @@ All coordinates are in nondimensional CR3BP rotating-frame units.
 
 See Also
 --------
-:mod:`hiten.algorithms.connections.backends`
+:mod:`~hiten.algorithms.connections.backends`
     Backend algorithms for connection computation.
-:mod:`hiten.algorithms.connections.base`
+:mod:`~hiten.algorithms.connections.base`
     User-facing Connection class that uses this engine.
-:mod:`hiten.algorithms.connections.interfaces`
+:mod:`~hiten.algorithms.connections.interfaces`
     Interface classes for manifold data access.
 """
 
@@ -41,16 +41,16 @@ class _ConnectionProblem:
 
     Parameters
     ----------
-    source : :class:`hiten.algorithms.connections.interfaces._ManifoldInterface`
+    source : :class:`~hiten.algorithms.connections.interfaces._ManifoldInterface`
         Interface to the source manifold (typically unstable manifold).
-    target : :class:`hiten.algorithms.connections.interfaces._ManifoldInterface`
+    target : :class:`~hiten.algorithms.connections.interfaces._ManifoldInterface`
         Interface to the target manifold (typically stable manifold).
-    section : :class:`hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+    section : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
         Configuration for the synodic section where manifolds are intersected.
     direction : {1, -1, None}, optional
         Direction for section crossings. 1 for positive crossings, -1 for
         negative crossings, None for both directions.
-    search : :class:`hiten.algorithms.connections.config._SearchConfig`
+    search : :class:`~hiten.algorithms.connections.config._SearchConfig`
         Search configuration including tolerances and geometric parameters.
 
     Notes
@@ -60,7 +60,7 @@ class _ConnectionProblem:
     required parameters are provided and properly typed.
 
     The problem specification is typically created by the high-level
-    :class:`hiten.algorithms.connections.base.Connection` class and passed
+    :class:`~hiten.algorithms.connections.base.Connection` class and passed
     to the engine for processing.
 
     Examples
@@ -84,9 +84,9 @@ class _ConnectionProblem:
 
     See Also
     --------
-    :class:`hiten.algorithms.connections.engine._ConnectionEngine`
+    :class:`~hiten.algorithms.connections.engine._ConnectionEngine`
         Engine class that processes this problem specification.
-    :class:`hiten.algorithms.connections.base.Connection`
+    :class:`~hiten.algorithms.connections.base.Connection`
         High-level class that creates these problem specifications.
     """
     source: _ManifoldInterface
@@ -128,11 +128,11 @@ class _ConnectionEngine:
 
     See Also
     --------
-    :class:`hiten.algorithms.connections.engine._ConnectionProblem`
+    :class:`~hiten.algorithms.connections.engine._ConnectionProblem`
         Problem specification structure processed by this engine.
-    :class:`hiten.algorithms.connections.backends._ConnectionsBackend`
+    :class:`~hiten.algorithms.connections.backends._ConnectionsBackend`
         Backend algorithms that perform the actual computations.
-    :class:`hiten.algorithms.connections.base.Connection`
+    :class:`~hiten.algorithms.connections.base.Connection`
         High-level user interface that uses this engine.
     """
 
@@ -144,13 +144,13 @@ class _ConnectionEngine:
 
         Parameters
         ----------
-        problem : :class:`hiten.algorithms.connections.engine._ConnectionProblem`
+        problem : :class:`~hiten.algorithms.connections.engine._ConnectionProblem`
             Complete problem specification including source/target manifolds,
             synodic section configuration, crossing direction, and search parameters.
 
         Returns
         -------
-        list of :class:`hiten.algorithms.connections.results._ConnectionResult`
+        list of :class:`~hiten.algorithms.connections.results._ConnectionResult`
             Discovered connections sorted by increasing Delta-V requirement.
             Each result contains transfer type (ballistic/impulsive), Delta-V,
             intersection points, and 6D states at the connection.
@@ -175,7 +175,7 @@ class _ConnectionEngine:
 
         See Also
         --------
-        :class:`hiten.algorithms.connections.backends._ConnectionsBackend`
+        :class:`~hiten.algorithms.connections.backends._ConnectionsBackend`
             Backend class that performs the actual computations.
         """
         # Delegate to backend for matching/refinement/Delta-V computation

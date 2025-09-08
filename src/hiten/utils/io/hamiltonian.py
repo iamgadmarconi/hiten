@@ -38,7 +38,7 @@ def _resolve_class(class_name: str) -> Type["Hamiltonian"]:
         
     Returns
     -------
-    Type[:class:`hiten.system.hamiltonians.base.Hamiltonian`]
+    Type[:class:`~hiten.system.hamiltonians.base.Hamiltonian`]
         The resolved Hamiltonian class.
         
     Notes
@@ -79,7 +79,7 @@ def save_hamiltonian(ham: "Hamiltonian", path: str | Path, *, compression: str =
 
     Parameters
     ----------
-    ham : :class:`hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
         The Hamiltonian object to serialize.
     path : str or pathlib.Path
         File path where to save the Hamiltonian data.
@@ -131,7 +131,7 @@ def load_hamiltonian(path: str | Path, **kwargs) -> "Hamiltonian":
         
     Returns
     -------
-    :class:`hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
         The reconstructed Hamiltonian object.
         
     Raises

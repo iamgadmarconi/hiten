@@ -7,11 +7,11 @@ logic, stopping criteria, and parameter handling.
 
 See Also
 --------
-:mod:`hiten.algorithms.continuation.base`
+:mod:`~hiten.algorithms.continuation.base`
     Base continuation engine that these strategies extend.
-:mod:`hiten.algorithms.continuation.strategies._stepping`
+:mod:`~hiten.algorithms.continuation.strategies._stepping`
     Stepping strategy implementations used by these algorithms.
-:mod:`hiten.algorithms.continuation.predictors`
+:mod:`~hiten.algorithms.continuation.predictors`
     Concrete implementations that use these algorithm strategies.
 """
 
@@ -39,7 +39,7 @@ class _NaturalParameter(_ContinuationEngine, ABC):
     Parameters
     ----------
     *args, **kwargs
-        Arguments passed to the base :class:`hiten.algorithms.continuation.base._ContinuationEngine`.
+        Arguments passed to the base :class:`~hiten.algorithms.continuation.base._ContinuationEngine`.
         See base class documentation for parameter details.
 
     Notes
@@ -58,7 +58,7 @@ class _NaturalParameter(_ContinuationEngine, ABC):
     - Bifurcations or fold points are not expected
 
     For more complex scenarios with turning points or bifurcations,
-    consider using :class:`hiten.algorithms.continuation.strategies._algorithms._SecantArcLength` 
+    consider using :class:`~hiten.algorithms.continuation.strategies._algorithms._SecantArcLength` 
     continuation instead.
 
     Examples
@@ -77,11 +77,11 @@ class _NaturalParameter(_ContinuationEngine, ABC):
 
     See Also
     --------
-    :class:`hiten.algorithms.continuation.strategies._algorithms._SecantArcLength`
+    :class:`~hiten.algorithms.continuation.strategies._algorithms._SecantArcLength`
         Alternative strategy for pseudo-arclength continuation.
-    :class:`hiten.algorithms.continuation.base._ContinuationEngine`
+    :class:`~hiten.algorithms.continuation.base._ContinuationEngine`
         Base continuation engine that this class extends.
-    :class:`hiten.algorithms.continuation.predictors._StateParameter`
+    :class:`~hiten.algorithms.continuation.predictors._StateParameter`
         Concrete implementation using natural parameter continuation.
     """
 
@@ -145,7 +145,7 @@ class _NaturalParameter(_ContinuationEngine, ABC):
 
         Returns
         -------
-        :class:`hiten.algorithms.continuation.strategies._step_interface._ContinuationStep`
+        :class:`~hiten.algorithms.continuation.strategies._step_interface._ContinuationStep`
             Stepping strategy instance for natural parameter continuation.
 
         Raises
@@ -157,7 +157,7 @@ class _NaturalParameter(_ContinuationEngine, ABC):
         -----
         Subclasses must implement this method to specify how predictions
         are generated for the specific problem type. Common implementations
-        include :class:`hiten.algorithms.continuation.strategies._stepping._NaturalParameterStep` 
+        include :class:`~hiten.algorithms.continuation.strategies._stepping._NaturalParameterStep` 
         for state-based continuation.
 
         Examples
@@ -188,7 +188,7 @@ class _SecantArcLength(_ContinuationEngine, ABC):
     Parameters
     ----------
     *args, **kwargs
-        Arguments passed to the base :class:`hiten.algorithms.continuation.base._ContinuationEngine`.
+        Arguments passed to the base :class:`~hiten.algorithms.continuation.base._ContinuationEngine`.
         See base class documentation for parameter details.
 
     Notes
@@ -225,11 +225,11 @@ class _SecantArcLength(_ContinuationEngine, ABC):
 
     See Also
     --------
-    :class:`hiten.algorithms.continuation.strategies._algorithms._NaturalParameter`
+    :class:`~hiten.algorithms.continuation.strategies._algorithms._NaturalParameter`
         Simpler strategy for monotonic parameter continuation.
-    :class:`hiten.algorithms.continuation.strategies._stepping._SecantStep`
+    :class:`~hiten.algorithms.continuation.strategies._stepping._SecantStep`
         Stepping strategy used by this algorithm.
-    :class:`hiten.algorithms.continuation.base._ContinuationEngine`
+    :class:`~hiten.algorithms.continuation.base._ContinuationEngine`
         Base continuation engine that this class extends.
     """
 
@@ -249,8 +249,8 @@ class _SecantArcLength(_ContinuationEngine, ABC):
         Notes
         -----
         The initialization automatically creates and configures a
-        :class:`hiten.algorithms.continuation.strategies._stepping._SecantStep` strategy 
-        using the abstract :meth:`hiten.algorithms.continuation.strategies._algorithms._SecantArcLength._representation`
+        :class:`~hiten.algorithms.continuation.strategies._stepping._SecantStep` strategy 
+        using the abstract :meth:`~hiten.algorithms.continuation.strategies._algorithms._SecantArcLength._representation`
         method that must be implemented by subclasses.
         """
         super().__init__(*args, **kwargs)
@@ -348,7 +348,7 @@ class _SecantArcLength(_ContinuationEngine, ABC):
         -----
         The default implementation does nothing since tangent vector
         maintenance is handled automatically by the 
-        :class:`hiten.algorithms.continuation.strategies._stepping._SecantStep`
+        :class:`~hiten.algorithms.continuation.strategies._stepping._SecantStep`
         strategy. Subclasses can override this method for:
         
         - Computing additional solution properties
@@ -367,7 +367,7 @@ class _SecantArcLength(_ContinuationEngine, ABC):
 
         Returns
         -------
-        :class:`hiten.algorithms.continuation.strategies._stepping._SecantStep`
+        :class:`~hiten.algorithms.continuation.strategies._stepping._SecantStep`
             The secant-based stepping strategy.
 
         Raises
@@ -379,7 +379,7 @@ class _SecantArcLength(_ContinuationEngine, ABC):
         -----
         Unlike natural parameter continuation, pseudo-arclength continuation
         automatically configures its stepping strategy during initialization.
-        The :class:`hiten.algorithms.continuation.strategies._stepping._SecantStep` 
+        The :class:`~hiten.algorithms.continuation.strategies._stepping._SecantStep` 
         strategy is created with the representation
         and parameter functions provided by the subclass.
         """

@@ -1,12 +1,12 @@
 """Stable/unstable invariant manifolds of periodic orbits in the spatial circular
 restricted three-body problem.
 
-The module offers a high-level interface (:class:`hiten.system.manifold.Manifold`) that, given a
-generating :class:`hiten.system.orbits.base.PeriodicOrbit`, launches trajectory
+The module offers a high-level interface (:class:`~hiten.system.manifold.Manifold`) that, given a
+generating :class:`~hiten.system.orbits.base.PeriodicOrbit`, launches trajectory
 integrations along the selected eigen-directions, records their intersections
 with the canonical Poincare section, provides quick 3-D visualisation, and
-handles (de)serialisation through :meth:`hiten.system.manifold.Manifold.save` and
-:meth:`hiten.system.manifold.Manifold.load`.
+handles (de)serialisation through :meth:`~hiten.system.manifold.Manifold.save` and
+:meth:`~hiten.system.manifold.Manifold.load`.
 
 Notes
 -----
@@ -42,7 +42,7 @@ from hiten.utils.plots import plot_manifold
 @dataclass
 class ManifoldResult:
     """
-    Output container produced by :meth:`hiten.system.manifold.Manifold.compute`.
+    Output container produced by :meth:`~hiten.system.manifold.Manifold.compute`.
 
     Parameters
     ----------
@@ -99,7 +99,7 @@ class Manifold:
 
     Parameters
     ----------
-    generating_orbit : :class:`hiten.system.orbits.base.PeriodicOrbit`
+    generating_orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
         Orbit that seeds the manifold.
     stable : bool, default True
         True selects the stable manifold, False the unstable one.
@@ -108,9 +108,9 @@ class Manifold:
 
     Attributes
     ----------
-    generating_orbit : :class:`hiten.system.orbits.base.PeriodicOrbit`
+    generating_orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
         Orbit that seeds the manifold.
-    libration_point : :class:`hiten.system.libration.base.LibrationPoint`
+    libration_point : :class:`~hiten.system.libration.base.LibrationPoint`
         Libration point associated with generating_orbit.
     stable : int
         Encoded stability: 1 for stable, -1 for unstable.
@@ -118,13 +118,13 @@ class Manifold:
         Encoded direction: 1 for 'positive', -1 for 'negative'.
     mu : float
         Mass ratio of the underlying CRTBP system (dimensionless).
-    manifold_result : :class:`hiten.system.manifold.ManifoldResult` or None
+    manifold_result : :class:`~hiten.system.manifold.ManifoldResult` or None
         Cached result returned by the last successful compute call.
 
     Notes
     -----
     Re-invoking compute after a successful run returns the cached
-    :class:`hiten.system.manifold.ManifoldResult` without recomputation.
+    :class:`~hiten.system.manifold.ManifoldResult` without recomputation.
     """
 
     def __init__(
@@ -137,7 +137,7 @@ class Manifold:
         
         Parameters
         ----------
-        generating_orbit : :class:`hiten.system.orbits.base.PeriodicOrbit`
+        generating_orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             The periodic orbit that seeds the manifold.
         stable : bool, default True
             Whether to compute the stable (True) or unstable (False) manifold.
@@ -162,7 +162,7 @@ class Manifold:
         
         Returns
         -------
-        :class:`hiten.system.orbits.base.PeriodicOrbit`
+        :class:`~hiten.system.orbits.base.PeriodicOrbit`
             The generating periodic orbit.
         """
         return self._generating_orbit
@@ -173,7 +173,7 @@ class Manifold:
         
         Returns
         -------
-        :class:`hiten.system.libration.base.LibrationPoint`
+        :class:`~hiten.system.libration.base.LibrationPoint`
             The libration point associated with the generating orbit.
         """
         return self._libration_point
@@ -217,7 +217,7 @@ class Manifold:
         
         Returns
         -------
-        :class:`hiten.system.manifold.ManifoldResult` or None
+        :class:`~hiten.system.manifold.ManifoldResult` or None
             The cached manifold result, or None if not computed.
         """
         return self._manifold_result
@@ -228,7 +228,7 @@ class Manifold:
         Returns
         -------
         str
-            String representation of the :class:`hiten.system.manifold.Manifold`.
+            String representation of the :class:`~hiten.system.manifold.Manifold`.
         """
         return f"Manifold(stable={self._stable}, direction={self._direction}) of {self._generating_orbit}"
     
@@ -238,7 +238,7 @@ class Manifold:
         Returns
         -------
         str
-            Detailed string representation of the :class:`hiten.system.manifold.Manifold`.
+            Detailed string representation of the :class:`~hiten.system.manifold.Manifold`.
         """
         return self.__str__()
 
@@ -383,7 +383,7 @@ class Manifold:
 
         Returns
         -------
-        :class:`hiten.system.manifold.ManifoldResult`
+        :class:`~hiten.system.manifold.ManifoldResult`
             The computed manifold result containing trajectories and Poincare section data.
 
         Raises
@@ -663,7 +663,7 @@ class Manifold:
             
         Returns
         -------
-        :class:`hiten.system.manifold.Manifold`
+        :class:`~hiten.system.manifold.Manifold`
             The loaded Manifold instance.
             
         Raises

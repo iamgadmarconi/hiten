@@ -19,13 +19,13 @@ Coordinate Systems
 
 See Also
 --------
-:mod:`hiten.algorithms.hamiltonian.center`
+:mod:`~hiten.algorithms.hamiltonian.center`
     Center manifold computations using these transformations.
-:mod:`hiten.algorithms.hamiltonian.normal`
+:mod:`~hiten.algorithms.hamiltonian.normal`
     Normal form computations in various coordinate systems.
-:mod:`hiten.system.libration.collinear`
+:mod:`~hiten.system.libration.collinear`
     Collinear libration point classes with transformation methods.
-:mod:`hiten.system.libration.triangular`
+:mod:`~hiten.system.libration.triangular`
     Triangular libration point classes with transformation methods.
 
 References
@@ -114,9 +114,9 @@ def _M(mix_pairs: tuple[int, ...] = (1, 2)) -> np.ndarray:
 
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.transforms._M_inv`
+    :func:`~hiten.algorithms.hamiltonian.transforms._M_inv`
         Inverse transformation from complex to real coordinates.
-    :func:`hiten.algorithms.hamiltonian.transforms._substitute_complex`
+    :func:`~hiten.algorithms.hamiltonian.transforms._substitute_complex`
         Apply complexification to polynomial expressions.
 
     References
@@ -156,9 +156,9 @@ def _M_inv(mix_pairs: tuple[int, ...] = (1, 2)) -> np.ndarray:
 
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.transforms._M`
+    :func:`~hiten.algorithms.hamiltonian.transforms._M`
         Forward complexification transformation.
-    :func:`hiten.algorithms.hamiltonian.transforms._substitute_real`
+    :func:`~hiten.algorithms.hamiltonian.transforms._substitute_real`
         Apply inverse complexification to polynomial expressions.
     """
     M = _M(mix_pairs)
@@ -180,9 +180,9 @@ def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo, tol=
     max_deg : int
         Maximum polynomial degree to retain in the transformation.
     psi : ndarray
-        Combinatorial index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+        Combinatorial index table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`.
     clmo : List[ndarray]
-        Packed multi-index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+        Packed multi-index table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`.
     tol : float, default 1e-12
         Numerical tolerance for cleaning small coefficients after transformation.
     mix_pairs : tuple of int, default (1, 2)
@@ -207,9 +207,9 @@ def _substitute_complex(poly_rn: List[np.ndarray], max_deg: int, psi, clmo, tol=
 
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.transforms._substitute_real`
+    :func:`~hiten.algorithms.hamiltonian.transforms._substitute_real`
         Inverse transformation from complex to real coordinates.
-    :func:`hiten.algorithms.hamiltonian.transforms._M`
+    :func:`~hiten.algorithms.hamiltonian.transforms._M`
         Complexification matrix used in the transformation.
     """
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
@@ -230,9 +230,9 @@ def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-
     max_deg : int
         Maximum polynomial degree to retain in the transformation.
     psi : ndarray
-        Combinatorial index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+        Combinatorial index table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`.
     clmo : List[ndarray]
-        Packed multi-index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+        Packed multi-index table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`.
     tol : float, default 1e-12
         Numerical tolerance for cleaning small coefficients after transformation.
     mix_pairs : tuple of int, default (1, 2)
@@ -246,7 +246,7 @@ def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-
 
     Notes
     -----
-    This is the inverse of :func:`hiten.algorithms.hamiltonian.transforms._substitute_complex`, using the inverse
+    This is the inverse of :func:`~hiten.algorithms.hamiltonian.transforms._substitute_complex`, using the inverse
     complexification matrix M_inv to recover real polynomial expressions
     from their complex representations.
 
@@ -256,9 +256,9 @@ def _substitute_real(poly_cn: List[np.ndarray], max_deg: int, psi, clmo, tol=1e-
 
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.transforms._substitute_complex`
+    :func:`~hiten.algorithms.hamiltonian.transforms._substitute_complex`
         Forward transformation from real to complex coordinates.
-    :func:`hiten.algorithms.hamiltonian.transforms._M_inv`
+    :func:`~hiten.algorithms.hamiltonian.transforms._M_inv`
         Inverse complexification matrix used in the transformation.
     """
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
@@ -297,9 +297,9 @@ def _solve_complex(real_coords: np.ndarray, tol: float = 1e-30, *, mix_pairs: tu
 
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.transforms._solve_real`
+    :func:`~hiten.algorithms.hamiltonian.transforms._solve_real`
         Inverse transformation from complex to real coordinates.
-    :func:`hiten.algorithms.hamiltonian.transforms._M_inv`
+    :func:`~hiten.algorithms.hamiltonian.transforms._M_inv`
         Complexification matrix used in this transformation.
     """
     return _clean_coordinates(_substitute_coordinates(real_coords, _M_inv(mix_pairs)), tol)
@@ -480,9 +480,9 @@ def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray, to
 
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.transforms._synodic2local_collinear`
+    :func:`~hiten.algorithms.hamiltonian.transforms._synodic2local_collinear`
         Inverse transformation from synodic to local coordinates.
-    :class:`hiten.system.libration.collinear.CollinearPoint`
+    :class:`~hiten.system.libration.collinear.CollinearPoint`
         Collinear point class providing transformation parameters.
 
     References
@@ -530,7 +530,7 @@ def _synodic2local_collinear(point: CollinearPoint, synodic_coords: np.ndarray, 
     r"""
     Transform coordinates from synodic to local frame for the collinear points.
 
-    This is the exact inverse of :func:`hiten.algorithms.hamiltonian.transforms._local2synodic_collinear`.
+    This is the exact inverse of :func:`~hiten.algorithms.hamiltonian.transforms._local2synodic_collinear`.
 
     Parameters
     ----------
@@ -658,7 +658,7 @@ def _synodic2local_triangular(point: TriangularPoint, synodic_coords: np.ndarray
     r"""
     Transform coordinates from synodic to local frame for the triangular (equilateral) points.
 
-    This is the exact inverse of :func:`hiten.algorithms.hamiltonian.transforms._local2synodic_triangular`.
+    This is the exact inverse of :func:`~hiten.algorithms.hamiltonian.transforms._local2synodic_triangular`.
 
     Parameters
     ----------
@@ -728,7 +728,7 @@ def _restrict_poly_to_center_manifold(point, poly_H, clmo, tol=1e-14):
         Polynomial Hamiltonian coefficients organized by degree, in
         nondimensional energy units.
     clmo : List[ndarray]
-        Packed multi-index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+        Packed multi-index table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`.
     tol : float, default 1e-14
         Tolerance for zeroing small coefficients during restriction.
 
@@ -754,11 +754,11 @@ def _restrict_poly_to_center_manifold(point, poly_H, clmo, tol=1e-14):
 
     See Also
     --------
-    :func:`hiten.algorithms.polynomial.base._decode_multiindex`
+    :func:`~hiten.algorithms.polynomial.base._decode_multiindex`
         Multi-index decoding used to identify hyperbolic terms.
-    :class:`hiten.system.libration.collinear.CollinearPoint`
+    :class:`~hiten.system.libration.collinear.CollinearPoint`
         Collinear points with hyperbolic directions.
-    :class:`hiten.system.libration.triangular.TriangularPoint`
+    :class:`~hiten.system.libration.triangular.TriangularPoint`
         Triangular points with all elliptic directions.
 
     References

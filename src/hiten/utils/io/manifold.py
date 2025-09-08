@@ -40,7 +40,7 @@ def save_manifold(
 
     Parameters
     ----------
-    manifold : :class:`hiten.system.manifold.Manifold`
+    manifold : :class:`~hiten.system.manifold.Manifold`
         The manifold object to serialize.
     path : str or pathlib.Path
         File path where to save the manifold data.
@@ -102,7 +102,7 @@ def load_manifold(path: str | Path) -> "Manifold":
         
     Returns
     -------
-    :class:`hiten.system.manifold.Manifold`
+    :class:`~hiten.system.manifold.Manifold`
         The reconstructed manifold object.
         
     Raises

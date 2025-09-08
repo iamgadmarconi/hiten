@@ -4,7 +4,7 @@ This module provides a concrete implementation of the return map backend
 for single-hit Poincare sections. It implements the generic surface-of-section
 crossing search using numerical integration and root finding.
 
-The main class :class:`hiten.algorithms.poincare.singlehit.backend._SingleHitBackend` 
+The main class :class:`~hiten.algorithms.poincare.singlehit.backend._SingleHitBackend` 
 extends the abstract base class
 to provide a complete implementation for finding single trajectory-section
 intersections.
@@ -36,9 +36,9 @@ class _SingleHitBackend(_ReturnMapBackend):
 
     Parameters
     ----------
-    dynsys : :class:`hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+    dynsys : :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
         The dynamical system providing the equations of motion.
-    surface : :class:`hiten.algorithms.poincare.core.events._SurfaceEvent`
+    surface : :class:`~hiten.algorithms.poincare.core.events._SurfaceEvent`
         The Poincare section surface definition.
     forward : int, default=1
         Integration direction (1 for forward, -1 for backward).
@@ -236,7 +236,7 @@ class _SingleHitBackend(_ReturnMapBackend):
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.core.events._SectionHit` or None
+        :class:`~hiten.algorithms.poincare.core.events._SectionHit` or None
             Section hit object containing the crossing time, state, and
             2D projection. Returns None if no crossing is found.
 
@@ -296,11 +296,11 @@ def find_crossing(dynsys, state0, surface, **kwargs):
 
     Parameters
     ----------
-    dynsys : :class:`hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+    dynsys : :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
         The dynamical system providing the equations of motion.
     state0 : array_like, shape (6,)
         Initial state vector [x, y, z, vx, vy, vz] in nondimensional units.
-    surface : :class:`hiten.algorithms.poincare.core.events._SurfaceEvent`
+    surface : :class:`~hiten.algorithms.poincare.core.events._SurfaceEvent`
         The Poincare section surface definition.
     **kwargs
         Additional keyword arguments passed to the backend constructor.

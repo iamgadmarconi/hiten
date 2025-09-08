@@ -89,7 +89,7 @@ def eigenvalue_decomposition(A: np.ndarray, discrete: int = 0, delta: float = 1e
     
     See Also
     --------
-    :func:`hiten.algorithms.dynamics.utils.linalg.eigenvalue_decomposition` : General eigenvalue classification
+    :func:`~hiten.algorithms.dynamics.utils.linalg.eigenvalue_decomposition` : General eigenvalue classification
     """
     logger.debug(f"Starting eigenvalue decomposition for matrix A with shape {A.shape}, discrete={discrete}, delta={delta}")
     # Compute eigen-decomposition
@@ -245,7 +245,7 @@ def _stability_indices(M: np.ndarray, tol: float = 1e-8) -> Tuple[np.ndarray, np
     
     See Also
     --------
-    :func:`hiten.algorithms.dynamics.utils.linalg.eigenvalue_decomposition` : General eigenvalue classification
+    :func:`~hiten.algorithms.dynamics.utils.linalg.eigenvalue_decomposition` : General eigenvalue classification
     """
     logger.info(f"Calculating stability indices for matrix M with shape {M.shape}, tolerance={tol}")
 
@@ -423,8 +423,8 @@ def _remove_infinitesimals_in_place(vec: np.ndarray, tol: float = 1e-14) -> None
     
     See Also
     --------
-    :func:`hiten.algorithms.dynamics.utils.linalg._remove_infinitesimals_array` : Non-destructive version
-    :func:`hiten.algorithms.dynamics.utils.linalg._zero_small_imag_part` : Cleanup for scalar complex values
+    :func:`~hiten.algorithms.dynamics.utils.linalg._remove_infinitesimals_array` : Non-destructive version
+    :func:`~hiten.algorithms.dynamics.utils.linalg._zero_small_imag_part` : Cleanup for scalar complex values
     """
     for i in range(len(vec)):
         re = vec[i].real
@@ -455,8 +455,8 @@ def _remove_infinitesimals_array(vec: np.ndarray, tol: float = 1e-12) -> np.ndar
     
     See Also
     --------
-    :func:`hiten.algorithms.dynamics.utils.linalg._remove_infinitesimals_in_place` : In-place version
-    :func:`hiten.algorithms.dynamics.utils.linalg._zero_small_imag_part` : Cleanup for scalar complex values
+    :func:`~hiten.algorithms.dynamics.utils.linalg._remove_infinitesimals_in_place` : In-place version
+    :func:`~hiten.algorithms.dynamics.utils.linalg._zero_small_imag_part` : Cleanup for scalar complex values
     """
     vcopy = vec.copy()
     _remove_infinitesimals_in_place(vcopy, tol)
@@ -482,8 +482,8 @@ def _zero_small_imag_part(eig_val: complex, tol: float = 1e-12) -> complex:
         
     See Also
     --------
-    :func:`hiten.algorithms.dynamics.utils.linalg._remove_infinitesimals_array` : Vector version for arrays
-    :func:`hiten.algorithms.dynamics.utils.linalg._remove_infinitesimals_in_place` : In-place vector cleanup
+    :func:`~hiten.algorithms.dynamics.utils.linalg._remove_infinitesimals_array` : Vector version for arrays
+    :func:`~hiten.algorithms.dynamics.utils.linalg._remove_infinitesimals_in_place` : In-place vector cleanup
     """
     if abs(eig_val.imag) < tol:
         return complex(eig_val.real, 0.0)

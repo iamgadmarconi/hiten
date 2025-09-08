@@ -10,11 +10,11 @@ normal-form computations, and invariant manifold analyses throughout the package
 
 See Also
 --------
-:mod:`hiten.algorithms.polynomial.base`
+:mod:`~hiten.algorithms.polynomial.base`
     Polynomial data structures and indexing operations.
-:mod:`hiten.algorithms.polynomial.operations`
+:mod:`~hiten.algorithms.polynomial.operations`
     Polynomial arithmetic and manipulation routines.
-:mod:`hiten.system.libration`
+:mod:`~hiten.system.libration`
     Libration point classes that provide coefficient sequences.
 
 References
@@ -57,9 +57,9 @@ def _build_T_polynomials(poly_x, poly_y, poly_z, max_deg: int, psi_table, clmo_t
     max_deg : int
         Maximum polynomial degree n such that T_n is computed.
     psi_table : ndarray
-        Combinatorial index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+        Combinatorial index table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`.
     clmo_table : List[ndarray]
-        Packed multi-index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+        Packed multi-index table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`.
     encode_dict_list : List[dict]
         Lookup tables mapping multi-indices to coefficient positions.
 
@@ -82,9 +82,9 @@ def _build_T_polynomials(poly_x, poly_y, poly_z, max_deg: int, psi_table, clmo_t
 
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_R_polynomials`
+    :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_R_polynomials`
         Auxiliary polynomials for Lindstedt-Poincare formulation.
-    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_potential_U`
+    :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_potential_U`
         Gravitational potential construction using Chebyshev polynomials.
 
     References
@@ -142,13 +142,13 @@ def _build_R_polynomials(poly_x, poly_y, poly_z, poly_T: types.ListType, max_deg
         Polynomial representations of coordinates x, y, z in nondimensional
         distance units.
     poly_T : List[List[ndarray]]
-        Chebyshev polynomials from :func:`hiten.algorithms.hamiltonian.hamiltonian._build_T_polynomials`.
+        Chebyshev polynomials from :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_T_polynomials`.
     max_deg : int
         Maximum polynomial degree for R_n computation.
     psi_table : ndarray
-        Combinatorial index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+        Combinatorial index table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`.
     clmo_table : List[ndarray]
-        Packed multi-index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+        Packed multi-index table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`.
     encode_dict_list : List[dict]
         Lookup tables mapping multi-indices to coefficient positions.
 
@@ -171,9 +171,9 @@ def _build_R_polynomials(poly_x, poly_y, poly_z, poly_T: types.ListType, max_deg
 
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_T_polynomials`
+    :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_T_polynomials`
         Chebyshev polynomials used in this computation.
-    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_lindstedt_poincare_rhs_polynomials`
+    :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_lindstedt_poincare_rhs_polynomials`
         Final right-hand side construction using R_n polynomials.
 
     References
@@ -254,14 +254,14 @@ def _build_potential_U(poly_T, point, max_deg: int, psi_table) -> List[np.ndarra
     Parameters
     ----------
     poly_T : List[List[ndarray]]
-        Chebyshev polynomials T_n from :func:`hiten.algorithms.hamiltonian.hamiltonian._build_T_polynomials`.
+        Chebyshev polynomials T_n from :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_T_polynomials`.
     point : object
         Libration point object with method _cn(k) returning the potential
         coefficient c_k (dimensionless).
     max_deg : int
         Maximum polynomial degree for potential truncation.
     psi_table : ndarray
-        Combinatorial index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+        Combinatorial index table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`.
 
     Returns
     -------
@@ -281,9 +281,9 @@ def _build_potential_U(poly_T, point, max_deg: int, psi_table) -> List[np.ndarra
 
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_T_polynomials`
+    :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_T_polynomials`
         Chebyshev polynomials used in this expansion.
-    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_physical_hamiltonian_collinear`
+    :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_physical_hamiltonian_collinear`
         Complete Hamiltonian construction using this potential.
 
     References
@@ -310,9 +310,9 @@ def _build_kinetic_energy_terms(poly_px, poly_py, poly_pz, max_deg: int, psi_tab
     max_deg : int
         Maximum polynomial degree for kinetic energy computation.
     psi_table : ndarray
-        Combinatorial index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+        Combinatorial index table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`.
     clmo_table : List[ndarray]
-        Packed multi-index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+        Packed multi-index table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`.
     encode_dict_list : List[dict]
         Lookup tables mapping multi-indices to coefficient positions.
 
@@ -334,9 +334,9 @@ def _build_kinetic_energy_terms(poly_px, poly_py, poly_pz, max_deg: int, psi_tab
 
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_rotational_terms`
+    :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_rotational_terms`
         Coriolis terms that couple with kinetic energy in rotating frame.
-    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_physical_hamiltonian_collinear`
+    :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_physical_hamiltonian_collinear`
         Complete Hamiltonian assembly including kinetic energy.
     """
     poly_kinetic = _polynomial_zero_list(max_deg, psi_table)
@@ -363,9 +363,9 @@ def _build_rotational_terms(poly_x, poly_y, poly_px, poly_py, max_deg: int, psi_
     max_deg : int
         Maximum polynomial degree for Coriolis term computation.
     psi_table : ndarray
-        Combinatorial index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+        Combinatorial index table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`.
     clmo_table : List[ndarray]
-        Packed multi-index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+        Packed multi-index table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`.
     encode_dict_list : List[dict]
         Lookup tables mapping multi-indices to coefficient positions.
 
@@ -388,9 +388,9 @@ def _build_rotational_terms(poly_x, poly_y, poly_px, poly_py, max_deg: int, psi_
 
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_kinetic_energy_terms`
+    :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_kinetic_energy_terms`
         Kinetic energy terms that couple with Coriolis terms.
-    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_physical_hamiltonian_collinear`
+    :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_physical_hamiltonian_collinear`
         Complete Hamiltonian including Coriolis terms.
 
     References
@@ -448,13 +448,13 @@ def _build_physical_hamiltonian_collinear(point, max_deg: int) -> List[np.ndarra
 
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_kinetic_energy_terms`
+    :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_kinetic_energy_terms`
         Kinetic energy polynomial construction.
-    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_potential_U`
+    :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_potential_U`
         Gravitational potential using Chebyshev expansion.
-    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_rotational_terms`
+    :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_rotational_terms`
         Coriolis terms for rotating frame.
-    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_physical_hamiltonian_triangular`
+    :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_physical_hamiltonian_triangular`
         Hamiltonian construction for triangular points.
 
     Examples
@@ -509,9 +509,9 @@ def _build_A_polynomials(poly_x, poly_y, poly_z, d_x: float, d_y: float, max_deg
     max_deg : int
         Maximum polynomial degree for A_n computation.
     psi_table : ndarray
-        Combinatorial index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+        Combinatorial index table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`.
     clmo_table : List[ndarray]
-        Packed multi-index table from :func:`hiten.algorithms.polynomial.base._init_index_tables`.
+        Packed multi-index table from :func:`~hiten.algorithms.polynomial.base._init_index_tables`.
     encode_dict_list : List[dict]
         Lookup tables mapping multi-indices to coefficient positions.
 
@@ -536,9 +536,9 @@ def _build_A_polynomials(poly_x, poly_y, poly_z, d_x: float, d_y: float, max_deg
 
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_physical_hamiltonian_triangular`
+    :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_physical_hamiltonian_triangular`
         Triangular point Hamiltonian using these polynomials.
-    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_T_polynomials`
+    :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_T_polynomials`
         Analogous Chebyshev polynomials for collinear points.
 
     References
@@ -659,9 +659,9 @@ def _build_physical_hamiltonian_triangular(point, max_deg: int) -> List[np.ndarr
 
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_A_polynomials`
+    :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_A_polynomials`
         Legendre-type polynomials for inverse distance expansions.
-    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_physical_hamiltonian_collinear`
+    :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_physical_hamiltonian_collinear`
         Analogous Hamiltonian for collinear points.
 
     References
@@ -779,9 +779,9 @@ def _build_lindstedt_poincare_rhs_polynomials(point, max_deg: int) -> Tuple[List
 
     See Also
     --------
-    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_T_polynomials`
+    :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_T_polynomials`
         Chebyshev polynomials used in x-equation.
-    :func:`hiten.algorithms.hamiltonian.hamiltonian._build_R_polynomials`
+    :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_R_polynomials`
         Auxiliary polynomials used in y,z-equations.
 
     Examples

@@ -12,11 +12,11 @@ consistent numerical behavior across different problem domains.
 
 See Also
 --------
-:mod:`hiten.algorithms.corrector.newton`
+:mod:`~hiten.algorithms.corrector.newton`
     Newton-Raphson correction implementations.
-:mod:`hiten.algorithms.corrector.interfaces`
+:mod:`~hiten.algorithms.corrector.interfaces`
     Interface classes for different correction strategies.
-:mod:`hiten.algorithms.corrector._step_interface`
+:mod:`~hiten.algorithms.corrector._step_interface`
     Step-size control interfaces for robust convergence.
 """
 
@@ -200,9 +200,9 @@ class _BaseCorrectionConfig:
 
     See Also
     --------
-    :class:`hiten.algorithms.corrector.line._LineSearchConfig`
+    :class:`~hiten.algorithms.corrector.line._LineSearchConfig`
         Configuration class for line search parameters.
-    :class:`hiten.algorithms.corrector.base._Corrector`
+    :class:`~hiten.algorithms.corrector.base._Corrector`
         Abstract base class that uses this configuration.
     """
     max_attempts: int = 50
@@ -282,7 +282,7 @@ class _Corrector(ABC):
 
     Notes
     -----
-    Subclasses must implement the :meth:`hiten.algorithms.corrector.base._Corrector.correct` method and are expected
+    Subclasses must implement the :meth:`~hiten.algorithms.corrector.base._Corrector.correct` method and are expected
     to document any additional keyword arguments specific to their
     correction strategy (maximum iterations, tolerances, step control
     parameters, etc.).
@@ -310,11 +310,11 @@ class _Corrector(ABC):
 
     See Also
     --------
-    :class:`hiten.algorithms.corrector.base._BaseCorrectionConfig`
+    :class:`~hiten.algorithms.corrector.base._BaseCorrectionConfig`
         Configuration class for correction parameters.
-    :mod:`hiten.algorithms.corrector.newton`
+    :mod:`~hiten.algorithms.corrector.newton`
         Concrete Newton-Raphson implementations.
-    :mod:`hiten.algorithms.corrector._step_interface`
+    :mod:`~hiten.algorithms.corrector._step_interface`
         Step-size control interfaces for robust convergence.
     """
 

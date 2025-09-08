@@ -6,7 +6,7 @@ precomputed trajectories. It implements a facade pattern that mirrors
 the API of other return-map modules while providing specialized
 functionality for synodic sections.
 
-The main class :class:`hiten.algorithms.poincare.synodic.base.SynodicMap` extends the abstract base class
+The main class :class:`~hiten.algorithms.poincare.synodic.base.SynodicMap` extends the abstract base class
 to provide detection capabilities on precomputed trajectory data,
 including support for orbits, manifolds, and custom trajectories.
 
@@ -38,21 +38,21 @@ class SynodicMap(_ReturnMapBase):
 
     Parameters
     ----------
-    map_cfg : :class:`hiten.algorithms.poincare.synodic.config._SynodicMapConfig`, optional
+    map_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`, optional
         Configuration object containing detection parameters, section geometry,
         and refinement settings. If None, uses default configuration.
 
     Attributes
     ----------
-    config : :class:`hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+    config : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
         The map configuration object.
-    _section_cfg : :class:`hiten.algorithms.poincare.synodic.config._SynodicSectionConfig`
+    _section_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicSectionConfig`
         The section configuration derived from the map configuration.
-    _engine : :class:`hiten.algorithms.poincare.synodic.engine._SynodicEngine`
+    _engine : :class:`~hiten.algorithms.poincare.synodic.engine._SynodicEngine`
         The engine that coordinates detection and refinement.
-    _sections : dict[str, :class:`hiten.algorithms.poincare.core.base._Section`]
+    _sections : dict[str, :class:`~hiten.algorithms.poincare.core.base._Section`]
         Cache of computed sections keyed by section parameters.
-    _section : :class:`hiten.algorithms.poincare.core.base._Section` or None
+    _section : :class:`~hiten.algorithms.poincare.core.base._Section` or None
         The most recently computed section.
 
     Notes
@@ -62,9 +62,9 @@ class SynodicMap(_ReturnMapBase):
     complexity of the underlying detection and refinement algorithms.
 
     The class supports multiple input methods:
-    - Custom trajectories via :meth:`hiten.algorithms.poincare.synodic.base.SynodicMap.from_trajectories`
-    - Periodic orbits via :meth:`hiten.algorithms.poincare.synodic.base.SynodicMap.from_orbit`
-    - Manifold structures via :meth:`hiten.algorithms.poincare.synodic.base.SynodicMap.from_manifold`
+    - Custom trajectories via :meth:`~hiten.algorithms.poincare.synodic.base.SynodicMap.from_trajectories`
+    - Periodic orbits via :meth:`~hiten.algorithms.poincare.synodic.base.SynodicMap.from_orbit`
+    - Manifold structures via :meth:`~hiten.algorithms.poincare.synodic.base.SynodicMap.from_manifold`
 
     All time units are in nondimensional units unless otherwise specified.
     """
@@ -74,7 +74,7 @@ class SynodicMap(_ReturnMapBase):
 
         Parameters
         ----------
-        map_cfg : :class:`hiten.algorithms.poincare.synodic.config._SynodicMapConfig`, optional
+        map_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`, optional
             Configuration object containing detection parameters, section geometry,
             and refinement settings. If None, uses default configuration.
 
@@ -143,12 +143,12 @@ class SynodicMap(_ReturnMapBase):
 
         Parameters
         ----------
-        cfg : :class:`hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+        cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
             Map configuration containing section geometry parameters.
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.synodic.config._SynodicSectionConfig`
+        :class:`~hiten.algorithms.poincare.synodic.config._SynodicSectionConfig`
             Section configuration object with normalized geometry.
 
         Notes
@@ -182,7 +182,7 @@ class SynodicMap(_ReturnMapBase):
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.synodic.engine._SynodicEngine`
+        :class:`~hiten.algorithms.poincare.synodic.engine._SynodicEngine`
             Configured detection engine with backend and strategy.
 
         Notes
@@ -229,7 +229,7 @@ class SynodicMap(_ReturnMapBase):
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.core.base._Section`
+        :class:`~hiten.algorithms.poincare.core.base._Section`
             The computed synodic Poincare section containing:
             - points: 2D projected coordinates
             - states: Full 6D state vectors
@@ -263,7 +263,7 @@ class SynodicMap(_ReturnMapBase):
 
         Parameters
         ----------
-        orbit : :class:`hiten.system.orbits.base.PeriodicOrbit`
+        orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             The periodic orbit to analyze. Must be propagated before calling
             this method (i.e., `orbit.times` and `orbit.trajectory` must not be None).
         direction : {1, -1, None}, optional
@@ -274,7 +274,7 @@ class SynodicMap(_ReturnMapBase):
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.core.base._Section`
+        :class:`~hiten.algorithms.poincare.core.base._Section`
             The computed synodic Poincare section from the periodic orbit.
 
         Raises
@@ -314,7 +314,7 @@ class SynodicMap(_ReturnMapBase):
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.core.base._Section`
+        :class:`~hiten.algorithms.poincare.core.base._Section`
             The computed synodic Poincare section from the manifold.
 
         Raises

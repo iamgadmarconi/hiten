@@ -32,9 +32,9 @@ class _SingleAxisSeeding(_CenterManifoldSeedingBase):
 
     Parameters
     ----------
-    section_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
         Configuration for the Poincare section.
-    map_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
+    map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Configuration for the center manifold map.
     seed_axis : str, optional
         Coordinate axis to vary ('q2', 'p2', 'q3', or 'p3'). If None,
@@ -129,9 +129,9 @@ class _AxisAlignedSeeding(_CenterManifoldSeedingBase):
 
     Parameters
     ----------
-    section_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
         Configuration for the Poincare section.
-    map_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
+    map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Configuration for the center manifold map.
 
     Notes
@@ -213,9 +213,9 @@ class _LevelSetsSeeding(_CenterManifoldSeedingBase):
 
     Parameters
     ----------
-    section_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
         Configuration for the Poincare section.
-    map_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
+    map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Configuration for the center manifold map.
 
     Notes
@@ -312,9 +312,9 @@ class _RadialSeeding(_CenterManifoldSeedingBase):
 
     Parameters
     ----------
-    section_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
         Configuration for the Poincare section.
-    map_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
+    map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Configuration for the center manifold map.
 
     Notes
@@ -407,9 +407,9 @@ class _RandomSeeding(_CenterManifoldSeedingBase):
 
     Parameters
     ----------
-    section_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
         Configuration for the Poincare section.
-    map_config : :class:`hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
+    map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Configuration for the center manifold map.
 
     Notes

@@ -159,10 +159,10 @@ class _ReturnMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _IterationConfi
     Notes
     -----
     This class inherits all parameters from:
-    - :class:`hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`: Base orchestration parameters
-    - :class:`hiten.algorithms.poincare.core.config._IntegrationConfig`: Numerical integration parameters
-    - :class:`hiten.algorithms.poincare.core.config._IterationConfig`: Iteration control parameters
-    - :class:`hiten.algorithms.poincare.core.config._SeedingConfig`: Seeding strategy parameters
+    - :class:`~hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`: Base orchestration parameters
+    - :class:`~hiten.algorithms.poincare.core.config._IntegrationConfig`: Numerical integration parameters
+    - :class:`~hiten.algorithms.poincare.core.config._IterationConfig`: Iteration control parameters
+    - :class:`~hiten.algorithms.poincare.core.config._SeedingConfig`: Seeding strategy parameters
 
     All time units are in nondimensional units unless otherwise
     specified.

@@ -52,14 +52,14 @@ class PeriodicOrbit(ABC):
     Abstract base-class that encapsulates a CR3BP periodic orbit.
 
     The constructor either accepts a user supplied initial state or derives an
-    analytical first guess via :meth:`hiten.system.orbits.base.PeriodicOrbit._initial_guess` (to be
+    analytical first guess via :meth:`~hiten.system.orbits.base.PeriodicOrbit._initial_guess` (to be
     implemented by subclasses). All subsequent high-level operations
     (propagation, plotting, stability analysis, differential correction) build
     upon this initial description.
 
     Parameters
     ----------
-    libration_point : :class:`hiten.system.libration.base.LibrationPoint`
+    libration_point : :class:`~hiten.system.libration.base.LibrationPoint`
         The libration point instance that anchors the family.
     initial_state : Sequence[float] or None, optional
         Initial condition in rotating canonical units
@@ -70,9 +70,9 @@ class PeriodicOrbit(ABC):
     ----------
     family : str
         Orbit family name (settable property with class-specific defaults).
-    libration_point : :class:`hiten.system.libration.base.LibrationPoint`
+    libration_point : :class:`~hiten.system.libration.base.LibrationPoint`
         Libration point anchoring the family.
-    system : :class:`hiten.system.base.System`
+    system : :class:`~hiten.system.base.System`
         Parent CR3BP system.
     mu : float
         Mass ratio of the system, accessed as system.mu (dimensionless).
@@ -81,17 +81,17 @@ class PeriodicOrbit(ABC):
     period : float or None
         Orbit period, set after a successful correction (nondimensional units).
     trajectory : ndarray or None, shape (N, 6)
-        Stored trajectory after :meth:`hiten.system.orbits.base.PeriodicOrbit.propagate`.
+        Stored trajectory after :meth:`~hiten.system.orbits.base.PeriodicOrbit.propagate`.
     times : ndarray or None, shape (N,)
         Time vector associated with trajectory (nondimensional units).
     stability_info : tuple or None
-        Output of :func:`hiten.algorithms.dynamics.rtbp._stability_indices`.
+        Output of :func:`~hiten.algorithms.dynamics.rtbp._stability_indices`.
 
     Notes
     -----
     Instantiating the class does not perform any propagation. Users must
-    call :meth:`hiten.system.orbits.base.PeriodicOrbit.correct` (or manually set
-    period) followed by :meth:`hiten.system.orbits.base.PeriodicOrbit.propagate`.
+    call :meth:`~hiten.system.orbits.base.PeriodicOrbit.correct` (or manually set
+    period) followed by :meth:`~hiten.system.orbits.base.PeriodicOrbit.propagate`.
     """
     
     # This should be overridden by subclasses
@@ -151,7 +151,7 @@ class PeriodicOrbit(ABC):
         
         Returns
         -------
-        :class:`hiten.system.libration.base.LibrationPoint`
+        :class:`~hiten.system.libration.base.LibrationPoint`
             The libration point instance.
         """
         return self._libration_point
@@ -277,7 +277,7 @@ class PeriodicOrbit(ABC):
         
         Returns
         -------
-        :class:`hiten.system.base.System`
+        :class:`~hiten.system.base.System`
             The parent CR3BP system.
         """
         return self._system
@@ -406,7 +406,7 @@ class PeriodicOrbit(ABC):
         """Differential correction wrapper.
 
         This method now delegates the heavy lifting to the generic
-        :class:`hiten.algorithms.corrector.newton._NewtonOrbitCorrector` which
+        :class:`~hiten.algorithms.corrector.newton._NewtonOrbitCorrector` which
         implements a robust Newton-Armijo scheme.
         
         Parameters
@@ -419,7 +419,7 @@ class PeriodicOrbit(ABC):
             Forward integration direction.
         max_delta : float, optional
             Maximum step size for corrections.
-        line_search_config : :class:`hiten.algorithms.corrector.line._LineSearchConfig` or bool, optional
+        line_search_config : :class:`~hiten.algorithms.corrector.line._LineSearchConfig` or bool, optional
             Line search configuration.
         finite_difference : bool, optional
             Whether to use finite difference for Jacobian.
@@ -540,7 +540,7 @@ class PeriodicOrbit(ABC):
             
         Returns
         -------
-        :class:`hiten.system.manifold.Manifold`
+        :class:`~hiten.system.manifold.Manifold`
             The manifold object.
         """
         from hiten.system.manifold import Manifold
@@ -698,7 +698,7 @@ class PeriodicOrbit(ABC):
             
         Returns
         -------
-        :class:`hiten.system.orbits.base.PeriodicOrbit`
+        :class:`~hiten.system.orbits.base.PeriodicOrbit`
             The loaded orbit instance.
             
         Raises
@@ -756,7 +756,7 @@ class GenericOrbit(PeriodicOrbit):
     
     Parameters
     ----------
-    libration_point : :class:`hiten.system.libration.base.LibrationPoint`
+    libration_point : :class:`~hiten.system.libration.base.LibrationPoint`
         The libration point around which the orbit is computed.
     initial_state : Sequence[float], optional
         Initial state vector [x, y, z, vx, vy, vz] in nondimensional units.
@@ -770,7 +770,7 @@ class GenericOrbit(PeriodicOrbit):
         
         Parameters
         ----------
-        libration_point : :class:`hiten.system.libration.base.LibrationPoint`
+        libration_point : :class:`~hiten.system.libration.base.LibrationPoint`
             The libration point around which the orbit is computed.
         initial_state : Sequence[float], optional
             Initial state vector [x, y, z, vx, vy, vz] in nondimensional units.
@@ -789,13 +789,13 @@ class GenericOrbit(PeriodicOrbit):
         """
         Get or set the user-defined differential correction configuration.
 
-        This property must be set to a valid :class:`hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`
-        instance before calling :meth:`hiten.system.orbits.base.PeriodicOrbit.correct` on a
-        :class:`hiten.system.orbits.base.GenericOrbit` object.
+        This property must be set to a valid :class:`~hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`
+        instance before calling :meth:`~hiten.system.orbits.base.PeriodicOrbit.correct` on a
+        :class:`~hiten.system.orbits.base.GenericOrbit` object.
         
         Returns
         -------
-        :class:`hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig` or None
+        :class:`~hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig` or None
             The correction configuration, or None if not set.
         """
         return self._custom_correction_config
@@ -806,7 +806,7 @@ class GenericOrbit(PeriodicOrbit):
         
         Parameters
         ----------
-        value : :class:`hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig` or None
+        value : :class:`~hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig` or None
             The correction configuration to set.
             
         Raises
@@ -841,7 +841,7 @@ class GenericOrbit(PeriodicOrbit):
         
         Returns
         -------
-        :class:`hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`
+        :class:`~hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`
             The correction configuration.
             
         Raises
@@ -884,7 +884,7 @@ class GenericOrbit(PeriodicOrbit):
         
         Returns
         -------
-        :class:`hiten.algorithms.continuation.interfaces._OrbitContinuationConfig` or None
+        :class:`~hiten.algorithms.continuation.interfaces._OrbitContinuationConfig` or None
             The continuation configuration, or None if not set.
         """
         return self._custom_continuation_config
@@ -895,13 +895,13 @@ class GenericOrbit(PeriodicOrbit):
         
         Parameters
         ----------
-        cfg : :class:`hiten.algorithms.continuation.interfaces._OrbitContinuationConfig` or None
+        cfg : :class:`~hiten.algorithms.continuation.interfaces._OrbitContinuationConfig` or None
             The continuation configuration to set.
             
         Raises
         ------
         TypeError
-            If cfg is not an instance of :class:`hiten.algorithms.continuation.interfaces._OrbitContinuationConfig` or None.
+            If cfg is not an instance of :class:`~hiten.algorithms.continuation.interfaces._OrbitContinuationConfig` or None.
         """
         from hiten.algorithms.continuation.interfaces import \
             _OrbitContinuationConfig
@@ -915,7 +915,7 @@ class GenericOrbit(PeriodicOrbit):
         
         Returns
         -------
-        :class:`hiten.algorithms.continuation.interfaces._OrbitContinuationConfig`
+        :class:`~hiten.algorithms.continuation.interfaces._OrbitContinuationConfig`
             The continuation configuration.
             
         Raises

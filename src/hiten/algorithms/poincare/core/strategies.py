@@ -5,7 +5,7 @@ This module provides the abstract base class for implementing seeding
 strategies in the Poincare section framework. Seeding strategies determine
 how initial conditions are generated for return map computation.
 
-The main class :class:`hiten.algorithms.poincare.core.strategies._SeedingStrategyBase` 
+The main class :class:`~hiten.algorithms.poincare.core.strategies._SeedingStrategyBase` 
 defines the interface that all concrete seeding strategies must implement, providing common
 all concrete seeding strategies must implement, providing common
 functionality for configuration management and seed generation.
@@ -33,18 +33,18 @@ class _SeedingStrategyBase(ABC):
 
     Parameters
     ----------
-    section_cfg : :class:`hiten.algorithms.poincare.core.config._SectionConfig`
+    section_cfg : :class:`~hiten.algorithms.poincare.core.config._SectionConfig`
         Section configuration containing section coordinate and plane
         coordinate information.
-    map_cfg : :class:`hiten.algorithms.poincare.core.config._SeedingConfigLike`
+    map_cfg : :class:`~hiten.algorithms.poincare.core.config._SeedingConfigLike`
         Seeding configuration containing parameters such as the
         number of seeds to generate.
 
     Attributes
     ----------
-    _section_cfg : :class:`hiten.algorithms.poincare.core.config._SectionConfig`
+    _section_cfg : :class:`~hiten.algorithms.poincare.core.config._SectionConfig`
         The section configuration.
-    _map_cfg : :class:`hiten.algorithms.poincare.core.config._SeedingConfigLike`
+    _map_cfg : :class:`~hiten.algorithms.poincare.core.config._SeedingConfigLike`
         The seeding configuration.
     _cached_limits : dict[tuple[float, int], list[float]]
         Class-level cache for computed limits, keyed by (h0, n_seeds)
@@ -71,7 +71,7 @@ class _SeedingStrategyBase(ABC):
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.core.config._SectionConfig`
+        :class:`~hiten.algorithms.poincare.core.config._SectionConfig`
             The section configuration containing section coordinate
             and plane coordinate information.
 
@@ -88,7 +88,7 @@ class _SeedingStrategyBase(ABC):
 
         Returns
         -------
-        :class:`hiten.algorithms.poincare.core.config._SeedingConfigLike`
+        :class:`~hiten.algorithms.poincare.core.config._SeedingConfigLike`
             The seeding configuration containing parameters such as
             the number of seeds to generate.
 
