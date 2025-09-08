@@ -114,7 +114,7 @@ class _CenterManifoldEngine(_ReturnMapEngine):
         if self._section_cache is not None and not recompute:
             return self._section_cache
 
-        logger.info("Generating Poincaré map: seeds=%d, iterations=%d, workers=%d",
+        logger.info("Generating Poincare map: seeds=%d, iterations=%d, workers=%d",
                     self._strategy.n_seeds, self._n_iter, self._n_workers)
 
         plane_pts = self._strategy.generate(

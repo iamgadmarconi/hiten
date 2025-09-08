@@ -150,7 +150,7 @@ class HamiltonianPipeline:
 
         Returns
         -------
-        Hamiltonian
+        :class:`hiten.system.hamiltonians.base.Hamiltonian`
             The requested Hamiltonian representation
 
         Raises
@@ -213,7 +213,7 @@ class HamiltonianPipeline:
 
         Returns
         -------
-        Hamiltonian
+        :class:`hiten.system.hamiltonians.base.Hamiltonian`
             The computed Hamiltonian representation
 
         Raises
@@ -259,7 +259,7 @@ class HamiltonianPipeline:
 
         Returns
         -------
-        Hamiltonian
+        :class:`hiten.system.hamiltonians.base.Hamiltonian`
             The physical Hamiltonian representation
 
         Notes
@@ -351,7 +351,7 @@ class HamiltonianPipeline:
             
         Returns
         -------
-        Hamiltonian
+        :class:`hiten.system.hamiltonians.base.Hamiltonian`
             The converted Hamiltonian
             
         Raises
@@ -405,7 +405,7 @@ class HamiltonianPipeline:
             
         Returns
         -------
-        Hamiltonian
+        :class:`hiten.system.hamiltonians.base.Hamiltonian`
             The final converted Hamiltonian
             
         Notes
@@ -497,7 +497,7 @@ class HamiltonianPipeline:
 
         Returns
         -------
-        _HamiltonianSystem
+        :class:`hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem`
             The runtime Hamiltonian system
 
         Notes

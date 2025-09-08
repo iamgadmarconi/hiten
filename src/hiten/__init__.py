@@ -1,8 +1,4 @@
-"""
-hiten
-=====
-
-Top-level public API for the *hiten* package.
+"""Top-level public API for the *hiten* package.
 
 This module re-exports the most frequently used symbols from the
 sub-packages so that user code can simply write, for example::

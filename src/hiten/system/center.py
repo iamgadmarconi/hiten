@@ -1,13 +1,14 @@
-r"""
-center.base
-===========
-
-High-level utilities for computing a polynomial normal form of the centre
+"""High-level utilities for computing a polynomial normal form of the centre
 manifold around a collinear libration point of the spatial circular
 restricted three body problem (CRTBP).
 
 All heavy algebra is performed symbolically on packed coefficient arrays.
 Only NumPy is used so the implementation is portable and fast.
+
+Notes
+-----
+All positions and velocities are expressed in nondimensional units where the
+distance between the primaries is unity and the orbital period is 2*pi.
 
 References
 ----------
@@ -48,28 +49,28 @@ if TYPE_CHECKING:
 
 
 class CenterManifold:
-    r"""
+    """
     Centre manifold normal-form builder.
 
     This class provides high-level operations for working with center manifolds
     around libration points. It uses the HamiltonianPipeline internally for
     all Hamiltonian computations and focuses on center manifold specific
-    operations like coordinate transformations and Poincaré maps.
+    operations like coordinate transformations and Poincare maps.
 
     Parameters
     ----------
-    point : hiten.system.libration.base.LibrationPoint
+    point : :class:`hiten.system.libration.base.LibrationPoint`
         Libration point about which the center manifold is computed.
     degree : int
-        Maximum total degree :math:`N` of the polynomial truncation.
+        Maximum total degree N of the polynomial truncation.
 
     Attributes
     ----------
-    point : hiten.system.libration.base.LibrationPoint
+    point : :class:`hiten.system.libration.base.LibrationPoint`
         The libration point about which the center manifold is computed.
     degree : int
         The maximum total degree of the polynomial truncation.
-    pipeline : HamiltonianPipeline
+    pipeline : :class:`hiten.system.hamiltonians.pipeline.HamiltonianPipeline`
         Internal pipeline for managing Hamiltonian computations and caching.
 
     Notes
@@ -80,6 +81,15 @@ class CenterManifold:
     """
     
     def __init__(self, point: LibrationPoint, degree: int):
+        """Initialize a CenterManifold instance.
+        
+        Parameters
+        ----------
+        point : :class:`hiten.system.libration.base.LibrationPoint`
+            The libration point about which the center manifold is computed.
+        degree : int
+            Maximum total degree of the polynomial truncation.
+        """
         self._point = point
         self._max_degree = degree
         
@@ -106,24 +116,45 @@ class CenterManifold:
         else:
             raise ValueError(f"Unsupported libration point type: {type(self._point)}")
 
-        # Cache for Poincaré maps
+        # Cache for Poincare maps
         self._poincare_maps: Dict[Tuple[float, tuple], "CenterManifoldMap"] = {}
         self._backends: Dict[Tuple[float, str], _CenterManifoldBackend] = {} # energy, section_coord
 
     @property
     def point(self) -> LibrationPoint:
-        """The libration point about which the center manifold is computed."""
+        """The libration point about which the center manifold is computed.
+        
+        Returns
+        -------
+        :class:`hiten.system.libration.base.LibrationPoint`
+            The libration point about which the center manifold is computed.
+        """
         return self._point
 
     @property
     def degree(self) -> int:
-        """The maximum total degree of the polynomial truncation."""
+        """The maximum total degree of the polynomial truncation.
+        
+        Returns
+        -------
+        int
+            The maximum total degree of the polynomial truncation.
+        """
         return self._max_degree
 
     @degree.setter
     def degree(self, value: int):
-        """
-        Set a new maximum degree, which invalidates all cached data.
+        """Set a new maximum degree, which invalidates all cached data.
+        
+        Parameters
+        ----------
+        value : int
+            New maximum degree for the polynomial truncation.
+            
+        Raises
+        ------
+        ValueError
+            If value is not a positive integer.
         """
         if not isinstance(value, int) or value <= 0:
             raise ValueError("degree must be a positive integer.")
@@ -143,22 +174,56 @@ class CenterManifold:
 
     @property
     def pipeline(self) -> HamiltonianPipeline:
-        """Access to the internal Hamiltonian pipeline."""
+        """Access to the internal Hamiltonian pipeline.
+        
+        Returns
+        -------
+        :class:`hiten.system.hamiltonians.pipeline.HamiltonianPipeline`
+            The internal Hamiltonian pipeline.
+        """
         return self._pipeline
 
     def __str__(self):
+        """Return a string representation of the CenterManifold.
+        
+        Returns
+        -------
+        str
+            String representation of the CenterManifold.
+        """
         return f"CenterManifold(point={self._point}, degree={self._max_degree})" 
     
     def __repr__(self):
+        """Return a detailed string representation of the CenterManifold.
+        
+        Returns
+        -------
+        str
+            Detailed string representation of the CenterManifold.
+        """
         return f"CenterManifold(point={self._point}, degree={self._max_degree})"
     
     def __getstate__(self):
+        """Get the state for pickling.
+        
+        Returns
+        -------
+        dict
+            Dictionary containing the serializable state.
+        """
         return {
             "_point": self._point,
             "_max_degree": self._max_degree,
         }
 
     def __setstate__(self, state):
+        """Restore the state after unpickling.
+        
+        Parameters
+        ----------
+        state : dict
+            Dictionary containing the serialized state.
+        """
         self._point = state["_point"]
         self._max_degree = state["_max_degree"]
         self._pipeline = HamiltonianPipeline(self._point, self._max_degree)
@@ -220,8 +285,10 @@ class CenterManifold:
         return table
 
     def cache_clear(self):
-        """
-        Clear all caches (Hamiltonian pipeline and Poincaré maps).
+        """Clear all caches (Hamiltonian pipeline and Poincare maps).
+        
+        This method clears all internal caches including the Hamiltonian pipeline
+        cache and all Poincare map caches.
         """
         logger.debug("Clearing all caches.")
         self._pipeline.cache_clear()
@@ -231,10 +298,20 @@ class CenterManifold:
     def _restrict_coord_to_center_manifold(self, coord_6d):
         """Project a 6-D Phase-space coordinate onto the centre manifold.
 
-        For collinear points the hyperbolic pair (q1, p1) is removed.  For
+        For collinear points the hyperbolic pair (q1, p1) is removed. For
         triangular points all six variables belong to the centre manifold so
         the original coordinates are returned unchanged (apart from casting to
         real dtype and ensuring contiguity).
+        
+        Parameters
+        ----------
+        coord_6d : numpy.ndarray
+            6-dimensional phase space coordinate.
+            
+        Returns
+        -------
+        numpy.ndarray
+            Projected coordinate on the centre manifold.
         """
         # Always work with real numbers once we reach this stage.
         if np.iscomplexobj(coord_6d):
@@ -248,7 +325,22 @@ class CenterManifold:
         return np.array([0.0, coord_6d[1], coord_6d[2], 0.0, coord_6d[4], coord_6d[5]], dtype=np.float64)
     
     def _get_or_create_backend(self, energy: float, section_coord: str, **kwargs) -> _CenterManifoldBackend:
-        """Get or create a backend for the given section coordinate and energy."""
+        """Get or create a backend for the given section coordinate and energy.
+        
+        Parameters
+        ----------
+        energy : float
+            Energy level for the backend.
+        section_coord : str
+            Section coordinate identifier.
+        **kwargs
+            Additional keyword arguments for backend configuration.
+            
+        Returns
+        -------
+        :class:`hiten.algorithms.poincare.centermanifold.backend._CenterManifoldBackend`
+            The backend instance.
+        """
         cache_key = (energy, section_coord)
         if cache_key not in self._backends:
             cm_hamsys = self._hamsys
@@ -264,15 +356,27 @@ class CenterManifold:
     def _4d_cm_to_ic(self, cm_coords_4d: np.ndarray, tol: float = 1e-14) -> np.ndarray:
         """Convert 4-D centre-manifold coordinates to 6-D synodic initial conditions.
 
-        This helper assumes *cm_coords_4d* is an array-like object of shape ``(4,)``
-        containing the real centre-manifold variables ``[q2, p2, q3, p3]``.  No
+        This helper assumes cm_coords_4d is an array-like object of shape (4,)
+        containing the real centre-manifold variables [q2, p2, q3, p3]. No
         root-finding or Hamiltonian energy information is required - the
         supplied coordinates are taken to lie on the centre manifold already.
 
-        The transformation follows exactly the *second* half of the original
-        :py:meth:`ic` pipeline::
+        The transformation follows exactly the second half of the original
+        :meth:`ic` pipeline:
 
             CM (real) -> CM (complex) -> Lie transform -> real modal -> local -> synodic
+            
+        Parameters
+        ----------
+        cm_coords_4d : numpy.ndarray, shape (4,)
+            Centre-manifold coordinates [q2, p2, q3, p3] in nondimensional units.
+        tol : float, default 1e-14
+            Numerical tolerance for the transformation.
+            
+        Returns
+        -------
+        numpy.ndarray, shape (6,)
+            Synodic initial conditions [x, y, z, vx, vy, vz] in nondimensional units.
         """
         # Construct a 6-D centre-manifold phase-space vector
         real_4d_cm = np.asarray(cm_coords_4d, dtype=np.float64).reshape(4)
@@ -302,7 +406,7 @@ class CenterManifold:
 
     def _2d_cm_to_ic(self, poincare_point: np.ndarray, energy: float,
                      section_coord: str = "q3", tol: float = 1e-14, **kwargs) -> np.ndarray:
-        """Original *ic* behaviour - convert a 2-D Poincaré-section point.
+        """Original ic behaviour - convert a 2-D Poincare-section point.
 
         This routine reproduces verbatim the legacy implementation that:
 
@@ -311,6 +415,24 @@ class CenterManifold:
         2. Embeds the resulting 4-D CM coordinates into 6-D phase-space;
         3. Applies the Lie transform and coordinate conversions to obtain the
            synodic initial conditions.
+           
+        Parameters
+        ----------
+        poincare_point : numpy.ndarray, shape (2,)
+            Point on the Poincare section in nondimensional units.
+        energy : float
+            Hamiltonian energy level in nondimensional units.
+        section_coord : str, default "q3"
+            Coordinate fixed to zero on the Poincare section.
+        tol : float, default 1e-14
+            Numerical tolerance for the transformation.
+        **kwargs
+            Additional keyword arguments for backend configuration.
+            
+        Returns
+        -------
+        numpy.ndarray, shape (6,)
+            Synodic initial conditions [x, y, z, vx, vy, vz] in nondimensional units.
         """
         # Section configuration specifies which coordinate is fixed to zero and
         # which one must be solved for
@@ -351,44 +473,49 @@ class CenterManifold:
            section_coord: str = "q3", tol: float = 1e-14) -> np.ndarray:
         """Convert centre-manifold coordinates to full synodic ICs.
 
-        The method now supports **two** input formats:
+        The method now supports two input formats:
 
-        1. *2-D Poincaré-section* coordinates (legacy behaviour).  In this case
-           *energy* **must** be provided and *section_coord* specifies which CM
+        1. 2-D Poincare-section coordinates (legacy behaviour). In this case
+           energy must be provided and section_coord specifies which CM
            coordinate is fixed to zero on the section.
-        2. *4-D centre-manifold* coordinates ``[q2, p2, q3, p3]``.  Here the
+        2. 4-D centre-manifold coordinates [q2, p2, q3, p3]. Here the
            coordinates are assumed to satisfy the Hamiltonian energy
-           constraint already, so *energy* and *section_coord* are ignored.
+           constraint already, so energy and section_coord are ignored.
 
         Parameters
         ----------
         cm_point : numpy.ndarray, shape (2,) or (4,)
-            Point on the Poincaré section (length-2) **or** full centre-manifold
-            coordinates (length-4).
-        energy : float | None, optional
-            Hamiltonian energy level *h0*.  Required only when *cm_point* is a
+            Point on the Poincare section (length-2) or full centre-manifold
+            coordinates (length-4) in nondimensional units.
+        energy : float or None, optional
+            Hamiltonian energy level h0 in nondimensional units. Required only when cm_point is a
             2-vector.
         section_coord : {'q3', 'p3', 'q2', 'p2'}, default 'q3'
-            Coordinate fixed to zero on the Poincaré section.  Ignored for
+            Coordinate fixed to zero on the Poincare section. Ignored for
             4-D inputs.
-        tol : float, optional
+        tol : float, default 1e-14
             Numerical tolerance used by the various helper routines.
 
         Returns
         -------
         numpy.ndarray, shape (6,)
-            Synodic-frame initial conditions ``(q1, q2, q3, p1, p2, p3)``.
+            Synodic-frame initial conditions (x, y, z, vx, vy, vz) in nondimensional units.
+            
+        Raises
+        ------
+        ValueError
+            If energy is not provided for 2-D input or if cm_point has invalid shape.
         """
         cm_point = np.asarray(cm_point)
 
         if cm_point.size == 2:
             if energy is None:
                 raise ValueError(
-                    "energy must be specified when converting a 2-D Poincaré "
+                    "energy must be specified when converting a 2-D Poincare "
                     "point to initial conditions."
                 )
             logger.info(
-                "Converting 2-D Poincaré point %s (section=%s) to synodic ICs",
+                "Converting 2-D Poincare point %s (section=%s) to synodic ICs",
                 cm_point, section_coord,
             )
             return self._2d_cm_to_ic(cm_point, float(energy), section_coord, tol)
@@ -400,26 +527,28 @@ class CenterManifold:
         else:
             raise ValueError(
                 "cm_point must be either a 2- or 4-element vector representing "
-                "a Poincaré-section point or full CM coordinates, respectively."
+                "a Poincare-section point or full CM coordinates, respectively."
             )
 
     def cm(self, synodic_6d: np.ndarray, tol=1e-14) -> np.ndarray:
         """Return 4-D centre-manifold coordinates (q2, p2, q3, p3) from 6-D synodic ICs.
 
-        This is the exact inverse of :py:meth:`ic` and therefore performs the
-        following steps in *reverse* order::
+        This is the exact inverse of :meth:`ic` and therefore performs the
+        following steps in reverse order:
 
             synodic -> local -> real modal -> complex modal -> Lie-inverse -> CM.
 
         Parameters
         ----------
         synodic_6d : numpy.ndarray, shape (6,)
-            Synodic coordinates (X, Y, Z, Vx, Vy, Vz).
+            Synodic coordinates (x, y, z, vx, vy, vz) in nondimensional units.
+        tol : float, default 1e-14
+            Numerical tolerance for the transformation.
 
         Returns
         -------
         numpy.ndarray, shape (4,)
-            Centre-manifold real coordinates ``[q2, p2, q3, p3]``.
+            Centre-manifold real coordinates [q2, p2, q3, p3] in nondimensional units.
         """
         local_6d = self._synodic2local(self._point, synodic_6d, tol)
         real_modal_6d = _coordlocal2realmodal(self._point, local_6d, tol)
@@ -442,19 +571,19 @@ class CenterManifold:
 
     def poincare_map(self, energy: float, **kwargs) -> "CenterManifoldMap":
         """
-        Create a Poincaré map at the specified energy level.
+        Create a Poincare map at the specified energy level.
 
         Parameters
         ----------
         energy : float
-            Hamiltonian energy :math:`h_0`.
+            Hamiltonian energy h0 in nondimensional units.
         **kwargs
-            Configuration parameters for the Poincaré map.
+            Configuration parameters for the Poincare map.
 
         Returns
         -------
-        CenterManifoldMap
-            A Poincaré map object for the given energy and configuration.
+        :class:`hiten.algorithms.poincare.centermanifold.base.CenterManifoldMap`
+            A Poincare map object for the given energy and configuration.
 
         Notes
         -----
@@ -499,6 +628,8 @@ class CenterManifold:
         ----------
         dir_path : str or path-like object
             The path to the directory where the data will be saved.
+        **kwargs
+            Additional keyword arguments for the save operation.
         """
         save_center_manifold(self, dir_path, **kwargs)
 
@@ -508,16 +639,18 @@ class CenterManifold:
         Load a CenterManifold instance from a directory.
 
         This class method deserializes a CenterManifold object and its
-        associated Poincare maps that were saved with the `save` method.
+        associated Poincare maps that were saved with the save method.
 
         Parameters
         ----------
         dir_path : str or path-like object
             The path to the directory from which to load the data.
+        **kwargs
+            Additional keyword arguments for the load operation.
 
         Returns
         -------
-        CenterManifold
+        :class:`CenterManifold`
             The loaded CenterManifold instance with its Poincare maps.
         """
         return load_center_manifold(dir_path, **kwargs)

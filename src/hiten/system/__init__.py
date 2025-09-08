@@ -1,5 +1,4 @@
-"""
-Public API for the ``system`` package.
+"""Public API for the :mod:`hiten.system` package.
 
 This module re-exports the most frequently used classes so that users can
 simply write::

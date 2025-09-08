@@ -1,5 +1,4 @@
-"""
-Physical constants for astrodynamics simulations.
+"""Physical constants for astrodynamics simulations.
 
 This module contains fundamental physical constants and system-specific values
 for use in astrodynamics simulations. All constants are defined in SI units
@@ -18,10 +17,9 @@ mechanics problems.
 
 References
 ----------
-Values are based on standard IAU (International Astronomical Union) and
-NASA/JPL data. For detailed sources, see:
-- IAU 2015 Resolution B3 (https://www.iau.org/static/resolutions/IAU2015_English.pdf)
-- NASA JPL Solar System Dynamics (https://ssd.jpl.nasa.gov/)
+IAU 2015 Resolution B3 (https://www.iau.org/static/resolutions/IAU2015_English.pdf)
+
+NASA JPL Solar System Dynamics (https://ssd.jpl.nasa.gov/)
 """
 
 import numpy as np

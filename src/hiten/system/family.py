@@ -1,18 +1,14 @@
-"""
-hiten.system.family
-=====================
-
-Light-weight container that groups a *family* of periodic orbits obtained via a
+"""Light-weight container that groups a family of periodic orbits obtained via a
 continuation engine.
 
-The class keeps together:
-    • list of `PeriodicOrbit` instances in ascending continuation order,
-    • the continuation parameter values (float array),
-    • a short string identifying that parameter (for labelling / DataFrame).
-
 It offers convenience helpers for iteration, random access, conversion to a
-`pandas.DataFrame`, and basic serialisation to an HDF5 file leveraging the
-existing utilities in :pymod:`hiten.utils.io`.
+pandas.DataFrame, and basic serialisation to an HDF5 file leveraging the
+existing utilities in :mod:`hiten.utils.io`.
+
+Notes
+-----
+All positions and velocities are expressed in nondimensional units where the
+distance between the primaries is unity and the orbital period is 2*pi.
 """
 import os
 from dataclasses import dataclass, field
@@ -32,13 +28,43 @@ from hiten.utils.plots import plot_orbit_family
 
 @dataclass
 class OrbitFamily:
-    """Container for an ordered family of periodic orbits."""
+    """Container for an ordered family of periodic orbits.
+    
+    Parameters
+    ----------
+    orbits : list of :class:`hiten.system.orbits.base.PeriodicOrbit`
+        List of periodic orbits in ascending continuation order.
+    parameter_name : str, default "param"
+        Name of the continuation parameter for labelling.
+    parameter_values : numpy.ndarray or None, optional
+        Array of parameter values corresponding to each orbit.
+        If None, will be initialized with NaN values.
+    
+    Attributes
+    ----------
+    orbits : list of :class:`hiten.system.orbits.base.PeriodicOrbit`
+        List of periodic orbits in the family.
+    parameter_name : str
+        Name of the continuation parameter.
+    parameter_values : numpy.ndarray
+        Array of parameter values for each orbit.
+    """
 
     orbits: List[PeriodicOrbit] = field(default_factory=list)
     parameter_name: str = "param"
     parameter_values: np.ndarray | None = None  # one value per orbit
 
     def __post_init__(self) -> None:
+        """Initialize parameter values after dataclass creation.
+        
+        This method ensures parameter_values is properly initialized and
+        validates that the length matches the number of orbits.
+        
+        Raises
+        ------
+        ValueError
+            If the length of parameter_values does not match the number of orbits.
+        """
         if self.parameter_values is None:
             self.parameter_values = np.full(len(self.orbits), np.nan, dtype=float)
         else:
@@ -48,36 +74,106 @@ class OrbitFamily:
 
     @classmethod
     def from_engine(cls, engine, parameter_name: str | None = None):
-        """Build an `OrbitFamily` from a finished continuation engine."""
+        """Build an OrbitFamily from a finished continuation engine.
+        
+        Parameters
+        ----------
+        engine
+            A continuation engine that has completed its run.
+        parameter_name : str or None, optional
+            Name for the continuation parameter. If None, defaults to "param".
+            
+        Returns
+        -------
+        :class:`OrbitFamily`
+            A new OrbitFamily instance containing the orbits from the engine.
+        """
         if parameter_name is None:
             parameter_name = "param"
         return cls(list(engine.family), parameter_name, np.asarray(engine.parameter_values))
 
     def __len__(self) -> int:
+        """Return the number of orbits in the family.
+        
+        Returns
+        -------
+        int
+            Number of orbits in the family.
+        """
         return len(self.orbits)
 
     def __iter__(self) -> Iterator[PeriodicOrbit]:
+        """Return an iterator over the orbits in the family.
+        
+        Returns
+        -------
+        Iterator[:class:`hiten.system.orbits.base.PeriodicOrbit`]
+            Iterator over the orbits in the family.
+        """
         return iter(self.orbits)
 
     def __getitem__(self, idx):
+        """Get an orbit by index.
+        
+        Parameters
+        ----------
+        idx : int or slice
+            Index or slice to access orbits.
+            
+        Returns
+        -------
+        :class:`hiten.system.orbits.base.PeriodicOrbit` or list
+            The orbit(s) at the specified index(es).
+        """
         return self.orbits[idx]
 
     @property
     def periods(self) -> np.ndarray:
-        """Array of orbit periods (NaN if not available)."""
+        """Array of orbit periods.
+        
+        Returns
+        -------
+        numpy.ndarray
+            Array of orbit periods in nondimensional units (NaN if not available).
+        """
         return np.array([o.period if o.period is not None else np.nan for o in self.orbits])
 
     @property
     def jacobi_constants(self) -> np.ndarray:
+        """Array of Jacobi constants for all orbits.
+        
+        Returns
+        -------
+        numpy.ndarray
+            Array of Jacobi constants (dimensionless).
+        """
         return np.array([o.jacobi_constant for o in self.orbits])
     
     def propagate(self, **kwargs) -> None:
-        """Propagate all orbits in the family."""
+        """Propagate all orbits in the family.
+        
+        Parameters
+        ----------
+        **kwargs
+            Additional keyword arguments passed to each orbit's propagate method.
+        """
         for orb in self.orbits:
             orb.propagate(**kwargs)
 
     def save(self, filepath: str | Path, *, compression: str = "gzip", level: int = 4) -> None:
-        """Save the family to an HDF5 file (each orbit as a subgroup)."""
+        """Save the family to an HDF5 file.
+        
+        Each orbit is saved as a subgroup within the HDF5 file.
+        
+        Parameters
+        ----------
+        filepath : str or pathlib.Path
+            Path where to save the HDF5 file.
+        compression : str, default "gzip"
+            Compression algorithm to use for the HDF5 file.
+        level : int, default 4
+            Compression level (0-9, higher means better compression).
+        """
         path = Path(filepath)
         path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -95,15 +191,15 @@ class OrbitFamily:
         logger.info(f"Family saved to {filepath}")
 
     def to_csv(self, filepath: str, **kwargs) -> None:
-        r"""
+        """
         Export the contents of the orbit family to a CSV file.
 
         Parameters
         ----------
         filepath : str
-            Destination CSV file.
+            Destination CSV file path.
         **kwargs
-            Extra keyword arguments passed to :py:meth:`PeriodicOrbit.propagate`.
+            Extra keyword arguments passed to :meth:`hiten.system.orbits.base.PeriodicOrbit.propagate`.
 
         Raises
         ------
@@ -132,7 +228,23 @@ class OrbitFamily:
 
     @classmethod
     def load(cls, filepath: str | Path):
-        """Load a family previously saved with `save_hdf`."""
+        """Load a family previously saved with save method.
+        
+        Parameters
+        ----------
+        filepath : str or pathlib.Path
+            Path to the HDF5 file containing the saved family.
+            
+        Returns
+        -------
+        :class:`OrbitFamily`
+            The loaded OrbitFamily instance.
+            
+        Raises
+        ------
+        ValueError
+            If the file does not contain a valid OrbitFamily object.
+        """
         with h5py.File(filepath, "r") as f:
             if str(f.attrs.get("class", "")) != "OrbitFamily":
                 raise ValueError("File does not contain an OrbitFamily object")
@@ -145,10 +257,39 @@ class OrbitFamily:
         return cls(orbits, param_name, param_vals)
 
     def __repr__(self) -> str:
+        """Return a detailed string representation of the OrbitFamily.
+        
+        Returns
+        -------
+        str
+            String representation showing number of orbits and parameter name.
+        """
         return f"OrbitFamily(n_orbits={len(self)}, parameter='{self.parameter_name}')"
 
     def plot(self, *, dark_mode: bool = True, save: bool = False, filepath: str = "orbit_family.svg", **kwargs):
-        """Visualise the family trajectories in rotating frame."""
+        """Visualise the family trajectories in rotating frame.
+        
+        Parameters
+        ----------
+        dark_mode : bool, default True
+            Whether to use dark mode for the plot.
+        save : bool, default False
+            Whether to save the plot to a file.
+        filepath : str, default "orbit_family.svg"
+            Path where to save the plot if save=True.
+        **kwargs
+            Additional keyword arguments passed to the plotting function.
+            
+        Returns
+        -------
+        matplotlib.figure.Figure
+            The generated plot figure.
+            
+        Raises
+        ------
+        ValueError
+            If orbits have no trajectory data available.
+        """
 
         states_list = []
         times_list = []

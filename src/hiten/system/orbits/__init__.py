@@ -1,10 +1,8 @@
-"""hiten.system.orbits
-================
-Public interface for the orbit-family classes.
+"""Public interface for the orbit-family classes.
 
 Usage example::
 
-    from hiten.system.orbits import HaloOrbit, LyapunovOrbit
+>>> from hiten.system.orbits import HaloOrbit, LyapunovOrbit
 """
 
 from ...algorithms.utils.types import SynodicState

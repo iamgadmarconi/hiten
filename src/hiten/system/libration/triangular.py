@@ -1,13 +1,27 @@
-r"""
+"""
 hiten.system.libration.triangular
 ==========================
 
-Triangular Libration points (:math:`L_4` and :math:`L_5`) of the Circular Restricted Three-Body Problem (CR3BP).
+Triangular Libration points (L4 and L5) of the Circular Restricted Three-Body Problem (CR3BP).
 
-The module defines:
+This module provides concrete implementations of the triangular libration points
+in the Circular Restricted Three-Body Problem. These points form equilateral
+triangles with the two primary bodies and are characterized by center-type
+stability when the mass ratio is below Routh's critical value.
 
-* :pyclass:`TriangularPoint` - an abstract helper encapsulating the geometry shared by the triangular points.
-* :pyclass:`L4Point` and :pyclass:`L5Point` - concrete equilibria located at +-60° with respect to the line connecting the primaries.
+Classes
+-------
+:class:`TriangularPoint`
+    Abstract base class for triangular libration points.
+:class:`L4Point`
+    L4 libration point located above the x-axis (positive y).
+:class:`L5Point`
+    L5 libration point located below the x-axis (negative y).
+
+Notes
+-----
+All positions and distances are expressed in nondimensional units where the
+distance between the primaries is unity and the orbital period is 2*pi.
 """
 
 from typing import TYPE_CHECKING
@@ -22,38 +36,43 @@ if TYPE_CHECKING:
 
 
 class TriangularPoint(LibrationPoint):
-    r"""
+    """
     Abstract helper for the triangular Libration points.
 
     The triangular points form equilateral triangles with the two primary
     bodies. They behave as centre-type equilibria when the mass ratio
-    :math:`\mu` is below Routh's critical value.
+    mu is below Routh's critical value.
 
     Parameters
     ----------
-    system : System
-        CR3BP model supplying the mass parameter :math:`\mu`.
+    system : :class:`hiten.system.base.System`
+        CR3BP model supplying the mass parameter mu.
 
     Attributes
     ----------
     mu : float
-        Mass ratio :math:`\mu = m_2 / (m_1 + m_2)` taken from *system*.
+        Mass ratio mu = m2 / (m1 + m2) taken from system (dimensionless).
     ROUTH_CRITICAL_MU : float
-        Critical value :math:`\mu_R` delimiting linear stability.
+        Critical value mu_R delimiting linear stability (dimensionless).
     sign : int
-        +1 for :pyclass:`L4Point`, -1 for :pyclass:`L5Point`.
+        +1 for :class:`L4Point`, -1 for :class:`L5Point`.
     a : float
-        Offset used by local <-> synodic frame transformations.
+        Offset used by local <-> synodic frame transformations (dimensionless).
 
     Notes
     -----
-    A warning is logged if :math:`\mu > \mu_R`.
+    A warning is logged if mu > mu_R.
     """
     ROUTH_CRITICAL_MU = (1.0 - np.sqrt(1.0 - (1.0/27.0))) / 2.0 # approx 0.03852
     
     def __init__(self, system: "System"):
-        r"""
+        """
         Initialize a triangular Libration point.
+        
+        Parameters
+        ----------
+        system : :class:`hiten.system.base.System`
+            The CR3BP system containing the mass parameter mu.
         """
         super().__init__(system)
         # Log stability warning based on mu
@@ -62,31 +81,36 @@ class TriangularPoint(LibrationPoint):
 
     @property
     def sign(self) -> int:
-        r"""
+        """
         Sign convention distinguishing L4 and L5.
 
         Returns
         -------
         int
-            +1 for :pyclass:`L4Point`, -1 for :pyclass:`L5Point`.
+            +1 for :class:`L4Point`, -1 for :class:`L5Point`.
         """
         return 1 if isinstance(self, L4Point) else -1
     
     @property
     def a(self) -> float:
-        r"""
-        Offset *a* along the x axis used in frame changes.
+        """
+        Offset a along the x axis used in frame changes.
+        
+        Returns
+        -------
+        float
+            The offset value a (dimensionless).
         """
         return self.sign * 3 * np.sqrt(3) / 4 * (1 - 2 * self.mu)
 
     def _calculate_position(self) -> np.ndarray:
-        r"""
+        """
         Calculate the position of a triangular point (L4 or L5).
         
         Returns
         -------
-        ndarray
-            3D vector [x, y, 0] giving the position
+        numpy.ndarray, shape (3,)
+            3D vector [x, y, 0] giving the position in nondimensional units.
         """
         point_name = self.__class__.__name__
         logger.debug(f"Calculating {point_name} position directly.")
@@ -98,13 +122,13 @@ class TriangularPoint(LibrationPoint):
         return np.array([x, y, 0], dtype=np.float64)
 
     def _get_linear_data(self) -> LinearData:
-        r"""
+        """
         Get the linear data for the Libration point.
         
         Returns
         -------
-        LinearData
-            Object containing the linear data for the Libration point
+        :class:`LinearData`
+            Object containing the linear data for the Libration point.
         """
         # Frequencies and canonical transform
         omega1, omega2, omega_z = self.linear_modes
@@ -123,6 +147,14 @@ class TriangularPoint(LibrationPoint):
         )
 
     def normal_form_transform(self):
+        """
+        Build the 6x6 symplectic matrix C that sends H2 to normal form.
+
+        Returns
+        -------
+        tuple
+            (C, Cinv) where C is the symplectic transformation matrix and Cinv is its inverse.
+        """
         cache_key = ('normal_form_transform',)
         cached = self.cache_get(cache_key)
         if cached is not None:
@@ -148,8 +180,20 @@ class TriangularPoint(LibrationPoint):
         return C, Cinv
     
     def _compute_linear_modes(self):
-        """Return the three frequencies (omega_1, omega_2, omega_z) following the convention:
-        omega_1 > 0 with omega_1^2 < 1/2, omega_2 < 0, omega_z is vertical frequency = 1."""
+        """
+        Compute the three frequencies (omega_1, omega_2, omega_z) following the convention:
+        omega_1 > 0 with omega_1^2 < 1/2, omega_2 < 0, omega_z is vertical frequency = 1.
+        
+        Returns
+        -------
+        tuple
+            (omega_1, omega_2, omega_z) in nondimensional units.
+            
+        Raises
+        ------
+        RuntimeError
+            If the expected number of eigenvalues or frequency groups are not found.
+        """
         J_full = self._J_hess_H2()
         eigvals = np.linalg.eigvals(J_full)
 
@@ -229,17 +273,18 @@ class TriangularPoint(LibrationPoint):
 
     @property
     def linear_modes(self):
-        r"""
+        """
         Get the linear modes for the Libration point.
         
         Returns
         -------
-        Tuple (omega_1, omega_2, omega_z) where:
-        - omega_1 > 0 with omega_1^2 < 1/2 (small positive planar frequency)
-        - omega_2 < 0 (negative planar frequency)  
-        - omega_z = 1.0 (vertical frequency)
-        For triangular points all eigenvalues are purely imaginary so no
-        hyperbolic mode is present.
+        tuple
+            (omega_1, omega_2, omega_z) where:
+            - omega_1 > 0 with omega_1^2 < 1/2 (small positive planar frequency)
+            - omega_2 < 0 (negative planar frequency)  
+            - omega_z = 1.0 (vertical frequency)
+            For triangular points all eigenvalues are purely imaginary so no
+            hyperbolic mode is present.
         """
         cached = self.cache_get(('linear_modes',))
         if cached is not None:
@@ -250,6 +295,14 @@ class TriangularPoint(LibrationPoint):
         return result
 
     def _J_hess_H2(self) -> np.ndarray:
+        """
+        Compute the 6x6 symplectic matrix for the quadratic Hamiltonian H2.
+        
+        Returns
+        -------
+        numpy.ndarray, shape (6, 6)
+            The symplectic matrix J for the quadratic Hamiltonian.
+        """
         # Planar 4x4 block (x, y, p_x, p_y)
         J_planar = np.array([
             [0.0, 1.0, 1.0, 0.0],
@@ -268,13 +321,32 @@ class TriangularPoint(LibrationPoint):
         return J_full # x, y, p_x, p_y, z, p_z
     
     def _rs(self, idx):
+        """
+        Compute the scaling factor for the given mode index.
+        
+        Parameters
+        ----------
+        idx : int
+            The mode index (0 or 1 for planar modes).
+            
+        Returns
+        -------
+        float
+            The scaling factor (dimensionless).
+            
+        Raises
+        ------
+        ValueError
+            If idx is not 0 or 1.
+        """
         if idx not in [0, 1]:
             raise ValueError(f"Invalid index {idx} for scaling factor calculation")
         return np.sqrt(self.linear_modes[idx] * (4*self.linear_modes[idx]**4 + self.linear_modes[idx]**2 - 1.5))
 
     def _get_eigvs(self):
-        """Return the six real eigenvectors (u_1, u_2, u_3, v_1, v_2, v_3)
-        providing a canonical basis of the *centre* sub-space.
+        """
+        Return the six real eigenvectors (u_1, u_2, u_3, v_1, v_2, v_3)
+        providing a canonical basis of the centre sub-space.
 
         For triangular points the flow decomposes into a planar 2-DOF part
         and a vertical 1-DOF harmonic oscillator uncoupled from the plane.
@@ -284,6 +356,11 @@ class TriangularPoint(LibrationPoint):
         zeros to embed them in the full 6-D phase-space.  The vertical pair
         is trivial thanks to the decoupling: (z, p_z) already form a
         canonical coordinate pair.
+        
+        Returns
+        -------
+        numpy.ndarray, shape (6, 6)
+            Matrix of eigenvectors as rows.
         """
 
         a = self.a
@@ -321,12 +398,38 @@ class TriangularPoint(LibrationPoint):
         return eigv_matrix
     
     def _d_omega(self, idx):
+        """
+        Compute the derivative term for the given mode index.
+        
+        Parameters
+        ----------
+        idx : int
+            The mode index.
+            
+        Returns
+        -------
+        float
+            The derivative term (dimensionless).
+        """
         omegas = self.linear_modes
         omega = omegas[idx]
 
         return omega * (2*omega**4+0.5*omega**2-0.75)
     
     def _scaling_factor(self, idx):
+        """
+        Compute the scaling factor for the given mode index.
+        
+        Parameters
+        ----------
+        idx : int
+            The mode index (0, 1 for planar modes, 2 for vertical).
+            
+        Returns
+        -------
+        float
+            The scaling factor (dimensionless).
+        """
         # Planar modes: use Gómez et al. formula.  Vertical mode: already
         # rescaled directly in the eigenvectors, so the scaling factor is 1.
         if idx == 2:
@@ -335,40 +438,76 @@ class TriangularPoint(LibrationPoint):
 
 
 class L4Point(TriangularPoint):
-    r"""
+    """
     L4 Libration point, forming an equilateral triangle with the two primary bodies,
     located above the x-axis (positive y).
     
+    The L4 point is situated above the x-axis, forming an equilateral triangle
+    with the two primary bodies. It is characterized by center-type stability
+    when the mass ratio is below Routh's critical value.
+    
     Parameters
     ----------
-    mu : float
-        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+    system : :class:`hiten.system.base.System`
+        The CR3BP system containing the mass parameter mu.
     """
     
     def __init__(self, system: "System"):
-        """Initialize the L4 Libration point."""
+        """
+        Initialize the L4 Libration point.
+        
+        Parameters
+        ----------
+        system : :class:`hiten.system.base.System`
+            The CR3BP system containing the mass parameter mu.
+        """
         super().__init__(system)
     
     @property
     def idx(self) -> int:
+        """Get the libration point index.
+        
+        Returns
+        -------
+        int
+            The libration point index (4 for L4).
+        """
         return 4
 
 
 class L5Point(TriangularPoint):
-    r"""
+    """
     L5 Libration point, forming an equilateral triangle with the two primary bodies,
     located below the x-axis (negative y).
     
+    The L5 point is situated below the x-axis, forming an equilateral triangle
+    with the two primary bodies. It is characterized by center-type stability
+    when the mass ratio is below Routh's critical value.
+    
     Parameters
     ----------
-    mu : float
-        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+    system : :class:`hiten.system.base.System`
+        The CR3BP system containing the mass parameter mu.
     """
     
     def __init__(self, system: "System"):
-        """Initialize the L5 Libration point."""
+        """
+        Initialize the L5 Libration point.
+        
+        Parameters
+        ----------
+        system : :class:`hiten.system.base.System`
+            The CR3BP system containing the mass parameter mu.
+        """
         super().__init__(system)
     
     @property
     def idx(self) -> int:
+        """Get the libration point index.
+        
+        Returns
+        -------
+        int
+            The libration point index (5 for L5).
+        """
         return 5

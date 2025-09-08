@@ -1,13 +1,14 @@
-r"""
-hiten.system.libration.collinear
-==========================
+"""Collinear libration points L1, L2 and L3 of the circular restricted three body problem (CR3BP).
 
-Collinear libration points :math:`L_1`, :math:`L_2` and :math:`L_3` of the circular restricted three body problem (CR3BP).
+This module provides concrete implementations of the collinear libration points
+in the Circular Restricted Three-Body Problem. These points lie on the line
+connecting the two primary bodies and are characterized by saddle-center
+stability (one unstable direction, two center directions).
 
-The module defines:
-
-* :pyclass:`CollinearPoint` - an abstract helper encapsulating the geometry shared by the collinear points.
-* :pyclass:`L1Point`, :pyclass:`L2Point`, :pyclass:`L3Point` - concrete equilibria located on the x-axis connecting the primaries.
+Notes
+-----
+All positions and distances are expressed in nondimensional units where the
+distance between the primaries is unity and the orbital period is 2*pi.
 """
 
 from abc import abstractmethod
@@ -25,7 +26,7 @@ if TYPE_CHECKING:
 
 
 class CollinearPoint(LibrationPoint):
-    r"""
+    """
     Base class for collinear Libration points (L1, L2, L3).
     
     The collinear points lie on the x-axis connecting the two primary
@@ -34,18 +35,44 @@ class CollinearPoint(LibrationPoint):
     
     Parameters
     ----------
+    system : :class:`hiten.system.base.System`
+        The CR3BP system containing the mass parameter mu.
+        
+    Attributes
+    ----------
     mu : float
-        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+        Mass parameter of the CR3BP system (ratio of smaller to total mass,
+        dimensionless).
+    gamma : float
+        Distance ratio from the libration point to the nearest primary
+        (dimensionless).
+    sign : int
+        Sign convention for coordinate transformations (+1 for L3, -1 for L1/L2).
+    a : float
+        Offset along the x-axis used in frame changes (dimensionless).
+    linear_modes : tuple
+        (lambda1, omega1, omega2) values for the linearized system.
     """
     def __init__(self, system: "System"):
-        r"""Initialize a collinear Libration point."""
+        """Initialize a collinear Libration point.
+        
+        Parameters
+        ----------
+        system : :class:`hiten.system.base.System`
+            The CR3BP system containing the mass parameter mu.
+            
+        Raises
+        ------
+        ValueError
+            If the mass parameter mu is not in the range (0, 0.5).
+        """
         if not 0 < system.mu < 0.5:
             raise ValueError(f"Mass parameter mu must be in range (0, 0.5), got {system.mu}")
         super().__init__(system)
 
     @property
     def gamma(self) -> float:
-        r"""
+        """
         Get the distance ratio gamma for the libration point, calculated
         with high precision.
 
@@ -58,7 +85,7 @@ class CollinearPoint(LibrationPoint):
         Returns
         -------
         float
-            The gamma value calculated with high precision.
+            The gamma value calculated with high precision (dimensionless).
         """
         cached = self.cache_get(('gamma',))
         if cached is not None:
@@ -71,28 +98,43 @@ class CollinearPoint(LibrationPoint):
 
     @property
     def sign(self) -> int:
-        r"""
+        """
         Sign convention (+-1) used for local <-> synodic transformations.
 
         Following the convention adopted in Gómez et al. (2001):
 
         * L1, L2  ->  -1 ("lower" sign)
         * L3      ->  +1 ("upper" sign)
+        
+        Returns
+        -------
+        int
+            The sign convention for coordinate transformations.
         """
         return 1 if isinstance(self, L3Point) else -1
 
     @property
     def a(self) -> float:
-        r"""
-        Offset *a* along the x axis used in frame changes.
+        """
+        Offset a along the x axis used in frame changes.
 
         The relation x_L = mu + a links the equilibrium x coordinate in
         synodic coordinates (x_L) with the mass parameter mu.  Using the
-        distance gamma (``self.gamma``) to the closest primary we obtain:
+        distance gamma (self.gamma) to the closest primary we obtain:
 
             a = -1 + gamma   (L1)
             a = -1 - gamma   (L2)
             a =  gamma       (L3)
+            
+        Returns
+        -------
+        float
+            The offset value a (dimensionless).
+            
+        Raises
+        ------
+        AttributeError
+            If the offset is undefined for this point type.
         """
         if isinstance(self, L1Point):
             return -1 + self.gamma
@@ -105,13 +147,13 @@ class CollinearPoint(LibrationPoint):
 
     @property
     def linear_modes(self):
-        r"""
+        """
         Get the linear modes for the Libration point.
         
         Returns
         -------
         tuple
-            (lambda1, omega1, omega2) values
+            (lambda1, omega1, omega2) values in nondimensional units.
         """
         cached = self.cache_get(('linear_modes',))
         if cached is not None:
@@ -124,7 +166,13 @@ class CollinearPoint(LibrationPoint):
     @property
     @abstractmethod
     def _position_search_interval(self) -> list:
-        """Defines the search interval for finding the x-position."""
+        """Defines the search interval for finding the x-position.
+        
+        Returns
+        -------
+        list
+            [min_x, max_x] interval for root finding in nondimensional units.
+        """
         pass
 
     @property
@@ -136,28 +184,29 @@ class CollinearPoint(LibrationPoint):
         Returns
         -------
         tuple
-            (coefficients, search_range)
+            (coefficients, search_range) where coefficients is a list of
+            polynomial coefficients and search_range is (min_gamma, max_gamma).
         """
         pass
 
     def _find_position(self, primary_interval: list) -> float:
-        r"""
+        """
         Find the x-coordinate of a collinear point using retry logic.
         
         Parameters
         ----------
         primary_interval : list
-            Initial interval [a, b] to search for the root
+            Initial interval [a, b] to search for the root in nondimensional units.
             
         Returns
         -------
         float
-            x-coordinate of the libration point
+            x-coordinate of the libration point in nondimensional units.
             
         Raises
         ------
         RuntimeError
-            If both primary and fallback searches fail
+            If both primary and fallback searches fail.
         """
         func = lambda x_val: self._dOmega_dx(x_val)
         
@@ -173,22 +222,25 @@ class CollinearPoint(LibrationPoint):
             raise RuntimeError(err) from e
 
     def _solve_gamma_polynomial(self, coeffs: list, gamma_range: tuple) -> float:
-        r"""
+        """
         Solve the quintic polynomial for gamma with validation and fallback.
         
         Parameters
         ----------
         coeffs : list
-            Polynomial coefficients from highest to lowest degree
+            Polynomial coefficients from highest to lowest degree.
         gamma_range : tuple
-            (min_gamma, max_gamma) valid range for this point type
-        fallback_approx : float
-            Fallback approximation if polynomial solving fails
+            (min_gamma, max_gamma) valid range for this point type.
             
         Returns
         -------
         float
-            The gamma value for this libration point
+            The gamma value for this libration point (dimensionless).
+            
+        Raises
+        ------
+        RuntimeError
+            If polynomial root finding fails or no valid root is found.
         """
         try:
             roots = np.roots(coeffs)
@@ -219,27 +271,52 @@ class CollinearPoint(LibrationPoint):
 
     @abstractmethod
     def _compute_gamma(self) -> float:
-        r"""
+        """
         Compute the gamma value for this specific libration point.
         
         Returns
         -------
         float
-            The gamma value calculated with high precision
+            The gamma value calculated with high precision (dimensionless).
         """
         pass
 
     @abstractmethod
     def _compute_cn(self, n: int) -> float:
-        r"""
+        """
         Compute the actual value of cn(mu) without caching.
         This needs to be implemented by subclasses.
+        
+        Parameters
+        ----------
+        n : int
+            The coefficient index (must be non-negative).
+            
+        Returns
+        -------
+        float
+            The cn coefficient value (dimensionless).
         """
         pass
 
     def _cn(self, n: int) -> float:
-        r"""
+        """
         Get the cn coefficient with caching.
+        
+        Parameters
+        ----------
+        n : int
+            The coefficient index (must be non-negative).
+            
+        Returns
+        -------
+        float
+            The cn coefficient value (dimensionless).
+            
+        Raises
+        ------
+        ValueError
+            If n is negative.
         """
         if n < 0:
             raise ValueError(f"Coefficient index n must be non-negative, got {n}")
@@ -255,18 +332,23 @@ class CollinearPoint(LibrationPoint):
         return self.cache_set(('cn', n), value)
 
     def _dOmega_dx(self, x: float) -> float:
-        r"""
+        """
         Compute the derivative of the effective potential with respect to x.
         
         Parameters
         ----------
         x : float
-            x-coordinate in the rotating frame
+            x-coordinate in the rotating frame (nondimensional units).
         
         Returns
         -------
         float
-            Value of dOmega/dx at the given x-coordinate
+            Value of dOmega/dx at the given x-coordinate (nondimensional units).
+            
+        Raises
+        ------
+        ValueError
+            If x-coordinate is too close to primary masses.
         """
         mu = self.mu
         # Handle potential division by zero if x coincides with primary positions
@@ -290,6 +372,14 @@ class CollinearPoint(LibrationPoint):
         return term1 + term2 + term3
 
     def _J_hess_H2(self) -> np.ndarray:
+        """
+        Compute the 6x6 symplectic matrix for the quadratic Hamiltonian H2.
+        
+        Returns
+        -------
+        numpy.ndarray, shape (6, 6)
+            The symplectic matrix J for the quadratic Hamiltonian.
+        """
         c2 = self._cn(2)
         omega2 = np.sqrt(c2)
 
@@ -309,6 +399,19 @@ class CollinearPoint(LibrationPoint):
         return J_full
 
     def _compute_linear_modes(self):
+        """
+        Compute the linear modes (lambda1, omega1, omega2) for the libration point.
+        
+        Returns
+        -------
+        tuple
+            (lambda1, omega1, omega2) in nondimensional units.
+            
+        Raises
+        ------
+        RuntimeError
+            If no real eigenvalues are found or expected frequencies are missing.
+        """
         J_full = self._J_hess_H2()
         c2 = self._cn(2)
         omega2_expected = np.sqrt(c2)
@@ -338,20 +441,25 @@ class CollinearPoint(LibrationPoint):
         return (float(lambda1), float(omega1_val), float(omega2_val))
 
     def _scale_factor(self, lambda1, omega1):
-        r"""
+        """
         Calculate the normalization factors s1 and s2 used in the normal form transformation.
         
         Parameters
         ----------
         lambda1 : float
-            The hyperbolic mode value
+            The hyperbolic mode value (nondimensional units).
         omega1 : float
-            The elliptic mode value
+            The elliptic mode value (nondimensional units).
             
         Returns
         -------
-        s1, s2 : tuple of float
-            The normalization factors for the hyperbolic and elliptic components
+        tuple
+            (s1, s2) normalization factors for the hyperbolic and elliptic components.
+            
+        Raises
+        ------
+        RuntimeError
+            If the expressions for s1 or s2 are negative.
         """
         c2_hp = hp(self._cn(2))
         lambda1_hp = hp(lambda1)
@@ -380,13 +488,13 @@ class CollinearPoint(LibrationPoint):
         return float(expr1_hp.sqrt()), float(expr2_hp.sqrt())
 
     def _get_linear_data(self) -> LinearData:
-        r"""
+        """
         Get the linear data for the Libration point.
         
         Returns
         -------
-        LinearData
-            Object containing the linear data for the Libration point
+        :class:`LinearData`
+            Object containing the linear data for the Libration point.
         """
         # Get cached values
         lambda1, omega1, omega2 = self.linear_modes
@@ -405,29 +513,39 @@ class CollinearPoint(LibrationPoint):
         )
 
     def _calculate_position(self) -> np.ndarray:
-        r"""
+        """
         Calculate the position of the point by finding the root of dOmega/dx
         within a search interval defined by the concrete subclass.
+        
+        Returns
+        -------
+        numpy.ndarray, shape (3,)
+            Position vector [x, y, z] in nondimensional units.
         """
         x = self._find_position(self._position_search_interval)
         return np.array([x, 0, 0], dtype=np.float64)
 
     def _compute_gamma(self) -> float:
-        r"""
+        """
         Compute gamma for the libration point by solving the quintic polynomial
         defined by the concrete subclass.
+        
+        Returns
+        -------
+        float
+            The gamma value (dimensionless).
         """
         coeffs, search_range = self._gamma_poly_def
         return self._solve_gamma_polynomial(coeffs, search_range)
 
     def normal_form_transform(self) -> Tuple[np.ndarray, np.ndarray]:
-        r"""
-        Build the 6x6 symplectic matrix C that sends H_2 to normal form.
+        """
+        Build the 6x6 symplectic matrix C that sends H2 to normal form.
 
         Returns
         -------
         tuple
-            (C, Cinv) where C is the symplectic transformation matrix and Cinv is its inverse
+            (C, Cinv) where C is the symplectic transformation matrix and Cinv is its inverse.
         """
         # Check cache first
         cache_key = ('normal_form_transform',)
@@ -487,42 +605,82 @@ class CollinearPoint(LibrationPoint):
 
 
 class L1Point(CollinearPoint):
-    r"""
+    """
     L1 Libration point, located between the two primary bodies.
+    
+    The L1 point is situated between the two primary bodies on the line
+    connecting them. It is characterized by saddle-center stability with
+    one unstable direction and two center directions.
     
     Parameters
     ----------
-    mu : float
-        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+    system : :class:`hiten.system.base.System`
+        The CR3BP system containing the mass parameter mu.
     """
     
     def __init__(self, system: "System"):
-        r"""
+        """
         Initialize the L1 Libration point.
+        
+        Parameters
+        ----------
+        system : :class:`hiten.system.base.System`
+            The CR3BP system containing the mass parameter mu.
         """
         super().__init__(system)
 
     @property
     def idx(self) -> int:
+        """Get the libration point index.
+        
+        Returns
+        -------
+        int
+            The libration point index (1 for L1).
+        """
         return 1
 
     @property
     def _position_search_interval(self) -> list:
-        """Search interval for L1's x-position."""
+        """Search interval for L1's x-position.
+        
+        Returns
+        -------
+        list
+            [min_x, max_x] interval for root finding in nondimensional units.
+            L1 is between the primaries: -mu < x < 1-mu.
+        """
         # L1 is between the primaries: -mu < x < 1-mu
         return [-self.mu + 0.01, 1 - self.mu - 0.01]
 
     @property
     def _gamma_poly_def(self) -> Tuple[list, tuple]:
-        """Quintic polynomial definition for L1's gamma value."""
+        """Quintic polynomial definition for L1's gamma value.
+        
+        Returns
+        -------
+        tuple
+            (coefficients, search_range) for the L1 quintic polynomial.
+            The polynomial is: x^5 - (3-mu)x^4 + (3-2mu)x^3 - mux^2 + 2mux - mu = 0.
+        """
         mu = self.mu
         # Coefficients for L1 quintic: x^5 - (3-mu)x^4 + (3-2mu)x^3 - mux^2 + 2mux - mu = 0
         coeffs = [1, -(3 - mu), (3 - 2 * mu), -mu, 2 * mu, -mu]
         return coeffs, (0, 1)
 
     def _compute_cn(self, n: int) -> float:
-        r"""
+        """
         Compute cn coefficient for L1 using Jorba & Masdemont (1999), eq. (3).
+        
+        Parameters
+        ----------
+        n : int
+            The coefficient index (must be non-negative).
+            
+        Returns
+        -------
+        float
+            The cn coefficient value (dimensionless).
         """
         gamma = self.gamma
         mu = self.mu
@@ -535,42 +693,82 @@ class L1Point(CollinearPoint):
 
 
 class L2Point(CollinearPoint):
-    r"""
+    """
     L2 Libration point, located beyond the smaller primary body.
+    
+    The L2 point is situated beyond the smaller primary body on the line
+    connecting the primaries. It is characterized by saddle-center stability
+    with one unstable direction and two center directions.
     
     Parameters
     ----------
-    mu : float
-        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+    system : :class:`hiten.system.base.System`
+        The CR3BP system containing the mass parameter mu.
     """
     
     def __init__(self, system: "System"):
-        r"""
+        """
         Initialize the L2 Libration point.
+        
+        Parameters
+        ----------
+        system : :class:`hiten.system.base.System`
+            The CR3BP system containing the mass parameter mu.
         """
         super().__init__(system)
 
     @property
     def idx(self) -> int:
+        """Get the libration point index.
+        
+        Returns
+        -------
+        int
+            The libration point index (2 for L2).
+        """
         return 2
 
     @property
     def _position_search_interval(self) -> list:
-        """Search interval for L2's x-position."""
+        """Search interval for L2's x-position.
+        
+        Returns
+        -------
+        list
+            [min_x, max_x] interval for root finding in nondimensional units.
+            L2 is beyond the smaller primary: x > 1-mu.
+        """
         # L2 is beyond the smaller primary: x > 1-mu
         return [1 - self.mu + 0.001, 2.0]
 
     @property
     def _gamma_poly_def(self) -> Tuple[list, tuple]:
-        """Quintic polynomial definition for L2's gamma value."""
+        """Quintic polynomial definition for L2's gamma value.
+        
+        Returns
+        -------
+        tuple
+            (coefficients, search_range) for the L2 quintic polynomial.
+            The polynomial is: x^5 + (3-mu)x^4 + (3-2mu)x^3 - mux^2 - 2mux - mu = 0.
+        """
         mu = self.mu
         # Coefficients for L2 quintic: x^5 + (3-mu)x^4 + (3-2mu)x^3 - mux^2 - 2mux - mu = 0
         coeffs = [1, (3 - mu), (3 - 2 * mu), -mu, -2 * mu, -mu]
         return coeffs, (0, 1)
 
     def _compute_cn(self, n: int) -> float:
-        r"""
+        """
         Compute cn coefficient for L2 using Jorba & Masdemont (1999), eq. (3).
+        
+        Parameters
+        ----------
+        n : int
+            The coefficient index (must be non-negative).
+            
+        Returns
+        -------
+        float
+            The cn coefficient value (dimensionless).
         """
         gamma = self.gamma
         mu = self.mu
@@ -583,34 +781,64 @@ class L2Point(CollinearPoint):
 
 
 class L3Point(CollinearPoint):
-    r"""
+    """
     L3 Libration point, located beyond the larger primary body.
+    
+    The L3 point is situated beyond the larger primary body on the line
+    connecting the primaries. It is characterized by saddle-center stability
+    with one unstable direction and two center directions.
     
     Parameters
     ----------
-    mu : float
-        Mass parameter of the CR3BP system (ratio of smaller to total mass)
+    system : :class:`hiten.system.base.System`
+        The CR3BP system containing the mass parameter mu.
     """
     
     def __init__(self, system: "System"):
-        r"""
+        """
         Initialize the L3 Libration point.
+        
+        Parameters
+        ----------
+        system : :class:`hiten.system.base.System`
+            The CR3BP system containing the mass parameter mu.
         """
         super().__init__(system)
 
     @property
     def idx(self) -> int:
+        """Get the libration point index.
+        
+        Returns
+        -------
+        int
+            The libration point index (3 for L3).
+        """
         return 3
 
     @property
     def _position_search_interval(self) -> list:
-        """Search interval for L3's x-position."""
+        """Search interval for L3's x-position.
+        
+        Returns
+        -------
+        list
+            [min_x, max_x] interval for root finding in nondimensional units.
+            L3 is beyond the larger primary: x < -mu.
+        """
         # L3 is beyond the larger primary: x < -mu
         return [-1.5, -self.mu - 0.001]
 
     @property
     def _gamma_poly_def(self) -> Tuple[list, tuple]:
-        """Quintic polynomial definition for L3's gamma value."""
+        """Quintic polynomial definition for L3's gamma value.
+        
+        Returns
+        -------
+        tuple
+            (coefficients, search_range) for the L3 quintic polynomial.
+            The polynomial is: x^5 + (2+mu)x^4 + (1+2mu)x^3 - mu_1x^2 - 2mu_1x - mu_1 = 0.
+        """
         mu = self.mu
         mu1 = 1 - mu  # mass of larger primary
         # Coefficients for L3 quintic: x^5 + (2+mu)x^4 + (1+2mu)x^3 - mu_1x^2 - 2mu_1x - mu_1 = 0
@@ -618,8 +846,18 @@ class L3Point(CollinearPoint):
         return coeffs, (0.5, 1.5)
 
     def _compute_cn(self, n: int) -> float:
-        r"""
+        """
         Compute cn coefficient for L3 using Jorba & Masdemont (1999), eq. (3).
+        
+        Parameters
+        ----------
+        n : int
+            The coefficient index (must be non-negative).
+            
+        Returns
+        -------
+        float
+            The cn coefficient value (dimensionless).
         """
         gamma = self.gamma
         mu = self.mu

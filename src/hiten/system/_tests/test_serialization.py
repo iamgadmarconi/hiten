@@ -94,7 +94,7 @@ def test_serialization() -> None:
 
     # Verify stored points via the new API
     _assert_equal(
-        "Poincaré map points",
+        "Poincare map points",
         pmap.get_points(),
         pmap_loaded.get_points(),
     )

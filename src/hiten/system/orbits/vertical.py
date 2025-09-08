@@ -1,14 +1,14 @@
-r"""
-hiten.system.orbits.vertical
-======================
+"""Periodic vertical orbits of the circular restricted three-body problem.
 
-Periodic vertical orbits of the circular restricted three-body problem.
-
-This module supplies concrete realisations of :pyclass:`hiten.system.orbits.base.PeriodicOrbit`
+This module supplies concrete realisations of :class:`hiten.system.orbits.base.PeriodicOrbit`
 corresponding to the vertical family around the collinear libration points
-:math:`L_1` and :math:`L_2`.  Each class provides an analytical first guess
-together with a customised differential corrector that exploits the symmetries
-of the family.
+L1 and L2. Each class provides an analytical first guess together with a
+customised differential corrector that exploits the symmetries of the family.
+
+Notes
+-----
+All positions and velocities are expressed in nondimensional units where the
+distance between the primaries is unity and the orbital period is 2*pi.
 
 References
 ----------
@@ -32,20 +32,25 @@ if TYPE_CHECKING:
 
 
 class VerticalOrbit(PeriodicOrbit):
-    r"""
+    """
     Vertical family about a collinear libration point.
 
     The orbit oscillates out of the synodic plane and is symmetric with
-    respect to the :math:`x`-:math:`z` plane.  Initial-guess generation is not
+    respect to the x-z plane. Initial-guess generation is not
     yet available.
 
     Parameters
     ----------
-    libration_point : CollinearPoint
-        Target :pyclass:`CollinearPoint` around
-        which the orbit is computed.
+    libration_point : :class:`hiten.system.libration.collinear.CollinearPoint`
+        Target collinear libration point around which the orbit is computed.
     initial_state : Sequence[float] or None, optional
-        Optional six-dimensional initial state vector.
+        Six-dimensional initial state vector [x, y, z, vx, vy, vz] in
+        nondimensional units. If None, must be provided manually.
+
+    Attributes
+    ----------
+    _amplitude_z : float or None
+        z-amplitude of the vertical orbit (nondimensional units).
 
     Notes
     -----
@@ -56,26 +61,68 @@ class VerticalOrbit(PeriodicOrbit):
     _family = "vertical"
 
     def __init__(self, libration_point: CollinearPoint, initial_state: Optional[Sequence[float]] = None):
+        """Initialize a Vertical orbit.
+        
+        Parameters
+        ----------
+        libration_point : :class:`hiten.system.libration.collinear.CollinearPoint`
+            The libration point around which the vertical orbit is computed.
+        initial_state : Sequence[float], optional
+            Initial state vector [x, y, z, vx, vy, vz] in nondimensional units.
+            If None, must be provided manually.
+        """
         super().__init__(libration_point, initial_state)
 
     def _initial_guess(self) -> NDArray[np.float64]:
+        """Generate initial guess for Vertical orbit.
+        
+        This method is not yet implemented for vertical orbits.
+        
+        Returns
+        -------
+        numpy.ndarray, shape (6,)
+            The initial state vector in nondimensional units.
+            
+        Raises
+        ------
+        NotImplementedError
+            Initial guess generation is not yet implemented for vertical orbits.
+        """
         raise NotImplementedError("Initial guess is not implemented for Vertical orbits.")
 
     @property
     def amplitude(self) -> float:
-        """(Read-only) Current z-amplitude of the vertical orbit."""
+        """(Read-only) Current z-amplitude of the vertical orbit.
+        
+        Returns
+        -------
+        float
+            The z-amplitude in nondimensional units.
+        """
         if getattr(self, "_initial_state", None) is not None:
             return float(abs(self._initial_state[SynodicState.Z]))
         return float(self._amplitude_z)
 
     @property
     def eccentricity(self) -> float:
-        """Eccentricity is not a well-defined concept for vertical orbits."""
+        """Eccentricity is not a well-defined concept for vertical orbits.
+        
+        Returns
+        -------
+        float
+            NaN since eccentricity is not defined for vertical orbits.
+        """
         return np.nan
 
     @property
     def _correction_config(self) -> "_OrbitCorrectionConfig":
-        """Provides the differential correction configuration for vertical orbits."""
+        """Provides the differential correction configuration for vertical orbits.
+        
+        Returns
+        -------
+        :class:`hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`
+            The correction configuration for vertical orbits.
+        """
         from hiten.algorithms.corrector.interfaces import \
             _OrbitCorrectionConfig
         return _OrbitCorrectionConfig(
@@ -88,7 +135,13 @@ class VerticalOrbit(PeriodicOrbit):
 
     @property
     def _continuation_config(self) -> "_OrbitContinuationConfig":
-        """Default continuation parameter: vary the out-of-plane amplitude."""
+        """Default continuation parameter: vary the out-of-plane amplitude.
+        
+        Returns
+        -------
+        :class:`hiten.algorithms.continuation.interfaces._OrbitContinuationConfig`
+            The continuation configuration for vertical orbits.
+        """
         from hiten.algorithms.continuation.interfaces import \
             _OrbitContinuationConfig
         return _OrbitContinuationConfig(state=SynodicState.Z, amplitude=True)
