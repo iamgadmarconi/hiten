@@ -16,10 +16,12 @@ components for advanced customization.
 
 Examples
 -------------
-Here's a basic example of continuing a family of Halo orbits:
+Here's a basic example of continuing a family of Halo orbits in the
+z-amplitude using natural parameter continuation:
 
 >>> from hiten.system import System
 >>> from hiten.algorithms.continuation.predictors import _StateParameter
+>>> from hiten.algorithms.utils.types import SynodicState as S
 >>>
 >>> # Setup system and initial orbit
 >>> system = System.from_bodies("earth", "moon")
@@ -27,35 +29,48 @@ Here's a basic example of continuing a family of Halo orbits:
 >>> halo = l1.create_orbit('halo', amplitude_z=0.5, zenith='southern')
 >>> halo.correct()
 >>>
->>> # Create continuation algorithm
+>>> # Create continuation algorithm in amplitude of z
 >>> continuation = _StateParameter(
->>>     initial_orbit=halo,
->>>     parameter_indices=[2],  # Continue in z-component
->>>     step_size=0.01,
->>>     max_steps=100
->>> )
+...     initial_orbit=halo,
+...     state=S.Z,
+...     amplitude=True,
+...     target=(float(halo.amplitude), float(halo.amplitude) * 1.5),
+...     step=0.005,
+...     max_orbits=50,
+...     corrector_kwargs={'tol': 1e-9, 'max_attempts': 50},
+... )
 >>>
 >>> # Run continuation
 >>> family = continuation.run()
->>> 
->>> # Analyze results
 >>> print(f"Generated {len(family)} orbits in family")
->>> for orbit in family:
->>>     print(f"z-amplitude: {orbit.initial_state[2]:.4f}, period: {orbit.period:.4f}")
 
 Advanced Usage
 --------------
 For advanced users, the framework supports custom continuation algorithms:
 
->>> from hiten.algorithms.continuation.base import _ContinuationEngine
+>>> import numpy as np
 >>> from hiten.algorithms.continuation.interfaces import _PeriodicOrbitContinuationInterface
->>> from hiten.algorithms.continuation.strategies import _NaturalParameter
+>>> from hiten.algorithms.continuation.strategies import (
+...     _NaturalParameter, _NaturalParameterStep,
+... )
 >>>
 >>> class CustomContinuation(_PeriodicOrbitContinuationInterface, _NaturalParameter):
->>>     def __init__(self, initial_orbit, custom_predictor, **kwargs):
->>>         from hiten.algorithms.continuation.strategies import _NaturalParameterStep
->>>         stepper = _NaturalParameterStep(custom_predictor)
->>>         super().__init__(stepper, initial_orbit=initial_orbit, **kwargs)
+...     def __init__(self, *, initial_orbit, target, step, **kwargs):
+...         # Simple predictor that nudges the z-state
+...         self._predict_fn = lambda orbit, s: (
+...             orbit.initial_state.copy().astype(float)
+...             + np.array([0.0, 0.0, float(s[0]), 0.0, 0.0, 0.0])
+...         )
+...         super().__init__(
+...             initial_orbit=initial_orbit,
+...             parameter_getter=lambda o: np.asarray([float(o.initial_state[2])]),
+...             target=target,
+...             step=step,
+...             **kwargs,
+...         )
+...
+...     def _make_stepper(self):
+...         return _NaturalParameterStep(self._predict_fn)
 
 See Also
 --------

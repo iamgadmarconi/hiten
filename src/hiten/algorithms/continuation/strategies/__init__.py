@@ -31,15 +31,27 @@ The strategies are typically used through higher-level interfaces in the
 :mod:`hiten.algorithms.continuation` package, but can be combined directly
 for custom continuation scenarios:
 
+>>> import numpy as np
 >>> from hiten.algorithms.continuation.strategies._algorithms import _NaturalParameter
 >>> from hiten.algorithms.continuation.strategies._stepping import _NaturalParameterStep
 >>> from hiten.algorithms.continuation.interfaces import _PeriodicOrbitContinuationInterface
 >>>
 >>> # Create a custom continuation algorithm
 >>> class CustomOrbitContinuation(_NaturalParameter, _PeriodicOrbitContinuationInterface):
->>>     def __init__(self, predictor_fn, **kwargs):
->>>         stepper = _NaturalParameterStep(predictor_fn)
->>>         super().__init__(stepper, **kwargs)
+...     def __init__(self, *, initial_orbit, target, step, **kwargs):
+...         self._predict_fn = lambda orb, s: (
+...             orb.initial_state.copy().astype(float) + np.array([0, 0, float(s[0]), 0, 0, 0])
+...         )
+...         super().__init__(
+...             initial_orbit=initial_orbit,
+...             parameter_getter=lambda o: np.asarray([float(o.initial_state[2])]),
+...             target=target,
+...             step=step,
+...             **kwargs,
+...         )
+...
+...     def _make_stepper(self):
+...         return _NaturalParameterStep(self._predict_fn)
 
 See Also
 --------
