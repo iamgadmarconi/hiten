@@ -71,7 +71,11 @@ class _ConnectionProblem:
     >>> 
     >>> source_if = _ManifoldInterface(manifold=unstable_manifold)
     >>> target_if = _ManifoldInterface(manifold=stable_manifold)
-    >>> section_cfg = _SynodicMapConfig(x=0.8)
+    >>> section_cfg = _SynodicMapConfig(
+    ...     section_axis="x",
+    ...     section_offset=0.8,
+    ...     plane_coords=("y", "z")
+    ... )
     >>> search_cfg = _SearchConfig(delta_v_tol=1e-3)
     >>> 
     >>> problem = _ConnectionProblem(

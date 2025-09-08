@@ -70,7 +70,11 @@ class _ManifoldInterface:
     >>> 
     >>> # Assuming manifold is computed
     >>> interface = _ManifoldInterface(manifold=computed_manifold)
-    >>> section_cfg = _SynodicMapConfig(x=0.8)
+    >>> section_cfg = _SynodicMapConfig(
+    ...     section_axis="x",
+    ...     section_offset=0.8,
+    ...     plane_coords=("y", "z")
+    ... )
     >>> section = interface.to_section(config=section_cfg, direction=1)
     >>> print(f"Found {len(section.points)} intersection points")
 
