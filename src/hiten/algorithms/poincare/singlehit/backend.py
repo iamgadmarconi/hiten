@@ -1,20 +1,13 @@
-"""
-Concrete backend implementation for single-hit Poincare sections.
+"""Concrete backend implementation for single-hit Poincare sections.
 
 This module provides a concrete implementation of the return map backend
 for single-hit Poincare sections. It implements the generic surface-of-section
 crossing search using numerical integration and root finding.
 
-The main class :class:`_SingleHitBackend` extends the abstract base class
+The main class :class:`hiten.algorithms.poincare.singlehit.backend._SingleHitBackend` 
+extends the abstract base class
 to provide a complete implementation for finding single trajectory-section
 intersections.
-
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
-
-Guckenheimer, J. & Holmes, P. (1983). *Nonlinear Oscillations, Dynamical
-Systems, and Bifurcations of Vector Fields*. Springer.
 """
 
 from typing import Callable, Literal

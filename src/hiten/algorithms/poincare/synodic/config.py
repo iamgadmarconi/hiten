@@ -1,5 +1,4 @@
-"""
-Configuration classes for synodic Poincare sections.
+"""Configuration classes for synodic Poincare sections.
 
 This module provides configuration classes for synodic Poincare section
 detection and refinement. It defines the parameters needed for section
@@ -8,13 +7,6 @@ geometry, detection algorithms, and numerical settings.
 The implementation supports both explicit normal vector specification
 and axis-based section definitions, with comprehensive numerical
 settings for detection and refinement algorithms.
-
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
-
-Guckenheimer, J. & Holmes, P. (1983). *Nonlinear Oscillations, Dynamical
-Systems, and Bifurcations of Vector Fields*. Springer.
 """
 
 from dataclasses import dataclass
@@ -77,7 +69,9 @@ class _SynodicMapConfig(_ReturnMapBaseConfig):
 
     The class automatically sets `compute_on_init = False` since synodic
     maps require precomputed trajectories to be supplied explicitly via
-    :meth:`from_orbit`, :meth:`from_manifold`, or :meth:`from_trajectories`.
+    :meth:`hiten.algorithms.poincare.synodic.base.SynodicMap.from_orbit`, 
+    :meth:`hiten.algorithms.poincare.synodic.base.SynodicMap.from_manifold`, 
+    or :meth:`hiten.algorithms.poincare.synodic.base.SynodicMap.from_trajectories`.
 
     All tolerances and offsets are in nondimensional units unless
     otherwise specified.
@@ -104,7 +98,9 @@ class _SynodicMapConfig(_ReturnMapBaseConfig):
         -----
         This method automatically sets `compute_on_init = False` since
         synodic maps require precomputed trajectories to be supplied
-        explicitly via :meth:`from_orbit`, :meth:`from_manifold`, or :meth:`from_trajectories`.
+        explicitly via :meth:`hiten.algorithms.poincare.synodic.base.SynodicMap.from_orbit`, 
+        :meth:`hiten.algorithms.poincare.synodic.base.SynodicMap.from_manifold`, 
+        or :meth:`hiten.algorithms.poincare.synodic.base.SynodicMap.from_trajectories`.
         The user-provided value for `compute_on_init` is ignored.
         """
         # Synodic maps do not support computing on init because trajectories
@@ -261,7 +257,7 @@ def _get_section_config(
 
     Returns
     -------
-    :class:`_SynodicSectionConfig`
+    :class:`hiten.algorithms.poincare.synodic.config._SynodicSectionConfig`
         A cached section configuration object with the specified geometry.
 
     Notes

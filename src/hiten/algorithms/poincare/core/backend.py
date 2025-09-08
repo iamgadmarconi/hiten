@@ -1,20 +1,13 @@
-"""
-Abstract base class for Poincare return map backends.
+"""Abstract base class for Poincare return map backends.
 
 This module provides the abstract base class for implementing return map
 backends in the Poincare section framework. Backends handle the numerical
 integration and section crossing detection for computing Poincare maps.
 
-The main class :class:`_ReturnMapBackend` defines the interface that all
-concrete backends must implement, including the core `step_to_section`
-method and common functionality for root finding and bracket expansion.
-
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
-
-Guckenheimer, J. & Holmes, P. (1983). *Nonlinear Oscillations, Dynamical
-Systems, and Bifurcations of Vector Fields*. Springer.
+The main class :class:`hiten.algorithms.poincare.core.backend._ReturnMapBackend` 
+defines the interface that all concrete backends must implement, including the 
+core `step_to_section` method and common functionality for root finding and bracket 
+expansion.
 """
 
 from abc import ABC, abstractmethod

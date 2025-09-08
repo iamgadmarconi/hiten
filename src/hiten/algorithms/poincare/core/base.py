@@ -1,5 +1,4 @@
-"""
-Base classes for Poincare return map implementations.
+"""Base classes for Poincare return map implementations.
 
 This module provides the foundational classes for implementing Poincare
 return maps in the hiten framework. It defines the core interfaces and
@@ -103,9 +102,12 @@ class _ReturnMapBase(ABC):
 
     Concrete subclasses must implement four key methods:
 
-    1. :meth:`_build_backend` -> :class:`hiten.algorithms.poincare.core.backend._ReturnMapBackend`
-    2. :meth:`_build_seeding_strategy` -> :class:`hiten.algorithms.poincare.core.strategies._SeedingStrategyBase`
-    3. :meth:`ic` -> 6D initial conditions in the problem frame
+    1. :meth:`hiten.algorithms.poincare.core.base._ReturnMapBase._build_backend` 
+        -> :class:`hiten.algorithms.poincare.core.backend._ReturnMapBackend`
+    2. :meth:`hiten.algorithms.poincare.core.base._ReturnMapBase._build_seeding_strategy` 
+        -> :class:`hiten.algorithms.poincare.core.strategies._SeedingStrategyBase`
+    3. :meth:`hiten.algorithms.poincare.core.base._ReturnMapBase.ic` 
+        -> 6D initial conditions in the problem frame
     4. *(optionally)* overrides for plotting or advanced projections
 
     Parameters
@@ -117,11 +119,11 @@ class _ReturnMapBase(ABC):
     ----------
     config : :class:`hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`
         The configuration object.
-    _sections : dict[str, :class:`_Section`]
+    _sections : dict[str, :class:`hiten.algorithms.poincare.core.base._Section`]
         Cache of computed sections, keyed by section coordinate.
     _engines : dict[str, :class:`hiten.algorithms.poincare.core.engine._ReturnMapEngine`]
         Cache of engines, keyed by section coordinate.
-    _section : :class:`_Section` or None
+    _section : :class:`hiten.algorithms.poincare.core.base._Section` or None
         The most recently accessed section.
 
     Notes
@@ -276,7 +278,7 @@ class _ReturnMapBase(ABC):
 
         Returns
         -------
-        :class:`_Section`
+        :class:`hiten.algorithms.poincare.core.base._Section`
             The computed section data.
 
         Raises
@@ -350,7 +352,7 @@ class _ReturnMapBase(ABC):
 
         Parameters
         ----------
-        section : :class:`_Section`
+        section : :class:`hiten.algorithms.poincare.core.base._Section`
             The section containing the axis labels.
         axis : str
             The axis label to find.

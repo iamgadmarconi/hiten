@@ -1,5 +1,4 @@
-"""
-Poincare section algorithms for dynamical systems.
+"""Poincare section algorithms for dynamical systems.
 
 This module provides algorithms for computing Poincare sections in
 dynamical systems, particularly the circular restricted three-body

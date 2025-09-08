@@ -1,24 +1,17 @@
-"""
-Abstract base class for Poincare return map engines.
+"""Abstract base class for Poincare return map engines.
 
 This module provides the abstract base class for implementing Poincare
 return map engines in the hiten framework. Engines coordinate backends
 and seeding strategies to compute complete return maps.
 
-The main class :class:`_ReturnMapEngine` defines the interface that all
-concrete engines must implement, including the core `compute_section`
-method and common functionality for caching and configuration.
+The main class :class:`hiten.algorithms.poincare.core.engine._ReturnMapEngine` 
+defines the interface that all concrete engines must implement, including 
+the core `compute_section` method and common functionality for caching and 
+configuration.
 
 The engine layer sits between the high-level return map interface
 and the low-level numerical integration, providing a clean separation
 of concerns and enabling different computational strategies.
-
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
-
-Guckenheimer, J. & Holmes, P. (1983). *Nonlinear Oscillations, Dynamical
-Systems, and Bifurcations of Vector Fields*. Springer.
 """
 
 import os

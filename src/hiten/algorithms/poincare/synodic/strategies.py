@@ -1,25 +1,17 @@
-"""
-Seeding strategies for synodic Poincare sections.
+"""Seeding strategies for synodic Poincare sections.
 
 This module provides seeding strategy classes for synodic Poincare section
 detection. Since synodic maps operate on precomputed trajectories rather
 than generating initial conditions, the strategies are minimal and serve
 as placeholders to satisfy the engine interface.
 
-The main class :class:`_NoOpStrategy` implements a no-operation seeding
-strategy that raises NotImplementedError when called, since synodic maps
-do not require seed generation.
+The main class :class:`hiten.algorithms.poincare.synodic.strategies._NoOpStrategy` 
+implements a no-operation seeding strategy that raises NotImplementedError when called, 
+since synodic maps do not require seed generation.
 
 The implementation provides a minimal interface that satisfies the
 engine requirements while clearly indicating that seed generation
 is not applicable for synodic maps.
-
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
-
-Guckenheimer, J. & Holmes, P. (1983). *Nonlinear Oscillations, Dynamical
-Systems, and Bifurcations of Vector Fields*. Springer.
 """
 
 from hiten.algorithms.poincare.core.strategies import _SeedingStrategyBase

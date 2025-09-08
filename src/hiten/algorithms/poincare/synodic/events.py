@@ -1,29 +1,22 @@
-"""
-Synodic (rotating-frame) section events.
+"""Synodic (rotating-frame) section events.
 
 This module defines an affine hyperplane event usable as a Poincare
 surface in the synodic CRTBP frame. It generalizes axis-aligned planes
 by allowing arbitrary normals in the 6D state space, providing
 flexibility for defining complex section geometries.
 
-The main class :class:`_AffinePlaneEvent` extends the base surface event
-to provide specialized functionality for synodic Poincare sections,
-including support for arbitrary hyperplane orientations and convenient
-axis-aligned plane construction.
+The main class :class:`hiten.algorithms.poincare.synodic.events._AffinePlaneEvent` 
+extends the base surface event to provide specialized functionality for synodic 
+Poincare sections, including support for arbitrary hyperplane orientations 
+and convenient axis-aligned plane construction.
 
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
-
-Guckenheimer, J. & Holmes, P. (1983). *Nonlinear Oscillations, Dynamical
-Systems, and Bifurcations of Vector Fields*. Springer.
 """
 
 from typing import Literal, Sequence
 
 import numpy as np
 
-from hiten.algorithms.poincare.core.events import _SurfaceEvent, _PlaneEvent
+from hiten.algorithms.poincare.core.events import _PlaneEvent, _SurfaceEvent
 
 
 class _AffinePlaneEvent(_SurfaceEvent):
@@ -187,7 +180,7 @@ class _AffinePlaneEvent(_SurfaceEvent):
 
         Returns
         -------
-        :class:`_AffinePlaneEvent`
+        :class:`hiten.algorithms.poincare.synodic.events._AffinePlaneEvent`
             An affine plane event with axis-aligned normal.
 
         Raises
@@ -199,11 +192,11 @@ class _AffinePlaneEvent(_SurfaceEvent):
         --------
         Create a plane at x = 1 - mu::
 
-            plane = _AffinePlaneEvent.axis_plane("x", c=1-mu)
+        >>> plane = hiten.algorithms.poincare.synodic.events._AffinePlaneEvent.axis_plane("x", c=1-mu)
 
         Create a plane at y = 0::
 
-            plane = _AffinePlaneEvent.axis_plane(1, c=0.0)
+        >>> plane = hiten.algorithms.poincare.synodic.events._AffinePlaneEvent.axis_plane(1, c=0.0)
 
         Notes
         -----

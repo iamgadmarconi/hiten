@@ -1,21 +1,13 @@
-"""
-Concrete backend implementation for synodic Poincare sections.
+"""Concrete backend implementation for synodic Poincare sections.
 
 This module provides a concrete implementation of the return map backend
 for synodic Poincare sections. It implements detection and refinement
 algorithms for finding trajectory-section intersections on precomputed
 trajectories.
 
-The main class :class:`_SynodicDetectionBackend` extends the abstract base
-class to provide detection capabilities on precomputed trajectory data,
+The main class :class:`hiten.algorithms.poincare.synodic.backend._SynodicDetectionBackend` 
+extends the abstract base class to provide detection capabilities on precomputed trajectory data,
 including cubic interpolation and Newton refinement for high accuracy.
-
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
-
-Guckenheimer, J. & Holmes, P. (1983). *Nonlinear Oscillations, Dynamical
-Systems, and Bifurcations of Vector Fields*. Springer.
 """
 
 from dataclasses import dataclass

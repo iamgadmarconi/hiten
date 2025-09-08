@@ -1,17 +1,9 @@
-"""
-Event classes for Poincare section detection and intersection handling.
+"""Event classes for Poincare section detection and intersection handling.
 
 This module provides classes for defining Poincare section events and
 handling trajectory-section intersections. It defines the interface
 for surface event detection and provides concrete implementations
 for common section types.
-
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
-
-Guckenheimer, J. & Holmes, P. (1983). *Nonlinear Oscillations, Dynamical
-Systems, and Bifurcations of Vector Fields*. Springer.
 """
 
 from abc import ABC, abstractmethod

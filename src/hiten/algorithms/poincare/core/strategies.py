@@ -5,7 +5,8 @@ This module provides the abstract base class for implementing seeding
 strategies in the Poincare section framework. Seeding strategies determine
 how initial conditions are generated for return map computation.
 
-The main class :class:`_SeedingStrategyBase` defines the interface that
+The main class :class:`hiten.algorithms.poincare.core.strategies._SeedingStrategyBase` 
+defines the interface that all concrete seeding strategies must implement, providing common
 all concrete seeding strategies must implement, providing common
 functionality for configuration management and seed generation.
 
@@ -13,13 +14,6 @@ Different strategies are appropriate for different dynamical systems
 and analysis goals. The base class provides a common interface while
 allowing concrete implementations to define their specific seeding
 logic.
-
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
-
-Guckenheimer, J. & Holmes, P. (1983). *Nonlinear Oscillations, Dynamical
-Systems, and Bifurcations of Vector Fields*. Springer.
 """
 
 from abc import ABC, abstractmethod

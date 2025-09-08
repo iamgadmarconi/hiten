@@ -1,5 +1,4 @@
-"""
-User-facing interface for synodic Poincare sections.
+"""User-facing interface for synodic Poincare sections.
 
 This module provides the main `SynodicMap` class that serves as the
 user-facing interface for synodic Poincare section detection on
@@ -7,16 +6,10 @@ precomputed trajectories. It implements a facade pattern that mirrors
 the API of other return-map modules while providing specialized
 functionality for synodic sections.
 
-The main class :class:`SynodicMap` extends the abstract base class
+The main class :class:`hiten.algorithms.poincare.synodic.base.SynodicMap` extends the abstract base class
 to provide detection capabilities on precomputed trajectory data,
 including support for orbits, manifolds, and custom trajectories.
 
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
-
-Guckenheimer, J. & Holmes, P. (1983). *Nonlinear Oscillations, Dynamical
-Systems, and Bifurcations of Vector Fields*. Springer.
 """
 
 from typing import Literal, Optional, Sequence

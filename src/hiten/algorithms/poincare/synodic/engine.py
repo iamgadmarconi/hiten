@@ -1,5 +1,4 @@
-"""
-Engine classes for synodic Poincare section detection.
+"""Engine classes for synodic Poincare section detection.
 
 This module provides the engine classes that coordinate the detection
 and refinement of synodic Poincare sections on precomputed trajectories.
@@ -9,13 +8,6 @@ detection across multiple trajectories.
 The implementation provides high-accuracy detection using advanced
 numerical techniques including cubic Hermite interpolation and
 Newton refinement for precise crossing detection.
-
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
-
-Guckenheimer, J. & Holmes, P. (1983). *Nonlinear Oscillations, Dynamical
-Systems, and Bifurcations of Vector Fields*. Springer.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -117,7 +109,7 @@ class _SynodicEngine(_ReturnMapEngine):
         The detection backend for synodic sections.
     seed_strategy : :class:`hiten.algorithms.poincare.synodic.strategies._NoOpStrategy`
         The seeding strategy (no-op for synodic maps).
-    map_config : :class:`_SynodicEngineConfigAdapter`
+    map_config : :class:`hiten.algorithms.poincare.synodic.engine._SynodicEngineConfigAdapter`
         The configuration adapter for the engine.
 
     Attributes
@@ -155,7 +147,7 @@ class _SynodicEngine(_ReturnMapEngine):
             The detection backend for synodic sections.
         seed_strategy : :class:`hiten.algorithms.poincare.synodic.strategies._NoOpStrategy`
             The seeding strategy (no-op for synodic maps).
-        map_config : :class:`_SynodicEngineConfigAdapter`
+        map_config : :class:`hiten.algorithms.poincare.synodic.engine._SynodicEngineConfigAdapter`
             The configuration adapter for the engine.
 
         Notes
@@ -193,7 +185,7 @@ class _SynodicEngine(_ReturnMapEngine):
 
         Returns
         -------
-        :class:`_SynodicEngine`
+        :class:`hiten.algorithms.poincare.synodic.engine._SynodicEngine`
             Self for method chaining.
 
         Notes

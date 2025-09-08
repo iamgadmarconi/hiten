@@ -1,5 +1,4 @@
-"""
-Protocol for seeding strategies in Poincare return map computation.
+"""Protocol for seeding strategies in Poincare return map computation.
 
 This module provides the protocol interface for seeding strategies
 that generate initial conditions for Poincare return map computation.

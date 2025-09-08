@@ -1,5 +1,4 @@
-"""
-Configuration classes for Poincare return map implementations.
+"""Configuration classes for Poincare return map implementations.
 
 This module provides configuration dataclasses and protocols for
 Poincare return map computations. It defines the configuration
@@ -8,13 +7,6 @@ interface that all return map implementations must support.
 The configuration system provides a flexible way to tune these
 parameters for different dynamical systems and computational
 requirements.
-
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
-
-Guckenheimer, J. & Holmes, P. (1983). *Nonlinear Oscillations, Dynamical
-Systems, and Bifurcations of Vector Fields*. Springer.
 """
 
 from abc import ABC
@@ -83,11 +75,6 @@ class _IntegrationConfig(ABC):
 
     Notes
     -----
-    The choice of integration method and parameters significantly
-    affects the accuracy and efficiency of Poincare map computation.
-    Symplectic methods are preferred for Hamiltonian systems as they
-    preserve the symplectic structure of the phase space.
-
     All time units are in nondimensional units unless otherwise
     specified.
     """
@@ -172,10 +159,10 @@ class _ReturnMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _IterationConfi
     Notes
     -----
     This class inherits all parameters from:
-    - :class:`_ReturnMapBaseConfig`: Base orchestration parameters
-    - :class:`_IntegrationConfig`: Numerical integration parameters
-    - :class:`_IterationConfig`: Iteration control parameters
-    - :class:`_SeedingConfig`: Seeding strategy parameters
+    - :class:`hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`: Base orchestration parameters
+    - :class:`hiten.algorithms.poincare.core.config._IntegrationConfig`: Numerical integration parameters
+    - :class:`hiten.algorithms.poincare.core.config._IterationConfig`: Iteration control parameters
+    - :class:`hiten.algorithms.poincare.core.config._SeedingConfig`: Seeding strategy parameters
 
     All time units are in nondimensional units unless otherwise
     specified.
