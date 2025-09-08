@@ -5,7 +5,7 @@ hiten.system.base
 High-level abstractions for the Circular Restricted Three-Body Problem (CR3BP).
 
 This module bundles the physical information of a binary system, computes the
-mass parameter :math:`\mu`, instantiates the underlying vector field via
+mass parameter mu, instantiates the underlying vector field via
 :pyfunc:`hiten.algorithms.dynamics.rtbp.rtbp_dynsys`, and pre-computes the five
 classical Lagrange (libration) points.
 
@@ -113,7 +113,7 @@ class System(object):
 
     @property
     def mu(self) -> float:
-        r"""Mass parameter :math:`\mu`."""
+        r"""Mass parameter mu."""
         return self._mu
 
     @property
@@ -138,13 +138,13 @@ class System(object):
         Returns
         -------
         float
-            Value of :math:`\mu`.
+            Value of mu.
 
         Notes
         -----
         The calculation is performed in high precision using
         :pyfunc:`hiten.utils.precision.hp` to mitigate numerical cancellation when
-        :math:`m_1 \approx m_2`.
+        the two masses are nearly equal.
         """
         logger.debug(f"Calculating mu: {self.secondary.mass} / ({self.primary.mass} + {self.secondary.mass})")
 

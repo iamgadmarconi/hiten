@@ -7,13 +7,13 @@ in the circular restricted three-body problem (CR3BP).
 
 The module provides:
 
-* :pyclass:`PeriodicOrbit` - an abstract base class that implements common
+- :pyclass:`PeriodicOrbit` - an abstract base class that implements common
   functionality such as energy evaluation, propagation wrappers, plotting and
   differential correction.
-* :pyclass:`GenericOrbit` - a minimal concrete implementation useful for
+- :pyclass:`GenericOrbit` - a minimal concrete implementation useful for
   arbitrary initial conditions when no analytical guess or specific correction
   is required.
-* Light-weight configuration containers (:pyclass:`_OrbitCorrectionConfig`) that 
+- Light-weight configuration containers (:pyclass:`_OrbitCorrectionConfig`) that 
   encapsulate user input for differential correction settings.
 
 References
@@ -69,7 +69,7 @@ class PeriodicOrbit(ABC):
         The libration point instance that anchors the family.
     initial_state : Sequence[float] or None, optional
         Initial condition in rotating canonical units
-        :math:`[x, y, z, \dot x, \dot y, \dot z]`. When *None* an analytical
+        [x, y, z, x_dot, y_dot, z_dot]. When *None* an analytical
         approximation is attempted.
 
     Attributes

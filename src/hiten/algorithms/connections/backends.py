@@ -221,7 +221,7 @@ def _refine_pairs_on_section(pu: np.ndarray, ps: np.ndarray, pairs: np.ndarray, 
 
 
 class _ConnectionsBackend:
-    """Encapsulates matching/refinement and ΔV computation for connections."""
+    """Encapsulates matching/refinement and delta-v computation for connections."""
 
     def solve(self, problem):
         # Lazy imports to avoid circulars at module import tim

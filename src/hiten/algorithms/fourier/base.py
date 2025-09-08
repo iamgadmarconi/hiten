@@ -25,7 +25,7 @@ from hiten.algorithms.utils.config import FASTMATH
 
 _N_MASK = 0x3F              # 6 bits
 _K_MASK = 0x7F              # 7 bits
-_K_OFFSET = 64              # shift applied to store signed kᵢ as unsigned
+_K_OFFSET = 64              # shift applied to store signed k_i as unsigned
 
 # upper bounds hard-wired by bit-width
 _MAX_N = _N_MASK

@@ -6,15 +6,15 @@ Abstract interfaces for numerical time integration.
 
 The module provides two core abstractions:
 
-* :pyclass:`_Solution` - an immutable container that stores a time grid, the
+- :pyclass:`_Solution` - an immutable container that stores a time grid, the
   associated state vectors, and, optionally, the vector field evaluations so
   that the trajectory can be queried by cubic Hermite interpolation.
-* :pyclass:`_Integrator` - an abstract base class that prescribes the public
+- :pyclass:`_Integrator` - an abstract base class that prescribes the public
   API for every concrete one-step or multi-step integrator.
 
 References
 ----------
-Hairer, E., Nørsett, S. P., & Wanner, G. (1993). "Solving Ordinary
+Hairer, E., Norsett, S. P., & Wanner, G. (1993). "Solving Ordinary
 Differential Equations I: Non-stiff Problems".
 """
 
@@ -34,12 +34,12 @@ class _Solution:
 
     Parameters
     ----------
-    times : numpy.ndarray, shape (:math:`n`,)
+    times : numpy.ndarray, shape (n,)
         Monotonically ordered time grid.
-    states : numpy.ndarray, shape (:math:`n`, :math:`d`)
+    states : numpy.ndarray, shape (n, d)
         State vectors corresponding to *times*.
-    derivatives : numpy.ndarray or None, optional, shape (:math:`n`, :math:`d`)
-        Evaluations of :math:`f(t,\mathbf y)` at the stored nodes. When
+    derivatives : numpy.ndarray or None, optional, shape (n, d)
+        Evaluations of f(t, y) at the stored nodes. When
         available a cubic Hermite interpolant is employed by
         :pyfunc:`_Solution.interpolate`; otherwise linear interpolation is used.
 
@@ -86,13 +86,13 @@ class _Solution:
         ----------
         t : float or array_like
             Query time or array of times contained in
-            :math:`[\text{times}[0],\,\text{times}[-1]]`.
+            [times[0], times[-1]].
 
         Returns
         -------
         numpy.ndarray
-            Interpolated state with shape (:math:`d`,) when *t* is scalar or
-            (:math:`m`, :math:`d`) when *t* comprises :math:`m` points.
+            Interpolated state with shape (d,) when *t* is scalar or
+            (m, d) when *t* comprises m points.
 
         Raises
         ------
