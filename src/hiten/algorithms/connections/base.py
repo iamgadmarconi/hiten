@@ -95,23 +95,23 @@ class Connection:
     >>> manifold_l2.compute(integration_fraction=1.0, step=0.005)
     >>> 
     >>> section_cfg = SynodicMapConfig(
-    >>>     section_axis="x",
-    >>>     section_offset=1 - mu,
-    >>>     plane_coords=("y", "z"),
-    >>>     interp_kind="cubic",
-    >>>     segment_refine=30,
-    >>>     tol_on_surface=1e-9,
-    >>>     dedup_time_tol=1e-9,
-    >>>     dedup_point_tol=1e-9,
-    >>>     max_hits_per_traj=None,
-    >>>     n_workers=None,
-    >>> )
+    ...     section_axis="x",
+    ...     section_offset=1 - mu,
+    ...     plane_coords=("y", "z"),
+    ...     interp_kind="cubic",
+    ...     segment_refine=30,
+    ...     tol_on_surface=1e-9,
+    ...     dedup_time_tol=1e-9,
+    ...     dedup_point_tol=1e-9,
+    ...     max_hits_per_traj=None,
+    ...     n_workers=None,
+    ... )
     >>> 
     >>> conn = Connection(
-    >>>     section=section_cfg,
-    >>>     direction=None,
-    >>>     search_cfg=SearchConfig(delta_v_tol=1, ballistic_tol=1e-8, eps2d=1e-3),
-    >>> )
+    ...     section=section_cfg,
+    ...     direction=None,
+    ...     search_cfg=SearchConfig(delta_v_tol=1, ballistic_tol=1e-8, eps2d=1e-3),
+    ... )
     >>> 
     >>> conn.solve(manifold_l1, manifold_l2)
     >>> print(conn)

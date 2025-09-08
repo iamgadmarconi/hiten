@@ -17,7 +17,7 @@ See Also
 from typing import Tuple
 
 import numpy as np
-from numba import njit
+from numba import njit  # external, referenced in plain text per docs
 
 from hiten.algorithms.connections.results import _ConnectionResult
 
@@ -109,8 +109,8 @@ def _radpair2d(query: np.ndarray, ref: np.ndarray, radius: float) -> np.ndarray:
 
     Notes
     -----
-    Uses :func:`_pair_counts` and :func:`_exclusive_prefix_sum` to efficiently
-    allocate and populate the output array.
+    Uses :func:`_pair_counts` and :func:`_exclusive_prefix_sum` to
+    efficiently allocate and populate the output array.
     """
     r2 = float(radius) * float(radius)
     counts = _pair_counts(query, ref, r2)
@@ -154,7 +154,8 @@ def _radius_pairs_2d(query: np.ndarray, ref: np.ndarray, radius: float) -> np.nd
     Notes
     -----
     This is the main entry point for 2D radius-based pairing. It prepares
-    contiguous arrays and delegates to the numba-accelerated :func:`_radpair2d`.
+    contiguous arrays and delegates to the numba accelerated
+    :func:`_radpair2d`.
     """
     q = np.ascontiguousarray(query, dtype=np.float64)
     r = np.ascontiguousarray(ref, dtype=np.float64)
@@ -178,7 +179,8 @@ def _nearest_neighbor_2d_numba(points: np.ndarray) -> np.ndarray:
 
     Notes
     -----
-    This is the numba-accelerated implementation used by :func:`_nearest_neighbor_2d`.
+    This is the numba accelerated implementation used by
+    :func:`_nearest_neighbor_2d`.
     """
     n = points.shape[0]
     out = np.full(n, -1, dtype=np.int64)
@@ -216,7 +218,7 @@ def _nearest_neighbor_2d(points: np.ndarray) -> np.ndarray:
 
     Notes
     -----
-    This function prepares data and delegates to the numba-accelerated
+    This function prepares data and delegates to the numba accelerated
     :func:`_nearest_neighbor_2d_numba`.
     """
     p = np.ascontiguousarray(points, dtype=np.float64)
@@ -416,26 +418,27 @@ class _ConnectionsBackend:
 
         Parameters
         ----------
-        problem : object
-            Problem specification containing source/target sections, search parameters,
-            and synodic section definition.
+        problem : :class:`hiten.algorithms.connections.engine._ConnectionProblem`
+            Problem specification containing source/target sections, search
+            parameters, and synodic section definition.
 
         Returns
         -------
         list of :class:`hiten.algorithms.connections.results._ConnectionResult`
-            Connection results sorted by increasing delta_v (velocity change)
-            required for the transfer.
+            Connection results sorted by increasing Delta-V (velocity
+            change) required for the transfer.
 
         Notes
         -----
         The algorithm performs these steps:
-        1. Build section hits using ``problem.source.to_section()`` and ``problem.target.to_section()``
+        1. Build section hits using
+           ``problem.source.to_section()`` and ``problem.target.to_section()``
         2. Coarse 2D radius pairing via :func:`_radius_pairs_2d`
-        3. Mutual-nearest filtering to reduce false positives
-        4. On-section refinement via :func:`_refine_pairs_on_section`
+        3. Mutual nearest filtering to reduce false positives
+        4. On section refinement via :func:`_refine_pairs_on_section`
         5. Delta-V computation and classification (ballistic vs impulsive)
         """
-        # Lazy imports to avoid circulars at module import tim
+        # Lazy imports to avoid circular imports at module import time
         # 1) Build section hits on the provided synodic section
         sec_u = problem.source.to_section(problem.section, direction=problem.direction)
         sec_s = problem.target.to_section(problem.section, direction=problem.direction)
