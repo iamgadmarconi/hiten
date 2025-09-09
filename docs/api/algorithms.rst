@@ -519,77 +519,12 @@ The :class:`ExtendedSymplectic` class implements a factory for extended symplect
    :members: _map
    :exclude-members: __init__
 
-coefficients
-~~~~~~~~~~~~
+coefficients/
+~~~~~~~~~~~~~
 
 The coefficients module provides Butcher tableaux for various Runge-Kutta methods.
 
 .. currentmodule:: hiten.algorithms.integrators.coefficients
-
-DOP853 Coefficients
-^^^^^^^^^^^^^^^^^^^
-
-The DOP853 module provides the Butcher tableau for the Dormand-Prince 8(5,3) Runge-Kutta method.
-
-.. currentmodule:: hiten.algorithms.integrators.coefficients.dop853
-
-.. autodata:: N_STAGES
-.. autodata:: N_STAGES_EXTENDED
-.. autodata:: INTERPOLATOR_POWER
-.. autodata:: C
-.. autodata:: A
-.. autodata:: B
-.. autodata:: E3
-.. autodata:: E5
-.. autodata:: D
-
-RK4 Coefficients
-^^^^^^^^^^^^^^^^
-
-The RK4 module provides the Butcher tableau for the classical fourth-order Runge-Kutta method.
-
-.. currentmodule:: hiten.algorithms.integrators.coefficients.rk4
-
-.. autodata:: A
-.. autodata:: B
-.. autodata:: C
-
-RK45 Coefficients
-^^^^^^^^^^^^^^^^^
-
-The RK45 module provides the Butcher tableau for the Dormand-Prince 4(5) Runge-Kutta method.
-
-.. currentmodule:: hiten.algorithms.integrators.coefficients.rk45
-
-.. autodata:: C
-.. autodata:: A
-.. autodata:: B_HIGH
-.. autodata:: B_LOW
-.. autodata:: B
-.. autodata:: E
-.. autodata:: P
-
-RK6 Coefficients
-^^^^^^^^^^^^^^^^
-
-The RK6 module provides the Butcher tableau for a sixth-order Runge-Kutta method.
-
-.. currentmodule:: hiten.algorithms.integrators.coefficients.rk6
-
-.. autodata:: A
-.. autodata:: B
-.. autodata:: C
-
-RK8 Coefficients
-^^^^^^^^^^^^^^^^
-
-The RK8 module provides the Butcher tableau for an eighth-order Runge-Kutta method.
-
-.. currentmodule:: hiten.algorithms.integrators.coefficients.rk8
-
-.. autodata:: A
-.. autodata:: B
-.. autodata:: C
 
 Continuation
 ------------
