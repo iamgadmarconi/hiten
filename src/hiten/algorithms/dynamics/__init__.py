@@ -53,20 +53,15 @@ Koon, W. S.; Lo, M. W.; Marsden, J. E.; Ross, S. D. (2011).
 Caltech.
 """
 
-# Core framework components
-from .base import _DirectedSystem, _DynamicalSystem, _DynamicalSystemProtocol
-# Hamiltonian systems
+from .base import (_DirectedSystem, _DynamicalSystem, _DynamicalSystemProtocol,
+                   _propagate_dynsys, _validate_initial_state)
 from .hamiltonian import create_hamiltonian_system
-# Generic RHS adapters
 from .rhs import create_rhs_system
-# CR3BP systems  
 from .rtbp import jacobian_dynsys, rtbp_dynsys, variational_dynsys
-# Utilities - Energy and potential functions
 from .utils.energy import (crtbp_energy, effective_potential, energy_to_jacobi,
                            gravitational_potential, hill_region,
                            jacobi_to_energy, kinetic_energy, primary_distance,
                            pseudo_potential_at_point, secondary_distance)
-# Utilities - Linear algebra and stability analysis  
 from .utils.linalg import eigenvalue_decomposition
 
 __all__ = [
@@ -74,6 +69,8 @@ __all__ = [
     "_DynamicalSystem",
     "_DirectedSystem", 
     "_DynamicalSystemProtocol",
+    "_propagate_dynsys",
+    "_validate_initial_state",
     
     # CR3BP systems
     "rtbp_dynsys",

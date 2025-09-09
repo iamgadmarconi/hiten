@@ -63,7 +63,7 @@ class _DynamicalSystemProtocol(Protocol):
             
 
 class _DynamicalSystem(ABC):
-    r"""Provide an abstract base class for dynamical systems.
+    """Provide an abstract base class for dynamical systems.
 
     Provides common functionality and interface definition for concrete
     dynamical system implementations. Handles state space dimension
@@ -251,7 +251,7 @@ class _DirectedSystem(_DynamicalSystem):
             
         Returns
         -------
-        Any
+        typing.Any
             Attribute value from wrapped system.
             
         Raises

@@ -15,9 +15,21 @@ integrating dynamical systems with emphasis on applications in astrodynamics.
 Core Framework
 ~~~~~~~~~~~~~~
 
-.. autoclass:: _DynamicalSystem
+The core framework provides the base classes for dynamical systems and their interfaces. 
+An abstract base class for dynamical systems is provided, as well as a protocol for dynamical systems.
+
+Abstract Base Class
+~~~~~~~~~~~~~~~~~~~
+
+The :class:`_DynamicalSystem` class provides the foundation for implementing
+concrete dynamical systems that can be integrated numerically. It defines the
+minimal interface required for compatibility with the integrator framework
+and includes utilities for state validation and dimension checking.
+
+.. autoclass:: _DynamicalSystem()
    :members:
    :undoc-members:
+   :exclude-members: __init__
 
 .. autoclass:: _DirectedSystem
    :members:
@@ -26,6 +38,11 @@ Core Framework
 .. autoclass:: _DynamicalSystemProtocol
    :members:
    :undoc-members:
+   :no-index:
+
+.. autofunction:: _propagate_dynsys
+
+.. autofunction:: _validate_initial_state
 
 Integrators
 -----------
