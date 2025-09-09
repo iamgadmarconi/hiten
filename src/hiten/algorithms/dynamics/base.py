@@ -68,6 +68,16 @@ class _DynamicalSystem(ABC):
     Provides common functionality and interface definition for concrete
     dynamical system implementations. Handles state space dimension
     validation and provides utilities for state vector checking.
+        
+    Parameters
+    ----------
+    dim : int
+        Dimension of the state space (must be positive).
+        
+    Raises
+    ------
+    ValueError
+        If dim is not positive.
 
     Notes
     -----
@@ -81,18 +91,7 @@ class _DynamicalSystem(ABC):
     """
     
     def __init__(self, dim: int):
-        """Initialize the dynamical system.
-        
-        Parameters
-        ----------
-        dim : int
-            Dimension of the state space (must be positive).
-            
-        Raises
-        ------
-        ValueError
-            If dim is not positive.
-        """
+        """Initialize the dynamical system."""
         if dim <= 0:
             raise ValueError(f"Dimension must be positive, got {dim}")
         self._dim = dim
@@ -130,7 +129,7 @@ class _DynamicalSystem(ABC):
 
 
 class _DirectedSystem(_DynamicalSystem):
-    r"""Provide a directional wrapper for forward/backward time integration.
+    """Provide a directional wrapper for forward/backward time integration.
 
     Wraps another dynamical system to enable forward or backward time
     integration with selective component sign handling. Particularly useful
@@ -189,11 +188,8 @@ class _DirectedSystem(_DynamicalSystem):
     :func:`~hiten.algorithms.dynamics.base._propagate_dynsys` : Generic propagation using DirectedSystem
     """
 
-    def __init__(self,
-                 base_or_dim: "_DynamicalSystem | int",
-                 fwd: int = 1,
-                 flip_indices: "slice | Sequence[int] | None" = None):
-
+    def __init__(self, base_or_dim: "_DynamicalSystem | int", fwd: int = 1, flip_indices: "slice | Sequence[int] | None" = None):
+        """Initialize the directed system."""
         if isinstance(base_or_dim, _DynamicalSystem):
             self._base: "_DynamicalSystem | None" = base_or_dim
             dim = base_or_dim.dim
@@ -208,7 +204,7 @@ class _DirectedSystem(_DynamicalSystem):
 
     @property
     def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-
+        """Right-hand side function for ODE integration."""
         if self._base is None:
             raise AttributeError("`rhs` not implemented: subclass must provide "
                                  "its own implementation when no base system "
@@ -275,7 +271,7 @@ def _propagate_dynsys(
     order: int = 6,
     flip_indices: Sequence[int] | None = None,
 ) -> "_Solution":
-    r"""Generic trajectory propagation for dynamical systems.
+    """Generic trajectory propagation for dynamical systems.
 
     Internal utility that handles state validation, directional wrapping,
     and delegation to various integration backends. Supports multiple
@@ -283,7 +279,7 @@ def _propagate_dynsys(
 
     Parameters
     ----------
-    dynsys : _DynamicalSystem
+    dynsys : :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
         Dynamical system to integrate.
     state0 : Sequence[float]
         Initial state vector.
@@ -305,7 +301,7 @@ def _propagate_dynsys(
 
     Returns
     -------
-    _Solution
+    :class:`~hiten.algorithms.integrators.base._Solution`
         Integration solution containing times and states.
 
     Notes
@@ -384,7 +380,7 @@ def _validate_initial_state(state, expected_dim=6):
 
     Returns
     -------
-    ndarray
+    numpy.ndarray
         Validated state vector as float64 numpy array.
 
     Raises

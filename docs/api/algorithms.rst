@@ -31,18 +31,27 @@ and includes utilities for state validation and dimension checking.
    :undoc-members:
    :exclude-members: __init__
 
-.. autoclass:: _DirectedSystem
+The :class:`_DirectedSystem` class provides a directional wrapper for forward/backward time integration.
+
+.. autoclass:: _DirectedSystem()
    :members:
    :undoc-members:
+   :exclude-members: __init__
 
-.. autoclass:: _DynamicalSystemProtocol
+The :class:`_DynamicalSystemProtocol` class provides the protocol for the minimal interface for dynamical systems.
+
+.. autoclass:: _DynamicalSystemProtocol()
    :members:
    :undoc-members:
-   :no-index:
+   :exclude-members: __init__
 
-.. autofunction:: _propagate_dynsys
+The :func:`_propagate_dynsys` function provides a generic propagation function for dynamical systems.
 
-.. autofunction:: _validate_initial_state
+.. autofunction:: _propagate_dynsys()
+
+The :func:`_validate_initial_state` function provides a function to validate the initial state of a dynamical system.
+
+.. autofunction:: _validate_initial_state()
 
 Integrators
 -----------
