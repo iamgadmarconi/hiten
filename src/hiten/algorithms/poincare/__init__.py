@@ -9,9 +9,6 @@ implementations with various seeding strategies.
 from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
 from hiten.algorithms.poincare.centermanifold.config import \
     _CenterManifoldMapConfig as CenterManifoldMapConfig
-from hiten.algorithms.poincare.centermanifold.strategies import (
-    _AxisAlignedSeeding, _LevelSetsSeeding, _RadialSeeding, _RandomSeeding,
-    _SingleAxisSeeding)
 from hiten.algorithms.poincare.synodic.base import SynodicMap
 from hiten.algorithms.poincare.synodic.config import \
     _SynodicMapConfig as SynodicMapConfig
@@ -57,6 +54,11 @@ def _build_seeding_strategy(section_cfg, config):
     All time units are in nondimensional units unless otherwise specified.
     """
 
+    # Import here to avoid circular imports
+    from hiten.algorithms.poincare.centermanifold.strategies import (
+        _AxisAlignedSeeding, _LevelSetsSeeding, _RadialSeeding, _RandomSeeding,
+        _SingleAxisSeeding)
+
     strat = config.seed_strategy.lower()
 
     factories = {
@@ -75,11 +77,6 @@ def _build_seeding_strategy(section_cfg, config):
 
 __all__ = [
     "_build_seeding_strategy",
-    "_SingleAxisSeeding", 
-    "_AxisAlignedSeeding", 
-    "_LevelSetsSeeding", 
-    "_RadialSeeding", 
-    "_RandomSeeding",
     "CenterManifoldMap",   
     "CenterManifoldMapConfig",
     "SynodicMap",

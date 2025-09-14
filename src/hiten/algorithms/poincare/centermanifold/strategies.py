@@ -23,6 +23,58 @@ from hiten.algorithms.poincare.centermanifold.seeding import \
 from hiten.utils.log_config import logger
 
 
+def _make_strategy(kind: str, section_config: "_CenterManifoldSectionConfig", 
+                   map_config: "_CenterManifoldMapConfig", **kwargs) -> "_CenterManifoldSeedingBase":
+    """Factory returning a concrete seeding strategy.
+
+    Parameters
+    ----------
+    kind : str
+        Strategy identifier. Must be one of: 'single', 'axis_aligned', 
+        'level_sets', 'radial', or 'random'.
+    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+        Configuration describing the Poincare section parameters.
+    map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
+        Map-level configuration containing global parameters such as
+        ``n_seeds`` and ``seed_axis``.
+    **kwargs
+        Additional keyword arguments forwarded to the concrete strategy
+        constructor.
+
+    Returns
+    -------
+    :class:`~hiten.algorithms.poincare.centermanifold.seeding._CenterManifoldSeedingBase`
+        Concrete seeding strategy instance.
+
+    Raises
+    ------
+    ValueError
+        If ``kind`` is not a valid strategy identifier.
+
+    Notes
+    -----
+    The available strategies are:
+    - 'single': Single axis seeding along one coordinate direction
+    - 'axis_aligned': Seeding aligned with coordinate axes
+    - 'level_sets': Seeding based on level sets of the Hamiltonian
+    - 'radial': Radial seeding pattern from the periodic orbit
+    - 'random': Random seeding within specified bounds
+    """
+    _STRATEGY_MAP = {
+        "single": _SingleAxisSeeding,
+        "axis_aligned": _AxisAlignedSeeding,
+        "level_sets": _LevelSetsSeeding,
+        "radial": _RadialSeeding,
+        "random": _RandomSeeding,
+    }
+    
+    try:
+        cls = _STRATEGY_MAP[kind]
+    except KeyError as exc:
+        raise ValueError(f"Unknown seed_strategy '{kind}'") from exc
+    return cls(section_config, map_config, **kwargs)
+
+
 class _SingleAxisSeeding(_CenterManifoldSeedingBase):
     """Single axis seeding strategy.
 

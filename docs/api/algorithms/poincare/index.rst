@@ -8,11 +8,10 @@ The module is organized into several submodules:
 .. toctree::
    :maxdepth: 2
 
-   poincare/centermanifold
-   poincare/core
-   poincare/singlehit
-   poincare/synodic
-   poincare/utils
+   centermanifold
+   core
+   singlehit
+   synodic
+   utils
 
 .. currentmodule:: hiten.algorithms.poincare
-
