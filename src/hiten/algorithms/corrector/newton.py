@@ -24,21 +24,20 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
     handling of ill-conditioned Jacobians, and extensible hooks for
     customization. Uses multiple inheritance to separate step control
     from core Newton logic.
+
+    Parameters
+    ----------
+    line_search_config : _LineSearchConfig, bool, or None, optional
+        Armijo line search configuration:
+        - _LineSearchConfig: Custom line search parameters
+        - True: Use default line search parameters
+        - False/None: Disable line search (use full Newton steps)
+    **kwargs
+        Additional arguments passed to parent classes.
     """
 
     def __init__(self, *, line_search_config: _LineSearchConfig | bool | None = None, **kwargs) -> None:
-        """Initialize Newton solver with line search configuration.
-
-        Parameters
-        ----------
-        line_search_config : _LineSearchConfig, bool, or None, optional
-            Armijo line search configuration:
-            - _LineSearchConfig: Custom line search parameters
-            - True: Use default line search parameters
-            - False/None: Disable line search (use full Newton steps)
-        **kwargs
-            Additional arguments passed to parent classes.
-        """
+        """Initialize Newton solver with line search configuration."""
         # Delegate line-search handling to mix-in
         super().__init__(line_search_config=line_search_config, **kwargs)
 

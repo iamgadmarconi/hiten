@@ -95,13 +95,7 @@ class _ArmijoLineSearch:
     """
 
     def __init__(self, *, config: _LineSearchConfig) -> None:
-        """Initialize Armijo line search with configuration.
-        
-        Parameters
-        ----------
-        config : _LineSearchConfig
-            Line search configuration parameters.
-        """
+        """Initialize Armijo line search with configuration."""
         self.norm_fn = _default_norm if config.norm_fn is None else config.norm_fn
         self.residual_fn = config.residual_fn
         self.jacobian_fn = config.jacobian_fn
