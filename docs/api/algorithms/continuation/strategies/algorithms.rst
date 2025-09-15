@@ -3,7 +3,7 @@ Continuation Algorithm Strategies
 
 The algorithms module provides abstract base classes for different continuation algorithm strategies. Each strategy defines a particular approach to parameter continuation with specialized stepping logic, stopping criteria, and parameter handling.
 
-.. currentmodule:: hiten.algorithms.continuation.strategies.algorithms
+.. currentmodule:: hiten.algorithms.continuation.strategies._algorithms
 
 _NaturalParameter()
 ^^^^^^^^^^^^^^^^^^^^

@@ -333,7 +333,7 @@ The center module provides partial normal form computations for center manifold 
 .. toctree::
    :maxdepth: 2
 
-   center
+   hamiltonian/center
 
 normal/
 ~~~~~~~
@@ -343,5 +343,5 @@ The normal module provides full normal form computations for complete dynamical 
 .. toctree::
    :maxdepth: 2
 
-   normal
+   hamiltonian/normal
 

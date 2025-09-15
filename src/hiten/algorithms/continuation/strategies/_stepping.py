@@ -41,21 +41,6 @@ class _StepStrategy(Protocol):
     - Maintain auxiliary data structures (e.g., tangent vectors)
     - Respond to continuation events for internal bookkeeping
 
-    Methods
-    -------
-    __call__(last_solution, step)
-        Core stepping method for solution prediction.
-    on_initialisation(*args, **kwargs)
-        Hook called when continuation engine initializes.
-    on_iteration(*args, **kwargs)
-        Hook called at the start of each continuation iteration.
-    on_success(*args, **kwargs)
-        Hook called after successful solution acceptance.
-    on_reject(*args, **kwargs)
-        Hook called after solution rejection.
-    on_failure(*args, **kwargs)
-        Hook called after correction failure.
-
     Notes
     -----
     All hook methods are optional and can be implemented as no-ops.

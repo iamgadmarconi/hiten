@@ -101,12 +101,12 @@ def register_conversion(src_name: str, dst: "type[Hamiltonian] | str",
     Notes
     -----
     The conversion registry enables automatic transformation between coordinate
-    systems by maintaining a lookup table of (source, destination) -> function
+    systems by maintaining a lookup table of (source, destination) to function
     mappings. This supports the normal form computation pipeline where
     Hamiltonians must be transformed through multiple coordinate systems.
 
     Registered functions should follow the signature:
-    conversion_func(ham: Hamiltonian, **kwargs) -> Hamiltonian or tuple
+    conversion_func(ham: Hamiltonian, kwargs) returns Hamiltonian or tuple
 
     The kwargs typically include context (like libration points) and numerical
     parameters (like tolerances). Some conversions return tuples containing
@@ -124,7 +124,7 @@ def register_conversion(src_name: str, dst: "type[Hamiltonian] | str",
     >>> @register_conversion("physical", "real_modal", 
     ...                     required_context=["point"],
     ...                     default_params={"tol": 1e-12})
-    ... def physical_to_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
+    ... def physical_to_modal(ham: Hamiltonian, kwargs) -> Hamiltonian:
     ...     point = kwargs["point"]
     ...     tol = kwargs.get("tol", 1e-12)
     ...     # Transform polynomial using point's eigenvectors
@@ -163,8 +163,9 @@ def _physical_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
     ham : Hamiltonian
         Source Hamiltonian in physical coordinates, with polynomial coefficients
         in nondimensional energy units.
-    **kwargs
+    kwargs
         Conversion context and parameters:
+        
         - point : CollinearPoint or TriangularPoint
             Libration point providing the modal transformation matrix.
         - tol : float, default 1e-12
@@ -254,8 +255,9 @@ def _complex_modal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -> tupl
     ham : Hamiltonian
         Source Hamiltonian in complex modal coordinates, with polynomial
         coefficients in nondimensional energy units.
-    **kwargs
+    kwargs
         Conversion context and parameters:
+        
         - point : CollinearPoint or TriangularPoint
             Libration point providing eigenvalue information for resonance analysis.
         - tol_lie : float, default 1e-30
@@ -349,8 +351,9 @@ def _complex_partial_normal_to_center_manifold_complex(ham: Hamiltonian, **kwarg
     ham : Hamiltonian
         Source Hamiltonian in complex partial normal form, with polynomial
         coefficients in nondimensional energy units.
-    **kwargs
+    kwargs
         Conversion context and parameters:
+        
         - point : CollinearPoint or TriangularPoint
             Libration point determining the manifold structure and hyperbolic directions.
         - tol : float, default 1e-14

@@ -3,7 +3,7 @@ Continuation Interface Protocols
 
 The interfaces module defines protocol and base classes for continuation stepping strategies. These protocols specify the required interface for all stepping strategies used in continuation algorithms.
 
-.. currentmodule:: hiten.algorithms.continuation.strategies.interfaces
+.. currentmodule:: hiten.algorithms.continuation.strategies._step_interface
 
 _ContinuationStep()
 ^^^^^^^^^^^^^^^^^^^^

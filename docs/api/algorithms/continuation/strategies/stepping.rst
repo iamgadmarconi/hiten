@@ -3,7 +3,7 @@ Continuation Stepping Strategies
 
 The stepping module provides concrete implementations of stepping strategies used in continuation algorithms. These strategies handle the prediction phase of the continuation process, generating numerical representations of the next solution based on the current solution and step size.
 
-.. currentmodule:: hiten.algorithms.continuation.strategies.stepping
+.. currentmodule:: hiten.algorithms.continuation.strategies._stepping
 
 _StepStrategy()
 ^^^^^^^^^^^^^^^

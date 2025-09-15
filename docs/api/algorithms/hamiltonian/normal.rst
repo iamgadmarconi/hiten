@@ -3,7 +3,7 @@ Full Normal Forms
 
 The normal module provides full normal form computations for complete dynamical reduction.
 
-.. currentmodule:: hiten.algorithms.hamiltonian.normal
+.. currentmodule:: hiten.algorithms.hamiltonian.normal._lie
 
 _lie_transform()
 ^^^^^^^^^^^^^^^^

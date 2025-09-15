@@ -104,7 +104,7 @@ The strategies module provides continuation strategies and stepping methods.
 .. toctree::
    :maxdepth: 2
 
-   strategies/index
+   continuation/strategies/index
 
 events.py
 ~~~~~~~~~

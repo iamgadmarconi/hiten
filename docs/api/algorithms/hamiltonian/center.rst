@@ -3,7 +3,7 @@ Center Manifold Normal Forms
 
 The center module provides partial normal form computations for center manifold analysis.
 
-.. currentmodule:: hiten.algorithms.hamiltonian.center
+.. currentmodule:: hiten.algorithms.hamiltonian.center._lie
 
 _lie_transform()
 ^^^^^^^^^^^^^^^^
