@@ -84,27 +84,6 @@ class LyapunovOrbit(PeriodicOrbit):
             amplitude_x: Optional[float] = None,
             initial_state: Optional[Sequence[float]] = None
         ):
-        """Initialize a Lyapunov orbit.
-        
-        Parameters
-        ----------
-        libration_point : :class:`~hiten.system.libration.base.LibrationPoint`
-            The libration point around which the Lyapunov orbit is computed.
-        amplitude_x : float, optional
-            x-amplitude of the Lyapunov orbit in nondimensional units.
-        initial_state : Sequence[float], optional
-            Initial state vector [x, y, z, vx, vy, vz] in nondimensional units.
-            
-        Raises
-        ------
-        ValueError
-            If conflicting parameters are provided or required parameters are missing.
-        TypeError
-            If libration_point is not a :class:`~hiten.system.libration.collinear.CollinearPoint`.
-        NotImplementedError
-            If L3 libration point is used.
-        """
-        
         # Validate constructor parameters
         if initial_state is not None and amplitude_x is not None:
             raise ValueError("Cannot provide both an initial_state and an analytical parameter (amplitude_x).")
