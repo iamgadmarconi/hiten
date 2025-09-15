@@ -110,6 +110,14 @@ class _InvariantTori:
     is constructed from a periodic orbit by analyzing the monodromy matrix
     and computing the associated eigenvector field.
 
+    Parameters
+    ----------
+    orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
+        Corrected periodic orbit about which the torus is constructed. The
+        orbit must expose a valid period attribute - no propagation is
+        performed here; we only integrate the variational equations to
+        obtain the state-transition matrices required by the algorithm.
+
     Mathematical Background
     ----------------------
     The invariant torus is parameterized by two angles:
@@ -128,21 +136,7 @@ class _InvariantTori:
 
     def __init__(self, orbit: PeriodicOrbit):
         """
-        Initialize the invariant torus computation.
-
-        Parameters
-        ----------
-        orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
-            Corrected periodic orbit about which the torus is constructed. The
-            orbit must expose a valid period attribute - no propagation is
-            performed here; we only integrate the variational equations to
-            obtain the state-transition matrices required by the algorithm.
-
-        Raises
-        ------
-        ValueError
-            If the orbit period is None (orbit not corrected).
-        """
+        Initialize the invariant torus computation."""
         if orbit.period is None:
             raise ValueError("The generating orbit must be corrected first (period is None).")
 

@@ -5,14 +5,14 @@ The utils module provides utility functions for interpolation and numerical meth
 
 .. currentmodule:: hiten.algorithms.poincare.utils
 
-.. autofunction:: _interp_linear
+.. autofunction:: _interp_linear()
 
 Linear interpolation function for trajectory segments. Efficiently interpolates between two states at given times using linear approximation.
 
-.. autofunction:: _hermite_scalar
+.. autofunction:: _hermite_scalar()
 
 Scalar Hermite interpolation function. Computes high-order interpolation using function values and derivatives for improved accuracy in section crossing detection.
 
-.. autofunction:: _hermite_der
+.. autofunction:: _hermite_der()
 
 Hermite interpolation derivative function. Computes the derivative of Hermite interpolated values, useful for velocity and acceleration calculations in trajectory refinement.

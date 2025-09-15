@@ -70,24 +70,7 @@ class SynodicMap(_ReturnMapBase):
     """
 
     def __init__(self, map_cfg: Optional[_SynodicMapConfig] = None) -> None:
-        """Initialize the synodic Poincare map.
-
-        Parameters
-        ----------
-        map_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`, optional
-            Configuration object containing detection parameters, section geometry,
-            and refinement settings. If None, uses default configuration.
-
-        Notes
-        -----
-        This constructor initializes the synodic Poincare map by:
-        1. Setting up the configuration (using defaults if not provided)
-        2. Building the section configuration from the map configuration
-        3. Creating the detection engine with the appropriate backend and strategy
-
-        The initialization process ensures that all components are properly
-        configured for synodic Poincare section detection.
-        """
+        """Initialize the synodic Poincare map."""
         cfg = map_cfg or _SynodicMapConfig()
         super().__init__(cfg)  # stores in self.config
         self._section_cfg = self._build_section_config(cfg)

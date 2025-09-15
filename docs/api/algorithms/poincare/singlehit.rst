@@ -5,16 +5,16 @@ The singlehit module provides single-hit Poincare section detection for individu
 
 .. currentmodule:: hiten.algorithms.poincare.singlehit
 
-.. autoclass:: _SingleHitBackend
+.. autoclass:: _SingleHitBackend()
    :members:
-   :special-members: __init__
+   :exclude-members: __init__
 
 Backend for single-hit Poincare section detection. Implements efficient algorithms for finding the next section crossing from a given initial state using numerical integration and root finding.
 
-.. autofunction:: find_crossing
+.. autofunction:: find_crossing()
 
 High-level function for finding a single Poincare section crossing. Provides a convenient interface for detecting section crossings from initial conditions.
 
-.. autofunction:: _plane_crossing_factory
+.. autofunction:: _plane_crossing_factory()
 
 Factory function for creating plane crossing detection functions. Generates specialized crossing detection functions for specific coordinate planes.
