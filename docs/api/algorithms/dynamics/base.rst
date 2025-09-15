@@ -29,7 +29,7 @@ Particularly useful for Hamiltonian systems where momentum variables change sign
 .. autoclass:: _DirectedSystem()
    :members:
    :undoc-members:
-   :exclude-members: __init__, dim
+   :exclude-members: __init__, dim, __repr__, __getattr__
 
 _DynamicalSystemProtocol()
 ^^^^^^^^^^^^^^^^^^^^^^^^^^

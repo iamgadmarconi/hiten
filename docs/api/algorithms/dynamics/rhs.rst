@@ -17,7 +17,7 @@ and includes utilities for state validation and dimension checking.
 .. autoclass:: _RHSSystem()
    :members:
    :undoc-members:
-   :exclude-members: __init__, dim
+   :exclude-members: __init__, dim, __repr__
 
 The class automatically compiles the RHS function using Numba if it is not already a compiled Numba dispatcher.
 

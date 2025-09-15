@@ -12,7 +12,7 @@ The :class:`_HamiltonianSystemProtocol` class extends the base dynamical system 
 
 .. autoclass:: _HamiltonianSystemProtocol()
    :members: n_dof, dH_dQ, dH_dP, poly_H
-   :exclude-members: __init__
+   :exclude-members: __init__, __repr__
 
 _HamiltonianSystem()
 ^^^^^^^^^^^^^^^^^^^^
