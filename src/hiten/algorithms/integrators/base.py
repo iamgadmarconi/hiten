@@ -170,7 +170,6 @@ class _Integrator(ABC):
     """
     
     def __init__(self, name: str, **options):
-        """Initialize the integrator with a name and optional parameters."""
         self.name = name
         self.options = options
     

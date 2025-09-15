@@ -160,23 +160,6 @@ class _FixedStepRK(_RungeKuttaBase):
     """
 
     def __init__(self, name: str, A: np.ndarray, B: np.ndarray, C: np.ndarray, order: int, **options):
-        """Initialize a fixed-step Runge-Kutta integrator.
-        
-        Parameters
-        ----------
-        name : str
-            Human readable identifier of the scheme.
-        A : numpy.ndarray
-            Butcher tableau A matrix (stage coefficients).
-        B : numpy.ndarray
-            Butcher tableau B vector (weights).
-        C : numpy.ndarray
-            Butcher tableau C vector (nodes).
-        order : int
-            Formal order of accuracy of the method.
-        **options
-            Additional keyword options forwarded to the base :class:`~hiten.algorithms.integrators.base._Integrator`.
-        """
         self._A = A
         self._B_HIGH = B
         self._B_LOW = None
@@ -329,23 +312,6 @@ class _AdaptiveStepRK(_RungeKuttaBase):
                  max_step: float = np.inf,
                  min_step: Optional[float] = None,
                  **options):
-        """Initialize an adaptive step-size Runge-Kutta integrator.
-        
-        Parameters
-        ----------
-        name : str, default "AdaptiveRK"
-            Identifier passed to the :class:`~hiten.algorithms.integrators.base._Integrator` base class.
-        rtol, atol : float, optional
-            Relative and absolute error tolerances.  Defaults are read from
-            :data:`~hiten.utils.config.TOL`.
-        max_step : float, optional
-            Upper bound on the step size.  infinity by default.
-        min_step : float or None, optional
-            Lower bound on the step size.  When *None* the value is derived from
-            machine precision.
-        **options
-            Additional keyword options forwarded to the base :class:`~hiten.algorithms.integrators.base._Integrator`.
-        """
         super().__init__(name, **options)
         self._rtol = rtol
         self._atol = atol
