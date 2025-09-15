@@ -109,7 +109,7 @@ The :class:`_Number` class provides a number class that supports high-precision 
    :exclude-members: __init__
 
 hp()
-^^^
+^^^^
 
 The :func:`hp` function creates a high-precision number instance.
 

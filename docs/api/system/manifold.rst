@@ -7,22 +7,22 @@ This module provides the fundamental classes for representing and computing inva
 
 .. currentmodule:: hiten.system.manifold
 
-Manifold
---------
+Manifold()
+^^^^^^^^^^
 
 Base class for invariant manifolds.
 
-.. autoclass:: Manifold
+.. autoclass:: Manifold()
    :members:
    :undoc-members:
-   :exclude-members: __init__
+   :exclude-members: __init__, __str__, __repr__
 
-ManifoldResult
---------------
+ManifoldResult()
+^^^^^^^^^^^^^^^^
 
 Container for manifold computation results.
 
-.. autoclass:: ManifoldResult
+.. autoclass:: ManifoldResult()
    :members:
    :undoc-members:
-   :exclude-members: __init__
+   :exclude-members: __init__, __iter__

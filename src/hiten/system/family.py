@@ -93,38 +93,12 @@ class OrbitFamily:
         return cls(list(engine.family), parameter_name, np.asarray(engine.parameter_values))
 
     def __len__(self) -> int:
-        """Return the number of orbits in the family.
-        
-        Returns
-        -------
-        int
-            Number of orbits in the family.
-        """
         return len(self.orbits)
 
     def __iter__(self) -> Iterator[PeriodicOrbit]:
-        """Return an iterator over the orbits in the family.
-        
-        Returns
-        -------
-        Iterator[:class:`~hiten.system.orbits.base.PeriodicOrbit`]
-            Iterator over the orbits in the family.
-        """
         return iter(self.orbits)
 
     def __getitem__(self, idx):
-        """Get an orbit by index.
-        
-        Parameters
-        ----------
-        idx : int or slice
-            Index or slice to access orbits.
-            
-        Returns
-        -------
-        :class:`~hiten.system.orbits.base.PeriodicOrbit` or list
-            The orbit(s) at the specified index(es).
-        """
         return self.orbits[idx]
 
     @property
@@ -257,13 +231,6 @@ class OrbitFamily:
         return cls(orbits, param_name, param_vals)
 
     def __repr__(self) -> str:
-        """Return a detailed string representation of the OrbitFamily.
-        
-        Returns
-        -------
-        str
-            String representation showing number of orbits and parameter name.
-        """
         return f"OrbitFamily(n_orbits={len(self)}, parameter='{self.parameter_name}')"
 
     def plot(self, *, dark_mode: bool = True, save: bool = False, filepath: str = "orbit_family.svg", **kwargs):

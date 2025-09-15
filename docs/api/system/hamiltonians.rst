@@ -14,22 +14,22 @@ The base module provides the core Hamiltonian framework.
 
 .. currentmodule:: hiten.system.hamiltonians.base
 
-Hamiltonian
-^^^^^^^^^^^
+Hamiltonian()
+^^^^^^^^^^^^^
 
 Abstract container for a specific polynomial Hamiltonian representation.
 
-.. autoclass:: Hamiltonian
+.. autoclass:: Hamiltonian()
    :members:
    :undoc-members:
    :exclude-members: __init__
 
-LieGeneratingFunction
-^^^^^^^^^^^^^^^^^^^^^
+LieGeneratingFunction()
+^^^^^^^^^^^^^^^^^^^^^^^
 
 Class for Lie generating functions in canonical transformations.
 
-.. autoclass:: LieGeneratingFunction
+.. autoclass:: LieGeneratingFunction()
    :members:
    :undoc-members:
    :exclude-members: __init__
@@ -41,12 +41,12 @@ The pipeline module provides Hamiltonian transformation pipeline classes.
 
 .. currentmodule:: hiten.system.hamiltonians.pipeline
 
-HamiltonianPipeline
-^^^^^^^^^^^^^^^^^^^
+HamiltonianPipeline()
+^^^^^^^^^^^^^^^^^^^^^
 
 Manages the transformation pipeline for Hamiltonian representations.
 
-.. autoclass:: HamiltonianPipeline
+.. autoclass:: HamiltonianPipeline()
    :members:
    :undoc-members:
    :exclude-members: __init__

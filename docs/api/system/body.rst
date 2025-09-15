@@ -7,12 +7,12 @@ The module defines the :class:`~hiten.system.body.Body` class, a minimal contain
 
 .. currentmodule:: hiten.system.body
 
-Body
-----
+Body()
+^^^^^^
 
 Celestial body container for CR3BP systems.
 
-.. autoclass:: Body
+.. autoclass:: Body()
    :members:
    :undoc-members:
-   :exclude-members: __init__
+   :exclude-members: __init__, __repr__, __str__

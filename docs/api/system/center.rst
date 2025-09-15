@@ -7,12 +7,12 @@ All heavy algebra is performed symbolically on packed coefficient arrays. Only N
 
 .. currentmodule:: hiten.system.center
 
-CenterManifold
---------------
+CenterManifold()
+^^^^^^^^^^^^^^^^
 
 Centre manifold normal-form builder for libration points.
 
-.. autoclass:: CenterManifold
+.. autoclass:: CenterManifold()
    :members:
    :undoc-members:
-   :exclude-members: __init__
+   :exclude-members: __init__, __repr__, __str__

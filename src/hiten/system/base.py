@@ -76,18 +76,6 @@ class System(object):
     libration point classes; this wrapper simply orchestrates them.
     """
     def __init__(self, primary: Body, secondary: Body, distance: float):
-        """Initialize the CR3BP system based on the provided configuration.
-        
-        Parameters
-        ----------
-        primary : :class:`~hiten.system.body.Body`
-            The primary gravitating body.
-        secondary : :class:`~hiten.system.body.Body`
-            The secondary gravitating body.
-        distance : float
-            Characteristic separation between the bodies in km.
-        """
-
         logger.info(f"Initializing System with primary='{primary.name}', secondary='{secondary.name}', distance={distance:.4e}")
         
         self._primary = primary

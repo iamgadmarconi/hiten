@@ -7,12 +7,12 @@ This module bundles the physical information of a binary system, computes the ma
 
 .. currentmodule:: hiten.system.base
 
-System
-------
+System()
+^^^^^^^^
 
 The main system class that provides a lightweight wrapper around the CR3BP dynamical system.
 
-.. autoclass:: System
+.. autoclass:: System()
    :members:
    :undoc-members:
-   :exclude-members: __init__
+   :exclude-members: __init__, __repr__, __str__

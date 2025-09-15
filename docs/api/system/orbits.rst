@@ -14,12 +14,12 @@ The base module provides the core periodic orbit framework.
 
 .. currentmodule:: hiten.system.orbits.base
 
-PeriodicOrbit
-^^^^^^^^^^^^^
+PeriodicOrbit()
+^^^^^^^^^^^^^^^
 
 Base class for periodic orbits.
 
-.. autoclass:: PeriodicOrbit
+.. autoclass:: PeriodicOrbit()
    :members:
    :undoc-members:
    :exclude-members: __init__
@@ -31,12 +31,12 @@ The halo module provides halo orbit classes.
 
 .. currentmodule:: hiten.system.orbits.halo
 
-HaloOrbit
-^^^^^^^^^
+HaloOrbit()
+^^^^^^^^^^^
 
 Halo orbit representation.
 
-.. autoclass:: HaloOrbit
+.. autoclass:: HaloOrbit()
    :members:
    :undoc-members:
    :exclude-members: __init__
@@ -48,12 +48,12 @@ The lyapunov module provides Lyapunov orbit classes.
 
 .. currentmodule:: hiten.system.orbits.lyapunov
 
-LyapunovOrbit
-^^^^^^^^^^^^^
+LyapunovOrbit()
+^^^^^^^^^^^^^^^
 
 Lyapunov orbit representation.
 
-.. autoclass:: LyapunovOrbit
+.. autoclass:: LyapunovOrbit()
    :members:
    :undoc-members:
    :exclude-members: __init__
@@ -65,12 +65,12 @@ The vertical module provides vertical orbit classes.
 
 .. currentmodule:: hiten.system.orbits.vertical
 
-VerticalOrbit
-^^^^^^^^^^^^^
+VerticalOrbit()
+^^^^^^^^^^^^^^^
 
 Vertical orbit representation.
 
-.. autoclass:: VerticalOrbit
+.. autoclass:: VerticalOrbit()
    :members:
    :undoc-members:
    :exclude-members: __init__

@@ -7,12 +7,12 @@ It offers convenience helpers for iteration, random access, conversion to a pand
 
 .. currentmodule:: hiten.system.family
 
-OrbitFamily
------------
+OrbitFamily()
+^^^^^^^^^^^^^
 
 Container for an ordered family of periodic orbits.
 
-.. autoclass:: OrbitFamily
+.. autoclass:: OrbitFamily()
    :members:
    :undoc-members:
-   :exclude-members: __init__
+   :exclude-members: __init__, __len__, __iter__, __getitem__, __repr__

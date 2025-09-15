@@ -88,32 +88,10 @@ class Body(object):
         logger.info(f"Created Body: name='{self.name}', mass={self.mass}, radius={self.radius}, color='{self.color}', parent='{parent_name}'")
 
     def __str__(self) -> str:
-        """Return a concise human-readable description of the body.
-
-        Returns
-        -------
-        str
-            "<name> orbiting <parent>" when the body orbits another, or
-            "<name> (Primary)" when it is the primary.
-        """
         parent_desc = f"orbiting {self.parent.name}" if self.parent is not self else "(Primary)"
         return f"{self.name} {parent_desc}"
 
     def __repr__(self) -> str:
-        """Unambiguous representation that avoids recursion.
-
-        Notes
-        -----
-        The representation of a secondary body is intentionally not evaluatable
-        with eval because it only includes the parent's name to
-        prevent infinite recursion. A primary body's representation, however,
-        can be evaluated.
-
-        Returns
-        -------
-        str
-            Python expression that describes the :class:`~hiten.system.body.Body` instance.
-        """
         # For the parent, we show its name to avoid recursion.
         # This makes the repr not perfectly eval-able for secondaries, but it's safe.
         if self.parent is self:
