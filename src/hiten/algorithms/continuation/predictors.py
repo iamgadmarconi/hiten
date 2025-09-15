@@ -293,8 +293,8 @@ class _EnergyLevel(_PeriodicOrbitContinuationInterface, _NaturalParameter):
         Implemented state-based continuation.
     :class:`~hiten.algorithms.continuation.predictors._FixedPeriod`
         Future period-based continuation.
-    :mod:`~hiten.system`
-        System classes that compute Jacobi constants.
+    :mod:`~hiten.system.orbits`
+        Orbit classes that compute Jacobi constants.
     """
 
     def __init__(self, *args, **kwargs):

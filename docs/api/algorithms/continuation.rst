@@ -20,7 +20,7 @@ The :class:`_ContinuationEngine` class provides the foundation for implementing 
 .. autoclass:: _ContinuationEngine()
    :members:
    :undoc-members:
-   :exclude-members: __init__
+   :exclude-members: __init__, __repr__
 
 interfaces.py
 ~~~~~~~~~~~~~

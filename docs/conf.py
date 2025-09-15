@@ -149,10 +149,7 @@ autodoc_default_options = {
 }
 
 # Handle import errors gracefully
-autodoc_mock_imports = [
-    "hiten.algorithms.continuation.base",
-    "hiten.algorithms.continuation.strategies._algorithms",
-]
+autodoc_mock_imports = []
 
 # Don't show type hints in the signature
 autodoc_typehints = "description"
