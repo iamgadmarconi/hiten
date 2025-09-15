@@ -75,9 +75,13 @@ Contents
    :maxdepth: 2
    :caption: User Guide
 
-   user_guide/system
-   user_guide/algorithms
-   user_guide/utilities
+   user_guide/guide_01_systems
+   user_guide/guide_02_libration
+   user_guide/guide_03_propagation
+   user_guide/guide_04_orbits
+   user_guide/guide_05_manifolds
+   user_guide/guide_06_poincare
+   user_guide/guide_07_center_manifold
 
 .. toctree::
    :maxdepth: 2
