@@ -86,24 +86,6 @@ class _NaturalParameter(_ContinuationEngine, ABC):
     """
 
     def __init__(self, *args, **kwargs):
-        """Initialize natural parameter continuation with direction enforcement.
-
-        This method initializes the base continuation engine and enforces
-        natural parameter policies including monotonic parameter advancement
-        toward target intervals and proper step direction orientation.
-
-        Parameters
-        ----------
-        *args, **kwargs
-            Arguments passed to the base continuation engine.
-
-        Notes
-        -----
-        The initialization performs automatic step direction correction:
-        if the initial step would move parameters away from their target
-        ranges, the step signs are flipped component-wise to ensure
-        progression toward the targets.
-        """
         super().__init__(*args, **kwargs)
 
         # Ensure the initial step points from the current parameter value toward
@@ -234,25 +216,6 @@ class _SecantArcLength(_ContinuationEngine, ABC):
     """
 
     def __init__(self, *args, **kwargs):
-        """Initialize pseudo-arclength continuation with secant stepping.
-
-        This method initializes the base continuation engine and sets up
-        the secant-based stepping strategy for pseudo-arclength continuation.
-        The stepping strategy is configured with representation and parameter
-        extraction functions.
-
-        Parameters
-        ----------
-        *args, **kwargs
-            Arguments passed to the base continuation engine.
-
-        Notes
-        -----
-        The initialization automatically creates and configures a
-        :class:`~hiten.algorithms.continuation.strategies._stepping._SecantStep` strategy 
-        using the abstract :meth:`~hiten.algorithms.continuation.strategies._algorithms._SecantArcLength._representation`
-        method that must be implemented by subclasses.
-        """
         super().__init__(*args, **kwargs)
 
         # Build and assign secant stepper strategy

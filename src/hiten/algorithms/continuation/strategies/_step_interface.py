@@ -163,14 +163,6 @@ class _PlainStep:
     """
 
     def __init__(self, predictor: Callable[[object, np.ndarray], np.ndarray]):
-        """Initialize plain stepping strategy with predictor function.
-
-        Parameters
-        ----------
-        predictor : callable
-            Prediction function with signature:
-            ``predictor(solution: object, step: ndarray) -> ndarray``
-        """
         self._predictor = predictor
 
     def __call__(self, last_solution, step):

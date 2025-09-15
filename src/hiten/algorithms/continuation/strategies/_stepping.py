@@ -192,14 +192,6 @@ class _NaturalParameterStep:
     """
 
     def __init__(self, predictor: Callable[[object, np.ndarray], np.ndarray]):
-        """Initialize natural parameter stepping with predictor function.
-
-        Parameters
-        ----------
-        predictor : callable
-            Prediction function with signature:
-            ``predictor(solution: object, step: ndarray) -> ndarray``
-        """
         self._predictor = predictor
 
     def __call__(self, last_solution: object, step: np.ndarray):
@@ -343,15 +335,6 @@ class _SecantStep:
         representation_fn: Callable[[object], np.ndarray],
         parameter_fn: Callable[[object], np.ndarray],
     ) -> None:
-        """Initialize secant stepping with representation and parameter functions.
-
-        Parameters
-        ----------
-        representation_fn : callable
-            Function to convert solutions to numerical representations.
-        parameter_fn : callable
-            Function to extract parameters from solutions.
-        """
         self._repr_fn = representation_fn
         self._param_fn = parameter_fn
 

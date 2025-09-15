@@ -37,8 +37,6 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
     """
 
     def __init__(self, *, line_search_config: _LineSearchConfig | bool | None = None, **kwargs) -> None:
-        """Initialize Newton solver with line search configuration."""
-        # Delegate line-search handling to mix-in
         super().__init__(line_search_config=line_search_config, **kwargs)
 
     def _on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:

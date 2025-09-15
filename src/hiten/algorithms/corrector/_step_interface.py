@@ -227,8 +227,6 @@ class _StepInterface(ABC):
     """
 
     def __init__(self, **kwargs):
-        """Initialize step interface with multiple inheritance support."""
-        # Allow clean cooperation in multiple-inheritance chains
         super().__init__(**kwargs)
 
     @abstractmethod
@@ -490,10 +488,8 @@ class _ArmijoStepInterface(_PlainStepInterface):
         line_search_config: _LineSearchConfig | bool | None = None,
         **kwargs,
     ) -> None:
-        """Initialize Armijo step interface with line search configuration."""
         super().__init__(**kwargs)
 
-        # Process line-search configuration with flexible input handling
         if line_search_config is None:
             self._line_search_config = None
             self._use_line_search = False

@@ -154,75 +154,22 @@ class ConnectionResults:
     """
 
     def __init__(self, results: Sequence[_ConnectionResult] | None):
-        """Initialize connection results collection.
-
-        Parameters
-        ----------
-        results : sequence of :class:`~hiten.algorithms.connections.results._ConnectionResult` or None
-            Connection results to store. If None, creates empty collection.
-        """
         self._results: list[_ConnectionResult] = list(results) if results else []
 
     # Sequence-like methods
     def __len__(self) -> int:
-        """Return the number of connection results.
-
-        Returns
-        -------
-        int
-            Number of connection results in the collection.
-        """
         return len(self._results)
 
     def __iter__(self) -> Iterator[_ConnectionResult]:
-        """Iterate over connection results.
-
-        Yields
-        ------
-        :class:`~hiten.algorithms.connections.results._ConnectionResult`
-            Individual connection results in order (typically sorted by Delta-V).
-        """
         return iter(self._results)
 
     def __getitem__(self, idx: int) -> _ConnectionResult:
-        """Access a connection result by index.
-
-        Parameters
-        ----------
-        idx : int
-            Index of the connection result to retrieve.
-
-        Returns
-        -------
-        :class:`~hiten.algorithms.connections.results._ConnectionResult`
-            Connection result at the specified index.
-
-        Raises
-        ------
-        IndexError
-            If the index is out of range.
-        """
         return self._results[idx]
 
     def __bool__(self) -> bool:
-        """Check if the collection contains any results.
-
-        Returns
-        -------
-        bool
-            True if the collection contains one or more results, False otherwise.
-        """
         return bool(self._results)
 
-    # Pretty printing
     def __repr__(self) -> str:
-        """Return a concise string representation with summary statistics.
-
-        Returns
-        -------
-        str
-            Compact representation showing total count and breakdown by type.
-        """
         n_total = len(self._results)
         n_ballistic = sum(1 for r in self._results if r.kind == "ballistic")
         n_impulsive = n_total - n_ballistic
