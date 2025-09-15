@@ -157,19 +157,6 @@ class _SectionHit(NamedTuple):
     point2d: np.ndarray  # shape (2,)
 
     def __repr__(self):
-        """Return a string representation of the section hit.
-
-        Returns
-        -------
-        str
-            String representation showing the time, state vector,
-            and 2D point coordinates with 3 decimal places precision.
-
-        Notes
-        -----
-        This method provides a concise string representation useful
-        for debugging and interactive exploration.
-        """
         return (f"SectionHit(t={self.time:.3e}, state={np.array2string(self.state, precision=3)}, "
                 f"pt={np.array2string(self.point2d, precision=3)})")
 

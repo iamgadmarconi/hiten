@@ -59,24 +59,6 @@ class _SynodicEngineConfigAdapter:
     """
 
     def __init__(self, cfg: _SynodicMapConfig) -> None:
-        """Initialize the configuration adapter.
-
-        Parameters
-        ----------
-        cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
-            The synodic map configuration to adapt.
-
-        Notes
-        -----
-        This constructor initializes the adapter by setting appropriate
-        values for the synodic use case. Since synodic maps use precomputed
-        trajectories, the time step and iteration count are set to values
-        that reflect this workflow.
-
-        The adapter extracts the number of workers from the configuration
-        and sets the number of seeds to 0 since synodic maps don't use
-        seeding strategies.
-        """
         self._cfg = cfg
         self.dt = 0.0
         self.n_iter = 1
@@ -85,13 +67,6 @@ class _SynodicEngineConfigAdapter:
         self.n_seeds = 0
 
     def __repr__(self) -> str:
-        """Return a string representation of the adapter.
-
-        Returns
-        -------
-        str
-            String representation showing the number of workers.
-        """
         return f"SynodicEngineConfigAdapter(n_workers={self.n_workers})"
 
 
@@ -139,27 +114,6 @@ class _SynodicEngine(_ReturnMapEngine):
         seed_strategy: _NoOpStrategy,
         map_config: _SynodicEngineConfigAdapter,
     ) -> None:
-        """Initialize the synodic Poincare engine.
-
-        Parameters
-        ----------
-        backend : :class:`~hiten.algorithms.poincare.synodic.backend._SynodicDetectionBackend`
-            The detection backend for synodic sections.
-        seed_strategy : :class:`~hiten.algorithms.poincare.synodic.strategies._NoOpStrategy`
-            The seeding strategy (no-op for synodic maps).
-        map_config : :class:`~hiten.algorithms.poincare.synodic.engine._SynodicEngineConfigAdapter`
-            The configuration adapter for the engine.
-
-        Notes
-        -----
-        This constructor initializes the engine with the required components
-        for synodic Poincare section detection. The engine is configured
-        with a detection backend, a no-op seeding strategy (since synodic
-        maps use precomputed trajectories), and a configuration adapter.
-
-        The engine starts with no trajectories set and will raise an error
-        if `compute_section` is called before trajectories are provided.
-        """
         super().__init__(backend, seed_strategy, map_config)
         self._trajectories: "Sequence[tuple[np.ndarray, np.ndarray]]" | None = None
         self._direction: int | None = None

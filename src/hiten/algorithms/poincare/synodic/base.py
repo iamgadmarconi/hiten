@@ -70,7 +70,6 @@ class SynodicMap(_ReturnMapBase):
     """
 
     def __init__(self, map_cfg: Optional[_SynodicMapConfig] = None) -> None:
-        """Initialize the synodic Poincare map."""
         cfg = map_cfg or _SynodicMapConfig()
         super().__init__(cfg)  # stores in self.config
         self._section_cfg = self._build_section_config(cfg)

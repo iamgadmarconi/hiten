@@ -243,17 +243,5 @@ class _ReturnMapBackend(ABC):
         return getattr(sec, "states", np.empty((0, 0)))
 
     def __len__(self):
-        """Return the number of points in the computed section.
-
-        Returns
-        -------
-        int
-            Number of points in the section.
-
-        Notes
-        -----
-        This method triggers computation if the section hasn't been
-        computed yet.
-        """
         return self.points2d().shape[0]
 

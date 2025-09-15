@@ -72,24 +72,9 @@ class _Section:
         self.times: np.ndarray | None = times  # (n,) absolute integration times (optional)
 
     def __len__(self):
-        """Return the number of points in the section.
-
-        Returns
-        -------
-        int
-            Number of intersection points in the section.
-        """
         return self.points.shape[0]
 
     def __repr__(self):
-        """Return a string representation of the section.
-
-        Returns
-        -------
-        str
-            String representation showing the number of points, labels,
-            and whether times are available.
-        """
         return f"_Section(points={len(self)}, labels={self.labels}, times={'yes' if self.times is not None else 'no'})"
 
 
@@ -428,35 +413,9 @@ class _ReturnMapBase(ABC):
         return sec.points[:, (idx1, idx2)]
 
     def __len__(self):
-        """Return the number of points in the most recently accessed section.
-
-        Returns
-        -------
-        int
-            Number of points in the section, or 0 if no section has been
-            accessed yet.
-
-        Notes
-        -----
-        This method returns the length of the most recently accessed section.
-        If no section has been computed or accessed, it returns 0.
-        """
         return 0 if self._section is None else len(self._section)
 
     def __repr__(self):
-        """Return a string representation of the return map.
-
-        Returns
-        -------
-        str
-            String representation showing the class name, number of computed
-            sections, and configuration object.
-
-        Notes
-        -----
-        This method provides a concise string representation useful for
-        debugging and interactive exploration.
-        """
         return (
             f"{self.__class__.__name__}(sections={len(self._sections)}, "
             f"config={self.config})"
