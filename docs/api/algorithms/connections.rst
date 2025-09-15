@@ -20,7 +20,7 @@ The :class:`Connection` class provides a user-facing facade for connection disco
 .. autoclass:: Connection()
    :members:
    :undoc-members:
-   :exclude-members: __init__
+   :exclude-members: __init__, __repr__, __str__
 
 backends.py
 ~~~~~~~~~~~
@@ -191,4 +191,4 @@ The :class:`ConnectionResults` class provides a collection of connection results
 .. autoclass:: ConnectionResults()
    :members:
    :undoc-members:
-   :exclude-members: __init__
+   :exclude-members: __init__, __len__, __iter__, __getitem__, __bool__, __repr__
