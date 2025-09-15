@@ -72,7 +72,6 @@ class _RHSSystem(_DynamicalSystem):
     """
 
     def __init__(self, rhs_func: Callable[[float, np.ndarray], np.ndarray], dim: int, name: str = "Generic RHS"):
-        """Initialize RHS system with automatic JIT compilation."""
         super().__init__(dim)
 
         # Detect pre-compiled Numba dispatchers to avoid redundant compilation
@@ -114,13 +113,6 @@ class _RHSSystem(_DynamicalSystem):
         return self._rhs_compiled
     
     def __repr__(self) -> str:
-        """String representation of the RHS system.
-        
-        Returns
-        -------
-        str
-            Formatted string showing system name and dimension.
-        """
         return f"_RHSSystem(name='{self.name}', dim={self.dim})"
 
 

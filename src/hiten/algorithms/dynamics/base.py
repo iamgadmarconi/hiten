@@ -91,7 +91,6 @@ class _DynamicalSystem(ABC):
     """
     
     def __init__(self, dim: int):
-        """Initialize the dynamical system."""
         if dim <= 0:
             raise ValueError(f"Dimension must be positive, got {dim}")
         self._dim = dim
@@ -189,7 +188,6 @@ class _DirectedSystem(_DynamicalSystem):
     """
 
     def __init__(self, base_or_dim: "_DynamicalSystem | int", fwd: int = 1, flip_indices: "slice | Sequence[int] | None" = None):
-        """Initialize the directed system."""
         if isinstance(base_or_dim, _DynamicalSystem):
             self._base: "_DynamicalSystem | None" = base_or_dim
             dim = base_or_dim.dim
