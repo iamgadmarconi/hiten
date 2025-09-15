@@ -259,4 +259,4 @@ Once you understand libration points, you can:
 - Create periodic orbits (see :doc:`guide_04_orbits`)
 - Analyze center manifolds (see :doc:`guide_07_center_manifold`)
 
-For more advanced libration point analysis, see :doc:`guide_08_advanced`.
+For more advanced libration point analysis, see :doc:`guide_07_center_manifold`.

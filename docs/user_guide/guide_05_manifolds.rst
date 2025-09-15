@@ -385,4 +385,4 @@ Once you understand manifolds and tori, you can:
 - Find heteroclinic connections (see :doc:`guide_06_poincare`)
 - Use center manifold methods (see :doc:`guide_07_center_manifold`)
 
-For advanced manifold analysis, see :doc:`guide_08_advanced`.
+For advanced manifold analysis, see :doc:`guide_16_connections`.

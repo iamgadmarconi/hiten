@@ -202,4 +202,4 @@ Once you have a system configured, you can:
 - Propagate orbits (see :doc:`guide_03_propagation`)
 - Create periodic orbits (see :doc:`guide_04_orbits`)
 
-For more advanced system configurations, see :doc:`guide_09_custom`.
+For more advanced system configurations, see :doc:`guide_17_dynamical_systems`.

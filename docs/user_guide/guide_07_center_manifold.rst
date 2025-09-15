@@ -383,8 +383,8 @@ Next Steps
 
 Once you understand center manifolds, you can:
 
-- Perform advanced dynamical analysis (see :doc:`guide_08_advanced`)
-- Create custom systems (see :doc:`guide_09_custom`)
-- Use advanced continuation methods (see :doc:`guide_08_advanced`)
+- Perform advanced dynamical analysis (see :doc:`guide_16_connections`)
+- Create custom systems (see :doc:`guide_17_dynamical_systems`)
+- Use advanced continuation methods (see :doc:`guide_12_continuation`)
 
-For more advanced center manifold analysis, see :doc:`guide_08_advanced`.
+For more advanced center manifold analysis, see :doc:`guide_14_polynomial`.

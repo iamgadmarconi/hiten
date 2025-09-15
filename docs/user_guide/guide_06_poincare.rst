@@ -449,7 +449,7 @@ Next Steps
 Once you understand Poincare sections and connections, you can:
 
 - Use center manifold methods (see :doc:`guide_07_center_manifold`)
-- Perform advanced dynamical analysis (see :doc:`guide_08_advanced`)
-- Create custom systems (see :doc:`guide_09_custom`)
+- Perform advanced dynamical analysis (see :doc:`guide_16_connections`)
+- Create custom systems (see :doc:`guide_17_dynamical_systems`)
 
-For more advanced connection analysis, see :doc:`guide_08_advanced`.
+For more advanced connection analysis, see :doc:`guide_16_connections`.

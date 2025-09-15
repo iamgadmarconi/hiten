@@ -286,4 +286,4 @@ Once you understand basic propagation, you can:
 - Compute manifolds (see :doc:`guide_05_manifolds`)
 - Analyze Poincare sections (see :doc:`guide_06_poincare`)
 
-For advanced propagation techniques, see :doc:`guide_08_advanced`.
+For advanced propagation techniques, see :doc:`guide_10_integrators`.

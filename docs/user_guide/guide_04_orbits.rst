@@ -434,4 +434,4 @@ Once you understand periodic orbits, you can:
 - Analyze Poincare sections (see :doc:`guide_06_poincare`)
 - Use center manifold methods (see :doc:`guide_07_center_manifold`)
 
-For advanced orbit analysis, see :doc:`guide_08_advanced`.
+For advanced orbit analysis, see :doc:`guide_11_correction`.
