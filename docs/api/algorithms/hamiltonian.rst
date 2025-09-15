@@ -330,75 +330,18 @@ center/
 
 The center module provides partial normal form computations for center manifold analysis.
 
-.. currentmodule:: hiten.algorithms.hamiltonian.center
+.. toctree::
+   :maxdepth: 2
 
-.. autofunction:: _lie_transform
-   :noindex:
-
-Perform Lie series normalization of polynomial Hamiltonian for center manifold.
-Implements the partial normal form algorithm that systematically eliminates
-non-resonant terms from a polynomial Hamiltonian using Lie series transformations.
-
-.. autofunction:: _get_homogeneous_terms
-   :noindex:
-
-Extract homogeneous terms of specified degree from polynomial.
-JIT-compiled function that extracts the coefficient array corresponding
-to homogeneous terms of a specific degree from a polynomial representation.
-
-.. autofunction:: _select_terms_for_elimination
-   :noindex:
-
-Identify non-resonant terms for elimination in Lie normalization.
-JIT-compiled function that selects polynomial terms to be eliminated
-based on resonance conditions for center manifold analysis.
-
-.. autofunction:: _lie_expansion
-   :noindex:
-
-Compute coordinate transformations using Lie series expansions.
-Performs Lie series transformations to compute polynomial expansions
-that relate center manifold coordinates to the original coordinate system.
-
-.. autofunction:: _apply_coord_transform
-   :noindex:
-
-Apply Lie series transformation to single coordinate polynomial.
-JIT-compiled function that applies a Lie series transformation to transform
-a coordinate polynomial using a generating function.
-
-.. autofunction:: _evaluate_transform
-   :noindex:
-
-Evaluate coordinate transformation at specific center manifold point.
-JIT-compiled function that evaluates six polynomial expansions representing
-coordinate transformations at a given point in center manifold coordinates.
-
-.. autofunction:: _zero_q1p1
-   :noindex:
-
-Restrict polynomial expansions to center manifold subspace.
-Eliminates all terms in coordinate expansions that depend on the hyperbolic
-variables q1 or p1, effectively restricting the expansions to the center manifold.
+   center
 
 normal/
 ~~~~~~~
 
 The normal module provides full normal form computations for complete dynamical reduction.
 
-.. currentmodule:: hiten.algorithms.hamiltonian.normal
+.. toctree::
+   :maxdepth: 2
 
-.. autofunction:: _lie_transform
-   :noindex:
-
-Perform full Lie series normalization of polynomial Hamiltonian.
-Eliminates all non-resonant terms using the complete resonance condition,
-producing the maximally simplified canonical form.
-
-.. autofunction:: _select_nonresonant_terms
-   :noindex:
-
-Identify non-resonant terms using full resonance condition.
-JIT-compiled function that selects terms for elimination based on
-the complete frequency analysis for full normal form computation.
+   normal
 

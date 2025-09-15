@@ -101,98 +101,10 @@ strategies/
 
 The strategies module provides continuation strategies and stepping methods.
 
-.. currentmodule:: hiten.algorithms.continuation.strategies
+.. toctree::
+   :maxdepth: 2
 
-Algorithm Strategies
-^^^^^^^^^^^^^^^^^^^^
-
-The algorithm strategies provide different continuation approaches.
-
-.. currentmodule:: hiten.algorithms.continuation.strategies._algorithms
-
-_NaturalParameter()
-^^^^^^^^^^^^^^^^^^^
-
-The :class:`_NaturalParameter` class provides an abstract base class for natural parameter continuation algorithms.
-
-.. autoclass:: _NaturalParameter()
-   :members:
-   :undoc-members:
-   :exclude-members: __init__
-
-_SecantArcLength()
-^^^^^^^^^^^^^^^^^^
-
-The :class:`_SecantArcLength` class provides an abstract base class for pseudo-arclength continuation algorithms.
-
-.. autoclass:: _SecantArcLength()
-   :members:
-   :undoc-members:
-   :exclude-members: __init__
-
-Stepping Strategies
-^^^^^^^^^^^^^^^^^^^
-
-The stepping strategies provide concrete implementations of prediction methods.
-
-.. currentmodule:: hiten.algorithms.continuation.strategies._stepping
-
-_StepStrategy()
-^^^^^^^^^^^^^^^
-
-The :class:`_StepStrategy` class defines an extended protocol for stepping strategies with event hooks.
-
-.. autoclass:: _StepStrategy()
-   :members:
-   :undoc-members:
-   :exclude-members: __init__
-
-_NaturalParameterStep()
-^^^^^^^^^^^^^^^^^^^^^^^^
-
-The :class:`_NaturalParameterStep` class implements a natural parameter stepping strategy with user-supplied predictor.
-
-.. autoclass:: _NaturalParameterStep()
-   :members:
-   :undoc-members:
-   :exclude-members: __init__
-
-_SecantStep()
-^^^^^^^^^^^^^
-
-The :class:`_SecantStep` class implements a secant-based stepping strategy for pseudo-arclength continuation.
-
-.. autoclass:: _SecantStep()
-   :members:
-   :undoc-members:
-   :exclude-members: __init__
-
-Interface Protocols
-^^^^^^^^^^^^^^^^^^^
-
-The interface protocols define the required interfaces for stepping strategies.
-
-.. currentmodule:: hiten.algorithms.continuation.strategies._step_interface
-
-_ContinuationStep()
-^^^^^^^^^^^^^^^^^^^
-
-The :class:`_ContinuationStep` class defines the protocol for continuation stepping strategies.
-
-.. autoclass:: _ContinuationStep()
-   :members:
-   :undoc-members:
-   :exclude-members: __init__
-
-_PlainStep()
-^^^^^^^^^^^^
-
-The :class:`_PlainStep` class implements a simple stepping strategy using a provided predictor function.
-
-.. autoclass:: _PlainStep()
-   :members:
-   :undoc-members:
-   :exclude-members: __init__
+   strategies/index
 
 events.py
 ~~~~~~~~~
