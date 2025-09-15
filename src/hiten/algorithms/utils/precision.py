@@ -54,22 +54,6 @@ class _Number:
     """
     
     def __init__(self, value: Union[float, int, str, '_Number'], precision: int = None):
-        """
-        Initialize a high precision number.
-        
-        Parameters
-        ----------
-        value : float, int, str, or _Number
-            The numeric value to wrap
-        precision : int, optional
-            Number of decimal places. If None, uses 100.
-            
-        Notes
-        -----
-        The precision is automatically managed based on the USE_ARBITRARY_PRECISION
-        configuration flag. When enabled, mpmath is used for arbitrary precision
-        arithmetic.
-        """
         self.precision = precision if precision is not None else 100
         
         if isinstance(value, _Number):
@@ -109,7 +93,6 @@ class _Number:
                 else:
                     raise ValueError(f"Unsupported operation: {operation}")
         else:
-            # Standard precision fallback
             if operation == 'add':
                 result_value = float(self.value) + float(other.value)
             elif operation == 'sub':
@@ -127,7 +110,6 @@ class _Number:
         
         return _Number(result_value, max_precision)
     
-    # Arithmetic operators
     def __add__(self, other):
         return self._binary_operation(other, 'add')
     
@@ -164,7 +146,6 @@ class _Number:
     def __rmod__(self, other):
         return _Number(other, self.precision).__mod__(self)
     
-    # Unary operators
     def __neg__(self):
         if USE_ARBITRARY_PRECISION:
             with mp.workdps(self.precision):
@@ -181,7 +162,6 @@ class _Number:
             result_value = abs(float(self.value))
         return _Number(result_value, self.precision)
     
-    # Comparison operators
     def __eq__(self, other):
         other = self._ensure_precision_number(other)
         return float(self.value) == float(other.value)
@@ -205,7 +185,6 @@ class _Number:
         other = self._ensure_precision_number(other)
         return float(self.value) >= float(other.value)
     
-    # Mathematical functions
     def sqrt(self):
         """Compute square root with high precision."""
         if USE_ARBITRARY_PRECISION:
@@ -257,25 +236,19 @@ class _Number:
                 result_value = np.log(float(self.value)) / np.log(float(base))
         return _Number(result_value, self.precision)
     
-    # Conversion methods
     def __float__(self):
-        """Convert to standard Python float."""
         return float(self.value)
     
     def __int__(self):
-        """Convert to standard Python int."""
         return int(float(self.value))
     
     def __str__(self):
-        """String representation."""
         return str(float(self.value))
     
     def __repr__(self):
-        """Detailed string representation."""
         return f"_Number({float(self.value)}, precision={self.precision})"
 
 
-# Factory function for convenience
 def hp(value: Union[float, int, str], precision: int = None) -> _Number:
     """
     Create a high-precision number instance.

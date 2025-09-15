@@ -135,8 +135,6 @@ class _InvariantTori:
     """
 
     def __init__(self, orbit: PeriodicOrbit):
-        """
-        Initialize the invariant torus computation."""
         if orbit.period is None:
             raise ValueError("The generating orbit must be corrected first (period is None).")
 
