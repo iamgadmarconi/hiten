@@ -47,14 +47,15 @@ The most common correction method uses Newton's method with analytical or numeri
    from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
 
    # Create a Newton corrector by combining interfaces
-   class NewtonOrbitCorrector(_PeriodicOrbitCorrectorInterface, _NewtonCore):
+   # Note: _NewtonCore must come first in inheritance order
+   class NewtonOrbitCorrector(_NewtonCore, _PeriodicOrbitCorrectorInterface):
        pass
    
    newton_corrector = NewtonOrbitCorrector()
 
-   # Correct an orbit using the orbit's correct method
+   # Correct an orbit using the corrector's correct method
    halo = l1.create_orbit("halo", amplitude_z=0.2, zenith="southern")
-   corrected_state, half_period = halo.correct()
+   corrected_state, half_period = newton_corrector.correct(halo)
    
    print(f"Correction successful: {halo.period is not None}")
    print(f"Final period: {halo.period}")
@@ -70,8 +71,10 @@ For orbits where analytical Jacobians are difficult to compute, finite differenc
    # Use finite difference for vertical orbits
    vertical = l1.create_orbit("vertical", initial_state=[0.8, 0, 0, 0, 0.1, 0])
    
-   # Correct with finite difference using the orbit's correct method
-   corrected_state, half_period = vertical.correct(
+   # Create a corrector and use it for correction
+   corrector = _NewtonOrbitCorrector()
+   corrected_state, half_period = corrector.correct(
+       vertical,
        max_attempts=100,
        finite_difference=True,
        tol=1e-10
@@ -88,14 +91,17 @@ Convergence Criteria
 .. code-block:: python
 
    # High accuracy correction
-   corrected_state, half_period = halo.correct(
+   corrector = _NewtonOrbitCorrector()
+   corrected_state, half_period = corrector.correct(
+       halo,
        max_attempts=50,
        tol=1e-12,        # Very tight tolerance
        max_delta=1e-8    # Small maximum step size
    )
 
    # Fast correction
-   corrected_state, half_period = halo.correct(
+   corrected_state, half_period = corrector.correct(
+       halo,
        max_attempts=10,
        tol=1e-6,         # Looser tolerance
        max_delta=1e-3    # Larger step size
@@ -107,14 +113,16 @@ Step Size Control
 .. code-block:: python
 
    # Conservative correction (smaller steps)
-   corrected_state, half_period = halo.correct(
+   corrected_state, half_period = corrector.correct(
+       halo,
        max_attempts=30,
        max_delta=1e-8,
        line_search_config=True  # Use line search for better convergence
    )
 
    # Aggressive correction (larger steps)
-   corrected_state, half_period = halo.correct(
+   corrected_state, half_period = corrector.correct(
+       halo,
        max_attempts=20,
        max_delta=1e-4,
        line_search_config=False
@@ -138,7 +146,8 @@ For more advanced control over the line search behavior, you can use the `_LineS
    )
 
    # Use custom line search configuration
-   corrected_state, half_period = halo.correct(
+   corrected_state, half_period = corrector.correct(
+       halo,
        max_attempts=30,
        line_search_config=line_search_config
    )
@@ -181,8 +190,12 @@ For more control, you can create a custom corrector by combining interfaces:
    from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
    from hiten.algorithms.corrector.line import _LineSearchConfig
 
-   class CustomOrbitCorrector(_PeriodicOrbitCorrectorInterface, _NewtonCore):
-       """Custom corrector with specialized configuration."""
+   class CustomOrbitCorrector(_NewtonCore, _PeriodicOrbitCorrectorInterface):
+       """Custom corrector with specialized configuration.
+       
+       Note: _NewtonCore must come first in inheritance order to provide
+       the _generic_correct method that _PeriodicOrbitCorrectorInterface expects.
+       """
        
        def __init__(self, custom_tol=1e-8, **kwargs):
            super().__init__(**kwargs)
@@ -198,15 +211,16 @@ For more control, you can create a custom corrector by combining interfaces:
    custom_corrector = CustomOrbitCorrector(custom_tol=1e-12)
    corrected_state, half_period = custom_corrector.correct(halo)
 
-Advanced Custom Corrector with Backend Separation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Advanced Custom Corrector for Generic Problems
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For more sophisticated methods, follow HITEN's architectural patterns with backend separation:
+For generic correction problems (not orbit-specific), you can create custom correctors
+by extending the base correction framework:
 
 .. code-block:: python
 
    from hiten.algorithms.corrector.base import _Corrector, _BaseCorrectionConfig
-   from hiten.algorithms.corrector._step_interface import _Stepper
+   from hiten.algorithms.corrector.newton import _NewtonCore
    from abc import ABC, abstractmethod
    from dataclasses import dataclass
    from typing import Optional, Tuple
@@ -229,23 +243,24 @@ For more sophisticated methods, follow HITEN's architectural patterns with backe
        initial_jacobian: str = "identity"
        update_threshold: float = 1e-12
 
-   # Backend for computation (following HITEN's backend pattern)
-   class _QuasiNewtonBackend(ABC):
-       """Backend for quasi-Newton correction computations."""
+   # Custom corrector extending the Newton core
+   class QuasiNewtonCorrector(_NewtonCore):
+       """Quasi-Newton corrector with custom Jacobian update strategy."""
        
-       def __init__(self, config: _QuasiNewtonConfig):
+       def __init__(self, config: _QuasiNewtonConfig, **kwargs):
+           super().__init__(**kwargs)
            self.config = config
            self.jacobian = None
            self._prev_residual = None
        
-       def initialize_jacobian(self, n: int) -> np.ndarray:
+       def _initialize_jacobian(self, n: int) -> np.ndarray:
            """Initialize Jacobian matrix."""
            if self.config.initial_jacobian == "identity":
                return np.eye(n)
            else:
                return np.zeros((n, n))
        
-       def update_jacobian(self, delta_x: np.ndarray, delta_r: np.ndarray) -> None:
+       def _update_jacobian(self, delta_x: np.ndarray, delta_r: np.ndarray) -> None:
            """Update Jacobian using Broyden's method."""
            if self.jacobian is None:
                return
@@ -254,68 +269,40 @@ For more sophisticated methods, follow HITEN's architectural patterns with backe
                u = delta_r - self.jacobian @ delta_x
                self.jacobian += np.outer(u, delta_x) / np.dot(delta_x, delta_x)
        
-       def solve_correction(self, residual: np.ndarray) -> np.ndarray:
-           """Solve for correction step."""
-           try:
-               return np.linalg.solve(self.jacobian, -residual)
-           except np.linalg.LinAlgError:
-               # Fall back to gradient descent
-               return -0.1 * residual
-
-   # Main corrector following HITEN's interface pattern
-   class QuasiNewtonCorrector(_Corrector):
-       """Quasi-Newton corrector using backend separation."""
+       def _compute_jacobian(self, x, residual_fn, jacobian_fn, fd_step):
+           """Override Jacobian computation with quasi-Newton update."""
+           if jacobian_fn is not None:
+               return jacobian_fn(x)
+           
+           # Use quasi-Newton update if available
+           if self.jacobian is not None:
+               return self.jacobian
+           
+           # Fall back to finite difference for first iteration
+           return super()._compute_jacobian(x, residual_fn, jacobian_fn, fd_step)
        
-       def __init__(self, config: _QuasiNewtonConfig, **kwargs):
-           super().__init__(**kwargs)
-           self.config = config
-           self._backend = _QuasiNewtonBackend(config)
-       
-       def correct(self, x0: np.ndarray, residual_fn, *, jacobian_fn=None, norm_fn=None, **kwargs):
-           """Implement the abstract _Corrector.correct method."""
-           if norm_fn is None:
-               norm_fn = lambda r: np.linalg.norm(r)
+       def _on_iteration(self, k, x, r_norm):
+           """Update Jacobian after each iteration."""
+           if k > 0 and hasattr(self, '_prev_x') and hasattr(self, '_prev_residual'):
+               delta_x = x - self._prev_x
+               delta_r = self._compute_residual(x, self._residual_fn) - self._prev_residual
+               self._update_jacobian(delta_x, delta_r)
            
-           x = x0.copy()
-           n = len(x)
-           self._backend.jacobian = self._backend.initialize_jacobian(n)
-           
-           max_attempts = kwargs.get('max_attempts', self.config.max_attempts)
-           tol = kwargs.get('tol', self.config.tol)
-           
-           for attempt in range(max_attempts):
-               r = residual_fn(x)
-               r_norm = norm_fn(r)
-               
-               if r_norm < tol:
-                   return x, {'iterations': attempt, 'residual_norm': r_norm}
-               
-               # Update Jacobian if not first iteration
-               if attempt > 0 and self._backend._prev_residual is not None:
-                   delta_x = x - prev_x
-                   delta_r = r - self._backend._prev_residual
-                   self._backend.update_jacobian(delta_x, delta_r)
-               
-               # Solve for correction
-               correction = self._backend.solve_correction(r)
-               prev_x = x.copy()
-               x = x + correction
-               self._backend._prev_residual = r.copy()
-           
-           raise ConvergenceError(f"Failed to converge after {max_attempts} iterations")
+           self._prev_x = x.copy()
+           self._prev_residual = self._compute_residual(x, self._residual_fn).copy()
 
    # Usage example
    config = _QuasiNewtonConfig(tol=1e-10, max_attempts=30)
    corrector = QuasiNewtonCorrector(config)
    
-   # Define residual function for orbit correction
-   def orbit_residual(x):
-       # This would be the actual orbit constraint residual
-       return np.array([x[0]**2 + x[1]**2 - 1.0, x[2]])  # Example constraint
+   # Define residual function for generic correction
+   def generic_residual(x):
+       # Example: solve x^2 + y^2 = 1, z = 0
+       return np.array([x[0]**2 + x[1]**2 - 1.0, x[2]])
    
    # Use the corrector
    x0 = np.array([0.8, 0.6, 0.0])
-   solution, info = corrector.correct(x0, orbit_residual)
+   solution, info = corrector.correct(x0, generic_residual)
    print(f"Solution: {solution}")
    print(f"Converged in {info['iterations']} iterations")
 
@@ -351,8 +338,11 @@ The correction framework uses several key interfaces:
    from hiten.algorithms.corrector.newton import _NewtonCore
 
    # Create a custom corrector by combining interfaces
-   class CustomOrbitCorrector(_PeriodicOrbitCorrectorInterface, _NewtonCore):
-       """Custom corrector combining orbit interface with Newton core."""
+   class CustomOrbitCorrector(_NewtonCore, _PeriodicOrbitCorrectorInterface):
+       """Custom corrector combining Newton core with orbit interface.
+       
+       Note: _NewtonCore must come first in inheritance order.
+       """
        
        def __init__(self, **kwargs):
            super().__init__(**kwargs)
@@ -413,7 +403,11 @@ For specialized applications, you can implement custom line search strategies by
            return max(alpha, 1e-6)  # Minimum step size
 
    # Use custom step interface
-   class CustomCorrector(_PeriodicOrbitCorrectorInterface, CustomStepInterface):
+   class CustomCorrector(_NewtonCore, _PeriodicOrbitCorrectorInterface, CustomStepInterface):
+       """Custom corrector with custom step interface.
+       
+       Note: _NewtonCore must come first in inheritance order.
+       """
        pass
 
    custom_corrector = CustomCorrector(custom_param=0.2)
@@ -453,7 +447,9 @@ The `_LineSearchConfig` class provides fine-grained control over line search beh
    )
 
    # Use different configurations for different problems
-   corrected_state, half_period = orbit.correct(
+   corrector = _NewtonOrbitCorrector()
+   corrected_state, half_period = corrector.correct(
+       orbit,
        line_search_config=precise_config,
        max_attempts=50
    )
@@ -499,7 +495,9 @@ For specialized problems, you can implement custom Jacobian computation strategi
        return (r_plus[i] - r_minus[i]) / (2 * h)
 
    # Use custom Jacobian in correction
-   corrected_state, half_period = orbit.correct(
+   corrector = _NewtonOrbitCorrector()
+   corrected_state, half_period = corrector.correct(
+       orbit,
        jacobian_fn=custom_jacobian_fn
    )
 
@@ -510,17 +508,17 @@ For specialized correction problems, you can create custom interfaces that exten
 
 **Important**: When extending `_Corrector`, you must implement the abstract `correct` method with the exact signature: `correct(self, x0, residual_fn, *, jacobian_fn=None, norm_fn=None, **kwargs)`. This ensures compatibility with the correction framework.
 
-Custom Domain Interface with Engine Pattern
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Custom Domain Interface for Specialized Problems
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Create a custom interface following HITEN's engine pattern for better separation of concerns:
+For specialized correction problems, you can create custom interfaces that work
+with the correction framework. Here's a simplified approach that follows
+HITEN's actual architecture:
 
 .. code-block:: python
 
-   from hiten.algorithms.corrector.base import _Corrector, _BaseCorrectionConfig
-   from hiten.algorithms.corrector._step_interface import _Stepper
+   from hiten.algorithms.corrector.base import _BaseCorrectionConfig
    from hiten.algorithms.corrector.newton import _NewtonCore
-   from abc import ABC, abstractmethod
    from dataclasses import dataclass
    from typing import Optional, Tuple, Dict, Any
    import numpy as np
@@ -530,33 +528,23 @@ Create a custom interface following HITEN's engine pattern for better separation
        """Raised when constraint evaluation fails."""
        pass
 
-   class ProblemSetupError(Exception):
-       """Raised when problem setup fails."""
-       pass
-
-   # Configuration following HITEN's mixin pattern
+   # Configuration following HITEN's pattern
    @dataclass(frozen=True, slots=True)
-   class _ConstraintConfig:
-       """Configuration for constraint handling."""
+   class _CustomProblemConfig(_BaseCorrectionConfig):
+       """Configuration for custom problem correction."""
+       custom_tolerance: float = 1e-8
        constraint_type: str = "equality"
        penalty_weight: float = 1.0
-       bounds: Optional[Tuple[np.ndarray, np.ndarray]] = None
 
-   @dataclass(frozen=True, slots=True)
-   class _CustomProblemConfig(_BaseCorrectionConfig, _ConstraintConfig):
-       """Complete configuration for custom problem correction."""
-       custom_tolerance: float = 1e-8
-       linear_constraints: Optional[np.ndarray] = None
-
-   # Backend for constraint computation
-   class _ConstraintBackend(ABC):
-       """Backend for constraint computation and evaluation."""
+   # Custom corrector for specialized problems
+   class CustomProblemCorrector(_NewtonCore):
+       """Custom corrector for specialized constraint problems."""
        
-       def __init__(self, config: _ConstraintConfig):
+       def __init__(self, config: _CustomProblemConfig, **kwargs):
+           super().__init__(**kwargs)
            self.config = config
-           self._constraint_cache: Dict[str, Any] = {}
        
-       def evaluate_constraints(self, x: np.ndarray, constraints: list) -> np.ndarray:
+       def _evaluate_constraints(self, x: np.ndarray, constraints: list) -> np.ndarray:
            """Evaluate all constraints at point x."""
            residuals = []
            
@@ -575,133 +563,17 @@ Create a custom interface following HITEN's engine pattern for better separation
            
            return np.concatenate(residuals) if residuals else np.array([])
        
-       def compute_bounds_penalty(self, x: np.ndarray) -> np.ndarray:
-           """Compute penalty for bounds violations."""
-           if self.config.bounds is None:
-               return np.array([])
+       def solve_constraint_problem(self, x0: np.ndarray, constraints: list, **kwargs):
+           """High-level method for solving constraint problems."""
            
-           lower, upper = self.config.bounds
-           violations = np.maximum(0, x - upper) + np.maximum(0, lower - x)
-           return self.config.penalty_weight * violations
-
-   # Engine for coordinating correction process
-   class _CustomCorrectionEngine:
-       """Engine coordinating backend and correction strategy."""
-       
-       def __init__(self, backend: _ConstraintBackend, config: _CustomProblemConfig):
-           self._backend = backend
-           self._config = config
-           self._problem_state: Optional[Dict[str, Any]] = None
-       
-       def setup_problem(self, problem_data: Dict[str, Any]) -> None:
-           """Setup problem-specific data structures."""
-           try:
-               self._problem_state = {
-                   'initial_guess': problem_data.get('initial_guess'),
-                   'constraints': problem_data.get('constraints', []),
-                   'objective': problem_data.get('objective'),
-               }
-           except Exception as e:
-               raise ProblemSetupError(f"Failed to setup problem: {e}")
-       
-       def compute_residual(self, x: np.ndarray) -> np.ndarray:
-           """Compute complete residual vector."""
-           if self._problem_state is None:
-               raise ProblemSetupError("Problem not set up. Call setup_problem first.")
-           
-           # Evaluate constraints
-           constraint_residuals = self._backend.evaluate_constraints(
-               x, self._problem_state['constraints']
-           )
-           
-           # Add bounds penalty
-           bounds_penalty = self._backend.compute_bounds_penalty(x)
-           
-           return np.concatenate([constraint_residuals, bounds_penalty])
-       
-       def compute_jacobian(self, x: np.ndarray) -> np.ndarray:
-           """Compute Jacobian using finite differences."""
-           h = 1e-8
-           n = len(x)
-           r0 = self.compute_residual(x)
-           m = len(r0)
-           
-           J = np.zeros((m, n))
-           for j in range(n):
-               x_plus = x.copy()
-               x_minus = x.copy()
-               h_j = h * max(1.0, abs(x[j]))
-               x_plus[j] += h_j
-               x_minus[j] -= h_j
-               
-               r_plus = self.compute_residual(x_plus)
-               r_minus = self.compute_residual(x_minus)
-               J[:, j] = (r_plus - r_minus) / (2 * h_j)
-           
-           return J
-
-   # Main corrector interface
-   class CustomProblemCorrector(_Corrector):
-       """Custom corrector using engine pattern."""
-       
-       def __init__(self, config: _CustomProblemConfig, **kwargs):
-           super().__init__(**kwargs)
-           self.config = config
-           self._backend = _ConstraintBackend(config)
-           self._engine = _CustomCorrectionEngine(self._backend, config)
-       
-       def correct(self, x0: np.ndarray, residual_fn, *, jacobian_fn=None, norm_fn=None, **kwargs):
-           """Implement the abstract _Corrector.correct method."""
-           if norm_fn is None:
-               norm_fn = lambda r: np.linalg.norm(r)
-           
-           x = x0.copy()
-           max_attempts = kwargs.get('max_attempts', self.config.max_attempts)
-           tol = kwargs.get('tol', self.config.custom_tolerance)
-           
-           for attempt in range(max_attempts):
-               r = residual_fn(x)
-               r_norm = norm_fn(r)
-               
-               if r_norm < tol:
-                   return x, {'iterations': attempt, 'residual_norm': r_norm}
-               
-               if jacobian_fn is not None:
-                   J = jacobian_fn(x)
-               else:
-                   J = self._engine.compute_jacobian(x)
-               
-               try:
-                   delta = np.linalg.solve(J, -r)
-                   x = x + delta
-               except np.linalg.LinAlgError:
-                   # Fallback to gradient descent
-                   delta = -J.T @ r
-                   alpha = 0.1
-                   x = x + alpha * delta
-           
-           raise ConvergenceError(f"Failed to converge after {max_attempts} iterations")
-       
-       def solve_custom_problem(self, problem_data: Dict[str, Any], **kwargs):
-           """High-level method for solving custom problems."""
-           # Setup problem
-           self._engine.setup_problem(problem_data)
-           
-           # Extract initial guess
-           x0 = self._engine._problem_state['initial_guess']
-           
-           # Build residual and Jacobian functions
            def residual_fn(x):
-               return self._engine.compute_residual(x)
+               return self._evaluate_constraints(x, constraints)
            
-           def jacobian_fn(x):
-               return self._engine.compute_jacobian(x)
-           
-           # Use the correct method
+           # Use the generic correct method
            return self.correct(
                x0=x0,
                residual_fn=residual_fn,
-               jacobian_fn=jacobian_fn,
+               tol=kwargs.get('tol', self.config.custom_tolerance),
                **kwargs
            )
 
@@ -709,206 +581,56 @@ Create a custom interface following HITEN's engine pattern for better separation
    config = _CustomProblemConfig(
        constraint_type="equality",
        penalty_weight=10.0,
-       custom_tolerance=1e-10,
-       bounds=(np.array([-1.0, -1.0]), np.array([1.0, 1.0]))
+       custom_tolerance=1e-10
    )
    
    corrector = CustomProblemCorrector(config)
    
-   # Define problem data
-   problem_data = {
-       'initial_guess': np.array([0.5, 0.5]),
-       'constraints': [
-           {
-               'type': 'equality',
-               'function': lambda x: x[0]**2 + x[1]**2,
-               'target': 1.0
-           }
-       ],
-       'objective': lambda x: x[0] + x[1]
-   }
+   # Define constraints
+   constraints = [
+       {
+           'type': 'equality',
+           'function': lambda x: x[0]**2 + x[1]**2,
+           'target': 1.0
+       }
+   ]
    
-   # Run correction using the custom method
-   solution, info = corrector.solve_custom_problem(problem_data)
+   # Run correction
+   x0 = np.array([0.5, 0.5])
+   solution, info = corrector.solve_constraint_problem(x0, constraints)
    print(f"Solution: {solution}")
    print(f"Final residual: {info['residual_norm']}")
    print(f"Iterations: {info['iterations']}")
 
-Custom Step Interface with Protocol Pattern
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Create a custom step control strategy following HITEN's protocol pattern:
-
-.. code-block:: python
-
-   from hiten.algorithms.corrector._step_interface import _StepInterface, _Stepper
-   from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
-   from hiten.algorithms.corrector.newton import _NewtonCore
-   from dataclasses import dataclass
-   from typing import Protocol, Optional
-   import numpy as np
-
-   # Configuration for trust region method
-   @dataclass(frozen=True, slots=True)
-   class _TrustRegionConfig:
-       """Configuration for trust region step control."""
-       initial_radius: float = 1.0
-       max_radius: float = 10.0
-       min_radius: float = 0.1
-       good_ratio_threshold: float = 0.75
-       poor_ratio_threshold: float = 0.25
-       radius_expansion_factor: float = 2.0
-       radius_contraction_factor: float = 0.5
-
-   # Protocol for trust region strategies
-   class _TrustRegionStrategy(Protocol):
-       """Protocol for trust region step strategies."""
-       
-       def __call__(self, x: np.ndarray, delta: np.ndarray, current_norm: float) -> tuple[np.ndarray, float, float]:
-           """Apply trust region step strategy."""
-           ...
-
-   # Backend for trust region computations
-   class _TrustRegionBackend:
-       """Backend for trust region computations."""
-       
-       def __init__(self, config: _TrustRegionConfig):
-           self.config = config
-           self.current_radius = config.initial_radius
-           self.radius_history = []
-       
-       def predict_reduction(self, delta: np.ndarray) -> float:
-           """Predict reduction using quadratic model."""
-           # Simplified prediction - in practice, you'd use the quadratic model
-           return 0.5 * np.linalg.norm(delta)**2
-       
-       def adapt_radius(self, actual_reduction: float, predicted_reduction: float) -> None:
-           """Adapt trust region radius based on reduction ratio."""
-           if predicted_reduction <= 0:
-               return
-           
-           ratio = actual_reduction / predicted_reduction
-           
-           if ratio > self.config.good_ratio_threshold:
-               # Good agreement - expand radius
-               self.current_radius = min(
-                   self.config.radius_expansion_factor * self.current_radius,
-                   self.config.max_radius
-               )
-           elif ratio < self.config.poor_ratio_threshold:
-               # Poor agreement - contract radius
-               self.current_radius = max(
-                   self.config.radius_contraction_factor * self.current_radius,
-                   self.config.min_radius
-               )
-           
-           self.radius_history.append(self.current_radius)
-       
-       def constrain_step(self, x: np.ndarray, delta: np.ndarray) -> tuple[np.ndarray, float]:
-           """Constrain step to fit within trust region."""
-           delta_norm = np.linalg.norm(delta)
-           
-           if delta_norm <= self.current_radius:
-               return x + delta, 1.0
-           
-           # Scale step to fit within trust region
-           alpha = self.current_radius / delta_norm
-           return x + alpha * delta, alpha
-
-   # Custom step interface following HITEN's pattern
-   class _TrustRegionStepInterface(_StepInterface):
-       """Step interface implementing trust region method."""
-       
-       def __init__(self, config: _TrustRegionConfig, **kwargs):
-           super().__init__(**kwargs)
-           self.config = config
-           self._backend = _TrustRegionBackend(config)
-       
-       def _build_line_searcher(self, residual_fn, norm_fn, max_delta):
-           """Build trust region stepper following HITEN's protocol pattern."""
-           
-           def trust_region_step(x: np.ndarray, delta: np.ndarray, current_norm: float):
-               """Trust region step with radius adaptation."""
-               
-               # Compute full Newton step
-               x_full = x + delta
-               r_full = residual_fn(x_full)
-               r_norm_full = norm_fn(r_full)
-               
-               # Check if full step is within trust region
-               if np.linalg.norm(delta) <= self._backend.current_radius:
-                   # Full step is acceptable
-                   actual_reduction = current_norm - r_norm_full
-                   predicted_reduction = self._backend.predict_reduction(delta)
-                   
-                   # Adapt radius based on reduction ratio
-                   self._backend.adapt_radius(actual_reduction, predicted_reduction)
-                   
-                   return x_full, r_norm_full, 1.0
-               
-               # Full step outside trust region - compute constrained step
-               x_constrained, alpha = self._backend.constrain_step(x, delta)
-               r_constrained = residual_fn(x_constrained)
-               r_norm_constrained = norm_fn(r_constrained)
-               
-               return x_constrained, r_norm_constrained, alpha
-           
-           return trust_region_step
-
-   # Complete corrector combining interfaces
-   class TrustRegionCorrector(_PeriodicOrbitCorrectorInterface, _TrustRegionStepInterface, _NewtonCore):
-       """Corrector using trust region method with full HITEN architecture."""
-       
-       def __init__(self, config: _TrustRegionConfig, **kwargs):
-           super().__init__(config=config, **kwargs)
-
-   # Usage example
-   config = _TrustRegionConfig(
-       initial_radius=0.5,
-       max_radius=5.0,
-       good_ratio_threshold=0.8
-   )
-   
-   trust_corrector = TrustRegionCorrector(config)
-   corrected_state, half_period = trust_corrector.correct(orbit)
-   
-   print(f"Trust region radius history: {trust_corrector._backend.radius_history}")
-   print(f"Final radius: {trust_corrector._backend.current_radius}")
-
 Architectural Best Practices
 -----------------------------
 
-The custom correction examples above follow HITEN's architectural patterns:
+The correction framework follows these architectural patterns:
 
 **Configuration Pattern**
     - Use `@dataclass(frozen=True, slots=True)` for immutable configurations
-    - Follow mixin pattern for configuration inheritance
+    - Single inheritance from `_BaseCorrectionConfig` for configs
     - Separate domain-specific configs from base configs
 
-**Backend Separation**
-    - Separate computation logic into backend classes
-    - Backends handle low-level numerical operations
-    - Enable testing and reuse of computation components
+**Interface Separation**
+    - Domain interfaces (like `_PeriodicOrbitCorrectorInterface`) handle domain-specific logic
+    - Algorithm cores (like `_NewtonCore`) handle numerical algorithms
+    - Combine through multiple inheritance with correct order
 
-**Engine Coordination**
-    - Use engine classes to coordinate backends and strategies
-    - Engines handle high-level algorithm orchestration
-    - Provide clean separation between interface and implementation
-
-**Protocol-Based Design**
-    - Use protocols for flexible strategy implementations
-    - Enable different algorithms to share common interfaces
-    - Support multiple inheritance cleanly
+**Method Delegation**
+    - Domain interfaces delegate to algorithm cores via `_generic_correct`
+    - Avoid direct inheritance from `_Corrector` in domain interfaces
+    - Use composition or delegation for complex interactions
 
 **Error Handling**
     - Define domain-specific exception hierarchies
     - Provide meaningful error messages for debugging
     - Handle edge cases gracefully
 
-**Multiple Inheritance**
-    - Combine interfaces through multiple inheritance
-    - Follow HITEN's pattern of mixing domain interfaces with algorithm cores
-    - Maintain clean separation of concerns
+**Multiple Inheritance Order**
+    - Always put algorithm cores first: `(_NewtonCore, _DomainInterface)`
+    - This ensures the `_generic_correct` method is available
+    - Avoid conflicts between different `correct` method signatures
 
 Next Steps
 ----------

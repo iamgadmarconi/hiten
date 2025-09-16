@@ -1,4 +1,4 @@
-Advanced Connection Analysis and Custom Detection
+Connection Analysis and Custom Detection
 =================================================
 
 This guide covers HITEN's connection analysis capabilities for finding heteroclinic and homoclinic connections between invariant manifolds, including custom connection detection algorithms.

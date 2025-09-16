@@ -14,7 +14,7 @@ Basic Continuation Concept
 .. code-block:: python
 
    from hiten import System, OrbitFamily
-   from hiten.algorithms.continuation.predictors import _StateParameter
+   from hiten.algorithms import StateParameter
    from hiten.algorithms.utils.types import SynodicState
    import numpy as np
 
@@ -26,7 +26,7 @@ Basic Continuation Concept
    initial_orbit.correct()
 
    # Use continuation to generate a family
-   state_engine = _StateParameter(
+   state_engine = StateParameter(
        initial_orbit=initial_orbit,
        state=SynodicState.Z,      # Vary Z component
        target=(0.1, 0.3),         # Target range
@@ -52,7 +52,7 @@ The simplest continuation method varies a single parameter linearly:
 .. code-block:: python
 
    # Natural parameter continuation
-   natural_engine = _StateParameter(
+   natural_engine = StateParameter(
        initial_orbit=initial_orbit,
        state=SynodicState.X,      # Vary X position
        target=(0.8, 0.9),         # Target range
@@ -108,7 +108,7 @@ The continuation engine automatically adapts step sizes based on correction succ
 .. code-block:: python
 
    # Step size is automatically adapted by the engine
-   adaptive_engine = _StateParameter(
+   adaptive_engine = StateParameter(
        initial_orbit=initial_orbit,
        state=SynodicState.Z,      # Vary Z component
        target=(0.1, 0.5),         # Target range
@@ -126,7 +126,7 @@ Convergence Control
 .. code-block:: python
 
    # High accuracy continuation
-   high_precision_engine = _StateParameter(
+   high_precision_engine = StateParameter(
        initial_orbit=initial_orbit,
        state=SynodicState.Z,      # Vary Z component
        target=(0.1, 0.5),         # Target range
@@ -147,7 +147,7 @@ Continue in multiple parameters simultaneously:
 .. code-block:: python
 
    # Two-parameter continuation
-   multi_param_engine = _StateParameter(
+   multi_param_engine = StateParameter(
        initial_orbit=initial_orbit,
        state=[SynodicState.X, SynodicState.Z],  # Vary both X and Z
        target=[[0.8, 0.9], [0.1, 0.3]],        # Target ranges for each parameter
@@ -206,6 +206,11 @@ Basic Custom Continuation
        def _make_stepper(self):
            """Create custom stepping strategy."""
            return _NaturalParameterStep(self._custom_predictor)
+       
+       def _stop_condition(self) -> bool:
+           """Check if continuation should terminate."""
+           current = self._parameter(self._family[-1])
+           return np.any(current < self._target_min) or np.any(current > self._target_max)
 
    # Use custom continuation
    custom_engine = CustomContinuation(
@@ -239,7 +244,7 @@ For more sophisticated methods, implement custom stepping strategies with event 
            self.current_step = initial_step
            self.convergence_history = []
        
-       def __call__(self, last_solution, step):
+       def __call__(self, last_solution: object, step: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
            """Generate prediction with adaptive step size."""
            
            # Adjust step size based on convergence history
@@ -256,13 +261,13 @@ For more sophisticated methods, implement custom stepping strategies with event 
            prediction = self._predictor(last_solution, np.array([self.current_step]))
            return prediction, np.array([self.current_step])
        
-       def on_success(self, solution):
+       def on_success(self, solution: object) -> None:
            """Called when correction succeeds."""
            # Track convergence for step size adaptation
            if hasattr(solution, 'correction_error'):
                self.convergence_history.append(solution.correction_error)
        
-       def on_failure(self, solution):
+       def on_failure(self, solution: object) -> None:
            """Called when correction fails."""
            # Reduce step size on failure
            self.current_step = max(self.current_step * 0.5, self.min_step)
@@ -292,6 +297,11 @@ For more sophisticated methods, implement custom stepping strategies with event 
        def _make_stepper(self):
            """Create adaptive stepping strategy."""
            return self._adaptive_stepper
+       
+       def _stop_condition(self) -> bool:
+           """Check if continuation should terminate."""
+           current = self._parameter(self._family[-1])
+           return np.any(current < self._target_min) or np.any(current > self._target_max)
 
    # Use adaptive continuation
    adaptive_engine = AdaptiveContinuation(
@@ -394,6 +404,11 @@ Advanced users can implement custom event handling:
        def _make_stepper(self):
            """Create stepping strategy with monitoring."""
            return _NaturalParameterStep(self._predictor)
+       
+       def _stop_condition(self) -> bool:
+           """Check if continuation should terminate."""
+           current = self._parameter(self._family[-1])
+           return np.any(current < self._target_min) or np.any(current > self._target_max)
        
        def _on_accept(self, candidate):
            """Hook called after successful solution acceptance."""
