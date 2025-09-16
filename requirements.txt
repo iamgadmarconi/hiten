@@ -7,3 +7,5 @@ sympy==1.14.0
 matplotlib==3.10.3
 tqdm==4.67.1
 pandas==2.3.0
+sphinx==8.2.3
+myst-parser==4.0.1
