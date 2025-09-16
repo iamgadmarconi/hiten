@@ -27,6 +27,7 @@ jobs:
           pip install sphinx
           pip install sphinx-rtd-theme
           pip install myst-parser
+          pip install linkify-it-py
 
       - name: Build Sphinx docs
         run: sphinx-build -b html docs/ docs/html
