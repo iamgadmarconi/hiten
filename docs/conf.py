@@ -56,7 +56,9 @@ html_theme_options = {
     "titles_only": False,
     "prev_next_buttons_location": "bottom",
     "style_external_links": True,
-    "style_nav_header_background": "#2980B9",
+    "style_nav_header_background": "#1a1a1a",
+    "logo_only": True,
+    "display_version": False,
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
@@ -226,17 +228,17 @@ myst_enable_extensions = [
 
 # -- Custom configuration -------------------------------------------------
 
-# Add any custom Sphinx configuration here
-def setup(app):
-    """Set up custom Sphinx configuration."""
-    app.add_css_file("custom.css")
+# Ensure our custom stylesheet is loaded on every page
+html_css_files = [
+    "custom.css",
+]
 
 
 # -- Options for HTML output ----------------------------------------------
 html_title = "HITEN Documentation"
 html_short_title = "HITEN"
-html_logo = None
-html_favicon = None
+html_logo = "_static/hiten-cropped.svg"
+html_favicon = "_static/hiten.png"
 
 # -- Options for EPUB output ----------------------------------------------
 epub_title = project

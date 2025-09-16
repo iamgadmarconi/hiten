@@ -32,21 +32,6 @@ Manifolds are created from periodic orbits:
    # Create unstable manifold
    unstable_manifold = halo.manifold(stable=False, direction="negative")
 
-Manifold Types
-~~~~~~~~~~~~~~
-
-HITEN supports different manifold types:
-
-.. code-block:: python
-
-   # Stable manifolds
-   stable_pos = halo.manifold(stable=True, direction="positive")
-   stable_neg = halo.manifold(stable=True, direction="negative")
-   
-   # Unstable manifolds
-   unstable_pos = halo.manifold(stable=False, direction="positive")
-   unstable_neg = halo.manifold(stable=False, direction="negative")
-
 Computing Manifolds
 -------------------
 
@@ -82,25 +67,6 @@ Control computation parameters:
        safe_distance=1e-2            # Safety distance from primaries
    )
 
-Computation Parameters
-~~~~~~~~~~~~~~~~~~~~~~
-
-Key parameters for manifold computation:
-
-.. code-block:: python
-
-   # Step size: controls resolution along generating orbit
-   result = stable_manifold.compute(step=0.02)  # 50 samples per period
-   
-   # Integration fraction: how long to integrate each trajectory
-   result = stable_manifold.compute(integration_fraction=0.75)  # 75% of period
-   
-   # Displacement: initial displacement along eigenvector
-   result = stable_manifold.compute(displacement=1e-6)  # Very small displacement
-   
-   # Integration method
-   result = stable_manifold.compute(method="scipy", order=8)  # High order
-
 Manifold Results
 ----------------
 
@@ -114,43 +80,13 @@ Accessing Trajectories
    # Get trajectory data
    trajectories = result.trajectories
    times = result.times
-   poincare_section = result.poincare_section
-   
+
    print(f"Number of trajectories: {len(trajectories)}")
    print(f"Trajectory lengths: {[len(traj) for traj in trajectories]}")
    
    # Access individual trajectory
    traj = trajectories[0]
    print(f"First trajectory shape: {traj.shape}")
-
-Poincare Section
-~~~~~~~~~~~~~~~~
-
-Manifolds provide Poincare section data:
-
-.. code-block:: python
-
-   # Access Poincare section
-   section_points = poincare_section.points
-   section_labels = poincare_section.labels
-   
-   print(f"Poincare section points: {len(section_points)}")
-   print(f"Section labels: {section_labels}")
-
-Success Rate
-~~~~~~~~~~~~
-
-Monitor computation success:
-
-.. code-block:: python
-
-   # Check success rate
-   success_rate = result.success_rate
-   print(f"Success rate: {success_rate:.2%}")
-   
-   # Access failed trajectories
-   failed_trajectories = result.failed_trajectories
-   print(f"Failed trajectories: {len(failed_trajectories)}")
 
 Invariant Tori
 --------------
@@ -193,103 +129,8 @@ Control torus computation:
    torus.compute(epsilon=1e-1)   # Large perturbation
    torus.compute(epsilon=1e-4)   # Small perturbation
 
-Torus Analysis
-~~~~~~~~~~~~~~
-
-Analyze computed tori:
-
-.. code-block:: python
-
-   # Check if torus was computed successfully
-   if torus.is_computed:
-       print("Torus computed successfully")
-       
-       # Access torus data
-       torus_data = torus.torus_data
-       print(f"Torus data shape: {torus_data.shape}")
-       
-       # Get torus properties
-       print(f"Torus dimension: {torus.dimension}")
-       print(f"Torus frequency: {torus.frequency}")
-
-Visualization
--------------
-
-Plot manifolds and tori:
-
-Manifold Visualization
-~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-   import matplotlib.pyplot as plt
-   
-   # Plot manifold
-   stable_manifold.plot()
-   
-   # Custom plotting
-   fig = plt.figure(figsize=(12, 8))
-   ax = fig.add_subplot(111, projection='3d')
-   
-   # Plot trajectories
-   for traj in result.trajectories:
-       x = traj[:, 0]
-       y = traj[:, 1]
-       z = traj[:, 2]
-       ax.plot(x, y, z, 'b-', alpha=0.6, linewidth=0.8)
-   
-   ax.set_xlabel('X')
-   ax.set_ylabel('Y')
-   ax.set_zlabel('Z')
-   ax.set_title('Stable Manifold')
-   plt.show()
-
-Torus Visualization
-~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-   # Plot torus
-   torus.plot()
-   
-   # Custom torus plotting
-   if torus.is_computed:
-       fig = plt.figure(figsize=(10, 8))
-       ax = fig.add_subplot(111, projection='3d')
-       
-       # Plot torus surface
-       torus_data = torus.torus_data
-       ax.plot_surface(torus_data[:, :, 0], 
-                      torus_data[:, :, 1], 
-                      torus_data[:, :, 2], 
-                      alpha=0.7, cmap='viridis')
-       
-       ax.set_xlabel('X')
-       ax.set_ylabel('Y')
-       ax.set_zlabel('Z')
-       ax.set_title('Invariant Torus')
-       plt.show()
-
-Poincare Section Plotting
-~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-   # Plot Poincare section
-   fig, ax = plt.subplots(figsize=(8, 8))
-   
-   # Plot section points
-   points = poincare_section.points
-   ax.scatter(points[:, 0], points[:, 1], s=1, alpha=0.6)
-   
-   ax.set_xlabel('X')
-   ax.set_ylabel('Y')
-   ax.set_title('Poincare Section')
-   ax.set_aspect('equal')
-   plt.show()
-
-Practical Examples
-------------------
+Examples
+--------
 
 Earth-Moon L1 Halo Manifolds
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -32,6 +32,8 @@ Halo orbits are three-dimensional periodic orbits that appear as halos around li
    print(f"Halo period: {halo.period}")
    print(f"Halo family: {halo.family}")
 
+To create a halo orbit, you need to specify the amplitude and zenith of the orbit. The amplitude is the maximum distance from the libration point in the z-direction, and the zenith is the family of the orbit.
+
 Halo Orbit Parameters
 ~~~~~~~~~~~~~~~~~~~~~
 
@@ -51,6 +53,8 @@ Control halo orbit characteristics:
    # Large amplitude halo
    halo_large = l1.create_orbit("halo", amplitude_z=0.5, zenith="southern")
 
+Internally, HITEN uses Richardson's third-order analytical approximation to generate the initial guess for the halo orbit. This is typically accurate for small amplitudes, but may not be accurate for large amplitudes (above 0.8).
+
 Lyapunov Orbits
 ~~~~~~~~~~~~~~~
 
@@ -67,6 +71,8 @@ Lyapunov orbits are planar periodic orbits in the orbital plane:
    
    print(f"Lyapunov period: {lyapunov.period}")
 
+To create a Lyapunov orbit, you need to specify the amplitude of the orbit. The amplitude is the maximum distance from the libration point in the x-direction.
+
 Vertical Orbits
 ~~~~~~~~~~~~~~~
 
@@ -82,6 +88,8 @@ Vertical orbits are periodic orbits perpendicular to the orbital plane:
    vertical.propagate(steps=1000)
    
    print(f"Vertical period: {vertical.period}")
+
+An initial state is required to create a vertical orbit. This can be computed from the center manifold of the libration point (see :doc:`guide_07_center_manifold`).
 
 Generic Orbits
 ~~~~~~~~~~~~~~
@@ -156,6 +164,58 @@ For some orbits, finite difference methods work better:
        tol=1e-10
    )
 
+Custom Correction
+~~~~~~~~~~~~~~~~~
+
+You can create a custom corrector by implementing the :class:`~hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`:
+
+.. code-block:: python
+
+   @dataclass(frozen=True, slots=True)
+   class _OrbitCorrectionConfig(_BaseCorrectionConfig):
+      """Define a configuration for periodic orbit correction.
+
+      Extends the base correction configuration with orbit-specific parameters
+      for constraint selection, integration settings, and event detection.
+
+      Parameters
+      ----------
+      residual_indices : tuple of int, default=()
+         State components used to build the residual vector.
+      control_indices : tuple of int, default=()
+         State components allowed to change during correction.
+      extra_jacobian : callable or None, default=None
+         Additional Jacobian contribution function.
+      target : tuple of float, default=(0.0,)
+         Target values for the residual components.
+      event_func : callable, default=:class:`~hiten.algorithms.poincare.singlehit.backend._y_plane_crossing`
+         Function to detect Poincare section crossings.
+      method : str, default="scipy"
+         Integration method for trajectory computation.
+      order : int, default=8
+         Integration order for numerical methods.
+      steps : int, default=500
+         Number of integration steps.
+      forward : int, default=1
+         Integration direction (1 for forward, -1 for backward).
+      """
+
+      residual_indices: tuple[int, ...] = ()  # Components used to build R(x)
+      control_indices: tuple[int, ...] = ()   # Components allowed to change
+      extra_jacobian: Callable[[np.ndarray, np.ndarray], np.ndarray] | None = None
+      target: tuple[float, ...] = (0.0,)  # Desired residual values
+
+      event_func: Callable[..., tuple[float, np.ndarray]] = _y_plane_crossing
+
+      method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy"
+      order: int = 8
+      steps: int = 500
+
+      forward: int = 1
+
+This requires you to define the residual indices, control indices, extra Jacobian, target, and the event function.
+Then, pass it to a :class:`~hiten.system.orbits.base.GenericOrbit` instance by setting the :attr:`~hiten.system.orbits.base.GenericOrbit.correction_config` property.
+
 Orbit Analysis
 --------------
 
@@ -209,53 +269,6 @@ Energy Analysis
    
    print(f"Energy error: {energy_error:.2e}")
 
-Orbit Families
---------------
-
-Create and manage families of periodic orbits:
-
-Creating Families
-~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-   from hiten import OrbitFamily
-   
-   # Create empty family
-   family = OrbitFamily(system, orbit_type="halo")
-   
-   # Add orbits to family
-   family.add_orbit(halo1)
-   family.add_orbit(halo2)
-   family.add_orbit(halo3)
-   
-   print(f"Family size: {len(family)}")
-
-Family Properties
-~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-   # Access family properties
-   orbits = family.orbits
-   periods = family.periods
-   jacobi_constants = family.jacobi_constants
-   
-   print(f"Periods: {periods}")
-   print(f"Jacobi constants: {jacobi_constants}")
-
-Family Propagation
-~~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-   # Propagate all orbits in family
-   family.propagate(steps=1000)
-   
-   # Access individual orbit trajectories
-   for i, orbit in enumerate(family.orbits):
-       print(f"Orbit {i}: {orbit.trajectory.shape}")
-
 Continuation Methods
 --------------------
 
@@ -290,59 +303,9 @@ State Parameter Continuation
    family = OrbitFamily.from_engine(state_engine)
    family.propagate()
 
-Visualization
--------------
 
-Plot periodic orbits and their families:
-
-Single Orbit
-~~~~~~~~~~~~
-
-.. code-block:: python
-
-   import matplotlib.pyplot as plt
-   
-   # 3D plot
-   fig = plt.figure(figsize=(10, 8))
-   ax = fig.add_subplot(111, projection='3d')
-   
-   x = halo.trajectory[:, 0]
-   y = halo.trajectory[:, 1]
-   z = halo.trajectory[:, 2]
-   
-   ax.plot(x, y, z, 'b-', linewidth=2)
-   ax.set_xlabel('X')
-   ax.set_ylabel('Y')
-   ax.set_zlabel('Z')
-   ax.set_title('Halo Orbit')
-   plt.show()
-
-Orbit Family
-~~~~~~~~~~~~
-
-.. code-block:: python
-
-   # Plot family in 3D
-   fig = plt.figure(figsize=(12, 8))
-   ax = fig.add_subplot(111, projection='3d')
-   
-   colors = plt.cm.viridis(np.linspace(0, 1, len(family)))
-   
-   for i, orbit in enumerate(family.orbits):
-       x = orbit.trajectory[:, 0]
-       y = orbit.trajectory[:, 1]
-       z = orbit.trajectory[:, 2]
-       
-       ax.plot(x, y, z, color=colors[i], linewidth=1.5)
-   
-   ax.set_xlabel('X')
-   ax.set_ylabel('Y')
-   ax.set_zlabel('Z')
-   ax.set_title('Halo Family')
-   plt.show()
-
-Practical Examples
-------------------
+Examples
+--------
 
 Earth-Moon L1 Halo Family
 ~~~~~~~~~~~~~~~~~~~~~~~~~~

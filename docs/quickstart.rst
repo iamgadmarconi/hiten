@@ -138,9 +138,8 @@ Next Steps
 Now that you have a basic understanding of HITEN, you can:
 
 1. Explore the :doc:`examples/index` for more detailed examples
-2. Read the :doc:`user_guide/system` for system configuration
+2. Read the :doc:`user_guide/guide_01_systems`
 3. Check the :doc:`api/system` for detailed API documentation
-4. Learn about :doc:`user_guide/algorithms` for advanced algorithms
 
 For more examples, see the `examples/` directory in the source code repository.
 

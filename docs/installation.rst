@@ -101,6 +101,7 @@ If you encounter issues during installation:
 
 1. Check the `GitHub Issues <https://github.com/iamgadmarconi/hiten/issues>`_
 2. Create a new issue with:
+
    - Your operating system and Python version
    - Complete error message
    - Steps to reproduce the issue

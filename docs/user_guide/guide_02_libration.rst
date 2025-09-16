@@ -206,8 +206,8 @@ Libration points are integrated with the system's dynamical system:
    var_system = l1.var_eq_system
    print(f"Variational system: {var_system}")
 
-Practical Examples
-------------------
+Examples
+--------
 
 Earth-Moon L1 Analysis
 ~~~~~~~~~~~~~~~~~~~~~~~

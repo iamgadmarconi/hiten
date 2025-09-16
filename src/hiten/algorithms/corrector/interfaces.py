@@ -39,7 +39,7 @@ class _OrbitCorrectionConfig(_BaseCorrectionConfig):
         Additional Jacobian contribution function.
     target : tuple of float, default=(0.0,)
         Target values for the residual components.
-    event_func : callable, default=_y_plane_crossing
+    event_func : callable, default=:class:`~hiten.algorithms.poincare.singlehit.backend._y_plane_crossing`
         Function to detect Poincare section crossings.
     method : str, default="scipy"
         Integration method for trajectory computation.

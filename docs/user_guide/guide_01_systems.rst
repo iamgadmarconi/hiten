@@ -150,8 +150,8 @@ HITEN performs basic validation on system parameters:
    # Valid range
    system = System.from_mu(0.01215)  # Earth-Moon system
 
-Common System Configurations
-----------------------------
+Examples
+--------
 
 Here are some commonly used system configurations:
 
