@@ -58,7 +58,6 @@ html_theme_options = {
     "style_external_links": True,
     "style_nav_header_background": "#1a1a1a",
     "logo_only": True,
-    "display_version": False,
 }
 
 # Add any paths that contain custom static files (such as style sheets) here,
