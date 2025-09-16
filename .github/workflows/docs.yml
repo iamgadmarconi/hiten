@@ -25,6 +25,8 @@ jobs:
         run: |
           pip install -r requirements.txt || true
           pip install sphinx
+          pip install sphinx-rtd-theme
+          pip install myst-parser
 
       - name: Build Sphinx docs
         run: sphinx-build -b html docs/ docs/html
