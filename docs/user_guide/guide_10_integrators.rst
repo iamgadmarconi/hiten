@@ -27,7 +27,7 @@ HITEN includes several explicit Runge-Kutta schemes with different orders of acc
 
 .. code-block:: python
 
-   from hiten.algorithms.integrators import RungeKutta, AdaptiveRK
+   from hiten.algorithms.integrators.rk import RungeKutta, AdaptiveRK
    from hiten import System
    import numpy as np
 
@@ -88,7 +88,7 @@ The key advantage is that this approach can handle Hamiltonians that are natural
 
 .. code-block:: python
 
-   from hiten.algorithms.integrators import ExtendedSymplectic
+   from hiten.algorithms.integrators.symplectic import ExtendedSymplectic
 
    # Create symplectic integrators of different orders
    symp2 = ExtendedSymplectic(order=2)  # 2nd order
@@ -198,7 +198,6 @@ Basic Custom Integrator
            
            # Validate inputs
            self.validate_system(system)
-           self.validate_inputs(system, y0, t_vals)
            
            # Initialize solution arrays
            states = np.zeros((len(t_vals), len(y0)))
@@ -239,7 +238,6 @@ For more advanced custom integrators, you can implement adaptive step-size contr
            """Integrate using adaptive Euler method."""
            
            self.validate_system(system)
-           self.validate_inputs(system, y0, t_vals)
            
            # Simple adaptive implementation
            states = [y0.copy()]
@@ -310,7 +308,7 @@ A symplectic integrator must preserve the symplectic 2-form ω = dp ∧ dq. This
                     t_vals: np.ndarray, **kwargs) -> _Solution:
            """Integrate using custom symplectic method."""
            
-           self.validate_inputs(system, y0, t_vals)
+           self.validate_system(system)
            
            # For symplectic integrators, we need Hamiltonian structure
            if not hasattr(system, 'jac_H'):
@@ -397,7 +395,7 @@ For more sophisticated symplectic integrators, you can implement higher-order co
                     t_vals: np.ndarray, **kwargs) -> _Solution:
            """Integrate using high-order symplectic composition."""
            
-           self.validate_inputs(system, y0, t_vals)
+           self.validate_system(system)
            
            states = np.zeros((len(t_vals), len(y0)))
            states[0] = y0.copy()
