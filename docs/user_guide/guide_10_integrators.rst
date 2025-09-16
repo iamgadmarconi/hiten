@@ -6,19 +6,19 @@ This guide covers HITEN's advanced integration methods, including Runge-Kutta sc
 Available Integrators
 ---------------------------
 
-HITEN provides several high-quality integrators optimized for different types of dynamical systems. The main user-facing classes are factory classes that create the appropriate integrator instances.
+HITEN provides several integrators optimized for different types of dynamical systems. The main user-facing classes are factory classes that create the appropriate integrator instances.
 
 Integration Methods
 ~~~~~~~~~~~~~~~~~~~
 
-The primary way to use integrators in HITEN is through the :meth:`~hiten.system.base.System.propagate` method, which supports the following methods:
+The primary way to use integrators in HITEN is through the :meth:`~hiten.algorithms.dynamics.base._propagate_dynsys` method, which supports the following methods:
 
 - ``"scipy"``: Uses SciPy's DOP853 adaptive integrator (default)
 - ``"rk"``: Fixed-step Runge-Kutta methods (orders 4, 6, 8)
 - ``"adaptive"``: Adaptive step-size Runge-Kutta methods (orders 5, 8)
 - ``"symplectic"``: High-order symplectic integrators (orders 2, 4, 6, 8)
 
-For direct access to integrator classes, use the factory classes from :mod:`hiten.algorithms.integrators`.
+For direct access to integrator classes, use the factory classes from :mod:`~hiten.algorithms.integrators`.
 
 Runge-Kutta Methods
 ~~~~~~~~~~~~~~~~~~~
@@ -143,46 +143,7 @@ Symplectic integrators require systems with specific Hamiltonian structure. They
 - ``n_dof``: Number of degrees of freedom (must equal 3 for this implementation)
 - ``dim``: System dimension (must equal 2 * n_dof)
 
-Energy Conservation Comparison
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Symplectic integrators excel at long-term energy conservation:
-
-.. code-block:: python
-
-   import numpy as np
-   from hiten.algorithms.dynamics.utils.energy import crtbp_energy
-
-   def compare_energy_conservation(system, initial_state, tf=100*np.pi):
-       """Compare energy conservation between different integrators."""
-       
-       # Runge-Kutta integration
-       times_rk, states_rk = system.propagate(
-           initial_state, tf=tf, steps=10000, method="rk", order=8
-       )
-       
-       # Symplectic integration
-       times_symp, states_symp = system.propagate(
-           initial_state, tf=tf, steps=10000, method="symplectic", order=6
-       )
-       
-       # Calculate energy errors
-       initial_energy = crtbp_energy(initial_state, system.mu)
-       
-       rk_energies = [crtbp_energy(state, system.mu) for state in states_rk]
-       symp_energies = [crtbp_energy(state, system.mu) for state in states_symp]
-       
-       rk_error = np.max(np.abs(np.array(rk_energies) - initial_energy))
-       symp_error = np.max(np.abs(np.array(symp_energies) - initial_energy))
-       
-       print(f"RK8 maximum energy error: {rk_error:.2e}")
-       print(f"Symplectic6 maximum energy error: {symp_error:.2e}")
-       print(f"Symplectic advantage: {rk_error/symp_error:.1f}x better")
-
-   # Run comparison
-   compare_energy_conservation(system, initial_state)
-
-Symplectic integrators are particularly well-suited for:
+Symplectic integrators excel at long-term energy conservation and are particularly well-suited for:
 
 1. **Long-term Integration**: When you need to integrate over many orbital periods
 2. **Hamiltonian Systems**: Systems that can be expressed in Hamiltonian form
@@ -342,12 +303,6 @@ A symplectic integrator must preserve the symplectic 2-form ω = dp ∧ dq. This
            """Integrate using custom symplectic method."""
            
            self.validate_inputs(system, y0, t_vals)
-           
-           # For symplectic integrators, we need Hamiltonian structure
-           required_attrs = ['jac_H', 'clmo_H', 'n_dof']
-           missing_attrs = [attr for attr in required_attrs if not hasattr(system, attr)]
-           if missing_attrs:
-               raise ValueError(f"System must provide Hamiltonian structure for symplectic integration. Missing: {missing_attrs}")
            
            # Use the system's RHS method directly
            rhs_func = system.rhs

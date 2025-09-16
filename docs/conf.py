@@ -56,7 +56,7 @@ html_theme_options = {
     "titles_only": False,
     "prev_next_buttons_location": "bottom",
     "style_external_links": True,
-    "style_nav_header_background": "#000000",
+    "style_nav_header_background": "#1a1a1a",
     "logo_only": True,
     "display_version": False,
 }
