@@ -13,7 +13,7 @@ from importlib import metadata as _metadata
 try:
     __version__: str = _metadata.version("hiten")
 except _metadata.PackageNotFoundError:
-    __version__ = "0.3.1"
+    __version__ = "0.3.2"
 
 from . import algorithms, system, utils
 from .system import *
