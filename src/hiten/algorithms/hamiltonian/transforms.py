@@ -53,6 +53,29 @@ from hiten.utils.log_config import logger
 
 
 def _build_complexification_matrix(mix_indices):
+    """Build complexification transformation matrix for canonical coordinate pairs.
+    
+    The transformation is given by:
+    q_j(complex) = (q_j(real) + i*p_j(real)) / sqrt(2)
+    p_j(complex) = (i*q_j(real) + p_j(real)) / sqrt(2)
+    where j is the index of the canonical coordinate pair.
+
+    Parameters
+    ----------
+    mix_indices : tuple of int
+        Indices of canonical coordinate pairs to complexify.
+
+    Returns
+    -------
+    np.ndarray
+        Complexification transformation matrix.
+
+    References
+    ----------
+    Jorba, A. (1999). A methodology for the numerical computation of normal forms,
+    centre manifolds and first integrals of Hamiltonian systems. Experimental
+    Mathematics, 8(2), 155-195.
+    """
 
     half = 1.0 / np.sqrt(2.0)
 

@@ -39,11 +39,6 @@ class _ContinuationStep(Protocol):
     algorithms to use various prediction methods while maintaining interface
     consistency with the continuation engine.
 
-    Methods
-    -------
-    __call__(last_solution, step)
-        Predict next solution representation and return adapted step size.
-
     Notes
     -----
     Implementations of this protocol should handle:
@@ -168,14 +163,6 @@ class _PlainStep:
     """
 
     def __init__(self, predictor: Callable[[object, np.ndarray], np.ndarray]):
-        """Initialize plain stepping strategy with predictor function.
-
-        Parameters
-        ----------
-        predictor : callable
-            Prediction function with signature:
-            ``predictor(solution: object, step: ndarray) -> ndarray``
-        """
         self._predictor = predictor
 
     def __call__(self, last_solution, step):

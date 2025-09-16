@@ -95,13 +95,6 @@ class _ArmijoLineSearch:
     """
 
     def __init__(self, *, config: _LineSearchConfig) -> None:
-        """Initialize Armijo line search with configuration.
-        
-        Parameters
-        ----------
-        config : _LineSearchConfig
-            Line search configuration parameters.
-        """
         self.norm_fn = _default_norm if config.norm_fn is None else config.norm_fn
         self.residual_fn = config.residual_fn
         self.jacobian_fn = config.jacobian_fn
@@ -153,7 +146,6 @@ class _ArmijoLineSearch:
         if self.residual_fn is None:
             raise ValueError("residual_fn must be provided in _LineSearchConfig")
 
-        # Apply step size capping for numerical stability
         if (self.max_delta is not None) and (not np.isinf(self.max_delta)):
             delta_norm = np.linalg.norm(delta, ord=np.inf)
             if delta_norm > self.max_delta:

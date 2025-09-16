@@ -71,27 +71,6 @@ class HamiltonianPipeline:
     """
 
     def __init__(self, point: LibrationPoint, degree: int):
-        """
-        Initialize the Hamiltonian transformation pipeline.
-        
-        Parameters
-        ----------
-        point : :class:`~hiten.system.libration.base.LibrationPoint`
-            The libration point about which the normal form is computed
-        degree : int
-            Maximum total degree of the polynomial truncation
-            
-        Raises
-        ------
-        ValueError
-            If degree is not a positive integer
-            
-        Notes
-        -----
-        The pipeline automatically determines the appropriate Hamiltonian
-        builder function based on the type of libration point (collinear
-        or triangular).
-        """
         if not isinstance(degree, int) or degree <= 0:
             raise ValueError("degree must be a positive integer")
 

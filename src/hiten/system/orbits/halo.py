@@ -78,27 +78,6 @@ class HaloOrbit(PeriodicOrbit):
             zenith: Optional[Literal["northern", "southern"]] = None,
             initial_state: Optional[Sequence[float]] = None
         ):
-        """Initialize a Halo orbit.
-        
-        Parameters
-        ----------
-        libration_point : :class:`~hiten.system.libration.base.LibrationPoint`
-            The libration point around which the halo orbit is computed.
-        amplitude_z : float, optional
-            z-amplitude of the halo orbit in nondimensional units.
-        zenith : {'northern', 'southern'}, optional
-            Symmetry branch with respect to the xy-plane.
-        initial_state : Sequence[float], optional
-            Initial state vector [x, y, z, vx, vy, vz] in nondimensional units.
-            
-        Raises
-        ------
-        ValueError
-            If required parameters are missing or conflicting parameters provided.
-        TypeError
-            If libration_point is not a CollinearPoint.
-        """
-
         # Validate constructor parameters
         if initial_state is not None and (amplitude_z is not None or zenith is not None):
             raise ValueError("Cannot provide both an initial_state and analytical parameters (amplitude_z, zenith).")

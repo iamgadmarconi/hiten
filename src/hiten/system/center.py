@@ -81,15 +81,6 @@ class CenterManifold:
     """
     
     def __init__(self, point: LibrationPoint, degree: int):
-        """Initialize a CenterManifold instance.
-        
-        Parameters
-        ----------
-        point : :class:`~hiten.system.libration.base.LibrationPoint`
-            The libration point about which the center manifold is computed.
-        degree : int
-            Maximum total degree of the polynomial truncation.
-        """
         self._point = point
         self._max_degree = degree
         
@@ -184,23 +175,9 @@ class CenterManifold:
         return self._pipeline
 
     def __str__(self):
-        """Return a string representation of the CenterManifold.
-        
-        Returns
-        -------
-        str
-            String representation of the :class:`~hiten.system.center.CenterManifold`.
-        """
         return f"CenterManifold(point={self._point}, degree={self._max_degree})" 
     
     def __repr__(self):
-        """Return a detailed string representation of the CenterManifold.
-        
-        Returns
-        -------
-        str
-            Detailed string representation of the :class:`~hiten.system.center.CenterManifold`.
-        """
         return f"CenterManifold(point={self._point}, degree={self._max_degree})"
     
     def __getstate__(self):

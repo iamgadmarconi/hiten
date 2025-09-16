@@ -188,6 +188,12 @@ class _StepInterface(ABC):
     class handles common initialization patterns and ensures compatibility
     with multiple inheritance chains commonly used in the correction framework.
 
+    Parameters
+    ----------
+    **kwargs
+        Additional keyword arguments passed to parent classes.
+        This enables clean cooperation in multiple-inheritance chains.
+
     Notes
     -----
     The interface is designed to work seamlessly with multiple inheritance,
@@ -221,15 +227,6 @@ class _StepInterface(ABC):
     """
 
     def __init__(self, **kwargs):
-        """Initialize step interface with multiple inheritance support.
-
-        Parameters
-        ----------
-        **kwargs
-            Additional keyword arguments passed to parent classes.
-            This enables clean cooperation in multiple-inheritance chains.
-        """
-        # Allow clean cooperation in multiple-inheritance chains
         super().__init__(**kwargs)
 
     @abstractmethod
@@ -491,22 +488,8 @@ class _ArmijoStepInterface(_PlainStepInterface):
         line_search_config: _LineSearchConfig | bool | None = None,
         **kwargs,
     ) -> None:
-        """Initialize Armijo step interface with line search configuration.
-
-        Parameters
-        ----------
-        line_search_config : :class:`~hiten.algorithms.corrector.line._LineSearchConfig`, bool, or None, optional
-            Line search configuration:
-            - None: Disable line search, use plain Newton steps
-            - True: Enable line search with default parameters
-            - False: Explicitly disable line search
-            - _LineSearchConfig: Enable line search with custom parameters
-        **kwargs
-            Additional arguments passed to parent classes.
-        """
         super().__init__(**kwargs)
 
-        # Process line-search configuration with flexible input handling
         if line_search_config is None:
             self._line_search_config = None
             self._use_line_search = False

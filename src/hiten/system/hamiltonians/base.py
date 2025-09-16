@@ -68,31 +68,6 @@ class Hamiltonian:
     """
 
     def __init__(self, poly_H: list[np.ndarray], degree: int, ndof: int=3, name: str = "Hamiltonian"):
-        """
-        Initialize a polynomial Hamiltonian representation.
-        
-        Parameters
-        ----------
-        poly_H : list[np.ndarray]
-            Packed coefficient blocks [H_0, H_2, ..., H_N] representing the Hamiltonian
-        degree : int
-            Maximum total degree N represented in poly_H
-        ndof : int, optional
-            Number of degrees of freedom, by default 3
-        name : str, optional
-            Name of the Hamiltonian representation, by default "Hamiltonian"
-            
-        Raises
-        ------
-        ValueError
-            If degree is not a positive integer
-            
-        Notes
-        -----
-        The polynomial coefficients are stored in packed format for efficient
-        computation. The degree parameter determines the maximum order of
-        terms in the polynomial representation.
-        """
         if degree <= 0:
             raise ValueError("degree must be a positive integer")
 

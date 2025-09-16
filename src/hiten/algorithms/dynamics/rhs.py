@@ -72,28 +72,6 @@ class _RHSSystem(_DynamicalSystem):
     """
 
     def __init__(self, rhs_func: Callable[[float, np.ndarray], np.ndarray], dim: int, name: str = "Generic RHS"):
-        r"""Initialize RHS system with automatic JIT compilation.
-
-        The provided RHS function is automatically JIT-compiled for performance
-        unless it's already a compiled Numba dispatcher. This ensures efficient
-        execution within numerical integrator kernels.
-
-        Parameters
-        ----------
-        rhs_func : Callable[[float, ndarray], ndarray]
-            Right-hand side function to wrap.
-        dim : int
-            State space dimension.
-        name : str, optional
-            System identifier. Default is "Generic RHS".
-            
-        Notes
-        -----
-        Compilation uses the global FASTMATH setting for numerical optimization.
-        Pre-compiled Numba dispatchers are detected and reused to avoid
-        redundant compilation overhead.
-        """
-
         super().__init__(dim)
 
         # Detect pre-compiled Numba dispatchers to avoid redundant compilation
@@ -115,7 +93,7 @@ class _RHSSystem(_DynamicalSystem):
     
     @property
     def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        r"""JIT-compiled right-hand side function.
+        """JIT-compiled right-hand side function.
 
         Returns the RHS function compiled for efficient execution in Numba
         nopython mode. Maintains the same mathematical semantics as the
@@ -135,13 +113,6 @@ class _RHSSystem(_DynamicalSystem):
         return self._rhs_compiled
     
     def __repr__(self) -> str:
-        """String representation of the RHS system.
-        
-        Returns
-        -------
-        str
-            Formatted string showing system name and dimension.
-        """
         return f"_RHSSystem(name='{self.name}', dim={self.dim})"
 
 

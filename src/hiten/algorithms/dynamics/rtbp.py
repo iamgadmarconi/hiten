@@ -353,7 +353,7 @@ def _compute_monodromy(dynsys, x0, period):
     See Also
     --------
     :func:`~hiten.algorithms.dynamics.rtbp._compute_stm` : General STM computation used internally
-    :func:`~hiten.algorithms.dynamics.utils.linalg._stability_indices` : Compute stability indices from monodromy matrix
+    :func:`~hiten.algorithms.dynamics.rtbp._stability_indices` : Compute stability indices from monodromy matrix
     """
     _, _, M, _ = _compute_stm(dynsys, x0, period)
     return M

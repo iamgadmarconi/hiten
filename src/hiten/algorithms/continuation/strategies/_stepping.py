@@ -41,21 +41,6 @@ class _StepStrategy(Protocol):
     - Maintain auxiliary data structures (e.g., tangent vectors)
     - Respond to continuation events for internal bookkeeping
 
-    Methods
-    -------
-    __call__(last_solution, step)
-        Core stepping method for solution prediction.
-    on_initialisation(*args, **kwargs)
-        Hook called when continuation engine initializes.
-    on_iteration(*args, **kwargs)
-        Hook called at the start of each continuation iteration.
-    on_success(*args, **kwargs)
-        Hook called after successful solution acceptance.
-    on_reject(*args, **kwargs)
-        Hook called after solution rejection.
-    on_failure(*args, **kwargs)
-        Hook called after correction failure.
-
     Notes
     -----
     All hook methods are optional and can be implemented as no-ops.
@@ -207,14 +192,6 @@ class _NaturalParameterStep:
     """
 
     def __init__(self, predictor: Callable[[object, np.ndarray], np.ndarray]):
-        """Initialize natural parameter stepping with predictor function.
-
-        Parameters
-        ----------
-        predictor : callable
-            Prediction function with signature:
-            ``predictor(solution: object, step: ndarray) -> ndarray``
-        """
         self._predictor = predictor
 
     def __call__(self, last_solution: object, step: np.ndarray):
@@ -358,15 +335,6 @@ class _SecantStep:
         representation_fn: Callable[[object], np.ndarray],
         parameter_fn: Callable[[object], np.ndarray],
     ) -> None:
-        """Initialize secant stepping with representation and parameter functions.
-
-        Parameters
-        ----------
-        representation_fn : callable
-            Function to convert solutions to numerical representations.
-        parameter_fn : callable
-            Function to extract parameters from solutions.
-        """
         self._repr_fn = representation_fn
         self._param_fn = parameter_fn
 

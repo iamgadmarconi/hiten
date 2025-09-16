@@ -139,7 +139,7 @@ def _format_poly_table(poly: List[np.ndarray], clmo: np.ndarray, degree: Optiona
     >>> poly = [np.array([]), np.array([]), np.array([1.0, 2.0])]
     >>> clmo = np.array([[0, 0, 0, 0, 0, 0], [1, 0, 0, 0, 0, 0]])
     >>> _format_poly_table(poly, clmo, degree=2)
-    'q1  p1  q2  p2  q3  p3  hk\n...'
+    'q1  p1  q2  p2  q3  p3  hk ...'
     """
     # Each entry: (degree, (k_q1, k_q2, k_q3, k_p1, k_p2, k_p3), coeff)
     structured_terms: list[tuple[int, tuple[int, int, int, int, int, int], complex]] = []

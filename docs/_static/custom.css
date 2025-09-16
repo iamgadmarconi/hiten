@@ -1,23 +1,106 @@
 /* Custom CSS for HITEN documentation */
 
-/* Override theme colors */
+/* Dark theme color overrides (works across RTD theme) */
 :root {
-    --pst-color-primary: #2980B9;
-    --pst-color-secondary: #34495E;
-    --pst-color-accent: #E74C3C;
-    --pst-color-info: #3498DB;
-    --pst-color-success: #27AE60;
-    --pst-color-warning: #F39C12;
-    --pst-color-danger: #E74C3C;
+    --pst-color-primary: #4A9EFF;
+    --pst-color-secondary: #B0B0B0;
+    --pst-color-accent: #FF6B6B;
+    --pst-color-info: #4A9EFF;
+    --pst-color-success: #4ECDC4;
+    --pst-color-warning: #FFE66D;
+    --pst-color-danger: #FF6B6B;
+    --pst-color-text: #E0E0E0;
+    --pst-color-text-muted: #B0B0B0;
+    --pst-color-background: #1a1a1a;
+    --pst-color-on-background: #2a2a2a;
+    --pst-color-surface: #2a2a2a;
+    --pst-color-on-surface: #E0E0E0;
 }
 
-/* Custom styling for code blocks */
+/* Read the Docs theme variables and components */
+/* Sidebar and nav header */
+.wy-side-nav-search {
+    background: var(--pst-color-background) !important;
+}
+.wy-side-nav-search .logo, .wy-side-nav-search a, .wy-side-nav-search a:visited {
+    color: var(--pst-color-text);
+}
+.wy-nav-top {
+    background: var(--pst-color-background) !important;
+}
+.wy-nav-side {
+    background: var(--pst-color-on-background) !important;
+}
+.wy-menu-vertical a {
+    color: var(--pst-color-text);
+}
+.wy-menu-vertical a:hover {
+    background: var(--pst-color-surface);
+}
+.wy-menu-vertical .current > a, .wy-menu-vertical .current > a:hover {
+    background: var(--pst-color-primary);
+    color: #ffffff;
+}
+.wy-menu-vertical li.toctree-l1.current > a span.toctree-expand {
+    color: #ffffff;
+}
+
+/* Content area */
+.wy-nav-content {
+    background: var(--pst-color-background);
+}
+.wy-nav-content-wrap {
+    background: var(--pst-color-background);
+}
+.rst-content {
+    color: var(--pst-color-text);
+}
+.rst-content a {
+    color: var(--pst-color-primary);
+}
+.rst-content a:hover {
+    color: #80baff;
+}
+
+/* Search input */
+input[type="text"], .wy-side-nav-search input[type="text"] {
+    background: var(--pst-color-surface);
+    color: var(--pst-color-text);
+    border: 1px solid #404040;
+}
+
+/* Dark theme body styling */
+body {
+    background-color: var(--pst-color-background);
+    color: var(--pst-color-text);
+}
+
+/* Dark theme for code blocks */
 .highlight {
-    background-color: #f8f9fa;
-    border: 1px solid #e9ecef;
+    background-color: #2d2d2d;
+    border: 1px solid #404040;
     border-radius: 0.375rem;
     padding: 1rem;
+    color: #E0E0E0;
 }
+
+/* Dark theme for inline code */
+code {
+    background-color: #2d2d2d;
+    color: #4A9EFF;
+    padding: 0.2em 0.4em;
+    border-radius: 0.25rem;
+}
+
+/* Dark theme for pre blocks */
+pre {
+    background-color: #2d2d2d;
+    color: #E0E0E0;
+    border: 1px solid #404040;
+    border-radius: 0.375rem;
+}
+
+/* Additional dark theme styling */
 
 /* Math equations */
 .math {
@@ -72,13 +155,14 @@
     border-left-color: var(--pst-color-danger);
 }
 
-/* Table styling */
+/* Dark theme table styling */
 table.docutils {
     border-collapse: collapse;
     border-spacing: 0;
-    border: 1px solid #dee2e6;
+    border: 1px solid #404040;
     border-radius: 0.375rem;
     overflow: hidden;
+    background-color: var(--pst-color-surface);
 }
 
 table.docutils th {
@@ -91,11 +175,12 @@ table.docutils th {
 
 table.docutils td {
     padding: 0.75rem;
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid #404040;
+    color: var(--pst-color-text);
 }
 
 table.docutils tr:nth-child(even) {
-    background-color: #f8f9fa;
+    background-color: #2d2d2d;
 }
 
 /* Navigation */
@@ -104,13 +189,18 @@ table.docutils tr:nth-child(even) {
     font-size: 1.25rem;
 }
 
-/* Footer */
+/* Dark theme footer */
 .footer {
-    border-top: 1px solid #dee2e6;
+    border-top: 1px solid #404040;
     margin-top: 2rem;
     padding-top: 1rem;
     text-align: center;
-    color: #6c757d;
+    color: var(--pst-color-text-muted);
+}
+
+/* Header logo sizing for RTD */
+.wy-side-nav-search .logo, .wy-side-nav-search img.logo {
+    max-height: 60px;
 }
 
 /* Responsive design */

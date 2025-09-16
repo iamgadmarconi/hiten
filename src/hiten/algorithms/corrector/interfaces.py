@@ -39,7 +39,7 @@ class _OrbitCorrectionConfig(_BaseCorrectionConfig):
         Additional Jacobian contribution function.
     target : tuple of float, default=(0.0,)
         Target values for the residual components.
-    event_func : callable, default=_y_plane_crossing
+    event_func : callable, default=:class:`~hiten.algorithms.poincare.singlehit.backend._y_plane_crossing`
         Function to detect Poincare section crossings.
     method : str, default="scipy"
         Integration method for trajectory computation.
@@ -96,9 +96,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
     _fd_mode: bool = False  # finite-difference mode flag set per correction
 
     def __init__(self, *args, **kwargs):
-        """Initialize interface with clean cache state."""
         super().__init__(*args, **kwargs)
-        # Ensure cache is reset for every new corrector instance
         self._event_cache = None
 
     def _to_full_state(

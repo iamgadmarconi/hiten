@@ -30,48 +30,6 @@ To install the latest stable release from PyPI:
 
    pip install hiten
 
-Development Installation
-~~~~~~~~~~~~~~~~~~~~~~~~
-
-To install HITEN in development mode from source:
-
-.. code-block:: bash
-
-   git clone https://github.com/iamgadmarconi/hiten.git
-   cd hiten
-   pip install -e .
-
-This will install HITEN in "editable" mode, meaning changes to the source code
-will be immediately reflected in your Python environment.
-
-With Development Dependencies
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-To install HITEN with development tools (pytest, black, ruff):
-
-.. code-block:: bash
-
-   git clone https://github.com/iamgadmarconi/hiten.git
-   cd hiten
-   pip install -e ".[dev]"
-
-Verification
-------------
-
-To verify that HITEN is installed correctly, run the following in a Python interpreter:
-
-.. code-block:: python
-
-   import hiten
-   print(f"HITEN version: {hiten.__version__}")
-   
-   # Test basic functionality
-   from hiten import Constants
-   constants = Constants(mu=0.012150585609624)
-   print(f"Earth-Moon system mu: {constants.mu}")
-
-If this runs without errors, HITEN is properly installed.
-
 Troubleshooting
 ---------------
 
@@ -101,6 +59,7 @@ If you encounter issues during installation:
 
 1. Check the `GitHub Issues <https://github.com/iamgadmarconi/hiten/issues>`_
 2. Create a new issue with:
+
    - Your operating system and Python version
    - Complete error message
    - Steps to reproduce the issue

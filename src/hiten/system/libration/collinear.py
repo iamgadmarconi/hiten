@@ -54,18 +54,6 @@ class CollinearPoint(LibrationPoint):
         (lambda1, omega1, omega2) values for the linearized system.
     """
     def __init__(self, system: "System"):
-        """Initialize a collinear Libration point.
-        
-        Parameters
-        ----------
-        system : :class:`~hiten.system.base.System`
-            The CR3BP system containing the mass parameter mu.
-            
-        Raises
-        ------
-        ValueError
-            If the mass parameter mu is not in the range (0, 0.5).
-        """
         if not 0 < system.mu < 0.5:
             raise ValueError(f"Mass parameter mu must be in range (0, 0.5), got {system.mu}")
         super().__init__(system)
@@ -620,14 +608,6 @@ class L1Point(CollinearPoint):
     """
     
     def __init__(self, system: "System"):
-        """
-        Initialize the L1 Libration point.
-        
-        Parameters
-        ----------
-        system : :class:`~hiten.system.base.System`
-            The CR3BP system containing the mass parameter mu.
-        """
         super().__init__(system)
 
     @property
@@ -711,14 +691,6 @@ class L2Point(CollinearPoint):
     """
     
     def __init__(self, system: "System"):
-        """
-        Initialize the L2 Libration point.
-        
-        Parameters
-        ----------
-        system : :class:`~hiten.system.base.System`
-            The CR3BP system containing the mass parameter mu.
-        """
         super().__init__(system)
 
     @property
@@ -801,14 +773,6 @@ class L3Point(CollinearPoint):
     """
     
     def __init__(self, system: "System"):
-        """
-        Initialize the L3 Libration point.
-        
-        Parameters
-        ----------
-        system : :class:`~hiten.system.base.System`
-            The CR3BP system containing the mass parameter mu.
-        """
         super().__init__(system)
 
     @property

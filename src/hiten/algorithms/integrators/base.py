@@ -30,10 +30,6 @@ class _Solution:
         available a cubic Hermite interpolant is employed by
         :func:`~hiten.algorithms.integrators.base._Solution.interpolate`; otherwise linear interpolation is used.
 
-    Attributes
-    ----------
-    Same as *Parameters*.
-
     Raises
     ------
     ValueError
@@ -50,17 +46,7 @@ class _Solution:
     derivatives: Optional[np.ndarray] = None
     
     def __post_init__(self):
-        """Validate the consistency of times, states, and derivatives arrays.
-        
-        This method is automatically called after dataclass initialization
-        to ensure that all arrays have compatible dimensions.
-        
-        Raises
-        ------
-        ValueError
-            If the lengths of times, states, or derivatives (when provided)
-            are inconsistent.
-        """
+        """Validate the consistency of times, states, and derivatives arrays"""
         if len(self.times) != len(self.states):
             raise ValueError(
                 f"Times and states must have same length: "
@@ -161,13 +147,6 @@ class _Integrator(ABC):
         Extra keyword arguments left untouched and stored in
         :attr:`~hiten.algorithms.integrators.base._Integrator.options` for later use by subclasses.
 
-    Attributes
-    ----------
-    name : str
-        Same as the constructor argument.
-    options : dict
-        User-supplied options passed verbatim to the instance.
-
     Notes
     -----
     Subclasses *must* implement the abstract members :func:`~hiten.algorithms.integrators.base._Integrator.order` and
@@ -191,16 +170,6 @@ class _Integrator(ABC):
     """
     
     def __init__(self, name: str, **options):
-        """Initialize the integrator with a name and optional parameters.
-        
-        Parameters
-        ----------
-        name : str
-            Human-readable identifier of the method.
-        **options
-            Extra keyword arguments left untouched and stored in
-            :attr:`~hiten.algorithms.integrators.base._Integrator.options` for later use by subclasses.
-        """
         self.name = name
         self.options = options
     

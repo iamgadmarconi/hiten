@@ -632,8 +632,7 @@ def _build_physical_hamiltonian_triangular(point, max_deg: int) -> List[np.ndarr
     Notes
     -----
     The triangular point Hamiltonian has the form:
-    H = (1/2)*(px^2 + py^2 + pz^2) + y*px - x*py + ((1/2) - mu)*x + s*sqrt(3)/2*y
-        - (1-mu)/r_PS - mu/r_PJ
+    H = (1/2)*(px^2 + py^2 + pz^2) + y*px - x*py + ((1/2) - mu)*x + s*sqrt(3)/2*y - (1-mu)/r_PS - mu/r_PJ
 
     where:
     - (px, py, pz): canonical momenta in nondimensional momentum units

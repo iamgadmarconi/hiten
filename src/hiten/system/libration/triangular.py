@@ -67,14 +67,6 @@ class TriangularPoint(LibrationPoint):
     ROUTH_CRITICAL_MU = (1.0 - np.sqrt(1.0 - (1.0/27.0))) / 2.0 # approx 0.03852
     
     def __init__(self, system: "System"):
-        """
-        Initialize a triangular Libration point.
-        
-        Parameters
-        ----------
-        system : :class:`~hiten.system.base.System`
-            The CR3BP system containing the mass parameter mu.
-        """
         super().__init__(system)
         # Log stability warning based on mu
         if system.mu > self.ROUTH_CRITICAL_MU:
@@ -454,14 +446,6 @@ class L4Point(TriangularPoint):
     """
     
     def __init__(self, system: "System"):
-        """
-        Initialize the L4 Libration point.
-        
-        Parameters
-        ----------
-        system : :class:`~hiten.system.base.System`
-            The CR3BP system containing the mass parameter mu.
-        """
         super().__init__(system)
     
     @property
@@ -492,14 +476,6 @@ class L5Point(TriangularPoint):
     """
     
     def __init__(self, system: "System"):
-        """
-        Initialize the L5 Libration point.
-        
-        Parameters
-        ----------
-        system : :class:`~hiten.system.base.System`
-            The CR3BP system containing the mass parameter mu.
-        """
         super().__init__(system)
     
     @property

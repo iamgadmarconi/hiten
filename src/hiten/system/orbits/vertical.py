@@ -61,16 +61,6 @@ class VerticalOrbit(PeriodicOrbit):
     _family = "vertical"
 
     def __init__(self, libration_point: CollinearPoint, initial_state: Optional[Sequence[float]] = None):
-        """Initialize a Vertical orbit.
-        
-        Parameters
-        ----------
-        libration_point : :class:`~hiten.system.libration.collinear.CollinearPoint`
-            The libration point around which the vertical orbit is computed.
-        initial_state : Sequence[float], optional
-            Initial state vector [x, y, z, vx, vy, vz] in nondimensional units.
-            If None, must be provided manually.
-        """
         super().__init__(libration_point, initial_state)
 
     def _initial_guess(self) -> NDArray[np.float64]:

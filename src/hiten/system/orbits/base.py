@@ -766,16 +766,6 @@ class GenericOrbit(PeriodicOrbit):
     _family = "generic"
     
     def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None):
-        """Initialize a GenericOrbit.
-        
-        Parameters
-        ----------
-        libration_point : :class:`~hiten.system.libration.base.LibrationPoint`
-            The libration point around which the orbit is computed.
-        initial_state : Sequence[float], optional
-            Initial state vector [x, y, z, vx, vy, vz] in nondimensional units.
-            If None, a default period of pi is set.
-        """
         super().__init__(libration_point, initial_state)
         self._custom_correction_config: Optional["_OrbitCorrectionConfig"] = None
         self._custom_continuation_config: Optional["_OrbitContinuationConfig"] = None

@@ -220,25 +220,11 @@ class Connection:
         return ConnectionResults(self._last_results)
 
     def __repr__(self) -> str:
-        """Return a concise string representation of the Connection object.
-
-        Returns
-        -------
-        str
-            String representation showing section type, direction, and result count.
-        """
         n = len(self._last_results or [])
         sec = type(self.section).__name__ if self.section is not None else "None"
         return f"Connection(section={sec}, direction={self.direction}, results={n})"
 
     def __str__(self) -> str:
-        """Return a detailed string representation including results summary.
-
-        Returns
-        -------
-        str
-            Multi-line string showing object info and results summary.
-        """
         header = self.__repr__()
         res_str = str(self.results)
         return f"{header}\n{res_str}"

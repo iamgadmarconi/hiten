@@ -22,11 +22,11 @@ from typing import Literal, Optional, Sequence
 
 import numpy as np
 
-from hiten.algorithms.poincare.centermanifold import _make_strategy
 from hiten.algorithms.poincare.centermanifold.config import (
     _CenterManifoldMapConfig, _get_section_config)
 from hiten.algorithms.poincare.centermanifold.engine import \
     _CenterManifoldEngine
+from hiten.algorithms.poincare.centermanifold.strategies import _make_strategy
 from hiten.algorithms.poincare.core.base import _ReturnMapBase
 from hiten.system.center import CenterManifold
 from hiten.system.orbits.base import GenericOrbit

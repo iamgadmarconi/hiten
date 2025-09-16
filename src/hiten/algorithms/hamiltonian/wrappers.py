@@ -101,12 +101,12 @@ def register_conversion(src_name: str, dst: "type[Hamiltonian] | str",
     Notes
     -----
     The conversion registry enables automatic transformation between coordinate
-    systems by maintaining a lookup table of (source, destination) -> function
+    systems by maintaining a lookup table of (source, destination) to function
     mappings. This supports the normal form computation pipeline where
     Hamiltonians must be transformed through multiple coordinate systems.
 
     Registered functions should follow the signature:
-    conversion_func(ham: Hamiltonian, **kwargs) -> Hamiltonian or tuple
+    conversion_func(ham: Hamiltonian, kwargs) returns :class:`~hiten.system.hamiltonians.base.Hamiltonian` or tuple
 
     The kwargs typically include context (like libration points) and numerical
     parameters (like tolerances). Some conversions return tuples containing
@@ -124,7 +124,7 @@ def register_conversion(src_name: str, dst: "type[Hamiltonian] | str",
     >>> @register_conversion("physical", "real_modal", 
     ...                     required_context=["point"],
     ...                     default_params={"tol": 1e-12})
-    ... def physical_to_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
+    ... def physical_to_modal(ham: Hamiltonian, kwargs) -> Hamiltonian:
     ...     point = kwargs["point"]
     ...     tol = kwargs.get("tol", 1e-12)
     ...     # Transform polynomial using point's eigenvectors
@@ -160,19 +160,20 @@ def _physical_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
 
     Parameters
     ----------
-    ham : Hamiltonian
+    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
         Source Hamiltonian in physical coordinates, with polynomial coefficients
         in nondimensional energy units.
-    **kwargs
+    kwargs
         Conversion context and parameters:
-        - point : CollinearPoint or TriangularPoint
+        
+        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or :class:`~hiten.system.libration.triangular.TriangularPoint`
             Libration point providing the modal transformation matrix.
         - tol : float, default 1e-12
             Numerical tolerance for cleaning small coefficients.
 
     Returns
     -------
-    Hamiltonian
+    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
         Transformed Hamiltonian in real modal coordinates with name "real_modal".
 
     Notes
@@ -203,6 +204,47 @@ def _physical_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
                     required_context=["point"],
                     default_params={"tol": 1e-12})
 def _real_modal_to_physical(ham: Hamiltonian, **kwargs) -> Hamiltonian:
+    """Transform Hamiltonian from real modal to physical coordinates.
+
+    Convert a polynomial Hamiltonian from real modal coordinates aligned with
+    linear stability eigenvectors back to local physical coordinates centered
+    at the equilibrium point.
+
+    Parameters
+    ----------
+    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+        Source Hamiltonian in real modal coordinates, with polynomial coefficients
+        in nondimensional energy units.
+    kwargs
+        Conversion context and parameters:
+        
+        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or :class:`~hiten.system.libration.triangular.TriangularPoint`
+            Libration point providing the inverse modal transformation matrix.
+        - tol : float, default 1e-12
+            Numerical tolerance for cleaning small coefficients.
+
+    Returns
+    -------
+    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+        Transformed Hamiltonian in physical coordinates with name "physical".
+
+    Notes
+    -----
+    This transformation is the inverse of the physical to real modal conversion,
+    using the inverse of the eigenvector matrix from the libration point's
+    linearization to convert back from modal coordinates to local coordinates.
+
+    The transformation restores the original physical coordinate system where
+    coordinates represent displacements from the equilibrium point in the
+    standard CR3BP reference frame.
+
+    See Also
+    --------
+    :func:`~hiten.algorithms.hamiltonian.transforms._polyrealmodal2local`
+        Underlying transformation function.
+    :func:`~hiten.algorithms.hamiltonian.wrappers._physical_to_real_modal`
+        Forward transformation to real modal coordinates.
+    """
     point = kwargs["point"]
     tol = kwargs.get("tol", 1e-12)
     new_poly = _polyrealmodal2local(point, ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol)
@@ -213,6 +255,49 @@ def _real_modal_to_physical(ham: Hamiltonian, **kwargs) -> Hamiltonian:
                     required_context=["point"],
                     default_params={"tol": 1e-12})
 def _real_modal_to_complex_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
+    """Transform Hamiltonian from real modal to complex modal coordinates.
+
+    Convert a polynomial Hamiltonian from real modal coordinates to complex
+    modal coordinates by complexifying elliptic coordinate pairs. This enables
+    the use of complex normal form techniques for analyzing the dynamics.
+
+    Parameters
+    ----------
+    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+        Source Hamiltonian in real modal coordinates, with polynomial coefficients
+        in nondimensional energy units.
+    kwargs
+        Conversion context and parameters:
+        
+        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or :class:`~hiten.system.libration.triangular.TriangularPoint`
+            Libration point determining which coordinate pairs to complexify.
+        - tol : float, default 1e-12
+            Numerical tolerance for cleaning small coefficients.
+
+    Returns
+    -------
+    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+        Transformed Hamiltonian in complex modal coordinates with name "complex_modal".
+
+    Notes
+    -----
+    For collinear points, coordinate pairs (1, 2) are complexified, corresponding
+    to the elliptic directions. For triangular points, all coordinate pairs
+    (0, 1, 2) are complexified since all directions are elliptic.
+
+    The complexification process introduces complex variables that simplify
+    the analysis of elliptic dynamics and enable the application of complex
+    normal form theory. The transformation preserves the Hamiltonian structure
+    while providing a more convenient representation for subsequent normal
+    form computations.
+
+    See Also
+    --------
+    :func:`~hiten.algorithms.hamiltonian.transforms._substitute_complex`
+        Underlying complexification function.
+    :func:`~hiten.algorithms.hamiltonian.wrappers._complex_modal_to_real_modal`
+        Inverse transformation back to real modal coordinates.
+    """
     point = kwargs["point"]
     if isinstance(point, CollinearPoint):
         mix_pairs = (1, 2)
@@ -228,6 +313,48 @@ def _real_modal_to_complex_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
                     required_context=["point"],
                     default_params={"tol": 1e-12})
 def _complex_modal_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
+    """Transform Hamiltonian from complex modal to real modal coordinates.
+
+    Convert a polynomial Hamiltonian from complex modal coordinates back to
+    real modal coordinates by realifying complexified elliptic coordinate pairs.
+    This provides the inverse of the complexification process.
+
+    Parameters
+    ----------
+    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+        Source Hamiltonian in complex modal coordinates, with polynomial coefficients
+        in nondimensional energy units.
+    kwargs
+        Conversion context and parameters:
+        
+        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or :class:`~hiten.system.libration.triangular.TriangularPoint`
+            Libration point determining which coordinate pairs to realify.
+        - tol : float, default 1e-12
+            Numerical tolerance for cleaning small coefficients.
+
+    Returns
+    -------
+    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+        Transformed Hamiltonian in real modal coordinates with name "real_modal".
+
+    Notes
+    -----
+    For collinear points, coordinate pairs (1, 2) are realified, corresponding
+    to the elliptic directions. For triangular points, all coordinate pairs
+    (0, 1, 2) are realified since all directions are elliptic.
+
+    The realification process converts complex variables back to real variables
+    while preserving the Hamiltonian structure. This transformation is typically
+    used after complex normal form computations to return to a real representation
+    suitable for physical interpretation or further real-coordinate analysis.
+
+    See Also
+    --------
+    :func:`~hiten.algorithms.hamiltonian.transforms._substitute_real`
+        Underlying realification function.
+    :func:`~hiten.algorithms.hamiltonian.wrappers._real_modal_to_complex_modal`
+        Forward transformation to complex modal coordinates.
+    """
     point = kwargs["point"]
     if isinstance(point, CollinearPoint):
         mix_pairs = (1, 2)
@@ -251,19 +378,20 @@ def _complex_modal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -> tupl
 
     Parameters
     ----------
-    ham : Hamiltonian
+    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
         Source Hamiltonian in complex modal coordinates, with polynomial
         coefficients in nondimensional energy units.
-    **kwargs
+    kwargs
         Conversion context and parameters:
-        - point : CollinearPoint or TriangularPoint
+        
+        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or :class:`~hiten.system.libration.triangular.TriangularPoint`
             Libration point providing eigenvalue information for resonance analysis.
         - tol_lie : float, default 1e-30
             Numerical tolerance for Lie series computations and coefficient cleaning.
 
     Returns
     -------
-    tuple of (Hamiltonian, LieGeneratingFunction)
+    tuple of (:class:`~hiten.system.hamiltonians.base.Hamiltonian`, :class:`~hiten.system.hamiltonians.base.LieGeneratingFunction`)
         - Transformed Hamiltonian in partial normal form with name "complex_partial_normal"
         - Generating functions used in the transformation, containing both the
           total generating function and eliminated terms
@@ -307,6 +435,53 @@ def _complex_modal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -> tupl
                     required_context=["point"],
                     default_params={"tol": 1e-14})
 def _complex_partial_normal_to_real_partial_normal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
+    """Transform Hamiltonian from complex partial normal to real partial normal form.
+
+    Convert a polynomial Hamiltonian from complex partial normal form to real
+    partial normal form by realifying complexified elliptic coordinate pairs.
+    This provides a real representation of the partially normalized dynamics.
+
+    Parameters
+    ----------
+    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+        Source Hamiltonian in complex partial normal form, with polynomial
+        coefficients in nondimensional energy units.
+    kwargs
+        Conversion context and parameters:
+        
+        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or :class:`~hiten.system.libration.triangular.TriangularPoint`
+            Libration point determining which coordinate pairs to realify.
+        - tol : float, default 1e-14
+            Numerical tolerance for cleaning small coefficients.
+
+    Returns
+    -------
+    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+        Transformed Hamiltonian in real partial normal form with name "real_partial_normal".
+
+    Notes
+    -----
+    For collinear points, coordinate pairs (1, 2) are realified, corresponding
+    to the elliptic directions. For triangular points, all coordinate pairs
+    (0, 1, 2) are realified since all directions are elliptic.
+
+    The partial normal form retains only terms that contribute to center manifold
+    dynamics while eliminating non-resonant terms. The realification process
+    converts the complex representation back to real variables while preserving
+    the normalized structure, making the dynamics more interpretable in physical
+    terms.
+
+    This transformation is typically used after complex partial normal form
+    computations to obtain a real representation suitable for center manifold
+    analysis or further real-coordinate processing.
+
+    See Also
+    --------
+    :func:`~hiten.algorithms.hamiltonian.transforms._substitute_real`
+        Underlying realification function.
+    :func:`~hiten.algorithms.hamiltonian.wrappers._real_partial_normal_to_complex_partial_normal`
+        Inverse transformation back to complex partial normal form.
+    """
     point = kwargs["point"]
     if isinstance(point, CollinearPoint):
         mix_pairs = (1, 2)
@@ -323,6 +498,52 @@ def _complex_partial_normal_to_real_partial_normal(ham: Hamiltonian, **kwargs) -
                     required_context=["point"],
                     default_params={"tol": 1e-14})
 def _real_partial_normal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
+    """Transform Hamiltonian from real partial normal to complex partial normal form.
+
+    Convert a polynomial Hamiltonian from real partial normal form to complex
+    partial normal form by complexifying elliptic coordinate pairs. This enables
+    the use of complex analysis techniques on the partially normalized dynamics.
+
+    Parameters
+    ----------
+    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+        Source Hamiltonian in real partial normal form, with polynomial
+        coefficients in nondimensional energy units.
+    kwargs
+        Conversion context and parameters:
+        
+        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or :class:`~hiten.system.libration.triangular.TriangularPoint`
+            Libration point determining which coordinate pairs to complexify.
+        - tol : float, default 1e-14
+            Numerical tolerance for cleaning small coefficients.
+
+    Returns
+    -------
+    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+        Transformed Hamiltonian in complex partial normal form with name "complex_partial_normal".
+
+    Notes
+    -----
+    For collinear points, coordinate pairs (1, 2) are complexified, corresponding
+    to the elliptic directions. For triangular points, all coordinate pairs
+    (0, 1, 2) are complexified since all directions are elliptic.
+
+    The partial normal form retains only terms that contribute to center manifold
+    dynamics while eliminating non-resonant terms. The complexification process
+    converts real variables to complex variables while preserving the normalized
+    structure, enabling the application of complex analysis techniques.
+
+    This transformation is typically used when complex analysis methods are
+    needed on the partially normalized dynamics, such as for further normal
+    form computations or complex center manifold analysis.
+
+    See Also
+    --------
+    :func:`~hiten.algorithms.hamiltonian.transforms._substitute_complex`
+        Underlying complexification function.
+    :func:`~hiten.algorithms.hamiltonian.wrappers._complex_partial_normal_to_real_partial_normal`
+        Inverse transformation back to real partial normal form.
+    """
     point = kwargs["point"]
     if isinstance(point, CollinearPoint):
         mix_pairs = (1, 2)
@@ -346,19 +567,20 @@ def _complex_partial_normal_to_center_manifold_complex(ham: Hamiltonian, **kwarg
 
     Parameters
     ----------
-    ham : Hamiltonian
+    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
         Source Hamiltonian in complex partial normal form, with polynomial
         coefficients in nondimensional energy units.
-    **kwargs
+    kwargs
         Conversion context and parameters:
-        - point : CollinearPoint or TriangularPoint
+        
+        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or :class:`~hiten.system.libration.triangular.TriangularPoint`
             Libration point determining the manifold structure and hyperbolic directions.
         - tol : float, default 1e-14
             Numerical tolerance for zeroing small coefficients during restriction.
 
     Returns
     -------
-    Hamiltonian
+    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
         Restricted Hamiltonian on center manifold with name "center_manifold_complex".
 
     Notes
@@ -399,6 +621,53 @@ def _complex_partial_normal_to_center_manifold_complex(ham: Hamiltonian, **kwarg
                     required_context=["point"],
                     default_params={"tol": 1e-14})
 def _center_manifold_complex_to_center_manifold_real(ham: Hamiltonian, **kwargs) -> Hamiltonian:
+    """Transform Hamiltonian from complex center manifold to real center manifold.
+
+    Convert a polynomial Hamiltonian from complex center manifold representation
+    to real center manifold representation by realifying complexified elliptic
+    coordinate pairs. This provides a real representation of the center manifold dynamics.
+
+    Parameters
+    ----------
+    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+        Source Hamiltonian in complex center manifold representation, with polynomial
+        coefficients in nondimensional energy units.
+    kwargs
+        Conversion context and parameters:
+        
+        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or :class:`~hiten.system.libration.triangular.TriangularPoint`
+            Libration point determining which coordinate pairs to realify.
+        - tol : float, default 1e-14
+            Numerical tolerance for cleaning small coefficients.
+
+    Returns
+    -------
+    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+        Transformed Hamiltonian in real center manifold representation with name "center_manifold_real".
+
+    Notes
+    -----
+    For collinear points, coordinate pairs (1, 2) are realified, corresponding
+    to the elliptic directions. For triangular points, all coordinate pairs
+    (0, 1, 2) are realified since all directions are elliptic.
+
+    The center manifold Hamiltonian captures the long-term dynamics by eliminating
+    hyperbolic terms and focusing on neutrally stable directions. The realification
+    process converts complex variables back to real variables while preserving
+    the center manifold structure, making the dynamics more interpretable in
+    physical terms.
+
+    This transformation is typically used after complex center manifold computations
+    to obtain a real representation suitable for physical interpretation or
+    further real-coordinate analysis of the center manifold dynamics.
+
+    See Also
+    --------
+    :func:`~hiten.algorithms.hamiltonian.transforms._substitute_real`
+        Underlying realification function.
+    :func:`~hiten.algorithms.hamiltonian.wrappers._center_manifold_real_to_center_manifold_complex`
+        Inverse transformation back to complex center manifold representation.
+    """
     point = kwargs["point"]
     if isinstance(point, CollinearPoint):
         mix_pairs = (1, 2)
@@ -414,6 +683,52 @@ def _center_manifold_complex_to_center_manifold_real(ham: Hamiltonian, **kwargs)
                     required_context=["point"],
                     default_params={"tol": 1e-14})
 def _center_manifold_real_to_center_manifold_complex(ham: Hamiltonian, **kwargs) -> Hamiltonian:
+    """Transform Hamiltonian from real center manifold to complex center manifold.
+
+    Convert a polynomial Hamiltonian from real center manifold representation
+    to complex center manifold representation by complexifying elliptic coordinate
+    pairs. This enables the use of complex analysis techniques on center manifold dynamics.
+
+    Parameters
+    ----------
+    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+        Source Hamiltonian in real center manifold representation, with polynomial
+        coefficients in nondimensional energy units.
+    kwargs
+        Conversion context and parameters:
+        
+        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or :class:`~hiten.system.libration.triangular.TriangularPoint`
+            Libration point determining which coordinate pairs to complexify.
+        - tol : float, default 1e-14
+            Numerical tolerance for cleaning small coefficients.
+
+    Returns
+    -------
+    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+        Transformed Hamiltonian in complex center manifold representation with name "center_manifold_complex".
+
+    Notes
+    -----
+    For collinear points, coordinate pairs (1, 2) are complexified, corresponding
+    to the elliptic directions. For triangular points, all coordinate pairs
+    (0, 1, 2) are complexified since all directions are elliptic.
+
+    The center manifold Hamiltonian captures the long-term dynamics by eliminating
+    hyperbolic terms and focusing on neutrally stable directions. The complexification
+    process converts real variables to complex variables while preserving the
+    center manifold structure, enabling the application of complex analysis techniques.
+
+    This transformation is typically used when complex analysis methods are
+    needed on the center manifold dynamics, such as for further normal form
+    computations or complex center manifold analysis.
+
+    See Also
+    --------
+    :func:`~hiten.algorithms.hamiltonian.transforms._substitute_complex`
+        Underlying complexification function.
+    :func:`~hiten.algorithms.hamiltonian.wrappers._center_manifold_complex_to_center_manifold_real`
+        Inverse transformation back to real center manifold representation.
+    """
     point = kwargs["point"]
     if isinstance(point, CollinearPoint):
         mix_pairs = (1, 2)
@@ -429,6 +744,63 @@ def _center_manifold_real_to_center_manifold_complex(ham: Hamiltonian, **kwargs)
                     required_context=["point"],
                     default_params={"tol_lie": 1e-30, "resonance_tol": 1e-14})
 def _complex_modal_to_complex_full_normal(ham: Hamiltonian, **kwargs) -> tuple[Hamiltonian, "LieGeneratingFunction"]:
+    """Transform Hamiltonian to full normal form via Lie series method.
+
+    Apply complete normal form transformation to eliminate all non-resonant terms
+    from a complex modal Hamiltonian, achieving the maximum possible simplification
+    of the dynamics through canonical transformations.
+
+    Parameters
+    ----------
+    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+        Source Hamiltonian in complex modal coordinates, with polynomial
+        coefficients in nondimensional energy units.
+    kwargs
+        Conversion context and parameters:
+        
+        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or :class:`~hiten.system.libration.triangular.TriangularPoint`
+            Libration point providing eigenvalue information for resonance analysis.
+        - tol_lie : float, default 1e-30
+            Numerical tolerance for Lie series computations and coefficient cleaning.
+        - resonance_tol : float, default 1e-14
+            Tolerance for detecting resonance conditions between eigenvalues.
+
+    Returns
+    -------
+    tuple of (:class:`~hiten.system.hamiltonians.base.Hamiltonian`, :class:`~hiten.system.hamiltonians.base.LieGeneratingFunction`)
+        - Transformed Hamiltonian in full normal form with name "complex_full_normal"
+        - Generating functions used in the transformation, containing both the
+          total generating function and eliminated terms
+
+    Notes
+    -----
+    The full normal form eliminates all non-resonant terms through a sequence
+    of canonical transformations, achieving the maximum possible simplification
+    of the Hamiltonian while preserving the essential dynamics. This is the
+    most complete form of normalization possible.
+
+    The Lie series method implements transformations of the form:
+    H' = exp(L_G) H
+    where L_G is the Lie operator associated with generating function G.
+
+    Resonance conditions are detected based on the eigenvalues of the libration
+    point, and only resonant terms are preserved in the final normal form.
+    The resulting Hamiltonian contains only terms that cannot be eliminated
+    due to resonance conditions.
+
+    The returned generating functions contain the complete transformation
+    history and can be used for coordinate transformations or analysis of
+    the eliminated dynamics.
+
+    See Also
+    --------
+    :func:`~hiten.algorithms.hamiltonian.normal._lie._lie_transform`
+        Underlying full normal form computation.
+    :func:`~hiten.algorithms.hamiltonian.wrappers._complex_modal_to_complex_partial_normal`
+        Partial normal form transformation.
+    :class:`~hiten.system.hamiltonians.base.LieGeneratingFunction`
+        Container for generating function data.
+    """
     point = kwargs["point"]
     tol_lie = kwargs.get("tol_lie", 1e-30)
     resonance_tol = kwargs.get("resonance_tol", 1e-14)
@@ -444,6 +816,54 @@ def _complex_modal_to_complex_full_normal(ham: Hamiltonian, **kwargs) -> tuple[H
                     required_context=["point"],
                     default_params={"tol": 1e-14})
 def _complex_full_normal_to_real_full_normal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
+    """Transform Hamiltonian from complex full normal to real full normal form.
+
+    Convert a polynomial Hamiltonian from complex full normal form to real
+    full normal form by realifying complexified elliptic coordinate pairs.
+    This provides a real representation of the completely normalized dynamics.
+
+    Parameters
+    ----------
+    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+        Source Hamiltonian in complex full normal form, with polynomial
+        coefficients in nondimensional energy units.
+    kwargs
+        Conversion context and parameters:
+        
+        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or :class:`~hiten.system.libration.triangular.TriangularPoint`
+            Libration point determining which coordinate pairs to realify.
+        - tol : float, default 1e-14
+            Numerical tolerance for cleaning small coefficients.
+
+    Returns
+    -------
+    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+        Transformed Hamiltonian in real full normal form with name "real_full_normal".
+
+    Notes
+    -----
+    For collinear points, coordinate pairs (1, 2) are realified, corresponding
+    to the elliptic directions. For triangular points, all coordinate pairs
+    (0, 1, 2) are realified since all directions are elliptic.
+
+    The full normal form represents the maximum possible simplification of the
+    Hamiltonian through canonical transformations, eliminating all non-resonant
+    terms. The realification process converts complex variables back to real
+    variables while preserving the normalized structure, making the dynamics
+    more interpretable in physical terms.
+
+    This transformation is typically used after complex full normal form
+    computations to obtain a real representation suitable for physical
+    interpretation or further real-coordinate analysis of the completely
+    normalized dynamics.
+
+    See Also
+    --------
+    :func:`~hiten.algorithms.hamiltonian.transforms._substitute_real`
+        Underlying realification function.
+    :func:`~hiten.algorithms.hamiltonian.wrappers._real_full_normal_to_complex_full_normal`
+        Inverse transformation back to complex full normal form.
+    """
     point = kwargs["point"]
     if isinstance(point, CollinearPoint):
         mix_pairs = (1, 2)
@@ -459,6 +879,53 @@ def _complex_full_normal_to_real_full_normal(ham: Hamiltonian, **kwargs) -> Hami
                     required_context=["point"],
                     default_params={"tol": 1e-14})
 def _real_full_normal_to_complex_full_normal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
+    """Transform Hamiltonian from real full normal to complex full normal form.
+
+    Convert a polynomial Hamiltonian from real full normal form to complex
+    full normal form by complexifying elliptic coordinate pairs. This enables
+    the use of complex analysis techniques on the completely normalized dynamics.
+
+    Parameters
+    ----------
+    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+        Source Hamiltonian in real full normal form, with polynomial
+        coefficients in nondimensional energy units.
+    kwargs
+        Conversion context and parameters:
+        
+        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or :class:`~hiten.system.libration.triangular.TriangularPoint`
+            Libration point determining which coordinate pairs to complexify.
+        - tol : float, default 1e-14
+            Numerical tolerance for cleaning small coefficients.
+
+    Returns
+    -------
+    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+        Transformed Hamiltonian in complex full normal form with name "complex_full_normal".
+
+    Notes
+    -----
+    For collinear points, coordinate pairs (1, 2) are complexified, corresponding
+    to the elliptic directions. For triangular points, all coordinate pairs
+    (0, 1, 2) are complexified since all directions are elliptic.
+
+    The full normal form represents the maximum possible simplification of the
+    Hamiltonian through canonical transformations, eliminating all non-resonant
+    terms. The complexification process converts real variables to complex
+    variables while preserving the normalized structure, enabling the application
+    of complex analysis techniques.
+
+    This transformation is typically used when complex analysis methods are
+    needed on the completely normalized dynamics, such as for further analysis
+    or complex coordinate transformations.
+
+    See Also
+    --------
+    :func:`~hiten.algorithms.hamiltonian.transforms._substitute_complex`
+        Underlying complexification function.
+    :func:`~hiten.algorithms.hamiltonian.wrappers._complex_full_normal_to_real_full_normal`
+        Inverse transformation back to real full normal form.
+    """
     point = kwargs["point"]
     if isinstance(point, CollinearPoint):
         mix_pairs = (1, 2)

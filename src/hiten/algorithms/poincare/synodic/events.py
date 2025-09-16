@@ -73,32 +73,6 @@ class _AffinePlaneEvent(_SurfaceEvent):
         offset: float = 0.0,
         direction: Literal[1, -1, None] = None,
     ) -> None:
-        """Initialize the affine plane event.
-
-        Parameters
-        ----------
-        normal : array_like, shape (6,)
-            Hyperplane normal in synodic coordinates (nondimensional units).
-            Must be a 1D array of length 6 with finite values.
-        offset : float, default 0.0
-            Hyperplane offset along the normal (nondimensional units).
-        direction : {1, -1, None}, optional
-            Crossing direction filter for the surface event.
-
-        Raises
-        ------
-        ValueError
-            If normal vector has incorrect dimensions or contains non-finite values.
-
-        Notes
-        -----
-        This constructor initializes the affine plane event with validation
-        of the normal vector. The normal vector is converted to a numpy
-        array and validated for correct dimensions and finite values.
-
-        The section is defined by the equation n * state = offset, where
-        n is the normal vector and state is the 6D state vector.
-        """
         super().__init__(direction=direction)
 
         n_arr = np.asarray(normal, dtype=float)
@@ -222,14 +196,6 @@ class _AffinePlaneEvent(_SurfaceEvent):
         return cls(normal=n, offset=c, direction=direction)
 
     def __repr__(self) -> str:
-        """Return a string representation of the affine plane event.
-
-        Returns
-        -------
-        str
-            String representation showing the normal vector, offset,
-            and crossing direction.
-        """
         return (f"AffinePlaneEvent(n={np.array2string(self._n, precision=3)}, "
                 f"c={self._c:.6g}, dir={self.direction})")
 

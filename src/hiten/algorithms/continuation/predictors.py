@@ -248,13 +248,6 @@ class _FixedPeriod(_PeriodicOrbitContinuationInterface, _NaturalParameter):
     """
     
     def __init__(self, *args, **kwargs):
-        """Initialize fixed-period continuation (not yet implemented).
-        
-        Raises
-        ------
-        NotImplementedError
-            This functionality is not yet available.
-        """
         raise NotImplementedError("Period continuation is not implemented yet.")
 
 
@@ -293,16 +286,9 @@ class _EnergyLevel(_PeriodicOrbitContinuationInterface, _NaturalParameter):
         Implemented state-based continuation.
     :class:`~hiten.algorithms.continuation.predictors._FixedPeriod`
         Future period-based continuation.
-    :mod:`~hiten.system`
-        System classes that compute Jacobi constants.
+    :mod:`~hiten.system.orbits`
+        Orbit classes that compute Jacobi constants.
     """
 
     def __init__(self, *args, **kwargs):
-        """Initialize energy-level continuation (not yet implemented).
-        
-        Raises
-        ------
-        NotImplementedError
-            This functionality is not yet available.
-        """
         raise NotImplementedError("Energy continuation is not implemented yet.")

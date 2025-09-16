@@ -9,25 +9,13 @@ HITEN Documentation
    :target: https://opensource.org/licenses/MIT
    :alt: License
 
-.. image:: https://img.shields.io/badge/Code%20style-black-000000.svg
-   :target: https://github.com/psf/black
-   :alt: Code style: black
+.. image:: https://img.shields.io/pypi/v/hiten.svg
+   :target: https://pypi.org/project/hiten/
+   :alt: PyPI version
 
 HITEN is a computational toolkit for the Circular Restricted Three-Body Problem (CR3BP). 
 It provides algorithms for computing periodic orbits, invariant manifolds, bifurcation analysis, 
 and various numerical methods essential for dynamical systems analysis in astrodynamics.
-
-Key Features
-------------
-
-- **Periodic Orbit Computation**: Continuation methods for families of periodic orbits
-- **Invariant Manifolds**: Stable and unstable manifold computation and analysis
-- **Bifurcation Analysis**: Detection and analysis of bifurcations in parameter families
-- **Hamiltonian Methods**: Normal form theory and center manifold reduction
-- **Poincare Maps**: Various mapping techniques for dynamical analysis
-- **Fourier Analysis**: Spectral methods for periodic solutions
-- **Polynomial Methods**: Algebraic approaches to dynamical systems
-- **Integration Methods**: Symplectic and Runge-Kutta integrators
 
 Quick Start
 -----------
@@ -75,9 +63,21 @@ Contents
    :maxdepth: 2
    :caption: User Guide
 
-   user_guide/system
-   user_guide/algorithms
-   user_guide/utilities
+   user_guide/guide_01_systems
+   user_guide/guide_02_libration
+   user_guide/guide_03_propagation
+   user_guide/guide_04_orbits
+   user_guide/guide_05_manifolds
+   user_guide/guide_06_poincare
+   user_guide/guide_07_center_manifold
+   user_guide/guide_14_polynomial
+   user_guide/guide_13_fourier
+   user_guide/guide_15_bifurcation
+   user_guide/guide_10_integrators
+   user_guide/guide_11_correction
+   user_guide/guide_12_continuation
+   user_guide/guide_16_connections
+   user_guide/guide_17_dynamical_systems
 
 .. toctree::
    :maxdepth: 2

@@ -11,7 +11,7 @@ requirements.
 
 from abc import ABC
 from dataclasses import dataclass
-from typing import Literal, Protocol, Tuple, runtime_checkable
+from typing import Literal, Optional, Protocol, Tuple, runtime_checkable
 
 
 @dataclass
@@ -32,7 +32,7 @@ class _ReturnMapBaseConfig(ABC):
     n_workers : int or None, default=None
         Number of parallel workers for computation. If None,
         uses the default number of workers (typically the number
-        of CPU cores).
+        of CPU cores).  
 
     Notes
     -----
@@ -81,7 +81,7 @@ class _IntegrationConfig(ABC):
     dt: float = 1e-2
     method: Literal["scipy", "rk", "symplectic", "adaptive"] = "rk"
     order: int = 4
-    c_omega_heuristic: float = 20.0
+    c_omega_heuristic: Optional[float] = 20.0
 
 
 @dataclass

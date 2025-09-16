@@ -133,33 +133,7 @@ class _ReturnMapEngine(ABC):
         self._section_cache = None
 
     def __repr__(self) -> str:
-        """Return a string representation of the engine.
-
-        Returns
-        -------
-        str
-            String representation showing the class name and key
-            configuration parameters.
-
-        Notes
-        -----
-        This method provides a concise string representation useful
-        for debugging and interactive exploration.
-        """
         return f"{self.__class__.__name__}(n_iter={self._n_iter}, dt={self._dt}, n_workers={self._n_workers})"
 
     def __str__(self) -> str:
-        """Return a string representation of the engine.
-
-        Returns
-        -------
-        str
-            String representation showing the class name and key
-            configuration parameters.
-
-        Notes
-        -----
-        This method provides a user-friendly string representation
-        for display purposes.
-        """
         return f"{self.__class__.__name__}(n_iter={self._n_iter}, dt={self._dt}, n_workers={self._n_workers})"

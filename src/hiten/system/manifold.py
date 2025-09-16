@@ -133,17 +133,6 @@ class Manifold:
             stable: bool = True, 
             direction: Literal["positive", "negative"] = "positive", 
         ):
-        """Initialize a Manifold instance.
-        
-        Parameters
-        ----------
-        generating_orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
-            The periodic orbit that seeds the manifold.
-        stable : bool, default True
-            Whether to compute the stable (True) or unstable (False) manifold.
-        direction : {'positive', 'negative'}, default 'positive'
-            Direction of the eigenvector for manifold initialization.
-        """
         self._generating_orbit = generating_orbit
         self._libration_point = self._generating_orbit.libration_point
         self._stable = 1 if stable else -1
@@ -223,23 +212,9 @@ class Manifold:
         return self._manifold_result
 
     def __str__(self):
-        """Return a string representation of the Manifold.
-        
-        Returns
-        -------
-        str
-            String representation of the :class:`~hiten.system.manifold.Manifold`.
-        """
         return f"Manifold(stable={self._stable}, direction={self._direction}) of {self._generating_orbit}"
     
     def __repr__(self):
-        """Return a detailed string representation of the Manifold.
-        
-        Returns
-        -------
-        str
-            Detailed string representation of the :class:`~hiten.system.manifold.Manifold`.
-        """
         return self.__str__()
 
     def _get_real_eigenvectors(self, vectors: np.ndarray, values: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
@@ -549,9 +524,7 @@ class Manifold:
                 err = f"Error computing manifold: {e}"
                 logger.error(err)
                 continue
-        
-        # Note: success/failure of section hits is no longer tracked here.
-        
+
         self._manifold_result = ManifoldResult(
             ysos, dysos, states_list, times_list, self._successes, self._attempts
         )
