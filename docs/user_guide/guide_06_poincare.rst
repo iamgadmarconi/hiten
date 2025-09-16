@@ -154,7 +154,7 @@ Section Properties
 Heteroclinic Connections
 ------------------------
 
-Heteroclinic connections are trajectories that connect different invariant manifolds.
+A heteroclinic connection is a path in phase space which joins two different equilibrium points.
 
 Creating Connections
 ~~~~~~~~~~~~~~~~~~~~
@@ -184,10 +184,7 @@ Creating Connections
    manifold_l2 = halo_l2.manifold(stable=False, direction="negative")
    manifold_l2.compute(integration_fraction=1.0, step=0.005)
 
-Connection Configuration
-~~~~~~~~~~~~~~~~~~~~~~~
-
-Configure connection search parameters:
+Once you created the manifolds, you can create a connection between them by configuring the section and search parameters.
 
 .. code-block:: python
 
@@ -217,10 +214,7 @@ Configure connection search parameters:
        search_cfg=search_cfg
    )
 
-Finding Connections
-~~~~~~~~~~~~~~~~~~~
-
-Search for connections between manifolds:
+Then you can solve for connections between the manifolds.
 
 .. code-block:: python
 
@@ -270,33 +264,6 @@ Connection Classification
    print(f"Ballistic connections: {len(ballistic_connections)}")
    print(f"Impulsive connections: {len(impulsive_connections)}")
 
-Visualization
--------------
-
-Plot Poincare sections and connections:
-
-Section Visualization
-~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: python
-
-   import matplotlib.pyplot as plt
-   
-   # Plot synodic section
-   synodic_map.plot()
-   
-   # Custom section plotting
-   fig, ax = plt.subplots(figsize=(10, 8))
-   
-   points = synodic_map.points
-   ax.scatter(points[:, 0], points[:, 1], s=1, alpha=0.6)
-   
-   ax.set_xlabel('Y')
-   ax.set_ylabel('Z')
-   ax.set_title('Poincare Section')
-   ax.set_aspect('equal')
-   plt.show()
-
 Connection Visualization
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -304,27 +271,6 @@ Connection Visualization
 
    # Plot connections
    connection.plot(dark_mode=True)
-   
-   # Custom connection plotting
-   fig, ax = plt.subplots(figsize=(12, 8))
-   
-   # Plot section points
-   points_src = connection._last_source_section.points
-   points_tgt = connection._last_target_section.points
-   
-   ax.scatter(points_src[:, 0], points_src[:, 1], s=1, alpha=0.6, label='Source')
-   ax.scatter(points_tgt[:, 0], points_tgt[:, 1], s=1, alpha=0.6, label='Target')
-   
-   # Plot connections
-   for result in connection.results:
-       ax.scatter(result.point2d[0], result.point2d[1], 
-                 s=50, c='red', marker='x')
-   
-   ax.set_xlabel('Y')
-   ax.set_ylabel('Z')
-   ax.set_title('Heteroclinic Connections')
-   ax.legend()
-   plt.show()
 
 Practical Examples
 ------------------
