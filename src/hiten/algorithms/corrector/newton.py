@@ -34,6 +34,11 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
         - False/None: Disable line search (use full Newton steps)
     **kwargs
         Additional arguments passed to parent classes.
+
+    Notes
+    -----
+    This class is designed to be mixed with :class:`~hiten.algorithms.corrector._step_interface._ArmijoStepInterface`
+    to provide a robust Newton-Raphson algorithm with Armijo line search.
     """
 
     def __init__(self, *, line_search_config: _LineSearchConfig | bool | None = None, **kwargs) -> None:
