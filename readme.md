@@ -3,6 +3,7 @@
 # HITEN - Computational Toolkit for the Circular Restricted Three-Body Problem
 
 [![PyPI version](https://img.shields.io/pypi/v/hiten.svg?color=brightgreen)](https://pypi.org/project/hiten/)
+[![Docs](https://img.shields.io/badge/docs-online-brightgreen)](https://iamgadmarconi.github.io/hiten/)
 
 ## Overview
 
@@ -16,13 +17,9 @@ HITEN is published on PyPI. A recent Python version (3.9+) is required.
 py -m pip install hiten
 ```
 
-Optional dev tools (formatting, linting, tests):
-
-```bash
-py -m pip install "hiten[dev]"
-```
-
 ## Quickstart
+
+Full documentation is available [here](https://iamgadmarconi.github.io/hiten/).
 
 Compute a halo orbit around Earth-Moon L1 and plot a branch of its stable manifold:
 
