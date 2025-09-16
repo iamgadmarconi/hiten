@@ -30,7 +30,8 @@ jobs:
         run: sphinx-build -b html docs/ docs/html
 
       - name: Upload built docs as Pages artifact
-        uses: actions/upload-pages-artifact@v2
+        # <-- updated to v4 to avoid the deprecated upload-artifact v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: docs/html
 
