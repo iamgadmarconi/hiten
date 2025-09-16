@@ -19,7 +19,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.10"
+          python-version: "3.11"
 
       - name: Install dependencies
         run: |
@@ -29,7 +29,7 @@ jobs:
       - name: Build Sphinx docs
         run: sphinx-build -b html docs/ docs/html
 
-      - name: Upload Pages artifact
+      - name: Upload built docs as Pages artifact
         uses: actions/upload-pages-artifact@v2
         with:
           path: docs/html
