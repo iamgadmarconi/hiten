@@ -1,242 +1,363 @@
 Custom Dynamical Systems
 =========================
 
-This guide covers how to create custom dynamical systems in HITEN, including both standard dynamical systems and Hamiltonian systems. Understanding how to implement custom systems is essential for extending HITEN's capabilities to new problems and research applications.
+This guide covers how to create and work with dynamical systems in HITEN, including both built-in systems and custom implementations. The dynamics framework provides a flexible interface for defining, analyzing, and integrating dynamical systems with emphasis on astrodynamics applications.
 
-Understanding Dynamical Systems
--------------------------------
+Understanding the Dynamics Framework
+------------------------------------
 
-HITEN provides a flexible framework for defining dynamical systems through the :class:`~hiten.algorithms.dynamics.base._DynamicalSystem` abstract base class. All systems must implement the :class:`hiten.algorithms.dynamics.base._DynamicalSystemProtocol` interface.
+HITEN provides a comprehensive framework for dynamical systems through several key components:
 
-Creating Standard Dynamical Systems
------------------------------------
+- **Core Framework**: :class:`~hiten.algorithms.dynamics.base._DynamicalSystem` abstract base class and :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol` interface
+- **Built-in Systems**: CR3BP equations, Hamiltonian systems, and generic RHS adapters
+- **Utilities**: Energy analysis, stability analysis, and linear algebra tools
+- **Integration**: Compatible with all HITEN integrators
 
-For general dynamical systems, subclass :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`:
+Built-in Dynamical Systems
+---------------------------
+
+HITEN provides several pre-built dynamical systems for common applications:
+
+CR3BP Systems
+~~~~~~~~~~~~~
+
+Several built-in systems are available in HITEN:
+
+.. code-block:: python
+
+   from hiten.algorithms.dynamics import rtbp_dynsys, jacobian_dynsys, variational_dynsys
+   import numpy as np
+   from scipy.integrate import solve_ivp
+
+   # Create CR3BP system (Earth-Moon system)
+   system = rtbp_dynsys(mu=0.01215, name="Earth-Moon")
+   
+   # Initial state near L1 point
+   initial_state = np.array([0.8, 0, 0, 0, 0.1, 0])
+   
+   # Integrate using SciPy
+   times = np.linspace(0, 10, 1000)
+   sol = solve_ivp(system.rhs, [0, 10], initial_state, t_eval=times)
+   
+   print(f"System dimension: {system.dim}")
+   print(f"Mass parameter: {system.mu}")
+
+   # Create Jacobian evaluation system
+   jac_system = jacobian_dynsys(mu=0.01215)
+   jacobian = jac_system.rhs(0.0, initial_state[:3])  # Position only
+   
+   # Create variational equations system for STM propagation
+   var_system = variational_dynsys(mu=0.01215)
+
+Generic RHS Systems
+~~~~~~~~~~~~~~~~~~~
+
+For custom ODE systems, use the RHS adapter:
+
+.. code-block:: python
+
+   from hiten.algorithms.dynamics import create_rhs_system
+   import numpy as np
+
+   def harmonic_oscillator(t, y):
+       """Simple harmonic oscillator: dy/dt = [v, -ω²x]"""
+       return np.array([y[1], -y[0]])
+
+   def duffing_oscillator(t, y):
+       """Duffing oscillator with forcing"""
+       x, v = y[0], y[1]
+       alpha, beta, gamma, omega = 1.0, 0.1, 0.2, 1.2
+       return np.array([v, -alpha*x - beta*x**3 + gamma*np.cos(omega*t)])
+
+   # Create systems
+   harmonic = create_rhs_system(harmonic_oscillator, dim=2, name="Harmonic")
+   duffing = create_rhs_system(duffing_oscillator, dim=2, name="Duffing")
+   
+   # Test the systems
+   state = np.array([1.0, 0.0])
+   print(f"Harmonic derivative: {harmonic.rhs(0.0, state)}")
+   print(f"Duffing derivative: {duffing.rhs(0.0, state)}")
+
+Hamiltonian Systems
+~~~~~~~~~~~~~~~~~~~
+
+For polynomial Hamiltonian systems from center manifold reduction:
+
+.. code-block:: python
+
+   from hiten.algorithms.dynamics import create_hamiltonian_system
+   from hiten.algorithms.polynomial.base import _init_index_tables
+   import numpy as np
+
+   # Example: Create a simple polynomial Hamiltonian system
+   # (In practice, you would get these from center manifold computation)
+   degree = 4
+   n_dof = 3
+   
+   # Initialize polynomial tables
+   psi_table, clmo_table = _init_index_tables(degree)
+   
+   # Create dummy H_blocks (in practice from normal form computation)
+   H_blocks = [np.zeros(1) for _ in range(degree + 1)]
+   encode_dict_list = [{} for _ in range(degree + 1)]
+   
+   # Create Hamiltonian system
+   ham_system = create_hamiltonian_system(
+       H_blocks, degree, psi_table, clmo_table, 
+       encode_dict_list, n_dof=3, name="Center Manifold"
+   )
+   
+   print(f"Hamiltonian system dimension: {ham_system.dim}")
+   print(f"Degrees of freedom: {ham_system.n_dof}")
+
+Creating Custom Dynamical Systems
+---------------------------------
+
+HITEN provides the :func:`~hiten.algorithms.dynamics.create_rhs_system` function for creating custom dynamical systems from user-defined ODE functions. This is the recommended approach rather than subclassing the base classes directly.
 
 Basic Custom System
 ~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
-   from hiten.algorithms.dynamics.base import _DynamicalSystem
-   from hiten.algorithms.integrators.base import _Solution
+   from hiten.algorithms.dynamics import create_rhs_system
    import numpy as np
-   from numba import njit
-   from hiten.algorithms.utils.config import FASTMATH
 
-   class SimpleOscillator(_DynamicalSystem):
-       """Simple harmonic oscillator: d²x/dt² + ω²x = 0."""
-       
-       def __init__(self, omega=1.0, name="Simple Oscillator"):
-           super().__init__(dim=2)  # [position, velocity]
-           self.omega = omega
-           self.name = name
-           
-           # Create JIT-compiled RHS function
-           @njit(fastmath=FASTMATH, cache=False)
-           def _oscillator_rhs(t: float, y: np.ndarray, _omega=omega) -> np.ndarray:
-               # y = [x, v], dy/dt = [v, -ω²x]
-               return np.array([y[1], -_omega**2 * y[0]])
-           
-           self._rhs = _oscillator_rhs
-       
-       @property
-       def rhs(self):
-           """Right-hand side function for the oscillator."""
-           return self._rhs
-       
-       def __repr__(self):
-           return f"SimpleOscillator(omega={self.omega}, name='{self.name}')"
+   def harmonic_oscillator(t, y, omega=1.0):
+       """Simple harmonic oscillator: dy/dt = [v, -ω²x]"""
+       return np.array([y[1], -omega**2 * y[0]])
 
-   # Use the custom system
-   oscillator = SimpleOscillator(omega=2.0)
-   
-   # Integrate the system
-   from hiten.algorithms.integrators.rk import RK8Integrator
-   
-   initial_state = np.array([1.0, 0.0])  # Start at x=1, v=0
-   times = np.linspace(0, 4*np.pi, 1000)
-   
-   integrator = RK8Integrator()
-   solution = integrator.integrate(oscillator, initial_state, times)
-   
-   print(f"Oscillator period: {2*np.pi/oscillator.omega:.4f}")
+   def duffing_oscillator(t, y, alpha=1.0, beta=0.1, gamma=0.2, omega=1.2, delta=0.0):
+       """Duffing oscillator with forcing"""
+       x, v = y[0], y[1]
+       forcing = gamma * np.cos(omega * t) if gamma != 0 else 0.0
+       return np.array([v, -delta*v - alpha*x - beta*x**3 + forcing])
 
-Advanced Custom System
-~~~~~~~~~~~~~~~~~~~~~~
+   # Create systems using the factory function
+   oscillator = create_rhs_system(harmonic_oscillator, dim=2, name="Harmonic Oscillator")
+   duffing = create_rhs_system(duffing_oscillator, dim=2, name="Duffing Oscillator")
+   
+   # Test the systems
+   state = np.array([1.0, 0.0])
+   print(f"Harmonic derivative: {oscillator.rhs(0.0, state)}")
+   print(f"Duffing derivative: {duffing.rhs(0.0, state)}")
 
-For more complex systems with parameters and validation:
+Advanced Custom System with Parameters
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For systems requiring parameter validation or additional methods, you can create a wrapper class:
 
 .. code-block:: python
 
-   class DuffingOscillator(_DynamicalSystem):
-       """Duffing oscillator"""
+   class ParameterizedOscillator:
+       """Wrapper for parameterized oscillator with validation."""
        
-       def __init__(self, alpha=1.0, beta=1.0, gamma=0.0, omega=1.0, 
-                    delta=0.0, name="Duffing Oscillator"):
-           super().__init__(dim=2)  # [position, velocity]
-           self.alpha = alpha
-           self.beta = beta
-           self.gamma = gamma
+       def __init__(self, omega=1.0, damping=0.0, forcing_amplitude=0.0, forcing_freq=1.0):
            self.omega = omega
-           self.delta = delta
-           self.name = name
+           self.damping = damping
+           self.forcing_amplitude = forcing_amplitude
+           self.forcing_freq = forcing_freq
            
-           # Create JIT-compiled RHS function
-           @njit(fastmath=FASTMATH, cache=False)
-           def _duffing_rhs(t: float, y: np.ndarray, _alpha=alpha, _beta=beta, 
-                           _gamma=gamma, _omega=omega, _delta=delta) -> np.ndarray:
-               # y = [x, v], dy/dt = [v, -δv - αx - βx³ + γcos(ωt)]
+           # Validate parameters
+           if omega <= 0:
+               raise ValueError("Natural frequency must be positive")
+           if damping < 0:
+               raise ValueError("Damping coefficient must be non-negative")
+           
+           # Create the RHS function with parameters
+           def rhs_func(t, y):
                x, v = y[0], y[1]
-               forcing = _gamma * np.cos(_omega * t) if _gamma != 0 else 0.0
-               return np.array([v, -_delta*v - _alpha*x - _beta*x**3 + forcing])
+               forcing = self.forcing_amplitude * np.cos(self.forcing_freq * t)
+               return np.array([v, -self.omega**2 * x - self.damping * v + forcing])
            
-           self._rhs = _duffing_rhs
+           # Create the dynamical system
+           self.system = create_rhs_system(rhs_func, dim=2, name="Parameterized Oscillator")
        
        @property
        def rhs(self):
-           """Right-hand side function for the Duffing oscillator."""
-           return self._rhs
+           """Access to the RHS function."""
+           return self.system.rhs
        
-       def validate_parameters(self):
-           """Validate system parameters."""
-           if self.alpha < 0 and self.beta < 0:
-               raise ValueError("System parameters lead to unstable dynamics")
-           return True
+       @property
+       def dim(self):
+           """System dimension."""
+           return self.system.dim
+       
+       def energy(self, y):
+           """Compute system energy (for conservative case)."""
+           if self.damping == 0 and self.forcing_amplitude == 0:
+               x, v = y[0], y[1]
+               return 0.5 * v**2 + 0.5 * self.omega**2 * x**2
+           return None
        
        def __repr__(self):
-           return (f"DuffingOscillator(alpha={self.alpha}, beta={self.beta}, "
-                   f"gamma={self.gamma}, omega={self.omega}, delta={self.delta})")
+           return (f"ParameterizedOscillator(omega={self.omega}, damping={self.damping}, "
+                   f"forcing_amp={self.forcing_amplitude}, forcing_freq={self.forcing_freq})")
 
-   # Use the advanced system
-   duffing = DuffingOscillator(alpha=1.0, beta=0.1, gamma=0.2, omega=1.2)
-   duffing.validate_parameters()
+   # Use the parameterized system
+   osc = ParameterizedOscillator(omega=2.0, damping=0.1, forcing_amplitude=0.5, forcing_freq=1.5)
    
-   # Integrate with different initial conditions
-   initial_states = [
-       np.array([1.0, 0.0]),  # Small amplitude
-       np.array([2.0, 0.0]),  # Large amplitude
-   ]
-   
-   for i, y0 in enumerate(initial_states):
-       solution = integrator.integrate(duffing, y0, times)
-       print(f"Initial condition {i+1}: Final state = {solution.states[-1]}")
+   # Test the system
+   state = np.array([1.0, 0.0])
+   derivative = osc.rhs(0.0, state)
+   energy = osc.energy(state)
+   print(f"Derivative: {derivative}")
+   print(f"Energy: {energy}")
 
-Creating Hamiltonian Systems
-----------------------------
+Working with High-Level Systems
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For Hamiltonian systems that can be used with symplectic integrators, implement additional attributes:
-
-Basic Hamiltonian System
-~~~~~~~~~~~~~~~~~~~~~~~~
+In practice, most HITEN users work with high-level `System` objects rather than low-level dynamical systems:
 
 .. code-block:: python
 
-   class SimplePendulum(_DynamicalSystem):
-       """Simple pendulum: H = p²/(2m) - mgl cos(θ)."""
-       
-       def __init__(self, m=1.0, g=9.81, l=1.0, name="Simple Pendulum"):
-           super().__init__(dim=2)  # [θ, p]
-           self.m = m
-           self.g = g
-           self.l = l
-           self.name = name
-           self.n_dof = 1  # Required for symplectic integrators
-           
-           # Create JIT-compiled RHS function
-           @njit(fastmath=FASTMATH, cache=False)
-           def _pendulum_rhs(t: float, y: np.ndarray, _m=m, _g=g, _l=l) -> np.ndarray:
-               # y = [θ, p], dy/dt = [p/(ml²), -mgl sin(θ)]
-               theta, p = y[0], y[1]
-               return np.array([p/(_m*_l**2), -_m*_g*_l*np.sin(theta)])
-           
-           self._rhs = _pendulum_rhs
-           
-           # For symplectic integration, we need polynomial representations
-           # This is a simplified example - real implementation would be more complex
-           self.jac_H = None  # Jacobian of Hamiltonian
-           self.clmo_H = None  # Coefficient layout mapping
-       
-       @property
-       def rhs(self):
-           """Right-hand side function for the pendulum."""
-           return self._rhs
-       
-       def hamiltonian(self, y):
-           """Compute the Hamiltonian at state y."""
-           theta, p = y[0], y[1]
-           return p**2/(2*self.m*self.l**2) - self.m*self.g*self.l*np.cos(theta)
-       
-       def __repr__(self):
-           return f"SimplePendulum(m={self.m}, g={self.g}, l={self.l})"
+   from hiten.system import System
+   from hiten.algorithms.dynamics import create_rhs_system
+   import numpy as np
 
-   # Use the Hamiltonian system
-   pendulum = SimplePendulum(m=1.0, g=9.81, l=1.0)
+   # Create a physical system (Earth-Moon CR3BP)
+   system = System.from_bodies("earth", "moon")
    
-   # Check energy conservation
-   initial_state = np.array([np.pi/4, 0.0])  # Start at θ=π/4, p=0
-   initial_energy = pendulum.hamiltonian(initial_state)
+   # Access the underlying dynamical system
+   dynsys = system.dynsys  # This is an _RTBPRHS instance
+   var_dynsys = system.var_dynsys  # Variational equations
    
-   solution = integrator.integrate(pendulum, initial_state, times)
-   final_energy = pendulum.hamiltonian(solution.states[-1])
+   # Create custom systems for specialized analysis
+   def custom_perturbation(t, y, base_system, perturbation_strength=0.01):
+       """Add small perturbation to base system."""
+       base_derivative = base_system.rhs(t, y)
+       # Add small random perturbation
+       perturbation = perturbation_strength * np.random.normal(0, 1, len(y))
+       return base_derivative + perturbation
    
-   print(f"Energy conservation error: {abs(final_energy - initial_energy):.2e}")
+   # Create perturbed system
+   perturbed_system = create_rhs_system(
+       lambda t, y: custom_perturbation(t, y, dynsys, 0.001),
+       dim=6, 
+       name="Perturbed CR3BP"
+   )
+   
+   print(f"Base system: {dynsys}")
+   print(f"Perturbed system: {perturbed_system}")
 
-Polynomial Hamiltonian System
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Integration with HITEN Integrators
+------------------------------------
 
-For systems that work with symplectic integrators, you need polynomial representations:
+HITEN provides several integrators that work with dynamical systems:
+
+Using Runge-Kutta Methods
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
-   from hiten.algorithms.polynomial.base import _init_index_tables, _make_poly
-   from hiten.algorithms.polynomial.operations import _polynomial_evaluate, _polynomial_variable
+   from hiten.algorithms.integrators.rk import RungeKutta, AdaptiveRK
+   from hiten.algorithms.dynamics import create_rhs_system
+   import numpy as np
 
-   class PolynomialHamiltonianSystem(_DynamicalSystem):
-       """Example polynomial Hamiltonian system for symplectic integration."""
-       
-       def __init__(self, degree=4, name="Polynomial Hamiltonian"):
-           super().__init__(dim=6)  # 3 DOF system
-           self.n_dof = 3  # Required for symplectic integrators
-           self.degree = degree
-           self.name = name
-           
-           # Initialize polynomial tables
-           self.psi, self.clmo = _init_index_tables(degree)
-           
-           # Create polynomial Hamiltonian (simplified example)
-           self._setup_polynomial_hamiltonian()
-           
-           # Create RHS function
-           @njit(fastmath=FASTMATH, cache=False)
-           def _polynomial_rhs(t: float, y: np.ndarray) -> np.ndarray:
-               # This would compute derivatives from polynomial Hamiltonian
-               # Simplified implementation
-               return np.zeros(6)
-           
-           self._rhs = _polynomial_rhs
-       
-       def _setup_polynomial_hamiltonian(self):
-           """Set up polynomial representation of Hamiltonian."""
-           # This is a simplified example - real implementation would be more complex
-           # Create dummy polynomial coefficients for demonstration
-           self.jac_H = []
-           for i in range(6):
-               # Create polynomial for each variable
-               var_poly = _polynomial_variable(i, self.degree, self.psi, 
-                                              self.clmo, self._ENCODE_DICT_GLOBAL)
-               self.jac_H.append(var_poly)
-       
-       @property
-       def rhs(self):
-           """Right-hand side function."""
-           return self._rhs
-       
-       def __repr__(self):
-           return f"PolynomialHamiltonianSystem(degree={self.degree})"
+   # Create a system using the RHS adapter
+   def harmonic_oscillator(t, y, omega=2.0):
+       return np.array([y[1], -omega**2 * y[0]])
+   
+   oscillator = create_rhs_system(harmonic_oscillator, dim=2, name="Harmonic")
+   initial_state = np.array([1.0, 0.0])
+   times = np.linspace(0, 2*np.pi, 100)
 
-System Integration and Testing
-------------------------------
+   # Fixed-step Runge-Kutta (orders 4, 6, 8)
+   rk4 = RungeKutta(order=4)
+   rk8 = RungeKutta(order=8)
+   
+   # Adaptive Runge-Kutta (orders 5, 8)
+   rk45 = AdaptiveRK(order=5)
+   dop853 = AdaptiveRK(order=8)
+
+   # Integrate with different methods
+   sol_rk4 = rk4.integrate(oscillator, initial_state, times)
+   sol_rk8 = rk8.integrate(oscillator, initial_state, times)
+   sol_adaptive = rk45.integrate(oscillator, initial_state, times)
+
+   print(f"RK4 solution shape: {sol_rk4.states.shape}")
+   print(f"RK8 solution shape: {sol_rk8.states.shape}")
+   print(f"Adaptive solution shape: {sol_adaptive.states.shape}")
+
+Using SciPy Integration
+~~~~~~~~~~~~~~~~~~~~~~~
+
+.. code-block:: python
+
+   from scipy.integrate import solve_ivp
+   import numpy as np
+
+   # Create system
+   system = rtbp_dynsys(mu=0.01215)
+   initial_state = np.array([0.8, 0, 0, 0, 0.1, 0])
+   
+   # Integrate with SciPy
+   times = np.linspace(0, 10, 1000)
+   sol = solve_ivp(system.rhs, [0, 10], initial_state, t_eval=times, 
+                   method='DOP853', rtol=1e-12, atol=1e-12)
+   
+   print(f"Integration successful: {sol.success}")
+   print(f"Number of function evaluations: {sol.nfev}")
+
+Energy and Stability Analysis
+-----------------------------
+
+HITEN provides utilities for analyzing dynamical systems:
+
+Energy Analysis
+~~~~~~~~~~~~~~~
+
+.. code-block:: python
+
+   from hiten.algorithms.dynamics.utils import (crtbp_energy, kinetic_energy, 
+                                               effective_potential, hill_region)
+   import numpy as np
+
+   # CR3BP energy analysis
+   state = np.array([0.8, 0, 0, 0, 0.1, 0])
+   mu = 0.01215
+   
+   # Compute different energy components
+   total_energy = crtbp_energy(state, mu)
+   kinetic = kinetic_energy(state)
+   potential = effective_potential(state, mu)
+   
+   print(f"Total energy: {total_energy:.6f}")
+   print(f"Kinetic energy: {kinetic:.6f}")
+   print(f"Effective potential: {potential:.6f}")
+   
+   # Generate Hill region for visualization
+   X, Y, Z = hill_region(mu=mu, C=total_energy, n_grid=100)
+   print(f"Hill region shape: {Z.shape}")
+
+Stability Analysis
+~~~~~~~~~~~~~~~~~~
+
+.. code-block:: python
+
+   from hiten.algorithms.dynamics.utils import eigenvalue_decomposition
+   from hiten.algorithms.dynamics import jacobian_dynsys
+   import numpy as np
+
+   # Create Jacobian system
+   jac_system = jacobian_dynsys(mu=0.01215)
+   
+   # Evaluate Jacobian at a point
+   state = np.array([0.8, 0, 0])
+   jacobian = jac_system.rhs(0.0, state)
+   
+   # Analyze stability
+   stable_vals, unstable_vals, center_vals, Ws, Wu, Wc = eigenvalue_decomposition(jacobian)
+   
+   print(f"Stable eigenvalues: {stable_vals}")
+   print(f"Unstable eigenvalues: {unstable_vals}")
+   print(f"Center eigenvalues: {center_vals}")
+   print(f"Stable subspace dimension: {Ws.shape[1]}")
+   print(f"Unstable subspace dimension: {Wu.shape[1]}")
+   print(f"Center subspace dimension: {Wc.shape[1]}")
+
+System Testing and Validation
+-----------------------------
 
 Test your custom systems thoroughly:
 
@@ -267,7 +388,10 @@ System Validation
            print(f"  RHS evaluation failed: {e}")
 
    # Test the oscillator system
-   oscillator = SimpleOscillator(omega=2.0)
+   def harmonic_oscillator(t, y, omega=2.0):
+       return np.array([y[1], -omega**2 * y[0]])
+   
+   oscillator = create_rhs_system(harmonic_oscillator, dim=2, name="Harmonic")
    test_states = [
        np.array([1.0, 0.0]),  # Valid
        np.array([0.5, 0.5]),  # Valid
@@ -302,10 +426,21 @@ Integration Testing
            print(f"  Integration failed: {e}")
            return None
 
-   # Test integration
-   from hiten.algorithms.integrators.rk import RK4Integrator, RK8Integrator
+   # Test integration with different methods
+   from hiten.algorithms.integrators.rk import RungeKutta, AdaptiveRK
+   from hiten.algorithms.dynamics import create_rhs_system
    
-   integrators = [RK4Integrator(), RK8Integrator()]
+   # Create test system
+   def harmonic_oscillator(t, y, omega=2.0):
+       return np.array([y[1], -omega**2 * y[0]])
+   
+   oscillator = create_rhs_system(harmonic_oscillator, dim=2, name="Harmonic")
+   
+   integrators = [
+       RungeKutta(order=4),
+       RungeKutta(order=8), 
+       AdaptiveRK(order=5)
+   ]
    initial_state = np.array([1.0, 0.0])
    times = np.linspace(0, 2*np.pi, 100)
    
@@ -315,21 +450,49 @@ Integration Testing
 Best Practices
 --------------
 
-1. **Use Numba JIT Compilation**:
-   - Always use `@njit` decorators for RHS functions
-   - Use `fastmath=FASTMATH` for better performance
-   - Avoid Python objects in compiled functions
+1. **Use the RHS Adapter Pattern**:
+   - Use :func:`~hiten.algorithms.dynamics.create_rhs_system` for custom systems
+   - Let HITEN handle JIT compilation automatically
+   - Avoid direct subclassing of `_DynamicalSystem` unless absolutely necessary
+
+2. **System Design**:
+   - Create simple RHS functions with clear parameter handling
+   - Use wrapper classes for complex parameter validation
+   - Follow the :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol` interface
+
+3. **High-Level vs Low-Level**:
+   - Use high-level `System` objects for CR3BP applications
+   - Use low-level dynamical systems only for specialized analysis
+   - Leverage built-in systems (`rtbp_dynsys`, `variational_dynsys`) when possible
+
+4. **Testing**:
+   - Test with various initial conditions
+   - Validate state dimensions
+   - Check for numerical stability
+
+5. **Performance**:
+   - Use built-in systems when possible (CR3BP, RHS adapters)
+   - Leverage HITEN's optimized integrators
+   - Consider adaptive step sizes for complex dynamics
 
 Troubleshooting
 ---------------
 
+Common issues and solutions:
+
+- **Dimension Mismatch**: Ensure state vectors match system dimension
+- **JIT Compilation Errors**: Avoid Python objects in compiled functions
+- **Integration Failures**: Check for singularities or numerical instabilities
+- **Performance Issues**: Use appropriate integrator for your problem type
+
 Next Steps
 ----------
 
-Once you understand custom dynamical systems, you can:
+Once you understand the dynamics framework, you can:
 
 - Learn about advanced integration techniques (see :doc:`guide_10_integrators`)
 - Explore polynomial methods (see :doc:`guide_14_polynomial`)
 - Study Hamiltonian mechanics (see :doc:`guide_07_center_manifold`)
+- Analyze periodic orbits and manifolds (see :doc:`guide_05_manifolds`)
 
 For more advanced dynamical system techniques, see the HITEN source code in :mod:`hiten.algorithms.dynamics`.

@@ -1,4 +1,4 @@
-Advanced Integration Methods and Custom Integrators
+Integration Methods and Custom Integrators
 ===================================================
 
 This guide covers HITEN's advanced integration methods, including Runge-Kutta schemes, symplectic integrators, and how to create custom integrators for specialized applications.
@@ -28,6 +28,7 @@ HITEN includes several explicit Runge-Kutta schemes with different orders of acc
 .. code-block:: python
 
    from hiten.algorithms.integrators.rk import RungeKutta, AdaptiveRK
+   from hiten.algorithms.integrators.symplectic import ExtendedSymplectic
    from hiten import System
    import numpy as np
 
@@ -40,13 +41,38 @@ HITEN includes several explicit Runge-Kutta schemes with different orders of acc
    rk8 = RungeKutta(order=8)
 
    # Adaptive step-size methods
-   rk45 = AdaptiveRK(order=5)  # Dormand-Prince 5(4)
-   dop853 = AdaptiveRK(order=8)  # Dormand-Prince 8(5,3)
+   rk45 = AdaptiveRK(order=5)  # Dormand-Prince 5(4) with custom error estimation
+   dop853 = AdaptiveRK(order=8)  # Dormand-Prince 8(5,3) with dual error estimation
 
    # Integration using System.propagate() method
    times, states_rk4 = system.propagate(initial_state, tf=2*np.pi, method="rk", order=4)
    times, states_rk8 = system.propagate(initial_state, tf=2*np.pi, method="rk", order=8)
    times, states_adaptive = system.propagate(initial_state, tf=2*np.pi, method="adaptive", order=8)
+
+Adaptive Step-Size Methods
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+HITEN's adaptive integrators automatically adjust the step size to maintain a specified error tolerance. This is particularly useful for systems with varying time scales or when you need guaranteed accuracy.
+
+The adaptive methods use embedded Runge-Kutta schemes that compute both high-order and low-order solutions to estimate the local truncation error. HITEN's implementation uses custom error estimation methods rather than traditional embedded coefficient approaches for better numerical stability. The available methods are:
+
+- **RK45**: Dormand-Prince 5(4) method with custom error estimation using embedded coefficients (not traditional B_LOW approach)
+- **DOP853**: Dormand-Prince 8(5,3) method with dual error estimation using both 5th and 3rd order estimates for improved robustness
+
+.. code-block:: python
+
+   from hiten.algorithms.integrators.rk import AdaptiveRK
+
+   # Create adaptive integrators
+   rk45 = AdaptiveRK(order=5, rtol=1e-6, atol=1e-8)
+   dop853 = AdaptiveRK(order=8, rtol=1e-9, atol=1e-11)
+   
+   # Note: RK45 uses custom _rk_embedded_step() method with E coefficients
+   # DOP853 uses _estimate_error() with both 5th and 3rd order estimates
+
+   # Integration with error control
+   times, states_rk45 = system.propagate(initial_state, tf=2*np.pi, method="adaptive", order=5)
+   times, states_dop853 = system.propagate(initial_state, tf=2*np.pi, method="adaptive", order=8)
 
 Symplectic Integrators
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -112,9 +138,10 @@ The key advantage is that this approach can handle Hamiltonians that are natural
 
 Symplectic integrators require systems with specific Hamiltonian structure. They must implement the following attributes:
 
-- ``jac_H``: Jacobian of the Hamiltonian
-- ``clmo_H``: Coefficient layout mapping objects
-- ``n_dof``: Number of degrees of freedom
+- ``jac_H``: Jacobian of the Hamiltonian as a list of polynomial coefficients
+- ``clmo_H``: Coefficient layout mapping objects for polynomial evaluation
+- ``n_dof``: Number of degrees of freedom (must equal 3 for this implementation)
+- ``dim``: System dimension (must equal 2 * n_dof)
 
 Energy Conservation Comparison
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -171,7 +198,10 @@ However, they have limitations:
 Creating Custom Integrators
 ---------------------------------
 
-HITEN's modular design allows you to create custom integrators by implementing the :class:`~hiten.algorithms.integrators.base._Integrator` interface:
+HITEN's modular design allows you to create custom integrators by implementing the :class:`~hiten.algorithms.integrators.base._Integrator` interface. However, custom integrators must be properly integrated with HITEN's architecture to work correctly with the framework's direction handling, state validation, and system wrapping.
+
+.. warning::
+   Custom integrators should not be used directly in most cases. The recommended approach is to extend the existing factory classes or integrate them through the framework's propagation system.
 
 Basic Custom Integrator
 ~~~~~~~~~~~~~~~~~~~~~~~
@@ -197,22 +227,35 @@ Basic Custom Integrator
            """Integrate using explicit Euler method."""
            
            # Validate inputs
-           self.validate_system(system)
+           self.validate_inputs(system, y0, t_vals)
            
-           # Initialize solution arrays
-           states = np.zeros((len(t_vals), len(y0)))
-           states[0] = y0
+           # Use the system's RHS method directly
+           rhs_func = system.rhs
+           
+           # Initialize solution arrays with derivatives for Hermite interpolation
+           states = np.zeros((len(t_vals), len(y0)), dtype=np.float64)
+           derivatives = np.zeros_like(states)
+           states[0] = y0.copy()
+           derivatives[0] = rhs_func(t_vals[0], y0)
            
            # Euler integration
            for i in range(len(t_vals) - 1):
                dt = t_vals[i+1] - t_vals[i]
-               states[i+1] = states[i] + dt * system.rhs(t_vals[i], states[i])
+               states[i+1] = states[i] + dt * rhs_func(t_vals[i], states[i])
+               derivatives[i+1] = rhs_func(t_vals[i+1], states[i+1])
            
-           return _Solution(t_vals, states)
+           return _Solution(t_vals.copy(), states, derivatives)
 
-   # Use the custom integrator
+   # Use the custom integrator with proper HITEN architecture
+   from hiten.algorithms.dynamics.base import _DirectedSystem
+   
    euler = EulerIntegrator()
-   solution_euler = euler.integrate(system.dynsys, initial_state, times)
+   
+   # Wrap system for direction handling (required by HITEN)
+   dynsys_dir = _DirectedSystem(system._dynsys, forward=1)
+   
+   # Use custom integrator with wrapped system
+   solution_euler = euler.integrate(dynsys_dir, initial_state, times)
 
 Advanced Custom Integrator
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -237,11 +280,15 @@ For more advanced custom integrators, you can implement adaptive step-size contr
                     t_vals: np.ndarray, **kwargs) -> _Solution:
            """Integrate using adaptive Euler method."""
            
-           self.validate_system(system)
+           self.validate_inputs(system, y0, t_vals)
+           
+           # Use the system's RHS method directly
+           rhs_func = system.rhs
            
            # Simple adaptive implementation
            states = [y0.copy()]
            times = [t_vals[0]]
+           derivatives = [rhs_func(t_vals[0], y0)]
            
            for i in range(len(t_vals) - 1):
                t_curr = t_vals[i]
@@ -250,30 +297,16 @@ For more advanced custom integrators, you can implement adaptive step-size contr
                
                # Single Euler step
                y_curr = states[-1]
-               dy = system.rhs(t_curr, y_curr)
+               dy = rhs_func(t_curr, y_curr)
                y_next = y_curr + dt * dy
                
                states.append(y_next)
                times.append(t_next)
+               derivatives.append(rhs_func(t_next, y_next))
            
-           return _Solution(np.array(times), np.array(states))
+           return _Solution(np.array(times), np.array(states), np.array(derivatives))
 
-Integration with System Propagation
------------------------------------------
 
-Custom integrators can be integrated with HITEN's system-level propagation by using them directly:
-
-.. code-block:: python
-
-   # Create custom integrator
-   custom_integrator = AdaptiveEulerIntegrator(rtol=1e-8)
-   
-   # Use directly with system's dynamical system
-   times = np.linspace(0, 2*np.pi, 1000)
-   solution = custom_integrator.integrate(system.dynsys, initial_state, times)
-   
-   print(f"Custom integrator: {custom_integrator.name}")
-   print(f"Solution shape: {solution.states.shape}")
 
 Custom Symplectic Integrators
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -288,7 +321,7 @@ A symplectic integrator must preserve the symplectic 2-form ω = dp ∧ dq. This
 .. code-block:: python
 
    from hiten.algorithms.integrators.base import _Integrator, _Solution
-   from hiten.algorithms.dynamics.base import _DynamicalSystem
+   from hiten.algorithms.dynamics.base import _DynamicalSystemProtocol
    import numpy as np
 
    class CustomSymplecticIntegrator(_Integrator):
@@ -304,26 +337,34 @@ A symplectic integrator must preserve the symplectic 2-form ω = dp ∧ dq. This
        def order(self):
            return self._order
        
-       def integrate(self, system: _DynamicalSystem, y0: np.ndarray, 
+       def integrate(self, system: _DynamicalSystemProtocol, y0: np.ndarray, 
                     t_vals: np.ndarray, **kwargs) -> _Solution:
            """Integrate using custom symplectic method."""
            
-           self.validate_system(system)
+           self.validate_inputs(system, y0, t_vals)
            
            # For symplectic integrators, we need Hamiltonian structure
-           if not hasattr(system, 'jac_H'):
-               raise ValueError("System must provide Hamiltonian structure for symplectic integration")
+           required_attrs = ['jac_H', 'clmo_H', 'n_dof']
+           missing_attrs = [attr for attr in required_attrs if not hasattr(system, attr)]
+           if missing_attrs:
+               raise ValueError(f"System must provide Hamiltonian structure for symplectic integration. Missing: {missing_attrs}")
            
-           # Initialize solution
-           states = np.zeros((len(t_vals), len(y0)))
+           # Use the system's RHS method directly
+           rhs_func = system.rhs
+           
+           # Initialize solution with derivatives
+           states = np.zeros((len(t_vals), len(y0)), dtype=np.float64)
+           derivatives = np.zeros_like(states)
            states[0] = y0.copy()
+           derivatives[0] = rhs_func(t_vals[0], y0)
            
            # Symplectic integration using operator splitting
            for i in range(len(t_vals) - 1):
                dt = t_vals[i+1] - t_vals[i]
                states[i+1] = self._symplectic_step(system, states[i], dt)
+               derivatives[i+1] = rhs_func(t_vals[i+1], states[i+1])
            
-           return _Solution(t_vals, states)
+           return _Solution(t_vals.copy(), states, derivatives)
        
        def _symplectic_step(self, system, y, dt):
            """Single symplectic step using operator splitting."""
@@ -358,6 +399,18 @@ A symplectic integrator must preserve the symplectic 2-form ω = dp ∧ dq. This
            # For now, return zeros as placeholder
            return np.zeros_like(p)
 
+   # Usage example with proper HITEN architecture
+   from hiten.algorithms.dynamics.base import _DirectedSystem
+   
+   custom_symplectic = CustomSymplecticIntegrator(order=4)
+   
+   # Wrap system for direction handling (required for symplectic integrators)
+   dynsys_dir = _DirectedSystem(system._dynsys, forward=1)
+   
+   # Use custom integrator with wrapped system
+   times = np.linspace(0, 2*np.pi, 1000)
+   solution = custom_symplectic.integrate(dynsys_dir, initial_state, times)
+
 Advanced Symplectic Methods
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -391,20 +444,26 @@ For more sophisticated symplectic integrators, you can implement higher-order co
            # Default to 2nd order
            return [0.5, 0.5]
        
-       def integrate(self, system: _DynamicalSystem, y0: np.ndarray, 
+       def integrate(self, system: _DynamicalSystemProtocol, y0: np.ndarray, 
                     t_vals: np.ndarray, **kwargs) -> _Solution:
            """Integrate using high-order symplectic composition."""
            
-           self.validate_system(system)
+           self.validate_inputs(system, y0, t_vals)
            
-           states = np.zeros((len(t_vals), len(y0)))
+           # Use the system's RHS method directly
+           rhs_func = system.rhs
+           
+           states = np.zeros((len(t_vals), len(y0)), dtype=np.float64)
+           derivatives = np.zeros_like(states)
            states[0] = y0.copy()
+           derivatives[0] = rhs_func(t_vals[0], y0)
            
            for i in range(len(t_vals) - 1):
                dt = t_vals[i+1] - t_vals[i]
                states[i+1] = self._composition_step(system, states[i], dt)
+               derivatives[i+1] = rhs_func(t_vals[i+1], states[i+1])
            
-           return _Solution(t_vals, states)
+           return _Solution(t_vals.copy(), states, derivatives)
        
        def _composition_step(self, system, y, dt):
            """Single step using composition method."""

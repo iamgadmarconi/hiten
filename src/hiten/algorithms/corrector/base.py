@@ -185,7 +185,7 @@ class _BaseCorrectionConfig:
     >>>
     >>> # Robust configuration with custom line search
     >>> from hiten.algorithms.corrector.line import _LineSearchConfig
-    >>> ls_config = _LineSearchConfig(c1=1e-4, rho=0.5)
+    >>> ls_config = _LineSearchConfig(armijo_c=1e-4, alpha_reduction=0.5)
     >>> config = _BaseCorrectionConfig(
     ...     line_search_config=ls_config,
     ...     max_delta=1e-3

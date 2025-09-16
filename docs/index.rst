@@ -82,12 +82,12 @@ Contents
    user_guide/guide_05_manifolds
    user_guide/guide_06_poincare
    user_guide/guide_07_center_manifold
+   user_guide/guide_14_polynomial
+   user_guide/guide_13_fourier
+   user_guide/guide_15_bifurcation
    user_guide/guide_10_integrators
    user_guide/guide_11_correction
    user_guide/guide_12_continuation
-   user_guide/guide_13_fourier
-   user_guide/guide_14_polynomial
-   user_guide/guide_15_bifurcation
    user_guide/guide_16_connections
    user_guide/guide_17_dynamical_systems
 
