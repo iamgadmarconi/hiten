@@ -21,12 +21,9 @@ See Also
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from typing import Any, Callable, Tuple
 
 import numpy as np
-
-from hiten.algorithms.corrector.line import _LineSearchConfig
 
 #: Type alias for residual function signatures.
 #:
@@ -113,132 +110,6 @@ JacobianFn = Callable[[np.ndarray], np.ndarray]
 NormFn = Callable[[np.ndarray], float]
 
 
-@dataclass(frozen=True, slots=True)
-class _BaseCorrectionConfig:
-    """Define a base configuration class for correction algorithm parameters.
-
-    This dataclass encapsulates the common configuration parameters used
-    by correction algorithms throughout the hiten framework. It provides
-    sensible defaults while allowing customization for specific problem
-    requirements and numerical considerations.
-
-    The configuration is designed to be immutable (frozen) for thread safety
-    and to prevent accidental modification during algorithm execution. The
-    slots optimization reduces memory overhead when many configuration
-    objects are created.
-
-    Parameters
-    ----------
-    max_attempts : int, default=50
-        Maximum number of Newton iterations to attempt before declaring
-        convergence failure. This prevents infinite loops in cases where
-        the algorithm fails to converge.
-    tol : float, default=1e-10
-        Convergence tolerance for the residual norm. The algorithm terminates
-        successfully when the norm of the residual falls below this value.
-        Should be chosen based on the required precision and numerical
-        conditioning of the problem.
-    max_delta : float, default=1e-2
-        Maximum allowed infinity norm of Newton steps. This serves as a
-        safeguard against excessively large steps that could cause numerical
-        overflow or move far from the solution. Particularly important for
-        poorly conditioned problems or bad initial guesses.
-    line_search_config : _LineSearchConfig, bool, or None, default=True
-        Configuration for line search behavior:
-        - True: Enable line search with default parameters
-        - False or None: Disable line search (use full Newton steps)
-        - _LineSearchConfig: Enable line search with custom parameters
-        Line search improves robustness for challenging problems at the
-        cost of additional function evaluations.
-    finite_difference : bool, default=False
-        Force finite-difference approximation of Jacobians even when
-        analytic Jacobians are available. Useful for debugging, testing,
-        or when analytic Jacobians are suspected to be incorrect.
-        Generally results in slower convergence but can be more robust.
-
-    Notes
-    -----
-    The default parameters are chosen to work well for typical problems
-    in astrodynamics and dynamical systems, particularly in the context
-    of the Circular Restricted Three-Body Problem (CR3BP).
-
-    Parameter Selection Guidelines:
-    
-    - **Tolerance**: Should be 2-3 orders of magnitude larger than
-      machine epsilon to account for numerical errors in function
-      evaluation and Jacobian computation.
-    - **Max attempts**: Should be large enough to allow convergence
-      from reasonable initial guesses but not so large as to waste
-      computation on hopeless cases.
-    - **Max delta**: Should be scaled appropriately for the problem's
-      characteristic length scales to prevent numerical instability.
-    - **Line search**: Generally recommended for production use,
-      especially when initial guesses may be poor.
-
-    Examples
-    --------
-    >>> # Default configuration
-    >>> config = _BaseCorrectionConfig()
-    >>>
-    >>> # High-precision configuration
-    >>> config = _BaseCorrectionConfig(tol=1e-12, max_attempts=100)
-    >>>
-    >>> # Robust configuration with custom line search
-    >>> from hiten.algorithms.corrector.line import _LineSearchConfig
-    >>> ls_config = _LineSearchConfig(armijo_c=1e-4, alpha_reduction=0.5)
-    >>> config = _BaseCorrectionConfig(
-    ...     line_search_config=ls_config,
-    ...     max_delta=1e-3
-    ... )
-    >>>
-    >>> # Fast configuration without line search
-    >>> config = _BaseCorrectionConfig(
-    ...     line_search_config=False,
-    ...     tol=1e-8,
-    ...     max_attempts=20
-    ... )
-
-    See Also
-    --------
-    :class:`~hiten.algorithms.corrector.line._LineSearchConfig`
-        Configuration class for line search parameters.
-    :class:`~hiten.algorithms.corrector.base._Corrector`
-        Abstract base class that uses this configuration.
-    """
-    max_attempts: int = 50
-    tol: float = 1e-10
-
-    max_delta: float = 1e-2
-
-    line_search_config: _LineSearchConfig | bool | None = True
-    """Line search configuration.
-    
-    Controls the line search behavior for step-size control:
-    - True: Use default line search parameters for robust convergence
-    - False or None: Disable line search, use full Newton steps
-    - _LineSearchConfig: Use custom line search parameters
-    
-    Line search is generally recommended for production use as it
-    significantly improves convergence robustness, especially for
-    problems with poor initial guesses or ill-conditioning.
-    """
-
-    finite_difference: bool = False
-    """Force finite-difference Jacobian approximation.
-    
-    When True, forces the use of finite-difference approximation for
-    Jacobians even when analytic Jacobians are available. This can be
-    useful for:
-    - Debugging analytic Jacobian implementations
-    - Testing convergence behavior with different Jacobian sources
-    - Working around bugs in analytic Jacobian code
-    
-    Generally results in slower convergence but may be more robust
-    in some cases. The finite-difference step size is chosen automatically
-    based on the problem scaling and machine precision.
-    """
-
-
 class _Corrector(ABC):
     """Define an abstract base class for iterative correction algorithms.
 
@@ -310,7 +181,7 @@ class _Corrector(ABC):
 
     See Also
     --------
-    :class:`~hiten.algorithms.corrector.base._BaseCorrectionConfig`
+    :class:`~hiten.algorithms.corrector.config._BaseCorrectionConfig`
         Configuration class for correction parameters.
     :mod:`~hiten.algorithms.corrector.newton`
         Concrete Newton-Raphson implementations.

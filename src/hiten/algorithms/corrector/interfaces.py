@@ -8,61 +8,17 @@ expected by the correction algorithms.
 
 from dataclasses import dataclass
 from functools import partial
-from typing import TYPE_CHECKING, Callable, Literal, Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import numpy as np
 
-from hiten.algorithms.corrector.base import (JacobianFn, NormFn,
-                                             _BaseCorrectionConfig, _Corrector)
+from hiten.algorithms.corrector.base import JacobianFn, NormFn, _Corrector
 from hiten.algorithms.dynamics.rtbp import _compute_stm
-from hiten.algorithms.poincare.singlehit.backend import _y_plane_crossing
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
     from hiten.system.orbits.base import PeriodicOrbit
 
-
-@dataclass(frozen=True, slots=True)
-class _OrbitCorrectionConfig(_BaseCorrectionConfig):
-    """Define a configuration for periodic orbit correction.
-
-    Extends the base correction configuration with orbit-specific parameters
-    for constraint selection, integration settings, and event detection.
-
-    Parameters
-    ----------
-    residual_indices : tuple of int, default=()
-        State components used to build the residual vector.
-    control_indices : tuple of int, default=()
-        State components allowed to change during correction.
-    extra_jacobian : callable or None, default=None
-        Additional Jacobian contribution function.
-    target : tuple of float, default=(0.0,)
-        Target values for the residual components.
-    event_func : callable, default=:class:`~hiten.algorithms.poincare.singlehit.backend._y_plane_crossing`
-        Function to detect Poincare section crossings.
-    method : str, default="scipy"
-        Integration method for trajectory computation.
-    order : int, default=8
-        Integration order for numerical methods.
-    steps : int, default=500
-        Number of integration steps.
-    forward : int, default=1
-        Integration direction (1 for forward, -1 for backward).
-    """
-
-    residual_indices: tuple[int, ...] = ()  # Components used to build R(x)
-    control_indices: tuple[int, ...] = ()   # Components allowed to change
-    extra_jacobian: Callable[[np.ndarray, np.ndarray], np.ndarray] | None = None
-    target: tuple[float, ...] = (0.0,)  # Desired residual values
-
-    event_func: Callable[..., tuple[float, np.ndarray]] = _y_plane_crossing
-
-    method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy"
-    order: int = 8
-    steps: int = 500
-
-    forward: int = 1
 
 
 class _PeriodicOrbitCorrectorInterface(_Corrector):

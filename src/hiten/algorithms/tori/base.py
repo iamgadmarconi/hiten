@@ -28,7 +28,7 @@ from typing import Literal, Optional, Sequence, Tuple
 import numba
 import numpy as np
 
-from hiten.algorithms.corrector.base import _BaseCorrectionConfig
+from hiten.algorithms.corrector.config import _ToriCorrectionConfig
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_stm
 from hiten.algorithms.utils.config import FASTMATH
@@ -37,30 +37,6 @@ from hiten.system.libration.base import LibrationPoint
 from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.log_config import logger
 from hiten.utils.plots import plot_invariant_torus
-
-
-@dataclass(frozen=True, slots=True)
-class _ToriCorrectionConfig(_BaseCorrectionConfig):
-    """Configuration container for invariant-torus Newton solves.
-
-    Extends the generic :class:`~hiten.algorithms.corrector.base._BaseCorrectionConfig` with additional
-    parameters controlling the integration backend used by the stroboscopic
-    map and variational equations.
-
-    Parameters
-    ----------
-    delta_s : float, default 1e-4
-        Step size for numerical differentiation in the Newton solver.
-        Used in finite difference approximations for the Jacobian matrix.
-
-    Notes
-    -----
-    This configuration is specifically tailored for invariant torus computations
-    in the circular restricted three-body problem, where the stroboscopic map
-    and variational equations require careful numerical treatment.
-    """
-
-    delta_s: float = 1e-4
 
 
 @dataclass(slots=True, frozen=True)

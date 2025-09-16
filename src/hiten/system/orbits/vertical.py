@@ -26,9 +26,8 @@ from hiten.system.libration.collinear import CollinearPoint
 from hiten.system.orbits.base import PeriodicOrbit
 
 if TYPE_CHECKING:
-    from hiten.algorithms.continuation.interfaces import \
-        _OrbitContinuationConfig
-    from hiten.algorithms.corrector.interfaces import _OrbitCorrectionConfig
+    from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+    from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
 
 
 class VerticalOrbit(PeriodicOrbit):
@@ -110,11 +109,10 @@ class VerticalOrbit(PeriodicOrbit):
         
         Returns
         -------
-        :class:`~hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`
+        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
             The correction configuration for vertical orbits.
         """
-        from hiten.algorithms.corrector.interfaces import \
-            _OrbitCorrectionConfig
+        from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
         return _OrbitCorrectionConfig(
             residual_indices=(SynodicState.VX, SynodicState.Y),     # Want VX=0 and Y=0
             control_indices=(SynodicState.VZ, SynodicState.VY),     # Adjust initial VZ and VY
@@ -129,9 +127,8 @@ class VerticalOrbit(PeriodicOrbit):
         
         Returns
         -------
-        :class:`~hiten.algorithms.continuation.interfaces._OrbitContinuationConfig`
+        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
             The continuation configuration for vertical orbits.
         """
-        from hiten.algorithms.continuation.interfaces import \
-            _OrbitContinuationConfig
+        from hiten.algorithms.continuation.config import _OrbitContinuationConfig
         return _OrbitContinuationConfig(state=SynodicState.Z, amplitude=True)

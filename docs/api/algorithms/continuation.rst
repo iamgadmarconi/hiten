@@ -22,12 +22,12 @@ The :class:`_ContinuationEngine` class provides the foundation for implementing 
    :undoc-members:
    :exclude-members: __init__, __repr__
 
-interfaces.py
-~~~~~~~~~~~~~
+config.py
+~~~~~~~~~
 
-The interfaces module provides domain-specific continuation interfaces for different types of solutions.
+The config module provides configuration classes for domain-specific continuation algorithms.
 
-.. currentmodule:: hiten.algorithms.continuation.interfaces
+.. currentmodule:: hiten.algorithms.continuation.config
 
 _OrbitContinuationConfig()
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -38,6 +38,13 @@ The :class:`_OrbitContinuationConfig` class defines configuration parameters for
    :members:
    :undoc-members:
    :exclude-members: __init__
+
+interfaces.py
+~~~~~~~~~~~~~
+
+The interfaces module provides domain-specific continuation interfaces for different types of solutions.
+
+.. currentmodule:: hiten.algorithms.continuation.interfaces
 
 _PeriodicOrbitContinuationInterface()
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

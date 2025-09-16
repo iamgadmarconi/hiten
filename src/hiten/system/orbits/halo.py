@@ -26,9 +26,8 @@ from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
-    from hiten.algorithms.continuation.interfaces import \
-        _OrbitContinuationConfig
-    from hiten.algorithms.corrector.interfaces import _OrbitCorrectionConfig
+    from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+    from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
 
 
 class HaloOrbit(PeriodicOrbit):
@@ -132,11 +131,10 @@ class HaloOrbit(PeriodicOrbit):
         
         Returns
         -------
-        :class:`~hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`
+        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
             The correction configuration for halo orbits.
         """
-        from hiten.algorithms.corrector.interfaces import \
-            _OrbitCorrectionConfig
+        from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
         return _OrbitCorrectionConfig(
             event_func=_y_plane_crossing,
             residual_indices=(SynodicState.VX, SynodicState.VZ),
@@ -150,11 +148,10 @@ class HaloOrbit(PeriodicOrbit):
         
         Returns
         -------
-        :class:`~hiten.algorithms.continuation.interfaces._OrbitContinuationConfig`
+        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
             The continuation configuration for halo orbits.
         """
-        from hiten.algorithms.continuation.interfaces import \
-            _OrbitContinuationConfig
+        from hiten.algorithms.continuation.config import _OrbitContinuationConfig
         return _OrbitContinuationConfig(state=SynodicState.Z, amplitude=True)
 
     def _initial_guess(self) -> NDArray[np.float64]:

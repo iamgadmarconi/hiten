@@ -5,10 +5,11 @@ correction algorithms. Line search ensures sufficient decrease in the residual
 norm, providing robustness for challenging nonlinear systems.
 """
 
-from typing import Callable, NamedTuple, Optional, Tuple
+from typing import Callable, Tuple
 
 import numpy as np
 
+from hiten.algorithms.corrector.config import _LineSearchConfig
 from hiten.utils.log_config import logger
 
 # Type aliases for function signatures
@@ -52,34 +53,6 @@ def _infinity_norm(r: np.ndarray) -> float:
     """
     return float(np.linalg.norm(r, ord=np.inf))
 
-class _LineSearchConfig(NamedTuple):
-    """Define configuration parameters for Armijo line search.
-    
-    Parameters
-    ----------
-    norm_fn : NormFn or None, default=None
-        Function to compute residual norm. Uses L2 norm if None.
-    residual_fn : ResidualFn or None, default=None
-        Function to compute residual vector. Must be provided.
-    jacobian_fn : JacobianFn or None, default=None
-        Jacobian function (currently unused).
-    max_delta : float, default=1e-2
-        Maximum allowed step size (infinity norm).
-    alpha_reduction : float, default=0.5
-        Factor to reduce step size in backtracking.
-    min_alpha : float, default=1e-4
-        Minimum step size before giving up.
-    armijo_c : float, default=0.1
-        Armijo parameter for sufficient decrease condition.
-    """
-    norm_fn: Optional[NormFn] = None
-    residual_fn: Optional[ResidualFn] = None
-    jacobian_fn: Optional[JacobianFn] = None
-    max_delta: float = 1e-2
-    alpha_reduction: float = 0.5
-    min_alpha: float = 1e-4
-    armijo_c: float = 0.1
-
 
 class _ArmijoLineSearch:
     """Implement Armijo line search with backtracking for Newton methods.
@@ -90,7 +63,7 @@ class _ArmijoLineSearch:
     
     Parameters
     ----------
-    config : _LineSearchConfig
+    config : :class:`~hiten.algorithms.corrector.config._LineSearchConfig`
         Configuration parameters for the line search.
     """
 

@@ -23,8 +23,8 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
+from hiten.algorithms.corrector.config import _LineSearchConfig
 from hiten.algorithms.corrector.correctors import _NewtonOrbitCorrector
-from hiten.algorithms.corrector.line import _LineSearchConfig
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import (_compute_monodromy, _compute_stm,
                                             _stability_indices)
@@ -41,9 +41,8 @@ from hiten.utils.plots import (animate_trajectories, plot_inertial_frame,
                                plot_rotating_frame)
 
 if TYPE_CHECKING:
-    from hiten.algorithms.continuation.interfaces import \
-        _OrbitContinuationConfig
-    from hiten.algorithms.corrector.interfaces import _OrbitCorrectionConfig
+    from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+    from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
     from hiten.system.manifold import Manifold
 
 
@@ -419,7 +418,7 @@ class PeriodicOrbit(ABC):
             Forward integration direction.
         max_delta : float, optional
             Maximum step size for corrections.
-        line_search_config : :class:`~hiten.algorithms.corrector.line._LineSearchConfig` or bool, optional
+        line_search_config : :class:`~hiten.algorithms.corrector.config._LineSearchConfig` or bool, optional
             Line search configuration.
         finite_difference : bool, optional
             Whether to use finite difference for Jacobian.
@@ -779,13 +778,13 @@ class GenericOrbit(PeriodicOrbit):
         """
         Get or set the user-defined differential correction configuration.
 
-        This property must be set to a valid :class:`~hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`
+        This property must be set to a valid :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
         instance before calling :meth:`~hiten.system.orbits.base.PeriodicOrbit.correct` on a
         :class:`~hiten.system.orbits.base.GenericOrbit` object.
         
         Returns
         -------
-        :class:`~hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig` or None
+        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig` or None
             The correction configuration, or None if not set.
         """
         return self._custom_correction_config
@@ -796,16 +795,15 @@ class GenericOrbit(PeriodicOrbit):
         
         Parameters
         ----------
-        value : :class:`~hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig` or None
+        value : :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig` or None
             The correction configuration to set.
             
         Raises
         ------
         TypeError
-            If value is not an instance of _OrbitCorrectionConfig or None.
+            If value is not an instance of :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig` or None.
         """
-        from hiten.algorithms.corrector.interfaces import \
-            _OrbitCorrectionConfig
+        from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
         if value is not None and not isinstance(value, _OrbitCorrectionConfig):
             raise TypeError("correction_config must be an instance of _OrbitCorrectionConfig or None.")
         self._custom_correction_config = value
@@ -831,7 +829,7 @@ class GenericOrbit(PeriodicOrbit):
         
         Returns
         -------
-        :class:`~hiten.algorithms.corrector.interfaces._OrbitCorrectionConfig`
+        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
             The correction configuration.
             
         Raises
@@ -843,7 +841,7 @@ class GenericOrbit(PeriodicOrbit):
             return self.correction_config
         raise NotImplementedError(
             "Differential correction is not defined for a GenericOrbit unless the "
-            "`correction_config` property is set with a valid _OrbitCorrectionConfig."
+            "`correction_config` property is set with a valid :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`."
         )
 
     @property
@@ -874,7 +872,7 @@ class GenericOrbit(PeriodicOrbit):
         
         Returns
         -------
-        :class:`~hiten.algorithms.continuation.interfaces._OrbitContinuationConfig` or None
+        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None
             The continuation configuration, or None if not set.
         """
         return self._custom_continuation_config
@@ -885,16 +883,15 @@ class GenericOrbit(PeriodicOrbit):
         
         Parameters
         ----------
-        cfg : :class:`~hiten.algorithms.continuation.interfaces._OrbitContinuationConfig` or None
+        cfg : :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None
             The continuation configuration to set.
             
         Raises
         ------
         TypeError
-            If cfg is not an instance of :class:`~hiten.algorithms.continuation.interfaces._OrbitContinuationConfig` or None.
+            If cfg is not an instance of :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None.
         """
-        from hiten.algorithms.continuation.interfaces import \
-            _OrbitContinuationConfig
+        from hiten.algorithms.continuation.config import _OrbitContinuationConfig
         if cfg is not None and not isinstance(cfg, _OrbitContinuationConfig):
             raise TypeError("continuation_config must be a _OrbitContinuationConfig instance or None")
         self._custom_continuation_config = cfg
@@ -905,7 +902,7 @@ class GenericOrbit(PeriodicOrbit):
         
         Returns
         -------
-        :class:`~hiten.algorithms.continuation.interfaces._OrbitContinuationConfig`
+        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
             The continuation configuration.
             
         Raises

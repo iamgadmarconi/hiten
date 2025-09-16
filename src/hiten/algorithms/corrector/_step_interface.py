@@ -26,8 +26,8 @@ from typing import Callable, Optional, Protocol
 
 import numpy as np
 
-from hiten.algorithms.corrector.line import (_ArmijoLineSearch,
-                                             _LineSearchConfig)
+from hiten.algorithms.corrector.config import _LineSearchConfig
+from hiten.algorithms.corrector.line import _ArmijoLineSearch
 
 #: Type alias for residual function signatures.
 #:
@@ -245,9 +245,9 @@ class _StepInterface(ABC):
 
         Parameters
         ----------
-        residual_fn : ResidualFn
+        residual_fn : :class:`~hiten.algorithms.corrector.base.ResidualFn`
             Function that computes residual vectors from state vectors.
-        norm_fn : NormFn
+        norm_fn : :class:`~hiten.algorithms.corrector.base.NormFn`
             Function that computes scalar norms from residual vectors.
         max_delta : float or None
             Maximum allowed step size (infinity norm), or None for
@@ -329,9 +329,9 @@ class _PlainStepInterface(_StepInterface):
 
         Parameters
         ----------
-        residual_fn : ResidualFn
+        residual_fn : :class:`~hiten.algorithms.corrector.base.ResidualFn`
             Function to compute residual vectors.
-        norm_fn : NormFn
+        norm_fn : :class:`~hiten.algorithms.corrector.base.NormFn`
             Function to compute residual norms.
         max_delta : float or None
             Maximum allowed infinity norm of the Newton step.
@@ -339,7 +339,7 @@ class _PlainStepInterface(_StepInterface):
 
         Returns
         -------
-        stepper : _Stepper
+        stepper : :class:`~hiten.algorithms.corrector._step_interface._Stepper`
             Step transformation function implementing plain Newton updates.
 
         Notes
@@ -385,16 +385,16 @@ class _PlainStepInterface(_StepInterface):
 
         Parameters
         ----------
-        residual_fn : ResidualFn
+        residual_fn : :class:`~hiten.algorithms.corrector.base.ResidualFn`
             Function to compute residual vectors.
-        norm_fn : NormFn
+        norm_fn : :class:`~hiten.algorithms.corrector.base.NormFn`
             Function to compute residual norms.
         max_delta : float or None
             Maximum allowed step size for safeguarding.
 
         Returns
         -------
-        stepper : _Stepper
+        stepper : :class:`~hiten.algorithms.corrector._step_interface._Stepper`
             Plain Newton step transformation function.
         """
         return self._make_plain_stepper(residual_fn, norm_fn, max_delta)
@@ -431,19 +431,19 @@ class _ArmijoStepInterface(_PlainStepInterface):
 
     Attributes
     ----------
-    _line_search_config : _LineSearchConfig or None
+    _line_search_config : :class:`~hiten.algorithms.corrector.config._LineSearchConfig` or None
         Configuration object for line search parameters.
     _use_line_search : bool
         Flag indicating whether line search should be used.
 
     Parameters
     ----------
-    line_search_config : _LineSearchConfig, bool, or None, optional
+    line_search_config : :class:`~hiten.algorithms.corrector.config._LineSearchConfig`, bool, or None, optional
         Line search configuration. Can be:
         - None: Disable line search (use plain Newton steps)
         - True: Enable line search with default parameters
         - False: Explicitly disable line search
-        - _LineSearchConfig: Enable line search with custom parameters
+        - :class:`~hiten.algorithms.corrector.config._LineSearchConfig`: Enable line search with custom parameters
     **kwargs
         Additional arguments passed to parent classes.
 
@@ -475,7 +475,7 @@ class _ArmijoStepInterface(_PlainStepInterface):
         Parent class providing plain Newton step capabilities.
     :class:`~hiten.algorithms.corrector.line._ArmijoLineSearch`
         Line search implementation used by this interface.
-    :class:`~hiten.algorithms.corrector.line._LineSearchConfig`
+    :class:`~hiten.algorithms.corrector.config._LineSearchConfig`
         Configuration class for line search parameters.
     """
 
@@ -519,16 +519,16 @@ class _ArmijoStepInterface(_PlainStepInterface):
 
         Parameters
         ----------
-        residual_fn : ResidualFn
+        residual_fn : :class:`~hiten.algorithms.corrector.base.ResidualFn`
             Function to compute residual vectors.
-        norm_fn : NormFn
+        norm_fn : :class:`~hiten.algorithms.corrector.base.NormFn`
             Function to compute residual norms.
         max_delta : float or None
             Maximum allowed step size (used by plain stepper fallback).
 
         Returns
         -------
-        stepper : _Stepper
+        stepper : :class:`~hiten.algorithms.corrector._step_interface._Stepper`
             Step transformation function, either plain Newton or Armijo
             line search based on configuration.
 

@@ -13,7 +13,7 @@ import numpy as np
 from hiten.algorithms.corrector._step_interface import _ArmijoStepInterface
 from hiten.algorithms.corrector.base import (JacobianFn, NormFn, ResidualFn,
                                              _Corrector)
-from hiten.algorithms.corrector.line import _LineSearchConfig
+from hiten.algorithms.corrector.config import _LineSearchConfig
 from hiten.utils.log_config import logger
 
 
@@ -27,9 +27,9 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
 
     Parameters
     ----------
-    line_search_config : _LineSearchConfig, bool, or None, optional
+    line_search_config : :class:`~hiten.algorithms.corrector.config._LineSearchConfig`, bool, or None, optional
         Armijo line search configuration:
-        - _LineSearchConfig: Custom line search parameters
+        - :class:`~hiten.algorithms.corrector.config._LineSearchConfig`: Custom line search parameters
         - True: Use default line search parameters
         - False/None: Disable line search (use full Newton steps)
     **kwargs
@@ -104,7 +104,7 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
         ----------
         x : ndarray
             Current parameter vector.
-        residual_fn : ResidualFn
+        residual_fn : :class:`~hiten.algorithms.corrector.base.ResidualFn`
             Function to compute residual.
             
         Returns
@@ -121,7 +121,7 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
         ----------
         residual : ndarray
             Residual vector.
-        norm_fn : NormFn
+        norm_fn : :class:`~hiten.algorithms.corrector.base.NormFn`
             Function to compute norm.
             
         Returns
@@ -147,9 +147,9 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
         ----------
         x : ndarray
             Current parameter vector.
-        residual_fn : ResidualFn
+        residual_fn : :class:`~hiten.algorithms.corrector.base.ResidualFn`
             Function to compute residual.
-        jacobian_fn : JacobianFn or None
+        jacobian_fn : :class:`~hiten.algorithms.corrector.base.JacobianFn` or None
             Analytical Jacobian function, if available.
         fd_step : float
             Step size for finite-difference approximation.
@@ -249,11 +249,11 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
         ----------
         x0 : ndarray
             Initial guess.
-        residual_fn : ResidualFn
+        residual_fn : :class:`~hiten.algorithms.corrector.base.ResidualFn`
             Function to compute residual vector R(x).
-        jacobian_fn : JacobianFn or None, optional
+        jacobian_fn : :class:`~hiten.algorithms.corrector.base.JacobianFn` or None, optional
             Function to compute Jacobian dR/dx. Uses finite-difference if None.
-        norm_fn : NormFn or None, optional
+        norm_fn : :class:`~hiten.algorithms.corrector.base.NormFn` or None, optional
             Function to compute residual norm. Uses L2 norm if None.
         tol : float, default=1e-10
             Convergence tolerance for residual norm.

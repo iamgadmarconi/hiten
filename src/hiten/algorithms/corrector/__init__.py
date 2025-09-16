@@ -39,40 +39,31 @@ See Also
     Continuation algorithms that use correction for family generation.
 """
 
-# Step control interfaces
 from ._step_interface import (_ArmijoStepInterface, _PlainStepInterface,
                               _StepInterface, _Stepper)
-# Configuration classes
-from .base import _BaseCorrectionConfig, _Corrector
-# Ready-to-use correctors
+from .config import (_BaseCorrectionConfig, _LineSearchConfig,
+                     _OrbitCorrectionConfig)
+from .base import _Corrector
 from .correctors import _NewtonOrbitCorrector
 from .interfaces import (_InvariantToriCorrectorInterface,
-                         _OrbitCorrectionConfig,
                          _PeriodicOrbitCorrectorInterface)
-from .line import _ArmijoLineSearch, _LineSearchConfig
-# Core algorithms
+from .line import _ArmijoLineSearch
 from .newton import _NewtonCore
 
-# Public API - expose main correction classes
 __all__ = [
-    # Ready-to-use correctors
     "_NewtonOrbitCorrector",
     
-    # Core algorithms
     "_NewtonCore",
     "_ArmijoLineSearch",
     
-    # Configuration classes
     "_BaseCorrectionConfig",
     "_OrbitCorrectionConfig", 
     "_LineSearchConfig",
     
-    # Domain interfaces
     "_Corrector",
     "_PeriodicOrbitCorrectorInterface",
     "_InvariantToriCorrectorInterface",
     
-    # Step control interfaces
     "_Stepper",
     "_StepInterface",
     "_PlainStepInterface",

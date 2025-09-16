@@ -78,8 +78,8 @@ unified framework.
 """
 
 from .base import _ContinuationEngine
+from .config import _OrbitContinuationConfig
 from .interfaces import (_InvariantToriContinuationInterface,
-                         _OrbitContinuationConfig,
                          _PeriodicOrbitContinuationInterface)
 from .predictors import _EnergyLevel, _FixedPeriod, _StateParameter
 

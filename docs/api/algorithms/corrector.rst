@@ -5,12 +5,12 @@ The corrector module provides robust iterative correction algorithms for solving
 
 .. currentmodule:: hiten.algorithms.corrector
 
-base.py
-~~~~~~~
+config.py
+~~~~~~~~~
 
-The base module provides the core corrector framework and abstract base class for iterative correction algorithms.
+The config module provides configuration classes for iterative correction algorithms.
 
-.. currentmodule:: hiten.algorithms.corrector.base
+.. currentmodule:: hiten.algorithms.corrector.config
 
 _BaseCorrectionConfig()
 ^^^^^^^^^^^^^^^^^^^^^^^
@@ -21,6 +21,33 @@ The :class:`_BaseCorrectionConfig` class defines a base configuration class for 
    :members:
    :undoc-members:
    :exclude-members: __init__
+
+_OrbitCorrectionConfig()
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The :class:`_OrbitCorrectionConfig` class defines a configuration for periodic orbit correction.
+
+.. autoclass:: _OrbitCorrectionConfig()
+   :members:
+   :undoc-members:
+   :exclude-members: __init__
+
+_LineSearchConfig()
+^^^^^^^^^^^^^^^^^^^^
+
+The :class:`_LineSearchConfig` class defines configuration parameters for Armijo line search.
+
+.. autoclass:: _LineSearchConfig()
+   :members:
+   :undoc-members:
+   :exclude-members: __init__
+
+base.py
+~~~~~~~
+
+The base module provides the core corrector framework and abstract base class for iterative correction algorithms.
+
+.. currentmodule:: hiten.algorithms.corrector.base
 
 _Corrector()
 ^^^^^^^^^^^^
@@ -56,16 +83,6 @@ The interfaces module provides domain-specific interfaces for correction algorit
 
 .. currentmodule:: hiten.algorithms.corrector.interfaces
 
-_OrbitCorrectionConfig()
-^^^^^^^^^^^^^^^^^^^^^^^^^
-
-The :class:`_OrbitCorrectionConfig` class defines a configuration for periodic orbit correction.
-
-.. autoclass:: _OrbitCorrectionConfig()
-   :members:
-   :undoc-members:
-   :exclude-members: __init__
-
 _PeriodicOrbitCorrectorInterface()
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -92,16 +109,6 @@ line.py
 The line module provides line search implementations for robust Newton-type methods.
 
 .. currentmodule:: hiten.algorithms.corrector.line
-
-_LineSearchConfig()
-^^^^^^^^^^^^^^^^^^^^
-
-The :class:`_LineSearchConfig` class defines configuration parameters for Armijo line search.
-
-.. autoclass:: _LineSearchConfig()
-   :members:
-   :undoc-members:
-   :exclude-members: __init__
 
 _ArmijoLineSearch()
 ^^^^^^^^^^^^^^^^^^^
