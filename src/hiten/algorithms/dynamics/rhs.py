@@ -74,30 +74,12 @@ class _RHSSystem(_DynamicalSystem):
     def __init__(self, rhs_func: Callable[[float, np.ndarray], np.ndarray], dim: int, name: str = "Generic RHS"):
         super().__init__(dim)
 
-        # Use centralized JIT compilation utility
-        self._rhs_compiled = self._compile_rhs_function(rhs_func)
+        # Store plain implementation; compilation handled by base
+        self._rhs_impl = rhs_func
         self.name = name
     
-    @property
-    def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        """JIT-compiled right-hand side function.
-
-        Returns the RHS function compiled for efficient execution in Numba
-        nopython mode. Maintains the same mathematical semantics as the
-        original function while providing optimal performance.
-
-        Returns
-        -------
-        Callable[[float, ndarray], ndarray]
-            Compiled function f(t, y) -> dy/dt with signature identical
-            to the original but optimized for numerical integration.
-            
-        Notes
-        -----
-        The returned function can be safely called from within other
-        Numba-compiled functions without performance penalties.
-        """
-        return self._rhs_compiled
+    def _build_rhs_impl(self) -> Callable[[float, np.ndarray], np.ndarray]:
+        return self._rhs_impl
     
     def __repr__(self) -> str:
         return f"_RHSSystem(name='{self.name}', dim={self.dim})"

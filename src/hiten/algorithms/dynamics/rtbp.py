@@ -442,16 +442,15 @@ class _JacobianRHS(_DynamicalSystem):
         self.name = name
         self.mu = float(mu)
         
-        mu_val = self.mu
+        self._mu_val = self.mu
 
-        def _jacobian_rhs(t: float, state, _mu=mu_val) -> np.ndarray:
+    def _build_rhs_impl(self) -> Callable[[float, np.ndarray], np.ndarray]:
+        mu_val = self._mu_val
+
+        def _jacobian_rhs(t: float, state: np.ndarray, _mu=mu_val) -> np.ndarray:
             return _jacobian_crtbp(state[0], state[1], state[2], _mu)
-        
-        self._rhs = self._compile_rhs_function(_jacobian_rhs)
 
-    @property
-    def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        return self._rhs
+        return _jacobian_rhs
 
     def __repr__(self) -> str:
         return f"_JacobianRHS(name='{self.name}', mu={self.mu})"
@@ -508,16 +507,15 @@ class _VarEqRHS(_DynamicalSystem):
         self.name = name
         self.mu = float(mu)
 
-        mu_val = self.mu
+        self._mu_val = self.mu
+
+    def _build_rhs_impl(self) -> Callable[[float, np.ndarray], np.ndarray]:
+        mu_val = self._mu_val
 
         def _var_eq_rhs(t: float, y: np.ndarray, _mu=mu_val) -> np.ndarray:
             return _var_equations(t, y, _mu)
-        
-        self._rhs = self._compile_rhs_function(_var_eq_rhs)
 
-    @property
-    def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        return self._rhs
+        return _var_eq_rhs
 
     def __repr__(self) -> str:
         return f"_VarEqRHS(name='{self.name}', mu={self.mu})"
@@ -575,16 +573,15 @@ class _RTBPRHS(_DynamicalSystem):
         self.name = name
         self.mu = float(mu)
 
-        mu_val = self.mu
+        self._mu_val = self.mu
+
+    def _build_rhs_impl(self) -> Callable[[float, np.ndarray], np.ndarray]:
+        mu_val = self._mu_val
 
         def _crtbp_rhs(t: float, state: np.ndarray, _mu=mu_val) -> np.ndarray:
             return _crtbp_accel(state, _mu)
 
-        self._rhs = self._compile_rhs_function(_crtbp_rhs)
-
-    @property
-    def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        return self._rhs
+        return _crtbp_rhs
 
     def __repr__(self) -> str:
         return f"_RTBPRHS(name='{self.name}', mu={self.mu})"

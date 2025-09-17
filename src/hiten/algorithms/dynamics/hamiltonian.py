@@ -265,6 +265,8 @@ class _HamiltonianSystem(_DynamicalSystem):
         self.name = name
         
         self._validate_polynomial_data()
+        
+        # Hamiltonian system uses base class caching/compilation for rhs
     
     @property
     def n_dof(self) -> int:
@@ -295,40 +297,23 @@ class _HamiltonianSystem(_DynamicalSystem):
         if not self.clmo_H:
             raise ValueError("Coefficient layout mapping objects cannot be empty")
 
-    @property
-    def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        r"""Right-hand side function for ODE integration.
-
-        Returns a function compatible with standard ODE solvers that computes
-        Hamilton's equations. The implementation uses a thin Python wrapper
-        around JIT-compiled polynomial evaluation for optimal performance.
-
+    def _build_rhs_impl(self) -> Callable[[float, np.ndarray], np.ndarray]:
+        """
+        Return a compiled function implementing Hamilton's equations.
+        
         Returns
         -------
         Callable[[float, ndarray], ndarray]
-            Function f(t, y) that computes dy/dt = [dQ/dt, dP/dt] = [dH/dP, -dH/dQ].
-            The time argument t is ignored (autonomous system).
-
-        Notes
-        -----
-        - Uses JIT-compiled :func:`~hiten.algorithms.dynamics.hamiltonian._hamiltonian_rhs` for numerical computation
-        - Maintains Python wrapper to ensure Numba compatibility and pickling
-        - Marginal wrapper overhead is negligible for high-order polynomials
-        - Compatible with SciPy ODE solvers and custom integrators
-        
-        See Also
-        --------
-        :func:`~hiten.algorithms.dynamics.hamiltonian._hamiltonian_rhs` : JIT-compiled computation engine
+            Compiled function implementing Hamilton's equations.
         """
 
         jac_H, clmo_H, n_dof = self.jac_H, self.clmo_H, self.n_dof
 
-        def _rhs_closure(t: float, state: np.ndarray) -> np.ndarray:
-            # The 't' argument is unused in this autonomous system but
-            # required by the standard ODE solver interface.
+        def _rhs_impl(t: float, state: np.ndarray) -> np.ndarray:
+            # Autonomous: t is unused; required for interface consistency
             return _hamiltonian_rhs(state, jac_H, clmo_H, n_dof)
 
-        return _rhs_closure
+        return _rhs_impl
     
     @property
     def clmo(self) -> List[np.ndarray]:

@@ -764,7 +764,7 @@ class AdaptiveRK:
 
 
 def _build_rhs_wrapper(system: _DynamicalSystem) -> Callable[[float, np.ndarray], np.ndarray]:
-    """Return a JIT friendly wrapper around :func:`~hiten.system.rhs`.
+    """Return the standardized compiled (t, y) RHS from the system.
 
     The dynamical systems implemented in the code base expose their vector
     field either as ``rhs(t, y)`` or, for autonomous systems, as ``rhs(y)``.
@@ -792,23 +792,8 @@ def _build_rhs_wrapper(system: _DynamicalSystem) -> Callable[[float, np.ndarray]
     """
 
     rhs_func = system.rhs
-
+    # Sanity check signature
     sig = inspect.signature(rhs_func)
-    n_params = len(sig.parameters)
-
-    # Case 1: Function already accepts (t, y) - use directly.
-    if n_params >= 2:
-        return rhs_func
-
-    # Case 2: Autonomous system with signature rhs(y).  Wrap to inject time argument.
-    if n_params == 1:
-
-        def _rhs_one(t, y):
-            return rhs_func(y)
-
-        return _rhs_one
-
-    raise ValueError(
-        f"Unsupported rhs signature with {n_params} parameters. "
-        "Only (t, y) or (y,) are currently supported."
-    )
+    if len(sig.parameters) < 2:
+        raise ValueError("System.rhs must have signature (t, y)")
+    return rhs_func

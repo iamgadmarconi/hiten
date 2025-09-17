@@ -63,6 +63,17 @@ class _DynamicalSystemProtocol(Protocol):
     def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
         """Right-hand side function for ODE integration."""
         ...
+    
+    def _build_rhs_impl(self) -> Callable[[float, np.ndarray], np.ndarray]:
+        """Return a plain Python function implementing f(t, y).
+        
+        Notes
+        -----
+        Concrete implementations deriving from :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
+        must provide this method. The base class compiles and caches the returned
+        function to expose the standardized, compiled :attr:`rhs`.
+        """
+        ...
             
 
 class _DynamicalSystem(ABC):
@@ -97,6 +108,8 @@ class _DynamicalSystem(ABC):
         if dim <= 0:
             raise ValueError(f"Dimension must be positive, got {dim}")
         self._dim = dim
+        # Cache for compiled RHS dispatcher built from subclass implementation
+        self._rhs_compiled: "Callable[[float, np.ndarray], np.ndarray] | None" = None
     
     @property
     def dim(self) -> int:
@@ -104,10 +117,17 @@ class _DynamicalSystem(ABC):
         return self._dim
     
     @property
-    @abstractmethod
     def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        """Right-hand side function for ODE integration."""
-        pass
+        """Return compiled and cached right-hand side f(t, y)."""
+        if self._rhs_compiled is None:
+            impl = self._build_rhs_impl()
+            self._rhs_compiled = self._compile_rhs_function(impl)
+        return self._rhs_compiled
+
+    @abstractmethod
+    def _build_rhs_impl(self) -> Callable[[float, np.ndarray], np.ndarray]:
+        """Return a plain Python function implementing f(t, y)."""
+        ...
     
     def validate_state(self, y: np.ndarray) -> None:
         """Validate state vector dimension.
@@ -257,22 +277,26 @@ class _DirectedSystem(_DynamicalSystem):
 
         self._fwd: int = 1 if fwd >= 0 else -1
         self._flip_idx = flip_indices
+        # Normalise flip indices for possible JIT compilation
+        if flip_indices is None:
+            self._flip_idx_norm = None
+        elif isinstance(flip_indices, slice):
+            self._flip_idx_norm = flip_indices
+        else:
+            self._flip_idx_norm = np.asarray(flip_indices, dtype=np.int64)
 
-    @property
-    def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        """Right-hand side function for ODE integration."""
+    
+    def _build_rhs_impl(self) -> Callable[[float, np.ndarray], np.ndarray]:
         if self._base is None:
-            raise AttributeError("`rhs` not implemented: subclass must provide "
-                                 "its own implementation when no base system "
-                                 "is wrapped.")
+            raise AttributeError("`rhs` not implemented: subclass must provide its own implementation when no base system is wrapped.")
 
         base_rhs = self._base.rhs
-        flip_idx = self._flip_idx
+        flip_idx = self._flip_idx_norm
+        fwd = self._fwd
 
-        def _rhs(t: float, y: np.ndarray) -> np.ndarray:
+        def _rhs_impl(t: float, y: np.ndarray) -> np.ndarray:
             dy = base_rhs(t, y)
-
-            if self._fwd == -1:
+            if fwd == -1:
                 if flip_idx is None:
                     dy = -dy
                 else:
@@ -280,7 +304,7 @@ class _DirectedSystem(_DynamicalSystem):
                     dy[flip_idx] *= -1
             return dy
 
-        return _rhs
+        return _rhs_impl
 
     def __repr__(self):
         """String representation of DirectedSystem.
