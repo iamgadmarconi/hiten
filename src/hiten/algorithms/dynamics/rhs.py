@@ -12,7 +12,6 @@ seamlessly with various numerical integrators.
 from typing import Callable
 
 import numpy as np
-from hiten.algorithms.utils.config import FASTMATH
 
 from hiten.algorithms.dynamics.base import _DynamicalSystem
 
@@ -51,6 +50,7 @@ class _RHSSystem(_DynamicalSystem):
 
     Notes
     -----
+    - Uses centralized JIT compilation utility for optimal performance
     - Automatically detects pre-compiled Numba dispatchers and reuses them
     - Compiles plain Python functions with Numba JIT for performance
     - Uses global fast-math setting for numerical optimization
@@ -67,28 +67,15 @@ class _RHSSystem(_DynamicalSystem):
     See Also
     --------
     :class:`~hiten.algorithms.dynamics.base._DynamicalSystem` : Base class
+    :meth:`~hiten.algorithms.dynamics.base._DynamicalSystem._compile_rhs_function` : JIT compilation method
     :func:`~hiten.algorithms.dynamics.rhs.create_rhs_system` : Factory function
-    numba.njit : JIT compilation used internally
     """
 
     def __init__(self, rhs_func: Callable[[float, np.ndarray], np.ndarray], dim: int, name: str = "Generic RHS"):
         super().__init__(dim)
 
-        # Detect pre-compiled Numba dispatchers to avoid redundant compilation
-        try:
-            from numba.core.registry import CPUDispatcher
-            is_dispatcher = isinstance(rhs_func, CPUDispatcher)
-        except Exception:
-            is_dispatcher = False
-
-        if is_dispatcher:
-            # Function is already compiled, reuse it directly
-            self._rhs_compiled = rhs_func
-        else:
-            # Compile with global fast-math setting for performance
-            import numba
-            self._rhs_compiled = numba.njit(cache=False, fastmath=FASTMATH)(rhs_func)
-
+        # Use centralized JIT compilation utility
+        self._rhs_compiled = self._compile_rhs_function(rhs_func)
         self.name = name
     
     @property

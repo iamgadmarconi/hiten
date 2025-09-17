@@ -23,11 +23,14 @@ from typing import (TYPE_CHECKING, Callable, Literal, Protocol, Sequence,
 import numpy as np
 from scipy.integrate import solve_ivp
 
-from hiten.algorithms.utils.config import TOL
+from hiten.algorithms.utils.config import FASTMATH, TOL
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
     from hiten.algorithms.integrators.base import _Solution
+
+
+
 
 @runtime_checkable
 class _DynamicalSystemProtocol(Protocol):
@@ -125,6 +128,61 @@ class _DynamicalSystem(ABC):
         """
         if len(y) != self.dim:
             raise ValueError(f"State vector dimension {len(y)} != system dimension {self.dim}")
+
+    def _compile_rhs_function(self, rhs_func: Callable[[float, np.ndarray], np.ndarray]) -> Callable[[float, np.ndarray], np.ndarray]:
+        r"""Compile a right-hand side function with Numba JIT for optimal performance.
+        
+        Provides intelligent JIT compilation that detects pre-compiled Numba dispatchers
+        to avoid redundant compilation while ensuring optimal performance for plain
+        Python functions. Uses global fast-math settings for numerical optimization.
+        
+        Parameters
+        ----------
+        rhs_func : Callable[[float, ndarray], ndarray]
+            Function implementing the ODE system dy/dt = f(t, y).
+            Can be either a plain Python function or a pre-compiled Numba dispatcher.
+            
+        Returns
+        -------
+        Callable[[float, ndarray], ndarray]
+            JIT-compiled function compatible with Numba nopython mode.
+            If input is already compiled, returns it unchanged.
+            
+        Notes
+        -----
+        - Automatically detects pre-compiled Numba dispatchers and reuses them
+        - Compiles plain Python functions with Numba JIT for performance
+        - Uses global fast-math setting for numerical optimization
+        - Compatible with all integrators that accept _DynamicalSystem objects
+        
+        Examples
+        --------
+        >>> import numpy as np
+        >>> def harmonic_oscillator(t, y):
+        ...     return np.array([y[1], -y[0]])
+        >>> # In a subclass:
+        >>> compiled_rhs = self._compile_rhs_function(harmonic_oscillator)
+        >>> # Now compiled_rhs is JIT-compiled for optimal performance
+        
+        See Also
+        --------
+        :class:`~hiten.algorithms.dynamics.base._DynamicalSystem` : Base class containing this method
+        numba.njit : JIT compilation used internally
+        """
+        # Detect pre-compiled Numba dispatchers to avoid redundant compilation
+        try:
+            from numba.core.registry import CPUDispatcher
+            is_dispatcher = isinstance(rhs_func, CPUDispatcher)
+        except Exception:
+            is_dispatcher = False
+
+        if is_dispatcher:
+            # Function is already compiled, reuse it directly
+            return rhs_func
+        else:
+            # Compile with global fast-math setting for performance
+            import numba
+            return numba.njit(cache=False, fastmath=FASTMATH)(rhs_func)
 
 
 class _DirectedSystem(_DynamicalSystem):

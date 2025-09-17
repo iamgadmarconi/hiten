@@ -444,11 +444,10 @@ class _JacobianRHS(_DynamicalSystem):
         
         mu_val = self.mu
 
-        @numba.njit(fastmath=FASTMATH, cache=False)
         def _jacobian_rhs(t: float, state, _mu=mu_val) -> np.ndarray:
             return _jacobian_crtbp(state[0], state[1], state[2], _mu)
         
-        self._rhs = _jacobian_rhs
+        self._rhs = self._compile_rhs_function(_jacobian_rhs)
 
     @property
     def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
@@ -511,11 +510,10 @@ class _VarEqRHS(_DynamicalSystem):
 
         mu_val = self.mu
 
-        @numba.njit(fastmath=FASTMATH, cache=False)
         def _var_eq_rhs(t: float, y: np.ndarray, _mu=mu_val) -> np.ndarray:
             return _var_equations(t, y, _mu)
         
-        self._rhs = _var_eq_rhs
+        self._rhs = self._compile_rhs_function(_var_eq_rhs)
 
     @property
     def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
@@ -579,11 +577,10 @@ class _RTBPRHS(_DynamicalSystem):
 
         mu_val = self.mu
 
-        @numba.njit(fastmath=FASTMATH, cache=False)
         def _crtbp_rhs(t: float, state: np.ndarray, _mu=mu_val) -> np.ndarray:
             return _crtbp_accel(state, _mu)
 
-        self._rhs = _crtbp_rhs
+        self._rhs = self._compile_rhs_function(_crtbp_rhs)
 
     @property
     def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
