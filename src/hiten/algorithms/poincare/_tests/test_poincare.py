@@ -32,7 +32,7 @@ def poincare_test_setup():
 
     pmConfig = _CenterManifoldMapConfig(
         dt=TEST_DT,
-        method="rk",
+        method="fixed",
         order=4,
         c_omega_heuristic=20.0,
         n_seeds=TEST_N_SEEDS,

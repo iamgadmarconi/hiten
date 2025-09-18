@@ -70,7 +70,7 @@ class _SingleHitBackend(_ReturnMapBackend):
         dynsys: "_DynamicalSystemProtocol",
         surface: "_SurfaceEvent",
         forward: int = 1,
-        method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
+        method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
         order: int = 8,
         pre_steps: int = 1000,
         refine_steps: int = 3000,

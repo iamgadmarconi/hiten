@@ -200,7 +200,7 @@ class CenterManifoldMap(_ReturnMapBase):
         energy,
         *,
         steps=1000,
-        method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy",
+        method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
         order=6,
     ):
         """Propagate a trajectory from a center manifold point.
@@ -213,7 +213,7 @@ class CenterManifoldMap(_ReturnMapBase):
             Energy level for the trajectory (nondimensional units).
         steps : int, default=1000
             Number of integration steps.
-        method : {'rk', 'scipy', 'symplectic', 'adaptive'}, default='scipy'
+        method : {'fixed', 'adaptive', 'symplectic'}, default='adaptive'
             Integration method.
         order : int, default=6
             Integration order for Runge-Kutta methods.
@@ -300,7 +300,7 @@ class CenterManifoldMap(_ReturnMapBase):
         self,
         *,
         steps=1000,
-        method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy",
+        method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
         order=6,
         frame="rotating",
         dark_mode: bool = True,

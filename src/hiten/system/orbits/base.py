@@ -447,7 +447,7 @@ class PeriodicOrbit(ABC):
             finite_difference=_finite_difference,
         )
 
-    def propagate(self, steps: int = 1000, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 8) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    def propagate(self, steps: int = 1000, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         """
         Propagate the orbit for one period.
         
@@ -456,7 +456,7 @@ class PeriodicOrbit(ABC):
         steps : int, optional
             Number of time steps. Default is 1000.
         method : str, optional
-            Integration method. Default is "scipy".
+            Integration method. Default is "adaptive".
         order : int, optional
             Integration order. Default is 8.
             

@@ -259,7 +259,7 @@ class System(object):
         tf: float = 2 * np.pi,
         *,
         steps: int = 1000,
-        method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy",
+        method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
         order: int = 8,
         **kwargs
     ) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
@@ -279,11 +279,10 @@ class System(object):
             Final time for integration in nondimensional units.
         steps : int, default 1000
             Number of output nodes in the returned trajectory.
-        method : {"rk", "scipy", "symplectic", "adaptive"}, default "scipy"
-            Integration backend to employ.
+        method : {"fixed", "adaptive", "symplectic"}, default "adaptive"
+            Integration backend to employ (Hiten integrators).
         order : int, default 8
-            Formal order of the integrator when applicable (ignored by the
-            SciPy backend).
+            Formal order of the integrator when applicable.
         **kwargs
             Additional keyword arguments passed to the integrator.
 

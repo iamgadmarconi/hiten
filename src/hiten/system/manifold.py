@@ -317,7 +317,7 @@ class Manifold:
 
         return x0W
 
-    def compute(self, step: float = 0.02, integration_fraction: float = 0.75, NN: int = 1, displacement: float = 1e-6, method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy", order: int = 6, **kwargs):
+    def compute(self, step: float = 0.02, integration_fraction: float = 0.75, NN: int = 1, displacement: float = 1e-6, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8, **kwargs):
         """
         Generate manifold trajectories and build a Poincare map.
 
@@ -337,9 +337,9 @@ class Manifold:
             Index of the real eigenvector to follow (1-based).
         displacement : float, default 1e-6
             Dimensionless displacement applied along the eigenvector.
-        method : {'rk', 'scipy', 'symplectic', 'adaptive'}, default 'scipy'
+        method : {'fixed', 'adaptive', 'symplectic'}, default 'adaptive'
             Integration method to use.
-        order : int, default 6
+        order : int, default 8
             Integration order for fixed-step methods.
         **kwargs
             Additional options:

@@ -434,7 +434,7 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         h0: float,
         forward: int = 1,
         max_steps: int = 2000,
-        method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
+        method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
         order: int = 8,
         pre_steps: int = 1000,
         refine_steps: int = 3000,

@@ -271,6 +271,9 @@ class _Integrator(ABC):
         
         # Check that time values are monotonic (either strictly increasing or decreasing)
         dt = np.diff(t_vals)
+        # Allow zero-span intervals (all times equal) for short-circuit handling in drivers
+        if np.all(dt == 0.0):
+            return
         if not (np.all(dt > 0) or np.all(dt < 0)):
             raise ValueError("Time values must be strictly monotonic (either increasing or decreasing)")
 
@@ -279,3 +282,22 @@ class _Integrator(ABC):
 
     def __repr__(self):
         return f"{self.__class__.__name__}(name='{self.name}', options={self.options})"
+
+    def _maybe_constant_solution(
+        self,
+        system: _DynamicalSystemProtocol,
+        y0: np.ndarray,
+        t_vals: np.ndarray,
+    ) -> "_Solution | None":
+        """Return constant-state solution when span is effectively zero; else None.
+
+        This centralizes the zero-span short-circuit so concrete integrators
+        can simply call this helper at the top of their integrate methods.
+        """
+        if t_vals.size >= 2 and np.isclose(t_vals[0], t_vals[-1]):
+            f = system.rhs
+            deriv0 = f(t_vals[0], y0)
+            states = np.repeat(y0[None, :], repeats=t_vals.size, axis=0)
+            derivs = np.repeat(deriv0[None, :], repeats=t_vals.size, axis=0)
+            return _Solution(times=t_vals.copy(), states=states, derivatives=derivs)
+        return None

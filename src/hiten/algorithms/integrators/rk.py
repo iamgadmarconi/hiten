@@ -175,6 +175,11 @@ class _FixedStepRK(_RungeKuttaBase):
         """Integrate a dynamical system using a fixed-step Runge-Kutta method."""
         self.validate_inputs(system, y0, t_vals)
 
+        # Common zero-span short-circuit
+        constant_sol = self._maybe_constant_solution(system, y0, t_vals)
+        if constant_sol is not None:
+            return constant_sol
+
         f = _build_rhs_wrapper(system)
 
         has_b_low = self._B_LOW is not None
@@ -585,6 +590,10 @@ class _DOP853(_AdaptiveStepRK):
     def integrate(self, system: _DynamicalSystem, y0: np.ndarray, t_vals: np.ndarray, **kwargs) -> _Solution:
         """Adaptive integration fully in Numba for DOP853 with Hermite interpolation."""
         self.validate_inputs(system, y0, t_vals)
+        # Common zero-span short-circuit
+        constant_sol = self._maybe_constant_solution(system, y0, t_vals)
+        if constant_sol is not None:
+            return constant_sol
         f = _build_rhs_wrapper(system)
         states, derivs = _DOP853._integrate_dop853(
             f=f,
@@ -717,6 +726,10 @@ class _DOP853(_AdaptiveStepRK):
             t0s = ts_arr[j]
             t1s = ts_arr[j + 1]
             hseg = t1s - t0s
+            if hseg == 0.0:
+                # Degenerate segment: no progress; use left state directly
+                y_out[idx, :] = ys_arr[j, :]
+                continue
             x = (t_q - t0s) / hseg
             if j != last_j:
                 # Build extended K for dense output

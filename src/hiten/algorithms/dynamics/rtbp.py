@@ -246,7 +246,7 @@ def _var_equations(t, PHI_vec, mu):
     return dPHI_vec
 
 
-def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy", order=8):
+def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order=8):
     r"""Propagate state transition matrix (STM) along CR3BP trajectory.
 
     Integrates the 42-dimensional variational system to compute the fundamental
@@ -268,10 +268,10 @@ def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["scipy",
     forward : int, optional
         Integration direction: +1 for forward, -1 for backward time.
         Default is 1.
-    method : {'scipy', 'rk', 'symplectic', 'adaptive'}, optional
-        Numerical integration method. Default is 'scipy'.
+    method : {'fixed', 'adaptive', 'symplectic'}, optional
+        Numerical integration method. Default is 'adaptive'.
     order : int, optional
-        Integration order for non-scipy methods. Default is 8.
+        Integration order. Default is 8.
 
     Returns
     -------

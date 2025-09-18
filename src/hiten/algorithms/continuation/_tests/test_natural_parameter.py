@@ -33,7 +33,7 @@ def _run_engine(engine_cls, save_figure=False, figure_name=None, **kwargs):
 
     # Build family container and generate trajectories (few steps for speed)
     family = OrbitFamily.from_engine(engine)
-    family.propagate(steps=300, method="rk", order=4)
+    family.propagate(steps=300, method="fixed", order=4)
 
     # Determine save parameters
     if save_figure and figure_name:

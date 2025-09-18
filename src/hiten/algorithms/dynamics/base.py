@@ -27,8 +27,9 @@ from hiten.algorithms.utils.config import FASTMATH, TOL
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
+    from hiten.algorithms.dynamics.hamiltonian import \
+        _HamiltonianSystemProtocol
     from hiten.algorithms.integrators.base import _Solution
-
 
 
 
@@ -347,8 +348,8 @@ def _propagate_dynsys(
     tf: float,
     forward: int = 1,
     steps: int = 1000,
-    method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
-    order: int = 6,
+    method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
+    order: int = 8,
     flip_indices: Sequence[int] | None = None,
 ) -> "_Solution":
     """Generic trajectory propagation for dynamical systems.
@@ -371,10 +372,10 @@ def _propagate_dynsys(
         Integration direction (+1 forward, -1 backward). Default is 1.
     steps : int, optional
         Number of time steps for output. Default is 1000.
-    method : {'scipy', 'rk', 'symplectic', 'adaptive'}, optional
-        Integration method to use. Default is 'scipy'.
+    method : {'fixed', 'adaptive', 'symplectic'}, optional
+        Integration method to use. Default is 'adaptive'.
     order : int, optional
-        Integration order for non-scipy methods. Default is 6.
+        Integration order. Default is 8.
     flip_indices : Sequence[int] or None, optional
         State component indices to flip for backward integration.
         Default is None.
@@ -388,7 +389,7 @@ def _propagate_dynsys(
     -----
     - Automatically applies :class:`~hiten.algorithms.dynamics.base._DirectedSystem` wrapper for direction handling
     - Validates initial state dimension against system requirements
-    - Supports multiple backends: SciPy (DOP853), Runge-Kutta, symplectic, adaptive
+    - Supports multiple backends: fixed-step Runge-Kutta, adaptive RK, symplectic
     - Time array is adjusted for integration direction in output
     
     See Also
@@ -406,42 +407,21 @@ def _propagate_dynsys(
 
     t_eval = np.linspace(t0, tf, steps)
 
-    if method == "scipy":
-        t_span = (t_eval[0], t_eval[-1])
+    # Handle zero-length intervals gracefully to avoid integrator issues
+    if steps >= 2 and np.isclose(t_eval[0], t_eval[-1]):
+        times_signed = forward * t_eval
+        states = np.repeat(state0_np[None, :], repeats=len(t_eval), axis=0)
+        return _Solution(times_signed, states)
 
-        # Build a lightweight Python wrapper to avoid Numba object-mode overhead
-        base_rhs = dynsys.rhs
-        flip_idx = slice(None) if flip_indices is None else flip_indices
-
-        def _scipy_rhs(t: float, y: np.ndarray) -> np.ndarray:
-            dy = base_rhs(t, y)
-            if forward == -1:
-                if flip_indices is None:
-                    return -dy
-                dy = dy.copy()
-                dy[flip_idx] *= -1
-            return dy
-
-        sol = solve_ivp(
-            _scipy_rhs,
-            t_span,
-            state0_np,
-            t_eval=t_eval,
-            method='DOP853',
-            dense_output=True,
-            rtol=TOL,
-            atol=TOL,
-        )
-        times = sol.t
-        states = sol.y.T
-        
-    elif method == "rk":
+    if method == "fixed":
         integrator = RungeKutta(order=order)
         sol = integrator.integrate(dynsys_dir, state0_np, t_eval)
         times = sol.times
         states = sol.states
         
     elif method == "symplectic":
+        if not isinstance(dynsys, _HamiltonianSystemProtocol):
+            raise ValueError("Symplectic method requires a _HamiltonianSystem")
         integrator = _ExtendedSymplectic(order=order)
         sol = integrator.integrate(dynsys_dir, state0_np, t_eval)
         times = sol.times
