@@ -351,6 +351,7 @@ def _propagate_dynsys(
     method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
     order: int = 8,
     flip_indices: Sequence[int] | None = None,
+    **kwargs
 ) -> "_Solution":
     """Generic trajectory propagation for dynamical systems.
 
@@ -379,7 +380,8 @@ def _propagate_dynsys(
     flip_indices : Sequence[int] or None, optional
         State component indices to flip for backward integration.
         Default is None.
-
+    **kwargs
+        Additional keyword arguments passed to the integrator.
     Returns
     -------
     :class:`~hiten.algorithms.integrators.base._Solution`
@@ -428,7 +430,10 @@ def _propagate_dynsys(
         states = sol.states
         
     elif method == "adaptive":
-        integrator = AdaptiveRK(order=order, max_step=1e4, rtol=1e-3, atol=1e-6)
+        max_step = kwargs.get("max_step", 1e4)
+        rtol = kwargs.get("rtol", 1e-6)
+        atol = kwargs.get("atol", 1e-9)
+        integrator = AdaptiveRK(order=order, max_step=max_step, rtol=rtol, atol=atol)
         sol = integrator.integrate(dynsys_dir, state0_np, t_eval)
         times = sol.times
         states = sol.states
