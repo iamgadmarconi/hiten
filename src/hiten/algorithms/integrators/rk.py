@@ -1070,18 +1070,35 @@ class _DOP853(_AdaptiveStepRK):
 
                 beta = 1.0 / (order + 1)
                 alpha = 0.4 * beta
+                # Robust step factor to avoid NaNs when err_norm or err_prev are zero
                 if err_prev < 0:
-                    factor = SAFETY * (err_norm ** (-beta))
+                    if err_norm == 0.0:
+                        factor = MAX_FACTOR
+                    else:
+                        factor = SAFETY * (err_norm ** (-beta))
                 else:
-                    factor = SAFETY * (err_norm ** (-beta)) * (err_prev ** alpha)
+                    if err_norm == 0.0:
+                        factor = MAX_FACTOR
+                    else:
+                        base = (err_norm ** (-beta))
+                        # Avoid 0 ** alpha when err_prev is exactly zero
+                        hist = 1.0 if err_prev == 0.0 else (err_prev ** alpha)
+                        factor = SAFETY * base * hist
+                # Clamp and sanitize
+                if not np.isfinite(factor):
+                    factor = MAX_FACTOR
                 if factor < MIN_FACTOR:
                     factor = MIN_FACTOR
                 if factor > MAX_FACTOR:
                     factor = MAX_FACTOR
                 h = h * factor
+                if not np.isfinite(h) or h == 0.0:
+                    h = max_step
                 err_prev = err_norm
             else:
                 factor = SAFETY * (err_norm ** (-err_exp))
+                if not np.isfinite(factor) or factor <= 0.0:
+                    factor = MIN_FACTOR
                 if factor < MIN_FACTOR:
                     factor = MIN_FACTOR
                 h = h * factor
