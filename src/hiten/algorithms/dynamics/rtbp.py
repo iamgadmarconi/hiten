@@ -603,7 +603,7 @@ def rtbp_dynsys(mu: float, name: str = "RTBP") -> _RTBPRHS:
         
     Returns
     -------
-    _RTBPRHS
+    :class:`~hiten.algorithms.dynamics.rtbp._RTBPRHS`
         Configured CR3BP dynamical system.
         
     See Also
@@ -627,7 +627,7 @@ def jacobian_dynsys(mu: float, name: str="Jacobian") -> _JacobianRHS:
         
     Returns
     -------
-    _JacobianRHS
+    :class:`~hiten.algorithms.dynamics.rtbp._JacobianRHS`   
         Configured Jacobian evaluation system.
         
     See Also
@@ -651,7 +651,7 @@ def variational_dynsys(mu: float, name: str = "VarEq") -> _VarEqRHS:
         
     Returns
     -------
-    _VarEqRHS
+    :class:`~hiten.algorithms.dynamics.rtbp._VarEqRHS`
         Configured variational equations system.
         
     See Also

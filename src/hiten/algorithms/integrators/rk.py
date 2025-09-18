@@ -20,6 +20,8 @@ formulas".
 import inspect
 from typing import Callable, Optional
 
+import numba
+from numba.typed import List
 import numpy as np
 
 from hiten.algorithms.dynamics.base import _DynamicalSystem
@@ -51,8 +53,111 @@ from hiten.algorithms.integrators.coefficients.rk45 import B_LOW as RK45_B_LOW
 from hiten.algorithms.integrators.coefficients.rk45 import A as RK45_A
 from hiten.algorithms.integrators.coefficients.rk45 import C as RK45_C
 from hiten.algorithms.integrators.coefficients.rk45 import E as RK45_E
-from hiten.algorithms.utils.config import TOL
+from hiten.algorithms.utils.config import FASTMATH, TOL
 from hiten.utils.log_config import logger
+
+
+@numba.njit(cache=False, fastmath=FASTMATH)
+def rk_embedded_step_jit_kernel(f, t, y, h, A, B_HIGH, B_LOW, C, has_b_low):
+    s = B_HIGH.size
+    k = np.empty((s, y.size), dtype=np.float64)
+
+    k[0] = f(t, y)
+    for i in range(1, s):
+        y_stage = y.copy()
+        for j in range(i):
+            a_ij = A[i, j]
+            if a_ij != 0.0:
+                y_stage += h * a_ij * k[j]
+        k[i] = f(t + C[i] * h, y_stage)
+
+    y_high = y.copy()
+    for j in range(s):
+        bj = B_HIGH[j]
+        if bj != 0.0:
+            y_high += h * bj * k[j]
+
+    if has_b_low:
+        y_low = y.copy()
+        for j in range(s):
+            bl = B_LOW[j]
+            if bl != 0.0:
+                y_low += h * bl * k[j]
+    else:
+        y_low = y_high.copy()
+    err_vec = y_high - y_low
+    return y_high, y_low, err_vec
+
+@numba.njit(cache=False, fastmath=FASTMATH)
+def rk45_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E):
+    s = 6
+    k = np.empty((s + 1, y.size), dtype=np.float64)
+    k[0] = f(t, y)
+    for i in range(1, s):
+        y_stage = y.copy()
+        for j in range(i):
+            aij = A[i, j]
+            if aij != 0.0:
+                y_stage += h * aij * k[j]
+        k[i] = f(t + C[i] * h, y_stage)
+    y_high = y.copy()
+    for j in range(s):
+        bj = B_HIGH[j]
+        if bj != 0.0:
+            y_high += h * bj * k[j]
+    k[s] = f(t + h, y_high)
+    # err_vec = h * (k.T @ E)
+    m = k.shape[0]
+    n = k.shape[1]
+    err_vec = np.zeros(n, dtype=np.float64)
+    for j in range(m):
+        coeff = E[j]
+        if coeff != 0.0:
+            err_vec += h * coeff * k[j]
+    y_low = y_high - err_vec
+    return y_high, y_low, err_vec
+
+@numba.njit(cache=False, fastmath=FASTMATH)
+def dop853_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E5, E3):
+    s = B_HIGH.size
+    k = np.empty((s + 1, y.size), dtype=np.float64)
+    k[0] = f(t, y)
+    for i in range(1, s):
+        y_stage = y.copy()
+        for j in range(i):
+            a_ij = A[i, j]
+            if a_ij != 0.0:
+                y_stage += h * a_ij * k[j]
+        k[i] = f(t + C[i] * h, y_stage)
+    y_high = y.copy()
+    for j in range(s):
+        b_j = B_HIGH[j]
+        if b_j != 0.0:
+            y_high += h * b_j * k[j]
+    k[s] = f(t + h, y_high)
+    # error using E5/E3 combo
+    m = k.shape[0]
+    n = k.shape[1]
+    err5 = np.zeros(n, dtype=np.float64)
+    err3 = np.zeros(n, dtype=np.float64)
+    for j in range(m):
+        c5 = E5[j]
+        c3 = E3[j]
+        if c5 != 0.0:
+            err5 += c5 * k[j]
+        if c3 != 0.0:
+            err3 += c3 * k[j]
+    err5 *= h
+    err3 *= h
+    denom = np.hypot(np.abs(err5), 0.1 * np.abs(err3))
+    err_vec = np.empty_like(err5)
+    for i in range(n):
+        if denom[i] > 0.0:
+            err_vec[i] = err5[i] * (np.abs(err5[i]) / denom[i])
+        else:
+            err_vec[i] = err5[i]
+    y_low = y_high - err_vec
+    return y_high, y_low, err_vec
 
 
 class _RungeKuttaBase(_Integrator):
@@ -117,22 +222,77 @@ class _RungeKuttaBase(_Integrator):
         err_vec : numpy.ndarray
             Error estimate vector (y_high - y_low).
         """
-        s = self._B_HIGH.size
+        has_b_low = self._B_LOW is not None
+        B_LOW = self._B_LOW if has_b_low else np.empty(0, dtype=np.float64)
+        return self._rk_embedded_step_jit(
+            f, t, y, h, self._A, self._B_HIGH, B_LOW, self._C, has_b_low
+        )
+
+    @staticmethod
+    @numba.njit(cache=False, fastmath=FASTMATH)
+    def _rk_embedded_step_jit(f, t, y, h, A, B_HIGH, B_LOW, C, has_b_low):
+        """Perform one embedded Runge-Kutta step with error estimation.
+        
+        This method implements a single step of an embedded Runge-Kutta method,
+        computing both high-order and low-order solutions for error estimation.
+        
+        Parameters
+        ----------
+        f : callable
+            Right-hand side function f(t, y) that returns the derivative.
+        t : float
+            Current time.
+        y : numpy.ndarray
+            Current state vector.
+        h : float
+            Step size.
+        A : numpy.ndarray
+            Matrix of stage coefficients a_ij.
+        B_HIGH : numpy.ndarray
+            Weights of the high order solution.
+        B_LOW : numpy.ndarray
+            Weights of the lower order solution, optional.  When *None* no error
+            estimate is produced and :func:`~hiten.algorithms.integrators.rk._rk_embedded_step` falls back to
+            the high order result for both outputs.
+        C : numpy.ndarray
+            Nodes c_i measured in units of the step size.
+        has_b_low : bool
+            Whether the lower order solution is available.
+
+        Returns
+        -------
+        y_high : numpy.ndarray
+            High-order solution at t + h.
+        y_low : numpy.ndarray
+            Low-order solution at t + h (for error estimation).
+        err_vec : numpy.ndarray
+            Error estimate vector (y_high - y_low).
+        """
+        s = B_HIGH.size
         k = np.empty((s, y.size), dtype=np.float64)
 
         k[0] = f(t, y)
         for i in range(1, s):
             y_stage = y.copy()
             for j in range(i):
-                a_ij = self._A[i, j]
+                a_ij = A[i, j]
                 if a_ij != 0.0:
                     y_stage += h * a_ij * k[j]
-            k[i] = f(t + self._C[i] * h, y_stage)
+            k[i] = f(t + C[i] * h, y_stage)
 
-        y_high = y + h * np.dot(self._B_HIGH, k)
+        # y_high = y + h * sum_j B_HIGH[j] * k[j]
+        y_high = y.copy()
+        for j in range(s):
+            bj = B_HIGH[j]
+            if bj != 0.0:
+                y_high += h * bj * k[j]
 
-        if self._B_LOW is not None:
-            y_low = y + h * np.dot(self._B_LOW, k)
+        if has_b_low:
+            y_low = y.copy()
+            for j in range(s):
+                bl = B_LOW[j]
+                if bl != 0.0:
+                    y_low += h * bl * k[j]
         else:
             y_low = y_high.copy()
         err_vec = y_high - y_low
@@ -185,57 +345,47 @@ class _FixedStepRK(_RungeKuttaBase):
         t_vals: np.ndarray,
         **kwargs,
     ) -> _Solution:
-        """Integrate a dynamical system using a fixed-step Runge-Kutta method.
-        
-        This method performs integration with constant step size determined by
-        the spacing of the provided time values.
-        
-        Parameters
-        ----------
-        system : :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
-            The dynamical system to integrate.
-        y0 : numpy.ndarray
-            Initial state vector.
-        t_vals : numpy.ndarray
-            Array of time points at which to evaluate the solution.
-        **kwargs
-            Additional integration options (unused for fixed-step methods).
-            
-        Returns
-        -------
-        :class:`~hiten.algorithms.integrators.base._Solution`
-            Integration results containing times, states, and derivatives.
-        """
+        """Integrate a dynamical system using a fixed-step Runge-Kutta method."""
         self.validate_inputs(system, y0, t_vals)
 
-        rhs_wrapped = _build_rhs_wrapper(system)
+        f = _build_rhs_wrapper(system)
 
-        # The RHS that comes in may already embed the intended time direction.
-        # Therefore do *not* apply any additional sign here - simply forward
-        # the call to the wrapped system RHS.
-        def f(t, y):
-            return rhs_wrapped(t, y)
+        has_b_low = self._B_LOW is not None
+        B_LOW_arr = self._B_LOW if has_b_low else np.empty(0, dtype=np.float64)
+        states, derivs = _FixedStepRK._integrate_fixed_rk(
+            f, y0, t_vals, self._A, self._B_HIGH, B_LOW_arr, self._C, has_b_low
+        )
+        return _Solution(times=t_vals.copy(), states=states, derivatives=derivs)
 
-        traj = np.empty((t_vals.size, y0.size), dtype=np.float64)
-        derivs = np.empty_like(traj)
-
-        # Initial state and derivative
-        traj[0] = y0.copy()
+    @staticmethod
+    @numba.njit(cache=False, fastmath=FASTMATH)
+    def _integrate_fixed_rk(
+        f,
+        y0,
+        t_vals,
+        A,
+        B_HIGH,
+        B_LOW,
+        C,
+        has_b_low,
+    ):
+        n_steps = t_vals.size
+        dim = y0.size
+        states = np.empty((n_steps, dim), dtype=np.float64)
+        derivs = np.empty_like(states)
+        states[0] = y0
         derivs[0] = f(t_vals[0], y0)
 
-        for idx in range(t_vals.size - 1):
+        for idx in range(n_steps - 1):
             t_n = t_vals[idx]
             h = t_vals[idx + 1] - t_n
-            y_n = traj[idx]
-
-            # Perform RK step and obtain high-order solution
-            y_high, _, _ = self._rk_embedded_step(f, t_n, y_n, h)
-            traj[idx + 1] = y_high
-
-            # Derivative at the new time point (needed for Hermite interpolation)
+            y_n = states[idx]
+            y_high, _, _ = rk_embedded_step_jit_kernel(
+                f, t_n, y_n, h, A, B_HIGH, B_LOW if has_b_low else np.empty(0, np.float64), C, has_b_low
+            )
+            states[idx + 1] = y_high
             derivs[idx + 1] = f(t_vals[idx + 1], y_high)
-
-        return _Solution(times=t_vals.copy(), states=traj, derivatives=derivs)
+        return states, derivs
 
 
 class _RK4(_FixedStepRK):
@@ -341,13 +491,9 @@ class _AdaptiveStepRK(_RungeKuttaBase):
 
         debug = self.options.get("debug", False)
 
-        rhs_wrapped = _build_rhs_wrapper(system)
-
-        # The RHS that comes in may already embed the intended time direction.
-        # Therefore do *not* apply any additional sign here - simply forward
-        # the call to the wrapped system RHS.
-        def f(t, y):
-            return rhs_wrapped(t, y)
+        # Use compiled dispatcher directly (no Python wrapper) so JIT kernels
+        # receive a Numba-typed callable
+        f = _build_rhs_wrapper(system)
 
         t_span = (t_vals[0], t_vals[-1])
 
@@ -524,7 +670,33 @@ class _RK45(_AdaptiveStepRK):
         super().__init__("_RK45", **opts)
 
     def _rk_embedded_step(self, f, t, y, h):
-        """Perform one Dormand-Prince 5(4) embedded step with error estimation.
+        return self._rk45_step_jit(f, t, y, h, self._A, self._B_HIGH, self._C, self._E)
+
+    def integrate(self, system: _DynamicalSystem, y0: np.ndarray, t_vals: np.ndarray, **kwargs) -> _Solution:
+        """Adaptive integration fully in Numba for RK45 with Hermite interpolation."""
+        self.validate_inputs(system, y0, t_vals)
+        f = _build_rhs_wrapper(system)
+        states, derivs = _RK45._integrate_rk45(
+            f=f,
+            y0=y0,
+            t_eval=t_vals,
+            A=self._A,
+            B_HIGH=self._B_HIGH,
+            C=self._C,
+            E=self._E,
+            rtol=self._rtol,
+            atol=self._atol,
+            max_step=self._max_step,
+            min_step=self._min_step,
+            order=self._p,
+        )
+        return _Solution(times=t_vals.copy(), states=states, derivatives=derivs)
+
+    @staticmethod
+    @numba.njit(cache=False, fastmath=FASTMATH)
+    def _rk45_step_jit(f, t, y, h, A, B_HIGH, C, E):
+        """
+        Perform one Dormand-Prince 5(4) embedded step with error estimation.
         
         This method implements the specific Dormand-Prince 5(4) embedded
         Runge-Kutta step, computing both 5th-order and 4th-order solutions
@@ -540,7 +712,15 @@ class _RK45(_AdaptiveStepRK):
             Current state vector.
         h : float
             Step size.
-            
+        A : numpy.ndarray
+            Matrix of stage coefficients a_ij.
+        B_HIGH : numpy.ndarray
+            Weights of the high order solution.
+        C : numpy.ndarray
+            Nodes c_i measured in units of the step size.
+        E : numpy.ndarray
+            Error coefficients for 4th-order solution.
+
         Returns
         -------
         y_high : numpy.ndarray
@@ -548,19 +728,155 @@ class _RK45(_AdaptiveStepRK):
         y_low : numpy.ndarray
             4th-order solution at t + h (for error estimation).
         err_vec : numpy.ndarray
-            Error estimate vector (y_high - y_low).
+            Error estimate vector computed using 
+            :func:`~hiten.algorithms.integrators.rk.AdaptiveRK._estimate_error`.
         """
         s = 6
-        k = np.empty((s + 1, y.size))
+        k = np.empty((s + 1, y.size), dtype=np.float64)
         k[0] = f(t, y)
         for i in range(1, s):
-            y_stage = y + h * (self._A[i, :i] @ k[:i])
-            k[i] = f(t + self._C[i] * h, y_stage)
-        y_high = y + h * (self._B_HIGH @ k[:s])
+            y_stage = y.copy()
+            # y_stage += h * sum_{j < i} A[i,j] * k[j]
+            for j in range(i):
+                aij = A[i, j]
+                if aij != 0.0:
+                    y_stage += h * aij * k[j]
+            k[i] = f(t + C[i] * h, y_stage)
+        # y_high = y + h * sum_{j < s} B_HIGH[j] * k[j]
+        y_high = y.copy()
+        for j in range(s):
+            bj = B_HIGH[j]
+            if bj != 0.0:
+                y_high += h * bj * k[j]
         k[s] = f(t + h, y_high)
-        err_vec = h * (k.T @ self._E)
+        # err_vec = h * (k.T @ E)
+        m = k.shape[0]
+        n = k.shape[1]
+        err_vec = np.zeros(n, dtype=np.float64)
+        for j in range(m):
+            coeff = E[j]
+            if coeff != 0.0:
+                err_vec += h * coeff * k[j]
         y_low = y_high - err_vec
         return y_high, y_low, err_vec
+
+    @staticmethod
+    @numba.njit(cache=False, fastmath=FASTMATH)
+    def _integrate_rk45(f, y0, t_eval, A, B_HIGH, C, E, rtol, atol, max_step, min_step, order):
+        t0 = t_eval[0]
+        tf = t_eval[-1]
+        t = t0
+        y = y0.copy()
+        ts = List()
+        ys = List()
+        dys = List()
+        ts.append(t)
+        ys.append(y.copy())
+        dys.append(f(t, y))
+
+        # initial step selection (simple heuristic)
+        dy0 = dys[0]
+        scale0 = atol + rtol * np.abs(y)
+        d0 = np.linalg.norm(y / scale0) / np.sqrt(y.size)
+        d1 = np.linalg.norm(dy0 / scale0) / np.sqrt(y.size)
+        h = 1e-6 if (d0 < 1e-5 or d1 < 1e-5) else 0.01 * d0 / d1
+        if h > max_step:
+            h = max_step
+        if h < min_step:
+            h = min_step
+
+        err_prev = -1.0
+        SAFETY = 0.9
+        MIN_FACTOR = 0.2
+        MAX_FACTOR = 10.0
+        err_exp = 1.0 / order
+
+        while (t - tf) * 1.0 < 0.0:
+            if h > max_step:
+                h = max_step
+            if t + h > tf:
+                h = abs(tf - t)
+
+            y_high, y_low, err_vec = rk45_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E)
+            scale = atol + rtol * np.maximum(np.abs(y), np.abs(y_high))
+            err_norm = np.linalg.norm(err_vec / scale) / np.sqrt(err_vec.size)
+
+            if err_norm <= 1.0:
+                t_new = t + h
+                y_new = y_high
+                ts.append(t_new)
+                ys.append(y_new.copy())
+                dys.append(f(t_new, y_new))
+                t = t_new
+                y = y_new
+
+                beta = 1.0 / (order + 1)
+                alpha = 0.4 * beta
+                if err_prev < 0:
+                    factor = SAFETY * (err_norm ** (-beta))
+                else:
+                    factor = SAFETY * (err_norm ** (-beta)) * (err_prev ** alpha)
+                if factor < MIN_FACTOR:
+                    factor = MIN_FACTOR
+                if factor > MAX_FACTOR:
+                    factor = MAX_FACTOR
+                h = h * factor
+                err_prev = err_norm
+            else:
+                factor = SAFETY * (err_norm ** (-err_exp))
+                if factor < MIN_FACTOR:
+                    factor = MIN_FACTOR
+                h = h * factor
+                if h < min_step:
+                    h = min_step
+
+        # Convert lists to arrays
+        n_nodes = len(ts)
+        dim = y0.size
+        ts_arr = np.empty(n_nodes, dtype=np.float64)
+        ys_arr = np.empty((n_nodes, dim), dtype=np.float64)
+        dys_arr = np.empty_like(ys_arr)
+        for i in range(n_nodes):
+            ts_arr[i] = ts[i]
+            ys_arr[i, :] = ys[i]
+            dys_arr[i, :] = dys[i]
+
+        # Hermite interpolation at t_eval
+        m = t_eval.size
+        y_out = np.empty((m, dim), dtype=np.float64)
+        # searchsorted
+        for idx in range(m):
+            t_q = t_eval[idx]
+            # find right index
+            j = np.searchsorted(ts_arr, t_q, side='right') - 1
+            if j < 0:
+                j = 0
+            if j > n_nodes - 2:
+                j = n_nodes - 2
+            t0 = ts_arr[j]
+            t1 = ts_arr[j + 1]
+            y0v = ys_arr[j]
+            y1v = ys_arr[j + 1]
+            dy0v = dys_arr[j]
+            dy1v = dys_arr[j + 1]
+            hseg = t1 - t0
+            s = (t_q - t0) / hseg
+            s2 = s * s
+            s3 = s2 * s
+            h00 = 2 * s3 - 3 * s2 + 1
+            h10 = s3 - 2 * s2 + s
+            h01 = -2 * s3 + 3 * s2
+            h11 = s3 - s2
+            y_out[idx, :] = (
+                h00 * y0v + h10 * hseg * dy0v + h01 * y1v + h11 * hseg * dy1v
+            )
+
+        # Derivatives at t_eval (reuse f)
+        derivs_out = np.empty_like(y_out)
+        for idx in range(m):
+            derivs_out[idx, :] = f(t_eval[idx], y_out[idx, :])
+
+        return y_out, derivs_out
 
 
 class _DOP853(_AdaptiveStepRK):
@@ -586,12 +902,38 @@ class _DOP853(_AdaptiveStepRK):
         super().__init__("_DOP853", **opts)
 
     def _rk_embedded_step(self, f, t, y, h):
+        return self._dop853_step_jit(f, t, y, h, self._A, self._B_HIGH, self._C, self._E5, self._E3)
+
+    def integrate(self, system: _DynamicalSystem, y0: np.ndarray, t_vals: np.ndarray, **kwargs) -> _Solution:
+        """Adaptive integration fully in Numba for DOP853 with Hermite interpolation."""
+        self.validate_inputs(system, y0, t_vals)
+        f = _build_rhs_wrapper(system)
+        states, derivs = _DOP853._integrate_dop853(
+            f=f,
+            y0=y0,
+            t_eval=t_vals,
+            A=self._A,
+            B_HIGH=self._B_HIGH,
+            C=self._C,
+            E5=self._E5,
+            E3=self._E3,
+            rtol=self._rtol,
+            atol=self._atol,
+            max_step=self._max_step,
+            min_step=self._min_step,
+            order=self._p,
+        )
+        return _Solution(times=t_vals.copy(), states=states, derivatives=derivs)
+
+    @staticmethod
+    @numba.njit(cache=False, fastmath=FASTMATH)
+    def _dop853_step_jit(f, t, y, h, A, B_HIGH, C, E5, E3):
         """Perform one Dormand-Prince 8(5,3) embedded step with error estimation.
         
         This method implements the specific Dormand-Prince 8(5,3) embedded
         Runge-Kutta step, computing both 8th-order and 5th/3rd-order solutions
         for error estimation.
-        
+
         Parameters
         ----------
         f : callable
@@ -602,36 +944,181 @@ class _DOP853(_AdaptiveStepRK):
             Current state vector.
         h : float
             Step size.
-            
+        A : numpy.ndarray
+            Matrix of stage coefficients a_ij.
+        B_HIGH : numpy.ndarray
+            Weights of the high order solution.
+        C : numpy.ndarray
+            Nodes c_i measured in units of the step size.
+        E5 : numpy.ndarray
+            Error coefficients for 5th-order solution.
+        E3 : numpy.ndarray
+            Error coefficients for 3rd-order solution.
+
         Returns
         -------
         y_high : numpy.ndarray
             8th-order solution at t + h.
         y_low : numpy.ndarray
-            Lower-order solution at t + h (for error estimation).
+            5th/3rd-order solution at t + h (for error estimation).
         err_vec : numpy.ndarray
             Error estimate vector computed using 
             :func:`~hiten.algorithms.integrators.rk.AdaptiveRK._estimate_error`.
         """
-        s = self._N_STAGES
+        s = B_HIGH.size
         k = np.empty((s + 1, y.size), dtype=np.float64)
         k[0] = f(t, y)
         for i in range(1, s):
             y_stage = y.copy()
             for j in range(i):
-                a_ij = self._A[i, j]
+                a_ij = A[i, j]
                 if a_ij != 0.0:
                     y_stage += h * a_ij * k[j]
-            k[i] = f(t + self._C[i] * h, y_stage)
+            k[i] = f(t + C[i] * h, y_stage)
         y_high = y.copy()
         for j in range(s):
-            b_j = self._B_HIGH[j]
+            b_j = B_HIGH[j]
             if b_j != 0.0:
                 y_high += h * b_j * k[j]
         k[s] = f(t + h, y_high)
-        err_vec = self._estimate_error(k, h)
+        # error using E5/E3 combo (mirrors _estimate_error) without matrix multiplies
+        m = k.shape[0]
+        n = k.shape[1]
+        err5 = np.zeros(n, dtype=np.float64)
+        err3 = np.zeros(n, dtype=np.float64)
+        for j in range(m):
+            c5 = E5[j]
+            c3 = E3[j]
+            if c5 != 0.0:
+                err5 += c5 * k[j]
+            if c3 != 0.0:
+                err3 += c3 * k[j]
+        err5 *= h
+        err3 *= h
+        denom = np.hypot(np.abs(err5), 0.1 * np.abs(err3))
+        err_vec = np.empty_like(err5)
+        for i in range(n):
+            if denom[i] > 0.0:
+                err_vec[i] = err5[i] * (np.abs(err5[i]) / denom[i])
+            else:
+                err_vec[i] = err5[i]
         y_low = y_high - err_vec
         return y_high, y_low, err_vec
+
+    @staticmethod
+    @numba.njit(cache=False, fastmath=FASTMATH)
+    def _integrate_dop853(f, y0, t_eval, A, B_HIGH, C, E5, E3, rtol, atol, max_step, min_step, order):
+        t0 = t_eval[0]
+        tf = t_eval[-1]
+        t = t0
+        y = y0.copy()
+        ts = List()
+        ys = List()
+        dys = List()
+        ts.append(t)
+        ys.append(y.copy())
+        dys.append(f(t, y))
+
+        # initial step heuristic
+        dy0 = dys[0]
+        scale0 = atol + rtol * np.abs(y)
+        d0 = np.linalg.norm(y / scale0) / np.sqrt(y.size)
+        d1 = np.linalg.norm(dy0 / scale0) / np.sqrt(y.size)
+        h = 1e-6 if (d0 < 1e-5 or d1 < 1e-5) else 0.01 * d0 / d1
+        if h > max_step:
+            h = max_step
+        if h < min_step:
+            h = min_step
+
+        err_prev = -1.0
+        SAFETY = 0.9
+        MIN_FACTOR = 0.2
+        MAX_FACTOR = 10.0
+        err_exp = 1.0 / order
+
+        while (t - tf) * 1.0 < 0.0:
+            if h > max_step:
+                h = max_step
+            if t + h > tf:
+                h = abs(tf - t)
+
+            y_high, y_low, err_vec = dop853_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E5, E3)
+            scale = atol + rtol * np.maximum(np.abs(y), np.abs(y_high))
+            err_norm = np.linalg.norm(err_vec / scale) / np.sqrt(err_vec.size)
+
+            if err_norm <= 1.0:
+                t_new = t + h
+                y_new = y_high
+                ts.append(t_new)
+                ys.append(y_new.copy())
+                dys.append(f(t_new, y_new))
+                t = t_new
+                y = y_new
+
+                beta = 1.0 / (order + 1)
+                alpha = 0.4 * beta
+                if err_prev < 0:
+                    factor = SAFETY * (err_norm ** (-beta))
+                else:
+                    factor = SAFETY * (err_norm ** (-beta)) * (err_prev ** alpha)
+                if factor < MIN_FACTOR:
+                    factor = MIN_FACTOR
+                if factor > MAX_FACTOR:
+                    factor = MAX_FACTOR
+                h = h * factor
+                err_prev = err_norm
+            else:
+                factor = SAFETY * (err_norm ** (-err_exp))
+                if factor < MIN_FACTOR:
+                    factor = MIN_FACTOR
+                h = h * factor
+                if h < min_step:
+                    h = min_step
+
+        # Convert lists to arrays
+        n_nodes = len(ts)
+        dim = y0.size
+        ts_arr = np.empty(n_nodes, dtype=np.float64)
+        ys_arr = np.empty((n_nodes, dim), dtype=np.float64)
+        dys_arr = np.empty_like(ys_arr)
+        for i in range(n_nodes):
+            ts_arr[i] = ts[i]
+            ys_arr[i, :] = ys[i]
+            dys_arr[i, :] = dys[i]
+
+        # Hermite interpolation at t_eval
+        m = t_eval.size
+        y_out = np.empty((m, dim), dtype=np.float64)
+        for idx in range(m):
+            t_q = t_eval[idx]
+            j = np.searchsorted(ts_arr, t_q, side='right') - 1
+            if j < 0:
+                j = 0
+            if j > n_nodes - 2:
+                j = n_nodes - 2
+            t0s = ts_arr[j]
+            t1s = ts_arr[j + 1]
+            y0v = ys_arr[j]
+            y1v = ys_arr[j + 1]
+            dy0v = dys_arr[j]
+            dy1v = dys_arr[j + 1]
+            hseg = t1s - t0s
+            s = (t_q - t0s) / hseg
+            s2 = s * s
+            s3 = s2 * s
+            h00 = 2 * s3 - 3 * s2 + 1
+            h10 = s3 - 2 * s2 + s
+            h01 = -2 * s3 + 3 * s2
+            h11 = s3 - s2
+            y_out[idx, :] = (
+                h00 * y0v + h10 * hseg * dy0v + h01 * y1v + h11 * hseg * dy1v
+            )
+
+        derivs_out = np.empty_like(y_out)
+        for idx in range(m):
+            derivs_out[idx, :] = f(t_eval[idx], y_out[idx, :])
+
+        return y_out, derivs_out
 
     def _estimate_error(self, K, h):
         """Estimate error using Dormand-Prince 8(5,3) error coefficients.
