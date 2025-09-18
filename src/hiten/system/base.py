@@ -64,10 +64,10 @@ class System(object):
     libration_points : dict[int, LibrationPoint]
         Mapping from integer identifiers {1,...,5} to the corresponding
         libration point objects.
-    dynsys : :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+    dynsys : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
         Underlying vector field instance compatible with the integrators
         defined in :mod:`~hiten.algorithms.integrators`.
-    var_dynsys : :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+    var_dynsys : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
         Underlying variational equations system.
 
     Notes
@@ -158,7 +158,7 @@ class System(object):
         
         Returns
         -------
-        :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+        :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
             The underlying vector field instance.
         """
         return self._dynsys
@@ -169,7 +169,7 @@ class System(object):
         
         Returns
         -------
-        :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+        :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
             The underlying variational equations system.
         """
         return self._var_dynsys

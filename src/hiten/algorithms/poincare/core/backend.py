@@ -15,7 +15,7 @@ from typing import Callable, Literal
 
 import numpy as np
 
-from hiten.algorithms.dynamics.base import _DynamicalSystemProtocol
+from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
 from hiten.algorithms.poincare.core.events import _SurfaceEvent
 
 
@@ -28,7 +28,7 @@ class _ReturnMapBackend(ABC):
 
     Parameters
     ----------
-    dynsys : :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+    dynsys : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
         Dynamical system providing the equations of motion.
     surface : :class:`~hiten.algorithms.poincare.core.events._SurfaceEvent`
         Poincare section surface definition.

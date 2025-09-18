@@ -18,14 +18,13 @@ centre manifolds and first integrals of Hamiltonian systems.
 *Experimental Mathematics*, 8(2), 155-195.
 """
 
-from typing import Callable, Protocol, runtime_checkable
+from typing import Callable
 
 import numpy as np
 from numba import njit
 from numba.typed import List
 
-from hiten.algorithms.dynamics.base import (_DynamicalSystemProtocol,
-                                            _DynamicalSystem)
+from hiten.algorithms.dynamics.base import _DynamicalSystem
 from hiten.algorithms.integrators.symplectic import _eval_dH_dP, _eval_dH_dQ
 from hiten.algorithms.polynomial.operations import (_polynomial_evaluate,
                                                     _polynomial_jacobian)
@@ -88,75 +87,6 @@ def _hamiltonian_rhs(
     rhs[n_dof : 2 * n_dof] = -dH_dQ  # dp/dt
     return rhs
 
-@runtime_checkable
-class _HamiltonianSystemProtocol(_DynamicalSystemProtocol, Protocol):
-    r"""Define the protocol for the interface for Hamiltonian dynamical systems.
-    
-    Extends the base dynamical system protocol with Hamiltonian-specific
-    methods required by symplectic integrators. Provides access to partial
-    derivatives and polynomial representation of the Hamiltonian.
-    
-    See Also
-    --------
-    :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol` : Base protocol
-    :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem` : Concrete implementation
-    """
-    
-    @property
-    def n_dof(self) -> int:
-        """Number of degrees of freedom.
-        
-        Returns
-        -------
-        int
-            Degrees of freedom count. Total state dimension is 2 * n_dof.
-        """
-        ...
-    
-    def dH_dQ(self, Q: np.ndarray, P: np.ndarray) -> np.ndarray:
-        r"""Compute partial derivatives of Hamiltonian with respect to positions.
-        
-        Parameters
-        ----------
-        Q : ndarray, shape (n_dof,)
-            Position coordinates.
-        P : ndarray, shape (n_dof,)
-            Momentum coordinates.
-            
-        Returns
-        -------
-        ndarray, shape (n_dof,)
-            Partial derivatives dH/dQ.
-        """
-        ...
-    
-    def dH_dP(self, Q: np.ndarray, P: np.ndarray) -> np.ndarray:
-        r"""Compute partial derivatives of Hamiltonian with respect to momenta.
-        
-        Parameters
-        ----------
-        Q : ndarray, shape (n_dof,)
-            Position coordinates.
-        P : ndarray, shape (n_dof,)
-            Momentum coordinates.
-            
-        Returns
-        -------
-        ndarray, shape (n_dof,)
-            Partial derivatives dH/dP.
-        """
-        ...
-
-    def poly_H(self) -> List[List[np.ndarray]]:
-        r"""Return polynomial representation of the Hamiltonian.
-        
-        Returns
-        -------
-        List[List[ndarray]]
-            Nested list structure containing polynomial coefficients
-            organized by degree and variable.
-        """
-        ...
 
 
 class _HamiltonianSystem(_DynamicalSystem):

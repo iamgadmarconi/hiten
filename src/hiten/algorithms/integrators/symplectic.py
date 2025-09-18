@@ -20,7 +20,7 @@ from numba.typed import List
 from hiten.algorithms.polynomial.operations import _polynomial_evaluate
 from hiten.algorithms.utils.config import FASTMATH
 from hiten.algorithms.integrators.base import _Integrator, _Solution
-from hiten.algorithms.dynamics.base import _DynamicalSystem
+from hiten.algorithms.dynamics.protocols import _HamiltonianSystemProtocol
 
 N_SYMPLECTIC_DOF = 3
 N_VARS_POLY = 6
@@ -518,13 +518,13 @@ class _ExtendedSymplectic(_Integrator):
         """
         return self._order
     
-    def validate_system(self, system: _DynamicalSystem) -> None:
+    def validate_system(self, system: _HamiltonianSystemProtocol) -> None:
         """
         Validate that the system is compatible with symplectic integration.
         
         Parameters
         ----------
-        system : :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
+        system : :class:`~hiten.algorithms.dynamics.protocols._HamiltonianSystemProtocol`
             The system to validate
             
         Raises
@@ -552,7 +552,7 @@ class _ExtendedSymplectic(_Integrator):
     
     def integrate(
         self,
-        system: _DynamicalSystem,
+        system: _HamiltonianSystemProtocol,
         y0: np.ndarray,
         t_vals: np.ndarray,
         **kwargs
@@ -562,7 +562,7 @@ class _ExtendedSymplectic(_Integrator):
         
         Parameters
         ----------
-        system : :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
+        system : :class:`~hiten.algorithms.dynamics.protocols._HamiltonianSystemProtocol`
             The Hamiltonian system to integrate (must provide polynomial structure)
         y0 : numpy.ndarray
             Initial state vector [Q, P], shape (2*n_dof,)

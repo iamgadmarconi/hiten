@@ -14,13 +14,7 @@ class _EventConfig:
         - -1: only decreasing crossings (g0 >= 0 and g1 <= 0)
     terminal : bool, default True
         When True, integration should stop at the first event.
-    tol : float, default 1e-12
-        Absolute time tolerance for root bracketing refinement.
-    max_iter : int, default 50
-        Maximum iterations of the bracketing refinement.
     """
 
     direction: int = 0
     terminal: bool = True
-    tol: float = 1e-12
-    max_iter: int = 50

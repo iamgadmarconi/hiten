@@ -11,7 +11,7 @@ from typing import Optional, Callable
 
 import numpy as np
 
-from hiten.algorithms.dynamics.base import _DynamicalSystemProtocol
+from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
 from hiten.algorithms.integrators.configs import _EventConfig
 from hiten.algorithms.integrators.types import _Solution
 
@@ -80,7 +80,7 @@ class _Integrator(ABC):
         
         Parameters
         ----------
-        system : _DynamicalSystemProtocol
+        system : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
             The dynamical system to integrate
         y0 : numpy.ndarray
             Initial state vector, shape (hiten.system.dim,)
@@ -102,17 +102,17 @@ class _Integrator(ABC):
         pass
     
     def validate_system(self, system: _DynamicalSystemProtocol) -> None:
-        """Check that *system* complies with :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`.
+        """Check that *system* complies with :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`.
 
         Parameters
         ----------
-        system : :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+        system : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
             Candidate system whose suitability is being tested.
 
         Raises
         ------
         ValueError
-            If the required attribute :attr:`~hiten.algorithms.integrators.base._DynamicalSystem.rhs` is absent.
+            If the required attribute :attr:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol.rhs` is absent.
         """
         if not hasattr(system, 'rhs'):
             raise ValueError(f"System must implement 'rhs' method for {self.name}")
@@ -127,7 +127,7 @@ class _Integrator(ABC):
 
         Parameters
         ----------
-        system : :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+        system : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
             System to be integrated.
         y0 : numpy.ndarray
             Initial state vector of length :attr:`~hiten.system.dim`.

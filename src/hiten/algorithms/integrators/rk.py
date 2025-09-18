@@ -18,14 +18,13 @@ formulas".
 """
 
 import inspect
-from abc import abstractmethod
 from typing import Callable, Optional
 
 import numba
 import numpy as np
 from numba.typed import List
 
-from hiten.algorithms.dynamics.base import _DynamicalSystem
+from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
 from hiten.algorithms.integrators.base import _Integrator, _Solution
 from hiten.algorithms.integrators.coefficients.dop853 import E3 as DOP853_E3
 from hiten.algorithms.integrators.coefficients.dop853 import E5 as DOP853_E5
@@ -56,7 +55,6 @@ from hiten.algorithms.integrators.coefficients.rk45 import C as RK45_C
 from hiten.algorithms.integrators.coefficients.rk45 import E as RK45_E
 from hiten.algorithms.integrators.coefficients.rk45 import P as RK45_P
 from hiten.algorithms.integrators.configs import _EventConfig
-from hiten.algorithms.integrators.events import _check_and_refine_event, _no_event_fn
 from hiten.algorithms.utils.config import FASTMATH, TOL
 
 
@@ -169,7 +167,7 @@ class _FixedStepRK(_RungeKuttaBase):
 
     def integrate(
         self,
-        system: _DynamicalSystem,
+        system: _DynamicalSystemProtocol,
         y0: np.ndarray,
         t_vals: np.ndarray,
         *,
@@ -189,17 +187,12 @@ class _FixedStepRK(_RungeKuttaBase):
 
         has_b_low = self._B_LOW is not None
         B_LOW_arr = self._B_LOW if has_b_low else np.empty(0, dtype=np.float64)
-        event_enabled = (event_fn is not None) and (event_cfg is not None)
-        dir_flag = 0 if (event_cfg is None) else int(event_cfg.direction)
-        tol_val = 1e-12 if (event_cfg is None) else float(event_cfg.tol)
-        max_iter = 50 if (event_cfg is None) else int(event_cfg.max_iter)
-        # Always call a njit function; supply a no-op event when disabled
-        g = _no_event_fn if not event_enabled else event_fn
         states, derivs = _FixedStepRK._integrate_fixed_rk(
             f, y0, t_vals, self._A, self._B_HIGH, B_LOW_arr, self._C, has_b_low,
-            g, int(dir_flag), float(tol_val), int(max_iter), bool(event_enabled)
         )
-        return _Solution(times=t_vals.copy(), states=states, derivatives=derivs)
+        # If an event terminated early, kernel returns truncated arrays.
+        times_out = t_vals[: states.shape[0]]
+        return _Solution(times=times_out, states=states, derivatives=derivs)
 
     @staticmethod
     @numba.njit(cache=False, fastmath=FASTMATH)
@@ -212,11 +205,6 @@ class _FixedStepRK(_RungeKuttaBase):
         B_LOW,
         C,
         has_b_low,
-        event_fn,
-        direction: int,
-        tol: float,
-        max_iter: int,
-        event_enabled: bool,
     ):
         n_steps = t_vals.size
         dim = y0.size
@@ -232,14 +220,6 @@ class _FixedStepRK(_RungeKuttaBase):
             y_high, _, _ = rk_embedded_step_jit_kernel(
                 f, t_n, y_n, h, A, B_HIGH, B_LOW if has_b_low else np.empty(0, np.float64), C, has_b_low
             )
-            if event_enabled:
-                hit, te, ye, _ = _check_and_refine_event(
-                    f, event_fn, t_n, y_n, t_vals[idx + 1], y_high, direction, tol, max_iter
-                )
-                if hit:
-                    states[idx + 1] = ye
-                    derivs[idx + 1] = f(te, ye)
-                    return states[: idx + 2], derivs[: idx + 2]
             states[idx + 1] = y_high
             derivs[idx + 1] = f(t_vals[idx + 1], y_high)
         return states, derivs
@@ -382,15 +362,10 @@ class _RK45(_AdaptiveStepRK):
         y_high, y_low, err_vec, _ = rk45_step_jit_kernel(f, t, y, h, self._A, self._B_HIGH, self._C, self._E)
         return y_high, y_low, err_vec
 
-    def integrate(self, system: _DynamicalSystem, y0: np.ndarray, t_vals: np.ndarray, *, event_fn=None, event_cfg: _EventConfig | None = None, **kwargs) -> _Solution:
+    def integrate(self, system: _DynamicalSystemProtocol, y0: np.ndarray, t_vals: np.ndarray, *, event_fn=None, event_cfg: _EventConfig | None = None, **kwargs) -> _Solution:
         """Adaptive integration fully in Numba for RK45 with Hermite interpolation."""
         self.validate_inputs(system, y0, t_vals)
         f = _build_rhs_wrapper(system)
-        event_enabled = (event_fn is not None) and (event_cfg is not None)
-        dir_flag = 0 if (event_cfg is None) else int(event_cfg.direction)
-        tol_val = 1e-12 if (event_cfg is None) else float(event_cfg.tol)
-        max_iter = 50 if (event_cfg is None) else int(event_cfg.max_iter)
-        g = _no_event_fn if not event_enabled else event_fn
         states, derivs = _RK45._integrate_rk45(
             f=f,
             y0=y0,
@@ -405,17 +380,12 @@ class _RK45(_AdaptiveStepRK):
             max_step=self._max_step,
             min_step=self._min_step,
             order=self._p,
-            event_enabled=event_enabled,
-            event_fn=g,
-            direction=dir_flag,
-            tol=tol_val,
-            max_iter=max_iter,
         )
         return _Solution(times=t_vals.copy(), states=states, derivatives=derivs)
 
     @staticmethod
     @numba.njit(cache=False, fastmath=FASTMATH)
-    def _integrate_rk45(f, y0, t_eval, A, B_HIGH, C, E, P, rtol, atol, max_step, min_step, order, event_enabled, event_fn, direction, tol, max_iter):
+    def _integrate_rk45(f, y0, t_eval, A, B_HIGH, C, E, P, rtol, atol, max_step, min_step, order):
         t0 = t_eval[0]
         tf = t_eval[-1]
         t = t0
@@ -463,35 +433,7 @@ class _RK45(_AdaptiveStepRK):
                 f_new = f(t_new, y_new)
                 dys.append(f_new)
                 Ks.append(k)
-                if event_enabled:
-                    hit, te, ye, _ = _check_and_refine_event(f, event_fn, t, y, t_new, y_new, direction, tol, max_iter)
-                    if hit:
-                        ts[-1] = te
-                        ys[-1] = ye.copy()
-                        dys[-1] = f(te, ye)
-                        n_nodes = len(ts)
-                        dim = y0.size
-                        ts_arr = np.empty(n_nodes, dtype=np.float64)
-                        ys_arr = np.empty((n_nodes, dim), dtype=np.float64)
-                        dys_arr = np.empty_like(ys_arr)
-                        for i in range(n_nodes):
-                            ts_arr[i] = ts[i]
-                            ys_arr[i, :] = ys[i]
-                            dys_arr[i, :] = dys[i]
-                        m = t_eval.size
-                        y_out = np.empty((m, dim), dtype=np.float64)
-                        for idx in range(m):
-                            tq = t_eval[idx]
-                            j = np.searchsorted(ts_arr, tq, side='right') - 1
-                            if j < 0:
-                                j = 0
-                            if j > n_nodes - 1:
-                                j = n_nodes - 1
-                            y_out[idx, :] = ys_arr[j, :]
-                        derivs_out = np.empty_like(y_out)
-                        for idx in range(m):
-                            derivs_out[idx, :] = f(t_eval[idx], y_out[idx, :])
-                        return y_out, derivs_out
+
                 t = t_new
                 y = y_new
 
@@ -651,7 +593,7 @@ class _DOP853(_AdaptiveStepRK):
         )
         return y_high, y_low, err_vec
 
-    def integrate(self, system: _DynamicalSystem, y0: np.ndarray, t_vals: np.ndarray, *, event_fn=None, event_cfg: _EventConfig | None = None, **kwargs) -> _Solution:
+    def integrate(self, system: _DynamicalSystemProtocol    , y0: np.ndarray, t_vals: np.ndarray, *, event_fn=None, event_cfg: _EventConfig | None = None, **kwargs) -> _Solution:
         """Adaptive integration fully in Numba for DOP853 with Hermite interpolation."""
         self.validate_inputs(system, y0, t_vals)
         # Common zero-span short-circuit
@@ -659,11 +601,7 @@ class _DOP853(_AdaptiveStepRK):
         if constant_sol is not None:
             return constant_sol
         f = _build_rhs_wrapper(system)
-        event_enabled = (event_fn is not None) and (event_cfg is not None)
-        dir_flag = 0 if (event_cfg is None) else int(event_cfg.direction)
-        tol_val = 1e-12 if (event_cfg is None) else float(event_cfg.tol)
-        max_iter = 50 if (event_cfg is None) else int(event_cfg.max_iter)
-        g = _no_event_fn if not event_enabled else event_fn
+
         states, derivs = _DOP853._integrate_dop853(
             f=f,
             y0=y0,
@@ -683,17 +621,12 @@ class _DOP853(_AdaptiveStepRK):
             max_step=self._max_step,
             min_step=self._min_step,
             order=self._p,
-            event_enabled=event_enabled,
-            event_fn=g,
-            direction=dir_flag,
-            tol=tol_val,
-            max_iter=max_iter,
         )
         return _Solution(times=t_vals.copy(), states=states, derivatives=derivs)
 
     @staticmethod
     @numba.njit(cache=False, fastmath=FASTMATH)
-    def _integrate_dop853(f, y0, t_eval, A, B_HIGH, C, E5, E3, D, n_stages_extended, interpolator_power, A_full, C_full, rtol, atol, max_step, min_step, order, event_enabled, event_fn, direction, tol, max_iter):
+    def _integrate_dop853(f, y0, t_eval, A, B_HIGH, C, E5, E3, D, n_stages_extended, interpolator_power, A_full, C_full, rtol, atol, max_step, min_step, order):
         t0 = t_eval[0]
         tf = t_eval[-1]
         t = t0
@@ -750,37 +683,6 @@ class _DOP853(_AdaptiveStepRK):
                 f_new = f(t_new, y_new)
                 dys.append(f_new)
                 Ks.append(k)
-                if event_enabled:
-                    hit, te, ye, _ = _check_and_refine_event(f, event_fn, t, y, t_new, y_new, direction, tol, max_iter)
-                    if hit:
-                        ts[-1] = te
-                        ys[-1] = ye.copy()
-                        dys[-1] = f(te, ye)
-                        # Build outputs up to event time only
-                        n_nodes = len(ts)
-                        dim = y0.size
-                        ts_arr = np.empty(n_nodes, dtype=np.float64)
-                        ys_arr = np.empty((n_nodes, dim), dtype=np.float64)
-                        dys_arr = np.empty_like(ys_arr)
-                        for i in range(n_nodes):
-                            ts_arr[i] = ts[i]
-                            ys_arr[i, :] = ys[i]
-                            dys_arr[i, :] = dys[i]
-                        # Simple left-hold output to avoid dense overhead
-                        m = t_eval.size
-                        y_out = np.empty((m, dim), dtype=np.float64)
-                        for idx in range(m):
-                            tq = t_eval[idx]
-                            j = np.searchsorted(ts_arr, tq, side='right') - 1
-                            if j < 0:
-                                j = 0
-                            if j > n_nodes - 1:
-                                j = n_nodes - 1
-                            y_out[idx, :] = ys_arr[j, :]
-                        derivs_out = np.empty_like(y_out)
-                        for idx in range(m):
-                            derivs_out[idx, :] = f(t_eval[idx], y_out[idx, :])
-                        return y_out, derivs_out
                 t = t_new
                 y = y_new
 
@@ -984,7 +886,7 @@ class AdaptiveRK:
         return cls._map[order](**opts)
 
 
-def _build_rhs_wrapper(system: _DynamicalSystem) -> Callable[[float, np.ndarray], np.ndarray]:
+def _build_rhs_wrapper(system: _DynamicalSystemProtocol) -> Callable[[float, np.ndarray], np.ndarray]:
     """Return the compiled (t, y) RHS from the system.
 
     Ensures `system.rhs` has the expected two-argument signature and returns it.
@@ -992,7 +894,7 @@ def _build_rhs_wrapper(system: _DynamicalSystem) -> Callable[[float, np.ndarray]
 
     Parameters
     ----------
-    system : :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
+    system : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
         The dynamical system to wrap.
 
     Returns
@@ -1002,8 +904,8 @@ def _build_rhs_wrapper(system: _DynamicalSystem) -> Callable[[float, np.ndarray]
     
     See Also
     --------
-    :class:`~hiten.algorithms.dynamics.base._DynamicalSystem` : Base class
-    :func:`~hiten.algorithms.dynamics.base._DynamicalSystem._compile_rhs_function` : JIT compilation method
+    :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol` : Base class
+    :func:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol._compile_rhs_function` : JIT compilation method
 
     Raises
     ------

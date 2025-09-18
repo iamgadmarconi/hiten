@@ -18,15 +18,6 @@ from hiten.algorithms.integrators.types import EventResult
 
 
 @njit(cache=False, fastmath=True)
-def _no_event_fn(t: float, y: np.ndarray) -> float:
-    """Numba-callable event function that never triggers a crossing.
-
-    Returns a positive constant so g0*g1 > 0 always.
-    """
-    return 1.0
-
-
-@njit(cache=False, fastmath=True)
 def _direction_allows(g0: float, g1: float, direction: int) -> bool:
     """Return True if the sign change (g0 -> g1) matches desired direction.
 

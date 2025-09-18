@@ -22,7 +22,7 @@ from typing import Protocol, runtime_checkable
 
 import numpy as np
 
-from hiten.algorithms.dynamics.base import _DynamicalSystemProtocol
+from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
 from hiten.algorithms.poincare.core.events import _SurfaceEvent
 
 
@@ -70,7 +70,7 @@ class _SeedingProtocol(Protocol):
 
         Parameters
         ----------
-        dynsys : :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+        dynsys : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
             The dynamical system that will be used for propagation.
             The seeding strategy may use system properties to inform
             the distribution of initial conditions.

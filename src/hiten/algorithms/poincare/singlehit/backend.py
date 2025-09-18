@@ -15,11 +15,12 @@ from typing import Callable, Literal
 import numpy as np
 from scipy.optimize import root_scalar
 
-from hiten.algorithms.dynamics.base import (_DynamicalSystemProtocol,
-                                            _propagate_dynsys)
+from hiten.algorithms.dynamics.base import _propagate_dynsys
+from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
+from hiten.algorithms.integrators.configs import _EventConfig
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
 from hiten.algorithms.poincare.core.events import (_PlaneEvent, _SectionHit,
-                                              _SurfaceEvent)
+                                                   _SurfaceEvent)
 
 
 class _SingleHitBackend(_ReturnMapBackend):
@@ -36,7 +37,7 @@ class _SingleHitBackend(_ReturnMapBackend):
 
     Parameters
     ----------
-    dynsys : :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+    dynsys : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
         The dynamical system providing the equations of motion.
     surface : :class:`~hiten.algorithms.poincare.core.events._SurfaceEvent`
         The Poincare section surface definition.
@@ -296,7 +297,7 @@ def find_crossing(dynsys, state0, surface, **kwargs):
 
     Parameters
     ----------
-    dynsys : :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+    dynsys : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
         The dynamical system providing the equations of motion.
     state0 : array_like, shape (6,)
         Initial state vector [x, y, z, vx, vy, vz] in nondimensional units.
@@ -353,6 +354,8 @@ def _plane_crossing_factory(coord: str, value: float = 0.0, direction: int | Non
         # Ensure the seed state is treated as a full 6-D vector and find a single crossing
         be = _SingleHitBackend(dynsys=dynsys, surface=event, forward=forward)
         hit = be._cross(np.asarray(x0, float))  # compute single crossing
+        if hit is None:
+            raise RuntimeError("No section crossing detected within search horizon.")
         return hit.time, hit.state
 
     return _section_crossing

@@ -17,64 +17,20 @@ Caltech.
 """
 
 from abc import ABC, abstractmethod
-from typing import (TYPE_CHECKING, Callable, Literal, Protocol, Sequence,
-                    runtime_checkable)
+from typing import TYPE_CHECKING, Callable, Literal, Sequence
 
 import numpy as np
-from scipy.integrate import solve_ivp
 
-from hiten.algorithms.utils.config import FASTMATH, TOL
+from hiten.algorithms.integrators.configs import _EventConfig
+from hiten.algorithms.utils.config import FASTMATH
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
-    from hiten.algorithms.dynamics.hamiltonian import \
-        _HamiltonianSystemProtocol
+    from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
     from hiten.algorithms.integrators.base import _Solution
 
 
 
-@runtime_checkable
-class _DynamicalSystemProtocol(Protocol):
-    r"""Define the protocol for the minimal interface for dynamical systems.
-
-    This protocol specifies the required attributes that any dynamical system
-    must implement to be compatible with the integrator framework. It uses
-    structural typing to allow duck typing while maintaining type safety.
-
-    Attributes
-    ----------
-    dim : int
-        Dimension of the state space (number of state variables).
-    rhs : Callable[[float, ndarray], ndarray]
-        Right-hand side function f(t, y) that computes the time derivative
-        dy/dt given time t and state vector y.
-        
-    Notes
-    -----
-    The @runtime_checkable decorator allows isinstance() checks against
-    this protocol at runtime, enabling flexible type validation.
-    """
-    
-    @property
-    def dim(self) -> int:
-        """Dimension of the state space."""
-        ...
-    
-    @property
-    def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        """Right-hand side function for ODE integration."""
-        ...
-    
-    def _build_rhs_impl(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        """Return a plain Python function implementing f(t, y).
-        
-        Notes
-        -----
-        Concrete implementations deriving from :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
-        must provide this method. The base class compiles and caches the returned
-        function to expose the standardized, compiled :attr:`rhs`.
-        """
-        ...
             
 
 class _DynamicalSystem(ABC):
@@ -97,11 +53,11 @@ class _DynamicalSystem(ABC):
     Notes
     -----
     Subclasses must implement the abstract :attr:`~hiten.algorithms.dynamics.base._DynamicalSystem.rhs` property to provide
-    the vector field function compatible with :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`.
+    the vector field function compatible with :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`.
     
     See Also
     --------
-    :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol` : Interface specification
+    :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol` : Interface specification
     :class:`~hiten.algorithms.dynamics.base._DirectedSystem` : Directional wrapper implementation
     """
     
@@ -342,7 +298,7 @@ class _DirectedSystem(_DynamicalSystem):
 
 
 def _propagate_dynsys(
-    dynsys: _DynamicalSystem,
+    dynsys: "_DynamicalSystemProtocol",
     state0: Sequence[float],
     t0: float,
     tf: float,
@@ -361,7 +317,7 @@ def _propagate_dynsys(
 
     Parameters
     ----------
-    dynsys : :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
+    dynsys : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
         Dynamical system to integrate.
     state0 : Sequence[float]
         Initial state vector.
@@ -381,7 +337,9 @@ def _propagate_dynsys(
         State component indices to flip for backward integration.
         Default is None.
     **kwargs
-        Additional keyword arguments passed to the integrator.
+        Additional keyword arguments passed to the integrator, including:
+        - event_fn: Numba-compiled scalar event function g(t, y)
+        - event_cfg: _EventConfig with direction/tolerances
     Returns
     -------
     :class:`~hiten.algorithms.integrators.base._Solution`
@@ -415,13 +373,18 @@ def _propagate_dynsys(
         states = np.repeat(state0_np[None, :], repeats=len(t_eval), axis=0)
         return _Solution(times_signed, states)
 
+    event_fn = kwargs.get("event_fn", None)
+    event_cfg: _EventConfig | None = kwargs.get("event_cfg", None)
+
     if method == "fixed":
         integrator = RungeKutta(order=order)
-        sol = integrator.integrate(dynsys_dir, state0_np, t_eval)
+        sol = integrator.integrate(dynsys_dir, state0_np, t_eval, event_fn=event_fn, event_cfg=event_cfg)
         times = sol.times
         states = sol.states
         
     elif method == "symplectic":
+        from hiten.algorithms.dynamics.protocols import \
+            _HamiltonianSystemProtocol
         if not isinstance(dynsys, _HamiltonianSystemProtocol):
             raise ValueError("Symplectic method requires a _HamiltonianSystem")
         integrator = _ExtendedSymplectic(order=order)
@@ -434,7 +397,7 @@ def _propagate_dynsys(
         rtol = kwargs.get("rtol", 1e-6)
         atol = kwargs.get("atol", 1e-9)
         integrator = AdaptiveRK(order=order, max_step=max_step, rtol=rtol, atol=atol)
-        sol = integrator.integrate(dynsys_dir, state0_np, t_eval)
+        sol = integrator.integrate(dynsys_dir, state0_np, t_eval, event_fn=event_fn, event_cfg=event_cfg)
         times = sol.times
         states = sol.states
 
