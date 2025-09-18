@@ -11,15 +11,12 @@ intersections.
 """
 
 from typing import Callable, Literal
-import time
-import numba
 
 import numpy as np
 from scipy.optimize import root_scalar
 
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
-from hiten.algorithms.integrators.configs import _EventConfig
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
 from hiten.algorithms.poincare.core.events import (_PlaneEvent, _SectionHit,
                                                    _SurfaceEvent)
@@ -39,7 +36,7 @@ class _SingleHitBackend(_ReturnMapBackend):
 
     Parameters
     ----------
-    dynsys : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
+    dynsys : :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
         The dynamical system providing the equations of motion.
     surface : :class:`~hiten.algorithms.poincare.core.events._SurfaceEvent`
         The Poincare section surface definition.
@@ -73,7 +70,7 @@ class _SingleHitBackend(_ReturnMapBackend):
         dynsys: "_DynamicalSystemProtocol",
         surface: "_SurfaceEvent",
         forward: int = 1,
-        method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
+        method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
         order: int = 8,
         pre_steps: int = 1000,
         refine_steps: int = 3000,
@@ -91,22 +88,6 @@ class _SingleHitBackend(_ReturnMapBackend):
             bracket_dx=bracket_dx,
             max_expand=max_expand,
         )
-        # Pre-compile plane event function once per backend instance to avoid
-        # repeated Numba compilation in the integrator path.
-        self._plane_idx: int | None = None
-        self._plane_val: float | None = None
-        self._compiled_event_fn = None
-        self._event_warmed_up: bool = False
-        if isinstance(surface, _PlaneEvent):
-            self._plane_idx = int(surface.index)
-            self._plane_val = float(surface.offset)
-            idx = self._plane_idx
-            val = self._plane_val
-            def _plane_event_fn(t: float, y: np.ndarray) -> float:
-                return float(y[idx] - val)
-            # Compile once; reusing the same CPUDispatcher avoids repeated JITs
-            from hiten.algorithms.utils.config import FASTMATH as _FASTMATH
-            self._compiled_event_fn = numba.njit(cache=True, fastmath=_FASTMATH)(_plane_event_fn)
 
     def step_to_section(
         self,
@@ -271,70 +252,43 @@ class _SingleHitBackend(_ReturnMapBackend):
         The 2D projection uses the first two coordinates as a fallback
         projection method.
         """
-        ev_fn = None
-        ev_cfg = None
-        if self._compiled_event_fn is not None:
-            idx = int(self._plane_idx)  # for logging/verification
-            val = float(self._plane_val)
-            ev_fn = self._compiled_event_fn
-            dir_attr = self._surface.direction
-            ev_dir = 0 if dir_attr is None else int(dir_attr)
-            ev_cfg = _EventConfig(direction=ev_dir, terminal=True)
+        t0_z = float(t_guess) if t_guess is not None else (np.pi / 2.0 - t0_offset)
 
-        # Choose a conservative horizon; event path will terminate early on hit
-        tf_base = float(t_guess) if t_guess is not None else float(np.pi)
-        tf = tf_base + 2.0 * np.pi
-        if tf <= 0.5:
-            tf = 0.5
+        sol_coarse = _propagate_dynsys(
+            self._dynsys,
+            state0,
+            0.0,
+            t0_z,
+            forward=self._forward,
+            steps=self._pre_steps,
+            method=self._method,
+            order=self._order,
+        )
+        state_mid = sol_coarse.states[-1]
 
-        if ev_fn is not None:
-            # One-time warm-up to avoid JIT cost on first real call
-            if not self._event_warmed_up:
-                try:
-                    _ = _propagate_dynsys(
-                        dynsys=self._dynsys,
-                        state0=state0,
-                        t0=0.0,
-                        tf=min(1e-8, max(1e-12, abs(float(tf) * 1e-9))),
-                        forward=self._forward,
-                        steps=2,
-                        method=self._method,
-                        order=self._order,
-                        event_fn=ev_fn,
-                        event_cfg=ev_cfg,
-                        rtol=1e-5,
-                        atol=1e-8,
-                    )
-                except Exception:
-                    pass
-                self._event_warmed_up = True
-            try:
-                print(f"[SingleHitBackend] event path: idx={idx}, val={val:.3e}, dir={ev_cfg.direction}, tf={tf:.3e}")
-                _t0 = time.perf_counter()
-                sol_evt = _propagate_dynsys(
-                    dynsys=self._dynsys,
-                    state0=state0,
-                    t0=0.0,
-                    tf=tf,
-                    forward=self._forward,
-                    steps=2,
-                    method=self._method,
-                    order=self._order,
-                    event_fn=ev_fn,
-                    event_cfg=ev_cfg,
-                    rtol=1e-5,
-                    atol=1e-8,
-                )
-                _dt = time.perf_counter() - _t0
-                t_end = float(sol_evt.times[-1])
-                state_end = sol_evt.states[-1].copy()
-                print(f"[SingleHitBackend] event returned: t_end={t_end:.6e}, g={state_end[idx]-val:.6e}, dt={_dt:.3f}s")
-                if abs(state_end[idx] - val) <= 1e-10:
-                    point2d = state_end[:2].copy()
-                    return _SectionHit(time=t_end, state=state_end, point2d=point2d)
-            except Exception:
-                pass
+        def _g(t: float):
+            return self._value_at_time(state_mid, t0_z, t)
 
+        a, b = self._bracket_root(_g, t0_z)
+
+        root_t = root_scalar(_g, bracket=(a, b), method="brentq", xtol=1e-12).root
+
+        sol_final = _propagate_dynsys(
+            self._dynsys,
+            state_mid,
+            t0_z,
+            root_t,
+            forward=self._forward,
+            steps=self._refine_steps,
+            method=self._method,
+            order=self._order,
+        )
+        state_cross = sol_final.states[-1].copy()
+
+        # Fallback 2-D projection: first two coordinates
+        point2d = state_cross[:2].copy()
+
+        return _SectionHit(time=root_t, state=state_cross, point2d=point2d)
 
 
 def find_crossing(dynsys, state0, surface, **kwargs):
@@ -342,7 +296,7 @@ def find_crossing(dynsys, state0, surface, **kwargs):
 
     Parameters
     ----------
-    dynsys : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
+    dynsys : :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
         The dynamical system providing the equations of motion.
     state0 : array_like, shape (6,)
         Initial state vector [x, y, z, vx, vy, vz] in nondimensional units.
@@ -399,8 +353,6 @@ def _plane_crossing_factory(coord: str, value: float = 0.0, direction: int | Non
         # Ensure the seed state is treated as a full 6-D vector and find a single crossing
         be = _SingleHitBackend(dynsys=dynsys, surface=event, forward=forward)
         hit = be._cross(np.asarray(x0, float))  # compute single crossing
-        if hit is None:
-            raise RuntimeError("No section crossing detected within search horizon.")
         return hit.time, hit.state
 
     return _section_crossing
