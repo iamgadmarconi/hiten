@@ -38,7 +38,7 @@ class _Solution:
 
     Notes
     -----
-    The class is a :class:`~dataclasses.dataclass` and behaves like an
+    The class is a `dataclasses.dataclass` and behaves like an
     immutable record.
     """
     times: np.ndarray

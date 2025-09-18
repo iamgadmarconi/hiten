@@ -30,10 +30,15 @@ from hiten.algorithms.integrators.base import _Integrator, _Solution
 from hiten.algorithms.integrators.coefficients.dop853 import E3 as DOP853_E3
 from hiten.algorithms.integrators.coefficients.dop853 import E5 as DOP853_E5
 from hiten.algorithms.integrators.coefficients.dop853 import \
+    INTERPOLATOR_POWER as DOP853_INTERPOLATOR_POWER
+from hiten.algorithms.integrators.coefficients.dop853 import \
     N_STAGES as DOP853_N_STAGES
+from hiten.algorithms.integrators.coefficients.dop853 import \
+    N_STAGES_EXTENDED as DOP853_N_STAGES_EXTENDED
 from hiten.algorithms.integrators.coefficients.dop853 import A as DOP853_A
 from hiten.algorithms.integrators.coefficients.dop853 import B as DOP853_B
 from hiten.algorithms.integrators.coefficients.dop853 import C as DOP853_C
+from hiten.algorithms.integrators.coefficients.dop853 import D as DOP853_D
 from hiten.algorithms.integrators.coefficients.rk4 import A as RK4_A
 from hiten.algorithms.integrators.coefficients.rk4 import B as RK4_B
 from hiten.algorithms.integrators.coefficients.rk4 import C as RK4_C
@@ -49,6 +54,7 @@ from hiten.algorithms.integrators.coefficients.rk45 import B_LOW as RK45_B_LOW
 from hiten.algorithms.integrators.coefficients.rk45 import A as RK45_A
 from hiten.algorithms.integrators.coefficients.rk45 import C as RK45_C
 from hiten.algorithms.integrators.coefficients.rk45 import E as RK45_E
+from hiten.algorithms.integrators.coefficients.rk45 import P as RK45_P
 from hiten.algorithms.utils.config import FASTMATH, TOL
 
 
@@ -120,9 +126,16 @@ class _RungeKuttaBase(_Integrator):
     _C: np.ndarray = None
     _p: int = 0
 
-    @abstractmethod
-    def integrate(self, system: _DynamicalSystem, y0: np.ndarray, t_vals: np.ndarray, **kwargs) -> _Solution:
-        """Integrate a dynamical system using a Runge-Kutta method."""
+    @property
+    def order(self) -> int:
+        """Return the formal order of accuracy of the method.
+        
+        Returns
+        -------
+        int
+            The order of accuracy of the Runge-Kutta method.
+        """
+        return self._p
 
 class _FixedStepRK(_RungeKuttaBase):
     """Implement an explicit fixed-step Runge-Kutta scheme.
@@ -151,17 +164,6 @@ class _FixedStepRK(_RungeKuttaBase):
         self._C = C
         self._p = order
         super().__init__(name, **options)
-
-    @property
-    def order(self) -> int:
-        """Return the formal order of accuracy of the method.
-        
-        Returns
-        -------
-        int
-            The order of accuracy of the Runge-Kutta method.
-        """
-        return self._p
 
     def integrate(
         self,
@@ -298,17 +300,6 @@ class _AdaptiveStepRK(_RungeKuttaBase):
         if not hasattr(self, "_err_exp") or self._err_exp == 0:
             self._err_exp = 1.0 / (self._p)
 
-    @property
-    def order(self) -> int:
-        """Return the formal order of accuracy of the method.
-        
-        Returns
-        -------
-        int
-            The order of accuracy of the Runge-Kutta method.
-        """
-        return self._p
-
 
 @numba.njit(cache=False, fastmath=FASTMATH)
 def rk45_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E):
@@ -337,7 +328,7 @@ def rk45_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E):
         if coeff != 0.0:
             err_vec += h * coeff * k[j]
     y_low = y_high - err_vec
-    return y_high, y_low, err_vec
+    return y_high, y_low, err_vec, k
 
 
 class _RK45(_AdaptiveStepRK):
@@ -358,7 +349,8 @@ class _RK45(_AdaptiveStepRK):
         super().__init__("_RK45", **opts)
 
     def _rk_embedded_step(self, f, t, y, h):
-        return rk45_step_jit_kernel(f, t, y, h, self._A, self._B_HIGH, self._C, self._E)
+        y_high, y_low, err_vec, _ = rk45_step_jit_kernel(f, t, y, h, self._A, self._B_HIGH, self._C, self._E)
+        return y_high, y_low, err_vec
 
     def integrate(self, system: _DynamicalSystem, y0: np.ndarray, t_vals: np.ndarray, **kwargs) -> _Solution:
         """Adaptive integration fully in Numba for RK45 with Hermite interpolation."""
@@ -372,6 +364,7 @@ class _RK45(_AdaptiveStepRK):
             B_HIGH=self._B_HIGH,
             C=self._C,
             E=self._E,
+            P=RK45_P,
             rtol=self._rtol,
             atol=self._atol,
             max_step=self._max_step,
@@ -382,7 +375,7 @@ class _RK45(_AdaptiveStepRK):
 
     @staticmethod
     @numba.njit(cache=False, fastmath=FASTMATH)
-    def _integrate_rk45(f, y0, t_eval, A, B_HIGH, C, E, rtol, atol, max_step, min_step, order):
+    def _integrate_rk45(f, y0, t_eval, A, B_HIGH, C, E, P, rtol, atol, max_step, min_step, order):
         t0 = t_eval[0]
         tf = t_eval[-1]
         t = t0
@@ -390,6 +383,7 @@ class _RK45(_AdaptiveStepRK):
         ts = List()
         ys = List()
         dys = List()
+        Ks = List()
         ts.append(t)
         ys.append(y.copy())
         dys.append(f(t, y))
@@ -417,7 +411,7 @@ class _RK45(_AdaptiveStepRK):
             if t + h > tf:
                 h = abs(tf - t)
 
-            y_high, y_low, err_vec = rk45_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E)
+            y_high, y_low, err_vec, k = rk45_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E)
             scale = atol + rtol * np.maximum(np.abs(y), np.abs(y_high))
             err_norm = np.linalg.norm(err_vec / scale) / np.sqrt(err_vec.size)
 
@@ -426,7 +420,9 @@ class _RK45(_AdaptiveStepRK):
                 y_new = y_high
                 ts.append(t_new)
                 ys.append(y_new.copy())
-                dys.append(f(t_new, y_new))
+                f_new = f(t_new, y_new)
+                dys.append(f_new)
+                Ks.append(k)
                 t = t_new
                 y = y_new
 
@@ -461,10 +457,13 @@ class _RK45(_AdaptiveStepRK):
             ys_arr[i, :] = ys[i]
             dys_arr[i, :] = dys[i]
 
-        # Hermite interpolation at t_eval
+        # SciPy-like dense output for RK45 using P matrix
         m = t_eval.size
         y_out = np.empty((m, dim), dtype=np.float64)
         # searchsorted
+        last_j = -1
+        # Cached Q for the last segment
+        Q_cache = np.empty((dim, P.shape[1]), dtype=np.float64)
         for idx in range(m):
             t_q = t_eval[idx]
             # find right index
@@ -475,21 +474,36 @@ class _RK45(_AdaptiveStepRK):
                 j = n_nodes - 2
             t0 = ts_arr[j]
             t1 = ts_arr[j + 1]
-            y0v = ys_arr[j]
-            y1v = ys_arr[j + 1]
-            dy0v = dys_arr[j]
-            dy1v = dys_arr[j + 1]
             hseg = t1 - t0
-            s = (t_q - t0) / hseg
-            s2 = s * s
-            s3 = s2 * s
-            h00 = 2 * s3 - 3 * s2 + 1
-            h10 = s3 - 2 * s2 + s
-            h01 = -2 * s3 + 3 * s2
-            h11 = s3 - s2
-            y_out[idx, :] = (
-                h00 * y0v + h10 * hseg * dy0v + h01 * y1v + h11 * hseg * dy1v
-            )
+            x = (t_q - t0) / hseg
+            # Compute Q for new segment if needed: Q = K^T @ P
+            if j != last_j:
+                Kseg = Ks[j]
+                # Q_cache[:, c] = sum_{r} Kseg[r, :] * P[r, c]
+                for c in range(P.shape[1]):
+                    # initialize column
+                    for d in range(dim):
+                        Q_cache[d, c] = 0.0
+                    for r in range(Kseg.shape[0]):
+                        coeff = P[r, c]
+                        if coeff != 0.0:
+                            for d in range(dim):
+                                Q_cache[d, c] += coeff * Kseg[r, d]
+                last_j = j
+            # build p vector as cumulative powers of x
+            p_len = P.shape[1]
+            p = np.empty(p_len, dtype=np.float64)
+            val = x
+            for c in range(p_len):
+                p[c] = val
+                val *= x
+            # y = y_old + h * Q @ p
+            y_old = ys_arr[j]
+            for d in range(dim):
+                acc = 0.0
+                for c in range(p_len):
+                    acc += Q_cache[d, c] * p[c]
+                y_out[idx, d] = y_old[d] + hseg * acc
 
         # Derivatives at t_eval (reuse f)
         derivs_out = np.empty_like(y_out)
@@ -539,7 +553,7 @@ def dop853_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E5, E3):
         else:
             err_vec[i] = err5[i]
     y_low = y_high - err_vec
-    return y_high, y_low, err_vec
+    return y_high, y_low, err_vec, err5, err3, k
 
 
 class _DOP853(_AdaptiveStepRK):
@@ -563,7 +577,10 @@ class _DOP853(_AdaptiveStepRK):
         super().__init__("_DOP853", **opts)
 
     def _rk_embedded_step(self, f, t, y, h):
-        return dop853_step_jit_kernel(f, t, y, h, self._A, self._B_HIGH, self._C, self._E5, self._E3)
+        y_high, y_low, err_vec, _, _ = dop853_step_jit_kernel(
+            f, t, y, h, self._A, self._B_HIGH, self._C, self._E5, self._E3
+        )
+        return y_high, y_low, err_vec
 
     def integrate(self, system: _DynamicalSystem, y0: np.ndarray, t_vals: np.ndarray, **kwargs) -> _Solution:
         """Adaptive integration fully in Numba for DOP853 with Hermite interpolation."""
@@ -578,6 +595,11 @@ class _DOP853(_AdaptiveStepRK):
             C=self._C,
             E5=self._E5,
             E3=self._E3,
+            D=DOP853_D,
+            n_stages_extended=DOP853_N_STAGES_EXTENDED,
+            interpolator_power=DOP853_INTERPOLATOR_POWER,
+            A_full=DOP853_A,
+            C_full=DOP853_C,
             rtol=self._rtol,
             atol=self._atol,
             max_step=self._max_step,
@@ -588,7 +610,7 @@ class _DOP853(_AdaptiveStepRK):
 
     @staticmethod
     @numba.njit(cache=False, fastmath=FASTMATH)
-    def _integrate_dop853(f, y0, t_eval, A, B_HIGH, C, E5, E3, rtol, atol, max_step, min_step, order):
+    def _integrate_dop853(f, y0, t_eval, A, B_HIGH, C, E5, E3, D, n_stages_extended, interpolator_power, A_full, C_full, rtol, atol, max_step, min_step, order):
         t0 = t_eval[0]
         tf = t_eval[-1]
         t = t0
@@ -596,6 +618,7 @@ class _DOP853(_AdaptiveStepRK):
         ts = List()
         ys = List()
         dys = List()
+        Ks = List()
         ts.append(t)
         ys.append(y.copy())
         dys.append(f(t, y))
@@ -623,16 +646,27 @@ class _DOP853(_AdaptiveStepRK):
             if t + h > tf:
                 h = abs(tf - t)
 
-            y_high, y_low, err_vec = dop853_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E5, E3)
+            y_high, y_low, err_vec, err5, err3, k = dop853_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E5, E3)
             scale = atol + rtol * np.maximum(np.abs(y), np.abs(y_high))
-            err_norm = np.linalg.norm(err_vec / scale) / np.sqrt(err_vec.size)
+            # SciPy-compatible combined error norm for DOP853
+            err5_scaled = err5 / scale
+            err3_scaled = err3 / scale
+            err5_norm_2 = np.dot(err5_scaled, err5_scaled)
+            err3_norm_2 = np.dot(err3_scaled, err3_scaled)
+            if err5_norm_2 == 0.0 and err3_norm_2 == 0.0:
+                err_norm = 0.0
+            else:
+                denom = err5_norm_2 + 0.01 * err3_norm_2
+                err_norm = np.abs(h) * err5_norm_2 / np.sqrt(denom * scale.size)
 
             if err_norm <= 1.0:
                 t_new = t + h
                 y_new = y_high
                 ts.append(t_new)
                 ys.append(y_new.copy())
-                dys.append(f(t_new, y_new))
+                f_new = f(t_new, y_new)
+                dys.append(f_new)
+                Ks.append(k)
                 t = t_new
                 y = y_new
 
@@ -667,9 +701,12 @@ class _DOP853(_AdaptiveStepRK):
             ys_arr[i, :] = ys[i]
             dys_arr[i, :] = dys[i]
 
-        # Hermite interpolation at t_eval
+        # SciPy-like dense output for DOP853 using D matrix (build F per segment)
         m = t_eval.size
         y_out = np.empty((m, dim), dtype=np.float64)
+        last_j = -1
+        # cache F for last segment: shape (interpolator_power, dim)
+        F_cache = np.empty((interpolator_power, dim), dtype=np.float64)
         for idx in range(m):
             t_q = t_eval[idx]
             j = np.searchsorted(ts_arr, t_q, side='right') - 1
@@ -679,21 +716,74 @@ class _DOP853(_AdaptiveStepRK):
                 j = n_nodes - 2
             t0s = ts_arr[j]
             t1s = ts_arr[j + 1]
-            y0v = ys_arr[j]
-            y1v = ys_arr[j + 1]
-            dy0v = dys_arr[j]
-            dy1v = dys_arr[j + 1]
             hseg = t1s - t0s
-            s = (t_q - t0s) / hseg
-            s2 = s * s
-            s3 = s2 * s
-            h00 = 2 * s3 - 3 * s2 + 1
-            h10 = s3 - 2 * s2 + s
-            h01 = -2 * s3 + 3 * s2
-            h11 = s3 - s2
-            y_out[idx, :] = (
-                h00 * y0v + h10 * hseg * dy0v + h01 * y1v + h11 * hseg * dy1v
-            )
+            x = (t_q - t0s) / hseg
+            if j != last_j:
+                # Build extended K for dense output
+                Kext = np.empty((n_stages_extended, dim), dtype=np.float64)
+                Kseg = Ks[j]
+                s_used = Kseg.shape[0]
+                for r in range(s_used):
+                    for d in range(dim):
+                        Kext[r, d] = Kseg[r, d]
+                # compute additional stages using A_EXTRA rows with hseg and stored y_old
+                y_old = ys_arr[j]
+                t_old = t0s
+                start_row = s_used
+                for srow in range(start_row, n_stages_extended):
+                    # dy = (Kext[:srow].T @ A_full[srow, :srow]) * hseg
+                    # Build y_stage vector
+                    y_stage = np.empty(dim, dtype=np.float64)
+                    for d in range(dim):
+                        acc = 0.0
+                        for r in range(srow):
+                            a = A_full[srow, r]
+                            if a != 0.0:
+                                acc += a * Kext[r, d]
+                        y_stage[d] = y_old[d] + hseg * acc
+                    # Evaluate derivative at stage
+                    t_stage = t_old + C_full[srow] * hseg
+                    k_vec = f(t_stage, y_stage)
+                    for d in range(dim):
+                        Kext[srow, d] = k_vec[d]
+                # Build F
+                # F[0] = delta_y, F[1] = h f_old - delta_y, F[2] = 2*delta_y - h(f_new+f_old)
+                f_old = dys_arr[j]
+                f_new = dys_arr[j + 1]
+                delta_y = ys_arr[j + 1] - ys_arr[j]
+                for d in range(dim):
+                    F_cache[0, d] = delta_y[d]
+                    F_cache[1, d] = hseg * f_old[d] - delta_y[d]
+                    F_cache[2, d] = 2.0 * delta_y[d] - hseg * (f_new[d] + f_old[d])
+                # Remaining rows: h * (D @ Kext)
+                rows_remaining = interpolator_power - 3
+                for irem in range(rows_remaining):
+                    for d in range(dim):
+                        acc = 0.0
+                        for r in range(n_stages_extended):
+                            coeff = D[irem, r]
+                            if coeff != 0.0:
+                                acc += coeff * Kext[r, d]
+                        F_cache[3 + irem, d] = hseg * acc
+                last_j = j
+            # Evaluate Dop853DenseOutput polynomial by Horner-like alternating x and (1-x)
+            y_val = np.zeros(dim, dtype=np.float64)
+            for i in range(interpolator_power - 1, -1, -1):
+                for d in range(dim):
+                    y_val[d] += F_cache[i, d]
+                if (interpolator_power - 1 - i) % 2 == 0:
+                    # even offset -> multiply by x
+                    for d in range(dim):
+                        y_val[d] *= x
+                else:
+                    # odd offset -> multiply by (1 - x)
+                    one_minus_x = 1.0 - x
+                    for d in range(dim):
+                        y_val[d] *= one_minus_x
+            # add y_old
+            y_old = ys_arr[j]
+            for d in range(dim):
+                y_out[idx, d] = y_val[d] + y_old[d]
 
         derivs_out = np.empty_like(y_out)
         for idx in range(m):
