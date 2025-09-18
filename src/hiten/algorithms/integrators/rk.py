@@ -137,6 +137,36 @@ class _RungeKuttaBase(_Integrator):
         """
         return self._p
 
+    def _compile_event_function(self, event_fn: "Callable[[float, np.ndarray], float]") -> "Callable[[float, np.ndarray], float]":
+        """Compile a scalar event function g(t, y) with Numba JIT when needed.
+
+        This mirrors the dynamic system's RHS compilation helper and ensures
+        event functions are usable inside Numba-compiled integration kernels.
+
+        Parameters
+        ----------
+        event_fn : Callable[[float, ndarray], float]
+            Scalar event function g(t, y).
+
+        Returns
+        -------
+        Callable[[float, ndarray], float]
+            A function suitable for use inside njit regions. If ``event_fn``
+            is already a Numba dispatcher it is returned unchanged, otherwise
+            it is wrapped with ``numba.njit(cache=False, fastmath=FASTMATH)``.
+        """
+        # Detect pre-compiled Numba dispatchers to avoid redundant compilation
+        try:
+            from numba.core.registry import CPUDispatcher  # type: ignore
+            is_dispatcher = isinstance(event_fn, CPUDispatcher)
+        except Exception:
+            is_dispatcher = False
+
+        if is_dispatcher:
+            return event_fn
+        # Compile with global fast-math setting for performance
+        return numba.njit(cache=False, fastmath=FASTMATH)(event_fn)
+
 class _FixedStepRK(_RungeKuttaBase):
     """Implement an explicit fixed-step Runge-Kutta scheme.
 
@@ -566,6 +596,115 @@ def dop853_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E5, E3):
     y_low = y_high - err_vec
     return y_high, y_low, err_vec, err5, err3, k
 
+@numba.njit(cache=False, fastmath=FASTMATH)
+def _dop853_build_dense_cache(f, y_old, f_old, y_new, f_new, hseg, Kseg, A_full, C_full, D, n_stages_extended, interpolator_power):
+    # Build extended stages Kext
+    dim = y_old.size
+    s_used = Kseg.shape[0]
+    Kext = np.empty((n_stages_extended, dim), dtype=np.float64)
+    for r in range(s_used):
+        for d in range(dim):
+            Kext[r, d] = Kseg[r, d]
+    # compute additional stages using A_full rows
+    t_old = 0.0  # we evaluate relative to t_old; only C_full*hseg used
+    y0loc = y_old
+    for srow in range(s_used, n_stages_extended):
+        y_stage = np.empty(dim, dtype=np.float64)
+        for d in range(dim):
+            acc = 0.0
+            for r in range(s_used):
+                a = A_full[srow, r]
+                if a != 0.0:
+                    acc += a * Kext[r, d]
+            y_stage[d] = y0loc[d] + hseg * acc
+        t_stage = t_old + C_full[srow] * hseg
+        k_vec = f(t_stage, y_stage)
+        for d in range(dim):
+            Kext[srow, d] = k_vec[d]
+
+    # Build F_cache (interpolator_power x dim)
+    F_cache = np.empty((interpolator_power, dim), dtype=np.float64)
+    delta_y = y_new - y_old
+    for d in range(dim):
+        F_cache[0, d] = delta_y[d]
+        F_cache[1, d] = hseg * f_old[d] - delta_y[d]
+        F_cache[2, d] = 2.0 * delta_y[d] - hseg * (f_new[d] + f_old[d])
+    rows_remaining = interpolator_power - 3
+    for irem in range(rows_remaining):
+        for d in range(dim):
+            acc = 0.0
+            for r in range(n_stages_extended):
+                coeff = D[irem, r]
+                if coeff != 0.0:
+                    acc += coeff * Kext[r, d]
+            F_cache[3 + irem, d] = hseg * acc
+    return F_cache
+
+@numba.njit(cache=False, fastmath=FASTMATH)
+def _dop853_eval_dense(y_old, F_cache, interpolator_power, x):
+    dim = y_old.size
+    y_val = np.zeros(dim, dtype=np.float64)
+    for i in range(interpolator_power - 1, -1, -1):
+        for d in range(dim):
+            y_val[d] += F_cache[i, d]
+        if (interpolator_power - 1 - i) % 2 == 0:
+            for d in range(dim):
+                y_val[d] *= x
+        else:
+            one_minus_x = 1.0 - x
+            for d in range(dim):
+                y_val[d] *= one_minus_x
+    for d in range(dim):
+        y_val[d] += y_old[d]
+    return y_val
+
+@numba.njit(cache=False, fastmath=FASTMATH)
+def _dop853_refine_in_step(f, event_fn, t0, y0, f0, t1, y1, f1, h, Kseg, A_full, C_full, D, n_stages_extended, interpolator_power, direction, xtol):
+    # Build dense cache once for this step
+    F_cache = _dop853_build_dense_cache(
+        f=f,
+        y_old=y0,
+        f_old=f0,
+        y_new=y1,
+        f_new=f1,
+        hseg=h,
+        Kseg=Kseg,
+        A_full=A_full,
+        C_full=C_full,
+        D=D,
+        n_stages_extended=n_stages_extended,
+        interpolator_power=interpolator_power,
+    )
+    # Bisection on x in [0, 1]
+    a = 0.0
+    b = 1.0
+    # Evaluate g at endpoints via event_fn directly (we have y0,y1,f0,f1)
+    g_left = event_fn(t0, y0)
+    g_right = event_fn(t1, y1)
+    max_iter = 64
+    for _ in range(max_iter):
+        mid = 0.5 * (a + b)
+        y_mid = _dop853_eval_dense(y0, F_cache, interpolator_power, mid)
+        g_mid = event_fn(t0 + mid * h, y_mid)
+        crossed = False
+        if direction == 0:
+            crossed = (g_left < 0.0 and g_mid > 0.0) or (g_left > 0.0 and g_mid < 0.0)
+        elif direction > 0:
+            crossed = (g_left < 0.0 and g_mid > 0.0)
+        else:
+            crossed = (g_left > 0.0 and g_mid < 0.0)
+        if crossed:
+            b = mid
+            g_right = g_mid
+        else:
+            a = mid
+            g_left = g_mid
+        if (b - a) * abs(h) <= xtol:
+            break
+    x_hit = b
+    t_hit = t0 + x_hit * h
+    y_hit = _dop853_eval_dense(y0, F_cache, interpolator_power, x_hit)
+    return t_hit, y_hit
 
 class _DOP853(_AdaptiveStepRK):
     """Implement the Dormand-Prince 8(5,3) adaptive Runge-Kutta method.
@@ -594,7 +733,11 @@ class _DOP853(_AdaptiveStepRK):
         return y_high, y_low, err_vec
 
     def integrate(self, system: _DynamicalSystemProtocol    , y0: np.ndarray, t_vals: np.ndarray, *, event_fn=None, event_cfg: _EventConfig | None = None, **kwargs) -> _Solution:
-        """Adaptive integration fully in Numba for DOP853 with Hermite interpolation."""
+        """Adaptive integration fully in Numba for DOP853 with dense interpolation.
+
+        Supports an optional scalar `event_fn(t, y) -> float` to terminate at the
+        first detected crossing according to `event_cfg.direction`.
+        """
         self.validate_inputs(system, y0, t_vals)
         # Common zero-span short-circuit
         constant_sol = self._maybe_constant_solution(system, y0, t_vals)
@@ -602,6 +745,45 @@ class _DOP853(_AdaptiveStepRK):
             return constant_sol
         f = _build_rhs_wrapper(system)
 
+        # Event-enabled path
+        if event_fn is not None:
+            event_compiled = self._compile_event_function(event_fn)
+            direction = 0 if event_cfg is None else int(event_cfg.direction)
+            terminal = 1 if (event_cfg is None or event_cfg.terminal) else 0
+            t0 = float(t_vals[0])
+            tmax = float(t_vals[-1])
+            xtol = float(TOL)
+            hit, t_event, y_event, y_last = _DOP853._integrate_dop853_until_event(
+                f=f,
+                y0=y0,
+                t0=t0,
+                tmax=tmax,
+                A=self._A,
+                B_HIGH=self._B_HIGH,
+                C=self._C,
+                E5=self._E5,
+                E3=self._E3,
+                D=DOP853_D,
+                n_stages_extended=DOP853_N_STAGES_EXTENDED,
+                interpolator_power=DOP853_INTERPOLATOR_POWER,
+                A_full=DOP853_A,
+                C_full=DOP853_C,
+                rtol=self._rtol,
+                atol=self._atol,
+                max_step=self._max_step,
+                min_step=self._min_step,
+                order=self._p,
+                event_fn=event_compiled,
+                direction=direction,
+                terminal=terminal,
+                xtol=xtol,
+            )
+            if hit:
+                return _Solution(times=np.array([t0, t_event], dtype=np.float64), states=np.vstack([y0, y_event]))
+            else:
+                return _Solution(times=np.array([t0, tmax], dtype=np.float64), states=np.vstack([y0, y_last]))
+
+        # Standard non-event path
         states, derivs = _DOP853._integrate_dop853(
             f=f,
             y0=y0,
@@ -811,6 +993,103 @@ class _DOP853(_AdaptiveStepRK):
 
         return y_out, derivs_out
 
+    @staticmethod
+    @numba.njit(cache=False, fastmath=FASTMATH)
+    def _integrate_dop853_until_event(
+        f, y0, t0, tmax, A, B_HIGH, C, E5, E3, D, n_stages_extended, interpolator_power, A_full, C_full, rtol, atol, max_step, min_step, order,
+        event_fn, direction, terminal, xtol,
+    ):
+        t = t0
+        y = y0.copy()
+        # initial derivative and event value
+        f_curr = f(t, y)
+        g_prev = event_fn(t, y)
+
+        h = min_step
+        # initial step heuristic akin to main driver
+        scale0 = atol + rtol * np.abs(y)
+        d0 = np.linalg.norm(y / scale0) / np.sqrt(y.size)
+        d1 = np.linalg.norm(f_curr / scale0) / np.sqrt(y.size)
+        if d0 < 1e-5 or d1 < 1e-5:
+            h = 1e-6
+        else:
+            h = 0.01 * d0 / d1
+        if h > max_step:
+            h = max_step
+        if h < min_step:
+            h = min_step
+
+        err_prev = -1.0
+        SAFETY = 0.9
+        MIN_FACTOR = 0.2
+        MAX_FACTOR = 10.0
+        err_exp = 1.0 / order
+
+        while (t - tmax) * 1.0 < 0.0:
+            if h > max_step:
+                h = max_step
+            if t + h > tmax:
+                h = abs(tmax - t)
+
+            y_high, y_low, err_vec, err5, err3, K = dop853_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E5, E3)
+            scale = atol + rtol * np.maximum(np.abs(y), np.abs(y_high))
+            err5_scaled = err5 / scale
+            err3_scaled = err3 / scale
+            err5_norm_2 = np.dot(err5_scaled, err5_scaled)
+            err3_norm_2 = np.dot(err3_scaled, err3_scaled)
+            if err5_norm_2 == 0.0 and err3_norm_2 == 0.0:
+                err_norm = 0.0
+            else:
+                denom = err5_norm_2 + 0.01 * err3_norm_2
+                err_norm = np.abs(h) * err5_norm_2 / np.sqrt(denom * scale.size)
+
+            if err_norm <= 1.0:
+                # accept
+                t_new = t + h
+                y_new = y_high
+                f_new = f(t_new, y_new)
+
+                # event check
+                g_new = event_fn(t_new, y_new)
+                crossed = False
+                if direction == 0:
+                    crossed = (g_prev < 0.0 and g_new > 0.0) or (g_prev > 0.0 and g_new < 0.0)
+                elif direction > 0:
+                    crossed = (g_prev < 0.0 and g_new > 0.0)
+                else:
+                    crossed = (g_prev > 0.0 and g_new < 0.0)
+                if crossed:
+                    t_hit, y_hit = _dop853_refine_in_step(f, event_fn, t, y, f_curr, t_new, y_new, f_new, h, K, A_full, C_full, D, n_stages_extended, interpolator_power, direction, xtol)
+                    return True, t_hit, y_hit, y_new
+
+                # no crossing, advance
+                t = t_new
+                y = y_new
+                f_curr = f_new
+                g_prev = g_new
+
+                beta = 1.0 / (order + 1)
+                alpha = 0.4 * beta
+                if err_prev < 0:
+                    factor = SAFETY * (err_norm ** (-beta))
+                else:
+                    factor = SAFETY * (err_norm ** (-beta)) * (err_prev ** alpha)
+                if factor < MIN_FACTOR:
+                    factor = MIN_FACTOR
+                if factor > MAX_FACTOR:
+                    factor = MAX_FACTOR
+                h = h * factor
+                err_prev = err_norm
+            else:
+                factor = SAFETY * (err_norm ** (-err_exp))
+                if factor < MIN_FACTOR:
+                    factor = MIN_FACTOR
+                h = h * factor
+                if h < min_step:
+                    h = min_step
+
+        return False, t, y, y
+
 
 class RungeKutta:
     """Implement a factory class for creating fixed-step Runge-Kutta integrators.
@@ -848,6 +1127,7 @@ class RungeKutta:
         if order not in cls._map:
             raise ValueError("RK order must be 4, 6, or 8")
         return cls._map[order](**opts)
+
 
 class AdaptiveRK:
     """Implement a factory class for creating adaptive step-size Runge-Kutta integrators.

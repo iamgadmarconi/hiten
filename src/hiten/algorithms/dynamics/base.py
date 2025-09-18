@@ -378,7 +378,7 @@ def _propagate_dynsys(
 
     if method == "fixed":
         integrator = RungeKutta(order=order)
-        sol = integrator.integrate(dynsys_dir, state0_np, t_eval, event_fn=event_fn, event_cfg=event_cfg)
+        sol = integrator.integrate(dynsys_dir, state0_np, t_eval, event_fn=event_fn, event_cfg=event_cfg, **kwargs)
         times = sol.times
         states = sol.states
         
@@ -388,7 +388,7 @@ def _propagate_dynsys(
         if not isinstance(dynsys, _HamiltonianSystemProtocol):
             raise ValueError("Symplectic method requires a _HamiltonianSystem")
         integrator = _ExtendedSymplectic(order=order)
-        sol = integrator.integrate(dynsys_dir, state0_np, t_eval)
+        sol = integrator.integrate(dynsys_dir, state0_np, t_eval, **kwargs)
         times = sol.times
         states = sol.states
         
@@ -397,7 +397,7 @@ def _propagate_dynsys(
         rtol = kwargs.get("rtol", 1e-6)
         atol = kwargs.get("atol", 1e-9)
         integrator = AdaptiveRK(order=order, max_step=max_step, rtol=rtol, atol=atol)
-        sol = integrator.integrate(dynsys_dir, state0_np, t_eval, event_fn=event_fn, event_cfg=event_cfg)
+        sol = integrator.integrate(dynsys_dir, state0_np, t_eval, event_fn=event_fn, event_cfg=event_cfg, **kwargs)
         times = sol.times
         states = sol.states
 

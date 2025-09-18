@@ -7,6 +7,7 @@ expected by the correction algorithms.
 """
 
 from dataclasses import dataclass
+import time
 from functools import partial
 from typing import TYPE_CHECKING, Optional, Tuple
 
@@ -161,10 +162,13 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
 
         # Evaluate event section
         t_event, X_ev_local = self._evaluate_event(orbit, x_full, cfg, forward)
+        print(f"[Corrector] residual: t_event={t_event:.6e}, steps={cfg.steps}, method={cfg.method}, order={cfg.order}")
 
         Phi_local: np.ndarray | None = None
+        _t0 = time.perf_counter()
         if not self._fd_mode:
             # Analytical Jacobian will be requested, compute STM now
+            
             _, _, Phi_flat, _ = _compute_stm(
                 orbit.libration_point._var_eq_system,
                 x_full,
@@ -173,8 +177,11 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
                 method=cfg.method,
                 order=cfg.order,
             )
+            _dt_fd = time.perf_counter() - _t0
+            print(f"[Corrector] STM computed in {_dt_fd:.6f}s at t_event={t_event:.6e}")
             Phi_local = Phi_flat
-
+        _dt = time.perf_counter() - _t0
+        print(f"[Corrector] Phi_local computed in {_dt:.6f}s at t_event={t_event:.6e}")
         # Update cache for potential reuse by Jacobian
         self._event_cache = self._EventCache(
             p_vec=p_vec.copy(),
@@ -233,13 +240,16 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
 
         if cache_valid:
             # Reuse cached data
+            print("[Corrector] Jacobian: using cached Phi")
             X_ev_local = self._event_cache.X_event
             Phi = self._event_cache.Phi
         else:
             # Recompute event and STM, then refresh cache
             x_full = self._to_full_state(base_state, control_indices, p_vec)
             t_event, X_ev_local = self._evaluate_event(orbit, x_full, cfg, forward)
+            print(f"[Corrector] Jacobian: recomputing Phi at t_event={t_event:.6e}")
 
+            _t0 = time.perf_counter()
             _, _, Phi_flat, _ = _compute_stm(
                 orbit.libration_point._var_eq_system,
                 x_full,
@@ -248,6 +258,8 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
                 method=cfg.method,
                 order=cfg.order,
             )
+            _dt = time.perf_counter() - _t0
+            print(f"[Corrector] Jacobian: STM computed in {_dt:.3f}s")
             Phi = Phi_flat
 
             self._event_cache = self._EventCache(
