@@ -409,8 +409,21 @@ def _propagate_dynsys(
     if method == "scipy":
         t_span = (t_eval[0], t_eval[-1])
 
+        # Build a lightweight Python wrapper to avoid Numba object-mode overhead
+        base_rhs = dynsys.rhs
+        flip_idx = slice(None) if flip_indices is None else flip_indices
+
+        def _scipy_rhs(t: float, y: np.ndarray) -> np.ndarray:
+            dy = base_rhs(t, y)
+            if forward == -1:
+                if flip_indices is None:
+                    return -dy
+                dy = dy.copy()
+                dy[flip_idx] *= -1
+            return dy
+
         sol = solve_ivp(
-            dynsys_dir.rhs,
+            _scipy_rhs,
             t_span,
             state0_np,
             t_eval=t_eval,
