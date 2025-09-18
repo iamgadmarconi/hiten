@@ -732,7 +732,7 @@ class _DOP853(_AdaptiveStepRK):
         )
         return y_high, y_low, err_vec
 
-    def integrate(self, system: _DynamicalSystemProtocol    , y0: np.ndarray, t_vals: np.ndarray, *, event_fn=None, event_cfg: _EventConfig | None = None, **kwargs) -> _Solution:
+    def integrate(self, system: _DynamicalSystemProtocol, y0: np.ndarray, t_vals: np.ndarray, *, event_fn=None, event_cfg: _EventConfig | None = None, **kwargs) -> _Solution:
         """Adaptive integration fully in Numba for DOP853 with dense interpolation.
 
         Supports an optional scalar `event_fn(t, y) -> float` to terminate at the
