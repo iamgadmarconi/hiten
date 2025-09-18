@@ -275,7 +275,7 @@ class _Integrator(ABC):
             raise ValueError("Time values must be strictly monotonic (either increasing or decreasing)")
 
     def __str__(self):
-        return self.name
+        return f"HITEN-{self.name}"
 
     def __repr__(self):
         return f"{self.__class__.__name__}(name='{self.name}', options={self.options})"
