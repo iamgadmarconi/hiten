@@ -50,7 +50,6 @@ from hiten.algorithms.integrators.coefficients.rk45 import A as RK45_A
 from hiten.algorithms.integrators.coefficients.rk45 import C as RK45_C
 from hiten.algorithms.integrators.coefficients.rk45 import E as RK45_E
 from hiten.algorithms.utils.config import FASTMATH, TOL
-from hiten.utils.log_config import logger
 
 
 @numba.njit(cache=False, fastmath=FASTMATH)
@@ -353,7 +352,6 @@ class _RK45(_AdaptiveStepRK):
     _B_LOW = None
     _C = RK45_C
     _p = 5
-    _err_exp = 1.0 / 5.0
     _E = RK45_E
 
     def __init__(self, **opts):
@@ -557,8 +555,6 @@ class _DOP853(_AdaptiveStepRK):
     _C = DOP853_C[:DOP853_N_STAGES]
 
     _p = 8
-    _err_exp = 1.0 / _p
-
     _E3 = DOP853_E3
     _E5 = DOP853_E5
     _N_STAGES = DOP853_N_STAGES
@@ -781,31 +777,30 @@ class AdaptiveRK:
 
 
 def _build_rhs_wrapper(system: _DynamicalSystem) -> Callable[[float, np.ndarray], np.ndarray]:
-    """Return the standardized compiled (t, y) RHS from the system.
+    """Return the compiled (t, y) RHS from the system.
 
-    The dynamical systems implemented in the code base expose their vector
-    field either as ``rhs(t, y)`` or, for autonomous systems, as ``rhs(y)``.
-    The integrator layer expects the non autonomous signature and therefore
-    needs to adapt the call site on the fly. This helper inspects the right
-    hand side via inspect.signature and generates a small
-    numba compiled closure with the correct arity.
+    Ensures `system.rhs` has the expected two-argument signature and returns it.
+    All systems now expose a compiled dispatcher.
 
     Parameters
     ----------
     system : :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
-        Instance providing the original vector field.
+        The dynamical system to wrap.
 
     Returns
     -------
-    Callable[[float, numpy.ndarray], numpy.ndarray]
-        Function accepting the full ``(t, y)`` signature required by the
-        integrators.
+    Callable[[float, np.ndarray], np.ndarray]
+        The compiled `(t, y)` RHS callable.
+    
+    See Also
+    --------
+    :class:`~hiten.algorithms.dynamics.base._DynamicalSystem` : Base class
+    :func:`~hiten.algorithms.dynamics.base._DynamicalSystem._compile_rhs_function` : JIT compilation method
 
     Raises
     ------
     ValueError
-        If the detected signature contains neither one nor two positional
-        arguments.
+        If `system.rhs` does not have the `(t, y)` signature.
     """
 
     rhs_func = system.rhs
