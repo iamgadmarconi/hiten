@@ -273,3 +273,9 @@ class _Integrator(ABC):
         dt = np.diff(t_vals)
         if not (np.all(dt > 0) or np.all(dt < 0)):
             raise ValueError("Time values must be strictly monotonic (either increasing or decreasing)")
+
+    def __str__(self):
+        return self.name
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(name='{self.name}', options={self.options})"
