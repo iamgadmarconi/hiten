@@ -22,6 +22,7 @@ from typing import Callable, Optional
 
 import numba
 import numpy as np
+from numba import types
 from numba.typed import List
 
 from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
@@ -56,38 +57,6 @@ from hiten.algorithms.integrators.coefficients.rk45 import E as RK45_E
 from hiten.algorithms.integrators.coefficients.rk45 import P as RK45_P
 from hiten.algorithms.integrators.configs import _EventConfig
 from hiten.algorithms.utils.config import FASTMATH, TOL
-
-
-@numba.njit(cache=False, fastmath=FASTMATH)
-def rk_embedded_step_jit_kernel(f, t, y, h, A, B_HIGH, B_LOW, C, has_b_low):
-    s = B_HIGH.size
-    k = np.empty((s, y.size), dtype=np.float64)
-
-    k[0] = f(t, y)
-    for i in range(1, s):
-        y_stage = y.copy()
-        for j in range(i):
-            a_ij = A[i, j]
-            if a_ij != 0.0:
-                y_stage += h * a_ij * k[j]
-        k[i] = f(t + C[i] * h, y_stage)
-
-    y_high = y.copy()
-    for j in range(s):
-        bj = B_HIGH[j]
-        if bj != 0.0:
-            y_high += h * bj * k[j]
-
-    if has_b_low:
-        y_low = y.copy()
-        for j in range(s):
-            bl = B_LOW[j]
-            if bl != 0.0:
-                y_low += h * bl * k[j]
-    else:
-        y_low = y_high.copy()
-    err_vec = y_high - y_low
-    return y_high, y_low, err_vec
 
 
 class _RungeKuttaBase(_Integrator):
@@ -137,11 +106,12 @@ class _RungeKuttaBase(_Integrator):
         """
         return self._p
 
-    def _compile_event_function(self, event_fn: "Callable[[float, np.ndarray], float]") -> "Callable[[float, np.ndarray], float]":
-        """Compile a scalar event function g(t, y) with Numba JIT when needed.
+    def _compile_event_function(self, event_fn: Callable[[float, np.ndarray], float]) -> Callable[[float, np.ndarray], float]:
+        """Compile a scalar event function g(t, y) with a fixed Numba signature.
 
-        This mirrors the dynamic system's RHS compilation helper and ensures
-        event functions are usable inside Numba-compiled integration kernels.
+        Ensures the kernel receives a callable with concrete native type
+        ``float64(float64, float64[:])`` so specialization happens once and
+        calls are inlined at full speed.
 
         Parameters
         ----------
@@ -152,20 +122,87 @@ class _RungeKuttaBase(_Integrator):
         -------
         Callable[[float, ndarray], float]
             A function suitable for use inside njit regions. If ``event_fn``
-            is already a Numba dispatcher it is returned unchanged, otherwise
-            it is wrapped with ``numba.njit(cache=False, fastmath=FASTMATH)``.
+            is already a Numba dispatcher it is returned unchanged; otherwise
+            it is compiled with an explicit signature.
         """
         # Detect pre-compiled Numba dispatchers to avoid redundant compilation
         try:
-            from numba.core.registry import CPUDispatcher  # type: ignore
-            is_dispatcher = isinstance(event_fn, CPUDispatcher)
+            from numba.core.registry import CPUDispatcher
+            if isinstance(event_fn, CPUDispatcher):
+                return event_fn
         except Exception:
-            is_dispatcher = False
+            pass
 
-        if is_dispatcher:
-            return event_fn
-        # Compile with global fast-math setting for performance
-        return numba.njit(cache=False, fastmath=FASTMATH)(event_fn)
+        # Compile with explicit signature for stable typing inside kernels
+        event_sig = types.float64(types.float64, types.float64[:])
+        return numba.njit(event_sig, cache=False, fastmath=FASTMATH)(event_fn)
+    
+    def _build_rhs_wrapper(self, system: _DynamicalSystemProtocol) -> Callable[[float, np.ndarray], np.ndarray]:
+        """Return the compiled (t, y) RHS from the system.
+
+        Ensures `system.rhs` has the expected two-argument signature and returns it.
+        All systems now expose a compiled dispatcher.
+
+        Parameters
+        ----------
+        system : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
+            The dynamical system to wrap.
+
+        Returns
+        -------
+        Callable[[float, np.ndarray], np.ndarray]
+            The compiled `(t, y)` RHS callable.
+        
+        See Also
+        --------
+        :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol` : Base class
+        :func:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol._compile_rhs_function` : JIT compilation method
+
+        Raises
+        ------
+        ValueError
+            If `system.rhs` does not have the `(t, y)` signature.
+        """
+
+        rhs_func = system.rhs
+        # Sanity check signature
+        sig = inspect.signature(rhs_func)
+        if len(sig.parameters) < 2:
+            raise ValueError("System.rhs must have signature (t, y)")
+        return rhs_func
+
+
+@numba.njit(cache=False, fastmath=FASTMATH)
+def rk_embedded_step_jit_kernel(f, t, y, h, A, B_HIGH, B_LOW, C, has_b_low):
+    s = B_HIGH.size
+    k = np.empty((s, y.size), dtype=np.float64)
+
+    k[0] = f(t, y)
+    for i in range(1, s):
+        y_stage = y.copy()
+        for j in range(i):
+            a_ij = A[i, j]
+            if a_ij != 0.0:
+                y_stage += h * a_ij * k[j]
+        k[i] = f(t + C[i] * h, y_stage)
+
+    y_high = y.copy()
+    for j in range(s):
+        bj = B_HIGH[j]
+        if bj != 0.0:
+            y_high += h * bj * k[j]
+
+    if has_b_low:
+        y_low = y.copy()
+        for j in range(s):
+            bl = B_LOW[j]
+            if bl != 0.0:
+                y_low += h * bl * k[j]
+    else:
+        y_low = y_high.copy()
+    err_vec = y_high - y_low
+    return y_high, y_low, err_vec
+
 
 class _FixedStepRK(_RungeKuttaBase):
     """Implement an explicit fixed-step Runge-Kutta scheme.
@@ -213,7 +250,7 @@ class _FixedStepRK(_RungeKuttaBase):
         if constant_sol is not None:
             return constant_sol
 
-        f = _build_rhs_wrapper(system)
+        f = self._build_rhs_wrapper(system)
 
         has_b_low = self._B_LOW is not None
         B_LOW_arr = self._B_LOW if has_b_low else np.empty(0, dtype=np.float64)
@@ -395,7 +432,7 @@ class _RK45(_AdaptiveStepRK):
     def integrate(self, system: _DynamicalSystemProtocol, y0: np.ndarray, t_vals: np.ndarray, *, event_fn=None, event_cfg: _EventConfig | None = None, **kwargs) -> _Solution:
         """Adaptive integration fully in Numba for RK45 with Hermite interpolation."""
         self.validate_inputs(system, y0, t_vals)
-        f = _build_rhs_wrapper(system)
+        f = self._build_rhs_wrapper(system)
         states, derivs = _RK45._integrate_rk45(
             f=f,
             y0=y0,
@@ -597,7 +634,7 @@ def dop853_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E5, E3):
     return y_high, y_low, err_vec, err5, err3, k
 
 @numba.njit(cache=False, fastmath=FASTMATH)
-def _dop853_build_dense_cache(f, y_old, f_old, y_new, f_new, hseg, Kseg, A_full, C_full, D, n_stages_extended, interpolator_power):
+def _dop853_build_dense_cache(f, t_old, y_old, f_old, y_new, f_new, hseg, Kseg, A_full, C_full, D, n_stages_extended, interpolator_power):
     # Build extended stages Kext
     dim = y_old.size
     s_used = Kseg.shape[0]
@@ -606,13 +643,12 @@ def _dop853_build_dense_cache(f, y_old, f_old, y_new, f_new, hseg, Kseg, A_full,
         for d in range(dim):
             Kext[r, d] = Kseg[r, d]
     # compute additional stages using A_full rows
-    t_old = 0.0  # we evaluate relative to t_old; only C_full*hseg used
     y0loc = y_old
     for srow in range(s_used, n_stages_extended):
         y_stage = np.empty(dim, dtype=np.float64)
         for d in range(dim):
             acc = 0.0
-            for r in range(s_used):
+            for r in range(srow):
                 a = A_full[srow, r]
                 if a != 0.0:
                     acc += a * Kext[r, d]
@@ -663,6 +699,7 @@ def _dop853_refine_in_step(f, event_fn, t0, y0, f0, t1, y1, f1, h, Kseg, A_full,
     # Build dense cache once for this step
     F_cache = _dop853_build_dense_cache(
         f=f,
+        t_old=t0,
         y_old=y0,
         f_old=f0,
         y_new=y1,
@@ -743,7 +780,7 @@ class _DOP853(_AdaptiveStepRK):
         constant_sol = self._maybe_constant_solution(system, y0, t_vals)
         if constant_sol is not None:
             return constant_sol
-        f = _build_rhs_wrapper(system)
+        f = self._build_rhs_wrapper(system)
 
         # Event-enabled path
         if event_fn is not None:
@@ -1181,38 +1218,3 @@ class AdaptiveRK:
         if order not in cls._map:
             raise ValueError("Adaptive RK order not supported")
         return cls._map[order](**opts)
-
-
-def _build_rhs_wrapper(system: _DynamicalSystemProtocol) -> Callable[[float, np.ndarray], np.ndarray]:
-    """Return the compiled (t, y) RHS from the system.
-
-    Ensures `system.rhs` has the expected two-argument signature and returns it.
-    All systems now expose a compiled dispatcher.
-
-    Parameters
-    ----------
-    system : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
-        The dynamical system to wrap.
-
-    Returns
-    -------
-    Callable[[float, np.ndarray], np.ndarray]
-        The compiled `(t, y)` RHS callable.
-    
-    See Also
-    --------
-    :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol` : Base class
-    :func:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol._compile_rhs_function` : JIT compilation method
-
-    Raises
-    ------
-    ValueError
-        If `system.rhs` does not have the `(t, y)` signature.
-    """
-
-    rhs_func = system.rhs
-    # Sanity check signature
-    sig = inspect.signature(rhs_func)
-    if len(sig.parameters) < 2:
-        raise ValueError("System.rhs must have signature (t, y)")
-    return rhs_func
