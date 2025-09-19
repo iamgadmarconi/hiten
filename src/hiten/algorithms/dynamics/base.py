@@ -20,6 +20,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Callable, Literal, Sequence
 
 import numpy as np
+import time
 
 from hiten.algorithms.integrators.configs import _EventConfig
 from hiten.algorithms.utils.config import FASTMATH
@@ -222,6 +223,9 @@ class _DirectedSystem(_DynamicalSystem):
     :func:`~hiten.algorithms.dynamics.base._propagate_dynsys` : Generic propagation using DirectedSystem
     """
 
+    # Reuse compiled RHS wrappers across instances with identical configuration
+    _rhs_cache: dict[tuple[int, int, tuple | None], Callable[[float, np.ndarray], np.ndarray]] = {}
+
     def __init__(self, base_or_dim: "_DynamicalSystem | int", fwd: int = 1, flip_indices: "slice | Sequence[int] | None" = None):
         if isinstance(base_or_dim, _DynamicalSystem):
             self._base: "_DynamicalSystem | None" = base_or_dim
@@ -247,21 +251,41 @@ class _DirectedSystem(_DynamicalSystem):
         if self._base is None:
             raise AttributeError("`rhs` not implemented: subclass must provide its own implementation when no base system is wrapped.")
 
+        # Build or reuse a compiled wrapper for (base_rhs, fwd, flip_idx)
         base_rhs = self._base.rhs
-        flip_idx = self._flip_idx_norm
-        fwd = self._fwd
+        # Build a hashable flip key
+        if self._flip_idx_norm is None:
+            flip_key: tuple | None = None
+        elif isinstance(self._flip_idx_norm, slice):
+            sl = self._flip_idx_norm
+            flip_key = ("slice", sl.start, sl.stop, sl.step)
+        else:
+            flip_key = ("idx", *tuple(np.asarray(self._flip_idx_norm, dtype=np.int64).tolist()))
 
-        def _rhs_impl(t: float, y: np.ndarray) -> np.ndarray:
-            dy = base_rhs(t, y)
-            if fwd == -1:
-                if flip_idx is None:
-                    dy = -dy
+        cache_key = (id(base_rhs), self._fwd, flip_key)
+        cached = self._rhs_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        fwd = int(self._fwd)
+        flip_idx = self._flip_idx_norm
+
+        # Avoid closing over `self` to keep Numba happy
+        def _rhs_impl(t: float, y: np.ndarray, _base_rhs=base_rhs, _fwd=fwd, _flip=flip_idx) -> np.ndarray:
+            dy = _base_rhs(t, y)
+            if _fwd == -1:
+                if _flip is None:
+                    return -dy
                 else:
-                    dy = dy.copy()
-                    dy[flip_idx] *= -1
+                    out = dy.copy()
+                    out[_flip] *= -1
+                    return out
             return dy
 
-        return _rhs_impl
+        import numba  # local import to avoid module import-time JIT
+        compiled = numba.njit(cache=False, fastmath=FASTMATH)(_rhs_impl)
+        self._rhs_cache[cache_key] = compiled
+        return compiled
 
     def __repr__(self):
         """String representation of DirectedSystem.
@@ -361,6 +385,7 @@ def _propagate_dynsys(
     from hiten.algorithms.integrators.rk import AdaptiveRK, RungeKutta
     from hiten.algorithms.integrators.symplectic import _ExtendedSymplectic
 
+    _t0 = time.perf_counter()
     state0_np = _validate_initial_state(state0, dynsys.dim)
 
     dynsys_dir = _DirectedSystem(dynsys, forward, flip_indices=flip_indices)
@@ -378,9 +403,12 @@ def _propagate_dynsys(
 
     if method == "fixed":
         integrator = RungeKutta(order=order)
+        _ti = time.perf_counter()
         sol = integrator.integrate(dynsys_dir, state0_np, t_eval, event_fn=event_fn, event_cfg=event_cfg)
+        _to = time.perf_counter()
         times = sol.times
         states = sol.states
+        print(f"[Propagate] method=fixed, order={order}, steps={steps}, integrate={( _to - _ti)*1e3:.2f} ms, total={( _to - _t0)*1e3:.2f} ms")
         
     elif method == "symplectic":
         from hiten.algorithms.dynamics.protocols import \
@@ -388,18 +416,24 @@ def _propagate_dynsys(
         if not isinstance(dynsys, _HamiltonianSystemProtocol):
             raise ValueError("Symplectic method requires a _HamiltonianSystem")
         integrator = _ExtendedSymplectic(order=order)
+        _ti = time.perf_counter()
         sol = integrator.integrate(dynsys_dir, state0_np, t_eval)
+        _to = time.perf_counter()
         times = sol.times
         states = sol.states
+        print(f"[Propagate] method=symplectic, order={order}, steps={steps}, integrate={( _to - _ti)*1e3:.2f} ms, total={( _to - _t0)*1e3:.2f} ms")
         
     elif method == "adaptive":
         max_step = kwargs.get("max_step", 1e4)
-        rtol = kwargs.get("rtol", 1e-6)
-        atol = kwargs.get("atol", 1e-9)
+        rtol = kwargs.get("rtol", 1e-12)
+        atol = kwargs.get("atol", 1e-12)
         integrator = AdaptiveRK(order=order, max_step=max_step, rtol=rtol, atol=atol)
+        _ti = time.perf_counter()
         sol = integrator.integrate(dynsys_dir, state0_np, t_eval, event_fn=event_fn, event_cfg=event_cfg)
+        _to = time.perf_counter()
         times = sol.times
         states = sol.states
+        print(f"[Propagate] method=adaptive, order={order}, steps={steps}, rtol={rtol:.1e}, atol={atol:.1e}, integrate={( _to - _ti)*1e3:.2f} ms, total={( _to - _t0)*1e3:.2f} ms")
 
     times_signed = forward * times
 

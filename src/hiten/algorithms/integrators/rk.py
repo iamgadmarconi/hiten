@@ -249,7 +249,7 @@ def _hermite_eval_dense(y0, f0, y1, f1, x, h):
 
 
 @numba.njit(cache=False, fastmath=FASTMATH)
-def _hermite_refine_in_step(event_fn, t0, y0, f0, t1, y1, f1, h, direction, xtol):
+def _hermite_refine_in_step(event_fn, t0, y0, f0, t1, y1, f1, h, direction, xtol, gtol):
     """Refine the integration step using bisection on x in [0, 1].
     
     Parameters
@@ -293,11 +293,16 @@ def _hermite_refine_in_step(event_fn, t0, y0, f0, t1, y1, f1, h, direction, xtol
     b = 1.0
     g_left = event_fn(t0, y0)
     g_right = event_fn(t1, y1)
-    max_iter = 64
+    max_iter = 128
     for _ in range(max_iter):
         mid = 0.5 * (a + b)
         y_mid = _hermite_eval_dense(y0, f0, y1, f1, mid, h)
         g_mid = event_fn(t0 + mid * h, y_mid)
+        if abs(g_mid) <= gtol:
+            x_hit = mid
+            t_hit = t0 + x_hit * h
+            y_hit = _hermite_eval_dense(y0, f0, y1, f1, x_hit, h)
+            return t_hit, y_hit
         crossed = False
         if direction == 0:
             crossed = (g_left < 0.0 and g_mid > 0.0) or (g_left > 0.0 and g_mid < 0.0)
@@ -393,6 +398,8 @@ class _FixedStepRK(_RungeKuttaBase):
             event_compiled = self._compile_event_function(event_fn)
             direction = 0 if event_cfg is None else int(event_cfg.direction)
             terminal = 1 if (event_cfg is None or event_cfg.terminal) else 0
+            xtol = float(event_cfg.xtol if event_cfg is not None else 1.0e-12)
+            gtol = float(event_cfg.gtol if event_cfg is not None else 1.0e-12)
             hit, t_hit, y_hit, states = _FixedStepRK._integrate_fixed_rk_until_event(
                 f=f,
                 y0=y0,
@@ -403,6 +410,8 @@ class _FixedStepRK(_RungeKuttaBase):
                 event_fn=event_compiled,
                 direction=direction,
                 terminal=terminal,
+                xtol=xtol,
+                gtol=gtol,
             )
             if hit:
                 return _Solution(times=np.array([t_vals[0], t_hit], dtype=np.float64), states=np.vstack([y0, y_hit]))
@@ -479,7 +488,7 @@ class _FixedStepRK(_RungeKuttaBase):
 
     @staticmethod
     @numba.njit(cache=False, fastmath=FASTMATH)
-    def _integrate_fixed_rk_until_event(f, y0, t_vals, A, B_HIGH, C, event_fn, direction, terminal):
+    def _integrate_fixed_rk_until_event(f, y0, t_vals, A, B_HIGH, C, event_fn, direction, terminal, xtol, gtol):
         """
         Integrate a dynamical system using a fixed-step Runge-Kutta method until an event is detected.
         
@@ -535,13 +544,13 @@ class _FixedStepRK(_RungeKuttaBase):
             g_new = event_fn(t_n + h, y_high)
             crossed = False
             if direction == 0:
-                crossed = (g_prev < 0.0 and g_new > 0.0) or (g_prev > 0.0 and g_new < 0.0)
+                crossed = (g_prev <= 0.0 and g_new >= 0.0) or (g_prev >= 0.0 and g_new <= 0.0)
             elif direction > 0:
-                crossed = (g_prev < 0.0 and g_new > 0.0)
+                crossed = (g_prev < 0.0 and g_new >= 0.0)
             else:
-                crossed = (g_prev > 0.0 and g_new < 0.0)
+                crossed = (g_prev > 0.0 and g_new <= 0.0)
             if crossed:
-                t_hit, y_hit = _hermite_refine_in_step(event_fn, t_n, y_n, f_prev, t_n + h, y_high, f_new, h, direction, TOL)
+                t_hit, y_hit = _hermite_refine_in_step(event_fn, t_n, y_n, f_prev, t_n + h, y_high, f_new, h, direction, xtol, gtol)
                 return True, t_hit, y_hit, states
             states[idx + 1] = y_high
             f_prev = f_new
@@ -762,7 +771,7 @@ def _rk45_eval_dense(y_old, Q_cache, P, x, hseg):
     return y_val
 
 @numba.njit(cache=False, fastmath=FASTMATH)
-def _rk45_refine_in_step(event_fn, t0, y0, t1, y1, h, Kseg, P, direction, xtol):
+def _rk45_refine_in_step(event_fn, t0, y0, t1, y1, h, Kseg, P, direction, xtol, gtol):
     """Refine the integration step using bisection on x in [0, 1].
     
     Parameters
@@ -801,11 +810,16 @@ def _rk45_refine_in_step(event_fn, t0, y0, t1, y1, h, Kseg, P, direction, xtol):
     b = 1.0
     g_left = event_fn(t0, y0)
     g_right = event_fn(t1, y1)
-    max_iter = 64
+    max_iter = 128
     for _ in range(max_iter):
         mid = 0.5 * (a + b)
         y_mid = _rk45_eval_dense(y0, Q_cache, P, mid, h)
         g_mid = event_fn(t0 + mid * h, y_mid)
+        if abs(g_mid) <= gtol:
+            x_hit = mid
+            t_hit = t0 + x_hit * h
+            y_hit = _rk45_eval_dense(y0, Q_cache, P, x_hit, h)
+            return t_hit, y_hit
         crossed = False
         if direction == 0:
             crossed = (g_left < 0.0 and g_mid > 0.0) or (g_left > 0.0 and g_mid < 0.0)
@@ -903,7 +917,8 @@ class _RK45(_AdaptiveStepRK):
             terminal = 1 if (event_cfg is None or event_cfg.terminal) else 0
             t0 = float(t_vals[0])
             tmax = float(t_vals[-1])
-            xtol = float(TOL)
+            xtol = float(event_cfg.xtol if event_cfg is not None else 1.0e-12)
+            gtol = float(event_cfg.gtol if event_cfg is not None else 1.0e-12)
             hit, t_event, y_event, y_last = _RK45._integrate_rk45_until_event(
                 f=f,
                 y0=y0,
@@ -923,6 +938,7 @@ class _RK45(_AdaptiveStepRK):
                 direction=direction,
                 terminal=terminal,
                 xtol=xtol,
+                gtol=gtol,
             )
             if hit:
                 return _Solution(times=np.array([t0, t_event], dtype=np.float64), states=np.vstack([y0, y_event]))
@@ -1123,7 +1139,7 @@ class _RK45(_AdaptiveStepRK):
 
     @staticmethod
     @numba.njit(cache=False, fastmath=FASTMATH)
-    def _integrate_rk45_until_event(f, y0, t0, tmax, A, B_HIGH, C, E, P, rtol, atol, max_step, min_step, order, event_fn, direction, terminal, xtol):
+    def _integrate_rk45_until_event(f, y0, t0, tmax, A, B_HIGH, C, E, P, rtol, atol, max_step, min_step, order, event_fn, direction, terminal, xtol, gtol):
         """Integrate the RK45 method until an event is detected.
         
         Parameters
@@ -1214,13 +1230,13 @@ class _RK45(_AdaptiveStepRK):
                 g_new = event_fn(t_new, y_new)
                 crossed = False
                 if direction == 0:
-                    crossed = (g_prev < 0.0 and g_new > 0.0) or (g_prev > 0.0 and g_new < 0.0)
+                    crossed = (g_prev <= 0.0 and g_new >= 0.0) or (g_prev >= 0.0 and g_new <= 0.0)
                 elif direction > 0:
-                    crossed = (g_prev < 0.0 and g_new > 0.0)
+                    crossed = (g_prev < 0.0 and g_new >= 0.0)
                 else:
-                    crossed = (g_prev > 0.0 and g_new < 0.0)
+                    crossed = (g_prev > 0.0 and g_new <= 0.0)
                 if crossed:
-                    t_hit, y_hit = _rk45_refine_in_step(event_fn, t, y, t_new, y_new, h, K, P, direction, xtol)
+                    t_hit, y_hit = _rk45_refine_in_step(event_fn, t, y, t_new, y_new, h, K, P, direction, xtol, gtol)
                     return True, t_hit, y_hit, y_new
 
                 # accept
@@ -1458,7 +1474,7 @@ def _dop853_eval_dense(y_old, F_cache, interpolator_power, x):
     return y_val
 
 @numba.njit(cache=False, fastmath=FASTMATH)
-def _dop853_refine_in_step(f, event_fn, t0, y0, f0, t1, y1, f1, h, Kseg, A_full, C_full, D, n_stages_extended, interpolator_power, direction, xtol):
+def _dop853_refine_in_step(f, event_fn, t0, y0, f0, t1, y1, f1, h, Kseg, A_full, C_full, D, n_stages_extended, interpolator_power, direction, xtol, gtol):
     """Refine the integration step using bisection on x in [0, 1].
     
     Parameters
@@ -1537,11 +1553,16 @@ def _dop853_refine_in_step(f, event_fn, t0, y0, f0, t1, y1, f1, h, Kseg, A_full,
     # Evaluate g at endpoints via event_fn directly (we have y0,y1,f0,f1)
     g_left = event_fn(t0, y0)
     g_right = event_fn(t1, y1)
-    max_iter = 64
+    max_iter = 128
     for _ in range(max_iter):
         mid = 0.5 * (a + b)
         y_mid = _dop853_eval_dense(y0, F_cache, interpolator_power, mid)
         g_mid = event_fn(t0 + mid * h, y_mid)
+        if abs(g_mid) <= gtol:
+            x_hit = mid
+            t_hit = t0 + x_hit * h
+            y_hit = _dop853_eval_dense(y0, F_cache, interpolator_power, x_hit)
+            return t_hit, y_hit
         crossed = False
         if direction == 0:
             crossed = (g_left < 0.0 and g_mid > 0.0) or (g_left > 0.0 and g_mid < 0.0)
@@ -1651,7 +1672,8 @@ class _DOP853(_AdaptiveStepRK):
             terminal = 1 if (event_cfg is None or event_cfg.terminal) else 0
             t0 = float(t_vals[0])
             tmax = float(t_vals[-1])
-            xtol = float(TOL)
+            xtol = float(event_cfg.xtol if event_cfg is not None else 1.0e-12)
+            gtol = float(event_cfg.gtol if event_cfg is not None else 1.0e-12)
             hit, t_event, y_event, y_last = _DOP853._integrate_dop853_until_event(
                 f=f,
                 y0=y0,
@@ -1676,6 +1698,7 @@ class _DOP853(_AdaptiveStepRK):
                 direction=direction,
                 terminal=terminal,
                 xtol=xtol,
+                gtol=gtol,
             )
             if hit:
                 return _Solution(times=np.array([t0, t_event], dtype=np.float64), states=np.vstack([y0, y_event]))
@@ -1949,7 +1972,7 @@ class _DOP853(_AdaptiveStepRK):
     @numba.njit(cache=False, fastmath=FASTMATH)
     def _integrate_dop853_until_event(
         f, y0, t0, tmax, A, B_HIGH, C, E5, E3, D, n_stages_extended, interpolator_power, A_full, C_full, rtol, atol, max_step, min_step, order,
-        event_fn, direction, terminal, xtol,
+        event_fn, direction, terminal, xtol, gtol,
     ):
         """
         Integrate until an event is detected.
@@ -2068,13 +2091,13 @@ class _DOP853(_AdaptiveStepRK):
                 g_new = event_fn(t_new, y_new)
                 crossed = False
                 if direction == 0:
-                    crossed = (g_prev < 0.0 and g_new > 0.0) or (g_prev > 0.0 and g_new < 0.0)
+                    crossed = (g_prev <= 0.0 and g_new >= 0.0) or (g_prev >= 0.0 and g_new <= 0.0)
                 elif direction > 0:
-                    crossed = (g_prev < 0.0 and g_new > 0.0)
+                    crossed = (g_prev < 0.0 and g_new >= 0.0)
                 else:
-                    crossed = (g_prev > 0.0 and g_new < 0.0)
+                    crossed = (g_prev > 0.0 and g_new <= 0.0)
                 if crossed:
-                    t_hit, y_hit = _dop853_refine_in_step(f, event_fn, t, y, f_curr, t_new, y_new, f_new, h, K, A_full, C_full, D, n_stages_extended, interpolator_power, direction, xtol)
+                    t_hit, y_hit = _dop853_refine_in_step(f, event_fn, t, y, f_curr, t_new, y_new, f_new, h, K, A_full, C_full, D, n_stages_extended, interpolator_power, direction, xtol, gtol)
                     return True, t_hit, y_hit, y_new
 
                 # no crossing, advance

@@ -11,6 +11,7 @@ from functools import partial
 from typing import TYPE_CHECKING, Optional, Tuple
 
 import numpy as np
+import time
 
 from hiten.algorithms.corrector.base import JacobianFn, NormFn, _Corrector
 from hiten.algorithms.dynamics.rtbp import _compute_stm
@@ -157,14 +158,18 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         ndarray
             Residual vector (actual - target).
         """
+        _t0 = time.perf_counter()
         x_full = self._to_full_state(base_state, control_indices, p_vec)
 
         # Evaluate event section
+        _te0 = time.perf_counter()
         t_event, X_ev_local = self._evaluate_event(orbit, x_full, cfg, forward)
+        _te1 = time.perf_counter()
 
         Phi_local: np.ndarray | None = None
         if not self._fd_mode:
             # Analytical Jacobian will be requested, compute STM now
+            _ts0 = time.perf_counter()
             _, _, Phi_flat, _ = _compute_stm(
                 orbit.libration_point._var_eq_system,
                 x_full,
@@ -173,6 +178,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
                 method=cfg.method,
                 order=cfg.order,
             )
+            _ts1 = time.perf_counter()
             Phi_local = Phi_flat
 
         # Update cache for potential reuse by Jacobian
@@ -184,6 +190,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         )
 
         self._last_t_event = t_event
+        print(f"[Corrector] residual: event={( _te1 - _te0)*1e3:.2f} ms, STM={( _ts1 - _ts0)*1e3:.2f} ms, total={( time.perf_counter() - _t0)*1e3:.2f} ms; t_event={t_event:.6g}")
         return X_ev_local[residual_indices] - target_vec
 
     def _jacobian_mat(
@@ -231,6 +238,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
             and self._event_cache.Phi is not None
         )
 
+        _t0 = time.perf_counter()
         if cache_valid:
             # Reuse cached data
             X_ev_local = self._event_cache.X_event
@@ -238,8 +246,11 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         else:
             # Recompute event and STM, then refresh cache
             x_full = self._to_full_state(base_state, control_indices, p_vec)
+            _te0 = time.perf_counter()
             t_event, X_ev_local = self._evaluate_event(orbit, x_full, cfg, forward)
+            _te1 = time.perf_counter()
 
+            _ts0 = time.perf_counter()
             _, _, Phi_flat, _ = _compute_stm(
                 orbit.libration_point._var_eq_system,
                 x_full,
@@ -248,6 +259,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
                 method=cfg.method,
                 order=cfg.order,
             )
+            _ts1 = time.perf_counter()
             Phi = Phi_flat
 
             self._event_cache = self._EventCache(
@@ -262,7 +274,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
 
         if cfg.extra_jacobian is not None:
             J_red -= cfg.extra_jacobian(X_ev_local, Phi)
-
+        print(f"[Corrector] jacobian: cache={cache_valid}, total={( time.perf_counter() - _t0)*1e3:.2f} ms")
         return J_red
 
     def correct(

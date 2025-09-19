@@ -2,6 +2,7 @@ import numpy as np
 
 from hiten.algorithms.dynamics.rhs import create_rhs_system
 from hiten.algorithms.integrators import AdaptiveRK
+from hiten.algorithms.integrators import RungeKutta
 from hiten.algorithms.integrators.configs import _EventConfig
 
 
@@ -240,3 +241,33 @@ def test_dop853_event_crossing_very_early_from_near_plane():
     y_hit = sol.states[-1, 0]
     assert abs(t_hit - eps) < 1e-9
     assert abs(y_hit - 1.0) < 1e-10
+
+
+def test_endpoint_zero_is_detected_rk45_and_fixed_rk():
+    # Construct a step where g hits exactly zero at the right endpoint.
+    # dy/dt = 1, y0 = 0, event at y=1 → at t=1 exactly.
+    def rhs(t, y):
+        return np.array([1.0])
+
+    sys = create_rhs_system(rhs, dim=1, name="endpoint_zero")
+    y0 = np.array([0.0])
+    t_vals = np.array([0.0, 1.0])
+
+    def g(t, y):
+        return float(y[0] - 1.0)
+
+    ev_cfg = _EventConfig(direction=+1, terminal=True)
+
+    # RK45 should detect the event at the right endpoint exactly at t=1
+    rk45 = AdaptiveRK(order=5)
+    sol45 = rk45.integrate(sys, y0, t_vals, event_fn=g, event_cfg=ev_cfg)
+    assert sol45.times.size == 2
+    assert abs(sol45.times[-1] - 1.0) < 1e-12
+    assert abs(sol45.states[-1, 0] - 1.0) < 1e-12
+
+    # Fixed RK4 should detect it as well when stepping exactly to t=1
+    rk4 = RungeKutta(order=4)
+    sol4 = rk4.integrate(sys, y0, t_vals, event_fn=g, event_cfg=ev_cfg)
+    assert sol4.times.size == 2
+    assert abs(sol4.times[-1] - 1.0) < 1e-12
+    assert abs(sol4.states[-1, 0] - 1.0) < 1e-12

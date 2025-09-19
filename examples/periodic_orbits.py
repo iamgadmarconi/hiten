@@ -32,7 +32,7 @@ def main() -> None:
             "name": "Vertical",
             "kwargs": {"initial_state": ic_seed},
             "diff_corr_attempts": 100,
-            "finite_difference": True,
+            "finite_difference": False,
         },
         {
             "cls": HaloOrbit,

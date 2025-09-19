@@ -22,12 +22,13 @@ from typing import Callable, Literal
 
 import numba
 import numpy as np
+import time
 
 from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
 from hiten.algorithms.utils.config import FASTMATH
 
 
-@numba.njit(fastmath=FASTMATH, cache=False)
+@numba.njit(fastmath=FASTMATH, cache=True)
 def _crtbp_accel(state, mu):
     r"""Compute CR3BP equations of motion in rotating synodic frame.
     
@@ -71,7 +72,7 @@ def _crtbp_accel(state, mu):
 
     return np.array([vx, vy, vz, ax, ay, az], dtype=np.float64)
 
-@numba.njit(fastmath=FASTMATH, cache=False)
+@numba.njit(fastmath=FASTMATH, cache=True)
 def _jacobian_crtbp(x, y, z, mu):
     r"""Compute analytical Jacobian matrix of CR3BP equations of motion.
     
@@ -159,7 +160,7 @@ def _jacobian_crtbp(x, y, z, mu):
 
     return F
 
-@numba.njit(fastmath=FASTMATH, cache=False)
+@numba.njit(fastmath=FASTMATH, cache=True)
 def _var_equations(t, PHI_vec, mu):
     r"""Compute CR3BP variational equations for state transition matrix propagation.
     
@@ -297,10 +298,12 @@ def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["fixed",
     :class:`~hiten.algorithms.dynamics.rtbp._VarEqRHS` : Dynamical system for variational equations
     :func:`~hiten.algorithms.dynamics.rtbp._compute_monodromy` : Specialized version for periodic orbits
     """
+    _t0 = time.perf_counter()
     PHI0 = np.zeros(42, dtype=np.float64)
     PHI0[:36] = np.eye(6, dtype=np.float64).ravel()
     PHI0[36:] = x0
 
+    _ti = time.perf_counter()
     sol_obj = _propagate_dynsys(
         dynsys=dynsys,
         state0=PHI0,
@@ -312,6 +315,8 @@ def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["fixed",
         order=order,
         flip_indices=slice(36, 42),
     )
+    _to = time.perf_counter()
+    print(f"[STM] tf={tf:.6g}, steps={steps}, method={method}, order={order}, integrate={( _to - _ti)*1e3:.2f} ms, total={( _to - _t0)*1e3:.2f} ms")
 
     PHI = sol_obj.states
 

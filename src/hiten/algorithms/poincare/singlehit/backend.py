@@ -13,13 +13,32 @@ intersections.
 from typing import Callable, Literal
 
 import numpy as np
-from scipy.optimize import root_scalar
+import time
 
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
 from hiten.algorithms.poincare.core.events import (_PlaneEvent, _SectionHit,
                                                    _SurfaceEvent)
+from hiten.algorithms.integrators import AdaptiveRK
+from hiten.algorithms.integrators.configs import _EventConfig
+from numba import njit, types
+
+
+# --- Precompiled plane event functions (fast path for standard sections) ---
+@njit(types.float64(types.float64, types.float64[:]), cache=True, fastmath=True)
+def _g_x0(t: float, y: np.ndarray) -> float:
+    return float(y[0])
+
+
+@njit(types.float64(types.float64, types.float64[:]), cache=True, fastmath=True)
+def _g_y0(t: float, y: np.ndarray) -> float:
+    return float(y[1])
+
+
+@njit(types.float64(types.float64, types.float64[:]), cache=True, fastmath=True)
+def _g_z0(t: float, y: np.ndarray) -> float:
+    return float(y[2])
 
 
 class _SingleHitBackend(_ReturnMapBackend):
@@ -147,148 +166,115 @@ class _SingleHitBackend(_ReturnMapBackend):
             return np.asarray(pts, float), np.asarray(states, float)
         return np.empty((0, 2)), np.empty((0, 6))
 
-    def _value_at_time(self, state_ref: np.ndarray, t_ref: float, t_query: float):
-        """Evaluate the surface function at a given time.
-
-        Parameters
-        ----------
-        state_ref : ndarray, shape (6,)
-            Reference state vector at time t_ref.
-        t_ref : float
-            Reference time (nondimensional units).
-        t_query : float
-            Query time (nondimensional units).
-
-        Returns
-        -------
-        float
-            Value of the surface function at the query time.
-
-        Notes
-        -----
-        This method efficiently evaluates the surface function at a
-        given time by either using the reference state directly (if
-        times are very close) or by integrating from the reference
-        state to the query time.
-
-        The method uses the configured integration method and parameters
-        for the integration step.
-        """
-        if np.isclose(t_query, t_ref, rtol=3e-10, atol=1e-10):
-            return self._surface.value(state_ref)
-
-        sol_seg = _propagate_dynsys(
-            self._dynsys,
-            state_ref,
-            t_ref,
-            t_query,
-            forward=self._forward,
-            steps=self._refine_steps,
-            method=self._method,
-            order=self._order,
-        )
-        state_final = sol_seg.states[-1]
-        return self._surface.value(state_final)
-
-    def _bracket_root(self, f: Callable[[float], float], x0: float):
-        """Bracket a root of the surface function.
-
-        Parameters
-        ----------
-        f : callable
-            Function whose root is being searched for.
-        x0 : float
-            Reference point around which to expand the bracket.
-
-        Returns
-        -------
-        tuple[float, float]
-            Bracket (a, b) containing the root.
-
-        Notes
-        -----
-        This method uses the parent class's bracket expansion algorithm
-        with parameters optimized for surface crossing detection. The
-        crossing test is provided by the surface event.
-        """
-        return self._expand_bracket(
-            f,
-            x0,
-            dx0=self._bracket_dx,
-            grow=np.sqrt(2),
-            max_expand=self._max_expand,
-            crossing_test=self._surface.is_crossing,
-            symmetric=True,
-        )
-
-    def _cross(self, state0: np.ndarray, *, t_guess: float | None = None, t0_offset: float = 0.15):
-        """Find a single crossing of a trajectory with the section.
+    def _cross_event_driven(self, state0: np.ndarray, *, t0: float, tmax: float) -> _SectionHit | None:
+        """Find a single crossing using event-driven integration.
 
         Parameters
         ----------
         state0 : ndarray, shape (6,)
-            Initial state vector [x, y, z, vx, vy, vz] in nondimensional units.
-        t_guess : float, optional
-            Initial guess for the crossing time. If None, uses a default
-            value based on the orbital period.
-        t0_offset : float, default=0.15
-            Offset from the default time guess (nondimensional units).
+            Initial state at t=t0.
+        t0 : float
+            Start time.
+        tmax : float
+            Maximum time to search for a crossing.
 
         Returns
         -------
-        :class:`~hiten.algorithms.poincare.core.events._SectionHit` or None
-            Section hit object containing the crossing time, state, and
-            2D projection. Returns None if no crossing is found.
-
-        Notes
-        -----
-        This method implements the two-stage approach:
-        1. Coarse integration to get near the section
-        2. Fine root finding to locate the exact crossing
-
-        The method uses Brent's method for root finding after bracketing
-        the root using the surface crossing detection logic.
-
-        The 2D projection uses the first two coordinates as a fallback
-        projection method.
+        _SectionHit or None
+            Crossing information, or None if no crossing before tmax.
         """
-        t0_z = float(t_guess) if t_guess is not None else (np.pi / 2.0 - t0_offset)
+        # Map surface to scalar event g(t,y)
+        _t_total0 = time.perf_counter()
+        _t_map0 = _t_total0
+        direction = getattr(self._surface, "direction", None)
+        normal_raw = getattr(self._surface, "normal", None)
+        offset = getattr(self._surface, "offset", None)
 
-        sol_coarse = _propagate_dynsys(
-            self._dynsys,
-            state0,
-            0.0,
-            t0_z,
-            forward=self._forward,
-            steps=self._pre_steps,
-            method=self._method,
-            order=self._order,
-        )
-        state_mid = sol_coarse.states[-1]
+        if isinstance(self._surface, _PlaneEvent) and normal_raw is not None and offset is not None:
+            n_vec = np.asarray(normal_raw, dtype=np.float64)
+            if not (float(offset) == 0.0 and n_vec.size >= 3):
+                raise TypeError("Only axis-aligned zero-offset plane events are supported in event-driven backend")
+            if n_vec[0] == 1.0 and n_vec[1] == 0.0 and n_vec[2] == 0.0:
+                event_fn = _g_x0
+                ev_name = "x==0"
+            elif n_vec[0] == 0.0 and n_vec[1] == 1.0 and n_vec[2] == 0.0:
+                event_fn = _g_y0
+                ev_name = "y==0"
+            elif n_vec[0] == 0.0 and n_vec[1] == 0.0 and n_vec[2] == 1.0:
+                event_fn = _g_z0
+                ev_name = "z==0"
+            else:
+                raise TypeError("Only axis-aligned zero-offset plane events are supported in event-driven backend")
+        else:
+            raise TypeError("_SingleHitBackend requires a plane event with normal and offset")
 
-        def _g(t: float):
-            return self._value_at_time(state_mid, t0_z, t)
+        # Build integrator and config
+        _t_map1 = time.perf_counter()
+        integrator = AdaptiveRK(order=8, rtol=1e-8, atol=1e-10)
+        ev_dir = 0 if direction is None else int(direction)
+        ev_cfg = _EventConfig(direction=ev_dir, terminal=True)
+        _t_setup1 = time.perf_counter()
 
-        a, b = self._bracket_root(_g, t0_z)
+        # Diagnostics
+        try:
+            print(f"[SingleHit] surface normal={n_vec[:3]}, offset={float(offset):.3g}, direction={ev_dir}, event={ev_name}")
+        except Exception:
+            pass
 
-        root_t = root_scalar(_g, bracket=(a, b), method="brentq", xtol=1e-12).root
+        # Handle on-surface start to avoid immediate zero
+        _t_g0_0 = time.perf_counter()
+        g0 = event_fn(t0, state0)
+        _t_g0_1 = time.perf_counter()
+        t_start = float(t0)
+        y_start = state0.astype(float, copy=True)
+        print(f"[SingleHit] window t0={t0:.6g}, tmax={tmax:.6g}; g(t0)={g0:.3e}")
+        print(f"[SingleHit][timing] map={(_t_map1 - _t_map0)*1e3:.2f} ms, setup={(_t_setup1 - _t_map1)*1e3:.2f} ms, g0_eval={( _t_g0_1 - _t_g0_0)*1e3:.2f} ms")
+        if abs(g0) < 1e-12:
+            # advance by epsilon time using RHS
+            eps = 1e-9
+            _t_eps0 = time.perf_counter()
+            sol_eps = integrator.integrate(self._dynsys, y_start, np.array([t_start, t_start + eps], dtype=float))
+            _t_eps1 = time.perf_counter()
+            t_start = float(sol_eps.times[-1])
+            y_start = sol_eps.states[-1].copy()
+            g_start = event_fn(t_start, y_start)
+            print(f"[SingleHit] on-surface start; advanced by {eps:.1e} to t={t_start:.6g}; g={g_start:.3e}")
+            print(f"[SingleHit][timing] eps_integrate={(_t_eps1 - _t_eps0)*1e3:.2f} ms")
 
-        sol_final = _propagate_dynsys(
-            self._dynsys,
-            state_mid,
-            t0_z,
-            root_t,
-            forward=self._forward,
-            steps=self._refine_steps,
-            method=self._method,
-            order=self._order,
-        )
-        state_cross = sol_final.states[-1].copy()
+        # Integrate until event or tmax
+        times = np.array([t_start, tmax], dtype=float)
+        _t_int0 = time.perf_counter()
+        sol = integrator.integrate(self._dynsys, y_start, times, event_fn=event_fn, event_cfg=ev_cfg)
+        _t_int1 = time.perf_counter()
+        t_hit = float(sol.times[-1])
+        y_hit = sol.states[-1].copy()
+        if t_hit < tmax and (t_hit - t_start) * 1.0 >= 0.0:
+            g_hit = event_fn(t_hit, y_hit)
+            print(f"[SingleHit] HIT at t={t_hit:.6g}, g={g_hit:.3e}, y[:3]={y_hit[:3]}")
+            print(f"[SingleHit][timing] integrate={(_t_int1 - _t_int0)*1e3:.2f} ms, total={(time.perf_counter() - _t_total0)*1e3:.2f} ms")
+            return _SectionHit(time=t_hit, state=y_hit, point2d=y_hit[:2].copy())
+        print(f"[SingleHit] NO HIT before tmax; returned t={t_hit:.6g}, dt={t_hit - t_start:.3e}")
+        print(f"[SingleHit][timing] integrate={(_t_int1 - _t_int0)*1e3:.2f} ms, total={(time.perf_counter() - _t_total0)*1e3:.2f} ms")
+        return None
 
-        # Fallback 2-D projection: first two coordinates
-        point2d = state_cross[:2].copy()
+    def _cross(self, state0: np.ndarray, *, t_guess: float | None = None, t0_offset: float = 0.15):
+        """Find a single crossing using event-driven integrators."""
+        _t_cross0 = time.perf_counter()
+        # Choose search horizon to avoid trivial early crossings:
+        # Start near half-period and look for the first crossing in a π window.
+        if t_guess is not None:
+            t_start = float(t_guess)
+        else:
+            t_start = float(np.pi / 2.0 - t0_offset)
+        if t_start < 0.0:
+            t_start = 0.0
+        t0 = t_start
+        tmax = t_start + float(np.pi)
+        print(f"[SingleHit] _cross window: t_start={t0:.6g} .. tmax={tmax:.6g} (t0_offset={t0_offset}, t_guess={t_guess})")
 
-        return _SectionHit(time=root_t, state=state_cross, point2d=point2d)
+        hit = self._cross_event_driven(np.asarray(state0, float), t0=t0, tmax=tmax)
+        print(f"[SingleHit][timing] _cross total={(time.perf_counter() - _t_cross0)*1e3:.2f} ms")
+        return hit
 
 
 def find_crossing(dynsys, state0, surface, **kwargs):
@@ -348,11 +334,26 @@ def _plane_crossing_factory(coord: str, value: float = 0.0, direction: int | Non
     _section_crossing(*, dynsys, x0, forward=1, **kwargs) -> (time, state)
     """
     event = _PlaneEvent(coord=coord, value=value, direction=direction)
+    # Attach explicit plane parameters for fast event selection downstream
+    n = np.zeros(6, dtype=np.float64)
+    if coord.lower() == "x":
+        n[0] = 1.0
+    elif coord.lower() == "y":
+        n[1] = 1.0
+    elif coord.lower() == "z":
+        n[2] = 1.0
+    else:
+        raise ValueError(f"Unsupported plane coord '{coord}'. Must be one of 'x','y','z'.")
+    # Provide attributes expected by the event-driven backend
+    try:
+        setattr(event, "normal", n)
+        setattr(event, "offset", float(value))
+    except Exception:
+        pass
 
     def _section_crossing(*, dynsys, x0, forward: int = 1, **kwargs):
-        # Ensure the seed state is treated as a full 6-D vector and find a single crossing
         be = _SingleHitBackend(dynsys=dynsys, surface=event, forward=forward)
-        hit = be._cross(np.asarray(x0, float))  # compute single crossing
+        hit = be._cross(np.asarray(x0, float))
         return hit.time, hit.state
 
     return _section_crossing
