@@ -19,21 +19,21 @@ def main() -> None:
     # Build system & centre manifold
     system = System.from_bodies("earth", "moon")
     l_point = system.get_libration_point(1)
-    cm = l_point.get_center_manifold(degree=6)
-    cm.compute()
+    # cm = l_point.get_center_manifold(degree=6)
+    # cm.compute()
 
-    ic_seed = cm.ic([0.0, 0.0], 0.6, "q3") # Good initial guess from CM
-    logger.info("Initial conditions (CM to physical coordinates): %s", ic_seed)
+    # ic_seed = cm.ic([0.0, 0.0], 0.6, "q3") # Good initial guess from CM
+    # logger.info("Initial conditions (CM to physical coordinates): %s", ic_seed)
 
     # Specifications for each family we wish to generate
     orbit_specs = [
-        {
-            "cls": VerticalOrbit,
-            "name": "Vertical",
-            "kwargs": {"initial_state": ic_seed},
-            "diff_corr_attempts": 100,
-            "finite_difference": True,
-        },
+        # {
+        #     "cls": VerticalOrbit,
+        #     "name": "Vertical",
+        #     "kwargs": {"initial_state": ic_seed},
+        #     "diff_corr_attempts": 100,
+        #     "finite_difference": True,
+        # },
         {
             "cls": HaloOrbit,
             "name": "Halo",

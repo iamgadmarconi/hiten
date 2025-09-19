@@ -399,16 +399,26 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
             max_delta=max_delta,
         )
 
-        # Ensure we have a valid half-period
-        if self._last_t_event is None:
-            self._last_t_event, _ = self._evaluate_event(
-                orbit,
-                self._to_full_state(base_state, control_indices, p_corr),
-                cfg,
-                forward,
-            )
-    
         x_corr = self._to_full_state(base_state, control_indices, p_corr)
+        # Recompute half-period from corrected state using default window (no hints),
+        # matching old pipeline semantics
+        try:
+            t_final, _ = cfg.event_func(
+                dynsys=orbit.system._dynsys,
+                x0=x_corr,
+                forward=forward,
+            )
+            self._last_t_event = float(t_final)
+        except Exception:
+            # Fallback to evaluating via interface if direct call fails
+            if self._last_t_event is None:
+                self._last_t_event, _ = self._evaluate_event(
+                    orbit,
+                    x_corr,
+                    cfg,
+                    forward,
+                )
+
         orbit._reset()
         orbit._initial_state = x_corr
         orbit._period = 2.0 * self._last_t_event

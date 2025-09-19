@@ -245,6 +245,23 @@ class _SingleHitBackend(_ReturnMapBackend):
                 print(f"[SingleHit] pre-march by t_min={t_min:.1e} to t={t_start:.6g}; g={g_start:.3e}")
                 print(f"[SingleHit][timing] pre_integrate={(_t_pre1 - _t_pre0)*1e3:.2f} ms")
 
+        # Align initial state with t_start to ensure absolute times are referenced to t=0
+        if t_start != 0.0:
+            _t_align0 = time.perf_counter()
+            sol_align = _propagate_dynsys(
+                self._dynsys,
+                y_start,
+                0.0,
+                t_start,
+                forward=self._forward,
+                steps=2,
+                method="adaptive",
+                order=8,
+            )
+            _t_align1 = time.perf_counter()
+            y_start = sol_align.states[-1].copy()
+            print(f"[SingleHit] aligned start state to t_start in {(_t_align1 - _t_align0)*1e3:.2f} ms")
+
         # Integrate until event or tmax
         times = np.array([t_start, tmax], dtype=float)
         _t_int0 = time.perf_counter()
