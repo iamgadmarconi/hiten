@@ -161,9 +161,20 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         _t0 = time.perf_counter()
         x_full = self._to_full_state(base_state, control_indices, p_vec)
 
-        # Evaluate event section
+        # Evaluate event section (with optional time hint/window if available)
         _te0 = time.perf_counter()
-        t_event, X_ev_local = self._evaluate_event(orbit, x_full, cfg, forward)
+        t_hint = self._last_t_event
+        t_win = 0.1 if (t_hint is not None) else None
+        if t_hint is not None:
+            t_event, X_ev_local = cfg.event_func(
+                dynsys=orbit.system._dynsys,
+                x0=x_full,
+                forward=forward,
+                t_guess=float(t_hint),
+                t_window=float(t_win),
+            )
+        else:
+            t_event, X_ev_local = self._evaluate_event(orbit, x_full, cfg, forward)
         _te1 = time.perf_counter()
 
         Phi_local: np.ndarray | None = None
@@ -190,7 +201,14 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         )
 
         self._last_t_event = t_event
-        print(f"[Corrector] residual: event={( _te1 - _te0)*1e3:.2f} ms, STM={( _ts1 - _ts0)*1e3:.2f} ms, total={( time.perf_counter() - _t0)*1e3:.2f} ms; t_event={t_event:.6g}")
+        # Guard STM timing when in finite-difference mode (STM not computed)
+        _total_ms = (time.perf_counter() - _t0) * 1e3
+        _event_ms = (_te1 - _te0) * 1e3
+        if self._fd_mode:
+            _stm_ms_str = "N/A"
+        else:
+            _stm_ms_str = f"{((_ts1 - _ts0) * 1e3):.2f}"
+        print(f"[Corrector] residual: event={_event_ms:.2f} ms, STM={_stm_ms_str} ms, total={_total_ms:.2f} ms; t_event={t_event:.6g}")
         return X_ev_local[residual_indices] - target_vec
 
     def _jacobian_mat(
@@ -247,7 +265,18 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
             # Recompute event and STM, then refresh cache
             x_full = self._to_full_state(base_state, control_indices, p_vec)
             _te0 = time.perf_counter()
-            t_event, X_ev_local = self._evaluate_event(orbit, x_full, cfg, forward)
+            t_hint = self._last_t_event
+            t_win = 0.1 if (t_hint is not None) else None
+            if t_hint is not None:
+                t_event, X_ev_local = cfg.event_func(
+                    dynsys=orbit.system._dynsys,
+                    x0=x_full,
+                    forward=forward,
+                    t_guess=float(t_hint),
+                    t_window=float(t_win),
+                )
+            else:
+                t_event, X_ev_local = self._evaluate_event(orbit, x_full, cfg, forward)
             _te1 = time.perf_counter()
 
             _ts0 = time.perf_counter()

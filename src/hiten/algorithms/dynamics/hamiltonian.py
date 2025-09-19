@@ -31,7 +31,7 @@ from hiten.algorithms.polynomial.operations import (_polynomial_evaluate,
 from hiten.algorithms.utils.config import FASTMATH
 
 
-@njit(cache=False, fastmath=FASTMATH)
+@njit(cache=True, fastmath=FASTMATH)
 def _hamiltonian_rhs(
     state6: np.ndarray,
     jac_H: List[List[np.ndarray]],

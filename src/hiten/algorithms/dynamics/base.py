@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Callable, Literal, Sequence
 
 import numpy as np
 import time
+from typing import Dict
 
 from hiten.algorithms.integrators.configs import _EventConfig
 from hiten.algorithms.utils.config import FASTMATH
@@ -30,9 +31,10 @@ if TYPE_CHECKING:
     from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
     from hiten.algorithms.integrators.base import _Solution
 
+# Global cache for compiled RHS dispatchers (function -> compiled numba dispatcher)
+_RHS_DISPATCH_CACHE: Dict[Callable[[float, np.ndarray], np.ndarray], Callable[[float, np.ndarray], np.ndarray]] = {}
 
 
-            
 
 class _DynamicalSystem(ABC):
     """Provide an abstract base class for dynamical systems.
@@ -160,7 +162,20 @@ class _DynamicalSystem(ABC):
         else:
             # Compile with global fast-math setting for performance
             import numba
-            return numba.njit(cache=False, fastmath=FASTMATH)(rhs_func)
+            # Central cache to reuse compiled dispatchers across instances
+            global _RHS_DISPATCH_CACHE
+            try:
+                cache_hit = rhs_func in _RHS_DISPATCH_CACHE
+            except Exception:
+                cache_hit = False
+            if cache_hit:
+                return _RHS_DISPATCH_CACHE[rhs_func]
+            compiled = numba.njit(cache=True, fastmath=FASTMATH)(rhs_func)
+            try:
+                _RHS_DISPATCH_CACHE[rhs_func] = compiled
+            except Exception:
+                pass
+            return compiled
 
 
 class _DirectedSystem(_DynamicalSystem):

@@ -544,11 +544,11 @@ class _FixedStepRK(_RungeKuttaBase):
             g_new = event_fn(t_n + h, y_high)
             crossed = False
             if direction == 0:
-                crossed = (g_prev <= 0.0 and g_new >= 0.0) or (g_prev >= 0.0 and g_new <= 0.0)
+                crossed = ((g_prev < 0.0 and g_new > 0.0) or (g_prev > 0.0 and g_new < 0.0) or (g_new == 0.0))
             elif direction > 0:
-                crossed = (g_prev < 0.0 and g_new >= 0.0)
+                crossed = ((g_prev < 0.0 and g_new > 0.0) or (g_new == 0.0))
             else:
-                crossed = (g_prev > 0.0 and g_new <= 0.0)
+                crossed = ((g_prev > 0.0 and g_new < 0.0) or (g_new == 0.0))
             if crossed:
                 t_hit, y_hit = _hermite_refine_in_step(event_fn, t_n, y_n, f_prev, t_n + h, y_high, f_new, h, direction, xtol, gtol)
                 return True, t_hit, y_hit, states
@@ -1230,11 +1230,11 @@ class _RK45(_AdaptiveStepRK):
                 g_new = event_fn(t_new, y_new)
                 crossed = False
                 if direction == 0:
-                    crossed = (g_prev <= 0.0 and g_new >= 0.0) or (g_prev >= 0.0 and g_new <= 0.0)
+                    crossed = ((g_prev < 0.0 and g_new > 0.0) or (g_prev > 0.0 and g_new < 0.0) or (g_new == 0.0))
                 elif direction > 0:
-                    crossed = (g_prev < 0.0 and g_new >= 0.0)
+                    crossed = ((g_prev < 0.0 and g_new > 0.0) or (g_new == 0.0))
                 else:
-                    crossed = (g_prev > 0.0 and g_new <= 0.0)
+                    crossed = ((g_prev > 0.0 and g_new < 0.0) or (g_new == 0.0))
                 if crossed:
                     t_hit, y_hit = _rk45_refine_in_step(event_fn, t, y, t_new, y_new, h, K, P, direction, xtol, gtol)
                     return True, t_hit, y_hit, y_new
@@ -2091,11 +2091,11 @@ class _DOP853(_AdaptiveStepRK):
                 g_new = event_fn(t_new, y_new)
                 crossed = False
                 if direction == 0:
-                    crossed = (g_prev <= 0.0 and g_new >= 0.0) or (g_prev >= 0.0 and g_new <= 0.0)
+                    crossed = ((g_prev < 0.0 and g_new > 0.0) or (g_prev > 0.0 and g_new < 0.0) or (g_new == 0.0))
                 elif direction > 0:
-                    crossed = (g_prev < 0.0 and g_new >= 0.0)
+                    crossed = ((g_prev < 0.0 and g_new > 0.0) or (g_new == 0.0))
                 else:
-                    crossed = (g_prev > 0.0 and g_new <= 0.0)
+                    crossed = ((g_prev > 0.0 and g_new < 0.0) or (g_new == 0.0))
                 if crossed:
                     t_hit, y_hit = _dop853_refine_in_step(f, event_fn, t, y, f_curr, t_new, y_new, f_new, h, K, A_full, C_full, D, n_stages_extended, interpolator_power, direction, xtol, gtol)
                     return True, t_hit, y_hit, y_new
