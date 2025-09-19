@@ -204,6 +204,121 @@ def rk_embedded_step_jit_kernel(f, t, y, h, A, B_HIGH, B_LOW, C, has_b_low):
     return y_high, y_low, err_vec
 
 
+@numba.njit(cache=False, fastmath=FASTMATH)
+def _hermite_eval_dense(y0, f0, y1, f1, x, h):
+    """Evaluate cubic Hermite interpolant between (t0,y0,f0) and (t1,y1,f1).
+
+    Uses standard basis: H00=2x^3-3x^2+1, H10=x^3-2x^2+x, H01=-2x^3+3x^2, H11=x^3-x^2.
+
+    Parameters
+    ----------
+    y0 : numpy.ndarray
+        The initial state.
+    f0 : numpy.ndarray
+        The initial derivative.
+    y1 : numpy.ndarray
+        The final state.
+    f1 : numpy.ndarray
+        The final derivative.
+    x : float
+        The time to evaluate the interpolator at.
+    h : float
+        The step size.
+
+    Returns
+    -------
+    numpy.ndarray
+        The interpolated state.
+    """
+    dim = y0.size
+    y = np.empty(dim, dtype=np.float64)
+    x2 = x * x
+    x3 = x2 * x
+    H00 = 2.0 * x3 - 3.0 * x2 + 1.0
+    H10 = x3 - 2.0 * x2 + x
+    H01 = -2.0 * x3 + 3.0 * x2
+    H11 = x3 - x2
+    for d in range(dim):
+        y[d] = (
+            H00 * y0[d]
+            + H10 * (h * f0[d])
+            + H01 * y1[d]
+            + H11 * (h * f1[d])
+        )
+    return y
+
+
+@numba.njit(cache=False, fastmath=FASTMATH)
+def _hermite_refine_in_step(event_fn, t0, y0, f0, t1, y1, f1, h, direction, xtol):
+    """Refine the integration step using bisection on x in [0, 1].
+    
+    Parameters
+    ----------
+    event_fn : callable
+        The event function.
+    t0 : float
+        The initial time.
+    y0 : numpy.ndarray
+        The initial state.
+    f0 : numpy.ndarray
+        The initial derivative.
+    t1 : float
+        The final time.
+    y1 : numpy.ndarray
+        The final state.
+    f1 : numpy.ndarray
+        The final derivative.
+    h : float
+        The step size.
+    direction : int
+        The direction of the event.
+    xtol : float
+        The tolerance.
+
+    Returns
+    -------
+    float
+        The time of the event.
+    numpy.ndarray
+        The state at the event.
+
+    Notes
+    -----
+    This function implements the bisection method to find the time of the event.
+    It uses the dense interpolator to evaluate the event function at the time of the event.
+    It returns the time of the event and the state at the event.
+    The time of the event is returned in the interval [t0, t1].
+    """
+    a = 0.0
+    b = 1.0
+    g_left = event_fn(t0, y0)
+    g_right = event_fn(t1, y1)
+    max_iter = 64
+    for _ in range(max_iter):
+        mid = 0.5 * (a + b)
+        y_mid = _hermite_eval_dense(y0, f0, y1, f1, mid, h)
+        g_mid = event_fn(t0 + mid * h, y_mid)
+        crossed = False
+        if direction == 0:
+            crossed = (g_left < 0.0 and g_mid > 0.0) or (g_left > 0.0 and g_mid < 0.0)
+        elif direction > 0:
+            crossed = (g_left < 0.0 and g_mid > 0.0)
+        else:
+            crossed = (g_left > 0.0 and g_mid < 0.0)
+        if crossed:
+            b = mid
+            g_right = g_mid
+        else:
+            a = mid
+            g_left = g_mid
+        if (b - a) * abs(h) <= xtol:
+            break
+    x_hit = b
+    t_hit = t0 + x_hit * h
+    y_hit = _hermite_eval_dense(y0, f0, y1, f1, x_hit, h)
+    return t_hit, y_hit
+
+
 class _FixedStepRK(_RungeKuttaBase):
     """Implement an explicit fixed-step Runge-Kutta scheme.
 
@@ -242,7 +357,28 @@ class _FixedStepRK(_RungeKuttaBase):
         event_cfg: _EventConfig | None = None,
         **kwargs,
     ) -> _Solution:
-        """Integrate a dynamical system using a fixed-step Runge-Kutta method."""
+        """Integrate a dynamical system using a fixed-step Runge-Kutta method with optional events.
+        
+        Parameters
+        ----------
+        system : _DynamicalSystemProtocol
+            The dynamical system to integrate.
+        y0 : numpy.ndarray
+            The initial state.
+        t_vals : numpy.ndarray
+            The time points to evaluate the solution at.
+        event_fn : callable
+            The event function.
+        event_cfg : _EventConfig | None
+            The event configuration.
+        **kwargs
+            Additional integration options.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.integrators.base._Solution`
+            The integration results.
+        """
         self.validate_inputs(system, y0, t_vals)
 
         # Common zero-span short-circuit
@@ -251,6 +387,27 @@ class _FixedStepRK(_RungeKuttaBase):
             return constant_sol
 
         f = self._build_rhs_wrapper(system)
+
+        # Event-enabled path: scan fixed steps for a sign change and refine using RK dense/stage data
+        if event_fn is not None:
+            event_compiled = self._compile_event_function(event_fn)
+            direction = 0 if event_cfg is None else int(event_cfg.direction)
+            terminal = 1 if (event_cfg is None or event_cfg.terminal) else 0
+            hit, t_hit, y_hit, states = _FixedStepRK._integrate_fixed_rk_until_event(
+                f=f,
+                y0=y0,
+                t_vals=t_vals,
+                A=self._A,
+                B_HIGH=self._B_HIGH,
+                C=self._C,
+                event_fn=event_compiled,
+                direction=direction,
+                terminal=terminal,
+            )
+            if hit:
+                return _Solution(times=np.array([t_vals[0], t_hit], dtype=np.float64), states=np.vstack([y0, y_hit]))
+            else:
+                return _Solution(times=np.array([t_vals[0], t_vals[-1]], dtype=np.float64), states=np.vstack([y0, states[-1]]))
 
         has_b_low = self._B_LOW is not None
         B_LOW_arr = self._B_LOW if has_b_low else np.empty(0, dtype=np.float64)
@@ -273,6 +430,35 @@ class _FixedStepRK(_RungeKuttaBase):
         C,
         has_b_low,
     ):
+        """
+        Integrate a dynamical system using a fixed-step Runge-Kutta method.
+        
+        Parameters
+        ----------
+        f : callable
+            The right-hand side of the differential equation.
+        y0 : numpy.ndarray
+            The initial state.
+        t_vals : numpy.ndarray
+            The time points to evaluate the solution at.
+        A : numpy.ndarray
+            The Butcher tableau.
+        B_HIGH : numpy.ndarray
+            The high order weights.
+        B_LOW : numpy.ndarray
+            The low order weights.
+        C : numpy.ndarray
+            The nodes.
+        has_b_low : bool
+            Whether the low order weights are used.
+
+        Returns
+        -------
+        numpy.ndarray
+            The states at the time points.
+        numpy.ndarray
+            The derivatives at the time points.
+        """
         n_steps = t_vals.size
         dim = y0.size
         states = np.empty((n_steps, dim), dtype=np.float64)
@@ -290,6 +476,77 @@ class _FixedStepRK(_RungeKuttaBase):
             states[idx + 1] = y_high
             derivs[idx + 1] = f(t_vals[idx + 1], y_high)
         return states, derivs
+
+    @staticmethod
+    @numba.njit(cache=False, fastmath=FASTMATH)
+    def _integrate_fixed_rk_until_event(f, y0, t_vals, A, B_HIGH, C, event_fn, direction, terminal):
+        """
+        Integrate a dynamical system using a fixed-step Runge-Kutta method until an event is detected.
+        
+        Parameters
+        ----------
+        f : callable
+            The right-hand side of the differential equation.
+        y0 : numpy.ndarray
+            The initial state.
+        t_vals : numpy.ndarray
+            The time points to evaluate the solution at.
+        A : numpy.ndarray
+            The Butcher tableau.
+        B_HIGH : numpy.ndarray
+            The high order weights.
+        C : numpy.ndarray
+            The nodes.
+        event_fn : callable
+            The event function.
+        direction : int
+            The direction of the event.
+        terminal : int
+            Whether the event is terminal.
+
+        Returns
+        -------
+        bool
+            Whether the event was detected.
+        float
+            The time of the event.
+        numpy.ndarray
+            The state at the event.
+        numpy.ndarray
+            The states at the time points.
+        """
+        n_steps = t_vals.size
+        dim = y0.size
+        states = np.empty((n_steps, dim), dtype=np.float64)
+        states[0] = y0
+        t0 = t_vals[0]
+        f_prev = f(t0, y0)
+        g_prev = event_fn(t0, y0)
+        for idx in range(n_steps - 1):
+            t_n = t_vals[idx]
+            h = t_vals[idx + 1] - t_n
+            y_n = states[idx]
+            # advance one step with the provided tableau
+            y_high, _, _ = rk_embedded_step_jit_kernel(
+                f, t_n, y_n, h, A, B_HIGH, np.empty(0, np.float64), C, False
+            )
+            f_new = f(t_n + h, y_high)
+            # event check at t_{n+1}
+            g_new = event_fn(t_n + h, y_high)
+            crossed = False
+            if direction == 0:
+                crossed = (g_prev < 0.0 and g_new > 0.0) or (g_prev > 0.0 and g_new < 0.0)
+            elif direction > 0:
+                crossed = (g_prev < 0.0 and g_new > 0.0)
+            else:
+                crossed = (g_prev > 0.0 and g_new < 0.0)
+            if crossed:
+                t_hit, y_hit = _hermite_refine_in_step(event_fn, t_n, y_n, f_prev, t_n + h, y_high, f_new, h, direction, TOL)
+                return True, t_hit, y_hit, states
+            states[idx + 1] = y_high
+            f_prev = f_new
+            g_prev = g_new
+        return False, t_vals[-1], states[-1], states
 
 
 class _RK4(_FixedStepRK):
@@ -380,6 +637,36 @@ class _AdaptiveStepRK(_RungeKuttaBase):
 
 @numba.njit(cache=False, fastmath=FASTMATH)
 def rk45_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E):
+    """Perform a single step of the RK45 method.
+    
+    Parameters
+    ----------
+    f : callable
+        The right-hand side of the differential equation.
+    t : float
+        The current time.
+    y : numpy.ndarray
+        The current state.
+    h : float
+        The step size.
+    A : numpy.ndarray
+        The Butcher tableau.
+    B_HIGH : numpy.ndarray
+        The high order weights.
+    C : numpy.ndarray
+        The nodes.
+    E : numpy.ndarray
+        The error weights.
+
+    Returns
+    -------
+    numpy.ndarray
+        The high order solution.
+    numpy.ndarray
+        The low order solution.
+    numpy.ndarray
+        The error vector.
+    """
     s = 6
     k = np.empty((s + 1, y.size), dtype=np.float64)
     k[0] = f(t, y)
@@ -408,6 +695,138 @@ def rk45_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E):
     return y_high, y_low, err_vec, k
 
 
+@numba.njit(cache=False, fastmath=FASTMATH)
+def _rk45_build_Q_cache(Kseg, P, dim):
+    """Build the Q cache for the RK45 method.
+    
+    Parameters
+    ----------
+    Kseg : numpy.ndarray
+        The intermediate stages.
+    P : numpy.ndarray
+        The nodes.
+    dim : int
+        The dimension of the state.
+
+    Returns
+    -------
+    numpy.ndarray
+        The Q cache.
+    """
+    Q_cache = np.empty((dim, P.shape[1]), dtype=np.float64)
+    for c in range(P.shape[1]):
+        for d in range(dim):
+            Q_cache[d, c] = 0.0
+        for r in range(Kseg.shape[0]):
+            coeff = P[r, c]
+            if coeff != 0.0:
+                for d in range(dim):
+                    Q_cache[d, c] += coeff * Kseg[r, d]
+    return Q_cache
+
+@numba.njit(cache=False, fastmath=FASTMATH)
+def _rk45_eval_dense(y_old, Q_cache, P, x, hseg):
+    """Evaluate the dense interpolator at time x.
+    
+    Parameters
+    ----------
+    y_old : numpy.ndarray
+        The initial state.
+    Q_cache : numpy.ndarray
+        The Q cache.
+    P : numpy.ndarray
+        The nodes.
+    x : float
+        The time to evaluate the interpolator at.
+    hseg : float
+        The step size.
+    
+    Returns
+    -------
+    numpy.ndarray
+        The interpolated state.
+    """
+    dim = y_old.size
+    p_len = P.shape[1]
+    p = np.empty(p_len, dtype=np.float64)
+    val = x
+    for c in range(p_len):
+        p[c] = val
+        val *= x
+    y_val = np.empty(dim, dtype=np.float64)
+    for d in range(dim):
+        acc = 0.0
+        for c in range(p_len):
+            acc += Q_cache[d, c] * p[c]
+        y_val[d] = y_old[d] + hseg * acc
+    return y_val
+
+@numba.njit(cache=False, fastmath=FASTMATH)
+def _rk45_refine_in_step(event_fn, t0, y0, t1, y1, h, Kseg, P, direction, xtol):
+    """Refine the integration step using bisection on x in [0, 1].
+    
+    Parameters
+    ----------
+    event_fn : callable
+        The event function.
+    t0 : float
+        The initial time.
+    y0 : numpy.ndarray
+        The initial state.
+    t1 : float
+        The final time.
+    y1 : numpy.ndarray
+        The final state.
+    h : float
+        The step size.
+    Kseg : numpy.ndarray
+        The intermediate stages.
+    P : numpy.ndarray
+        The nodes.
+    direction : int
+        The direction of the event.
+    xtol : float
+        The tolerance.
+
+    Returns
+    -------
+    float
+        The time of the event.
+    numpy.ndarray
+        The state at the event.
+    """
+    dim = y0.size
+    Q_cache = _rk45_build_Q_cache(Kseg, P, dim)
+    a = 0.0
+    b = 1.0
+    g_left = event_fn(t0, y0)
+    g_right = event_fn(t1, y1)
+    max_iter = 64
+    for _ in range(max_iter):
+        mid = 0.5 * (a + b)
+        y_mid = _rk45_eval_dense(y0, Q_cache, P, mid, h)
+        g_mid = event_fn(t0 + mid * h, y_mid)
+        crossed = False
+        if direction == 0:
+            crossed = (g_left < 0.0 and g_mid > 0.0) or (g_left > 0.0 and g_mid < 0.0)
+        elif direction > 0:
+            crossed = (g_left < 0.0 and g_mid > 0.0)
+        else:
+            crossed = (g_left > 0.0 and g_mid < 0.0)
+        if crossed:
+            b = mid
+            g_right = g_mid
+        else:
+            a = mid
+            g_left = g_mid
+        if (b - a) * abs(h) <= xtol:
+            break
+    x_hit = b
+    t_hit = t0 + x_hit * h
+    y_hit = _rk45_eval_dense(y0, Q_cache, P, x_hit, h)
+    return t_hit, y_hit
+
+
 class _RK45(_AdaptiveStepRK):
     """Implement the Dormand-Prince 5(4) adaptive Runge-Kutta method.
     
@@ -426,13 +845,89 @@ class _RK45(_AdaptiveStepRK):
         super().__init__("_RK45", **opts)
 
     def _rk_embedded_step(self, f, t, y, h):
+        """Perform a single step of the RK45 method.
+        
+        Parameters
+        ----------
+        f : callable
+            The right-hand side of the differential equation.
+        t : float
+            The current time.
+        y : numpy.ndarray
+            The current state.
+        h : float
+            The step size.
+
+        Returns
+        -------
+        numpy.ndarray
+            The high order solution.
+        numpy.ndarray
+            The low order solution.
+        numpy.ndarray
+            The error vector.
+        """
         y_high, y_low, err_vec, _ = rk45_step_jit_kernel(f, t, y, h, self._A, self._B_HIGH, self._C, self._E)
         return y_high, y_low, err_vec
 
     def integrate(self, system: _DynamicalSystemProtocol, y0: np.ndarray, t_vals: np.ndarray, *, event_fn=None, event_cfg: _EventConfig | None = None, **kwargs) -> _Solution:
-        """Adaptive integration fully in Numba for RK45 with Hermite interpolation."""
+        """Adaptive integration fully in Numba for RK45 with Hermite interpolation and optional events.
+        
+
+        Parameters
+        ----------
+        system : _DynamicalSystemProtocol
+            The dynamical system to integrate.
+        y0 : numpy.ndarray
+            The initial condition.
+        t_vals : numpy.ndarray
+            The time points to evaluate the solution at.
+        event_fn : callable
+            The event function.
+        event_cfg : :class:`~hiten.algorithms.integrators.configs._EventConfig` | None
+            The event configuration.
+        **kwargs
+            Additional integration options.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.integrators.base._Solution`
+            The integration results.
+        """
         self.validate_inputs(system, y0, t_vals)
         f = self._build_rhs_wrapper(system)
+        # Event-enabled path
+        if event_fn is not None:
+            event_compiled = self._compile_event_function(event_fn)
+            direction = 0 if event_cfg is None else int(event_cfg.direction)
+            terminal = 1 if (event_cfg is None or event_cfg.terminal) else 0
+            t0 = float(t_vals[0])
+            tmax = float(t_vals[-1])
+            xtol = float(TOL)
+            hit, t_event, y_event, y_last = _RK45._integrate_rk45_until_event(
+                f=f,
+                y0=y0,
+                t0=t0,
+                tmax=tmax,
+                A=self._A,
+                B_HIGH=self._B_HIGH,
+                C=self._C,
+                E=self._E,
+                P=RK45_P,
+                rtol=self._rtol,
+                atol=self._atol,
+                max_step=self._max_step,
+                min_step=self._min_step,
+                order=self._p,
+                event_fn=event_compiled,
+                direction=direction,
+                terminal=terminal,
+                xtol=xtol,
+            )
+            if hit:
+                return _Solution(times=np.array([t0, t_event], dtype=np.float64), states=np.vstack([y0, y_event]))
+            else:
+                return _Solution(times=np.array([t0, tmax], dtype=np.float64), states=np.vstack([y0, y_last]))
         states, derivs = _RK45._integrate_rk45(
             f=f,
             y0=y0,
@@ -453,6 +948,42 @@ class _RK45(_AdaptiveStepRK):
     @staticmethod
     @numba.njit(cache=False, fastmath=FASTMATH)
     def _integrate_rk45(f, y0, t_eval, A, B_HIGH, C, E, P, rtol, atol, max_step, min_step, order):
+        """Integrate the RK45 method.
+        
+        Parameters
+        ----------
+        f : callable
+            The right-hand side of the differential equation.
+        y0 : numpy.ndarray
+            The initial condition.
+        t_eval : numpy.ndarray
+            The time points to evaluate the solution at.
+        A : numpy.ndarray
+            The Butcher tableau.
+        B_HIGH : numpy.ndarray
+            The high order weights.
+        C : numpy.ndarray
+            The nodes.
+        E : numpy.ndarray
+            The error weights.
+        P : numpy.ndarray
+            The nodes.
+        rtol : float
+            The relative tolerance.
+        atol : float
+            The absolute tolerance.
+        max_step : float
+            The maximum step size.
+        min_step : float
+            The minimum step size.
+
+        Returns
+        -------
+        numpy.ndarray
+            The states at the time points.
+        numpy.ndarray
+            The derivatives at the time points.
+        """
         t0 = t_eval[0]
         tf = t_eval[-1]
         t = t0
@@ -590,9 +1121,171 @@ class _RK45(_AdaptiveStepRK):
 
         return y_out, derivs_out
 
+    @staticmethod
+    @numba.njit(cache=False, fastmath=FASTMATH)
+    def _integrate_rk45_until_event(f, y0, t0, tmax, A, B_HIGH, C, E, P, rtol, atol, max_step, min_step, order, event_fn, direction, terminal, xtol):
+        """Integrate the RK45 method until an event is detected.
+        
+        Parameters
+        ----------
+        f : callable
+            The right-hand side of the differential equation.
+        y0 : numpy.ndarray
+            The initial condition.
+        t0 : float
+            The initial time.
+        tmax : float
+            The maximum time.
+        A : numpy.ndarray
+            The Butcher tableau.
+        B_HIGH : numpy.ndarray
+            The high order weights.
+        C : numpy.ndarray
+            The nodes.
+        E : numpy.ndarray
+            The error weights.
+        P : numpy.ndarray
+            The nodes.
+        rtol : float
+            The relative tolerance.
+        atol : float
+            The absolute tolerance.
+        max_step : float
+            The maximum step size.
+        min_step : float
+            The minimum step size.
+        order : int
+            The order of the method.
+        event_fn : callable
+            The event function.
+        direction : int
+            The direction of the event.
+        terminal : int
+            Whether the event is terminal.
+        xtol : float
+            The tolerance.
+
+        Returns
+        -------
+        bool
+            Whether the event was detected.
+        float
+            The time of the event.
+        numpy.ndarray
+            The state at the event.
+        """
+        t = t0
+        y = y0.copy()
+        f_curr = f(t, y)
+        g_prev = event_fn(t, y)
+
+        # initial step heuristic
+        scale0 = atol + rtol * np.abs(y)
+        d0 = np.linalg.norm(y / scale0) / np.sqrt(y.size)
+        d1 = np.linalg.norm(f_curr / scale0) / np.sqrt(y.size)
+        if d0 < 1e-5 or d1 < 1e-5:
+            h = 1e-6
+        else:
+            h = 0.01 * d0 / d1
+        if h > max_step:
+            h = max_step
+        if h < min_step:
+            h = min_step
+
+        err_prev = -1.0
+        SAFETY = 0.9
+        MIN_FACTOR = 0.2
+        MAX_FACTOR = 10.0
+        err_exp = 1.0 / order
+
+        while (t - tmax) * 1.0 < 0.0:
+            if h > max_step:
+                h = max_step
+            if t + h > tmax:
+                h = abs(tmax - t)
+
+            y_high, y_low, err_vec, K = rk45_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E)
+            scale = atol + rtol * np.maximum(np.abs(y), np.abs(y_high))
+            err_norm = np.linalg.norm(err_vec / scale) / np.sqrt(err_vec.size)
+
+            if err_norm <= 1.0:
+                t_new = t + h
+                y_new = y_high
+                g_new = event_fn(t_new, y_new)
+                crossed = False
+                if direction == 0:
+                    crossed = (g_prev < 0.0 and g_new > 0.0) or (g_prev > 0.0 and g_new < 0.0)
+                elif direction > 0:
+                    crossed = (g_prev < 0.0 and g_new > 0.0)
+                else:
+                    crossed = (g_prev > 0.0 and g_new < 0.0)
+                if crossed:
+                    t_hit, y_hit = _rk45_refine_in_step(event_fn, t, y, t_new, y_new, h, K, P, direction, xtol)
+                    return True, t_hit, y_hit, y_new
+
+                # accept
+                t = t_new
+                y = y_new
+                f_curr = f(t, y)
+                g_prev = g_new
+
+                beta = 1.0 / (order + 1)
+                alpha = 0.4 * beta
+                if err_prev < 0:
+                    factor = SAFETY * (err_norm ** (-beta))
+                else:
+                    factor = SAFETY * (err_norm ** (-beta)) * (err_prev ** alpha)
+                if factor < MIN_FACTOR:
+                    factor = MIN_FACTOR
+                if factor > MAX_FACTOR:
+                    factor = MAX_FACTOR
+                h = h * factor
+                err_prev = err_norm
+            else:
+                factor = SAFETY * (err_norm ** (-err_exp))
+                if factor < MIN_FACTOR:
+                    factor = MIN_FACTOR
+                h = h * factor
+                if h < min_step:
+                    h = min_step
+
+        return False, t, y, y
+
 
 @numba.njit(cache=False, fastmath=FASTMATH)
 def dop853_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E5, E3):
+    """Perform a single step of the DOP853 method.
+    
+    Parameters
+    ----------
+    f : callable
+        The right-hand side of the differential equation.
+    t : float
+        The current time.
+    y : numpy.ndarray
+        The current state.
+    h : float
+        The step size.
+    A : numpy.ndarray
+        The Butcher tableau.
+    B_HIGH : numpy.ndarray
+        The high order weights.
+    C : numpy.ndarray
+        The nodes.
+    E5 : numpy.ndarray
+        The error weights.
+    E3 : numpy.ndarray
+        The error weights.
+    
+    Returns
+    -------
+    numpy.ndarray
+        The high order solution.
+    numpy.ndarray
+        The low order solution.
+    numpy.ndarray
+        The error vector.
+    """
     s = B_HIGH.size
     k = np.empty((s + 1, y.size), dtype=np.float64)
     k[0] = f(t, y)
@@ -635,6 +1328,50 @@ def dop853_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E5, E3):
 
 @numba.njit(cache=False, fastmath=FASTMATH)
 def _dop853_build_dense_cache(f, t_old, y_old, f_old, y_new, f_new, hseg, Kseg, A_full, C_full, D, n_stages_extended, interpolator_power):
+    """Build the dense cache for the DOP853 method.
+    
+    Parameters
+    ----------
+    f : callable
+        The right-hand side of the differential equation.
+    t_old : float
+        The initial time.
+    y_old : numpy.ndarray
+        The initial state.
+    f_old : numpy.ndarray
+        The initial derivative.
+    y_new : numpy.ndarray
+        The final state.
+    f_new : numpy.ndarray
+        The final derivative.
+    hseg : float
+        The step size.
+    Kseg : numpy.ndarray
+        The intermediate stages.
+    A_full : numpy.ndarray
+        The full Butcher tableau.
+    C_full : numpy.ndarray
+        The full Butcher tableau.
+    D : numpy.ndarray
+        The full Butcher tableau.
+    n_stages_extended : int
+        The number of stages.
+    interpolator_power : int
+        The power of the interpolator.
+
+    Returns
+    -------
+    numpy.ndarray
+        The dense cache.
+
+    Notes
+    -----
+    This function implements the dense cache for the DOP853 method.
+    It uses the dense cache to evaluate the interpolator at the time x.
+    It returns the interpolated state.
+    The interpolated state is returned in the interval [y0, y1].
+    The time of the event is returned in the interval [t0, t1].
+    """
     # Build extended stages Kext
     dim = y_old.size
     s_used = Kseg.shape[0]
@@ -678,6 +1415,32 @@ def _dop853_build_dense_cache(f, t_old, y_old, f_old, y_new, f_new, hseg, Kseg, 
 
 @numba.njit(cache=False, fastmath=FASTMATH)
 def _dop853_eval_dense(y_old, F_cache, interpolator_power, x):
+    """Evaluate the dense interpolator at time x.
+
+    Parameters
+    ----------
+    y_old : numpy.ndarray
+        The initial state.
+    F_cache : numpy.ndarray
+        The dense cache.
+    interpolator_power : int
+        The power of the interpolator.
+    x : float
+        The time to evaluate the interpolator at.
+
+    Returns
+    -------
+    numpy.ndarray
+        The interpolated state.
+
+    Notes
+    -----
+    This function implements the dense interpolator.
+    It uses the dense cache to evaluate the interpolator at the time x.
+    It returns the interpolated state.
+    The interpolated state is returned in the interval [y0, y1].
+    The time of the event is returned in the interval [t0, t1].
+    """
     dim = y_old.size
     y_val = np.zeros(dim, dtype=np.float64)
     for i in range(interpolator_power - 1, -1, -1):
@@ -696,6 +1459,62 @@ def _dop853_eval_dense(y_old, F_cache, interpolator_power, x):
 
 @numba.njit(cache=False, fastmath=FASTMATH)
 def _dop853_refine_in_step(f, event_fn, t0, y0, f0, t1, y1, f1, h, Kseg, A_full, C_full, D, n_stages_extended, interpolator_power, direction, xtol):
+    """Refine the integration step using bisection on x in [0, 1].
+    
+    Parameters
+    ----------
+    f : callable
+        The right-hand side of the differential equation.
+    event_fn : callable
+        The event function.
+    t0 : float
+        The initial time.
+    y0 : numpy.ndarray
+        The initial state.
+    f0 : numpy.ndarray
+        The initial derivative.
+    t1 : float
+        The final time.
+    y1 : numpy.ndarray
+        The final state.
+    f1 : numpy.ndarray
+        The final derivative.
+    h : float
+        The step size.
+    Kseg : numpy.ndarray
+        The intermediate stages.
+    A_full : numpy.ndarray
+        The full Butcher tableau.
+    C_full : numpy.ndarray
+        The full Butcher tableau.
+    D : numpy.ndarray
+        The full Butcher tableau.
+    n_stages_extended : int
+        The number of stages.
+    interpolator_power : int
+        The power of the interpolator.
+    direction : int
+        The direction of the event.
+    xtol : float
+        The tolerance.
+
+    Returns
+    -------
+    float
+        The time of the event.
+    numpy.ndarray
+        The state at the event.
+
+    Notes
+    -----
+    This function implements the bisection method to find the time of the event.
+    It uses the dense cache to evaluate the event function at the endpoints and
+    the intermediate points.
+    It then uses the bisection method to find the time of the event.
+    It returns the time of the event and the state at the event.
+    The time of the event is returned in the interval [t0, t1].
+    The state at the event is returned in the interval [y0, y1].
+    """
     # Build dense cache once for this step
     F_cache = _dop853_build_dense_cache(
         f=f,
@@ -764,6 +1583,29 @@ class _DOP853(_AdaptiveStepRK):
         super().__init__("_DOP853", **opts)
 
     def _rk_embedded_step(self, f, t, y, h):
+        """
+        Perform a single step of the DOP853 method.
+
+        Parameters
+        ----------
+        f : callable
+            The right-hand side of the differential equation.
+        t : float
+            The current time.
+        y : numpy.ndarray
+            The current state.
+        h : float
+            The step size.
+
+        Returns
+        -------
+        numpy.ndarray
+            The high order solution.
+        numpy.ndarray
+            The low order solution.
+        numpy.ndarray
+            The error vector.
+        """
         y_high, y_low, err_vec, _, _ = dop853_step_jit_kernel(
             f, t, y, h, self._A, self._B_HIGH, self._C, self._E5, self._E3
         )
@@ -774,6 +1616,26 @@ class _DOP853(_AdaptiveStepRK):
 
         Supports an optional scalar `event_fn(t, y) -> float` to terminate at the
         first detected crossing according to `event_cfg.direction`.
+
+        Parameters
+        ----------
+        system : _DynamicalSystemProtocol
+            The dynamical system to integrate.
+        y0 : numpy.ndarray
+            The initial condition.
+        t_vals : numpy.ndarray
+            The time points to evaluate the solution at.
+        event_fn : callable
+            The event function.
+        event_cfg : :class:`~hiten.algorithms.integrators.configs._EventConfig`
+            The event configuration.
+        **kwargs
+            Additional integration options.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.integrators.base._Solution`
+            The integration results.
         """
         self.validate_inputs(system, y0, t_vals)
         # Common zero-span short-circuit
@@ -846,6 +1708,59 @@ class _DOP853(_AdaptiveStepRK):
     @staticmethod
     @numba.njit(cache=False, fastmath=FASTMATH)
     def _integrate_dop853(f, y0, t_eval, A, B_HIGH, C, E5, E3, D, n_stages_extended, interpolator_power, A_full, C_full, rtol, atol, max_step, min_step, order):
+        """
+        Integrate until the end of the time interval.
+
+        Parameters
+        ----------
+        f : callable
+            The right-hand side of the differential equation.
+        y0 : numpy.ndarray
+            The initial condition.
+        t_eval : numpy.ndarray
+            The time points to evaluate the solution at.
+        A : numpy.ndarray
+            The Butcher tableau.
+        B_HIGH : numpy.ndarray
+            The high order weights.
+        C : numpy.ndarray
+            The nodes.
+        E5 : numpy.ndarray
+            The fifth order error coefficients.
+        E3 : numpy.ndarray
+            The third order error coefficients.
+        D : numpy.ndarray
+            The D matrix.
+        n_stages_extended : int
+            The number of stages extended.
+        interpolator_power : int
+            The interpolator power.
+        A_full : numpy.ndarray
+            The full A matrix.
+        C_full : numpy.ndarray
+            The full C matrix.
+        rtol : float
+            The relative tolerance.
+        atol : float
+            The absolute tolerance.
+        max_step : float
+            The maximum step size.
+        min_step : float
+            The minimum step size.
+        order : int
+            The order of the method.
+
+        Returns
+        -------
+        numpy.ndarray
+            The states at the time points.
+        numpy.ndarray
+            The derivatives at the time points.
+
+        See Also
+        --------
+        :func:`~hiten.algorithms.integrators.rk.dop853_step_jit_kernel` : The kernel used for the step.
+        """
         t0 = t_eval[0]
         tf = t_eval[-1]
         t = t0
@@ -1036,6 +1951,69 @@ class _DOP853(_AdaptiveStepRK):
         f, y0, t0, tmax, A, B_HIGH, C, E5, E3, D, n_stages_extended, interpolator_power, A_full, C_full, rtol, atol, max_step, min_step, order,
         event_fn, direction, terminal, xtol,
     ):
+        """
+        Integrate until an event is detected.
+
+        Parameters
+        ----------
+        f : callable
+            The right-hand side of the differential equation.
+        y0 : numpy.ndarray
+            The initial condition.
+        t0 : float
+            The initial time.
+        tmax : float
+            The maximum time.
+        A : numpy.ndarray
+            The Butcher tableau.
+        B_HIGH : numpy.ndarray
+            The high order weights.
+        C : numpy.ndarray
+            The nodes.
+        E5 : numpy.ndarray
+            The fifth order error coefficients.
+        E3 : numpy.ndarray
+            The third order error coefficients.
+        D : numpy.ndarray
+            The D matrix.
+        n_stages_extended : int
+            The number of stages extended.
+        interpolator_power : int
+            The interpolator power.
+        A_full : numpy.ndarray
+            The full A matrix.
+        C_full : numpy.ndarray
+            The full C matrix.
+        rtol : float
+            The relative tolerance.
+        atol : float
+            The absolute tolerance.
+        max_step : float
+            The maximum step size.
+        min_step : float
+            The minimum step size.
+        order : int
+            The order of the integrator.
+        event_fn : callable
+            The event function.
+        direction : int
+            The direction of the event.
+        terminal : bool
+            Whether to terminate at the event.
+        xtol : float
+            The tolerance for the event.
+
+        Returns
+        -------
+        bool
+            Whether an event was detected.
+        float
+            The time of the event.
+        numpy.ndarray
+            The state at the event.
+        numpy.ndarray
+            The state at the end of the integration.
+        """
         t = t0
         y = y0.copy()
         # initial derivative and event value
@@ -1145,7 +2123,7 @@ class _DOP853(_AdaptiveStepRK):
         return False, t, y, y
 
 
-class RungeKutta:
+class FixedRK:
     """Implement a factory class for creating fixed-step Runge-Kutta integrators.
     
     This factory provides convenient access to fixed-step Runge-Kutta methods
@@ -1153,9 +2131,9 @@ class RungeKutta:
     
     Examples
     --------
-    >>> rk4 = RungeKutta(order=4)
-    >>> rk6 = RungeKutta(order=6)
-    >>> rk8 = RungeKutta(order=8)
+    >>> rk4 = FixedRK(order=4)
+    >>> rk6 = FixedRK(order=6)
+    >>> rk8 = FixedRK(order=8)
     """
     _map = {4: _RK4, 6: _RK6, 8: _RK8}
     def __new__(cls, order=4, **opts):
@@ -1218,3 +2196,38 @@ class AdaptiveRK:
         if order not in cls._map:
             raise ValueError("Adaptive RK order not supported")
         return cls._map[order](**opts)
+
+class RungeKutta:
+    """Implement a factory class for creating Runge-Kutta integrators.
+    
+    This factory provides convenient access to Runge-Kutta integrators of different orders.
+    """
+    _map = {4: FixedRK, 45: AdaptiveRK, 6: FixedRK, 8: FixedRK, 853: AdaptiveRK}
+    def __new__(cls, order=4, **opts):
+        """Create a Runge-Kutta integrator of specified order.
+        
+        Parameters
+        ----------
+        order : int, default 4
+            Order of the Runge-Kutta method. Must be 4, 45, 6, 8, or 853.
+        **opts
+            Additional options passed to the integrator constructor.
+            
+        Returns
+        -------
+        :class:`~hiten.algorithms.integrators.rk.FixedRK` or :class:`~hiten.algorithms.integrators.rk.AdaptiveRK`
+            A Runge-Kutta integrator instance.
+        """
+        if order not in cls._map:
+            raise ValueError("Runge-Kutta order not supported")
+        
+        factory_class = cls._map[order]
+        if order in [45, 853]:
+            if order == 45:
+                _order = 5
+            else:
+                _order = 8
+            return factory_class(order=_order, **opts)
+        else:
+            _order = order
+            return factory_class(order=_order, **opts)
