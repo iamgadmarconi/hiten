@@ -56,6 +56,7 @@ def main() -> None:
 
         # Differential correction, propagation & basic visualisation
         orbit.correct(max_attempts=spec["diff_corr_attempts"], finite_difference=spec["finite_difference"])
+        print(f"Corrected state: {orbit.initial_state} | Period: {orbit.period}")
         orbit.propagate(steps=1000)
         orbit.plot("rotating")
 
