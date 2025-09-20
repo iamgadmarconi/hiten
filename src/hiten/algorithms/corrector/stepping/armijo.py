@@ -1,5 +1,3 @@
-
-
 """Define the Armijo step interface for step-size control strategies.
 
 This module provides the Armijo step interface for step-size control strategies.
