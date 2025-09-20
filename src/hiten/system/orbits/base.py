@@ -505,9 +505,9 @@ class PeriodicOrbit(ABC):
         interface = _PeriodicOrbitInterface()
         engine = _OrbitCorrectionEngine(backend=backend, interface=interface)
 
-        x_corr, result, half_period = engine.solve(self, cfg)
-        interface.apply_results_to_orbit(self, corrected_state=x_corr, half_period=half_period)
-        return x_corr, half_period
+        result, half_period = engine.solve(self, cfg)
+        interface.apply_results_to_orbit(self, corrected_state=result.x_corrected, half_period=half_period)
+        return result.x_corrected, half_period
 
     def propagate(self, steps: int = 1000, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         """

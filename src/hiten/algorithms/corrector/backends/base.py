@@ -193,3 +193,19 @@ class _CorrectorBackend(ABC):
         """
         # Subclasses must provide concrete implementation
         raise NotImplementedError("Subclasses must implement the correct method")
+
+    def on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:
+        """Called after each iteration. Default: no-op."""
+        return
+
+    def on_accept(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
+        """Called when the backend detects convergence. Default: no-op."""
+        return
+
+    def on_failure(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
+        """Called when the backend completes without converging. Default: no-op."""
+        return
+
+    def on_success(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
+        """Called by the Engine after final acceptance. Default: no-op."""
+        return

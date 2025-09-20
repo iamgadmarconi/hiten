@@ -64,57 +64,6 @@ class _NewtonBackend(_CorrectorBackend):
         else:
             self._stepper_factory = stepper_factory
 
-    def _on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:
-        """Hook called after each iteration for custom processing.
-
-        Override for custom bookkeeping, adaptive strategies, or detailed
-        logging without modifying the core solver.
-
-        Parameters
-        ----------
-        k : int
-            Current iteration index (starting at 0).
-        x : ndarray
-            Current solution estimate.
-        r_norm : float
-            Residual norm at current estimate.
-        """
-        pass
-
-    def _on_accept(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
-        """Hook called once after successful convergence.
-
-        Override for post-processing that should happen only once after
-        convergence (caching, statistics, cleanup).
-
-        Parameters
-        ----------
-        x : ndarray
-            Converged solution vector.
-        iterations : int
-            Total iterations performed.
-        residual_norm : float
-            Final residual norm (<= tolerance).
-        """
-        pass
-
-    def _on_failure(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
-        """Hook called once after convergence failure.
-
-        Override for post-processing that should happen only once after
-        failure (cleanup, diagnostics, fallback strategies).
-
-        Parameters
-        ----------
-        x : ndarray
-            Final solution vector.
-        iterations : int
-            Total iterations performed.
-        residual_norm : float
-            Final residual norm (>= tolerance).
-        """
-        pass
-
     def _compute_residual(self, x: np.ndarray, residual_fn: ResidualFn) -> np.ndarray:
         """Compute residual vector R(x).
 
@@ -150,6 +99,32 @@ class _NewtonBackend(_CorrectorBackend):
             Scalar norm value.
         """
         return norm_fn(residual)
+
+    def on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:
+        """Public hook invoked after each iteration. Safe no-op by default."""
+        try:
+            self._on_iteration(k, x, r_norm)
+        except Exception:
+            # Hooks must never disrupt solver
+            pass
+
+    def on_accept(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
+        """Public hook invoked when the backend detects convergence."""
+        try:
+            self._on_accept(x, iterations=iterations, residual_norm=residual_norm)
+        except Exception:
+            pass
+
+    def on_failure(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
+        """Public hook invoked when the backend completes without converging."""
+        try:
+            self._on_failure(x, iterations=iterations, residual_norm=residual_norm)
+        except Exception:
+            pass
+
+    def on_success(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
+        """Public hook intended to be called by the Engine after final acceptance."""
+        return
 
     def _compute_jacobian(
         self,
@@ -230,18 +205,15 @@ class _NewtonBackend(_CorrectorBackend):
             else:
                 J_reg = J
 
-            logger.debug("Jacobian cond=%.2e, lambda_reg=%.1e", cond_J, lambda_reg)
             try:
                 delta = np.linalg.solve(J_reg, -r)
             except np.linalg.LinAlgError:
                 logger.warning("Jacobian singular; switching to SVD least-squares update")
                 delta = np.linalg.lstsq(J_reg, -r, rcond=None)[0]
         else:
-            logger.debug("Rectangular Jacobian (%dx%d); solving via Tikhonov least-squares", *J.shape)
             lambda_reg = 1e-12 if (np.isnan(cond_J) or cond_J > cond_threshold) else 0.0
             JTJ = J.T @ J + lambda_reg * np.eye(J.shape[1])
             JTr = J.T @ r
-            logger.debug("Jacobian cond=%.2e, lambda_reg=%.1e", cond_J, lambda_reg)
             try:
                 delta = np.linalg.solve(JTJ, -JTr)
             except np.linalg.LinAlgError:
@@ -308,18 +280,18 @@ class _NewtonBackend(_CorrectorBackend):
             r_norm = self._compute_norm(r, norm_fn)
 
             try:
-                self._on_iteration(k, x, r_norm)
-            except Exception as exc:
-                logger.warning("_on_iteration hook raised an exception: %s", exc)
+                self.on_iteration(k, x, r_norm)
+            except Exception:
+                pass
 
             if r_norm < tol:
                 logger.info("Newton converged after %d iterations (|R|=%.2e)", k, r_norm)
                 info.update(iterations=k, residual_norm=r_norm)
-                # Notify acceptance hook
+                # Notify acceptance hook (public)
                 try:
-                    self._on_accept(x, iterations=k, residual_norm=r_norm)
-                except Exception as exc:
-                    logger.warning("_on_accept hook raised an exception: %s", exc)
+                    self.on_accept(x, iterations=k, residual_norm=r_norm)
+                except Exception:
+                    pass
                 return x, info
 
             J = self._compute_jacobian(x, residual_fn, jacobian_fn, fd_step)
@@ -333,14 +305,6 @@ class _NewtonBackend(_CorrectorBackend):
                     f"Step strategy failed to produce an update at iter {k}: {exc}"
                 ) from exc
 
-            logger.debug(
-                "Newton iter %d/%d: |R|=%.2e -> %.2e (alpha=%.2e)",
-                k + 1,
-                max_attempts,
-                r_norm,
-                r_norm_new,
-                alpha_used,
-            )
             x = x_new
 
         r_final = self._compute_residual(x, residual_fn)
@@ -348,15 +312,9 @@ class _NewtonBackend(_CorrectorBackend):
 
         # Call acceptance hook if converged in the final check
         if r_final_norm < tol:
-            try:
-                self._on_accept(x, iterations=max_attempts, residual_norm=r_final_norm)
-            except Exception as exc:
-                logger.warning("_on_accept hook raised an exception during final check: %s", exc)
+            self.on_accept(x, iterations=max_attempts, residual_norm=r_final_norm)
 
-        try:
-            self._on_failure(x, iterations=max_attempts, residual_norm=r_final_norm)
-        except Exception as exc:
-            logger.warning("_on_failure hook raised an exception during final check: %s", exc)
+        self.on_failure(x, iterations=max_attempts, residual_norm=r_final_norm)
 
         raise ConvergenceError(
             f"Newton did not converge after {max_attempts} iterations (|R|={r_final_norm:.2e})."

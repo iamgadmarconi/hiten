@@ -87,6 +87,11 @@ class _BaseCorrectionConfig:
         or when analytic Jacobians are suspected to be incorrect.
         Generally results in slower convergence but can be more robust.
 
+    fd_step : float, default=1e-8
+        Finite-difference step size used when computing Jacobians via
+        central differences. Scaled internally per-parameter by
+        max(1, |x[i]|) to maintain relative step size.
+
     Notes
     -----
     The default parameters are chosen to work well for typical problems
@@ -125,6 +130,37 @@ class _BaseCorrectionConfig:
     in some cases. The finite-difference step size is chosen automatically
     based on the problem scaling and machine precision.
     """
+
+    fd_step: float = 1e-8
+    """Finite-difference base step size for Jacobian approximation."""
+
+    def __post_init__(self):
+        # Validate scalar parameters
+        if not (isinstance(self.max_attempts, int) and self.max_attempts > 0):
+            raise ValueError("max_attempts must be a positive integer")
+        if not (isinstance(self.tol, (int, float)) and self.tol > 0):
+            raise ValueError("tol must be a positive float")
+        if self.max_delta is not None and not (isinstance(self.max_delta, (int, float)) and self.max_delta > 0):
+            raise ValueError("max_delta must be a positive float or None")
+        if not isinstance(self.finite_difference, bool):
+            raise ValueError("finite_difference must be a boolean")
+        if not (isinstance(self.fd_step, (int, float)) and self.fd_step > 0):
+            raise ValueError("fd_step must be a positive float")
+
+        # Validate line search configuration
+        lsc = self.line_search_config
+        if isinstance(lsc, _LineSearchConfig):
+            # Only basic numeric constraints; residual_fn/norm_fn are injected at runtime
+            if lsc.max_delta is not None and not (isinstance(lsc.max_delta, (int, float)) and lsc.max_delta > 0):
+                raise ValueError("line_search_config.max_delta must be a positive float or None")
+            if not (0 < lsc.alpha_reduction < 1):
+                raise ValueError("line_search_config.alpha_reduction must be in (0, 1)")
+            if not (lsc.min_alpha > 0):
+                raise ValueError("line_search_config.min_alpha must be positive")
+            if not (0 < lsc.armijo_c < 1):
+                raise ValueError("line_search_config.armijo_c must be in (0, 1)")
+        elif lsc is not None and not isinstance(lsc, bool):
+            raise ValueError("line_search_config must be True, False, None, or a _LineSearchConfig instance")
 
 
 @dataclass(frozen=True, slots=True)

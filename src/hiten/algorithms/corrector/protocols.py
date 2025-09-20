@@ -1,3 +1,8 @@
+"""Protocol definitions for the corrector module.
+
+This module provides the protocol definitions for the corrector module.
+"""
+
 from typing import Protocol, Tuple, runtime_checkable
 
 import numpy as np
@@ -70,11 +75,11 @@ class CorrectorBackendProtocol(Protocol):
         ----------
         x0 : np.ndarray
             Initial guess for the parameter vector.
-        residual_fn : ResidualFn
+        residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
             Residual function R(x).
-        jacobian_fn : JacobianFn | None
+        jacobian_fn : :class:`~hiten.algorithms.corrector.types.JacobianFn` | None
             Optional analytical Jacobian.
-        norm_fn : NormFn | None
+        norm_fn : :class:`~hiten.algorithms.corrector.types.NormFn` | None
             Optional norm function for convergence checks.
         tol : float
             Convergence tolerance on residual norm.
