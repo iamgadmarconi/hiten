@@ -13,6 +13,7 @@ from hiten.algorithms.corrector.config import _LineSearchConfig
 from hiten.algorithms.corrector.protocols import StepProtocol
 from hiten.algorithms.corrector.stepping.base import _SteppingBase
 from hiten.algorithms.corrector.types import NormFn, ResidualFn
+from hiten.algorithms.utils.exceptions import BackendError
 from hiten.utils.log_config import logger
 
 
@@ -111,7 +112,7 @@ class _ArmijoLineSearch:
         ------
         ValueError
             If residual function is not provided in configuration.
-        RuntimeError
+        BackendError
             If line search fails to find any productive step.
         """
         if self.residual_fn is None:
@@ -180,7 +181,7 @@ class _ArmijoLineSearch:
             "for min_alpha=%.2e",
             self.min_alpha,
         )
-        raise RuntimeError("Armijo line search failed to find a productive step.")
+        raise BackendError("Armijo line search failed to find a productive step.")
 
 
 class _ArmijoStep(_SteppingBase):

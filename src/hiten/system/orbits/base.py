@@ -25,6 +25,8 @@ import pandas as pd
 
 from hiten.algorithms.corrector.config import _LineSearchConfig
 from hiten.algorithms.corrector.correctors import _NewtonOrbitCorrector
+from hiten.algorithms.corrector.stepping import (make_armijo_stepper,
+                                                 make_plain_stepper)
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import (_compute_monodromy, _compute_stm,
                                             _stability_indices)
@@ -438,7 +440,16 @@ class PeriodicOrbit(ABC):
         _max_delta = max_delta if max_delta is not None else cfg.max_delta
         _finite_difference = finite_difference if finite_difference is not None else cfg.finite_difference
 
-        return _NewtonOrbitCorrector(line_search_config=_line_search_cfg).correct(
+        # Build stepper factory based on line search configuration
+        if _line_search_cfg is True:
+            stepper_factory = make_armijo_stepper(_LineSearchConfig())
+        elif _line_search_cfg is False or _line_search_cfg is None:
+            stepper_factory = make_plain_stepper()
+        else:
+            # Provided a custom _LineSearchConfig
+            stepper_factory = make_armijo_stepper(_line_search_cfg)
+
+        return _NewtonOrbitCorrector(stepper_factory=stepper_factory).correct(
             self,
             tol=_tol,
             max_attempts=_max_attempts,
@@ -891,7 +902,8 @@ class GenericOrbit(PeriodicOrbit):
         TypeError
             If cfg is not an instance of :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None.
         """
-        from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+        from hiten.algorithms.continuation.config import \
+            _OrbitContinuationConfig
         if cfg is not None and not isinstance(cfg, _OrbitContinuationConfig):
             raise TypeError("continuation_config must be a _OrbitContinuationConfig instance or None")
         self._custom_continuation_config = cfg

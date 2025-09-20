@@ -45,13 +45,14 @@ The most common correction method uses Newton's method with analytical or numeri
 
    from hiten.algorithms.corrector.newton import _NewtonBackend
    from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
+   from hiten.algorithms.corrector.stepping import make_plain_stepper
 
    # Create a Newton corrector by combining interfaces
    # Note: _NewtonBackend must come first in inheritance order
    class NewtonOrbitCorrector(_NewtonBackend, _PeriodicOrbitCorrectorInterface):
        pass
    
-   newton_corrector = NewtonOrbitCorrector()
+   newton_corrector = NewtonOrbitCorrector(stepper_factory=make_plain_stepper())
 
    # Correct an orbit using the corrector's correct method
    halo = l1.create_orbit("halo", amplitude_z=0.2, zenith="southern")
@@ -72,7 +73,8 @@ For orbits where analytical Jacobians are difficult to compute, finite differenc
    vertical = l1.create_orbit("vertical", initial_state=[0.8, 0, 0, 0, 0.1, 0])
    
    # Create a corrector and use it for correction
-   corrector = _NewtonOrbitCorrector()
+   from hiten.algorithms.corrector.stepping import make_plain_stepper
+   corrector = _NewtonOrbitCorrector(stepper_factory=make_plain_stepper())
    corrected_state, half_period = corrector.correct(
        vertical,
        max_attempts=100,
@@ -91,7 +93,9 @@ Convergence Criteria
 .. code-block:: python
 
    # High accuracy correction
-   corrector = _NewtonOrbitCorrector()
+   from hiten.algorithms.corrector.stepping import make_armijo_stepper
+   from hiten.algorithms.corrector.config import _LineSearchConfig
+   corrector = _NewtonOrbitCorrector(stepper_factory=make_armijo_stepper(_LineSearchConfig()))
    corrected_state, half_period = corrector.correct(
        halo,
        max_attempts=50,
@@ -146,11 +150,9 @@ For more advanced control over the line search behavior, you can use the `_LineS
    )
 
    # Use custom line search configuration
-   corrected_state, half_period = corrector.correct(
-       halo,
-       max_attempts=30,
-       line_search_config=line_search_config
-   )
+   from hiten.algorithms.corrector.stepping import make_armijo_stepper
+   corrector = _NewtonOrbitCorrector(stepper_factory=make_armijo_stepper(line_search_config))
+   corrected_state, half_period = corrector.correct(halo, max_attempts=30)
 
 Creating Custom Correctors
 --------------------------------
@@ -165,16 +167,12 @@ The simplest way to create a custom corrector is to use the existing `_NewtonOrb
 .. code-block:: python
 
    from hiten.algorithms.corrector import _NewtonOrbitCorrector
-   from hiten.algorithms.corrector.line import _LineSearchConfig
+   from hiten.algorithms.corrector.config import _LineSearchConfig
+   from hiten.algorithms.corrector.stepping import make_armijo_stepper
 
    # Use the ready-to-use corrector with custom configuration
    custom_corrector = _NewtonOrbitCorrector(
-       max_attempts=50,
-       tol=1e-8,
-       line_search_config=_LineSearchConfig(
-           armijo_c=1e-4,
-           alpha_reduction=0.5
-       )
+       stepper_factory=make_armijo_stepper(_LineSearchConfig(armijo_c=1e-4, alpha_reduction=0.5))
    )
    
    halo = l1.create_orbit("halo", amplitude_z=0.2, zenith="southern")
@@ -334,7 +332,7 @@ The correction framework uses several key interfaces:
 
    from hiten.algorithms.corrector.backends.base import _CorrectorBackend
    from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
-   from hiten.algorithms.corrector._step_interface import _ArmijoStep
+   from hiten.algorithms.corrector.stepping import _ArmijoStep
    from hiten.algorithms.corrector.newton import _NewtonBackend
 
    # Create a custom corrector by combining interfaces
@@ -447,12 +445,9 @@ The `_LineSearchConfig` class provides fine-grained control over line search beh
    )
 
    # Use different configurations for different problems
-   corrector = _NewtonOrbitCorrector()
-   corrected_state, half_period = corrector.correct(
-       orbit,
-       line_search_config=precise_config,
-       max_attempts=50
-   )
+   from hiten.algorithms.corrector.stepping import make_armijo_stepper
+   corrector = _NewtonOrbitCorrector(stepper_factory=make_armijo_stepper(precise_config))
+   corrected_state, half_period = corrector.correct(orbit, max_attempts=50)
 
 Custom Jacobian Computation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~

@@ -66,7 +66,7 @@ The correctors module provides concrete corrector implementations for specific p
 
 .. currentmodule:: hiten.algorithms.corrector.correctors
 
-_NewtonOrbitCorrector()
+_NewtonOrbitCorrector(stepper_factory=...)
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
 The :class:`_NewtonOrbitCorrector` class implements a Newton-Raphson corrector for periodic orbits.

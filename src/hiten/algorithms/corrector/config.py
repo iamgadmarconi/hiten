@@ -92,49 +92,6 @@ class _BaseCorrectionConfig:
     The default parameters are chosen to work well for typical problems
     in astrodynamics and dynamical systems, particularly in the context
     of the Circular Restricted Three-Body Problem (CR3BP).
-
-    Parameter Selection Guidelines:
-    
-    - **Tolerance**: Should be 2-3 orders of magnitude larger than
-      machine epsilon to account for numerical errors in function
-      evaluation and Jacobian computation.
-    - **Max attempts**: Should be large enough to allow convergence
-      from reasonable initial guesses but not so large as to waste
-      computation on hopeless cases.
-    - **Max delta**: Should be scaled appropriately for the problem's
-      characteristic length scales to prevent numerical instability.
-    - **Line search**: Generally recommended for production use,
-      especially when initial guesses may be poor.
-
-    Examples
-    --------
-    >>> # Default configuration
-    >>> config = _BaseCorrectionConfig()
-    >>>
-    >>> # High-precision configuration
-    >>> config = _BaseCorrectionConfig(tol=1e-12, max_attempts=100)
-    >>>
-    >>> # Robust configuration with custom line search
-    >>> from hiten.algorithms.corrector.config import _LineSearchConfig
-    >>> ls_config = _LineSearchConfig(armijo_c=1e-4, alpha_reduction=0.5)
-    >>> config = _BaseCorrectionConfig(
-    ...     line_search_config=ls_config,
-    ...     max_delta=1e-3
-    ... )
-    >>>
-    >>> # Fast configuration without line search
-    >>> config = _BaseCorrectionConfig(
-    ...     line_search_config=False,
-    ...     tol=1e-8,
-    ...     max_attempts=20
-    ... )
-
-    See Also
-    --------
-    :class:`~hiten.algorithms.corrector.config._LineSearchConfig`
-        Configuration class for line search parameters.
-    :class:`~hiten.algorithms.corrector.backends.base._CorrectorBackend`
-        Abstract base class that uses this configuration.
     """
     max_attempts: int = 50
     tol: float = 1e-10

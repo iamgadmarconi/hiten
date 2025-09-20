@@ -12,10 +12,14 @@ different correction strategies with various problem types.
 
 Examples
 -------------
-Most users will work with the ready-to-use correctors:
+Most users will call `PeriodicOrbit.correct()` which wires a default stepper.
+Advanced users can inject a custom stepper factory:
 
 >>> from hiten.algorithms.corrector import _NewtonOrbitCorrector
->>> corrector = _NewtonOrbitCorrector()
+>>> from hiten.algorithms.corrector.stepping import make_armijo_stepper
+>>> from hiten.algorithms.corrector.config import _LineSearchConfig
+>>> stepper_factory = make_armijo_stepper(_LineSearchConfig())
+>>> corrector = _NewtonOrbitCorrector(stepper_factory=stepper_factory)
 >>> corrected_orbit = corrector.correct(orbit)
 
 Advanced users can create custom correctors by combining components:

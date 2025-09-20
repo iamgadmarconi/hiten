@@ -100,9 +100,13 @@ class _PlainStep(_SteppingBase):
             if (max_delta is not None) and (not np.isinf(max_delta)):
                 delta_norm = float(np.linalg.norm(delta, ord=np.inf))
                 if delta_norm > max_delta:
-                    delta = delta * (max_delta / delta_norm)
+                    scale = max_delta / delta_norm
+                    delta = delta * scale
+                    x_new = x + delta
+                    r_norm_new = norm_fn(residual_fn(x_new))
+                    return x_new, r_norm_new, float(scale)
 
-            # Apply the (possibly capped) Newton step
+            # Apply the (uncapped) Newton step
             x_new = x + delta
             r_norm_new = norm_fn(residual_fn(x_new))
             return x_new, r_norm_new, 1.0

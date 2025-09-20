@@ -5,15 +5,14 @@ handling of ill-conditioned systems, finite-difference Jacobians, and
 extensible hooks for customization.
 """
 
-from typing import Any, Tuple
+from typing import Any, Callable, Tuple
 
 import numpy as np
 
 from hiten.algorithms.corrector.backends.base import _CorrectorBackend
-from hiten.algorithms.corrector.config import _LineSearchConfig
-from hiten.algorithms.corrector.stepping import _ArmijoLineSearch
 from hiten.algorithms.corrector.protocols import StepProtocol
 from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
+from hiten.algorithms.utils.exceptions import ConvergenceError
 from hiten.utils.log_config import logger
 
 
@@ -25,15 +24,10 @@ class _NewtonBackend(_CorrectorBackend):
     customization. Uses multiple inheritance to separate step control
     from core Newton logic.
 
-    Parameters
-    ----------
-    line_search_config : :class:`~hiten.algorithms.corrector.config._LineSearchConfig`, bool, or None, optional
-        Armijo line search configuration:
-        - :class:`~hiten.algorithms.corrector.config._LineSearchConfig`: Custom line search parameters
-        - True: Use default line search parameters
-        - False/None: Disable line search (use full Newton steps)
-    **kwargs
-        Additional arguments passed to parent classes.
+    Dependency injection
+    --------------------
+    The backend receives a stepper factory that builds a step strategy per
+    problem. If not provided, a safe default plain-capped step is used.
 
     Notes
     -----
@@ -41,56 +35,34 @@ class _NewtonBackend(_CorrectorBackend):
     to provide a robust Newton-Raphson algorithm with Armijo line search.
     """
 
-    _line_search_config: _LineSearchConfig | None
-    _use_line_search: bool
-
-    def __init__(self, *, line_search_config: _LineSearchConfig | bool | None = None, **kwargs) -> None:
-        super().__init__(**kwargs)
-        if line_search_config is None:
-            self._line_search_config = None
-            self._use_line_search = False
-        elif isinstance(line_search_config, bool):
-            if line_search_config:
-                self._line_search_config = _LineSearchConfig()
-                self._use_line_search = True
-            else:
-                self._line_search_config = None
-                self._use_line_search = False
-        else:
-            self._line_search_config = line_search_config
-            self._use_line_search = True
-
-    def _build_stepper(
+    def __init__(
         self,
-        residual_fn: ResidualFn,
-        norm_fn: NormFn,
-        max_delta: float | None,
-    ) -> StepProtocol:
-        """Create a step transformation strategy by composition.
-
-        Returns either a plain capped-step strategy or an Armijo line-search
-        strategy depending on configuration.
-        """
-        if not getattr(self, "_use_line_search", False):
-            def _plain_step(x: np.ndarray, delta: np.ndarray, current_norm: float):
-                if (max_delta is not None) and (not np.isinf(max_delta)):
-                    delta_norm = float(np.linalg.norm(delta, ord=np.inf))
-                    if delta_norm > max_delta:
-                        delta = delta * (max_delta / delta_norm)
-                x_new = x + delta
-                r_norm_new = norm_fn(residual_fn(x_new))
-                return x_new, r_norm_new, 1.0
-            return _plain_step
-
-        cfg = self._line_search_config
-        searcher = _ArmijoLineSearch(
-            config=cfg._replace(residual_fn=residual_fn, norm_fn=norm_fn)
-        )
-
-        def _armijo_step(x: np.ndarray, delta: np.ndarray, current_norm: float):
-            return searcher(x0=x, delta=delta, current_norm=current_norm)
-
-        return _armijo_step
+        *,
+        stepper_factory: Callable[[ResidualFn, NormFn, float | None], StepProtocol] | None = None,
+        **kwargs,
+    ) -> None:
+        super().__init__(**kwargs)
+        # Dependency-injected factory building the stepper per problem
+        self._stepper_factory: Callable[[ResidualFn, NormFn, float | None], StepProtocol]
+        if stepper_factory is None:
+            # Default to a simple capped plain stepper, keeping backend decoupled
+            def _default_factory(res_fn: ResidualFn, nrm_fn: NormFn, max_del: float | None) -> StepProtocol:
+                def _plain_step(x: np.ndarray, delta: np.ndarray, current_norm: float):
+                    if (max_del is not None) and (not np.isinf(max_del)):
+                        delta_norm = float(np.linalg.norm(delta, ord=np.inf))
+                        if delta_norm > max_del:
+                            scale = max_del / delta_norm
+                            delta = delta * scale
+                            x_new_local = x + delta
+                            r_norm_new_local = nrm_fn(res_fn(x_new_local))
+                            return x_new_local, r_norm_new_local, float(scale)
+                    x_new_local = x + delta
+                    r_norm_new_local = nrm_fn(res_fn(x_new_local))
+                    return x_new_local, r_norm_new_local, 1.0
+                return _plain_step
+            self._stepper_factory = _default_factory
+        else:
+            self._stepper_factory = stepper_factory
 
     def _on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:
         """Hook called after each iteration for custom processing.
@@ -328,8 +300,8 @@ class _NewtonBackend(_CorrectorBackend):
         x = x0.copy()
         info: dict[str, Any] = {}
 
-        # Obtain the stepper callable from the composed strategy builder
-        stepper = self._build_stepper(residual_fn, norm_fn, max_delta)
+        # Obtain the stepper callable from the injected factory
+        stepper = self._stepper_factory(residual_fn, norm_fn, max_delta)
 
         for k in range(max_attempts):
             r = self._compute_residual(x, residual_fn)
@@ -353,7 +325,13 @@ class _NewtonBackend(_CorrectorBackend):
             J = self._compute_jacobian(x, residual_fn, jacobian_fn, fd_step)
             delta = self._solve_delta(J, r)
 
-            x_new, r_norm_new, alpha_used = stepper(x, delta, r_norm)
+            try:
+                x_new, r_norm_new, alpha_used = stepper(x, delta, r_norm)
+            except Exception as exc:
+                # Map step strategy failures to convergence errors at backend level
+                raise ConvergenceError(
+                    f"Step strategy failed to produce an update at iter {k}: {exc}"
+                ) from exc
 
             logger.debug(
                 "Newton iter %d/%d: |R|=%.2e -> %.2e (alpha=%.2e)",
@@ -380,6 +358,6 @@ class _NewtonBackend(_CorrectorBackend):
         except Exception as exc:
             logger.warning("_on_failure hook raised an exception during final check: %s", exc)
 
-        raise RuntimeError(
+        raise ConvergenceError(
             f"Newton did not converge after {max_attempts} iterations (|R|={r_final_norm:.2e})."
         ) from None
