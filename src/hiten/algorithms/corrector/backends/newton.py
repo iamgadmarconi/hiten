@@ -11,8 +11,8 @@ import numpy as np
 
 from hiten.algorithms.corrector.backends.base import _CorrectorBackend
 from hiten.algorithms.corrector.config import _LineSearchConfig
-from hiten.algorithms.corrector.line import _ArmijoLineSearch
-from hiten.algorithms.corrector.protocols import StepStrategyProtocol
+from hiten.algorithms.corrector.stepping import _ArmijoLineSearch
+from hiten.algorithms.corrector.protocols import StepProtocol
 from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
 from hiten.utils.log_config import logger
 
@@ -37,7 +37,7 @@ class _NewtonBackend(_CorrectorBackend):
 
     Notes
     -----
-    This class is designed to be mixed with :class:`~hiten.algorithms.corrector._step_interface._ArmijoStepInterface`
+    This class is designed to be mixed with :class:`~hiten.algorithms.corrector.stepping.armijo._ArmijoStep`
     to provide a robust Newton-Raphson algorithm with Armijo line search.
     """
 
@@ -65,7 +65,7 @@ class _NewtonBackend(_CorrectorBackend):
         residual_fn: ResidualFn,
         norm_fn: NormFn,
         max_delta: float | None,
-    ) -> StepStrategyProtocol:
+    ) -> StepProtocol:
         """Create a step transformation strategy by composition.
 
         Returns either a plain capped-step strategy or an Armijo line-search

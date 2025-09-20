@@ -178,22 +178,22 @@ The :class:`_StepInterface` class provides an abstract base class for step-size 
    :undoc-members:
    :exclude-members: __init__
 
-_PlainStepInterface()
+_PlainStep()
 ^^^^^^^^^^^^^^^^^^^^^
 
-The :class:`_PlainStepInterface` class provides a step interface for plain Newton updates with safeguards.
+The :class:`_PlainStep` class provides a step interface for plain Newton updates with safeguards.
 
-.. autoclass:: _PlainStepInterface()
+.. autoclass:: _PlainStep()
    :members:
    :undoc-members:
    :exclude-members: __init__
 
-_ArmijoStepInterface()
+_ArmijoStep()
 ^^^^^^^^^^^^^^^^^^^^^^
 
-The :class:`_ArmijoStepInterface` class provides a step interface with Armijo line search for robust convergence.
+The :class:`_ArmijoStep` class provides a step interface with Armijo line search for robust convergence.
 
-.. autoclass:: _ArmijoStepInterface()
+.. autoclass:: _ArmijoStep()
    :members:
    :undoc-members:
    :exclude-members: __init__

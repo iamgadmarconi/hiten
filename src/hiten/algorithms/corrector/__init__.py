@@ -39,16 +39,13 @@ See Also
     Continuation algorithms that use correction for family generation.
 """
 
-from ._step_interface import (_ArmijoStepInterface, _PlainStepInterface,
-                              _StepInterface)
+from .backends.base import _CorrectorBackend
+from .backends.newton import _NewtonBackend
 from .config import (_BaseCorrectionConfig, _LineSearchConfig,
                      _OrbitCorrectionConfig)
-from .backends.base import _CorrectorBackend
 from .correctors import _NewtonOrbitCorrector
 from .interfaces import (_InvariantToriCorrectorInterface,
                          _PeriodicOrbitCorrectorInterface)
-from .line import _ArmijoLineSearch
-from .backends.newton import _NewtonBackend
 
 __all__ = [
     "_NewtonOrbitCorrector",
@@ -63,8 +60,4 @@ __all__ = [
     "_CorrectorBackend",
     "_PeriodicOrbitCorrectorInterface",
     "_InvariantToriCorrectorInterface",
-
-    "_StepInterface",
-    "_PlainStepInterface",
-    "_ArmijoStepInterface",
 ]

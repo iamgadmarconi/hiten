@@ -6,7 +6,7 @@ from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
 
 
 @runtime_checkable
-class StepStrategyProtocol(Protocol):
+class StepProtocol(Protocol):
     """Protocol for a step-size control strategy used by backends.
 
     Transforms a Newton step into an accepted update and returns the
@@ -91,108 +91,5 @@ class CorrectorBackendProtocol(Protocol):
             Corrected parameter vector.
         info : dict
             Convergence information with keys 'iterations' and 'residual_norm'.
-        """
-        ...
-
-
-class StepProtocol(Protocol):
-    """Define the protocol for step transformation functions in Newton-type methods.
-
-    This protocol defines the interface for functions that transform a
-    computed Newton step into an accepted update. Different implementations
-    can provide various step-size control strategies, from simple full
-    steps to sophisticated line search and trust region methods.
-
-    The protocol enables separation of concerns between:
-    - Newton step computation (direction finding)
-    - Step size control (distance along direction)
-    - Convergence monitoring (residual evaluation)
-
-    Implementations typically handle:
-    - Step size scaling for convergence control
-    - Safeguards against excessive step sizes
-    - Line search for sufficient decrease conditions
-    - Trust region constraints for robustness
-
-    Parameters
-    ----------
-    x : ndarray
-        Current iterate in the Newton method.
-    delta : ndarray
-        Newton step direction (typically from solving J*delta = -F).
-    current_norm : float
-        Norm of the residual at the current iterate *x*.
-
-    Returns
-    -------
-    x_new : ndarray
-        Updated iterate after applying the step transformation.
-    r_norm_new : float
-        Norm of the residual at the new iterate *x_new*.
-    alpha_used : float
-        Step-size scaling factor actually employed. A value of 1.0
-        indicates the full Newton step was taken, while smaller values
-        indicate step size reduction for convergence control.
-
-    Notes
-    -----
-    The protocol allows for flexible step-size control strategies:
-    
-    - **Full Newton steps**: alpha_used = 1.0, x_new = x + delta
-    - **Scaled steps**: alpha_used < 1.0, x_new = x + alpha * delta
-    - **Line search**: alpha chosen to satisfy decrease conditions
-    - **Trust region**: delta modified to stay within trust region
-    
-    Implementations should ensure that r_norm_new is computed consistently
-    with the norm function used in the overall Newton algorithm.
-
-    Examples
-    --------
-    >>> # Simple full-step implementation
-    >>> def full_step(x, delta, current_norm):
-    ...     x_new = x + delta
-    ...     r_norm_new = norm_fn(residual_fn(x_new))
-    ...     return x_new, r_norm_new, 1.0
-    >>>
-    >>> # Scaled step implementation
-    >>> def scaled_step(x, delta, current_norm):
-    ...     alpha = 0.5  # Half step
-    ...     x_new = x + alpha * delta
-    ...     r_norm_new = norm_fn(residual_fn(x_new))
-    ...     return x_new, r_norm_new, alpha
-
-    See Also
-    --------
-    :class:`~hiten.algorithms.corrector._step_interface._PlainStepInterface`
-        Simple implementation with optional step size capping.
-    :class:`~hiten.algorithms.corrector._step_interface._ArmijoStepInterface`
-        Line search implementation using Armijo conditions.
-    """
-
-    def __call__(
-        self,
-        x: np.ndarray,
-        delta: np.ndarray,
-        current_norm: float,
-    ) -> tuple[np.ndarray, float, float]:
-        """Transform Newton step into accepted update.
-
-        Parameters
-        ----------
-        x : ndarray
-            Current iterate.
-        delta : ndarray
-            Newton step direction.
-        current_norm : float
-            Norm of residual at current iterate.
-
-        Returns
-        -------
-        x_new : ndarray
-            Updated iterate.
-        r_norm_new : float
-            Norm of residual at new iterate.
-        alpha_used : float
-            Step scaling factor employed.
         """
         ...

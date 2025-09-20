@@ -327,14 +327,14 @@ The correction framework uses several key interfaces:
 **Step Control Interfaces**
 
     - `_StepInterface`: Abstract base for step-size control strategies
-    - `_PlainStepInterface`: Simple Newton steps with safeguards
-    - `_ArmijoStepInterface`: Armijo line search with backtracking
+    - `_PlainStep`: Simple Newton steps with safeguards
+    - `_ArmijoStep`: Armijo line search with backtracking
 
 .. code-block:: python
 
    from hiten.algorithms.corrector.backends.base import _CorrectorBackend
    from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
-   from hiten.algorithms.corrector._step_interface import _ArmijoStepInterface
+   from hiten.algorithms.corrector._step_interface import _ArmijoStep
    from hiten.algorithms.corrector.newton import _NewtonBackend
 
    # Create a custom corrector by combining interfaces
