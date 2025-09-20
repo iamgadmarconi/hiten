@@ -11,13 +11,13 @@ from typing import Any, Tuple
 import numpy as np
 
 from hiten.algorithms.corrector._step_interface import _ArmijoStepInterface
-from hiten.algorithms.corrector.base import _Corrector
+from hiten.algorithms.corrector.backends.base import _CorrectorBackend
 from hiten.algorithms.corrector.config import _LineSearchConfig
 from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
 from hiten.utils.log_config import logger
 
 
-class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
+class _NewtonBackend(_ArmijoStepInterface, _CorrectorBackend, ABC):
     """Implement the Newton-Raphson algorithm with robust linear algebra and step control.
     
     Combines Newton-Raphson iteration with Armijo line search, automatic

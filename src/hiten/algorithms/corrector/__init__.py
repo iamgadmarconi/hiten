@@ -20,9 +20,9 @@ Most users will work with the ready-to-use correctors:
 
 Advanced users can create custom correctors by combining components:
 
->>> from hiten.algorithms.corrector import (_NewtonCore, 
+>>> from hiten.algorithms.corrector.backends.newton import (_NewtonBackend, 
 ...                                        _PeriodicOrbitCorrectorInterface)
->>> class CustomCorrector(_PeriodicOrbitCorrectorInterface, _NewtonCore):
+>>> class CustomCorrector(_PeriodicOrbitCorrectorInterface, _NewtonBackend):
 ...     pass
 
 ------------
@@ -43,24 +43,24 @@ from ._step_interface import (_ArmijoStepInterface, _PlainStepInterface,
                               _StepInterface, _Stepper)
 from .config import (_BaseCorrectionConfig, _LineSearchConfig,
                      _OrbitCorrectionConfig)
-from .base import _Corrector
+from .backends.base import _CorrectorBackend
 from .correctors import _NewtonOrbitCorrector
 from .interfaces import (_InvariantToriCorrectorInterface,
                          _PeriodicOrbitCorrectorInterface)
 from .line import _ArmijoLineSearch
-from .newton import _NewtonCore
+from .backends.newton import _NewtonBackend
 
 __all__ = [
     "_NewtonOrbitCorrector",
     
-    "_NewtonCore",
+    "_NewtonBackend",
     "_ArmijoLineSearch",
     
     "_BaseCorrectionConfig",
     "_OrbitCorrectionConfig", 
     "_LineSearchConfig",
     
-    "_Corrector",
+    "_CorrectorBackend",
     "_PeriodicOrbitCorrectorInterface",
     "_InvariantToriCorrectorInterface",
     

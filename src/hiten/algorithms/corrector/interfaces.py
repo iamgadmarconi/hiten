@@ -12,7 +12,8 @@ from typing import TYPE_CHECKING, Optional, Tuple
 
 import numpy as np
 
-from hiten.algorithms.corrector.base import JacobianFn, NormFn, _Corrector
+from hiten.algorithms.corrector.backends.base import _CorrectorBackend
+from hiten.algorithms.corrector.types import JacobianFn, NormFn
 from hiten.algorithms.dynamics.rtbp import _compute_stm
 
 if TYPE_CHECKING:
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
 
 
 
-class _PeriodicOrbitCorrectorInterface(_Corrector):
+class _PeriodicOrbitCorrectorInterface(_CorrectorBackend):
     """Provide an interface for periodic orbit differential correction.
     
     Provides orbit-specific correction functionality designed to be used as a
@@ -326,7 +327,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
 
         # Build residual / Jacobian callables using *partial* to capture
         # constant arguments while keeping the signature expected by
-        # _NewtonCore.
+        # _NewtonBackend.
         residual_fn = partial(
             self._residual_vec,
             orbit=orbit,

@@ -49,12 +49,12 @@ The base module provides the core corrector framework and abstract base class fo
 
 .. currentmodule:: hiten.algorithms.corrector.base
 
-_Corrector()
+_CorrectorBackend()
 ^^^^^^^^^^^^
 
-The :class:`_Corrector` class defines an abstract base class for iterative correction algorithms.
+The :class:`_CorrectorBackend` class defines an abstract base class for iterative correction algorithms.
 
-.. autoclass:: _Corrector()
+.. autoclass:: _CorrectorBackend()
    :members:
    :undoc-members:
    :exclude-members: __init__
@@ -141,12 +141,12 @@ The newton module provides Newton-Raphson correction algorithm with robust linea
 
 .. currentmodule:: hiten.algorithms.corrector.newton
 
-_NewtonCore()
+_NewtonBackend()
 ^^^^^^^^^^^^^
 
-The :class:`_NewtonCore` class implements the Newton-Raphson algorithm with robust linear algebra and step control.
+The :class:`_NewtonBackend` class implements the Newton-Raphson algorithm with robust linear algebra and step control.
 
-.. autoclass:: _NewtonCore()
+.. autoclass:: _NewtonBackend()
    :members:
    :undoc-members:
    :exclude-members: __init__

@@ -133,7 +133,7 @@ class _BaseCorrectionConfig:
     --------
     :class:`~hiten.algorithms.corrector.config._LineSearchConfig`
         Configuration class for line search parameters.
-    :class:`~hiten.algorithms.corrector.base._Corrector`
+    :class:`~hiten.algorithms.corrector.backends.base._CorrectorBackend`
         Abstract base class that uses this configuration.
     """
     max_attempts: int = 50

@@ -28,7 +28,7 @@ import numpy as np
 from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
 
 
-class _Corrector(ABC):
+class _CorrectorBackend(ABC):
     """Define an abstract base class for iterative correction algorithms.
 
     This class defines the interface for iterative correction algorithms
@@ -37,55 +37,19 @@ class _Corrector(ABC):
     can be specialized for different types of problems (periodic orbits,
     invariant manifolds, fixed points, etc.).
 
-    The design follows the strategy pattern, separating the algorithmic
-    aspects of correction (Newton-Raphson, quasi-Newton, etc.) from the
-    domain-specific problem formulation. This enables:
-
-    - **Code reuse**: Same algorithms work for different problem types
-    - **Modularity**: Easy to swap different correction strategies
-    - **Testing**: Algorithms can be tested independently of domain logic
-    - **Flexibility**: Custom correction strategies can be implemented
-
-    The corrector operates on abstract parameter vectors and residual
-    functions, requiring domain-specific objects to provide thin wrapper
-    interfaces that translate between their natural representation and
-    the vector-based interface expected by the correction algorithms.
-
-    Key Design Principles
-    ---------------------
-    1. **Domain Independence**: Works with any problem that can be
-       expressed as finding zeros of a vector-valued function.
-    2. **Algorithm Flexibility**: Supports different correction strategies
-       through subclassing and configuration.
-    3. **Robustness**: Includes safeguards and error handling for
-       challenging numerical situations.
-    4. **Performance**: Designed for efficient implementation with
-       minimal overhead.
-
-    Typical Usage Pattern
-    ---------------------
-    1. Domain object (e.g., periodic orbit) creates parameter vector
-    2. Domain object provides residual function for constraint violations
-    3. Corrector iteratively refines parameter vector to minimize residual
-    4. Domain object reconstructs corrected state from final parameter vector
-
     Notes
     -----
-    Subclasses must implement the :meth:`~hiten.algorithms.corrector.base._Corrector.correct` method and are expected
+    Subclasses must implement the 
+    :meth:`~hiten.algorithms.corrector.backends.base._CorrectorBackend.correct` 
+    method and are expected
     to document any additional keyword arguments specific to their
     correction strategy (maximum iterations, tolerances, step control
     parameters, etc.).
 
-    The abstract interface allows for different correction algorithms:
-    - Newton-Raphson with various step control strategies
-    - Quasi-Newton methods (BFGS, Broyden, etc.)
-    - Trust region methods
-    - Hybrid approaches combining multiple strategies
-
     Examples
     --------
     >>> # Typical usage pattern (conceptual)
-    >>> class NewtonCorrector(_Corrector):
+    >>> class NewtonCorrector(_CorrectorBackend):
     ...     def correct(self, x0, residual_fn, **kwargs):
     ...         # Newton-Raphson implementation
     ...         pass

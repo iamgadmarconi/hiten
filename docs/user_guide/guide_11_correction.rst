@@ -43,12 +43,12 @@ The most common correction method uses Newton's method with analytical or numeri
 
 .. code-block:: python
 
-   from hiten.algorithms.corrector.newton import _NewtonCore
+   from hiten.algorithms.corrector.newton import _NewtonBackend
    from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
 
    # Create a Newton corrector by combining interfaces
-   # Note: _NewtonCore must come first in inheritance order
-   class NewtonOrbitCorrector(_NewtonCore, _PeriodicOrbitCorrectorInterface):
+   # Note: _NewtonBackend must come first in inheritance order
+   class NewtonOrbitCorrector(_NewtonBackend, _PeriodicOrbitCorrectorInterface):
        pass
    
    newton_corrector = NewtonOrbitCorrector()
@@ -186,14 +186,14 @@ For more control, you can create a custom corrector by combining interfaces:
 
 .. code-block:: python
 
-   from hiten.algorithms.corrector.newton import _NewtonCore
+   from hiten.algorithms.corrector.newton import _NewtonBackend
    from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
    from hiten.algorithms.corrector.line import _LineSearchConfig
 
-   class CustomOrbitCorrector(_NewtonCore, _PeriodicOrbitCorrectorInterface):
+   class CustomOrbitCorrector(_NewtonBackend, _PeriodicOrbitCorrectorInterface):
        """Custom corrector with specialized configuration.
        
-       Note: _NewtonCore must come first in inheritance order to provide
+       Note: _NewtonBackend must come first in inheritance order to provide
        the _generic_correct method that _PeriodicOrbitCorrectorInterface expects.
        """
        
@@ -220,7 +220,7 @@ by extending the base correction framework:
 .. code-block:: python
 
    from hiten.algorithms.corrector.base import _Corrector, _BaseCorrectionConfig
-   from hiten.algorithms.corrector.newton import _NewtonCore
+   from hiten.algorithms.corrector.newton import _NewtonBackend
    from abc import ABC, abstractmethod
    from dataclasses import dataclass
    from typing import Optional, Tuple
@@ -244,7 +244,7 @@ by extending the base correction framework:
        update_threshold: float = 1e-12
 
    # Custom corrector extending the Newton core
-   class QuasiNewtonCorrector(_NewtonCore):
+   class QuasiNewtonCorrector(_NewtonBackend):
        """Quasi-Newton corrector with custom Jacobian update strategy."""
        
        def __init__(self, config: _QuasiNewtonConfig, **kwargs):
@@ -317,7 +317,7 @@ Correction Interfaces
 The correction framework uses several key interfaces:
 
 **Base Corrector Interface** 
-    - `_Corrector`: The abstract base class that defines the core correction algorithm interface. All correctors must implement the `correct` method.
+    - `_CorrectorBackend`: The abstract base class that defines the core correction algorithm interface. All correctors must implement the `correct` method.
 
 **Domain-Specific Interfaces**
 
@@ -332,16 +332,16 @@ The correction framework uses several key interfaces:
 
 .. code-block:: python
 
-   from hiten.algorithms.corrector.base import _Corrector
+   from hiten.algorithms.corrector.backends.base import _CorrectorBackend
    from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
    from hiten.algorithms.corrector._step_interface import _ArmijoStepInterface
-   from hiten.algorithms.corrector.newton import _NewtonCore
+   from hiten.algorithms.corrector.newton import _NewtonBackend
 
    # Create a custom corrector by combining interfaces
-   class CustomOrbitCorrector(_NewtonCore, _PeriodicOrbitCorrectorInterface):
+   class CustomOrbitCorrector(_NewtonBackend, _PeriodicOrbitCorrectorInterface):
        """Custom corrector combining Newton core with orbit interface.
        
-       Note: _NewtonCore must come first in inheritance order.
+       Note: _NewtonBackend must come first in inheritance order.
        """
        
        def __init__(self, **kwargs):
@@ -403,10 +403,10 @@ For specialized applications, you can implement custom line search strategies by
            return max(alpha, 1e-6)  # Minimum step size
 
    # Use custom step interface
-   class CustomCorrector(_NewtonCore, _PeriodicOrbitCorrectorInterface, CustomStepInterface):
+   class CustomCorrector(_NewtonBackend, _PeriodicOrbitCorrectorInterface, CustomStepInterface):
        """Custom corrector with custom step interface.
        
-       Note: _NewtonCore must come first in inheritance order.
+       Note: _NewtonBackend must come first in inheritance order.
        """
        pass
 
@@ -518,7 +518,7 @@ HITEN's actual architecture:
 .. code-block:: python
 
    from hiten.algorithms.corrector.base import _BaseCorrectionConfig
-   from hiten.algorithms.corrector.newton import _NewtonCore
+   from hiten.algorithms.corrector.newton import _NewtonBackend
    from dataclasses import dataclass
    from typing import Optional, Tuple, Dict, Any
    import numpy as np
@@ -537,7 +537,7 @@ HITEN's actual architecture:
        penalty_weight: float = 1.0
 
    # Custom corrector for specialized problems
-   class CustomProblemCorrector(_NewtonCore):
+   class CustomProblemCorrector(_NewtonBackend):
        """Custom corrector for specialized constraint problems."""
        
        def __init__(self, config: _CustomProblemConfig, **kwargs):
@@ -614,7 +614,7 @@ The correction framework follows these architectural patterns:
 
 **Interface Separation**
     - Domain interfaces (like `_PeriodicOrbitCorrectorInterface`) handle domain-specific logic
-    - Algorithm cores (like `_NewtonCore`) handle numerical algorithms
+    - Algorithm cores (like `_NewtonBackend`) handle numerical algorithms
     - Combine through multiple inheritance with correct order
 
 **Method Delegation**
@@ -628,7 +628,7 @@ The correction framework follows these architectural patterns:
     - Handle edge cases gracefully
 
 **Multiple Inheritance Order**
-    - Always put algorithm cores first: `(_NewtonCore, _DomainInterface)`
+    - Always put algorithm cores first: `(_NewtonBackend, _DomainInterface)`
     - This ensures the `_generic_correct` method is available
     - Avoid conflicts between different `correct` method signatures
 

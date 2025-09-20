@@ -7,14 +7,14 @@ inheritance.
 
 from hiten.algorithms.corrector.interfaces import \
     _PeriodicOrbitCorrectorInterface
-from hiten.algorithms.corrector.newton import _NewtonCore
+from hiten.algorithms.corrector.backends.newton import _NewtonBackend
 
 
-class _NewtonOrbitCorrector(_PeriodicOrbitCorrectorInterface, _NewtonCore):
+class _NewtonOrbitCorrector(_PeriodicOrbitCorrectorInterface, _NewtonBackend):
     """Implement a Newton-Raphson corrector for periodic orbits.
 
     Combines :class:`~hiten.algorithms.corrector.interfaces._PeriodicOrbitCorrectorInterface`
-    with :class:`~hiten.algorithms.corrector.newton._NewtonCore` to provide
+    with :class:`~hiten.algorithms.corrector.backends.newton._NewtonBackend` to provide
     a complete corrector for periodic orbits using Newton-Raphson iteration.
 
     Parameters
@@ -41,7 +41,7 @@ class _NewtonOrbitCorrector(_PeriodicOrbitCorrectorInterface, _NewtonCore):
     --------
     :class:`~hiten.algorithms.corrector.interfaces._PeriodicOrbitCorrectorInterface`
         Orbit-specific correction interface.
-    :class:`~hiten.algorithms.corrector.newton._NewtonCore`
+    :class:`~hiten.algorithms.corrector.backends.newton._NewtonBackend`
         Newton-Raphson algorithm implementation.
     """
 
