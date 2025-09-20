@@ -1,80 +1,40 @@
-Center Manifold Poincare Maps
-=============================
+Center Manifold Backend
+=======================
 
-The centermanifold module provides specialized Poincare map computation for center manifolds of collinear libration points in the CR3BP. This module implements efficient algorithms for computing return maps restricted to the center manifold, which is crucial for understanding the local dynamics near libration points.
+The backend module provides Numba-compiled kernels for computing center manifold trajectories in the CR3BP.
 
-.. currentmodule:: hiten.algorithms.poincare.centermanifold
-
-.. autoclass:: CenterManifoldMap()
-   :members:
-   :exclude-members: __init__
-
-Main user-facing class for computing Poincare maps on center manifolds. Provides a high-level interface for generating return maps with various seeding strategies and visualization capabilities.
-
-.. autoclass:: _CenterManifoldMapConfig()
-   :members:
-   :exclude-members: __init__
-
-Configuration class for center manifold Poincare maps. Combines parameters for integration, iteration control, and seeding strategies specific to center manifold computations.
-
-.. autoclass:: _CenterManifoldSectionConfig()
-   :members:
-   :exclude-members: __init__
-
-Configuration for Poincare sections on center manifolds. Defines section coordinates, plane mappings, and coordinate transformations for the 4D center manifold phase space.
+.. currentmodule:: hiten.algorithms.poincare.centermanifold.backend
 
 .. autoclass:: _CenterManifoldBackend()
    :members:
    :exclude-members: __init__
 
-Numba-compiled backend for efficient center manifold computations. Handles numerical integration, section crossing detection, and parallel processing for high-performance map generation.
+Backend for center manifold computations in the CR3BP. Uses Numba-compiled kernels for efficient Hamiltonian integration and Poincare map evaluation.
 
-.. autoclass:: _CenterManifoldEngine()
-   :members:
-   :exclude-members: __init__
+.. autofunction:: _detect_crossing()
 
-Computation engine for center manifold Poincare maps. Coordinates seeding strategies, parallel processing, and iterative map computation to generate complete return maps.
+Detect if trajectory crossed the Poincare section using Hermite interpolation.
 
-.. autoclass:: _CenterManifoldSeedingBase()
-   :members:
-   :exclude-members: __init__
+.. autofunction:: _solve_bracketed()
 
-Abstract base class for center manifold seeding strategies. Provides common functionality for Hill boundary validation and seed generation on the center manifold.
+Pure-Python bracketed bisection solver for general callables.
 
-.. autoclass:: _SingleAxisSeeding()
-   :members:
-   :exclude-members: __init__
+.. autofunction:: _get_rk_coefficients()
 
-Seeding strategy that generates seeds along a single coordinate axis. Useful for exploring center manifold dynamics along specific coordinate directions.
+Return Runge-Kutta coefficients for specified order.
 
-.. autoclass:: _AxisAlignedSeeding()
-   :members:
-   :exclude-members: __init__
+.. autofunction:: _integrate_rk_ham()
 
-Seeding strategy that generates seeds along both coordinate axes. Provides good coverage of coordinate directions with approximately half the seeds on each axis.
+Integrate Hamiltonian system using Runge-Kutta method.
 
-.. autoclass:: _LevelSetsSeeding()
-   :members:
-   :exclude-members: __init__
+.. autofunction:: _integrate_map()
 
-Seeding strategy based on level sets of coordinates. Creates a grid-like pattern of seeds for uniform coverage of the section plane.
+Integrate Hamiltonian system using specified method (Runge-Kutta or symplectic).
 
-.. autoclass:: _RadialSeeding()
-   :members:
-   :exclude-members: __init__
+.. autofunction:: _poincare_step()
 
-Seeding strategy that distributes seeds on concentric circles. Provides radial coverage of the section plane in polar coordinates.
+Perform one Poincare map step for center manifold integration.
 
-.. autoclass:: _RandomSeeding()
-   :members:
-   :exclude-members: __init__
+.. autofunction:: _poincare_map()
 
-Seeding strategy using uniform rejection sampling. Generates random seeds within the Hill boundary for statistical coverage of the section plane.
-
-.. autofunction:: _make_strategy()
-
-Factory function for creating concrete seeding strategy instances based on string identifiers.
-
-.. autofunction:: _get_section_config()
-
-Utility function for retrieving cached section configuration objects for specific coordinates.
+Compute Poincare map for multiple center manifold seeds in parallel.

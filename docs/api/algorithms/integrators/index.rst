@@ -9,6 +9,8 @@ The module is organized into several submodules:
    :maxdepth: 2
 
    base
+   types
+   configs
    rk
    symplectic
    coefficients
