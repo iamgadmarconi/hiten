@@ -17,11 +17,9 @@ Caltech.
 """
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Callable, Literal, Sequence
+from typing import TYPE_CHECKING, Callable, Dict, Literal, Sequence
 
 import numpy as np
-import time
-from typing import Dict
 
 from hiten.algorithms.integrators.configs import _EventConfig
 from hiten.algorithms.utils.config import FASTMATH
@@ -166,6 +164,7 @@ class _DynamicalSystem(ABC):
         else:
             # Compile with global fast-math setting for performance
             import numba
+
             # Central cache to reuse compiled dispatchers across instances
             global _RHS_DISPATCH_CACHE
             try:
@@ -410,7 +409,6 @@ def _propagate_dynsys(
     from hiten.algorithms.integrators.rk import AdaptiveRK, RungeKutta
     from hiten.algorithms.integrators.symplectic import _ExtendedSymplectic
 
-    _t0 = time.perf_counter()
     state0_np = _validate_initial_state(state0, dynsys.dim)
 
     dynsys_dir = _DirectedSystem(dynsys, forward, flip_indices=flip_indices)
@@ -428,9 +426,7 @@ def _propagate_dynsys(
 
     if method == "fixed":
         integrator = RungeKutta(order=order)
-        _ti = time.perf_counter()
         sol = integrator.integrate(dynsys_dir, state0_np, t_eval, event_fn=event_fn, event_cfg=event_cfg)
-        _to = time.perf_counter()
         times = sol.times
         states = sol.states
 
@@ -440,9 +436,7 @@ def _propagate_dynsys(
         if not isinstance(dynsys, _HamiltonianSystemProtocol):
             raise ValueError("Symplectic method requires a _HamiltonianSystem")
         integrator = _ExtendedSymplectic(order=order)
-        _ti = time.perf_counter()
         sol = integrator.integrate(dynsys_dir, state0_np, t_eval)
-        _to = time.perf_counter()
         times = sol.times
         states = sol.states
 
@@ -451,12 +445,11 @@ def _propagate_dynsys(
         rtol = kwargs.get("rtol", 1e-12)
         atol = kwargs.get("atol", 1e-12)
         integrator = AdaptiveRK(order=order, max_step=max_step, rtol=rtol, atol=atol)
-        _ti = time.perf_counter()
         sol = integrator.integrate(dynsys_dir, state0_np, t_eval, event_fn=event_fn, event_cfg=event_cfg)
-        _to = time.perf_counter()
         times = sol.times
         states = sol.states
 
+    # Encode direction in the returned time array for user visibility.
     times_signed = forward * times
 
     return _Solution(times_signed, states)

@@ -9,7 +9,6 @@ from abc import ABC
 from typing import Any, Tuple
 
 import numpy as np
-import time
 
 from hiten.algorithms.corrector._step_interface import _ArmijoStepInterface
 from hiten.algorithms.corrector.base import (JacobianFn, NormFn, ResidualFn,

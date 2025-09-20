@@ -22,7 +22,6 @@ from typing import Callable, Literal
 
 import numba
 import numpy as np
-import time
 
 from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
 from hiten.algorithms.utils.config import FASTMATH

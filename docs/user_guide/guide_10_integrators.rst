@@ -13,8 +13,7 @@ Integration Methods
 
 The primary way to use integrators in HITEN is through the :meth:`~hiten.algorithms.dynamics.base._propagate_dynsys` method, which supports the following methods:
 
-- ``"scipy"``: Uses SciPy's DOP853 adaptive integrator (default)
-- ``"rk"``: Fixed-step Runge-Kutta methods (orders 4, 6, 8)
+- ``"fixed"``: Fixed-step Runge-Kutta methods (orders 4, 6, 8)
 - ``"adaptive"``: Adaptive step-size Runge-Kutta methods (orders 5, 8)
 - ``"symplectic"``: High-order symplectic integrators (orders 2, 4, 6, 8)
 
@@ -136,6 +135,29 @@ The key advantage is that this approach can handle Hamiltonians that are natural
        order=6
    )
 
+RHS Function Compilation Requirements
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+For optimal performance, HITEN's integrators use JIT compilation (Numba) for right-hand side (RHS) functions. The compilation requirements vary by integration method:
+
+**General Requirements:**
+
+- RHS functions must have signature ``(t, y)`` where ``t`` is time and ``y`` is the state vector
+- Functions should be compatible with Numba compilation
+- HITEN automatically handles compilation through the system wrapper
+
+**For Runge-Kutta Methods:**
+
+- RHS functions are compiled with explicit Numba signatures
+- The system wrapper ensures proper compilation automatically
+- No manual compilation is required from the user
+
+**For Symplectic Methods:**
+
+- RHS functions are provided through the Hamiltonian structure
+- The ``_hamiltonian_rhs`` function handles the compilation internally
+- Users don't need to provide explicit RHS functions for Hamiltonian systems
+
 Symplectic integrators require systems with specific Hamiltonian structure. They must implement the following attributes:
 
 - ``jac_H``: Jacobian of the Hamiltonian as a list of polynomial coefficients
@@ -155,6 +177,110 @@ However, they have limitations:
 2. **Computational Cost**: Higher-order methods require more function evaluations
 3. **Implementation Complexity**: More complex to implement than standard Runge-Kutta methods
 4. **Limited Applicability**: Not suitable for non-Hamiltonian systems
+
+Event-Based Integration
+~~~~~~~~~~~~~~~~~~~~~~~
+
+HITEN's integrators support event detection during integration, allowing you to find specific conditions or stop integration when certain criteria are met. Events are particularly useful for:
+
+- Detecting when trajectories cross specific surfaces (Poincaré sections)
+- Stopping integration when systems reach certain states
+- Monitoring system behavior for specific conditions
+- Adaptive time stepping based on system events
+
+Basic Event Detection
+~~~~~~~~~~~~~~~~~~~~~
+
+Events are defined as scalar functions ``g(t, y)`` that trigger when ``g(t, y) = 0``. HITEN supports three types of event detection:
+
+**Event Directionality:**
+- ``direction=0``: Detect any sign change (default)
+- ``direction=+1``: Only detect increasing crossings (g goes from negative to positive)
+- ``direction=-1``: Only detect decreasing crossings (g goes from positive to negative)
+
+**Event Configuration:**
+Events are configured using the :class:`~hiten.algorithms.integrators.configs._EventConfig` class:
+
+.. code-block:: python
+
+   from hiten.algorithms.integrators.configs import _EventConfig
+
+   # Detect any sign change and stop integration
+   event_cfg = _EventConfig(direction=0, terminal=True)
+
+   # Detect only increasing crossings and continue integration
+   event_cfg = _EventConfig(direction=+1, terminal=False)
+
+   # High precision event detection
+   event_cfg = _EventConfig(
+       direction=0,
+       terminal=True,
+       xtol=1e-15,  # Time tolerance
+       gtol=1e-15   # Function tolerance
+   )
+
+**Simple Event Example:**
+.. code-block:: python
+
+   import numpy as np
+   from hiten.algorithms.integrators.rk import AdaptiveRK
+   from hiten.algorithms.integrators.configs import _EventConfig
+
+   def rhs(t, y):
+       return np.array([-y[1], y[0]])  # Harmonic oscillator
+
+   def event_func(t, y):
+       """Detect when x = 0.5"""
+       return y[0] - 0.5  # Trigger when x = 0.5
+
+   # Create integrator and event configuration
+   rk45 = AdaptiveRK(order=5)
+   event_cfg = _EventConfig(direction=0, terminal=True)
+
+   # Initial conditions
+   y0 = np.array([0.0, 1.0])
+   t_vals = np.linspace(0, 10, 1000)
+
+   # Integration with event detection
+   solution = rk45.integrate(
+       system=rhs,
+       y0=y0,
+       t_vals=t_vals,
+       event_fn=event_func,
+       event_cfg=event_cfg
+   )
+
+   # Integration stops at the event
+   print(f"Event detected at t = {solution.times[-1]:.4f}")
+   print(f"State at event: {solution.states[-1]}")
+
+**Advanced Event Features:**
+- **Dense Interpolation**: Events use cubic Hermite interpolation for precise timing
+- **Multiple Events**: Can detect multiple events in a single integration
+- **Hamiltonian Support**: Events work with both standard and Hamiltonian systems
+- **Event Refinement**: Automatic refinement of event timing using bisection
+
+**Event-Based Poincaré Sections:**
+Events are ideal for creating Poincaré sections in dynamical systems:
+
+.. code-block:: python
+
+   @numba.njit(cache=False)
+   def plane_crossing_event(t, y):
+       """Detect crossing of the x=0 plane"""
+       return y[0]  # Zero when x = 0
+
+   # Configure for plane crossing detection
+   event_cfg = _EventConfig(direction=+1, terminal=False)
+
+   # Each integration step that crosses x=0 will be recorded
+   solution = rk45.integrate(
+       system=rhs,
+       y0=y0,
+       t_vals=t_vals,
+       event_fn=plane_crossing_event,
+       event_cfg=event_cfg
+   )
 
 Creating Custom Integrators
 ---------------------------------

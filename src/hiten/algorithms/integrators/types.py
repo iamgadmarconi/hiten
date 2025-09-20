@@ -100,7 +100,12 @@ class _Solution:
         """
         t_arr = np.atleast_1d(t).astype(float)
 
-        if np.any(t_arr < self.times[0]) or np.any(t_arr > self.times[-1]):
+        # Support both ascending and descending time grids
+        ascending = self.times[0] <= self.times[-1]
+        t_min = self.times[0] if ascending else self.times[-1]
+        t_max = self.times[-1] if ascending else self.times[0]
+
+        if np.any(t_arr < t_min) or np.any(t_arr > t_max):
             raise ValueError("Interpolation times must lie within the solution interval.")
 
         # Pre-allocate output array.
@@ -108,7 +113,11 @@ class _Solution:
         y_out = np.empty((t_arr.size, n_dim), dtype=self.states.dtype)
 
         # For each query time, locate the bracketing interval.
-        idxs = np.searchsorted(self.times, t_arr, side="right") - 1
+        if ascending:
+            idxs = np.searchsorted(self.times, t_arr, side="right") - 1
+        else:
+            # searchsorted assumes ascending sequences; invert sign to reuse it
+            idxs = np.searchsorted(-self.times, -t_arr, side="right") - 1
         idxs = np.clip(idxs, 0, len(self.times) - 2)
 
         t0 = self.times[idxs]

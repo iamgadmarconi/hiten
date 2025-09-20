@@ -623,8 +623,6 @@ class LibrationPoint(ABC):
         :class:`~hiten.system.orbits.base.PeriodicOrbit`
             Newly created orbit instance.
         """
-
-        # Lazy imports to avoid circular dependencies and reduce import time.
         from hiten.system.orbits.base import GenericOrbit, PeriodicOrbit
         from hiten.system.orbits.halo import HaloOrbit
         from hiten.system.orbits.lyapunov import LyapunovOrbit

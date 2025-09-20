@@ -10,6 +10,7 @@ The module is organized into several submodules:
    :maxdepth: 2
 
    base
+   protocols
    rhs
    hamiltonian
    rtbp

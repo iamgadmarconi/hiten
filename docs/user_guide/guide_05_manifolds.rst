@@ -61,7 +61,7 @@ Control computation parameters:
        step=0.01,                    # Smaller step for higher resolution
        integration_fraction=0.9,     # Integrate for 90% of period
        displacement=1e-6,            # Small displacement along eigenvector
-       method="scipy",               # Integration method
+       method="adaptive",               # Integration method
        order=8,                      # Integration order
        energy_tol=1e-6,              # Energy conservation tolerance
        safe_distance=1e-2            # Safety distance from primaries

@@ -13,23 +13,20 @@ provide a complete implementation for finding single
 trajectory-section intersections.
 """
 
-from typing import Callable, Literal
+from typing import Literal
 
 import numpy as np
-import time
+from numba import njit, types
 
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
+from hiten.algorithms.integrators import AdaptiveRK
+from hiten.algorithms.integrators.configs import _EventConfig
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
 from hiten.algorithms.poincare.core.events import (_PlaneEvent, _SectionHit,
                                                    _SurfaceEvent)
-from hiten.algorithms.integrators import AdaptiveRK
-from hiten.algorithms.integrators.configs import _EventConfig
-from numba import njit, types
-from hiten.utils.log_config import logger
 
 
-# --- Precompiled plane event functions (fast path for standard sections) ---
 @njit(types.float64(types.float64, types.float64[:]), cache=True, fastmath=True)
 def _g_x0(t: float, y: np.ndarray) -> float:
     return float(y[0])

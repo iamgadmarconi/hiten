@@ -11,11 +11,9 @@ from functools import partial
 from typing import TYPE_CHECKING, Optional, Tuple
 
 import numpy as np
-import time
 
 from hiten.algorithms.corrector.base import JacobianFn, NormFn, _Corrector
 from hiten.algorithms.dynamics.rtbp import _compute_stm
-from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
     from hiten.system.orbits.base import PeriodicOrbit
