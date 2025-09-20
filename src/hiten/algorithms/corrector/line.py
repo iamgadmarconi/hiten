@@ -5,17 +5,12 @@ correction algorithms. Line search ensures sufficient decrease in the residual
 norm, providing robustness for challenging nonlinear systems.
 """
 
-from typing import Callable, Tuple
+from typing import Tuple
 
 import numpy as np
 
 from hiten.algorithms.corrector.config import _LineSearchConfig
 from hiten.utils.log_config import logger
-
-# Type aliases for function signatures
-NormFn = Callable[[np.ndarray], float]
-ResidualFn = Callable[[np.ndarray], np.ndarray]
-JacobianFn = Callable[[np.ndarray], np.ndarray]
 
 
 def _default_norm(r: np.ndarray) -> float:

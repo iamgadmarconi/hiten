@@ -11,7 +11,7 @@ from typing import Callable, Literal, NamedTuple, Optional
 
 import numpy as np
 
-from hiten.algorithms.corrector.base import JacobianFn, NormFn, ResidualFn
+from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
 from hiten.algorithms.poincare.singlehit.backend import _y_plane_crossing
 
 

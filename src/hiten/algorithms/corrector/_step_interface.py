@@ -22,47 +22,13 @@ See Also
 """
 
 from abc import ABC, abstractmethod
-from typing import Callable, Optional, Protocol
+from typing import Optional, Protocol
 
 import numpy as np
 
 from hiten.algorithms.corrector.config import _LineSearchConfig
 from hiten.algorithms.corrector.line import _ArmijoLineSearch
-
-#: Type alias for residual function signatures.
-#:
-#: Functions of this type compute residual vectors from state vectors,
-#: typically representing the nonlinear equations to be solved. The
-#: residual should be zero (or close to zero) at the solution.
-#:
-#: Parameters
-#: ----------
-#: x : ndarray
-#:     State vector at which to evaluate the residual.
-#:
-#: Returns
-#: -------
-#: residual : ndarray
-#:     Residual vector of the same shape as the input.
-ResidualFn = Callable[[np.ndarray], np.ndarray]
-
-#: Type alias for norm function signatures.
-#:
-#: Functions of this type compute scalar norms from residual vectors,
-#: providing a measure of how close the current iterate is to satisfying
-#: the nonlinear equations. Common choices include L2 norm, infinity norm,
-#: and weighted norms.
-#:
-#: Parameters
-#: ----------
-#: residual : ndarray
-#:     Residual vector to compute the norm of.
-#:
-#: Returns
-#: -------
-#: norm : float
-#:     Scalar norm value (non-negative).
-NormFn = Callable[[np.ndarray], float]
+from hiten.algorithms.corrector.types import NormFn, ResidualFn
 
 
 class _Stepper(Protocol):
@@ -245,9 +211,9 @@ class _StepInterface(ABC):
 
         Parameters
         ----------
-        residual_fn : :class:`~hiten.algorithms.corrector.base.ResidualFn`
+        residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
             Function that computes residual vectors from state vectors.
-        norm_fn : :class:`~hiten.algorithms.corrector.base.NormFn`
+        norm_fn : :class:`~hiten.algorithms.corrector.types.NormFn`
             Function that computes scalar norms from residual vectors.
         max_delta : float or None
             Maximum allowed step size (infinity norm), or None for
@@ -329,9 +295,9 @@ class _PlainStepInterface(_StepInterface):
 
         Parameters
         ----------
-        residual_fn : :class:`~hiten.algorithms.corrector.base.ResidualFn`
+        residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
             Function to compute residual vectors.
-        norm_fn : :class:`~hiten.algorithms.corrector.base.NormFn`
+        norm_fn : :class:`~hiten.algorithms.corrector.types.NormFn`
             Function to compute residual norms.
         max_delta : float or None
             Maximum allowed infinity norm of the Newton step.
@@ -385,9 +351,9 @@ class _PlainStepInterface(_StepInterface):
 
         Parameters
         ----------
-        residual_fn : :class:`~hiten.algorithms.corrector.base.ResidualFn`
+        residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
             Function to compute residual vectors.
-        norm_fn : :class:`~hiten.algorithms.corrector.base.NormFn`
+        norm_fn : :class:`~hiten.algorithms.corrector.types.NormFn`
             Function to compute residual norms.
         max_delta : float or None
             Maximum allowed step size for safeguarding.
@@ -519,9 +485,9 @@ class _ArmijoStepInterface(_PlainStepInterface):
 
         Parameters
         ----------
-        residual_fn : :class:`~hiten.algorithms.corrector.base.ResidualFn`
+        residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
             Function to compute residual vectors.
-        norm_fn : :class:`~hiten.algorithms.corrector.base.NormFn`
+        norm_fn : :class:`~hiten.algorithms.corrector.types.NormFn`
             Function to compute residual norms.
         max_delta : float or None
             Maximum allowed step size (used by plain stepper fallback).

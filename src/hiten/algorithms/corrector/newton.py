@@ -11,9 +11,9 @@ from typing import Any, Tuple
 import numpy as np
 
 from hiten.algorithms.corrector._step_interface import _ArmijoStepInterface
-from hiten.algorithms.corrector.base import (JacobianFn, NormFn, ResidualFn,
-                                             _Corrector)
+from hiten.algorithms.corrector.base import _Corrector
 from hiten.algorithms.corrector.config import _LineSearchConfig
+from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
 from hiten.utils.log_config import logger
 
 
@@ -104,7 +104,7 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
         ----------
         x : ndarray
             Current parameter vector.
-        residual_fn : :class:`~hiten.algorithms.corrector.base.ResidualFn`
+        residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
             Function to compute residual.
             
         Returns
@@ -121,7 +121,7 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
         ----------
         residual : ndarray
             Residual vector.
-        norm_fn : :class:`~hiten.algorithms.corrector.base.NormFn`
+        norm_fn : :class:`~hiten.algorithms.corrector.types.NormFn`
             Function to compute norm.
             
         Returns
@@ -147,9 +147,9 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
         ----------
         x : ndarray
             Current parameter vector.
-        residual_fn : :class:`~hiten.algorithms.corrector.base.ResidualFn`
+        residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
             Function to compute residual.
-        jacobian_fn : :class:`~hiten.algorithms.corrector.base.JacobianFn` or None
+        jacobian_fn : :class:`~hiten.algorithms.corrector.types.JacobianFn` or None
             Analytical Jacobian function, if available.
         fd_step : float
             Step size for finite-difference approximation.
@@ -249,11 +249,11 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
         ----------
         x0 : ndarray
             Initial guess.
-        residual_fn : :class:`~hiten.algorithms.corrector.base.ResidualFn`
+        residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
             Function to compute residual vector R(x).
-        jacobian_fn : :class:`~hiten.algorithms.corrector.base.JacobianFn` or None, optional
+        jacobian_fn : :class:`~hiten.algorithms.corrector.types.JacobianFn` or None, optional
             Function to compute Jacobian dR/dx. Uses finite-difference if None.
-        norm_fn : :class:`~hiten.algorithms.corrector.base.NormFn` or None, optional
+        norm_fn : :class:`~hiten.algorithms.corrector.types.NormFn` or None, optional
             Function to compute residual norm. Uses L2 norm if None.
         tol : float, default=1e-10
             Convergence tolerance for residual norm.
