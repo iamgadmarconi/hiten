@@ -184,8 +184,6 @@ class _SingleHitBackend(_ReturnMapBackend):
             Crossing information, or None if no crossing before tmax.
         """
         # Map surface to scalar event g(t,y)
-        _t_total0 = time.perf_counter()
-        _t_map0 = _t_total0
         direction = getattr(self._surface, "direction", None)
         normal_raw = getattr(self._surface, "normal", None)
         offset = getattr(self._surface, "offset", None)
@@ -208,93 +206,38 @@ class _SingleHitBackend(_ReturnMapBackend):
         else:
             raise TypeError("_SingleHitBackend requires a plane event with normal and offset")
 
-        # Build integrator and config
-        _t_map1 = time.perf_counter()
-        # Use tight tolerances to match STM propagation accuracy
         integrator = AdaptiveRK(order=8, rtol=1e-12, atol=1e-12)
         ev_dir = 0 if direction is None else int(direction)
         ev_cfg = _EventConfig(direction=ev_dir, terminal=True)
-        _t_setup1 = time.perf_counter()
 
-        # Diagnostics
-        try:
-            print(f"[SingleHit] surface normal={n_vec[:3]}, offset={float(offset):.3g}, direction={ev_dir}, event={ev_name}")
-        except Exception:
-            pass
-
-        # Handle on-surface start diagnostics
-        _t_g0_0 = time.perf_counter()
-        g0 = event_fn(t0, state0)
-        _t_g0_1 = time.perf_counter()
         t_start = float(t0)
         y_start = state0.astype(float, copy=True)
-        print(f"[SingleHit] window t0={t0:.6g}, tmax={tmax:.6g}; g(t0)={g0:.3e}")
-        print(f"[SingleHit][timing] map={(_t_map1 - _t_map0)*1e3:.2f} ms, setup={(_t_setup1 - _t_map1)*1e3:.2f} ms, g0_eval={( _t_g0_1 - _t_g0_0)*1e3:.2f} ms")
 
-        # Only pre-march on large windows; skip for narrow hint windows to avoid missing boundary hits
-        t_span = float(tmax - t_start)
-        if t_span > 0.2 and abs(g0) < 1e-12:
-            t_min = 1e-6
-            if t_start + t_min < tmax:
-                _t_pre0 = time.perf_counter()
-                sol_pre = integrator.integrate(self._dynsys, y_start, np.array([t_start, t_start + t_min], dtype=float))
-                _t_pre1 = time.perf_counter()
-                t_start = float(sol_pre.times[-1])
-                y_start = sol_pre.states[-1].copy()
-                g_start = event_fn(t_start, y_start)
-                print(f"[SingleHit] pre-march by t_min={t_min:.1e} to t={t_start:.6g}; g={g_start:.3e}")
-                print(f"[SingleHit][timing] pre_integrate={(_t_pre1 - _t_pre0)*1e3:.2f} ms")
+        sol_align = _propagate_dynsys(
+            self._dynsys,
+            y_start,
+            0.0,
+            t_start,
+            forward=self._forward,
+            steps=2,
+            method="adaptive",
+            order=8,
+        )
+        y_start = sol_align.states[-1].copy()
 
-        # Align initial state with t_start to ensure absolute times are referenced to t=0
-        if t_start != 0.0:
-            _t_align0 = time.perf_counter()
-            sol_align = _propagate_dynsys(
-                self._dynsys,
-                y_start,
-                0.0,
-                t_start,
-                forward=self._forward,
-                steps=2,
-                method="adaptive",
-                order=8,
-            )
-            _t_align1 = time.perf_counter()
-            y_start = sol_align.states[-1].copy()
-            print(f"[SingleHit] aligned start state to t_start in {(_t_align1 - _t_align0)*1e3:.2f} ms")
-
-        # Integrate until event or tmax
-        # Integrate from absolute t=0 origin to preserve consistent absolute times
         span = float(max(0.0, tmax - t_start))
         times = np.array([0.0, span], dtype=float)
-        _t_int0 = time.perf_counter()
         sol = integrator.integrate(self._dynsys, y_start, times, event_fn=event_fn, event_cfg=ev_cfg)
-        _t_int1 = time.perf_counter()
         t_hit_rel = float(sol.times[-1])
         y_hit = sol.states[-1].copy()
         t_hit = t_start + t_hit_rel
         if t_hit_rel < span and t_hit_rel >= 0.0:
-            g_hit = event_fn(t_hit, y_hit)
-            # Direction diagnostic: gdot at hit using system RHS
-            try:
-                f_hit = self._dynsys.rhs(t_hit, y_hit)
-                if ev_name == "x==0":
-                    gdot = float(f_hit[0])
-                elif ev_name == "y==0":
-                    gdot = float(f_hit[1])
-                else:
-                    gdot = float(f_hit[2])
-                print(f"[SingleHit] HIT at t={t_hit:.6g}, g={g_hit:.3e}, gdot={gdot:.3e}, dir={ev_dir}, y[:3]={y_hit[:3]}")
-            except Exception:
-                print(f"[SingleHit] HIT at t={t_hit:.6g}, g={g_hit:.3e}, y[:3]={y_hit[:3]}")
-            print(f"[SingleHit][timing] integrate={(_t_int1 - _t_int0)*1e3:.2f} ms, total={(time.perf_counter() - _t_total0)*1e3:.2f} ms")
             return _SectionHit(time=t_hit, state=y_hit, point2d=y_hit[:2].copy())
-        print(f"[SingleHit][timing] integrate={(_t_int1 - _t_int0)*1e3:.2f} ms, total={(time.perf_counter() - _t_total0)*1e3:.2f} ms")
+
         return None
 
     def _cross(self, state0: np.ndarray, *, t_guess: float | None = None, t0_offset: float = 0.15, t_window: float | None = None):
         """Find a single crossing using event-driven integrators."""
-        _t_cross0 = time.perf_counter()
-        # Choose search horizon:
         # If a hint is provided, confine search to a small window around it to keep branch selection consistent.
         if (t_guess is not None) and (t_window is not None) and (t_window > 0.0):
             t0 = float(max(t_guess - 0.5 * t_window, 0.0))
@@ -309,7 +252,6 @@ class _SingleHitBackend(_ReturnMapBackend):
                 t_start = 0.0
             t0 = t_start
             tmax = t_start + float(np.pi)
-        print(f"[SingleHit] _cross window: t_start={t0:.6g} .. tmax={tmax:.6g} (t0_offset={t0_offset}, t_guess={t_guess}, t_window={t_window})")
 
         hit = self._cross_event_driven(np.asarray(state0, float), t0=t0, tmax=tmax)
         # If a hint was used and no hit was found, progressively widen the window (up to pi) then fall back
@@ -319,7 +261,6 @@ class _SingleHitBackend(_ReturnMapBackend):
                 span *= 2.0
                 t0_try = float(max(t_guess - 0.5 * span, 0.0))
                 tmax_try = float(t0_try + span)
-                print(f"[SingleHit] retry with expanded window: t_start={t0_try:.6g} .. tmax={tmax_try:.6g} (span={span:.6g})")
                 hit = self._cross_event_driven(np.asarray(state0, float), t0=t0_try, tmax=tmax_try)
                 if hit is not None:
                     break
@@ -333,9 +274,7 @@ class _SingleHitBackend(_ReturnMapBackend):
                     t_start = 0.0
             t0_fb = t_start
             tmax_fb = t_start + float(np.pi)
-            print(f"[SingleHit] fallback window: t_start={t0_fb:.6g} .. tmax={tmax_fb:.6g}")
             hit = self._cross_event_driven(np.asarray(state0, float), t0=t0_fb, tmax=tmax_fb)
-        print(f"[SingleHit][timing] _cross total={(time.perf_counter() - _t_cross0)*1e3:.2f} ms")
         return hit
 
 

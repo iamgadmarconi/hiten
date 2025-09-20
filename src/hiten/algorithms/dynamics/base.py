@@ -423,8 +423,7 @@ def _propagate_dynsys(
         _to = time.perf_counter()
         times = sol.times
         states = sol.states
-        print(f"[Propagate] method=fixed, order={order}, steps={steps}, integrate={( _to - _ti)*1e3:.2f} ms, total={( _to - _t0)*1e3:.2f} ms")
-        
+
     elif method == "symplectic":
         from hiten.algorithms.dynamics.protocols import \
             _HamiltonianSystemProtocol
@@ -436,8 +435,7 @@ def _propagate_dynsys(
         _to = time.perf_counter()
         times = sol.times
         states = sol.states
-        print(f"[Propagate] method=symplectic, order={order}, steps={steps}, integrate={( _to - _ti)*1e3:.2f} ms, total={( _to - _t0)*1e3:.2f} ms")
-        
+
     elif method == "adaptive":
         max_step = kwargs.get("max_step", 1e4)
         rtol = kwargs.get("rtol", 1e-12)
@@ -448,7 +446,6 @@ def _propagate_dynsys(
         _to = time.perf_counter()
         times = sol.times
         states = sol.states
-        print(f"[Propagate] method=adaptive, order={order}, steps={steps}, rtol={rtol:.1e}, atol={atol:.1e}, integrate={( _to - _ti)*1e3:.2f} ms, total={( _to - _t0)*1e3:.2f} ms")
 
     times_signed = forward * times
 

@@ -305,12 +305,10 @@ def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["fixed",
     :class:`~hiten.algorithms.dynamics.rtbp._VarEqRHS` : Dynamical system for variational equations
     :func:`~hiten.algorithms.dynamics.rtbp._compute_monodromy` : Specialized version for periodic orbits
     """
-    _t0 = time.perf_counter()
     PHI0 = np.zeros(42, dtype=np.float64)
     PHI0[:36] = np.eye(6, dtype=np.float64).ravel()
     PHI0[36:] = x0
 
-    _ti = time.perf_counter()
     sol_obj = _propagate_dynsys(
         dynsys=dynsys,
         state0=PHI0,
@@ -323,8 +321,6 @@ def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["fixed",
         flip_indices=slice(36, 42),
         **kwargs
     )
-    _to = time.perf_counter()
-    print(f"[STM] tf={tf:.6g}, steps={steps}, method={method}, order={order}, integrate={( _to - _ti)*1e3:.2f} ms, total={( _to - _t0)*1e3:.2f} ms")
 
     PHI = sol_obj.states
 

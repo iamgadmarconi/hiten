@@ -287,10 +287,7 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
         stepper = self._build_line_searcher(residual_fn, norm_fn, max_delta)
 
         for k in range(max_attempts):
-            _t_iter0 = time.perf_counter()
-            _t_r0 = time.perf_counter()
             r = self._compute_residual(x, residual_fn)
-            _t_r1 = time.perf_counter()
             r_norm = self._compute_norm(r, norm_fn)
 
             try:
@@ -308,18 +305,10 @@ class _NewtonCore(_ArmijoStepInterface, _Corrector, ABC):
                     logger.warning("_on_accept hook raised an exception: %s", exc)
                 return x, info
 
-            _t_j0 = time.perf_counter()
             J = self._compute_jacobian(x, residual_fn, jacobian_fn, fd_step)
-            _t_j1 = time.perf_counter()
-            _t_s0 = time.perf_counter()
             delta = self._solve_delta(J, r)
-            _t_s1 = time.perf_counter()
 
-            _t_ls0 = time.perf_counter()
             x_new, r_norm_new, alpha_used = stepper(x, delta, r_norm)
-            _t_ls1 = time.perf_counter()
-
-            print(f"[Newton] iter={k} times: residual={( _t_r1 - _t_r0)*1e3:.2f} ms, jacobian={( _t_j1 - _t_j0)*1e3:.2f} ms, solve={( _t_s1 - _t_s0)*1e3:.2f} ms, line_search={( _t_ls1 - _t_ls0)*1e3:.2f} ms, total={( time.perf_counter() - _t_iter0)*1e3:.2f} ms; |R|={r_norm:.3e}->{r_norm_new:.3e}, alpha={alpha_used:.2e}")
 
             logger.debug(
                 "Newton iter %d/%d: |R|=%.2e -> %.2e (alpha=%.2e)",
