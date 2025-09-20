@@ -1,8 +1,9 @@
+import numba
 import numpy as np
+import pytest
 
 from hiten.algorithms.dynamics.rhs import create_rhs_system
-from hiten.algorithms.integrators import AdaptiveRK
-from hiten.algorithms.integrators import RungeKutta
+from hiten.algorithms.integrators import AdaptiveRK, RungeKutta
 from hiten.algorithms.integrators.configs import _EventConfig
 
 
@@ -271,3 +272,133 @@ def test_endpoint_zero_is_detected_rk45_and_fixed_rk():
     assert sol4.times.size == 2
     assert abs(sol4.times[-1] - 1.0) < 1e-12
     assert abs(sol4.states[-1, 0] - 1.0) < 1e-12
+
+
+class _TestHamSystem:
+    """Minimal Hamiltonian-like system satisfying `_HamiltonianSystemProtocol`.
+
+    Used to exercise Hamiltonian fast paths without constructing full polynomial data.
+    The integrators will call `rhs_params`, and we patch the low-level
+    `_hamiltonian_rhs` in `hiten.algorithms.integrators.rk` during tests to ignore
+    the polynomial arguments.
+    """
+
+    def __init__(self, dim: int = 2, n_dof: int = 1):
+        self._dim = dim
+        self._n_dof = n_dof
+
+    # _DynamicalSystemProtocol
+    @property
+    def dim(self) -> int:
+        return self._dim
+
+    @property
+    def rhs(self):
+        # Not used by Hamiltonian fast path, but required by protocol
+        def _dummy_rhs(t, y):
+            return np.zeros_like(y)
+
+        return _dummy_rhs
+
+    def _build_rhs_impl(self):
+        return self.rhs
+
+    # _HamiltonianSystemProtocol
+    @property
+    def n_dof(self) -> int:
+        return self._n_dof
+
+    def dH_dQ(self, Q: np.ndarray, P: np.ndarray) -> np.ndarray:
+        return np.zeros(self._n_dof, dtype=float)
+
+    def dH_dP(self, Q: np.ndarray, P: np.ndarray) -> np.ndarray:
+        return np.zeros(self._n_dof, dtype=float)
+
+    def poly_H(self):
+        return []
+
+    @property
+    def rhs_params(self) -> tuple:
+        # jac_H, clmo_H, n_dof — content unused by patched RHS
+        return (None, None, self._n_dof)
+
+
+def _patch_ham_rhs_constant_flow(monkeypatch, dqdt: float = 1.0, dpdt: float = 0.0):
+    """Patch rk._hamiltonian_rhs to a constant vector field for tests.
+
+    Parameters
+    ----------
+    dqdt, dpdt : float
+        Components of the test Hamiltonian flow (q', p').
+    """
+
+    @numba.njit(cache=False)
+    def _rhs(state, jac_H, clmo_H, n_dof):
+        # state = [q, p] when n_dof == 1
+        out = np.empty_like(state)
+        out[0] = dqdt
+        out[1] = dpdt
+        return out
+
+    monkeypatch.setattr("hiten.algorithms.integrators.rk._hamiltonian_rhs", _rhs, raising=True)
+
+
+def test_rk45_event_hamiltonian_positive_crossing(monkeypatch):
+    # Hamiltonian path: q' = +1, p' = 0; event at q = 1 -> t_hit = 1 - q0
+    _patch_ham_rhs_constant_flow(monkeypatch, dqdt=1.0, dpdt=0.0)
+    sys = _TestHamSystem(dim=2, n_dof=1)
+    y0 = np.array([0.0, 0.0])  # q0=0, p0=0
+    t_vals = np.array([0.0, 2.0])
+
+    def g(t, y):
+        return float(y[0] - 1.0)
+
+    ev_cfg = _EventConfig(direction=+1, terminal=True)
+    rk45 = AdaptiveRK(order=5)
+    sol = rk45.integrate(sys, y0, t_vals, event_fn=g, event_cfg=ev_cfg)
+
+    assert sol.times.size == 2
+    t_hit = sol.times[-1]
+    q_hit = sol.states[-1, 0]
+    assert abs(t_hit - 1.0) < 1e-9
+    assert abs(q_hit - 1.0) < 1e-9
+
+
+def test_dop853_event_hamiltonian_negative_crossing(monkeypatch):
+    # Hamiltonian path: q' = -1, p' = 0; event at q = 1 from above -> t_hit = q0 - 1
+    _patch_ham_rhs_constant_flow(monkeypatch, dqdt=-1.0, dpdt=0.0)
+    sys = _TestHamSystem(dim=2, n_dof=1)
+    y0 = np.array([1.5, 0.0])  # start above plane
+    t_vals = np.array([0.0, 2.0])
+
+    def g(t, y):
+        return float(y[0] - 1.0)
+
+    ev_cfg = _EventConfig(direction=-1, terminal=True)
+    dop853 = AdaptiveRK(order=8)
+    sol = dop853.integrate(sys, y0, t_vals, event_fn=g, event_cfg=ev_cfg)
+
+    assert sol.times.size == 2
+    t_hit = sol.times[-1]
+    q_hit = sol.states[-1, 0]
+    assert abs(t_hit - 0.5) < 1e-9
+    assert abs(q_hit - 1.0) < 1e-9
+
+
+def test_fixed_rk_event_hamiltonian_endpoint_zero(monkeypatch):
+    # Fixed RK4: q' = +1, event exactly at endpoint t=1
+    _patch_ham_rhs_constant_flow(monkeypatch, dqdt=1.0, dpdt=0.0)
+    sys = _TestHamSystem(dim=2, n_dof=1)
+    y0 = np.array([0.0, 0.0])
+    t_vals = np.array([0.0, 1.0])
+
+    def g(t, y):
+        return float(y[0] - 1.0)
+
+    ev_cfg = _EventConfig(direction=+1, terminal=True)
+    rk4 = RungeKutta(order=4)
+    sol = rk4.integrate(sys, y0, t_vals, event_fn=g, event_cfg=ev_cfg)
+
+    assert sol.times.size == 2
+    assert abs(sol.times[-1] - 1.0) < 1e-12
+    assert abs(sol.states[-1, 0] - 1.0) < 1e-12
