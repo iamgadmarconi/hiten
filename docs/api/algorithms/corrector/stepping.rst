@@ -15,12 +15,12 @@ base.py
 
 .. currentmodule:: hiten.algorithms.corrector.stepping.base
 
-_SteppingBase()
+_CorrectorSteppingBase()
 ^^^^^^^^^^^^^^^
 
-The :class:`_SteppingBase` class provides an abstract base class for step-size control strategy interfaces.
+The :class:`_CorrectorSteppingBase` class provides an abstract base class for step-size control strategy interfaces.
 
-.. autoclass:: _SteppingBase()
+.. autoclass:: _CorrectorSteppingBase()
    :members:
    :undoc-members:
    :exclude-members: __init__

@@ -361,7 +361,7 @@ For specialized applications, you can implement custom line search strategies by
 
 .. code-block:: python
 
-   from hiten.algorithms.corrector._step_interface import _StepInterface, StepProtocol
+   from hiten.algorithms.corrector._step_interface import _StepInterface, CorrectorStepProtocol
    from hiten.algorithms.corrector.line import _LineSearchConfig
    import numpy as np
 

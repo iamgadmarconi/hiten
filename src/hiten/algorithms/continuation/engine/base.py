@@ -65,44 +65,6 @@ class _ContinuationEngine(ABC):
     parameter_values : sequence of ndarray
         Parameter values corresponding to each family member.
 
-    Notes
-    -----
-    The continuation algorithm implements these steps:
-    
-    1. **Prediction**: Use stepping strategy to predict next solution
-    2. **Instantiation**: Convert predicted representation to domain object
-    3. **Correction**: Refine solution using problem-specific corrector
-    4. **Acceptance**: Add to family if correction succeeds
-    5. **Adaptation**: Adjust step size based on success/failure
-    6. **Termination**: Check stopping condition and iteration limit
-    
-    Subclasses must implement:
-    - :meth:`~hiten.algorithms.continuation.base._ContinuationEngine._make_stepper`: Create stepping strategy
-    - :meth:`~hiten.algorithms.continuation.base._ContinuationEngine._stop_condition`: Define termination criteria
-    - :meth:`~hiten.algorithms.continuation.base._ContinuationEngine._instantiate`: Convert predictions to domain objects
-    - :meth:`~hiten.algorithms.continuation.base._ContinuationEngine._correct`: Problem-specific correction
-    - :meth:`~hiten.algorithms.continuation.base._ContinuationEngine._parameter`: Extract parameters from solutions
-
-    Examples
-    --------
-    >>> # Subclass implementation example
-    >>> class OrbitContinuation(_ContinuationEngine):
-    ...     def _make_stepper(self):
-    ...         return NaturalParameterStep()
-    ...     
-    ...     def _stop_condition(self):
-    ...         current = self._parameter(self._family[-1])
-    ...         return np.any(current >= self._target_max)
-    ...     
-    ...     def _instantiate(self, repr):
-    ...         return Orbit.from_state(repr)
-    ...     
-    ...     def _correct(self, orbit, **kwargs):
-    ...         return orbit.correct(**kwargs)
-    ...     
-    ...     def _parameter(self, orbit):
-    ...         return orbit.energy
-
     See Also
     --------
     :class:`~hiten.algorithms.continuation.strategies._step_interface._ContinuationStep`

@@ -5,12 +5,12 @@ This module provides the plain step interface for step-size control strategies.
 
 import numpy as np
 
-from hiten.algorithms.corrector.protocols import StepProtocol
-from hiten.algorithms.corrector.stepping.base import _SteppingBase
+from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
+from hiten.algorithms.corrector.stepping.base import _CorrectorSteppingBase
 from hiten.algorithms.corrector.types import NormFn, ResidualFn
 
 
-class _PlainStep(_SteppingBase):
+class _PlainStep(_CorrectorSteppingBase):
     """Provide a step interface for plain Newton updates with safeguards.
 
     This class implements the simplest step-size control strategy: taking
@@ -49,7 +49,7 @@ class _PlainStep(_SteppingBase):
     --------
     :class:`~hiten.algorithms.corrector.stepping.armijo._ArmijoStep`
         More sophisticated interface with line search capabilities.
-    :class:`~hiten.algorithms.corrector.stepping.base._SteppingBase`
+    :class:`~hiten.algorithms.corrector.stepping.base._CorrectorSteppingBase`
         Abstract base class that this class extends.
     """
 
@@ -58,7 +58,7 @@ class _PlainStep(_SteppingBase):
         residual_fn: ResidualFn,
         norm_fn: NormFn,
         max_delta: float | None,
-    ) -> StepProtocol:
+    ) -> CorrectorStepProtocol:
         """Create a plain Newton stepper with optional step size capping.
 
         This method builds a step transformation function that implements
@@ -78,7 +78,7 @@ class _PlainStep(_SteppingBase):
 
         Returns
         -------
-        stepper : :class:`~hiten.algorithms.corrector.protocols.StepProtocol`
+        stepper : :class:`~hiten.algorithms.corrector.protocols.CorrectorStepProtocol`
             Step transformation function implementing plain Newton updates.
 
         Notes
@@ -118,7 +118,7 @@ class _PlainStep(_SteppingBase):
         residual_fn: ResidualFn,
         norm_fn: NormFn,
         max_delta: float | None,
-    ) -> StepProtocol:
+    ) -> CorrectorStepProtocol:
         """Build a plain Newton stepper for the current problem.
 
         This method implements the abstract interface by delegating to
@@ -137,7 +137,7 @@ class _PlainStep(_SteppingBase):
 
         Returns
         -------
-        stepper : :class:`~hiten.algorithms.corrector.protocols.StepProtocol`
+        stepper : :class:`~hiten.algorithms.corrector.protocols.CorrectorStepProtocol`
             Plain Newton step transformation function.
         """
         return self._make_plain_stepper(residual_fn, norm_fn, max_delta)
