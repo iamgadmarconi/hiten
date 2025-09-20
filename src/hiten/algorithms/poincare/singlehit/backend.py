@@ -1,13 +1,16 @@
 """Concrete backend implementation for single-hit Poincare sections.
 
 This module provides a concrete implementation of the return map backend
-for single-hit Poincare sections. It implements the generic surface-of-section
-crossing search using numerical integration and root finding.
+for single-hit Poincare sections. It implements the generic
+surface-of-section crossing search using numerical integration and root
+finding.
 
-The main class :class:`~hiten.algorithms.poincare.singlehit.backend._SingleHitBackend` 
+The main class
+:class:`~hiten.algorithms.poincare.singlehit.backend._SingleHitBackend`
 extends the abstract base class
-to provide a complete implementation for finding single trajectory-section
-intersections.
+:class:`~hiten.algorithms.poincare.core.backend._ReturnMapBackend` to
+provide a complete implementation for finding single
+trajectory-section intersections.
 """
 
 from typing import Callable, Literal
@@ -56,7 +59,7 @@ class _SingleHitBackend(_ReturnMapBackend):
 
     Parameters
     ----------
-    dynsys : :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+    dynsys : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
         The dynamical system providing the equations of motion.
     surface : :class:`~hiten.algorithms.poincare.core.events._SurfaceEvent`
         The Poincare section surface definition.
@@ -79,9 +82,10 @@ class _SingleHitBackend(_ReturnMapBackend):
     -----
     This backend is optimized for single-hit computations where only
     the first intersection with the section is needed. It uses efficient
-    root finding to locate the exact crossing point after coarse integration.
+    root finding to locate the exact crossing point after coarse
+    integration.
 
-    All time units are in nondimensional units unless otherwise specified.
+    All time units are nondimensional unless otherwise specified.
     """
 
     def __init__(
@@ -181,8 +185,9 @@ class _SingleHitBackend(_ReturnMapBackend):
 
         Returns
         -------
-        _SectionHit or None
-            Crossing information, or None if no crossing before tmax.
+        :class:`~hiten.algorithms.poincare.core.events._SectionHit` or None
+            Crossing information, or ``None`` if no crossing before
+            ``tmax``.
         """
         # Map surface to scalar event g(t,y)
         direction = getattr(self._surface, "direction", None)
@@ -295,7 +300,7 @@ def find_crossing(dynsys, state0, surface, **kwargs):
 
     Parameters
     ----------
-    dynsys : :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`
+    dynsys : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
         The dynamical system providing the equations of motion.
     state0 : array_like, shape (6,)
         Initial state vector [x, y, z, vx, vy, vz] in nondimensional units.
@@ -306,8 +311,9 @@ def find_crossing(dynsys, state0, surface, **kwargs):
 
     Returns
     -------
-    tuple[ndarray, ndarray]
-        Tuple of (points, states) arrays from the backend's step_to_section method.
+    tuple[numpy.ndarray, numpy.ndarray]
+        Tuple of ``(points, states)`` arrays from the backend's
+        ``step_to_section`` method.
 
     Notes
     -----
@@ -343,8 +349,9 @@ def _plane_crossing_factory(coord: str, value: float = 0.0, direction: int | Non
     specific coordinate planes. The returned function takes a dynamical
     system and initial state and returns the crossing time and state.
 
-    The returned function signature is:
-    _section_crossing(*, dynsys, x0, forward=1, **kwargs) -> (time, state)
+    The returned function signature is::
+
+        _section_crossing(*, dynsys, x0, forward=1, **kwargs) -> (time, state)
     """
     event = _PlaneEvent(coord=coord, value=value, direction=direction)
     # Attach explicit plane parameters for fast event selection downstream

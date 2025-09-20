@@ -112,19 +112,23 @@ def _solve_bracketed(f, a: float, b: float, xtol: float = 1e-12, max_iter: int =
     """
     left = float(a)
     right = float(b)
-    f_left = float(f(left))
-    f_right = float(f(right))
+    f_eval = f  # local bind for tiny speedup
+    f_left = float(f_eval(left))
+    f_right = float(f_eval(right))
 
     if f_left == 0.0:
         return left
     if f_right == 0.0:
         return right
 
-    for _ in range(max_iter):
-        mid = 0.5 * (left + right)
-        f_mid = float(f(mid))
-        if (right - left) <= xtol:
+    iterations = 0
+    while (right - left) > xtol and iterations < max_iter:
+        mid = left + 0.5 * (right - left)
+        f_mid = float(f_eval(mid))
+
+        if f_mid == 0.0:
             return mid
+
         if f_left * f_mid <= 0.0:
             right = mid
             f_right = f_mid
@@ -132,7 +136,9 @@ def _solve_bracketed(f, a: float, b: float, xtol: float = 1e-12, max_iter: int =
             left = mid
             f_left = f_mid
 
-    return 0.5 * (left + right)
+        iterations += 1
+
+    return left + 0.5 * (right - left)
 
 @njit(cache=False, fastmath=FASTMATH)
 def _get_rk_coefficients(order: int):
@@ -569,8 +575,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
             Maximum expansion iterations.
         symmetric : bool, default=False
             If True, use symmetric bracketing.
-        method : str, default='brentq'
-            Root finding method.
         xtol : float, default=1e-12
             Root finding tolerance.
 
@@ -606,7 +610,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         max_expand: int = 40,
         *,
         symmetric: bool = False,
-        method: str = "brentq",
         xtol: float = 1e-12,
     ) -> Optional[float]:
         """Solve for the turning-point value of one center manifold coordinate.
@@ -625,8 +628,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
             Maximum expansion iterations.
         symmetric : bool, default=False
             If True, use symmetric bracketing.
-        method : str, default='brentq'
-            Root finding method.
         xtol : float, default=1e-12
             Root finding tolerance.
 
@@ -669,7 +670,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
             factor=expand_factor,
             max_expand=max_expand,
             symmetric=symmetric,
-            method=method,
             xtol=xtol,
         )
 
@@ -687,7 +687,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         max_expand: int = 40,
         *,
         symmetric: bool = False,
-        method: str = "brentq",
         xtol: float = 1e-12,
     ) -> float:
         """Find the absolute turning-point value for specified coordinate.
@@ -704,8 +703,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
             Maximum expansion iterations.
         symmetric : bool, default=False
             If True, use symmetric bracketing.
-        method : str, default='brentq'
-            Root finding method.
         xtol : float, default=1e-12
             Root finding tolerance.
 
@@ -734,7 +731,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
             expand_factor,
             max_expand,
             symmetric=symmetric,
-            method=method,
             xtol=xtol,
         )
 

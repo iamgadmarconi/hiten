@@ -108,9 +108,12 @@ def crtbp_energy(state: Sequence[float], mu: float) -> float:
     
     See Also
     --------
-    :func:`~hiten.algorithms.dynamics.utils.energy.energy_to_jacobi` : Convert energy to Jacobi constant
-    :func:`~hiten.algorithms.dynamics.utils.energy.kinetic_energy` : Compute kinetic energy component
-    :func:`~hiten.algorithms.dynamics.utils.energy.effective_potential` : Compute effective potential component
+    :func:`~hiten.algorithms.dynamics.utils.energy.energy_to_jacobi` :
+        Convert energy to Jacobi constant
+    :func:`~hiten.algorithms.dynamics.utils.energy.kinetic_energy` :
+        Compute kinetic energy component
+    :func:`~hiten.algorithms.dynamics.utils.energy.effective_potential` :
+        Compute effective potential component
     """
     logger.debug(f"Computing energy for state={state}, mu={mu}")
     
@@ -180,8 +183,10 @@ def hill_region(
     
     See Also
     --------
-    :func:`~hiten.algorithms.dynamics.utils.energy.crtbp_energy` : Compute Hamiltonian energy
-    :func:`~hiten.algorithms.dynamics.utils.energy.pseudo_potential_at_point` : Evaluate pseudo-potential
+    :func:`~hiten.algorithms.dynamics.utils.energy.crtbp_energy` : Compute
+        Hamiltonian energy
+    :func:`~hiten.algorithms.dynamics.utils.energy.pseudo_potential_at_point` :
+        Evaluate pseudo-potential
     """
     logger.info(f"Computing Hill region for mu={mu}, C={C}, grid={n_grid}x{n_grid}")
     logger.debug(f"x_range={x_range}, y_range={y_range}")
@@ -215,8 +220,10 @@ def energy_to_jacobi(energy: float) -> float:
         
     See Also
     --------
-    :func:`~hiten.algorithms.dynamics.utils.energy.jacobi_to_energy` : Inverse conversion
-    :func:`~hiten.algorithms.dynamics.utils.energy.crtbp_energy` : Compute Hamiltonian energy
+    :func:`~hiten.algorithms.dynamics.utils.energy.jacobi_to_energy` : Inverse
+        conversion
+    :func:`~hiten.algorithms.dynamics.utils.energy.crtbp_energy` : Compute
+        Hamiltonian energy
     """
     jacobi = -2 * energy
     logger.debug(f"Converted energy {energy} to Jacobi constant {jacobi}")
@@ -238,8 +245,10 @@ def jacobi_to_energy(jacobi: float) -> float:
         
     See Also
     --------
-    :func:`~hiten.algorithms.dynamics.utils.energy.energy_to_jacobi` : Inverse conversion
-    :func:`~hiten.algorithms.dynamics.utils.energy.crtbp_energy` : Compute Hamiltonian energy
+    :func:`~hiten.algorithms.dynamics.utils.energy.energy_to_jacobi` : Inverse
+        conversion
+    :func:`~hiten.algorithms.dynamics.utils.energy.crtbp_energy` : Compute
+        Hamiltonian energy
     """
     energy = -jacobi / 2
     logger.debug(f"Converted Jacobi constant {jacobi} to energy {energy}")
@@ -268,8 +277,10 @@ def kinetic_energy(state: Sequence[float]) -> float:
         
     See Also
     --------
-    :func:`~hiten.algorithms.dynamics.utils.energy.effective_potential` : Compute potential energy component
-    :func:`~hiten.algorithms.dynamics.utils.energy.crtbp_energy` : Compute total Hamiltonian energy
+    :func:`~hiten.algorithms.dynamics.utils.energy.effective_potential` :
+        Compute potential energy component
+    :func:`~hiten.algorithms.dynamics.utils.energy.crtbp_energy` : Compute
+        total Hamiltonian energy
     """
     x, y, z, vx, vy, vz = state
     
@@ -304,7 +315,8 @@ def effective_potential(state: Sequence[float], mu: float) -> float:
 
     Notes
     -----
-    Uses :func:`~hiten.algorithms.dynamics.utils.energy.primary_distance` and :func:`~hiten.algorithms.dynamics.utils.energy.secondary_distance` for
+    Uses :func:`~hiten.algorithms.dynamics.utils.energy.primary_distance` and
+    :func:`~hiten.algorithms.dynamics.utils.energy.secondary_distance` for
     distance calculations. Warns when approaching singularities.
     
     See Also
@@ -355,8 +367,10 @@ def pseudo_potential_at_point(x: float, y: float, mu: float) -> float:
         
     See Also
     --------
-    :func:`~hiten.algorithms.dynamics.utils.energy.hill_region` : Compute Hill regions using pseudo-potential
-    :func:`~hiten.algorithms.dynamics.utils.energy.effective_potential` : 3D effective potential
+    :func:`~hiten.algorithms.dynamics.utils.energy.hill_region` : Compute Hill
+        regions using pseudo-potential
+    :func:`~hiten.algorithms.dynamics.utils.energy.effective_potential` : 3D
+        effective potential
     """
     logger.debug(f"Computing pseudo-potential at point x={x}, y={y}, mu={mu}")
     r1 = np.sqrt((x + mu)**2 + y**2)
@@ -389,9 +403,12 @@ def gravitational_potential(state: Sequence[float], mu: float) -> float:
         
     See Also
     --------
-    :func:`~hiten.algorithms.dynamics.utils.energy.effective_potential` : Effective potential including centrifugal terms
-    :func:`~hiten.algorithms.dynamics.utils.energy.primary_distance` : Distance to primary body
-    :func:`~hiten.algorithms.dynamics.utils.energy.secondary_distance` : Distance to secondary body
+    :func:`~hiten.algorithms.dynamics.utils.energy.effective_potential` :
+        Effective potential including centrifugal terms
+    :func:`~hiten.algorithms.dynamics.utils.energy.primary_distance` : Distance
+        to primary body
+    :func:`~hiten.algorithms.dynamics.utils.energy.secondary_distance` : Distance
+        to secondary body
     """
     logger.debug(f"Computing gravitational potential for state={state}, mu={mu}")
     
@@ -428,8 +445,10 @@ def primary_distance(state: Sequence[float], mu: float) -> float:
         
     See Also
     --------
-    :func:`~hiten.algorithms.dynamics.utils.energy.secondary_distance` : Distance to secondary body
-    :func:`~hiten.algorithms.dynamics.utils.energy.gravitational_potential` : Uses both distance calculations
+    :func:`~hiten.algorithms.dynamics.utils.energy.secondary_distance` :
+        Distance to secondary body
+    :func:`~hiten.algorithms.dynamics.utils.energy.gravitational_potential` :
+        Uses both distance calculations
     """
     # This is a simple helper function, so we'll just use debug level log
     logger.debug(f"Computing primary distance for state={state}, mu={mu}")
@@ -463,8 +482,10 @@ def secondary_distance(state: Sequence[float], mu: float) -> float:
         
     See Also
     --------
-    :func:`~hiten.algorithms.dynamics.utils.energy.primary_distance` : Distance to primary body
-    :func:`~hiten.algorithms.dynamics.utils.energy.gravitational_potential` : Uses both distance calculations
+    :func:`~hiten.algorithms.dynamics.utils.energy.primary_distance` : Distance
+        to primary body
+    :func:`~hiten.algorithms.dynamics.utils.energy.gravitational_potential` :
+        Uses both distance calculations
     """
     # This is a simple helper function, so we'll just use debug level log
     logger.debug(f"Computing secondary distance for state={state}, mu={mu}")

@@ -18,7 +18,7 @@ centre manifolds and first integrals of Hamiltonian systems.
 *Experimental Mathematics*, 8(2), 155-195.
 """
 
-from typing import Callable
+from typing import Callable, List
 
 import numpy as np
 from numba import njit
@@ -31,7 +31,7 @@ from hiten.algorithms.polynomial.operations import (_polynomial_evaluate,
 from hiten.algorithms.utils.config import FASTMATH
 
 
-@njit(cache=True, fastmath=FASTMATH)
+@njit(cache=False, fastmath=FASTMATH)
 def _hamiltonian_rhs(
     state6: np.ndarray,
     jac_H: List[List[np.ndarray]],
@@ -71,8 +71,10 @@ def _hamiltonian_rhs(
     
     See Also
     --------
-    :func:`~hiten.algorithms.polynomial.operations._polynomial_evaluate` : Polynomial evaluation
-    :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem` : Uses this function for RHS computation
+    :func:`~hiten.algorithms.polynomial.operations._polynomial_evaluate` :
+        Polynomial evaluation
+    :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem` : Uses
+        this function for RHS computation
     """
 
     dH_dQ = np.empty(n_dof)
@@ -151,9 +153,12 @@ class _HamiltonianSystem(_DynamicalSystem):
     
     See Also
     --------
-    :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystemProtocol` : Interface specification
-    :func:`~hiten.algorithms.dynamics.hamiltonian.create_hamiltonian_system` : Factory function
-    :func:`~hiten.algorithms.dynamics.hamiltonian._hamiltonian_rhs` : JIT-compiled RHS computation
+    :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystemProtocol` :
+        Interface specification
+    :func:`~hiten.algorithms.dynamics.hamiltonian.create_hamiltonian_system` :
+        Factory function
+    :func:`~hiten.algorithms.dynamics.hamiltonian._hamiltonian_rhs` :
+        JIT-compiled RHS computation
     """
 
     def __init__(
@@ -172,7 +177,7 @@ class _HamiltonianSystem(_DynamicalSystem):
             raise ValueError(f"Number of degrees of freedom must be positive, got {n_dof}")
         
         jac_H = _polynomial_jacobian(H_blocks, degree, psi_table, clmo_table, encode_dict_list)
-
+        # Store in numba.typed.List to avoid reflected Python list issues inside njit.
         jac_H_typed = List()
         for var_derivs in jac_H:
             var_list = List()
@@ -256,7 +261,8 @@ class _HamiltonianSystem(_DynamicalSystem):
             
         See Also
         --------
-        :func:`~hiten.algorithms.polynomial.operations._polynomial_evaluate` : Uses these objects
+        :func:`~hiten.algorithms.polynomial.operations._polynomial_evaluate` :
+            Uses these objects
         """
         return self.clmo_H
     
@@ -282,8 +288,10 @@ class _HamiltonianSystem(_DynamicalSystem):
             
         See Also
         --------
-        :func:`~hiten.algorithms.integrators.symplectic._eval_dH_dQ` : Implementation
-        :meth:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem.dH_dP` : Momentum derivatives
+        :func:`~hiten.algorithms.integrators.symplectic._eval_dH_dQ` :
+            Implementation
+        :meth:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem.dH_dP` :
+            Momentum derivatives
         """
         self._validate_coordinates(Q, P)
         return _eval_dH_dQ(Q, P, self.jac_H, self.clmo_H)
@@ -310,8 +318,10 @@ class _HamiltonianSystem(_DynamicalSystem):
             
         See Also
         --------
-        :func:`~hiten.algorithms.integrators.symplectic._eval_dH_dP` : Implementation
-        :meth:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem.dH_dQ` : Position derivatives
+        :func:`~hiten.algorithms.integrators.symplectic._eval_dH_dP` :
+            Implementation
+        :meth:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem.dH_dQ` :
+            Position derivatives
         """
         self._validate_coordinates(Q, P)
         return _eval_dH_dP(Q, P, self.jac_H, self.clmo_H)
@@ -327,7 +337,8 @@ class _HamiltonianSystem(_DynamicalSystem):
             
         See Also
         --------
-        :func:`~hiten.algorithms.dynamics.hamiltonian.create_hamiltonian_system` : Uses these blocks for system creation
+        :func:`~hiten.algorithms.dynamics.hamiltonian.create_hamiltonian_system` :
+            Uses these blocks for system creation
         """
         return self.H_blocks
     

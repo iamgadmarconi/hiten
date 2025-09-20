@@ -62,31 +62,35 @@ from hiten.algorithms.utils.config import FASTMATH, TOL
 class _RungeKuttaBase(_Integrator):
     """Provide shared functionality of explicit Runge-Kutta schemes.
 
-    The class stores a Butcher tableau and provides a single low level helper
-    :func:`~hiten.algorithms.integrators.rk._RungeKuttaBase._rk_embedded_step` that advances one macro time step and, when a
-    second set of weights is available, returns an error estimate suitable
-    for adaptive step-size control.
+    The class stores a Butcher tableau and provides a single low level
+    helper
+    :func:`~hiten.algorithms.integrators.rk._RungeKuttaBase._rk_embedded_step`
+    that advances one macro time step and, when a second set of weights
+    is available, returns an error estimate suitable for adaptive
+    step-size control.
 
     Attributes
     ----------
-    _A : numpy.ndarray of shape (s, s)
-        Strictly lower triangular array of stage coefficients a_ij.
-    _B_HIGH : numpy.ndarray of shape (s,)
+    _A : numpy.ndarray of shape ``(s, s)``
+        Strictly lower triangular array of stage coefficients ``a_ij``.
+    _B_HIGH : numpy.ndarray of shape ``(s,)``
         Weights of the high order solution.
     _B_LOW : numpy.ndarray or None
-        Weights of the lower order solution, optional.  When *None* no error
-        estimate is produced and :func:`~hiten.algorithms.integrators.rk.rk_embedded_step_jit_kernel` falls back to
-        the high order result for both outputs.
-    _C : numpy.ndarray of shape (s,)
-        Nodes c_i measured in units of the step size.
+        Weights of the lower order solution, optional. When ``None`` no
+        error estimate is produced and
+        :func:`~hiten.algorithms.integrators.rk.rk_embedded_step_jit_kernel`
+        falls back to the high order result for both outputs.
+    _C : numpy.ndarray of shape ``(s,)``
+        Nodes ``c_i`` measured in units of the step size.
     _p : int
         Formal order of accuracy of the high order scheme.
 
     Notes
     -----
-    The class is **not** intended to be used directly.  Concrete subclasses
-    define the specific coefficients and expose a public interface compliant
-    with :class:`~hiten.algorithms.integrators.base._Integrator`.
+    The class is not intended to be used directly. Concrete subclasses
+    define the specific coefficients and expose a public interface
+    compliant with
+    :class:`~hiten.algorithms.integrators.base._Integrator`.
     """
 
     _A: np.ndarray = None
@@ -138,10 +142,10 @@ class _RungeKuttaBase(_Integrator):
         return numba.njit(event_sig, cache=False, fastmath=FASTMATH)(event_fn)
     
     def _build_rhs_wrapper(self, system: _DynamicalSystemProtocol) -> Callable[[float, np.ndarray], np.ndarray]:
-        """Return the compiled (t, y) RHS from the system.
+        """Return the compiled ``(t, y)`` RHS from the system.
 
-        Ensures `system.rhs` has the expected two-argument signature and returns it.
-        All systems now expose a compiled dispatcher.
+        Ensures ``system.rhs`` has the expected two-argument signature and
+        returns it. All systems now expose a compiled dispatcher.
 
         Parameters
         ----------
@@ -150,18 +154,13 @@ class _RungeKuttaBase(_Integrator):
 
         Returns
         -------
-        Callable[[float, np.ndarray], np.ndarray]
-            The compiled `(t, y)` RHS callable.
-        
-        See Also
-        --------
-        :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol` : Base class
-        :func:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol._compile_rhs_function` : JIT compilation method
+        Callable[[float, numpy.ndarray], numpy.ndarray]
+            The compiled ``(t, y)`` RHS callable.
 
         Raises
         ------
         ValueError
-            If `system.rhs` does not have the `(t, y)` signature.
+            If ``system.rhs`` does not have the ``(t, y)`` signature.
         """
 
         rhs_func = system.rhs
@@ -362,27 +361,32 @@ class _FixedStepRK(_RungeKuttaBase):
         event_cfg: _EventConfig | None = None,
         **kwargs,
     ) -> _Solution:
-        """Integrate a dynamical system using a fixed-step Runge-Kutta method with optional events.
-        
+        """Integrate with a fixed-step Runge-Kutta method, with events.
+
         Parameters
         ----------
-        system : _DynamicalSystemProtocol
+        system : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
             The dynamical system to integrate.
         y0 : numpy.ndarray
-            The initial state.
+            Initial state of shape ``(system.dim,)``. Units follow the
+            provided ``system``.
         t_vals : numpy.ndarray
-            The time points to evaluate the solution at.
-        event_fn : callable
-            The event function.
-        event_cfg : _EventConfig | None
-            The event configuration.
+            Strictly monotonic time nodes of shape ``(N,)`` at which to
+            evaluate the solution. Units follow the provided ``system``.
+        event_fn : Callable[[float, numpy.ndarray], float], optional
+            Scalar event function evaluated as ``g(t, y)``. A zero
+            crossing may terminate integration or mark an event.
+        event_cfg : :class:`~hiten.algorithms.integrators.configs._EventConfig` | None
+            Configuration controlling event directionality, terminal
+            behavior, and tolerances.
         **kwargs
-            Additional integration options.
+            Additional integration options passed to the implementation.
 
         Returns
         -------
-        :class:`~hiten.algorithms.integrators.base._Solution`
-            The integration results.
+        :class:`~hiten.algorithms.integrators.types._Solution`
+            Integration results with times, states, and derivatives when
+            available. Units follow the provided ``system``.
         """
         self.validate_inputs(system, y0, t_vals)
 
@@ -885,28 +889,31 @@ class _RK45(_AdaptiveStepRK):
         return y_high, y_low, err_vec
 
     def integrate(self, system: _DynamicalSystemProtocol, y0: np.ndarray, t_vals: np.ndarray, *, event_fn=None, event_cfg: _EventConfig | None = None, **kwargs) -> _Solution:
-        """Adaptive integration fully in Numba for RK45 with Hermite interpolation and optional events.
-        
+        """Integrate with RK45 and dense interpolation, with events.
 
         Parameters
         ----------
-        system : _DynamicalSystemProtocol
+        system : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
             The dynamical system to integrate.
         y0 : numpy.ndarray
-            The initial condition.
+            Initial state of shape ``(system.dim,)``. Units follow the
+            provided ``system``.
         t_vals : numpy.ndarray
-            The time points to evaluate the solution at.
-        event_fn : callable
-            The event function.
+            Time nodes of shape ``(N,)`` at which to evaluate the
+            solution. Units follow the provided ``system``.
+        event_fn : Callable[[float, numpy.ndarray], float], optional
+            Scalar event function evaluated as ``g(t, y)``.
         event_cfg : :class:`~hiten.algorithms.integrators.configs._EventConfig` | None
-            The event configuration.
+            Configuration controlling directionality, terminal behavior,
+            and tolerances.
         **kwargs
-            Additional integration options.
+            Additional integration options passed to the implementation.
 
         Returns
         -------
-        :class:`~hiten.algorithms.integrators.base._Solution`
-            The integration results.
+        :class:`~hiten.algorithms.integrators.types._Solution`
+            Integration results with times, states, and derivatives when
+            available. Units follow the provided ``system``.
         """
         self.validate_inputs(system, y0, t_vals)
         f = self._build_rhs_wrapper(system)
@@ -1633,30 +1640,31 @@ class _DOP853(_AdaptiveStepRK):
         return y_high, y_low, err_vec
 
     def integrate(self, system: _DynamicalSystemProtocol, y0: np.ndarray, t_vals: np.ndarray, *, event_fn=None, event_cfg: _EventConfig | None = None, **kwargs) -> _Solution:
-        """Adaptive integration fully in Numba for DOP853 with dense interpolation.
-
-        Supports an optional scalar `event_fn(t, y) -> float` to terminate at the
-        first detected crossing according to `event_cfg.direction`.
+        """Integrate with DOP853 and dense interpolation, with events.
 
         Parameters
         ----------
-        system : _DynamicalSystemProtocol
+        system : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
             The dynamical system to integrate.
         y0 : numpy.ndarray
-            The initial condition.
+            Initial state of shape ``(system.dim,)``. Units follow the
+            provided ``system``.
         t_vals : numpy.ndarray
-            The time points to evaluate the solution at.
-        event_fn : callable
-            The event function.
+            Time nodes of shape ``(N,)`` at which to evaluate the
+            solution. Units follow the provided ``system``.
+        event_fn : Callable[[float, numpy.ndarray], float], optional
+            Scalar event function evaluated as ``g(t, y)``.
         event_cfg : :class:`~hiten.algorithms.integrators.configs._EventConfig`
-            The event configuration.
+            Configuration controlling directionality, terminal behavior,
+            and tolerances.
         **kwargs
-            Additional integration options.
+            Additional integration options passed to the implementation.
 
         Returns
         -------
-        :class:`~hiten.algorithms.integrators.base._Solution`
-            The integration results.
+        :class:`~hiten.algorithms.integrators.types._Solution`
+            Integration results with times, states, and derivatives when
+            available. Units follow the provided ``system``.
         """
         self.validate_inputs(system, y0, t_vals)
         # Common zero-span short-circuit
@@ -2238,7 +2246,8 @@ class RungeKutta:
             
         Returns
         -------
-        :class:`~hiten.algorithms.integrators.rk.FixedRK` or :class:`~hiten.algorithms.integrators.rk.AdaptiveRK`
+        :class:`~hiten.algorithms.integrators.rk.FixedRK` or
+        :class:`~hiten.algorithms.integrators.rk.AdaptiveRK`
             A Runge-Kutta integrator instance.
         """
         if order not in cls._map:

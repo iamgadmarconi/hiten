@@ -2,8 +2,8 @@
 
 References
 ----------
-Hairer, E., Norsett, S. P., & Wanner, G. (1993). "Solving Ordinary
-Differential Equations I: Non-stiff Problems".
+Hairer, E., Norsett, S. P., and Wanner, G. (1993).
+"Solving Ordinary Differential Equations I: Non-stiff Problems".
 """
 
 from abc import ABC, abstractmethod
@@ -17,7 +17,8 @@ from hiten.algorithms.integrators.types import _Solution
 
 
 class _Integrator(ABC):
-    """Define the minimal interface that every concrete integrator must satisfy.
+    """Define the minimal interface that every concrete integrator must
+    satisfy.
 
     Parameters
     ----------
@@ -25,11 +26,13 @@ class _Integrator(ABC):
         Human-readable identifier of the method.
     **options
         Extra keyword arguments left untouched and stored in
-        :attr:`~hiten.algorithms.integrators.base._Integrator.options` for later use by subclasses.
+        :attr:`~hiten.algorithms.integrators.base._Integrator.options` for
+        later use by subclasses.
 
     Notes
     -----
-    Subclasses *must* implement the abstract members :func:`~hiten.algorithms.integrators.base._Integrator.order` and
+    Subclasses must implement the abstract members
+    :func:`~hiten.algorithms.integrators.base._Integrator.order` and
     :func:`~hiten.algorithms.integrators.base._Integrator.integrate`.
 
     Examples
@@ -56,12 +59,12 @@ class _Integrator(ABC):
     @property
     @abstractmethod
     def order(self) -> Optional[int]:
-        """Order of accuracy of the integrator.
+        """Return the order of accuracy of the integrator.
         
         Returns
         -------
         int or None
-            Order of the method, or None if not applicable
+            Order of the method, or ``None`` if not applicable.
         """
         pass
     
@@ -81,28 +84,44 @@ class _Integrator(ABC):
         Parameters
         ----------
         system : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
-            The dynamical system to integrate
+            The dynamical system to integrate.
         y0 : numpy.ndarray
-            Initial state vector, shape (hiten.system.dim,)
+            Initial state vector of shape ``(system.dim,)``.
+            Units follow the provided ``system``; for CR3BP components,
+            values are typically nondimensional.
         t_vals : numpy.ndarray
-            Array of time points at which to evaluate the solution
+            Strictly monotonic array of time points of shape ``(N,)`` at
+            which to evaluate the solution. Units follow the provided
+            ``system``; for CR3BP components, time is typically
+            nondimensional.
+        event_fn : Callable[[float, numpy.ndarray], float], optional
+            Event function evaluated as ``g(t, y)``. A zero crossing may
+            be used by concrete integrators to stop or record events.
+        event_cfg : :class:`~hiten.algorithms.integrators.configs._EventConfig`, optional
+            Configuration controlling event directionality, terminal
+            behavior, and tolerances for event handling.
         **kwargs
-            Additional integration options
+            Additional integration options passed to concrete
+            implementations.
             
         Returns
         -------
-        :class:`~hiten.algorithms.integrators.base._Solution`
-            Integration results containing times and states
+        :class:`~hiten.algorithms.integrators.types._Solution`
+            Integration results containing times and states (and, when
+            available, state derivatives). Time and state units follow the
+            provided ``system``.
             
         Raises
         ------
         ValueError
-            If the system is incompatible with this integrator
+            If inputs are inconsistent (e.g., dimension mismatch or
+            non-monotonic ``t_vals``) or the system is incompatible.
         """
         pass
     
     def validate_system(self, system: _DynamicalSystemProtocol) -> None:
-        """Check that *system* complies with :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`.
+        """Check that *system* complies with
+        :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`.
 
         Parameters
         ----------
@@ -112,7 +131,9 @@ class _Integrator(ABC):
         Raises
         ------
         ValueError
-            If the required attribute :attr:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol.rhs` is absent.
+            If the required attribute
+            :attr:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol.rhs`
+            is absent.
         """
         if not hasattr(system, 'rhs'):
             raise ValueError(f"System must implement 'rhs' method for {self.name}")
@@ -123,7 +144,8 @@ class _Integrator(ABC):
         y0: np.ndarray,
         t_vals: np.ndarray
     ) -> None:
-        """Validate that the input arguments form a consistent integration task.
+        """Validate that the input arguments form a consistent integration
+        task.
 
         Parameters
         ----------
@@ -132,7 +154,8 @@ class _Integrator(ABC):
         y0 : numpy.ndarray
             Initial state vector of length :attr:`~hiten.system.dim`.
         t_vals : numpy.ndarray
-            Strictly monotonic array of time nodes with at least two entries.
+            Strictly monotonic array of time nodes with at least two
+            entries.
 
         Raises
         ------
@@ -172,10 +195,28 @@ class _Integrator(ABC):
         y0: np.ndarray,
         t_vals: np.ndarray,
     ) -> "_Solution | None":
-        """Return constant-state solution when span is effectively zero; else None.
+        """Return a constant-state solution for an effectively zero span.
 
-        This centralizes the zero-span short-circuit so concrete integrators
-        can simply call this helper at the top of their integrate methods.
+        This centralizes the zero-span short-circuit so concrete
+        integrators can call this helper at the top of their
+        ``integrate`` methods.
+
+        Parameters
+        ----------
+        system : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
+            The system providing the right-hand side function.
+        y0 : numpy.ndarray
+            Initial state vector of shape ``(system.dim,)``.
+        t_vals : numpy.ndarray
+            Time nodes of shape ``(N,)``. If ``t_vals[0]`` equals
+            ``t_vals[-1]`` within numerical tolerance, a constant
+            solution is returned.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.integrators.types._Solution` or None
+            A solution with repeated states and derivatives when the time
+            span is effectively zero, otherwise ``None``.
         """
         if t_vals.size >= 2 and np.isclose(t_vals[0], t_vals[-1]):
             f = system.rhs

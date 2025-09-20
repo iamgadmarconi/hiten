@@ -93,7 +93,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         
         Parameters
         ----------
-        orbit : PeriodicOrbit
+        orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             Orbit object containing system information.
         x_full : ndarray
             Initial state for integration.
@@ -138,7 +138,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         ----------
         p_vec : ndarray
             Current parameter vector.
-        orbit : PeriodicOrbit
+        orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             Orbit being corrected.
         base_state : ndarray
             Base state vector.
@@ -203,7 +203,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         ----------
         p_vec : ndarray
             Current parameter vector.
-        orbit : PeriodicOrbit
+        orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             Orbit being corrected.
         base_state : ndarray
             Base state vector.
@@ -290,7 +290,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         
         Parameters
         ----------
-        orbit : PeriodicOrbit
+        orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             Orbit to be corrected.
         tol : float, default=1e-10
             Convergence tolerance for residual norm.
@@ -308,7 +308,8 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         x_corr : ndarray
             Corrected initial state.
         t_event : float
-            Half-period (time to Poincare section crossing).
+            Half-period (time to Poincare section crossing),
+            nondimensional.
         """
         cfg = orbit._correction_config
 

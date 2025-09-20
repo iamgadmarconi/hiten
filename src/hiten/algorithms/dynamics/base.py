@@ -55,8 +55,10 @@ class _DynamicalSystem(ABC):
 
     Notes
     -----
-    Subclasses must implement the abstract :attr:`~hiten.algorithms.dynamics.base._DynamicalSystem.rhs` property to provide
-    the vector field function compatible with :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`.
+    Subclasses must implement the abstract
+    :attr:`~hiten.algorithms.dynamics.base._DynamicalSystem.rhs` property to
+    provide the vector field function compatible with
+    :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`.
     
     See Also
     --------
@@ -104,7 +106,8 @@ class _DynamicalSystem(ABC):
             
         See Also
         --------
-        :func:`~hiten.algorithms.dynamics.base._validate_initial_state` : Module-level validation utility
+        :func:`~hiten.algorithms.dynamics.base._validate_initial_state` :
+            Module-level validation utility
         """
         if len(y) != self.dim:
             raise ValueError(f"State vector dimension {len(y)} != system dimension {self.dim}")
@@ -146,7 +149,8 @@ class _DynamicalSystem(ABC):
         
         See Also
         --------
-        :class:`~hiten.algorithms.dynamics.base._DynamicalSystem` : Base class containing this method
+        :class:`~hiten.algorithms.dynamics.base._DynamicalSystem` : Base class
+            containing this method
         numba.njit : JIT compilation used internally
         """
         # Detect pre-compiled Numba dispatchers to avoid redundant compilation
@@ -170,7 +174,7 @@ class _DynamicalSystem(ABC):
                 cache_hit = False
             if cache_hit:
                 return _RHS_DISPATCH_CACHE[rhs_func]
-            compiled = numba.njit(cache=True, fastmath=FASTMATH)(rhs_func)
+            compiled = numba.njit(cache=False, fastmath=FASTMATH)(rhs_func)
             try:
                 _RHS_DISPATCH_CACHE[rhs_func] = compiled
             except Exception:
@@ -234,8 +238,10 @@ class _DirectedSystem(_DynamicalSystem):
     
     See Also
     --------
-    :class:`~hiten.algorithms.dynamics.base._DynamicalSystem` : Base class for dynamical systems
-    :func:`~hiten.algorithms.dynamics.base._propagate_dynsys` : Generic propagation using DirectedSystem
+    :class:`~hiten.algorithms.dynamics.base._DynamicalSystem` : Base class for
+        dynamical systems
+    :func:`~hiten.algorithms.dynamics.base._propagate_dynsys` : Generic
+        propagation using DirectedSystem
     """
 
     # Reuse compiled RHS wrappers across instances with identical configuration
@@ -381,20 +387,24 @@ def _propagate_dynsys(
         - event_cfg: _EventConfig with direction/tolerances
     Returns
     -------
-    :class:`~hiten.algorithms.integrators.base._Solution`
+    :class:`~hiten.algorithms.integrators.types._Solution`
         Integration solution containing times and states.
 
     Notes
     -----
-    - Automatically applies :class:`~hiten.algorithms.dynamics.base._DirectedSystem` wrapper for direction handling
+    - Automatically applies
+      :class:`~hiten.algorithms.dynamics.base._DirectedSystem` wrapper for
+      direction handling
     - Validates initial state dimension against system requirements
     - Supports multiple backends: fixed-step Runge-Kutta, adaptive RK, symplectic
     - Time array is adjusted for integration direction in output
     
     See Also
     --------
-    :class:`~hiten.algorithms.dynamics.base._DirectedSystem` : Directional wrapper used internally
-    :func:`~hiten.algorithms.dynamics.base._validate_initial_state` : State validation utility
+    :class:`~hiten.algorithms.dynamics.base._DirectedSystem` : Directional
+        wrapper used internally
+    :func:`~hiten.algorithms.dynamics.base._validate_initial_state` : State
+        validation utility
     """
     from hiten.algorithms.integrators.base import _Solution
     from hiten.algorithms.integrators.rk import AdaptiveRK, RungeKutta

@@ -67,7 +67,8 @@ class _RHSSystem(_DynamicalSystem):
     See Also
     --------
     :class:`~hiten.algorithms.dynamics.base._DynamicalSystem` : Base class
-    :meth:`~hiten.algorithms.dynamics.base._DynamicalSystem._compile_rhs_function` : JIT compilation method
+    :meth:`~hiten.algorithms.dynamics.base._DynamicalSystem._compile_rhs_function` :
+        JIT compilation method
     :func:`~hiten.algorithms.dynamics.rhs.create_rhs_system` : Factory function
     """
 
@@ -117,7 +118,8 @@ def create_rhs_system(rhs_func: Callable[[float, np.ndarray], np.ndarray], dim: 
     
     See Also
     --------
-    :class:`~hiten.algorithms.dynamics.rhs._RHSSystem` : Direct constructor interface
+    :class:`~hiten.algorithms.dynamics.rhs._RHSSystem` : Direct constructor
+        interface
     :class:`~hiten.algorithms.dynamics.base._DynamicalSystem` : Base interface
     """
     return _RHSSystem(rhs_func, dim, name)
