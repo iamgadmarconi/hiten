@@ -42,6 +42,32 @@ def _g_z0(t: float, y: np.ndarray) -> float:
     return float(y[2])
 
 
+# Cache for compiled plane event functions keyed by (index, offset)
+_PLANE_EVENT_FN_CACHE = {}
+
+
+def _get_cached_plane_event_fn(idx: int, offset: float):
+    """Return a compiled g(t, y) = y[idx] - offset function, cached.
+
+    Compiles once per (idx, offset) pair and reuses the CPUDispatcher so
+    integrators receive a stable, already-compiled callable.
+    """
+    key = (int(idx), float(offset))
+    fn = _PLANE_EVENT_FN_CACHE.get(key)
+    if fn is not None:
+        return fn
+
+    i = int(idx)
+    off = float(offset)
+
+    @njit(types.float64(types.float64, types.float64[:]), cache=True, fastmath=True)
+    def _g(t: float, y: np.ndarray) -> float:
+        return float(y[i] - off)
+
+    _PLANE_EVENT_FN_CACHE[key] = _g
+    return _g
+
+
 class _SingleHitBackend(_ReturnMapBackend):
     """Concrete backend for single-hit Poincare section crossing search.
 
@@ -188,26 +214,21 @@ class _SingleHitBackend(_ReturnMapBackend):
         """
         # Map surface to scalar event g(t,y)
         direction = getattr(self._surface, "direction", None)
-        normal_raw = getattr(self._surface, "normal", None)
-        offset = getattr(self._surface, "offset", None)
 
-        if isinstance(self._surface, _PlaneEvent) and normal_raw is not None and offset is not None:
-            n_vec = np.asarray(normal_raw, dtype=np.float64)
-            if not (float(offset) == 0.0 and n_vec.size >= 3):
-                raise TypeError("Only axis-aligned zero-offset plane events are supported in event-driven backend")
-            if n_vec[0] == 1.0 and n_vec[1] == 0.0 and n_vec[2] == 0.0:
-                event_fn = _g_x0
-                ev_name = "x==0"
-            elif n_vec[0] == 0.0 and n_vec[1] == 1.0 and n_vec[2] == 0.0:
-                event_fn = _g_y0
-                ev_name = "y==0"
-            elif n_vec[0] == 0.0 and n_vec[1] == 0.0 and n_vec[2] == 1.0:
-                event_fn = _g_z0
-                ev_name = "z==0"
+        if isinstance(self._surface, _PlaneEvent):
+            idx = int(getattr(self._surface, "index", 0))
+            off = float(getattr(self._surface, "offset", 0.0))
+            if off == 0.0 and idx in (0, 1, 2):
+                if idx == 0:
+                    event_fn = _g_x0
+                elif idx == 1:
+                    event_fn = _g_y0
+                else:
+                    event_fn = _g_z0
             else:
-                raise TypeError("Only axis-aligned zero-offset plane events are supported in event-driven backend")
+                event_fn = _get_cached_plane_event_fn(idx, off)
         else:
-            raise TypeError("_SingleHitBackend requires a plane event with normal and offset")
+            raise TypeError("_SingleHitBackend requires a _PlaneEvent surface")
 
         # diagnostics disabled by default
 
