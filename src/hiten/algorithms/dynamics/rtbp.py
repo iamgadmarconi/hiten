@@ -247,7 +247,7 @@ def _var_equations(t, PHI_vec, mu):
     return dPHI_vec
 
 
-def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order=8):
+def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order=8, **kwargs):
     r"""Propagate state transition matrix (STM) along CR3BP trajectory.
 
     Integrates the 42-dimensional variational system to compute the fundamental
@@ -273,6 +273,13 @@ def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["fixed",
         Numerical integration method. Default is 'adaptive'.
     order : int, optional
         Integration order. Default is 8.
+    **kwargs
+        Additional keyword arguments passed to the integrator, including:
+        - rtol: Relative tolerance for integration. If None, uses default from 
+        :func:`~hiten.algorithms.dynamics.base._propagate_dynsys`.
+        - atol: Absolute tolerance for integration. If None, uses default from 
+        :func:`~hiten.algorithms.dynamics.base._propagate_dynsys`.
+
 
     Returns
     -------
@@ -291,7 +298,7 @@ def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["fixed",
     - Backward integration uses DirectedSystem with momentum sign flipping
     - Combined 42D system enables simultaneous trajectory and linearization
     - STM satisfies d(Phi)/dt = F(x(t)) * Phi(t) where F is the Jacobian
-    
+
     See Also
     --------
     :func:`~hiten.algorithms.dynamics.rtbp._var_equations` : Variational equations used for integration
@@ -314,6 +321,7 @@ def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["fixed",
         method=method,
         order=order,
         flip_indices=slice(36, 42),
+        **kwargs
     )
     _to = time.perf_counter()
     print(f"[STM] tf={tf:.6g}, steps={steps}, method={method}, order={order}, integrate={( _to - _ti)*1e3:.2f} ms, total={( _to - _t0)*1e3:.2f} ms")
