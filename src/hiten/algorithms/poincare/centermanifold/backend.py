@@ -15,7 +15,6 @@ from typing import Callable, Literal, Optional, Tuple
 
 import numpy as np
 from numba import njit, prange
-from scipy.optimize import root_scalar
 
 from hiten.algorithms.dynamics.hamiltonian import (_eval_dH_dP, _eval_dH_dQ,
                                                    _hamiltonian_rhs)
@@ -90,6 +89,50 @@ def _detect_crossing(section_coord: str, state_old: np.ndarray, state_new: np.nd
     alpha = f_old / (f_old - f_new)
     return True, alpha
 
+
+def _solve_bracketed(f, a: float, b: float, xtol: float = 1e-12, max_iter: int = 200) -> float:
+    """Pure-Python bracketed bisection solver for general callables.
+
+    Parameters
+    ----------
+    f : callable
+        Scalar function whose root is being searched for.
+    a : float
+        Left endpoint of the bracket.
+    b : float
+        Right endpoint of the bracket.
+    xtol : float, default=1e-12
+        Root finding tolerance.
+    max_iter : int, default=200
+
+    Returns
+    -------
+    float
+        Root value if found, None otherwise.
+    """
+    left = float(a)
+    right = float(b)
+    f_left = float(f(left))
+    f_right = float(f(right))
+
+    if f_left == 0.0:
+        return left
+    if f_right == 0.0:
+        return right
+
+    for _ in range(max_iter):
+        mid = 0.5 * (left + right)
+        f_mid = float(f(mid))
+        if (right - left) <= xtol:
+            return mid
+        if f_left * f_mid <= 0.0:
+            right = mid
+            f_right = f_mid
+        else:
+            left = mid
+            f_left = f_mid
+
+    return 0.5 * (left + right)
 
 @njit(cache=False, fastmath=FASTMATH)
 def _get_rk_coefficients(order: int):
@@ -510,7 +553,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         max_expand: int = 40,
         *,
         symmetric: bool = False,
-        method: str = "brentq",
         xtol: float = 1e-12,
     ) -> Optional[float]:
         """Find a positive root of function f using bracketing and root finding.
@@ -542,21 +584,18 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         if f(0.0) > 0.0:
             return None
 
-        try:
-            a, b = self._expand_bracket(
-                f,
-                0.0,
-                dx0=initial,
-                grow=factor,
-                max_expand=max_expand,
-                crossing_test=lambda prev, curr: prev <= 0.0 < curr,
-                symmetric=symmetric,
-            )
-        except RuntimeError:
-            return None
+        a, b = self._expand_bracket(
+            f,
+            0.0,
+            dx0=initial,
+            grow=factor,
+            max_expand=max_expand,
+            crossing_test=lambda prev, curr: prev <= 0.0 < curr,
+            symmetric=symmetric,
+        )
 
-        sol = root_scalar(f, bracket=(a, b), method=method, xtol=xtol)
-        return float(sol.root) if sol.converged else None
+        return float(_solve_bracketed(f, float(a), float(b), float(xtol), 200))
+
 
     def _solve_missing_coord(
         self,
