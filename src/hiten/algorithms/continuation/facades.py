@@ -54,8 +54,6 @@ class StateParameter:
             step=step_arr,
             max_members=int(max_members),
             max_retries_per_step=int(max_retries_per_step),
-            adapt_success_factor=2.0,
-            adapt_failure_factor=0.5,
             step_min=float(step_min),
             step_max=float(step_max),
             state=state if state is None else state,

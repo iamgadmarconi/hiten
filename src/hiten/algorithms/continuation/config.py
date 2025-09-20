@@ -21,8 +21,6 @@ class _ContinuationConfig:
     step: np.ndarray
     max_members: int
     max_retries_per_step: int
-    adapt_success_factor: float
-    adapt_failure_factor: float
     step_min: float
     step_max: float
     shrink_policy: Callable[[np.ndarray], np.ndarray] | None = None
@@ -61,11 +59,6 @@ class _ContinuationConfig:
         if not isinstance(self.max_retries_per_step, int) or self.max_retries_per_step < 0:
             raise ValueError("max_retries_per_step must be a non-negative integer")
 
-        # Validate adaptation factors and step bounds
-        if not (isinstance(self.adapt_success_factor, float) and self.adapt_success_factor > 1.0):
-            raise ValueError("adapt_success_factor must be a float > 1.0")
-        if not (isinstance(self.adapt_failure_factor, float) and 0.0 < self.adapt_failure_factor < 1.0):
-            raise ValueError("adapt_failure_factor must be a float in (0, 1)")
         if not (isinstance(self.step_min, float) and self.step_min > 0.0):
             raise ValueError("step_min must be a positive float")
         if not (isinstance(self.step_max, float) and self.step_max > self.step_min):
@@ -105,7 +98,7 @@ class _OrbitContinuationConfig(_ContinuationConfig):
         Additional parameters passed to orbit correction methods.
         Common keys include tolerances, maximum iterations, etc.
     """
-    state: SynodicState | None
+    state: SynodicState | None = None
     amplitude: bool = False
     getter: Callable[["PeriodicOrbit"], float] | None = None
     extra_params: dict | None = None
