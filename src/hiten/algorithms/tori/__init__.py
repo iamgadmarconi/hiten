@@ -7,11 +7,9 @@ The module provides:
 """
 
 from .base import _InvariantTori as InvariantTori
-from .base import _ToriCorrectionConfig as ToriCorrectionConfig
 from .base import _Torus as Torus
 
 __all__ = [
     "InvariantTori",
-    "ToriCorrectionConfig",
     "Torus",
 ]

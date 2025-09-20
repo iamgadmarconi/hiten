@@ -6,11 +6,11 @@ systems analysis in the CR3BP.
 
 .. toctree::
    :maxdepth: 2
-   
+
    algorithms/dynamics/index
    algorithms/integrators/index
    algorithms/continuation
-   algorithms/corrector
+   algorithms/corrector/index
    algorithms/bifurcation
    algorithms/connections
    algorithms/fourier

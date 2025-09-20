@@ -13,21 +13,16 @@ different correction strategies with various problem types.
 Examples
 -------------
 Most users will call `PeriodicOrbit.correct()` which wires a default stepper.
-Advanced users can inject a custom stepper factory:
+Advanced users can compose components explicitly:
 
->>> from hiten.algorithms.corrector import _NewtonOrbitCorrector
+>>> from hiten.algorithms.corrector.backends.newton import _NewtonBackend
+>>> from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
+>>> from hiten.algorithms.corrector.interfaces import _PeriodicOrbitInterface
 >>> from hiten.algorithms.corrector.stepping import make_armijo_stepper
 >>> from hiten.algorithms.corrector.config import _LineSearchConfig
->>> stepper_factory = make_armijo_stepper(_LineSearchConfig())
->>> corrector = _NewtonOrbitCorrector(stepper_factory=stepper_factory)
->>> corrected_orbit = corrector.correct(orbit)
-
-Advanced users can create custom correctors by combining components:
-
->>> from hiten.algorithms.corrector.backends.newton import (_NewtonBackend, 
-...                                        _PeriodicOrbitCorrectorInterface)
->>> class CustomCorrector(_PeriodicOrbitCorrectorInterface, _NewtonBackend):
-...     pass
+>>> backend = _NewtonBackend(stepper_factory=make_armijo_stepper(_LineSearchConfig()))
+>>> engine = _OrbitCorrectionEngine(backend=backend, interface=_PeriodicOrbitInterface())
+>>> x_corr, result, t_half = engine.solve(orbit, orbit._correction_config)
 
 ------------
 
@@ -47,14 +42,10 @@ from .backends.base import _CorrectorBackend
 from .backends.newton import _NewtonBackend
 from .config import (_BaseCorrectionConfig, _LineSearchConfig,
                      _OrbitCorrectionConfig)
-from .correctors import _NewtonOrbitCorrector
 from .engine import _OrbitCorrectionEngine
-from .interfaces import (_PeriodicOrbitCorrectorInterface,
-                         _PeriodicOrbitInterface)
+from .interfaces import _PeriodicOrbitInterface
 
 __all__ = [
-    "_NewtonOrbitCorrector",
-    
     "_NewtonBackend",
     
     "_BaseCorrectionConfig",
@@ -62,8 +53,6 @@ __all__ = [
     "_LineSearchConfig",
     
     "_CorrectorBackend",
-    "_PeriodicOrbitCorrectorInterface",
-    "_InvariantToriCorrectorInterface",
     "_PeriodicOrbitInterface",
     "_OrbitCorrectionEngine",
 ]

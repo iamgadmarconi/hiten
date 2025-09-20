@@ -168,27 +168,3 @@ class _OrbitCorrectionConfig(_BaseCorrectionConfig):
     steps: int = 500
 
     forward: int = 1
-
-
-@dataclass(frozen=True, slots=True)
-class _ToriCorrectionConfig(_BaseCorrectionConfig):
-    """Configuration container for invariant-torus Newton solves.
-
-    Extends the generic :class:`~hiten.algorithms.corrector.base._BaseCorrectionConfig` with additional
-    parameters controlling the integration backend used by the stroboscopic
-    map and variational equations.
-
-    Parameters
-    ----------
-    delta_s : float, default 1e-4
-        Step size for numerical differentiation in the Newton solver.
-        Used in finite difference approximations for the Jacobian matrix.
-
-    Notes
-    -----
-    This configuration is specifically tailored for invariant torus computations
-    in the circular restricted three-body problem, where the stroboscopic map
-    and variational equations require careful numerical treatment.
-    """
-
-    delta_s: float = 1e-4

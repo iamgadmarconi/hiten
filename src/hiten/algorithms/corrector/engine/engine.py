@@ -28,13 +28,7 @@ class _OrbitCorrectionEngine(_CorrectionEngine):
     def solve(
         self,
         orbit: "PeriodicOrbit",
-        cfg : _OrbitCorrectionConfig,
-        *,
-        forward: int,
-        tol: float | None = None,
-        max_attempts: int | None = None,
-        max_delta: float | None = None,
-        finite_difference: bool | None = None,
+        cfg: _OrbitCorrectionConfig,
     ) -> Tuple[np.ndarray, CorrectionResult, float]:
         """Run correction and return corrected state, backend result, half-period.
         
@@ -44,19 +38,15 @@ class _OrbitCorrectionEngine(_CorrectionEngine):
             Orbit to be corrected.
         cfg : :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
             Configuration for the correction.
-        forward : int
-            Forward integration direction.
-        tol : float | None
-            Convergence tolerance for the correction.
-        max_attempts : int | None
-            Maximum number of correction attempts.
-        max_delta : float | None
-            Maximum step size for corrections.
-        finite_difference : bool | None
-            Use finite-difference Jacobian instead of analytical.
+
+        Returns
+        -------
+        Tuple[np.ndarray, :class:`~hiten.algorithms.corrector.types.CorrectionResult`, float]
+            Corrected state, backend result, half-period.
         """
         p0 = self._interface.initial_guess(orbit, cfg)
-        fd_mode = cfg.finite_difference if finite_difference is None else finite_difference
+        fd_mode = bool(cfg.finite_difference)
+        forward = cfg.forward
         residual, jacobian, to_full_state = self._interface.build_functions(
             orbit,
             cfg,
@@ -70,9 +60,9 @@ class _OrbitCorrectionEngine(_CorrectionEngine):
             residual_fn=residual,
             jacobian_fn=jacobian,
             norm_fn=norm_fn,
-            tol=cfg.tol if tol is None else tol,
-            max_attempts=cfg.max_attempts if max_attempts is None else max_attempts,
-            max_delta=cfg.max_delta if max_delta is None else max_delta,
+            tol=cfg.tol,
+            max_attempts=cfg.max_attempts,
+            max_delta=cfg.max_delta,
             fd_step=1e-8,
         )
 
