@@ -194,6 +194,7 @@ Basic Event Detection
 Events are defined as scalar functions ``g(t, y)`` that trigger when ``g(t, y) = 0``. HITEN supports three types of event detection:
 
 **Event Directionality:**
+
 - ``direction=0``: Detect any sign change (default)
 - ``direction=+1``: Only detect increasing crossings (g goes from negative to positive)
 - ``direction=-1``: Only detect decreasing crossings (g goes from positive to negative)
@@ -220,6 +221,7 @@ Events are configured using the :class:`~hiten.algorithms.integrators.configs._E
    )
 
 **Simple Event Example:**
+
 .. code-block:: python
 
    import numpy as np
@@ -255,6 +257,7 @@ Events are configured using the :class:`~hiten.algorithms.integrators.configs._E
    print(f"State at event: {solution.states[-1]}")
 
 **Advanced Event Features:**
+
 - **Dense Interpolation**: Events use cubic Hermite interpolation for precise timing
 - **Multiple Events**: Can detect multiple events in a single integration
 - **Hamiltonian Support**: Events work with both standard and Hamiltonian systems
