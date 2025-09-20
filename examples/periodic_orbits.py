@@ -38,8 +38,8 @@ def main() -> None:
             "cls": HaloOrbit,
             "name": "Halo",
             "kwargs": {"amplitude_z": 0.2, "zenith": "southern"},
-            "diff_corr_attempts": 25,
-            "finite_difference": False,
+            "diff_corr_attempts": 5,
+            "finite_difference": True,
         },
         {
             "cls": LyapunovOrbit,
@@ -55,7 +55,7 @@ def main() -> None:
         orbit = l_point.create_orbit(spec["cls"], **spec["kwargs"])
 
         # Differential correction, propagation & basic visualisation
-        orbit.correct(max_attempts=spec["diff_corr_attempts"], finite_difference=spec["finite_difference"])
+        orbit.correct(max_attempts=spec["diff_corr_attempts"], max_delta=1e-2, finite_difference=spec["finite_difference"])
         print(f"Corrected state: {orbit.initial_state} | Period: {orbit.period}")
         orbit.propagate(steps=1000)
         orbit.plot("rotating")

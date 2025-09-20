@@ -222,7 +222,7 @@ class _SingleHitBackend(_ReturnMapBackend):
         except Exception:
             pass
 
-        # Handle on-surface start and enforce a small t_min to avoid ill-conditioned immediate crossings
+        # Handle on-surface start diagnostics
         _t_g0_0 = time.perf_counter()
         g0 = event_fn(t0, state0)
         _t_g0_1 = time.perf_counter()
@@ -263,13 +263,16 @@ class _SingleHitBackend(_ReturnMapBackend):
             print(f"[SingleHit] aligned start state to t_start in {(_t_align1 - _t_align0)*1e3:.2f} ms")
 
         # Integrate until event or tmax
-        times = np.array([t_start, tmax], dtype=float)
+        # Integrate from absolute t=0 origin to preserve consistent absolute times
+        span = float(max(0.0, tmax - t_start))
+        times = np.array([0.0, span], dtype=float)
         _t_int0 = time.perf_counter()
         sol = integrator.integrate(self._dynsys, y_start, times, event_fn=event_fn, event_cfg=ev_cfg)
         _t_int1 = time.perf_counter()
-        t_hit = float(sol.times[-1])
+        t_hit_rel = float(sol.times[-1])
         y_hit = sol.states[-1].copy()
-        if t_hit < tmax and (t_hit - t_start) * 1.0 >= 0.0:
+        t_hit = t_start + t_hit_rel
+        if t_hit_rel < span and t_hit_rel >= 0.0:
             g_hit = event_fn(t_hit, y_hit)
             # Direction diagnostic: gdot at hit using system RHS
             try:
@@ -285,7 +288,6 @@ class _SingleHitBackend(_ReturnMapBackend):
                 print(f"[SingleHit] HIT at t={t_hit:.6g}, g={g_hit:.3e}, y[:3]={y_hit[:3]}")
             print(f"[SingleHit][timing] integrate={(_t_int1 - _t_int0)*1e3:.2f} ms, total={(time.perf_counter() - _t_total0)*1e3:.2f} ms")
             return _SectionHit(time=t_hit, state=y_hit, point2d=y_hit[:2].copy())
-        print(f"[SingleHit] NO HIT before tmax; returned t={t_hit:.6g}, dt={t_hit - t_start:.3e}")
         print(f"[SingleHit][timing] integrate={(_t_int1 - _t_int0)*1e3:.2f} ms, total={(time.perf_counter() - _t_total0)*1e3:.2f} ms")
         return None
 

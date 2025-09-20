@@ -51,6 +51,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
 
     _event_cache: _EventCache | None = None  # initialised lazily
     _fd_mode: bool = False  # finite-difference mode flag set per correction
+    _enable_diagnostics: bool = True  # temporary diagnostics switch
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -161,20 +162,9 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         _t0 = time.perf_counter()
         x_full = self._to_full_state(base_state, control_indices, p_vec)
 
-        # Evaluate event section (with optional time hint/window if available)
+        # Evaluate event section (without hinting to avoid branch locking)
         _te0 = time.perf_counter()
-        t_hint = self._last_t_event
-        t_win = 0.1 if (t_hint is not None) else None
-        if t_hint is not None:
-            t_event, X_ev_local = cfg.event_func(
-                dynsys=orbit.system._dynsys,
-                x0=x_full,
-                forward=forward,
-                t_guess=float(t_hint),
-                t_window=float(t_win),
-            )
-        else:
-            t_event, X_ev_local = self._evaluate_event(orbit, x_full, cfg, forward)
+        t_event, X_ev_local = self._evaluate_event(orbit, x_full, cfg, forward)
         _te1 = time.perf_counter()
 
         Phi_local: np.ndarray | None = None
@@ -265,18 +255,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
             # Recompute event and STM, then refresh cache
             x_full = self._to_full_state(base_state, control_indices, p_vec)
             _te0 = time.perf_counter()
-            t_hint = self._last_t_event
-            t_win = 0.1 if (t_hint is not None) else None
-            if t_hint is not None:
-                t_event, X_ev_local = cfg.event_func(
-                    dynsys=orbit.system._dynsys,
-                    x0=x_full,
-                    forward=forward,
-                    t_guess=float(t_hint),
-                    t_window=float(t_win),
-                )
-            else:
-                t_event, X_ev_local = self._evaluate_event(orbit, x_full, cfg, forward)
+            t_event, X_ev_local = self._evaluate_event(orbit, x_full, cfg, forward)
             _te1 = time.perf_counter()
 
             _ts0 = time.perf_counter()
@@ -389,6 +368,21 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         _norm_inf: NormFn = lambda r: float(np.linalg.norm(r, ord=np.inf))
 
         # Delegate numerical work to the super-class (usually _NewtonCore)
+        # Stash diagnostic context for iteration hook
+        try:
+            self._diag_context = {
+                "residual_fn": residual_fn,
+                "jacobian_fn": jacobian_fn,
+                "control_indices": control_indices,
+                "residual_indices": residual_indices,
+                "base_state": base_state,
+                "orbit": orbit,
+                "cfg": cfg,
+                "forward": forward,
+            }
+        except Exception:
+            self._diag_context = None
+
         p_corr, info = super().correct( 
             x0=p0,
             residual_fn=residual_fn,
@@ -430,6 +424,73 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         )
 
         return x_corr, self._last_t_event
+
+    # --- Diagnostics hook: compare analytic vs FD Jacobian on first iteration ---
+    def _on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:  # type: ignore[override]
+        if not getattr(self, "_enable_diagnostics", False):
+            return
+        if k != 0:
+            return
+        ctx = getattr(self, "_diag_context", None)
+        if not ctx or ctx.get("jacobian_fn") is None:
+            return
+        try:
+            residual_fn = ctx["residual_fn"]
+            jacobian_fn = ctx["jacobian_fn"]
+            control_indices = ctx["control_indices"]
+            residual_indices = ctx["residual_indices"]
+            base_state = ctx["base_state"]
+            orbit = ctx["orbit"]
+            cfg = ctx["cfg"]
+            forward = ctx["forward"]
+
+            # Analytic Jacobian (also refreshes event cache with Phi/X_event)
+            J_an = jacobian_fn(x)
+
+            # Finite-difference Jacobian of the same residual (central diff)
+            n = x.size
+            r0 = residual_fn(x)
+            m = r0.size
+            J_fd = np.zeros((m, n), dtype=np.float64)
+            for i in range(n):
+                h_i = 1e-6 * max(1.0, abs(x[i]))
+                x_p = x.copy(); x_p[i] += h_i
+                x_m = x.copy(); x_m[i] -= h_i
+                r_p = residual_fn(x_p)
+                r_m = residual_fn(x_m)
+                J_fd[:, i] = (r_p - r_m) / (2.0 * h_i)
+
+            diff = J_an - J_fd
+            fn = lambda A: float(np.linalg.norm(A))
+            rel_err = fn(diff) / (fn(J_fd) + 1e-16)
+            print(f"[Diag] iter=0: ||J_an-J_fd||/||J_fd||={rel_err:.3e}; ||J_an||={fn(J_an):.3e}, ||J_fd||={fn(J_fd):.3e}, max|Δ|={float(np.max(np.abs(diff))):.3e}")
+
+            # Decompose J_an ≈ Phi_rc - extra_jacobian(X_ev, Phi)
+            ec = getattr(self, "_event_cache", None)
+            if ec is not None and ec.Phi is not None:
+                Phi = ec.Phi
+                X_ev = ec.X_event
+                J_phi = Phi[np.ix_(residual_indices, control_indices)]
+                extra = None
+                if cfg.extra_jacobian is not None:
+                    try:
+                        extra = cfg.extra_jacobian(X_ev, Phi)
+                    except Exception as exc:
+                        print(f"[Diag] extra_jacobian raised: {exc}")
+                if extra is not None:
+                    J_rebuild = J_phi - extra
+                    print(f"[Diag] rebuild check: ||J_an-(Phi_rc-extra)||={fn(J_an - J_rebuild):.3e}")
+                # Hit details
+                try:
+                    t_ev = float(ec.t_event)
+                    vy = float(X_ev[4])
+                    f_hit = orbit.system._dynsys.rhs(t_ev, X_ev)
+                    ax = float(f_hit[3]); az = float(f_hit[5])
+                    print(f"[Diag] t_event={t_ev:.6g}, vy={vy:.3e}, ax={ax:.3e}, az={az:.3e}")
+                except Exception:
+                    pass
+        except Exception as exc:
+            print(f"[Diag] iteration diagnostics failed: {exc}")
 
 
 class _InvariantToriCorrectorInterface:
