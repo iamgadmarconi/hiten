@@ -107,7 +107,7 @@ def _solve_bracketed(f, a: float, b: float, xtol: float = 1e-12, max_iter: int =
 
     Returns
     -------
-    float
+    float or None
         Root value if found, None otherwise.
     """
     left = float(a)
@@ -138,7 +138,14 @@ def _solve_bracketed(f, a: float, b: float, xtol: float = 1e-12, max_iter: int =
 
         iterations += 1
 
-    return left + 0.5 * (right - left)
+    mid = left + 0.5 * (right - left)
+    f_mid = float(f_eval(mid))
+
+    if (right - left) > xtol or f_left * f_right > 0.0 or abs(f_mid) > xtol:
+
+        return None
+
+    return mid
 
 @njit(cache=False, fastmath=FASTMATH)
 def _get_rk_coefficients(order: int):

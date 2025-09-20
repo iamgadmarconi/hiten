@@ -372,7 +372,7 @@ def _plane_crossing_factory(coord: str, value: float = 0.0, direction: int | Non
         be = _SingleHitBackend(dynsys=dynsys, surface=event, forward=forward)
         hit = be._cross(np.asarray(x0, float), t_guess=t_guess, t_window=t_window)
         if hit is None:
-            raise ValueError(f"No Poincare section intersection found within the search window for initial state {x0}")
+            return None, None
         return hit.time, hit.state
 
     return _section_crossing
