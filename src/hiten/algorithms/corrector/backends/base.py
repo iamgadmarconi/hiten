@@ -21,96 +21,14 @@ See Also
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Tuple
+from typing import Any, Tuple
 
 import numpy as np
 
-#: Type alias for residual function signatures.
-#:
-#: Functions of this type compute residual vectors from parameter vectors,
-#: representing the nonlinear equations to be solved. The residual should
-#: approach zero as the parameter vector approaches the solution.
-#:
-#: In dynamical systems contexts, the residual typically represents:
-#: - Constraint violations for periodic orbits
-#: - Boundary condition errors for invariant manifolds
-#: - Fixed point equations for equilibrium solutions
-#:
-#: Parameters
-#: ----------
-#: x : ndarray
-#:     Parameter vector at which to evaluate the residual.
-#:
-#: Returns
-#: -------
-#: residual : ndarray
-#:     Residual vector of the same shape as the input.
-#:
-#: Notes
-#: -----
-#: The residual function should be well-defined and continuous in
-#: the neighborhood of the expected solution. For best convergence
-#: properties, it should also be differentiable with a non-singular
-#: Jacobian at the solution.
-ResidualFn = Callable[[np.ndarray], np.ndarray]
-
-#: Type alias for Jacobian function signatures.
-#:
-#: Functions of this type compute Jacobian matrices (first derivatives)
-#: of residual functions with respect to parameter vectors. The Jacobian
-#: is essential for Newton-type methods and provides information about
-#: the local linearization of the nonlinear system.
-#:
-#: Parameters
-#: ----------
-#: x : ndarray
-#:     Parameter vector at which to evaluate the Jacobian.
-#:
-#: Returns
-#: -------
-#: jacobian : ndarray
-#:     Jacobian matrix with shape (n, n) where n is the length of x.
-#:     Element (i, j) contains the partial derivative of residual[i]
-#:     with respect to x[j].
-#:
-#: Notes
-#: -----
-#: For Newton methods to converge quadratically, the Jacobian should
-#: be continuous and non-singular in a neighborhood of the solution.
-#: When analytic Jacobians are not available, finite-difference
-#: approximations can be used at the cost of reduced convergence rate.
-JacobianFn = Callable[[np.ndarray], np.ndarray]
-
-#: Type alias for norm function signatures.
-#:
-#: Functions of this type compute scalar norms from vectors, providing
-#: a measure of vector magnitude used for convergence assessment and
-#: step-size control. The choice of norm can affect convergence behavior
-#: and numerical stability.
-#:
-#: Parameters
-#: ----------
-#: vector : ndarray
-#:     Vector to compute the norm of.
-#:
-#: Returns
-#: -------
-#: norm : float
-#:     Scalar norm value (non-negative).
-#:
-#: Notes
-#: -----
-#: Common choices include:
-#: - L2 norm (Euclidean): Good general-purpose choice
-#: - Infinity norm: Emphasizes largest component
-#: - Weighted norms: Account for different scales in components
-#:
-#: The norm should be consistent across all uses within a single
-#: correction process to ensure proper convergence assessment.
-NormFn = Callable[[np.ndarray], float]
+from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
 
 
-class _Corrector(ABC):
+class _CorrectorBackend(ABC):
     """Define an abstract base class for iterative correction algorithms.
 
     This class defines the interface for iterative correction algorithms
@@ -119,55 +37,19 @@ class _Corrector(ABC):
     can be specialized for different types of problems (periodic orbits,
     invariant manifolds, fixed points, etc.).
 
-    The design follows the strategy pattern, separating the algorithmic
-    aspects of correction (Newton-Raphson, quasi-Newton, etc.) from the
-    domain-specific problem formulation. This enables:
-
-    - **Code reuse**: Same algorithms work for different problem types
-    - **Modularity**: Easy to swap different correction strategies
-    - **Testing**: Algorithms can be tested independently of domain logic
-    - **Flexibility**: Custom correction strategies can be implemented
-
-    The corrector operates on abstract parameter vectors and residual
-    functions, requiring domain-specific objects to provide thin wrapper
-    interfaces that translate between their natural representation and
-    the vector-based interface expected by the correction algorithms.
-
-    Key Design Principles
-    ---------------------
-    1. **Domain Independence**: Works with any problem that can be
-       expressed as finding zeros of a vector-valued function.
-    2. **Algorithm Flexibility**: Supports different correction strategies
-       through subclassing and configuration.
-    3. **Robustness**: Includes safeguards and error handling for
-       challenging numerical situations.
-    4. **Performance**: Designed for efficient implementation with
-       minimal overhead.
-
-    Typical Usage Pattern
-    ---------------------
-    1. Domain object (e.g., periodic orbit) creates parameter vector
-    2. Domain object provides residual function for constraint violations
-    3. Corrector iteratively refines parameter vector to minimize residual
-    4. Domain object reconstructs corrected state from final parameter vector
-
     Notes
     -----
-    Subclasses must implement the :meth:`~hiten.algorithms.corrector.base._Corrector.correct` method and are expected
+    Subclasses must implement the 
+    :meth:`~hiten.algorithms.corrector.backends.base._CorrectorBackend.correct` 
+    method and are expected
     to document any additional keyword arguments specific to their
     correction strategy (maximum iterations, tolerances, step control
     parameters, etc.).
 
-    The abstract interface allows for different correction algorithms:
-    - Newton-Raphson with various step control strategies
-    - Quasi-Newton methods (BFGS, Broyden, etc.)
-    - Trust region methods
-    - Hybrid approaches combining multiple strategies
-
     Examples
     --------
     >>> # Typical usage pattern (conceptual)
-    >>> class NewtonCorrector(_Corrector):
+    >>> class NewtonCorrector(_CorrectorBackend):
     ...     def correct(self, x0, residual_fn, **kwargs):
     ...         # Newton-Raphson implementation
     ...         pass
@@ -224,17 +106,17 @@ class _Corrector(ABC):
             close to the expected solution for best convergence properties.
             The quality of the initial guess significantly affects both
             convergence rate and success probability.
-        residual_fn : ResidualFn
+        residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
             Function computing the residual vector R(x) for parameter
             vector x. The residual should be zero (or close to zero) at
             the desired solution. Must be well-defined and preferably
             continuous in a neighborhood of the solution.
-        jacobian_fn : JacobianFn, optional
+        jacobian_fn : :class:`~hiten.algorithms.corrector.types.JacobianFn`, optional
             Function returning the Jacobian matrix J(x) = dR/dx. If not
             provided, implementations may use finite-difference approximation
             or other Jacobian-free methods. Analytic Jacobians generally
             provide better convergence properties.
-        norm_fn : NormFn, optional
+        norm_fn : :class:`~hiten.algorithms.corrector.types.NormFn`, optional
             Custom norm function for assessing convergence. If not provided,
             implementations typically default to the L2 (Euclidean) norm.
             The choice of norm can affect convergence behavior and should
@@ -311,3 +193,19 @@ class _Corrector(ABC):
         """
         # Subclasses must provide concrete implementation
         raise NotImplementedError("Subclasses must implement the correct method")
+
+    def on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:
+        """Called after each iteration. Default: no-op."""
+        return
+
+    def on_accept(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
+        """Called when the backend detects convergence. Default: no-op."""
+        return
+
+    def on_failure(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
+        """Called when the backend completes without converging. Default: no-op."""
+        return
+
+    def on_success(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
+        """Called by the Engine after final acceptance. Default: no-op."""
+        return

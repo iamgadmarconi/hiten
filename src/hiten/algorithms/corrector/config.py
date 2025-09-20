@@ -11,7 +11,7 @@ from typing import Callable, Literal, NamedTuple, Optional
 
 import numpy as np
 
-from hiten.algorithms.corrector.base import JacobianFn, NormFn, ResidualFn
+from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
 from hiten.algorithms.poincare.singlehit.backend import _y_plane_crossing
 
 
@@ -87,54 +87,16 @@ class _BaseCorrectionConfig:
         or when analytic Jacobians are suspected to be incorrect.
         Generally results in slower convergence but can be more robust.
 
+    fd_step : float, default=1e-8
+        Finite-difference step size used when computing Jacobians via
+        central differences. Scaled internally per-parameter by
+        max(1, |x[i]|) to maintain relative step size.
+
     Notes
     -----
     The default parameters are chosen to work well for typical problems
     in astrodynamics and dynamical systems, particularly in the context
     of the Circular Restricted Three-Body Problem (CR3BP).
-
-    Parameter Selection Guidelines:
-    
-    - **Tolerance**: Should be 2-3 orders of magnitude larger than
-      machine epsilon to account for numerical errors in function
-      evaluation and Jacobian computation.
-    - **Max attempts**: Should be large enough to allow convergence
-      from reasonable initial guesses but not so large as to waste
-      computation on hopeless cases.
-    - **Max delta**: Should be scaled appropriately for the problem's
-      characteristic length scales to prevent numerical instability.
-    - **Line search**: Generally recommended for production use,
-      especially when initial guesses may be poor.
-
-    Examples
-    --------
-    >>> # Default configuration
-    >>> config = _BaseCorrectionConfig()
-    >>>
-    >>> # High-precision configuration
-    >>> config = _BaseCorrectionConfig(tol=1e-12, max_attempts=100)
-    >>>
-    >>> # Robust configuration with custom line search
-    >>> from hiten.algorithms.corrector.config import _LineSearchConfig
-    >>> ls_config = _LineSearchConfig(armijo_c=1e-4, alpha_reduction=0.5)
-    >>> config = _BaseCorrectionConfig(
-    ...     line_search_config=ls_config,
-    ...     max_delta=1e-3
-    ... )
-    >>>
-    >>> # Fast configuration without line search
-    >>> config = _BaseCorrectionConfig(
-    ...     line_search_config=False,
-    ...     tol=1e-8,
-    ...     max_attempts=20
-    ... )
-
-    See Also
-    --------
-    :class:`~hiten.algorithms.corrector.config._LineSearchConfig`
-        Configuration class for line search parameters.
-    :class:`~hiten.algorithms.corrector.base._Corrector`
-        Abstract base class that uses this configuration.
     """
     max_attempts: int = 50
     tol: float = 1e-10
@@ -168,6 +130,37 @@ class _BaseCorrectionConfig:
     in some cases. The finite-difference step size is chosen automatically
     based on the problem scaling and machine precision.
     """
+
+    fd_step: float = 1e-8
+    """Finite-difference base step size for Jacobian approximation."""
+
+    def __post_init__(self):
+        # Validate scalar parameters
+        if not (isinstance(self.max_attempts, int) and self.max_attempts > 0):
+            raise ValueError("max_attempts must be a positive integer")
+        if not (isinstance(self.tol, (int, float)) and self.tol > 0):
+            raise ValueError("tol must be a positive float")
+        if self.max_delta is not None and not (isinstance(self.max_delta, (int, float)) and self.max_delta > 0):
+            raise ValueError("max_delta must be a positive float or None")
+        if not isinstance(self.finite_difference, bool):
+            raise ValueError("finite_difference must be a boolean")
+        if not (isinstance(self.fd_step, (int, float)) and self.fd_step > 0):
+            raise ValueError("fd_step must be a positive float")
+
+        # Validate line search configuration
+        lsc = self.line_search_config
+        if isinstance(lsc, _LineSearchConfig):
+            # Only basic numeric constraints; residual_fn/norm_fn are injected at runtime
+            if lsc.max_delta is not None and not (isinstance(lsc.max_delta, (int, float)) and lsc.max_delta > 0):
+                raise ValueError("line_search_config.max_delta must be a positive float or None")
+            if not (0 < lsc.alpha_reduction < 1):
+                raise ValueError("line_search_config.alpha_reduction must be in (0, 1)")
+            if not (lsc.min_alpha > 0):
+                raise ValueError("line_search_config.min_alpha must be positive")
+            if not (0 < lsc.armijo_c < 1):
+                raise ValueError("line_search_config.armijo_c must be in (0, 1)")
+        elif lsc is not None and not isinstance(lsc, bool):
+            raise ValueError("line_search_config must be True, False, None, or a _LineSearchConfig instance")
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,27 +204,3 @@ class _OrbitCorrectionConfig(_BaseCorrectionConfig):
     steps: int = 500
 
     forward: int = 1
-
-
-@dataclass(frozen=True, slots=True)
-class _ToriCorrectionConfig(_BaseCorrectionConfig):
-    """Configuration container for invariant-torus Newton solves.
-
-    Extends the generic :class:`~hiten.algorithms.corrector.base._BaseCorrectionConfig` with additional
-    parameters controlling the integration backend used by the stroboscopic
-    map and variational equations.
-
-    Parameters
-    ----------
-    delta_s : float, default 1e-4
-        Step size for numerical differentiation in the Newton solver.
-        Used in finite difference approximations for the Jacobian matrix.
-
-    Notes
-    -----
-    This configuration is specifically tailored for invariant torus computations
-    in the circular restricted three-body problem, where the stroboscopic map
-    and variational equations require careful numerical treatment.
-    """
-
-    delta_s: float = 1e-4

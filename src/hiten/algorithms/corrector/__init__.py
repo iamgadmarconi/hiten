@@ -12,18 +12,17 @@ different correction strategies with various problem types.
 
 Examples
 -------------
-Most users will work with the ready-to-use correctors:
+Most users will call `PeriodicOrbit.correct()` which wires a default stepper.
+Advanced users can compose components explicitly:
 
->>> from hiten.algorithms.corrector import _NewtonOrbitCorrector
->>> corrector = _NewtonOrbitCorrector()
->>> corrected_orbit = corrector.correct(orbit)
-
-Advanced users can create custom correctors by combining components:
-
->>> from hiten.algorithms.corrector import (_NewtonCore, 
-...                                        _PeriodicOrbitCorrectorInterface)
->>> class CustomCorrector(_PeriodicOrbitCorrectorInterface, _NewtonCore):
-...     pass
+>>> from hiten.algorithms.corrector.backends.newton import _NewtonBackend
+>>> from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
+>>> from hiten.algorithms.corrector.interfaces import _PeriodicOrbitInterface
+>>> from hiten.algorithms.corrector.stepping import make_armijo_stepper
+>>> from hiten.algorithms.corrector.config import _LineSearchConfig
+>>> backend = _NewtonBackend(stepper_factory=make_armijo_stepper(_LineSearchConfig()))
+>>> engine = _OrbitCorrectionEngine(backend=backend, interface=_PeriodicOrbitInterface())
+>>> x_corr, result, t_half = engine.solve(orbit, orbit._correction_config)
 
 ------------
 
@@ -39,33 +38,21 @@ See Also
     Continuation algorithms that use correction for family generation.
 """
 
-from ._step_interface import (_ArmijoStepInterface, _PlainStepInterface,
-                              _StepInterface, _Stepper)
+from .backends.base import _CorrectorBackend
+from .backends.newton import _NewtonBackend
 from .config import (_BaseCorrectionConfig, _LineSearchConfig,
                      _OrbitCorrectionConfig)
-from .base import _Corrector
-from .correctors import _NewtonOrbitCorrector
-from .interfaces import (_InvariantToriCorrectorInterface,
-                         _PeriodicOrbitCorrectorInterface)
-from .line import _ArmijoLineSearch
-from .newton import _NewtonCore
+from .engine import _OrbitCorrectionEngine
+from .interfaces import _PeriodicOrbitInterface
 
 __all__ = [
-    "_NewtonOrbitCorrector",
-    
-    "_NewtonCore",
-    "_ArmijoLineSearch",
+    "_NewtonBackend",
     
     "_BaseCorrectionConfig",
     "_OrbitCorrectionConfig", 
     "_LineSearchConfig",
     
-    "_Corrector",
-    "_PeriodicOrbitCorrectorInterface",
-    "_InvariantToriCorrectorInterface",
-    
-    "_Stepper",
-    "_StepInterface",
-    "_PlainStepInterface",
-    "_ArmijoStepInterface",
+    "_CorrectorBackend",
+    "_PeriodicOrbitInterface",
+    "_OrbitCorrectionEngine",
 ]

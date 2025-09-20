@@ -23,8 +23,12 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
-from hiten.algorithms.corrector.config import _LineSearchConfig
-from hiten.algorithms.corrector.correctors import _NewtonOrbitCorrector
+from hiten.algorithms.corrector.config import _LineSearchConfig, _OrbitCorrectionConfig
+from hiten.algorithms.corrector.stepping import (make_armijo_stepper,
+                                                 make_plain_stepper)
+from hiten.algorithms.corrector.backends.newton import _NewtonBackend
+from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
+from hiten.algorithms.corrector.interfaces import _PeriodicOrbitInterface
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import (_compute_monodromy, _compute_stm,
                                             _stability_indices)
@@ -42,7 +46,6 @@ from hiten.utils.plots import (animate_trajectories, plot_inertial_frame,
 
 if TYPE_CHECKING:
     from hiten.algorithms.continuation.config import _OrbitContinuationConfig
-    from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
     from hiten.system.manifold import Manifold
 
 
@@ -125,6 +128,9 @@ class PeriodicOrbit(ABC):
         
         # General initialization log
         logger.info(f"Initialized {self.family} orbit around L{self.libration_point.idx}")
+
+        # Algorithm-level correction parameter overrides (applied to config lazily)
+        self._correction_overrides: dict[str, object] = {}
 
     def __str__(self):
         return f"{self.family} orbit around {self._libration_point}."
@@ -390,7 +396,37 @@ class PeriodicOrbit(ABC):
 
     @abstractmethod
     def _initial_guess(self, **kwargs):
-        pass
+        """Provides the initial guess for the differential correction."""
+        raise NotImplementedError
+
+    def update_correction(self, **kwargs) -> None:
+        """Update algorithm-level correction parameters for this orbit.
+
+        Allowed keys: tol, max_attempts, max_delta, line_search_config,
+        finite_difference, forward.
+        """
+        allowed = {"tol", "max_attempts", "max_delta", "line_search_config", "finite_difference", "forward"}
+        invalid = [k for k in kwargs.keys() if k not in allowed]
+        if invalid:
+            raise KeyError(f"Invalid correction parameter(s): {invalid}. Allowed: {sorted(allowed)}")
+        self._correction_overrides.update({k: v for k, v in kwargs.items() if v is not None})
+
+    def clear_correction_overrides(self) -> None:
+        """Clear any previously set correction parameter overrides."""
+        self._correction_overrides.clear()
+
+    def _apply_correction_overrides(self, cfg: "_OrbitCorrectionConfig") -> "_OrbitCorrectionConfig":
+        if not self._correction_overrides:
+            return cfg
+        from dataclasses import replace as _dc_replace
+        # Apply only attributes that exist on the config
+        valid = {k: v for k, v in self._correction_overrides.items() if hasattr(cfg, k)}
+        return _dc_replace(cfg, **valid)
+
+    @abstractmethod
+    def _correction_config(self) -> _OrbitCorrectionConfig:
+        """Provides the differential correction configuration for this orbit family."""
+        raise NotImplementedError
 
     def correct(
             self,
@@ -410,42 +446,68 @@ class PeriodicOrbit(ABC):
         
         Parameters
         ----------
-        tol : float, optional
-            Convergence tolerance for the correction.
-        max_attempts : int, optional
-            Maximum number of correction attempts.
-        forward : int, optional
-            Forward integration direction.
-        max_delta : float, optional
-            Maximum step size for corrections.
-        line_search_config : :class:`~hiten.algorithms.corrector.config._LineSearchConfig` or bool, optional
-            Line search configuration.
-        finite_difference : bool, optional
-            Whether to use finite difference for Jacobian.
-            
+        tol: float, optional
+            Convergence tolerance for the residual norm. The algorithm terminates
+            successfully when the norm of the residual falls below this value.
+        max_attempts: int, optional
+            Maximum number of Newton iterations to attempt before declaring
+            convergence failure.
+        forward: int, optional
+        max_delta: float, optional
+            Maximum allowed infinity norm of Newton steps. 
+        line_search_config: _LineSearchConfig | bool | None, optional
+            Configuration for line search behavior:
+
+            - True: Enable line search with default parameters
+            - False or None: Disable line search (use full Newton steps)
+            - :class:`~hiten.algorithms.corrector.config._LineSearchConfig`: Enable line search with custom parameters  
+
+        finite_difference: bool, optional
+            Force finite-difference approximation of Jacobians even when
+            analytic Jacobians are available.
+
         Returns
         -------
         tuple
             (corrected_state, period) in nondimensional units.
         """
-        # Use per-family correction configuration as fallback defaults
-        cfg = self._correction_config
+        # Apply any call-time overrides into per-orbit overrides for this run
+        overrides: dict[str, object] = {}
+        if tol is not None:
+            overrides["tol"] = tol
+        if max_attempts is not None:
+            overrides["max_attempts"] = max_attempts
+        if forward is not None:
+            overrides["forward"] = forward
+        if max_delta is not None:
+            overrides["max_delta"] = max_delta
+        if line_search_config is not None:
+            overrides["line_search_config"] = line_search_config
+        if finite_difference is not None:
+            overrides["finite_difference"] = finite_difference
+        if overrides:
+            self.update_correction(**overrides)
 
-        _tol = tol if tol is not None else cfg.tol
-        _max_attempts = max_attempts if max_attempts is not None else cfg.max_attempts
-        _forward = forward if forward is not None else cfg.forward
-        _line_search_cfg = line_search_config if line_search_config is not None else cfg.line_search_config
-        _max_delta = max_delta if max_delta is not None else cfg.max_delta
-        _finite_difference = finite_difference if finite_difference is not None else cfg.finite_difference
+        # Select family configuration, then apply per-orbit overrides
+        cfg_base = self._correction_config
+        cfg = self._apply_correction_overrides(cfg_base)
 
-        return _NewtonOrbitCorrector(line_search_config=_line_search_cfg).correct(
-            self,
-            tol=_tol,
-            max_attempts=_max_attempts,
-            forward=_forward,
-            max_delta=_max_delta,
-            finite_difference=_finite_difference,
-        )
+        # Build stepper factory based on line search configuration
+        if cfg.line_search_config is True:
+            stepper_factory = make_armijo_stepper(_LineSearchConfig())
+        elif cfg.line_search_config is False or cfg.line_search_config is None:
+            stepper_factory = make_plain_stepper()
+        else:
+            # Provided a custom _LineSearchConfig
+            stepper_factory = make_armijo_stepper(cfg.line_search_config)
+
+        backend = _NewtonBackend(stepper_factory=stepper_factory)
+        interface = _PeriodicOrbitInterface()
+        engine = _OrbitCorrectionEngine(backend=backend, interface=interface)
+
+        result, half_period = engine.solve(self, cfg)
+        interface.apply_results_to_orbit(self, corrected_state=result.x_corrected, half_period=half_period)
+        return result.x_corrected, half_period
 
     def propagate(self, steps: int = 1000, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         """
@@ -891,7 +953,8 @@ class GenericOrbit(PeriodicOrbit):
         TypeError
             If cfg is not an instance of :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None.
         """
-        from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+        from hiten.algorithms.continuation.config import \
+            _OrbitContinuationConfig
         if cfg is not None and not isinstance(cfg, _OrbitContinuationConfig):
             raise TypeError("continuation_config must be a _OrbitContinuationConfig instance or None")
         self._custom_continuation_config = cfg
