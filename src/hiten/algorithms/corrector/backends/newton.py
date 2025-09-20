@@ -5,19 +5,19 @@ handling of ill-conditioned systems, finite-difference Jacobians, and
 extensible hooks for customization.
 """
 
-from abc import ABC
 from typing import Any, Tuple
 
 import numpy as np
 
-from hiten.algorithms.corrector._step_interface import _ArmijoStepInterface
 from hiten.algorithms.corrector.backends.base import _CorrectorBackend
 from hiten.algorithms.corrector.config import _LineSearchConfig
+from hiten.algorithms.corrector.line import _ArmijoLineSearch
+from hiten.algorithms.corrector.protocols import StepStrategyProtocol
 from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
 from hiten.utils.log_config import logger
 
 
-class _NewtonBackend(_ArmijoStepInterface, _CorrectorBackend, ABC):
+class _NewtonBackend(_CorrectorBackend):
     """Implement the Newton-Raphson algorithm with robust linear algebra and step control.
     
     Combines Newton-Raphson iteration with Armijo line search, automatic
@@ -41,8 +41,56 @@ class _NewtonBackend(_ArmijoStepInterface, _CorrectorBackend, ABC):
     to provide a robust Newton-Raphson algorithm with Armijo line search.
     """
 
+    _line_search_config: _LineSearchConfig | None
+    _use_line_search: bool
+
     def __init__(self, *, line_search_config: _LineSearchConfig | bool | None = None, **kwargs) -> None:
-        super().__init__(line_search_config=line_search_config, **kwargs)
+        super().__init__(**kwargs)
+        if line_search_config is None:
+            self._line_search_config = None
+            self._use_line_search = False
+        elif isinstance(line_search_config, bool):
+            if line_search_config:
+                self._line_search_config = _LineSearchConfig()
+                self._use_line_search = True
+            else:
+                self._line_search_config = None
+                self._use_line_search = False
+        else:
+            self._line_search_config = line_search_config
+            self._use_line_search = True
+
+    def _build_stepper(
+        self,
+        residual_fn: ResidualFn,
+        norm_fn: NormFn,
+        max_delta: float | None,
+    ) -> StepStrategyProtocol:
+        """Create a step transformation strategy by composition.
+
+        Returns either a plain capped-step strategy or an Armijo line-search
+        strategy depending on configuration.
+        """
+        if not getattr(self, "_use_line_search", False):
+            def _plain_step(x: np.ndarray, delta: np.ndarray, current_norm: float):
+                if (max_delta is not None) and (not np.isinf(max_delta)):
+                    delta_norm = float(np.linalg.norm(delta, ord=np.inf))
+                    if delta_norm > max_delta:
+                        delta = delta * (max_delta / delta_norm)
+                x_new = x + delta
+                r_norm_new = norm_fn(residual_fn(x_new))
+                return x_new, r_norm_new, 1.0
+            return _plain_step
+
+        cfg = self._line_search_config
+        searcher = _ArmijoLineSearch(
+            config=cfg._replace(residual_fn=residual_fn, norm_fn=norm_fn)
+        )
+
+        def _armijo_step(x: np.ndarray, delta: np.ndarray, current_norm: float):
+            return searcher(x0=x, delta=delta, current_norm=current_norm)
+
+        return _armijo_step
 
     def _on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:
         """Hook called after each iteration for custom processing.
@@ -229,8 +277,6 @@ class _NewtonBackend(_ArmijoStepInterface, _CorrectorBackend, ABC):
                 delta = np.linalg.lstsq(J, -r, rcond=None)[0]
         return delta
 
-    # _apply_step removed; step-size control delegated to _Stepper strategy
-
     def correct(
         self,
         x0: np.ndarray,
@@ -282,8 +328,8 @@ class _NewtonBackend(_ArmijoStepInterface, _CorrectorBackend, ABC):
         x = x0.copy()
         info: dict[str, Any] = {}
 
-        # Obtain the stepper callable from the strategy mix-in
-        stepper = self._build_line_searcher(residual_fn, norm_fn, max_delta)
+        # Obtain the stepper callable from the composed strategy builder
+        stepper = self._build_stepper(residual_fn, norm_fn, max_delta)
 
         for k in range(max_attempts):
             r = self._compute_residual(x, residual_fn)

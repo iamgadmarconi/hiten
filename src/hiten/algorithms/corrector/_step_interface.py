@@ -22,116 +22,14 @@ See Also
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Protocol
+from typing import Optional
 
 import numpy as np
 
 from hiten.algorithms.corrector.config import _LineSearchConfig
 from hiten.algorithms.corrector.line import _ArmijoLineSearch
+from hiten.algorithms.corrector.protocols import StepProtocol
 from hiten.algorithms.corrector.types import NormFn, ResidualFn
-
-
-class _Stepper(Protocol):
-    """Define the protocol for step transformation functions in Newton-type methods.
-
-    This protocol defines the interface for functions that transform a
-    computed Newton step into an accepted update. Different implementations
-    can provide various step-size control strategies, from simple full
-    steps to sophisticated line search and trust region methods.
-
-    The protocol enables separation of concerns between:
-    - Newton step computation (direction finding)
-    - Step size control (distance along direction)
-    - Convergence monitoring (residual evaluation)
-
-    Implementations typically handle:
-    - Step size scaling for convergence control
-    - Safeguards against excessive step sizes
-    - Line search for sufficient decrease conditions
-    - Trust region constraints for robustness
-
-    Parameters
-    ----------
-    x : ndarray
-        Current iterate in the Newton method.
-    delta : ndarray
-        Newton step direction (typically from solving J*delta = -F).
-    current_norm : float
-        Norm of the residual at the current iterate *x*.
-
-    Returns
-    -------
-    x_new : ndarray
-        Updated iterate after applying the step transformation.
-    r_norm_new : float
-        Norm of the residual at the new iterate *x_new*.
-    alpha_used : float
-        Step-size scaling factor actually employed. A value of 1.0
-        indicates the full Newton step was taken, while smaller values
-        indicate step size reduction for convergence control.
-
-    Notes
-    -----
-    The protocol allows for flexible step-size control strategies:
-    
-    - **Full Newton steps**: alpha_used = 1.0, x_new = x + delta
-    - **Scaled steps**: alpha_used < 1.0, x_new = x + alpha * delta
-    - **Line search**: alpha chosen to satisfy decrease conditions
-    - **Trust region**: delta modified to stay within trust region
-    
-    Implementations should ensure that r_norm_new is computed consistently
-    with the norm function used in the overall Newton algorithm.
-
-    Examples
-    --------
-    >>> # Simple full-step implementation
-    >>> def full_step(x, delta, current_norm):
-    ...     x_new = x + delta
-    ...     r_norm_new = norm_fn(residual_fn(x_new))
-    ...     return x_new, r_norm_new, 1.0
-    >>>
-    >>> # Scaled step implementation
-    >>> def scaled_step(x, delta, current_norm):
-    ...     alpha = 0.5  # Half step
-    ...     x_new = x + alpha * delta
-    ...     r_norm_new = norm_fn(residual_fn(x_new))
-    ...     return x_new, r_norm_new, alpha
-
-    See Also
-    --------
-    :class:`~hiten.algorithms.corrector._step_interface._PlainStepInterface`
-        Simple implementation with optional step size capping.
-    :class:`~hiten.algorithms.corrector._step_interface._ArmijoStepInterface`
-        Line search implementation using Armijo conditions.
-    """
-
-    def __call__(
-        self,
-        x: np.ndarray,
-        delta: np.ndarray,
-        current_norm: float,
-    ) -> tuple[np.ndarray, float, float]:
-        """Transform Newton step into accepted update.
-
-        Parameters
-        ----------
-        x : ndarray
-            Current iterate.
-        delta : ndarray
-            Newton step direction.
-        current_norm : float
-            Norm of residual at current iterate.
-
-        Returns
-        -------
-        x_new : ndarray
-            Updated iterate.
-        r_norm_new : float
-            Norm of residual at new iterate.
-        alpha_used : float
-            Step scaling factor employed.
-        """
-        ...
 
 
 class _StepInterface(ABC):
@@ -167,7 +65,7 @@ class _StepInterface(ABC):
     capabilities (convergence monitoring, Jacobian computation, etc.).
 
     The abstract method :meth:`~hiten.algorithms.corrector._step_interface._StepInterface._build_line_searcher` is responsible for
-    creating :class:`~hiten.algorithms.corrector._step_interface._Stepper` objects that encapsulate the step
+    creating :class:`~hiten.algorithms.corrector.protocols.StepProtocol` objects that encapsulate the step
     transformation logic for specific problems.
 
     Examples
@@ -188,7 +86,7 @@ class _StepInterface(ABC):
         Concrete implementation for simple Newton steps.
     :class:`~hiten.algorithms.corrector._step_interface._ArmijoStepInterface`
         Concrete implementation with Armijo line search.
-    :class:`~hiten.algorithms.corrector._step_interface._Stepper`
+    :class:`~hiten.algorithms.corrector.protocols.StepProtocol`
         Protocol for step transformation functions.
     """
 
@@ -201,10 +99,10 @@ class _StepInterface(ABC):
         residual_fn: ResidualFn,
         norm_fn: NormFn,
         max_delta: float | None,
-    ) -> _Stepper:
+    ) -> StepProtocol:
         """Build a step transformation function for the current problem.
 
-        This method creates a :class:`~hiten.algorithms.corrector._step_interface._Stepper` object that encapsulates
+        This method creates a :class:`~hiten.algorithms.corrector.protocols.StepProtocol` object that encapsulates
         the step-size control logic for a specific nonlinear system.
         The stepper uses the provided residual and norm functions to
         evaluate candidate steps and determine appropriate step sizes.
@@ -221,7 +119,7 @@ class _StepInterface(ABC):
 
         Returns
         -------
-        stepper : :class:`~hiten.algorithms.corrector._step_interface._Stepper`
+        stepper : :class:`~hiten.algorithms.corrector.protocols.StepProtocol`
             Step transformation function configured for this problem.
 
         Notes
@@ -285,7 +183,7 @@ class _PlainStepInterface(_StepInterface):
         residual_fn: ResidualFn,
         norm_fn: NormFn,
         max_delta: float | None,
-    ) -> _Stepper:
+    ) -> StepProtocol:
         """Create a plain Newton stepper with optional step size capping.
 
         This method builds a step transformation function that implements
@@ -305,7 +203,7 @@ class _PlainStepInterface(_StepInterface):
 
         Returns
         -------
-        stepper : :class:`~hiten.algorithms.corrector._step_interface._Stepper`
+        stepper : :class:`~hiten.algorithms.corrector.protocols.StepProtocol`
             Step transformation function implementing plain Newton updates.
 
         Notes
@@ -341,7 +239,7 @@ class _PlainStepInterface(_StepInterface):
         residual_fn: ResidualFn,
         norm_fn: NormFn,
         max_delta: float | None,
-    ) -> _Stepper:
+    ) -> StepProtocol:
         """Build a plain Newton stepper for the current problem.
 
         This method implements the abstract interface by delegating to
@@ -360,7 +258,7 @@ class _PlainStepInterface(_StepInterface):
 
         Returns
         -------
-        stepper : :class:`~hiten.algorithms.corrector._step_interface._Stepper`
+        stepper : :class:`~hiten.algorithms.corrector.protocols.StepProtocol`
             Plain Newton step transformation function.
         """
         return self._make_plain_stepper(residual_fn, norm_fn, max_delta)
@@ -475,7 +373,7 @@ class _ArmijoStepInterface(_PlainStepInterface):
         residual_fn: ResidualFn,
         norm_fn: NormFn,
         max_delta: float | None,
-    ) -> _Stepper:
+    ) -> StepProtocol:
         """Build a step transformation function with optional line search.
 
         This method creates either a plain Newton stepper or an Armijo
@@ -494,7 +392,7 @@ class _ArmijoStepInterface(_PlainStepInterface):
 
         Returns
         -------
-        stepper : :class:`~hiten.algorithms.corrector._step_interface._Stepper`
+        stepper : :class:`~hiten.algorithms.corrector.protocols.StepProtocol`
             Step transformation function, either plain Newton or Armijo
             line search based on configuration.
 

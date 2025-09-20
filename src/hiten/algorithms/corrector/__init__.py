@@ -40,7 +40,7 @@ See Also
 """
 
 from ._step_interface import (_ArmijoStepInterface, _PlainStepInterface,
-                              _StepInterface, _Stepper)
+                              _StepInterface)
 from .config import (_BaseCorrectionConfig, _LineSearchConfig,
                      _OrbitCorrectionConfig)
 from .backends.base import _CorrectorBackend
@@ -63,8 +63,7 @@ __all__ = [
     "_CorrectorBackend",
     "_PeriodicOrbitCorrectorInterface",
     "_InvariantToriCorrectorInterface",
-    
-    "_Stepper",
+
     "_StepInterface",
     "_PlainStepInterface",
     "_ArmijoStepInterface",

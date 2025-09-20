@@ -158,12 +158,12 @@ The step interface module provides step-size control interfaces for Newton-type 
 
 .. currentmodule:: hiten.algorithms.corrector._step_interface
 
-_Stepper()
+StepProtocol()
 ^^^^^^^^^^
 
-The :class:`_Stepper` class defines the protocol for step transformation functions in Newton-type methods.
+The :class:`StepProtocol` class defines the protocol for step transformation functions in Newton-type methods.
 
-.. autoclass:: _Stepper()
+.. autoclass:: StepProtocol()
    :members:
    :undoc-members:
    :exclude-members: __init__

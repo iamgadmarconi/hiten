@@ -29,26 +29,26 @@ class ConvergenceError(HitenError):
 
 
 class BackendError(HitenError):
-    """Raised when an exception occurs in a backend.
+    """An error occurred within a Backend algorithm.
     
     Parameters
     ----------
     message : str
         The error message.
     """
-    
+
     def __init__(self, message: str):
         super().__init__(message)
 
 
 class EngineError(HitenError):
-    """Raised when an exception occurs in the engine.
+    """An error occurred during an Engine's workflow.
     
     Parameters
     ----------
     message : str
         The error message.
     """
-    
+
     def __init__(self, message: str):
         super().__init__(message)

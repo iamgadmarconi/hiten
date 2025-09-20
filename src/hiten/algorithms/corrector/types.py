@@ -1,12 +1,11 @@
 """
 Types for the corrector module.
 
-
-
+This module provides the types for the corrector module.
 """
 
 from dataclasses import dataclass
-from typing import Callable, NamedTuple
+from typing import Callable, NamedTuple, Optional
 
 import numpy as np
 
@@ -96,12 +95,53 @@ NormFn = Callable[[np.ndarray], float]
 
 
 class CorrectionResult(NamedTuple):
-
+    """Standardized result for a backend correction run.
+    
+    Attributes
+    ----------
+    converged : bool
+        Whether the correction converged.
+    x_corrected : ndarray
+        Corrected parameter vector.
+    residual_norm : float
+        Final residual norm.
+    iterations : int
+        Number of iterations performed.
+    """
     converged: bool
     x_corrected: np.ndarray
     residual_norm: float
     iterations: int
 
 
-class _CorrectionProblem(NamedTuple):
-    pass
+@dataclass(frozen=True)
+class _CorrectionProblem:
+    """Defines the inputs for a backend correction run.
+
+    Attributes
+    ----------
+    initial_guess : ndarray
+        Initial parameter vector.
+    residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
+        Residual function R(x).
+    jacobian_fn : :class:`~hiten.algorithms.corrector.types.JacobianFn` | None
+        Optional analytical Jacobian.
+    norm_fn : :class:`~hiten.algorithms.corrector.types.NormFn` | None
+        Optional norm function for convergence checks.
+    tol : float
+        Convergence tolerance on residual norm.
+    max_attempts : int
+        Maximum Newton iterations.
+    max_delta : float | None
+        Optional cap on infinity-norm of Newton step.
+    fd_step : float
+        Finite-difference step if Jacobian is not provided.
+    """
+    initial_guess: np.ndarray
+    residual_fn: ResidualFn
+    jacobian_fn: Optional[JacobianFn] | None = None
+    norm_fn: Optional[NormFn] | None = None
+    tol: float = 1e-10
+    max_attempts: int = 25
+    max_delta: float | None = 1e-2
+    fd_step: float = 1e-8
