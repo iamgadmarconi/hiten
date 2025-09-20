@@ -24,9 +24,11 @@ import numpy.typing as npt
 import pandas as pd
 
 from hiten.algorithms.corrector.config import _LineSearchConfig
-from hiten.algorithms.corrector.correctors import _NewtonOrbitCorrector
 from hiten.algorithms.corrector.stepping import (make_armijo_stepper,
                                                  make_plain_stepper)
+from hiten.algorithms.corrector.backends.newton import _NewtonBackend
+from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
+from hiten.algorithms.corrector.interfaces import _PeriodicOrbitInterface
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import (_compute_monodromy, _compute_stm,
                                             _stability_indices)
@@ -449,14 +451,21 @@ class PeriodicOrbit(ABC):
             # Provided a custom _LineSearchConfig
             stepper_factory = make_armijo_stepper(_line_search_cfg)
 
-        return _NewtonOrbitCorrector(stepper_factory=stepper_factory).correct(
+        backend = _NewtonBackend(stepper_factory=stepper_factory)
+        interface = _PeriodicOrbitInterface()
+        engine = _OrbitCorrectionEngine(backend=backend, interface=interface)
+
+        x_corr, result, half_period = engine.solve(
             self,
+            cfg,
+            forward=_forward,
             tol=_tol,
             max_attempts=_max_attempts,
-            forward=_forward,
             max_delta=_max_delta,
             finite_difference=_finite_difference,
         )
+        interface.apply_results_to_orbit(self, corrected_state=x_corr, half_period=half_period)
+        return x_corr, half_period
 
     def propagate(self, steps: int = 1000, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
         """

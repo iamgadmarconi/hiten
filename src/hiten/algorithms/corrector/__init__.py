@@ -48,14 +48,14 @@ from .backends.newton import _NewtonBackend
 from .config import (_BaseCorrectionConfig, _LineSearchConfig,
                      _OrbitCorrectionConfig)
 from .correctors import _NewtonOrbitCorrector
-from .interfaces import (_InvariantToriCorrectorInterface,
-                         _PeriodicOrbitCorrectorInterface)
+from .engine import _OrbitCorrectionEngine
+from .interfaces import (_PeriodicOrbitCorrectorInterface,
+                         _PeriodicOrbitInterface)
 
 __all__ = [
     "_NewtonOrbitCorrector",
     
     "_NewtonBackend",
-    "_ArmijoLineSearch",
     
     "_BaseCorrectionConfig",
     "_OrbitCorrectionConfig", 
@@ -64,4 +64,6 @@ __all__ = [
     "_CorrectorBackend",
     "_PeriodicOrbitCorrectorInterface",
     "_InvariantToriCorrectorInterface",
+    "_PeriodicOrbitInterface",
+    "_OrbitCorrectionEngine",
 ]
