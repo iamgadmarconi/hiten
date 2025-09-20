@@ -62,7 +62,7 @@ class _SingleHitBackend(_ReturnMapBackend):
         The Poincare section surface definition.
     forward : int, default=1
         Integration direction (1 for forward, -1 for backward).
-    method : {'scipy', 'rk', 'symplectic', 'adaptive'}, default='scipy'
+    method : {'fixed', 'symplectic', 'adaptive'}, default='adaptive'
         Integration method to use.
     order : int, default=8
         Integration order for Runge-Kutta methods.
@@ -90,7 +90,7 @@ class _SingleHitBackend(_ReturnMapBackend):
         dynsys: "_DynamicalSystemProtocol",
         surface: "_SurfaceEvent",
         forward: int = 1,
-        method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
+        method: Literal["fixed", "symplectic", "adaptive"] = "adaptive",
         order: int = 8,
         pre_steps: int = 1000,
         refine_steps: int = 3000,

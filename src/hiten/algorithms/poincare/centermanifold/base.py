@@ -313,7 +313,7 @@ class CenterManifoldMap(_ReturnMapBase):
         ----------
         steps : int, default=1000
             Number of integration steps for trajectory propagation.
-        method : {'rk', 'scipy', 'symplectic', 'adaptive'}, default='scipy'
+        method : {'fixed', 'symplectic', 'adaptive'}, default='adaptive'
             Integration method for trajectory propagation.
         order : int, default=6
             Integration order for Runge-Kutta methods.

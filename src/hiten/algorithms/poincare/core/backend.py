@@ -34,7 +34,7 @@ class _ReturnMapBackend(ABC):
         Poincare section surface definition.
     forward : int, default=1
         Integration direction (1 for forward, -1 for backward).
-    method : {'scipy', 'rk', 'symplectic', 'adaptive'}, default='scipy'
+    method : {'fixed', 'symplectic', 'adaptive'}, default='adaptive'
         Integration method to use.
     order : int, default=8
         Integration order for Runge-Kutta methods.

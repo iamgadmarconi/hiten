@@ -405,7 +405,7 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         Integration direction (1 for forward, -1 for backward).
     max_steps : int, default=2000
         Maximum integration steps per trajectory.
-    method : {'scipy', 'rk', 'symplectic', 'adaptive'}, default='scipy'
+    method : {'fixed', 'symplectic', 'adaptive'}, default='adaptive'
         Integration method.
     order : int, default=8
         Integration order for Runge-Kutta methods.
