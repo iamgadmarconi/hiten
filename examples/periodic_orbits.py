@@ -38,7 +38,7 @@ def main() -> None:
             "cls": HaloOrbit,
             "name": "Halo",
             "kwargs": {"amplitude_z": 0.2, "zenith": "southern"},
-            "diff_corr_attempts": 5,
+            "diff_corr_attempts": 10,
             "finite_difference": False,
         },
         {

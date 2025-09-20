@@ -23,6 +23,7 @@ from hiten.algorithms.poincare.core.events import (_PlaneEvent, _SectionHit,
 from hiten.algorithms.integrators import AdaptiveRK
 from hiten.algorithms.integrators.configs import _EventConfig
 from numba import njit, types
+from hiten.utils.log_config import logger
 
 
 # --- Precompiled plane event functions (fast path for standard sections) ---
@@ -206,11 +207,16 @@ class _SingleHitBackend(_ReturnMapBackend):
         else:
             raise TypeError("_SingleHitBackend requires a plane event with normal and offset")
 
+        # diagnostics disabled by default
+
         integrator = AdaptiveRK(order=8, rtol=1e-12, atol=1e-12)
         ev_dir = 0 if direction is None else int(direction)
         ev_cfg = _EventConfig(direction=ev_dir, terminal=True)
 
         t_start = float(t0)
+        # Avoid exactly-zero window start which may trigger an immediate event
+        if t_start <= 0.0:
+            t_start = 1e-12
         y_start = state0.astype(float, copy=True)
 
         sol_align = _propagate_dynsys(
@@ -227,13 +233,15 @@ class _SingleHitBackend(_ReturnMapBackend):
 
         span = float(max(0.0, tmax - t_start))
         times = np.array([0.0, span], dtype=float)
+        # diagnostics disabled by default
         sol = integrator.integrate(self._dynsys, y_start, times, event_fn=event_fn, event_cfg=ev_cfg)
         t_hit_rel = float(sol.times[-1])
         y_hit = sol.states[-1].copy()
         t_hit = t_start + t_hit_rel
         if t_hit_rel < span and t_hit_rel >= 0.0:
+            # diagnostics disabled by default
             return _SectionHit(time=t_hit, state=y_hit, point2d=y_hit[:2].copy())
-
+        # diagnostics disabled by default
         return None
 
     def _cross(self, state0: np.ndarray, *, t_guess: float | None = None, t0_offset: float = 0.15, t_window: float | None = None):
@@ -250,9 +258,10 @@ class _SingleHitBackend(_ReturnMapBackend):
                 t_start = float(np.pi / 2.0 - t0_offset)
             if t_start < 0.0:
                 t_start = 0.0
-            t0 = t_start
-            tmax = t_start + float(np.pi)
-
+            half_span = float(np.pi) * 0.5
+            t0 = float(max(t_start - half_span, 0.0))
+            tmax = float(t0 + 2.0 * half_span)
+        # diagnostics disabled by default
         hit = self._cross_event_driven(np.asarray(state0, float), t0=t0, tmax=tmax)
         # If a hint was used and no hit was found, progressively widen the window (up to pi) then fall back
         if hit is None and t_guess is not None:
@@ -261,8 +270,10 @@ class _SingleHitBackend(_ReturnMapBackend):
                 span *= 2.0
                 t0_try = float(max(t_guess - 0.5 * span, 0.0))
                 tmax_try = float(t0_try + span)
+                # diagnostics disabled by default
                 hit = self._cross_event_driven(np.asarray(state0, float), t0=t0_try, tmax=tmax_try)
                 if hit is not None:
+                    # diagnostics disabled by default
                     break
         # Final fallback: default half-period window
         if hit is None:
@@ -274,6 +285,7 @@ class _SingleHitBackend(_ReturnMapBackend):
                     t_start = 0.0
             t0_fb = t_start
             tmax_fb = t_start + float(np.pi)
+            # diagnostics disabled by default
             hit = self._cross_event_driven(np.asarray(state0, float), t0=t0_fb, tmax=tmax_fb)
         return hit
 

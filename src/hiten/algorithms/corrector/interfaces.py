@@ -51,7 +51,6 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
 
     _event_cache: _EventCache | None = None  # initialised lazily
     _fd_mode: bool = False  # finite-difference mode flag set per correction
-    _enable_diagnostics: bool = True  # temporary diagnostics switch
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -261,6 +260,18 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
             J_red -= cfg.extra_jacobian(X_ev_local, Phi)
         return J_red
 
+    # --- Newton hooks for rich diagnostics without changing solver core ---
+    def _on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:
+        if not getattr(self, "_enable_diagnostics", False):
+            return
+        # diagnostics disabled
+
+    def _on_accept(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
+        return
+
+    def _on_failure(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
+        return
+
     def correct(
         self,
         orbit: "PeriodicOrbit",
@@ -343,22 +354,6 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         # Infinity norm is the standard for orbit residuals
         _norm_inf: NormFn = lambda r: float(np.linalg.norm(r, ord=np.inf))
 
-        # Delegate numerical work to the super-class (usually _NewtonCore)
-        # Stash diagnostic context for iteration hook
-        try:
-            self._diag_context = {
-                "residual_fn": residual_fn,
-                "jacobian_fn": jacobian_fn,
-                "control_indices": control_indices,
-                "residual_indices": residual_indices,
-                "base_state": base_state,
-                "orbit": orbit,
-                "cfg": cfg,
-                "forward": forward,
-            }
-        except Exception:
-            self._diag_context = None
-
         p_corr, info = super().correct( 
             x0=p0,
             residual_fn=residual_fn,
@@ -393,11 +388,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         orbit._initial_state = x_corr
         orbit._period = 2.0 * self._last_t_event
 
-        logger.info(
-            "Periodic-orbit corrector converged in %d iterations (|R|=%.2e)",
-            info.get("iterations", -1),
-            info.get("residual_norm", float("nan")),
-        )
+        # silent in normal runs
 
         return x_corr, self._last_t_event
 
