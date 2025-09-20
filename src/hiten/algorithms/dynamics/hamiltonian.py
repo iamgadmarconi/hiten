@@ -372,6 +372,17 @@ class _HamiltonianSystem(_DynamicalSystem):
         """
         return f"_HamiltonianSystem(name='{self.name}', n_dof={self.n_dof})"
 
+    @property
+    def rhs_params(self) -> tuple:
+        """Return low-level RHS parameters for parametric kernels.
+
+        Returns
+        -------
+        tuple
+            (jac_H, clmo_H, n_dof) for use with compiled Hamiltonian RHS.
+        """
+        return (self.jac_H, self.clmo_H, self.n_dof)
+
 
 def create_hamiltonian_system(
     H_blocks: List[np.ndarray],

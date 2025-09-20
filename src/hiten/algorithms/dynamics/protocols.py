@@ -116,3 +116,16 @@ class _HamiltonianSystemProtocol(_DynamicalSystemProtocol, Protocol):
             organized by degree and variable.
         """
         ...
+
+    @property
+    def rhs_params(self) -> tuple:
+        r"""Return low-level RHS parameters for parametric kernels.
+
+        Returns
+        -------
+        tuple
+            A 3-tuple ``(jac_H, clmo_H, n_dof)`` suitable for passing to
+            compiled Hamiltonian RHS kernels. ``jac_H`` and ``clmo_H`` are
+            sequence-like containers of numpy arrays; ``n_dof`` is an int.
+        """
+        ...
