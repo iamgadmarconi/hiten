@@ -91,7 +91,7 @@ def _detect_crossing(section_coord: str, state_old: np.ndarray, state_new: np.nd
 
 
 def _solve_bracketed(f, a: float, b: float, xtol: float = 1e-12, max_iter: int = 200) -> float:
-    """Pure-Python bracketed bisection solver for general callables.
+    """Pure-Python Brent's method solver for general callables.
 
     Parameters
     ----------
@@ -110,42 +110,94 @@ def _solve_bracketed(f, a: float, b: float, xtol: float = 1e-12, max_iter: int =
     float or None
         Root value if found, None otherwise.
     """
-    left = float(a)
-    right = float(b)
-    f_eval = f  # local bind for tiny speedup
-    f_left = float(f_eval(left))
-    f_right = float(f_eval(right))
+    # Local bind for small speedup
+    f_eval = f
 
-    if f_left == 0.0:
-        return left
-    if f_right == 0.0:
-        return right
+    # Ensure floats and evaluate endpoints
+    a = float(a)
+    b = float(b)
+    fa = float(f_eval(a))
+    fb = float(f_eval(b))
 
-    iterations = 0
-    while (right - left) > xtol and iterations < max_iter:
-        mid = left + 0.5 * (right - left)
-        f_mid = float(f_eval(mid))
+    # Handle exact hits at the endpoints
+    if fa == 0.0:
+        return a
+    if fb == 0.0:
+        return b
 
-        if f_mid == 0.0:
-            return mid
-
-        if f_left * f_mid <= 0.0:
-            right = mid
-            f_right = f_mid
-        else:
-            left = mid
-            f_left = f_mid
-
-        iterations += 1
-
-    mid = left + 0.5 * (right - left)
-    f_mid = float(f_eval(mid))
-
-    if (right - left) > xtol or f_left * f_right > 0.0 or abs(f_mid) > xtol:
-
+    # Require a valid bracket
+    if fa * fb > 0.0:
         return None
 
-    return mid
+    # Initialize the third point of the bracket
+    c = a
+    fc = fa
+    d = b - a
+    e = d
+
+    eps = float(np.finfo(np.float64).eps)
+
+    for _ in range(int(max_iter)):
+        if fb == 0.0:
+            return b
+
+        # If fb and fc have the same sign, move c to a
+        if fb * fc > 0.0:
+            c = a
+            fc = fa
+            d = b - a
+            e = d
+
+        # Ensure that |fc| >= |fb|
+        if abs(fc) < abs(fb):
+            a, b, c = b, c, b
+            fa, fb, fc = fb, fc, fb
+
+        tol = 2.0 * eps * abs(b) + 0.5 * xtol
+        m = 0.5 * (c - b)
+        if abs(m) <= tol:
+            return b
+
+        if abs(e) >= tol and abs(fa) > abs(fb):
+            s = fb / fa
+            if a == c:
+                # Secant step
+                p = 2.0 * m * s
+                q = 1.0 - s
+            else:
+                # Inverse quadratic interpolation
+                q_ = fa / fc
+                r = fb / fc
+                p = s * (2.0 * m * q_ * (q_ - r) - (b - a) * (r - 1.0))
+                q = (q_ - 1.0) * (r - 1.0) * (s - 1.0)
+            if p > 0.0:
+                q = -q
+            else:
+                p = -p
+            if (2.0 * p) < min(3.0 * m * q - abs(tol * q), abs(e * q)):
+                e = d
+                d = p / q
+            else:
+                d = m
+                e = m
+        else:
+            d = m
+            e = m
+
+        a = b
+        fa = fb
+        if abs(d) > tol:
+            b = b + d
+        else:
+            b = b + (tol if m > 0.0 else -tol)
+        fb = float(f_eval(b))
+
+    # Final tolerance check
+    tol = 2.0 * eps * abs(b) + 0.5 * xtol
+    m = 0.5 * (c - b)
+    if abs(m) <= tol or fb == 0.0:
+        return b
+    return None
 
 @njit(cache=False, fastmath=FASTMATH)
 def _get_rk_coefficients(order: int):

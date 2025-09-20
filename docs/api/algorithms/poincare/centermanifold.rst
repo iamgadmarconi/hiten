@@ -17,7 +17,7 @@ Detect if trajectory crossed the Poincare section using Hermite interpolation.
 
 .. autofunction:: _solve_bracketed()
 
-Pure-Python bracketed bisection solver for general callables.
+Pure-Python Brent's method root-finder for bracketed scalar functions.
 
 .. autofunction:: _get_rk_coefficients()
 
