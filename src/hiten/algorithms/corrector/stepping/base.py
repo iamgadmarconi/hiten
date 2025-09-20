@@ -9,7 +9,7 @@ from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
 from hiten.algorithms.corrector.types import NormFn, ResidualFn
 
 
-class _CorrectorSteppingBase(ABC):
+class _CorrectorStepBase(ABC):
     """Provide an abstract base class for step-size control strategy interfaces.
 
     This class provides the foundation for implementing different step-size
@@ -41,13 +41,13 @@ class _CorrectorSteppingBase(ABC):
     allowing correction algorithms to mix step interfaces with other
     capabilities (convergence monitoring, Jacobian computation, etc.).
 
-    The abstract method :meth:`~hiten.algorithms.corrector.stepping.base._CorrectorSteppingBase._build_line_searcher` is responsible for
+    The abstract method :meth:`~hiten.algorithms.corrector.stepping.base._CorrectorStepBase._build_line_searcher` is responsible for
     creating :class:`~hiten.algorithms.corrector.protocols.CorrectorStepProtocol` objects that encapsulate the step
     transformation logic for specific problems.
 
     Examples
     --------
-    >>> class CustomStepInterface(_CorrectorSteppingBase):
+    >>> class CustomStepInterface(_CorrectorStepBase):
     ...     def _build_line_searcher(self, residual_fn, norm_fn, max_delta):
     ...         def custom_step(x, delta, current_norm):
     ...             # Custom step logic here
@@ -59,7 +59,7 @@ class _CorrectorSteppingBase(ABC):
 
     See Also
     --------
-    :class:`~hiten.algorithms.corrector.stepping.plain._PlainStep`
+    :class:`~hiten.algorithms.corrector.stepping.plain._CorrectorPlainStep`
         Concrete implementation for simple Newton steps.
     :class:`~hiten.algorithms.corrector.stepping.armijo._ArmijoStep`
         Concrete implementation with Armijo line search.

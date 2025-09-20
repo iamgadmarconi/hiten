@@ -15,12 +15,12 @@ base.py
 
 .. currentmodule:: hiten.algorithms.corrector.stepping.base
 
-_CorrectorSteppingBase()
+_CorrectorStepBase()
 ^^^^^^^^^^^^^^^
 
-The :class:`_CorrectorSteppingBase` class provides an abstract base class for step-size control strategy interfaces.
+The :class:`_CorrectorStepBase` class provides an abstract base class for step-size control strategy interfaces.
 
-.. autoclass:: _CorrectorSteppingBase()
+.. autoclass:: _CorrectorStepBase()
    :members:
    :undoc-members:
    :exclude-members: __init__
@@ -30,12 +30,12 @@ plain.py
 
 .. currentmodule:: hiten.algorithms.corrector.stepping.plain
 
-_PlainStep()
+_CorrectorPlainStep()
 ^^^^^^^^^^^^
 
-The :class:`_PlainStep` class provides a step interface for plain Newton updates with safeguards.
+The :class:`_CorrectorPlainStep` class provides a step interface for plain Newton updates with safeguards.
 
-.. autoclass:: _PlainStep()
+.. autoclass:: _CorrectorPlainStep()
    :members:
    :undoc-members:
    :exclude-members: __init__

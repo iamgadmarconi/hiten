@@ -13,7 +13,7 @@ from hiten.algorithms.continuation.types import ContinuationResult
 
 
 @runtime_checkable
-class StepStrategyProtocol(Protocol):
+class ContinuationStepProtocol(Protocol):
     """Protocol for continuation step strategies with optional hooks.
 
     Implementations generate the next prediction from the last accepted

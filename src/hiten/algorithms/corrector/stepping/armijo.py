@@ -9,7 +9,7 @@ import numpy as np
 
 from hiten.algorithms.corrector.config import _LineSearchConfig
 from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
-from hiten.algorithms.corrector.stepping.base import _CorrectorSteppingBase
+from hiten.algorithms.corrector.stepping.base import _CorrectorStepBase
 from hiten.algorithms.corrector.types import NormFn, ResidualFn
 from hiten.algorithms.utils.exceptions import BackendError
 from hiten.utils.log_config import logger
@@ -182,7 +182,7 @@ class _ArmijoLineSearch:
         raise BackendError("Armijo line search failed to find a productive step.")
 
 
-class _ArmijoStep(_CorrectorSteppingBase):
+class _ArmijoStep(_CorrectorStepBase):
     """Provide a step interface with Armijo line search for robust convergence.
 
     This class extends the plain step interface with optional Armijo line
@@ -253,7 +253,7 @@ class _ArmijoStep(_CorrectorSteppingBase):
 
     See Also
     --------
-    :class:`~hiten.algorithms.corrector._step_interface._PlainStep`
+    :class:`~hiten.algorithms.corrector._step_interface._CorrectorPlainStep`
         Parent class providing plain Newton step capabilities.
     :class:`~hiten.algorithms.corrector.line._ArmijoLineSearch`
         Line search implementation used by this interface.

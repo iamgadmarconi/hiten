@@ -228,13 +228,13 @@ For more sophisticated methods, implement custom stepping strategies with event 
 
 .. code-block:: python
 
-   from hiten.algorithms.continuation.strategies._step_interface import _ContinuationStep
+   from hiten.algorithms.continuation.strategies._step_interface import _ContinuationStepBase
    from hiten.algorithms.continuation.strategies._algorithms import _NaturalParameter
    from hiten.algorithms.continuation.interfaces import _PeriodicOrbitContinuationInterface
    import numpy as np
 
    class AdaptiveStepper:
-       """Adaptive stepping strategy implementing _ContinuationStep protocol."""
+       """Adaptive stepping strategy implementing _ContinuationStepBase protocol."""
        
        def __init__(self, predictor_fn, initial_step=0.01, min_step=0.001, max_step=0.1):
            self._predictor = predictor_fn

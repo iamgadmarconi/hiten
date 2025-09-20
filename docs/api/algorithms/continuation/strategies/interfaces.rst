@@ -5,22 +5,22 @@ The interfaces module defines protocol and base classes for continuation steppin
 
 .. currentmodule:: hiten.algorithms.continuation.strategies._step_interface
 
-_ContinuationStep()
+_ContinuationStepBase()
 ^^^^^^^^^^^^^^^^^^^^
 
-The :class:`_ContinuationStep` class defines the protocol for continuation stepping strategies.
+The :class:`_ContinuationStepBase` class defines the protocol for continuation stepping strategies.
 
-.. autoclass:: _ContinuationStep()
+.. autoclass:: _ContinuationStepBase()
    :members:
    :undoc-members:
    :exclude-members: __init__
 
-_PlainStep()
+_CorrectorPlainStep()
 ^^^^^^^^^^^^
 
-The :class:`_PlainStep` class implements a simple stepping strategy using a provided predictor function.
+The :class:`_CorrectorPlainStep` class implements a simple stepping strategy using a provided predictor function.
 
-.. autoclass:: _PlainStep()
+.. autoclass:: _CorrectorPlainStep()
    :members:
    :undoc-members:
    :exclude-members: __init__

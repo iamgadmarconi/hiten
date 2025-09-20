@@ -11,14 +11,14 @@ from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
 from hiten.algorithms.corrector.types import NormFn, ResidualFn
 
 from .armijo import _ArmijoLineSearch, _ArmijoStep
-from .base import _CorrectorSteppingBase
-from .plain import _PlainStep
+from .base import _CorrectorStepBase
+from .plain import _CorrectorPlainStep
 
 
 def make_plain_stepper() -> Callable[[ResidualFn, NormFn, float | None], CorrectorStepProtocol]:
     """Return a factory that builds a plain capped stepper per problem."""
     def _factory(residual_fn: ResidualFn, norm_fn: NormFn, max_delta: float | None) -> CorrectorStepProtocol:
-        return _PlainStep()._build_line_searcher(residual_fn, norm_fn, max_delta)
+        return _CorrectorPlainStep()._build_line_searcher(residual_fn, norm_fn, max_delta)
     return _factory
 
 
@@ -37,8 +37,8 @@ def make_armijo_stepper(config: "_LineSearchConfig") -> Callable[[ResidualFn, No
 __all__ = [
     "_ArmijoStep",
     "_ArmijoLineSearch",
-    "_CorrectorSteppingBase",
-    "_PlainStep",
+    "_CorrectorStepBase",
+    "_CorrectorPlainStep",
     "make_plain_stepper",
     "make_armijo_stepper",
 ]

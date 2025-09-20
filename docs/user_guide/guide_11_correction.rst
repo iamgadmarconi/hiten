@@ -328,7 +328,7 @@ The correction framework uses several key interfaces:
 **Step Control Interfaces**
 
     - `_StepInterface`: Abstract base for step-size control strategies
-    - `_PlainStep`: Simple Newton steps with safeguards
+    - `_CorrectorPlainStep`: Simple Newton steps with safeguards
     - `_ArmijoStep`: Armijo line search with backtracking
 
 .. code-block:: python

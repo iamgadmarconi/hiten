@@ -73,24 +73,38 @@ class OrbitFamily:
                 raise ValueError("Length of parameter_values must match number of orbits")
 
     @classmethod
-    def from_engine(cls, engine, parameter_name: str | None = None):
-        """Build an OrbitFamily from a finished continuation engine.
-        
+    def from_result(cls, result, parameter_name: str | None = None):
+        """Build an OrbitFamily from a ContinuationResult.
+
         Parameters
         ----------
-        engine
-            A continuation engine that has completed its run.
+        result : ContinuationResult
+            Result object returned by the new continuation engine/facade.
         parameter_name : str or None, optional
             Name for the continuation parameter. If None, defaults to "param".
-            
+
         Returns
         -------
         :class:`~hiten.system.family.OrbitFamily`
-            A new OrbitFamily instance containing the orbits from the engine.
+            A new OrbitFamily instance containing the orbits from the result.
         """
         if parameter_name is None:
             parameter_name = "param"
-        return cls(list(engine.family), parameter_name, np.asarray(engine.parameter_values))
+
+        orbits = list(result.family)
+
+        # Coerce tuple of parameter vectors to 1D array (one value per orbit)
+        param_vals_list: list[float] = []
+        for vec in result.parameter_values:
+            arr = np.asarray(vec, dtype=float)
+            if arr.ndim == 0 or arr.size == 1:
+                param_vals_list.append(float(arr.reshape(-1)[0]))
+            else:
+                # Use Euclidean norm for multi-parameter continuation by default
+                param_vals_list.append(float(np.linalg.norm(arr)))
+        param_vals = np.asarray(param_vals_list, dtype=float)
+
+        return cls(orbits, parameter_name, param_vals)
 
     def __len__(self) -> int:
         return len(self.orbits)
