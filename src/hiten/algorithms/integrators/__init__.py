@@ -11,9 +11,27 @@ The main user-facing classes are the factories:
 - :class:`~hiten.algorithms.integrators.rk.RungeKutta` for fixed-step methods
 - :class:`~hiten.algorithms.integrators.rk.AdaptiveRK` for adaptive step-size methods
 - :class:`~hiten.algorithms.integrators.symplectic.ExtendedSymplectic` for symplectic integration
+
+To avoid import-time side effects and circular imports when submodules
+such as :mod:`hiten.algorithms.integrators.configs` are imported, the
+exports in this module are loaded lazily on first access (PEP 562).
 """
 
-from .rk import AdaptiveRK, RungeKutta
-from .symplectic import ExtendedSymplectic
+from importlib import import_module
+from typing import Any
 
 __all__ = ["RungeKutta", "AdaptiveRK", "ExtendedSymplectic"]
+
+
+def __getattr__(name: str) -> Any:
+    if name in ("RungeKutta", "AdaptiveRK"):
+        module = import_module("hiten.algorithms.integrators.rk")
+        return getattr(module, name)
+    if name == "ExtendedSymplectic":
+        module = import_module("hiten.algorithms.integrators.symplectic")
+        return getattr(module, name)
+    raise AttributeError(f"module 'hiten.algorithms.integrators' has no attribute {name!r}")
+
+
+def __dir__() -> list[str]:
+    return sorted(list(globals().keys()) + __all__)

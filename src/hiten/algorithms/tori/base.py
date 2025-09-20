@@ -229,7 +229,7 @@ class _InvariantTori:
         # Return an *immutable* copy of the grid to avoid accidental mutation.
         return _Torus(grid=self._grid.copy(), omega=omega, C0=C0, system=self.system)
 
-    def _prepare(self, n_theta1: int = 256, *, method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy", order: int = 8) -> None:
+    def _prepare(self, n_theta1: int = 256, *, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8) -> None:
         """
         Compute the trajectory, STM samples Phi_theta1(0) and the rotated
         eigen-vector field y(theta1) required by the torus parameterisation.
@@ -241,7 +241,7 @@ class _InvariantTori:
         ----------
         n_theta1 : int, default 256
             Number of discretization points along the periodic orbit.
-        method : {'scipy', 'rk', 'symplectic', 'adaptive'}, default 'scipy'
+        method : {'fixed', 'adaptive', 'symplectic'}, default 'adaptive'
             Integration method for computing the state transition matrix.
         order : int, default 8
             Order of the integration method.
@@ -609,8 +609,8 @@ class _InvariantTori:
                 tf=self.period,
                 forward=1,
                 steps=2,
-                method="scipy",
-                order=4,
+                method="adaptive",
+                order=8,
             )
             j_target = int(np.round(j + rho * len(v_curve_corr) / (2 * np.pi))) % len(v_curve_corr)
             errors.append(np.linalg.norm(sol.states[-1] - v_curve_corr[j_target]))
@@ -655,7 +655,7 @@ class _InvariantTori:
         self,
         states: np.ndarray | Sequence[float],
         *,
-        method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
+        method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
         order: int = 6,
         forward: int = 1,
     ) -> np.ndarray:

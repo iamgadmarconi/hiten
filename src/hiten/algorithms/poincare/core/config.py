@@ -60,13 +60,12 @@ class _IntegrationConfig(ABC):
     dt : float, default=1e-2
         Integration time step (nondimensional units). Smaller
         values provide higher accuracy but require more computation.
-    method : {'scipy', 'rk', 'symplectic', 'adaptive'}, default='rk'
+    method : {'fixed', 'adaptive', 'symplectic'}, default='fixed'
         Integration method to use:
-        - 'scipy': SciPy's adaptive integrator
-        - 'rk': Runge-Kutta methods
+        - 'fixed': Fixed-step Runge-Kutta methods
         - 'symplectic': Symplectic integrators (preserves Hamiltonian structure)
         - 'adaptive': Adaptive step size methods
-    order : int, default=4
+    order : int, default=8
         Integration order for Runge-Kutta methods. Higher orders
         provide better accuracy but require more function evaluations.
     c_omega_heuristic : float, default=20.0
@@ -79,8 +78,8 @@ class _IntegrationConfig(ABC):
     specified.
     """
     dt: float = 1e-2
-    method: Literal["scipy", "rk", "symplectic", "adaptive"] = "rk"
-    order: int = 4
+    method: Literal["fixed", "adaptive", "symplectic"] = "fixed"
+    order: int = 8
     c_omega_heuristic: Optional[float] = 20.0
 
 

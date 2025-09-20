@@ -27,7 +27,7 @@ from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
 from hiten.algorithms.utils.config import FASTMATH
 
 
-@numba.njit(fastmath=FASTMATH, cache=False)
+@numba.njit(fastmath=FASTMATH, cache=True)
 def _crtbp_accel(state, mu):
     r"""Compute CR3BP equations of motion in rotating synodic frame.
     
@@ -57,8 +57,10 @@ def _crtbp_accel(state, mu):
     
     See Also
     --------
-    :class:`~hiten.algorithms.dynamics.rtbp._RTBPRHS` : Dynamical system wrapper for these equations
-    :func:`~hiten.algorithms.dynamics.rtbp._jacobian_crtbp` : Analytical Jacobian of these equations
+    :class:`~hiten.algorithms.dynamics.rtbp._RTBPRHS` : Dynamical system
+        wrapper for these equations
+    :func:`~hiten.algorithms.dynamics.rtbp._jacobian_crtbp` : Analytical
+        Jacobian of these equations
     """
     x, y, z, vx, vy, vz = state
 
@@ -71,7 +73,7 @@ def _crtbp_accel(state, mu):
 
     return np.array([vx, vy, vz, ax, ay, az], dtype=np.float64)
 
-@numba.njit(fastmath=FASTMATH, cache=False)
+@numba.njit(fastmath=FASTMATH, cache=True)
 def _jacobian_crtbp(x, y, z, mu):
     r"""Compute analytical Jacobian matrix of CR3BP equations of motion.
     
@@ -103,9 +105,12 @@ def _jacobian_crtbp(x, y, z, mu):
     
     See Also
     --------
-    :func:`~hiten.algorithms.dynamics.rtbp._var_equations` : Uses this Jacobian for STM propagation
-    :class:`~hiten.algorithms.dynamics.rtbp._JacobianRHS` : Dynamical system wrapper for Jacobian evaluation
-    :func:`~hiten.algorithms.dynamics.rtbp._crtbp_accel` : Vector field that this function differentiates
+    :func:`~hiten.algorithms.dynamics.rtbp._var_equations` : Uses this
+        Jacobian for STM propagation
+    :class:`~hiten.algorithms.dynamics.rtbp._JacobianRHS` : Dynamical system
+        wrapper for Jacobian evaluation
+    :func:`~hiten.algorithms.dynamics.rtbp._crtbp_accel` : Vector field that
+        this function differentiates
     """
     mu2 = 1.0 - mu
 
@@ -159,7 +164,7 @@ def _jacobian_crtbp(x, y, z, mu):
 
     return F
 
-@numba.njit(fastmath=FASTMATH, cache=False)
+@numba.njit(fastmath=FASTMATH, cache=True)
 def _var_equations(t, PHI_vec, mu):
     r"""Compute CR3BP variational equations for state transition matrix propagation.
     
@@ -193,10 +198,14 @@ def _var_equations(t, PHI_vec, mu):
     
     See Also
     --------
-    :func:`~hiten.algorithms.dynamics.rtbp._jacobian_crtbp` : Provides Jacobian matrix F for STM evolution
-    :func:`~hiten.algorithms.dynamics.rtbp._crtbp_accel` : Base dynamics for physical state evolution
-    :class:`~hiten.algorithms.dynamics.rtbp._VarEqRHS` : Dynamical system wrapper for these equations
-    :func:`~hiten.algorithms.dynamics.rtbp._compute_stm` : Uses this function for STM propagation
+    :func:`~hiten.algorithms.dynamics.rtbp._jacobian_crtbp` : Provides
+        Jacobian matrix F for STM evolution
+    :func:`~hiten.algorithms.dynamics.rtbp._crtbp_accel` : Base dynamics for
+        physical state evolution
+    :class:`~hiten.algorithms.dynamics.rtbp._VarEqRHS` : Dynamical system
+        wrapper for these equations
+    :func:`~hiten.algorithms.dynamics.rtbp._compute_stm` : Uses this
+        function for STM propagation
     """
     phi_flat = PHI_vec[:36]
     x_vec    = PHI_vec[36:]  # [x, y, z, vx, vy, vz]
@@ -246,7 +255,7 @@ def _var_equations(t, PHI_vec, mu):
     return dPHI_vec
 
 
-def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy", order=8):
+def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order=8, **kwargs):
     r"""Propagate state transition matrix (STM) along CR3BP trajectory.
 
     Integrates the 42-dimensional variational system to compute the fundamental
@@ -256,7 +265,7 @@ def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["scipy",
 
     Parameters
     ----------
-    dynsys : _DynamicalSystem
+    dynsys : :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
         Variational system implementing 42-dimensional CR3BP variational equations.
         Typically an instance of _VarEqRHS.
     x0 : array_like, shape (6,)
@@ -268,10 +277,17 @@ def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["scipy",
     forward : int, optional
         Integration direction: +1 for forward, -1 for backward time.
         Default is 1.
-    method : {'scipy', 'rk', 'symplectic', 'adaptive'}, optional
-        Numerical integration method. Default is 'scipy'.
+    method : {'fixed', 'adaptive', 'symplectic'}, optional
+        Numerical integration method. Default is 'adaptive'.
     order : int, optional
-        Integration order for non-scipy methods. Default is 8.
+        Integration order. Default is 8.
+    **kwargs
+        Additional keyword arguments passed to the integrator, including:
+        - rtol: Relative tolerance for integration. If None, uses default from 
+        :func:`~hiten.algorithms.dynamics.base._propagate_dynsys`.
+        - atol: Absolute tolerance for integration. If None, uses default from 
+        :func:`~hiten.algorithms.dynamics.base._propagate_dynsys`.
+
 
     Returns
     -------
@@ -290,7 +306,7 @@ def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["scipy",
     - Backward integration uses DirectedSystem with momentum sign flipping
     - Combined 42D system enables simultaneous trajectory and linearization
     - STM satisfies d(Phi)/dt = F(x(t)) * Phi(t) where F is the Jacobian
-    
+
     See Also
     --------
     :func:`~hiten.algorithms.dynamics.rtbp._var_equations` : Variational equations used for integration
@@ -311,6 +327,7 @@ def _compute_stm(dynsys, x0, tf, steps=2000, forward=1, method: Literal["scipy",
         method=method,
         order=order,
         flip_indices=slice(36, 42),
+        **kwargs
     )
 
     PHI = sol_obj.states
@@ -352,8 +369,10 @@ def _compute_monodromy(dynsys, x0, period):
     
     See Also
     --------
-    :func:`~hiten.algorithms.dynamics.rtbp._compute_stm` : General STM computation used internally
-    :func:`~hiten.algorithms.dynamics.rtbp._stability_indices` : Compute stability indices from monodromy matrix
+    :func:`~hiten.algorithms.dynamics.rtbp._compute_stm` : General STM
+        computation used internally
+    :func:`~hiten.algorithms.dynamics.rtbp._stability_indices` : Compute
+        stability indices from monodromy matrix
     """
     _, _, M, _ = _compute_stm(dynsys, x0, period)
     return M
@@ -388,8 +407,10 @@ def _stability_indices(monodromy):
     
     See Also
     --------
-    :func:`~hiten.algorithms.dynamics.rtbp._compute_monodromy` : Provides monodromy matrix input
-    :func:`~hiten.algorithms.dynamics.utils.linalg._stability_indices` : More robust version
+    :func:`~hiten.algorithms.dynamics.rtbp._compute_monodromy` : Provides
+        monodromy matrix input
+    :func:`~hiten.algorithms.dynamics.utils.linalg._stability_indices` :
+        More robust version
     """
     eigs = np.linalg.eigvals(monodromy)
     
@@ -433,26 +454,27 @@ class _JacobianRHS(_DynamicalSystem):
     
     See Also
     --------
-    :func:`~hiten.algorithms.dynamics.rtbp._jacobian_crtbp` : Core Jacobian computation function
-    :class:`~hiten.algorithms.dynamics.rtbp._RTBPRHS` : Main CR3BP equations of motion
-    :class:`~hiten.algorithms.dynamics.rtbp._VarEqRHS` : Variational equations using this Jacobian
+    :func:`~hiten.algorithms.dynamics.rtbp._jacobian_crtbp` : Core Jacobian
+        computation function
+    :class:`~hiten.algorithms.dynamics.rtbp._RTBPRHS` : Main CR3BP equations
+        of motion
+    :class:`~hiten.algorithms.dynamics.rtbp._VarEqRHS` : Variational equations
+        using this Jacobian
     """
     def __init__(self, mu: float, name: str = "CR3BP Jacobian"):
         super().__init__(3)
         self.name = name
         self.mu = float(mu)
         
-        mu_val = self.mu
+        self._mu_val = self.mu
 
-        @numba.njit(fastmath=FASTMATH, cache=False)
-        def _jacobian_rhs(t: float, state, _mu=mu_val) -> np.ndarray:
+    def _build_rhs_impl(self) -> Callable[[float, np.ndarray], np.ndarray]:
+        mu_val = self._mu_val
+
+        def _jacobian_rhs(t: float, state: np.ndarray, _mu=mu_val) -> np.ndarray:
             return _jacobian_crtbp(state[0], state[1], state[2], _mu)
-        
-        self._rhs = _jacobian_rhs
 
-    @property
-    def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        return self._rhs
+        return _jacobian_rhs
 
     def __repr__(self) -> str:
         return f"_JacobianRHS(name='{self.name}', mu={self.mu})"
@@ -500,8 +522,10 @@ class _VarEqRHS(_DynamicalSystem):
     
     See Also
     --------
-    :func:`~hiten.algorithms.dynamics.rtbp._var_equations` : Core variational equations implementation
-    :func:`~hiten.algorithms.dynamics.rtbp._compute_stm` : Uses this system for STM computation
+    :func:`~hiten.algorithms.dynamics.rtbp._var_equations` : Core variational
+        equations implementation
+    :func:`~hiten.algorithms.dynamics.rtbp._compute_stm` : Uses this system
+        for STM computation
     :class:`~hiten.algorithms.dynamics.rtbp._RTBPRHS` : Base CR3BP dynamics
     """
     def __init__(self, mu: float, name: str = "CR3BP Variational Equations"):
@@ -509,17 +533,15 @@ class _VarEqRHS(_DynamicalSystem):
         self.name = name
         self.mu = float(mu)
 
-        mu_val = self.mu
+        self._mu_val = self.mu
 
-        @numba.njit(fastmath=FASTMATH, cache=False)
+    def _build_rhs_impl(self) -> Callable[[float, np.ndarray], np.ndarray]:
+        mu_val = self._mu_val
+
         def _var_eq_rhs(t: float, y: np.ndarray, _mu=mu_val) -> np.ndarray:
             return _var_equations(t, y, _mu)
-        
-        self._rhs = _var_eq_rhs
 
-    @property
-    def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        return self._rhs
+        return _var_eq_rhs
 
     def __repr__(self) -> str:
         return f"_VarEqRHS(name='{self.name}', mu={self.mu})"
@@ -568,26 +590,27 @@ class _RTBPRHS(_DynamicalSystem):
     
     See Also
     --------
-    :func:`~hiten.algorithms.dynamics.rtbp._crtbp_accel` : Core equations of motion implementation
-    :func:`~hiten.algorithms.dynamics.rtbp.rtbp_dynsys` : Factory function for creating instances
-    :class:`~hiten.algorithms.dynamics.rtbp._VarEqRHS` : Variational equations based on this system
+    :func:`~hiten.algorithms.dynamics.rtbp._crtbp_accel` : Core equations of
+        motion implementation
+    :func:`~hiten.algorithms.dynamics.rtbp.rtbp_dynsys` : Factory function for
+        creating instances
+    :class:`~hiten.algorithms.dynamics.rtbp._VarEqRHS` : Variational equations
+        based on this system
     """
     def __init__(self, mu: float, name: str = "RTBP"):
         super().__init__(dim=6)
         self.name = name
         self.mu = float(mu)
 
-        mu_val = self.mu
+        self._mu_val = self.mu
 
-        @numba.njit(fastmath=FASTMATH, cache=False)
+    def _build_rhs_impl(self) -> Callable[[float, np.ndarray], np.ndarray]:
+        mu_val = self._mu_val
+
         def _crtbp_rhs(t: float, state: np.ndarray, _mu=mu_val) -> np.ndarray:
             return _crtbp_accel(state, _mu)
 
-        self._rhs = _crtbp_rhs
-
-    @property
-    def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        return self._rhs
+        return _crtbp_rhs
 
     def __repr__(self) -> str:
         return f"_RTBPRHS(name='{self.name}', mu={self.mu})"
@@ -609,7 +632,7 @@ def rtbp_dynsys(mu: float, name: str = "RTBP") -> _RTBPRHS:
         
     Returns
     -------
-    _RTBPRHS
+    :class:`~hiten.algorithms.dynamics.rtbp._RTBPRHS`
         Configured CR3BP dynamical system.
         
     See Also
@@ -633,7 +656,7 @@ def jacobian_dynsys(mu: float, name: str="Jacobian") -> _JacobianRHS:
         
     Returns
     -------
-    _JacobianRHS
+    :class:`~hiten.algorithms.dynamics.rtbp._JacobianRHS`
         Configured Jacobian evaluation system.
         
     See Also
@@ -657,7 +680,7 @@ def variational_dynsys(mu: float, name: str = "VarEq") -> _VarEqRHS:
         
     Returns
     -------
-    _VarEqRHS
+    :class:`~hiten.algorithms.dynamics.rtbp._VarEqRHS`
         Configured variational equations system.
         
     See Also

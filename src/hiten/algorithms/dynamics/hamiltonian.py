@@ -18,14 +18,13 @@ centre manifolds and first integrals of Hamiltonian systems.
 *Experimental Mathematics*, 8(2), 155-195.
 """
 
-from typing import Callable, Protocol, runtime_checkable
+from typing import Callable, List
 
 import numpy as np
 from numba import njit
 from numba.typed import List
 
-from hiten.algorithms.dynamics.base import (_DynamicalSystemProtocol,
-                                            _DynamicalSystem)
+from hiten.algorithms.dynamics.base import _DynamicalSystem
 from hiten.algorithms.integrators.symplectic import _eval_dH_dP, _eval_dH_dQ
 from hiten.algorithms.polynomial.operations import (_polynomial_evaluate,
                                                     _polynomial_jacobian)
@@ -72,8 +71,10 @@ def _hamiltonian_rhs(
     
     See Also
     --------
-    :func:`~hiten.algorithms.polynomial.operations._polynomial_evaluate` : Polynomial evaluation
-    :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem` : Uses this function for RHS computation
+    :func:`~hiten.algorithms.polynomial.operations._polynomial_evaluate` :
+        Polynomial evaluation
+    :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem` : Uses
+        this function for RHS computation
     """
 
     dH_dQ = np.empty(n_dof)
@@ -88,75 +89,6 @@ def _hamiltonian_rhs(
     rhs[n_dof : 2 * n_dof] = -dH_dQ  # dp/dt
     return rhs
 
-@runtime_checkable
-class _HamiltonianSystemProtocol(_DynamicalSystemProtocol, Protocol):
-    r"""Define the protocol for the interface for Hamiltonian dynamical systems.
-    
-    Extends the base dynamical system protocol with Hamiltonian-specific
-    methods required by symplectic integrators. Provides access to partial
-    derivatives and polynomial representation of the Hamiltonian.
-    
-    See Also
-    --------
-    :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol` : Base protocol
-    :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem` : Concrete implementation
-    """
-    
-    @property
-    def n_dof(self) -> int:
-        """Number of degrees of freedom.
-        
-        Returns
-        -------
-        int
-            Degrees of freedom count. Total state dimension is 2 * n_dof.
-        """
-        ...
-    
-    def dH_dQ(self, Q: np.ndarray, P: np.ndarray) -> np.ndarray:
-        r"""Compute partial derivatives of Hamiltonian with respect to positions.
-        
-        Parameters
-        ----------
-        Q : ndarray, shape (n_dof,)
-            Position coordinates.
-        P : ndarray, shape (n_dof,)
-            Momentum coordinates.
-            
-        Returns
-        -------
-        ndarray, shape (n_dof,)
-            Partial derivatives dH/dQ.
-        """
-        ...
-    
-    def dH_dP(self, Q: np.ndarray, P: np.ndarray) -> np.ndarray:
-        r"""Compute partial derivatives of Hamiltonian with respect to momenta.
-        
-        Parameters
-        ----------
-        Q : ndarray, shape (n_dof,)
-            Position coordinates.
-        P : ndarray, shape (n_dof,)
-            Momentum coordinates.
-            
-        Returns
-        -------
-        ndarray, shape (n_dof,)
-            Partial derivatives dH/dP.
-        """
-        ...
-
-    def poly_H(self) -> List[List[np.ndarray]]:
-        r"""Return polynomial representation of the Hamiltonian.
-        
-        Returns
-        -------
-        List[List[ndarray]]
-            Nested list structure containing polynomial coefficients
-            organized by degree and variable.
-        """
-        ...
 
 
 class _HamiltonianSystem(_DynamicalSystem):
@@ -221,9 +153,12 @@ class _HamiltonianSystem(_DynamicalSystem):
     
     See Also
     --------
-    :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystemProtocol` : Interface specification
-    :func:`~hiten.algorithms.dynamics.hamiltonian.create_hamiltonian_system` : Factory function
-    :func:`~hiten.algorithms.dynamics.hamiltonian._hamiltonian_rhs` : JIT-compiled RHS computation
+    :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystemProtocol` :
+        Interface specification
+    :func:`~hiten.algorithms.dynamics.hamiltonian.create_hamiltonian_system` :
+        Factory function
+    :func:`~hiten.algorithms.dynamics.hamiltonian._hamiltonian_rhs` :
+        JIT-compiled RHS computation
     """
 
     def __init__(
@@ -242,7 +177,7 @@ class _HamiltonianSystem(_DynamicalSystem):
             raise ValueError(f"Number of degrees of freedom must be positive, got {n_dof}")
         
         jac_H = _polynomial_jacobian(H_blocks, degree, psi_table, clmo_table, encode_dict_list)
-
+        # Store in numba.typed.List to avoid reflected Python list issues inside njit.
         jac_H_typed = List()
         for var_derivs in jac_H:
             var_list = List()
@@ -265,6 +200,8 @@ class _HamiltonianSystem(_DynamicalSystem):
         self.name = name
         
         self._validate_polynomial_data()
+        
+        # Hamiltonian system uses base class caching/compilation for rhs
     
     @property
     def n_dof(self) -> int:
@@ -295,40 +232,23 @@ class _HamiltonianSystem(_DynamicalSystem):
         if not self.clmo_H:
             raise ValueError("Coefficient layout mapping objects cannot be empty")
 
-    @property
-    def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        r"""Right-hand side function for ODE integration.
-
-        Returns a function compatible with standard ODE solvers that computes
-        Hamilton's equations. The implementation uses a thin Python wrapper
-        around JIT-compiled polynomial evaluation for optimal performance.
-
+    def _build_rhs_impl(self) -> Callable[[float, np.ndarray], np.ndarray]:
+        """
+        Return a compiled function implementing Hamilton's equations.
+        
         Returns
         -------
         Callable[[float, ndarray], ndarray]
-            Function f(t, y) that computes dy/dt = [dQ/dt, dP/dt] = [dH/dP, -dH/dQ].
-            The time argument t is ignored (autonomous system).
-
-        Notes
-        -----
-        - Uses JIT-compiled :func:`~hiten.algorithms.dynamics.hamiltonian._hamiltonian_rhs` for numerical computation
-        - Maintains Python wrapper to ensure Numba compatibility and pickling
-        - Marginal wrapper overhead is negligible for high-order polynomials
-        - Compatible with SciPy ODE solvers and custom integrators
-        
-        See Also
-        --------
-        :func:`~hiten.algorithms.dynamics.hamiltonian._hamiltonian_rhs` : JIT-compiled computation engine
+            Compiled function implementing Hamilton's equations.
         """
 
         jac_H, clmo_H, n_dof = self.jac_H, self.clmo_H, self.n_dof
 
-        def _rhs_closure(t: float, state: np.ndarray) -> np.ndarray:
-            # The 't' argument is unused in this autonomous system but
-            # required by the standard ODE solver interface.
+        def _rhs_impl(t: float, state: np.ndarray) -> np.ndarray:
+            # Autonomous: t is unused; required for interface consistency
             return _hamiltonian_rhs(state, jac_H, clmo_H, n_dof)
 
-        return _rhs_closure
+        return _rhs_impl
     
     @property
     def clmo(self) -> List[np.ndarray]:
@@ -341,7 +261,8 @@ class _HamiltonianSystem(_DynamicalSystem):
             
         See Also
         --------
-        :func:`~hiten.algorithms.polynomial.operations._polynomial_evaluate` : Uses these objects
+        :func:`~hiten.algorithms.polynomial.operations._polynomial_evaluate` :
+            Uses these objects
         """
         return self.clmo_H
     
@@ -367,8 +288,10 @@ class _HamiltonianSystem(_DynamicalSystem):
             
         See Also
         --------
-        :func:`~hiten.algorithms.integrators.symplectic._eval_dH_dQ` : Implementation
-        :meth:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem.dH_dP` : Momentum derivatives
+        :func:`~hiten.algorithms.integrators.symplectic._eval_dH_dQ` :
+            Implementation
+        :meth:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem.dH_dP` :
+            Momentum derivatives
         """
         self._validate_coordinates(Q, P)
         return _eval_dH_dQ(Q, P, self.jac_H, self.clmo_H)
@@ -395,8 +318,10 @@ class _HamiltonianSystem(_DynamicalSystem):
             
         See Also
         --------
-        :func:`~hiten.algorithms.integrators.symplectic._eval_dH_dP` : Implementation
-        :meth:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem.dH_dQ` : Position derivatives
+        :func:`~hiten.algorithms.integrators.symplectic._eval_dH_dP` :
+            Implementation
+        :meth:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem.dH_dQ` :
+            Position derivatives
         """
         self._validate_coordinates(Q, P)
         return _eval_dH_dP(Q, P, self.jac_H, self.clmo_H)
@@ -412,7 +337,8 @@ class _HamiltonianSystem(_DynamicalSystem):
             
         See Also
         --------
-        :func:`~hiten.algorithms.dynamics.hamiltonian.create_hamiltonian_system` : Uses these blocks for system creation
+        :func:`~hiten.algorithms.dynamics.hamiltonian.create_hamiltonian_system` :
+            Uses these blocks for system creation
         """
         return self.H_blocks
     
@@ -445,6 +371,17 @@ class _HamiltonianSystem(_DynamicalSystem):
             Formatted string showing system name and degrees of freedom.
         """
         return f"_HamiltonianSystem(name='{self.name}', n_dof={self.n_dof})"
+
+    @property
+    def rhs_params(self) -> tuple:
+        """Return low-level RHS parameters for parametric kernels.
+
+        Returns
+        -------
+        tuple
+            (jac_H, clmo_H, n_dof) for use with compiled Hamiltonian RHS.
+        """
+        return (self.jac_H, self.clmo_H, self.n_dof)
 
 
 def create_hamiltonian_system(

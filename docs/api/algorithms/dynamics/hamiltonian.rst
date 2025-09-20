@@ -23,6 +23,13 @@ The :class:`_HamiltonianSystem` class implements a polynomial Hamiltonian system
    :members: n_dof, jac_H, clmo_H, rhs, clmo, dH_dQ, dH_dP, poly_H, _validate_coordinates, _validate_polynomial_data
    :exclude-members: __init__
 
+_hamiltonian_rhs()
+^^^^^^^^^^^^^^^^^^
+
+The :func:`_hamiltonian_rhs` function computes Hamilton's equations for polynomial Hamiltonian systems.
+
+.. autofunction:: _hamiltonian_rhs()
+
 create_hamiltonian_system()
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

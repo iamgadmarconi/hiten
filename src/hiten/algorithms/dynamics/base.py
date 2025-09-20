@@ -17,50 +17,22 @@ Caltech.
 """
 
 from abc import ABC, abstractmethod
-from typing import (TYPE_CHECKING, Callable, Literal, Protocol, Sequence,
-                    runtime_checkable)
+from typing import TYPE_CHECKING, Callable, Dict, Literal, Sequence
 
 import numpy as np
-from scipy.integrate import solve_ivp
 
-from hiten.algorithms.utils.config import TOL
+from hiten.algorithms.integrators.configs import _EventConfig
+from hiten.algorithms.utils.config import FASTMATH
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
+    from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
     from hiten.algorithms.integrators.base import _Solution
 
-@runtime_checkable
-class _DynamicalSystemProtocol(Protocol):
-    r"""Define the protocol for the minimal interface for dynamical systems.
+# Global cache for compiled RHS dispatchers (function -> compiled numba dispatcher)
+_RHS_DISPATCH_CACHE: Dict[Callable[[float, np.ndarray], np.ndarray], Callable[[float, np.ndarray], np.ndarray]] = {}
 
-    This protocol specifies the required attributes that any dynamical system
-    must implement to be compatible with the integrator framework. It uses
-    structural typing to allow duck typing while maintaining type safety.
 
-    Attributes
-    ----------
-    dim : int
-        Dimension of the state space (number of state variables).
-    rhs : Callable[[float, ndarray], ndarray]
-        Right-hand side function f(t, y) that computes the time derivative
-        dy/dt given time t and state vector y.
-        
-    Notes
-    -----
-    The @runtime_checkable decorator allows isinstance() checks against
-    this protocol at runtime, enabling flexible type validation.
-    """
-    
-    @property
-    def dim(self) -> int:
-        """Dimension of the state space."""
-        ...
-    
-    @property
-    def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        """Right-hand side function for ODE integration."""
-        ...
-            
 
 class _DynamicalSystem(ABC):
     """Provide an abstract base class for dynamical systems.
@@ -81,12 +53,14 @@ class _DynamicalSystem(ABC):
 
     Notes
     -----
-    Subclasses must implement the abstract :attr:`~hiten.algorithms.dynamics.base._DynamicalSystem.rhs` property to provide
-    the vector field function compatible with :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol`.
+    Subclasses must implement the abstract
+    :attr:`~hiten.algorithms.dynamics.base._DynamicalSystem.rhs` property to
+    provide the vector field function compatible with
+    :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`.
     
     See Also
     --------
-    :class:`~hiten.algorithms.dynamics.base._DynamicalSystemProtocol` : Interface specification
+    :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol` : Interface specification
     :class:`~hiten.algorithms.dynamics.base._DirectedSystem` : Directional wrapper implementation
     """
     
@@ -94,6 +68,8 @@ class _DynamicalSystem(ABC):
         if dim <= 0:
             raise ValueError(f"Dimension must be positive, got {dim}")
         self._dim = dim
+        # Cache for compiled RHS dispatcher built from subclass implementation
+        self._rhs_compiled: "Callable[[float, np.ndarray], np.ndarray] | None" = None
     
     @property
     def dim(self) -> int:
@@ -101,10 +77,17 @@ class _DynamicalSystem(ABC):
         return self._dim
     
     @property
-    @abstractmethod
     def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        """Right-hand side function for ODE integration."""
-        pass
+        """Return compiled and cached right-hand side f(t, y)."""
+        if self._rhs_compiled is None:
+            impl = self._build_rhs_impl()
+            self._rhs_compiled = self._compile_rhs_function(impl)
+        return self._rhs_compiled
+
+    @abstractmethod
+    def _build_rhs_impl(self) -> Callable[[float, np.ndarray], np.ndarray]:
+        """Return a plain Python function implementing f(t, y)."""
+        ...
     
     def validate_state(self, y: np.ndarray) -> None:
         """Validate state vector dimension.
@@ -121,10 +104,81 @@ class _DynamicalSystem(ABC):
             
         See Also
         --------
-        :func:`~hiten.algorithms.dynamics.base._validate_initial_state` : Module-level validation utility
+        :func:`~hiten.algorithms.dynamics.base._validate_initial_state` :
+            Module-level validation utility
         """
         if len(y) != self.dim:
             raise ValueError(f"State vector dimension {len(y)} != system dimension {self.dim}")
+
+    def _compile_rhs_function(self, rhs_func: Callable[[float, np.ndarray], np.ndarray]) -> Callable[[float, np.ndarray], np.ndarray]:
+        r"""Compile a right-hand side function with Numba JIT for optimal performance.
+        
+        Provides intelligent JIT compilation that detects pre-compiled Numba dispatchers
+        to avoid redundant compilation while ensuring optimal performance for plain
+        Python functions. Uses global fast-math settings for numerical optimization.
+        
+        Parameters
+        ----------
+        rhs_func : Callable[[float, ndarray], ndarray]
+            Function implementing the ODE system dy/dt = f(t, y).
+            Can be either a plain Python function or a pre-compiled Numba dispatcher.
+            
+        Returns
+        -------
+        Callable[[float, ndarray], ndarray]
+            JIT-compiled function compatible with Numba nopython mode.
+            If input is already compiled, returns it unchanged.
+            
+        Notes
+        -----
+        - Automatically detects pre-compiled Numba dispatchers and reuses them
+        - Compiles plain Python functions with Numba JIT for performance
+        - Uses global fast-math setting for numerical optimization
+        - Compatible with all integrators that accept _DynamicalSystem objects
+        
+        Examples
+        --------
+        >>> import numpy as np
+        >>> def harmonic_oscillator(t, y):
+        ...     return np.array([y[1], -y[0]])
+        >>> # In a subclass:
+        >>> compiled_rhs = self._compile_rhs_function(harmonic_oscillator)
+        >>> # Now compiled_rhs is JIT-compiled for optimal performance
+        
+        See Also
+        --------
+        :class:`~hiten.algorithms.dynamics.base._DynamicalSystem` : Base class
+            containing this method
+        numba.njit : JIT compilation used internally
+        """
+        # Detect pre-compiled Numba dispatchers to avoid redundant compilation
+        try:
+            from numba.core.registry import CPUDispatcher
+            is_dispatcher = isinstance(rhs_func, CPUDispatcher)
+        except Exception:
+            is_dispatcher = False
+
+        if is_dispatcher:
+            # Function is already compiled, reuse it directly
+            return rhs_func
+        else:
+            # Compile with global fast-math setting for performance
+            import numba
+
+            # Central cache to reuse compiled dispatchers across instances
+            global _RHS_DISPATCH_CACHE
+            try:
+                cache_hit = rhs_func in _RHS_DISPATCH_CACHE
+            except Exception:
+                cache_hit = False
+            if cache_hit:
+                return _RHS_DISPATCH_CACHE[rhs_func]
+            compiled = numba.njit(cache=False, fastmath=FASTMATH)(rhs_func)
+            try:
+                _RHS_DISPATCH_CACHE[rhs_func] = compiled
+            except Exception:
+                pass
+            return compiled
 
 
 class _DirectedSystem(_DynamicalSystem):
@@ -183,9 +237,14 @@ class _DirectedSystem(_DynamicalSystem):
     
     See Also
     --------
-    :class:`~hiten.algorithms.dynamics.base._DynamicalSystem` : Base class for dynamical systems
-    :func:`~hiten.algorithms.dynamics.base._propagate_dynsys` : Generic propagation using DirectedSystem
+    :class:`~hiten.algorithms.dynamics.base._DynamicalSystem` : Base class for
+        dynamical systems
+    :func:`~hiten.algorithms.dynamics.base._propagate_dynsys` : Generic
+        propagation using DirectedSystem
     """
+
+    # Reuse compiled RHS wrappers across instances with identical configuration
+    _rhs_cache: dict[tuple[int, int, tuple | None], Callable[[float, np.ndarray], np.ndarray]] = {}
 
     def __init__(self, base_or_dim: "_DynamicalSystem | int", fwd: int = 1, flip_indices: "slice | Sequence[int] | None" = None):
         if isinstance(base_or_dim, _DynamicalSystem):
@@ -199,30 +258,54 @@ class _DirectedSystem(_DynamicalSystem):
 
         self._fwd: int = 1 if fwd >= 0 else -1
         self._flip_idx = flip_indices
+        # Normalise flip indices for possible JIT compilation
+        if flip_indices is None:
+            self._flip_idx_norm = None
+        elif isinstance(flip_indices, slice):
+            self._flip_idx_norm = flip_indices
+        else:
+            self._flip_idx_norm = np.asarray(flip_indices, dtype=np.int64)
 
-    @property
-    def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        """Right-hand side function for ODE integration."""
+    
+    def _build_rhs_impl(self) -> Callable[[float, np.ndarray], np.ndarray]:
         if self._base is None:
-            raise AttributeError("`rhs` not implemented: subclass must provide "
-                                 "its own implementation when no base system "
-                                 "is wrapped.")
+            raise AttributeError("`rhs` not implemented: subclass must provide its own implementation when no base system is wrapped.")
 
+        # Build or reuse a compiled wrapper for (base_rhs, fwd, flip_idx)
         base_rhs = self._base.rhs
-        flip_idx = self._flip_idx
+        # Build a hashable flip key
+        if self._flip_idx_norm is None:
+            flip_key: tuple | None = None
+        elif isinstance(self._flip_idx_norm, slice):
+            sl = self._flip_idx_norm
+            flip_key = ("slice", sl.start, sl.stop, sl.step)
+        else:
+            flip_key = ("idx", *tuple(np.asarray(self._flip_idx_norm, dtype=np.int64).tolist()))
 
-        def _rhs(t: float, y: np.ndarray) -> np.ndarray:
-            dy = base_rhs(t, y)
+        cache_key = (id(base_rhs), self._fwd, flip_key)
+        cached = self._rhs_cache.get(cache_key)
+        if cached is not None:
+            return cached
 
-            if self._fwd == -1:
-                if flip_idx is None:
-                    dy = -dy
+        fwd = int(self._fwd)
+        flip_idx = self._flip_idx_norm
+
+        # Avoid closing over `self` to keep Numba happy
+        def _rhs_impl(t: float, y: np.ndarray, _base_rhs=base_rhs, _fwd=fwd, _flip=flip_idx) -> np.ndarray:
+            dy = _base_rhs(t, y)
+            if _fwd == -1:
+                if _flip is None:
+                    return -dy
                 else:
-                    dy = dy.copy()
-                    dy[flip_idx] *= -1
+                    out = dy.copy()
+                    out[_flip] *= -1
+                    return out
             return dy
 
-        return _rhs
+        import numba  # local import to avoid module import-time JIT
+        compiled = numba.njit(cache=False, fastmath=FASTMATH)(_rhs_impl)
+        self._rhs_cache[cache_key] = compiled
+        return compiled
 
     def __repr__(self):
         """String representation of DirectedSystem.
@@ -259,15 +342,16 @@ class _DirectedSystem(_DynamicalSystem):
 
 
 def _propagate_dynsys(
-    dynsys: _DynamicalSystem,
+    dynsys: "_DynamicalSystemProtocol",
     state0: Sequence[float],
     t0: float,
     tf: float,
     forward: int = 1,
     steps: int = 1000,
-    method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
-    order: int = 6,
+    method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
+    order: int = 8,
     flip_indices: Sequence[int] | None = None,
+    **kwargs
 ) -> "_Solution":
     """Generic trajectory propagation for dynamical systems.
 
@@ -277,7 +361,7 @@ def _propagate_dynsys(
 
     Parameters
     ----------
-    dynsys : :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
+    dynsys : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
         Dynamical system to integrate.
     state0 : Sequence[float]
         Initial state vector.
@@ -289,30 +373,37 @@ def _propagate_dynsys(
         Integration direction (+1 forward, -1 backward). Default is 1.
     steps : int, optional
         Number of time steps for output. Default is 1000.
-    method : {'scipy', 'rk', 'symplectic', 'adaptive'}, optional
-        Integration method to use. Default is 'scipy'.
+    method : {'fixed', 'adaptive', 'symplectic'}, optional
+        Integration method to use. Default is 'adaptive'.
     order : int, optional
-        Integration order for non-scipy methods. Default is 6.
+        Integration order. Default is 8.
     flip_indices : Sequence[int] or None, optional
         State component indices to flip for backward integration.
         Default is None.
-
+    **kwargs
+        Additional keyword arguments passed to the integrator, including:
+        - event_fn: Numba-compiled scalar event function g(t, y)
+        - event_cfg: _EventConfig with direction/tolerances
     Returns
     -------
-    :class:`~hiten.algorithms.integrators.base._Solution`
+    :class:`~hiten.algorithms.integrators.types._Solution`
         Integration solution containing times and states.
 
     Notes
     -----
-    - Automatically applies :class:`~hiten.algorithms.dynamics.base._DirectedSystem` wrapper for direction handling
+    - Automatically applies
+      :class:`~hiten.algorithms.dynamics.base._DirectedSystem` wrapper for
+      direction handling
     - Validates initial state dimension against system requirements
-    - Supports multiple backends: SciPy (DOP853), Runge-Kutta, symplectic, adaptive
+    - Supports multiple backends: fixed-step Runge-Kutta, adaptive RK, symplectic
     - Time array is adjusted for integration direction in output
     
     See Also
     --------
-    :class:`~hiten.algorithms.dynamics.base._DirectedSystem` : Directional wrapper used internally
-    :func:`~hiten.algorithms.dynamics.base._validate_initial_state` : State validation utility
+    :class:`~hiten.algorithms.dynamics.base._DirectedSystem` : Directional
+        wrapper used internally
+    :func:`~hiten.algorithms.dynamics.base._validate_initial_state` : State
+        validation utility
     """
     from hiten.algorithms.integrators.base import _Solution
     from hiten.algorithms.integrators.rk import AdaptiveRK, RungeKutta
@@ -324,40 +415,41 @@ def _propagate_dynsys(
 
     t_eval = np.linspace(t0, tf, steps)
 
-    if method == "scipy":
-        t_span = (t_eval[0], t_eval[-1])
+    # Handle zero-length intervals gracefully to avoid integrator issues
+    if steps >= 2 and np.isclose(t_eval[0], t_eval[-1]):
+        times_signed = forward * t_eval
+        states = np.repeat(state0_np[None, :], repeats=len(t_eval), axis=0)
+        return _Solution(times_signed, states)
 
-        sol = solve_ivp(
-            dynsys_dir.rhs,
-            t_span,
-            state0_np,
-            t_eval=t_eval,
-            method='DOP853',
-            dense_output=True,
-            rtol=TOL,
-            atol=TOL,
-        )
-        times = sol.t
-        states = sol.y.T
-        
-    elif method == "rk":
+    event_fn = kwargs.get("event_fn", None)
+    event_cfg: _EventConfig | None = kwargs.get("event_cfg", None)
+
+    if method == "fixed":
         integrator = RungeKutta(order=order)
-        sol = integrator.integrate(dynsys_dir, state0_np, t_eval)
+        sol = integrator.integrate(dynsys_dir, state0_np, t_eval, event_fn=event_fn, event_cfg=event_cfg)
         times = sol.times
         states = sol.states
-        
+
     elif method == "symplectic":
+        from hiten.algorithms.dynamics.protocols import \
+            _HamiltonianSystemProtocol
+        if not isinstance(dynsys, _HamiltonianSystemProtocol):
+            raise ValueError("Symplectic method requires a _HamiltonianSystem")
         integrator = _ExtendedSymplectic(order=order)
         sol = integrator.integrate(dynsys_dir, state0_np, t_eval)
         times = sol.times
         states = sol.states
-        
+
     elif method == "adaptive":
-        integrator = AdaptiveRK(order=order, max_step=1e4, rtol=1e-3, atol=1e-6)
-        sol = integrator.integrate(dynsys_dir, state0_np, t_eval)
+        max_step = kwargs.get("max_step", 1e4)
+        rtol = kwargs.get("rtol", 1e-12)
+        atol = kwargs.get("atol", 1e-12)
+        integrator = AdaptiveRK(order=order, max_step=max_step, rtol=rtol, atol=atol)
+        sol = integrator.integrate(dynsys_dir, state0_np, t_eval, event_fn=event_fn, event_cfg=event_cfg)
         times = sol.times
         states = sol.states
 
+    # Encode direction in the returned time array for user visibility.
     times_signed = forward * times
 
     return _Solution(times_signed, states)

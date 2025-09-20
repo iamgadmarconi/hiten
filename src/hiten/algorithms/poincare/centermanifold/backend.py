@@ -15,11 +15,10 @@ from typing import Callable, Literal, Optional, Tuple
 
 import numpy as np
 from numba import njit, prange
-from scipy.optimize import root_scalar
 
 from hiten.algorithms.dynamics.hamiltonian import (_eval_dH_dP, _eval_dH_dQ,
-                                                   _hamiltonian_rhs,
-                                                   _HamiltonianSystemProtocol)
+                                                   _hamiltonian_rhs)
+from hiten.algorithms.dynamics.protocols import _HamiltonianSystemProtocol
 from hiten.algorithms.integrators.rk import (RK4_A, RK4_B, RK4_C, RK6_A, RK6_B,
                                              RK6_C, RK8_A, RK8_B, RK8_C)
 from hiten.algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
@@ -90,6 +89,115 @@ def _detect_crossing(section_coord: str, state_old: np.ndarray, state_new: np.nd
     alpha = f_old / (f_old - f_new)
     return True, alpha
 
+
+def _solve_bracketed(f, a: float, b: float, xtol: float = 1e-12, max_iter: int = 200) -> float:
+    """Pure-Python Brent's method solver for general callables.
+
+    Parameters
+    ----------
+    f : callable
+        Scalar function whose root is being searched for.
+    a : float
+        Left endpoint of the bracket.
+    b : float
+        Right endpoint of the bracket.
+    xtol : float, default=1e-12
+        Root finding tolerance.
+    max_iter : int, default=200
+
+    Returns
+    -------
+    float or None
+        Root value if found, None otherwise.
+    """
+    # Local bind for small speedup
+    f_eval = f
+
+    # Ensure floats and evaluate endpoints
+    a = float(a)
+    b = float(b)
+    fa = float(f_eval(a))
+    fb = float(f_eval(b))
+
+    # Handle exact hits at the endpoints
+    if fa == 0.0:
+        return a
+    if fb == 0.0:
+        return b
+
+    # Require a valid bracket
+    if fa * fb > 0.0:
+        return None
+
+    # Initialize the third point of the bracket
+    c = a
+    fc = fa
+    d = b - a
+    e = d
+
+    eps = float(np.finfo(np.float64).eps)
+
+    for _ in range(int(max_iter)):
+        if fb == 0.0:
+            return b
+
+        # If fb and fc have the same sign, move c to a
+        if fb * fc > 0.0:
+            c = a
+            fc = fa
+            d = b - a
+            e = d
+
+        # Ensure that |fc| >= |fb|
+        if abs(fc) < abs(fb):
+            a, b, c = b, c, b
+            fa, fb, fc = fb, fc, fb
+
+        tol = 2.0 * eps * abs(b) + 0.5 * xtol
+        m = 0.5 * (c - b)
+        if abs(m) <= tol:
+            return b
+
+        if abs(e) >= tol and abs(fa) > abs(fb):
+            s = fb / fa
+            if a == c:
+                # Secant step
+                p = 2.0 * m * s
+                q = 1.0 - s
+            else:
+                # Inverse quadratic interpolation
+                q_ = fa / fc
+                r = fb / fc
+                p = s * (2.0 * m * q_ * (q_ - r) - (b - a) * (r - 1.0))
+                q = (q_ - 1.0) * (r - 1.0) * (s - 1.0)
+            if p > 0.0:
+                q = -q
+            else:
+                p = -p
+            if (2.0 * p) < min(3.0 * m * q - abs(tol * q), abs(e * q)):
+                e = d
+                d = p / q
+            else:
+                d = m
+                e = m
+        else:
+            d = m
+            e = m
+
+        a = b
+        fa = fb
+        if abs(d) > tol:
+            b = b + d
+        else:
+            b = b + (tol if m > 0.0 else -tol)
+        fb = float(f_eval(b))
+
+    # Final tolerance check
+    tol = 2.0 * eps * abs(b) + 0.5 * xtol
+    m = 0.5 * (c - b)
+    if abs(m) <= tol or fb == 0.0:
+        return b
+    return None
 
 @njit(cache=False, fastmath=FASTMATH)
 def _get_rk_coefficients(order: int):
@@ -393,7 +501,7 @@ class _CenterManifoldBackend(_ReturnMapBackend):
 
     Parameters
     ----------
-    dynsys : :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystemProtocol`
+    dynsys : :class:`~hiten.algorithms.dynamics.protocols._HamiltonianSystemProtocol`
         Hamiltonian system providing polynomial representation and CLMO tables.
     surface : :class:`~hiten.algorithms.poincare.core.events._SurfaceEvent`
         Poincare section surface definition.
@@ -405,7 +513,7 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         Integration direction (1 for forward, -1 for backward).
     max_steps : int, default=2000
         Maximum integration steps per trajectory.
-    method : {'scipy', 'rk', 'symplectic', 'adaptive'}, default='scipy'
+    method : {'fixed', 'symplectic', 'adaptive'}, default='adaptive'
         Integration method.
     order : int, default=8
         Integration order for Runge-Kutta methods.
@@ -434,7 +542,7 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         h0: float,
         forward: int = 1,
         max_steps: int = 2000,
-        method: Literal["scipy", "rk", "symplectic", "adaptive"] = "scipy",
+        method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
         order: int = 8,
         pre_steps: int = 1000,
         refine_steps: int = 3000,
@@ -510,7 +618,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         max_expand: int = 40,
         *,
         symmetric: bool = False,
-        method: str = "brentq",
         xtol: float = 1e-12,
     ) -> Optional[float]:
         """Find a positive root of function f using bracketing and root finding.
@@ -527,8 +634,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
             Maximum expansion iterations.
         symmetric : bool, default=False
             If True, use symmetric bracketing.
-        method : str, default='brentq'
-            Root finding method.
         xtol : float, default=1e-12
             Root finding tolerance.
 
@@ -542,21 +647,18 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         if f(0.0) > 0.0:
             return None
 
-        try:
-            a, b = self._expand_bracket(
-                f,
-                0.0,
-                dx0=initial,
-                grow=factor,
-                max_expand=max_expand,
-                crossing_test=lambda prev, curr: prev <= 0.0 < curr,
-                symmetric=symmetric,
-            )
-        except RuntimeError:
-            return None
+        a, b = self._expand_bracket(
+            f,
+            0.0,
+            dx0=initial,
+            grow=factor,
+            max_expand=max_expand,
+            crossing_test=lambda prev, curr: prev <= 0.0 < curr,
+            symmetric=symmetric,
+        )
 
-        sol = root_scalar(f, bracket=(a, b), method=method, xtol=xtol)
-        return float(sol.root) if sol.converged else None
+        return float(_solve_bracketed(f, float(a), float(b), float(xtol), 200))
+
 
     def _solve_missing_coord(
         self,
@@ -567,7 +669,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         max_expand: int = 40,
         *,
         symmetric: bool = False,
-        method: str = "brentq",
         xtol: float = 1e-12,
     ) -> Optional[float]:
         """Solve for the turning-point value of one center manifold coordinate.
@@ -586,8 +687,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
             Maximum expansion iterations.
         symmetric : bool, default=False
             If True, use symmetric bracketing.
-        method : str, default='brentq'
-            Root finding method.
         xtol : float, default=1e-12
             Root finding tolerance.
 
@@ -630,7 +729,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
             factor=expand_factor,
             max_expand=max_expand,
             symmetric=symmetric,
-            method=method,
             xtol=xtol,
         )
 
@@ -648,7 +746,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         max_expand: int = 40,
         *,
         symmetric: bool = False,
-        method: str = "brentq",
         xtol: float = 1e-12,
     ) -> float:
         """Find the absolute turning-point value for specified coordinate.
@@ -665,8 +762,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
             Maximum expansion iterations.
         symmetric : bool, default=False
             If True, use symmetric bracketing.
-        method : str, default='brentq'
-            Root finding method.
         xtol : float, default=1e-12
             Root finding tolerance.
 
@@ -695,7 +790,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
             expand_factor,
             max_expand,
             symmetric=symmetric,
-            method=method,
             xtol=xtol,
         )
 

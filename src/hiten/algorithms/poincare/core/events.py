@@ -210,6 +210,7 @@ class _PlaneEvent(_SurfaceEvent):
         if isinstance(coord, str):
             try:
                 self._idx = int(self._IDX_MAP[coord.lower()])
+                self._name = coord.lower()
             except KeyError as exc:
                 raise ValueError(f"Unknown coordinate name '{coord}'.") from exc
         else:
@@ -217,6 +218,7 @@ class _PlaneEvent(_SurfaceEvent):
             if idx_int < 0:
                 raise ValueError("coord index must be non-negative")
             self._idx = idx_int
+            self._name = None
 
         self._value = float(value)
 
@@ -274,3 +276,14 @@ class _PlaneEvent(_SurfaceEvent):
         initialization. The plane is defined by coord = offset.
         """
         return self._value
+
+    @property
+    def name(self) -> str | None:
+        """Return the original coordinate name if provided, else None.
+
+        Notes
+        -----
+        This can be used by fast-path backends to detect simple synodic planes
+        like 'x', 'y', or 'z'.
+        """
+        return self._name

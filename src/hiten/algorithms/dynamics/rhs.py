@@ -12,7 +12,6 @@ seamlessly with various numerical integrators.
 from typing import Callable
 
 import numpy as np
-from hiten.algorithms.utils.config import FASTMATH
 
 from hiten.algorithms.dynamics.base import _DynamicalSystem
 
@@ -51,6 +50,7 @@ class _RHSSystem(_DynamicalSystem):
 
     Notes
     -----
+    - Uses centralized JIT compilation utility for optimal performance
     - Automatically detects pre-compiled Numba dispatchers and reuses them
     - Compiles plain Python functions with Numba JIT for performance
     - Uses global fast-math setting for numerical optimization
@@ -67,50 +67,20 @@ class _RHSSystem(_DynamicalSystem):
     See Also
     --------
     :class:`~hiten.algorithms.dynamics.base._DynamicalSystem` : Base class
+    :meth:`~hiten.algorithms.dynamics.base._DynamicalSystem._compile_rhs_function` :
+        JIT compilation method
     :func:`~hiten.algorithms.dynamics.rhs.create_rhs_system` : Factory function
-    numba.njit : JIT compilation used internally
     """
 
     def __init__(self, rhs_func: Callable[[float, np.ndarray], np.ndarray], dim: int, name: str = "Generic RHS"):
         super().__init__(dim)
 
-        # Detect pre-compiled Numba dispatchers to avoid redundant compilation
-        try:
-            from numba.core.registry import CPUDispatcher
-            is_dispatcher = isinstance(rhs_func, CPUDispatcher)
-        except Exception:
-            is_dispatcher = False
-
-        if is_dispatcher:
-            # Function is already compiled, reuse it directly
-            self._rhs_compiled = rhs_func
-        else:
-            # Compile with global fast-math setting for performance
-            import numba
-            self._rhs_compiled = numba.njit(cache=False, fastmath=FASTMATH)(rhs_func)
-
+        # Store plain implementation; compilation handled by base
+        self._rhs_impl = rhs_func
         self.name = name
     
-    @property
-    def rhs(self) -> Callable[[float, np.ndarray], np.ndarray]:
-        """JIT-compiled right-hand side function.
-
-        Returns the RHS function compiled for efficient execution in Numba
-        nopython mode. Maintains the same mathematical semantics as the
-        original function while providing optimal performance.
-
-        Returns
-        -------
-        Callable[[float, ndarray], ndarray]
-            Compiled function f(t, y) -> dy/dt with signature identical
-            to the original but optimized for numerical integration.
-            
-        Notes
-        -----
-        The returned function can be safely called from within other
-        Numba-compiled functions without performance penalties.
-        """
-        return self._rhs_compiled
+    def _build_rhs_impl(self) -> Callable[[float, np.ndarray], np.ndarray]:
+        return self._rhs_impl
     
     def __repr__(self) -> str:
         return f"_RHSSystem(name='{self.name}', dim={self.dim})"
@@ -148,7 +118,8 @@ def create_rhs_system(rhs_func: Callable[[float, np.ndarray], np.ndarray], dim: 
     
     See Also
     --------
-    :class:`~hiten.algorithms.dynamics.rhs._RHSSystem` : Direct constructor interface
+    :class:`~hiten.algorithms.dynamics.rhs._RHSSystem` : Direct constructor
+        interface
     :class:`~hiten.algorithms.dynamics.base._DynamicalSystem` : Base interface
     """
     return _RHSSystem(rhs_func, dim, name)

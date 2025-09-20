@@ -53,9 +53,10 @@ Koon, W. S.; Lo, M. W.; Marsden, J. E.; Ross, S. D. (2011).
 Caltech.
 """
 
-from .base import (_DirectedSystem, _DynamicalSystem, _DynamicalSystemProtocol,
-                   _propagate_dynsys, _validate_initial_state)
+from .base import (_DirectedSystem, _DynamicalSystem, _propagate_dynsys,
+                   _validate_initial_state)
 from .hamiltonian import create_hamiltonian_system
+from .protocols import _DynamicalSystemProtocol, _HamiltonianSystemProtocol
 from .rhs import create_rhs_system
 from .rtbp import jacobian_dynsys, rtbp_dynsys, variational_dynsys
 from .utils.energy import (crtbp_energy, effective_potential, energy_to_jacobi,
@@ -69,6 +70,7 @@ __all__ = [
     "_DynamicalSystem",
     "_DirectedSystem", 
     "_DynamicalSystemProtocol",
+    "_HamiltonianSystemProtocol",
     "_propagate_dynsys",
     "_validate_initial_state",
     

@@ -14,7 +14,6 @@ import numpy as np
 
 from hiten.algorithms.corrector.base import JacobianFn, NormFn, _Corrector
 from hiten.algorithms.dynamics.rtbp import _compute_stm
-from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
     from hiten.system.orbits.base import PeriodicOrbit
@@ -92,7 +91,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         
         Parameters
         ----------
-        orbit : PeriodicOrbit
+        orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             Orbit object containing system information.
         x_full : ndarray
             Initial state for integration.
@@ -137,7 +136,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         ----------
         p_vec : ndarray
             Current parameter vector.
-        orbit : PeriodicOrbit
+        orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             Orbit being corrected.
         base_state : ndarray
             Base state vector.
@@ -158,13 +157,9 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
             Residual vector (actual - target).
         """
         x_full = self._to_full_state(base_state, control_indices, p_vec)
-
-        # Evaluate event section
         t_event, X_ev_local = self._evaluate_event(orbit, x_full, cfg, forward)
-
         Phi_local: np.ndarray | None = None
         if not self._fd_mode:
-            # Analytical Jacobian will be requested, compute STM now
             _, _, Phi_flat, _ = _compute_stm(
                 orbit.libration_point._var_eq_system,
                 x_full,
@@ -183,7 +178,6 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
             Phi=Phi_local,
         )
 
-        self._last_t_event = t_event
         return X_ev_local[residual_indices] - target_vec
 
     def _jacobian_mat(
@@ -207,7 +201,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         ----------
         p_vec : ndarray
             Current parameter vector.
-        orbit : PeriodicOrbit
+        orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             Orbit being corrected.
         base_state : ndarray
             Base state vector.
@@ -262,8 +256,19 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
 
         if cfg.extra_jacobian is not None:
             J_red -= cfg.extra_jacobian(X_ev_local, Phi)
-
         return J_red
+
+    # --- Newton hooks for rich diagnostics without changing solver core ---
+    def _on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:
+        if not getattr(self, "_enable_diagnostics", False):
+            return
+        # diagnostics disabled
+
+    def _on_accept(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
+        return
+
+    def _on_failure(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
+        return
 
     def correct(
         self,
@@ -283,7 +288,7 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         
         Parameters
         ----------
-        orbit : PeriodicOrbit
+        orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             Orbit to be corrected.
         tol : float, default=1e-10
             Convergence tolerance for residual norm.
@@ -301,7 +306,8 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         x_corr : ndarray
             Corrected initial state.
         t_event : float
-            Half-period (time to Poincare section crossing).
+            Half-period (time to Poincare section crossing),
+            nondimensional.
         """
         cfg = orbit._correction_config
 
@@ -347,7 +353,6 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
         # Infinity norm is the standard for orbit residuals
         _norm_inf: NormFn = lambda r: float(np.linalg.norm(r, ord=np.inf))
 
-        # Delegate numerical work to the super-class (usually _NewtonCore)
         p_corr, info = super().correct( 
             x0=p0,
             residual_fn=residual_fn,
@@ -358,25 +363,31 @@ class _PeriodicOrbitCorrectorInterface(_Corrector):
             max_delta=max_delta,
         )
 
-        # Ensure we have a valid half-period
-        if self._last_t_event is None:
-            self._last_t_event, _ = self._evaluate_event(
-                orbit,
-                self._to_full_state(base_state, control_indices, p_corr),
-                cfg,
-                forward,
-            )
-    
         x_corr = self._to_full_state(base_state, control_indices, p_corr)
+        # Recompute half-period from corrected state using default window (no hints),
+        # matching old pipeline semantics
+        try:
+            t_final, _ = cfg.event_func(
+                dynsys=orbit.system._dynsys,
+                x0=x_corr,
+                forward=forward,
+            )
+            self._last_t_event = float(t_final)
+        except Exception:
+            # Fallback to evaluating via interface if direct call fails
+            if self._last_t_event is None:
+                self._last_t_event, _ = self._evaluate_event(
+                    orbit,
+                    x_corr,
+                    cfg,
+                    forward,
+                )
+
         orbit._reset()
         orbit._initial_state = x_corr
         orbit._period = 2.0 * self._last_t_event
 
-        logger.info(
-            "Periodic-orbit corrector converged in %d iterations (|R|=%.2e)",
-            info.get("iterations", -1),
-            info.get("residual_norm", float("nan")),
-        )
+        # silent in normal runs
 
         return x_corr, self._last_t_event
 

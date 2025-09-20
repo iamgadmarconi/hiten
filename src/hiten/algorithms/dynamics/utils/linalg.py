@@ -89,7 +89,8 @@ def eigenvalue_decomposition(A: np.ndarray, discrete: int = 0, delta: float = 1e
     
     See Also
     --------
-    :func:`~hiten.algorithms.dynamics.utils.linalg.eigenvalue_decomposition` : General eigenvalue classification
+    :func:`~hiten.algorithms.dynamics.utils.linalg.eigenvalue_decomposition` :
+        General eigenvalue classification
     """
     logger.debug(f"Starting eigenvalue decomposition for matrix A with shape {A.shape}, discrete={discrete}, delta={delta}")
     # Compute eigen-decomposition
@@ -245,7 +246,8 @@ def _stability_indices(M: np.ndarray, tol: float = 1e-8) -> Tuple[np.ndarray, np
     
     See Also
     --------
-    :func:`~hiten.algorithms.dynamics.utils.linalg.eigenvalue_decomposition` : General eigenvalue classification
+    :func:`~hiten.algorithms.dynamics.utils.linalg.eigenvalue_decomposition` :
+        General eigenvalue classification
     """
     logger.info(f"Calculating stability indices for matrix M with shape {M.shape}, tolerance={tol}")
 

@@ -137,8 +137,17 @@ class _ArmijoLineSearch:
         # Backtracking line search loop
         while alpha >= self.min_alpha:
             x_trial = x0 + alpha * delta
-            r_trial = self.residual_fn(x_trial)
-            norm_trial = self.norm_fn(r_trial)
+            try:
+                r_trial = self.residual_fn(x_trial)
+                norm_trial = self.norm_fn(r_trial)
+            except Exception as exc:
+                logger.debug(
+                    "Residual evaluation failed at alpha=%.3e: %s. Trying smaller step.",
+                    alpha,
+                    exc,
+                )
+                alpha *= self.alpha_reduction
+                continue
 
             # Check Armijo sufficient decrease condition
             if norm_trial <= (1.0 - self.armijo_c * alpha) * current_norm:

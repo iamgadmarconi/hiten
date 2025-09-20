@@ -12,6 +12,13 @@ The energy module provides energy and potential functions for the CR3BP.
 
 .. currentmodule:: hiten.algorithms.dynamics.utils.energy
 
+_max_rel_energy_error()
+^^^^^^^^^^^^^^^^^^^^^^^
+
+The :func:`_max_rel_energy_error` function computes maximum relative deviation of Jacobi constant along trajectory.
+
+.. autofunction:: _max_rel_energy_error()
+
 crtbp_energy()
 ^^^^^^^^^^^^^^
 
@@ -102,3 +109,36 @@ _stability_indices()
 The :func:`_stability_indices` function computes Floquet stability indices for periodic orbit analysis.
 
 .. autofunction:: _stability_indices()
+
+Other Utility Functions
+^^^^^^^^^^^^^^^^^^^^^^^
+
+.. currentmodule:: hiten.algorithms.dynamics.utils.linalg
+
+_zero_small_imag_part()
+^^^^^^^^^^^^^^^^^^^^^^^
+
+The :func:`_zero_small_imag_part` function removes small imaginary parts from complex numbers.
+
+.. autofunction:: _zero_small_imag_part()
+
+_remove_infinitesimals_in_place()
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The :func:`_remove_infinitesimals_in_place` function removes numerical noise from complex vector components in-place.
+
+.. autofunction:: _remove_infinitesimals_in_place()
+
+_remove_infinitesimals_array()
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The :func:`_remove_infinitesimals_array` function creates cleaned copy of vector with numerical noise removed.
+
+.. autofunction:: _remove_infinitesimals_array()
+
+_totime()
+^^^^^^^^^
+
+The :func:`_totime` function finds indices of closest time values in array.
+
+.. autofunction:: _totime()

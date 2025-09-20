@@ -189,7 +189,7 @@ class _OrbitCorrectionConfig(_BaseCorrectionConfig):
         Target values for the residual components.
     event_func : callable, default=:class:`~hiten.algorithms.poincare.singlehit.backend._y_plane_crossing`
         Function to detect Poincare section crossings.
-    method : str, default="scipy"
+    method : str, default="adaptive"
         Integration method for trajectory computation.
     order : int, default=8
         Integration order for numerical methods.
@@ -206,7 +206,7 @@ class _OrbitCorrectionConfig(_BaseCorrectionConfig):
 
     event_func: Callable[..., tuple[float, np.ndarray]] = _y_plane_crossing
 
-    method: Literal["rk", "scipy", "symplectic", "adaptive"] = "scipy"
+    method: Literal["fixed", "adaptive", "symplectic"] = "adaptive"
     order: int = 8
     steps: int = 500
 
