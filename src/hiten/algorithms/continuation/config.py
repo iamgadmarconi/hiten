@@ -25,6 +25,7 @@ class _ContinuationConfig:
     adapt_failure_factor: float
     step_min: float
     step_max: float
+    shrink_policy: Callable[[np.ndarray], np.ndarray] | None = None
 
     def __post_init__(self) -> None:
         # Normalize target to shape (2, m)

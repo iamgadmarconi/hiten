@@ -43,6 +43,7 @@ class StateParameter:
         step_min: float = 1e-10,
         step_max: float = 1.0,
         extra_params: dict | None = None,
+        shrink_policy=None,
     ) -> ContinuationResult:
         # Normalize inputs for config construction
         target_arr = np.asarray(target, dtype=float)
@@ -61,6 +62,7 @@ class StateParameter:
             amplitude=False,
             getter=None,
             extra_params=extra_params or {},
+            shrink_policy=shrink_policy,
         )
 
         engine = self.engine

@@ -133,7 +133,7 @@ class _OrbitContinuationEngine(_ContinuationEngine):
                 target=np.asarray(cfg.target, dtype=float),
                 max_members=int(cfg.max_members),
                 max_retries_per_step=int(cfg.max_retries_per_step),
-                shrink_policy=getattr(self._interface, "shrink_policy", None),
+                shrink_policy=getattr(cfg, "shrink_policy", None),
                 step_min=float(cfg.step_min),
                 step_max=float(cfg.step_max),
             )
