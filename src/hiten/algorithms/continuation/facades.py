@@ -24,12 +24,24 @@ from hiten.system.orbits.base import PeriodicOrbit
 class StateParameter:
     """Facade for natural-parameter continuation varying selected state components.
 
-    By default, constructs an engine with the generic predict-correct backend
-    and the periodic-orbit interface. Users specify which state indices to vary
-    via `state` and provide target bounds and step.
+    Users supply an engine (DI). Use `StateParameter.with_default_engine()` to
+    construct a default engine wired with the generic predict-correct backend
+    and the periodic-orbit interface.
     """
 
-    engine: _OrbitContinuationEngine | None = None
+    engine: _OrbitContinuationEngine
+
+    @classmethod
+    def with_default_engine(cls) -> "StateParameter":
+        """Create a facade instance with a default engine (factory).
+
+        The default engine uses `_PCContinuationBackend` and
+        `_PeriodicOrbitContinuationInterface`.
+        """
+        backend = _PCContinuationBackend()
+        interface = _PeriodicOrbitContinuationInterface()
+        engine = _OrbitContinuationEngine(backend=backend, interface=interface)
+        return cls(engine=engine)
 
     def solve(
         self,
@@ -44,6 +56,7 @@ class StateParameter:
         step_max: float = 1.0,
         extra_params: dict | None = None,
         shrink_policy=None,
+        stepper: str = "natural",
     ) -> ContinuationResult:
         # Normalize inputs for config construction
         target_arr = np.asarray(target, dtype=float)
@@ -61,14 +74,10 @@ class StateParameter:
             getter=None,
             extra_params=extra_params or {},
             shrink_policy=shrink_policy,
+            stepper=str(stepper),
         )
 
         engine = self.engine
-        if engine is None:
-            backend = _PCContinuationBackend()
-            interface = _PeriodicOrbitContinuationInterface()
-            engine = _OrbitContinuationEngine(backend=backend, interface=interface)
-
         return engine.solve(seed, cfg)
 
 

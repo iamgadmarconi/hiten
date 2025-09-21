@@ -65,35 +65,36 @@ The simplest continuation method varies a single parameter linearly:
 Pseudo-Arclength Continuation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-More robust continuation that follows the solution curve in parameter space using the `_SecantArcLength` algorithm:
+More robust continuation that follows the solution curve in parameter space can be implemented using the stepping strategies:
 
 .. code-block:: python
 
-   from hiten.algorithms.continuation.strategies._algorithms import _SecantArcLength
+   from hiten.algorithms.continuation.stepping import make_secant_stepper
+   from hiten.algorithms.continuation.engine import _OrbitContinuationEngine
+   from hiten.algorithms.continuation.backends import _PCContinuationBackend
    from hiten.algorithms.continuation.interfaces import _PeriodicOrbitContinuationInterface
-   
-   # Create pseudo-arclength continuation class
-   class PseudoArcLengthContinuation(_PeriodicOrbitContinuationInterface, _SecantArcLength):
-       """Pseudo-arclength continuation for periodic orbits."""
-       
-       def _representation(self, orbit):
-           """Convert orbit to numerical representation for arclength computation."""
-           return orbit.initial_state
-   
-   # Use pseudo-arclength continuation
-   arclength_engine = PseudoArcLengthContinuation(
-       initial_orbit=initial_orbit,
-       parameter_getter=lambda orbit: np.array([orbit.initial_state[2]]),  # Z component
+
+   # Create a custom continuation engine with secant stepping
+   backend = _PCContinuationBackend()
+   interface = _PeriodicOrbitContinuationInterface()
+
+   # The secant stepper is created internally by the engine
+   # when using the standard StateParameter facade with appropriate configuration
+
+   # Use the StateParameter facade which supports pseudo-arclength internally
+   state_engine = StateParameter.with_default_engine()(
+       initial_orbit,
+       state=SynodicState.Z,
        target=(0.1, 0.5),
        step=0.01,
        max_orbits=15,
-       corrector_kwargs={
-           'max_attempts': 50,    # More correction attempts
-           'tol': 1e-12           # Higher precision
+       extra_params={
+           'max_attempts': 50,
+           'tol': 1e-12
        }
    )
 
-   arclength_family = arclength_engine.run()
+   arclength_family = state_engine.run()
 
 Continuation Parameters
 -----------------------------
@@ -160,24 +161,25 @@ Continue in multiple parameters simultaneously:
 Creating Custom Continuation Algorithms
 -----------------------------------------
 
-HITEN's modular design allows you to create custom continuation algorithms by combining interfaces and strategies.
+HITEN's modular design allows you to create custom continuation algorithms by combining interfaces and stepping strategies.
 
 .. note::
-   When creating custom continuation classes, you must:
-   
-   1. Inherit from both a domain interface (e.g., `_PeriodicOrbitContinuationInterface`) and an algorithm strategy (e.g., `_NaturalParameter`)
-   2. Provide a `parameter_getter` function that extracts continuation parameters from solution objects
-   3. Implement the `_make_stepper()` method to return your custom stepping strategy
-   4. Pass required parameters (`initial_orbit`, `parameter_getter`, `target`, `step`) to the parent constructor
+   When creating custom continuation algorithms, you can:
+
+   1. Use the existing facades with custom configurations
+   2. Create custom engines by combining backends, interfaces, and stepping strategies
+   3. Implement custom stepping strategies for specialized prediction logic
 
 Basic Custom Continuation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
-   from hiten.algorithms.continuation.strategies._algorithms import _NaturalParameter
-   from hiten.algorithms.continuation.strategies._stepping import _NaturalParameterStep
+   from hiten.algorithms.continuation.stepping import _NaturalParameterStep, make_natural_stepper
+   from hiten.algorithms.continuation.engine import _OrbitContinuationEngine
+   from hiten.algorithms.continuation.backends import _PCContinuationBackend
    from hiten.algorithms.continuation.interfaces import _PeriodicOrbitContinuationInterface
+   from hiten.algorithms.continuation.config import _OrbitContinuationConfig
    import numpy as np
 
    # Define custom prediction function
@@ -188,24 +190,26 @@ Basic Custom Continuation
        new_state[2] += step[0]  # Vary Z component
        return new_state
 
-   class CustomContinuation(_PeriodicOrbitContinuationInterface, _NaturalParameter):
-       """Custom continuation with specialized prediction logic."""
-       
-       def __init__(self, initial_orbit, parameter_getter, target, step=1e-4, **kwargs):
-           # Store custom predictor for use in _make_stepper
-           self._custom_predictor = custom_predictor
-           
-           super().__init__(
-               initial_orbit=initial_orbit,
-               parameter_getter=parameter_getter,
-               target=target,
-               step=step,
-               **kwargs
-           )
-       
-       def _make_stepper(self):
-           """Create custom stepping strategy."""
-           return _NaturalParameterStep(self._custom_predictor)
+   # Create custom engine with custom stepping strategy
+   backend = _PCContinuationBackend()
+   interface = _PeriodicOrbitContinuationInterface()
+
+   # Create the stepping strategy
+   stepper = _NaturalParameterStep(custom_predictor)
+
+   # Build the engine
+   engine = _OrbitContinuationEngine(backend=backend, interface=interface)
+
+   # Create configuration
+   config = _OrbitContinuationConfig(
+       target=(0.1, 0.3),
+       step=0.01,
+       max_members=10,
+       state=SynodicState.Z  # Vary Z component
+   )
+
+   # Use the engine directly
+   result = engine.solve(initial_orbit, config)
        
        def _stop_condition(self) -> bool:
            """Check if continuation should terminate."""
@@ -224,18 +228,19 @@ Basic Custom Continuation
 Advanced Custom Continuation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-For more sophisticated methods, implement custom stepping strategies with event hooks:
+For more sophisticated methods, implement custom stepping strategies:
 
 .. code-block:: python
 
-   from hiten.algorithms.continuation.strategies._step_interface import _ContinuationStepBase
-   from hiten.algorithms.continuation.strategies._algorithms import _NaturalParameter
+   from hiten.algorithms.continuation.stepping import _ContinuationStepBase
+   from hiten.algorithms.continuation.engine import _OrbitContinuationEngine
+   from hiten.algorithms.continuation.backends import _PCContinuationBackend
    from hiten.algorithms.continuation.interfaces import _PeriodicOrbitContinuationInterface
    import numpy as np
 
-   class AdaptiveStepper:
-       """Adaptive stepping strategy implementing _ContinuationStepBase protocol."""
-       
+   class AdaptiveStepper(_ContinuationStepBase):
+       """Adaptive stepping strategy."""
+
        def __init__(self, predictor_fn, initial_step=0.01, min_step=0.001, max_step=0.1):
            self._predictor = predictor_fn
            self.initial_step = initial_step
@@ -243,26 +248,23 @@ For more sophisticated methods, implement custom stepping strategies with event 
            self.max_step = max_step
            self.current_step = initial_step
            self.convergence_history = []
-       
+
        def __call__(self, last_solution: object, step: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
            """Generate prediction with adaptive step size."""
-           
+
            # Adjust step size based on convergence history
            if len(self.convergence_history) > 2:
                recent_errors = self.convergence_history[-3:]
                avg_error = np.mean(recent_errors)
-               
+
                if avg_error < 1e-8:  # Good convergence
                    self.current_step = min(self.current_step * 1.2, self.max_step)
                elif avg_error > 1e-6:  # Poor convergence
                    self.current_step = max(self.current_step * 0.8, self.min_step)
-           
+
            # Generate prediction using custom predictor
            prediction = self._predictor(last_solution, np.array([self.current_step]))
            return prediction, np.array([self.current_step])
-       
-       def on_success(self, solution: object) -> None:
-           """Called when correction succeeds."""
            # Track convergence for step size adaptation
            if hasattr(solution, 'correction_error'):
                self.convergence_history.append(solution.correction_error)
@@ -279,37 +281,29 @@ For more sophisticated methods, implement custom stepping strategies with event 
        new_state[0] += step[0]  # Vary X component
        return new_state
 
-   # Create custom continuation algorithm using the adaptive stepper
-   class AdaptiveContinuation(_PeriodicOrbitContinuationInterface, _NaturalParameter):
-       """Custom continuation with adaptive stepping."""
-       
-       def __init__(self, initial_orbit, parameter_getter, target, step=1e-4, **kwargs):
-           # Store adaptive stepper for use in _make_stepper
-           self._adaptive_stepper = AdaptiveStepper(adaptive_predictor)
-           super().__init__(
-               initial_orbit=initial_orbit,
-               parameter_getter=parameter_getter,
-               target=target,
-               step=step,
-               **kwargs
-           )
-       
-       def _make_stepper(self):
-           """Create adaptive stepping strategy."""
-           return self._adaptive_stepper
-       
-       def _stop_condition(self) -> bool:
-           """Check if continuation should terminate."""
-           current = self._parameter(self._family[-1])
-           return np.any(current < self._target_min) or np.any(current > self._target_max)
+   # Create custom engine using the adaptive stepper
+   backend = _PCContinuationBackend()
+   interface = _PeriodicOrbitContinuationInterface()
 
-   # Use adaptive continuation
-   adaptive_engine = AdaptiveContinuation(
-       initial_orbit=initial_orbit,
-       parameter_getter=lambda orbit: np.array([orbit.initial_state[0]]),  # X component
+   # Create configuration
+   config = _OrbitContinuationConfig(
        target=(0.8, 0.9),
        step=0.01,
-       max_orbits=20
+       max_members=20,
+       state=SynodicState.X  # Vary X component
+   )
+
+   # Create the adaptive stepper
+   adaptive_stepper = AdaptiveStepper(adaptive_predictor)
+
+   # Create engine with custom stepper (this would require more complex setup)
+   # For simplicity, use the standard facade with adaptive features
+   state_engine = StateParameter.with_default_engine()(
+       initial_orbit,
+       state=SynodicState.X,
+       target=(0.8, 0.9),
+       step=0.01,
+       max_members=20
    )
 
 Advanced Continuation
@@ -332,44 +326,36 @@ The continuation framework consists of several key components:
 
 **Algorithm Strategies** 
 
-    - `_NaturalParameter`: Abstract class that implements natural parameter continuation.
-    - `_SecantArcLength`: Abstract class that implements pseudo-arclength continuation.
+    - `_OrbitContinuationEngine`: Orchestration layer that combines backends and interfaces
+    - `_PCContinuationBackend`: Core numerical algorithm for driving the continuation process
+    - `_PeriodicOrbitContinuationInterface`: Domain-specific interface for periodic orbit continuation
 
 **Stepping Strategies**
 
-    - `_NaturalParameterStep`: Concrete implementation that handles the prediction phase of natural parameter continuation.
-    - `_SecantStep`: Concrete implementation that handles the prediction phase of pseudo-arclength continuation.
+    - `_NaturalParameterStep`: Concrete implementation for natural parameter continuation
+    - `_SecantStep`: Concrete implementation for pseudo-arclength continuation
+    - `_ContinuationPlainStep`: Simple stepping strategy using a provided predictor function
 
 .. code-block:: python
 
-   from hiten.algorithms.continuation.base import _ContinuationEngine
+   from hiten.algorithms.continuation.engine import _OrbitContinuationEngine
+   from hiten.algorithms.continuation.backends import _PCContinuationBackend
    from hiten.algorithms.continuation.interfaces import _PeriodicOrbitContinuationInterface
-   from hiten.algorithms.continuation.strategies._algorithms import _NaturalParameter
-   from hiten.algorithms.continuation.strategies._stepping import _NaturalParameterStep
+   from hiten.algorithms.continuation.stepping import _NaturalParameterStep
 
    # Example: Understanding the component relationships
-   class MyContinuation(_PeriodicOrbitContinuationInterface, _NaturalParameter):
-       """Custom continuation combining interface and algorithm."""
-       
-       def __init__(self, initial_orbit, parameter_getter, target, step=1e-4, **kwargs):
-           # Store predictor for use in _make_stepper
-           def predictor(orbit, step):
-               new_state = orbit.initial_state.copy()
-               new_state[2] += step[0]  # Vary Z component
-               return new_state
-           
-           self._predictor = predictor
-           super().__init__(
-               initial_orbit=initial_orbit,
-               parameter_getter=parameter_getter,
-               target=target,
-               step=step,
-               **kwargs
-           )
-       
-       def _make_stepper(self):
-           """Create stepping strategy."""
-           return _NaturalParameterStep(self._predictor)
+   def predictor(orbit, step):
+       new_state = orbit.initial_state.copy()
+       new_state[2] += step[0]  # Vary Z component
+       return new_state
+
+   # Create engine with custom stepping strategy
+   backend = _PCContinuationBackend()
+   interface = _PeriodicOrbitContinuationInterface()
+   engine = _OrbitContinuationEngine(backend=backend, interface=interface)
+
+   # Create stepping strategy
+   stepper = _NaturalParameterStep(predictor)
 
 Event Hooks and Monitoring
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -378,32 +364,18 @@ Advanced users can implement custom event handling:
 
 .. code-block:: python
 
-   class MonitoringContinuation(_PeriodicOrbitContinuationInterface, _NaturalParameter):
+   class MonitoringContinuation(_PeriodicOrbitContinuationInterface):
        """Continuation with detailed monitoring and logging."""
        
-       def __init__(self, initial_orbit, parameter_getter, target, step=1e-4, **kwargs):
-           self.convergence_data = []
-           self.step_history = []
-           
-           # Create stepping strategy with monitoring
-           def predictor(orbit, step):
-               self.step_history.append(step.copy())
-               new_state = orbit.initial_state.copy()
-               new_state[2] += step[0]
-               return new_state
-           
-           self._predictor = predictor
-           super().__init__(
-               initial_orbit=initial_orbit,
-               parameter_getter=parameter_getter,
-               target=target,
-               step=step,
-               **kwargs
-           )
-       
-       def _make_stepper(self):
-           """Create stepping strategy with monitoring."""
-           return _NaturalParameterStep(self._predictor)
+       # Create custom stepping strategy with monitoring
+       def predictor(orbit, step):
+           self.step_history.append(step.copy())
+           new_state = orbit.initial_state.copy()
+           new_state[2] += step[0]
+           return new_state
+
+       # Use the standard facade with custom configuration
+       # The monitoring would be implemented at the engine level
        
        def _stop_condition(self) -> bool:
            """Check if continuation should terminate."""

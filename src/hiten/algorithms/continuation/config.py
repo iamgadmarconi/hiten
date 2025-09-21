@@ -6,7 +6,7 @@ types of continuation methods (natural parameter, pseudo-arclength, etc.).
 """
 
 from dataclasses import dataclass
-from typing import Callable
+from typing import Callable, Literal
 
 import numpy as np
 
@@ -102,3 +102,4 @@ class _OrbitContinuationConfig(_ContinuationConfig):
     amplitude: bool = False
     getter: Callable[["PeriodicOrbit"], float] | None = None
     extra_params: dict | None = None
+    stepper: Literal["natural", "secant"] = "natural"

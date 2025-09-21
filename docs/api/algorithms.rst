@@ -9,7 +9,7 @@ systems analysis in the CR3BP.
 
    algorithms/dynamics/index
    algorithms/integrators/index
-   algorithms/continuation
+   algorithms/continuation/index
    algorithms/corrector/index
    algorithms/bifurcation
    algorithms/connections

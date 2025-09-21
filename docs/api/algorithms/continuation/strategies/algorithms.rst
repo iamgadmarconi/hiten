@@ -1,26 +1,17 @@
 Continuation Algorithm Strategies
 ==================================
 
-The algorithms module provides abstract base classes for different continuation algorithm strategies. Each strategy defines a particular approach to parameter continuation with specialized stepping logic, stopping criteria, and parameter handling.
+The strategies module has been restructured. Algorithm strategies are now implemented as stepping strategies within the main continuation module. See the stepping module documentation for details on available stepping strategies.
 
-.. currentmodule:: hiten.algorithms.continuation.strategies._algorithms
+The stepping strategies provide the core algorithmic components for different continuation approaches:
 
-_NaturalParameter()
-^^^^^^^^^^^^^^^^^^^^
+**Natural Parameter Stepping**
+    Simple stepping strategy for natural parameter continuation
 
-The :class:`_NaturalParameter` class provides an abstract base class for natural parameter continuation algorithms.
+**Secant Stepping**
+    Pseudo-arclength continuation using secant-based tangent estimation
 
-.. autoclass:: _NaturalParameter()
-   :members:
-   :undoc-members:
-   :exclude-members: __init__
+**Plain Stepping**
+    Basic stepping strategy using user-provided predictor functions
 
-_SecantArcLength()
-^^^^^^^^^^^^^^^^^^
-
-The :class:`_SecantArcLength` class provides an abstract base class for pseudo-arclength continuation algorithms.
-
-.. autoclass:: _SecantArcLength()
-   :members:
-   :undoc-members:
-   :exclude-members: __init__
+These strategies are located in the main continuation stepping module rather than in a separate strategies submodule.

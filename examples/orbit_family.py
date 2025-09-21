@@ -37,13 +37,16 @@ def main() -> None:
     step_x = (target_x - current_x) / (num_orbits - 1)
     step_z = (target_z - current_z) / (num_orbits - 1)
 
-    result = StateParameter().solve(
+    state_parameter = StateParameter.with_default_engine()
+
+    result = state_parameter.solve(
         seed=halo_seed,
         state=(SynodicState.X, SynodicState.Z),
         target=([current_x, current_z], [target_x, target_z]),
         step=(step_x, step_z),
         max_members=num_orbits,
         extra_params=dict(max_attempts=50, tol=1e-12),
+        stepper="secant",
     )
 
     logger.info(f"Generated {len(result.family)} orbits (success rate {result.success_rate:.2%})")
