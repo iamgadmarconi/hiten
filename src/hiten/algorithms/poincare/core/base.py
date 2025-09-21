@@ -249,7 +249,7 @@ class _ReturnMapBase(ABC):
             self._engines[key] = self._build_engine(backend, strategy)
 
         # Delegate compute to engine
-        self._section = self._engines[key].compute_section()
+        self._section = self._engines[key].solve()
         self._sections[key] = self._section
         return self._section.points
 

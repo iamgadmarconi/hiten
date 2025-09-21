@@ -156,44 +156,14 @@ class _SynodicEngine(_ReturnMapEngine):
         self.clear_cache()
         return self
 
-    def compute_section(self, *, recompute: bool = False) -> _Section:
+    def solve(self, *, recompute: bool = False) -> _Section:
         """Compute the synodic Poincare section from the set trajectories.
-
-        Parameters
-        ----------
-        recompute : bool, default False
-            Whether to recompute the section even if it's already cached.
-
-        Returns
-        -------
-        :class:`~hiten.algorithms.poincare.core.base._Section`
-            The computed synodic Poincare section containing:
-            - points: 2D projected coordinates
-            - states: Full 6D state vectors
-            - times: Crossing times
-            - labels: Coordinate labels for the projection
-
-        Raises
-        ------
-        ValueError
-            If no trajectories have been set.
 
         Notes
         -----
-        This method computes the synodic Poincare section from the
-        previously set trajectories. It uses parallel processing when
-        beneficial and caches the result for future use.
-
-        The method automatically chooses between serial and parallel
-        processing based on the number of workers and trajectories.
-        For small trajectory sets or single-worker configurations,
-        it uses serial processing for efficiency.
-
-        The computed section is cached and returned on subsequent
-        calls unless recompute is True.
-
-        All time units are in nondimensional units.
-        """  
+        This method conforms to the core engine interface. It delegates to
+        ``compute_section`` with caching enabled.
+        """
         if self._section_cache is not None and not recompute:
             return self._section_cache
 

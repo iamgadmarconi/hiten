@@ -6,8 +6,7 @@ and seeding strategies to compute complete return maps.
 
 The main class :class:`~hiten.algorithms.poincare.core.engine._ReturnMapEngine` 
 defines the interface that all concrete engines must implement, including 
-the core `compute_section` method and common functionality for caching and 
-configuration.
+the core `solve` method and common functionality for caching and configuration.
 
 The engine layer sits between the high-level return map interface
 and the low-level numerical integration, providing a clean separation
