@@ -17,6 +17,7 @@ import numpy as np
 
 from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
 from hiten.algorithms.poincare.core.events import _SurfaceEvent
+from hiten.algorithms.utils.exceptions import BackendError
 
 
 class _ReturnMapBackend(ABC):
@@ -171,7 +172,7 @@ class _ReturnMapBackend(ABC):
 
         Raises
         ------
-        RuntimeError
+        BackendError
             If the root cannot be bracketed within max_expand iterations.
 
         Notes
@@ -205,7 +206,34 @@ class _ReturnMapBackend(ABC):
 
             dx *= grow
 
-        raise RuntimeError("Failed to bracket root.")
+        raise BackendError("Failed to bracket root.")
+
+    def on_iteration(self, iteration: int, seeds: "np.ndarray | None" = None) -> None:
+        """Hook called at the start of each iteration in the engine."""
+        return None
+
+    def on_success(
+        self,
+        iteration: int,
+        points: "np.ndarray",
+        states: "np.ndarray",
+        times: "np.ndarray | None" = None,
+    ) -> None:
+        """Hook called when an iteration produces crossings."""
+        return None
+
+    def on_failure(self, iteration: int) -> None:
+        """Hook called when an iteration produces no crossings for a chunk."""
+        return None
+
+    def on_accept(
+        self,
+        points: "np.ndarray",
+        states: "np.ndarray",
+        times: "np.ndarray | None" = None,
+    ) -> None:
+        """Hook called after the engine aggregates final results."""
+        return None
 
     def points2d(self) -> np.ndarray:
         """Get the 2D points from the computed section.

@@ -14,10 +14,12 @@ from .base import CenterManifoldMap
 from .config import (_CenterManifoldMapConfig, _CenterManifoldSectionConfig,
                      _get_section_config)
 from .engine import _CenterManifoldEngine
+from .interfaces import _CenterManifoldInterface
 from .seeding import _CenterManifoldSeedingBase
 from .strategies import (_AxisAlignedSeeding, _LevelSetsSeeding,
                          _RadialSeeding, _RandomSeeding, _SingleAxisSeeding,
                          _make_strategy)
+from .types import _CenterManifoldMapProblem, CenterManifoldMapResults
 
 __all__ = [
     "CenterManifoldMap",
@@ -25,7 +27,10 @@ __all__ = [
     "_CenterManifoldSectionConfig",
     "_CenterManifoldBackend",
     "_CenterManifoldEngine",
+    "_CenterManifoldInterface",
     "_CenterManifoldSeedingBase",
+    "_CenterManifoldMapProblem",
+    "CenterManifoldMapResults",
     "_SingleAxisSeeding",
     "_AxisAlignedSeeding",
     "_LevelSetsSeeding",

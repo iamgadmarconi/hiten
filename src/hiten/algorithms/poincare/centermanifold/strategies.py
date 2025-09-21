@@ -20,6 +20,7 @@ from hiten.algorithms.poincare.centermanifold.config import (
     _CenterManifoldMapConfig, _CenterManifoldSectionConfig)
 from hiten.algorithms.poincare.centermanifold.seeding import \
     _CenterManifoldSeedingBase
+from hiten.algorithms.utils.exceptions import EngineError
 from hiten.utils.log_config import logger
 
 
@@ -71,7 +72,7 @@ def _make_strategy(kind: str, section_config: "_CenterManifoldSectionConfig",
     try:
         cls = _STRATEGY_MAP[kind]
     except KeyError as exc:
-        raise ValueError(f"Unknown seed_strategy '{kind}'") from exc
+        raise EngineError(f"Unknown seed_strategy '{kind}'") from exc
     return cls(section_config, map_config, **kwargs)
 
 

@@ -34,6 +34,7 @@ from hiten.algorithms.hamiltonian.transforms import (_coordlocal2realmodal,
                                                      _synodic2local_collinear,
                                                      _synodic2local_triangular)
 from hiten.algorithms.poincare.centermanifold.backend import _CenterManifoldBackend
+from hiten.algorithms.poincare.centermanifold.interfaces import _CenterManifoldInterface
 from hiten.algorithms.poincare.centermanifold.config import _get_section_config
 from hiten.algorithms.poincare.core.events import _PlaneEvent
 from hiten.system.hamiltonians.pipeline import HamiltonianPipeline
@@ -422,9 +423,14 @@ class CenterManifold:
 
         var_to_solve = config.missing_coord
 
-        backend = self._get_or_create_backend(energy, section_coord, **kwargs)
-
-        solved_val = backend._solve_missing_coord(var_to_solve, known_vars)
+        # Use the stateless Interface to solve the missing coordinate
+        solved_val = _CenterManifoldInterface.solve_missing_coord(
+            var_to_solve,
+            known_vars,
+            h0=float(energy),
+            H_blocks=self._hamsys.poly_H(),
+            clmo_table=self._hamsys.clmo_table,
+        )
 
         # Combine into a full CM coordinate dictionary
         full_cm_coords = known_vars.copy()
@@ -589,7 +595,8 @@ class CenterManifold:
         cache_key = (energy, config_tuple)
 
         if cache_key not in self._poincare_maps:
-            self._poincare_maps[cache_key] = CenterManifoldMap(self, energy, cfg)
+            # Prefer DI-friendly constructor with a default engine wired
+            self._poincare_maps[cache_key] = CenterManifoldMap.with_default_engine(self, energy, cfg)
         
         return self._poincare_maps[cache_key]
 

@@ -86,39 +86,9 @@ class _ReturnMapEngine(ABC):
         self._section_cache: "_Section" | None = None
 
     @abstractmethod
-    def compute_section(self, *, recompute: bool = False) -> "_Section":
-        """Compute the Poincare section using the configured backend and strategy.
-
-        This abstract method must be implemented by concrete engines to
-        define how the complete return map is computed. The method should
-        coordinate the seeding strategy and backend to generate the
-        section data.
-
-        Parameters
-        ----------
-        recompute : bool, default=False
-            If True, forces recomputation even if the section is cached.
-            If False, returns the cached section if available.
-
-        Returns
-        -------
-        :class:`~hiten.algorithms.poincare.core.base._Section`
-            The computed Poincare section containing points, states,
-            labels, and optional times.
-
-        Notes
-        -----
-        This method is the core of the engine's functionality. It should:
-        1. Generate initial conditions using the seeding strategy
-        2. Use the backend to integrate trajectories and find crossings
-        3. Iterate the process to build up the complete return map
-        4. Handle caching and parallel computation as appropriate
-        5. Return a properly formatted section object
-
-        The implementation should be efficient and handle edge cases
-        such as trajectories that don't reach the section.
-        """
-        pass
+    def solve(self) -> "_Section":
+        """Compute and return the section (or Results that inherit _Section)."""
+        raise NotImplementedError
 
     def clear_cache(self):
         """Clear the cached section data.

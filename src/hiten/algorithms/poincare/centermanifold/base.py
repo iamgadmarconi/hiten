@@ -26,8 +26,12 @@ from hiten.algorithms.poincare.centermanifold.config import (
     _CenterManifoldMapConfig, _get_section_config)
 from hiten.algorithms.poincare.centermanifold.engine import \
     _CenterManifoldEngine
+from hiten.algorithms.poincare.centermanifold.interfaces import \
+    _CenterManifoldInterface
 from hiten.algorithms.poincare.centermanifold.strategies import _make_strategy
-from hiten.algorithms.poincare.core.base import _ReturnMapBase
+from hiten.algorithms.poincare.centermanifold.types import (
+    CenterManifoldMapResults, _CenterManifoldMapProblem)
+from hiten.algorithms.poincare.core.base import _ReturnMapBase, _Section
 from hiten.system.center import CenterManifold
 from hiten.system.orbits.base import GenericOrbit
 from hiten.utils.io.map import (load_poincare_map, load_poincare_map_inplace,
@@ -83,6 +87,8 @@ class CenterManifoldMap(_ReturnMapBase):
         cm: CenterManifold,
         energy: float,
         config: Optional[_CenterManifoldMapConfig] = None,
+        *,
+        _engine: _CenterManifoldEngine | None = None,
     ) -> None:
         self.cm: CenterManifold = cm
         self._energy: float = float(energy)
@@ -91,6 +97,32 @@ class CenterManifoldMap(_ReturnMapBase):
         cfg = config or _CenterManifoldMapConfig()
 
         super().__init__(cfg)
+
+        # Optional dependency injection of a pre-configured engine
+        self._injected_engine: _CenterManifoldEngine | None = _engine
+
+    @classmethod
+    def with_default_engine(
+        cls,
+        cm: CenterManifold,
+        energy: float,
+        config: Optional[_CenterManifoldMapConfig] = None,
+    ) -> "CenterManifoldMap":
+        """Construct a map with a default-wired engine injected.
+
+        This mirrors the DI-friendly facades (e.g., Connection) by creating
+        a default engine using the current configuration and injecting it.
+        The engine is wired for the default section coordinate in the config.
+        """
+        inst = cls(cm, energy, config)
+        default_key = inst.config.section_coord
+        backend = inst._build_backend(default_key)
+        strategy = inst._build_seeding_strategy(default_key)
+        engine = inst._build_engine(backend, strategy)
+        inst._injected_engine = engine
+        # Make it available immediately for the default key
+        inst._engines[default_key] = engine
+        return inst
 
     @property
     def energy(self) -> float:
@@ -173,6 +205,7 @@ class CenterManifoldMap(_ReturnMapBase):
             backend=backend,
             seed_strategy=strategy,
             map_config=self.config,
+            interface=_CenterManifoldInterface(),
         )
 
     def ic(self, pt: np.ndarray, *, section_coord: str | None = None) -> np.ndarray:
@@ -267,11 +300,11 @@ class CenterManifoldMap(_ReturnMapBase):
         if section_coord is not None:
             if not self.has_section(section_coord):
                 logger.debug("Section %s not cached - computing now...", section_coord)
-                self.compute(section_coord=section_coord)
+                self._solve_and_cache(section_coord)
             section = self.get_section(section_coord)
         else:
             if self._section is None:
-                self.compute()
+                self._solve_and_cache(None)
             section = self._section
 
         # Decide projection
@@ -340,11 +373,11 @@ class CenterManifoldMap(_ReturnMapBase):
         if section_coord is not None:
             if not self.has_section(section_coord):
                 logger.debug("Section %s not cached - computing now...", section_coord)
-                self.compute(section_coord=section_coord)
+                self._solve_and_cache(section_coord)
             section = self.get_section(section_coord)
         else:
             if self._section is None:
-                self.compute()
+                self._solve_and_cache(None)
             section = self._section
 
         def _on_select(pt_np: np.ndarray):
@@ -436,7 +469,7 @@ class CenterManifoldMap(_ReturnMapBase):
 
         # Compute on-demand if missing
         if key not in self._sections:
-            self.compute(section_coord=key)
+            self._solve_and_cache(key)
 
         sec = self._sections[key]
 
@@ -457,6 +490,27 @@ class CenterManifoldMap(_ReturnMapBase):
 
         # Stack the two 1-D arrays column-wise into shape (n, 2)
         return np.column_stack(cols)
+
+    def _solve_and_cache(self, section_coord: str | None) -> None:
+        key = section_coord or self.config.section_coord
+        if key not in self._engines:
+            # Prefer an injected engine if its backend section matches
+            if (
+                self._injected_engine is not None
+                and getattr(self._injected_engine, "_backend", None) is not None
+                and getattr(self._injected_engine._backend, "_section_cfg", None) is not None
+                and self._injected_engine._backend._section_cfg.section_coord == key
+            ):
+                self._engines[key] = self._injected_engine
+            else:
+                backend = self._build_backend(key)
+                strategy = self._build_seeding_strategy(key)
+                self._engines[key] = self._build_engine(backend, strategy)
+
+        engine = self._engines[key]
+        results: CenterManifoldMapResults = engine.solve()
+        self._section = results
+        self._sections[key] = results
 
     def save(self, filepath: str, **kwargs) -> None:
         """Save the Poincare map to file.
