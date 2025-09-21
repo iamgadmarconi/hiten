@@ -89,10 +89,10 @@ class CenterManifoldMap(_ReturnMapBase):
         # If caller does not supply a config, fall back to defaults.
         cfg = config or _CenterManifoldMapConfig()
 
-        super().__init__(cfg)
-
-        # Optional dependency injection of a pre-configured engine
+        # Ensure injected engine is available even if base __init__ triggers compute()
         self._injected_engine: _CenterManifoldEngine | None = _engine
+
+        super().__init__(cfg)
 
     @classmethod
     def with_default_engine(
