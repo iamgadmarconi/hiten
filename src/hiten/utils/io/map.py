@@ -68,7 +68,12 @@ def save_poincare_map(
     """
 
     if not pmap._sections:
-        pmap.compute()
+        try:
+            # Prefer computing the default section via the facade's solver
+            pmap._solve_and_cache(None)
+        except Exception:
+            # Fallback: try default section explicitly
+            pmap._solve_and_cache(pmap.config.section_coord)
 
     path = Path(path)
     _ensure_dir(path.parent)
@@ -120,7 +125,7 @@ def load_poincare_map_inplace(
     """
 
     from hiten.algorithms.poincare.centermanifold.config import _CenterManifoldMapConfig
-    from hiten.algorithms.poincare.core.base import _Section
+    from hiten.algorithms.poincare.centermanifold.types import CenterManifoldMapResults
 
     path = Path(path)
     if not path.exists():
@@ -141,7 +146,7 @@ def load_poincare_map_inplace(
             sts = g["states"][()] if "states" in g else np.full((pts.shape[0], 4), np.nan)
             labels_json = g.attrs.get("labels_json")
             labels = tuple(json.loads(labels_json)) if labels_json else ("q2", "p2")
-            obj._sections[str(coord)] = _Section(pts, sts, labels)
+            obj._sections[str(coord)] = CenterManifoldMapResults(pts, sts, labels)
 
         obj._section = obj._sections[obj.config.section_coord]
 

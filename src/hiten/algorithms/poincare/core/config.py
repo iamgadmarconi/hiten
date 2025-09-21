@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from typing import Literal, Optional, Protocol, Tuple, runtime_checkable
 
 
-@dataclass
+@dataclass(frozen=True)
 class _ReturnMapBaseConfig(ABC):
     """Base configuration for Poincare return map implementations.
 
@@ -47,7 +47,7 @@ class _ReturnMapBaseConfig(ABC):
     n_workers: int | None = None
 
 
-@dataclass
+@dataclass(frozen=True)
 class _IntegrationConfig(ABC):
     """Configuration for numerical integration parameters.
 
@@ -83,7 +83,7 @@ class _IntegrationConfig(ABC):
     c_omega_heuristic: Optional[float] = 20.0
 
 
-@dataclass
+@dataclass(frozen=True)
 class _IterationConfig(ABC):
     """Configuration for iteration control in return map computation.
 
@@ -112,7 +112,7 @@ class _IterationConfig(ABC):
     n_iter: int = 40
 
 
-@dataclass
+@dataclass(frozen=True)
 class _SeedingConfig(ABC):
     """Configuration for seeding strategies in return map computation.
 
@@ -142,7 +142,7 @@ class _SeedingConfig(ABC):
 
 
 # Backward-compatible umbrella config combining all mixins
-@dataclass
+@dataclass(frozen=True)
 class _ReturnMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _IterationConfig, _SeedingConfig):
     """Complete configuration for Poincare return map computation.
 

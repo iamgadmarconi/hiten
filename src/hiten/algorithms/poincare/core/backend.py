@@ -17,6 +17,7 @@ import numpy as np
 
 from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
 from hiten.algorithms.poincare.core.events import _SurfaceEvent
+from hiten.algorithms.utils.exceptions import BackendError
 
 
 class _ReturnMapBackend(ABC):
@@ -171,7 +172,7 @@ class _ReturnMapBackend(ABC):
 
         Raises
         ------
-        RuntimeError
+        BackendError
             If the root cannot be bracketed within max_expand iterations.
 
         Notes
@@ -205,43 +206,31 @@ class _ReturnMapBackend(ABC):
 
             dx *= grow
 
-        raise RuntimeError("Failed to bracket root.")
+        raise BackendError("Failed to bracket root.")
 
-    def points2d(self) -> np.ndarray:
-        """Get the 2D points from the computed section.
+    def on_iteration(self, iteration: int, seeds: "np.ndarray | None" = None) -> None:
+        """Hook called at the start of each iteration in the engine."""
+        return None
 
-        Returns
-        -------
-        ndarray, shape (n_points, 2)
-            Array of 2D points in the section plane.
+    def on_success(
+        self,
+        iteration: int,
+        points: "np.ndarray",
+        states: "np.ndarray",
+        times: "np.ndarray | None" = None,
+    ) -> None:
+        """Hook called when an iteration produces crossings."""
+        return None
 
-        Notes
-        -----
-        This method triggers computation if the section hasn't been
-        computed yet. The points represent the intersection coordinates
-        in the section plane.
-        """
-        sec = self.compute()
-        return sec.points
+    def on_failure(self, iteration: int) -> None:
+        """Hook called when an iteration produces no crossings for a chunk."""
+        return None
 
-    def states(self) -> np.ndarray:
-        """Get the state vectors from the computed section.
-
-        Returns
-        -------
-        ndarray, shape (n_points, n_states)
-            Array of state vectors at the section crossings. Returns
-            empty array if states are not available.
-
-        Notes
-        -----
-        This method triggers computation if the section hasn't been
-        computed yet. The state vectors contain the full dynamical
-        state at each section crossing.
-        """
-        sec = self.compute()
-        return getattr(sec, "states", np.empty((0, 0)))
-
-    def __len__(self):
-        return self.points2d().shape[0]
-
+    def on_accept(
+        self,
+        points: "np.ndarray",
+        states: "np.ndarray",
+        times: "np.ndarray | None" = None,
+    ) -> None:
+        """Hook called after the engine aggregates final results."""
+        return None

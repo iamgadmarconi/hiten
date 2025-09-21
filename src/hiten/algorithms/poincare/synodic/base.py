@@ -22,7 +22,7 @@ from hiten.algorithms.poincare.synodic.config import (_get_section_config,
                                                       _SynodicMapConfig,
                                                       _SynodicSectionConfig)
 from hiten.algorithms.poincare.synodic.engine import (
-    _SynodicEngine, _SynodicEngineConfigAdapter)
+    _SynodicEngine, _SynodicEngineInterface)
 from hiten.algorithms.poincare.synodic.strategies import _NoOpStrategy
 from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.plots import plot_poincare_map
@@ -178,7 +178,7 @@ class SynodicMap(_ReturnMapBase):
         The engine coordinates the detection and refinement process
         for synodic Poincare sections.
         """
-        adapter = _SynodicEngineConfigAdapter(self.config)
+        adapter = _SynodicEngineInterface(self.config)
         backend = _SynodicDetectionBackend(section_cfg=self._section_cfg, map_cfg=adapter._cfg)
         strategy = _NoOpStrategy(self._section_cfg, adapter)
         return _SynodicEngine(
@@ -233,8 +233,8 @@ class SynodicMap(_ReturnMapBase):
 
         All time units are in nondimensional units.
         """
-        sec = self._engine.set_trajectories(trajectories, direction=direction).compute_section(recompute=recompute)
-        # Bridge into the base-class caching for consistent downstream APIs
+        sec = self._engine.set_trajectories(trajectories, direction=direction).solve(recompute=recompute)
+
         key = self._section_key()
         self._sections[key] = sec
         self._section = sec

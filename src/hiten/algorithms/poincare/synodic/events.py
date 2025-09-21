@@ -46,13 +46,6 @@ class _AffinePlaneEvent(_SurfaceEvent):
         Crossing direction filter passed to the base surface event.
         If None, no direction filtering is applied.
 
-    Attributes
-    ----------
-    normal : ndarray, shape (6,)
-        The hyperplane normal vector.
-    offset : float
-        The hyperplane offset value.
-
     Notes
     -----
     This class provides a flexible way to define Poincare sections in

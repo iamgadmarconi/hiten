@@ -3,14 +3,6 @@
 This module provides concrete implementations of seeding strategies for
 generating initial conditions on center manifolds of collinear libration
 points in the Circular Restricted Three-Body Problem (CR3BP).
-
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
-
-Jorba, A. & Masdemont, J. (1999). Dynamics in the center manifold
-of the collinear points of the restricted three body problem.
-*Physica D*, 132(1-2), 189-213.
 """
 from typing import Any, Callable, List, Optional, Tuple
 
@@ -20,6 +12,7 @@ from hiten.algorithms.poincare.centermanifold.config import (
     _CenterManifoldMapConfig, _CenterManifoldSectionConfig)
 from hiten.algorithms.poincare.centermanifold.seeding import \
     _CenterManifoldSeedingBase
+from hiten.algorithms.utils.exceptions import EngineError
 from hiten.utils.log_config import logger
 
 
@@ -71,7 +64,7 @@ def _make_strategy(kind: str, section_config: "_CenterManifoldSectionConfig",
     try:
         cls = _STRATEGY_MAP[kind]
     except KeyError as exc:
-        raise ValueError(f"Unknown seed_strategy '{kind}'") from exc
+        raise EngineError(f"Unknown seed_strategy '{kind}'") from exc
     return cls(section_config, map_config, **kwargs)
 
 

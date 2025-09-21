@@ -16,8 +16,8 @@ from typing import Callable, Literal, Sequence
 import numpy as np
 
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
-from hiten.algorithms.poincare.core.events import (_PlaneEvent, _SectionHit,
-                                                   _SurfaceEvent)
+from hiten.algorithms.poincare.core.events import _PlaneEvent, _SurfaceEvent
+from hiten.algorithms.poincare.core.types import _SectionHit
 from hiten.algorithms.poincare.synodic.config import (_SynodicMapConfig,
                                                       _SynodicSectionConfig)
 from hiten.algorithms.poincare.utils import _hermite_der, _hermite_scalar

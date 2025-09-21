@@ -10,9 +10,10 @@ from .config import (_EngineConfigLike, _IntegrationConfig, _IterationConfig,
                      _ReturnMapBaseConfig, _ReturnMapConfig, _SectionConfig,
                      _SeedingConfig, _SeedingConfigLike)
 from .engine import _ReturnMapEngine
-from .events import _PlaneEvent, _SectionHit, _SurfaceEvent
+from .events import _PlaneEvent, _SurfaceEvent
 from .seeding import _SeedingProtocol
 from .strategies import _SeedingStrategyBase
+from .types import _SectionHit
 
 __all__ = [
     "_ReturnMapBase",

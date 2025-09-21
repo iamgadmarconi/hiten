@@ -10,12 +10,15 @@ systems and analysis goals. The protocol provides a flexible interface
 that allows various distribution strategies while maintaining a
 consistent interface for the return map engine.
 
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
+This module provides the protocol interface for seeding strategies
+that generate initial conditions for Poincare return map computation.
+Seeding strategies determine how initial conditions are distributed
+on the section plane or in phase space.
 
-Guckenheimer, J. & Holmes, P. (1983). *Nonlinear Oscillations, Dynamical
-Systems, and Bifurcations of Vector Fields*. Springer.
+Different seeding strategies are appropriate for different dynamical
+systems and analysis goals. The protocol provides a flexible interface
+that allows various distribution strategies while maintaining a
+consistent interface for the return map engine.
 """
 
 from typing import Protocol, runtime_checkable

@@ -36,18 +36,18 @@ Synodic sections are defined in the rotating frame:
    section_cfg = SynodicMapConfig(
        section_axis="x",           # Section perpendicular to x-axis
        section_offset=0.8,         # At x = 0.8
-       plane_coords=("y", "z"),    # Plot y vs z
+       plane_coords=("y", "z"),    # Plot y vs z (default is ("y", "vy"))
        interp_kind="cubic",        # Cubic interpolation
        segment_refine=30,          # Refinement factor
-       tol_on_surface=1e-9,        # Surface tolerance
+       tol_on_surface=1e-9,        # Surface tolerance (default is 1e-12)
        dedup_time_tol=1e-9,        # Time deduplication tolerance
-       dedup_point_tol=1e-9,       # Point deduplication tolerance
+       dedup_point_tol=1e-9,       # Point deduplication tolerance (default is 1e-12)
        max_hits_per_traj=None,     # No limit on hits per trajectory
        n_workers=None              # Use all available workers
    )
    
    # Create synodic map
-   synodic_map = SynodicMap(section_cfg)
+   synodic_map = SynodicMap(map_cfg=section_cfg)
    
    # Generate section from manifold
    stable_manifold = halo.manifold(stable=True, direction="positive")
@@ -62,6 +62,8 @@ Center manifold sections are defined in the center manifold coordinates:
 
 .. code-block:: python
 
+   from hiten.algorithms.poincare import CenterManifoldMapConfig
+   
    # Get center manifold
    center_manifold = l1.get_center_manifold(degree=6)
    center_manifold.compute()
@@ -89,14 +91,14 @@ Basic Configuration
    section_cfg = SynodicMapConfig(
        section_axis="x",
        section_offset=0.8,
-       plane_coords=("y", "z")
+       plane_coords=("y", "z")  # Override default ("y", "vy")
    )
    
    # Simple y-section
    section_cfg = SynodicMapConfig(
        section_axis="y",
        section_offset=0.0,
-       plane_coords=("x", "z")
+       plane_coords=("x", "z")  # Override default ("y", "vy")
    )
 
 Advanced Configuration
@@ -202,13 +204,13 @@ Once you created the manifolds, you can create a connection between them by conf
    
    # Search configuration
    search_cfg = SearchConfig(
-       delta_v_tol=1,           # Delta-V tolerance
+       delta_v_tol=1.0,         # Delta-V tolerance (default is 1e-3)
        ballistic_tol=1e-8,      # Ballistic tolerance
-       eps2d=1e-3               # 2D distance tolerance
+       eps2d=1e-3               # 2D distance tolerance (default is 1e-4)
    )
    
-   # Create connection
-   connection = Connection(
+   # Create connection using the factory method
+   connection = Connection.with_default_engine(
        section=section_cfg,
        direction=None,           # Both directions
        search_cfg=search_cfg
@@ -321,13 +323,16 @@ Earth-Moon L1-L2 Connection
    )
    
    search_cfg = SearchConfig(
-       delta_v_tol=1,
-       ballistic_tol=1e-8,
-       eps2d=1e-3
+       delta_v_tol=1.0,         # Large tolerance for this example
+       ballistic_tol=1e-8,      # Standard ballistic threshold
+       eps2d=1e-3               # 2D pairing tolerance (default is 1e-4)
    )
    
    # Find connections
-   connection = Connection(section=section_cfg, search_cfg=search_cfg)
+   connection = Connection.with_default_engine(
+       section=section_cfg, 
+       search_cfg=search_cfg
+   )
    connection.solve(manifold_l1, manifold_l2)
    
    # Display results
@@ -376,13 +381,16 @@ Sun-Earth L1-L2 Connection
    )
    
    search_cfg = SearchConfig(
-       delta_v_tol=0.1,
-       ballistic_tol=1e-10,
-       eps2d=1e-4
+       delta_v_tol=0.1,         # Moderate tolerance for Sun-Earth system
+       ballistic_tol=1e-10,     # Tight ballistic threshold
+       eps2d=1e-4               # Standard 2D pairing tolerance
    )
    
    # Find connections
-   connection = Connection(section=section_cfg, search_cfg=search_cfg)
+   connection = Connection.with_default_engine(
+       section=section_cfg, 
+       search_cfg=search_cfg
+   )
    connection.solve(manifold_l1, manifold_l2)
    
    # Display results

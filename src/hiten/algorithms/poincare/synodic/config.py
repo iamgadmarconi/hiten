@@ -19,7 +19,7 @@ from hiten.algorithms.poincare.core.config import (_ReturnMapBaseConfig,
 from hiten.algorithms.poincare.synodic.events import _AffinePlaneEvent
 
 
-@dataclass
+@dataclass(frozen=True)
 class _SynodicMapConfig(_ReturnMapBaseConfig):
     """Configuration for synodic Poincare map detection and refinement.
 
@@ -105,7 +105,8 @@ class _SynodicMapConfig(_ReturnMapBaseConfig):
         """
         # Synodic maps do not support computing on init because trajectories
         # must be supplied via from_orbit/from_manifold. Ignore any user value.
-        self.compute_on_init = False
+        # For frozen dataclasses, use object.__setattr__ for post-init fixes.
+        object.__setattr__(self, "compute_on_init", False)
 
 
 class _SynodicSectionConfig(_SectionConfig):

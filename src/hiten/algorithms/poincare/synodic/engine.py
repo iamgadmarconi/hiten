@@ -15,14 +15,15 @@ from typing import Literal, Sequence
 
 import numpy as np
 
-from hiten.algorithms.poincare.core.base import _Section
 from hiten.algorithms.poincare.core.engine import _ReturnMapEngine
 from hiten.algorithms.poincare.synodic.backend import _SynodicDetectionBackend
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
 from hiten.algorithms.poincare.synodic.strategies import _NoOpStrategy
+from hiten.algorithms.poincare.synodic.types import (SynodicMapResults,
+                                                     _SynodicMapProblem)
 
 
-class _SynodicEngineConfigAdapter:
+class _SynodicEngineInterface:
     """Configuration adapter for synodic Poincare engine.
 
     This adapter class provides the interface expected by the base
@@ -84,7 +85,7 @@ class _SynodicEngine(_ReturnMapEngine):
         The detection backend for synodic sections.
     seed_strategy : :class:`~hiten.algorithms.poincare.synodic.strategies._NoOpStrategy`
         The seeding strategy (no-op for synodic maps).
-    map_config : :class:`~hiten.algorithms.poincare.synodic.engine._SynodicEngineConfigAdapter`
+    map_config : :class:`~hiten.algorithms.poincare.synodic.engine._SynodicEngineInterface`
         The configuration adapter for the engine.
 
     Attributes
@@ -112,7 +113,7 @@ class _SynodicEngine(_ReturnMapEngine):
         self,
         backend: _SynodicDetectionBackend,
         seed_strategy: _NoOpStrategy,
-        map_config: _SynodicEngineConfigAdapter,
+        map_config: _SynodicEngineInterface,
     ) -> None:
         super().__init__(backend, seed_strategy, map_config)
         self._trajectories: "Sequence[tuple[np.ndarray, np.ndarray]]" | None = None
@@ -156,62 +157,40 @@ class _SynodicEngine(_ReturnMapEngine):
         self.clear_cache()
         return self
 
-    def compute_section(self, *, recompute: bool = False) -> _Section:
+    def solve(self, *, recompute: bool = False) -> SynodicMapResults:
         """Compute the synodic Poincare section from the set trajectories.
-
-        Parameters
-        ----------
-        recompute : bool, default False
-            Whether to recompute the section even if it's already cached.
-
-        Returns
-        -------
-        :class:`~hiten.algorithms.poincare.core.base._Section`
-            The computed synodic Poincare section containing:
-            - points: 2D projected coordinates
-            - states: Full 6D state vectors
-            - times: Crossing times
-            - labels: Coordinate labels for the projection
-
-        Raises
-        ------
-        ValueError
-            If no trajectories have been set.
 
         Notes
         -----
-        This method computes the synodic Poincare section from the
-        previously set trajectories. It uses parallel processing when
-        beneficial and caches the result for future use.
-
-        The method automatically chooses between serial and parallel
-        processing based on the number of workers and trajectories.
-        For small trajectory sets or single-worker configurations,
-        it uses serial processing for efficiency.
-
-        The computed section is cached and returned on subsequent
-        calls unless recompute is True.
-
-        All time units are in nondimensional units.
-        """  
+        This method conforms to the core engine interface. It delegates to
+        ``compute_section`` with caching enabled.
+        """
         if self._section_cache is not None and not recompute:
             return self._section_cache
 
         if self._trajectories is None:
             raise ValueError("No trajectories set. Call set_trajectories(...) first.")
 
+        # Assemble an immutable problem definition for clarity
+        problem = _SynodicMapProblem(
+            plane_coords=self._backend.plane_coords,
+            direction=self._direction,
+            n_workers=self._n_workers,
+            trajectories=self._trajectories,
+        )
+
         # Delegate detection to backend passed in at construction
-        if self._n_workers <= 1 or len(self._trajectories) <= 1:
-            hits_lists = self._backend.detect_batch(self._trajectories, direction=self._direction)
+        if problem.n_workers <= 1 or len(problem.trajectories) <= 1:  # type: ignore[arg-type]
+            hits_lists = self._backend.detect_batch(problem.trajectories, direction=problem.direction)  # type: ignore[arg-type]
         else:
-            chunks = np.array_split(np.arange(len(self._trajectories)), self._n_workers)
+            chunks = np.array_split(np.arange(len(problem.trajectories)), problem.n_workers)  # type: ignore[arg-type]
 
             def _worker(idx_arr: np.ndarray):
-                subset = [self._trajectories[i] for i in idx_arr.tolist()]
-                return self._backend.detect_batch(subset, direction=self._direction)
+                subset = [problem.trajectories[i] for i in idx_arr.tolist()]  # type: ignore[index]
+                return self._backend.detect_batch(subset, direction=problem.direction)
 
             parts: list[list[list]] = []
-            with ThreadPoolExecutor(max_workers=self._n_workers) as ex:
+            with ThreadPoolExecutor(max_workers=problem.n_workers) as ex:
                 futs = [ex.submit(_worker, idxs) for idxs in chunks if len(idxs)]
                 for fut in as_completed(futs):
                     parts.append(fut.result())
@@ -228,6 +207,6 @@ class _SynodicEngine(_ReturnMapEngine):
         sts_np = np.asarray(sts, dtype=float) if sts else np.empty((0, 6))
         ts_np = np.asarray(ts, dtype=float) if ts else None
 
-        labels = self._backend.plane_coords
-        self._section_cache = _Section(pts_np, sts_np, labels, ts_np)
+        labels = problem.plane_coords
+        self._section_cache = SynodicMapResults(pts_np, sts_np, labels, ts_np)
         return self._section_cache

@@ -3,14 +3,6 @@
 This module provides configuration classes for computing Poincare sections
 restricted to center manifolds of collinear libration points in the Circular
 Restricted Three-Body Problem (CR3BP).
-
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
-
-Jorba, A. & Masdemont, J. (1999). Dynamics in the center manifold
-of the collinear points of the restricted three body problem.
-*Physica D*, 132(1-2), 189-213.
 """
 from dataclasses import dataclass
 from typing import Literal, Optional, Tuple
@@ -22,10 +14,11 @@ from hiten.algorithms.poincare.core.config import (_IntegrationConfig,
                                                    _ReturnMapBaseConfig,
                                                    _SectionConfig,
                                                    _SeedingConfig)
+from hiten.algorithms.utils.exceptions import EngineError
 from hiten.utils.log_config import logger
 
 
-@dataclass
+@dataclass(frozen=True)
 class _CenterManifoldMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _IterationConfig, _SeedingConfig):
     """Configuration for center manifold Poincare maps.
 
@@ -73,7 +66,7 @@ class _CenterManifoldMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _Iterat
 
     def __post_init__(self):
         if self.seed_strategy == "single" and self.seed_axis is None:
-            raise ValueError("seed_axis must be specified when seed_strategy is 'single'")
+            raise EngineError("seed_axis must be specified when seed_strategy is 'single'")
         if self.seed_strategy != "single" and self.seed_axis is not None:
             logger.warning("seed_axis is ignored when seed_strategy is not 'single'")
 
@@ -170,7 +163,7 @@ class _CenterManifoldSectionConfig(_SectionConfig):
         try:
             cfg = self._TABLE[section_coord]
         except KeyError as exc:
-            raise ValueError(f"Unsupported section_coord: {section_coord}") from exc
+            raise EngineError(f"Unsupported section_coord: {section_coord}") from exc
 
         # copy into attributes (they are read-only by convention)
         self.section_coord: str = section_coord
@@ -325,4 +318,4 @@ def _get_section_config(section_coord: str) -> _CenterManifoldSectionConfig:
     try:
         return _SECTION_CACHE[section_coord]
     except KeyError as exc:
-        raise ValueError(f"Unsupported section_coord: {section_coord}") from exc
+        raise EngineError(f"Unsupported section_coord: {section_coord}") from exc
