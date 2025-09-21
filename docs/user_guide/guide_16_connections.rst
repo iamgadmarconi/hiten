@@ -85,7 +85,7 @@ Search for connections between manifolds:
 .. code-block:: python
 
    # Create connection object
-   conn = Connection(
+   conn = Connection.with_default_engine(
        section=section_cfg,
        direction=None,                     # Search in both directions
        search_cfg=search_cfg
@@ -180,7 +180,7 @@ The most powerful way to create custom connection detection is by extending the 
 .. code-block:: python
 
    from hiten.algorithms.connections.backends import _ConnectionsBackend
-   from hiten.algorithms.connections.results import _ConnectionResult
+   from hiten.algorithms.connections.types import _ConnectionResult
    from hiten.algorithms.connections.backends import _radius_pairs_2d, _nearest_neighbor_2d
    import numpy as np
 
@@ -305,7 +305,8 @@ Create custom engines that use different backends:
 
 .. code-block:: python
 
-   from hiten.algorithms.connections.engine import _ConnectionEngine, _ConnectionProblem
+   from hiten.algorithms.connections.engine import _ConnectionEngine
+   from hiten.algorithms.connections.types import _ConnectionProblem
    from hiten.algorithms.connections.interfaces import _ManifoldInterface
 
    class CustomConnectionEngine(_ConnectionEngine):
@@ -451,24 +452,25 @@ The connection framework consists of several key components:
 
 **Base Connection Class** 
 
-    - `Connection`: The abstract base class that defines the core connection discovery interface. All connections must implement the :class:`~hiten.algorithms.connections.base.Connection` interface.
+    - `Connection`: High-level user-facing facade that provides convenient methods for connection discovery, result visualization, and problem specification.
 
 **Connection Engine** 
 
-    - `_ConnectionEngine`: The abstract base class that defines the core connection discovery interface. All connections must implement the :class:`~hiten.algorithms.connections.base.Connection` interface.
+    - `_ConnectionEngine`: Main orchestration engine that coordinates the connection discovery process between manifolds and delegates computational work to backend algorithms.
 
 **Backend Algorithms** 
 
-    - `_ConnectionsBackend`: The abstract base class that defines the core connection discovery interface. All connections must implement the :class:`~hiten.algorithms.connections.base.Connection` interface.
+    - `_ConnectionsBackend`: Computational backend that implements the core algorithms for geometric matching, refinement, and Delta-V computation between synodic sections.
 
 **Manifold Interfaces** 
 
-    - `_ManifoldInterface`: The abstract base class that defines the core connection discovery interface. All connections must implement the :class:`~hiten.algorithms.connections.base.Connection` interface.
+    - `_ManifoldInterface`: Interface adapter that provides clean access to manifold data and handles conversion to synodic section intersections for connection analysis.
 
 **Result Classes** 
 
-    - `_ConnectionResult`: The abstract base class that defines the core connection discovery interface. All connections must implement the :class:`~hiten.algorithms.connections.base.Connection` interface.
-    - `ConnectionResults`: The abstract base class that defines the core connection discovery interface. All connections must implement the :class:`~hiten.algorithms.connections.base.Connection` interface.
+    - `_ConnectionResult`: Individual connection result data structure that stores transfer information including Delta-V, connection points, and full state vectors.
+    - `ConnectionResults`: Collection class providing convenient access and formatting for multiple connection results.
+    - `_ConnectionProblem`: Problem specification that encapsulates all parameters needed for connection discovery between manifolds.
 
 Next Steps
 ----------

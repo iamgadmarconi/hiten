@@ -26,6 +26,10 @@ from typing import Iterator, Literal, Sequence, Tuple
 
 import numpy as np
 
+from hiten.algorithms.connections.config import _SearchConfig
+from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
+from hiten.system.manifold import Manifold
+
 
 @dataclass
 class _ConnectionResult:
@@ -85,7 +89,7 @@ class _ConnectionResult:
 
     See Also
     --------
-    :class:`~hiten.algorithms.connections.results.ConnectionResults`
+    :class:`~hiten.algorithms.connections.types.ConnectionResults`
         Collection class for multiple connection results.
     :class:`~hiten.algorithms.connections.config._SearchConfig`
         Configuration that determines ballistic vs impulsive classification.
@@ -238,3 +242,66 @@ class ConnectionResults:
             lines.append(fmt_row(row))
 
         return "\n".join(lines)
+
+
+
+@dataclass(frozen=True)
+class _ConnectionProblem:
+    """Define a problem specification for connection discovery between two manifolds.
+
+    This dataclass encapsulates all the parameters needed to define a connection
+    discovery problem, including the source and target manifolds, the synodic
+    section for intersection, crossing direction, and search configuration.
+
+    Parameters
+    ----------
+    source : :class:`~hiten.algorithms.connections.interfaces._ManifoldInterface`
+        Interface to the source manifold (typically unstable manifold).
+    target : :class:`~hiten.algorithms.connections.interfaces._ManifoldInterface`
+        Interface to the target manifold (typically stable manifold).
+    section : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+        Configuration for the synodic section where manifolds are intersected.
+    direction : {1, -1, None}, optional
+        Direction for section crossings. 1 for positive crossings, -1 for
+        negative crossings, None for both directions.
+    search : :class:`~hiten.algorithms.connections.config._SearchConfig`
+        Search configuration including tolerances and geometric parameters.
+
+    Notes
+    -----
+    This class serves as a data container that packages all the necessary
+    information for the connection engine to process. It ensures that all
+    required parameters are provided and properly typed.
+
+    The problem specification is typically created by the high-level
+    :class:`~hiten.algorithms.connections.base.Connection` class and passed
+    to the engine for processing.
+
+    Examples
+    --------
+    >>> from hiten.algorithms.connections.config import _SearchConfig
+    >>> from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
+    >>> 
+    >>> section_cfg = _SynodicMapConfig(x=0.8)
+    >>> search_cfg = _SearchConfig(delta_v_tol=1e-3)
+    >>> 
+    >>> problem = _ConnectionProblem(
+    ...     source=unstable_manifold,
+    ...     target=stable_manifold,
+    ...     section=section_cfg,
+    ...     direction=1,
+    ...     search=search_cfg
+    ... )
+
+    See Also
+    --------
+    :class:`~hiten.algorithms.connections.engine._ConnectionEngine`
+        Engine class that processes this problem specification.
+    :class:`~hiten.algorithms.connections.base.Connection`
+        High-level class that creates these problem specifications.
+    """
+    source: Manifold
+    target: Manifold
+    section: _SynodicMapConfig
+    direction: Literal[1, -1, None] | None
+    search: _SearchConfig | None

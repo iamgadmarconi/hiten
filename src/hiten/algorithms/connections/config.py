@@ -18,7 +18,7 @@ See Also
 from dataclasses import dataclass
 
 
-@dataclass
+@dataclass(frozen=True)
 class _SearchConfig:
     """Define search parameters and tolerances for connection discovery.
 
@@ -88,6 +88,7 @@ class _SearchConfig:
     # Pairing radius on the section plane
     eps2d: float = 1e-4
 
+@dataclass(frozen=True)
 class ConnectionConfig(_SearchConfig):
     """Define an extended configuration including computational parameters.
 

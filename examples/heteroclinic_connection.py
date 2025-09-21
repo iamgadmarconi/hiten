@@ -48,7 +48,7 @@ def main() -> None:
         n_workers=None,
     )
 
-    conn = Connection(
+    conn = Connection.with_default_engine(
         section=section_cfg,
         direction=None,
         search_cfg=SearchConfig(delta_v_tol=1, ballistic_tol=1e-8, eps2d=1e-3),
