@@ -359,7 +359,28 @@ class InvariantTori:
         return ubar + float(epsilon) * uhat
 
     def compute(self, *, epsilon: float, n_theta1: int, n_theta2: int) -> np.ndarray:
-        """Compute the invariant torus grid."""
+        """Compute the invariant torus grid.
+        
+        Parameters
+        ----------
+        epsilon : float
+            Torus amplitude used in the linear approximation.
+        n_theta1 : int
+            Number of discretisation points along theta1.
+        n_theta2 : int
+            Number of discretisation points along theta2.
+
+        Returns
+        -------
+        numpy.ndarray
+            Invariant torus grid.
+
+        Notes
+        -----
+        This method computes the invariant torus grid using the linear approximation.
+        The grid is computed using the cached STM samples and the complex eigenvector field.
+        The grid is cached for subsequent plotting and state export.
+        """
 
         # Ensure STM cache at requested resolution
         self._prepare(n_theta1)
