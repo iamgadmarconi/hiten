@@ -9,33 +9,12 @@ The module exports a factory function :func:`~hiten.algorithms.poincare.centerma
 that creates concrete seeding strategy instances based on a string identifier.
 """
 
-from .backend import _CenterManifoldBackend
 from .base import CenterManifoldMap
-from .config import (_CenterManifoldMapConfig, _CenterManifoldSectionConfig,
-                     _get_section_config)
-from .engine import _CenterManifoldEngine
-from .interfaces import _CenterManifoldInterface
-from .seeding import _CenterManifoldSeedingBase
-from .strategies import (_AxisAlignedSeeding, _LevelSetsSeeding,
-                         _RadialSeeding, _RandomSeeding, _SingleAxisSeeding,
-                         _make_strategy)
-from .types import _CenterManifoldMapProblem, CenterManifoldMapResults
+from .config import _CenterManifoldMapConfig
+from .types import CenterManifoldMapResults
 
 __all__ = [
     "CenterManifoldMap",
     "_CenterManifoldMapConfig",
-    "_CenterManifoldSectionConfig",
-    "_CenterManifoldBackend",
-    "_CenterManifoldEngine",
-    "_CenterManifoldInterface",
-    "_CenterManifoldSeedingBase",
-    "_CenterManifoldMapProblem",
     "CenterManifoldMapResults",
-    "_SingleAxisSeeding",
-    "_AxisAlignedSeeding",
-    "_LevelSetsSeeding",
-    "_RadialSeeding",
-    "_RandomSeeding",
-    "_make_strategy",
-    "_get_section_config",
 ]

@@ -19,6 +19,7 @@ of the collinear points of the restricted three body problem.
 """
 
 from typing import Literal, Optional, Sequence
+from dataclasses import replace
 
 import numpy as np
 
@@ -207,6 +208,92 @@ class CenterManifoldMap(_ReturnMapBase):
             map_config=self.config,
             interface=_CenterManifoldInterface(),
         )
+
+    def compute(
+        self,
+        section_coord: str | None = None,
+        *,
+        # runtime integration/iteration overrides
+        dt: float | None = None,
+        n_iter: int | None = None,
+        n_workers: int | None = None,
+        # runtime backend overrides
+        method: Literal["fixed", "adaptive", "symplectic"] | None = None,
+        order: int | None = None,
+        c_omega_heuristic: float | None = None,
+        # runtime seeding overrides
+        seed_strategy: str | None = None,
+        seed_axis: str | None = None,
+        n_seeds: int | None = None,
+    ) -> np.ndarray:
+        """Compute the section, supporting runtime overrides without mutating config.
+
+        If no overrides are provided, this defers to the cached, default setup
+        and persists the result. If any overrides are provided, a temporary
+        engine is assembled for this call and the result is returned without
+        polluting the persistent cache. In all cases, this method returns the
+        2-D points of the section.
+        """
+        key = section_coord or self.config.section_coord
+
+        # Fast path: no overrides → use existing lazy/cached pipeline
+        if (
+            dt is None and n_iter is None and n_workers is None
+            and method is None and order is None and c_omega_heuristic is None
+            and seed_strategy is None and seed_axis is None and n_seeds is None
+        ):
+            # Reuse existing engine/cache machinery
+            if key not in self._sections:
+                self._solve_and_cache(key)
+            self._section = self._sections[key]
+            return self._section.points
+
+        # Build a temporary backend honoring runtime backend overrides
+        backend = self.cm._get_or_create_backend(
+            self._energy,
+            key,
+            method=(method or self.config.method),
+            order=(order or self.config.order),
+            c_omega_heuristic=(
+                c_omega_heuristic if c_omega_heuristic is not None else self.config.c_omega_heuristic  # type: ignore[arg-type]
+            ),
+        )
+
+        # Build a temporary seeding strategy (honor runtime seeding overrides)
+        sec_cfg = _get_section_config(key)
+        final_seed_strategy = (seed_strategy or self.config.seed_strategy)
+        final_seed_axis: str | None
+        if final_seed_strategy == "single":
+            final_seed_axis = seed_axis or self.config.seed_axis  # may remain None if not provided
+        else:
+            final_seed_axis = None
+
+        # Clone current config to preserve all values, then override selected fields
+        tmp_cfg = replace(
+            self.config,
+            section_coord=key,
+            seed_strategy=final_seed_strategy,
+            seed_axis=final_seed_axis,
+            n_seeds=(int(n_seeds) if n_seeds is not None else self.config.n_seeds),
+        )
+
+        strategy = _make_strategy(tmp_cfg.seed_strategy, sec_cfg, tmp_cfg, seed_axis=tmp_cfg.seed_axis)
+
+        # Assemble a one-off engine and solve with runtime iteration/integration overrides
+        engine = _CenterManifoldEngine(
+            backend=backend,
+            seed_strategy=strategy,
+            map_config=tmp_cfg,
+            interface=_CenterManifoldInterface(),
+        )
+
+        results: CenterManifoldMapResults = engine.solve(
+            dt=dt, n_iter=n_iter, n_workers=n_workers
+        )
+
+        # Do not pollute section cache when overrides are used, but expose via _section
+        self._section = results
+        return results.points
 
     def ic(self, pt: np.ndarray, *, section_coord: str | None = None) -> np.ndarray:
         """Convert a plane point to initial conditions for integration.

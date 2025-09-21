@@ -319,7 +319,12 @@ class CenterManifold:
         :class:`~hiten.algorithms.poincare.centermanifold.backend._CenterManifoldBackend`
             The backend instance.
         """
-        cache_key = (energy, section_coord)
+        # Include integration-related kwargs in the cache key to allow
+        # multiple backends with different runtime settings to coexist.
+        method = kwargs.get("method")
+        order = kwargs.get("order")
+        c_omega_heuristic = kwargs.get("c_omega_heuristic")
+        cache_key = (energy, section_coord, method, order, c_omega_heuristic)
         if cache_key not in self._backends:
             cm_hamsys = self._hamsys
             self._backends[cache_key] = _CenterManifoldBackend(

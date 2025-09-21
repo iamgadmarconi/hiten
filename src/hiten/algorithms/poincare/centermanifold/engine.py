@@ -81,7 +81,13 @@ class _CenterManifoldEngine(_ReturnMapEngine):
         super().__init__(backend, seed_strategy, map_config)
         self._interface = interface
 
-    def solve(self) -> CenterManifoldMapResults:
+    def solve(
+        self,
+        *,
+        dt: float | None = None,
+        n_iter: int | None = None,
+        n_workers: int | None = None,
+    ) -> CenterManifoldMapResults:
         """Compute the Poincare section for the center manifold.
 
         This method generates the Poincare map by iteratively applying the
@@ -116,12 +122,16 @@ class _CenterManifoldEngine(_ReturnMapEngine):
         The method uses ThreadPoolExecutor for parallel processing, with the
         number of workers determined by the configuration.
         """
+        dt_ = float(self._dt if dt is None else dt)
+        n_iter_ = int(self._n_iter if n_iter is None else n_iter)
+        n_workers_ = int(self._n_workers if n_workers is None else n_workers)
+
         problem = _CenterManifoldMapProblem(
             section_coord=self._backend._section_cfg.section_coord,
             energy=self._backend._h0,
-            dt=self._dt,
-            n_iter=self._n_iter,
-            n_workers=self._n_workers,
+            dt=dt_,
+            n_iter=n_iter_,
+            n_workers=n_workers_,
         )
 
         logger.info("Generating Poincare map: seeds=%d, iterations=%d, workers=%d",
@@ -171,10 +181,26 @@ class _CenterManifoldEngine(_ReturnMapEngine):
         def _worker(chunk: np.ndarray):
             pts_accum, states_accum, times_accum = [], [], []
             seeds = chunk
-            for _ in range(problem.n_iter):
+            for it in range(problem.n_iter):
+                # Hook: iteration start
+                try:
+                    self._backend.on_iteration(it, seeds)
+                except Exception:
+                    pass
+
                 pts, states, times, flags = self._backend.step_to_section(seeds, dt=problem.dt)
                 if pts.size == 0:
+                    try:
+                        self._backend.on_failure(it)
+                    except Exception:
+                        pass
                     break
+
+                try:
+                    self._backend.on_success(it, pts, states, times)
+                except Exception:
+                    pass
+
                 pts_accum.append(pts)
                 states_accum.append(states)
                 times_accum.append(times)
@@ -196,6 +222,11 @@ class _CenterManifoldEngine(_ReturnMapEngine):
         pts_np = np.vstack(pts_list) if pts_list else np.empty((0, 2))
         cms_np = np.vstack(states_list) if states_list else np.empty((0, 4))
         times_np = np.concatenate(times_list) if times_list else None
+
+        try:
+            self._backend.on_accept(pts_np, cms_np, times_np)
+        except Exception:
+            pass
 
         return CenterManifoldMapResults(
             pts_np,
