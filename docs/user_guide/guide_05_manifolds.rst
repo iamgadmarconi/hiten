@@ -98,14 +98,13 @@ Creating Tori
 
 .. code-block:: python
 
-   from hiten.algorithms import InvariantTori
+   from hiten import InvariantTori
    
    # Create invariant torus
    torus = InvariantTori(halo)
    
    # Compute the torus
    torus.compute(
-       scheme='linear',      # Linear scheme
        epsilon=1e-2,         # Perturbation parameter
        n_theta1=512,         # Grid resolution in theta1
        n_theta2=512          # Grid resolution in theta2
@@ -119,7 +118,7 @@ Control torus computation:
 .. code-block:: python
 
    # Different schemes
-   torus.compute(scheme='linear', epsilon=1e-2)
+   torus.compute(epsilon=1e-2)
    
    # Grid resolution
    torus.compute(n_theta1=256, n_theta2=256)  # Lower resolution
@@ -186,7 +185,6 @@ Sun-Earth L2 Halo Tori
    # Create and compute torus
    torus = InvariantTori(halo_l2)
    torus.compute(
-       scheme='linear',
        epsilon=1e-2,
        n_theta1=512,
        n_theta2=512

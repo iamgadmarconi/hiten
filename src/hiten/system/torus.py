@@ -23,14 +23,11 @@ point for more sophisticated methods.
 """
 
 from dataclasses import dataclass
-from typing import Literal, Optional, Sequence, Tuple
+from typing import Literal, Optional, Tuple
 
-import numba
 import numpy as np
 
-from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_stm
-from hiten.algorithms.utils.config import FASTMATH
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.orbits.base import PeriodicOrbit
@@ -39,7 +36,7 @@ from hiten.utils.plots import plot_invariant_torus
 
 
 @dataclass(slots=True, frozen=True)
-class _Torus:
+class Torus:
     """
     Immutable representation of a 2-D invariant torus.
 
@@ -75,7 +72,7 @@ class _Torus:
     system: System
 
 
-class _InvariantTori:
+class InvariantTori:
     """
     Linear approximation of a 2-D invariant torus bifurcating from a
     centre component of a periodic orbit.
@@ -179,9 +176,9 @@ class _InvariantTori:
         """Latitudinal rotation number rho (set after GMOS computation)."""
         return getattr(self, "_rotation_number", None)
     
-    def as_state(self) -> _Torus:
+    def as_torus(self) -> Torus:
         """
-        Return an immutable :class:`~hiten.algorithms.tori.base._Torus` view of the current grid.
+        Return an immutable :class:`~hiten.system.torus.Torus` view of the current grid.
 
         The fundamental frequencies are derived from the generating periodic
         orbit: omega_1 = 2 * pi / T (longitudinal) and 
@@ -190,7 +187,7 @@ class _InvariantTori:
 
         Returns
         -------
-        :class:`~hiten.algorithms.tori.base._Torus`
+        :class:`~hiten.system.torus.Torus`
             Immutable torus representation with computed fundamental frequencies.
 
         Raises
@@ -226,7 +223,7 @@ class _InvariantTori:
         C0 = self.jacobi
 
         # Return an *immutable* copy of the grid to avoid accidental mutation.
-        return _Torus(grid=self._grid.copy(), omega=omega, C0=C0, system=self.system)
+        return Torus(grid=self._grid.copy(), omega=omega, C0=C0, system=self.system)
 
     def _prepare(self, n_theta1: int = 256, *, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8) -> None:
         """
@@ -361,8 +358,29 @@ class _InvariantTori:
 
         return ubar + float(epsilon) * uhat
 
-    def _compute_linear(self, *, epsilon: float, n_theta1: int, n_theta2: int) -> np.ndarray:
-        """Return the first-order torus grid."""
+    def compute(self, *, epsilon: float, n_theta1: int, n_theta2: int) -> np.ndarray:
+        """Compute the invariant torus grid.
+        
+        Parameters
+        ----------
+        epsilon : float
+            Torus amplitude used in the linear approximation.
+        n_theta1 : int
+            Number of discretisation points along theta1.
+        n_theta2 : int
+            Number of discretisation points along theta2.
+
+        Returns
+        -------
+        numpy.ndarray
+            Invariant torus grid.
+
+        Notes
+        -----
+        This method computes the invariant torus grid using the linear approximation.
+        The grid is computed using the cached STM samples and the complex eigenvector field.
+        The grid is cached for subsequent plotting and state export.
+        """
 
         # Ensure STM cache at requested resolution
         self._prepare(n_theta1)
@@ -382,6 +400,8 @@ class _InvariantTori:
                 - sin_t2[None, :, None] * yi[:, None, :]
             )
         )
+        # Cache computed grid for plotting and state export
+        self._grid = u_grid
         return u_grid
 
     def _initial_section_curve(
@@ -450,50 +470,6 @@ class _InvariantTori:
         rho = np.angle(lam_c)
 
         return v_curve.astype(float), float(rho)
-    
-    def _compute_kkg(self, *, epsilon: float, n_theta1: int, n_theta2: int) -> np.ndarray:
-        """Compute invariant torus using the KKG algorithm."""
-        raise NotImplementedError("KKG algorithm not implemented yet.")
-
-    def compute(
-        self,
-        *,
-        scheme: Literal["linear", "gmos", "kkg"] = "linear",
-        epsilon: float = 1e-4,
-        n_theta1: int = 256,
-        n_theta2: int = 64,
-        **kwargs,
-    ) -> np.ndarray:
-        """Generate and cache a torus grid using the selected *scheme*.
-
-        Parameters
-        ----------
-        scheme : {'linear', 'gmos', 'kkg'}, default 'linear'
-            Algorithm to use.  'linear' is the earlier first-order model;
-            'gmos' is the GMOS algorithm;
-            'kkg' is the KKG algorithm.
-        epsilon : float, default 1e-4
-            Amplitude of the torus
-        n_theta1 : int, default 256
-            Number of points along periodic orbit (longitudinal)
-        n_theta2 : int, default 64
-            Number of points in transverse direction (latitudinal)
-        kwargs : additional parameters forwarded to the chosen backend.
-        """
-
-        if scheme == "linear":
-            self._grid = self._compute_linear(epsilon=epsilon, n_theta1=n_theta1, n_theta2=n_theta2)
-        elif scheme == "gmos":
-            self._grid = self._compute_gmos(
-                epsilon=epsilon, 
-                n_theta1=n_theta1, 
-                n_theta2=n_theta2,
-                **kwargs
-            )
-        elif scheme == "kkg":
-            self._grid = self._compute_kkg(epsilon=epsilon, n_theta1=n_theta1, n_theta2=n_theta2)
-
-        return self._grid
 
     def plot(
         self,
@@ -536,241 +512,3 @@ class _InvariantTori:
             filepath=filepath,
             **kwargs,
         )
-
-    def _plot_diagnostics(
-        self,
-        v_curve_initial: np.ndarray,
-        v_curve_corr: np.ndarray,
-        save_path: str = "gmos_diagnostics.png",
-    ) -> None:
-        """Plot diagnostic information comparing initial and corrected curves.
-
-        Parameters
-        ----------
-        v_curve_initial : numpy.ndarray
-            Invariant curve obtained from the linear approximation, shape *(N, 6)*.
-        v_curve_corr : numpy.ndarray
-            Curve after GMOS Newton correction, shape *(N, 6)*.
-        save_path : str, default 'gmos_diagnostics.png'
-            File path where the figure is saved.
-        """
-
-        import matplotlib.pyplot as plt
-
-        theta2_vals = np.linspace(0.0, 2 * np.pi, len(v_curve_corr))
-
-        # Helper for Jacobi constant computation
-        def _jacobi(state: np.ndarray) -> float:
-            from hiten.algorithms.dynamics.utils.energy import (
-                crtbp_energy, energy_to_jacobi)
-            return energy_to_jacobi(crtbp_energy(state, self.system.mu))
-
-        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-
-        # Plot 1: Initial vs corrected curve in x-y plane
-        ax = axes[0, 0]
-        ax.plot(v_curve_initial[:, 0], v_curve_initial[:, 1], "b-", label="Initial", alpha=0.5)
-        ax.plot(v_curve_corr[:, 0], v_curve_corr[:, 1], "r-", label="Corrected")
-        ax.plot(self.orbit.initial_state[0], self.orbit.initial_state[1], "ko", markersize=8, label="Periodic orbit")
-        ax.set_xlabel("x")
-        ax.set_ylabel("y")
-        ax.set_title("Invariant Curve (x-y plane)")
-        ax.legend()
-        ax.axis("equal")
-
-        # Plot 2: Jacobi constant along curve
-        ax = axes[0, 1]
-        jacobi_vals = [_jacobi(state) for state in v_curve_corr]
-        ax.plot(theta2_vals, jacobi_vals, "g-")
-        ax.axhline(self.jacobi, color="k", linestyle="--", label="Orbit Jacobi")
-        ax.set_xlabel("theta_2")
-        ax.set_ylabel("Jacobi constant")
-        ax.set_title("Jacobi Constant Variation")
-        ax.legend()
-
-        # Plot 3: Distance from periodic orbit
-        ax = axes[1, 0]
-        distances = np.linalg.norm(v_curve_corr - self.orbit.initial_state, axis=1)
-        ax.plot(theta2_vals, distances, "m-")
-        ax.set_xlabel("theta_2")
-        ax.set_ylabel("Distance from periodic orbit")
-        ax.set_title("Curve Amplitude")
-
-        # Plot 4: Invariance error (per point)
-        ax = axes[1, 1]
-        errors = []
-        rho = self.rotation_number if self.rotation_number is not None else 0.0
-        for j, state in enumerate(v_curve_corr):
-            sol = _propagate_dynsys(
-                dynsys=self.dynsys,
-                state0=state,
-                t0=0.0,
-                tf=self.period,
-                forward=1,
-                steps=2,
-                method="adaptive",
-                order=8,
-            )
-            j_target = int(np.round(j + rho * len(v_curve_corr) / (2 * np.pi))) % len(v_curve_corr)
-            errors.append(np.linalg.norm(sol.states[-1] - v_curve_corr[j_target]))
-
-        ax.semilogy(theta2_vals, errors, "c-")
-        ax.set_xlabel("theta_2")
-        ax.set_ylabel("Invariance error")
-        ax.set_title("Point-wise Invariance Error")
-
-        plt.tight_layout()
-        plt.savefig(save_path)
-        plt.close()
-
-    def _plot_gmos_diagnostics(self, save_path: str = "gmos_diagnostics.png") -> None:
-        """Plot GMOS diagnostic information using stored curves from the last computation.
-
-        This is a convenience method that uses the curves stored during the most recent
-        GMOS computation. Call this after `compute(scheme='gmos', ...)`.
-
-        Parameters
-        ----------
-        save_path : str, default 'gmos_diagnostics.png'
-            File path where the figure is saved.
-
-        Raises
-        ------
-        ValueError
-            If GMOS has not been run yet (no stored curves available).
-        """
-        if not hasattr(self, '_v_curve_initial') or not hasattr(self, '_v_curve_corrected'):
-            raise ValueError(
-                "No GMOS curves available. Run `compute(scheme='gmos', ...)` first."
-            )
-        
-        self._plot_diagnostics(
-            self._v_curve_initial, 
-            self._v_curve_corrected, 
-            save_path=save_path
-        )
-
-    def _stroboscopic_map(
-        self,
-        states: np.ndarray | Sequence[float],
-        *,
-        method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
-        order: int = 6,
-        forward: int = 1,
-    ) -> np.ndarray:
-        states_np = np.asarray(states, dtype=float)
-
-        # Handle single state vector conveniently.
-        if states_np.ndim == 1:
-            sol = _propagate_dynsys(
-                dynsys=self.dynsys,
-                state0=states_np,
-                t0=0.0,
-                tf=self.period,
-                forward=forward,
-                steps=2,  # only initial and final time needed
-                method=method,
-                order=order,
-            )
-            return sol.states[-1]
-
-        out = np.empty_like(states_np)
-        for i, s in enumerate(states_np):
-            sol = _propagate_dynsys(
-                dynsys=self.dynsys,
-                state0=s,
-                t0=0.0,
-                tf=self.period,
-                forward=forward,
-                steps=2,
-                method=method,
-                order=order,
-            )
-            out[i] = sol.states[-1]
-        return out
-
-    def _compute_gmos(
-        self,
-        *,
-        epsilon: float = 1e-3,
-        n_theta1: int = 64,
-        n_theta2: int = 256,
-    ) -> np.ndarray:
-        """
-        Compute quasi-periodic invariant torus using the GMOS algorithm.
-        """
-        raise NotImplementedError("GMOS algorithm not implemented yet.")
-
-    @staticmethod
-    def _D(theta_2: np.ndarray) -> np.ndarray:
-        N = len(theta_2)
-        if N % 2 == 0:
-            raise ValueError("N must be odd for symmetric k-range indexing")
-            
-        # Sample points theta_2,i = 2*pi*i/N for i = 0, 1, ..., N-1
-        theta_2 = 2.0 * np.pi * np.arange(N) / N
-        
-        # Wavenumbers k = -(N-1)/2, ..., (N-1)/2
-        k_max = (N - 1) // 2
-        k_values = np.arange(-k_max, k_max + 1)
-        
-        # Construct DFT matrix: D[k,i] = exp(-i*k*theta_2,i)
-        D = np.zeros((N, N), dtype=np.complex128)
-        for idx_k, k in enumerate(k_values):
-            D[idx_k, :] = np.exp(-1j * k * theta_2)
-            
-        return D
-
-    @staticmethod
-    def _D_inv(theta_2: np.ndarray) -> np.ndarray:
-        N = len(theta_2)
-        if N % 2 == 0:
-            raise ValueError("N must be odd for symmetric k-range indexing")
-
-        theta_2 = 2.0 * np.pi * np.arange(N) / N
-        
-        # Wavenumbers k = -(N-1)/2, ..., (N-1)/2
-        k_max = (N - 1) // 2
-        k_values = np.arange(-k_max, k_max + 1)
-        
-        # Construct IDFT matrix: D_inv[i,k] = (1/N) * exp(i*k*theta_2,i)
-        D_inv = np.zeros((N, N), dtype=np.complex128)
-        for i in range(N):
-            for idx_k, k in enumerate(k_values):
-                D_inv[i, idx_k] = np.exp(1j * k * theta_2[i])
-        
-        # Scale by 1/N for proper inverse
-        D_inv /= N
-        
-        return D_inv
-    
-    @staticmethod
-    def _p2(theta_2: np.ndarray, v: np.ndarray, v_tilde: np.ndarray):
-        N = len(theta_2)
-
-        @numba.njit(cache=True, fastmath=FASTMATH)
-        def _df_dtheta(f_values: np.ndarray, h: float):
-            N = len(f_values)
-            df_dtheta = np.zeros_like(f_values)
-            
-            for i in range(N):
-                # Use periodic boundary conditions
-                i_plus = (i + 1) % N
-                i_minus = (i - 1) % N
-                
-                # Centered finite difference
-                df_dtheta[i] = (f_values[i_plus] - f_values[i_minus]) / (2 * h)
-            
-            return df_dtheta
-        
-        dv_tilde_dtheta2 = _df_dtheta(v_tilde, 2 * np.pi / N)
-    
-        inner_products = np.array([np.dot(v[i], dv_tilde_dtheta2[i]) for i in range(N)])
-
-        p2 = np.mean(inner_products)
-    
-        return p2
-
-    @staticmethod
-    def _Jacobian():
-        pass

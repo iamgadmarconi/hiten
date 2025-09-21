@@ -13,7 +13,6 @@ from .poincare.synodic.base import SynodicMap
 from .poincare.synodic.config import _SynodicMapConfig as SynodicMapConfig
 from .poincare.synodic.config import \
     _SynodicSectionConfig as SynodicSectionConfig
-from .tori.base import _InvariantTori as InvariantTori
 
 __all__ = [
     "StateParameter",
@@ -22,7 +21,6 @@ __all__ = [
     "SynodicMap",
     "SynodicMapConfig",
     "SynodicSectionConfig",
-    "InvariantTori",
     "LineSearchConfig",
     "OrbitCorrectionConfig",
     "OrbitContinuationConfig",
