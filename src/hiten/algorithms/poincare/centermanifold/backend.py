@@ -11,7 +11,7 @@ provides the interface for center manifold computations, while the Numba-compile
 handle the low-level numerical integration and section crossing detection.
 """
 
-from typing import Callable, Literal, Optional, Tuple
+from typing import Literal, Tuple
 
 import numpy as np
 from numba import njit, prange
@@ -27,9 +27,7 @@ from hiten.algorithms.poincare.centermanifold.config import _get_section_config
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
 from hiten.algorithms.poincare.core.events import _SurfaceEvent
 from hiten.algorithms.poincare.utils import _hermite_scalar
-from hiten.algorithms.polynomial.operations import _polynomial_evaluate
 from hiten.algorithms.utils.config import FASTMATH
-from hiten.utils.log_config import logger
 
 
 @njit(cache=False, fastmath=FASTMATH, inline="always")

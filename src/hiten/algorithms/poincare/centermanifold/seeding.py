@@ -7,14 +7,6 @@ Circular Restricted Three-Body Problem (CR3BP).
 The main class :class:`~hiten.algorithms.poincare.centermanifold.seeding._CenterManifoldSeedingBase` 
 defines the interface for all seeding strategies and provides common functionality for Hill
 boundary validation and seed generation.
-
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
-
-Jorba, A. & Masdemont, J. (1999). Dynamics in the center manifold
-of the collinear points of the restricted three body problem.
-*Physica D*, 132(1-2), 189-213.
 """
 from typing import Any, Callable
 

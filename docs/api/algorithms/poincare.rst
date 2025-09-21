@@ -13,6 +13,11 @@ The module is organized into several submodules:
    poincare/singlehit
    poincare/synodic
    poincare/utils
+   poincare/types
+   poincare/events
+   poincare/seeding
+   poincare/strategies
+   poincare/interfaces
 
 .. currentmodule:: hiten.algorithms.poincare
 

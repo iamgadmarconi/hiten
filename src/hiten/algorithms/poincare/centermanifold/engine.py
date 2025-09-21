@@ -31,10 +31,11 @@ from hiten.algorithms.poincare.centermanifold.interfaces import \
     _CenterManifoldInterface
 from hiten.algorithms.poincare.centermanifold.seeding import \
     _CenterManifoldSeedingBase
+from hiten.algorithms.poincare.centermanifold.types import (
+    CenterManifoldMapResults, _CenterManifoldMapProblem)
 from hiten.algorithms.poincare.core.engine import _ReturnMapEngine
-from hiten.utils.log_config import logger
 from hiten.algorithms.utils.exceptions import EngineError
-from .types import _CenterManifoldMapProblem, CenterManifoldMapResults
+from hiten.utils.log_config import logger
 
 
 class _CenterManifoldEngine(_ReturnMapEngine):

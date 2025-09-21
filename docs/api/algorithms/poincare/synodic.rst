@@ -35,7 +35,7 @@ Backend for synodic Poincare section detection. Implements efficient algorithms 
 
 Computation engine for synodic Poincare maps. Coordinates trajectory processing, parallel detection, and result aggregation for multiple trajectories.
 
-.. autoclass:: _SynodicEngineConfigAdapter()
+.. autoclass:: _SynodicEngineInterface()
    :members:
    :exclude-members: __init__, __repr__
 

@@ -8,14 +8,6 @@ libration points in the Circular Restricted Three-Body Problem (CR3BP).
 The :class:`~hiten.algorithms.poincare.centermanifold.base.CenterManifoldMap` 
 class extends the base return map functionality with center manifold-specific seeding 
 strategies and visualization capabilities.
-
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
-
-Jorba, A. & Masdemont, J. (1999). Dynamics in the center manifold
-of the collinear points of the restricted three body problem.
-*Physica D*, 132(1-2), 189-213.
 """
 
 from typing import Literal, Optional, Sequence
@@ -31,8 +23,8 @@ from hiten.algorithms.poincare.centermanifold.interfaces import \
     _CenterManifoldInterface
 from hiten.algorithms.poincare.centermanifold.strategies import _make_strategy
 from hiten.algorithms.poincare.centermanifold.types import (
-    CenterManifoldMapResults, _CenterManifoldMapProblem)
-from hiten.algorithms.poincare.core.base import _ReturnMapBase, _Section
+    CenterManifoldMapResults)
+from hiten.algorithms.poincare.core.base import _ReturnMapBase
 from hiten.system.center import CenterManifold
 from hiten.system.orbits.base import GenericOrbit
 from hiten.utils.io.map import (load_poincare_map, load_poincare_map_inplace,

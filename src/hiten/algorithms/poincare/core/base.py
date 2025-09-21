@@ -4,15 +4,9 @@ This module provides the foundational classes for implementing Poincare
 return maps in the hiten framework. It defines the core interfaces and
 data structures used across all Poincare map implementations.
 
-References
-----------
-Szebehely, V. (1967). *Theory of Orbits*. Academic Press.
-
-Guckenheimer, J. & Holmes, P. (1983). *Nonlinear Oscillations, Dynamical
-Systems, and Bifurcations of Vector Fields*. Springer.
-
-Wiggins, S. (2003). *Introduction to Applied Nonlinear Dynamical Systems
-and Chaos*. Springer.
+This module provides the foundational classes for implementing Poincare
+return maps in the hiten framework. It defines the core interfaces and
+data structures used across all Poincare map implementations.
 """
 
 from abc import ABC, abstractmethod
@@ -24,58 +18,7 @@ from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
 from hiten.algorithms.poincare.core.config import _ReturnMapBaseConfig
 from hiten.algorithms.poincare.core.engine import _ReturnMapEngine
 from hiten.algorithms.poincare.core.strategies import _SeedingStrategyBase
-
-
-class _Section:
-    """Immutable container for a single 2D return map slice.
-
-    This class holds the data for a computed Poincare section, including
-    the intersection points, state vectors, axis labels, and optional
-    integration times.
-
-    Parameters
-    ----------
-    points : ndarray, shape (n, 2)
-        Array of 2D intersection points in the section plane.
-    states : ndarray, shape (n, k)
-        Array of state vectors at the intersection points. The number
-        of columns k depends on the backend implementation.
-    labels : tuple[str, str]
-        Labels for the two axes in the section plane (e.g., ("q2", "p2")).
-    times : ndarray, optional, shape (n,)
-        Array of absolute integration times at each intersection point.
-        If None, times are not available.
-
-    Attributes
-    ----------
-    points : ndarray, shape (n, 2)
-        The 2D intersection points.
-    states : ndarray, shape (n, k)
-        The state vectors at intersections.
-    labels : tuple[str, str]
-        The axis labels.
-    times : ndarray or None, shape (n,)
-        The integration times, if available.
-
-    Notes
-    -----
-    This class is immutable after construction. All data is stored in
-    NumPy arrays for efficient access and manipulation. The class
-    provides basic functionality for accessing the data and determining
-    the number of points in the section.
-    """
-
-    def __init__(self, points: np.ndarray, states: np.ndarray, labels: tuple[str, str], times: np.ndarray | None = None):
-        self.points: np.ndarray = points       # (n, 2) plane coordinates
-        self.states: np.ndarray = states       # (n, k) backend-specific state vectors
-        self.labels: tuple[str, str] = labels  # axis labels (e.g. ("q2", "p2"))
-        self.times: np.ndarray | None = times  # (n,) absolute integration times (optional)
-
-    def __len__(self):
-        return self.points.shape[0]
-
-    def __repr__(self):
-        return f"_Section(points={len(self)}, labels={self.labels}, times={'yes' if self.times is not None else 'no'})"
+from hiten.algorithms.poincare.core.types import _Section
 
 
 class _ReturnMapBase(ABC):

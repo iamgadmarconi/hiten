@@ -1,12 +1,15 @@
-"""Problem and Results types for center manifold Poincare maps."""
+"""Problem and Results types for center manifold Poincare maps.
 
-from __future__ import annotations
+This module defines the problem and results types for center manifold Poincare maps.
+The problem type contains the parameters for the center manifold map computation,
+while the results type contains the computed section.
+"""
 
 from dataclasses import dataclass
 from typing import Optional, Tuple
 
 import numpy as np
-from hiten.algorithms.poincare.core.base import _Section
+from hiten.algorithms.poincare.core.types import _MapResults
 
 
 @dataclass(frozen=True)
@@ -34,9 +37,8 @@ class _CenterManifoldMapProblem:
     n_workers: int
 
 
-class CenterManifoldMapResults(_Section):
+class CenterManifoldMapResults(_MapResults):
     """User-facing results that behave as a _Section with extra helpers."""
-
     def __init__(self, points: np.ndarray, states: np.ndarray, labels: Tuple[str, str], times: Optional[np.ndarray] = None):
         super().__init__(points, states, labels, times)
 

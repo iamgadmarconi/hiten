@@ -7,7 +7,7 @@ for common section types.
 """
 
 from abc import ABC, abstractmethod
-from typing import Literal, NamedTuple
+from typing import Literal
 
 import numpy as np
 
@@ -119,46 +119,6 @@ class _SurfaceEvent(ABC):
         considered valid crossings.
         """
         return self._dir
-
-
-class _SectionHit(NamedTuple):
-    """Container for a single trajectory-section intersection.
-
-    This named tuple holds all the information about a single
-    intersection between a trajectory and a Poincare section.
-    It provides both the full state vector and the 2D projection
-    for efficient access.
-
-    Parameters
-    ----------
-    time : float
-        Absolute integration time (nondimensional units), signed
-        according to propagation direction.
-    state : ndarray, shape (n,)
-        Full state vector at the crossing (immutable copy).
-    point2d : ndarray, shape (2,)
-        2D coordinates of the point in the section plane (e.g.,
-        (q2, p2) or (x, x_dot)). Stored separately so callers
-        do not have to re-project the full state vector.
-
-    Notes
-    -----
-    This container is immutable and provides efficient access to
-    both the full state information and the 2D projection. The
-    2D coordinates are pre-computed to avoid repeated projection
-    operations.
-
-    All time units are in nondimensional units unless otherwise
-    specified.
-    """
-
-    time: float
-    state: np.ndarray  # shape (n,)
-    point2d: np.ndarray  # shape (2,)
-
-    def __repr__(self):
-        return (f"SectionHit(t={self.time:.3e}, state={np.array2string(self.state, precision=3)}, "
-                f"pt={np.array2string(self.point2d, precision=3)})")
 
 
 class _PlaneEvent(_SurfaceEvent):

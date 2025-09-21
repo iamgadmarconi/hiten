@@ -1,7 +1,7 @@
 Core Poincare Map Infrastructure
 =================================
 
-The core module provides the fundamental infrastructure for Poincare return map computation, including base classes, configuration management, and common utilities. This module defines the abstract interfaces and common functionality used by all excludeized Poincare map implementations.
+The core module provides the fundamental infrastructure for Poincare return map computation, including base classes, configuration management, and common utilities. This module defines the abstract interfaces and common functionality used by all specialized Poincare map implementations.
 
 .. currentmodule:: hiten.algorithms.poincare.core
 
