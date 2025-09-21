@@ -10,7 +10,7 @@ import numpy as np
 from hiten.algorithms.corrector.backends.newton import _NewtonBackend
 from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
 from hiten.algorithms.corrector.engine.base import _CorrectionEngine
-from hiten.algorithms.corrector.interfaces import _PeriodicOrbitInterface
+from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
 from hiten.algorithms.corrector.types import (CorrectionResult,
                                               _CorrectionProblem)
 from hiten.algorithms.utils.exceptions import (BackendError, ConvergenceError,
@@ -23,9 +23,9 @@ if TYPE_CHECKING:
 class _OrbitCorrectionEngine(_CorrectionEngine):
     """Engine orchestrating periodic orbit correction via a backend and interface."""
 
-    def __init__(self, *, backend: _NewtonBackend, interface: _PeriodicOrbitInterface | None = None) -> None:
+    def __init__(self, *, backend: _NewtonBackend, interface: _PeriodicOrbitCorrectorInterface | None = None) -> None:
         self._backend = backend
-        self._interface = _PeriodicOrbitInterface() if interface is None else interface
+        self._interface = _PeriodicOrbitCorrectorInterface() if interface is None else interface
 
     def solve(
         self,

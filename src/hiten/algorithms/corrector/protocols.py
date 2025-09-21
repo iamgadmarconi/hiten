@@ -11,7 +11,7 @@ from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
 
 
 @runtime_checkable
-class StepProtocol(Protocol):
+class CorrectorStepProtocol(Protocol):
     """Protocol for a step-size control strategy used by backends.
 
     Transforms a Newton step into an accepted update and returns the

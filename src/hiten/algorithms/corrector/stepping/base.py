@@ -5,11 +5,11 @@ This module provides the base class for step-size control strategies.
 
 from abc import ABC, abstractmethod
 
-from hiten.algorithms.corrector.protocols import StepProtocol
+from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
 from hiten.algorithms.corrector.types import NormFn, ResidualFn
 
 
-class _SteppingBase(ABC):
+class _CorrectorStepBase(ABC):
     """Provide an abstract base class for step-size control strategy interfaces.
 
     This class provides the foundation for implementing different step-size
@@ -41,13 +41,13 @@ class _SteppingBase(ABC):
     allowing correction algorithms to mix step interfaces with other
     capabilities (convergence monitoring, Jacobian computation, etc.).
 
-    The abstract method :meth:`~hiten.algorithms.corrector.stepping.base._SteppingBase._build_line_searcher` is responsible for
-    creating :class:`~hiten.algorithms.corrector.protocols.StepProtocol` objects that encapsulate the step
+    The abstract method :meth:`~hiten.algorithms.corrector.stepping.base._CorrectorStepBase._build_line_searcher` is responsible for
+    creating :class:`~hiten.algorithms.corrector.protocols.CorrectorStepProtocol` objects that encapsulate the step
     transformation logic for specific problems.
 
     Examples
     --------
-    >>> class CustomStepInterface(_SteppingBase):
+    >>> class CustomStepInterface(_CorrectorStepBase):
     ...     def _build_line_searcher(self, residual_fn, norm_fn, max_delta):
     ...         def custom_step(x, delta, current_norm):
     ...             # Custom step logic here
@@ -59,11 +59,11 @@ class _SteppingBase(ABC):
 
     See Also
     --------
-    :class:`~hiten.algorithms.corrector.stepping.plain._PlainStep`
+    :class:`~hiten.algorithms.corrector.stepping.plain._CorrectorPlainStep`
         Concrete implementation for simple Newton steps.
     :class:`~hiten.algorithms.corrector.stepping.armijo._ArmijoStep`
         Concrete implementation with Armijo line search.
-    :class:`~hiten.algorithms.corrector.protocols.StepProtocol`
+    :class:`~hiten.algorithms.corrector.protocols.CorrectorStepProtocol`
         Protocol for step transformation functions.
     """
 
@@ -76,10 +76,10 @@ class _SteppingBase(ABC):
         residual_fn: ResidualFn,
         norm_fn: NormFn,
         max_delta: float | None,
-    ) -> StepProtocol:
+    ) -> CorrectorStepProtocol:
         """Build a step transformation function for the current problem.
 
-        This method creates a :class:`~hiten.algorithms.corrector.protocols.StepProtocol` object that encapsulates
+        This method creates a :class:`~hiten.algorithms.corrector.protocols.CorrectorStepProtocol` object that encapsulates
         the step-size control logic for a specific nonlinear system.
         The stepper uses the provided residual and norm functions to
         evaluate candidate steps and determine appropriate step sizes.
@@ -96,7 +96,7 @@ class _SteppingBase(ABC):
 
         Returns
         -------
-        stepper : :class:`~hiten.algorithms.corrector.protocols.StepProtocol`
+        stepper : :class:`~hiten.algorithms.corrector.protocols.CorrectorStepProtocol`
             Step transformation function configured for this problem.
 
         Notes

@@ -541,8 +541,12 @@ def plot_orbit_family(
             scalar_param = np.linalg.norm(param_arr, axis=1)
     else:
         # Already 1-D (or a list/tuple of scalars)
-        scalar_param = param_arr.squeeze()
+        scalar_param = param_arr.flatten()  # Use flatten() instead of squeeze() to ensure 1D
 
+    # Ensure scalar_param is 1D and has a length
+    if scalar_param.ndim == 0:
+        scalar_param = np.array([scalar_param])  # Convert 0D to 1D array
+    
     if len(states_list) != len(scalar_param):
         raise ValueError("states_list and parameter_values length mismatch after flattening")
 

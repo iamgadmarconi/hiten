@@ -17,11 +17,11 @@ Advanced users can compose components explicitly:
 
 >>> from hiten.algorithms.corrector.backends.newton import _NewtonBackend
 >>> from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
->>> from hiten.algorithms.corrector.interfaces import _PeriodicOrbitInterface
+>>> from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
 >>> from hiten.algorithms.corrector.stepping import make_armijo_stepper
 >>> from hiten.algorithms.corrector.config import _LineSearchConfig
 >>> backend = _NewtonBackend(stepper_factory=make_armijo_stepper(_LineSearchConfig()))
->>> engine = _OrbitCorrectionEngine(backend=backend, interface=_PeriodicOrbitInterface())
+>>> engine = _OrbitCorrectionEngine(backend=backend, interface=_PeriodicOrbitCorrectorInterface())
 >>> x_corr, result, t_half = engine.solve(orbit, orbit._correction_config)
 
 ------------
@@ -43,7 +43,7 @@ from .backends.newton import _NewtonBackend
 from .config import (_BaseCorrectionConfig, _LineSearchConfig,
                      _OrbitCorrectionConfig)
 from .engine import _OrbitCorrectionEngine
-from .interfaces import _PeriodicOrbitInterface
+from .interfaces import _PeriodicOrbitCorrectorInterface
 
 __all__ = [
     "_NewtonBackend",
@@ -53,6 +53,6 @@ __all__ = [
     "_LineSearchConfig",
     
     "_CorrectorBackend",
-    "_PeriodicOrbitInterface",
+    "_PeriodicOrbitCorrectorInterface",
     "_OrbitCorrectionEngine",
 ]

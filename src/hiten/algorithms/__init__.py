@@ -3,9 +3,7 @@
 
 from .continuation.config import \
     _OrbitContinuationConfig as OrbitContinuationConfig
-from .continuation.predictors import _EnergyLevel as EnergyParameter
-from .continuation.predictors import _FixedPeriod as PeriodParameter
-from .continuation.predictors import _StateParameter as StateParameter
+from .continuation.facades import StateParameter
 from .corrector.config import _LineSearchConfig as LineSearchConfig
 from .corrector.config import _OrbitCorrectionConfig as OrbitCorrectionConfig
 from .poincare.centermanifold.base import CenterManifoldMap
@@ -19,8 +17,6 @@ from .tori.base import _InvariantTori as InvariantTori
 
 __all__ = [
     "StateParameter",
-    "PeriodParameter",
-    "EnergyParameter",
     "CenterManifoldMap",
     "CenterManifoldMapConfig",
     "SynodicMap",

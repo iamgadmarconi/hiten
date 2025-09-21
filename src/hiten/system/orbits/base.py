@@ -28,7 +28,7 @@ from hiten.algorithms.corrector.stepping import (make_armijo_stepper,
                                                  make_plain_stepper)
 from hiten.algorithms.corrector.backends.newton import _NewtonBackend
 from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
-from hiten.algorithms.corrector.interfaces import _PeriodicOrbitInterface
+from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import (_compute_monodromy, _compute_stm,
                                             _stability_indices)
@@ -502,7 +502,7 @@ class PeriodicOrbit(ABC):
             stepper_factory = make_armijo_stepper(cfg.line_search_config)
 
         backend = _NewtonBackend(stepper_factory=stepper_factory)
-        interface = _PeriodicOrbitInterface()
+        interface = _PeriodicOrbitCorrectorInterface()
         engine = _OrbitCorrectionEngine(backend=backend, interface=interface)
 
         result, half_period = engine.solve(self, cfg)

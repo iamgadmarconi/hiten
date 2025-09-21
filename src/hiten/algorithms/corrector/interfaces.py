@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from hiten.system.orbits.base import PeriodicOrbit
 
 
-class _PeriodicOrbitInterface:
+class _PeriodicOrbitCorrectorInterface:
     """Stateless adapter for periodic orbit correction.
     
     Produces residual and Jacobian closures and provides helpers to translate

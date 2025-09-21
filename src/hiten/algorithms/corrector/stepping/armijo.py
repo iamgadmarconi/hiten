@@ -1,5 +1,3 @@
-
-
 """Define the Armijo step interface for step-size control strategies.
 
 This module provides the Armijo step interface for step-size control strategies.
@@ -10,8 +8,8 @@ from typing import Optional, Tuple
 import numpy as np
 
 from hiten.algorithms.corrector.config import _LineSearchConfig
-from hiten.algorithms.corrector.protocols import StepProtocol
-from hiten.algorithms.corrector.stepping.base import _SteppingBase
+from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
+from hiten.algorithms.corrector.stepping.base import _CorrectorStepBase
 from hiten.algorithms.corrector.types import NormFn, ResidualFn
 from hiten.algorithms.utils.exceptions import BackendError
 from hiten.utils.log_config import logger
@@ -184,7 +182,7 @@ class _ArmijoLineSearch:
         raise BackendError("Armijo line search failed to find a productive step.")
 
 
-class _ArmijoStep(_SteppingBase):
+class _ArmijoStep(_CorrectorStepBase):
     """Provide a step interface with Armijo line search for robust convergence.
 
     This class extends the plain step interface with optional Armijo line
@@ -255,7 +253,7 @@ class _ArmijoStep(_SteppingBase):
 
     See Also
     --------
-    :class:`~hiten.algorithms.corrector._step_interface._PlainStep`
+    :class:`~hiten.algorithms.corrector._step_interface._CorrectorPlainStep`
         Parent class providing plain Newton step capabilities.
     :class:`~hiten.algorithms.corrector.line._ArmijoLineSearch`
         Line search implementation used by this interface.
@@ -293,7 +291,7 @@ class _ArmijoStep(_SteppingBase):
         residual_fn: ResidualFn,
         norm_fn: NormFn,
         max_delta: float | None,
-    ) -> StepProtocol:
+    ) -> CorrectorStepProtocol:
         """Build a step transformation function with optional line search.
 
         This method creates either a plain Newton stepper or an Armijo
@@ -312,7 +310,7 @@ class _ArmijoStep(_SteppingBase):
 
         Returns
         -------
-        stepper : :class:`~hiten.algorithms.corrector.protocols.StepProtocol`
+        stepper : :class:`~hiten.algorithms.corrector.protocols.CorrectorStepProtocol`
             Step transformation function, either plain Newton or Armijo
             line search based on configuration.
 

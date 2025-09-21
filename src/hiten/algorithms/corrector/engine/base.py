@@ -6,8 +6,6 @@ This module provides the base class for correction engines.
 from abc import ABC, abstractmethod
 from typing import Tuple
 
-import numpy as np
-
 from hiten.algorithms.corrector.types import CorrectionResult
 
 
@@ -18,7 +16,7 @@ class _CorrectionEngine(ABC):
     """
 
     @abstractmethod
-    def solve(self, orbit, cfg, *, forward: int) -> Tuple[np.ndarray, CorrectionResult, float]:
+    def solve(self, orbit, cfg) -> Tuple[CorrectionResult, float]:
         """Solve the correction problem.
 
         This method solves the correction problem for a given orbit and configuration.
@@ -29,7 +27,10 @@ class _CorrectionEngine(ABC):
             Orbit to be corrected.
         cfg : :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
             Configuration for the correction.
-        forward : int
-            Forward integration direction.
+
+        Returns
+        -------
+        Tuple[:class:`~hiten.algorithms.corrector.types.CorrectionResult`, float]
+            backend result, half-period.
         """
         ...

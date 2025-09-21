@@ -3,14 +3,10 @@ Correction Engine
 
 The engine module provides orchestration for correction workflows.
 
-.. toctree::
-   :maxdepth: 2
+.. currentmodule:: hiten.algorithms.corrector.engine
 
-   base
-   engine
-
-base.py
-^^^^^^^
+Base Engine
+-----------
 
 .. currentmodule:: hiten.algorithms.corrector.engine.base
 
@@ -24,8 +20,8 @@ The :class:`_CorrectionEngine` class provides an abstract base class for correct
    :undoc-members:
    :exclude-members: __init__
 
-engine.py
-^^^^^^^^^
+Orbit Correction Engine
+-----------------------
 
 .. currentmodule:: hiten.algorithms.corrector.engine.engine
 

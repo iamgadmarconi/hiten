@@ -10,7 +10,7 @@ from typing import Any, Callable, Tuple
 import numpy as np
 
 from hiten.algorithms.corrector.backends.base import _CorrectorBackend
-from hiten.algorithms.corrector.protocols import StepProtocol
+from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
 from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
 from hiten.algorithms.utils.exceptions import ConvergenceError
 from hiten.utils.log_config import logger
@@ -38,15 +38,15 @@ class _NewtonBackend(_CorrectorBackend):
     def __init__(
         self,
         *,
-        stepper_factory: Callable[[ResidualFn, NormFn, float | None], StepProtocol] | None = None,
+        stepper_factory: Callable[[ResidualFn, NormFn, float | None], CorrectorStepProtocol] | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         # Dependency-injected factory building the stepper per problem
-        self._stepper_factory: Callable[[ResidualFn, NormFn, float | None], StepProtocol]
+        self._stepper_factory: Callable[[ResidualFn, NormFn, float | None], CorrectorStepProtocol]
         if stepper_factory is None:
             # Default to a simple capped plain stepper, keeping backend decoupled
-            def _default_factory(res_fn: ResidualFn, nrm_fn: NormFn, max_del: float | None) -> StepProtocol:
+            def _default_factory(res_fn: ResidualFn, nrm_fn: NormFn, max_del: float | None) -> CorrectorStepProtocol:
                 def _plain_step(x: np.ndarray, delta: np.ndarray, current_norm: float):
                     if (max_del is not None) and (not np.isinf(max_del)):
                         delta_norm = float(np.linalg.norm(delta, ord=np.inf))

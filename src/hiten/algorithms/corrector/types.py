@@ -139,8 +139,8 @@ class _CorrectionProblem:
     """
     initial_guess: np.ndarray
     residual_fn: ResidualFn
-    jacobian_fn: Optional[JacobianFn] | None = None
-    norm_fn: Optional[NormFn] | None = None
+    jacobian_fn: Optional[JacobianFn] = None
+    norm_fn: Optional[NormFn] = None
     tol: float = 1e-10
     max_attempts: int = 25
     max_delta: float | None = 1e-2
