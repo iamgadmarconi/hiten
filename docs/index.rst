@@ -22,16 +22,19 @@ Quick Start
 
 .. code-block:: python
 
-   from hiten import Constants, CenterManifold, HaloOrbit
+   from hiten import System
+
+   system = System.from_bodies("earth", "moon")
+
+   l1 = system.get_libration_point(1)
+
+   orbit = l1.create_orbit("halo", amplitude_z=0.2, zenith="southern")
+   orbit.correct(max_attempts=25)
+   orbit.propagate(steps=1000)
    
-   # Set up the Earth-Moon system
-   constants = Constants(mu=0.012150585609624)
-   
-   # Create a center manifold
-   manifold = CenterManifold(constants)
-   
-   # Compute a halo orbit
-   orbit = HaloOrbit(constants)
+   manifold = orbit.manifold(stable=True, direction="positive")
+   manifold.compute()
+   manifold.plot()
 
 Installation
 ------------

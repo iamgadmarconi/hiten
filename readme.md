@@ -255,7 +255,7 @@ manifold.plot()
 
    ```python
    from hiten import System
-   from hiten.algorithms import InvariantTori
+   from hiten import InvariantTori
 
     system = System.from_bodies("earth", "moon")
     l1 = system.get_libration_point(1)
@@ -265,7 +265,7 @@ manifold.plot()
     orbit.propagate(steps=1000)
    
     torus = InvariantTori(orbit)
-    torus.compute(scheme='linear', epsilon=1e-2, n_theta1=256, n_theta2=256)
+    torus.compute(epsilon=1e-2, n_theta1=256, n_theta2=256)
     torus.plot()
    ```
 

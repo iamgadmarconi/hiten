@@ -10,7 +10,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from hiten import System
-from hiten.algorithms import InvariantTori
+from hiten import InvariantTori
 
 
 def main() -> None:
@@ -22,7 +22,7 @@ def main() -> None:
     orbit.propagate(steps=1000)
 
     torus = InvariantTori(orbit)
-    torus.compute(scheme='linear', epsilon=1e-2, n_theta1=512, n_theta2=512)
+    torus.compute(epsilon=1e-2, n_theta1=512, n_theta2=512)
     torus.plot()
 
 if __name__ == "__main__":

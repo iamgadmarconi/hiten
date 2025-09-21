@@ -965,7 +965,7 @@ def plot_invariant_torus(
     Parameters
     ----------
     u_grid : numpy.ndarray, shape (n_theta1, n_theta2, 6)
-        Grid of state vectors returned by _InvariantTori.sample_grid
+        Grid of state vectors returned by InvariantTori.sample_grid
         in nondimensional units.
     bodies : list of :class:`~hiten.system.body.Body`
         Primary and secondary bodies of the CR3BP.
