@@ -12,7 +12,7 @@ See Also
     Newton-Raphson backend implementation.
 :mod:`~hiten.algorithms.corrector.interfaces`
     Interface classes for different correction strategies.
-:mod:`~hiten.algorithms.corrector._step_interface`
+:mod:`~hiten.algorithms.corrector.stepping`
     Step-size control interfaces for robust convergence.
 """
 

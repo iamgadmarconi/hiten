@@ -13,8 +13,8 @@ All coordinates are in nondimensional CR3BP rotating-frame units.
 
 See Also
 --------
-:mod:`~hiten.algorithms.continuation.base`
-    Base continuation engine that these interfaces extend.
+:mod:`~hiten.algorithms.continuation.engine`
+    Continuation engines that these interfaces work with.
 :mod:`~hiten.system.orbits`
     Periodic orbit classes used by orbit continuation.
 :mod:`~hiten.algorithms.corrector`

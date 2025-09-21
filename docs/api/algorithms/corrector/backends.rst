@@ -3,14 +3,10 @@ Backend Algorithms
 
 The backends module provides core correction algorithms.
 
-.. toctree::
-   :maxdepth: 2
+.. currentmodule:: hiten.algorithms.corrector.backends
 
-   base
-   newton
-
-base.py
-^^^^^^^
+Base Backend
+------------
 
 .. currentmodule:: hiten.algorithms.corrector.backends.base
 
@@ -24,8 +20,8 @@ The :class:`_CorrectorBackend` class defines an abstract base class for iterativ
    :undoc-members:
    :exclude-members: __init__
 
-newton.py
-^^^^^^^^^
+Newton-Raphson Backend
+----------------------
 
 .. currentmodule:: hiten.algorithms.corrector.backends.newton
 

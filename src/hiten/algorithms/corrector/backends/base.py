@@ -12,11 +12,11 @@ consistent numerical behavior across different problem domains.
 
 See Also
 --------
-:mod:`~hiten.algorithms.corrector.newton`
+:mod:`~hiten.algorithms.corrector.backends.newton`
     Newton-Raphson correction implementations.
 :mod:`~hiten.algorithms.corrector.interfaces`
     Interface classes for different correction strategies.
-:mod:`~hiten.algorithms.corrector._step_interface`
+:mod:`~hiten.algorithms.corrector.stepping`
     Step-size control interfaces for robust convergence.
 """
 
@@ -65,9 +65,9 @@ class _CorrectorBackend(ABC):
     --------
     :class:`~hiten.algorithms.corrector.config._BaseCorrectionConfig`
         Configuration class for correction parameters.
-    :mod:`~hiten.algorithms.corrector.newton`
+    :mod:`~hiten.algorithms.corrector.backends.newton`
         Concrete Newton-Raphson implementations.
-    :mod:`~hiten.algorithms.corrector._step_interface`
+    :mod:`~hiten.algorithms.corrector.stepping`
         Step-size control interfaces for robust convergence.
     """
 

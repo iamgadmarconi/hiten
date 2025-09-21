@@ -25,28 +25,25 @@ Overview
 The continuation framework consists of several key components:
 
 **Backend Algorithms**
-    Core numerical algorithms for driving the continuation process (predict-correct loops, etc.)
+    Core numerical algorithms that implement the continuation loops (predict-correct-accept cycles)
 
 **Engine**
-    Orchestration layer that combines backends and interfaces for complete continuation workflows
+    Orchestration layer that coordinates the continuation process using backends and interfaces
 
 **Interfaces**
-    Domain-specific interfaces that translate between problem objects and the abstract vector representations expected by continuation algorithms
+    Domain-specific adapters that provide instantiation, correction, and parameter extraction methods
 
-**Step Control**
-    Step-size control strategies for robust continuation (natural parameter, pseudo-arclength, etc.)
+**Stepping Strategies**
+    Concrete implementations of prediction strategies (natural parameter, secant-based, etc.)
 
 **Configuration**
-    Configuration classes for algorithm parameters and problem-specific settings
+    Configuration classes that encapsulate continuation parameters and settings
 
 **Facades**
-    User-friendly interfaces that assemble engines, backends, and interfaces using dependency injection
+    User-friendly wrapper classes that provide convenient APIs for common continuation tasks
 
 **Types**
     Data structures and type definitions for continuation results and problems
 
 **Protocols**
-    Protocol definitions for the continuation framework components
-
-**Strategies**
-    Specialized algorithmic strategies for different continuation methods (see strategies/ subdirectory)
+    Runtime-checkable protocol definitions for the framework components

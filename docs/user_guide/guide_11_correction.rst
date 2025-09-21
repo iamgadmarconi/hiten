@@ -43,20 +43,19 @@ The most common correction method uses Newton's method with analytical or numeri
 
 .. code-block:: python
 
-   from hiten.algorithms.corrector.newton import _NewtonBackend
+   from hiten.algorithms.corrector.backends.newton import _NewtonBackend
+   from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
    from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
    from hiten.algorithms.corrector.stepping import make_plain_stepper
 
-   # Create a Newton corrector by combining interfaces
-   # Note: _NewtonBackend must come first in inheritance order
-   class NewtonOrbitCorrector(_NewtonBackend, _PeriodicOrbitCorrectorInterface):
-       pass
-   
-   newton_corrector = NewtonOrbitCorrector(stepper_factory=make_plain_stepper())
+   # Create a Newton corrector using the engine pattern
+   backend = _NewtonBackend(stepper_factory=make_plain_stepper())
+   interface = _PeriodicOrbitCorrectorInterface()
+   newton_corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
 
-   # Correct an orbit using the corrector's correct method
+   # Correct an orbit using the engine
    halo = l1.create_orbit("halo", amplitude_z=0.2, zenith="southern")
-   corrected_state, half_period = newton_corrector.correct(halo)
+   result, half_period = newton_corrector.solve(halo, halo._correction_config)
    
    print(f"Correction successful: {halo.period is not None}")
    print(f"Final period: {halo.period}")
@@ -72,16 +71,25 @@ For orbits where analytical Jacobians are difficult to compute, finite differenc
    # Use finite difference for vertical orbits
    vertical = l1.create_orbit("vertical", initial_state=[0.8, 0, 0, 0, 0.1, 0])
    
-   # Create a corrector and use it for correction
-   from hiten.algorithms.corrector.backends import _NewtonBackend
+   # Create a corrector engine and use it for correction
+   from hiten.algorithms.corrector.backends.newton import _NewtonBackend
+   from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
+   from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
    from hiten.algorithms.corrector.stepping import make_plain_stepper
-   corrector = _NewtonBackend(stepper_factory=make_plain_stepper())
-   corrected_state, half_period = corrector.correct(
-       vertical,
+   from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
+   
+   backend = _NewtonBackend(stepper_factory=make_plain_stepper())
+   interface = _PeriodicOrbitCorrectorInterface()
+   corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
+   
+   # Create configuration with finite difference settings
+   config = _OrbitCorrectionConfig(
        max_attempts=100,
        finite_difference=True,
        tol=1e-10
    )
+   
+   result, half_period = corrector.solve(vertical, config)
 
 Correction Parameters
 ---------------------------
@@ -94,24 +102,31 @@ Convergence Criteria
 .. code-block:: python
 
    # High accuracy correction
-   from hiten.algorithms.corrector.backends import _NewtonBackend
+   from hiten.algorithms.corrector.backends.newton import _NewtonBackend
+   from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
+   from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
    from hiten.algorithms.corrector.stepping import make_armijo_stepper
-   from hiten.algorithms.corrector.config import _LineSearchConfig
-   corrector = _NewtonBackend(stepper_factory=make_armijo_stepper(_LineSearchConfig()))
-   corrected_state, half_period = corrector.correct(
-       halo,
+   from hiten.algorithms.corrector.config import _LineSearchConfig, _OrbitCorrectionConfig
+   
+   backend = _NewtonBackend(stepper_factory=make_armijo_stepper(_LineSearchConfig()))
+   interface = _PeriodicOrbitCorrectorInterface()
+   corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
+   
+   # High accuracy configuration
+   high_accuracy_config = _OrbitCorrectionConfig(
        max_attempts=50,
        tol=1e-12,        # Very tight tolerance
        max_delta=1e-8    # Small maximum step size
    )
+   result, half_period = corrector.solve(halo, high_accuracy_config)
 
-   # Fast correction
-   corrected_state, half_period = corrector.correct(
-       halo,
+   # Fast correction configuration
+   fast_config = _OrbitCorrectionConfig(
        max_attempts=10,
        tol=1e-6,         # Looser tolerance
        max_delta=1e-3    # Larger step size
    )
+   result, half_period = corrector.solve(halo, fast_config)
 
 Step Size Control
 ~~~~~~~~~~~~~~~~~
@@ -119,20 +134,18 @@ Step Size Control
 .. code-block:: python
 
    # Conservative correction (smaller steps)
-   corrected_state, half_period = corrector.correct(
-       halo,
+   conservative_config = _OrbitCorrectionConfig(
        max_attempts=30,
-       max_delta=1e-8,
-       line_search_config=True  # Use line search for better convergence
+       max_delta=1e-8
    )
+   result, half_period = corrector.solve(halo, conservative_config)
 
    # Aggressive correction (larger steps)
-   corrected_state, half_period = corrector.correct(
-       halo,
+   aggressive_config = _OrbitCorrectionConfig(
        max_attempts=20,
-       max_delta=1e-4,
-       line_search_config=False
+       max_delta=1e-4
    )
+   result, half_period = corrector.solve(halo, aggressive_config)
 
 Line Search Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -141,7 +154,7 @@ For more advanced control over the line search behavior, you can use the `_LineS
 
 .. code-block:: python
 
-   from hiten.algorithms.corrector.line import _LineSearchConfig
+   from hiten.algorithms.corrector.config import _LineSearchConfig
 
    # Custom line search configuration
    line_search_config = _LineSearchConfig(
@@ -152,10 +165,18 @@ For more advanced control over the line search behavior, you can use the `_LineS
    )
 
    # Use custom line search configuration
-   from hiten.algorithms.corrector.backends import _NewtonBackend
+   from hiten.algorithms.corrector.backends.newton import _NewtonBackend
+   from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
+   from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
    from hiten.algorithms.corrector.stepping import make_armijo_stepper
-   corrector = _NewtonBackend(stepper_factory=make_armijo_stepper(line_search_config))
-   corrected_state, half_period = corrector.correct(halo, max_attempts=30)
+   from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
+   
+   backend = _NewtonBackend(stepper_factory=make_armijo_stepper(line_search_config))
+   interface = _PeriodicOrbitCorrectorInterface()
+   corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
+   
+   config = _OrbitCorrectionConfig(max_attempts=30)
+   result, half_period = corrector.solve(halo, config)
 
 Creating Custom Correctors
 --------------------------------
@@ -169,48 +190,53 @@ The simplest way to create a custom corrector is to use the existing `_NewtonBac
 
 .. code-block:: python
 
-   from hiten.algorithms.corrector.backends import _NewtonBackend
+   from hiten.algorithms.corrector.backends.newton import _NewtonBackend
+   from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
+   from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
    from hiten.algorithms.corrector.config import _LineSearchConfig
    from hiten.algorithms.corrector.stepping import make_armijo_stepper
 
    # Use the ready-to-use corrector with custom configuration
-   custom_corrector = _NewtonBackend(
+   backend = _NewtonBackend(
        stepper_factory=make_armijo_stepper(_LineSearchConfig(armijo_c=1e-4, alpha_reduction=0.5))
    )
+   interface = _PeriodicOrbitCorrectorInterface()
+   custom_corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
    
    halo = l1.create_orbit("halo", amplitude_z=0.2, zenith="southern")
-   corrected_state, half_period = custom_corrector.correct(halo)
+   result, half_period = custom_corrector.solve(halo, halo._correction_config)
    print(f"Custom correction successful: {half_period is not None}")
    print(f"Half period: {half_period}")
 
-For more control, you can create a custom corrector by combining interfaces:
+For more control, you can create a custom corrector engine with specialized behavior:
 
 .. code-block:: python
 
-   from hiten.algorithms.corrector.newton import _NewtonBackend
+   from hiten.algorithms.corrector.backends.newton import _NewtonBackend
+   from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
    from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
-   from hiten.algorithms.corrector.line import _LineSearchConfig
+   from hiten.algorithms.corrector.config import _LineSearchConfig, _OrbitCorrectionConfig
+   from hiten.algorithms.corrector.stepping import make_armijo_stepper
 
-   class CustomOrbitCorrector(_NewtonBackend, _PeriodicOrbitCorrectorInterface):
-       """Custom corrector with specialized configuration.
-       
-       Note: _NewtonBackend must come first in inheritance order to provide
-       the _generic_correct method that _PeriodicOrbitCorrectorInterface expects.
-       """
+   class CustomOrbitCorrectionEngine(_OrbitCorrectionEngine):
+       """Custom correction engine with specialized configuration."""
        
        def __init__(self, custom_tol=1e-8, **kwargs):
-           super().__init__(**kwargs)
+           # Create backend with custom stepper
+           backend = _NewtonBackend(stepper_factory=make_armijo_stepper(_LineSearchConfig()))
+           interface = _PeriodicOrbitCorrectorInterface()
+           super().__init__(backend=backend, interface=interface, **kwargs)
            self.custom_tol = custom_tol
        
-       def correct(self, orbit, **kwargs):
-           """Correct orbit with custom tolerance."""
-           # Override default tolerance
-           kwargs.setdefault('tol', self.custom_tol)
-           return super().correct(orbit, **kwargs)
+       def solve(self, orbit, cfg=None):
+           """Solve with custom tolerance."""
+           if cfg is None:
+               cfg = _OrbitCorrectionConfig(tol=self.custom_tol)
+           return super().solve(orbit, cfg)
 
    # Use the custom corrector
-   custom_corrector = CustomOrbitCorrector(custom_tol=1e-12)
-   corrected_state, half_period = custom_corrector.correct(halo)
+   custom_corrector = CustomOrbitCorrectionEngine(custom_tol=1e-12)
+   result, half_period = custom_corrector.solve(halo)
 
 Advanced Custom Corrector for Generic Problems
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -361,11 +387,12 @@ For specialized applications, you can implement custom line search strategies by
 
 .. code-block:: python
 
-   from hiten.algorithms.corrector._step_interface import _StepInterface, CorrectorStepProtocol
-   from hiten.algorithms.corrector.line import _LineSearchConfig
+   from hiten.algorithms.corrector.stepping.base import _CorrectorStepBase
+   from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
+   from hiten.algorithms.corrector.config import _LineSearchConfig
    import numpy as np
 
-   class CustomStepInterface(_StepInterface):
+   class CustomStepInterface(_CorrectorStepBase):
        """Custom step interface with specialized line search."""
        
        def __init__(self, custom_param=0.1, **kwargs):
@@ -421,7 +448,7 @@ The `_LineSearchConfig` class provides fine-grained control over line search beh
 
 .. code-block:: python
 
-   from hiten.algorithms.corrector.line import _LineSearchConfig
+   from hiten.algorithms.corrector.config import _LineSearchConfig
 
    # High-precision line search
    precise_config = _LineSearchConfig(
@@ -448,10 +475,18 @@ The `_LineSearchConfig` class provides fine-grained control over line search beh
    )
 
    # Use different configurations for different problems
-   from hiten.algorithms.corrector.backends import _NewtonBackend
+   from hiten.algorithms.corrector.backends.newton import _NewtonBackend
+   from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
+   from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
    from hiten.algorithms.corrector.stepping import make_armijo_stepper
-   corrector = _NewtonBackend(stepper_factory=make_armijo_stepper(precise_config))
-   corrected_state, half_period = corrector.correct(orbit, max_attempts=50)
+   from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
+   
+   backend = _NewtonBackend(stepper_factory=make_armijo_stepper(precise_config))
+   interface = _PeriodicOrbitCorrectorInterface()
+   corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
+   
+   config = _OrbitCorrectionConfig(max_attempts=50)
+   result, half_period = corrector.solve(orbit, config)
 
 Custom Jacobian Computation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -494,143 +529,18 @@ For specialized problems, you can implement custom Jacobian computation strategi
        return (r_plus[i] - r_minus[i]) / (2 * h)
 
    # Use custom Jacobian in correction
-   from hiten.algorithms.corrector.backends import _NewtonBackend
-   corrector = _NewtonBackend()
-   corrected_state, half_period = corrector.correct(
-       orbit,
-       jacobian_fn=custom_jacobian_fn
-   )
-
-Creating Custom Interfaces
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-For specialized correction problems, you can create custom interfaces that extend HITEN's correction framework. This allows you to implement domain-specific logic while leveraging the robust numerical algorithms.
-
-**Important**: When extending `_Corrector`, you must implement the abstract `correct` method with the exact signature: `correct(self, x0, residual_fn, *, jacobian_fn=None, norm_fn=None, **kwargs)`. This ensures compatibility with the correction framework.
-
-Custom Domain Interface for Specialized Problems
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-For specialized correction problems, you can create custom interfaces that work
-with the correction framework. Here's a simplified approach that follows
-HITEN's actual architecture:
-
-.. code-block:: python
-
-   from hiten.algorithms.corrector.base import _BaseCorrectionConfig
-   from hiten.algorithms.corrector.newton import _NewtonBackend
-   from dataclasses import dataclass
-   from typing import Optional, Tuple, Dict, Any
-   import numpy as np
-
-   # Domain-specific exceptions
-   class ConstraintError(Exception):
-       """Raised when constraint evaluation fails."""
-       pass
-
-   # Configuration following HITEN's pattern
-   @dataclass(frozen=True, slots=True)
-   class _CustomProblemConfig(_BaseCorrectionConfig):
-       """Configuration for custom problem correction."""
-       custom_tolerance: float = 1e-8
-       constraint_type: str = "equality"
-       penalty_weight: float = 1.0
-
-   # Custom corrector for specialized problems
-   class CustomProblemCorrector(_NewtonBackend):
-       """Custom corrector for specialized constraint problems."""
-       
-       def __init__(self, config: _CustomProblemConfig, **kwargs):
-           super().__init__(**kwargs)
-           self.config = config
-       
-       def _evaluate_constraints(self, x: np.ndarray, constraints: list) -> np.ndarray:
-           """Evaluate all constraints at point x."""
-           residuals = []
-           
-           for i, constraint in enumerate(constraints):
-               try:
-                   if constraint['type'] == 'equality':
-                       residual = constraint['function'](x) - constraint['target']
-                   elif constraint['type'] == 'inequality':
-                       residual = np.maximum(0, constraint['function'](x) - constraint['upper_bound'])
-                   else:
-                       raise ConstraintError(f"Unknown constraint type: {constraint['type']}")
-                   
-                   residuals.append(residual)
-               except Exception as e:
-                   raise ConstraintError(f"Failed to evaluate constraint {i}: {e}")
-           
-           return np.concatenate(residuals) if residuals else np.array([])
-       
-       def solve_constraint_problem(self, x0: np.ndarray, constraints: list, **kwargs):
-           """High-level method for solving constraint problems."""
-           
-           def residual_fn(x):
-               return self._evaluate_constraints(x, constraints)
-           
-           # Use the generic correct method
-           return self.correct(
-               x0=x0,
-               residual_fn=residual_fn,
-               tol=kwargs.get('tol', self.config.custom_tolerance),
-               **kwargs
-           )
-
-   # Usage example
-   config = _CustomProblemConfig(
-       constraint_type="equality",
-       penalty_weight=10.0,
-       custom_tolerance=1e-10
-   )
+   from hiten.algorithms.corrector.backends.newton import _NewtonBackend
+   from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
+   from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
+   from hiten.algorithms.corrector.stepping import make_plain_stepper
    
-   corrector = CustomProblemCorrector(config)
+   backend = _NewtonBackend(stepper_factory=make_plain_stepper())
+   interface = _PeriodicOrbitCorrectorInterface()
+   corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
    
-   # Define constraints
-   constraints = [
-       {
-           'type': 'equality',
-           'function': lambda x: x[0]**2 + x[1]**2,
-           'target': 1.0
-       }
-   ]
-   
-   # Run correction
-   x0 = np.array([0.5, 0.5])
-   solution, info = corrector.solve_constraint_problem(x0, constraints)
-   print(f"Solution: {solution}")
-   print(f"Final residual: {info['residual_norm']}")
-   print(f"Iterations: {info['iterations']}")
-
-Architectural Best Practices
------------------------------
-
-The correction framework follows these architectural patterns:
-
-**Configuration Pattern**
-    - Use `@dataclass(frozen=True, slots=True)` for immutable configurations
-    - Single inheritance from `_BaseCorrectionConfig` for configs
-    - Separate domain-specific configs from base configs
-
-**Interface Separation**
-    - Domain interfaces (like `_PeriodicOrbitCorrectorInterface`) handle domain-specific logic
-    - Algorithm cores (like `_NewtonBackend`) handle numerical algorithms
-    - Combine through multiple inheritance with correct order
-
-**Method Delegation**
-    - Domain interfaces delegate to algorithm cores via `_generic_correct`
-    - Avoid direct inheritance from `_Corrector` in domain interfaces
-    - Use composition or delegation for complex interactions
-
-**Error Handling**
-    - Define domain-specific exception hierarchies
-    - Provide meaningful error messages for debugging
-    - Handle edge cases gracefully
-
-**Multiple Inheritance Order**
-    - Always put algorithm cores first: `(_NewtonBackend, _DomainInterface)`
-    - This ensures the `_generic_correct` method is available
-    - Avoid conflicts between different `correct` method signatures
+   # Note: Custom Jacobian would need to be integrated into the backend
+   # This is a simplified example showing the engine pattern
+   result, half_period = corrector.solve(orbit, orbit._correction_config)
 
 Next Steps
 ----------

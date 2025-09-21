@@ -1,7 +1,7 @@
 Continuation Facades
 ====================
 
-The facades module provides user-facing interfaces for continuation workflows. These facades assemble the engine, backend, and interface using dependency injection and provide a simple API to run continuation with domain-friendly inputs.
+The facades module provides user-facing interfaces for continuation workflows. These facades wrap the continuation engine and provide a convenient API for domain-specific continuation tasks.
 
 .. currentmodule:: hiten.algorithms.continuation.facades
 
@@ -13,7 +13,9 @@ State Parameter Continuation
 StateParameter()
 ^^^^^^^^^^^^^^^^
 
-The :class:`StateParameter` class provides a facade for natural-parameter continuation varying selected state components. Users supply an engine (via dependency injection). The class also provides a factory method to construct a default engine wired with the generic predict-correct backend and the periodic-orbit interface.
+The :class:`StateParameter` class provides a facade for periodic orbit continuation that varies selected state components. It wraps a continuation engine and provides a convenient interface for configuring and running continuation with domain-friendly parameters like state indices and target ranges.
+
+The facade internally creates a default engine with the predict-correct backend and periodic orbit interface. Users can access the underlying engine via dependency injection if needed.
 
 .. autoclass:: StateParameter()
    :members:

@@ -60,10 +60,10 @@ class _NaturalParameterStep(_ContinuationStepBase):
 
     See Also
     --------
-    :class:`~hiten.algorithms.continuation.strategies._stepping._SecantStep`
+    :class:`~hiten.algorithms.continuation.stepping.sc._SecantStep`
         More sophisticated stepping with tangent vector maintenance.
-    :class:`~hiten.algorithms.continuation.strategies._stepping._StepStrategy`
-        Protocol that this class implements.
+    :class:`~hiten.algorithms.continuation.stepping.base._ContinuationStepBase`
+        Base class that this class implements.
     """
 
     def __init__(self, predictor: Callable[[object, np.ndarray], np.ndarray]):
