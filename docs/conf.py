@@ -14,8 +14,8 @@ sys.path.insert(0, str(src_path))
 project = "hiten"
 copyright = "2025, Gad Marconi"
 author = "Gad Marconi"
-release = "0.4.2"
-version = "0.4.2"
+release = "0.4.3"
+version = "0.4.3"
 
 # General configuration
 extensions = [
