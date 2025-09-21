@@ -17,5 +17,4 @@ systems analysis in the CR3BP.
    algorithms/hamiltonian
    algorithms/poincare
    algorithms/polynomial/index
-   algorithms/tori
    algorithms/utils
