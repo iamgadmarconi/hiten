@@ -16,8 +16,8 @@ Examples
 >>> # Configure search parameters
 >>> search = SearchConfig(delta_v_tol=1e-3, eps2d=1e-4)
 >>> 
->>> # Create connection solver
->>> conn = Connection(section=section, search_cfg=search)
+>>> # Create facade with a default engine
+>>> conn = Connection.with_default_engine(section=section, search_cfg=search)
 >>> 
 >>> # Discover connections
 >>> results = conn.solve(unstable_manifold, stable_manifold)

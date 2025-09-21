@@ -27,6 +27,7 @@ from typing import Literal
 from hiten.algorithms.poincare.core.base import _Section
 from hiten.algorithms.poincare.synodic.base import SynodicMap
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
+from hiten.algorithms.utils.exceptions import EngineError
 from hiten.system.manifold import Manifold
 
 
@@ -164,7 +165,7 @@ class _ManifoldInterface:
         """
 
         if self.manifold.manifold_result is None:
-            raise ValueError("Manifold must be computed before extracting section hits")
+            raise EngineError("Manifold must be computed before extracting section hits")
 
         cfg = config or _SynodicMapConfig()
         syn = SynodicMap(cfg)

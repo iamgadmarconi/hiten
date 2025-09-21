@@ -26,13 +26,13 @@ from typing import Literal
 
 import numpy as np
 
+from hiten.algorithms.connections.backends import _ConnectionsBackend
 from hiten.algorithms.connections.config import _SearchConfig
-from hiten.algorithms.connections.engine import (_ConnectionEngine,
-                                                 _ConnectionProblem)
-from hiten.algorithms.connections.interfaces import _ManifoldInterface
-from hiten.algorithms.connections.results import (ConnectionResults,
-                                                  _ConnectionResult)
+from hiten.algorithms.connections.engine import _ConnectionEngine
+from hiten.algorithms.connections.types import (ConnectionResults,
+                                                _ConnectionResult)
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
+from hiten.algorithms.utils.exceptions import EngineError
 from hiten.system.manifold import Manifold
 from hiten.utils.log_config import logger
 from hiten.utils.plots import plot_poincare_connections_map
@@ -120,7 +120,7 @@ class Connection:
     --------
     :class:`~hiten.algorithms.connections.engine._ConnectionEngine`
         Lower-level engine that performs the actual computation.
-    :class:`~hiten.algorithms.connections.results.ConnectionResults`
+    :class:`~hiten.algorithms.connections.types.ConnectionResults`
         Container for connection results with convenient access methods.
     """
     # User-provided single section configuration and direction
@@ -135,7 +135,34 @@ class Connection:
     _last_target: Manifold | None = None
     _last_results: list[_ConnectionResult] | None = None
 
-    def solve(self, source: Manifold, target: Manifold) -> list[_ConnectionResult]:
+    # Injected engine dependency (required)
+    _engine: _ConnectionEngine | None = None
+
+    @classmethod
+    def with_default_engine(cls, *, section: _SynodicMapConfig, direction: Literal[1, -1, None] | None = None, search_cfg: _SearchConfig | None = None) -> "Connection":
+        """Create a facade instance wired with the default engine and backend.
+
+        The default engine uses :class:`~hiten.algorithms.connections.backends._ConnectionsBackend`.
+
+        Parameters
+        ----------
+        section : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+            Synodic section configuration.
+        direction : {1, -1, None}, optional
+            Crossing direction filter, by default None.
+        search_cfg : :class:`~hiten.algorithms.connections.config._SearchConfig`, optional
+            Search tolerances, by default None.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.connections.base.Connection`
+            A connection facade instance with a default engine injected.
+        """
+        backend = _ConnectionsBackend()
+        engine = _ConnectionEngine(backend)
+        return cls(section=section, direction=direction, search_cfg=search_cfg, _engine=engine)
+
+    def solve(self, source: Manifold, target: Manifold) -> ConnectionResults:
         """Discover connections between two manifolds.
 
         This method finds ballistic and impulsive transfers between the source
@@ -151,7 +178,7 @@ class Connection:
 
         Returns
         -------
-        list of :class:`~hiten.algorithms.connections.results._ConnectionResult`
+        list of :class:`~hiten.algorithms.connections.types._ConnectionResult`
             Connection results sorted by increasing Delta-V requirement.
             Each result contains transfer type, Delta-V, intersection points,
             and 6D states at the connection.
@@ -175,22 +202,20 @@ class Connection:
         >>> print(results)
         """
         logger.info(f"Searching for connection between {source} and {target}..")
-        src_if = _ManifoldInterface(manifold=source)
-        tgt_if = _ManifoldInterface(manifold=target)
-
-        problem = _ConnectionProblem(
-            source=src_if,
-            target=tgt_if,
+        if self._engine is None:
+            raise EngineError("Connection requires an injected _ConnectionEngine; provide via constructor.")
+        results = self._engine.solve(
+            source=source,
+            target=target,
             section=self.section,
             direction=self.direction,
             search=self.search_cfg,
         )
-        results = _ConnectionEngine().solve(problem)
         self._last_source = source
         self._last_target = target
         self._last_results = results
         logger.info(f"Found {len(results)} connection(s)")
-        return results
+        return ConnectionResults(results)
 
     @property
     def results(self) -> ConnectionResults:
@@ -198,7 +223,8 @@ class Connection:
 
         Returns
         -------
-        :class:`~hiten.algorithms.connections.results.ConnectionResults`
+        :class:`~hiten.algorithms.connections.types.ConnectionResults`
+        :class:`~hiten.algorithms.connections.types.ConnectionResults` 
             A view over the latest results with friendly printing and
             convenient access methods. Returns an empty view if 
             :meth:`~hiten.algorithms.connections.base.Connection.solve`
@@ -275,7 +301,7 @@ class Connection:
         """
         # Use cached artifacts; user should call solve() first
         if self._last_source is None or self._last_target is None:
-            raise ValueError("Nothing to plot: call solve(source, target) first.")
+            raise EngineError("Nothing to plot: call solve(source, target) first.")
         from hiten.algorithms.connections.interfaces import \
             _ManifoldInterface  # internal
         src_if = _ManifoldInterface(manifold=self._last_source)

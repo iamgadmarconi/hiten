@@ -8,7 +8,7 @@ All coordinates are in nondimensional CR3BP rotating-frame units.
 
 See Also
 --------
-:mod:`~hiten.algorithms.connections.results`
+:mod:`~hiten.algorithms.connections.types`
     Result classes for connection data.
 :mod:`~hiten.algorithms.connections.engine`
     High-level connection engine interface.
@@ -19,7 +19,7 @@ from typing import Tuple
 import numpy as np
 from numba import njit
 
-from hiten.algorithms.connections.results import _ConnectionResult
+from hiten.algorithms.connections.types import _ConnectionResult
 
 
 @njit(cache=False)
@@ -413,52 +413,57 @@ class _ConnectionsBackend:
 
     See Also
     --------
-    :class:`~hiten.algorithms.connections.results._ConnectionResult`
+    :class:`~hiten.algorithms.connections.types._ConnectionResult`
         Result objects returned by the solve method.
     """
 
-    def solve(self, problem):
-        """Compute possible connections for a given problem specification.
+    def solve(
+        self,
+        pu: np.ndarray,
+        ps: np.ndarray,
+        Xu: np.ndarray,
+        Xs: np.ndarray,
+        *,
+        eps: float,
+        dv_tol: float,
+        bal_tol: float,
+    ) -> list[_ConnectionResult]:
+        """Compute possible connections from precomputed section data.
 
         Parameters
         ----------
-        problem : object
-            Problem specification containing source/target sections, search parameters,
-            and synodic section definition.
+        pu : ndarray, shape (N, 2)
+            2D points on the unstable/source section.
+        ps : ndarray, shape (M, 2)
+            2D points on the stable/target section.
+        Xu : ndarray, shape (N, 6)
+            6D states corresponding to ``pu``.
+        Xs : ndarray, shape (M, 6)
+            6D states corresponding to ``ps``.
+        eps : float
+            Pairing radius on the 2D section plane.
+        dv_tol : float
+            Maximum allowed Delta-V for accepting a connection.
+        bal_tol : float
+            Threshold for classifying a connection as ballistic.
 
         Returns
         -------
-        list of :class:`~hiten.algorithms.connections.results._ConnectionResult`
-            Connection results sorted by increasing delta_v (velocity change)
-            required for the transfer.
+        list of :class:`~hiten.algorithms.connections.types._ConnectionResult`
+            Connection results sorted by increasing delta_v (velocity change).
 
         Notes
         -----
-        The algorithm performs these steps:
-        1. Build section hits using ``problem.source.to_section()`` and ``problem.target.to_section()``
-        2. Coarse 2D radius pairing via :func:`~hiten.algorithms.connections.backends._radius_pairs_2d`
-        3. Mutual-nearest filtering to reduce false positives
-        4. On-section refinement via :func:`~hiten.algorithms.connections.backends._refine_pairs_on_section`
-        5. Delta-V computation and classification (ballistic vs impulsive)
+        Steps:
+        1. Coarse 2D radius pairing
+        2. Mutual-nearest filtering
+        3. Segment-based refinement
+        4. Delta-V computation and classification
         """
-        # Lazy imports to avoid circulars at module import tim
-        # 1) Build section hits on the provided synodic section
-        sec_u = problem.source.to_section(problem.section, direction=problem.direction)
-        sec_s = problem.target.to_section(problem.section, direction=problem.direction)
-
-        pu = np.asarray(sec_u.points, dtype=float)
-        ps = np.asarray(sec_s.points, dtype=float)
-        Xu = np.asarray(sec_u.states, dtype=float)
-        Xs = np.asarray(sec_s.states, dtype=float)
-
         if pu.size == 0 or ps.size == 0:
             return []
 
-        eps = float(getattr(problem.search, "eps2d", 1e-4)) if problem.search else 1e-4
-        dv_tol = float(getattr(problem.search, "delta_v_tol", 1e-3)) if problem.search else 1e-3
-        bal_tol = float(getattr(problem.search, "ballistic_tol", 1e-8)) if problem.search else 1e-8
-
-        pairs_arr = _radius_pairs_2d(pu, ps, eps)
+        pairs_arr = _radius_pairs_2d(pu, ps, float(eps))
         if pairs_arr.size == 0:
             return []
 
@@ -511,3 +516,12 @@ class _ConnectionsBackend:
 
         results.sort(key=lambda r: r.delta_v)
         return results
+
+    def on_start(self, problem) -> None:  # Engine notifies before solving
+        pass
+
+    def on_success(self, results: list[_ConnectionResult]) -> None:  # Engine notifies after successful solve
+        pass
+
+    def on_failure(self, error: Exception) -> None:  # Engine notifies on failure
+        pass

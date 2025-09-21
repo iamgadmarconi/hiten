@@ -166,12 +166,12 @@ The :class:`_ManifoldInterface` class provides an interface for accessing manifo
    :undoc-members:
    :exclude-members: __init__
 
-results.py
-~~~~~~~~~~
+types.py
+~~~~~~~~
 
-The results module provides result classes for connection discovery data in CR3BP.
+The types module provides result classes and problem specifications for connection discovery data in CR3BP.
 
-.. currentmodule:: hiten.algorithms.connections.results
+.. currentmodule:: hiten.algorithms.connections.types
 
 _ConnectionResult()
 ^^^^^^^^^^^^^^^^^^^
@@ -192,3 +192,13 @@ The :class:`ConnectionResults` class provides a collection of connection results
    :members:
    :undoc-members:
    :exclude-members: __init__, __len__, __iter__, __getitem__, __bool__, __repr__
+
+_ConnectionProblem()
+^^^^^^^^^^^^^^^^^^^^
+
+The :class:`_ConnectionProblem` class defines a problem specification for connection discovery between two manifolds.
+
+.. autoclass:: _ConnectionProblem()
+   :members:
+   :undoc-members:
+   :exclude-members: __init__

@@ -27,11 +27,7 @@ class _OrbitCorrectionEngine(_CorrectionEngine):
         self._backend = backend
         self._interface = _PeriodicOrbitCorrectorInterface() if interface is None else interface
 
-    def solve(
-        self,
-        orbit: "PeriodicOrbit",
-        cfg: _OrbitCorrectionConfig,
-    ) -> Tuple[CorrectionResult, float]:
+    def solve(self, orbit: "PeriodicOrbit", cfg: _OrbitCorrectionConfig) -> Tuple[CorrectionResult, float]:
         """Run correction and return corrected state, backend result, half-period.
         
         Parameters
