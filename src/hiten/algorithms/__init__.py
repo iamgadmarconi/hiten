@@ -3,7 +3,7 @@
 
 from .continuation.config import \
     _OrbitContinuationConfig as OrbitContinuationConfig
-from .continuation.facades import StateParameter
+from .continuation.base import StateParameter
 from .corrector.config import _LineSearchConfig as LineSearchConfig
 from .corrector.config import _OrbitCorrectionConfig as OrbitCorrectionConfig
 from .poincare.centermanifold.base import CenterManifoldMap
