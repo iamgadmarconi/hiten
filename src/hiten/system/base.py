@@ -17,23 +17,155 @@ Szebehely, V. (1967). "Theory of Orbits".
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Dict, Literal, Optional, Sequence, Tuple
 
 import numpy as np
 import numpy.typing as npt
+import pandas as pd
 
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import rtbp_dynsys, variational_dynsys
-from hiten.algorithms.utils.precision import hp
+from hiten.algorithms.utils.coordinates import _get_mass_parameter
 from hiten.system.body import Body
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import L1Point, L2Point, L3Point
 from hiten.system.libration.triangular import L4Point, L5Point
 from hiten.utils.constants import Constants
+from hiten.utils.io.system import save_system, load_system
 from hiten.utils.log_config import logger
 
 
-class System(object):
+class _HitenBase(ABC):
+    """Abstract base class for Hiten classes.
+    """
+
+    def __init__(self):
+        self._cache = {}
+
+    def cache_get(self, key: any, default: any = None) -> any:
+        """Get item from cache.
+
+        Parameters
+        ----------
+        key : any
+            The cache key.
+        default : any, optional
+            The default value to return if the key is not found.
+            
+        Returns
+        -------
+        any
+            The cached value or the default value if the key is not found.
+        """
+        return self._cache.get(key, default)
+    
+    def cache_set(self, key: any, value: any) -> any:
+        """Set item in cache.
+
+        Parameters
+        ----------
+        key : any
+            The cache key.
+        value : any
+            The value to cache.
+            
+        Returns
+        -------
+        any
+            The cached value.
+        """
+        self._cache[key] = value
+        return value
+    
+    def cache_clear(self) -> None:
+        """Clear cache.
+
+        This method resets all cached properties to None, forcing them to be
+        recomputed on next access.
+        """
+        self._cache.clear()
+
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__}()"
+    
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}()"
+
+    def __getstate__(self):
+        """Get state for pickling.
+        """
+        return self.__dict__.copy()
+    
+    def __setstate__(self, state):
+        """Set state after unpickling.
+        """
+        self.__dict__.update(state)
+        if not hasattr(self, "_cache") or self._cache is None:
+            self._cache = {}
+
+    @abstractmethod
+    def save(self, file_path: str | Path, **kwargs) -> None:
+        """Save the object to a file.
+
+        Parameters
+        ----------
+        file_path : str or Path
+            The path to the file to save the object to.
+        **kwargs
+            Additional keyword arguments passed to the save method.
+        """
+        ...
+
+    @classmethod
+    @abstractmethod
+    def load(cls, file_path: str | Path, **kwargs) -> "_HitenBase":
+        """Load the object from a file.
+        
+        Parameters
+        ----------
+        file_path : str or Path
+            The path to the file to load the object from.
+        **kwargs
+            Additional keyword arguments passed to the load method.
+            
+        Returns
+        -------
+        :class:`~hiten.system.base._HitenBase`
+            The loaded object.
+        """
+        ...
+
+    def to_csv(self, file_path: str | Path, **kwargs) -> None:
+        """Save the object to a CSV file.
+
+        Parameters
+        ----------
+        file_path : str or Path
+            The path to the file to save the object to.
+        **kwargs
+            Additional keyword arguments passed to the save method.
+        """
+        ...
+
+    def to_df(cls, **kwargs) -> pd.DataFrame:
+        """Convert the object to a pandas DataFrame.
+
+        Parameters
+        ----------
+        **kwargs
+            Additional keyword arguments passed to the to_df method.
+            
+        Returns
+        -------
+        pandas.DataFrame
+            The converted object.
+        """
+        ...
+
+
+class System(_HitenBase):
     """
     Lightweight wrapper around the CR3BP dynamical system.
 
@@ -53,12 +185,6 @@ class System(object):
 
     Attributes
     ----------
-    primary : :class:`~hiten.system.body.Body`
-        Primary gravitating body.
-    secondary : :class:`~hiten.system.body.Body`
-        Secondary gravitating body.
-    distance : float
-        Characteristic separation between the bodies in km.
     mu : float
         Mass parameter mu (dimensionless).
     libration_points : dict[int, LibrationPoint]
@@ -81,21 +207,24 @@ class System(object):
         self._primary = primary
         self._secondary = secondary
         self._distance = distance
-
-        self._mu: float = self._get_mu()
-        logger.info(f"Calculated mass parameter mu = {self.mu:.6e}")
-
+        self._mu: float = _get_mass_parameter(primary.mass, secondary.mass)
         self._dynsys = rtbp_dynsys(self.mu, name=f"RTBP_{self.primary.name}_{self.secondary.name}")
         self._var_dynsys = variational_dynsys(self.mu, name=f"VarEq_{self.primary.name}_{self.secondary.name}")
 
-        self._libration_points: Dict[int, LibrationPoint] = self._compute_libration_points()
+        self._cache = {
+            1: L1Point(self),
+            2: L2Point(self),
+            3: L3Point(self),
+            4: L4Point(self),
+            5: L5Point(self)
+        }
         logger.info(f"Computed {len(self.libration_points)} Libration points.")
 
     def __str__(self) -> str:
-        return f"System(primary='{self.primary.name}', secondary='{self.secondary.name}', mu={self.mu:.4e})"
+        return f"{self.secondary.name} orbiting {self.primary.name}"
 
     def __repr__(self) -> str:
-        return f"System(primary={self.primary!r}, secondary={self.secondary!r}, distance={self.distance})"
+        return f"System(primary={self.primary!r}, secondary={self.secondary!r}, distance={self.distance}), mu={self.mu:.6e}"
 
     @property
     def primary(self) -> Body:
@@ -150,7 +279,7 @@ class System(object):
         dict[int, LibrationPoint]
             Dictionary mapping integer identifiers {1,...,5} to libration point objects.
         """
-        return self._libration_points
+        return self._cache
         
     @property
     def dynsys(self):
@@ -173,54 +302,6 @@ class System(object):
             The underlying variational equations system.
         """
         return self._var_dynsys
-
-    def _get_mu(self) -> float:
-        """
-        Compute the dimensionless mass parameter.
-
-        Returns
-        -------
-        float
-            Value of mu = m2 / (m1 + m2) (dimensionless).
-
-        Notes
-        -----
-        The calculation is performed in high precision using
-        :func:`~hiten.utils.precision.hp` to mitigate numerical cancellation when
-        m1 approximately equals m2.
-        """
-        logger.debug(f"Calculating mu: {self.secondary.mass} / ({self.primary.mass} + {self.secondary.mass})")
-
-        # Use Number for critical mu calculation
-        primary_mass_hp = hp(self.primary.mass)
-        secondary_mass_hp = hp(self.secondary.mass)
-        total_mass_hp = primary_mass_hp + secondary_mass_hp
-        mu_hp = secondary_mass_hp / total_mass_hp
-
-        mu = float(mu_hp) # Convert back to float for storage
-        logger.debug(f"Calculated mu with high precision: {mu}")
-        return mu
-
-    def _compute_libration_points(self) -> Dict[int, LibrationPoint]:
-        """
-        Instantiate the five classical libration points.
-
-        Returns
-        -------
-        dict[int, LibrationPoint]
-            Mapping {1,...,5} to :class:`~hiten.system.libration.base.LibrationPoint`
-            objects.
-        """
-        logger.debug(f"Computing Libration points for mu={self.mu}")
-        points = {
-            1: L1Point(self),
-            2: L2Point(self),
-            3: L3Point(self),
-            4: L4Point(self),
-            5: L5Point(self)
-        }
-        logger.debug(f"Finished computing Libration points.")
-        return points
 
     def get_libration_point(self, index: int) -> LibrationPoint:
         """
@@ -246,11 +327,9 @@ class System(object):
         >>> sys = System(primary, secondary, distance)
         >>> L1 = sys.get_libration_point(1)
         """
-        point: Optional[LibrationPoint] = self.libration_points.get(index)
+        point: Optional[LibrationPoint] = self.cache_get(index)
         if point is None:
-            logger.error(f"Invalid Libration point index requested: {index}. Must be 1-5.")
             raise ValueError(f"Invalid Libration point index: {index}. Must be 1, 2, 3, 4, or 5.")
-        logger.debug(f"Retrieving Libration point L{index}")
         return point
 
     def propagate(
@@ -401,6 +480,8 @@ class System(object):
         # Remove the compiled dynamical system before pickling
         if "_dynsys" in state:
             state["_dynsys"] = None
+        if "_var_dynsys" in state:
+            state["_var_dynsys"] = None
         return state
 
     def __setstate__(self, state):
@@ -416,10 +497,27 @@ class System(object):
             Dictionary containing the serialized state of the System.
         """
         from hiten.algorithms.dynamics.rtbp import rtbp_dynsys
-
+        from hiten.algorithms.dynamics.rtbp import variational_dynsys
         # Restore the plain attributes
         self.__dict__.update(state)
 
-        # Re-instantiate the CR3BP vector field that had been stripped during pickling
         if self.__dict__.get("_dynsys") is None:
             self._dynsys = rtbp_dynsys(self.mu, name=self.primary.name + "_" + self.secondary.name)
+            self._var_dynsys = variational_dynsys(self.mu, name=self.primary.name + "_" + self.secondary.name)
+
+    def save(self, file_path: str | Path, **kwargs) -> None:
+        """Save this System to a file."""
+        from hiten.utils.io.system import save_system
+        save_system(self, file_path)
+
+    @classmethod
+    def load(cls, file_path: str | Path, **kwargs) -> "System":
+        """Load a System from a file (new instance)."""
+        from hiten.utils.io.system import load_system
+        return load_system(file_path)
+
+    def load_inplace(self, file_path: str | Path) -> "System":
+        """Load data into this System instance from a file (in place)."""
+        from hiten.utils.io.system import load_system_inplace
+        load_system_inplace(self, file_path)
+        return self

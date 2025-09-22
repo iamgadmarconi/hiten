@@ -12,11 +12,24 @@ for convenience. The containers are mutable and support validation of input
 data to ensure consistency with the expected coordinate system.
 """
 
-from enum import IntEnum
-from typing import Iterator, Sequence, Tuple, Union, overload
+from enum import IntEnum, Enum
+from typing import Iterator, Optional, Sequence, Tuple, Type, Union, overload
 
 import numpy as np
 import numpy.typing as npt
+
+
+class ReferenceFrame(Enum):
+    """
+    Reference frame for Cartesian states.
+
+    INERTIAL: non-rotating barycentric (or system-specific) inertial frame.
+    ROTATING: synodic frame rotating with primaries.
+    """
+    INERTIAL = "inertial"
+    ROTATING = "rotating"
+    CENTER_MANIFOLD = "center_manifold"
+    RESTRICTED_CENTER_MANIFOLD = "restricted_center_manifold"
 
 
 class SynodicState(IntEnum):
@@ -99,6 +112,21 @@ class RestrictedCenterManifoldState(IntEnum):
     restricted center manifold coordinate system. The coordinates are
     ordered as position components (q2, q3) followed by momentum components
     (p2, p3).
+    """
+    q2=0
+    p2=1
+    q3=2
+    p3=3
+
+
+class RestrictedCenterManifoldState(IntEnum):
+    """
+    Enumeration for restricted center manifold coordinates.
+    
+    This enumeration defines the indices for the 4D state vector in the
+    restricted center manifold coordinate system. The coordinates are
+    ordered as position components (q2, q3) followed by momentum components
+    (p2, p3).
     
     Attributes
     ----------
@@ -156,7 +184,14 @@ class _BaseStateContainer:
 
     _enum: type[IntEnum] = None  # to be set by subclasses
 
-    def __init__(self, values: Sequence[float] | None = None, **kwargs):
+    def __init__(
+        self,
+        values: Sequence[float] | npt.NDArray[np.float64] | None = None,
+        *,
+        copy: bool = True,
+        frame: Optional[ReferenceFrame] = None,
+        **kwargs,
+    ):
         if self._enum is None:
             raise TypeError("_BaseStateContainer cannot be instantiated directly; subclass and set _enum")
 
@@ -168,12 +203,16 @@ class _BaseStateContainer:
                 raise ValueError("values must be a 1D sequence")
             if arr.shape[0] != size:
                 raise ValueError(f"values must have length {size}")
-            self._values: npt.NDArray[np.float64] = arr.copy()
+            self._values: npt.NDArray[np.float64] = arr.copy() if copy else arr
         else:
             self._values = np.zeros((size,), dtype=np.float64)
 
+        # Reference frame metadata (optional; used mainly for Cartesian states)
+        default_frame = getattr(type(self), "DEFAULT_FRAME", None)
+        self._frame: Optional[ReferenceFrame] = frame if frame is not None else default_frame
+
         # Allow initialization via named fields, e.g., x=..., y=...,
-        # or using enum member names (case-insensitive).
+        # or using enum member names (case-insensitive). 'frame' is handled above.
         for key, val in kwargs.items():
             self._assign_by_name(key, float(val))
 
@@ -253,7 +292,27 @@ class _BaseStateContainer:
     def __repr__(self) -> str:
         cls_name = self.__class__.__name__
         items = ", ".join(f"{k}={v:.6g}" for k, v in self.as_dict().items())
-        return f"{cls_name}({items})"
+        frame_str = f", frame={self._frame.value}" if getattr(self, "_frame", None) is not None else ""
+        return f"{cls_name}({items}{frame_str})"
+
+    @property
+    def frame(self) -> Optional[ReferenceFrame]:
+        """Reference frame metadata, if available."""
+        return self._frame
+
+    @classmethod
+    def from_array_view(cls, array: npt.NDArray[np.float64], *, frame: Optional[ReferenceFrame] = None) -> "_BaseStateContainer":
+        """Construct a container that wraps a 1D NumPy array without copying.
+
+        The provided array must be 1D and have length equal to the enum size.
+        Mutations through the container will mutate the original array.
+        """
+        arr = np.asarray(array, dtype=np.float64)
+        if arr.ndim != 1:
+            raise ValueError("array must be 1D")
+        if arr.shape[0] != len(cls._enum):  # type: ignore[arg-type]
+            raise ValueError(f"array must have length {len(cls._enum)}")  # type: ignore[arg-type]
+        return cls(arr, copy=False, frame=frame)
 
 
 class SynodicStateVector(_BaseStateContainer):
@@ -292,6 +351,7 @@ class SynodicStateVector(_BaseStateContainer):
     represent position and velocity in the rotating reference frame.
     """
     _enum = SynodicState
+    DEFAULT_FRAME = ReferenceFrame.ROTATING
 
     @property
     def x(self) -> float:
@@ -378,6 +438,7 @@ class CenterManifoldStateVector(_BaseStateContainer):
     preserve the Hamiltonian structure of the system.
     """
     _enum = CenterManifoldState
+    DEFAULT_FRAME = ReferenceFrame.CENTER_MANIFOLD
 
     @property
     def q1(self) -> float:
@@ -461,6 +522,7 @@ class RestrictedCenterManifoldStateVector(_BaseStateContainer):
     reducing computational complexity.
     """
     _enum = RestrictedCenterManifoldState
+    DEFAULT_FRAME = ReferenceFrame.RESTRICTED_CENTER_MANIFOLD
 
     @property
     def q2(self) -> float:
@@ -533,7 +595,13 @@ class Trajectory:
     - All data is stored as 64-bit floating-point numbers for consistency.
     """
 
-    def __init__(self, times: Sequence[float], states: Sequence[Sequence[float]]):
+    def __init__(
+        self,
+        times: Sequence[float],
+        states: Sequence[Sequence[float]],
+        state_vector_cls: Optional[Type[_BaseStateContainer]] = None,
+        frame: Optional[ReferenceFrame] = None,
+    ):
         t_arr = np.asarray(times, dtype=np.float64)
         x_arr = np.asarray(states, dtype=np.float64)
 
@@ -554,6 +622,8 @@ class Trajectory:
 
         self._times: npt.NDArray[np.float64] = t_arr
         self._states: npt.NDArray[np.float64] = x_arr
+        self._state_vector_cls: Optional[Type[_BaseStateContainer]] = state_vector_cls
+        self._frame: Optional[ReferenceFrame] = frame
 
     @property
     def times(self) -> npt.NDArray[np.float64]:
@@ -592,6 +662,52 @@ class Trajectory:
         """Return the underlying arrays as a tuple (times, states)."""
         return self._times, self._states
 
+    @property
+    def state_vector_cls(self) -> Optional[Type[_BaseStateContainer]]:
+        """The container class used for row views, if any (e.g., SynodicStateVector)."""
+        return self._state_vector_cls
+
+    @property
+    def index_enum(self) -> Optional[type[IntEnum]]:
+        """Return the IntEnum representing the state indices, if a container class is bound."""
+        if self._state_vector_cls is None:
+            return None
+        return self._state_vector_cls._enum  # type: ignore[attr-defined]
+
+    @property
+    def frame(self) -> Optional[ReferenceFrame]:
+        """Reference frame for the trajectory's states (e.g., rotating vs inertial)."""
+        return self._frame
+
+    def with_state_vector(self, cls: Type[_BaseStateContainer]) -> "Trajectory":
+        """Return a new trajectory referencing the same arrays with a state vector class bound."""
+        new_traj = Trajectory(self._times, self._states, state_vector_cls=cls, frame=self._frame)
+        return new_traj
+
+    def with_frame(self, frame: ReferenceFrame) -> "Trajectory":
+        """Return a new trajectory referencing the same arrays with a reference frame set."""
+        return Trajectory(self._times, self._states, state_vector_cls=self._state_vector_cls, frame=frame)
+
+    def vector_at(self, index: int, *, copy: bool = False) -> _BaseStateContainer:
+        """Return the state at index wrapped as a state-vector container.
+
+        If copy=False, the wrapper references the underlying row view.
+        """
+        if self._state_vector_cls is None:
+            raise ValueError("No state_vector_cls configured. Use with_state_vector(...) first.")
+        row = self._states[index]
+        return self._state_vector_cls(row, copy=copy, frame=self._frame)  # type: ignore[call-arg]
+
+    def iter_vectors(self, *, copy: bool = False) -> Iterator[_BaseStateContainer]:
+        """Iterate over state rows yielding state-vector containers.
+
+        If copy=False, each yielded container wraps a view into the underlying array.
+        """
+        if self._state_vector_cls is None:
+            raise ValueError("No state_vector_cls configured. Use with_state_vector(...) first.")
+        for i in range(self.n_samples):
+            yield self._state_vector_cls(self._states[i], copy=copy, frame=self._frame)  # type: ignore[call-arg]
+
     def __len__(self) -> int:
         return self.n_samples
 
@@ -609,8 +725,7 @@ class Trajectory:
         if isinstance(key, int):
             return float(self._times[key]), self._states[key]
         if isinstance(key, slice):
-            return Trajectory(self._times[key], self._states[key])
-        raise TypeError("indices must be integers or slices")
+            return Trajectory(self._times[key], self._states[key], state_vector_cls=self._state_vector_cls, frame=self._frame)
 
     def __repr__(self) -> str:
         direction = "increasing" if self._times[1] > self._times[0] else "decreasing"
