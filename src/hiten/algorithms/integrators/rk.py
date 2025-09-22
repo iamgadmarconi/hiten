@@ -58,6 +58,16 @@ from hiten.algorithms.integrators.coefficients.rk45 import C as RK45_C
 from hiten.algorithms.integrators.coefficients.rk45 import E as RK45_E
 from hiten.algorithms.integrators.coefficients.rk45 import P as RK45_P
 from hiten.algorithms.integrators.configs import _EventConfig
+from hiten.algorithms.integrators.utils import (_adjust_step_to_endpoint,
+                                                _bisection_update,
+                                                _bracket_converged,
+                                                _clamp_step,
+                                                _crossed_direction,
+                                                _error_scale,
+                                                _event_crossed,
+                                                _pi_accept_factor,
+                                                _pi_reject_factor,
+                                                _select_initial_step)
 from hiten.algorithms.utils.config import FASTMATH, TOL
 
 
@@ -393,7 +403,6 @@ def _hermite_refine_in_step(event_fn, t0, y0, f0, t1, y1, f1, h, direction, xtol
     a = 0.0
     b = 1.0
     g_left = event_fn(t0, y0)
-    g_right = event_fn(t1, y1)
     max_iter = 128
     for _ in range(max_iter):
         mid = 0.5 * (a + b)
@@ -404,20 +413,9 @@ def _hermite_refine_in_step(event_fn, t0, y0, f0, t1, y1, f1, h, direction, xtol
             t_hit = t0 + x_hit * h
             y_hit = _hermite_eval_dense(y0, f0, y1, f1, x_hit, h)
             return t_hit, y_hit
-        crossed = False
-        if direction == 0:
-            crossed = (g_left < 0.0 and g_mid > 0.0) or (g_left > 0.0 and g_mid < 0.0)
-        elif direction > 0:
-            crossed = (g_left < 0.0 and g_mid > 0.0)
-        else:
-            crossed = (g_left > 0.0 and g_mid < 0.0)
-        if crossed:
-            b = mid
-            g_right = g_mid
-        else:
-            a = mid
-            g_left = g_mid
-        if (b - a) * abs(h) <= xtol:
+        crossed = _crossed_direction(g_left, g_mid, direction)
+        a, b, g_left = _bisection_update(a, b, g_left, mid, g_mid, crossed)
+        if _bracket_converged(a, b, h, xtol):
             break
     x_hit = b
     t_hit = t0 + x_hit * h
@@ -740,13 +738,7 @@ class _FixedStepRK(_RungeKuttaBase):
             f_new = f(t_n + h, y_high)
             # event check at t_{n+1}
             g_new = event_fn(t_n + h, y_high)
-            crossed = False
-            if direction == 0:
-                crossed = ((g_prev < 0.0 and g_new > 0.0) or (g_prev > 0.0 and g_new < 0.0) or (g_new == 0.0))
-            elif direction > 0:
-                crossed = ((g_prev < 0.0 and g_new > 0.0) or (g_new == 0.0))
-            else:
-                crossed = ((g_prev > 0.0 and g_new < 0.0) or (g_new == 0.0))
+            crossed = _event_crossed(g_prev, g_new, direction)
             if crossed:
                 t_hit, y_hit = _hermite_refine_in_step(event_fn, t_n, y_n, f_prev, t_n + h, y_high, f_new, h, direction, xtol, gtol)
                 return True, t_hit, y_hit, states
@@ -780,13 +772,7 @@ class _FixedStepRK(_RungeKuttaBase):
             f_new = _hamiltonian_rhs(y_high, jac_H, clmo_H, n_dof)
             # event check at t_{n+1}
             g_new = event_fn(t_n + h, y_high)
-            crossed = False
-            if direction == 0:
-                crossed = ((g_prev < 0.0 and g_new > 0.0) or (g_prev > 0.0 and g_new < 0.0) or (g_new == 0.0))
-            elif direction > 0:
-                crossed = ((g_prev < 0.0 and g_new > 0.0) or (g_new == 0.0))
-            else:
-                crossed = ((g_prev > 0.0 and g_new < 0.0) or (g_new == 0.0))
+            crossed = _event_crossed(g_prev, g_new, direction)
             if crossed:
                 t_hit, y_hit = _hermite_refine_in_step(event_fn, t_n, y_n, f_prev, t_n + h, y_high, f_new, h, direction, xtol, gtol)
                 return True, t_hit, y_hit, states
@@ -1116,7 +1102,6 @@ def _rk45_refine_in_step(event_fn, t0, y0, t1, y1, h, Kseg, P, direction, xtol, 
     a = 0.0
     b = 1.0
     g_left = event_fn(t0, y0)
-    g_right = event_fn(t1, y1)
     max_iter = 128
     for _ in range(max_iter):
         mid = 0.5 * (a + b)
@@ -1127,20 +1112,9 @@ def _rk45_refine_in_step(event_fn, t0, y0, t1, y1, h, Kseg, P, direction, xtol, 
             t_hit = t0 + x_hit * h
             y_hit = _rk45_eval_dense(y0, Q_cache, P, x_hit, h)
             return t_hit, y_hit
-        crossed = False
-        if direction == 0:
-            crossed = (g_left < 0.0 and g_mid > 0.0) or (g_left > 0.0 and g_mid < 0.0)
-        elif direction > 0:
-            crossed = (g_left < 0.0 and g_mid > 0.0)
-        else:
-            crossed = (g_left > 0.0 and g_mid < 0.0)
-        if crossed:
-            b = mid
-            g_right = g_mid
-        else:
-            a = mid
-            g_left = g_mid
-        if (b - a) * abs(h) <= xtol:
+        crossed = _crossed_direction(g_left, g_mid, direction)
+        a, b, g_left = _bisection_update(a, b, g_left, mid, g_mid, crossed)
+        if _bracket_converged(a, b, h, xtol):
             break
     x_hit = b
     t_hit = t0 + x_hit * h
@@ -1370,31 +1344,21 @@ class _RK45(_AdaptiveStepRK):
         ys.append(y.copy())
         dys.append(f(t, y))
 
-        # initial step selection (simple heuristic)
+        # initial step selection (shared heuristic)
         dy0 = dys[0]
         scale0 = atol + rtol * np.abs(y)
         d0 = np.linalg.norm(y / scale0) / np.sqrt(y.size)
         d1 = np.linalg.norm(dy0 / scale0) / np.sqrt(y.size)
-        h = 1e-6 if (d0 < 1e-5 or d1 < 1e-5) else 0.01 * d0 / d1
-        if h > max_step:
-            h = max_step
-        if h < min_step:
-            h = min_step
+        h = _select_initial_step(d0, d1, min_step, max_step)
 
         err_prev = -1.0
-        SAFETY = 0.9
-        MIN_FACTOR = 0.2
-        MAX_FACTOR = 10.0
-        err_exp = 1.0 / order
 
         while (t - tf) * 1.0 < 0.0:
-            if h > max_step:
-                h = max_step
-            if t + h > tf:
-                h = abs(tf - t)
+            h = _clamp_step(h, max_step, min_step)
+            h = _adjust_step_to_endpoint(t, h, tf)
 
             y_high, y_low, err_vec, k = rk45_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E)
-            scale = atol + rtol * np.maximum(np.abs(y), np.abs(y_high))
+            scale = _error_scale(y, y_high, rtol, atol)
             err_norm = np.linalg.norm(err_vec / scale) / np.sqrt(err_vec.size)
 
             if err_norm <= 1.0:
@@ -1409,25 +1373,13 @@ class _RK45(_AdaptiveStepRK):
                 t = t_new
                 y = y_new
 
-                beta = 1.0 / (order + 1)
-                alpha = 0.4 * beta
-                if err_prev < 0:
-                    factor = SAFETY * (err_norm ** (-beta))
-                else:
-                    factor = SAFETY * (err_norm ** (-beta)) * (err_prev ** alpha)
-                if factor < MIN_FACTOR:
-                    factor = MIN_FACTOR
-                if factor > MAX_FACTOR:
-                    factor = MAX_FACTOR
+                factor = _pi_accept_factor(err_norm, err_prev, order)
                 h = h * factor
                 err_prev = err_norm
             else:
-                factor = SAFETY * (err_norm ** (-err_exp))
-                if factor < MIN_FACTOR:
-                    factor = MIN_FACTOR
+                factor = _pi_reject_factor(err_norm, order)
                 h = h * factor
-                if h < min_step:
-                    h = min_step
+                h = _clamp_step(h, max_step, min_step)
 
         # Convert lists to arrays
         n_nodes = len(ts)
@@ -1459,34 +1411,14 @@ class _RK45(_AdaptiveStepRK):
             t1 = ts_arr[j + 1]
             hseg = t1 - t0
             x = (t_q - t0) / hseg
-            # Compute Q for new segment if needed: Q = K^T @ P
+            # Compute Q for new segment if needed
             if j != last_j:
                 Kseg = Ks[j]
-                # Q_cache[:, c] = sum_{r} Kseg[r, :] * P[r, c]
-                for c in range(P.shape[1]):
-                    # initialize column
-                    for d in range(dim):
-                        Q_cache[d, c] = 0.0
-                    for r in range(Kseg.shape[0]):
-                        coeff = P[r, c]
-                        if coeff != 0.0:
-                            for d in range(dim):
-                                Q_cache[d, c] += coeff * Kseg[r, d]
+                Q_cache = _rk45_build_Q_cache(Kseg, P, dim)
                 last_j = j
-            # build p vector as cumulative powers of x
-            p_len = P.shape[1]
-            p = np.empty(p_len, dtype=np.float64)
-            val = x
-            for c in range(p_len):
-                p[c] = val
-                val *= x
-            # y = y_old + h * Q @ p
+            # Evaluate dense state
             y_old = ys_arr[j]
-            for d in range(dim):
-                acc = 0.0
-                for c in range(p_len):
-                    acc += Q_cache[d, c] * p[c]
-                y_out[idx, d] = y_old[d] + hseg * acc
+            y_out[idx, :] = _rk45_eval_dense(y_old, Q_cache, P, x, hseg)
 
         # Derivatives at t_eval (reuse f)
         derivs_out = np.empty_like(y_out)
@@ -1514,26 +1446,17 @@ class _RK45(_AdaptiveStepRK):
         scale0 = atol + rtol * np.abs(y)
         d0 = np.linalg.norm(y / scale0) / np.sqrt(y.size)
         d1 = np.linalg.norm(dy0 / scale0) / np.sqrt(y.size)
-        h = 1e-6 if (d0 < 1e-5 or d1 < 1e-5) else 0.01 * d0 / d1
-        if h > max_step:
-            h = max_step
-        if h < min_step:
-            h = min_step
+
+        h = _select_initial_step(d0, d1, min_step, max_step)
 
         err_prev = -1.0
-        SAFETY = 0.9
-        MIN_FACTOR = 0.2
-        MAX_FACTOR = 10.0
-        err_exp = 1.0 / order
 
         while (t - tf) * 1.0 < 0.0:
-            if h > max_step:
-                h = max_step
-            if t + h > tf:
-                h = abs(tf - t)
+            h = _clamp_step(h, max_step, min_step)
+            h = _adjust_step_to_endpoint(t, h, tf)
 
             y_high, y_low, err_vec, k = rk45_step_ham_jit_kernel(t, y, h, A, B_HIGH, C, E, jac_H, clmo_H, n_dof)
-            scale = atol + rtol * np.maximum(np.abs(y), np.abs(y_high))
+            scale = _error_scale(y, y_high, rtol, atol)
             err_norm = np.linalg.norm(err_vec / scale) / np.sqrt(err_vec.size)
 
             if err_norm <= 1.0:
@@ -1548,25 +1471,11 @@ class _RK45(_AdaptiveStepRK):
                 t = t_new
                 y = y_new
 
-                beta = 1.0 / (order + 1)
-                alpha = 0.4 * beta
-                if err_prev < 0:
-                    factor = SAFETY * (err_norm ** (-beta))
-                else:
-                    factor = SAFETY * (err_norm ** (-beta)) * (err_prev ** alpha)
-                if factor < MIN_FACTOR:
-                    factor = MIN_FACTOR
-                if factor > MAX_FACTOR:
-                    factor = MAX_FACTOR
-                h = h * factor
+                h = h * _pi_accept_factor(err_norm, err_prev, order)
                 err_prev = err_norm
             else:
-                factor = SAFETY * (err_norm ** (-err_exp))
-                if factor < MIN_FACTOR:
-                    factor = MIN_FACTOR
-                h = h * factor
-                if h < min_step:
-                    h = min_step
+                h = h * _pi_reject_factor(err_norm, order)
+                h = _clamp_step(h, max_step, min_step)
 
         n_nodes = len(ts)
         dim = y0.size
@@ -1595,27 +1504,10 @@ class _RK45(_AdaptiveStepRK):
             x = (t_q - t0s) / hseg
             if j != last_j:
                 Kseg = Ks[j]
-                for c in range(P.shape[1]):
-                    for d in range(dim):
-                        Q_cache[d, c] = 0.0
-                    for r in range(Kseg.shape[0]):
-                        coeff = P[r, c]
-                        if coeff != 0.0:
-                            for d in range(dim):
-                                Q_cache[d, c] += coeff * Kseg[r, d]
+                Q_cache = _rk45_build_Q_cache(Kseg, P, dim)
                 last_j = j
-            p_len = P.shape[1]
-            p = np.empty(p_len, dtype=np.float64)
-            val = x
-            for c in range(p_len):
-                p[c] = val
-                val *= x
             y_old = ys_arr[j]
-            for d in range(dim):
-                acc = 0.0
-                for c in range(p_len):
-                    acc += Q_cache[d, c] * p[c]
-                y_out[idx, d] = y_old[d] + hseg * acc
+            y_out[idx, :] = _rk45_eval_dense(y_old, Q_cache, P, x, hseg)
 
         derivs_out = np.empty_like(y_out)
         for idx in range(m):
@@ -1685,42 +1577,24 @@ class _RK45(_AdaptiveStepRK):
         scale0 = atol + rtol * np.abs(y)
         d0 = np.linalg.norm(y / scale0) / np.sqrt(y.size)
         d1 = np.linalg.norm(f_curr / scale0) / np.sqrt(y.size)
-        if d0 < 1e-5 or d1 < 1e-5:
-            h = 1e-6
-        else:
-            h = 0.01 * d0 / d1
-        if h > max_step:
-            h = max_step
-        if h < min_step:
-            h = min_step
+        h = _select_initial_step(d0, d1, min_step, max_step)
 
         err_prev = -1.0
-        SAFETY = 0.9
-        MIN_FACTOR = 0.2
-        MAX_FACTOR = 10.0
-        err_exp = 1.0 / order
+        
 
         while (t - tmax) * 1.0 < 0.0:
-            if h > max_step:
-                h = max_step
-            if t + h > tmax:
-                h = abs(tmax - t)
+            h = _clamp_step(h, max_step, min_step)
+            h = _adjust_step_to_endpoint(t, h, tmax)
 
             y_high, y_low, err_vec, K = rk45_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E)
-            scale = atol + rtol * np.maximum(np.abs(y), np.abs(y_high))
+            scale = _error_scale(y, y_high, rtol, atol)
             err_norm = np.linalg.norm(err_vec / scale) / np.sqrt(err_vec.size)
 
             if err_norm <= 1.0:
                 t_new = t + h
                 y_new = y_high
                 g_new = event_fn(t_new, y_new)
-                crossed = False
-                if direction == 0:
-                    crossed = ((g_prev < 0.0 and g_new > 0.0) or (g_prev > 0.0 and g_new < 0.0) or (g_new == 0.0))
-                elif direction > 0:
-                    crossed = ((g_prev < 0.0 and g_new > 0.0) or (g_new == 0.0))
-                else:
-                    crossed = ((g_prev > 0.0 and g_new < 0.0) or (g_new == 0.0))
+                crossed = _event_crossed(g_prev, g_new, direction)
                 if crossed:
                     t_hit, y_hit = _rk45_refine_in_step(event_fn, t, y, t_new, y_new, h, K, P, direction, xtol, gtol)
                     return True, t_hit, y_hit, y_new
@@ -1731,25 +1605,11 @@ class _RK45(_AdaptiveStepRK):
                 f_curr = f(t, y)
                 g_prev = g_new
 
-                beta = 1.0 / (order + 1)
-                alpha = 0.4 * beta
-                if err_prev < 0:
-                    factor = SAFETY * (err_norm ** (-beta))
-                else:
-                    factor = SAFETY * (err_norm ** (-beta)) * (err_prev ** alpha)
-                if factor < MIN_FACTOR:
-                    factor = MIN_FACTOR
-                if factor > MAX_FACTOR:
-                    factor = MAX_FACTOR
-                h = h * factor
+                h = h * _pi_accept_factor(err_norm, err_prev, order)
                 err_prev = err_norm
             else:
-                factor = SAFETY * (err_norm ** (-err_exp))
-                if factor < MIN_FACTOR:
-                    factor = MIN_FACTOR
-                h = h * factor
-                if h < min_step:
-                    h = min_step
+                h = h * _pi_reject_factor(err_norm, order)
+                h = _clamp_step(h, max_step, min_step)
 
         return False, t, y, y
 
@@ -1766,42 +1626,23 @@ class _RK45(_AdaptiveStepRK):
         scale0 = atol + rtol * np.abs(y)
         d0 = np.linalg.norm(y / scale0) / np.sqrt(y.size)
         d1 = np.linalg.norm(f_curr / scale0) / np.sqrt(y.size)
-        if d0 < 1e-5 or d1 < 1e-5:
-            h = 1e-6
-        else:
-            h = 0.01 * d0 / d1
-        if h > max_step:
-            h = max_step
-        if h < min_step:
-            h = min_step
+        h = _select_initial_step(d0, d1, min_step, max_step)
 
         err_prev = -1.0
-        SAFETY = 0.9
-        MIN_FACTOR = 0.2
-        MAX_FACTOR = 10.0
-        err_exp = 1.0 / order
-
+        
         while (t - tmax) * 1.0 < 0.0:
-            if h > max_step:
-                h = max_step
-            if t + h > tmax:
-                h = abs(tmax - t)
+            h = _clamp_step(h, max_step, min_step)
+            h = _adjust_step_to_endpoint(t, h, tmax)
 
             y_high, y_low, err_vec, K = rk45_step_ham_jit_kernel(t, y, h, A, B_HIGH, C, E, jac_H, clmo_H, n_dof)
-            scale = atol + rtol * np.maximum(np.abs(y), np.abs(y_high))
+            scale = _error_scale(y, y_high, rtol, atol)
             err_norm = np.linalg.norm(err_vec / scale) / np.sqrt(err_vec.size)
 
             if err_norm <= 1.0:
                 t_new = t + h
                 y_new = y_high
                 g_new = event_fn(t_new, y_new)
-                crossed = False
-                if direction == 0:
-                    crossed = ((g_prev < 0.0 and g_new > 0.0) or (g_prev > 0.0 and g_new < 0.0) or (g_new == 0.0))
-                elif direction > 0:
-                    crossed = ((g_prev < 0.0 and g_new > 0.0) or (g_new == 0.0))
-                else:
-                    crossed = ((g_prev > 0.0 and g_new < 0.0) or (g_new == 0.0))
+                crossed = _event_crossed(g_prev, g_new, direction)
                 if crossed:
                     t_hit, y_hit = _rk45_refine_in_step(event_fn, t, y, t_new, y_new, h, K, P, direction, xtol, gtol)
                     return True, t_hit, y_hit, y_new
@@ -1812,25 +1653,11 @@ class _RK45(_AdaptiveStepRK):
                 f_curr = _hamiltonian_rhs(y, jac_H, clmo_H, n_dof)
                 g_prev = g_new
 
-                beta = 1.0 / (order + 1)
-                alpha = 0.4 * beta
-                if err_prev < 0:
-                    factor = SAFETY * (err_norm ** (-beta))
-                else:
-                    factor = SAFETY * (err_norm ** (-beta)) * (err_prev ** alpha)
-                if factor < MIN_FACTOR:
-                    factor = MIN_FACTOR
-                if factor > MAX_FACTOR:
-                    factor = MAX_FACTOR
-                h = h * factor
+                h = h * _pi_accept_factor(err_norm, err_prev, order)
                 err_prev = err_norm
             else:
-                factor = SAFETY * (err_norm ** (-err_exp))
-                if factor < MIN_FACTOR:
-                    factor = MIN_FACTOR
-                h = h * factor
-                if h < min_step:
-                    h = min_step
+                h = h * _pi_reject_factor(err_norm, order)
+                h = _clamp_step(h, max_step, min_step)
 
         return False, t, y, y
 
@@ -2077,6 +1904,90 @@ def _dop853_build_dense_cache(f, t_old, y_old, f_old, y_new, f_new, hseg, Kseg, 
     return F_cache
 
 @numba.njit(cache=False, fastmath=FASTMATH)
+def _dop853_build_dense_cache_ham(t_old, y_old, f_old, y_new, f_new, hseg, Kseg, A_full, C_full, D, n_stages_extended, interpolator_power, jac_H, clmo_H, n_dof):
+    """Build the dense cache for the DOP853 method (Hamiltonian variant).
+    
+    Mirrors _dop853_build_dense_cache but uses _hamiltonian_rhs to extend stages.
+
+    Parameters
+    ----------
+    t_old : float
+        The initial time.
+    y_old : numpy.ndarray
+        The initial state.
+    f_old : numpy.ndarray
+        The initial derivative.
+    y_new : numpy.ndarray
+        The final state.
+    f_new : numpy.ndarray
+        The final derivative.
+    hseg : float
+        The step size.
+    Kseg : numpy.ndarray
+        The intermediate stages.
+    A_full : numpy.ndarray
+        The full Butcher tableau.
+    C_full : numpy.ndarray
+        The full Butcher tableau.
+    D : numpy.ndarray
+        The full Butcher tableau.
+    n_stages_extended : int
+        The number of stages.
+    interpolator_power : int
+        The power of the interpolator.
+    jac_H : numpy.ndarray
+        The Jacobian of the Hamiltonian.
+    clmo_H : numpy.ndarray
+        The coefficient-layout mapping objects for the Hamiltonian.
+    n_dof : int, shape (n_dof,)
+        The number of degrees of freedom.
+
+    Returns
+    -------
+    numpy.ndarray
+        The dense cache.
+
+    Notes
+    -----
+    This function implements the dense cache for the DOP853 method (Hamiltonian variant).
+    It mirrors _dop853_build_dense_cache but uses _hamiltonian_rhs to extend stages.
+    """
+    dim = y_old.size
+    s_used = Kseg.shape[0]
+    Kext = np.empty((n_stages_extended, dim), dtype=np.float64)
+    for r in range(s_used):
+        for d in range(dim):
+            Kext[r, d] = Kseg[r, d]
+    for srow in range(s_used, n_stages_extended):
+        y_stage = np.empty(dim, dtype=np.float64)
+        for d in range(dim):
+            acc = 0.0
+            for r in range(srow):
+                a = A_full[srow, r]
+                if a != 0.0:
+                    acc += a * Kext[r, d]
+            y_stage[d] = y_old[d] + hseg * acc
+        k_vec = _hamiltonian_rhs(y_stage, jac_H, clmo_H, n_dof)
+        for d in range(dim):
+            Kext[srow, d] = k_vec[d]
+    F_cache = np.empty((interpolator_power, dim), dtype=np.float64)
+    delta_y = y_new - y_old
+    for d in range(dim):
+        F_cache[0, d] = delta_y[d]
+        F_cache[1, d] = hseg * f_old[d] - delta_y[d]
+        F_cache[2, d] = 2.0 * delta_y[d] - hseg * (f_new[d] + f_old[d])
+    rows_remaining = interpolator_power - 3
+    for irem in range(rows_remaining):
+        for d in range(dim):
+            acc = 0.0
+            for r in range(n_stages_extended):
+                coeff = D[irem, r]
+                if coeff != 0.0:
+                    acc += coeff * Kext[r, d]
+            F_cache[3 + irem, d] = hseg * acc
+    return F_cache
+
+@numba.njit(cache=False, fastmath=FASTMATH)
 def _dop853_eval_dense(y_old, F_cache, interpolator_power, x):
     """Evaluate the dense interpolator at time x.
 
@@ -2210,20 +2121,9 @@ def _dop853_refine_in_step(f, event_fn, t0, y0, f0, t1, y1, f1, h, Kseg, A_full,
             t_hit = t0 + x_hit * h
             y_hit = _dop853_eval_dense(y0, F_cache, interpolator_power, x_hit)
             return t_hit, y_hit
-        crossed = False
-        if direction == 0:
-            crossed = (g_left < 0.0 and g_mid > 0.0) or (g_left > 0.0 and g_mid < 0.0)
-        elif direction > 0:
-            crossed = (g_left < 0.0 and g_mid > 0.0)
-        else:
-            crossed = (g_left > 0.0 and g_mid < 0.0)
-        if crossed:
-            b = mid
-            g_right = g_mid
-        else:
-            a = mid
-            g_left = g_mid
-        if (b - a) * abs(h) <= xtol:
+        crossed = _crossed_direction(g_left, g_mid, direction)
+        a, b, g_left = _bisection_update(a, b, g_left, mid, g_mid, crossed)
+        if _bracket_converged(a, b, h, xtol):
             break
     x_hit = b
     t_hit = t0 + x_hit * h
@@ -2289,20 +2189,9 @@ def _dop853_refine_in_step_ham(event_fn, t0, y0, f0, t1, y1, f1, h, Kseg, A_full
             t_hit = t0 + x_hit * h
             y_hit = _dop853_eval_dense(y0, F_cache, interpolator_power, x_hit)
             return t_hit, y_hit
-        crossed = False
-        if direction == 0:
-            crossed = (g_left < 0.0 and g_mid > 0.0) or (g_left > 0.0 and g_mid < 0.0)
-        elif direction > 0:
-            crossed = (g_left < 0.0 and g_mid > 0.0)
-        else:
-            crossed = (g_left > 0.0 and g_mid < 0.0)
-        if crossed:
-            b = mid
-            g_right = g_mid
-        else:
-            a = mid
-            g_left = g_mid
-        if (b - a) * abs(h) <= xtol:
+        crossed = _crossed_direction(g_left, g_mid, direction)
+        a, b, g_left = _bisection_update(a, b, g_left, mid, g_mid, crossed)
+        if _bracket_converged(a, b, h, xtol):
             break
     x_hit = b
     t_hit = t0 + x_hit * h
@@ -2584,26 +2473,16 @@ class _DOP853(_AdaptiveStepRK):
         scale0 = atol + rtol * np.abs(y)
         d0 = np.linalg.norm(y / scale0) / np.sqrt(y.size)
         d1 = np.linalg.norm(dy0 / scale0) / np.sqrt(y.size)
-        h = 1e-6 if (d0 < 1e-5 or d1 < 1e-5) else 0.01 * d0 / d1
-        if h > max_step:
-            h = max_step
-        if h < min_step:
-            h = min_step
+        h = _select_initial_step(d0, d1, min_step, max_step)
 
         err_prev = -1.0
-        SAFETY = 0.9
-        MIN_FACTOR = 0.2
-        MAX_FACTOR = 10.0
-        err_exp = 1.0 / order
 
         while (t - tf) * 1.0 < 0.0:
-            if h > max_step:
-                h = max_step
-            if t + h > tf:
-                h = abs(tf - t)
+            h = _clamp_step(h, max_step, min_step)
+            h = _adjust_step_to_endpoint(t, h, tf)
 
             y_high, y_low, err_vec, err5, err3, k = dop853_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E5, E3)
-            scale = atol + rtol * np.maximum(np.abs(y), np.abs(y_high))
+            scale = _error_scale(y, y_high, rtol, atol)
             # SciPy-compatible combined error norm for DOP853
             err5_scaled = err5 / scale
             err3_scaled = err3 / scale
@@ -2626,25 +2505,11 @@ class _DOP853(_AdaptiveStepRK):
                 t = t_new
                 y = y_new
 
-                beta = 1.0 / (order + 1)
-                alpha = 0.4 * beta
-                if err_prev < 0:
-                    factor = SAFETY * (err_norm ** (-beta))
-                else:
-                    factor = SAFETY * (err_norm ** (-beta)) * (err_prev ** alpha)
-                if factor < MIN_FACTOR:
-                    factor = MIN_FACTOR
-                if factor > MAX_FACTOR:
-                    factor = MAX_FACTOR
-                h = h * factor
+                h = h * _pi_accept_factor(err_norm, err_prev, order)
                 err_prev = err_norm
             else:
-                factor = SAFETY * (err_norm ** (-err_exp))
-                if factor < MIN_FACTOR:
-                    factor = MIN_FACTOR
-                h = h * factor
-                if h < min_step:
-                    h = min_step
+                h = h * _pi_reject_factor(err_norm, order)
+                h = _clamp_step(h, max_step, min_step)
 
         # Convert lists to arrays
         n_nodes = len(ts)
@@ -2679,71 +2544,31 @@ class _DOP853(_AdaptiveStepRK):
                 continue
             x = (t_q - t0s) / hseg
             if j != last_j:
-                # Build extended K for dense output
-                Kext = np.empty((n_stages_extended, dim), dtype=np.float64)
-                Kseg = Ks[j]
-                s_used = Kseg.shape[0]
-                for r in range(s_used):
-                    for d in range(dim):
-                        Kext[r, d] = Kseg[r, d]
-                # compute additional stages using A_EXTRA rows with hseg and stored y_old
+                # Build dense cache for this segment using helper
                 y_old = ys_arr[j]
-                t_old = t0s
-                start_row = s_used
-                for srow in range(start_row, n_stages_extended):
-                    # dy = (Kext[:srow].T @ A_full[srow, :srow]) * hseg
-                    # Build y_stage vector
-                    y_stage = np.empty(dim, dtype=np.float64)
-                    for d in range(dim):
-                        acc = 0.0
-                        for r in range(srow):
-                            a = A_full[srow, r]
-                            if a != 0.0:
-                                acc += a * Kext[r, d]
-                        y_stage[d] = y_old[d] + hseg * acc
-                    # Evaluate derivative at stage
-                    t_stage = t_old + C_full[srow] * hseg
-                    k_vec = f(t_stage, y_stage)
-                    for d in range(dim):
-                        Kext[srow, d] = k_vec[d]
-                # Build F
-                # F[0] = delta_y, F[1] = h f_old - delta_y, F[2] = 2*delta_y - h(f_new+f_old)
+                y_new = ys_arr[j + 1]
                 f_old = dys_arr[j]
                 f_new = dys_arr[j + 1]
-                delta_y = ys_arr[j + 1] - ys_arr[j]
-                for d in range(dim):
-                    F_cache[0, d] = delta_y[d]
-                    F_cache[1, d] = hseg * f_old[d] - delta_y[d]
-                    F_cache[2, d] = 2.0 * delta_y[d] - hseg * (f_new[d] + f_old[d])
-                # Remaining rows: h * (D @ Kext)
-                rows_remaining = interpolator_power - 3
-                for irem in range(rows_remaining):
-                    for d in range(dim):
-                        acc = 0.0
-                        for r in range(n_stages_extended):
-                            coeff = D[irem, r]
-                            if coeff != 0.0:
-                                acc += coeff * Kext[r, d]
-                        F_cache[3 + irem, d] = hseg * acc
+                Kseg = Ks[j]
+                F_cache = _dop853_build_dense_cache(
+                    f=f,
+                    t_old=t0s,
+                    y_old=y_old,
+                    f_old=f_old,
+                    y_new=y_new,
+                    f_new=f_new,
+                    hseg=hseg,
+                    Kseg=Kseg,
+                    A_full=A_full,
+                    C_full=C_full,
+                    D=D,
+                    n_stages_extended=n_stages_extended,
+                    interpolator_power=interpolator_power,
+                )
                 last_j = j
-            # Evaluate Dop853DenseOutput polynomial by Horner-like alternating x and (1-x)
-            y_val = np.zeros(dim, dtype=np.float64)
-            for i in range(interpolator_power - 1, -1, -1):
-                for d in range(dim):
-                    y_val[d] += F_cache[i, d]
-                if (interpolator_power - 1 - i) % 2 == 0:
-                    # even offset -> multiply by x
-                    for d in range(dim):
-                        y_val[d] *= x
-                else:
-                    # odd offset -> multiply by (1 - x)
-                    one_minus_x = 1.0 - x
-                    for d in range(dim):
-                        y_val[d] *= one_minus_x
-            # add y_old
+            # Evaluate dense interpolant
             y_old = ys_arr[j]
-            for d in range(dim):
-                y_out[idx, d] = y_val[d] + y_old[d]
+            y_out[idx, :] = _dop853_eval_dense(y_old, F_cache, interpolator_power, x)
 
         derivs_out = np.empty_like(y_out)
         for idx in range(m):
@@ -2775,26 +2600,16 @@ class _DOP853(_AdaptiveStepRK):
         scale0 = atol + rtol * np.abs(y)
         d0 = np.linalg.norm(y / scale0) / np.sqrt(y.size)
         d1 = np.linalg.norm(dy0 / scale0) / np.sqrt(y.size)
-        h = 1e-6 if (d0 < 1e-5 or d1 < 1e-5) else 0.01 * d0 / d1
-        if h > max_step:
-            h = max_step
-        if h < min_step:
-            h = min_step
+        h = _select_initial_step(d0, d1, min_step, max_step)
 
         err_prev = -1.0
-        SAFETY = 0.9
-        MIN_FACTOR = 0.2
-        MAX_FACTOR = 10.0
-        err_exp = 1.0 / order
 
         while (t - tf) * 1.0 < 0.0:
-            if h > max_step:
-                h = max_step
-            if t + h > tf:
-                h = abs(tf - t)
+            h = _clamp_step(h, max_step, min_step)
+            h = _adjust_step_to_endpoint(t, h, tf)
 
             y_high, y_low, err_vec, err5, err3, k = dop853_step_ham_jit_kernel(t, y, h, A, B_HIGH, C, E5, E3, jac_H, clmo_H, n_dof)
-            scale = atol + rtol * np.maximum(np.abs(y), np.abs(y_high))
+            scale = _error_scale(y, y_high, rtol, atol)
             # SciPy-compatible combined error norm for DOP853
             err5_scaled = err5 / scale
             err3_scaled = err3 / scale
@@ -2817,25 +2632,11 @@ class _DOP853(_AdaptiveStepRK):
                 t = t_new
                 y = y_new
 
-                beta = 1.0 / (order + 1)
-                alpha = 0.4 * beta
-                if err_prev < 0:
-                    factor = SAFETY * (err_norm ** (-beta))
-                else:
-                    factor = SAFETY * (err_norm ** (-beta)) * (err_prev ** alpha)
-                if factor < MIN_FACTOR:
-                    factor = MIN_FACTOR
-                if factor > MAX_FACTOR:
-                    factor = MAX_FACTOR
-                h = h * factor
+                h = h * _pi_accept_factor(err_norm, err_prev, order)
                 err_prev = err_norm
             else:
-                factor = SAFETY * (err_norm ** (-err_exp))
-                if factor < MIN_FACTOR:
-                    factor = MIN_FACTOR
-                h = h * factor
-                if h < min_step:
-                    h = min_step
+                h = h * _pi_reject_factor(err_norm, order)
+                h = _clamp_step(h, max_step, min_step)
 
         # Convert lists to arrays
         n_nodes = len(ts)
@@ -2868,60 +2669,32 @@ class _DOP853(_AdaptiveStepRK):
                 continue
             x = (t_q - t0s) / hseg
             if j != last_j:
-                # Build extended K for dense output
-                Kext = np.empty((n_stages_extended, dim), dtype=np.float64)
-                Kseg = Ks[j]
-                s_used = Kseg.shape[0]
-                for r in range(s_used):
-                    for d in range(dim):
-                        Kext[r, d] = Kseg[r, d]
-                # compute additional stages using A_full rows
+                # Build dense cache for this segment using Hamiltonian helper
                 y_old = ys_arr[j]
-                for srow in range(s_used, n_stages_extended):
-                    y_stage = np.empty(dim, dtype=np.float64)
-                    for d in range(dim):
-                        acc = 0.0
-                        for rr in range(srow):
-                            a = A_full[srow, rr]
-                            if a != 0.0:
-                                acc += a * Kext[rr, d]
-                        y_stage[d] = y_old[d] + hseg * acc
-                    k_vec = _hamiltonian_rhs(y_stage, jac_H, clmo_H, n_dof)
-                    for d in range(dim):
-                        Kext[srow, d] = k_vec[d]
-                # Build F cache rows
+                y_new = ys_arr[j + 1]
                 f_old = dys_arr[j]
                 f_new = dys_arr[j + 1]
-                delta_y = ys_arr[j + 1] - ys_arr[j]
-                for d in range(dim):
-                    F_cache[0, d] = delta_y[d]
-                    F_cache[1, d] = hseg * f_old[d] - delta_y[d]
-                    F_cache[2, d] = 2.0 * delta_y[d] - hseg * (f_new[d] + f_old[d])
-                rows_remaining = interpolator_power - 3
-                for irem in range(rows_remaining):
-                    for d in range(dim):
-                        acc = 0.0
-                        for r in range(n_stages_extended):
-                            coeff = D[irem, r]
-                            if coeff != 0.0:
-                                acc += coeff * Kext[r, d]
-                        F_cache[3 + irem, d] = hseg * acc
+                Kseg = Ks[j]
+                F_cache = _dop853_build_dense_cache_ham(
+                    t_old=t0s,
+                    y_old=y_old,
+                    f_old=f_old,
+                    y_new=y_new,
+                    f_new=f_new,
+                    hseg=hseg,
+                    Kseg=Kseg,
+                    A_full=A_full,
+                    C_full=C_full,
+                    D=D,
+                    n_stages_extended=n_stages_extended,
+                    interpolator_power=interpolator_power,
+                    jac_H=jac_H,
+                    clmo_H=clmo_H,
+                    n_dof=n_dof,
+                )
+                # Evaluate
+                y_out[idx, :] = _dop853_eval_dense(y_old, F_cache, interpolator_power, x)
                 last_j = j
-            # Horner-like alternating x and (1-x)
-            y_val = np.zeros(dim, dtype=np.float64)
-            for i in range(interpolator_power - 1, -1, -1):
-                for d in range(dim):
-                    y_val[d] += F_cache[i, d]
-                if (interpolator_power - 1 - i) % 2 == 0:
-                    for d in range(dim):
-                        y_val[d] *= x
-                else:
-                    one_minus_x = 1.0 - x
-                    for d in range(dim):
-                        y_val[d] *= one_minus_x
-            y_old = ys_arr[j]
-            for d in range(dim):
-                y_out[idx, d] = y_val[d] + y_old[d]
 
         derivs_out = np.empty_like(y_out)
         for idx in range(m):
@@ -3009,29 +2782,16 @@ class _DOP853(_AdaptiveStepRK):
         scale0 = atol + rtol * np.abs(y)
         d0 = np.linalg.norm(y / scale0) / np.sqrt(y.size)
         d1 = np.linalg.norm(f_curr / scale0) / np.sqrt(y.size)
-        if d0 < 1e-5 or d1 < 1e-5:
-            h = 1e-6
-        else:
-            h = 0.01 * d0 / d1
-        if h > max_step:
-            h = max_step
-        if h < min_step:
-            h = min_step
+        h = _select_initial_step(d0, d1, min_step, max_step)
 
         err_prev = -1.0
-        SAFETY = 0.9
-        MIN_FACTOR = 0.2
-        MAX_FACTOR = 10.0
-        err_exp = 1.0 / order
 
         while (t - tmax) * 1.0 < 0.0:
-            if h > max_step:
-                h = max_step
-            if t + h > tmax:
-                h = abs(tmax - t)
+            h = _clamp_step(h, max_step, min_step)
+            h = _adjust_step_to_endpoint(t, h, tmax)
 
             y_high, y_low, err_vec, err5, err3, K = dop853_step_jit_kernel(f, t, y, h, A, B_HIGH, C, E5, E3)
-            scale = atol + rtol * np.maximum(np.abs(y), np.abs(y_high))
+            scale = _error_scale(y, y_high, rtol, atol)
             err5_scaled = err5 / scale
             err3_scaled = err3 / scale
             err5_norm_2 = np.dot(err5_scaled, err5_scaled)
@@ -3050,13 +2810,7 @@ class _DOP853(_AdaptiveStepRK):
 
                 # event check
                 g_new = event_fn(t_new, y_new)
-                crossed = False
-                if direction == 0:
-                    crossed = ((g_prev < 0.0 and g_new > 0.0) or (g_prev > 0.0 and g_new < 0.0) or (g_new == 0.0))
-                elif direction > 0:
-                    crossed = ((g_prev < 0.0 and g_new > 0.0) or (g_new == 0.0))
-                else:
-                    crossed = ((g_prev > 0.0 and g_new < 0.0) or (g_new == 0.0))
+                crossed = _event_crossed(g_prev, g_new, direction)
                 if crossed:
                     t_hit, y_hit = _dop853_refine_in_step(f, event_fn, t, y, f_curr, t_new, y_new, f_new, h, K, A_full, C_full, D, n_stages_extended, interpolator_power, direction, xtol, gtol)
                     return True, t_hit, y_hit, y_new
@@ -3067,42 +2821,11 @@ class _DOP853(_AdaptiveStepRK):
                 f_curr = f_new
                 g_prev = g_new
 
-                beta = 1.0 / (order + 1)
-                alpha = 0.4 * beta
-                # Robust step factor to avoid NaNs when err_norm or err_prev are zero
-                if err_prev < 0:
-                    if err_norm == 0.0:
-                        factor = MAX_FACTOR
-                    else:
-                        factor = SAFETY * (err_norm ** (-beta))
-                else:
-                    if err_norm == 0.0:
-                        factor = MAX_FACTOR
-                    else:
-                        base = (err_norm ** (-beta))
-                        # Avoid 0 ** alpha when err_prev is exactly zero
-                        hist = 1.0 if err_prev == 0.0 else (err_prev ** alpha)
-                        factor = SAFETY * base * hist
-                # Clamp and sanitize
-                if not np.isfinite(factor):
-                    factor = MAX_FACTOR
-                if factor < MIN_FACTOR:
-                    factor = MIN_FACTOR
-                if factor > MAX_FACTOR:
-                    factor = MAX_FACTOR
-                h = h * factor
-                if not np.isfinite(h) or h == 0.0:
-                    h = max_step
+                h = h * _pi_accept_factor(err_norm, err_prev, order)
                 err_prev = err_norm
             else:
-                factor = SAFETY * (err_norm ** (-err_exp))
-                if not np.isfinite(factor) or factor <= 0.0:
-                    factor = MIN_FACTOR
-                if factor < MIN_FACTOR:
-                    factor = MIN_FACTOR
-                h = h * factor
-                if h < min_step:
-                    h = min_step
+                h = h * _pi_reject_factor(err_norm, order)
+                h = _clamp_step(h, max_step, min_step)
 
         return False, t, y, y
 
@@ -3120,34 +2843,20 @@ class _DOP853(_AdaptiveStepRK):
         f_curr = _hamiltonian_rhs(y, jac_H, clmo_H, n_dof)
         g_prev = event_fn(t, y)
 
-        h = min_step
         # initial step heuristic
         scale0 = atol + rtol * np.abs(y)
         d0 = np.linalg.norm(y / scale0) / np.sqrt(y.size)
         d1 = np.linalg.norm(f_curr / scale0) / np.sqrt(y.size)
-        if d0 < 1e-5 or d1 < 1e-5:
-            h = 1e-6
-        else:
-            h = 0.01 * d0 / d1
-        if h > max_step:
-            h = max_step
-        if h < min_step:
-            h = min_step
+        h = _select_initial_step(d0, d1, min_step, max_step)
 
         err_prev = -1.0
-        SAFETY = 0.9
-        MIN_FACTOR = 0.2
-        MAX_FACTOR = 10.0
-        err_exp = 1.0 / order
 
         while (t - tmax) * 1.0 < 0.0:
-            if h > max_step:
-                h = max_step
-            if t + h > tmax:
-                h = abs(tmax - t)
+            h = _clamp_step(h, max_step, min_step)
+            h = _adjust_step_to_endpoint(t, h, tmax)
 
             y_high, y_low, err_vec, err5, err3, K = dop853_step_ham_jit_kernel(t, y, h, A, B_HIGH, C, E5, E3, jac_H, clmo_H, n_dof)
-            scale = atol + rtol * np.maximum(np.abs(y), np.abs(y_high))
+            scale = _error_scale(y, y_high, rtol, atol)
             err5_scaled = err5 / scale
             err3_scaled = err3 / scale
             err5_norm_2 = np.dot(err5_scaled, err5_scaled)
@@ -3166,13 +2875,7 @@ class _DOP853(_AdaptiveStepRK):
 
                 # event check
                 g_new = event_fn(t_new, y_new)
-                crossed = False
-                if direction == 0:
-                    crossed = ((g_prev < 0.0 and g_new > 0.0) or (g_prev > 0.0 and g_new < 0.0) or (g_new == 0.0))
-                elif direction > 0:
-                    crossed = ((g_prev < 0.0 and g_new > 0.0) or (g_new == 0.0))
-                else:
-                    crossed = ((g_prev > 0.0 and g_new < 0.0) or (g_new == 0.0))
+                crossed = _event_crossed(g_prev, g_new, direction)
                 if crossed:
                     t_hit, y_hit = _dop853_refine_in_step_ham(event_fn, t, y, f_curr, t_new, y_new, f_new, h, K, A_full, C_full, D, n_stages_extended, interpolator_power, direction, xtol, gtol, jac_H, clmo_H, n_dof)
                     return True, t_hit, y_hit, y_new
@@ -3183,39 +2886,11 @@ class _DOP853(_AdaptiveStepRK):
                 f_curr = f_new
                 g_prev = g_new
 
-                beta = 1.0 / (order + 1)
-                alpha = 0.4 * beta
-                if err_prev < 0:
-                    if err_norm == 0.0:
-                        factor = MAX_FACTOR
-                    else:
-                        factor = SAFETY * (err_norm ** (-beta))
-                else:
-                    if err_norm == 0.0:
-                        factor = MAX_FACTOR
-                    else:
-                        base = (err_norm ** (-beta))
-                        hist = 1.0 if err_prev == 0.0 else (err_prev ** alpha)
-                        factor = SAFETY * base * hist
-                if not np.isfinite(factor):
-                    factor = MAX_FACTOR
-                if factor < MIN_FACTOR:
-                    factor = MIN_FACTOR
-                if factor > MAX_FACTOR:
-                    factor = MAX_FACTOR
-                h = h * factor
-                if not np.isfinite(h) or h == 0.0:
-                    h = max_step
+                h = h * _pi_accept_factor(err_norm, err_prev, order)
                 err_prev = err_norm
             else:
-                factor = SAFETY * (err_norm ** (-err_exp))
-                if not np.isfinite(factor) or factor <= 0.0:
-                    factor = MIN_FACTOR
-                if factor < MIN_FACTOR:
-                    factor = MIN_FACTOR
-                h = h * factor
-                if h < min_step:
-                    h = min_step
+                h = h * _pi_reject_factor(err_norm, order)
+                h = _clamp_step(h, max_step, min_step)
 
         return False, t, y, y
 
