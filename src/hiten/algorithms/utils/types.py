@@ -21,10 +21,12 @@ import numpy.typing as npt
 
 class ReferenceFrame(Enum):
     """
-    Reference frame for Cartesian states.
+    Reference frame container.
 
-    INERTIAL: non-rotating barycentric (or system-specific) inertial frame.
-    ROTATING: synodic frame rotating with primaries.
+    INERTIAL: non-rotating barycentric (or system-specific) inertial frame. [x, y, z, vx, vy, vz]
+    ROTATING: synodic frame rotating with primaries. [x, y, z, vx, vy, vz]
+    CENTER_MANIFOLD: center manifold coordinate system. [q1, q2, q3, p1, p2, p3]
+    RESTRICTED_CENTER_MANIFOLD: restricted center manifold coordinate system. [q2, p2, q3, p3]
     """
     INERTIAL = "inertial"
     ROTATING = "rotating"
