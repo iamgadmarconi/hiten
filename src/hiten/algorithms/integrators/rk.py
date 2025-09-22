@@ -2692,9 +2692,10 @@ class _DOP853(_AdaptiveStepRK):
                     clmo_H=clmo_H,
                     n_dof=n_dof,
                 )
-                # Evaluate
-                y_out[idx, :] = _dop853_eval_dense(y_old, F_cache, interpolator_power, x)
                 last_j = j
+            # Evaluate (always)
+            y_old = ys_arr[j]
+            y_out[idx, :] = _dop853_eval_dense(y_old, F_cache, interpolator_power, x)
 
         derivs_out = np.empty_like(y_out)
         for idx in range(m):
