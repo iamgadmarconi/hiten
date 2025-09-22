@@ -24,95 +24,7 @@ import numpy as np
 from hiten.algorithms.poincare.centermanifold.config import _get_section_config
 from hiten.algorithms.polynomial.operations import _polynomial_evaluate
 from hiten.algorithms.utils.exceptions import BackendError, ConvergenceError
-
-
-def _solve_bracketed(
-    f: Callable[[float], float],
-    a: float,
-    b: float,
-    *,
-    xtol: float = 1e-12,
-    max_iter: int = 200,
-) -> Optional[float]:
-    """Brent-style bracketed scalar root solve in pure Python.
-
-    Returns the root in [a, b] if found; None if the bracket is invalid
-    or convergence is not achieved.
-    """
-    a = float(a)
-    b = float(b)
-    fa = float(f(a))
-    fb = float(f(b))
-
-    if fa == 0.0:
-        return a
-    if fb == 0.0:
-        return b
-    if fa * fb > 0.0:
-        return None
-
-    c = a
-    fc = fa
-    d = b - a
-    e = d
-    eps = float(np.finfo(np.float64).eps)
-
-    for _ in range(int(max_iter)):
-        if fb == 0.0:
-            return b
-
-        if fb * fc > 0.0:
-            c = a
-            fc = fa
-            d = b - a
-            e = d
-
-        if abs(fc) < abs(fb):
-            a, b, c = b, c, b
-            fa, fb, fc = fb, fc, fb
-
-        tol = 2.0 * eps * abs(b) + 0.5 * xtol
-        m = 0.5 * (c - b)
-        if abs(m) <= tol:
-            return b
-
-        if abs(e) >= tol and abs(fa) > abs(fb):
-            s = fb / fa
-            if a == c:
-                p = 2.0 * m * s
-                q = 1.0 - s
-            else:
-                q_ = fa / fc
-                r = fb / fc
-                p = s * (2.0 * m * q_ * (q_ - r) - (b - a) * (r - 1.0))
-                q = (q_ - 1.0) * (r - 1.0) * (s - 1.0)
-            if p > 0.0:
-                q = -q
-            else:
-                p = -p
-            if (2.0 * p) < min(3.0 * m * q - abs(tol * q), abs(e * q)):
-                e = d
-                d = p / q
-            else:
-                d = m
-                e = m
-        else:
-            d = m
-            e = m
-
-        a = b
-        fa = fb
-        if abs(d) > tol:
-            b = b + d
-        else:
-            b = b + (tol if m > 0.0 else -tol)
-        fb = float(f(b))
-
-    tol = 2.0 * eps * abs(b) + 0.5 * xtol
-    m = 0.5 * (c - b)
-    if abs(m) <= tol or fb == 0.0:
-        return b
-    return None
+from hiten.algorithms.utils.rootfinding import solve_bracketed_brent
 
 
 @dataclass(frozen=True)
@@ -184,7 +96,7 @@ class _CenterManifoldInterface:
             n_expand += 1
 
         if r_b > 0.0:
-            root = _solve_bracketed(residual, a, b, xtol=xtol, max_iter=200)
+            root = solve_bracketed_brent(residual, a, b, xtol=xtol, max_iter=200)
             return None if root is None else float(root)
 
         if symmetric:
@@ -198,7 +110,7 @@ class _CenterManifoldInterface:
                 r_a = residual(a_neg)
                 n_expand += 1
             if r_a > 0.0:
-                root = _solve_bracketed(residual, a_neg, b_neg, xtol=xtol, max_iter=200)
+                root = solve_bracketed_brent(residual, a_neg, b_neg, xtol=xtol, max_iter=200)
                 return None if root is None else float(root)
 
         return None

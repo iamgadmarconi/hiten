@@ -33,7 +33,7 @@ def main() -> None:
     current_z = halo_seed.initial_state[SynodicState.Z]  # 0 for planar Lyapunov halo_seed
 
     target_x = current_x + 0.01   # small shift along X
-    target_z = current_z + 0.5   # introduce out-of-plane Z
+    target_z = current_z + 0.9   # introduce out-of-plane Z
     step_x = (target_x - current_x) / (num_orbits - 1)
     step_z = (target_z - current_z) / (num_orbits - 1)
 

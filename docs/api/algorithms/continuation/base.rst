@@ -1,14 +1,14 @@
-Continuation Facades
-====================
+Continuation Base 
+=================
 
-The facades module provides user-facing interfaces for continuation workflows. These facades wrap the continuation engine and provide a convenient API for domain-specific continuation tasks.
+The base module provides the base classes for continuation workflows.
 
-.. currentmodule:: hiten.algorithms.continuation.facades
+.. currentmodule:: hiten.algorithms.continuation.base
 
 State Parameter Continuation
 ----------------------------
 
-.. currentmodule:: hiten.algorithms.continuation.facades
+.. currentmodule:: hiten.algorithms.continuation.base
 
 StateParameter()
 ^^^^^^^^^^^^^^^^
