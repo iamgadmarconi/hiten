@@ -191,10 +191,10 @@ def _read_orbit_group(grp: h5py.Group) -> "PeriodicOrbit":
             p_key, s_key = str(primary_name).lower(), str(secondary_name).lower()
             try:
                 primary = Body(primary_name.capitalize(), Constants.get_mass(p_key), Constants.get_radius(p_key))
-                secondary = Body(secondary_name.capitalize(), Constants.get_mass(s_key), Constants.get_radius(s_key), _parent_input=primary)
+                secondary = Body(secondary_name.capitalize(), Constants.get_mass(s_key), Constants.get_radius(s_key), parent=primary)
             except Exception:
                 primary = Body(primary_name.capitalize(), 1.0, 1.0)
-                secondary = Body(secondary_name.capitalize(), 1.0, 1.0, _parent_input=primary)
+                secondary = Body(secondary_name.capitalize(), 1.0, 1.0, parent=primary)
 
             system = System(primary, secondary, distance_km)
             orbit._system = system

@@ -15,14 +15,14 @@ All masses are expressed in kilograms and radii in metres (SI units).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional
 
-from hiten.utils.log_config import logger
+from hiten.system.core import _HitenBase
+from hiten.utils.io.body import load_body, load_body_inplace, save_body
 
 
-@dataclass(frozen=True)
-class Body(object):
+class Body(_HitenBase):
     """
     Celestial body container.
 
@@ -36,7 +36,7 @@ class Body(object):
         Mean equatorial radius in metres.
     color : str, optional
         Hexadecimal RGB string used for visualisation. Default is "#000000".
-    _parent_input : :class:`~hiten.system.body.Body`, optional
+    parent : :class:`~hiten.system.body.Body`, optional
         Internal parameter for parent body specification. If None, the
         object is treated as the primary and parent is set to the
         instance itself.
@@ -62,41 +62,58 @@ class Body(object):
     Examples
     --------
     >>> sun = Body("Sun", 1.98847e30, 6.957e8, color="#FDB813")
-    >>> earth = Body("Earth", 5.9722e24, 6.371e6, _parent_input=sun)
+    >>> earth = Body("Earth", 5.9722e24, 6.371e6, parent=sun)
     >>> print(earth)
     Earth orbiting Sun
     """
-    name: str
-    mass: float
-    radius: float
-    color: str = "#000000"
-    parent: Optional[Body] = field(default=None, init=False)
-    _parent_input: Optional[Body] = field(default=None, repr=False, compare=False)
 
-    def __post_init__(self):
-        """Initialize the parent attribute after dataclass creation.
-        
-        This method uses object.__setattr__ to bypass frozen=True protection,
-        which is a standard pattern for initializing fields in frozen dataclasses.
-        """
-        # Use object.__setattr__ to bypass frozen=True protection. This is a
-        # standard pattern for initializing fields in frozen dataclasses.
-        parent_to_set = self._parent_input or self
-        object.__setattr__(self, 'parent', parent_to_set)
-
-        parent_name = self.parent.name if self.parent is not self else "None"
-        logger.info(f"Created Body: name='{self.name}', mass={self.mass}, radius={self.radius}, color='{self.color}', parent='{parent_name}'")
+    def __init__(self, name: str, mass: float, radius: float, color: str = "#000000", parent: Optional["Body"] = None):
+        super().__init__()
+        self._name = name
+        self._mass = mass
+        self._radius = radius
+        self._color = color
+        self._parent = parent or self
 
     def __str__(self) -> str:
         parent_desc = f"orbiting {self.parent.name}" if self.parent is not self else "(Primary)"
         return f"{self.name} {parent_desc}"
 
     def __repr__(self) -> str:
-        # For the parent, we show its name to avoid recursion.
-        # This makes the repr not perfectly eval-able for secondaries, but it's safe.
         if self.parent is self:
             parent_repr = ""
         else:
-            parent_repr = f", _parent_input=Body(name='{self.parent.name}', ...)"
+            parent_repr = f", parent=Body(name='{self.parent.name}', ...)"
 
         return f"Body(name={self.name!r}, mass={self.mass}, radius={self.radius}, color={self.color!r}{parent_repr})"
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def mass(self) -> float:
+        return self._mass
+
+    @property
+    def radius(self) -> float:
+        return self._radius
+    
+    @property
+    def color(self) -> str:
+        return self._color
+
+    @property
+    def parent(self) -> "Body":
+        return self._parent
+    
+    def save(self, file_path: str | Path, **kwargs) -> None:
+        save_body(self, Path(file_path))
+
+    @classmethod
+    def load(cls, file_path: str | Path, **kwargs) -> "Body":
+        return load_body(Path(file_path))
+
+    def load_inplace(self, file_path: str | Path) -> "Body":
+        load_body_inplace(self, Path(file_path))
+        return self

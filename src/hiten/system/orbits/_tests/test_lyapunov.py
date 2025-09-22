@@ -16,7 +16,7 @@ def system():
     distance = Constants.get_orbital_distance("earth", "moon")
 
     earth = Body("Earth", earth_mass, earth_radius, color="blue")
-    moon = Body("Moon", moon_mass, moon_radius, color="gray", _parent_input=earth)
+    moon = Body("Moon", moon_mass, moon_radius, color="gray", parent=earth)
 
     return System(earth, moon, distance)
 

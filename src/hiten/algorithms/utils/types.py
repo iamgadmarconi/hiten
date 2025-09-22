@@ -12,11 +12,15 @@ for convenience. The containers are mutable and support validation of input
 data to ensure consistency with the expected coordinate system.
 """
 
-from enum import IntEnum, Enum
-from typing import Iterator, Optional, Sequence, Tuple, Type, Union, overload
+from enum import Enum, IntEnum
+from typing import (TYPE_CHECKING, Iterator, Optional, Sequence, Tuple, Type,
+                    Union, overload)
 
 import numpy as np
 import numpy.typing as npt
+
+if TYPE_CHECKING:
+    from hiten.algorithms.integrators.types import _Solution
 
 
 class ReferenceFrame(Enum):
@@ -741,9 +745,23 @@ class Trajectory:
         cls,
         times: npt.NDArray[np.float64],
         states: npt.NDArray[np.float64],
+        *,
+        state_vector_cls: Optional[Type[_BaseStateContainer]] = None,
+        frame: Optional[ReferenceFrame] = None,
     ) -> "Trajectory":
         """Construct from numpy arrays (validated)."""
-        return cls(times, states)
+        return cls(times, states, state_vector_cls=state_vector_cls, frame=frame)
+
+    @classmethod
+    def from_solution(
+        cls,
+        solution: "_Solution",
+        *,
+        state_vector_cls: Optional[Type[_BaseStateContainer]] = None,
+        frame: Optional[ReferenceFrame] = None,
+    ) -> "Trajectory":
+        """Construct from an integrator _Solution without copying arrays."""
+        return cls(solution.times, solution.states, state_vector_cls=state_vector_cls, frame=frame)
 
     def reversed(self) -> "Trajectory":
         """Return a new trajectory with reversed time order."""

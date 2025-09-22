@@ -9,160 +9,28 @@ Notes
 -----
 All positions and velocities are expressed in nondimensional units where the
 distance between the primaries is unity and the orbital period is 2*pi.
-
-References
-----------
-Szebehely, V. (1967). "Theory of Orbits".
 """
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Dict, Literal, Optional, Sequence, Tuple
+from typing import Dict, Literal, Optional, Sequence
 
 import numpy as np
-import numpy.typing as npt
-import pandas as pd
 
-from hiten.algorithms.dynamics.base import _propagate_dynsys
+from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import rtbp_dynsys, variational_dynsys
 from hiten.algorithms.utils.coordinates import _get_mass_parameter
+from hiten.algorithms.utils.types import (ReferenceFrame, SynodicStateVector,
+                                          Trajectory)
 from hiten.system.body import Body
+from hiten.system.core import _HitenBase
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import L1Point, L2Point, L3Point
 from hiten.system.libration.triangular import L4Point, L5Point
 from hiten.utils.constants import Constants
-from hiten.utils.io.system import save_system, load_system
+from hiten.utils.io.system import load_system, load_system_inplace, save_system
 from hiten.utils.log_config import logger
-
-
-class _HitenBase(ABC):
-    """Abstract base class for Hiten classes.
-    """
-
-    def __init__(self):
-        self._cache = {}
-
-    def cache_get(self, key: any, default: any = None) -> any:
-        """Get item from cache.
-
-        Parameters
-        ----------
-        key : any
-            The cache key.
-        default : any, optional
-            The default value to return if the key is not found.
-            
-        Returns
-        -------
-        any
-            The cached value or the default value if the key is not found.
-        """
-        return self._cache.get(key, default)
-    
-    def cache_set(self, key: any, value: any) -> any:
-        """Set item in cache.
-
-        Parameters
-        ----------
-        key : any
-            The cache key.
-        value : any
-            The value to cache.
-            
-        Returns
-        -------
-        any
-            The cached value.
-        """
-        self._cache[key] = value
-        return value
-    
-    def cache_clear(self) -> None:
-        """Clear cache.
-
-        This method resets all cached properties to None, forcing them to be
-        recomputed on next access.
-        """
-        self._cache.clear()
-
-    def __str__(self) -> str:
-        return f"{self.__class__.__name__}()"
-    
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}()"
-
-    def __getstate__(self):
-        """Get state for pickling.
-        """
-        return self.__dict__.copy()
-    
-    def __setstate__(self, state):
-        """Set state after unpickling.
-        """
-        self.__dict__.update(state)
-        if not hasattr(self, "_cache") or self._cache is None:
-            self._cache = {}
-
-    @abstractmethod
-    def save(self, file_path: str | Path, **kwargs) -> None:
-        """Save the object to a file.
-
-        Parameters
-        ----------
-        file_path : str or Path
-            The path to the file to save the object to.
-        **kwargs
-            Additional keyword arguments passed to the save method.
-        """
-        ...
-
-    @classmethod
-    @abstractmethod
-    def load(cls, file_path: str | Path, **kwargs) -> "_HitenBase":
-        """Load the object from a file.
-        
-        Parameters
-        ----------
-        file_path : str or Path
-            The path to the file to load the object from.
-        **kwargs
-            Additional keyword arguments passed to the load method.
-            
-        Returns
-        -------
-        :class:`~hiten.system.base._HitenBase`
-            The loaded object.
-        """
-        ...
-
-    def to_csv(self, file_path: str | Path, **kwargs) -> None:
-        """Save the object to a CSV file.
-
-        Parameters
-        ----------
-        file_path : str or Path
-            The path to the file to save the object to.
-        **kwargs
-            Additional keyword arguments passed to the save method.
-        """
-        ...
-
-    def to_df(cls, **kwargs) -> pd.DataFrame:
-        """Convert the object to a pandas DataFrame.
-
-        Parameters
-        ----------
-        **kwargs
-            Additional keyword arguments passed to the to_df method.
-            
-        Returns
-        -------
-        pandas.DataFrame
-            The converted object.
-        """
-        ...
 
 
 class System(_HitenBase):
@@ -202,15 +70,31 @@ class System(_HitenBase):
     libration point classes; this wrapper simply orchestrates them.
     """
     def __init__(self, primary: Body, secondary: Body, distance: float):
-        logger.info(f"Initializing System with primary='{primary.name}', secondary='{secondary.name}', distance={distance:.4e}")
-        
-        self._primary = primary
-        self._secondary = secondary
-        self._distance = distance
+        super().__init__()
+        self._primary: Body = primary
+        self._secondary: Body = secondary
+        self._distance: float = distance
         self._mu: float = _get_mass_parameter(primary.mass, secondary.mass)
-        self._dynsys = rtbp_dynsys(self.mu, name=f"RTBP_{self.primary.name}_{self.secondary.name}")
-        self._var_dynsys = variational_dynsys(self.mu, name=f"VarEq_{self.primary.name}_{self.secondary.name}")
 
+        logger.info(f"System: {secondary.name} orbiting {primary.name}")
+        logger.info("-" * 40)
+        logger.info("Body Parameters:")
+        logger.info(f"Primary     : {primary.name}")
+        logger.info(f"Mass        : {primary.mass:.6e} kg")
+        logger.info(f"Radius      : {primary.radius:.6e} m")
+        logger.info(f"Secondary   : {secondary.name}")
+        logger.info(f"Mass        : {secondary.mass:.6e} kg") 
+        logger.info(f"Radius      : {secondary.radius:.6e} m")
+        logger.info("-" * 40)
+        logger.info("System Parameters:")
+        logger.info(f"Distance    : {distance:.6e} km")
+        logger.info(f"Mass Ratio  : {self._mu:.8e}")
+        logger.info(f"mu_1        : {1-self._mu:.8e} (primary)")
+        logger.info(f"mu_2        : {self._mu:.8e} (secondary)")
+        logger.info("-" * 40)
+
+        self._dynsys: _DynamicalSystem = rtbp_dynsys(self.mu, name=f"RTBP_{self.primary.name}_{self.secondary.name}")
+        self._var_dynsys: _DynamicalSystem = variational_dynsys(self.mu, name=f"VarEq_{self.primary.name}_{self.secondary.name}")
         self._cache = {
             1: L1Point(self),
             2: L2Point(self),
@@ -218,7 +102,6 @@ class System(_HitenBase):
             4: L4Point(self),
             5: L5Point(self)
         }
-        logger.info(f"Computed {len(self.libration_points)} Libration points.")
 
     def __str__(self) -> str:
         return f"{self.secondary.name} orbiting {self.primary.name}"
@@ -282,7 +165,7 @@ class System(_HitenBase):
         return self._cache
         
     @property
-    def dynsys(self):
+    def dynsys(self) -> _DynamicalSystem:
         """Underlying vector field instance.
         
         Returns
@@ -293,7 +176,7 @@ class System(_HitenBase):
         return self._dynsys
 
     @property
-    def var_dynsys(self):
+    def var_dynsys(self) -> _DynamicalSystem:
         """Underlying variational equations system.
         
         Returns
@@ -341,7 +224,7 @@ class System(_HitenBase):
         method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
         order: int = 8,
         **kwargs
-    ) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    ) -> Trajectory:
         """
         Propagate arbitrary initial conditions in the CR3BP.
 
@@ -367,11 +250,8 @@ class System(_HitenBase):
 
         Returns
         -------
-        tuple (times, states)
-            times : numpy.ndarray, shape (steps,)
-                Array holding the sampling instants in nondimensional units.
-            states : numpy.ndarray, shape (steps, 6)
-                Array with the propagated trajectory [x, y, z, vx, vy, vz].
+        :class:`~hiten.algorithms.utils.types.Trajectory`
+            The propagated trajectory.
         """
 
         forward = kwargs.get("forward", 1)
@@ -387,7 +267,11 @@ class System(_HitenBase):
             order=order,
         )
 
-        return sol.times, sol.states
+        return Trajectory.from_solution(
+            sol,
+            state_vector_cls=SynodicStateVector,
+            frame=ReferenceFrame.ROTATING,
+        )
 
     @classmethod
     def from_bodies(cls, primary_name: str, secondary_name: str) -> "System":
@@ -417,13 +301,8 @@ class System(_HitenBase):
         ValueError
             If the body names are not found in the constants database.
         """
-        # Normalise the identifiers so that the lookup in *Constants* is
-        # case-insensitive while preserving the original capitalisation for
-        # display purposes.
         p_key = primary_name.lower()
         s_key = secondary_name.lower()
-
-        # Retrieve physical parameters from the constants catalogue
         try:
             p_mass = Constants.get_mass(p_key)
             p_radius = Constants.get_radius(p_key)
@@ -431,16 +310,13 @@ class System(_HitenBase):
             s_radius = Constants.get_radius(s_key)
             distance = Constants.get_orbital_distance(p_key, s_key)
         except KeyError as exc:
-            # Re-raise with a clearer error message for the end-user
             raise ValueError(
                 f"Unknown body or orbital distance for pair '{primary_name}', '{secondary_name}'."
             ) from exc
 
-        # Instantiate the bodies - the secondary orbits the primary.
         primary = Body(primary_name.capitalize(), p_mass, p_radius)
-        secondary = Body(secondary_name.capitalize(), s_mass, s_radius, _parent_input=primary)
+        secondary = Body(secondary_name.capitalize(), s_mass, s_radius, parent=primary)
 
-        # Create and return the CR3BP system
         return cls(primary, secondary, distance)
 
     @classmethod
@@ -477,7 +353,6 @@ class System(_HitenBase):
             Dictionary containing the serializable state of the System.
         """
         state = self.__dict__.copy()
-        # Remove the compiled dynamical system before pickling
         if "_dynsys" in state:
             state["_dynsys"] = None
         if "_var_dynsys" in state:
@@ -496,9 +371,8 @@ class System(_HitenBase):
         state : dict
             Dictionary containing the serialized state of the System.
         """
-        from hiten.algorithms.dynamics.rtbp import rtbp_dynsys
-        from hiten.algorithms.dynamics.rtbp import variational_dynsys
-        # Restore the plain attributes
+        from hiten.algorithms.dynamics.rtbp import (rtbp_dynsys,
+                                                    variational_dynsys)
         self.__dict__.update(state)
 
         if self.__dict__.get("_dynsys") is None:
@@ -507,17 +381,14 @@ class System(_HitenBase):
 
     def save(self, file_path: str | Path, **kwargs) -> None:
         """Save this System to a file."""
-        from hiten.utils.io.system import save_system
         save_system(self, file_path)
 
     @classmethod
     def load(cls, file_path: str | Path, **kwargs) -> "System":
         """Load a System from a file (new instance)."""
-        from hiten.utils.io.system import load_system
         return load_system(file_path)
 
     def load_inplace(self, file_path: str | Path) -> "System":
         """Load data into this System instance from a file (in place)."""
-        from hiten.utils.io.system import load_system_inplace
         load_system_inplace(self, file_path)
         return self

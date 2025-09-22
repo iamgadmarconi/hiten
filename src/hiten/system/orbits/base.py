@@ -43,6 +43,7 @@ from hiten.utils.io.orbits import (load_periodic_orbit,
 from hiten.utils.log_config import logger
 from hiten.utils.plots import (animate_trajectories, plot_inertial_frame,
                                plot_rotating_frame)
+from hiten.algorithms.utils.types import Trajectory, SynodicStateVector, ReferenceFrame
 
 if TYPE_CHECKING:
     from hiten.algorithms.continuation.config import _OrbitContinuationConfig
@@ -509,7 +510,14 @@ class PeriodicOrbit(ABC):
         interface.apply_results_to_orbit(self, corrected_state=result.x_corrected, half_period=half_period)
         return result.x_corrected, half_period
 
-    def propagate(self, steps: int = 1000, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+    def propagate(
+        self,
+        steps: int = 1000,
+        method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
+        order: int = 8,
+        *,
+        as_trajectory: bool = False,
+    ) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]] | Trajectory:
         """
         Propagate the orbit for one period.
         
@@ -550,7 +558,11 @@ class PeriodicOrbit(ABC):
         self._trajectory = sol.states
         self._times = sol.times
 
-        return self._times, self._trajectory
+        return Trajectory.from_solution(
+            sol,
+            state_vector_cls=SynodicStateVector,
+            frame=ReferenceFrame.ROTATING,
+        )
 
     def compute_stability(self, **kwargs) -> Tuple:
         """

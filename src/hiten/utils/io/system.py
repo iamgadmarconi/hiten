@@ -95,7 +95,7 @@ def load_system(path: str | Path) -> "System":
             float(s.attrs.get("mass", 1.0)),
             float(s.attrs.get("radius", 1.0)),
             str(s.attrs.get("color", "#000000")),
-            _parent_input=primary,
+            parent=primary,
         )
 
     return System(primary, secondary, distance)
