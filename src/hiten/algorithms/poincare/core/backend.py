@@ -11,13 +11,12 @@ expansion.
 """
 
 from abc import ABC, abstractmethod
-from typing import Callable, Literal
+from typing import Literal
 
 import numpy as np
 
 from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
 from hiten.algorithms.poincare.core.events import _SurfaceEvent
-from hiten.algorithms.utils.exceptions import BackendError
 
 
 class _ReturnMapBackend(ABC):
@@ -127,86 +126,6 @@ class _ReturnMapBackend(ABC):
         initial conditions and returning their next intersection with
         the section. The engine layer handles iteration and caching.
         """
-
-    def _expand_bracket(
-        self,
-        f: "Callable[[float], float]",
-        x0: float,
-        *,
-        dx0: float,
-        grow: float,
-        max_expand: int,
-        crossing_test: "Callable[[float, float], bool]",
-        symmetric: bool = True,
-    ) -> tuple[float, float]:
-        """Expand a bracket around a root of a scalar function.
-
-        This method implements a robust bracket expansion algorithm for
-        root finding. It starts from a reference point and expands the
-        search interval until a root is bracketed.
-
-        Parameters
-        ----------
-        f : callable
-            Scalar function whose root is being searched for.
-        x0 : float
-            Reference point around which to start expanding the bracket.
-        dx0 : float
-            Initial half-width of the trial interval.
-        grow : float
-            Multiplicative factor applied to dx after every unsuccessful
-            iteration.
-        max_expand : int
-            Maximum number of expansion attempts before giving up.
-        crossing_test : callable
-            A 2-argument predicate crossing_test(f_prev, f_curr) that returns
-            True when the desired crossing is located inside (prev, curr).
-        symmetric : bool, default=True
-            If True, probe both the +dx and -dx directions; otherwise
-            examine only the positive side.
-
-        Returns
-        -------
-        tuple[float, float]
-            Bracket (a, b) containing the root, with a < b.
-
-        Raises
-        ------
-        BackendError
-            If the root cannot be bracketed within max_expand iterations.
-
-        Notes
-        -----
-        The algorithm starts with a small interval around x0 and expands
-        it geometrically until a sign change is detected. If the function
-        is already very close to zero at x0, a zero-length bracket is
-        returned.
-        """
-
-        f0 = f(x0)
-
-        # If we are already on the section (or very close) return a zero-length
-        # bracket so the caller can decide what to do next.
-        if abs(f0) < 1e-14:
-            return (x0, x0)
-
-        dx = dx0
-        for _ in range(max_expand):
-            # Probe +dx first (forward propagation).
-            xr = x0 + dx
-            fr = f(xr)
-            if crossing_test(f0, fr):
-                return (x0, xr) if x0 < xr else (xr, x0)
-
-            if symmetric:
-                xl = x0 - dx
-                fl = f(xl)
-                if crossing_test(f0, fl):
-                    return (xl, x0) if xl < x0 else (x0, xl)
-
-            dx *= grow
-
-        raise BackendError("Failed to bracket root.")
 
     def on_iteration(self, iteration: int, seeds: "np.ndarray | None" = None) -> None:
         """Hook called at the start of each iteration in the engine."""
