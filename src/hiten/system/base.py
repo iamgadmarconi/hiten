@@ -19,7 +19,8 @@ from typing import Dict, Literal, Optional, Sequence
 import numpy as np
 
 from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
-from hiten.algorithms.dynamics.rtbp import rtbp_dynsys, variational_dynsys
+from hiten.algorithms.dynamics.rtbp import (jacobian_dynsys, rtbp_dynsys,
+                                            variational_dynsys)
 from hiten.algorithms.utils.coordinates import _get_mass_parameter
 from hiten.algorithms.utils.types import (ReferenceFrame, SynodicStateVector,
                                           Trajectory)
@@ -95,6 +96,7 @@ class System(_HitenBase):
 
         self._dynsys: _DynamicalSystem = rtbp_dynsys(self.mu, name=f"RTBP_{self.primary.name}_{self.secondary.name}")
         self._var_dynsys: _DynamicalSystem = variational_dynsys(self.mu, name=f"VarEq_{self.primary.name}_{self.secondary.name}")
+        self._jacobian_dynsys: _DynamicalSystem = jacobian_dynsys(self.mu, name=f"Jacobian_{self.primary.name}_{self.secondary.name}")
         self._cache = {
             1: L1Point(self),
             2: L2Point(self),
@@ -185,6 +187,17 @@ class System(_HitenBase):
             The underlying variational equations system.
         """
         return self._var_dynsys
+
+    @property
+    def jacobian_dynsys(self) -> _DynamicalSystem:
+        """Underlying Jacobian evaluation system.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
+            The underlying Jacobian evaluation system.
+        """
+        return self._jacobian_dynsys
 
     def get_libration_point(self, index: int) -> LibrationPoint:
         """
@@ -357,6 +370,8 @@ class System(_HitenBase):
             state["_dynsys"] = None
         if "_var_dynsys" in state:
             state["_var_dynsys"] = None
+        if "_jacobian_dynsys" in state:
+            state["_jacobian_dynsys"] = None
         return state
 
     def __setstate__(self, state):
@@ -371,13 +386,12 @@ class System(_HitenBase):
         state : dict
             Dictionary containing the serialized state of the System.
         """
-        from hiten.algorithms.dynamics.rtbp import (rtbp_dynsys,
-                                                    variational_dynsys)
         self.__dict__.update(state)
 
         if self.__dict__.get("_dynsys") is None:
             self._dynsys = rtbp_dynsys(self.mu, name=self.primary.name + "_" + self.secondary.name)
             self._var_dynsys = variational_dynsys(self.mu, name=self.primary.name + "_" + self.secondary.name)
+            self._jacobian_dynsys = jacobian_dynsys(self.mu, name=self.primary.name + "_" + self.secondary.name)
 
     def save(self, file_path: str | Path, **kwargs) -> None:
         """Save this System to a file."""
