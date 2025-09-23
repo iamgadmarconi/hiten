@@ -1,9 +1,9 @@
 """Provide domain-specific interfaces for correction algorithms.
 
 This module provides interface classes that adapt generic correction algorithms
-to specific problem domains. These interfaces handle the translation between
-domain objects (orbits, manifolds) and the abstract vector representations
-expected by the correction algorithms.
+ to specific problem domains. These interfaces handle the translation between
+ domain objects (orbits, manifolds) and the abstract vector representations
+ expected by the correction algorithms.
 """
 
 from typing import TYPE_CHECKING, Callable, Tuple
@@ -29,114 +29,48 @@ class _PeriodicOrbitCorrectorInterface:
         control_indices = list(cfg.control_indices)
         return orbit.initial_state[control_indices].copy()
 
-    def residual_fn(self, orbit: "PeriodicOrbit", cfg, forward: int) -> Callable[[np.ndarray], np.ndarray]:
-        finite = bool(getattr(cfg, "finite_difference", False))
-        residual, _ = self.build_functions(
-            orbit,
-            cfg,
-            forward,
-            finite_difference=finite,
-        )
-        return residual
-
-    def jacobian_fn(self, orbit: "PeriodicOrbit", cfg, forward: int) -> JacobianFn | None:
-        finite = bool(getattr(cfg, "finite_difference", False))
-        _, jac = self.build_functions(
-            orbit,
-            cfg,
-            forward,
-            finite_difference=finite,
-        )
-        return jac
-
     def norm_fn(self) -> NormFn:
         return lambda r: float(np.linalg.norm(r, ord=np.inf))
 
-    def build_functions(
-        self,
-        orbit: "PeriodicOrbit",
-        cfg,
-        forward: int,
-        *,
-        finite_difference: bool,
-    ) -> Tuple[Callable[[np.ndarray], np.ndarray], JacobianFn | None]:
-        """Create residual and optional Jacobian closures with a shared cache.
-
-        Parameters
-        ----------
-        orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
-            Orbit to be corrected.
-        cfg : :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
-            Configuration for the correction.
-        forward : int
-            Forward integration direction.
-        finite_difference : bool
-            Use finite-difference Jacobian instead of analytical.
-        
-        Returns
-        -------
-        residual_fn : Callable[[np.ndarray], np.ndarray]
-            Residual function.
-        jacobian_fn : JacobianFn | None
-            Jacobian function or None if finite-difference is requested.
-        """
+    def residual_fn(self, orbit: "PeriodicOrbit", cfg, forward: int) -> Callable[[np.ndarray], np.ndarray]:
         base_state = orbit.initial_state.copy()
         control_indices = list(cfg.control_indices)
         residual_indices = list(cfg.residual_indices)
         target_vec = np.asarray(cfg.target, dtype=float)
 
-        cache: dict[str, np.ndarray | float | None] = {"p": None, "t": None, "X": None, "Phi": None}
-
-        def residual_fn(p_vec: np.ndarray) -> np.ndarray:
+        def _residual(p_vec: np.ndarray) -> np.ndarray:
             x_full = self._to_full_state(base_state, control_indices, p_vec)
             t_event, X_event = self._evaluate_event(orbit, x_full, cfg, forward)
-            Phi_local: np.ndarray | None = None
-            if not finite_difference:
-                _, _, Phi_flat, _ = _compute_stm(
-                    orbit.var_dynsys,
-                    x_full,
-                    t_event,
-                    steps=cfg.steps,
-                    method=cfg.method,
-                    order=cfg.order,
-                )
-                Phi_local = Phi_flat
-            cache["p"] = p_vec.copy()
-            cache["t"] = float(t_event)
-            cache["X"] = X_event
-            cache["Phi"] = Phi_local
             return X_event[residual_indices] - target_vec
 
+        return _residual
+
+    def jacobian_fn(self, orbit: "PeriodicOrbit", cfg, forward: int) -> JacobianFn | None:
+        finite_difference = bool(getattr(cfg, "finite_difference", False))
         if finite_difference:
-            jacobian_fn = None
-        else:
-            def jacobian_fn(p_vec: np.ndarray) -> np.ndarray:
-                # Reuse cache if same p and Phi available
-                if (cache["p"] is not None) and np.array_equal(cache["p"], p_vec) and (cache["Phi"] is not None):
-                    X_event = cache["X"]  # type: ignore[assignment]
-                    Phi_flat = cache["Phi"]  # type: ignore[assignment]
-                else:
-                    x_full = self._to_full_state(base_state, control_indices, p_vec)
-                    t_event, X_event = self._evaluate_event(orbit, x_full, cfg, forward)
-                    _, _, Phi_flat, _ = _compute_stm(
-                        orbit.var_dynsys,
-                        x_full,
-                        t_event,
-                        steps=cfg.steps,
-                        method=cfg.method,
-                        order=cfg.order,
-                    )
-                    cache["p"] = p_vec.copy()
-                    cache["t"] = float(t_event)
-                    cache["X"] = X_event
-                    cache["Phi"] = Phi_flat
+            return None
 
-                J_red = Phi_flat[np.ix_(residual_indices, control_indices)]  # type: ignore[index]
-                if cfg.extra_jacobian is not None:
-                    J_red -= cfg.extra_jacobian(X_event, Phi_flat)  # type: ignore[arg-type]
-                return J_red
+        base_state = orbit.initial_state.copy()
+        control_indices = list(cfg.control_indices)
+        residual_indices = list(cfg.residual_indices)
 
-        return residual_fn, jacobian_fn
+        def _jac(p_vec: np.ndarray) -> np.ndarray:
+            x_full = self._to_full_state(base_state, control_indices, p_vec)
+            t_event, X_event = self._evaluate_event(orbit, x_full, cfg, forward)
+            _, _, Phi_flat, _ = _compute_stm(
+                orbit.var_dynsys,
+                x_full,
+                t_event,
+                steps=cfg.steps,
+                method=cfg.method,
+                order=cfg.order,
+            )
+            J_red = Phi_flat[np.ix_(residual_indices, control_indices)]  # type: ignore[index]
+            if cfg.extra_jacobian is not None:
+                J_red -= cfg.extra_jacobian(X_event, Phi_flat)  # type: ignore[arg-type]
+            return J_red
+
+        return _jac
 
     def create_problem(self, orbit: "PeriodicOrbit", cfg) -> _OrbitCorrectionProblem:
         """Compose a backend correction problem from a domain orbit and config.
@@ -154,13 +88,9 @@ class _PeriodicOrbitCorrectorInterface:
             Immutable problem object containing initial guess, closures, and numeric params.
         """
         forward = getattr(cfg, "forward", 1)
-        finite_difference = bool(getattr(cfg, "finite_difference", False))
-        residual_fn, jacobian_fn = self.build_functions(
-            orbit,
-            cfg,
-            forward,
-            finite_difference=finite_difference,
-        )
+        residual_fn = self.residual_fn(orbit, cfg, forward)
+        jacobian_fn = self.jacobian_fn(orbit, cfg, forward)
+
         norm_fn = self.norm_fn()
         p0 = self.initial_guess(orbit, cfg)
         return _OrbitCorrectionProblem(

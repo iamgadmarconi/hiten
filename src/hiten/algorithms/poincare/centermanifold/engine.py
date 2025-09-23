@@ -120,27 +120,12 @@ class _CenterManifoldEngine(_ReturnMapEngine):
         logger.info("Generating Poincare map: seeds=%d, iterations=%d, workers=%d",
                     self._strategy.n_seeds, problem.n_iter, problem.n_workers)
 
-        # Provide interface-bound helpers matching strategy signatures
-        solve_missing_coord_fn = lambda varname, fixed_vals: self._interface.solve_missing_coord(
-            varname,
-            fixed_vals,
-            h0=self._backend._h0,
-            H_blocks=self._backend._H_blocks,
-            clmo_table=self._backend._clmo_table,
-        )
-        find_turning_fn = lambda name: self._interface.find_turning(
-            name,
-            h0=self._backend._h0,
-            H_blocks=self._backend._H_blocks,
-            clmo_table=self._backend._clmo_table,
-        )
-
         plane_pts = self._strategy.generate(
             h0=self._backend._h0,
             H_blocks=self._backend._H_blocks,
             clmo_table=self._backend._clmo_table,
-            solve_missing_coord_fn=solve_missing_coord_fn,
-            find_turning_fn=find_turning_fn,
+            solve_missing_coord_fn=lambda varname, fixed_vals: problem.solve_missing_coord_fn(varname, fixed_vals),
+            find_turning_fn=lambda name: problem.find_turning_fn(name),
         )
 
         section_coord = self._backend._section_cfg.section_coord

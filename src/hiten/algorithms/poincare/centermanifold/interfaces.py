@@ -266,15 +266,33 @@ class _CenterManifoldInterface:
         return sec_if.build_state((float(plane[0]), float(plane[1])), tuple(other_vals))
 
     @staticmethod
-    def create_problem(section_coord: str, energy: float, *, dt: float, n_iter: int, n_workers: int | None) -> _CenterManifoldMapProblem:
+    def create_problem(section_coord: str, energy: float, *, dt: float, n_iter: int, n_workers: int | None, H_blocks=None, clmo_table=None) -> _CenterManifoldMapProblem:
         default_workers = os.cpu_count() or 1
         resolved_workers = (
             default_workers if (n_workers is None or int(n_workers) <= 0) else int(n_workers)
         )
+        def solve_missing_coord_fn(varname: str, fixed_vals: dict[str, float]) -> Optional[float]:
+            return _CenterManifoldInterface.solve_missing_coord(
+                varname,
+                fixed_vals,
+                h0=energy,
+                H_blocks=H_blocks,
+                clmo_table=clmo_table,
+            )
+
+        def find_turning_fn(name: str) -> float:
+            return _CenterManifoldInterface.find_turning(
+                name,
+                h0=energy,
+                H_blocks=H_blocks,
+                clmo_table=clmo_table,
+            )
         return _CenterManifoldMapProblem(
             section_coord=section_coord,
             energy=float(energy),
             dt=float(dt),
             n_iter=int(n_iter),
             n_workers=resolved_workers,
+            solve_missing_coord_fn=solve_missing_coord_fn,
+            find_turning_fn=find_turning_fn,
         )

@@ -285,6 +285,8 @@ class CenterManifoldMap(_ReturnMapBase):
             dt=float(dt if dt is not None else tmp_cfg.dt),
             n_iter=int(n_iter if n_iter is not None else tmp_cfg.n_iter),
             n_workers=(int(n_workers) if n_workers is not None else tmp_cfg.n_workers),
+            H_blocks=backend._H_blocks,
+            clmo_table=backend._clmo_table,
         )
         results: CenterManifoldMapResults = engine.solve(problem)
 
@@ -598,6 +600,8 @@ class CenterManifoldMap(_ReturnMapBase):
             dt=float(self.config.dt),
             n_iter=int(self.config.n_iter),
             n_workers=self.config.n_workers,
+            H_blocks=self.cm._hamsys.poly_H(),
+            clmo_table=self.cm._hamsys.clmo_table,
         )
         results: CenterManifoldMapResults = engine.solve(problem)
         self._section = results
