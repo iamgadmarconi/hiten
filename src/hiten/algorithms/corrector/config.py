@@ -115,33 +115,6 @@ class _BaseCorrectionConfig:
     steps: int = 500
     forward: int = 1
 
-    def __post_init__(self):
-        # Validate scalar parameters
-        if not (isinstance(self.max_attempts, int) and self.max_attempts > 0):
-            raise ValueError("max_attempts must be a positive integer")
-        if not (isinstance(self.tol, (int, float)) and self.tol > 0):
-            raise ValueError("tol must be a positive float")
-        if self.max_delta is not None and not (isinstance(self.max_delta, (int, float)) and self.max_delta > 0):
-            raise ValueError("max_delta must be a positive float or None")
-        if not isinstance(self.finite_difference, bool):
-            raise ValueError("finite_difference must be a boolean")
-        if not (isinstance(self.fd_step, (int, float)) and self.fd_step > 0):
-            raise ValueError("fd_step must be a positive float")
-
-        lsc = self.line_search_config
-        if isinstance(lsc, _LineSearchConfig):
-
-            if lsc.max_delta is not None and not (isinstance(lsc.max_delta, (int, float)) and lsc.max_delta > 0):
-                raise ValueError("line_search_config.max_delta must be a positive float or None")
-            if not (0 < lsc.alpha_reduction < 1):
-                raise ValueError("line_search_config.alpha_reduction must be in (0, 1)")
-            if not (lsc.min_alpha > 0):
-                raise ValueError("line_search_config.min_alpha must be positive")
-            if not (0 < lsc.armijo_c < 1):
-                raise ValueError("line_search_config.armijo_c must be in (0, 1)")
-        elif lsc is not None and not isinstance(lsc, bool):
-            raise ValueError("line_search_config must be True, False, None, or a _LineSearchConfig instance")
-
 
 @dataclass(frozen=True, slots=True)
 class _OrbitCorrectionConfig(_BaseCorrectionConfig):

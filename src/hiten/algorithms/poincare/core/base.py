@@ -21,135 +21,18 @@ from hiten.algorithms.poincare.core.strategies import _SeedingStrategyBase
 from hiten.algorithms.poincare.core.types import _Section
 
 
-class _ReturnMapBase(ABC):
-    """Abstract base class for Poincare return map implementations.
-
-    This class provides a reference-frame-agnostic facade for discrete
-    Poincare maps. It handles caching, section management, and provides
-    a unified interface for different types of return maps.
-
-    Concrete subclasses must implement four key methods:
-
-    1. :meth:`~hiten.algorithms.poincare.core.base._ReturnMapBase._build_backend` 
-        -> :class:`~hiten.algorithms.poincare.core.backend._ReturnMapBackend`
-    2. :meth:`~hiten.algorithms.poincare.core.base._ReturnMapBase._build_seeding_strategy` 
-        -> :class:`~hiten.algorithms.poincare.core.strategies._SeedingStrategyBase`
-    3. :meth:`~hiten.algorithms.poincare.core.base._ReturnMapBase.ic` 
-        -> 6D initial conditions in the problem frame
-    4. *(optionally)* overrides for plotting or advanced projections
-
-    Parameters
-    ----------
-    config : :class:`~hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`
-        Configuration object containing section parameters and settings.
-
-    Attributes
-    ----------
-    config : :class:`~hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`
-        The configuration object.
-    _sections : dict[str, :class:`~hiten.algorithms.poincare.core.base._Section`]
-        Cache of computed sections, keyed by section coordinate.
-    _engines : dict[str, :class:`~hiten.algorithms.poincare.core.engine._ReturnMapEngine`]
-        Cache of engines, keyed by section coordinate.
-    _section : :class:`~hiten.algorithms.poincare.core.base._Section` or None
-        The most recently accessed section.
-
-    Notes
-    -----
-    The class provides automatic caching of computed sections and engines
-    to avoid redundant computation. Sections are computed on-demand and
-    cached for subsequent access. The framework supports multiple section
-    coordinates and provides projection capabilities for different views
-    of the return map data.
-
-    All time units are in nondimensional units unless otherwise specified.
-    """
+class _PoincareMapBase(ABC):
+    """Common scaffolding for Poincare map facades."""
 
     def __init__(self, config: _ReturnMapBaseConfig) -> None:
         self.config: _ReturnMapBaseConfig = config
-
-        # Run-time caches
         self._sections: dict[str, _Section] = {}
-        self._engines: dict[str, "_ReturnMapEngine"] = {}
-        self._section: Optional[_Section] = None  # most-recently accessed
-
-        if self.config.compute_on_init:
-            self.compute()
+        self._section: Optional[_Section] = None
 
     @abstractmethod
-    def _build_backend(self, section_coord: str) -> _ReturnMapBackend:
-        """Build a backend for the specified section coordinate.
-
-        Parameters
-        ----------
-        section_coord : str
-            The section coordinate identifier (e.g., "q2", "p2").
-
-        Returns
-        -------
-        :class:`~hiten.algorithms.poincare.core.backend._ReturnMapBackend`
-            A backend capable of single-step propagation to the section.
-
-        Notes
-        -----
-        This method must be implemented by concrete subclasses to provide
-        the appropriate backend for the given section coordinate. The
-        backend handles the numerical integration and section crossing
-        detection.
-        """
-
-    @abstractmethod
-    def _build_seeding_strategy(self, section_coord: str) -> _SeedingStrategyBase:
-        """Build a seeding strategy for the specified section coordinate.
-
-        Parameters
-        ----------
-        section_coord : str
-            The section coordinate identifier (e.g., "q2", "p2").
-
-        Returns
-        -------
-        :class:`~hiten.algorithms.poincare.core.strategies._SeedingStrategyBase`
-            A seeding strategy suitable for the section coordinate.
-
-        Notes
-        -----
-        This method must be implemented by concrete subclasses to provide
-        the appropriate seeding strategy for generating initial conditions
-        on the section plane.
-        """
-
-    def _build_engine(self, backend: _ReturnMapBackend, strategy: _SeedingStrategyBase) -> "_ReturnMapEngine":
-        """Build an engine from a backend and seeding strategy.
-
-        Parameters
-        ----------
-        backend : :class:`~hiten.algorithms.poincare.core.backend._ReturnMapBackend`
-            The backend for numerical integration.
-        strategy : :class:`~hiten.algorithms.poincare.core.strategies._SeedingStrategyBase`
-            The seeding strategy for generating initial conditions.
-
-        Returns
-        -------
-        :class:`~hiten.algorithms.poincare.core.engine._ReturnMapEngine`
-            A concrete engine instance.
-
-        Raises
-        ------
-        TypeError
-            If the engine class is still abstract and must be implemented
-            by a subclass.
-
-        Notes
-        -----
-        This method creates an engine that coordinates the backend and
-        seeding strategy to compute the return map. If the engine class
-        is abstract, subclasses must override this method to provide
-        a concrete implementation.
-        """
-        if _ReturnMapEngine.__abstractmethods__:
-            raise TypeError("Sub-class must implement _build_engine to return a concrete _ReturnMapEngine")
-        return _ReturnMapEngine(backend=backend, seed_strategy=strategy, map_config=self.config)
+    def _get_or_compute_section(self, key: str) -> _Section:
+        """Return the cached section for ``key``, computing it if necessary."""
+        raise NotImplementedError
 
     def compute(self, *, section_coord: str | None = None):
         """Compute or retrieve the return map for the specified section.
@@ -178,21 +61,7 @@ class _ReturnMapBase(ABC):
         """
         key: str = section_coord or self.config.section_coord
 
-        # Fast path - already cached
-        if key in self._sections:
-            self._section = self._sections[key]
-            return self._section.points
-
-        # Lazy-build engine if needed
-        if key not in self._engines:
-            backend = self._build_backend(key)
-            strategy = self._build_seeding_strategy(key)
-
-            # Let the subclass decide which engine to use.
-            self._engines[key] = self._build_engine(backend, strategy)
-
-        # Delegate compute to engine
-        self._section = self._engines[key].solve()
+        self._section = self._get_or_compute_section(key)
         self._sections[key] = self._section
         return self._section.points
 
@@ -272,8 +141,9 @@ class _ReturnMapBase(ABC):
         free memory or force fresh computation with updated parameters.
         """
         self._sections.clear()
-        self._engines.clear()
         self._section = None
+        if hasattr(self, "_engines"):
+            getattr(self, "_engines").clear()
 
     def _axis_index(self, section: "_Section", axis: str) -> int:
         """Return the column index corresponding to an axis label.
@@ -345,7 +215,8 @@ class _ReturnMapBase(ABC):
         if key not in self._sections:
             self.compute(section_coord=key)
 
-        sec = self._sections[key]
+        sec = self._get_or_compute_section(key)
+        self._sections[key] = sec
 
         if axes is None:
             return sec.points
@@ -363,3 +234,71 @@ class _ReturnMapBase(ABC):
             f"{self.__class__.__name__}(sections={len(self._sections)}, "
             f"config={self.config})"
         )
+
+
+class _ReturnMapBase(_PoincareMapBase):
+    """Propagation-based Poincare map base class."""
+
+    def __init__(self, config: _ReturnMapBaseConfig) -> None:
+        super().__init__(config)
+        self._engines: dict[str, "_ReturnMapEngine"] = {}
+
+        if self.config.compute_on_init:
+            self.compute()
+
+    @abstractmethod
+    def _build_backend(self, section_coord: str) -> _ReturnMapBackend:
+        ...
+
+    @abstractmethod
+    def _build_seeding_strategy(self, section_coord: str) -> _SeedingStrategyBase:
+        ...
+
+    def _build_engine(self, backend: _ReturnMapBackend, strategy: _SeedingStrategyBase) -> "_ReturnMapEngine":
+        if _ReturnMapEngine.__abstractmethods__:
+            raise TypeError("Sub-class must implement _build_engine to return a concrete _ReturnMapEngine")
+        return _ReturnMapEngine(backend=backend, seed_strategy=strategy, map_config=self.config)
+
+    def _get_or_compute_section(self, key: str) -> _Section:
+        if key not in self._sections:
+            if key not in self._engines:
+                backend = self._build_backend(key)
+                strategy = self._build_seeding_strategy(key)
+                self._engines[key] = self._build_engine(backend, strategy)
+            self._sections[key] = self._engines[key].solve()
+        return self._sections[key]
+
+
+class _DetectionMapBase(_PoincareMapBase):
+    """Base class for Poincare maps that rely on detection-only backends.
+
+    Detection facades do not propagate seeds via a predictor/corrector backend;
+    instead they accept precomputed trajectories (or equivalent data) and run a
+    detection engine. This base provides the same caching and projection helpers
+    as :class:`_ReturnMapBase` without requiring subclasses to implement the
+    propagation-specific hooks.
+    """
+
+    def __init__(self, config: _ReturnMapBaseConfig) -> None:
+        # Detection maps do not support `compute_on_init` because they need
+        # explicit trajectory input. Guard against accidental use.
+        if getattr(config, "compute_on_init", False):
+            raise NotImplementedError(
+                "Detection-only maps do not support compute_on_init; call the "
+                "facade-specific API explicitly."
+            )
+        super().__init__(config)
+
+    def compute(self, *args, **kwargs):  # pragma: no cover - explicit guard
+        raise NotImplementedError(
+            "Detection-only maps do not implement compute(); use the facade-specific "
+            "method (e.g., from_trajectories) to trigger detection."
+        )
+
+    def _get_or_compute_section(self, key: str) -> _Section:
+        if key not in self._sections:
+            raise KeyError(
+                f"Section '{key}' has not been computed. "
+                f"Available: {list(self._sections.keys())}"
+            )
+        return self._sections[key]

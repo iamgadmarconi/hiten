@@ -16,7 +16,7 @@ from typing import Literal, Optional, Sequence
 
 import numpy as np
 
-from hiten.algorithms.poincare.core.base import _ReturnMapBase, _Section
+from hiten.algorithms.poincare.core.base import _DetectionMapBase, _Section
 from hiten.algorithms.poincare.synodic.backend import _SynodicDetectionBackend
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
 from hiten.algorithms.poincare.synodic.engine import _SynodicEngine
@@ -30,7 +30,7 @@ from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.plots import plot_poincare_map
 
 
-class SynodicMap(_ReturnMapBase):
+class SynodicMap(_DetectionMapBase):
     """User-facing interface for synodic Poincare section detection.
 
     This class provides a facade that mirrors the API of other return-map
@@ -86,51 +86,6 @@ class SynodicMap(_ReturnMapBase):
         inst = cls(map_cfg)
         inst._engine = inst._build_engine()
         return inst
-
-    # These are unused but required by the abstract base; we do not build a propagation backend/strategy.
-    def _build_backend(self, section_coord: str):
-        """Build a propagation backend (not used for synodic maps).
-
-        Parameters
-        ----------
-        section_coord : str
-            Section coordinate identifier (unused).
-
-        Raises
-        ------
-        NotImplementedError
-            Always raised since synodic maps use detection backends
-            rather than propagation backends.
-
-        Notes
-        -----
-        This method is required by the abstract base class but is not
-        used for synodic maps, which operate on precomputed trajectories
-        rather than propagating from initial conditions.
-        """
-        raise NotImplementedError("SynodicMap does not use a propagation backend")
-
-    def _build_seeding_strategy(self, section_coord: str):
-        """Build a seeding strategy (not used for synodic maps).
-
-        Parameters
-        ----------
-        section_coord : str
-            Section coordinate identifier (unused).
-
-        Raises
-        ------
-        NotImplementedError
-            Always raised since synodic maps use detection backends
-            rather than seeding strategies.
-
-        Notes
-        -----
-        This method is required by the abstract base class but is not
-        used for synodic maps, which operate on precomputed trajectories
-        rather than seeding initial conditions.
-        """
-        raise NotImplementedError("SynodicMap does not use a seeding strategy")
 
     def _build_section_interface(self, cfg: _SynodicMapConfig) -> _SynodicSectionInterface:
         """Build section configuration from map configuration.
