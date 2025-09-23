@@ -128,7 +128,7 @@ class _CenterManifoldEngine(_ReturnMapEngine):
             find_turning_fn=lambda name: problem.find_turning_fn(name),
         )
 
-        section_coord = self._backend._section_cfg.section_coord
+        section_coord = problem.section_coord
         seeds0 = [
             self._interface.lift_plane_point(
                 p,
@@ -148,59 +148,61 @@ class _CenterManifoldEngine(_ReturnMapEngine):
         chunks = np.array_split(seeds0, n_workers_eff)
 
         def _worker(chunk: np.ndarray):
-            pts_accum, states_accum, times_accum = [], [], []
+            states_accum, times_accum = [], []
             seeds = chunk
             for it in range(problem.n_iter):
                 # Hook: iteration start
                 try:
-                    self._backend.on_iteration(it, seeds)
+                    self._interface.on_iteration(it, seeds)
                 except Exception:
                     pass
 
-                pts, states, times, flags = self._backend.step_to_section(seeds, dt=problem.dt)
-                if pts.size == 0:
+                states, times, flags = self._backend.step_to_section(seeds, dt=problem.dt)
+                if states.size == 0:
                     try:
-                        self._backend.on_failure(it)
+                        self._interface.on_failure(it)
                     except Exception:
                         pass
                     break
 
+                states = self._interface.enforce_section_coordinate(states, section_coord=section_coord)
+                pts = self._interface.plane_points_from_states(states, section_coord=section_coord)
                 try:
-                    self._backend.on_success(it, pts, states, times)
+                    self._interface.on_success(it, pts, states, times)
                 except Exception:
                     pass
 
-                pts_accum.append(pts)
                 states_accum.append(states)
                 times_accum.append(times)
                 seeds = states  # feed back
-            if pts_accum:
-                return np.vstack(pts_accum), np.vstack(states_accum), np.concatenate(times_accum)
-            return np.empty((0, 2)), np.empty((0, 4)), np.empty((0,))
+            if states_accum:
+                return np.vstack(states_accum), np.concatenate(times_accum)
+            return np.empty((0, 4)), np.empty((0,))
 
-        pts_list, states_list, times_list = [], [], []
+        states_list, times_list = [], []
         with ThreadPoolExecutor(max_workers=n_workers_eff) as executor:
             futures = [executor.submit(_worker, c) for c in chunks if c.size]
             for fut in as_completed(futures):
-                p, s, t = fut.result()
-                if p.size:
-                    pts_list.append(p)
+                s, t = fut.result()
+                if s.size:
                     states_list.append(s)
                     times_list.append(t)
 
-        pts_np = np.vstack(pts_list) if pts_list else np.empty((0, 2))
         cms_np = np.vstack(states_list) if states_list else np.empty((0, 4))
         times_np = np.concatenate(times_list) if times_list else None
 
+        cms_np = self._interface.enforce_section_coordinate(cms_np, section_coord=section_coord)
+        pts_np = self._interface.plane_points_from_states(cms_np, section_coord=section_coord)
+
         try:
-            self._backend.on_accept(pts_np, cms_np, times_np)
+            self._interface.on_accept(pts_np, cms_np, times_np)
         except Exception:
             pass
 
-        return CenterManifoldMapResults(
+        return self._interface.create_results(
             pts_np,
             cms_np,
-            self._backend._section_cfg.plane_coords,
             times_np,
+            section_coord=section_coord,
         )
 

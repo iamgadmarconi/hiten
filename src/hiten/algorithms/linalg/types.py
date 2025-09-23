@@ -82,28 +82,6 @@ class EigenDecompositionResults:
         Unstable eigenvectors.
     Wc : np.ndarray
         Center eigenvectors.
-    """
-
-    stable: np.ndarray
-    unstable: np.ndarray
-    center: np.ndarray
-    Ws: np.ndarray
-    Wu: np.ndarray
-    Wc: np.ndarray
-
-    def __str__(self) -> str:
-        return (
-            f"EigenDecompositionResults(s={len(self.stable)}, u={len(self.unstable)}, "
-            f"c={len(self.center)})"
-        )
-
-
-@dataclass
-class StabilityIndicesResults:
-    """Floquet stability indices and spectrum.
-    
-    Parameters
-    ----------
     nu : np.ndarray
         Floquet stability indices.
     eigvals : np.ndarray
@@ -111,15 +89,15 @@ class StabilityIndicesResults:
     eigvecs : np.ndarray
         Eigenvectors.
     """
-
+    stable: np.ndarray
+    unstable: np.ndarray
+    center: np.ndarray
+    Ws: np.ndarray
+    Wu: np.ndarray
+    Wc: np.ndarray
     nu: np.ndarray
     eigvals: np.ndarray
     eigvecs: np.ndarray
-
-    def is_complete(self) -> bool:
-        """Check if the results are complete.
-        """
-        return not np.any(np.isnan(self.nu))
 
 
 @dataclass(frozen=True)
@@ -154,4 +132,3 @@ class _LibrationPointStabilityProblem(_EigenDecompositionProblem):
 
     mu: float
     position: np.ndarray
-

@@ -20,12 +20,15 @@ from typing import Optional, Tuple
 
 import numpy as np
 
-from hiten.algorithms.poincare.centermanifold.types import \
-    _CenterManifoldMapProblem
+from hiten.algorithms.poincare.centermanifold.types import (
+    CenterManifoldMapResults,
+    _CenterManifoldMapProblem,
+)
 from hiten.algorithms.poincare.core.interfaces import _SectionInterface
 from hiten.algorithms.polynomial.operations import _polynomial_evaluate
 from hiten.algorithms.utils.exceptions import BackendError, ConvergenceError
 from hiten.algorithms.utils.rootfinding import solve_bracketed_brent
+from hiten.algorithms.utils.types import RestrictedCenterManifoldState
 
 
 @dataclass(frozen=True)
@@ -93,6 +96,13 @@ class _CenterManifoldInterface:
     Methods accept required numerical inputs explicitly (energy, polynomial
     blocks, CLMO table) and perform domain ↔ backend translations.
     """
+
+    _STATE_INDEX = {
+        "q2": int(RestrictedCenterManifoldState.q2),
+        "p2": int(RestrictedCenterManifoldState.p2),
+        "q3": int(RestrictedCenterManifoldState.q3),
+        "p3": int(RestrictedCenterManifoldState.p3),
+    }
 
     @staticmethod
     def create_constraints(section_coord: str, **kwargs: float) -> dict[str, float]:
@@ -264,6 +274,42 @@ class _CenterManifoldInterface:
         other_vals[idx] = float(missing_val)
 
         return sec_if.build_state((float(plane[0]), float(plane[1])), tuple(other_vals))
+
+    @staticmethod
+    def enforce_section_coordinate(states: np.ndarray, *, section_coord: str) -> np.ndarray:
+        arr = np.asarray(states, dtype=np.float64)
+        if arr.size == 0:
+            return arr.reshape(0, 4)
+        idx = _CenterManifoldInterface._STATE_INDEX[section_coord]
+        out = np.array(arr, copy=True, order="C")
+        out[:, idx] = 0.0
+        return out
+
+    @staticmethod
+    def plane_points_from_states(states: np.ndarray, *, section_coord: str) -> np.ndarray:
+        arr = np.asarray(states, dtype=np.float64)
+        if arr.size == 0:
+            return np.empty((0, 2), dtype=np.float64)
+        sec_if = _get_section_interface(section_coord)
+        idx0 = _CenterManifoldInterface._STATE_INDEX[sec_if.plane_coords[0]]
+        idx1 = _CenterManifoldInterface._STATE_INDEX[sec_if.plane_coords[1]]
+        return arr[:, (idx0, idx1)]
+
+    @staticmethod
+    def plane_labels(section_coord: str) -> tuple[str, str]:
+        sec_if = _get_section_interface(section_coord)
+        return sec_if.plane_coords
+
+    @staticmethod
+    def create_results(
+        points: np.ndarray,
+        states: np.ndarray,
+        times: np.ndarray | None,
+        *,
+        section_coord: str,
+    ) -> CenterManifoldMapResults:
+        labels = _CenterManifoldInterface.plane_labels(section_coord)
+        return CenterManifoldMapResults(points, states, labels, times)
 
     @staticmethod
     def create_problem(section_coord: str, energy: float, *, dt: float, n_iter: int, n_workers: int | None, H_blocks=None, clmo_table=None) -> _CenterManifoldMapProblem:

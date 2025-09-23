@@ -16,6 +16,19 @@ class _PCContinuationBackend(_ContinuationBackend):
     reached or parameters exit the configured bounds.
     """
 
+    def __init__(self) -> None:
+        self._tangent: np.ndarray | None = None
+        self._last_residual: float = float("nan")
+
+    def _reset_state(self) -> None:
+        self._last_residual = float("nan")
+
+    def get_tangent(self) -> np.ndarray | None:
+        return None if self._tangent is None else self._tangent.copy()
+
+    def seed_tangent(self, tangent: np.ndarray | None) -> None:
+        self._tangent = None if tangent is None else np.asarray(tangent, dtype=float).copy()
+
     def solve(
         self,
         *,
@@ -24,7 +37,6 @@ class _PCContinuationBackend(_ContinuationBackend):
         parameter_getter: Callable[[np.ndarray], np.ndarray],
         corrector: Callable[[np.ndarray], tuple[np.ndarray, float, bool]],
         representation_of: Callable[[np.ndarray], np.ndarray] | None,
-        set_tangent: Callable[[np.ndarray | None], None] | None,
         step: np.ndarray,
         target: np.ndarray,
         max_members: int,
@@ -52,8 +64,6 @@ class _PCContinuationBackend(_ContinuationBackend):
             Function that takes a prediction and returns the corrected representation, residual norm, and convergence flag.
         representation_of : Callable[[np.ndarray], np.ndarray] | None
             Function that takes a representation and returns the numerical representation.
-        set_tangent : Callable[[np.ndarray | None], None] | None
-            Function that takes a tangent vector and sets it.
         step : np.ndarray
             Initial step vector.
         target : np.ndarray
@@ -76,6 +86,8 @@ class _PCContinuationBackend(_ContinuationBackend):
         info : dict
             Dictionary containing the accepted count, rejected count, iterations, parameter values, and final step vector.
         """
+        self._reset_state()
+
         family: list[np.ndarray] = [np.asarray(seed_repr, dtype=float).copy()]
         params_history: list[np.ndarray] = [np.asarray(parameter_getter(seed_repr), dtype=float).copy()]
 
@@ -91,6 +103,7 @@ class _PCContinuationBackend(_ContinuationBackend):
             mag = np.clip(np.abs(vec), step_min, step_max)
             return np.sign(vec) * mag
 
+        converged = False
         while accepted_count < int(max_members):
             last = family[-1]
 
@@ -117,7 +130,8 @@ class _PCContinuationBackend(_ContinuationBackend):
 
                 if converged:
                     family.append(corrected)
-                    params_history.append(np.asarray(parameter_getter(corrected), dtype=float).copy())
+                    params = np.asarray(parameter_getter(corrected), dtype=float).copy()
+                    params_history.append(params)
                     accepted_count += 1
                     try:
                         self.on_accept(corrected, iterations=iterations, residual_norm=float(res_norm))
@@ -128,13 +142,19 @@ class _PCContinuationBackend(_ContinuationBackend):
                     step_vec = proposed_step_after_success
 
                     # Optional: update tangent if interfaces provided (secant)
-                    if representation_of is not None and set_tangent is not None and len(family) >= 2:
+                    if representation_of is not None and len(family) >= 2:
                         # Compute secant in representation space
                         r_prev = representation_of(family[-2])
                         r_curr = representation_of(family[-1])
                         diff = (r_curr - r_prev).ravel()
                         norm = float(np.linalg.norm(diff))
-                        set_tangent(None if norm == 0.0 else diff / norm)
+                        if norm == 0.0:
+                            self._tangent = None
+                        else:
+                            self._tangent = diff / norm
+
+                    self._last_residual = float(res_norm)
+                    converged = True
 
                     current_params = params_history[-1]
                     if np.any(current_params < target_min) or np.any(current_params > target_max):
@@ -158,6 +178,7 @@ class _PCContinuationBackend(_ContinuationBackend):
                     except Exception:
                         pass
                     accepted_count = max_members
+                    converged = False
                     break
 
             if accepted_count >= int(max_members):
@@ -167,15 +188,9 @@ class _PCContinuationBackend(_ContinuationBackend):
             "accepted_count": int(accepted_count),
             "rejected_count": int(rejected_count),
             "iterations": int(iterations),
-            "parameter_values": tuple(params_history),
-            "final_step": step_vec.copy(),
+            "parameter_values": tuple(np.asarray(p, dtype=float).copy() for p in params_history),
+            "final_step": np.asarray(step_vec, dtype=float).copy(),
+            "residual_norm": float(self._last_residual) if np.isfinite(self._last_residual) else float("nan"),
         }
-
-        try:
-            last_repr = family[-1]
-            res_norm_final = float(np.linalg.norm(params_history[-1], ord=2))
-            self.on_success(last_repr, iterations=int(iterations), residual_norm=res_norm_final)
-        except Exception:
-            pass
 
         return family, info

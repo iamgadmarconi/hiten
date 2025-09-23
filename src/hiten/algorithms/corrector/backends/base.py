@@ -21,11 +21,12 @@ See Also
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Tuple
+from typing import Any, Callable, Tuple
 
 import numpy as np
 
 from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
+from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
 
 
 class _CorrectorBackend(ABC):
@@ -87,6 +88,7 @@ class _CorrectorBackend(ABC):
         *,
         jacobian_fn: JacobianFn | None = None,
         norm_fn: NormFn | None = None,
+        stepper_factory: Callable[[ResidualFn, NormFn, float | None], CorrectorStepProtocol] | None = None,
         **kwargs,
     ) -> Tuple[np.ndarray, Any]:
         """Solve nonlinear system to find x such that ||R(x)|| < tolerance.
@@ -121,6 +123,10 @@ class _CorrectorBackend(ABC):
             implementations typically default to the L2 (Euclidean) norm.
             The choice of norm can affect convergence behavior and should
             be appropriate for the problem scaling.
+        stepper_factory : callable, optional
+            Factory producing a :class:`~hiten.algorithms.corrector.protocols.CorrectorStepProtocol`
+            instance for the current problem. Allows callers to override the
+            backend's default step strategy on a per-problem basis.
         **kwargs
             Additional algorithm-specific parameters. Common parameters
             include maximum iterations, convergence tolerance, step control

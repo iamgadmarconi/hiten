@@ -6,11 +6,13 @@ map computation for the synodic module. These interfaces handle the
 conversion between synodic map configuration and the engine interface.
 """
 
-from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
-from hiten.algorithms.poincare.core.interfaces import _SectionInterface
-from hiten.algorithms.poincare.synodic.events import _AffinePlaneEvent
-import numpy as np
 from typing import Literal, Sequence, Tuple
+
+import numpy as np
+
+from hiten.algorithms.poincare.core.interfaces import _SectionInterface
+from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
+from hiten.algorithms.poincare.synodic.events import _AffinePlaneEvent
 
 
 class _SynodicEngineConfig:
@@ -54,7 +56,6 @@ class _SynodicEngineConfig:
         self.dt = 0.0
         self.n_iter = 1
         self.n_workers = cfg.n_workers
-        # Satisfy _SeedingConfigLike for the no-op strategy
         self.n_seeds = 0
 
     def __repr__(self) -> str:

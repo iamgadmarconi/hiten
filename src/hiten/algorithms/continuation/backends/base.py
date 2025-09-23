@@ -17,7 +17,6 @@ class _ContinuationBackend(ABC):
         parameter_getter: Callable[[np.ndarray], np.ndarray],
         corrector: Callable[[np.ndarray], tuple[np.ndarray, float, bool]],
         representation_of: Callable[[np.ndarray], np.ndarray] | None,
-        set_tangent: Callable[[np.ndarray | None], None] | None,
         step: np.ndarray,
         target: np.ndarray,
         max_members: int,
@@ -40,8 +39,6 @@ class _ContinuationBackend(ABC):
             corrector(prediction_repr) -> (corrected_repr, residual_norm, converged).
         representation_of : callable, optional
             Maps a domain solution to its numerical representation (for secant updates).
-        set_tangent : callable, optional
-            Setter to update the unit tangent vector maintained by the backend.
         step : ndarray
             Initial step vector (m,).
         target : ndarray
@@ -65,6 +62,20 @@ class _ContinuationBackend(ABC):
             Backend-specific telemetry (e.g., parameter history, counts, timings).
         """
         ...
+
+    def get_tangent(self) -> np.ndarray | None:
+        """Return the current tangent vector maintained by the backend.
+
+        Stateless backends may return ``None``.
+        """
+        return None
+
+    def seed_tangent(self, tangent: np.ndarray | None) -> None:
+        """Seed the backend with an initial tangent vector prior to ``solve``.
+
+        Engines may call this at most once. Default implementation is a no-op.
+        """
+        return
 
     def on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:
         """Called after each iteration. Default: no-op."""

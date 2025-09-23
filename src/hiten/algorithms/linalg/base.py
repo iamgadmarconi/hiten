@@ -1,7 +1,7 @@
 """Base types and protocols for the linear algebra module."""
 
-from dataclasses import dataclass, replace
-from typing import Optional, Tuple
+from dataclasses import dataclass
+from typing import Tuple
 
 import numpy as np
 
@@ -10,81 +10,69 @@ from hiten.algorithms.linalg.config import _EigenDecompositionConfig
 from hiten.algorithms.linalg.engine import _LinearStabilityEngine
 from hiten.algorithms.linalg.interfaces import _EigenDecompositionInterface
 from hiten.algorithms.linalg.types import (EigenDecompositionResults,
-                                           StabilityIndicesResults,
-                                           _SystemType,
-                                           _ProblemType)
+                                           _EigenDecompositionProblem,
+                                           _ProblemType, _SystemType)
 from hiten.algorithms.utils.exceptions import EngineError
 
 
 @dataclass
 class StabilityProperties:
+    """Facade exposing linear stability results on demand."""
 
     _engine: _LinearStabilityEngine
     _interface: _EigenDecompositionInterface
-    _stability_info: Tuple[EigenDecompositionResults, StabilityIndicesResults] | None = None
+    _result: EigenDecompositionResults | None = None
 
     @classmethod
-    def with_default_engine(cls, *, interface: _EigenDecompositionInterface) -> "StabilityProperties":
+    def with_default_engine(cls, *, config: _EigenDecompositionConfig) -> "StabilityProperties":
+        interface = _EigenDecompositionInterface(config=config)
         backend = _LinalgBackend()
-        intf = interface
-        engine = _LinearStabilityEngine(backend=backend, interface=intf)
-        return cls(_engine=engine, _interface=interface)
+        engine = _LinearStabilityEngine(backend=backend)
+        return cls(engine, interface)
 
-    def compute_linear_stability(
+    @property
+    def config(self) -> _EigenDecompositionConfig:
+        return self._interface.config
+
+    def compute(
         self,
+        matrix: np.ndarray,
         *,
-        system_type: _SystemType = _SystemType.CONTINUOUS,
-        problem_type: _ProblemType = _ProblemType.EIGENVALUE_DECOMPOSITION,
-        delta: float = 1e-4,
-        tol: float = 1e-8,
-    ) -> Tuple[EigenDecompositionResults, StabilityIndicesResults]:
-        """Compute linear stability for a linear system."""
-        cfg = replace(self._interface.config, system_type=system_type, delta=delta, tol=tol, problem_type=problem_type)
-        self._interface = replace(self._interface, config=cfg)
-        problem = self._interface.create_problem()
+        system_type: _SystemType | None = None,
+        problem_type: _ProblemType | None = None,
+    ) -> EigenDecompositionResults:
+        """Compose a problem from *matrix* and run the engine."""
 
-        if self._engine is None:
-            raise EngineError("StabilityProperties requires an injected _LinearStabilityEngine; provide via constructor.")
+        cfg = self._interface.config
+        if system_type is not None or problem_type is not None:
+            cfg = _EigenDecompositionConfig(
+                system_type=system_type or cfg.system_type,
+                problem_type=problem_type or cfg.problem_type,
+                delta=cfg.delta,
+                tol=cfg.tol,
+            )
+            self._interface = _EigenDecompositionInterface(config=cfg)
 
-        return self._engine.solve(problem)
+        problem = self._interface.create_problem(matrix)
+        self._result = self._engine.solve(problem)
+        return self._result
 
-    def __post_init__(self):
-        self._stability_info = self.compute_linear_stability(
-            system_type=self._interface.config.system_type,
-            delta=self._interface.config.delta,
-            tol=self._interface.config.tol,
-        )
+    def require_result(self) -> EigenDecompositionResults:
+        if self._result is None:
+            raise EngineError("Stability results not computed; call compute() first")
+        return self._result
 
     @property
     def is_stable(self) -> bool:
-        """Check if the linear system is stable."""
-        unstable_eigenvalues = self._stability_info[0].unstable
-        return len(unstable_eigenvalues) == 0
+        result = self.require_result()
+        return len(result.unstable) == 0
 
     @property
     def eigenvalues(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Get the eigenvalues of the linear system.
-
-        Returns
-        -------
-        tuple
-            (stable_eigenvalues, unstable_eigenvalues, center_eigenvalues)
-            Each array contains eigenvalues in nondimensional units.
-        """
-        results = self._stability_info[0]
-        return results.stable, results.unstable, results.center
+        result = self.require_result()
+        return result.stable, result.unstable, result.center
 
     @property
     def eigenvectors(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Get the eigenvectors of the linear system.
-
-        Returns
-        -------
-        tuple
-            (stable_eigenvectors, unstable_eigenvectors, center_eigenvectors)
-            Each array contains eigenvectors as column vectors.
-        """
-        results = self._stability_info[0]
-        return results.Ws, results.Wu, results.Wc
+        result = self.require_result()
+        return result.Ws, result.Wu, result.Wc

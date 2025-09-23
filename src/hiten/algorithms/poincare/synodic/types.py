@@ -4,7 +4,7 @@ This module provides the types for synodic Poincare maps.
 """
 
 from dataclasses import dataclass
-from typing import Sequence, Tuple
+from typing import Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -35,8 +35,8 @@ class _SynodicMapProblem:
     """
 
     plane_coords: Tuple[str, str]
-    direction: int | None
+    direction: Optional[int]
     n_workers: int
-    trajectories: Sequence[tuple[np.ndarray, np.ndarray]] | None = None
+    trajectories: Optional[Sequence[tuple[np.ndarray, np.ndarray]]] = None
 
 

@@ -61,31 +61,28 @@ class _OrbitContinuationEngine(_ContinuationEngine):
             # Choose stepper strategy based on config
             stepper_name = getattr(cfg, "stepper", "natural")
             if str(stepper_name).lower() == "secant":
-                tangent_vec: np.ndarray | None = None
-
-                def _tangent_provider():
-                    return tangent_vec
-
-                def _set_tangent(v: np.ndarray | None) -> None:
-                    nonlocal tangent_vec
-                    tangent_vec = None if v is None else np.asarray(v, dtype=float)
-
-                stepper = make_secant_stepper(lambda v: np.asarray(v, dtype=float), _tangent_provider)
-                set_tangent = _set_tangent
+                stepper = make_secant_stepper(
+                    lambda v: np.asarray(v, dtype=float),
+                    lambda: self._backend.get_tangent(),
+                )
                 # Pre-seed tangent using the natural predictor at the seed
                 try:
                     predictor = self._interface.build_predictor(seed, cfg)
-                    pred0 = np.asarray(predictor(self._interface.representation(seed), np.asarray(cfg.step, dtype=float)), dtype=float)
+                    pred0 = np.asarray(
+                        predictor(
+                            self._interface.representation(seed),
+                            np.asarray(cfg.step, dtype=float),
+                        ),
+                        dtype=float,
+                    )
                     diff0 = (pred0 - self._interface.representation(seed)).ravel()
                     n0 = float(np.linalg.norm(diff0))
-                    if n0 > 0.0:
-                        _set_tangent(diff0 / n0)
+                    self._backend.seed_tangent(None if n0 == 0.0 else diff0 / n0)
                 except Exception:
-                    pass
+                    self._backend.seed_tangent(None)
             else:
                 predictor = self._interface.build_predictor(seed, cfg)
                 stepper = make_natural_stepper(predictor)
-                set_tangent = None
 
             seed_repr = self._interface.representation(seed)
 
@@ -124,7 +121,6 @@ class _OrbitContinuationEngine(_ContinuationEngine):
                 parameter_getter=parameter_getter,
                 corrector=corrector,
                 representation_of=lambda v: np.asarray(v, dtype=float),
-                set_tangent=set_tangent,
                 step=step_eff,
                 target=np.asarray(cfg.target, dtype=float),
                 max_members=int(cfg.max_members),

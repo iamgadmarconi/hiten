@@ -565,12 +565,11 @@ class PeriodicOrbit(ABC):
         interface = _PeriodicOrbitCorrectorInterface()
         engine = _OrbitCorrectionEngine(backend=backend, interface=interface)
 
-        # Compose problem and call problem-based engine API, then compute half-period via shim
+        # Compose problem and delegate to engine which returns the full result
         problem = interface.create_problem(self, cfg)
-        result, _ = engine.solve(problem)
-        half_period = interface.compute_half_period(self, result.x_corrected, cfg, getattr(cfg, "forward", 1))
-        interface.apply_results_to_orbit(self, corrected_state=result.x_corrected, half_period=half_period)
-        return result.x_corrected, half_period
+        result = engine.solve(problem)
+        interface.apply_results_to_orbit(self, corrected_state=result.x_corrected, half_period=result.half_period)
+        return result.x_corrected, result.half_period
 
     def propagate(
         self,

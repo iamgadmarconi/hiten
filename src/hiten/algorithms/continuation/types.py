@@ -73,7 +73,6 @@ class _ContinuationProblem:
     max_retries_per_step: int
     corrector_kwargs: dict
     representation_of: Callable[[np.ndarray], np.ndarray] | None = None
-    set_tangent: Callable[[np.ndarray | None], None] | None = None
     shrink_policy: Callable[[np.ndarray], np.ndarray] | None = None
     step_min: float = 1e-10
     step_max: float = 1.0

@@ -5,12 +5,15 @@ This module provides the types for the corrector module.
 """
 
 from dataclasses import dataclass
-from typing import Any, Callable, NamedTuple, Optional
+from typing import Any, Callable, Optional, TYPE_CHECKING
 
 import numpy as np
 
 from hiten.algorithms.corrector.config import (_BaseCorrectionConfig,
                                                _OrbitCorrectionConfig)
+
+if TYPE_CHECKING:
+    from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
 
 #: Type alias for residual function signatures.
 #:
@@ -96,8 +99,11 @@ JacobianFn = Callable[[np.ndarray], np.ndarray]
 #: correction process to ensure proper convergence assessment.
 NormFn = Callable[[np.ndarray], float]
 
+StepperFactory = Callable[[ResidualFn, NormFn, float | None], "CorrectorStepProtocol"]
 
-class CorrectionResult(NamedTuple):
+
+@dataclass
+class CorrectionResult:
     """Standardized result for a backend correction run.
     
     Attributes
@@ -116,6 +122,19 @@ class CorrectionResult(NamedTuple):
     residual_norm: float
     iterations: int
 
+
+@dataclass
+class OrbitCorrectionResult(CorrectionResult):
+    """Result for an orbit correction run.
+    
+    Attributes
+    ----------
+    half_period : float
+        Half-period associated with the corrected orbit.
+    """
+    half_period: float
+
+
 @dataclass
 class _CorrectionProblem:
     """Defines the inputs for a backend correction run.
@@ -130,24 +149,17 @@ class _CorrectionProblem:
         Optional analytical Jacobian.
     norm_fn : :class:`~hiten.algorithms.corrector.types.NormFn` | None
         Optional norm function for convergence checks.
-    tol : float
-        Convergence tolerance on residual norm.
-    max_attempts : int
-        Maximum Newton iterations.
-    max_delta : float | None
-        Optional cap on infinity-norm of Newton step.
-    fd_step : float
-        Finite-difference step if Jacobian is not provided.
-    forward : int
-        Integration direction (1 for forward, -1 for backward).
     cfg : :class:`~hiten.algorithms.corrector.config._BaseCorrectionConfig`
-        Configuration for the correction.
+        Configuration object holding numeric tolerances and solver options.
+    stepper_factory : callable or None
+        Optional factory producing a stepper compatible with the backend.
     """
     initial_guess: np.ndarray
     residual_fn: ResidualFn
     jacobian_fn: Optional[JacobianFn]
     norm_fn: Optional[NormFn]
     cfg: _BaseCorrectionConfig
+    stepper_factory: Optional[StepperFactory]
 
 
 @dataclass

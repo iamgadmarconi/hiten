@@ -16,27 +16,26 @@ from hiten.algorithms.linalg.types import _EigenDecompositionProblem
 if TYPE_CHECKING:
     from hiten.system.libration.base import LibrationPoint
 
-@dataclass
-class _EigenDecompositionInterface:
-    """Direct adapter for matrix-based stability problems (domain-agnostic)."""
 
-    A: np.ndarray | None
+@dataclass(frozen=True)
+class _EigenDecompositionInterface:
+    """Stateless adapter that builds numeric eigen problems."""
+
     config: _EigenDecompositionConfig
 
-    def create_problem(self) -> _EigenDecompositionProblem:
-        return _EigenDecompositionProblem(A=self.A, config=self.config)   
+    def create_problem(self, matrix: np.ndarray) -> _EigenDecompositionProblem:
+        return _EigenDecompositionProblem(A=matrix, config=self.config)
 
-@dataclass
-class _LibrationPointInterface(_EigenDecompositionInterface):
-    """Create linalg problems from CR3BP domain data."""
 
-    point: "LibrationPoint"
+@dataclass(frozen=True)
+class _LibrationPointInterface:
+    config: _EigenDecompositionConfig
 
-    def __post_init__(self):
-        if self.A is None:
-            self.A = _jacobian_crtbp(
-                self.point.position[0],
-                self.point.position[1],
-                self.point.position[2],
-                self.point.mu
-            )
+    def create_problem(self, point: "LibrationPoint") -> _EigenDecompositionProblem:
+        jac = _jacobian_crtbp(
+            point.position[0],
+            point.position[1],
+            point.position[2],
+            point.mu,
+        )
+        return _EigenDecompositionProblem(A=jac, config=self.config)

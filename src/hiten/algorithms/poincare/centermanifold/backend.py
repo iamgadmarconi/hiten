@@ -468,7 +468,7 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         seeds: np.ndarray,
         *,
         dt: float = 1e-2,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Propagate center manifold seeds until the next Poincare section crossing.
 
         Parameters
@@ -480,8 +480,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
 
         Returns
         -------
-        pts : ndarray, shape (n_crossings, 2)
-            Plane coordinates of the section crossings.
         cm_states : ndarray, shape (n_crossings, 4)
             Center manifold coordinates of the crossings.
         times : ndarray, shape (n_crossings,)
@@ -498,13 +496,10 @@ class _CenterManifoldBackend(_ReturnMapBackend):
 
         if seeds.size == 0:
             return (
-                np.empty((0, 2)),
                 np.empty((0, 4)),
                 np.empty((0,)),
                 np.empty((0,), dtype=np.int64),
             )
-
-        max_steps = int(np.ceil(20.0 / dt))
 
         flags, q2p_arr, p2p_arr, q3p_arr, p3p_arr, t_arr = _poincare_map(
             np.ascontiguousarray(seeds, dtype=np.float64),
@@ -512,42 +507,23 @@ class _CenterManifoldBackend(_ReturnMapBackend):
             self._jac_H,
             self._clmo_table,
             self._order,
-            max_steps,
+            self._max_steps,
             self._use_symplectic,
             N_SYMPLECTIC_DOF,
             self._section_cfg.section_coord,
             self._c_omega_heuristic,
         )
 
-        cfg = self._section_cfg
-        pts_list: list[tuple[float, float]] = []
         states_list: list[tuple[float, float, float, float]] = []
         times_list: list[float] = []
 
         for i in range(flags.shape[0]):
             if flags[i]:
                 state = (q2p_arr[i], p2p_arr[i], q3p_arr[i], p3p_arr[i])
-                # Ensure the returned seed lies EXACTLY on the section plane so that
-                # the following iteration does not detect the same crossing again.
-                # We zero the coordinate that defines the section (q2, p2, q3 or p3)
-                # to avoid re-registering the same hit in subsequent steps.
-                if cfg.section_coord == "q3":
-                    state = (state[0], state[1], 0.0, state[3])
-                elif cfg.section_coord == "p3":
-                    state = (state[0], state[1], state[2], 0.0)
-                elif cfg.section_coord == "q2":
-                    state = (0.0, state[1], state[2], state[3])
-                else:  # "p2"
-                    state = (state[0], 0.0, state[2], state[3])
                 states_list.append(state)
-                if cfg.plane_coords == ("q2", "p2"):
-                    pts_list.append((state[0], state[1]))
-                else:
-                    pts_list.append((state[2], state[3]))
                 times_list.append(float(t_arr[i]))
 
         return (
-            np.asarray(pts_list, dtype=np.float64),
             np.asarray(states_list, dtype=np.float64),
             np.asarray(times_list, dtype=np.float64),
             np.asarray(flags, dtype=np.int64),

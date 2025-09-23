@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Callable, Tuple
 import numpy as np
 
 from hiten.algorithms.corrector.types import (JacobianFn, NormFn,
+                                              StepperFactory,
                                               _OrbitCorrectionProblem)
 from hiten.algorithms.dynamics.rtbp import _compute_stm
 
@@ -72,7 +73,7 @@ class _PeriodicOrbitCorrectorInterface:
 
         return _jac
 
-    def create_problem(self, orbit: "PeriodicOrbit", cfg) -> _OrbitCorrectionProblem:
+    def create_problem(self, orbit: "PeriodicOrbit", cfg, *, stepper_factory: StepperFactory | None = None) -> _OrbitCorrectionProblem:
         """Compose a backend correction problem from a domain orbit and config.
 
         Parameters
@@ -98,6 +99,7 @@ class _PeriodicOrbitCorrectorInterface:
             residual_fn=residual_fn,
             jacobian_fn=jacobian_fn,
             norm_fn=norm_fn,
+            stepper_factory=stepper_factory,
             orbit=orbit,
             cfg=cfg,
         )

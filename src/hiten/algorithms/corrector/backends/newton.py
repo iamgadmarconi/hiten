@@ -11,7 +11,9 @@ import numpy as np
 
 from hiten.algorithms.corrector.backends.base import _CorrectorBackend
 from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
-from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
+from hiten.algorithms.corrector.types import (JacobianFn, NormFn, ResidualFn,
+                                              StepperFactory)
+from hiten.algorithms.corrector.stepping import make_plain_stepper
 from hiten.algorithms.utils.exceptions import ConvergenceError
 from hiten.utils.log_config import logger
 
@@ -38,31 +40,13 @@ class _NewtonBackend(_CorrectorBackend):
     def __init__(
         self,
         *,
-        stepper_factory: Callable[[ResidualFn, NormFn, float | None], CorrectorStepProtocol] | None = None,
+        stepper_factory: StepperFactory | None = None,
         **kwargs,
     ) -> None:
         super().__init__(**kwargs)
         # Dependency-injected factory building the stepper per problem
-        self._stepper_factory: Callable[[ResidualFn, NormFn, float | None], CorrectorStepProtocol]
-        if stepper_factory is None:
-            # Default to a simple capped plain stepper, keeping backend decoupled
-            def _default_factory(res_fn: ResidualFn, nrm_fn: NormFn, max_del: float | None) -> CorrectorStepProtocol:
-                def _plain_step(x: np.ndarray, delta: np.ndarray, current_norm: float):
-                    if (max_del is not None) and (not np.isinf(max_del)):
-                        delta_norm = float(np.linalg.norm(delta, ord=np.inf))
-                        if delta_norm > max_del:
-                            scale = max_del / delta_norm
-                            delta = delta * scale
-                            x_new_local = x + delta
-                            r_norm_new_local = nrm_fn(res_fn(x_new_local))
-                            return x_new_local, r_norm_new_local, float(scale)
-                    x_new_local = x + delta
-                    r_norm_new_local = nrm_fn(res_fn(x_new_local))
-                    return x_new_local, r_norm_new_local, 1.0
-                return _plain_step
-            self._stepper_factory = _default_factory
-        else:
-            self._stepper_factory = stepper_factory
+        self._stepper_factory: StepperFactory
+        self._stepper_factory = make_plain_stepper() if stepper_factory is None else stepper_factory
 
     def _compute_residual(self, x: np.ndarray, residual_fn: ResidualFn) -> np.ndarray:
         """Compute residual vector R(x).
@@ -228,6 +212,7 @@ class _NewtonBackend(_CorrectorBackend):
         *,
         jacobian_fn: JacobianFn | None = None,
         norm_fn: NormFn | None = None,
+        stepper_factory: StepperFactory | None = None,
         tol: float = 1e-10,
         max_attempts: int = 25,
         max_delta: float | None = 1e-2,
@@ -273,7 +258,8 @@ class _NewtonBackend(_CorrectorBackend):
         info: dict[str, Any] = {}
 
         # Obtain the stepper callable from the injected factory
-        stepper = self._stepper_factory(residual_fn, norm_fn, max_delta)
+        factory = self._stepper_factory if stepper_factory is None else stepper_factory
+        stepper = factory(residual_fn, norm_fn, max_delta)
 
         for k in range(max_attempts):
             r = self._compute_residual(x, residual_fn)

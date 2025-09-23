@@ -138,16 +138,7 @@ class LibrationPoint(_HitenBase, ABC):
 
         self._linear_data: LinearData | None = None
         self._cm_registry = {}
-        self._stability_properties = StabilityProperties.with_default_engine(
-            interface=_LibrationPointInterface(
-                point=self,
-                A=None,
-                config=_EigenDecompositionConfig(
-                    problem_type=_ProblemType.EIGENVALUE_DECOMPOSITION,
-                    system_type=_SystemType.CONTINUOUS
-                )
-            )
-        )
+        self._stability_properties: StabilityProperties | None = None
     
     def __str__(self) -> str:
         return f"{type(self).__name__}(mu={self.mu:.6e})"
@@ -281,6 +272,14 @@ class LibrationPoint(_HitenBase, ABC):
         bool
             True if the libration point is linearly stable.
         """
+        config = _EigenDecompositionConfig(
+            problem_type=_ProblemType.EIGENVALUE_DECOMPOSITION,
+            system_type=_SystemType.CONTINUOUS,
+        )
+        problem = _LibrationPointInterface(config=config).create_problem(self)
+        if self._stability_properties is None:
+            self._stability_properties = StabilityProperties.with_default_engine(config=config)
+        self._stability_properties.compute(problem.A, system_type=config.system_type, problem_type=config.problem_type)
         return self._stability_properties.is_stable
 
     @property
@@ -294,6 +293,14 @@ class LibrationPoint(_HitenBase, ABC):
             (stable_eigenvalues, unstable_eigenvalues, center_eigenvalues)
             Each array contains eigenvalues in nondimensional units.
         """
+        config = _EigenDecompositionConfig(
+            problem_type=_ProblemType.EIGENVALUE_DECOMPOSITION,
+            system_type=_SystemType.CONTINUOUS,
+        )
+        problem = _LibrationPointInterface(config=config).create_problem(self)
+        if self._stability_properties is None:
+            self._stability_properties = StabilityProperties.with_default_engine(config=config)
+        self._stability_properties.compute(problem.A, system_type=config.system_type, problem_type=config.problem_type)
         return self._stability_properties.eigenvalues
     
     @property
@@ -307,6 +314,14 @@ class LibrationPoint(_HitenBase, ABC):
             (stable_eigenvectors, unstable_eigenvectors, center_eigenvectors)
             Each array contains eigenvectors as column vectors.
         """
+        config = _EigenDecompositionConfig(
+            problem_type=_ProblemType.EIGENVALUE_DECOMPOSITION,
+            system_type=_SystemType.CONTINUOUS,
+        )
+        problem = _LibrationPointInterface(config=config).create_problem(self)
+        if self._stability_properties is None:
+            self._stability_properties = StabilityProperties.with_default_engine(config=config)
+        self._stability_properties.compute(problem.A, system_type=config.system_type, problem_type=config.problem_type)
         return self._stability_properties.eigenvectors
 
     @property

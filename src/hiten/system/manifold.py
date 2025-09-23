@@ -34,7 +34,8 @@ from hiten.algorithms.dynamics.rtbp import _compute_stm
 from hiten.algorithms.linalg.base import StabilityProperties
 from hiten.algorithms.linalg.config import _EigenDecompositionConfig
 from hiten.algorithms.linalg.interfaces import _EigenDecompositionInterface
-from hiten.algorithms.linalg.types import _ProblemType, _SystemType
+from hiten.algorithms.linalg.types import (_EigenDecompositionProblem,
+                                           _ProblemType, _SystemType)
 from hiten.system.base import System
 from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.io.common import _ensure_dir
@@ -164,15 +165,7 @@ class Manifold:
         except Exception as e:
             logger.error(f"Failed to propagate STM once: {e}")
             raise
-        self._stability_properties: StabilityProperties = StabilityProperties.with_default_engine(
-            interface=_EigenDecompositionInterface(
-                A=self.phi_T, 
-                config=_EigenDecompositionConfig(
-                    problem_type=_ProblemType.ALL,
-                    system_type=_SystemType.DISCRETE
-                )
-            )
-        )
+        self._stability_properties: StabilityProperties | None = None
 
     @property
     def generating_orbit(self) -> PeriodicOrbit:
@@ -496,6 +489,13 @@ class Manifold:
         self._successes = 0
         self._attempts = 0
 
+        config = _EigenDecompositionConfig(
+            problem_type=_ProblemType.ALL,
+            system_type=_SystemType.DISCRETE,
+        )
+        if self._stability_properties is None:
+            self._stability_properties = StabilityProperties.with_default_engine(config=config)
+        self._stability_properties.compute(self.phi_T, system_type=config.system_type, problem_type=config.problem_type)
         sn, un, _ = self._stability_properties.eigenvalues
         Ws, Wu, _ = self._stability_properties.eigenvectors
 
