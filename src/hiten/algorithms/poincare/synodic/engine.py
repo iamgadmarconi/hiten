@@ -11,19 +11,16 @@ Newton refinement for precise crossing detection.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Literal, Sequence
 
 import numpy as np
 
 from hiten.algorithms.poincare.core.engine import _ReturnMapEngine
 from hiten.algorithms.poincare.synodic.backend import _SynodicDetectionBackend
-from hiten.algorithms.poincare.synodic.interfaces import _SynodicEngineInterface
+from hiten.algorithms.poincare.synodic.interfaces import _SynodicEngineConfig
 from hiten.algorithms.poincare.synodic.strategies import _NoOpStrategy
 from hiten.algorithms.poincare.synodic.types import (SynodicMapResults,
                                                      _SynodicMapProblem)
-
-
-
+from hiten.algorithms.utils.exceptions import EngineError
 
 
 class _SynodicEngine(_ReturnMapEngine):
@@ -68,72 +65,30 @@ class _SynodicEngine(_ReturnMapEngine):
         self,
         backend: _SynodicDetectionBackend,
         seed_strategy: _NoOpStrategy,
-        map_config: _SynodicEngineInterface,
+        map_config: _SynodicEngineConfig,
     ) -> None:
         super().__init__(backend, seed_strategy, map_config)
-        self._trajectories: "Sequence[tuple[np.ndarray, np.ndarray]]" | None = None
-        self._direction: int | None = None
-
-    def set_trajectories(
-        self,
-        trajectories: "Sequence[tuple[np.ndarray, np.ndarray]]",
-        *,
-        direction: Literal[1, -1, None] | None = None,
-    ) -> "_SynodicEngine":
-        """Set the trajectories to analyze and return self for chaining.
-
-        Parameters
-        ----------
-        trajectories : sequence of tuple[ndarray, ndarray]
-            Sequence of (times, states) tuples for each trajectory.
-            Each tuple contains:
-            - times: ndarray, shape (n,) - Time points (nondimensional units)
-            - states: ndarray, shape (n, 6) - State vectors at each time point
-        direction : {1, -1, None}, optional
-            Crossing direction filter. If None, uses the default
-            direction from the section configuration.
-
-        Returns
-        -------
-        :class:`~hiten.algorithms.poincare.synodic.engine._SynodicEngine`
-            Self for method chaining.
-
-        Notes
-        -----
-        This method sets the trajectories to analyze and clears any
-        cached results. It provides a fluent interface for chaining
-        method calls.
-
-        The method automatically clears the section cache when new
-        trajectories are set to ensure fresh computation.
-        """
-        self._trajectories = trajectories
-        self._direction = direction
-        self.clear_cache()
-        return self
 
     def solve(self, problem: _SynodicMapProblem) -> SynodicMapResults:
         """Compute the synodic Poincare section from the composed problem."""
-        self.set_trajectories(problem.trajectories or [], direction=problem.direction)
-        if self._section_cache is not None:
-            return self._section_cache
-
-        if self._trajectories is None:
-            raise ValueError("No trajectories set. Call set_trajectories(...) first.")
+        trajectories = problem.trajectories or []
+        direction = problem.direction
+        if not trajectories:
+            raise EngineError("No trajectories provided to synodic engine")
 
         # Keep local aliases for clarity
         plane_coords = self._backend.plane_coords
         n_workers = self._n_workers
 
         # Delegate detection to backend passed in at construction
-        if n_workers <= 1 or len(self._trajectories) <= 1:  # type: ignore[arg-type]
-            hits_lists = self._backend.detect_batch(self._trajectories, direction=self._direction)  # type: ignore[arg-type]
+        if n_workers <= 1 or len(trajectories) <= 1:  # type: ignore[arg-type]
+            hits_lists = self._backend.detect_batch(trajectories, direction=direction)  # type: ignore[arg-type]
         else:
-            chunks = np.array_split(np.arange(len(self._trajectories)), n_workers)  # type: ignore[arg-type]
+            chunks = np.array_split(np.arange(len(trajectories)), n_workers)  # type: ignore[arg-type]
 
             def _worker(idx_arr: np.ndarray):
-                subset = [self._trajectories[i] for i in idx_arr.tolist()]  # type: ignore[index]
-                return self._backend.detect_batch(subset, direction=self._direction)
+                subset = [trajectories[i] for i in idx_arr.tolist()]  # type: ignore[index]
+                return self._backend.detect_batch(subset, direction=direction)
 
             parts: list[list[list]] = []
             with ThreadPoolExecutor(max_workers=n_workers) as ex:
@@ -154,5 +109,4 @@ class _SynodicEngine(_ReturnMapEngine):
         ts_np = np.asarray(ts, dtype=float) if ts else None
 
         labels = plane_coords
-        self._section_cache = SynodicMapResults(pts_np, sts_np, labels, ts_np)
-        return self._section_cache
+        return SynodicMapResults(pts_np, sts_np, labels, ts_np)

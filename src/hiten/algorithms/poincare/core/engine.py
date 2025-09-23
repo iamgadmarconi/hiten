@@ -79,30 +79,9 @@ class _ReturnMapEngine(ABC):
         self._map_config = map_config
         self._n_iter = int(self._map_config.n_iter)
         self._dt = float(self._map_config.dt)
-        # Use configuration value for workers, falling back to CPU count
         self._n_workers = self._map_config.n_workers or os.cpu_count() or 1
 
-        self._section_cache: "_Section" | None = None
-
     @abstractmethod
-    def solve(self) -> "_Section":
+    def solve(self, problem) -> "_Section":
         """Compute and return the section (or Results that inherit _Section)."""
         raise NotImplementedError
-
-    def clear_cache(self):
-        """Clear the cached section data.
-
-        Notes
-        -----
-        This method clears the internal section cache, forcing
-        recomputation on the next call to compute_section. Use
-        this method to free memory or force fresh computation
-        with updated parameters.
-        """
-        self._section_cache = None
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(n_iter={self._n_iter}, dt={self._dt}, n_workers={self._n_workers})"
-
-    def __str__(self) -> str:
-        return f"{self.__class__.__name__}(n_iter={self._n_iter}, dt={self._dt}, n_workers={self._n_workers})"

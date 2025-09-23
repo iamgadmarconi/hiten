@@ -18,11 +18,10 @@ import numpy as np
 
 from hiten.algorithms.poincare.core.base import _ReturnMapBase, _Section
 from hiten.algorithms.poincare.synodic.backend import _SynodicDetectionBackend
-from hiten.algorithms.poincare.synodic.config import (_get_section_config,
-                                                      _SynodicMapConfig)
+from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
 from hiten.algorithms.poincare.synodic.engine import _SynodicEngine
-from hiten.algorithms.poincare.synodic.interfaces import (
-    _SynodicEngineInterface, _SynodicSectionInterface)
+from hiten.algorithms.poincare.synodic.interfaces import (_SynodicEngineConfig, 
+                                                          _SynodicSectionInterface)
 from hiten.algorithms.poincare.synodic.strategies import _NoOpStrategy
 from hiten.algorithms.poincare.synodic.types import _SynodicMapProblem
 from hiten.system.orbits.base import PeriodicOrbit
@@ -47,7 +46,7 @@ class SynodicMap(_ReturnMapBase):
     ----------
     config : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
         The map configuration object.
-    _section_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicSectionConfig`
+    _section_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicSectionInterface`
         The section configuration derived from the map configuration.
     _engine : :class:`~hiten.algorithms.poincare.synodic.engine._SynodicEngine`
         The engine that coordinates detection and refinement.
@@ -70,11 +69,21 @@ class SynodicMap(_ReturnMapBase):
     All time units are in nondimensional units unless otherwise specified.
     """
 
-    def __init__(self, map_cfg: Optional[_SynodicMapConfig] = None) -> None:
+    def __init__(self, map_cfg: Optional[_SynodicMapConfig] = None, *, _engine: "_SynodicEngine | None" = None) -> None:
         cfg = map_cfg or _SynodicMapConfig()
-        super().__init__(cfg)  # stores in self.config
+        super().__init__(cfg)
         self._section_cfg = self._build_section_config(cfg)
-        self._engine = self._build_engine()
+        self._engine: "_SynodicEngine | None" = _engine
+
+    @classmethod
+    def with_default_engine(
+        cls,
+        map_cfg: Optional[_SynodicMapConfig] = None,
+    ) -> "SynodicMap":
+        """Construct a facade with a default-wired engine injected (DI-friendly)."""
+        inst = cls(map_cfg)
+        inst._engine = inst._build_engine()
+        return inst
 
     # These are unused but required by the abstract base; we do not build a propagation backend/strategy.
     def _build_backend(self, section_coord: str):
@@ -131,7 +140,7 @@ class SynodicMap(_ReturnMapBase):
 
         Returns
         -------
-        :class:`~hiten.algorithms.poincare.synodic.config._SynodicSectionConfig`
+        :class:`~hiten.algorithms.poincare.synodic.config._SynodicSectionInterface`
             Section configuration object with normalized geometry.
 
         Notes
@@ -179,7 +188,7 @@ class SynodicMap(_ReturnMapBase):
         The engine coordinates the detection and refinement process
         for synodic Poincare sections.
         """
-        adapter = _SynodicEngineInterface(self.config)
+        adapter = _SynodicEngineConfig(self.config)
         backend = _SynodicDetectionBackend(section_cfg=self._section_cfg, map_cfg=adapter._cfg)
         strategy = _NoOpStrategy(self._section_cfg, adapter)
         return _SynodicEngine(
@@ -234,6 +243,9 @@ class SynodicMap(_ReturnMapBase):
 
         All time units are in nondimensional units.
         """
+        if self._engine is None:
+            self._engine = self._build_engine()
+
         problem = _SynodicMapProblem(
             plane_coords=self._section_cfg.plane_coords,
             direction=direction,

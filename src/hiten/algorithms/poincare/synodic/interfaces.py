@@ -13,7 +13,7 @@ import numpy as np
 from typing import Literal, Sequence, Tuple
 
 
-class _SynodicEngineInterface:
+class _SynodicEngineConfig:
     """Configuration adapter for synodic Poincare engine.
 
     This adapter class provides the interface expected by the base
@@ -58,7 +58,7 @@ class _SynodicEngineInterface:
         self.n_seeds = 0
 
     def __repr__(self) -> str:
-        return f"SynodicEngineConfigAdapter(n_workers={self.n_workers})"
+        return f"_SynodicEngineConfig(n_workers={self.n_workers})"
 
 
 class _SynodicSectionInterface(_SectionInterface):
