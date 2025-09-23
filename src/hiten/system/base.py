@@ -25,7 +25,7 @@ from hiten.algorithms.utils.coordinates import _get_mass_parameter
 from hiten.algorithms.utils.types import (ReferenceFrame, SynodicStateVector,
                                           Trajectory)
 from hiten.system.body import Body
-from hiten.system.core import _HitenBase
+from hiten.algorithms.utils.core import _HitenBase
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import L1Point, L2Point, L3Point
 from hiten.system.libration.triangular import L4Point, L5Point
