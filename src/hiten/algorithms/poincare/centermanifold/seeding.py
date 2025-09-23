@@ -10,8 +10,10 @@ boundary validation and seed generation.
 """
 from typing import Any, Callable
 
-from hiten.algorithms.poincare.centermanifold.config import (
-    _CenterManifoldMapConfig, _CenterManifoldSectionConfig)
+from hiten.algorithms.poincare.centermanifold.config import \
+    _CenterManifoldMapConfig
+from hiten.algorithms.poincare.centermanifold.interfaces import \
+    _CenterManifoldSectionInterface
 from hiten.algorithms.poincare.core.strategies import _SeedingStrategyBase
 
 
@@ -25,7 +27,7 @@ class _CenterManifoldSeedingBase(_SeedingStrategyBase):
 
     Parameters
     ----------
-    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+    section_interface : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
         Configuration for the Poincare section.
     map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Configuration for the center manifold map.
@@ -42,8 +44,8 @@ class _CenterManifoldSeedingBase(_SeedingStrategyBase):
     separation as the length unit.
     """
 
-    def __init__(self, section_config: _CenterManifoldSectionConfig, map_config: _CenterManifoldMapConfig) -> None:
-        super().__init__(section_config, map_config)
+    def __init__(self, section_interface: _CenterManifoldSectionInterface, map_config: _CenterManifoldMapConfig) -> None:
+        super().__init__(section_interface, map_config)
 
     def _hill_boundary_limits(
         self,
@@ -135,7 +137,14 @@ class _CenterManifoldSeedingBase(_SeedingStrategyBase):
             cfg.plane_coords[1]: plane_vals[1],
         })
 
-        missing_val = solve_missing_coord_fn(cfg.missing_coord, constraints)
+        missing_coord = {
+            "q3": "p3",
+            "p3": "q3",
+            "q2": "p2",
+            "p2": "q2",
+        }[cfg.section_coord]
+
+        missing_val = solve_missing_coord_fn(missing_coord, constraints)
 
         if missing_val is None:
             # Point lies outside Hill boundary.

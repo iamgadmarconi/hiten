@@ -7,10 +7,11 @@ computation, including base classes, configuration management, and common utilit
 from .backend import _ReturnMapBackend
 from .base import _ReturnMapBase, _Section
 from .config import (_EngineConfigLike, _IntegrationConfig, _IterationConfig,
-                     _ReturnMapBaseConfig, _ReturnMapConfig, _SectionConfig,
-                     _SeedingConfig, _SeedingConfigLike)
+                     _ReturnMapBaseConfig, _ReturnMapConfig, _SeedingConfig,
+                     _SeedingConfigLike)
 from .engine import _ReturnMapEngine
 from .events import _PlaneEvent, _SurfaceEvent
+from .interfaces import _SectionInterface
 from .seeding import _SeedingProtocol
 from .strategies import _SeedingStrategyBase
 from .types import _SectionHit
@@ -26,7 +27,7 @@ __all__ = [
     "_IterationConfig",
     "_SeedingConfig",
     "_ReturnMapConfig",
-    "_SectionConfig",
+    "_SectionInterface",
     "_EngineConfigLike",
     "_SeedingConfigLike",
     "_SurfaceEvent",

@@ -17,58 +17,13 @@ import numpy as np
 
 from hiten.algorithms.poincare.core.engine import _ReturnMapEngine
 from hiten.algorithms.poincare.synodic.backend import _SynodicDetectionBackend
-from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
+from hiten.algorithms.poincare.synodic.interfaces import _SynodicEngineInterface
 from hiten.algorithms.poincare.synodic.strategies import _NoOpStrategy
 from hiten.algorithms.poincare.synodic.types import (SynodicMapResults,
                                                      _SynodicMapProblem)
 
 
-class _SynodicEngineInterface:
-    """Configuration adapter for synodic Poincare engine.
 
-    This adapter class provides the interface expected by the base
-    return map engine while adapting the synodic map configuration
-    to the required format. It handles the translation between
-    synodic-specific parameters and the generic engine interface.
-
-    Parameters
-    ----------
-    cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
-        The synodic map configuration to adapt.
-
-    Attributes
-    ----------
-    _cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
-        The original synodic map configuration.
-    dt : float
-        Time step (set to 0.0 for synodic maps since they use precomputed trajectories).
-    n_iter : int
-        Number of iterations (set to 1 for synodic maps).
-    n_workers : int
-        Number of parallel workers for batch processing.
-    n_seeds : int
-        Number of seeds (set to 0 for synodic maps since they use precomputed trajectories).
-
-    Notes
-    -----
-    This adapter is necessary because synodic Poincare maps operate on
-    precomputed trajectories rather than integrating from initial conditions.
-    The adapter provides the interface expected by the base engine while
-    setting appropriate values for the synodic use case.
-
-    All time units are in nondimensional units unless otherwise specified.
-    """
-
-    def __init__(self, cfg: _SynodicMapConfig) -> None:
-        self._cfg = cfg
-        self.dt = 0.0
-        self.n_iter = 1
-        self.n_workers = cfg.n_workers
-        # Satisfy _SeedingConfigLike for the no-op strategy
-        self.n_seeds = 0
-
-    def __repr__(self) -> str:
-        return f"SynodicEngineConfigAdapter(n_workers={self.n_workers})"
 
 
 class _SynodicEngine(_ReturnMapEngine):
@@ -85,7 +40,7 @@ class _SynodicEngine(_ReturnMapEngine):
         The detection backend for synodic sections.
     seed_strategy : :class:`~hiten.algorithms.poincare.synodic.strategies._NoOpStrategy`
         The seeding strategy (no-op for synodic maps).
-    map_config : :class:`~hiten.algorithms.poincare.synodic.engine._SynodicEngineInterface`
+    map_config : :class:`~hiten.algorithms.poincare.synodic.interfaces._SynodicEngineInterface`
         The configuration adapter for the engine.
 
     Attributes

@@ -33,9 +33,10 @@ from hiten.algorithms.hamiltonian.transforms import (_coordlocal2realmodal,
                                                      _solve_real,
                                                      _synodic2local_collinear,
                                                      _synodic2local_triangular)
-from hiten.algorithms.poincare.centermanifold.backend import _CenterManifoldBackend
-from hiten.algorithms.poincare.centermanifold.interfaces import _CenterManifoldInterface
-from hiten.algorithms.poincare.centermanifold.config import _get_section_config
+from hiten.algorithms.poincare.centermanifold.backend import \
+    _CenterManifoldBackend
+from hiten.algorithms.poincare.centermanifold.interfaces import (
+    _CenterManifoldInterface, _get_section_interface)
 from hiten.algorithms.poincare.core.events import _PlaneEvent
 from hiten.system.hamiltonians.pipeline import HamiltonianPipeline
 from hiten.system.libration.base import LibrationPoint
@@ -417,16 +418,16 @@ class CenterManifold:
         numpy.ndarray, shape (6,)
             Synodic initial conditions [x, y, z, vx, vy, vz] in nondimensional units.
         """
-        # Section configuration specifies which coordinate is fixed to zero and
+        # Section interface specifies which coordinate is fixed to zero and
         # which one must be solved for
-        config = _get_section_config(section_coord)
+        sec_if = _get_section_interface(section_coord)
 
         # Known variables on the section
-        known_vars: Dict[str, float] = {config.section_coord: 0.0}
-        known_vars[config.plane_coords[0]] = float(poincare_point[0])
-        known_vars[config.plane_coords[1]] = float(poincare_point[1])
+        known_vars: Dict[str, float] = {sec_if.section_coord: 0.0}
+        known_vars[sec_if.plane_coords[0]] = float(poincare_point[0])
+        known_vars[sec_if.plane_coords[1]] = float(poincare_point[1])
 
-        var_to_solve = config.missing_coord
+        var_to_solve = {"q3": "p3", "p3": "q3", "q2": "p2", "p2": "q2"}[sec_if.section_coord]
 
         # Use the stateless Interface to solve the missing coordinate
         solved_val = _CenterManifoldInterface.solve_missing_coord(
@@ -579,7 +580,8 @@ class CenterManifold:
         configuration, and stored internally. Subsequent calls with the same
         parameters return the cached object.
         """
-        from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
+        from hiten.algorithms.poincare.centermanifold.base import \
+            CenterManifoldMap
         from hiten.algorithms.poincare.centermanifold.config import \
             _CenterManifoldMapConfig
 

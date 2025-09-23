@@ -14,19 +14,76 @@ easy to test and does not carry state. All numerical inputs (Hamiltonian
 blocks, CLMO tables, energy) are passed explicitly per call.
 """
 
-from __future__ import annotations
-
-from dataclasses import dataclass
 import os
-from typing import Callable, Optional, Tuple
+from dataclasses import dataclass
+from typing import Optional, Tuple
 
 import numpy as np
 
-from hiten.algorithms.poincare.centermanifold.config import _get_section_config
-from hiten.algorithms.poincare.centermanifold.types import _CenterManifoldMapProblem
+from hiten.algorithms.poincare.centermanifold.types import \
+    _CenterManifoldMapProblem
+from hiten.algorithms.poincare.core.interfaces import _SectionInterface
 from hiten.algorithms.polynomial.operations import _polynomial_evaluate
 from hiten.algorithms.utils.exceptions import BackendError, ConvergenceError
 from hiten.algorithms.utils.rootfinding import solve_bracketed_brent
+
+
+@dataclass(frozen=True)
+class _CenterManifoldSectionInterface(_SectionInterface):
+    """Section interface for center manifold sections (q2/p2/q3/p3 planes)."""
+
+    section_coord: str
+    plane_coords: tuple[str, str]
+
+    @staticmethod
+    def from_section_coord(section_coord: str) -> "_CenterManifoldSectionInterface":
+        cfg = _CM_SECTION_TABLE.get(section_coord)
+        if cfg is None:
+            raise BackendError(f"Unsupported section_coord: {section_coord}")
+        return _CenterManifoldSectionInterface(section_coord=section_coord, plane_coords=cfg["plane_coords"])  # type: ignore[index]
+
+    def build_constraint_dict(self, **kwargs) -> dict[str, float]:
+        out: dict[str, float] = {self.section_coord: 0.0}
+        for k, v in kwargs.items():
+            if k in {"q1", "q2", "q3", "p1", "p2", "p3"}:
+                out[k] = float(v)
+        return out
+
+    def build_state(self, plane_vals: Tuple[float, float], other_vals: Tuple[float, float]) -> Tuple[float, float, float, float]:
+        q2 = p2 = q3 = p3 = 0.0
+        if self.plane_coords == ("q2", "p2"):
+            q2, p2 = plane_vals
+            q3, p3 = other_vals
+        else:
+            q3, p3 = plane_vals
+            q2, p2 = other_vals
+        if self.section_coord == "q2":
+            q2 = 0.0
+        elif self.section_coord == "p2":
+            p2 = 0.0
+        elif self.section_coord == "q3":
+            q3 = 0.0
+        else:  # p3
+            p3 = 0.0
+        return q2, p2, q3, p3
+
+
+# Minimal section geometry table for CM planes
+_CM_SECTION_TABLE: dict[str, dict[str, object]] = {
+    "q3": {"plane_coords": ("q2", "p2")},
+    "p3": {"plane_coords": ("q2", "p2")},
+    "q2": {"plane_coords": ("q3", "p3")},
+    "p2": {"plane_coords": ("q3", "p3")},
+}
+
+
+_SECTION_CACHE: dict[str, _CenterManifoldSectionInterface] = {}
+
+
+def _get_section_interface(section_coord: str) -> _CenterManifoldSectionInterface:
+    if section_coord not in _SECTION_CACHE:
+        _SECTION_CACHE[section_coord] = _CenterManifoldSectionInterface.from_section_coord(section_coord)
+    return _SECTION_CACHE[section_coord]
 
 
 @dataclass(frozen=True)
@@ -40,8 +97,8 @@ class _CenterManifoldInterface:
     @staticmethod
     def create_constraints(section_coord: str, **kwargs: float) -> dict[str, float]:
         """Create a constraint dict including the section coordinate value."""
-        cfg = _get_section_config(section_coord)
-        return cfg.build_constraint_dict(**kwargs)
+        sec_if = _get_section_interface(section_coord)
+        return sec_if.build_constraint_dict(**kwargs)
 
     @staticmethod
     def solve_missing_coord(
@@ -171,14 +228,19 @@ class _CenterManifoldInterface:
 
         Returns (q2, p2, q3, p3) on the section if solvable; otherwise None.
         """
-        cfg = _get_section_config(section_coord)
-        constraints = cfg.build_constraint_dict(**{
-            cfg.plane_coords[0]: float(plane[0]),
-            cfg.plane_coords[1]: float(plane[1]),
+        sec_if = _get_section_interface(section_coord)
+        constraints = sec_if.build_constraint_dict(**{
+            sec_if.plane_coords[0]: float(plane[0]),
+            sec_if.plane_coords[1]: float(plane[1]),
         })
 
         missing_val = _CenterManifoldInterface.solve_missing_coord(
-            cfg.missing_coord,
+            missing_coord := {
+                "q3": "p3",
+                "p3": "q3",
+                "q2": "p2",
+                "p2": "q2",
+            }[sec_if.section_coord],
             constraints,
             h0=h0,
             H_blocks=H_blocks,
@@ -194,10 +256,14 @@ class _CenterManifoldInterface:
             return None
 
         other_vals = [0.0, 0.0]
-        idx = 0 if cfg.missing_coord == cfg.other_coords[0] else 1
+        # Infer which other coord was solved based on section_coord
+        missing_coord = missing_coord
+        other_coords = ("q3", "p3") if sec_if.plane_coords == ("q2", "p2") else ("q2", "p2")
+        idx = 0 if missing_coord == other_coords[0] else 1
+
         other_vals[idx] = float(missing_val)
 
-        return cfg.build_state((float(plane[0]), float(plane[1])), tuple(other_vals))
+        return sec_if.build_state((float(plane[0]), float(plane[1])), tuple(other_vals))
 
     @staticmethod
     def create_problem(section_coord: str, energy: float, *, dt: float, n_iter: int, n_workers: int | None) -> _CenterManifoldMapProblem:

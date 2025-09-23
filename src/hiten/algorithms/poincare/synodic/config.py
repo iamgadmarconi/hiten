@@ -14,8 +14,8 @@ from typing import Literal, Sequence, Tuple
 
 import numpy as np
 
-from hiten.algorithms.poincare.core.config import (_ReturnMapBaseConfig,
-                                                   _SectionConfig)
+from hiten.algorithms.poincare.core.config import _ReturnMapBaseConfig
+from hiten.algorithms.poincare.core.interfaces import _SectionInterface
 from hiten.algorithms.poincare.synodic.events import _AffinePlaneEvent
 
 
@@ -109,7 +109,7 @@ class _SynodicMapConfig(_ReturnMapBaseConfig):
         object.__setattr__(self, "compute_on_init", False)
 
 
-class _SynodicSectionConfig(_SectionConfig):
+class _SynodicSectionConfig(_SectionInterface):
     """Synodic affine-plane section specification.
 
     This configuration class defines the geometric section (hyperplane) used for

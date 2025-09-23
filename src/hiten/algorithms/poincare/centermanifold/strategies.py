@@ -8,15 +8,17 @@ from typing import Any, Callable, List, Optional, Tuple
 
 import numpy as np
 
-from hiten.algorithms.poincare.centermanifold.config import (
-    _CenterManifoldMapConfig, _CenterManifoldSectionConfig)
+from hiten.algorithms.poincare.centermanifold.config import \
+    _CenterManifoldMapConfig
+from hiten.algorithms.poincare.centermanifold.interfaces import \
+    _CenterManifoldSectionInterface
 from hiten.algorithms.poincare.centermanifold.seeding import \
     _CenterManifoldSeedingBase
 from hiten.algorithms.utils.exceptions import EngineError
 from hiten.utils.log_config import logger
 
 
-def _make_strategy(kind: str, section_config: "_CenterManifoldSectionConfig", 
+def _make_strategy(kind: str, section_interface: "_CenterManifoldSectionInterface", 
                    map_config: "_CenterManifoldMapConfig", **kwargs) -> "_CenterManifoldSeedingBase":
     """Factory returning a concrete seeding strategy.
 
@@ -25,7 +27,7 @@ def _make_strategy(kind: str, section_config: "_CenterManifoldSectionConfig",
     kind : str
         Strategy identifier. Must be one of: 'single', 'axis_aligned', 
         'level_sets', 'radial', or 'random'.
-    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+    section_interface : :class:`~hiten.algorithms.poincare.centermanifold.interfaces._CenterManifoldSectionInterface`
         Configuration describing the Poincare section parameters.
     map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Map-level configuration containing global parameters such as
@@ -65,7 +67,7 @@ def _make_strategy(kind: str, section_config: "_CenterManifoldSectionConfig",
         cls = _STRATEGY_MAP[kind]
     except KeyError as exc:
         raise EngineError(f"Unknown seed_strategy '{kind}'") from exc
-    return cls(section_config, map_config, **kwargs)
+    return cls(section_interface, map_config, **kwargs)
 
 
 class _SingleAxisSeeding(_CenterManifoldSeedingBase):
@@ -77,7 +79,7 @@ class _SingleAxisSeeding(_CenterManifoldSeedingBase):
 
     Parameters
     ----------
-    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+    section_interface : :class:`~hiten.algorithms.poincare.centermanifold.interfaces._CenterManifoldSectionInterface`
         Configuration for the Poincare section.
     map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Configuration for the center manifold map.
@@ -97,12 +99,12 @@ class _SingleAxisSeeding(_CenterManifoldSeedingBase):
 
     def __init__(
         self,
-        section_config: "_CenterManifoldSectionConfig",
+        section_interface: "_CenterManifoldSectionInterface",
         map_config: _CenterManifoldMapConfig,
         *,
         seed_axis: Optional[str] = None,
     ) -> None:
-        super().__init__(section_config, map_config)
+        super().__init__(section_interface, map_config)
         # seed_axis can be provided explicitly or taken from map_config
         self._seed_axis = seed_axis or map_config.seed_axis
 
@@ -174,7 +176,7 @@ class _AxisAlignedSeeding(_CenterManifoldSeedingBase):
 
     Parameters
     ----------
-    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+    section_interface : :class:`~hiten.algorithms.poincare.centermanifold.interfaces._CenterManifoldSectionInterface`
         Configuration for the Poincare section.
     map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Configuration for the center manifold map.
@@ -190,8 +192,8 @@ class _AxisAlignedSeeding(_CenterManifoldSeedingBase):
     separation as the length unit.
     """
 
-    def __init__(self, section_config: "_CenterManifoldSectionConfig", map_config: _CenterManifoldMapConfig) -> None:
-        super().__init__(section_config, map_config)
+    def __init__(self, section_interface: "_CenterManifoldSectionInterface", map_config: _CenterManifoldMapConfig) -> None:
+        super().__init__(section_interface, map_config)
 
     def generate(
         self,
@@ -258,7 +260,7 @@ class _LevelSetsSeeding(_CenterManifoldSeedingBase):
 
     Parameters
     ----------
-    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+    section_interface : :class:`~hiten.algorithms.poincare.centermanifold.interfaces._CenterManifoldSectionInterface`
         Configuration for the Poincare section.
     map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Configuration for the center manifold map.
@@ -274,8 +276,8 @@ class _LevelSetsSeeding(_CenterManifoldSeedingBase):
     separation as the length unit.
     """
 
-    def __init__(self, section_config: "_CenterManifoldSectionConfig", map_config: _CenterManifoldMapConfig) -> None:
-        super().__init__(section_config, map_config)
+    def __init__(self, section_interface: "_CenterManifoldSectionInterface", map_config: _CenterManifoldMapConfig) -> None:
+        super().__init__(section_interface, map_config)
 
     def generate(
         self,
@@ -357,7 +359,7 @@ class _RadialSeeding(_CenterManifoldSeedingBase):
 
     Parameters
     ----------
-    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+    section_interface : :class:`~hiten.algorithms.poincare.centermanifold.interfaces._CenterManifoldSectionInterface`
         Configuration for the Poincare section.
     map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Configuration for the center manifold map.
@@ -376,8 +378,8 @@ class _RadialSeeding(_CenterManifoldSeedingBase):
     separation as the length unit.
     """
 
-    def __init__(self, section_config: "_CenterManifoldSectionConfig", map_config: _CenterManifoldMapConfig) -> None:
-        super().__init__(section_config, map_config)
+    def __init__(self, section_interface: "_CenterManifoldSectionInterface", map_config: _CenterManifoldMapConfig) -> None:
+        super().__init__(section_interface, map_config)
 
     def generate(
         self,
@@ -452,7 +454,7 @@ class _RandomSeeding(_CenterManifoldSeedingBase):
 
     Parameters
     ----------
-    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
+    section_interface : :class:`~hiten.algorithms.poincare.centermanifold.interfaces._CenterManifoldSectionInterface`
         Configuration for the Poincare section.
     map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Configuration for the center manifold map.
@@ -471,8 +473,8 @@ class _RandomSeeding(_CenterManifoldSeedingBase):
     separation as the length unit.
     """
 
-    def __init__(self, section_config: "_CenterManifoldSectionConfig", map_config: _CenterManifoldMapConfig) -> None:
-        super().__init__(section_config, map_config)
+    def __init__(self, section_interface: "_CenterManifoldSectionInterface", map_config: _CenterManifoldMapConfig) -> None:
+        super().__init__(section_interface, map_config)
 
     def generate(
         self,

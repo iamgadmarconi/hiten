@@ -16,11 +16,11 @@ from dataclasses import replace
 import numpy as np
 
 from hiten.algorithms.poincare.centermanifold.config import (
-    _CenterManifoldMapConfig, _get_section_config)
+    _CenterManifoldMapConfig)
 from hiten.algorithms.poincare.centermanifold.engine import \
     _CenterManifoldEngine
 from hiten.algorithms.poincare.centermanifold.interfaces import \
-    _CenterManifoldInterface
+    _CenterManifoldInterface, _get_section_interface
 from hiten.algorithms.poincare.centermanifold.strategies import _make_strategy
 from hiten.algorithms.poincare.centermanifold.types import (
     CenterManifoldMapResults)
@@ -164,7 +164,8 @@ class CenterManifoldMap(_ReturnMapBase):
             Configured seeding strategy for generating initial conditions.
         """
 
-        sec_cfg = _get_section_config(section_coord)
+        sec_cfg = _get_section_interface(section_coord)
+        sec_cfg = _get_section_interface(section_coord)
 
         strategy_kwargs: dict[str, object] = {}
         if self.config.seed_strategy == "single":
@@ -252,7 +253,7 @@ class CenterManifoldMap(_ReturnMapBase):
         )
 
         # Build a temporary seeding strategy (honor runtime seeding overrides)
-        sec_cfg = _get_section_config(key)
+        sec_cfg = _get_section_interface(key)
         final_seed_strategy = (seed_strategy or self.config.seed_strategy)
         final_seed_axis: str | None
         if final_seed_strategy == "single":

@@ -19,12 +19,12 @@ import numpy as np
 from hiten.algorithms.poincare.core.base import _ReturnMapBase, _Section
 from hiten.algorithms.poincare.synodic.backend import _SynodicDetectionBackend
 from hiten.algorithms.poincare.synodic.config import (_get_section_config,
-                                                      _SynodicMapConfig,
-                                                      _SynodicSectionConfig)
-from hiten.algorithms.poincare.synodic.engine import (
-    _SynodicEngine, _SynodicEngineInterface)
-from hiten.algorithms.poincare.synodic.types import _SynodicMapProblem
+                                                      _SynodicMapConfig)
+from hiten.algorithms.poincare.synodic.engine import _SynodicEngine
+from hiten.algorithms.poincare.synodic.interfaces import (
+    _SynodicEngineInterface, _SynodicSectionInterface)
 from hiten.algorithms.poincare.synodic.strategies import _NoOpStrategy
+from hiten.algorithms.poincare.synodic.types import _SynodicMapProblem
 from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.plots import plot_poincare_map
 
@@ -121,7 +121,7 @@ class SynodicMap(_ReturnMapBase):
         """
         raise NotImplementedError("SynodicMap does not use a seeding strategy")
 
-    def _build_section_config(self, cfg: _SynodicMapConfig) -> _SynodicSectionConfig:
+    def _build_section_config(self, cfg: _SynodicMapConfig) -> _SynodicSectionInterface:
         """Build section configuration from map configuration.
 
         Parameters
@@ -158,7 +158,7 @@ class SynodicMap(_ReturnMapBase):
                 idx = int(cfg.section_axis)
             normal = np.zeros(6, dtype=float)
             normal[idx] = 1.0
-        return _get_section_config(normal=normal, offset=cfg.section_offset, plane_coords=cfg.plane_coords)
+        return _SynodicSectionInterface.from_normal(normal=normal, offset=cfg.section_offset, plane_coords=cfg.plane_coords)
 
     def _build_engine(self) -> _SynodicEngine:
         """Build the detection engine for synodic Poincare sections.

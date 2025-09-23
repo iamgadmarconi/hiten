@@ -19,8 +19,8 @@ logic.
 from abc import ABC, abstractmethod
 from typing import Any, List, Tuple
 
-from hiten.algorithms.poincare.core.config import (_SeedingConfigLike,
-                                                   _SectionConfig)
+from hiten.algorithms.poincare.core.config import _SeedingConfigLike
+from hiten.algorithms.poincare.core.interfaces import _SectionInterface
 
 
 class _SeedingStrategyBase(ABC):
@@ -33,7 +33,7 @@ class _SeedingStrategyBase(ABC):
 
     Parameters
     ----------
-    section_cfg : :class:`~hiten.algorithms.poincare.core.config._SectionConfig`
+    section_cfg : :class:`~hiten.algorithms.poincare.core.interfaces._SectionInterface`
         Section configuration containing section coordinate and plane
         coordinate information.
     map_cfg : :class:`~hiten.algorithms.poincare.core.config._SeedingConfigLike`
@@ -42,7 +42,7 @@ class _SeedingStrategyBase(ABC):
 
     Attributes
     ----------
-    _section_cfg : :class:`~hiten.algorithms.poincare.core.config._SectionConfig`
+    _section_cfg : :class:`~hiten.algorithms.poincare.core.interfaces._SectionInterface`
         The section configuration.
     _map_cfg : :class:`~hiten.algorithms.poincare.core.config._SeedingConfigLike`
         The seeding configuration.
@@ -61,17 +61,17 @@ class _SeedingStrategyBase(ABC):
 
     _cached_limits: dict[tuple[float, int], list[float]] = {}
     
-    def __init__(self, section_cfg: _SectionConfig, map_cfg: _SeedingConfigLike) -> None:
+    def __init__(self, section_cfg: _SectionInterface, map_cfg: _SeedingConfigLike) -> None:
         self._section_cfg = section_cfg
         self._map_cfg = map_cfg
 
     @property
-    def config(self) -> "_SectionConfig":
+    def config(self) -> "_SectionInterface":
         """Get the section configuration.
 
         Returns
         -------
-        :class:`~hiten.algorithms.poincare.core.config._SectionConfig`
+        :class:`~hiten.algorithms.poincare.core.interfaces._SectionInterface`
             The section configuration containing section coordinate
             and plane coordinate information.
 

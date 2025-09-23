@@ -23,7 +23,8 @@ from hiten.algorithms.integrators.rk import (RK4_A, RK4_B, RK4_C, RK6_A, RK6_B,
                                              RK6_C, RK8_A, RK8_B, RK8_C)
 from hiten.algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
                                                      _integrate_symplectic)
-from hiten.algorithms.poincare.centermanifold.config import _get_section_config
+from hiten.algorithms.poincare.centermanifold.interfaces import \
+    _get_section_interface
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
 from hiten.algorithms.poincare.core.events import _SurfaceEvent
 from hiten.algorithms.poincare.utils import _hermite_scalar
@@ -451,7 +452,7 @@ class _CenterManifoldBackend(_ReturnMapBackend):
             max_expand=max_expand,
         )
 
-        self._section_cfg = _get_section_config(section_coord)
+        self._section_cfg = _get_section_interface(section_coord)
         self._h0 = h0
         self._H_blocks = dynsys.poly_H()
         self._clmo_table = dynsys.clmo_table
