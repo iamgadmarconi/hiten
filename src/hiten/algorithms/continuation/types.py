@@ -1,42 +1,22 @@
-"""
-Types for the continuation module.
-
-Defines the standardized Result and Problem objects used by continuation
-engines, following the shared architecture used across algorithms.
-"""
+"""Types for the continuation module."""
 
 from dataclasses import dataclass
-from typing import Callable, NamedTuple
+from typing import Callable, Tuple
 
 import numpy as np
 
 from hiten.algorithms.continuation.config import _ContinuationConfig
 
 
-class ContinuationResult(NamedTuple):
-    """Standardized result for a continuation run.
-    
-    Attributes
-    ----------
-    accepted_count : int
-        Whether the continuation converged.
-    rejected_count : int
-        Number of rejected solutions.
-    success_rate : float
-        Success rate of the continuation.
-    family : list[object]
-        List of accepted solutions.
-    parameter_values : tuple[np.ndarray, ...]
-        Tuple of parameter values for each solution in the family.
-    iterations : int
-        Total predict-correct iterations attempted.
-    """
+@dataclass(frozen=True, slots=True)
+class ContinuationResult:
+    """Standardized result for a continuation run."""
 
     accepted_count: int
     rejected_count: int
     success_rate: float
-    family: list[object]
-    parameter_values: tuple[np.ndarray, ...]
+    family: Tuple[object, ...]
+    parameter_values: Tuple[np.ndarray, ...]
     iterations: int
 
 

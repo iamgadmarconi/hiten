@@ -89,7 +89,7 @@ class _ConnectionResult:
 
     See Also
     --------
-    :class:`~hiten.algorithms.connections.types.ConnectionResults`
+    :class:`~hiten.algorithms.connections.types.Connections`
         Collection class for multiple connection results.
     :class:`~hiten.algorithms.connections.config._SearchConfig`
         Configuration that determines ballistic vs impulsive classification.
@@ -103,7 +103,22 @@ class _ConnectionResult:
     index_s: int
 
 
+@dataclass
 class ConnectionResults:
+    """Carrier for engine-level connection results.
+
+    Encapsulates the backend-produced connection records so engines can
+    return a standardized result object. Provides a helper to obtain the
+    user-facing collection wrapper.
+    """
+
+    connections: list[_ConnectionResult]
+
+    def to_results(self) -> "Connections":
+        return Connections(self.connections)
+
+
+class Connections:
     """Provide a collection of connection results with convenient access and formatting.
 
     This class provides a read-only sequence-like interface over a collection
@@ -134,7 +149,7 @@ class ConnectionResults:
     Examples
     --------
     >>> # Create results collection
-    >>> results = ConnectionResults(connection_list)
+    >>> results = Connections(connection_list)
     >>> print(f"Found {len(results)} connections")
     >>> 
     >>> # Access individual results
@@ -178,7 +193,7 @@ class ConnectionResults:
         n_ballistic = sum(1 for r in self._results if r.kind == "ballistic")
         n_impulsive = n_total - n_ballistic
         return (
-            f"ConnectionResults(n={n_total}, ballistic={n_ballistic}, impulsive={n_impulsive})"
+            f"Connections(n={n_total}, ballistic={n_ballistic}, impulsive={n_impulsive})"
         )
 
     def __str__(self) -> str:

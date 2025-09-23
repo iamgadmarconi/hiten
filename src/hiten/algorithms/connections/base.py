@@ -29,7 +29,7 @@ import numpy as np
 from hiten.algorithms.connections.backends import _ConnectionsBackend
 from hiten.algorithms.connections.config import _SearchConfig
 from hiten.algorithms.connections.engine import _ConnectionEngine
-from hiten.algorithms.connections.types import (ConnectionResults,
+from hiten.algorithms.connections.types import (Connections,
                                                 _ConnectionProblem,
                                                 _ConnectionResult)
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
@@ -121,7 +121,7 @@ class Connection:
     --------
     :class:`~hiten.algorithms.connections.engine._ConnectionEngine`
         Lower-level engine that performs the actual computation.
-    :class:`~hiten.algorithms.connections.types.ConnectionResults`
+    :class:`~hiten.algorithms.connections.types.Connections`
         Container for connection results with convenient access methods.
     """
     # User-provided single section configuration and direction
@@ -163,7 +163,7 @@ class Connection:
         engine = _ConnectionEngine(backend)
         return cls(section=section, direction=direction, search_cfg=search_cfg, _engine=engine)
 
-    def solve(self, source: Manifold, target: Manifold) -> ConnectionResults:
+    def solve(self, source: Manifold, target: Manifold) -> Connections:
         """Discover connections between two manifolds.
 
         This method finds ballistic and impulsive transfers between the source
@@ -212,21 +212,22 @@ class Connection:
             direction=self.direction,
             search=self.search_cfg,
         )
-        results = self._engine.solve(problem)
+        engine_result = self._engine.solve(problem)
+        records = engine_result.connections
         self._last_source = source
         self._last_target = target
-        self._last_results = results
-        logger.info(f"Found {len(results)} connection(s)")
-        return ConnectionResults(results)
+        self._last_results = records
+        logger.info(f"Found {len(records)} connection(s)")
+        return engine_result.to_results()
 
     @property
-    def results(self) -> ConnectionResults:
+    def results(self) -> Connections:
         """Access the latest connection results with convenient formatting.
 
         Returns
         -------
-        :class:`~hiten.algorithms.connections.types.ConnectionResults`
-        :class:`~hiten.algorithms.connections.types.ConnectionResults` 
+        :class:`~hiten.algorithms.connections.types.Connections`
+        :class:`~hiten.algorithms.connections.types.Connections` 
             A view over the latest results with friendly printing and
             convenient access methods. Returns an empty view if 
             :meth:`~hiten.algorithms.connections.base.Connection.solve`
@@ -236,7 +237,7 @@ class Connection:
         -----
         This property provides access to cached results from the most recent
         call to :meth:`~hiten.algorithms.connections.base.Connection.solve`. 
-        The :class:`~hiten.algorithms.connections.results.ConnectionResults` 
+        The :class:`~hiten.algorithms.connections.results.Connections` 
         wrapper provides enhanced formatting and filtering capabilities.
 
         Examples
@@ -245,7 +246,7 @@ class Connection:
         >>> print(connection.results)  # Pretty-printed summary
         >>> ballistic = connection.results.ballistic  # Filter by type
         """
-        return ConnectionResults(self._last_results)
+        return Connections(self._last_results)
 
     def __repr__(self) -> str:
         n = len(self._last_results or [])

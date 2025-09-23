@@ -110,7 +110,7 @@ class _OrbitContinuationEngine(_ContinuationEngine):
                     accepted_count=accepted_count,
                     rejected_count=rejected_count,
                     success_rate=success_rate,
-                    family=[seed],
+                    family=(seed,),
                     parameter_values=parameter_values,
                     iterations=iterations,
                 )
@@ -132,19 +132,22 @@ class _OrbitContinuationEngine(_ContinuationEngine):
         except Exception as exc:
             raise EngineError("Orbit continuation failed") from exc
 
-        # Package result
-        parameter_values = info.get("parameter_values", tuple())
-        accepted_count = int(info.get("accepted_count", len(family_repr)))
-        rejected_count = int(info.get("rejected_count", 0))
-        iterations = int(info.get("iterations", 0))
-        denom = max(accepted_count + rejected_count, 1)
-        success_rate = float(accepted_count) / float(denom)
-
-        return ContinuationResult(
-            accepted_count=accepted_count,
-            rejected_count=rejected_count,
-            success_rate=success_rate,
-            family=[seed] + accepted_orbits,
-            parameter_values=tuple(parameter_values),
-            iterations=iterations,
+        # Package result via interface
+        result = self._interface.package_result(
+            seed=seed,
+            accepted_orbits=accepted_orbits,
+            backend_family_repr=family_repr,
+            backend_info=info,
         )
+
+        try:
+            last_repr = family_repr[-1] if family_repr else seed_repr
+            self._backend.on_success(
+                np.asarray(last_repr, dtype=float),
+                iterations=int(iterations),
+                residual_norm=float(info.get("residual_norm", float("nan"))),
+            )
+        except Exception:
+            pass
+
+        return result

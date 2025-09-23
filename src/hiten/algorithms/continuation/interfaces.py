@@ -26,7 +26,10 @@ from typing import Callable, Sequence
 import numpy as np
 
 from hiten.algorithms.utils.types import SynodicState
-from hiten.algorithms.continuation.types import _ContinuationProblem
+from hiten.algorithms.continuation.types import (
+    ContinuationResult,
+    _ContinuationProblem,
+)
 
 
 class _PeriodicOrbitContinuationInterface:
@@ -111,4 +114,29 @@ class _PeriodicOrbitContinuationInterface:
             max_members=int(cfg.max_members),
             max_retries_per_step=int(cfg.max_retries_per_step),
             corrector_kwargs={},
+        )
+
+    @staticmethod
+    def package_result(
+        *,
+        seed: object,
+        accepted_orbits: list,
+        backend_family_repr: list[np.ndarray],
+        backend_info: dict,
+    ) -> ContinuationResult:
+        parameter_values = tuple(backend_info.get("parameter_values", tuple()))
+        accepted_count = int(backend_info.get("accepted_count", len(backend_family_repr)))
+        rejected_count = int(backend_info.get("rejected_count", 0))
+        iterations = int(backend_info.get("iterations", 0))
+        denom = max(accepted_count + rejected_count, 1)
+        success_rate = float(accepted_count) / float(denom)
+        family = tuple([seed, *accepted_orbits])
+
+        return ContinuationResult(
+            accepted_count=accepted_count,
+            rejected_count=rejected_count,
+            success_rate=success_rate,
+            family=family,
+            parameter_values=parameter_values,
+            iterations=iterations,
         )

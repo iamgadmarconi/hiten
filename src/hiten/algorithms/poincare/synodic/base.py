@@ -20,8 +20,10 @@ from hiten.algorithms.poincare.core.base import _ReturnMapBase, _Section
 from hiten.algorithms.poincare.synodic.backend import _SynodicDetectionBackend
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
 from hiten.algorithms.poincare.synodic.engine import _SynodicEngine
-from hiten.algorithms.poincare.synodic.interfaces import (_SynodicEngineConfig, 
-                                                          _SynodicSectionInterface)
+from hiten.algorithms.poincare.synodic.interfaces import (
+    _SynodicEngineConfig,
+    _SynodicSectionInterface,
+)
 from hiten.algorithms.poincare.synodic.strategies import _NoOpStrategy
 from hiten.algorithms.poincare.synodic.types import _SynodicMapProblem
 from hiten.system.orbits.base import PeriodicOrbit
@@ -46,8 +48,8 @@ class SynodicMap(_ReturnMapBase):
     ----------
     config : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
         The map configuration object.
-    _section_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicSectionInterface`
-        The section configuration derived from the map configuration.
+    _section_iface : :class:`~hiten.algorithms.poincare.synodic.interfaces._SynodicSectionInterface`
+        The section interface derived from the map configuration.
     _engine : :class:`~hiten.algorithms.poincare.synodic.engine._SynodicEngine`
         The engine that coordinates detection and refinement.
     _sections : dict[str, :class:`~hiten.algorithms.poincare.core.base._Section`]
@@ -72,7 +74,7 @@ class SynodicMap(_ReturnMapBase):
     def __init__(self, map_cfg: Optional[_SynodicMapConfig] = None, *, _engine: "_SynodicEngine | None" = None) -> None:
         cfg = map_cfg or _SynodicMapConfig()
         super().__init__(cfg)
-        self._section_cfg = self._build_section_config(cfg)
+        self._section_iface = self._build_section_interface(cfg)
         self._engine: "_SynodicEngine | None" = _engine
 
     @classmethod
@@ -130,7 +132,7 @@ class SynodicMap(_ReturnMapBase):
         """
         raise NotImplementedError("SynodicMap does not use a seeding strategy")
 
-    def _build_section_config(self, cfg: _SynodicMapConfig) -> _SynodicSectionInterface:
+    def _build_section_interface(self, cfg: _SynodicMapConfig) -> _SynodicSectionInterface:
         """Build section configuration from map configuration.
 
         Parameters
@@ -160,13 +162,7 @@ class SynodicMap(_ReturnMapBase):
         if cfg.section_normal is not None:
             normal = np.asarray(cfg.section_normal, dtype=float)
         else:
-            from hiten.algorithms.poincare.core.events import _PlaneEvent
-            if isinstance(cfg.section_axis, str):
-                idx = int(_PlaneEvent._IDX_MAP[cfg.section_axis.lower()])
-            else:
-                idx = int(cfg.section_axis)
-            normal = np.zeros(6, dtype=float)
-            normal[idx] = 1.0
+            normal = _SynodicSectionInterface.axis_normal(cfg.section_axis)
         return _SynodicSectionInterface.from_normal(normal=normal, offset=cfg.section_offset, plane_coords=cfg.plane_coords)
 
     def _build_engine(self) -> _SynodicEngine:
@@ -188,9 +184,9 @@ class SynodicMap(_ReturnMapBase):
         The engine coordinates the detection and refinement process
         for synodic Poincare sections.
         """
-        adapter = _SynodicEngineConfig(self.config)
-        backend = _SynodicDetectionBackend(section_cfg=self._section_cfg, map_cfg=adapter._cfg)
-        strategy = _NoOpStrategy(self._section_cfg, adapter)
+        adapter = _SynodicEngineConfig.from_config(self.config, self._section_iface)
+        backend = _SynodicDetectionBackend(section_cfg=adapter.section_interface, map_cfg=adapter.config)
+        strategy = _NoOpStrategy(adapter.section_interface, adapter)
         return _SynodicEngine(
             backend=backend,
             seed_strategy=strategy,
@@ -246,8 +242,7 @@ class SynodicMap(_ReturnMapBase):
         if self._engine is None:
             self._engine = self._build_engine()
 
-        problem = _SynodicMapProblem(
-            plane_coords=self._section_cfg.plane_coords,
+        problem = self._section_iface.create_problem(
             direction=direction,
             n_workers=int(self.config.n_workers or 0),
             trajectories=trajectories,
@@ -370,10 +365,10 @@ class SynodicMap(_ReturnMapBase):
         The key is designed to be stable across different runs and
         provides a canonical identifier for caching purposes.
         """
-        n = self._section_cfg.normal
+        n = self._section_iface.normal
         n_key = ",".join(f"{float(v):.12g}" for v in n.tolist())
-        c = float(self._section_cfg.offset)
-        i, j = self._section_cfg.plane_coords
+        c = float(self._section_iface.offset)
+        i, j = self._section_iface.plane_coords
         return f"synodic[{i},{j}]_c={c:.12g}_n=({n_key})"
 
     def plot(
@@ -435,15 +430,13 @@ class SynodicMap(_ReturnMapBase):
             pts = section.points
             lbls = section.labels
         else:
-            # Build projection using either stored plane points or full states
-            from hiten.algorithms.poincare.core.events import _PlaneEvent
             cols = []
             for ax in axes:
                 if ax in section.labels:
                     idx = section.labels.index(ax)
                     cols.append(section.points[:, idx])
                 else:
-                    idx = int(_PlaneEvent._IDX_MAP[ax.lower()])
+                    idx = self._section_iface.coordinate_index(ax)
                     cols.append(section.states[:, idx])
             pts = np.column_stack(cols)
             lbls = tuple(axes)

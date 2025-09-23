@@ -6,62 +6,52 @@ map computation for the synodic module. These interfaces handle the
 conversion between synodic map configuration and the engine interface.
 """
 
-from typing import Literal, Sequence, Tuple
+from dataclasses import dataclass
+from typing import Callable, Literal, Sequence, Tuple
 
 import numpy as np
 
 from hiten.algorithms.poincare.core.interfaces import _SectionInterface
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
 from hiten.algorithms.poincare.synodic.events import _AffinePlaneEvent
+from hiten.algorithms.poincare.synodic.types import (
+    SynodicMapResults,
+    _SynodicMapProblem,
+)
+from hiten.algorithms.utils.types import SynodicState
 
 
+@dataclass(frozen=True)
 class _SynodicEngineConfig:
-    """Configuration adapter for synodic Poincare engine.
+    """Configuration adapter for synodic Poincare engine."""
 
-    This adapter class provides the interface expected by the base
-    return map engine while adapting the synodic map configuration
-    to the required format. It handles the translation between
-    synodic-specific parameters and the generic engine interface.
+    dt: float
+    n_iter: int
+    n_workers: int | None
+    n_seeds: int
+    section_interface: "_SynodicSectionInterface"
+    config: _SynodicMapConfig
 
-    Parameters
-    ----------
-    cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
-        The synodic map configuration to adapt.
-
-    Attributes
-    ----------
-    _cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
-        The original synodic map configuration.
-    dt : float
-        Time step (set to 0.0 for synodic maps since they use precomputed trajectories).
-    n_iter : int
-        Number of iterations (set to 1 for synodic maps).
-    n_workers : int
-        Number of parallel workers for batch processing.
-    n_seeds : int
-        Number of seeds (set to 0 for synodic maps since they use precomputed trajectories).
-
-    Notes
-    -----
-    This adapter is necessary because synodic Poincare maps operate on
-    precomputed trajectories rather than integrating from initial conditions.
-    The adapter provides the interface expected by the base engine while
-    setting appropriate values for the synodic use case.
-
-    All time units are in nondimensional units unless otherwise specified.
-    """
-
-    def __init__(self, cfg: _SynodicMapConfig) -> None:
-        self._cfg = cfg
-        self.dt = 0.0
-        self.n_iter = 1
-        self.n_workers = cfg.n_workers
-        self.n_seeds = 0
+    @classmethod
+    def from_config(
+        cls,
+        cfg: _SynodicMapConfig,
+        section_iface: "_SynodicSectionInterface",
+    ) -> "_SynodicEngineConfig":
+        return cls(
+            dt=0.0,
+            n_iter=1,
+            n_workers=cfg.n_workers,
+            n_seeds=0,
+            section_interface=section_iface,
+            config=cfg,
+        )
 
     def __repr__(self) -> str:
         return f"_SynodicEngineConfig(n_workers={self.n_workers})"
 
 
+@dataclass(frozen=True)
 class _SynodicSectionInterface(_SectionInterface):
     """Section interface for synodic affine hyperplanes."""
 
@@ -69,6 +59,16 @@ class _SynodicSectionInterface(_SectionInterface):
     plane_coords: tuple[str, str]
     normal: np.ndarray
     offset: float
+
+    @staticmethod
+    def axis_normal(axis: str | int) -> np.ndarray:
+        normal = np.zeros(6, dtype=float)
+        if isinstance(axis, str):
+            idx = int(SynodicState[axis.upper()])
+        else:
+            idx = int(axis)
+        normal[idx] = 1.0
+        return normal
 
     @staticmethod
     def from_normal(normal: Sequence[float], offset: float, plane_coords: Tuple[str, str]) -> "_SynodicSectionInterface":
@@ -79,3 +79,31 @@ class _SynodicSectionInterface(_SectionInterface):
 
     def build_event(self, *, direction: Literal[1, -1, None] = None) -> _AffinePlaneEvent:
         return _AffinePlaneEvent(normal=self.normal, offset=self.offset, direction=direction)
+
+    def create_problem(
+        self,
+        *,
+        direction: Literal[1, -1, None] | None,
+        n_workers: int,
+        trajectories: Sequence[tuple[np.ndarray, np.ndarray]] | None,
+    ) -> _SynodicMapProblem:
+        return _SynodicMapProblem(
+            plane_coords=self.plane_coords,
+            direction=direction,
+            n_workers=n_workers,
+            trajectories=trajectories,
+        )
+
+    def create_results(
+        self,
+        points: np.ndarray,
+        states: np.ndarray,
+        times: np.ndarray | None,
+    ) -> SynodicMapResults:
+        return SynodicMapResults(points, states, self.plane_coords, times)
+
+    def coordinate_index(self, axis: str) -> int:
+        try:
+            return int(SynodicState[axis.upper()])
+        except KeyError as exc:
+            raise ValueError(f"Unsupported synodic axis '{axis}'") from exc

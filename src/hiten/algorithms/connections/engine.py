@@ -21,16 +21,13 @@ See Also
     Interface classes for manifold data access.
 """
 
-from typing import Callable, Literal
-
-import numpy as np
+from typing import Callable
 
 from hiten.algorithms.connections.backends import _ConnectionsBackend
-from hiten.algorithms.connections.config import _SearchConfig
 from hiten.algorithms.connections.interfaces import _ManifoldInterface
-from hiten.algorithms.connections.types import (_ConnectionProblem,
-                                                _ConnectionResult)
-from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
+from hiten.algorithms.connections.types import (ConnectionResults,
+                                                _ConnectionProblem)
+from hiten.algorithms.utils.exceptions import EngineError
 from hiten.system.manifold import Manifold
 
 
@@ -85,7 +82,7 @@ class _ConnectionEngine:
         self._backend = backend
         self._interface_factory = interface_factory or (lambda m: _ManifoldInterface(manifold=m))
 
-    def solve(self, problem: _ConnectionProblem) -> list[_ConnectionResult]:
+    def solve(self, problem: _ConnectionProblem) -> ConnectionResults:
         """Solve a connection discovery problem from a composed Problem.
 
         Parameters
@@ -95,17 +92,45 @@ class _ConnectionEngine:
 
         Returns
         -------
-        list[:class:`~hiten.algorithms.connections.types._ConnectionResult`]
-            The connection results.
+        :class:`~hiten.algorithms.connections.types.ConnectionResults`
+            Engine-level result containing the backend connection records.
         """
 
         src_if = self._interface_factory(problem.source)
         tgt_if = self._interface_factory(problem.target)
-        pu, Xu = src_if.to_numeric(problem.section, direction=problem.direction)
-        ps, Xs = tgt_if.to_numeric(problem.section, direction=problem.direction)
 
-        eps = float(getattr(problem.search, "eps2d", 1e-4)) if problem.search else 1e-4
-        dv_tol = float(getattr(problem.search, "delta_v_tol", 1e-3)) if problem.search else 1e-3
-        bal_tol = float(getattr(problem.search, "ballistic_tol", 1e-8)) if problem.search else 1e-8
+        try:
+            self._backend.on_start(problem)
+        except Exception:
+            pass
 
-        return self._backend.solve(pu, ps, Xu, Xs, eps=eps, dv_tol=dv_tol, bal_tol=bal_tol)
+        try:
+            pu, Xu = src_if.to_numeric(problem.section, direction=problem.direction)
+            ps, Xs = tgt_if.to_numeric(problem.section, direction=problem.direction)
+
+            eps = float(getattr(problem.search, "eps2d", 1e-4)) if problem.search else 1e-4
+            dv_tol = float(getattr(problem.search, "delta_v_tol", 1e-3)) if problem.search else 1e-3
+            bal_tol = float(getattr(problem.search, "ballistic_tol", 1e-8)) if problem.search else 1e-8
+
+            records = self._backend.solve(
+                pu,
+                ps,
+                Xu,
+                Xs,
+                eps=eps,
+                dv_tol=dv_tol,
+                bal_tol=bal_tol,
+            )
+        except Exception as exc:
+            try:
+                self._backend.on_failure(exc)
+            except Exception:
+                pass
+            raise EngineError("Connection engine failed") from exc
+
+        try:
+            self._backend.on_success(records)
+        except Exception:
+            pass
+
+        return ConnectionResults(records)

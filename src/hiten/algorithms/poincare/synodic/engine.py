@@ -68,6 +68,7 @@ class _SynodicEngine(_ReturnMapEngine):
         map_config: _SynodicEngineConfig,
     ) -> None:
         super().__init__(backend, seed_strategy, map_config)
+        self._section = map_config.section_interface
 
     def solve(self, problem: _SynodicMapProblem) -> SynodicMapResults:
         """Compute the synodic Poincare section from the composed problem."""
@@ -76,8 +77,7 @@ class _SynodicEngine(_ReturnMapEngine):
         if not trajectories:
             raise EngineError("No trajectories provided to synodic engine")
 
-        # Keep local aliases for clarity
-        plane_coords = self._backend.plane_coords
+        section_iface = self._section
         n_workers = self._n_workers
 
         # Delegate detection to backend passed in at construction
@@ -108,5 +108,4 @@ class _SynodicEngine(_ReturnMapEngine):
         sts_np = np.asarray(sts, dtype=float) if sts else np.empty((0, 6))
         ts_np = np.asarray(ts, dtype=float) if ts else None
 
-        labels = plane_coords
-        return SynodicMapResults(pts_np, sts_np, labels, ts_np)
+        return section_iface.create_results(pts_np, sts_np, ts_np)
