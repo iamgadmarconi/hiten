@@ -409,7 +409,7 @@ def _stability_indices(monodromy):
     --------
     :func:`~hiten.algorithms.dynamics.rtbp._compute_monodromy` : Provides
         monodromy matrix input
-    :func:`~hiten.algorithms.dynamics.utils.linalg._stability_indices` :
+    :func:`~hiten.algorithms.common.linalg._stability_indices` :
         More robust version
     """
     eigs = np.linalg.eigvals(monodromy)

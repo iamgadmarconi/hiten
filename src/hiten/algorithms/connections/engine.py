@@ -85,50 +85,24 @@ class _ConnectionEngine:
         self._backend = backend
         self._interface_factory = interface_factory or (lambda m: _ManifoldInterface(manifold=m))
 
-    def solve(self, source: Manifold, target: Manifold, section: "_SynodicMapConfig", direction: Literal[1, -1, None] | None, search: _SearchConfig | None) -> list[_ConnectionResult]:
-        """Solve a connection discovery problem (assemble problem internally).
-
-        This method assembles a problem specification internally for clarity and
-        orchestrates the connection discovery workflow, returning discovered
-        connections between the source and target manifolds.
+    def solve(self, problem: _ConnectionProblem) -> list[_ConnectionResult]:
+        """Solve a connection discovery problem from a composed Problem.
 
         Parameters
         ----------
-        source : :class:`~hiten.system.manifold.Manifold`
-            Source manifold (typically unstable).
-        target : :class:`~hiten.system.manifold.Manifold`
-            Target manifold (typically stable).
-        section : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
-            Synodic section configuration.
-        direction : {1, -1, None}
-            Crossing direction filter.
-        search : :class:`~hiten.algorithms.connections.config._SearchConfig` or None
-            Tolerances and geometric parameters.
+        problem : :class:`~hiten.algorithms.connections.types._ConnectionProblem`
+            The problem to solve.
 
         Returns
         -------
         list[:class:`~hiten.algorithms.connections.types._ConnectionResult`]
-            Discovered connections sorted by increasing Delta-V requirement.
+            The connection results.
         """
-        # Assemble a problem object for traceability (not passed to backend)
-        problem = _ConnectionProblem(
-            source=source,
-            target=target,
-            section=section,
-            direction=direction,
-            search=search,
-        )
 
-        # Build numerical inputs via interfaces
         src_if = self._interface_factory(problem.source)
         tgt_if = self._interface_factory(problem.target)
-        sec_u = src_if.to_section(problem.section, direction=problem.direction)
-        sec_s = tgt_if.to_section(problem.section, direction=problem.direction)
-
-        pu = np.asarray(sec_u.points, dtype=float)
-        ps = np.asarray(sec_s.points, dtype=float)
-        Xu = np.asarray(sec_u.states, dtype=float)
-        Xs = np.asarray(sec_s.states, dtype=float)
+        pu, Xu = src_if.to_numeric(problem.section, direction=problem.direction)
+        ps, Xs = tgt_if.to_numeric(problem.section, direction=problem.direction)
 
         eps = float(getattr(problem.search, "eps2d", 1e-4)) if problem.search else 1e-4
         dv_tol = float(getattr(problem.search, "delta_v_tol", 1e-3)) if problem.search else 1e-3

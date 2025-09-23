@@ -10,6 +10,8 @@ from typing import Callable, NamedTuple
 
 import numpy as np
 
+from hiten.algorithms.continuation.config import _ContinuationConfig
+
 
 class ContinuationResult(NamedTuple):
     """Standardized result for a continuation run.
@@ -75,3 +77,4 @@ class _ContinuationProblem:
     shrink_policy: Callable[[np.ndarray], np.ndarray] | None = None
     step_min: float = 1e-10
     step_max: float = 1.0
+    cfg: _ContinuationConfig | None = None

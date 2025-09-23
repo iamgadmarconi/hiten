@@ -1,16 +1,16 @@
 import numpy as np
 import pytest
 
-from hiten.algorithms.dynamics.utils.linalg import (eigenvalue_decomposition,
-                                                    _stability_indices)
+from hiten.algorithms.linalg.backend import _LinalgBackend
+from hiten.algorithms.linalg.types import _SystemType
 
 
 def test_eig_decomp():
     A = np.array([[ 5,  3,  5],
                 [ -3,  5,  5],
                 [ 2,   -3,  2]])
-    discrete = 1
-    sn, un, cn, Ws, Wu, Wc = eigenvalue_decomposition(A, discrete)
+    backend = _LinalgBackend(system_type=_SystemType.DISCRETE)
+    sn, un, cn, Ws, Wu, Wc = backend.eigenvalue_decomposition(A)
 
     assert Ws.shape[1] == len(sn), "Stable eigenvector count should match eigenvalue count"
     assert Wu.shape[1] == len(un), "Unstable eigenvector count should match eigenvalue count"
@@ -34,7 +34,8 @@ def test_eig_decomp():
 
 def test_stability_indices():
     M = np.eye(6)
-    nu, eigvals, eigvecs = _stability_indices(M)
+    backend = _LinalgBackend()
+    nu, eigvals, eigvecs = backend.stability_indices(M)
 
     assert np.allclose(eigvals, np.ones(6)), "Eigenvalues of identity matrix should all be 1"
     

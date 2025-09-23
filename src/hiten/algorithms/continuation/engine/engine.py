@@ -35,34 +35,16 @@ class _OrbitContinuationEngine(_ContinuationEngine):
         self._backend = backend
         self._interface = _PeriodicOrbitContinuationInterface() if interface is None else interface
 
-    def solve(self, seed: PeriodicOrbit, cfg: _OrbitContinuationConfig) -> ContinuationResult:
-        """
-        Solve the periodic orbit continuation problem.
-
-        This method solves the periodic orbit continuation problem using the backend and interface.
-        It uses a backend to solve the continuation problem and an interface to build the necessary closures.
-
-        Parameters
-        ----------
-        seed : :class:`~hiten.system.orbits.base.PeriodicOrbit`
-            The seed orbit to use for the continuation problem.
-        cfg : :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
-            The configuration to use for the continuation problem.
-
-        Returns
-        -------
-        :class:`~hiten.algorithms.continuation.types.ContinuationResult`
-            The result of the continuation problem.
-
-        Raises
-        ------
-        :class:`~hiten.algorithms.utils.exceptions.EngineError`
-            If the continuation problem fails to solve.
-        """
+    def solve(self, problem: _ContinuationProblem) -> ContinuationResult:
+        """Solve continuation using a composed Problem."""
         try:
+            seed = problem.initial_solution  # domain object
+            cfg = getattr(problem, "cfg", None)
+            if cfg is None:
+                raise EngineError("Continuation problem missing cfg reference to build closures")
+
             # Build closures from stateless interface
             parameter_getter = self._interface.build_parameter_getter(seed, cfg)
-            # Build instantiator and corrector closure here (engine responsibility)
             instantiator = self._interface.build_instantiator(seed)
             accepted_orbits: list[PeriodicOrbit] = []
 
@@ -106,17 +88,6 @@ class _OrbitContinuationEngine(_ContinuationEngine):
                 set_tangent = None
 
             seed_repr = self._interface.representation(seed)
-
-            # Construct a problem object (for clarity and traceability)
-            _ContinuationProblem(
-                initial_solution=seed,
-                parameter_getter=lambda obj: parameter_getter(self._interface.representation(obj)),
-                target=np.asarray(cfg.target, dtype=float),
-                step=np.asarray(cfg.step, dtype=float),
-                max_members=int(cfg.max_members),
-                max_retries_per_step=int(cfg.max_retries_per_step),
-                corrector_kwargs={},
-            )
 
             # Normalize step direction toward target interval (natural-parameter parity)
             current_params = np.asarray(parameter_getter(seed_repr), dtype=float)

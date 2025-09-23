@@ -27,6 +27,7 @@ from typing import Literal, Optional, Tuple
 
 import numpy as np
 
+from hiten.algorithms.dynamics.base import _DynamicalSystem
 from hiten.algorithms.dynamics.rtbp import _compute_stm
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
@@ -113,7 +114,6 @@ class InvariantTori:
         self._orbit = orbit
         self._monodromy = self.orbit.monodromy
         self._evals, self._evecs = np.linalg.eig(self._monodromy)
-        self._dynsys = self.system.dynsys
 
         # Internal caches populated lazily by _prepare().
         self._theta1: Optional[np.ndarray] = None  # angle along the periodic orbit
@@ -139,17 +139,27 @@ class InvariantTori:
     @property
     def libration_point(self) -> LibrationPoint:
         """Libration point anchoring the family."""
-        return self._orbit.libration_point
+        return self.orbit.libration_point
 
     @property
     def system(self) -> System:
         """Parent CR3BP system."""
-        return self._orbit.system
+        return self.libration_point.system
     
     @property
     def dynsys(self):
         """Dynamical system."""
-        return self._dynsys
+        return self.system.dynsys
+
+    @property
+    def var_dynsys(self) -> _DynamicalSystem:
+        """Variational equations system."""
+        return self.system.var_dynsys
+
+    @property
+    def jacobian_dynsys(self) -> _DynamicalSystem:
+        """Jacobian evaluation system."""
+        return self.system.jacobian_dynsys
     
     @property
     def grid(self) -> np.ndarray:
@@ -255,7 +265,7 @@ class InvariantTori:
         logger.info("Pre-computing STM samples for invariant-torus initialisation (n_theta1=%d)", n_theta1)
 
         x_series, times, _, PHI_flat = _compute_stm(
-            self.libration_point._var_eq_system,
+            self.var_dynsys,
             self.orbit.initial_state,
             self.orbit.period,
             steps=n_theta1,

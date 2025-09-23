@@ -157,40 +157,31 @@ class _SynodicEngine(_ReturnMapEngine):
         self.clear_cache()
         return self
 
-    def solve(self, *, recompute: bool = False) -> SynodicMapResults:
-        """Compute the synodic Poincare section from the set trajectories.
-
-        Notes
-        -----
-        This method conforms to the core engine interface. It delegates to
-        ``compute_section`` with caching enabled.
-        """
-        if self._section_cache is not None and not recompute:
+    def solve(self, problem: _SynodicMapProblem) -> SynodicMapResults:
+        """Compute the synodic Poincare section from the composed problem."""
+        self.set_trajectories(problem.trajectories or [], direction=problem.direction)
+        if self._section_cache is not None:
             return self._section_cache
 
         if self._trajectories is None:
             raise ValueError("No trajectories set. Call set_trajectories(...) first.")
 
-        # Assemble an immutable problem definition for clarity
-        problem = _SynodicMapProblem(
-            plane_coords=self._backend.plane_coords,
-            direction=self._direction,
-            n_workers=self._n_workers,
-            trajectories=self._trajectories,
-        )
+        # Keep local aliases for clarity
+        plane_coords = self._backend.plane_coords
+        n_workers = self._n_workers
 
         # Delegate detection to backend passed in at construction
-        if problem.n_workers <= 1 or len(problem.trajectories) <= 1:  # type: ignore[arg-type]
-            hits_lists = self._backend.detect_batch(problem.trajectories, direction=problem.direction)  # type: ignore[arg-type]
+        if n_workers <= 1 or len(self._trajectories) <= 1:  # type: ignore[arg-type]
+            hits_lists = self._backend.detect_batch(self._trajectories, direction=self._direction)  # type: ignore[arg-type]
         else:
-            chunks = np.array_split(np.arange(len(problem.trajectories)), problem.n_workers)  # type: ignore[arg-type]
+            chunks = np.array_split(np.arange(len(self._trajectories)), n_workers)  # type: ignore[arg-type]
 
             def _worker(idx_arr: np.ndarray):
-                subset = [problem.trajectories[i] for i in idx_arr.tolist()]  # type: ignore[index]
-                return self._backend.detect_batch(subset, direction=problem.direction)
+                subset = [self._trajectories[i] for i in idx_arr.tolist()]  # type: ignore[index]
+                return self._backend.detect_batch(subset, direction=self._direction)
 
             parts: list[list[list]] = []
-            with ThreadPoolExecutor(max_workers=problem.n_workers) as ex:
+            with ThreadPoolExecutor(max_workers=n_workers) as ex:
                 futs = [ex.submit(_worker, idxs) for idxs in chunks if len(idxs)]
                 for fut in as_completed(futs):
                     parts.append(fut.result())
@@ -207,6 +198,6 @@ class _SynodicEngine(_ReturnMapEngine):
         sts_np = np.asarray(sts, dtype=float) if sts else np.empty((0, 6))
         ts_np = np.asarray(ts, dtype=float) if ts else None
 
-        labels = problem.plane_coords
+        labels = plane_coords
         self._section_cache = SynodicMapResults(pts_np, sts_np, labels, ts_np)
         return self._section_cache

@@ -26,6 +26,7 @@ from typing import Callable, Sequence
 import numpy as np
 
 from hiten.algorithms.utils.types import SynodicState
+from hiten.algorithms.continuation.types import _ContinuationProblem
 
 
 class _PeriodicOrbitContinuationInterface:
@@ -98,3 +99,28 @@ class _PeriodicOrbitContinuationInterface:
             return last
 
         return _predictor
+
+    @staticmethod
+    def create_problem(seed, cfg) -> _ContinuationProblem:
+        representation = _PeriodicOrbitContinuationInterface.representation(seed)
+        parameter_getter = _PeriodicOrbitContinuationInterface.build_parameter_getter(seed, cfg)
+
+        # Instantiator and corrector closures as in engine usage
+        instantiator = _PeriodicOrbitContinuationInterface.build_instantiator(seed)
+
+        def _corrector(prediction):
+            orbit = instantiator(prediction)
+            x_corr, _halfT = orbit.correct(**(getattr(cfg, "extra_params", None) or {}))
+
+            res = float(np.linalg.norm(np.asarray(x_corr, dtype=float) - np.asarray(prediction, dtype=float)))
+            return np.asarray(x_corr, dtype=float), res, True
+
+        return _ContinuationProblem(
+            initial_solution=seed,
+            parameter_getter=lambda obj: parameter_getter(np.asarray(obj, dtype=float)),
+            target=np.asarray(cfg.target, dtype=float),
+            step=np.asarray(cfg.step, dtype=float),
+            max_members=int(cfg.max_members),
+            max_retries_per_step=int(cfg.max_retries_per_step),
+            corrector_kwargs={},
+        )

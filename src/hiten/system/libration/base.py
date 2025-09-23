@@ -3,25 +3,29 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING, Tuple
 
 import numpy as np
 
+from hiten.algorithms.common.energy import crtbp_energy, energy_to_jacobi
+from hiten.algorithms.dynamics.base import _DynamicalSystem
 from hiten.algorithms.dynamics.hamiltonian import _HamiltonianSystem
-from hiten.algorithms.dynamics.rtbp import _jacobian_crtbp
-from hiten.algorithms.dynamics.utils.energy import (crtbp_energy,
-                                                    energy_to_jacobi)
-from hiten.algorithms.dynamics.utils.linalg import eigenvalue_decomposition
+from hiten.algorithms.dynamics.rtbp import jacobian_dynsys, variational_dynsys
+from hiten.algorithms.linalg.base import StabilityProperties
+from hiten.algorithms.linalg.config import _EigenDecompositionConfig
+from hiten.algorithms.linalg.interfaces import _LibrationPointInterface
+from hiten.algorithms.linalg.types import _ProblemType, _SystemType
+from hiten.system.core import _HitenBase
+from hiten.utils.io.libration import (load_libration_point,
+                                      load_libration_point_inplace,
+                                      save_libration_point)
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
     from hiten.system.base import System
     from hiten.system.center import CenterManifold
     from hiten.system.orbits.base import PeriodicOrbit
-
-# Constants for stability analysis mode
-CONTINUOUS_SYSTEM = 0
-DISCRETE_SYSTEM = 1
 
 
 @dataclass(slots=True)
@@ -67,7 +71,7 @@ class LinearData:
     Cinv: np.ndarray  # inverse
 
 
-class LibrationPoint(ABC):
+class LibrationPoint(_HitenBase, ABC):
     """
     Abstract base class for Libration points of the CR3BP.
 
@@ -88,12 +92,12 @@ class LibrationPoint(ABC):
         Evaluated on first access and cached thereafter.
     energy : float
         Dimensionless mechanical energy evaluated via
-        :func:`~hiten.algorithms.dynamics.utils.energy.crtbp_energy`.
+        :func:`~hiten.algorithms.common.energy.crtbp_energy`.
     jacobi_constant : float
         Jacobi integral CJ = -2E corresponding to energy (dimensionless).
     is_stable : bool
         True if all eigenvalues returned by 
-        :meth:`~hiten.system.libration.base.LibrationPoint.analyze_stability` lie
+        :meth:`~hiten.system.libration.base.LibrationPoint.is_stable` lie
         inside the unit circle (discrete case) or have non-positive real
         part (continuous case).
     eigenvalues : tuple(numpy.ndarray, numpy.ndarray, numpy.ndarray)
@@ -128,18 +132,22 @@ class LibrationPoint(ABC):
     """
     
     def __init__(self, system: "System"):
-        self.system = system
-        self.mu = system.mu
-        self._position = None
-        self._stability_info = None
-        self._linear_data = None
-        self._energy = None
-        self._jacobi_constant = None
-        self._cache = {}
-        self._cm_registry = {}
+        super().__init__()
+        self._system = system
+        self._mu = system.mu
 
-        self._dynsys = system.dynsys
-        self._var_eq_system = system.var_dynsys
+        self._linear_data: LinearData | None = None
+        self._cm_registry = {}
+        self._stability_properties = StabilityProperties.with_default_engine(
+            interface=_LibrationPointInterface(
+                point=self,
+                A=None,
+                config=_EigenDecompositionConfig(
+                    problem_type=_ProblemType.EIGENVALUE_DECOMPOSITION,
+                    system_type=_SystemType.CONTINUOUS
+                )
+            )
+        )
     
     def __str__(self) -> str:
         return f"{type(self).__name__}(mu={self.mu:.6e})"
@@ -147,27 +155,59 @@ class LibrationPoint(ABC):
     def __repr__(self) -> str:
         return f"{type(self).__name__}(mu={self.mu:.6e})"
 
+    def cache_clear(self) -> None:
+        """
+        Clear all cached data, including computed properties.
+        
+        This method resets all cached properties to None, forcing them to be
+        recomputed on next access.
+        """
+        super().cache_clear()
+        self._stability_properties = None
+        self._linear_data = None
+
     @property
-    def dynsys(self):
+    def system(self) -> "System":
+        """The system this libration point belongs to."""
+        return self._system
+    
+    @property
+    def mu(self) -> float:
+        """The mass parameter of the system."""
+        return self._mu
+
+    @property
+    def dynsys(self) -> _DynamicalSystem:
         """Underlying vector field instance.
         
         Returns
         -------
-        :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
-            The dynamical system instance for this libration point.
+        :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
+            The underlying vector field instance.
         """
-        return self._dynsys
-    
+        return self.system.dynsys
+
     @property
-    def var_eq_system(self):
+    def var_dynsys(self) -> _DynamicalSystem:
         """Underlying variational equations system.
         
         Returns
         -------
-        :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
-            The variational equations system for this libration point.
+        :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
+            The underlying variational equations system.
         """
-        return self._var_eq_system
+        return self.system.var_dynsys
+
+    @property
+    def jacobian_dynsys(self) -> _DynamicalSystem:
+        """Underlying Jacobian evaluation system.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
+            The underlying Jacobian evaluation system.
+        """
+        return self.system.jacobian_dynsys
 
     @property
     @abstractmethod
@@ -191,9 +231,10 @@ class LibrationPoint(ABC):
         numpy.ndarray, shape (3,)
             3D vector [x, y, z] representing the position in nondimensional units.
         """
-        if self._position is None:
-            self._position = self._calculate_position()
-        return self._position
+        cached = self.cache_get(('position',))
+        if cached is None:
+            cached = self.cache_set(('position',), self._calculate_position())
+        return cached
     
     @property
     def energy(self) -> float:
@@ -205,9 +246,11 @@ class LibrationPoint(ABC):
         float
             The mechanical energy in nondimensional units.
         """
-        if self._energy is None:
-            self._energy = self._compute_energy()
-        return self._energy
+        cached = self.cache_get(('energy',))
+        if cached is None:
+            state = np.concatenate([self.position, np.array([0.0, 0.0, 0.0])])
+            cached = self.cache_set(('energy',), crtbp_energy(state, self.mu))
+        return cached
     
     @property
     def jacobi_constant(self) -> float:
@@ -219,9 +262,10 @@ class LibrationPoint(ABC):
         float
             The Jacobi constant in nondimensional units.
         """
-        if self._jacobi_constant is None:
-            self._jacobi_constant = self._compute_jacobi_constant()
-        return self._jacobi_constant
+        cached = self.cache_get(('jacobi_constant',))
+        if cached is None:
+            cached = self.cache_set(('jacobi_constant',), energy_to_jacobi(self.energy))
+        return cached
     
     @property
     def is_stable(self) -> bool:
@@ -237,14 +281,33 @@ class LibrationPoint(ABC):
         bool
             True if the libration point is linearly stable.
         """
-        if self._stability_info is None:
-            # The default mode for analyze_stability is CONTINUOUS_SYSTEM,
-            # which correctly classifies eigenvalues based on their real part
-            # for determining stability.
-            self.analyze_stability()
+        return self._stability_properties.is_stable
+
+    @property
+    def eigenvalues(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Get the eigenvalues of the linearized system at the Libration point.
         
-        unstable_eigenvalues = self._stability_info[1]
-        return len(unstable_eigenvalues) == 0
+        Returns
+        -------
+        tuple
+            (stable_eigenvalues, unstable_eigenvalues, center_eigenvalues)
+            Each array contains eigenvalues in nondimensional units.
+        """
+        return self._stability_properties.eigenvalues
+    
+    @property
+    def eigenvectors(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """
+        Get the eigenvectors of the linearized system at the Libration point.
+        
+        Returns
+        -------
+        tuple
+            (stable_eigenvectors, unstable_eigenvectors, center_eigenvectors)
+            Each array contains eigenvectors as column vectors.
+        """
+        return self._stability_properties.eigenvectors
 
     @property
     def linear_data(self) -> LinearData:
@@ -259,111 +322,6 @@ class LibrationPoint(ABC):
         if self._linear_data is None:
             self._linear_data = self._get_linear_data()
         return self._linear_data
-
-    @property
-    def eigenvalues(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Get the eigenvalues of the linearized system at the Libration point.
-        
-        Returns
-        -------
-        tuple
-            (stable_eigenvalues, unstable_eigenvalues, center_eigenvalues)
-            Each array contains eigenvalues in nondimensional units.
-        """
-        if self._stability_info is None:
-            self.analyze_stability() # Ensure stability is analyzed
-        sn, un, cn, _, _, _ = self._stability_info
-        return (sn, un, cn)
-    
-    @property
-    def eigenvectors(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Get the eigenvectors of the linearized system at the Libration point.
-        
-        Returns
-        -------
-        tuple
-            (stable_eigenvectors, unstable_eigenvectors, center_eigenvectors)
-            Each array contains eigenvectors as column vectors.
-        """
-        if self._stability_info is None:
-            self.analyze_stability() # Ensure stability is analyzed
-        _, _, _, Ws, Wu, Wc = self._stability_info
-        return (Ws, Wu, Wc)
-
-    def cache_get(self, key) -> any:
-        """
-        Get item from cache.
-        
-        Parameters
-        ----------
-        key : any
-            The cache key.
-            
-        Returns
-        -------
-        any
-            The cached value or None if not found.
-        """
-        return self._cache.get(key)
-    
-    def cache_set(self, key, value) -> any:
-        """
-        Set item in cache and return the value.
-        
-        Parameters
-        ----------
-        key : any
-            The cache key.
-        value : any
-            The value to cache.
-            
-        Returns
-        -------
-        any
-            The cached value.
-        """
-        self._cache[key] = value
-        return value
-    
-    def cache_clear(self) -> None:
-        """
-        Clear all cached data, including computed properties.
-        
-        This method resets all cached properties to None, forcing them to be
-        recomputed on next access.
-        """
-        self._cache.clear()
-        self._position = None
-        self._stability_info = None
-        self._linear_data = None
-        self._energy = None
-        self._jacobi_constant = None
-        logger.debug(f"Cache cleared for {type(self).__name__}")
-
-    def _compute_energy(self) -> float:
-        """
-        Compute the energy of the Libration point.
-        
-        Returns
-        -------
-        float
-            The mechanical energy in nondimensional units.
-        """
-        state = np.concatenate([self.position, [0, 0, 0]])
-        return crtbp_energy(state, self.mu)
-
-    def _compute_jacobi_constant(self) -> float:
-        """
-        Compute the Jacobi constant of the Libration point.
-        
-        Returns
-        -------
-        float
-            The Jacobi constant in nondimensional units.
-        """
-        return energy_to_jacobi(self.energy)
 
     @abstractmethod
     def _calculate_position(self) -> np.ndarray:
@@ -390,57 +348,6 @@ class LibrationPoint(ABC):
             The linear data containing eigenvalues and eigenvectors.
         """
         pass
-
-    def analyze_stability(self, discrete: int = CONTINUOUS_SYSTEM, delta: float = 1e-4) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """
-        Analyze the stability properties of the Libration point.
-        
-        Parameters
-        ----------
-        discrete : int, optional
-            Classification mode for eigenvalues:
-            - CONTINUOUS_SYSTEM (0): continuous-time system (classify by real part sign)
-            - DISCRETE_SYSTEM (1): discrete-time system (classify by magnitude relative to 1)
-        delta : float, optional
-            Tolerance for classification (dimensionless).
-            
-        Returns
-        -------
-        tuple
-            (sn, un, cn, Ws, Wu, Wc) containing:
-            - sn: stable eigenvalues (nondimensional units)
-            - un: unstable eigenvalues (nondimensional units)
-            - cn: center eigenvalues (nondimensional units)
-            - Ws: eigenvectors spanning stable subspace
-            - Wu: eigenvectors spanning unstable subspace
-            - Wc: eigenvectors spanning center subspace
-        """
-        # Check cache first
-        cache_key = ('stability_analysis', discrete, delta)
-        cached = self.cache_get(cache_key)
-        if cached is not None:
-            logger.debug(f"Using cached stability analysis for {type(self).__name__}")
-            self._stability_info = cached  # Update instance variable for property access
-            return cached
-        
-        mode_str = "Continuous" if discrete == CONTINUOUS_SYSTEM else "Discrete"
-        logger.info(f"Analyzing stability for {type(self).__name__} (mu={self.mu}), mode={mode_str}, delta={delta}.")
-        pos = self.position
-        A = _jacobian_crtbp(pos[0], pos[1], pos[2], self.mu)
-        
-        logger.debug(f"Jacobian calculated at position {pos}:\n{A}")
-
-        # Perform eigenvalue decomposition and classification
-        stability_info = eigenvalue_decomposition(A, discrete, delta)
-        
-        # Cache and store in instance variable
-        self._stability_info = stability_info
-        self.cache_set(cache_key, stability_info)
-        
-        sn, un, cn, _, _, _ = stability_info
-        logger.info(f"Stability analysis complete: {len(sn)} stable, {len(un)} unstable, {len(cn)} center eigenvalues.")
-        
-        return stability_info
 
     def get_center_manifold(self, degree: int) -> "CenterManifold":
         """
@@ -482,8 +389,8 @@ class LibrationPoint(ABC):
             'normalized', 'center_manifold_complex', 'center_manifold_real'.
             Each value is a list of coefficient arrays.
         """
-        cm = self.get_center_manifold(max_deg)
-        cm.compute()  # ensures all representations are cached
+        center_manifold = self.get_center_manifold(max_deg)
+        center_manifold.compute()
 
         reprs = {}
         for label in (
@@ -494,7 +401,7 @@ class LibrationPoint(ABC):
             'center_manifold_complex',
             'center_manifold_real',
         ):
-            data = cm.cache_get(('hamiltonian', max_deg, label))
+            data = center_manifold.cache_get(('hamiltonian', max_deg, label))
             if data is not None:
                 reprs[label] = [arr.copy() for arr in data]
         return reprs
@@ -515,8 +422,8 @@ class LibrationPoint(ABC):
         :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem`
             The Hamiltonian system instance.
         """
-        cm = self.get_center_manifold(max_deg)
-        return cm._get_hamsys(form)
+        center_manifold = self.get_center_manifold(max_deg)
+        return center_manifold._get_hamsys(form)
 
     def generating_functions(self, max_deg: int):
         """
@@ -532,9 +439,9 @@ class LibrationPoint(ABC):
         list
             List of generating function coefficient arrays.
         """
-        cm = self.get_center_manifold(max_deg)
-        cm.compute()  # ensure they exist
-        data = cm.cache_get(('generating_functions', max_deg))
+        center_manifold = self.get_center_manifold(max_deg)
+        center_manifold.compute()
+        data = center_manifold.cache_get(('generating_functions', max_deg))
         return [] if data is None else [g.copy() for g in data]
 
     @abstractmethod
@@ -563,11 +470,14 @@ class LibrationPoint(ABC):
         dict
             The object state dictionary with unpickleable objects removed.
         """
-        state = self.__dict__.copy()
-        # Remove the compiled RHS system which cannot be pickled
+        state = super().__getstate__()
+
         if '_var_eq_system' in state:
             state['_var_eq_system'] = None
-        # Remove potential circular/self references to center manifolds
+
+        if '_jacobian_system' in state:
+            state['_jacobian_system'] = None
+
         if '_cm_registry' in state:
             state['_cm_registry'] = {}
         return state
@@ -584,14 +494,14 @@ class LibrationPoint(ABC):
         state : dict
             The object state dictionary from pickling.
         """
-        # Restore the plain attributes
-        self.__dict__.update(state)
-        # Recreate the compiled variational dynamics system on demand
-        from hiten.algorithms.dynamics.rtbp import variational_dynsys
+
+        super().__setstate__(state)
         self._var_eq_system = variational_dynsys(
             self.mu, name=f"CR3BP Variational Equations for {self.__class__.__name__}")
 
-        # Ensure _cm_registry exists after unpickling
+        self._jacobian_system = jacobian_dynsys(
+            self.mu, name=f"CR3BP Jacobian for {self.__class__.__name__}")
+
         if not hasattr(self, '_cm_registry') or self._cm_registry is None:
             self._cm_registry = {}
 
@@ -628,14 +538,9 @@ class LibrationPoint(ABC):
         from hiten.system.orbits.lyapunov import LyapunovOrbit
         from hiten.system.orbits.vertical import VerticalOrbit
 
-        # Direct class provided
         if isinstance(family, type) and issubclass(family, PeriodicOrbit):
             orbit_cls = family
             return orbit_cls(self, **kwargs)
-
-        # String identifier provided
-        if not isinstance(family, str):
-            raise TypeError("family must be either a string identifier or a PeriodicOrbit subclass")
 
         key = family.lower().strip()
         mapping: dict[str, type[PeriodicOrbit]] = {
@@ -654,3 +559,15 @@ class LibrationPoint(ABC):
 
         orbit_cls = mapping[key]
         return orbit_cls(self, **kwargs)
+
+    def save(self, file_path: str | Path, **kwargs) -> None:
+        save_libration_point(self, Path(file_path), **kwargs)
+
+    @classmethod
+    def load(cls, file_path: str | Path, **kwargs) -> "LibrationPoint":
+        system: System = kwargs.get("system")
+        return load_libration_point(Path(file_path), system)
+
+    def load_inplace(self, file_path: str | Path) -> "LibrationPoint":
+        load_libration_point_inplace(self, Path(file_path))
+        return self

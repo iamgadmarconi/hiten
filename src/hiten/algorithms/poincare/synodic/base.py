@@ -23,6 +23,7 @@ from hiten.algorithms.poincare.synodic.config import (_get_section_config,
                                                       _SynodicSectionConfig)
 from hiten.algorithms.poincare.synodic.engine import (
     _SynodicEngine, _SynodicEngineInterface)
+from hiten.algorithms.poincare.synodic.types import _SynodicMapProblem
 from hiten.algorithms.poincare.synodic.strategies import _NoOpStrategy
 from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.plots import plot_poincare_map
@@ -233,7 +234,13 @@ class SynodicMap(_ReturnMapBase):
 
         All time units are in nondimensional units.
         """
-        sec = self._engine.set_trajectories(trajectories, direction=direction).solve(recompute=recompute)
+        problem = _SynodicMapProblem(
+            plane_coords=self._section_cfg.plane_coords,
+            direction=direction,
+            n_workers=int(self.config.n_workers or 0),
+            trajectories=trajectories,
+        )
+        sec = self._engine.solve(problem)
 
         key = self._section_key()
         self._sections[key] = sec

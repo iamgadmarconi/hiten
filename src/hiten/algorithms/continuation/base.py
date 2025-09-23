@@ -4,7 +4,7 @@ These facades assemble the engine, backend, and interface using DI and
 provide a simple API to run continuation with domain-friendly inputs.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Sequence
 
 import numpy as np
@@ -78,6 +78,8 @@ class StateParameter:
         )
 
         engine = self.engine
-        return engine.solve(seed, cfg)
+        problem = _PeriodicOrbitContinuationInterface.create_problem(seed, cfg)
+        problem = replace(problem, cfg=cfg)
+        return engine.solve(problem)
 
 

@@ -23,17 +23,20 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
-from hiten.algorithms.corrector.config import _LineSearchConfig, _OrbitCorrectionConfig
+from hiten.algorithms.common.energy import crtbp_energy, energy_to_jacobi
+from hiten.algorithms.corrector.backends.newton import _NewtonBackend
+from hiten.algorithms.corrector.config import (_LineSearchConfig,
+                                               _OrbitCorrectionConfig)
+from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
+from hiten.algorithms.corrector.interfaces import \
+    _PeriodicOrbitCorrectorInterface
 from hiten.algorithms.corrector.stepping import (make_armijo_stepper,
                                                  make_plain_stepper)
-from hiten.algorithms.corrector.backends.newton import _NewtonBackend
-from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
-from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
-from hiten.algorithms.dynamics.base import _propagate_dynsys
+from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import (_compute_monodromy, _compute_stm,
                                             _stability_indices)
-from hiten.algorithms.dynamics.utils.energy import (crtbp_energy,
-                                                    energy_to_jacobi)
+from hiten.algorithms.utils.types import (ReferenceFrame, SynodicStateVector,
+                                          Trajectory)
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
 from hiten.utils.io.common import _ensure_dir
@@ -43,7 +46,6 @@ from hiten.utils.io.orbits import (load_periodic_orbit,
 from hiten.utils.log_config import logger
 from hiten.utils.plots import (animate_trajectories, plot_inertial_frame,
                                plot_rotating_frame)
-from hiten.algorithms.utils.types import Trajectory, SynodicStateVector, ReferenceFrame
 
 if TYPE_CHECKING:
     from hiten.algorithms.continuation.config import _OrbitContinuationConfig
@@ -163,6 +165,29 @@ class PeriodicOrbit(ABC):
         return self._libration_point
 
     @property
+    def system(self) -> System:
+        """The system this orbit belongs to.
+        
+        Returns
+        -------
+        :class:`~hiten.system.base.System`
+            The system this orbit belongs to.
+        """
+        return self._system
+
+    @property
+    def mu(self) -> float:
+        """The mass ratio of the system.
+        
+        Returns
+        -------
+        float
+            The mass ratio of the system.
+        """
+        return self._mu
+
+
+    @property
     def initial_state(self) -> npt.NDArray[np.float64]:
         """
         Get the initial state vector of the orbit.
@@ -218,6 +243,39 @@ class PeriodicOrbit(ABC):
         if self._stability_info is None:
             logger.warning("Stability information not computed. Call compute_stability() first.")
         return self._stability_info
+
+    @property
+    def dynsys(self) -> _DynamicalSystem:
+        """Underlying vector field instance.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
+            The underlying vector field instance.
+        """
+        return self.system.dynsys
+
+    @property
+    def var_dynsys(self) -> _DynamicalSystem:
+        """Underlying variational equations system.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
+            The underlying variational equations system.
+        """
+        return self.system.var_dynsys
+
+    @property
+    def jacobian_dynsys(self) -> _DynamicalSystem:
+        """Underlying Jacobian evaluation system.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
+            The underlying Jacobian evaluation system.
+        """
+        return self.system.jacobian_dynsys
 
     @property
     @abstractmethod
@@ -362,7 +420,7 @@ class PeriodicOrbit(ABC):
         if self.period is None:
             raise ValueError("Period must be set before computing monodromy")
         
-        Phi = _compute_monodromy(self.libration_point._var_eq_system, self.initial_state, self.period)
+        Phi = _compute_monodromy(self.var_dynsys, self.initial_state, self.period)
         return Phi
 
     @property
@@ -420,6 +478,7 @@ class PeriodicOrbit(ABC):
         if not self._correction_overrides:
             return cfg
         from dataclasses import replace as _dc_replace
+
         # Apply only attributes that exist on the config
         valid = {k: v for k, v in self._correction_overrides.items() if hasattr(cfg, k)}
         return _dc_replace(cfg, **valid)
@@ -506,7 +565,10 @@ class PeriodicOrbit(ABC):
         interface = _PeriodicOrbitCorrectorInterface()
         engine = _OrbitCorrectionEngine(backend=backend, interface=interface)
 
-        result, half_period = engine.solve(self, cfg)
+        # Compose problem and call problem-based engine API, then compute half-period via shim
+        problem = interface.create_problem(self, cfg)
+        result, _ = engine.solve(problem)
+        half_period = interface.compute_half_period(self, result.x_corrected, cfg, getattr(cfg, "forward", 1))
         interface.apply_results_to_orbit(self, corrected_state=result.x_corrected, half_period=half_period)
         return result.x_corrected, half_period
 

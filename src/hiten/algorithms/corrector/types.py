@@ -5,9 +5,12 @@ This module provides the types for the corrector module.
 """
 
 from dataclasses import dataclass
-from typing import Callable, NamedTuple, Optional
+from typing import Any, Callable, NamedTuple, Optional
 
 import numpy as np
+
+from hiten.algorithms.corrector.config import (_BaseCorrectionConfig,
+                                               _OrbitCorrectionConfig)
 
 #: Type alias for residual function signatures.
 #:
@@ -113,8 +116,7 @@ class CorrectionResult(NamedTuple):
     residual_norm: float
     iterations: int
 
-
-@dataclass(frozen=True)
+@dataclass
 class _CorrectionProblem:
     """Defines the inputs for a backend correction run.
 
@@ -136,12 +138,28 @@ class _CorrectionProblem:
         Optional cap on infinity-norm of Newton step.
     fd_step : float
         Finite-difference step if Jacobian is not provided.
+    forward : int
+        Integration direction (1 for forward, -1 for backward).
+    cfg : :class:`~hiten.algorithms.corrector.config._BaseCorrectionConfig`
+        Configuration for the correction.
     """
     initial_guess: np.ndarray
     residual_fn: ResidualFn
-    jacobian_fn: Optional[JacobianFn] = None
-    norm_fn: Optional[NormFn] = None
-    tol: float = 1e-10
-    max_attempts: int = 25
-    max_delta: float | None = 1e-2
-    fd_step: float = 1e-8
+    jacobian_fn: Optional[JacobianFn]
+    norm_fn: Optional[NormFn]
+    cfg: _BaseCorrectionConfig
+
+
+@dataclass
+class _OrbitCorrectionProblem(_CorrectionProblem):
+    """Defines the inputs for a backend orbit correction run.
+    
+    Attributes
+    ----------
+    orbit: Any
+        Orbit to be corrected.
+    cfg: _OrbitCorrectionConfig
+        Configuration for the correction.
+    """
+    orbit: Any
+    cfg: _OrbitCorrectionConfig

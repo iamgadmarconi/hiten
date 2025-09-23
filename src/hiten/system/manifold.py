@@ -27,11 +27,15 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from hiten.algorithms.dynamics.base import _propagate_dynsys
+from hiten.algorithms.common.energy import _max_rel_energy_error
+from hiten.algorithms.common.mani import _totime
+from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_stm
-from hiten.algorithms.dynamics.utils.energy import _max_rel_energy_error
-from hiten.algorithms.dynamics.utils.linalg import (_totime,
-                                                    eigenvalue_decomposition)
+from hiten.algorithms.linalg.base import StabilityProperties
+from hiten.algorithms.linalg.config import _EigenDecompositionConfig
+from hiten.algorithms.linalg.interfaces import _EigenDecompositionInterface
+from hiten.algorithms.linalg.types import _ProblemType, _SystemType
+from hiten.system.base import System
 from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.io.common import _ensure_dir
 from hiten.utils.io.manifold import load_manifold, save_manifold
@@ -135,15 +139,40 @@ class Manifold:
         ):
         self._generating_orbit = generating_orbit
         self._libration_point = self._generating_orbit.libration_point
+        self._system = self._generating_orbit.system
+        self._mu = self._system.mu
+
         self._stable = 1 if stable else -1
         self._direction = 1 if direction == "positive" else -1
-        self._mu = self._generating_orbit.system.mu
 
         self._forward = -self._stable
+
         self._successes = 0
         self._attempts = 0
         self._last_compute_params: dict = None
         self._manifold_result: ManifoldResult = None
+
+        
+        try:
+            self.xx, self.tt, self.phi_T, self.PHI = _compute_stm(
+                self.var_dynsys,
+                self.generating_orbit.initial_state,
+                self.generating_orbit.period,
+                steps=2000,
+                forward=self.forward,
+            )
+        except Exception as e:
+            logger.error(f"Failed to propagate STM once: {e}")
+            raise
+        self._stability_properties: StabilityProperties = StabilityProperties.with_default_engine(
+            interface=_EigenDecompositionInterface(
+                A=self.phi_T, 
+                config=_EigenDecompositionConfig(
+                    problem_type=_ProblemType.ALL,
+                    system_type=_SystemType.DISCRETE
+                )
+            )
+        )
 
     @property
     def generating_orbit(self) -> PeriodicOrbit:
@@ -168,6 +197,28 @@ class Manifold:
         return self._libration_point
 
     @property
+    def system(self) -> System:
+        """The system this manifold belongs to.
+        
+        Returns
+        -------
+        :class:`~hiten.system.base.System`
+            The system this manifold belongs to.
+        """
+        return self._system
+
+    @property
+    def mu(self) -> float:
+        """Mass ratio of the system.
+        
+        Returns
+        -------
+        float
+            The mass ratio (dimensionless).
+        """
+        return self._mu
+
+    @property
     def stable(self) -> int:
         """Encoded stability: 1 for stable, -1 for unstable.
         
@@ -190,15 +241,81 @@ class Manifold:
         return self._direction
 
     @property
-    def mu(self) -> float:
-        """Mass ratio of the underlying CRTBP system.
+    def forward(self) -> int:
+        """Encoded forward direction: 1 for forward, -1 for backward.
         
         Returns
         -------
-        float
-            Mass ratio mu = m2 / (m1 + m2) (dimensionless).
+        int
+            Encoded forward direction: 1 for forward, -1 for backward.
         """
-        return self._mu
+        return self._forward
+
+    @property
+    def successes(self) -> int:
+        """Number of successful computations.
+        
+        Returns
+        -------
+        int
+            Number of successful computations.
+        """
+        return self._successes
+    
+    @property
+    def attempts(self) -> int:
+        """Number of attempts.
+        
+        Returns
+        -------
+        int
+            Number of attempts.
+        """
+        return self._attempts
+
+    @property
+    def dynsys(self) -> _DynamicalSystem:
+        """Dynamical system of the manifold.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
+            The dynamical system of the manifold.
+        """
+        return self.system.dynsys
+
+    @property
+    def var_dynsys(self) -> _DynamicalSystem:
+        """Variational equations system of the manifold.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
+            The variational equations system of the manifold.
+        """
+        return self.system.var_dynsys
+
+    @property
+    def jacobian_dynsys(self) -> _DynamicalSystem:
+        """Jacobian evaluation system of the manifold.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
+            The Jacobian evaluation system of the manifold.
+        """
+        return self.system.jacobian_dynsys
+
+    @property
+    def stability_properties(self) -> StabilityProperties:
+        """Stability properties of the manifold.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.linalg.base.StabilityProperties`
+            The stability properties of the manifold.
+        """
+        return self._stability_properties
 
     @property
     def manifold_result(self) -> ManifoldResult:
@@ -212,38 +329,10 @@ class Manifold:
         return self._manifold_result
 
     def __str__(self):
-        return f"Manifold(stable={self._stable}, direction={self._direction}) of {self._generating_orbit}"
+        return f"Manifold(stable={self.stable}, direction={self.direction}) of {self.generating_orbit}"
     
     def __repr__(self):
         return self.__str__()
-
-    def _get_real_eigenvectors(self, vectors: np.ndarray, values: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Return eigenvalues/eigenvectors with zero imaginary part (vectorised).
-        
-        Parameters
-        ----------
-        vectors : numpy.ndarray
-            Eigenvectors matrix.
-        values : numpy.ndarray
-            Eigenvalues array.
-            
-        Returns
-        -------
-        tuple of numpy.ndarray
-            Tuple of (real_eigenvalues, real_eigenvectors).
-        """
-        mask = np.isreal(values)
-
-        # Eigenvalues that are real within numerical precision
-        real_vals_arr = values[mask].astype(np.complex128)
-
-        # Corresponding eigenvectors (may be none)
-        if np.any(mask):
-            real_vecs_arr = vectors[:, mask]
-        else:
-            real_vecs_arr = np.zeros((vectors.shape[0], 0), dtype=np.complex128)
-
-        return real_vals_arr, real_vecs_arr
 
     def _compute_manifold_section(
         self,
@@ -296,7 +385,7 @@ class Manifold:
         phi_frac_flat = PHI[mfrac_idx, :36]
         phi_frac = phi_frac_flat.reshape((6, 6))
 
-        MAN = self._direction * (phi_frac @ eigvec)
+        MAN = self.direction * (phi_frac @ eigvec)
 
         disp_magnitude = np.linalg.norm(MAN[0:3])
 
@@ -384,9 +473,9 @@ class Manifold:
         kwargs.setdefault("energy_tol", 1e-6)
         kwargs.setdefault("safe_distance", 2.0)
 
-        dist_m = self._generating_orbit.system.distance * 1e3
-        pr_nd = self._generating_orbit.system.primary.radius / dist_m
-        sr_nd = self._generating_orbit.system.secondary.radius / dist_m
+        dist_m = self.generating_orbit.system.distance * 1e3
+        pr_nd = self.generating_orbit.system.primary.radius / dist_m
+        sr_nd = self.generating_orbit.system.secondary.radius / dist_m
         safe_r1 = kwargs["safe_distance"] * pr_nd
         safe_r2 = kwargs["safe_distance"] * sr_nd
         current_params = {
@@ -407,29 +496,14 @@ class Manifold:
         self._successes = 0
         self._attempts = 0
 
-        initial_state = self._generating_orbit._initial_state
-
-        try:
-            xx, tt, phi_T, PHI = _compute_stm(
-                self._libration_point._var_eq_system,
-                initial_state,
-                self._generating_orbit.period,
-                steps=2000,
-                forward=self._forward,
-                method=method,
-                order=order,
-            )
-        except Exception as e:
-            logger.error(f"Failed to propagate STM once: {e}")
-            raise
-
-        sn, un, _, Ws, Wu, _ = eigenvalue_decomposition(phi_T, discrete=1)
+        sn, un, _ = self._stability_properties.eigenvalues
+        Ws, Wu, _ = self._stability_properties.eigenvectors
 
         snreal_vals, snreal_vecs = self._get_real_eigenvectors(Ws, sn)
         unreal_vals, unreal_vecs = self._get_real_eigenvectors(Wu, un)
 
         col_idx = NN - 1  # convert 1-based to 0-based
-        if self._stable == 1:
+        if self.stable == 1:
             if snreal_vecs.shape[1] <= col_idx or col_idx < 0:
                 raise ValueError(
                     f"Requested stable eigenvector {NN} not available. "
@@ -468,12 +542,12 @@ class Manifold:
             try:
 
                 x0W = self._compute_manifold_section(
-                    period=self._generating_orbit.period,
+                    period=self.generating_orbit.period,
                     fraction=fraction,
                     displacement=displacement,
-                    xx=xx,
-                    tt=tt,
-                    PHI=PHI,
+                    xx=self.xx,
+                    tt=self.tt,
+                    PHI=self.PHI,
                     eigvec=eigvec,
                 ).astype(np.float64)
                 tf = integration_fraction * 2 * np.pi
@@ -481,11 +555,11 @@ class Manifold:
                 steps = max(int(abs(tf) / dt) + 1, 100)
 
                 sol = _propagate_dynsys(
-                    dynsys=self._generating_orbit.system._dynsys,
+                    dynsys=self.dynsys,
                     state0=x0W,
                     t0=0.0,
                     tf=tf,
-                    forward=self._forward,
+                    forward=self.forward,
                     steps=steps,
                     method=method,
                     order=order,
@@ -497,8 +571,8 @@ class Manifold:
                 y = states[:, 1]
                 z = states[:, 2]
 
-                r1 = np.sqrt((x + self._mu) ** 2 + y ** 2 + z ** 2)
-                r2 = np.sqrt((x - 1 + self._mu) ** 2 + y ** 2 + z ** 2)
+                r1 = np.sqrt((x + self.mu) ** 2 + y ** 2 + z ** 2)
+                r2 = np.sqrt((x - 1 + self.mu) ** 2 + y ** 2 + z ** 2)
 
                 if (r1.min() < safe_r1) or (r2.min() < safe_r2):
                     logger.debug(
@@ -506,7 +580,7 @@ class Manifold:
                     )
                     continue
 
-                max_energy_err = _max_rel_energy_error(states, self._mu)
+                max_energy_err = _max_rel_energy_error(states, self.mu)
 
                 if max_energy_err > kwargs["energy_tol"]:
                     logger.warning(
@@ -526,10 +600,38 @@ class Manifold:
                 continue
 
         self._manifold_result = ManifoldResult(
-            ysos, dysos, states_list, times_list, self._successes, self._attempts
+            ysos, dysos, states_list, times_list, self.successes, self.attempts
         )
         self._last_compute_params = current_params
         return self._manifold_result
+
+    def _get_real_eigenvectors(self, vectors: np.ndarray, values: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+        """Return eigenvalues/eigenvectors with zero imaginary part (vectorised).
+        
+        Parameters
+        ----------
+        vectors : numpy.ndarray
+            Eigenvectors matrix.
+        values : numpy.ndarray
+            Eigenvalues array.
+            
+        Returns
+        -------
+        tuple of numpy.ndarray
+            Tuple of (real_eigenvalues, real_eigenvectors).
+        """
+        mask = np.isreal(values)
+
+        # Eigenvalues that are real within numerical precision
+        real_vals_arr = values[mask].astype(np.complex128)
+
+        # Corresponding eigenvectors (may be none)
+        if np.any(mask):
+            real_vecs_arr = vectors[:, mask]
+        else:
+            real_vecs_arr = np.zeros((vectors.shape[0], 0), dtype=np.complex128)
+
+        return real_vals_arr, real_vecs_arr
 
     def plot(self, dark_mode: bool = True, save: bool = False, filepath: str = 'manifold.svg', **kwargs):
         """
@@ -564,8 +666,8 @@ class Manifold:
         return plot_manifold(
             states_list=self._manifold_result.states_list,
             times_list=self._manifold_result.times_list,
-            bodies=[self._generating_orbit._system.primary, self._generating_orbit._system.secondary],
-            system_distance=self._generating_orbit._system.distance,
+            bodies=[self.system.primary, self.system.secondary],
+            system_distance=self.system.distance,
             dark_mode=dark_mode,
             save=save,
             filepath=filepath,

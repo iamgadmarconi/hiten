@@ -24,6 +24,8 @@ See Also
 from dataclasses import dataclass
 from typing import Literal
 
+import numpy as np
+
 from hiten.algorithms.poincare.core.base import _Section
 from hiten.algorithms.poincare.synodic.base import SynodicMap
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
@@ -171,3 +173,13 @@ class _ManifoldInterface:
         syn = SynodicMap(cfg)
         return syn.from_manifold(self.manifold, direction=direction)
 
+    def to_numeric(self, config: _SynodicMapConfig | None = None, *, direction: Literal[1, -1, None] | None = None):
+        """Return (points2d, states6d) arrays for this manifold on a section.
+
+        Parameters
+        ----------
+        config : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`, optional
+            Configuration for the synodic section geometry and detection settings.
+        """
+        sec = self.to_section(config=config, direction=direction)
+        return (np.asarray(sec.points, dtype=float), np.asarray(sec.states, dtype=float))

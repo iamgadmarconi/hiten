@@ -17,11 +17,13 @@ blocks, CLMO tables, energy) are passed explicitly per call.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from typing import Callable, Optional, Tuple
 
 import numpy as np
 
 from hiten.algorithms.poincare.centermanifold.config import _get_section_config
+from hiten.algorithms.poincare.centermanifold.types import _CenterManifoldMapProblem
 from hiten.algorithms.polynomial.operations import _polynomial_evaluate
 from hiten.algorithms.utils.exceptions import BackendError, ConvergenceError
 from hiten.algorithms.utils.rootfinding import solve_bracketed_brent
@@ -196,3 +198,17 @@ class _CenterManifoldInterface:
         other_vals[idx] = float(missing_val)
 
         return cfg.build_state((float(plane[0]), float(plane[1])), tuple(other_vals))
+
+    @staticmethod
+    def create_problem(section_coord: str, energy: float, *, dt: float, n_iter: int, n_workers: int | None) -> _CenterManifoldMapProblem:
+        default_workers = os.cpu_count() or 1
+        resolved_workers = (
+            default_workers if (n_workers is None or int(n_workers) <= 0) else int(n_workers)
+        )
+        return _CenterManifoldMapProblem(
+            section_coord=section_coord,
+            energy=float(energy),
+            dt=float(dt),
+            n_iter=int(n_iter),
+            n_workers=resolved_workers,
+        )

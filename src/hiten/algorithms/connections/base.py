@@ -30,6 +30,7 @@ from hiten.algorithms.connections.backends import _ConnectionsBackend
 from hiten.algorithms.connections.config import _SearchConfig
 from hiten.algorithms.connections.engine import _ConnectionEngine
 from hiten.algorithms.connections.types import (ConnectionResults,
+                                                _ConnectionProblem,
                                                 _ConnectionResult)
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
 from hiten.algorithms.utils.exceptions import EngineError
@@ -201,16 +202,17 @@ class Connection:
         >>> results = connection.solve(unstable_manifold, stable_manifold)
         >>> print(results)
         """
-        logger.info(f"Searching for connection between {source} and {target}..")
         if self._engine is None:
             raise EngineError("Connection requires an injected _ConnectionEngine; provide via constructor.")
-        results = self._engine.solve(
+
+        problem = _ConnectionProblem(
             source=source,
             target=target,
             section=self.section,
             direction=self.direction,
             search=self.search_cfg,
         )
+        results = self._engine.solve(problem)
         self._last_source = source
         self._last_target = target
         self._last_results = results

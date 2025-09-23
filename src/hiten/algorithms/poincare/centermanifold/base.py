@@ -278,10 +278,14 @@ class CenterManifoldMap(_ReturnMapBase):
             map_config=tmp_cfg,
             interface=_CenterManifoldInterface(),
         )
-
-        results: CenterManifoldMapResults = engine.solve(
-            dt=dt, n_iter=n_iter, n_workers=n_workers
+        problem = _CenterManifoldInterface.create_problem(
+            section_coord=key,
+            energy=self._energy,
+            dt=float(dt if dt is not None else tmp_cfg.dt),
+            n_iter=int(n_iter if n_iter is not None else tmp_cfg.n_iter),
+            n_workers=(int(n_workers) if n_workers is not None else tmp_cfg.n_workers),
         )
+        results: CenterManifoldMapResults = engine.solve(problem)
 
         # Do not pollute section cache when overrides are used, but expose via _section
         self._section = results
@@ -587,7 +591,14 @@ class CenterManifoldMap(_ReturnMapBase):
                 self._engines[key] = self._build_engine(backend, strategy)
 
         engine = self._engines[key]
-        results: CenterManifoldMapResults = engine.solve()
+        problem = _CenterManifoldInterface.create_problem(
+            section_coord=key,
+            energy=self._energy,
+            dt=float(self.config.dt),
+            n_iter=int(self.config.n_iter),
+            n_workers=self.config.n_workers,
+        )
+        results: CenterManifoldMapResults = engine.solve(problem)
         self._section = results
         self._sections[key] = results
 
