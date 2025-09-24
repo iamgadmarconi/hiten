@@ -21,8 +21,10 @@ Advanced users can compose components explicitly:
 >>> from hiten.algorithms.corrector.stepping import make_armijo_stepper
 >>> from hiten.algorithms.corrector.config import _LineSearchConfig
 >>> backend = _NewtonBackend(stepper_factory=make_armijo_stepper(_LineSearchConfig()))
->>> engine = _OrbitCorrectionEngine(backend=backend, interface=_PeriodicOrbitCorrectorInterface())
->>> x_corr, result, t_half = engine.solve(orbit, orbit._correction_config)
+>>> interface = _PeriodicOrbitCorrectorInterface(orbit)
+>>> engine = _OrbitCorrectionEngine(backend=backend, interface=interface)
+>>> problem = interface.create_problem(config=orbit._correction_config)
+>>> result = engine.solve(problem)
 
 ------------
 

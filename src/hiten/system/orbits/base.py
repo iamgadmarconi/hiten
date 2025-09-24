@@ -562,13 +562,12 @@ class PeriodicOrbit(ABC):
             stepper_factory = make_armijo_stepper(cfg.line_search_config)
 
         backend = _NewtonBackend(stepper_factory=stepper_factory)
-        interface = _PeriodicOrbitCorrectorInterface()
+        interface = _PeriodicOrbitCorrectorInterface(self)
         engine = _OrbitCorrectionEngine(backend=backend, interface=interface)
 
         # Compose problem and delegate to engine which returns the full result
-        problem = interface.create_problem(self, cfg)
+        problem = interface.create_problem(config=cfg, stepper_factory=stepper_factory)
         result = engine.solve(problem)
-        interface.apply_results_to_orbit(self, corrected_state=result.x_corrected, half_period=result.half_period)
         return result.x_corrected, result.half_period
 
     def propagate(

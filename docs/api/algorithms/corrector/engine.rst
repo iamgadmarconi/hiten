@@ -30,7 +30,7 @@ _OrbitCorrectionEngine()
 
 The :class:`_OrbitCorrectionEngine` class provides the main engine for orchestrating periodic orbit correction.
 
-.. autoclass:: _OrbitCorrectionEngine()
+.. autoclass:: _OrbitCorrectionEngine
    :members:
    :undoc-members:
    :exclude-members: __init__

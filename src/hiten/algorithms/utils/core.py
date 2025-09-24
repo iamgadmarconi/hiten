@@ -166,6 +166,14 @@ class _HitenBaseResults(ABC):
     __slots__ = ()
 
 
+class _HitenBaseConfig(ABC):
+    """Marker base class for configuration payloads produced by interfaces."""
+
+    __slots__ = ()
+
+class _HitenBaseBackend(ABC):
+    ...
+
 class _HitenBaseInterface(Generic[DomainT, ConfigT, ProblemT, ResultT, OutputsT], ABC):
     """Shared contract for translating between domain objects and backends."""
 
@@ -186,32 +194,24 @@ class _HitenBaseInterface(Generic[DomainT, ConfigT, ProblemT, ResultT, OutputsT]
 
     def from_domain(self, *, config: ConfigT) -> BackendCall:
         """Convenience helper to build backend inputs directly from config."""
-
         problem = self.create_problem(config=config)
         return self.to_backend_inputs(problem)
 
     def to_domain(self, outputs: OutputsT, *, problem: ProblemT) -> Any:
         """Optional hook to mutate or derive domain artefacts from outputs."""
-
         return None
 
     @abstractmethod
     def to_results(self, outputs: OutputsT, *, problem: ProblemT) -> ResultT:
         """Package backend outputs into user-facing result objects."""
 
-    def on_start(self, problem: ProblemT) -> None:  # pragma: no cover - optional
+    def on_start(self, problem: ProblemT) -> None:
         return None
 
-    def on_success(
-        self,
-        outputs: OutputsT,
-        *,
-        problem: ProblemT,
-        domain_payload: Any = None,
-    ) -> None:  # pragma: no cover - optional
+    def on_success(self, outputs: OutputsT, *, problem: ProblemT, domain_payload: Any = None) -> None:
         return None
 
-    def on_failure(self, exc: Exception, *, problem: ProblemT) -> None:  # pragma: no cover - optional
+    def on_failure(self, exc: Exception, *, problem: ProblemT) -> None:
         return None
 
 
@@ -223,49 +223,44 @@ class _HitenBaseEngine(Generic[ProblemT, ResultT, OutputsT], ABC):
         *,
         backend: Any,
         interface: _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT],
+        backend_method: str = "solve",
     ) -> None:
         self._backend = backend
+        self._backend_method = backend_method
         self._interface = interface
 
     def solve(self, problem: ProblemT) -> ResultT:
         """Execute the standard engine orchestration for ``problem``."""
 
-        call = self._interface.to_backend_inputs(problem)
-        self._interface.on_start(problem)
-        self._before_backend(problem, call)
+        interface = self._get_interface(problem)
+        call = interface.to_backend_inputs(problem)
+        interface.on_start(problem)
+        self._before_backend(problem, call, interface)
 
         try:
             outputs = self._invoke_backend(call)
-        except Exception as exc:  # pragma: no cover - passthrough behaviour
-            self._interface.on_failure(exc, problem=problem)
-            self._handle_backend_failure(exc, problem=problem, call=call)
 
-        domain_payload = self._interface.to_domain(outputs, problem=problem)
-        self._interface.on_success(outputs, problem=problem, domain_payload=domain_payload)
-        self._after_backend_success(outputs, problem=problem, domain_payload=domain_payload)
-        return self._interface.to_results(outputs, problem=problem)
+        except Exception as exc:
+            interface.on_failure(exc, problem=problem)
+            self._handle_backend_failure(exc, problem=problem, call=call, interface=interface)
 
-    def _before_backend(self, problem: ProblemT, call: BackendCall) -> None:
+        domain_payload = interface.to_domain(outputs, problem=problem)
+        interface.on_success(outputs, problem=problem, domain_payload=domain_payload)
+        self._after_backend_success(outputs, problem=problem, domain_payload=domain_payload, interface=interface)
+        return interface.to_results(outputs, problem=problem)
+
+    def _get_interface(self, problem: ProblemT) -> _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT]:
+        return self._interface
+
+    def _before_backend(self, problem: ProblemT, call: BackendCall, interface: _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT]) -> None:
         return None
 
-    def _after_backend_success(
-        self,
-        outputs: OutputsT,
-        *,
-        problem: ProblemT,
-        domain_payload: Any,
-    ) -> None:
+    def _after_backend_success(self, outputs: OutputsT, *, problem: ProblemT, domain_payload: Any, interface: _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT]) -> None:
         return None
 
-    def _handle_backend_failure(
-        self,
-        exc: Exception,
-        *,
-        problem: ProblemT,
-        call: BackendCall,
-    ) -> None:
+    def _handle_backend_failure(self, exc: Exception, *, problem: ProblemT, call: BackendCall, interface: _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT]) -> None:
         raise exc
 
     def _invoke_backend(self, call: BackendCall) -> OutputsT:
-        backend_callable = getattr(self._backend, "solve")
+        backend_callable = getattr(self._backend, self._backend_method)
         return backend_callable(*call.args, **call.kwargs)

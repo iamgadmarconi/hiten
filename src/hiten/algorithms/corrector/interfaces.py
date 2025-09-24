@@ -6,186 +6,180 @@ This module provides interface classes that adapt generic correction algorithms
  expected by the correction algorithms.
 """
 
-from typing import TYPE_CHECKING, Callable, Tuple
+from typing import TYPE_CHECKING, Any, Callable
 
 import numpy as np
 
+from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
 from hiten.algorithms.corrector.types import (JacobianFn, NormFn,
                                               StepperFactory,
+                                              OrbitCorrectionResult,
                                               _OrbitCorrectionProblem)
 from hiten.algorithms.dynamics.rtbp import _compute_stm
+from hiten.algorithms.utils.core import BackendCall, _HitenBaseInterface
 
 if TYPE_CHECKING:
     from hiten.system.orbits.base import PeriodicOrbit
 
 
-class _PeriodicOrbitCorrectorInterface:
-    """Stateless adapter for periodic orbit correction.
-    
-    Produces residual and Jacobian closures and provides helpers to translate
-    between parameter vectors and full states. Contains no mutable state.
-    """
+class _PeriodicOrbitCorrectorInterface(
+    _HitenBaseInterface[
+        "PeriodicOrbit",
+        _OrbitCorrectionConfig,
+        _OrbitCorrectionProblem,
+        OrbitCorrectionResult,
+        tuple[np.ndarray, dict[str, Any]],
+    ]
+):
+    """Adapter wiring periodic orbits to the Newton correction backend."""
 
-    def initial_guess(self, orbit: "PeriodicOrbit", cfg) -> np.ndarray:
-        control_indices = list(cfg.control_indices)
-        return orbit.initial_state[control_indices].copy()
+    def __init__(self, orbit: "PeriodicOrbit") -> None:
+        super().__init__(orbit)
+        self._problem: _OrbitCorrectionProblem | None = None
 
-    def norm_fn(self) -> NormFn:
+    def create_problem(self, *, config: _OrbitCorrectionConfig, stepper_factory: StepperFactory | None = None) -> _OrbitCorrectionProblem:
+        forward = getattr(config, "forward", 1)
+        residual_fn = self._residual_fn(config, forward)
+        jacobian_fn = self._jacobian_fn(config, forward)
+        norm_fn = self._norm_fn()
+        initial_guess = self._initial_guess(config)
+        problem = _OrbitCorrectionProblem(
+            initial_guess=initial_guess,
+            residual_fn=residual_fn,
+            jacobian_fn=jacobian_fn,
+            norm_fn=norm_fn,
+            stepper_factory=stepper_factory,
+            orbit=self.domain_object,
+            cfg=config,
+        )
+        self._problem = problem
+        return problem
+
+    def to_backend_inputs(self, problem: _OrbitCorrectionProblem) -> BackendCall:
+        return BackendCall(
+            args=(problem.initial_guess,),
+            kwargs={
+                "residual_fn": problem.residual_fn,
+                "jacobian_fn": problem.jacobian_fn,
+                "norm_fn": problem.norm_fn,
+                "stepper_factory": problem.stepper_factory,
+                "tol": problem.cfg.tol,
+                "max_attempts": problem.cfg.max_attempts,
+                "max_delta": problem.cfg.max_delta,
+                "fd_step": problem.cfg.fd_step,
+            },
+        )
+
+    def to_domain(self, outputs: tuple[np.ndarray, dict[str, Any]], *, problem: _OrbitCorrectionProblem) -> dict[str, Any]:
+        x_corr, info = outputs
+        control_indices = list(problem.cfg.control_indices)
+        base_state = self.domain_object.initial_state.copy()
+        x_full = self._to_full_state(base_state, control_indices, x_corr)
+        half_period = self._half_period(x_full, problem.cfg)
+        self.domain_object._reset()
+        self.domain_object._initial_state = x_full
+        self.domain_object._period = 2.0 * half_period
+        info = dict(info)
+        info["half_period"] = half_period
+        info["x_full"] = x_full
+        return info
+
+    def to_results(self, outputs: tuple[np.ndarray, dict[str, Any]], *, problem: _OrbitCorrectionProblem) -> OrbitCorrectionResult:
+        x_corr, info = outputs
+        info = dict(info)
+        iterations = int(info.get("iterations", 0))
+        residual_norm = float(info.get("residual_norm", np.nan))
+        half_period = float(info.get("half_period", np.nan))
+        x_full = info.get("x_full")
+        if x_full is None:
+            control_indices = list(problem.cfg.control_indices)
+            base_state = self.domain_object.initial_state.copy()
+            x_full = self._to_full_state(base_state, control_indices, x_corr)
+        return OrbitCorrectionResult(
+            converged=True,
+            x_corrected=x_full,
+            residual_norm=residual_norm,
+            iterations=iterations,
+            half_period=half_period,
+        )
+
+    def _initial_guess(self, cfg: _OrbitCorrectionConfig) -> np.ndarray:
+        indices = list(cfg.control_indices)
+        return self.domain_object.initial_state[indices].copy()
+
+    @staticmethod
+    def _norm_fn() -> NormFn:
         return lambda r: float(np.linalg.norm(r, ord=np.inf))
 
-    def residual_fn(self, orbit: "PeriodicOrbit", cfg, forward: int) -> Callable[[np.ndarray], np.ndarray]:
-        base_state = orbit.initial_state.copy()
+    def _residual_fn(self, cfg: _OrbitCorrectionConfig, forward: int) -> Callable[[np.ndarray], np.ndarray]:
+        base_state = self.domain_object.initial_state.copy()
         control_indices = list(cfg.control_indices)
         residual_indices = list(cfg.residual_indices)
         target_vec = np.asarray(cfg.target, dtype=float)
 
-        def _residual(p_vec: np.ndarray) -> np.ndarray:
-            x_full = self._to_full_state(base_state, control_indices, p_vec)
-            t_event, X_event = self._evaluate_event(orbit, x_full, cfg, forward)
-            return X_event[residual_indices] - target_vec
+        def _fn(params: np.ndarray) -> np.ndarray:
+            x_full = self._to_full_state(base_state, control_indices, params)
+            _, x_event = self._evaluate_event(x_full, cfg, forward)
+            return x_event[residual_indices] - target_vec
 
-        return _residual
+        return _fn
 
-    def jacobian_fn(self, orbit: "PeriodicOrbit", cfg, forward: int) -> JacobianFn | None:
-        finite_difference = bool(getattr(cfg, "finite_difference", False))
-        if finite_difference:
+    def _jacobian_fn(self, cfg: _OrbitCorrectionConfig, forward: int) -> JacobianFn | None:
+        if bool(getattr(cfg, "finite_difference", False)):
             return None
 
-        base_state = orbit.initial_state.copy()
+        base_state = self.domain_object.initial_state.copy()
         control_indices = list(cfg.control_indices)
         residual_indices = list(cfg.residual_indices)
 
-        def _jac(p_vec: np.ndarray) -> np.ndarray:
-            x_full = self._to_full_state(base_state, control_indices, p_vec)
-            t_event, X_event = self._evaluate_event(orbit, x_full, cfg, forward)
+        def _fn(params: np.ndarray) -> np.ndarray:
+            x_full = self._to_full_state(base_state, control_indices, params)
+            t_event, x_event = self._evaluate_event(x_full, cfg, forward)
             _, _, Phi_flat, _ = _compute_stm(
-                orbit.var_dynsys,
+                self.domain_object.var_dynsys,
                 x_full,
                 t_event,
                 steps=cfg.steps,
                 method=cfg.method,
                 order=cfg.order,
             )
-            J_red = Phi_flat[np.ix_(residual_indices, control_indices)]  # type: ignore[index]
+            jac = Phi_flat[np.ix_(residual_indices, control_indices)]  # type: ignore[index]
             if cfg.extra_jacobian is not None:
-                J_red -= cfg.extra_jacobian(X_event, Phi_flat)  # type: ignore[arg-type]
-            return J_red
+                jac -= cfg.extra_jacobian(x_event, Phi_flat)  # type: ignore[arg-type]
+            return jac
 
-        return _jac
+        return _fn
 
-    def create_problem(self, orbit: "PeriodicOrbit", cfg, *, stepper_factory: StepperFactory | None = None) -> _OrbitCorrectionProblem:
-        """Compose a backend correction problem from a domain orbit and config.
-
-        Parameters
-        ----------
-        orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
-            Orbit to be corrected.
-        cfg : :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
-            Configuration for the correction.
-
-        Returns
-        -------
-        :class:`~hiten.algorithms.corrector.types._OrbitCorrectionProblem`
-            Immutable problem object containing initial guess, closures, and numeric params.
-        """
+    def _half_period(self, corrected_state: np.ndarray, cfg: _OrbitCorrectionConfig) -> float:
         forward = getattr(cfg, "forward", 1)
-        residual_fn = self.residual_fn(orbit, cfg, forward)
-        jacobian_fn = self.jacobian_fn(orbit, cfg, forward)
-
-        norm_fn = self.norm_fn()
-        p0 = self.initial_guess(orbit, cfg)
-        return _OrbitCorrectionProblem(
-            initial_guess=p0,
-            residual_fn=residual_fn,
-            jacobian_fn=jacobian_fn,
-            norm_fn=norm_fn,
-            stepper_factory=stepper_factory,
-            orbit=orbit,
-            cfg=cfg,
-        )
-
-    def compute_half_period(self, orbit: "PeriodicOrbit", corrected_state: np.ndarray, cfg, forward: int) -> float:
-        """Compute the half-period of a periodic orbit.
-        
-        Parameters
-        ----------
-        orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
-            Orbit to be corrected.
-        corrected_state : np.ndarray
-            Corrected state vector.
-        cfg : :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
-            Configuration for the correction.
-        forward : int
-            Forward integration direction.
-        """
         try:
             t_final, _ = cfg.event_func(
-                dynsys=orbit.system.dynsys,
+                dynsys=self.domain_object.system.dynsys,
                 x0=corrected_state,
                 forward=forward,
             )
             return float(t_final)
-
         except Exception:
-            t_fallback, _ = self._evaluate_event(orbit, corrected_state, cfg, forward)
-            return float(t_fallback)
-
-    def apply_results_to_orbit(self, orbit: "PeriodicOrbit", *, corrected_state: np.ndarray, half_period: float) -> None:
-        """Apply the results of the correction to the orbit.
-        
-        Parameters
-        ----------
-        orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
-            Orbit to be corrected.
-        corrected_state : np.ndarray
-            Corrected state vector.
-        half_period : float
-            Half-period of the orbit.
-        """
-        orbit._reset()
-        orbit._initial_state = corrected_state
-        orbit._period = 2.0 * half_period
+            try:
+                fallback, _ = self._evaluate_event(corrected_state, cfg, forward)
+                return float(fallback)
+            except Exception as exc:
+                raise ValueError("Failed to evaluate orbit event for corrected state") from exc
 
     @staticmethod
-    def _to_full_state(base_state: np.ndarray, control_indices: list[int], p_vec: np.ndarray) -> np.ndarray:
-        """
-        Convert a parameter vector to a full state vector.
-        
-        Parameters
-        ----------
-        base_state : np.ndarray
-            Base state vector.
-        control_indices : list[int]
-            Indices of the control variables.
-        p_vec : np.ndarray
-            Parameter vector.
-
-        Returns
-        -------
-        np.ndarray
-            Full state vector.
-        """
+    def _to_full_state(base_state: np.ndarray, control_indices: list[int], params: np.ndarray) -> np.ndarray:
         x_full = base_state.copy()
-        x_full[control_indices] = p_vec
+        x_full[control_indices] = params
         return x_full
 
-    @staticmethod
-    def _evaluate_event(orbit: "PeriodicOrbit", x_full: np.ndarray, cfg, forward: int) -> Tuple[float, np.ndarray]:
-        """Evaluate the event function.
-        
-        Parameters
-        ----------
-        orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
-            Orbit to be corrected.
-        x_full : np.ndarray
-            Full state vector.
-        cfg : :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
-            Configuration for the correction.
-        forward : int
-            Forward integration direction.
-        """
+    def _evaluate_event(
+        self,
+        full_state: np.ndarray,
+        cfg: _OrbitCorrectionConfig,
+        forward: int,
+    ) -> tuple[float, np.ndarray]:
         return cfg.event_func(
-            dynsys=orbit.system.dynsys,
-            x0=x_full,
+            dynsys=self.domain_object.system.dynsys,
+            x0=full_state,
             forward=forward,
         )

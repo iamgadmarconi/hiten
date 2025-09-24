@@ -50,12 +50,9 @@ The most common correction method uses Newton's method with analytical or numeri
 
    # Create a Newton corrector using the engine pattern
    backend = _NewtonBackend(stepper_factory=make_plain_stepper())
-   interface = _PeriodicOrbitCorrectorInterface()
+   interface = _PeriodicOrbitCorrectorInterface(orbit)
    newton_corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
-
-   # Correct an orbit using the engine
-   halo = l1.create_orbit("halo", amplitude_z=0.2, zenith="southern")
-   result, half_period = newton_corrector.solve(halo, halo._correction_config)
+   problem = interface.create_problem(config=cfg)
    
    print(f"Correction successful: {halo.period is not None}")
    print(f"Final period: {halo.period}")
@@ -79,8 +76,9 @@ For orbits where analytical Jacobians are difficult to compute, finite differenc
    from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
    
    backend = _NewtonBackend(stepper_factory=make_plain_stepper())
-   interface = _PeriodicOrbitCorrectorInterface()
+   interface = _PeriodicOrbitCorrectorInterface(orbit)
    corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
+   problem = interface.create_problem(config=orbit._correction_config)
    
    # Create configuration with finite difference settings
    config = _OrbitCorrectionConfig(
@@ -109,7 +107,7 @@ Convergence Criteria
    from hiten.algorithms.corrector.config import _LineSearchConfig, _OrbitCorrectionConfig
    
    backend = _NewtonBackend(stepper_factory=make_armijo_stepper(_LineSearchConfig()))
-   interface = _PeriodicOrbitCorrectorInterface()
+   interface = _PeriodicOrbitCorrectorInterface(orbit)
    corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
    
    # High accuracy configuration
@@ -172,7 +170,7 @@ For more advanced control over the line search behavior, you can use the `_LineS
    from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
    
    backend = _NewtonBackend(stepper_factory=make_armijo_stepper(line_search_config))
-   interface = _PeriodicOrbitCorrectorInterface()
+   interface = _PeriodicOrbitCorrectorInterface(orbit)
    corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
    
    config = _OrbitCorrectionConfig(max_attempts=30)
@@ -200,7 +198,7 @@ The simplest way to create a custom corrector is to use the existing `_NewtonBac
    backend = _NewtonBackend(
        stepper_factory=make_armijo_stepper(_LineSearchConfig(armijo_c=1e-4, alpha_reduction=0.5))
    )
-   interface = _PeriodicOrbitCorrectorInterface()
+   interface = _PeriodicOrbitCorrectorInterface(orbit)
    custom_corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
    
    halo = l1.create_orbit("halo", amplitude_z=0.2, zenith="southern")
@@ -224,7 +222,7 @@ For more control, you can create a custom corrector engine with specialized beha
        def __init__(self, custom_tol=1e-8, **kwargs):
            # Create backend with custom stepper
            backend = _NewtonBackend(stepper_factory=make_armijo_stepper(_LineSearchConfig()))
-           interface = _PeriodicOrbitCorrectorInterface()
+           interface = _PeriodicOrbitCorrectorInterface(orbit)
            super().__init__(backend=backend, interface=interface, **kwargs)
            self.custom_tol = custom_tol
        
@@ -482,7 +480,7 @@ The `_LineSearchConfig` class provides fine-grained control over line search beh
    from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
    
    backend = _NewtonBackend(stepper_factory=make_armijo_stepper(precise_config))
-   interface = _PeriodicOrbitCorrectorInterface()
+   interface = _PeriodicOrbitCorrectorInterface(orbit)
    corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
    
    config = _OrbitCorrectionConfig(max_attempts=50)
@@ -535,7 +533,7 @@ For specialized problems, you can implement custom Jacobian computation strategi
    from hiten.algorithms.corrector.stepping import make_plain_stepper
    
    backend = _NewtonBackend(stepper_factory=make_plain_stepper())
-   interface = _PeriodicOrbitCorrectorInterface()
+   interface = _PeriodicOrbitCorrectorInterface(orbit)
    corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
    
    # Note: Custom Jacobian would need to be integrated into the backend

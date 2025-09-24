@@ -10,7 +10,7 @@ _PeriodicOrbitCorrectorInterface()
 
 The :class:`_PeriodicOrbitCorrectorInterface` class provides an interface for periodic orbit differential correction.
 
-.. autoclass:: _PeriodicOrbitCorrectorInterface()
+.. autoclass:: _PeriodicOrbitCorrectorInterface
    :members:
    :undoc-members:
    :exclude-members: __init__
