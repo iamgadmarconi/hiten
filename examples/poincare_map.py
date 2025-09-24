@@ -27,7 +27,8 @@ def main() -> None:
         section_coord="p3",
         n_seeds=50,
         n_iter=100,
-        seed_strategy="axis_aligned"
+        seed_strategy="axis_aligned",
+        n_workers=8
     )
 
     pm.plot(axes=("p2", "q3"))

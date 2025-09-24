@@ -14,17 +14,20 @@ of concerns and enabling different computational strategies.
 """
 
 import os
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from abc import abstractmethod
+from typing import TYPE_CHECKING, Generic
 
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
 from hiten.algorithms.poincare.core.config import _EngineConfigLike
 from hiten.algorithms.poincare.core.strategies import _SeedingStrategyBase
+from hiten.algorithms.utils.core import (OutputsT, ProblemT, ResultT,
+                                         _HitenBaseEngine)
 
 if TYPE_CHECKING:
     from hiten.algorithms.poincare.core.base import _Section
 
-class _ReturnMapEngine(ABC):
+
+class _ReturnMapEngine(_HitenBaseEngine[ProblemT, ResultT, OutputsT], Generic[ProblemT, ResultT, OutputsT]):
     """Abstract base class for Poincare return map engines.
 
     This class defines the interface that all concrete return map
@@ -71,10 +74,16 @@ class _ReturnMapEngine(ABC):
     All time units are in nondimensional units unless otherwise specified.
     """
 
-    def __init__(self, backend: _ReturnMapBackend, 
-                 seed_strategy: _SeedingStrategyBase,
-                 map_config: _EngineConfigLike) -> None:
-        self._backend = backend
+    def __init__(
+        self,
+        *,
+        backend: _ReturnMapBackend,
+        seed_strategy: _SeedingStrategyBase,
+        map_config: _EngineConfigLike,
+        interface=None,
+        backend_method: str = "step_to_section",
+    ) -> None:
+        super().__init__(backend=backend, interface=interface, backend_method=backend_method)
         self._strategy = seed_strategy
         self._map_config = map_config
         self._n_iter = int(self._map_config.n_iter)

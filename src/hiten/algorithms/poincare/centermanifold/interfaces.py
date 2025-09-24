@@ -20,11 +20,16 @@ from typing import Optional, Tuple
 
 import numpy as np
 
+from hiten.algorithms.poincare.centermanifold.config import _CenterManifoldMapConfig
 from hiten.algorithms.poincare.centermanifold.types import (
     CenterManifoldMapResults,
     _CenterManifoldMapProblem,
 )
-from hiten.algorithms.poincare.core.interfaces import _SectionInterface
+from hiten.algorithms.poincare.core.interfaces import (
+    _PoincareBaseInterface,
+    _SectionInterface,
+)
+from hiten.algorithms.utils.core import BackendCall
 from hiten.algorithms.polynomial.operations import _polynomial_evaluate
 from hiten.algorithms.utils.exceptions import BackendError, ConvergenceError
 from hiten.algorithms.utils.rootfinding import solve_bracketed_brent
@@ -89,13 +94,21 @@ def _get_section_interface(section_coord: str) -> _CenterManifoldSectionInterfac
     return _SECTION_CACHE[section_coord]
 
 
-@dataclass(frozen=True)
-class _CenterManifoldInterface:
-    """Stateless adapter for center manifold section computations.
-
-    Methods accept required numerical inputs explicitly (energy, polynomial
-    blocks, CLMO table) and perform domain ↔ backend translations.
-    """
+@dataclass
+class _CenterManifoldInterface(
+    _PoincareBaseInterface[
+        object,
+        _CenterManifoldMapConfig,
+        _CenterManifoldMapProblem,
+        CenterManifoldMapResults,
+        tuple[np.ndarray | None, Optional[np.ndarray]],
+    ]
+):
+    cm_state: RestrictedCenterManifoldState | None = None
+    section_coord: str = "q3"
+    energy: float = 0.0
+    H_blocks: any = None
+    clmo_table: any = None
 
     _STATE_INDEX = {
         "q2": int(RestrictedCenterManifoldState.q2),
@@ -104,9 +117,37 @@ class _CenterManifoldInterface:
         "p3": int(RestrictedCenterManifoldState.p3),
     }
 
+    def create_problem(
+        self,
+        *,
+        config: _CenterManifoldMapConfig,
+        section_coord: str,
+        energy: float,
+        H_blocks,
+        clmo_table,
+        dt: float,
+        n_iter: int,
+        n_workers: int | None,
+    ) -> _CenterManifoldMapProblem:
+        self.section_coord = section_coord
+        self.energy = float(energy)
+        self.H_blocks = H_blocks
+        self.clmo_table = clmo_table
+        return self._create_problem_payload(section_coord, float(energy), dt=dt, n_iter=n_iter, n_workers=n_workers, H_blocks=H_blocks, clmo_table=clmo_table)
+
+    def to_backend_inputs(self, problem: _CenterManifoldMapProblem):
+        return BackendCall(kwargs={"section_coord": problem.section_coord, "dt": problem.dt})
+
+    def to_domain(self, outputs, *, problem: _CenterManifoldMapProblem):
+        states, info, extra = outputs
+        return info
+
+    def to_results(self, outputs, *, problem: _CenterManifoldMapProblem) -> CenterManifoldMapResults:
+        points, states, (times, _) = outputs
+        return self._create_results(points, states, times, section_coord=problem.section_coord)
+
     @staticmethod
     def create_constraints(section_coord: str, **kwargs: float) -> dict[str, float]:
-        """Create a constraint dict including the section coordinate value."""
         sec_if = _get_section_interface(section_coord)
         return sec_if.build_constraint_dict(**kwargs)
 
@@ -301,7 +342,7 @@ class _CenterManifoldInterface:
         return sec_if.plane_coords
 
     @staticmethod
-    def create_results(
+    def _create_results(
         points: np.ndarray,
         states: np.ndarray,
         times: np.ndarray | None,
@@ -311,12 +352,10 @@ class _CenterManifoldInterface:
         labels = _CenterManifoldInterface.plane_labels(section_coord)
         return CenterManifoldMapResults(points, states, labels, times)
 
-    @staticmethod
-    def create_problem(section_coord: str, energy: float, *, dt: float, n_iter: int, n_workers: int | None, H_blocks=None, clmo_table=None) -> _CenterManifoldMapProblem:
+    def _create_problem_payload(self, section_coord: str, energy: float, *, dt: float, n_iter: int, n_workers: int | None, H_blocks=None, clmo_table=None) -> _CenterManifoldMapProblem:
         default_workers = os.cpu_count() or 1
-        resolved_workers = (
-            default_workers if (n_workers is None or int(n_workers) <= 0) else int(n_workers)
-        )
+        resolved_workers = default_workers if (n_workers is None or int(n_workers) <= 0) else int(n_workers)
+
         def solve_missing_coord_fn(varname: str, fixed_vals: dict[str, float]) -> Optional[float]:
             return _CenterManifoldInterface.solve_missing_coord(
                 varname,
@@ -333,6 +372,7 @@ class _CenterManifoldInterface:
                 H_blocks=H_blocks,
                 clmo_table=clmo_table,
             )
+
         return _CenterManifoldMapProblem(
             section_coord=section_coord,
             energy=float(energy),

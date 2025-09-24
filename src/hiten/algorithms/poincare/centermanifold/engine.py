@@ -23,17 +23,24 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 
-from hiten.algorithms.poincare.centermanifold.backend import \
-    _CenterManifoldBackend
-from hiten.algorithms.poincare.centermanifold.config import \
-    _CenterManifoldMapConfig
-from hiten.algorithms.poincare.centermanifold.interfaces import \
-    _CenterManifoldInterface
-from hiten.algorithms.poincare.centermanifold.seeding import \
-    _CenterManifoldSeedingBase
+from hiten.algorithms.poincare.centermanifold.backend import (
+    _CenterManifoldBackend,
+)
+from hiten.algorithms.poincare.centermanifold.config import (
+    _CenterManifoldMapConfig,
+)
+from hiten.algorithms.poincare.centermanifold.interfaces import (
+    _CenterManifoldInterface,
+)
+from hiten.algorithms.poincare.centermanifold.seeding import (
+    _CenterManifoldSeedingBase,
+)
 from hiten.algorithms.poincare.centermanifold.types import (
-    CenterManifoldMapResults, _CenterManifoldMapProblem)
+    CenterManifoldMapResults,
+    _CenterManifoldMapProblem,
+)
 from hiten.algorithms.poincare.core.engine import _ReturnMapEngine
+from hiten.algorithms.utils.core import BackendCall
 from hiten.algorithms.utils.exceptions import EngineError
 from hiten.utils.log_config import logger
 
@@ -73,14 +80,13 @@ class _CenterManifoldEngine(_ReturnMapEngine):
 
     def __init__(
         self,
+        *,
         backend: _CenterManifoldBackend,
         seed_strategy: _CenterManifoldSeedingBase,
         map_config: _CenterManifoldMapConfig,
-        *,
         interface: _CenterManifoldInterface,
     ) -> None:
-        super().__init__(backend, seed_strategy, map_config)
-        self._interface = interface
+        super().__init__(backend=backend, seed_strategy=seed_strategy, map_config=map_config, interface=interface, backend_method="step_to_section")
 
     def solve(self, problem: _CenterManifoldMapProblem) -> CenterManifoldMapResults:
         """Compute the Poincare section for the center manifold.
@@ -199,7 +205,7 @@ class _CenterManifoldEngine(_ReturnMapEngine):
         except Exception:
             pass
 
-        return self._interface.create_results(
+        return self._interface._create_results(
             pts_np,
             cms_np,
             times_np,

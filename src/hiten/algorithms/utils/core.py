@@ -179,11 +179,12 @@ class _HitenBaseBackend(ABC):
 class _HitenBaseInterface(Generic[DomainT, ConfigT, ProblemT, ResultT, OutputsT], ABC):
     """Shared contract for translating between domain objects and backends."""
 
-    def __init__(self, domain_object: DomainT) -> None:
-        self._domain_object = domain_object
+    def __init__(self, domain_object: DomainT | None = None) -> None:
+        self._domain_object: DomainT | None = domain_object
+        self._config: ConfigT | None = None
 
     @property
-    def domain_object(self) -> DomainT:
+    def domain_object(self) -> DomainT | None:
         return self._domain_object
     
     @property
@@ -191,16 +192,16 @@ class _HitenBaseInterface(Generic[DomainT, ConfigT, ProblemT, ResultT, OutputsT]
         return self._config
 
     @abstractmethod
-    def create_problem(self, *, config: ConfigT) -> ProblemT:
+    def create_problem(self, *, config: ConfigT | None = None, **kwargs) -> ProblemT:
         """Compose an immutable problem payload for the backend."""
 
     @abstractmethod
     def to_backend_inputs(self, problem: ProblemT) -> BackendCall:
         """Translate a problem into backend invocation arguments."""
 
-    def from_domain(self, *, config: ConfigT) -> BackendCall:
+    def from_domain(self, *, config: ConfigT | None = None, **kwargs) -> BackendCall:
         """Convenience helper to build backend inputs directly from config."""
-        problem = self.create_problem(config=config)
+        problem = self.create_problem(config=config, **kwargs)
         return self.to_backend_inputs(problem)
 
     def to_domain(self, outputs: OutputsT, *, problem: ProblemT) -> Any:

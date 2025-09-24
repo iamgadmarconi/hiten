@@ -16,10 +16,13 @@ import numpy as np
 
 from hiten.algorithms.poincare.core.engine import _ReturnMapEngine
 from hiten.algorithms.poincare.synodic.backend import _SynodicDetectionBackend
-from hiten.algorithms.poincare.synodic.interfaces import _SynodicEngineConfig
+from hiten.algorithms.poincare.synodic.interfaces import _SynodicInterface
 from hiten.algorithms.poincare.synodic.strategies import _NoOpStrategy
-from hiten.algorithms.poincare.synodic.types import (SynodicMapResults,
-                                                     _SynodicMapProblem)
+from hiten.algorithms.poincare.synodic.types import (
+    SynodicMapResults,
+    _SynodicMapProblem,
+)
+from hiten.algorithms.utils.core import BackendCall
 from hiten.algorithms.utils.exceptions import EngineError
 
 
@@ -63,12 +66,13 @@ class _SynodicEngine(_ReturnMapEngine):
 
     def __init__(
         self,
+        *,
         backend: _SynodicDetectionBackend,
         seed_strategy: _NoOpStrategy,
-        map_config: _SynodicEngineConfig,
+        map_config,
+        interface: _SynodicInterface,
     ) -> None:
-        super().__init__(backend, seed_strategy, map_config)
-        self._section = map_config.section_interface
+        super().__init__(backend=backend, seed_strategy=seed_strategy, map_config=map_config, interface=interface, backend_method="detect_batch")
 
     def solve(self, problem: _SynodicMapProblem) -> SynodicMapResults:
         """Compute the synodic Poincare section from the composed problem."""
@@ -77,17 +81,17 @@ class _SynodicEngine(_ReturnMapEngine):
         if not trajectories:
             raise EngineError("No trajectories provided to synodic engine")
 
-        section_iface = self._section
+        section_iface = self._interface.section_interface
         n_workers = self._n_workers
 
         # Delegate detection to backend passed in at construction
-        if n_workers <= 1 or len(trajectories) <= 1:  # type: ignore[arg-type]
-            hits_lists = self._backend.detect_batch(trajectories, direction=direction)  # type: ignore[arg-type]
+        if n_workers <= 1 or len(trajectories) <= 1:
+            hits_lists = self._backend.detect_batch(trajectories, direction=direction)
         else:
-            chunks = np.array_split(np.arange(len(trajectories)), n_workers)  # type: ignore[arg-type]
+            chunks = np.array_split(np.arange(len(trajectories)), n_workers)
 
             def _worker(idx_arr: np.ndarray):
-                subset = [trajectories[i] for i in idx_arr.tolist()]  # type: ignore[index]
+                subset = [trajectories[i] for i in idx_arr.tolist()]
                 return self._backend.detect_batch(subset, direction=direction)
 
             parts: list[list[list]] = []

@@ -11,7 +11,8 @@ from typing import Callable, Literal, Sequence, Tuple
 
 import numpy as np
 
-from hiten.algorithms.poincare.core.interfaces import _SectionInterface
+from hiten.algorithms.poincare.core.interfaces import (_PoincareBaseInterface,
+                                                       _SectionInterface)
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
 from hiten.algorithms.poincare.synodic.events import _AffinePlaneEvent
 from hiten.algorithms.poincare.synodic.types import (
@@ -19,6 +20,7 @@ from hiten.algorithms.poincare.synodic.types import (
     _SynodicMapProblem,
 )
 from hiten.algorithms.utils.types import SynodicState
+from hiten.algorithms.utils.core import BackendCall
 
 
 @dataclass(frozen=True)
@@ -107,3 +109,33 @@ class _SynodicSectionInterface(_SectionInterface):
             return int(SynodicState[axis.upper()])
         except KeyError as exc:
             raise ValueError(f"Unsupported synodic axis '{axis}'") from exc
+
+
+class _SynodicInterface(
+    _PoincareBaseInterface[
+        Tuple[np.ndarray, np.ndarray],
+        _SynodicMapConfig,
+        _SynodicMapProblem,
+        SynodicMapResults,
+        Tuple[list, list, list],
+    ]
+):
+    section_interface: _SynodicSectionInterface
+
+    def create_problem(
+        self,
+        *,
+        config: _SynodicMapConfig,
+        section_iface: _SynodicSectionInterface,
+        direction: Literal[1, -1, None] | None,
+        trajectories: Sequence[tuple[np.ndarray, np.ndarray]] | None,
+    ) -> _SynodicMapProblem:
+        self.section_interface = section_iface
+        return section_iface.create_problem(direction=direction, n_workers=config.n_workers or 1, trajectories=trajectories)
+
+    def to_backend_inputs(self, problem: _SynodicMapProblem):
+        return BackendCall(kwargs={"trajectories": problem.trajectories, "direction": problem.direction})
+
+    def to_results(self, outputs, *, problem: _SynodicMapProblem) -> SynodicMapResults:
+        points, states, times = outputs
+        return self.section_interface.create_results(points, states, times)

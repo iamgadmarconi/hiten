@@ -10,20 +10,20 @@ class extends the base return map functionality with center manifold-specific se
 strategies and visualization capabilities.
 """
 
-from typing import Literal, Optional, Sequence
 from dataclasses import replace
+from typing import Literal, Optional, Sequence
 
 import numpy as np
 
-from hiten.algorithms.poincare.centermanifold.config import (
-    _CenterManifoldMapConfig)
+from hiten.algorithms.poincare.centermanifold.config import \
+    _CenterManifoldMapConfig
 from hiten.algorithms.poincare.centermanifold.engine import \
     _CenterManifoldEngine
-from hiten.algorithms.poincare.centermanifold.interfaces import \
-    _CenterManifoldInterface, _get_section_interface
+from hiten.algorithms.poincare.centermanifold.interfaces import (
+    _CenterManifoldInterface, _get_section_interface)
 from hiten.algorithms.poincare.centermanifold.strategies import _make_strategy
-from hiten.algorithms.poincare.centermanifold.types import (
-    CenterManifoldMapResults)
+from hiten.algorithms.poincare.centermanifold.types import \
+    CenterManifoldMapResults
 from hiten.algorithms.poincare.core.base import _ReturnMapBase
 from hiten.system.center import CenterManifold
 from hiten.system.orbits.base import GenericOrbit
@@ -111,7 +111,8 @@ class CenterManifoldMap(_ReturnMapBase):
         default_key = inst.config.section_coord
         backend = inst._build_backend(default_key)
         strategy = inst._build_seeding_strategy(default_key)
-        engine = inst._build_engine(backend, strategy)
+        interface = _CenterManifoldInterface()
+        engine = inst._build_engine(backend, strategy).with_interface(interface)
         inst._injected_engine = engine
         # Make it available immediately for the default key
         inst._engines[default_key] = engine
@@ -594,14 +595,16 @@ class CenterManifoldMap(_ReturnMapBase):
                 self._engines[key] = self._build_engine(backend, strategy)
 
         engine = self._engines[key]
-        problem = _CenterManifoldInterface.create_problem(
+        interface = engine._get_interface(problem=None)
+        problem = interface.create_problem(
+            config=self.config,
             section_coord=key,
             energy=self._energy,
+            H_blocks=self.cm._hamsys.poly_H(),
+            clmo_table=self.cm._hamsys.clmo_table,
             dt=float(self.config.dt),
             n_iter=int(self.config.n_iter),
             n_workers=self.config.n_workers,
-            H_blocks=self.cm._hamsys.poly_H(),
-            clmo_table=self.cm._hamsys.clmo_table,
         )
         results: CenterManifoldMapResults = engine.solve(problem)
         self._section = results
