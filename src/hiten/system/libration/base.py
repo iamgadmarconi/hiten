@@ -16,11 +16,10 @@ from hiten.algorithms.linalg.base import StabilityProperties
 from hiten.algorithms.linalg.config import _EigenDecompositionConfig
 from hiten.algorithms.linalg.interfaces import _LibrationPointInterface
 from hiten.algorithms.linalg.types import _ProblemType, _SystemType
-from hiten.algorithms.utils.core import _HitenBase
+from hiten.algorithms.types.core import _HitenBase
 from hiten.utils.io.libration import (load_libration_point,
                                       load_libration_point_inplace,
                                       save_libration_point)
-from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
     from hiten.system.base import System

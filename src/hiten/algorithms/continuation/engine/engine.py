@@ -8,7 +8,7 @@ from hiten.algorithms.continuation.interfaces import (
     _PeriodicOrbitContinuationInterface,
 )
 from hiten.algorithms.continuation.types import _ContinuationProblem
-from hiten.algorithms.utils.exceptions import EngineError
+from hiten.algorithms.types.exceptions import EngineError
 
 
 class _OrbitContinuationEngine(_ContinuationEngine):

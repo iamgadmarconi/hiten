@@ -3,7 +3,7 @@
 This module provides the base class for correction engines.
 """
 
-from hiten.algorithms.utils.core import _HitenBaseEngine
+from hiten.algorithms.types.core import _HitenBaseEngine
 
 
 class _CorrectionEngine(_HitenBaseEngine):

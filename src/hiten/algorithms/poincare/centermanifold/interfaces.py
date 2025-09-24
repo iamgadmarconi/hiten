@@ -29,11 +29,11 @@ from hiten.algorithms.poincare.core.interfaces import (
     _PoincareBaseInterface,
     _SectionInterface,
 )
-from hiten.algorithms.utils.core import BackendCall
+from hiten.algorithms.types.core import BackendCall
 from hiten.algorithms.polynomial.operations import _polynomial_evaluate
-from hiten.algorithms.utils.exceptions import BackendError, ConvergenceError
+from hiten.algorithms.types.exceptions import BackendError, ConvergenceError
 from hiten.algorithms.utils.rootfinding import solve_bracketed_brent
-from hiten.algorithms.utils.types import RestrictedCenterManifoldState
+from hiten.algorithms.utils.states import RestrictedCenterManifoldState
 
 
 @dataclass(frozen=True)

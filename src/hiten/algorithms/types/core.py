@@ -10,7 +10,7 @@ from typing import Any, Generic, Optional, TypeVar
 
 import pandas as pd
 
-from hiten.algorithms.utils.exceptions import EngineError
+from hiten.algorithms.types.exceptions import EngineError
 
 
 class _HitenBase(ABC):

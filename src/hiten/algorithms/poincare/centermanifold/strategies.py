@@ -14,7 +14,7 @@ from hiten.algorithms.poincare.centermanifold.interfaces import \
     _CenterManifoldSectionInterface
 from hiten.algorithms.poincare.centermanifold.seeding import \
     _CenterManifoldSeedingBase
-from hiten.algorithms.utils.exceptions import EngineError
+from hiten.algorithms.types.exceptions import EngineError
 from hiten.utils.log_config import logger
 
 

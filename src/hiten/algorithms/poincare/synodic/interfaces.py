@@ -19,8 +19,8 @@ from hiten.algorithms.poincare.synodic.types import (
     SynodicMapResults,
     _SynodicMapProblem,
 )
-from hiten.algorithms.utils.types import SynodicState
-from hiten.algorithms.utils.core import BackendCall
+from hiten.algorithms.utils.states import SynodicState
+from hiten.algorithms.types.core import BackendCall
 
 
 @dataclass(frozen=True)

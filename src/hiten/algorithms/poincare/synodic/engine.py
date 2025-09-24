@@ -22,8 +22,8 @@ from hiten.algorithms.poincare.synodic.types import (
     SynodicMapResults,
     _SynodicMapProblem,
 )
-from hiten.algorithms.utils.core import BackendCall
-from hiten.algorithms.utils.exceptions import EngineError
+from hiten.algorithms.types.core import BackendCall
+from hiten.algorithms.types.exceptions import EngineError
 
 
 class _SynodicEngine(_ReturnMapEngine):

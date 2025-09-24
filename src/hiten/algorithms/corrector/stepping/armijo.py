@@ -11,7 +11,7 @@ from hiten.algorithms.corrector.config import _LineSearchConfig
 from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
 from hiten.algorithms.corrector.stepping.base import _CorrectorStepBase
 from hiten.algorithms.corrector.types import NormFn, ResidualFn
-from hiten.algorithms.utils.exceptions import BackendError
+from hiten.algorithms.types.exceptions import BackendError
 from hiten.utils.log_config import logger
 
 

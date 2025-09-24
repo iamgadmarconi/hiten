@@ -22,10 +22,10 @@ from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import (jacobian_dynsys, rtbp_dynsys,
                                             variational_dynsys)
 from hiten.algorithms.utils.coordinates import _get_mass_parameter
-from hiten.algorithms.utils.types import (ReferenceFrame, SynodicStateVector,
+from hiten.algorithms.utils.states import (ReferenceFrame, SynodicStateVector,
                                           Trajectory)
 from hiten.system.body import Body
-from hiten.algorithms.utils.core import _HitenBase
+from hiten.algorithms.types.core import _HitenBase
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import L1Point, L2Point, L3Point
 from hiten.system.libration.triangular import L4Point, L5Point
@@ -263,7 +263,7 @@ class System(_HitenBase):
 
         Returns
         -------
-        :class:`~hiten.algorithms.utils.types.Trajectory`
+        :class:`~hiten.algorithms.utils.states.Trajectory`
             The propagated trajectory.
         """
 

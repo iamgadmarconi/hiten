@@ -11,7 +11,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from hiten import System
 from hiten.algorithms import StateParameter
-from hiten.algorithms.utils.types import SynodicState
+from hiten.algorithms.utils.states import SynodicState
 from hiten.system.family import OrbitFamily
 from hiten.utils.log_config import logger
 

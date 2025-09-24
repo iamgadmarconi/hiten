@@ -8,7 +8,7 @@ from hiten.algorithms.linalg.backend import _LinalgBackend
 from hiten.algorithms.linalg.types import (EigenDecompositionResults,
                                            _EigenDecompositionProblem,
                                            _ProblemType)
-from hiten.algorithms.utils.core import BackendCall, _HitenBaseEngine
+from hiten.algorithms.types.core import BackendCall, _HitenBaseEngine
 
 
 @dataclass

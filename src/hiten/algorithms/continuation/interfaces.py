@@ -30,8 +30,8 @@ from hiten.algorithms.continuation.stepping import (make_natural_stepper,
                                                     make_secant_stepper)
 from hiten.algorithms.continuation.types import (ContinuationResult,
                                                  _ContinuationProblem)
-from hiten.algorithms.utils.core import BackendCall, _HitenBaseInterface
-from hiten.algorithms.utils.types import SynodicState
+from hiten.algorithms.types.core import BackendCall, _HitenBaseInterface
+from hiten.algorithms.utils.states import SynodicState
 
 if TYPE_CHECKING:
     from hiten.system.orbits.base import PeriodicOrbit

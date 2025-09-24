@@ -16,7 +16,7 @@ from hiten.algorithms.corrector.types import (JacobianFn, NormFn,
                                               StepperFactory,
                                               _OrbitCorrectionProblem)
 from hiten.algorithms.dynamics.rtbp import _compute_stm
-from hiten.algorithms.utils.core import BackendCall, _HitenBaseInterface
+from hiten.algorithms.types.core import BackendCall, _HitenBaseInterface
 
 if TYPE_CHECKING:
     from hiten.system.orbits.base import PeriodicOrbit

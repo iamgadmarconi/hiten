@@ -9,7 +9,7 @@ simply write::
 from ..algorithms.poincare.centermanifold.base import CenterManifoldMap
 from ..algorithms.poincare.centermanifold.config import \
     _CenterManifoldMapConfig
-from ..algorithms.utils.types import SynodicState
+from ..algorithms.utils.states import SynodicState
 from .base import System
 from .body import Body
 from .center import CenterManifold

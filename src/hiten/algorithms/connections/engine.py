@@ -27,7 +27,7 @@ from hiten.algorithms.connections.backends import _ConnectionsBackend
 from hiten.algorithms.connections.interfaces import _ManifoldInterface
 from hiten.algorithms.connections.types import (ConnectionResults,
                                                 _ConnectionProblem)
-from hiten.algorithms.utils.exceptions import EngineError
+from hiten.algorithms.types.exceptions import EngineError
 from hiten.system.manifold import Manifold
 
 

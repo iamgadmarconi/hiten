@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING, Generic
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
 from hiten.algorithms.poincare.core.config import _EngineConfigLike
 from hiten.algorithms.poincare.core.strategies import _SeedingStrategyBase
-from hiten.algorithms.utils.core import (OutputsT, ProblemT, ResultT,
+from hiten.algorithms.types.core import (OutputsT, ProblemT, ResultT,
                                          _HitenBaseEngine)
 
 if TYPE_CHECKING:

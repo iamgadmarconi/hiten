@@ -10,7 +10,7 @@ from hiten.algorithms.corrector.engine.base import _CorrectionEngine
 from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
 from hiten.algorithms.corrector.types import (OrbitCorrectionResult,
                                               _OrbitCorrectionProblem)
-from hiten.algorithms.utils.exceptions import (BackendError, ConvergenceError,
+from hiten.algorithms.types.exceptions import (BackendError, ConvergenceError,
                                                EngineError)
 
 

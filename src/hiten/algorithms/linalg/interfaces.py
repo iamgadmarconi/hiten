@@ -13,7 +13,7 @@ from hiten.algorithms.dynamics.rtbp import _jacobian_crtbp
 from hiten.algorithms.linalg.config import _EigenDecompositionConfig
 from hiten.algorithms.linalg.types import (EigenDecompositionResults,
                                            _EigenDecompositionProblem)
-from hiten.algorithms.utils.core import BackendCall, _HitenBaseInterface
+from hiten.algorithms.types.core import BackendCall, _HitenBaseInterface
 
 if TYPE_CHECKING:
     from hiten.system.libration.base import LibrationPoint

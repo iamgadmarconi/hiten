@@ -96,7 +96,7 @@ manifold.plot()
    ```python
    from hiten import System, OrbitFamily
    from hiten.algorithms import StateParameter
-   from hiten.algorithms.utils.types import SynodicState
+   from hiten.algorithms.utils.states import SynodicState
 
    system = System.from_bodies("earth", "moon")
    l1 = system.get_libration_point(1)

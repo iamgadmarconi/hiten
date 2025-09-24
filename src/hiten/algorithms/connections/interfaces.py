@@ -29,7 +29,7 @@ import numpy as np
 from hiten.algorithms.poincare.core.base import _Section
 from hiten.algorithms.poincare.synodic.base import SynodicMap
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
-from hiten.algorithms.utils.exceptions import EngineError
+from hiten.algorithms.types.exceptions import EngineError
 from hiten.system.manifold import Manifold
 
 

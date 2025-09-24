@@ -20,7 +20,7 @@ from typing import List, Tuple
 import numpy as np
 
 from hiten.algorithms.linalg.types import _StabilityType, _SystemType
-from hiten.algorithms.utils.exceptions import BackendError
+from hiten.algorithms.types.exceptions import BackendError
 
 
 class _LinalgBackend:
@@ -155,7 +155,7 @@ class _LinalgBackend:
 
         Raises
         ------
-        :class:`~hiten.algorithms.utils.exceptions.BackendError`
+        :class:`~hiten.algorithms.types.exceptions.BackendError`
             If M is not shape (6, 6).
         numpy.linalg.LinAlgError
             If eigenvalue computation fails. Returns NaN arrays in this case.

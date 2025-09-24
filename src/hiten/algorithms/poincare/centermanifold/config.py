@@ -12,7 +12,7 @@ from hiten.algorithms.poincare.core.config import (_IntegrationConfig,
                                                    _IterationConfig,
                                                    _ReturnMapBaseConfig,
                                                    _SeedingConfig)
-from hiten.algorithms.utils.exceptions import EngineError
+from hiten.algorithms.types.exceptions import EngineError
 from hiten.utils.log_config import logger
 
 

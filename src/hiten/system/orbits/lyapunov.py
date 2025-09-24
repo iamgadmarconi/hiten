@@ -21,7 +21,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from hiten.algorithms.poincare.singlehit.backend import _y_plane_crossing
-from hiten.algorithms.utils.types import SynodicState
+from hiten.algorithms.utils.states import SynodicState
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.libration.collinear import (CollinearPoint, L1Point, L2Point,
                                               L3Point)

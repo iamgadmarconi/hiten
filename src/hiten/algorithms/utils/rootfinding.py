@@ -18,7 +18,7 @@ from typing import Callable
 
 import numpy as np
 
-from hiten.algorithms.utils.exceptions import BackendError
+from hiten.algorithms.types.exceptions import BackendError
 
 
 def expand_bracket(

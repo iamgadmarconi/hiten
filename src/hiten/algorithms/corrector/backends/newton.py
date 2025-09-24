@@ -14,7 +14,7 @@ from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
 from hiten.algorithms.corrector.types import (JacobianFn, NormFn, ResidualFn,
                                               StepperFactory)
 from hiten.algorithms.corrector.stepping import make_plain_stepper
-from hiten.algorithms.utils.exceptions import ConvergenceError
+from hiten.algorithms.types.exceptions import ConvergenceError
 from hiten.utils.log_config import logger
 
 

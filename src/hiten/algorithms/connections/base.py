@@ -33,7 +33,7 @@ from hiten.algorithms.connections.types import (Connections,
                                                 _ConnectionProblem,
                                                 _ConnectionResult)
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
-from hiten.algorithms.utils.exceptions import EngineError
+from hiten.algorithms.types.exceptions import EngineError
 from hiten.system.manifold import Manifold
 from hiten.utils.log_config import logger
 from hiten.utils.plots import plot_poincare_connections_map

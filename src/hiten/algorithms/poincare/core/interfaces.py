@@ -1,7 +1,7 @@
 from abc import ABC
 from typing import Tuple
 
-from hiten.algorithms.utils.core import (ConfigT, DomainT, OutputsT, ProblemT,
+from hiten.algorithms.types.core import (ConfigT, DomainT, OutputsT, ProblemT,
                                          ResultT, _HitenBaseInterface)
 
 

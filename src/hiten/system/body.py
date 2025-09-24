@@ -18,7 +18,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from hiten.algorithms.utils.core import _HitenBase
+from hiten.algorithms.types.core import _HitenBase
 from hiten.utils.io.body import load_body, load_body_inplace, save_body
 
 

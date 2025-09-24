@@ -35,7 +35,7 @@ from hiten.algorithms.corrector.stepping import (make_armijo_stepper,
 from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import (_compute_monodromy, _compute_stm,
                                             _stability_indices)
-from hiten.algorithms.utils.types import (ReferenceFrame, SynodicStateVector,
+from hiten.algorithms.utils.states import (ReferenceFrame, SynodicStateVector,
                                           Trajectory)
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint

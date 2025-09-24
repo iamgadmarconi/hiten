@@ -280,7 +280,7 @@ State Parameter Continuation
 .. code-block:: python
 
    from hiten.algorithms import StateParameter
-   from hiten.algorithms.utils.types import SynodicState
+   from hiten.algorithms.utils.states import SynodicState
    
    # Create initial orbit
    initial_orbit = l1.create_orbit("halo", amplitude_z=0.2, zenith="southern")
@@ -314,7 +314,7 @@ Earth-Moon L1 Halo Family
 
    from hiten import System
    from hiten.algorithms import StateParameter
-   from hiten.algorithms.utils.types import SynodicState
+   from hiten.algorithms.utils.states import SynodicState
    
    # Create system
    system = System.from_bodies("earth", "moon")

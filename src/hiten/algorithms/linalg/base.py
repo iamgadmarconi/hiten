@@ -11,7 +11,7 @@ from hiten.algorithms.linalg.engine import _LinearStabilityEngine
 from hiten.algorithms.linalg.interfaces import _EigenDecompositionInterface
 from hiten.algorithms.linalg.types import (EigenDecompositionResults,
                                            _ProblemType, _SystemType)
-from hiten.algorithms.utils.exceptions import EngineError
+from hiten.algorithms.types.exceptions import EngineError
 
 
 @dataclass
