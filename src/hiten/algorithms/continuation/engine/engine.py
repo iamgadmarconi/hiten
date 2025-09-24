@@ -1,153 +1,50 @@
 """Orbit-specific continuation engine wiring backend and interface closures."""
 
-from typing import Callable
-
 import numpy as np
 
 from hiten.algorithms.continuation.backends.base import _ContinuationBackend
-from hiten.algorithms.continuation.config import _OrbitContinuationConfig
 from hiten.algorithms.continuation.engine.base import _ContinuationEngine
-from hiten.algorithms.continuation.interfaces import \
-    _PeriodicOrbitContinuationInterface
-from hiten.algorithms.continuation.stepping import (make_natural_stepper,
-                                                    make_secant_stepper)
-from hiten.algorithms.continuation.types import (ContinuationResult,
-                                                 _ContinuationProblem)
+from hiten.algorithms.continuation.interfaces import (
+    _PeriodicOrbitContinuationInterface,
+)
+from hiten.algorithms.continuation.types import _ContinuationProblem
 from hiten.algorithms.utils.exceptions import EngineError
-from hiten.system.orbits.base import PeriodicOrbit
 
 
 class _OrbitContinuationEngine(_ContinuationEngine):
-    """
-    Engine orchestrating periodic orbit continuation via a backend and interface.
+    """Engine orchestrating periodic orbit continuation via backend and interface."""
 
-    This class implements the predict-instantiate-correct-accept loop for periodic orbit continuation.
-    It uses a backend to solve the continuation problem and an interface to build the necessary closures.
+    def __init__(
+        self,
+        *,
+        backend: _ContinuationBackend,
+        interface: _PeriodicOrbitContinuationInterface | None = None,
+    ) -> None:
+        super().__init__(backend=backend, interface=interface)
 
-    Parameters
-    ----------
-    backend : :class:`~hiten.algorithms.continuation.backends.base._ContinuationBackend`
-        The backend to use for solving the continuation problem.
-    interface : :class:`~hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface`
-        The interface to use for building the necessary closures.
-    """
-    def __init__(self, *, backend: _ContinuationBackend, interface: _PeriodicOrbitContinuationInterface | None = None) -> None:
-        self._backend = backend
-        self._interface = _PeriodicOrbitContinuationInterface() if interface is None else interface
+    def _handle_backend_failure(
+        self,
+        exc: Exception,
+        *,
+        problem: _ContinuationProblem,
+        call,
+        interface,
+    ) -> None:
+        raise EngineError("Orbit continuation failed") from exc
 
-    def solve(self, problem: _ContinuationProblem) -> ContinuationResult:
-        """Solve continuation using a composed Problem."""
+    def _invoke_backend(self, call):
+        interface = self._interface
+        interface.bind_backend(self._backend)
+        return self._backend.solve(*call.args, **call.kwargs)
+
+    def _after_backend_success(self, outputs, *, problem, domain_payload, interface) -> None:
+        family_repr, info = outputs
         try:
-            seed = problem.initial_solution  # domain object
-            cfg = getattr(problem, "cfg", None)
-            if cfg is None:
-                raise EngineError("Continuation problem missing cfg reference to build closures")
-
-            # Build closures from stateless interface
-            parameter_getter = self._interface.build_parameter_getter(seed, cfg)
-            instantiator = self._interface.build_instantiator(seed)
-            accepted_orbits: list[PeriodicOrbit] = []
-
-            def _corrector(prediction):
-                orbit = instantiator(prediction)
-                x_corr, _halfT = orbit.correct(**(getattr(cfg, "extra_params", None) or {}))
-                # Collect domain object with period set
-                accepted_orbits.append(orbit)
-                res = float(np.linalg.norm(np.asarray(x_corr, dtype=float) - np.asarray(prediction, dtype=float)))
-                return np.asarray(x_corr, dtype=float), res, True
-
-            corrector = _corrector
-
-            # Choose stepper strategy based on config
-            stepper_name = getattr(cfg, "stepper", "natural")
-            if str(stepper_name).lower() == "secant":
-                stepper = make_secant_stepper(
-                    lambda v: np.asarray(v, dtype=float),
-                    lambda: self._backend.get_tangent(),
-                )
-                # Pre-seed tangent using the natural predictor at the seed
-                try:
-                    predictor = self._interface.build_predictor(seed, cfg)
-                    pred0 = np.asarray(
-                        predictor(
-                            self._interface.representation(seed),
-                            np.asarray(cfg.step, dtype=float),
-                        ),
-                        dtype=float,
-                    )
-                    diff0 = (pred0 - self._interface.representation(seed)).ravel()
-                    n0 = float(np.linalg.norm(diff0))
-                    self._backend.seed_tangent(None if n0 == 0.0 else diff0 / n0)
-                except Exception:
-                    self._backend.seed_tangent(None)
-            else:
-                predictor = self._interface.build_predictor(seed, cfg)
-                stepper = make_natural_stepper(predictor)
-
-            seed_repr = self._interface.representation(seed)
-
-            # Normalize step direction toward target interval (natural-parameter parity)
-            current_params = np.asarray(parameter_getter(seed_repr), dtype=float)
-            target_arr = np.asarray(cfg.target, dtype=float)
-            target_min = np.minimum(target_arr[0], target_arr[1])
-            target_max = np.maximum(target_arr[0], target_arr[1])
-            step_eff = np.asarray(cfg.step, dtype=float).copy()
-            for i in range(step_eff.size):
-                if (current_params[i] < target_min[i] and step_eff[i] < 0) or (
-                    current_params[i] > target_max[i] and step_eff[i] > 0
-                ):
-                    step_eff[i] = -step_eff[i]
-
-            # Early stop if already outside bounds (legacy parity)
-            if np.any(current_params < target_min) or np.any(current_params > target_max):
-                parameter_values = (current_params.copy(),)
-                accepted_count = 1
-                rejected_count = 0
-                iterations = 0
-                success_rate = 1.0
-                instantiator = self._interface.build_instantiator(seed)
-                return ContinuationResult(
-                    accepted_count=accepted_count,
-                    rejected_count=rejected_count,
-                    success_rate=success_rate,
-                    family=(seed,),
-                    parameter_values=parameter_values,
-                    iterations=iterations,
-                )
-
-            family_repr, info = self._backend.solve(
-                seed_repr=seed_repr,
-                stepper=stepper,
-                parameter_getter=parameter_getter,
-                corrector=corrector,
-                representation_of=lambda v: np.asarray(v, dtype=float),
-                step=step_eff,
-                target=np.asarray(cfg.target, dtype=float),
-                max_members=int(cfg.max_members),
-                max_retries_per_step=int(cfg.max_retries_per_step),
-                shrink_policy=getattr(cfg, "shrink_policy", None),
-                step_min=float(cfg.step_min),
-                step_max=float(cfg.step_max),
-            )
-        except Exception as exc:
-            raise EngineError("Orbit continuation failed") from exc
-
-        # Package result via interface
-        result = self._interface.package_result(
-            seed=seed,
-            accepted_orbits=accepted_orbits,
-            backend_family_repr=family_repr,
-            backend_info=info,
-        )
-
-        try:
-            last_repr = family_repr[-1] if family_repr else seed_repr
+            last_repr = family_repr[-1] if family_repr else interface._representation(interface.domain_object)
             self._backend.on_success(
                 np.asarray(last_repr, dtype=float),
-                iterations=int(iterations),
+                iterations=int(info.get("iterations", 0)),
                 residual_norm=float(info.get("residual_norm", float("nan"))),
             )
         except Exception:
             pass
-
-        return result

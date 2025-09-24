@@ -193,7 +193,7 @@ Basic Custom Continuation
 
    # Create custom engine with custom stepping strategy
    backend = _PCContinuationBackend()
-   interface = _PeriodicOrbitContinuationInterface()
+   interface = _PeriodicOrbitContinuationInterface(initial_orbit)
    engine = _OrbitContinuationEngine(backend=backend, interface=interface)
 
    # Create configuration
@@ -208,7 +208,8 @@ Basic Custom Continuation
    )
 
    # Use the engine directly
-   result = engine.solve(initial_orbit, config)
+   problem = interface.create_problem(config=config)
+   result = engine.solve(problem)
 
 Advanced Custom Continuation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -271,7 +272,7 @@ For more sophisticated methods, implement custom stepping strategies:
 
    # For advanced usage, you can create a custom engine with the adaptive stepper
    # backend = _PCContinuationBackend()
-   # interface = _PeriodicOrbitContinuationInterface()
+   # interface = _PeriodicOrbitContinuationInterface(initial_orbit)
    # engine = _OrbitContinuationEngine(backend=backend, interface=interface)
    # This would require more complex setup to integrate the adaptive stepper
 
@@ -336,7 +337,7 @@ The continuation framework consists of several key components:
 
    # Create engine with custom stepping strategy
    backend = _PCContinuationBackend()
-   interface = _PeriodicOrbitContinuationInterface()
+   interface = _PeriodicOrbitContinuationInterface(initial_orbit)
    engine = _OrbitContinuationEngine(backend=backend, interface=interface)
 
    # The stepping strategy would be integrated into the engine's solve method

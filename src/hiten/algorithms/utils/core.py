@@ -6,9 +6,11 @@ This module provides the abstract base class for all Hiten classes.
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Optional, TypeVar
 
 import pandas as pd
+
+from hiten.algorithms.utils.exceptions import EngineError
 
 
 class _HitenBase(ABC):
@@ -183,6 +185,10 @@ class _HitenBaseInterface(Generic[DomainT, ConfigT, ProblemT, ResultT, OutputsT]
     @property
     def domain_object(self) -> DomainT:
         return self._domain_object
+    
+    @property
+    def current_config(self) -> ConfigT | None:
+        return self._config
 
     @abstractmethod
     def create_problem(self, *, config: ConfigT) -> ProblemT:
@@ -205,6 +211,9 @@ class _HitenBaseInterface(Generic[DomainT, ConfigT, ProblemT, ResultT, OutputsT]
     def to_results(self, outputs: OutputsT, *, problem: ProblemT) -> ResultT:
         """Package backend outputs into user-facing result objects."""
 
+    def bind_backend(self, backend: _HitenBaseBackend) -> None:
+        return None
+
     def on_start(self, problem: ProblemT) -> None:
         return None
 
@@ -222,12 +231,23 @@ class _HitenBaseEngine(Generic[ProblemT, ResultT, OutputsT], ABC):
         self,
         *,
         backend: Any,
-        interface: _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT],
+        interface: _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT] | None = None,
         backend_method: str = "solve",
     ) -> None:
         self._backend = backend
         self._backend_method = backend_method
         self._interface = interface
+
+    @property
+    def backend(self) -> Any:
+        return self._backend
+
+    def with_interface(
+        self,
+        interface: _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT],
+    ) -> "_HitenBaseEngine[ProblemT, ResultT, OutputsT]":
+        self._interface = interface
+        return self
 
     def solve(self, problem: ProblemT) -> ResultT:
         """Execute the standard engine orchestration for ``problem``."""
@@ -249,8 +269,28 @@ class _HitenBaseEngine(Generic[ProblemT, ResultT, OutputsT], ABC):
         self._after_backend_success(outputs, problem=problem, domain_payload=domain_payload, interface=interface)
         return interface.to_results(outputs, problem=problem)
 
-    def _get_interface(self, problem: ProblemT) -> _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT]:
+    def _get_interface(
+        self,
+        problem: ProblemT,
+    ) -> _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT]:
+        if self._interface is None:
+            raise EngineError(
+                f"{self.__class__.__name__} must be configured with an interface before solving."
+            )
         return self._interface
+
+    def set_interface(
+        self,
+        interface: _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT],
+    ) -> None:
+        self._interface = interface
+
+    def with_interface(
+        self,
+        interface: _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT],
+    ) -> "_HitenBaseEngine[ProblemT, ResultT, OutputsT]":
+        self.set_interface(interface)
+        return self
 
     def _before_backend(self, problem: ProblemT, call: BackendCall, interface: _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT]) -> None:
         return None

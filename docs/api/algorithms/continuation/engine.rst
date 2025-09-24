@@ -31,7 +31,7 @@ Orbit Continuation Engine
 _OrbitContinuationEngine()
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The :class:`_OrbitContinuationEngine` class implements an engine for periodic orbit continuation that orchestrates the predict-instantiate-correct-accept loop using a backend and interface. This engine uses a backend to solve the continuation problem and an interface to build the necessary closures for domain-specific operations.
+The :class:`_OrbitContinuationEngine` class orchestrates periodic-orbit continuation by delegating domain translations to `_PeriodicOrbitContinuationInterface` and numerical work to `_PCContinuationBackend`.
 
 .. autoclass:: _OrbitContinuationEngine()
    :members:

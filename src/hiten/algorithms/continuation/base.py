@@ -4,7 +4,7 @@ These facades assemble the engine, backend, and interface using DI and
 provide a simple API to run continuation with domain-friendly inputs.
 """
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Sequence
 
 import numpy as np
@@ -39,8 +39,7 @@ class StateParameter:
         `_PeriodicOrbitContinuationInterface`.
         """
         backend = _PCContinuationBackend()
-        interface = _PeriodicOrbitContinuationInterface()
-        engine = _OrbitContinuationEngine(backend=backend, interface=interface)
+        engine = _OrbitContinuationEngine(backend=backend)
         return cls(engine=engine)
 
     def solve(
@@ -77,9 +76,9 @@ class StateParameter:
             stepper=str(stepper),
         )
 
-        engine = self.engine
-        problem = _PeriodicOrbitContinuationInterface.create_problem(seed, cfg)
-        problem = replace(problem, cfg=cfg)
+        interface = _PeriodicOrbitContinuationInterface(seed)
+        engine = _OrbitContinuationEngine(backend=self.engine.backend).with_interface(interface)
+        problem = interface.create_problem(config=cfg)
         return engine.solve(problem)
 
 

@@ -13,7 +13,7 @@ Periodic Orbit Continuation Interface
 _PeriodicOrbitContinuationInterface()
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The :class:`_PeriodicOrbitContinuationInterface` class provides a stateless adapter that builds closures for continuation engines. This interface handles periodic orbit continuation in the CR3BP by providing methods for solution representation, instantiation, parameter extraction, and prediction.
+The :class:`_PeriodicOrbitContinuationInterface` class adapts periodic-orbit continuation in the CR3BP by providing methods for solution representation, instantiation, parameter extraction, and prediction.
 
 .. autoclass:: _PeriodicOrbitContinuationInterface()
    :members:

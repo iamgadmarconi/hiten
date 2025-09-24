@@ -21,117 +21,120 @@ See Also
     Correction algorithms used by continuation interfaces.
 """
 
-from typing import Callable, Sequence
+from typing import TYPE_CHECKING, Callable, Sequence
 
 import numpy as np
 
+from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+from hiten.algorithms.continuation.stepping import (make_natural_stepper,
+                                                    make_secant_stepper)
+from hiten.algorithms.continuation.types import (ContinuationResult,
+                                                 _ContinuationProblem)
+from hiten.algorithms.utils.core import BackendCall, _HitenBaseInterface
 from hiten.algorithms.utils.types import SynodicState
-from hiten.algorithms.continuation.types import (
-    ContinuationResult,
-    _ContinuationProblem,
-)
+
+if TYPE_CHECKING:
+    from hiten.system.orbits.base import PeriodicOrbit
 
 
-class _PeriodicOrbitContinuationInterface:
-    """Stateless adapter that builds closures for continuation engines."""
+class _PeriodicOrbitContinuationInterface(
+    _HitenBaseInterface[
+        "PeriodicOrbit",
+        _OrbitContinuationConfig,
+        _ContinuationProblem,
+        ContinuationResult,
+        tuple[list[np.ndarray], dict[str, object]],
+    ]
+):
+    """Adapter wiring periodic-orbit families to continuation backends."""
 
-    @staticmethod
-    def representation(orbit) -> np.ndarray:
-        return np.asarray(orbit.initial_state, dtype=float).copy()
+    def __init__(self, seed: "PeriodicOrbit") -> None:
+        super().__init__(seed)
+        self._accepted: list["PeriodicOrbit"] = []
+        self._pending_tangent: np.ndarray | None = None
+        self._backend = None
+        self._config: _OrbitContinuationConfig | None = None
 
-    @staticmethod
-    def build_instantiator(seed) -> Callable[[np.ndarray], object]:
-        orbit_cls = type(seed)
-        libration_point = getattr(seed, "libration_point", None)
-
-        def _instantiate(representation: np.ndarray):
-            # Create a new orbit of the same class and libration point
-            return orbit_cls(libration_point=libration_point, initial_state=np.asarray(representation, dtype=float))
-
-        return _instantiate
-
-    @staticmethod
-    def build_parameter_getter(seed, cfg) -> Callable[[np.ndarray], np.ndarray]:
-        # Select continuation parameters from representation, default identity
-        state = getattr(cfg, "state", None)
-        if state is None:
-            def _getter(repr_vec: np.ndarray) -> np.ndarray:
-                return np.asarray(repr_vec, dtype=float)
-            return _getter
-
-        # Normalize state to list of indices
-        if isinstance(state, SynodicState):
-            indices = [int(state.value)]
-        elif isinstance(state, Sequence):
-            indices = [int(s.value) if isinstance(s, SynodicState) else int(s) for s in state]
-        else:
-            indices = [int(state)]
-
-        idx_arr = np.asarray(indices, dtype=int)
-
-        def _getter(repr_vec: np.ndarray) -> np.ndarray:
-            vec = np.asarray(repr_vec, dtype=float)
-            return vec[idx_arr]
-
-        return _getter
-
-    @staticmethod
-    def build_predictor(seed, cfg) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
-        # Default predictor adds step to selected indices; if no state provided, add to all components
-        state = getattr(cfg, "state", None)
-        if state is None:
-            def _predictor(last: np.ndarray, step: np.ndarray) -> np.ndarray:
-                return np.asarray(last, dtype=float) + np.asarray(step, dtype=float)
-            return _predictor
-
-        # Normalize state to list of indices
-        if isinstance(state, SynodicState):
-            indices = [int(state.value)]
-        elif isinstance(state, Sequence):
-            indices = [int(s.value) if isinstance(s, SynodicState) else int(s) for s in state]
-        else:
-            indices = [int(state)]
-
-        idx_arr = np.asarray(indices, dtype=int)
-
-        def _predictor(last: np.ndarray, step: np.ndarray) -> np.ndarray:
-            last = np.asarray(last, dtype=float).copy()
-            step = np.asarray(step, dtype=float)
-            for idx, d in zip(idx_arr, step):
-                last[idx] += d
-            return last
-
-        return _predictor
-
-    @staticmethod
-    def create_problem(seed, cfg) -> _ContinuationProblem:
-        parameter_getter = _PeriodicOrbitContinuationInterface.build_parameter_getter(seed, cfg)
+    def create_problem(self, *, config: _OrbitContinuationConfig) -> _ContinuationProblem:
+        self._config = config
+        parameter_getter = self._parameter_getter(config)
         return _ContinuationProblem(
-            initial_solution=seed,
-            parameter_getter=lambda obj: parameter_getter(np.asarray(obj, dtype=float)),
-            target=np.asarray(cfg.target, dtype=float),
-            step=np.asarray(cfg.step, dtype=float),
-            max_members=int(cfg.max_members),
-            max_retries_per_step=int(cfg.max_retries_per_step),
-            corrector_kwargs={},
+            initial_solution=self.domain_object,
+            parameter_getter=parameter_getter,
+            target=np.asarray(config.target, dtype=float),
+            step=np.asarray(config.step, dtype=float),
+            max_members=int(config.max_members),
+            max_retries_per_step=int(config.max_retries_per_step),
+            corrector_kwargs=config.extra_params or {},
+            representation_of=lambda obj: np.asarray(obj, dtype=float),
+            shrink_policy=config.shrink_policy,
+            step_min=float(config.step_min),
+            step_max=float(config.step_max),
+            cfg=config,
         )
 
-    @staticmethod
-    def package_result(
-        *,
-        seed: object,
-        accepted_orbits: list,
-        backend_family_repr: list[np.ndarray],
-        backend_info: dict,
-    ) -> ContinuationResult:
-        parameter_values = tuple(backend_info.get("parameter_values", tuple()))
-        accepted_count = int(backend_info.get("accepted_count", len(backend_family_repr)))
-        rejected_count = int(backend_info.get("rejected_count", 0))
-        iterations = int(backend_info.get("iterations", 0))
+    def to_backend_inputs(self, problem: _ContinuationProblem) -> BackendCall:
+        cfg = problem.cfg
+        assert cfg is not None
+
+        predictor = self._predictor(cfg)
+        seed_repr = self._representation(self.domain_object)
+        stepper = self._make_stepper(cfg, predictor)
+
+        step_eff = np.asarray(cfg.step, dtype=float)
+        if str(cfg.stepper).lower() == "secant":
+            try:
+                pred0 = predictor(seed_repr, step_eff)
+                diff0 = (np.asarray(pred0, dtype=float) - seed_repr).ravel()
+                norm0 = float(np.linalg.norm(diff0))
+                self._pending_tangent = None if norm0 == 0.0 else diff0 / norm0
+            except Exception:
+                self._pending_tangent = None
+        else:
+            self._pending_tangent = None
+
+        def corrector(prediction: np.ndarray) -> tuple[np.ndarray, float, bool]:
+            orbit = self._instantiate(prediction)
+            x_corr, _ = orbit.correct(**(cfg.extra_params or {}))
+            self._accepted.append(orbit)
+            residual = float(np.linalg.norm(np.asarray(x_corr, dtype=float) - prediction))
+            return np.asarray(x_corr, dtype=float), residual, True
+
+        return BackendCall(
+            kwargs={
+                "seed_repr": seed_repr,
+                "stepper": stepper,
+                "parameter_getter": problem.parameter_getter,
+                "corrector": corrector,
+                "representation_of": problem.representation_of or (lambda v: np.asarray(v, dtype=float)),
+                "step": step_eff,
+                "target": np.asarray(cfg.target, dtype=float),
+                "max_members": int(cfg.max_members),
+                "max_retries_per_step": int(cfg.max_retries_per_step),
+                "shrink_policy": cfg.shrink_policy,
+                "step_min": float(cfg.step_min),
+                "step_max": float(cfg.step_max),
+            }
+        )
+
+    def to_domain(self, outputs: tuple[list[np.ndarray], dict[str, object]], *, problem: _ContinuationProblem) -> dict[str, object]:
+        family_repr, info = outputs
+        info = dict(info)
+        info.setdefault("accepted_count", len(family_repr))
+        info.setdefault("parameter_values", tuple())
+        return info
+
+    def to_results(self, outputs: tuple[list[np.ndarray], dict[str, object]], *, problem: _ContinuationProblem) -> ContinuationResult:
+        family_repr, info = outputs
+        info = dict(info)
+        accepted_count = int(info.get("accepted_count", len(family_repr)))
+        rejected_count = int(info.get("rejected_count", 0))
+        iterations = int(info.get("iterations", 0))
+        parameter_values = tuple(info.get("parameter_values", tuple()))
         denom = max(accepted_count + rejected_count, 1)
         success_rate = float(accepted_count) / float(denom)
-        family = tuple([seed, *accepted_orbits])
-
+        family = tuple([self.domain_object, *self._accepted])
+        self._accepted = []
         return ContinuationResult(
             accepted_count=accepted_count,
             rejected_count=rejected_count,
@@ -140,3 +143,71 @@ class _PeriodicOrbitContinuationInterface:
             parameter_values=parameter_values,
             iterations=iterations,
         )
+
+    def bind_backend(self, backend) -> None:
+        self._backend = backend
+
+    def _representation(self, orbit) -> np.ndarray:
+        return np.asarray(orbit.initial_state, dtype=float).copy()
+
+    def _instantiate(self, representation: np.ndarray):
+        orbit_cls = type(self.domain_object)
+        lp = getattr(self.domain_object, "libration_point", None)
+        return orbit_cls(libration_point=lp, initial_state=np.asarray(representation, dtype=float))
+
+    def _parameter_getter(self, cfg: _OrbitContinuationConfig) -> Callable[[np.ndarray], np.ndarray]:
+        state = getattr(cfg, "state", None)
+        if state is None:
+            return lambda repr_vec: np.asarray(repr_vec, dtype=float)
+        if isinstance(state, SynodicState):
+            indices = [int(state.value)]
+        elif isinstance(state, Sequence):
+            indices = [int(s.value) if isinstance(s, SynodicState) else int(s) for s in state]
+        else:
+            indices = [int(state)]
+        idx_arr = np.asarray(indices, dtype=int)
+        return lambda repr_vec: np.asarray(repr_vec, dtype=float)[idx_arr]
+
+    def _predictor(self, cfg: _OrbitContinuationConfig) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
+        state = getattr(cfg, "state", None)
+        if state is None:
+            return lambda last, step: np.asarray(last, dtype=float) + np.asarray(step, dtype=float)
+        if isinstance(state, SynodicState):
+            indices = [int(state.value)]
+        elif isinstance(state, Sequence):
+            indices = [int(s.value) if isinstance(s, SynodicState) else int(s) for s in state]
+        else:
+            indices = [int(state)]
+        idx_arr = np.asarray(indices, dtype=int)
+
+        def _predict(last: np.ndarray, step: np.ndarray) -> np.ndarray:
+            last = np.asarray(last, dtype=float).copy()
+            step = np.asarray(step, dtype=float)
+            for idx, d in zip(idx_arr, step):
+                last[idx] += d
+            return last
+
+        return _predict
+
+    def _make_stepper(self, cfg: _OrbitContinuationConfig, predictor: Callable[[np.ndarray, np.ndarray], np.ndarray]):
+        if str(cfg.stepper).lower() == "secant":
+            return make_secant_stepper(lambda v: np.asarray(v, dtype=float), self._tangent)
+        return make_natural_stepper(predictor)
+
+    def _tangent(self) -> np.ndarray | None:
+        if self._pending_tangent is not None:
+            tangent = self._pending_tangent
+            self._pending_tangent = None
+            backend = getattr(self, "_backend", None)
+            if backend is not None and hasattr(backend, "seed_tangent"):
+                try:
+                    backend.seed_tangent(tangent)
+                except Exception:
+                    pass
+            return tangent
+        backend = getattr(self, "_backend", None)
+        if backend is not None:
+            getter = getattr(backend, "get_tangent", None)
+            if callable(getter):
+                return getter()
+        return None
