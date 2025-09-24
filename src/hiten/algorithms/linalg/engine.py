@@ -8,62 +8,53 @@ from hiten.algorithms.linalg.backend import _LinalgBackend
 from hiten.algorithms.linalg.types import (EigenDecompositionResults,
                                            _EigenDecompositionProblem,
                                            _ProblemType)
+from hiten.algorithms.utils.core import BackendCall, _HitenBaseEngine
 
 
 @dataclass
-class _LinearStabilityEngine:
-    """Engine: compute linear stability via Jacobian + eigen classification."""
-
+class _LinearStabilityEngine(_HitenBaseEngine[_EigenDecompositionProblem, EigenDecompositionResults, EigenDecompositionResults]):
     backend: _LinalgBackend
 
-    def solve(self, problem: _EigenDecompositionProblem) -> EigenDecompositionResults:
+    def __init__(self, backend: _LinalgBackend) -> None:
+        super().__init__(backend=backend, backend_method="solve")
+
+    def _invoke_backend(self, call: BackendCall) -> EigenDecompositionResults:
+        problem = call.args[0]
         self.backend.system_type = problem.config.system_type
         problem_type = problem.config.problem_type
 
-        # Initialize empty/default results to keep return type consistent
         n = problem.A.shape[0]
         empty_vals = np.array([], dtype=np.complex128)
-        empty_mat = np.zeros((n, 0), dtype=np.complex128)
-        empty_indices = np.array([], dtype=np.complex128)
-        empty_vecs = np.zeros((0, 0), dtype=np.complex128)
+        empty_vecs = np.zeros((n, 0), dtype=np.complex128)
+        empty_complex = np.array([], dtype=np.complex128)
         results = EigenDecompositionResults(
             stable=empty_vals,
             unstable=empty_vals,
             center=empty_vals,
-            Ws=empty_mat,
-            Wu=empty_mat,
-            Wc=empty_mat,
-            nu=empty_indices,
-            eigvals=empty_indices,
-            eigvecs=empty_vecs,
+            Ws=empty_vecs,
+            Wu=empty_vecs,
+            Wc=empty_vecs,
+            nu=empty_complex,
+            eigvals=empty_complex,
+            eigvecs=np.zeros((0, 0), dtype=np.complex128),
         )
 
-        if problem_type == _ProblemType.EIGENVALUE_DECOMPOSITION:
-            sn, un, cn, Ws, Wu, Wc = self.backend.eigenvalue_decomposition(
-                problem.A,
-                problem.config.delta,
-            )
-            results = EigenDecompositionResults(sn, un, cn, Ws, Wu, Wc,
-                                                results.nu,
-                                                results.eigvals,
-                                                results.eigvecs)
-        elif problem_type == _ProblemType.STABILITY_INDICES:
+        if problem_type in (_ProblemType.EIGENVALUE_DECOMPOSITION, _ProblemType.ALL):
+            sn, un, cn, Ws, Wu, Wc = self.backend.eigenvalue_decomposition(problem.A, problem.config.delta)
+            results = results.__class__(sn, un, cn, Ws, Wu, Wc, results.nu, results.eigvals, results.eigvecs)
+
+        if problem_type in (_ProblemType.STABILITY_INDICES, _ProblemType.ALL):
             nu, eigvals, eigvecs = self.backend.stability_indices(problem.A, problem.config.tol)
-            results = EigenDecompositionResults(results.stable,
-                                                results.unstable,
-                                                results.center,
-                                                results.Ws,
-                                                results.Wu,
-                                                results.Wc,
-                                                nu,
-                                                eigvals,
-                                                eigvecs)
-        elif problem_type == _ProblemType.ALL:
-            sn, un, cn, Ws, Wu, Wc = self.backend.eigenvalue_decomposition(
-                problem.A,
-                problem.config.delta,
+            results = results.__class__(
+                results.stable,
+                results.unstable,
+                results.center,
+                results.Ws,
+                results.Wu,
+                results.Wc,
+                nu,
+                eigvals,
+                eigvecs,
             )
-            nu, eigvals, eigvecs = self.backend.stability_indices(problem.A, problem.config.tol)
-            results = EigenDecompositionResults(sn, un, cn, Ws, Wu, Wc, nu, eigvals, eigvecs)
 
         return results

@@ -205,10 +205,8 @@ class _CenterManifoldEngine(_ReturnMapEngine):
         except Exception:
             pass
 
-        return self._interface._create_results(
-            pts_np,
-            cms_np,
-            times_np,
-            section_coord=section_coord,
+        return self._interface.to_results(
+            (pts_np, cms_np, times_np),
+            problem=problem,
         )
 

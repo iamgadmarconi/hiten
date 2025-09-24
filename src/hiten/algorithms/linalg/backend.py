@@ -15,13 +15,12 @@ References
    *Dynamical Systems, the Three-Body Problem and Space Mission Design*.
    Springer.
 """
-from typing import List, Tuple, Set
+from typing import List, Tuple
 
 import numpy as np
 
 from hiten.algorithms.linalg.types import _StabilityType, _SystemType
 from hiten.algorithms.utils.exceptions import BackendError
-from hiten.utils.log_config import logger
 
 
 class _LinalgBackend:

@@ -10,7 +10,6 @@ from hiten.algorithms.linalg.config import _EigenDecompositionConfig
 from hiten.algorithms.linalg.engine import _LinearStabilityEngine
 from hiten.algorithms.linalg.interfaces import _EigenDecompositionInterface
 from hiten.algorithms.linalg.types import (EigenDecompositionResults,
-                                           _EigenDecompositionProblem,
                                            _ProblemType, _SystemType)
 from hiten.algorithms.utils.exceptions import EngineError
 
@@ -27,7 +26,7 @@ class StabilityProperties:
     def with_default_engine(cls, *, config: _EigenDecompositionConfig) -> "StabilityProperties":
         interface = _EigenDecompositionInterface(config=config)
         backend = _LinalgBackend()
-        engine = _LinearStabilityEngine(backend=backend)
+        engine = _LinearStabilityEngine(backend=backend).with_interface(interface)
         return cls(engine, interface)
 
     @property
@@ -52,8 +51,10 @@ class StabilityProperties:
                 tol=cfg.tol,
             )
             self._interface = _EigenDecompositionInterface(config=cfg)
+            self._engine.with_interface(self._interface)
 
-        problem = self._interface.create_problem(matrix)
+        problem = self._interface.create_problem(matrix=np.asarray(matrix, dtype=float))
+        self._engine.with_interface(self._interface)
         self._result = self._engine.solve(problem)
         return self._result
 

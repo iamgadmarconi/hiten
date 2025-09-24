@@ -144,7 +144,9 @@ class _CenterManifoldInterface(
 
     def to_results(self, outputs, *, problem: _CenterManifoldMapProblem) -> CenterManifoldMapResults:
         points, states, (times, _) = outputs
-        return self._create_results(points, states, times, section_coord=problem.section_coord)
+        section_coord = problem.section_coord
+        labels = self.plane_labels(section_coord)
+        return CenterManifoldMapResults(points, states, labels, times)
 
     @staticmethod
     def create_constraints(section_coord: str, **kwargs: float) -> dict[str, float]:
@@ -340,17 +342,6 @@ class _CenterManifoldInterface(
     def plane_labels(section_coord: str) -> tuple[str, str]:
         sec_if = _get_section_interface(section_coord)
         return sec_if.plane_coords
-
-    @staticmethod
-    def _create_results(
-        points: np.ndarray,
-        states: np.ndarray,
-        times: np.ndarray | None,
-        *,
-        section_coord: str,
-    ) -> CenterManifoldMapResults:
-        labels = _CenterManifoldInterface.plane_labels(section_coord)
-        return CenterManifoldMapResults(points, states, labels, times)
 
     def _create_problem_payload(self, section_coord: str, energy: float, *, dt: float, n_iter: int, n_workers: int | None, H_blocks=None, clmo_table=None) -> _CenterManifoldMapProblem:
         default_workers = os.cpu_count() or 1

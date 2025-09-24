@@ -112,4 +112,4 @@ class _SynodicEngine(_ReturnMapEngine):
         sts_np = np.asarray(sts, dtype=float) if sts else np.empty((0, 6))
         ts_np = np.asarray(ts, dtype=float) if ts else None
 
-        return section_iface.create_results(pts_np, sts_np, ts_np)
+        return self._interface.to_results((pts_np, sts_np, ts_np), problem=problem)

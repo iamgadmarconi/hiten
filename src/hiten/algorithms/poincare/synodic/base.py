@@ -21,11 +21,8 @@ from hiten.algorithms.poincare.synodic.backend import _SynodicDetectionBackend
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
 from hiten.algorithms.poincare.synodic.engine import _SynodicEngine
 from hiten.algorithms.poincare.synodic.interfaces import (
-    _SynodicEngineConfig,
-    _SynodicSectionInterface,
-)
+    _SynodicEngineConfig, _SynodicInterface, _SynodicSectionInterface)
 from hiten.algorithms.poincare.synodic.strategies import _NoOpStrategy
-from hiten.algorithms.poincare.synodic.types import _SynodicMapProblem
 from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.plots import plot_poincare_map
 
@@ -142,10 +139,12 @@ class SynodicMap(_DetectionMapBase):
         adapter = _SynodicEngineConfig.from_config(self.config, self._section_iface)
         backend = _SynodicDetectionBackend(section_cfg=adapter.section_interface, map_cfg=adapter.config)
         strategy = _NoOpStrategy(adapter.section_interface, adapter)
+        interface = _SynodicInterface()
         return _SynodicEngine(
             backend=backend,
             seed_strategy=strategy,
             map_config=adapter,
+            interface=interface,
         )
 
     def from_trajectories(
@@ -197,7 +196,8 @@ class SynodicMap(_DetectionMapBase):
         if self._engine is None:
             self._engine = self._build_engine()
 
-        problem = self._section_iface.create_problem(
+        interface = self._engine._interface
+        problem = interface.create_problem(
             direction=direction,
             n_workers=int(self.config.n_workers or 0),
             trajectories=trajectories,

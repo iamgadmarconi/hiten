@@ -96,14 +96,6 @@ class _SynodicSectionInterface(_SectionInterface):
             trajectories=trajectories,
         )
 
-    def create_results(
-        self,
-        points: np.ndarray,
-        states: np.ndarray,
-        times: np.ndarray | None,
-    ) -> SynodicMapResults:
-        return SynodicMapResults(points, states, self.plane_coords, times)
-
     def coordinate_index(self, axis: str) -> int:
         try:
             return int(SynodicState[axis.upper()])
@@ -112,13 +104,7 @@ class _SynodicSectionInterface(_SectionInterface):
 
 
 class _SynodicInterface(
-    _PoincareBaseInterface[
-        Tuple[np.ndarray, np.ndarray],
-        _SynodicMapConfig,
-        _SynodicMapProblem,
-        SynodicMapResults,
-        Tuple[list, list, list],
-    ]
+    _PoincareBaseInterface[Tuple[np.ndarray, np.ndarray], _SynodicMapConfig, _SynodicMapProblem, SynodicMapResults, Tuple[np.ndarray, np.ndarray, np.ndarray | None]]
 ):
     section_interface: _SynodicSectionInterface
 
@@ -138,4 +124,5 @@ class _SynodicInterface(
 
     def to_results(self, outputs, *, problem: _SynodicMapProblem) -> SynodicMapResults:
         points, states, times = outputs
-        return self.section_interface.create_results(points, states, times)
+        plane_coords = self.section_interface.plane_coords if self.section_interface is not None else problem.plane_coords
+        return SynodicMapResults(points, states, plane_coords, times)
