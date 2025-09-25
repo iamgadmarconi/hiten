@@ -24,25 +24,16 @@ import numpy.typing as npt
 import pandas as pd
 
 from hiten.algorithms.common.energy import crtbp_energy, energy_to_jacobi
-from hiten.algorithms.corrector.backends.newton import _NewtonBackend
 from hiten.algorithms.corrector.config import (_LineSearchConfig,
                                                _OrbitCorrectionConfig)
-from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
-from hiten.algorithms.corrector.interfaces import \
-    _PeriodicOrbitCorrectorInterface
-from hiten.algorithms.corrector.stepping import (make_armijo_stepper,
-                                                 make_plain_stepper)
-from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
-from hiten.algorithms.dynamics.rtbp import (_compute_monodromy, _compute_stm,
-                                            _stability_indices)
-from hiten.algorithms.utils.states import (ReferenceFrame, SynodicStateVector,
-                                          Trajectory)
+from hiten.algorithms.dynamics.base import _DynamicalSystem
+from hiten.algorithms.types.adapters.orbits import _OrbitServices, _OrbitPersistenceAdapter
+from hiten.algorithms.types.core import _HitenBase
+from hiten.algorithms.types.states import (ReferenceFrame, SynodicStateVector,
+                                           Trajectory)
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
 from hiten.utils.io.common import _ensure_dir
-from hiten.utils.io.orbits import (load_periodic_orbit,
-                                   load_periodic_orbit_inplace,
-                                   save_periodic_orbit)
 from hiten.utils.log_config import logger
 from hiten.utils.plots import (animate_trajectories, plot_inertial_frame,
                                plot_rotating_frame)
@@ -52,7 +43,7 @@ if TYPE_CHECKING:
     from hiten.system.manifold import Manifold
 
 
-class PeriodicOrbit(ABC):
+class PeriodicOrbit(_HitenBase, ABC):
     """
     Abstract base-class that encapsulates a CR3BP periodic orbit.
 
@@ -106,6 +97,7 @@ class PeriodicOrbit(ABC):
         self._libration_point = libration_point
         self._system = self._libration_point.system
         self._mu = self._system.mu
+        self._services = _OrbitServices.for_system(self._system)
 
         # Determine how the initial state will be obtained and log accordingly
         if initial_state is not None:
@@ -419,14 +411,7 @@ class PeriodicOrbit(ABC):
         """
         if self.period is None:
             raise ValueError("Period must be set before computing monodromy")
-        
-        Phi = _compute_monodromy(self.var_dynsys, self.initial_state, self.period)
-        return Phi
-
-    @property
-    @abstractmethod
-    def eccentricity(self):
-        pass
+        return self._services.dynamics.monodromy(self)
 
     @property
     @abstractmethod
@@ -451,7 +436,6 @@ class PeriodicOrbit(ABC):
         self._stability_info = None
         self._period = None
         self._monodromy = None
-        logger.debug("Reset computed orbit properties due to state change")
 
     @abstractmethod
     def _initial_guess(self, **kwargs):
@@ -498,40 +482,7 @@ class PeriodicOrbit(ABC):
             line_search_config: _LineSearchConfig | bool | None = None,
             finite_difference: bool | None = None,
         ) -> tuple[np.ndarray, float]:
-        """Differential correction wrapper.
-
-        This method now delegates the heavy lifting to the generic
-        :class:`~hiten.algorithms.corrector.newton._NewtonOrbitCorrector` which
-        implements a robust Newton-Armijo scheme.
-        
-        Parameters
-        ----------
-        tol: float, optional
-            Convergence tolerance for the residual norm. The algorithm terminates
-            successfully when the norm of the residual falls below this value.
-        max_attempts: int, optional
-            Maximum number of Newton iterations to attempt before declaring
-            convergence failure.
-        forward: int, optional
-        max_delta: float, optional
-            Maximum allowed infinity norm of Newton steps. 
-        line_search_config: _LineSearchConfig | bool | None, optional
-            Configuration for line search behavior:
-
-            - True: Enable line search with default parameters
-            - False or None: Disable line search (use full Newton steps)
-            - :class:`~hiten.algorithms.corrector.config._LineSearchConfig`: Enable line search with custom parameters  
-
-        finite_difference: bool, optional
-            Force finite-difference approximation of Jacobians even when
-            analytic Jacobians are available.
-
-        Returns
-        -------
-        tuple
-            (corrected_state, period) in nondimensional units.
-        """
-        # Apply any call-time overrides into per-orbit overrides for this run
+        """Differential correction wrapper."""
         overrides: dict[str, object] = {}
         if tol is not None:
             overrides["tol"] = tol
@@ -548,27 +499,13 @@ class PeriodicOrbit(ABC):
         if overrides:
             self.update_correction(**overrides)
 
-        # Select family configuration, then apply per-orbit overrides
-        cfg_base = self._correction_config
-        cfg = self._apply_correction_overrides(cfg_base)
-
-        # Build stepper factory based on line search configuration
-        if cfg.line_search_config is True:
-            stepper_factory = make_armijo_stepper(_LineSearchConfig())
-        elif cfg.line_search_config is False or cfg.line_search_config is None:
-            stepper_factory = make_plain_stepper()
-        else:
-            # Provided a custom _LineSearchConfig
-            stepper_factory = make_armijo_stepper(cfg.line_search_config)
-
-        backend = _NewtonBackend(stepper_factory=stepper_factory)
-        interface = _PeriodicOrbitCorrectorInterface(self)
-        engine = _OrbitCorrectionEngine(backend=backend, interface=interface)
-
-        # Compose problem and delegate to engine which returns the full result
-        problem = interface.create_problem(config=cfg, stepper_factory=stepper_factory)
-        result = engine.solve(problem)
-        return result.x_corrected, result.half_period
+        result = self._services.correction.correct(self, overrides=overrides)
+        self._initial_state = result.corrected_state
+        self._period = result.period
+        self._trajectory = None
+        self._times = None
+        self._stability_info = None
+        return result.corrected_state, result.period
 
     def propagate(
         self,
@@ -578,88 +515,33 @@ class PeriodicOrbit(ABC):
         *,
         as_trajectory: bool = False,
     ) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]] | Trajectory:
-        """
-        Propagate the orbit for one period.
-        
-        Parameters
-        ----------
-        steps : int, optional
-            Number of time steps. Default is 1000.
-        method : str, optional
-            Integration method. Default is "adaptive".
-        order : int, optional
-            Integration order. Default is 8.
-            
-        Returns
-        -------
-        tuple
-            (times, trajectory) containing the time and state arrays in
-            nondimensional units.
-            
-        Raises
-        ------
-        ValueError
-            If period is not set.
-        """
         if self.period is None:
             raise ValueError("Period must be set before propagation")
-        
-        sol = _propagate_dynsys(
-            dynsys=self.system._dynsys,
-            state0=self.initial_state,
-            t0=0.0,
-            tf=self.period,
-            forward=1,
+
+        sol = self._services.dynamics.propagate(
+            self,
             steps=steps,
             method=method,
             order=order,
         )
 
-        self._trajectory = sol.states
-        self._times = sol.times
+        self._trajectory = sol.solution.states
+        self._times = sol.solution.times
 
-        return Trajectory.from_solution(
-            sol,
-            state_vector_cls=SynodicStateVector,
-            frame=ReferenceFrame.ROTATING,
-        )
+        traj = sol.trajectory
+        if as_trajectory:
+            return traj
+        return self._times, self._trajectory
 
     def compute_stability(self, **kwargs) -> Tuple:
-        """
-        Compute stability information for the orbit.
-        
-        Parameters
-        ----------
-        **kwargs
-            Additional keyword arguments passed to the STM computation.
-            
-        Returns
-        -------
-        tuple
-            (_stability_indices, eigenvalues, eigenvectors) from the monodromy matrix.
-            
-        Raises
-        ------
-        ValueError
-            If period is not set.
-        """
         if self.period is None:
             msg = "Period must be set before stability analysis"
             logger.error(msg)
             raise ValueError(msg)
-        
-        logger.info(f"Computing stability for orbit with period {self.period}")
-        # Compute STM over one period
-        _, _, Phi, _ = _compute_stm(self.libration_point._var_eq_system, self.initial_state, self.period)
-        
-        # Analyze stability
-        stability = _stability_indices(Phi)
-        self._stability_info = stability
-        
-        is_stable = np.all(np.abs(stability[0]) <= 1.0)
-        logger.info(f"Orbit stability: {'stable' if is_stable else 'unstable'}")
-        
-        return stability
+
+        stability = self._services.dynamics.compute_stability(self)
+        self._stability_info = (stability.indices, stability.eigenvalues, stability.eigenvectors)
+        return self._stability_info
 
     def manifold(self, stable: bool = True, direction: Literal["positive", "negative"] = "positive") -> "Manifold":
         """Create a manifold object for this orbit.
@@ -785,95 +667,41 @@ class PeriodicOrbit(ABC):
         logger.info(f"Orbit trajectory successfully exported to {filepath}")
 
     def save(self, filepath: str, **kwargs) -> None:
-        """Save the orbit to a file.
-        
-        Parameters
-        ----------
-        filepath : str
-            Path to save the orbit file.
-        **kwargs
-            Additional keyword arguments passed to the save function.
-        """
-        save_periodic_orbit(self, filepath, **kwargs)
-        return
+        """Save the orbit to a file."""
+        self._services.persistence.save(self, filepath, **kwargs)
 
     def load_inplace(self, filepath: str, **kwargs) -> None:
-        """Load orbit data from a file in place.
-        
-        Parameters
-        ----------
-        filepath : str
-            Path to the orbit file.
-        **kwargs
-            Additional keyword arguments passed to the load function.
-            
-        Raises
-        ------
-        FileNotFoundError
-            If the file does not exist.
-        """
-        if not os.path.exists(filepath):
-            raise FileNotFoundError(f"Orbit file not found: {filepath}")
-
-        load_periodic_orbit_inplace(self, filepath, **kwargs)
+        """Load orbit data from a file in place."""
+        self._services.persistence.load_inplace(self, filepath, **kwargs)
+        if getattr(self, "_system", None) is not None:
+            self._services = _OrbitServices.for_system(self._system)
         return
 
     @classmethod
     def load(cls, filepath: str, **kwargs) -> "PeriodicOrbit":
-        """Load an orbit from a file.
-        
-        Parameters
-        ----------
-        filepath : str
-            Path to the orbit file.
-        **kwargs
-            Additional keyword arguments passed to the load function.
-            
-        Returns
-        -------
-        :class:`~hiten.system.orbits.base.PeriodicOrbit`
-            The loaded orbit instance.
-            
-        Raises
-        ------
-        FileNotFoundError
-            If the file does not exist.
-        """
+        """Load an orbit from a file."""
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Orbit file not found: {filepath}")
-
-        return load_periodic_orbit(filepath, **kwargs)
+        adapter = _OrbitPersistenceAdapter()
+        orbit = adapter.load(filepath, **kwargs)
+        system = getattr(orbit, "_system", None)
+        if system is None:
+            raise ValueError("Serialized orbit is missing system metadata and cannot be rehydrated.")
+        orbit._services = _OrbitServices.for_system(system)
+        return orbit
 
     def __setstate__(self, state):
-        """Restore the PeriodicOrbit instance after unpickling.
-
-        The cached dynamical system used for high-performance propagation is
-        removed before pickling (it may contain numba objects) and recreated
-        lazily on first access after unpickling.
-        
-        Parameters
-        ----------
-        state : dict
-            The object state dictionary from pickling.
-        """
-        # Simply update the dictionary - the cached dynamical system will be
-        # rebuilt lazily when needed.
+        """Restore the PeriodicOrbit instance after unpickling."""
         self.__dict__.update(state)
+        if getattr(self, "_system", None) is not None:
+            self._services = _OrbitServices.for_system(self._system)
+        else:
+            self._services = _OrbitServices.for_system(System.__new__(System))
 
     def __getstate__(self):
-        """Custom state extractor to enable pickling.
-
-        We strip attributes that might keep references to non-pickleable numba
-        objects (e.g. the cached dynamical system) while leaving all the
-        essential orbital data untouched.
-        
-        Returns
-        -------
-        dict
-            The object state dictionary with unpickleable objects removed.
-        """
+        """Custom state extractor to enable pickling."""
         state = self.__dict__.copy()
-        # Remove the cached CR3BP dynamical system wrapper
+        state.pop("_services", None)
         if "_cached_dynsys" in state:
             state["_cached_dynsys"] = None
         return state

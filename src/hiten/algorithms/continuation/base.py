@@ -16,7 +16,7 @@ from hiten.algorithms.continuation.engine.engine import \
 from hiten.algorithms.continuation.interfaces import \
     _PeriodicOrbitContinuationInterface
 from hiten.algorithms.continuation.types import ContinuationResult
-from hiten.algorithms.utils.states import SynodicState
+from hiten.algorithms.types.states import SynodicState
 from hiten.system.orbits.base import PeriodicOrbit
 
 

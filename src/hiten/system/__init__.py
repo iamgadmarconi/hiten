@@ -9,15 +9,15 @@ simply write::
 from ..algorithms.poincare.centermanifold.base import CenterManifoldMap
 from ..algorithms.poincare.centermanifold.config import \
     _CenterManifoldMapConfig
-from ..algorithms.utils.states import SynodicState
+from ..algorithms.types.states import SynodicState
 from .base import System
 from .body import Body
 from .center import CenterManifold
 from .family import OrbitFamily
-from .libration.base import LibrationPoint, LinearData
+from .libration.base import LibrationPoint
 from .libration.collinear import CollinearPoint, L1Point, L2Point, L3Point
 from .libration.triangular import L4Point, L5Point, TriangularPoint
-from .manifold import Manifold, ManifoldResult
+from .manifold import Manifold
 from .orbits.base import GenericOrbit, PeriodicOrbit
 from .orbits.halo import HaloOrbit
 from .orbits.lyapunov import LyapunovOrbit
@@ -27,9 +27,7 @@ from .torus import InvariantTori, Torus
 __all__ = [
     "Body",
     "System",
-    "ManifoldResult",
     "Manifold",
-    "LinearData",
     "LibrationPoint",
     "CollinearPoint",
     "TriangularPoint",
@@ -47,9 +45,7 @@ __all__ = [
     "LyapunovOrbit",
     "VerticalOrbit",
     "SynodicState",
-    # Family
     "OrbitFamily",
-    # Tori
     "InvariantTori",
     "Torus",
 ]

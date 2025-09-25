@@ -15,65 +15,34 @@ All masses are expressed in kilograms and radii in metres (SI units).
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from hiten.algorithms.types.adapters.body import _BodyPersistenceAdapter
 from hiten.algorithms.types.core import _HitenBase
-from hiten.utils.io.body import load_body, load_body_inplace, save_body
+
+
+@dataclass
+class BodyContext:
+    persistence: _BodyPersistenceAdapter
+
+    @classmethod
+    def default(cls) -> "BodyContext":
+        return cls(persistence=_BodyPersistenceAdapter())
 
 
 class Body(_HitenBase):
-    """
-    Celestial body container.
+    """Celestial body container bound to a lightweight persistence adapter."""
 
-    Parameters
-    ----------
-    name : str
-        Human-readable identifier, for example "Earth" or "Sun".
-    mass : float
-        Gravitational mass in kilograms.
-    radius : float
-        Mean equatorial radius in metres.
-    color : str, optional
-        Hexadecimal RGB string used for visualisation. Default is "#000000".
-    parent : :class:`~hiten.system.body.Body`, optional
-        Internal parameter for parent body specification. If None, the
-        object is treated as the primary and parent is set to the
-        instance itself.
-
-    Attributes
-    ----------
-    name : str
-        Human-readable identifier.
-    mass : float
-        Gravitational mass in kilograms.
-    radius : float
-        Mean equatorial radius in metres.
-    color : str
-        Colour assigned for plotting purposes.
-    parent : :class:`~hiten.system.body.Body`
-        Central body around which this instance revolves.
-
-    Notes
-    -----
-    The class performs no unit or consistency checks; the responsibility of
-    providing coherent values lies with the caller.
-
-    Examples
-    --------
-    >>> sun = Body("Sun", 1.98847e30, 6.957e8, color="#FDB813")
-    >>> earth = Body("Earth", 5.9722e24, 6.371e6, parent=sun)
-    >>> print(earth)
-    Earth orbiting Sun
-    """
-
-    def __init__(self, name: str, mass: float, radius: float, color: str = "#000000", parent: Optional["Body"] = None):
+    def __init__(self, name: str, mass: float, radius: float, color: str = "#000000", parent: Optional["Body"] = None, *, context: Optional[BodyContext] = None):
         super().__init__()
         self._name = name
         self._mass = mass
         self._radius = radius
         self._color = color
         self._parent = parent or self
+        self._context = context or BodyContext.default()
 
     def __str__(self) -> str:
         parent_desc = f"orbiting {self.parent.name}" if self.parent is not self else "(Primary)"
@@ -108,12 +77,28 @@ class Body(_HitenBase):
         return self._parent
     
     def save(self, file_path: str | Path, **kwargs) -> None:
-        save_body(self, Path(file_path))
+        self._context.persistence.save(self, file_path, **kwargs)
 
     @classmethod
     def load(cls, file_path: str | Path, **kwargs) -> "Body":
-        return load_body(Path(file_path))
+        adapter = BodyContext.default().persistence
+        body = adapter.load(file_path, **kwargs)
+        if isinstance(body, cls) and not getattr(body, "_context", None):
+            body._context = BodyContext.default()
+        return body
 
     def load_inplace(self, file_path: str | Path) -> "Body":
-        load_body_inplace(self, Path(file_path))
+        self._context.persistence.load_inplace(self, file_path)
         return self
+    
+    def __getstate__(self):
+        """Custom pickle state that excludes unpicklable context."""
+        state = self.__dict__.copy()
+        state.pop("_context", None)
+        return state
+    
+    def __setstate__(self, state):
+        """Restore state and recreate context."""
+        self.__dict__.update(state)
+        if not hasattr(self, "_context"):
+            self._context = BodyContext.default()

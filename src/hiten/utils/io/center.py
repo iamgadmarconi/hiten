@@ -25,20 +25,19 @@ from hiten.utils.io.map import save_poincare_map, load_poincare_map
 
 if TYPE_CHECKING:
     from hiten.system.center import CenterManifold
-    from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
-    from hiten.system.hamiltonians.pipeline import HamiltonianPipeline
+    from hiten.algorithms.hamiltonian.pipeline import _HamiltonianPipeline
 
 __all__ = ["save_center_manifold", "load_center_manifold"]
 
 HDF5_VERSION = "2.0"
 """HDF5 format version for center manifold data."""
 
-def _serialize_hamiltonians(pipeline: "HamiltonianPipeline") -> bytes:
+def _serialize_hamiltonians(pipeline: "_HamiltonianPipeline") -> bytes:
     """Return a pickled representation of the pipeline's Hamiltonian cache.
     
     Parameters
     ----------
-    pipeline : :class:`~hiten.system.hamiltonians.pipeline.HamiltonianPipeline`
+    pipeline : :class:`~hiten.algorithms.hamiltonian.pipeline._HamiltonianPipeline`
         The Hamiltonian pipeline containing the cache to serialize.
         
     Returns
@@ -62,14 +61,14 @@ def _serialize_hamiltonians(pipeline: "HamiltonianPipeline") -> bytes:
     return pickle.dumps(data, protocol=pickle.HIGHEST_PROTOCOL)
 
 
-def _deserialize_hamiltonians(blob: bytes, pipeline: "HamiltonianPipeline") -> None:
+def _deserialize_hamiltonians(blob: bytes, pipeline: "_HamiltonianPipeline") -> None:
     """Deserialize Hamiltonian cache data into the pipeline.
     
     Parameters
     ----------
     blob : bytes
         Pickled representation of the Hamiltonian cache data.
-    pipeline : :class:`~hiten.system.hamiltonians.pipeline.HamiltonianPipeline`
+    pipeline : :class:`~hiten.algorithms.hamiltonian.pipeline._HamiltonianPipeline`
         The Hamiltonian pipeline to populate with the deserialized data.
         
     Notes
@@ -77,7 +76,7 @@ def _deserialize_hamiltonians(blob: bytes, pipeline: "HamiltonianPipeline") -> N
     This function reconstructs the Hamiltonian cache from serialized data,
     creating Hamiltonian objects and storing them in the pipeline's cache.
     """
-    from hiten.system.hamiltonians.base import Hamiltonian
+    from hiten.system.hamiltonian import Hamiltonian
 
     cache_data: Dict[str, Dict[str, Any]] = pickle.loads(blob)
     for form, info in cache_data.items():
@@ -143,14 +142,19 @@ def save_center_manifold(
             ham_blob = _serialize_hamiltonians(cm.pipeline)
             _write_dataset(f, "hamiltonians_pickle", np.frombuffer(ham_blob, dtype=np.uint8))
 
-    if cm._poincare_maps:
+    # Get cached maps from the dynamics adapter
+    cached_maps = getattr(cm._services.dynamics, '_cache', {})
+    poincare_maps = {key: value for key, value in cached_maps.items() 
+                    if hasattr(value, '__class__') and 'CenterManifoldMap' in str(value.__class__)}
+    
+    if poincare_maps:
         maps_dir = dir_path / "maps"
         maps_dir.mkdir(exist_ok=True)
         keys_info = []
-        for idx, (key, pmap) in enumerate(cm._poincare_maps.items()):
+        for idx, (key, pmap) in enumerate(poincare_maps.items()):
             filename = f"map_{idx}.h5"
             save_poincare_map(pmap, maps_dir / filename, compression=compression, level=level)
-            keys_info.append({"key": list(key), "file": filename})
+            keys_info.append({"key": str(key), "file": filename})
         (dir_path / "poincare_maps_keys.json").write_text(json.dumps(keys_info))
     else:
         # Remove stale files if present

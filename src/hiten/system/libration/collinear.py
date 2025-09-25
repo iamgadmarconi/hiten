@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING, Tuple
 import numpy as np
 
 from hiten.algorithms.utils.config import MPMATH_DPS
-from hiten.system.libration.base import LibrationPoint, LinearData
+from hiten.system.libration.base import LibrationPoint
 from hiten.utils.log_config import logger
 from hiten.algorithms.utils.precision import find_root, hp
 
@@ -53,36 +53,15 @@ class CollinearPoint(LibrationPoint):
     linear_modes : tuple
         (lambda1, omega1, omega2) values for the linearized system.
     """
-    def __init__(self, system: "System"):
+    def __init__(self, system: "System", *, services=None):
         if not 0 < system.mu < 0.5:
             raise ValueError(f"Mass parameter mu must be in range (0, 0.5), got {system.mu}")
-        super().__init__(system)
+        super().__init__(system, services=services)
 
     @property
     def gamma(self) -> float:
-        """
-        Get the distance ratio gamma for the libration point, calculated
-        with high precision.
-
-        Gamma is defined as the distance from the libration point to the nearest primary,
-        normalized by the distance between the primaries.
-        - For L1 and L2, gamma = |x_L - (1-mu)|
-        - For L3, gamma = |x_L + mu| 
-        (Note: This is equivalent to the root of the specific polynomial for each point).
-
-        Returns
-        -------
-        float
-            The gamma value calculated with high precision (dimensionless).
-        """
-        cached = self.cache_get(('gamma',))
-        if cached is not None:
-            return cached
-
-        gamma = self._compute_gamma()
-        logger.info(f"Gamma for {type(self).__name__} = {gamma}")
-        
-        return self.cache_set(('gamma',), gamma)
+        """High-precision distance ratio gamma supplied by the dynamics adapter."""
+        return self._services.dynamics.collinear_gamma(self)
 
     @property
     def sign(self) -> int:
@@ -143,13 +122,7 @@ class CollinearPoint(LibrationPoint):
         tuple
             (lambda1, omega1, omega2) values in nondimensional units.
         """
-        cached = self.cache_get(('linear_modes',))
-        if cached is not None:
-            return cached
-            
-        result = self._compute_linear_modes()
-        self.cache_set(('linear_modes',), result)
-        return result
+        return self._services.dynamics.collinear_linear_modes(self)
 
     @property
     @abstractmethod
@@ -310,15 +283,7 @@ class CollinearPoint(LibrationPoint):
         if n < 0:
             raise ValueError(f"Coefficient index n must be non-negative, got {n}")
             
-        cached = self.cache_get(('cn', n))
-        if cached is not None:
-            logger.debug(f"Using cached value for c{n}(mu) = {cached}")
-            return cached
-            
-        # Compute and cache the value
-        value = self._compute_cn(n)
-        logger.info(f"c{n}(mu) = {value}")
-        return self.cache_set(('cn', n), value)
+        return self._services.dynamics.collinear_cn(self, n)
 
     def _dOmega_dx(self, x: float) -> float:
         """
@@ -476,13 +441,13 @@ class CollinearPoint(LibrationPoint):
         
         return float(expr1_hp.sqrt()), float(expr2_hp.sqrt())
 
-    def _get_linear_data(self) -> LinearData:
+    def _get_linear_data(self):
         """
         Get the linear data for the Libration point.
         
         Returns
         -------
-        :class:`~hiten.system.libration.LinearData`
+        :class:`~hiten.algorithms.types.adapters.libration._LinearData`
             Object containing the linear data for the Libration point.
         """
         # Get cached values
@@ -490,7 +455,8 @@ class CollinearPoint(LibrationPoint):
         C, Cinv = self.normal_form_transform()
         
         # Create and return the LinearData object
-        return LinearData(
+        from hiten.algorithms.types.adapters.libration import _LinearData
+        return _LinearData(
             mu=self.mu,
             point=type(self).__name__[:2],  # 'L1', 'L2', 'L3'
             lambda1=lambda1, 
@@ -528,69 +494,46 @@ class CollinearPoint(LibrationPoint):
         return self._solve_gamma_polynomial(coeffs, search_range)
 
     def normal_form_transform(self) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Build the 6x6 symplectic matrix C that sends H2 to normal form.
+        return self._services.dynamics.collinear_normal_form(self)
 
-        Returns
-        -------
-        tuple
-            (C, Cinv) where C is the symplectic transformation matrix and Cinv is its inverse.
-        """
-        # Check cache first
-        cache_key = ('normal_form_transform',)
-        cached = self.cache_get(cache_key)
-        if cached is not None:
-            return cached
-            
-        # Get the numerical parameters
+    def _build_normal_form(self) -> Tuple[np.ndarray, np.ndarray]:
         lambda1, omega1, omega2 = self.linear_modes
         c2 = self._cn(2)
         s1, s2 = self._scale_factor(lambda1, omega1)
-        
-        # Add a safeguard for the vertical frequency omega2 to prevent division by zero
+
         if abs(omega2) < 1e-12:
-            logger.warning(f"Vertical frequency omega2 is very small ({omega2:.2e}). Transformation matrix may be ill-conditioned.")
-            sqrt_omega2 = 1e-6  # Use a small regularizing value
+            logger.warning(
+                "Vertical frequency omega2 is very small (%.2e). Transformation matrix may be ill-conditioned.",
+                omega2,
+            )
+            sqrt_omega2 = 1e-6
         else:
             sqrt_omega2 = np.sqrt(omega2)
 
-        # Build the 6x6 transformation matrix C numerically
         C = np.zeros((6, 6))
-        
-        # First row
+
         C[0, 0] = 2 * lambda1 / s1
         C[0, 3] = -2 * lambda1 / s1
         C[0, 4] = 2 * omega1 / s2
-        
-        # Second row
-        C[1, 0] = (lambda1**2 - 2*c2 - 1) / s1
-        C[1, 1] = (-omega1**2 - 2*c2 - 1) / s2
-        C[1, 3] = (lambda1**2 - 2*c2 - 1) / s1
-        
-        # Third row
+
+        C[1, 0] = (lambda1**2 - 2 * c2 - 1) / s1
+        C[1, 1] = (-omega1**2 - 2 * c2 - 1) / s2
+        C[1, 3] = (lambda1**2 - 2 * c2 - 1) / s1
+
         C[2, 2] = 1 / sqrt_omega2
-        
-        # Fourth row
-        C[3, 0] = (lambda1**2 + 2*c2 + 1) / s1
-        C[3, 1] = (-omega1**2 + 2*c2 + 1) / s2
-        C[3, 3] = (lambda1**2 + 2*c2 + 1) / s1
-        
-        # Fifth row
-        C[4, 0] = (lambda1**3 + (1 - 2*c2)*lambda1) / s1
-        C[4, 3] = (-lambda1**3 - (1 - 2*c2)*lambda1) / s1
-        C[4, 4] = (-omega1**3 + (1 - 2*c2)*omega1) / s2
-        
-        # Sixth row
+
+        C[3, 0] = (lambda1**2 + 2 * c2 + 1) / s1
+        C[3, 1] = (-omega1**2 + 2 * c2 + 1) / s2
+        C[3, 3] = (lambda1**2 + 2 * c2 + 1) / s1
+
+        C[4, 0] = (lambda1**3 + (1 - 2 * c2) * lambda1) / s1
+        C[4, 3] = (-lambda1**3 - (1 - 2 * c2) * lambda1) / s1
+        C[4, 4] = (-omega1**3 + (1 - 2 * c2) * omega1) / s2
+
         C[5, 5] = sqrt_omega2
-        
-        # Compute the inverse
+
         Cinv = np.linalg.inv(C)
-        
-        # Cache the result
-        result = (C, Cinv)
-        self.cache_set(cache_key, result)
-        
-        return result
+        return C, Cinv
 
 
 class L1Point(CollinearPoint):
@@ -607,8 +550,8 @@ class L1Point(CollinearPoint):
         The CR3BP system containing the mass parameter mu.
     """
     
-    def __init__(self, system: "System"):
-        super().__init__(system)
+    def __init__(self, system: "System", *, services=None):
+        super().__init__(system, services=services)
 
     @property
     def idx(self) -> int:
@@ -690,8 +633,8 @@ class L2Point(CollinearPoint):
         The CR3BP system containing the mass parameter mu.
     """
     
-    def __init__(self, system: "System"):
-        super().__init__(system)
+    def __init__(self, system: "System", *, services=None):
+        super().__init__(system, services=services)
 
     @property
     def idx(self) -> int:
@@ -772,8 +715,8 @@ class L3Point(CollinearPoint):
         The CR3BP system containing the mass parameter mu.
     """
     
-    def __init__(self, system: "System"):
-        super().__init__(system)
+    def __init__(self, system: "System", *, services=None):
+        super().__init__(system, services=services)
 
     @property
     def idx(self) -> int:

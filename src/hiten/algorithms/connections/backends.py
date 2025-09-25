@@ -17,12 +17,12 @@ See Also
 from typing import Tuple
 
 import numpy as np
-from numba import njit
+import numba
 
 from hiten.algorithms.connections.types import _ConnectionResult
 
 
-@njit(cache=False)
+@numba.njit(cache=False)
 def _pair_counts(query: np.ndarray, ref: np.ndarray, r2: float) -> np.ndarray:
     """Return for each query point the number of reference points within radius^2.
 
@@ -62,7 +62,7 @@ def _pair_counts(query: np.ndarray, ref: np.ndarray, r2: float) -> np.ndarray:
     return counts
 
 
-@njit(cache=False)
+@numba.njit(cache=False)
 def _exclusive_prefix_sum(a: np.ndarray) -> np.ndarray:
     """Compute exclusive prefix sum of an integer array.
 
@@ -91,7 +91,7 @@ def _exclusive_prefix_sum(a: np.ndarray) -> np.ndarray:
     return out
 
 
-@njit(cache=False)
+@numba.njit(cache=False)
 def _radpair2d(query: np.ndarray, ref: np.ndarray, radius: float) -> np.ndarray:
     """Find all pairs (i,j) where distance(query[i], ref[j]) <= radius in 2D.
 
@@ -165,7 +165,7 @@ def _radius_pairs_2d(query: np.ndarray, ref: np.ndarray, radius: float) -> np.nd
     return _radpair2d(q, r, float(radius))
 
 
-@njit(cache=False)
+@numba.njit(cache=False)
 def _nearest_neighbor_2d_numba(points: np.ndarray) -> np.ndarray:
     """Find the nearest neighbor for each point in a 2D array (numba-accelerated).
 
@@ -228,7 +228,7 @@ def _nearest_neighbor_2d(points: np.ndarray) -> np.ndarray:
     return _nearest_neighbor_2d_numba(p)
 
 
-@njit(cache=False)
+@numba.njit(cache=False)
 def _closest_points_on_segments_2d(a0x: float, a0y: float, a1x: float, a1y: float,
                                    b0x: float, b0y: float, b1x: float, b1y: float) -> Tuple[float, float, float, float, float, float]:
     """Find the closest points between two 2D line segments.
@@ -314,8 +314,8 @@ def _closest_points_on_segments_2d(a0x: float, a0y: float, a1x: float, a1y: floa
     return s, t, px, py, qx, qy
 
 
-def _refine_pairs_on_section(pu: np.ndarray, ps: np.ndarray, pairs: np.ndarray, nn_u: np.ndarray, nn_s: np.ndarray,
-                             *, max_seg_len: float = 1e9) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+@numba.njit(cache=False)
+def _refine_pairs_on_section(pu: np.ndarray, ps: np.ndarray, pairs: np.ndarray, nn_u: np.ndarray, nn_s: np.ndarray, max_seg_len: float = 1e9) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Refine matched pairs using closest points between local segments.
 
     Parameters

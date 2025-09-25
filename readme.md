@@ -74,7 +74,7 @@ manifold.plot()
    cm = l1.get_center_manifold(degree=10)
    cm.compute()
 
-   initial_state = cm.ic(poincare_point=[0.0, 0.0], energy=0.6, section_coord="q3")
+   initial_state = cm.to_synodic(poincare_point=[0.0, 0.0], energy=0.6, section_coord="q3")
 
    orbit = VerticalOrbit(l1, initial_state=initial_state)
    orbit.correct(max_attempts=100)
@@ -96,7 +96,7 @@ manifold.plot()
    ```python
    from hiten import System, OrbitFamily
    from hiten.algorithms import StateParameter
-   from hiten.algorithms.utils.states import SynodicState
+   from hiten.algorithms.types.states import SynodicState
 
    system = System.from_bodies("earth", "moon")
    l1 = system.get_libration_point(1)
@@ -165,7 +165,7 @@ manifold.plot()
    cm = l_point.get_center_manifold(degree=6)
    cm.compute()
 
-   ic_seed = cm.ic([0.0, 0.0], 0.6, "q3") # Good initial guess from CM
+   ic_seed = cm.to_synodic([0.0, 0.0], 0.6, "q3") # Good initial guess from CM
 
    orbit = VerticalOrbit(l_point, initial_state=ic_seed)
    orbit.correct(max_attempts=100, finite_difference=True)

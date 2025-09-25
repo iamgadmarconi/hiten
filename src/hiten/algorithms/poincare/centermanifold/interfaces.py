@@ -33,7 +33,7 @@ from hiten.algorithms.types.core import BackendCall
 from hiten.algorithms.polynomial.operations import _polynomial_evaluate
 from hiten.algorithms.types.exceptions import BackendError, ConvergenceError
 from hiten.algorithms.utils.rootfinding import solve_bracketed_brent
-from hiten.algorithms.utils.states import RestrictedCenterManifoldState
+from hiten.algorithms.types.states import RestrictedCenterManifoldState
 
 
 @dataclass(frozen=True)
@@ -143,7 +143,7 @@ class _CenterManifoldInterface(
         return info
 
     def to_results(self, outputs, *, problem: _CenterManifoldMapProblem) -> CenterManifoldMapResults:
-        points, states, (times, _) = outputs
+        points, states, times = outputs
         section_coord = problem.section_coord
         labels = self.plane_labels(section_coord)
         return CenterManifoldMapResults(points, states, labels, times)

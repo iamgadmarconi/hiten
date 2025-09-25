@@ -20,85 +20,22 @@ and Space Mission Design".
 """
 
 import os
-from dataclasses import dataclass
-from typing import List, Literal, Tuple
+from typing import Literal
 
-import numpy as np
 import pandas as pd
-from tqdm import tqdm
 
-from hiten.algorithms.common.energy import _max_rel_energy_error
-from hiten.algorithms.common.mani import _totime
-from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
-from hiten.algorithms.dynamics.rtbp import _compute_stm
-from hiten.algorithms.linalg.base import StabilityProperties
-from hiten.algorithms.linalg.config import _EigenDecompositionConfig
-from hiten.algorithms.linalg.interfaces import _EigenDecompositionInterface
-from hiten.algorithms.linalg.types import (_EigenDecompositionProblem,
-                                           _ProblemType, _SystemType)
+from hiten.algorithms.dynamics.base import _DynamicalSystem
 from hiten.system.base import System
 from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.io.common import _ensure_dir
-from hiten.utils.io.manifold import load_manifold, save_manifold
 from hiten.utils.log_config import logger
 from hiten.utils.plots import plot_manifold
+from hiten.algorithms.types.adapters.manifold import _ManifoldServices
+from hiten.algorithms.types.core import _HitenBase
 
 
-@dataclass
-class ManifoldResult:
-    """
-    Output container produced by :meth:`~hiten.system.manifold.Manifold.compute`.
 
-    Parameters
-    ----------
-    ysos : list[float]
-        y-coordinates of Poincare section crossings in nondimensional units.
-    dysos : list[float]
-        Corresponding y-velocity values in nondimensional units.
-    states_list : list[numpy.ndarray]
-        Propagated state arrays, one per trajectory.
-    times_list : list[numpy.ndarray]
-        Time grids associated with states_list in nondimensional units.
-    _successes : int
-        Number of trajectories that intersected the section.
-    _attempts : int
-        Total number of trajectories launched.
-
-    Attributes
-    ----------
-    success_rate : float
-        Success rate as _successes / max(1, _attempts).
-    """
-    ysos: List[float]
-    dysos: List[float]
-    states_list: List[float]
-    times_list: List[float]
-    _successes: int
-    _attempts: int
-
-    @property
-    def success_rate(self) -> float:
-        """Success rate of manifold computation.
-        
-        Returns
-        -------
-        float
-            Success rate as _successes / max(1, _attempts).
-        """
-        return self._successes / max(self._attempts, 1)
-    
-    def __iter__(self):
-        """Return an iterator over the manifold data.
-        
-        Returns
-        -------
-        iterator
-            Iterator over (ysos, dysos, states_list, times_list).
-        """
-        return iter((self.ysos, self.dysos, self.states_list, self.times_list))
-
-
-class Manifold:
+class Manifold(_HitenBase):
     """
     Compute and cache the invariant manifold of a periodic orbit.
 
@@ -142,30 +79,12 @@ class Manifold:
         self._libration_point = self._generating_orbit.libration_point
         self._system = self._generating_orbit.system
         self._mu = self._system.mu
-
         self._stable = 1 if stable else -1
         self._direction = 1 if direction == "positive" else -1
 
-        self._forward = -self._stable
-
-        self._successes = 0
-        self._attempts = 0
         self._last_compute_params: dict = None
-        self._manifold_result: ManifoldResult = None
-
-        
-        try:
-            self.xx, self.tt, self.phi_T, self.PHI = _compute_stm(
-                self.var_dynsys,
-                self.generating_orbit.initial_state,
-                self.generating_orbit.period,
-                steps=2000,
-                forward=self.forward,
-            )
-        except Exception as e:
-            logger.error(f"Failed to propagate STM once: {e}")
-            raise
-        self._stability_properties: StabilityProperties | None = None
+        self._manifold_result = None
+        self._services = _ManifoldServices.for_manifold(self)
 
     @property
     def generating_orbit(self) -> PeriodicOrbit:
@@ -234,39 +153,6 @@ class Manifold:
         return self._direction
 
     @property
-    def forward(self) -> int:
-        """Encoded forward direction: 1 for forward, -1 for backward.
-        
-        Returns
-        -------
-        int
-            Encoded forward direction: 1 for forward, -1 for backward.
-        """
-        return self._forward
-
-    @property
-    def successes(self) -> int:
-        """Number of successful computations.
-        
-        Returns
-        -------
-        int
-            Number of successful computations.
-        """
-        return self._successes
-    
-    @property
-    def attempts(self) -> int:
-        """Number of attempts.
-        
-        Returns
-        -------
-        int
-            Number of attempts.
-        """
-        return self._attempts
-
-    @property
     def dynsys(self) -> _DynamicalSystem:
         """Dynamical system of the manifold.
         
@@ -300,18 +186,7 @@ class Manifold:
         return self.system.jacobian_dynsys
 
     @property
-    def stability_properties(self) -> StabilityProperties:
-        """Stability properties of the manifold.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.linalg.base.StabilityProperties`
-            The stability properties of the manifold.
-        """
-        return self._stability_properties
-
-    @property
-    def manifold_result(self) -> ManifoldResult:
+    def manifold_result(self):
         """Cached result from the last successful compute call.
         
         Returns
@@ -327,79 +202,7 @@ class Manifold:
     def __repr__(self):
         return self.__str__()
 
-    def _compute_manifold_section(
-        self,
-        period: float,
-        fraction: float,
-        displacement: float,
-        xx: np.ndarray,
-        tt: np.ndarray,
-        PHI: np.ndarray,
-        eigvec: np.ndarray,
-    ):
-        """
-        Compute a section of the invariant manifold.
-
-        Parameters
-        ----------
-        period : float
-            Period of the periodic orbit in nondimensional units.
-        fraction : float
-            Fraction of the period to compute the section at.
-        displacement : float
-            Displacement magnitude in nondimensional units.
-        xx : numpy.ndarray
-            State trajectory from STM computation.
-        tt : numpy.ndarray
-            Time grid from STM computation.
-        PHI : numpy.ndarray
-            State transition matrix from STM computation.
-        eigvec : numpy.ndarray
-            Pre-selected eigenvector of the monodromy matrix.
-
-        Returns
-        -------
-        numpy.ndarray
-            Initial condition displaced along the invariant-manifold branch
-            in nondimensional units.
-
-        Raises
-        ------
-        ValueError
-            If the requested eigenvector is not available.
-        """
-        mfrac = _totime(tt, fraction * period)
-        
-        if np.isscalar(mfrac):
-            mfrac_idx = mfrac
-        else:
-            mfrac_idx = mfrac[0]
-
-        phi_frac_flat = PHI[mfrac_idx, :36]
-        phi_frac = phi_frac_flat.reshape((6, 6))
-
-        MAN = self.direction * (phi_frac @ eigvec)
-
-        disp_magnitude = np.linalg.norm(MAN[0:3])
-
-        if disp_magnitude < 1e-14:
-            logger.warning(f"Very small displacement magnitude: {disp_magnitude:.2e}, setting to 1.0")
-            disp_magnitude = 1.0
-        d = displacement / disp_magnitude
-
-        fracH = xx[mfrac_idx, :].copy()
-
-        x0W = fracH + d * MAN.real
-        x0W = x0W.flatten()
-        
-        if abs(x0W[2]) < 1.0e-15:
-            x0W[2] = 0.0
-        if abs(x0W[5]) < 1.0e-15:
-            x0W[5] = 0.0
-
-        return x0W
-
-    def compute(self, step: float = 0.02, integration_fraction: float = 0.75, NN: int = 1, displacement: float = 1e-6, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8, **kwargs):
+    def compute(self, step: float = 0.02, integration_fraction: float = 0.75, NN: int = 1, displacement: float = 1e-6, dt: float = 1e-3, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8, **kwargs):
         """
         Generate manifold trajectories and build a Poincare map.
 
@@ -428,8 +231,6 @@ class Manifold:
 
             show_progress : bool, default True
                 Display a tqdm progress bar.
-            dt : float, default 1e-3
-                Nominal time step for fixed-step integrators in nondimensional units.
             energy_tol : float, default 1e-6
                 Maximum relative variation of the Jacobi constant allowed along a trajectory.
                 Larger deviations indicate numerical error (often triggered by near-singular
@@ -462,176 +263,24 @@ class Manifold:
         >>> print(f"Success rate: {result.success_rate:.0%}")
         """
         kwargs.setdefault("show_progress", True)
-        kwargs.setdefault("dt", 1e-3)
         kwargs.setdefault("energy_tol", 1e-6)
         kwargs.setdefault("safe_distance", 2.0)
 
-        dist_m = self.generating_orbit.system.distance * 1e3
-        pr_nd = self.generating_orbit.system.primary.radius / dist_m
-        sr_nd = self.generating_orbit.system.secondary.radius / dist_m
-        safe_r1 = kwargs["safe_distance"] * pr_nd
-        safe_r2 = kwargs["safe_distance"] * sr_nd
-        current_params = {
-            "step": step,
-            "integration_fraction": integration_fraction,
-            "NN": NN,
-            "displacement": displacement,
-            "safe_distance": kwargs["safe_distance"],
-            **kwargs,
-        }
-
-        if self._manifold_result is not None and self._last_compute_params == current_params:
-            logger.info("Returning cached manifold result for identical parameters.")
-            return self._manifold_result
-
-        logger.info("New computation parameters detected or first run, computing manifold.")
-        self._manifold_result = None
-        self._successes = 0
-        self._attempts = 0
-
-        config = _EigenDecompositionConfig(
-            problem_type=_ProblemType.ALL,
-            system_type=_SystemType.DISCRETE,
-        )
-        if self._stability_properties is None:
-            self._stability_properties = StabilityProperties.with_default_engine(config=config)
-        self._stability_properties.compute(self.phi_T, system_type=config.system_type, problem_type=config.problem_type)
-        sn, un, _ = self._stability_properties.eigenvalues
-        Ws, Wu, _ = self._stability_properties.eigenvectors
-
-        snreal_vals, snreal_vecs = self._get_real_eigenvectors(Ws, sn)
-        unreal_vals, unreal_vecs = self._get_real_eigenvectors(Wu, un)
-
-        col_idx = NN - 1  # convert 1-based to 0-based
-        if self.stable == 1:
-            if snreal_vecs.shape[1] <= col_idx or col_idx < 0:
-                raise ValueError(
-                    f"Requested stable eigenvector {NN} not available. "
-                    f"Only {snreal_vecs.shape[1]} real stable eigenvectors found."
-                )
-            eigvec = snreal_vecs[:, col_idx]
-            eigval = np.real(snreal_vals[col_idx])
-            logger.debug(
-                f"Using stable manifold direction with eigenvalue {eigval:.6f} for {NN}th eigenvector (cached)"
-            )
-        else:
-            if unreal_vecs.shape[1] <= col_idx or col_idx < 0:
-                raise ValueError(
-                    f"Requested unstable eigenvector {NN} not available. "
-                    f"Only {unreal_vecs.shape[1]} real unstable eigenvectors found."
-                )
-            eigvec = unreal_vecs[:, col_idx]
-            eigval = np.real(unreal_vals[col_idx])
-            logger.debug(
-                f"Using unstable manifold direction with eigenvalue {eigval:.6f} for {NN}th eigenvector (cached)"
-            )
-
-        ysos, dysos, states_list, times_list = [], [], [], []
-
-        fractions = np.arange(0.0, 1.0, step)
-
-        iterator = (
-            tqdm(fractions, desc="Computing manifold")
-            if kwargs["show_progress"]
-            else fractions
+        result = self._services.dynamics.compute_manifold(
+            step=step,
+            integration_fraction=integration_fraction,
+            NN=NN,
+            displacement=displacement,
+            method=method,
+            order=order,
+            dt=dt,
+            energy_tol=kwargs["energy_tol"],
+            safe_distance=kwargs["safe_distance"],
+            show_progress=kwargs["show_progress"],
         )
 
-        for fraction in iterator:
-            self._attempts += 1
-
-            try:
-
-                x0W = self._compute_manifold_section(
-                    period=self.generating_orbit.period,
-                    fraction=fraction,
-                    displacement=displacement,
-                    xx=self.xx,
-                    tt=self.tt,
-                    PHI=self.PHI,
-                    eigvec=eigvec,
-                ).astype(np.float64)
-                tf = integration_fraction * 2 * np.pi
-                dt = abs(kwargs["dt"])
-                steps = max(int(abs(tf) / dt) + 1, 100)
-
-                sol = _propagate_dynsys(
-                    dynsys=self.dynsys,
-                    state0=x0W,
-                    t0=0.0,
-                    tf=tf,
-                    forward=self.forward,
-                    steps=steps,
-                    method=method,
-                    order=order,
-                    flip_indices=slice(0, 6),
-                )
-                states, times = sol.states, sol.times
-
-                x = states[:, 0]
-                y = states[:, 1]
-                z = states[:, 2]
-
-                r1 = np.sqrt((x + self.mu) ** 2 + y ** 2 + z ** 2)
-                r2 = np.sqrt((x - 1 + self.mu) ** 2 + y ** 2 + z ** 2)
-
-                if (r1.min() < safe_r1) or (r2.min() < safe_r2):
-                    logger.debug(
-                        f"Fraction {fraction:.3f}: Trajectory discarded due to body-radius proximity (min(r1)={r1.min():.2e}, min(r2)={r2.min():.2e})"
-                    )
-                    continue
-
-                max_energy_err = _max_rel_energy_error(states, self.mu)
-
-                if max_energy_err > kwargs["energy_tol"]:
-                    logger.warning(
-                        f"Fraction {fraction:.3f}: Trajectory discarded due to energy drift (|C(t)|/|C(0)|={max_energy_err:.2e} > {kwargs['energy_tol']:.1e})"
-                    )
-                    continue
-
-                states_list.append(states)
-                times_list.append(times)
-
-                # Section-of-section hits (Poincare map points) are no longer
-                # extracted here. This logic will be handled by the poincare module.
-
-            except Exception as e:
-                err = f"Error computing manifold: {e}"
-                logger.error(err)
-                continue
-
-        self._manifold_result = ManifoldResult(
-            ysos, dysos, states_list, times_list, self.successes, self.attempts
-        )
-        self._last_compute_params = current_params
-        return self._manifold_result
-
-    def _get_real_eigenvectors(self, vectors: np.ndarray, values: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Return eigenvalues/eigenvectors with zero imaginary part (vectorised).
-        
-        Parameters
-        ----------
-        vectors : numpy.ndarray
-            Eigenvectors matrix.
-        values : numpy.ndarray
-            Eigenvalues array.
-            
-        Returns
-        -------
-        tuple of numpy.ndarray
-            Tuple of (real_eigenvalues, real_eigenvectors).
-        """
-        mask = np.isreal(values)
-
-        # Eigenvalues that are real within numerical precision
-        real_vals_arr = values[mask].astype(np.complex128)
-
-        # Corresponding eigenvectors (may be none)
-        if np.any(mask):
-            real_vecs_arr = vectors[:, mask]
-        else:
-            real_vecs_arr = np.zeros((vectors.shape[0], 0), dtype=np.complex128)
-
-        return real_vals_arr, real_vecs_arr
+        self._manifold_result = result
+        return result
 
     def plot(self, dark_mode: bool = True, save: bool = False, filepath: str = 'manifold.svg', **kwargs):
         """
@@ -724,7 +373,7 @@ class Manifold:
         **kwargs
             Additional keyword arguments for the save operation.
         """
-        save_manifold(self, filepath, **kwargs)
+        self._services.persistence.save(self, filepath, **kwargs)
         return
 
     @classmethod
@@ -748,4 +397,5 @@ class Manifold:
         """
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Manifold file not found: {filepath}")
-        return load_manifold(filepath)
+        manifold = _ManifoldServices.for_loading().persistence.load(filepath)
+        return manifold

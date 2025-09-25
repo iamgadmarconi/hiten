@@ -14,24 +14,21 @@ distance between the primaries is unity and the orbital period is 2*pi.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, Literal, Optional, Sequence
+from typing import Dict, Literal, Sequence
 
 import numpy as np
 
-from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
-from hiten.algorithms.dynamics.rtbp import (jacobian_dynsys, rtbp_dynsys,
-                                            variational_dynsys)
-from hiten.algorithms.utils.coordinates import _get_mass_parameter
-from hiten.algorithms.utils.states import (ReferenceFrame, SynodicStateVector,
-                                          Trajectory)
-from hiten.system.body import Body
+from hiten.algorithms.types.adapters.libration import (
+    _LibrationDynamicsAdapter,
+    _LibrationServices,
+)
+from hiten.algorithms.types.adapters.system import _SystemServices
 from hiten.algorithms.types.core import _HitenBase
+from hiten.algorithms.types.states import (ReferenceFrame, SynodicStateVector,
+                                           Trajectory)
+from hiten.system.body import Body
 from hiten.system.libration.base import LibrationPoint
-from hiten.system.libration.collinear import L1Point, L2Point, L3Point
-from hiten.system.libration.triangular import L4Point, L5Point
 from hiten.utils.constants import Constants
-from hiten.utils.io.system import load_system, load_system_inplace, save_system
-from hiten.utils.log_config import logger
 
 
 class System(_HitenBase):
@@ -72,38 +69,13 @@ class System(_HitenBase):
     """
     def __init__(self, primary: Body, secondary: Body, distance: float):
         super().__init__()
-        self._primary: Body = primary
-        self._secondary: Body = secondary
-        self._distance: float = distance
-        self._mu: float = _get_mass_parameter(primary.mass, secondary.mass)
-
-        logger.info(f"System: {secondary.name} orbiting {primary.name}")
-        logger.info("-" * 40)
-        logger.info("Body Parameters:")
-        logger.info(f"Primary     : {primary.name}")
-        logger.info(f"Mass        : {primary.mass:.6e} kg")
-        logger.info(f"Radius      : {primary.radius:.6e} m")
-        logger.info(f"Secondary   : {secondary.name}")
-        logger.info(f"Mass        : {secondary.mass:.6e} kg") 
-        logger.info(f"Radius      : {secondary.radius:.6e} m")
-        logger.info("-" * 40)
-        logger.info("System Parameters:")
-        logger.info(f"Distance    : {distance:.6e} km")
-        logger.info(f"Mass Ratio  : {self._mu:.8e}")
-        logger.info(f"mu_1        : {1-self._mu:.8e} (primary)")
-        logger.info(f"mu_2        : {self._mu:.8e} (secondary)")
-        logger.info("-" * 40)
-
-        self._dynsys: _DynamicalSystem = rtbp_dynsys(self.mu, name=f"RTBP_{self.primary.name}_{self.secondary.name}")
-        self._var_dynsys: _DynamicalSystem = variational_dynsys(self.mu, name=f"VarEq_{self.primary.name}_{self.secondary.name}")
-        self._jacobian_dynsys: _DynamicalSystem = jacobian_dynsys(self.mu, name=f"Jacobian_{self.primary.name}_{self.secondary.name}")
-        self._cache = {
-            1: L1Point(self),
-            2: L2Point(self),
-            3: L3Point(self),
-            4: L4Point(self),
-            5: L5Point(self)
-        }
+        self._services = _SystemServices.from_bodies(primary, secondary, distance)
+        self._primary: Body = self._services.primary
+        self._secondary: Body = self._services.secondary
+        self._distance: float = self._services.distance
+        self._mu: float = self._services.mu
+        self._libration_points: Dict[int, LibrationPoint] = {}
+        self._libration_dynamics = _LibrationDynamicsAdapter()
 
     def __str__(self) -> str:
         return f"{self.secondary.name} orbiting {self.primary.name}"
@@ -164,10 +136,10 @@ class System(_HitenBase):
         dict[int, LibrationPoint]
             Dictionary mapping integer identifiers {1,...,5} to libration point objects.
         """
-        return self._cache
+        return self._libration_points
         
     @property
-    def dynsys(self) -> _DynamicalSystem:
+    def dynsys(self):
         """Underlying vector field instance.
         
         Returns
@@ -175,10 +147,10 @@ class System(_HitenBase):
         :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
             The underlying vector field instance.
         """
-        return self._dynsys
+        return self._services.dynamics.dynsys
 
     @property
-    def var_dynsys(self) -> _DynamicalSystem:
+    def var_dynsys(self):
         """Underlying variational equations system.
         
         Returns
@@ -186,10 +158,10 @@ class System(_HitenBase):
         :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
             The underlying variational equations system.
         """
-        return self._var_dynsys
+        return self._services.dynamics.variational
 
     @property
-    def jacobian_dynsys(self) -> _DynamicalSystem:
+    def jacobian_dynsys(self):
         """Underlying Jacobian evaluation system.
         
         Returns
@@ -197,7 +169,7 @@ class System(_HitenBase):
         :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
             The underlying Jacobian evaluation system.
         """
-        return self._jacobian_dynsys
+        return self._services.dynamics.jacobian
 
     def get_libration_point(self, index: int) -> LibrationPoint:
         """
@@ -223,10 +195,29 @@ class System(_HitenBase):
         >>> sys = System(primary, secondary, distance)
         >>> L1 = sys.get_libration_point(1)
         """
-        point: Optional[LibrationPoint] = self.cache_get(index)
-        if point is None:
-            raise ValueError(f"Invalid Libration point index: {index}. Must be 1, 2, 3, 4, or 5.")
-        return point
+        if index not in self._libration_points:
+            self._libration_points[index] = self._build_libration_point(index)
+        return self._libration_points[index]
+
+    def _build_libration_point(self, index: int) -> LibrationPoint:
+        """Instantiate and wire a libration point with shared services."""
+        from hiten.system.libration.collinear import (L1Point, L2Point, L3Point)
+        from hiten.system.libration.triangular import (L4Point, L5Point)
+
+        mapping: Dict[int, type[LibrationPoint]] = {
+            1: L1Point,
+            2: L2Point,
+            3: L3Point,
+            4: L4Point,
+            5: L5Point,
+        }
+        try:
+            point_cls = mapping[index]
+        except KeyError as exc:
+            raise ValueError("Libration point index must be in {1,2,3,4,5}.") from exc
+
+        services = _LibrationServices.with_shared_dynamics(self._libration_dynamics)
+        return point_cls(self, services=services)
 
     def propagate(
         self,
@@ -263,21 +254,20 @@ class System(_HitenBase):
 
         Returns
         -------
-        :class:`~hiten.algorithms.utils.states.Trajectory`
+        :class:`~hiten.algorithms.types.states.Trajectory`
             The propagated trajectory.
         """
 
         forward = kwargs.get("forward", 1)
 
-        sol = _propagate_dynsys(
-            dynsys=self._dynsys,
-            state0=initial_conditions,
-            t0=0.0,
+        sol = self._services.dynamics.propagate(
+            initial_conditions,
             tf=tf,
-            forward=forward,
             steps=steps,
             method=method,
             order=order,
+            forward=forward,
+            extra_kwargs={k: v for k, v in kwargs.items() if k != "forward"},
         )
 
         return Trajectory.from_solution(
@@ -366,12 +356,7 @@ class System(_HitenBase):
             Dictionary containing the serializable state of the System.
         """
         state = self.__dict__.copy()
-        if "_dynsys" in state:
-            state["_dynsys"] = None
-        if "_var_dynsys" in state:
-            state["_var_dynsys"] = None
-        if "_jacobian_dynsys" in state:
-            state["_jacobian_dynsys"] = None
+        state.pop("_services", None)
         return state
 
     def __setstate__(self, state):
@@ -388,21 +373,22 @@ class System(_HitenBase):
         """
         self.__dict__.update(state)
 
-        if self.__dict__.get("_dynsys") is None:
-            self._dynsys = rtbp_dynsys(self.mu, name=self.primary.name + "_" + self.secondary.name)
-            self._var_dynsys = variational_dynsys(self.mu, name=self.primary.name + "_" + self.secondary.name)
-            self._jacobian_dynsys = jacobian_dynsys(self.mu, name=self.primary.name + "_" + self.secondary.name)
+        if not hasattr(self, "_services"):
+            self._services = _SystemServices.from_bodies(self._primary, self._secondary, self._distance)
 
     def save(self, file_path: str | Path, **kwargs) -> None:
         """Save this System to a file."""
-        save_system(self, file_path)
+        self._services.persistence.save(self, file_path)
 
     @classmethod
     def load(cls, file_path: str | Path, **kwargs) -> "System":
         """Load a System from a file (new instance)."""
-        return load_system(file_path)
+        services = _SystemServices.from_file(file_path)
+        system = services.persistence.load(file_path)
+        system._services = services
+        return system
 
     def load_inplace(self, file_path: str | Path) -> "System":
         """Load data into this System instance from a file (in place)."""
-        load_system_inplace(self, file_path)
+        self._services.persistence.load_inplace(self, file_path)
         return self

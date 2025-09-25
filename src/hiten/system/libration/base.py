@@ -2,72 +2,21 @@
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Tuple
 
 import numpy as np
 
 from hiten.algorithms.common.energy import crtbp_energy, energy_to_jacobi
-from hiten.algorithms.dynamics.base import _DynamicalSystem
 from hiten.algorithms.dynamics.hamiltonian import _HamiltonianSystem
-from hiten.algorithms.dynamics.rtbp import jacobian_dynsys, variational_dynsys
-from hiten.algorithms.linalg.base import StabilityProperties
-from hiten.algorithms.linalg.config import _EigenDecompositionConfig
-from hiten.algorithms.linalg.interfaces import _LibrationPointInterface
-from hiten.algorithms.linalg.types import _ProblemType, _SystemType
+from hiten.algorithms.types.adapters.center import _CenterManifoldServices
+from hiten.algorithms.types.adapters.libration import _LibrationServices
 from hiten.algorithms.types.core import _HitenBase
-from hiten.utils.io.libration import (load_libration_point,
-                                      load_libration_point_inplace,
-                                      save_libration_point)
 
 if TYPE_CHECKING:
     from hiten.system.base import System
     from hiten.system.center import CenterManifold
     from hiten.system.orbits.base import PeriodicOrbit
-
-
-@dataclass(slots=True)
-class LinearData:
-    """
-    Container with linearised CR3BP invariants.
-
-    Parameters
-    ----------
-    mu : float
-        Mass ratio mu = m2/(m1+m2) of the primaries (dimensionless).
-    point : str
-        Identifier of the libration point ('L1', 'L2' or 'L3').
-    lambda1 : float | None
-        Real hyperbolic eigenvalue lambda1 > 0 associated with the
-        saddle behaviour along the centre-saddle subspace (nondimensional units).
-    omega1 : float
-        First elliptic frequency omega1 > 0 of the centre subspace (nondimensional units).
-    omega2 : float
-        Second elliptic frequency omega2 > 0 of the centre subspace (nondimensional units).
-    omega3: float | None
-        Vertical frequency omega3 of the centre subspace (nondimensional units).
-    C : numpy.ndarray, shape (6, 6)
-        Symplectic change-of-basis matrix such that C^(-1)AC is in real
-        Jordan canonical form, with A the Jacobian of the vector
-        field evaluated at the libration point.
-    Cinv : numpy.ndarray, shape (6, 6)
-        Precomputed inverse of C.
-
-    Notes
-    -----
-    The record is immutable thanks to slots=True; all fields are plain
-    numpy.ndarray or scalars so the instance can be safely cached
-    and shared among different computations.
-    """
-    mu: float
-    point: str        # 'L1', 'L2', 'L3'
-    lambda1: float | None
-    omega1: float
-    omega2: float
-    omega3: float | None
-    C: np.ndarray     # 6x6 symplectic transform
-    Cinv: np.ndarray  # inverse
 
 
 class LibrationPoint(_HitenBase, ABC):
@@ -130,15 +79,16 @@ class LibrationPoint(_HitenBase, ABC):
     array([...])
     """
     
-    def __init__(self, system: "System"):
+    def __init__(self, system: "System", services: _LibrationServices | None = None):
         super().__init__()
         self._system = system
         self._mu = system.mu
 
-        self._linear_data: LinearData | None = None
+        self._linear_data = None
         self._cm_registry = {}
-        self._stability_properties: StabilityProperties | None = None
-    
+        self._services = services or _LibrationServices.default()
+        self._center_services = {}
+
     def __str__(self) -> str:
         return f"{type(self).__name__}(mu={self.mu:.6e})"
 
@@ -153,8 +103,9 @@ class LibrationPoint(_HitenBase, ABC):
         recomputed on next access.
         """
         super().cache_clear()
-        self._stability_properties = None
         self._linear_data = None
+        self._center_services.clear()
+        self._services.dynamics.reset_point(self)
 
     @property
     def system(self) -> "System":
@@ -167,7 +118,7 @@ class LibrationPoint(_HitenBase, ABC):
         return self._mu
 
     @property
-    def dynsys(self) -> _DynamicalSystem:
+    def dynsys(self):
         """Underlying vector field instance.
         
         Returns
@@ -178,7 +129,7 @@ class LibrationPoint(_HitenBase, ABC):
         return self.system.dynsys
 
     @property
-    def var_dynsys(self) -> _DynamicalSystem:
+    def var_dynsys(self):
         """Underlying variational equations system.
         
         Returns
@@ -189,7 +140,7 @@ class LibrationPoint(_HitenBase, ABC):
         return self.system.var_dynsys
 
     @property
-    def jacobian_dynsys(self) -> _DynamicalSystem:
+    def jacobian_dynsys(self):
         """Underlying Jacobian evaluation system.
         
         Returns
@@ -271,15 +222,8 @@ class LibrationPoint(_HitenBase, ABC):
         bool
             True if the libration point is linearly stable.
         """
-        config = _EigenDecompositionConfig(
-            problem_type=_ProblemType.EIGENVALUE_DECOMPOSITION,
-            system_type=_SystemType.CONTINUOUS,
-        )
-        problem = _LibrationPointInterface(config=config).create_problem(self)
-        if self._stability_properties is None:
-            self._stability_properties = StabilityProperties.with_default_engine(config=config)
-        self._stability_properties.compute(problem.A, system_type=config.system_type, problem_type=config.problem_type)
-        return self._stability_properties.is_stable
+        props = self._services.dynamics.compute(self)
+        return props.is_stable
 
     @property
     def eigenvalues(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -292,15 +236,8 @@ class LibrationPoint(_HitenBase, ABC):
             (stable_eigenvalues, unstable_eigenvalues, center_eigenvalues)
             Each array contains eigenvalues in nondimensional units.
         """
-        config = _EigenDecompositionConfig(
-            problem_type=_ProblemType.EIGENVALUE_DECOMPOSITION,
-            system_type=_SystemType.CONTINUOUS,
-        )
-        problem = _LibrationPointInterface(config=config).create_problem(self)
-        if self._stability_properties is None:
-            self._stability_properties = StabilityProperties.with_default_engine(config=config)
-        self._stability_properties.compute(problem.A, system_type=config.system_type, problem_type=config.problem_type)
-        return self._stability_properties.eigenvalues
+        props = self._services.dynamics.compute(self)
+        return props.eigenvalues
     
     @property
     def eigenvectors(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -313,24 +250,17 @@ class LibrationPoint(_HitenBase, ABC):
             (stable_eigenvectors, unstable_eigenvectors, center_eigenvectors)
             Each array contains eigenvectors as column vectors.
         """
-        config = _EigenDecompositionConfig(
-            problem_type=_ProblemType.EIGENVALUE_DECOMPOSITION,
-            system_type=_SystemType.CONTINUOUS,
-        )
-        problem = _LibrationPointInterface(config=config).create_problem(self)
-        if self._stability_properties is None:
-            self._stability_properties = StabilityProperties.with_default_engine(config=config)
-        self._stability_properties.compute(problem.A, system_type=config.system_type, problem_type=config.problem_type)
-        return self._stability_properties.eigenvectors
+        props = self._services.dynamics.compute(self)
+        return props.eigenvectors
 
     @property
-    def linear_data(self) -> LinearData:
+    def linear_data(self):
         """
         Get the linear data for the Libration point.
         
         Returns
         -------
-        :class:`~hiten.system.libration.base.LinearData`
+        :class:`~hiten.algorithms.types.adapters.libration._LinearData`
             The linear data containing eigenvalues and eigenvectors.
         """
         if self._linear_data is None:
@@ -352,13 +282,13 @@ class LibrationPoint(_HitenBase, ABC):
         pass
 
     @abstractmethod
-    def _get_linear_data(self) -> LinearData:
+    def _get_linear_data(self):
         """
         Get the linear data for the Libration point.
         
         Returns
         -------
-        :class:`~hiten.system.libration.base.LinearData`
+        :class:`~hiten.algorithms.types.adapters.libration._LinearData`
             The linear data containing eigenvalues and eigenvectors.
         """
         pass
@@ -384,7 +314,10 @@ class LibrationPoint(_HitenBase, ABC):
         from hiten.system.center import CenterManifold
 
         if degree not in self._cm_registry:
-            self._cm_registry[degree] = CenterManifold(self, degree)
+            if (self.idx, degree) not in self._center_services:
+                self._center_services[(self.idx, degree)] = _CenterManifoldServices.from_point(self, degree)
+            services = self._center_services[(self.idx, degree)]
+            self._cm_registry[degree] = CenterManifold(self, degree, services=services)
         return self._cm_registry[degree]
 
     def hamiltonian(self, max_deg: int) -> dict:
@@ -472,52 +405,21 @@ class LibrationPoint(_HitenBase, ABC):
         pass
 
     def __getstate__(self):
-        """
-        Custom state extractor to enable pickling.
-
-        We remove attributes that may contain unpickleable Numba runtime
-        objects (e.g., the compiled variational dynamics system) and restore
-        them on unpickling.
-        
-        Returns
-        -------
-        dict
-            The object state dictionary with unpickleable objects removed.
-        """
+        """Customise pickling by omitting adapter caches."""
         state = super().__getstate__()
-
-        if '_var_eq_system' in state:
-            state['_var_eq_system'] = None
-
-        if '_jacobian_system' in state:
-            state['_jacobian_system'] = None
-
-        if '_cm_registry' in state:
-            state['_cm_registry'] = {}
+        state.pop("_services", None)
+        state.pop("_center_services", None)
+        state["_cm_registry"] = {}
         return state
 
     def __setstate__(self, state):
-        """
-        Restore object state after unpickling.
-
-        The variational dynamics system is re-constructed because it was
-        omitted during pickling (it contains unpickleable Numba objects).
-        
-        Parameters
-        ----------
-        state : dict
-            The object state dictionary from pickling.
-        """
-
+        """Restore adapter wiring after unpickling."""
         super().__setstate__(state)
-        self._var_eq_system = variational_dynsys(
-            self.mu, name=f"CR3BP Variational Equations for {self.__class__.__name__}")
-
-        self._jacobian_system = jacobian_dynsys(
-            self.mu, name=f"CR3BP Jacobian for {self.__class__.__name__}")
-
-        if not hasattr(self, '_cm_registry') or self._cm_registry is None:
+        self._services = _LibrationServices.default()
+        self._center_services = {}
+        if not hasattr(self, "_cm_registry") or self._cm_registry is None:
             self._cm_registry = {}
+        self._services.dynamics.reset_point(self)
 
     def create_orbit(self, family: str | type["PeriodicOrbit"], /, **kwargs) -> "PeriodicOrbit":
         """
@@ -575,13 +477,22 @@ class LibrationPoint(_HitenBase, ABC):
         return orbit_cls(self, **kwargs)
 
     def save(self, file_path: str | Path, **kwargs) -> None:
-        save_libration_point(self, Path(file_path), **kwargs)
+        self._services.persistence.save(self, file_path, **kwargs)
 
     @classmethod
     def load(cls, file_path: str | Path, **kwargs) -> "LibrationPoint":
-        system: System = kwargs.get("system")
-        return load_libration_point(Path(file_path), system)
+        system: System | None = kwargs.get("system")
+        services = _LibrationServices.default()
+        point = services.persistence.load(file_path, system=system)
+        point._services = services
+        point._center_services = _CenterManifoldServices()
+        if system is not None:
+            shared_dynamics = system._libration_dynamics
+            point._services = _LibrationServices.with_shared_dynamics(shared_dynamics)
+        point._services.dynamics.reset_point(point)
+        return point
 
     def load_inplace(self, file_path: str | Path) -> "LibrationPoint":
-        load_libration_point_inplace(self, Path(file_path))
+        self._services.persistence.load_inplace(self, file_path)
+        self._services.dynamics.reset_point(self)
         return self

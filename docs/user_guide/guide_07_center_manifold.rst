@@ -108,7 +108,7 @@ Coordinate Transformations
 
    # Transform from center manifold to physical coordinates
    cm_coords = np.array([0.1, 0.05, 0.0, 0.0])  # [q1, q2, p1, p2]
-   physical_coords = center_manifold.ic(cm_coords)
+   physical_coords = center_manifold.to_synodic(cm_coords)
    print(f"Physical coordinates: {physical_coords}")
    
    # Transform from physical to center manifold coordinates
@@ -124,14 +124,14 @@ Generate initial conditions for periodic orbits:
 .. code-block:: python
 
    # Generate initial conditions
-   ic = center_manifold.ic([0.0, 0.0], 0.6, "q3")
+   ic = center_manifold.to_synodic([0.0, 0.0], 0.6, "q3")
    print(f"Initial conditions: {ic}")
    
    # Different coordinate choices
-   ic_q1 = center_manifold.ic([0.1, 0.0], 0.6, "q1")
-   ic_q2 = center_manifold.ic([0.0, 0.1], 0.6, "q2")
-   ic_p1 = center_manifold.ic([0.0, 0.0], 0.6, "p1")
-   ic_p2 = center_manifold.ic([0.0, 0.0], 0.6, "p2")
+   ic_q1 = center_manifold.to_synodic([0.1, 0.0], 0.6, "q1")
+   ic_q2 = center_manifold.to_synodic([0.0, 0.1], 0.6, "q2")
+   ic_p1 = center_manifold.to_synodic([0.0, 0.0], 0.6, "p1")
+   ic_p2 = center_manifold.to_synodic([0.0, 0.0], 0.6, "p2")
 
 Poincare Maps
 -------------
@@ -254,15 +254,15 @@ Analytical Initial Conditions
    # Generate initial conditions for different orbit types
    
    # Halo orbit
-   halo_ic = center_manifold.ic([0.0, 0.0], 0.6, "q3")
+   halo_ic = center_manifold.to_synodic([0.0, 0.0], 0.6, "q3")
    print(f"Halo initial conditions: {halo_ic}")
    
    # Lyapunov orbit
-   lyapunov_ic = center_manifold.ic([0.1, 0.0], 0.6, "q1")
+   lyapunov_ic = center_manifold.to_synodic([0.1, 0.0], 0.6, "q1")
    print(f"Lyapunov initial conditions: {lyapunov_ic}")
    
    # Vertical orbit
-   vertical_ic = center_manifold.ic([0.0, 0.0], 0.6, "p2")
+   vertical_ic = center_manifold.to_synodic([0.0, 0.0], 0.6, "p2")
    print(f"Vertical initial conditions: {vertical_ic}")
 
 Orbit Creation from Center Manifold
@@ -317,7 +317,7 @@ Earth-Moon L1 Center Manifold
    poincare_map.plot(axes=("p2", "q3"))
    
    # Generate orbits
-   halo_ic = center_manifold.ic([0.0, 0.0], 0.6, "q3")
+   halo_ic = center_manifold.to_synodic([0.0, 0.0], 0.6, "q3")
    halo = l1.create_orbit("halo", initial_state=halo_ic)
    halo.correct()
    halo.propagate()
@@ -348,7 +348,7 @@ Sun-Earth L2 Center Manifold
    poincare_map.plot(axes=("q2", "p1"))
    
    # Generate orbits
-   lyapunov_ic = center_manifold.ic([0.05, 0.0], 0.5, "q1")
+   lyapunov_ic = center_manifold.to_synodic([0.05, 0.0], 0.5, "q1")
    lyapunov = l2.create_orbit("lyapunov", initial_state=lyapunov_ic)
    lyapunov.correct()
    lyapunov.propagate()
@@ -371,7 +371,7 @@ Custom Center Manifold Analysis
    energies = np.linspace(0.3, 0.7, 5)
    
    for energy in energies:
-       ic = center_manifold.ic([0.0, 0.0], energy, "q3")
+       ic = center_manifold.to_synodic([0.0, 0.0], energy, "q3")
        orbit = l1.create_orbit("halo", initial_state=ic)
        orbit.correct()
        orbit.propagate()

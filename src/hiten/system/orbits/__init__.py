@@ -5,7 +5,7 @@ Usage example::
 >>> from hiten.system.orbits import HaloOrbit, LyapunovOrbit
 """
 
-from ...algorithms.utils.states import SynodicState
+from ...algorithms.types.states import SynodicState
 from .base import GenericOrbit, PeriodicOrbit
 from .halo import HaloOrbit
 from .lyapunov import LyapunovOrbit

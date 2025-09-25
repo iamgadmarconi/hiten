@@ -77,3 +77,12 @@ class StabilityProperties:
     def eigenvectors(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         result = self.require_result()
         return result.Ws, result.Wu, result.Wc
+
+    def get_real_eigenvectors(self, vectors: np.ndarray, values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        mask = np.isreal(values)
+        real_vals_arr = values[mask].astype(np.complex128)
+        if np.any(mask):
+            real_vecs_arr = vectors[:, mask]
+        else:
+            real_vecs_arr = np.zeros((vectors.shape[0], 0), dtype=np.complex128)
+        return real_vals_arr, real_vecs_arr

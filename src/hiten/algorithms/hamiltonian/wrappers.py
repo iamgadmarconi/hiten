@@ -55,17 +55,26 @@ Meyer, K.R., Hall, G.R. (1992). Introduction to Hamiltonian Dynamical Systems
 and the N-Body Problem. Springer-Verlag, Chapters 4-5.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from hiten.algorithms.hamiltonian.center._lie import \
     _lie_transform as _lie_transform_partial
 from hiten.algorithms.hamiltonian.normal._lie import \
     _lie_transform as _lie_transform_full
+from hiten.algorithms.hamiltonian.pipeline import (
+    _CONVERSION_REGISTRY,
+)
 from hiten.algorithms.hamiltonian.transforms import (
     _polylocal2realmodal, _polyrealmodal2local,
     _restrict_poly_to_center_manifold, _substitute_complex, _substitute_real)
-from hiten.system.hamiltonians.base import (_CONVERSION_REGISTRY, Hamiltonian,
+from hiten.system.hamiltonian import (Hamiltonian,
                                             LieGeneratingFunction)
-from hiten.system.libration.collinear import CollinearPoint
-from hiten.system.libration.triangular import TriangularPoint
+
+if TYPE_CHECKING:
+    from hiten.system.libration.collinear import CollinearPoint
+    from hiten.system.libration.triangular import TriangularPoint
 
 
 def register_conversion(src_name: str, dst: "type[Hamiltonian] | str", 
@@ -299,6 +308,8 @@ def _real_modal_to_complex_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
         Inverse transformation back to real modal coordinates.
     """
     point = kwargs["point"]
+    from hiten.system.libration.collinear import CollinearPoint
+    from hiten.system.libration.triangular import TriangularPoint
     if isinstance(point, CollinearPoint):
         mix_pairs = (1, 2)
     elif isinstance(point, TriangularPoint):
@@ -356,6 +367,8 @@ def _complex_modal_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
         Forward transformation to complex modal coordinates.
     """
     point = kwargs["point"]
+    from hiten.system.libration.collinear import CollinearPoint
+    from hiten.system.libration.triangular import TriangularPoint
     if isinstance(point, CollinearPoint):
         mix_pairs = (1, 2)
     elif isinstance(point, TriangularPoint):
@@ -483,6 +496,8 @@ def _complex_partial_normal_to_real_partial_normal(ham: Hamiltonian, **kwargs) -
         Inverse transformation back to complex partial normal form.
     """
     point = kwargs["point"]
+    from hiten.system.libration.collinear import CollinearPoint
+    from hiten.system.libration.triangular import TriangularPoint
     if isinstance(point, CollinearPoint):
         mix_pairs = (1, 2)
     elif isinstance(point, TriangularPoint):
@@ -669,6 +684,8 @@ def _center_manifold_complex_to_center_manifold_real(ham: Hamiltonian, **kwargs)
         Inverse transformation back to complex center manifold representation.
     """
     point = kwargs["point"]
+    from hiten.system.libration.collinear import CollinearPoint
+    from hiten.system.libration.triangular import TriangularPoint
     if isinstance(point, CollinearPoint):
         mix_pairs = (1, 2)
     elif isinstance(point, TriangularPoint):
@@ -730,6 +747,8 @@ def _center_manifold_real_to_center_manifold_complex(ham: Hamiltonian, **kwargs)
         Inverse transformation back to real center manifold representation.
     """
     point = kwargs["point"]
+    from hiten.system.libration.collinear import CollinearPoint
+    from hiten.system.libration.triangular import TriangularPoint
     if isinstance(point, CollinearPoint):
         mix_pairs = (1, 2)
     elif isinstance(point, TriangularPoint):
@@ -865,6 +884,8 @@ def _complex_full_normal_to_real_full_normal(ham: Hamiltonian, **kwargs) -> Hami
         Inverse transformation back to complex full normal form.
     """
     point = kwargs["point"]
+    from hiten.system.libration.collinear import CollinearPoint
+    from hiten.system.libration.triangular import TriangularPoint
     if isinstance(point, CollinearPoint):
         mix_pairs = (1, 2)
     elif isinstance(point, TriangularPoint):

@@ -38,6 +38,10 @@ Gomez, G., Llibre, J., Martinez, R., Simo, C. (2001). Dynamics and Mission Desig
 Near Libration Points. World Scientific, Chapter 3.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 from numba.typed import List
 
@@ -47,9 +51,11 @@ from hiten.algorithms.polynomial.coordinates import (_clean_coordinates,
                                                      _substitute_coordinates)
 from hiten.algorithms.polynomial.operations import (_polynomial_clean,
                                                     _substitute_linear)
-from hiten.system.libration.collinear import CollinearPoint
-from hiten.system.libration.triangular import TriangularPoint
 from hiten.utils.log_config import logger
+
+if TYPE_CHECKING:
+    from hiten.system.libration.collinear import CollinearPoint
+    from hiten.system.libration.triangular import TriangularPoint
 
 
 def _build_complexification_matrix(mix_indices):
@@ -795,7 +801,7 @@ def _restrict_poly_to_center_manifold(point, poly_H, clmo, tol=1e-14):
     # eliminate any terms involving (q1, p1).  The original behaviour of
     # zeroing these terms is only appropriate for collinear points where
     # (q1, p1) span the hyperbolic sub-space.
-
+    from hiten.system.libration.triangular import TriangularPoint
     if isinstance(point, TriangularPoint):
         # Simply return a *copy* of the input to avoid accidental mutation
         return [h.copy() for h in poly_H]

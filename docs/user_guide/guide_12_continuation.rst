@@ -15,7 +15,7 @@ Basic Continuation Concept
 
    from hiten import System
    from hiten.algorithms.continuation import StateParameter
-   from hiten.algorithms.utils.states import SynodicState
+   from hiten.algorithms.types.states import SynodicState
    import numpy as np
 
    system = System.from_bodies("earth", "moon")

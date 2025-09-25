@@ -6,6 +6,7 @@ from .map import (load_poincare_map, load_poincare_map_inplace,
                   save_poincare_map)
 from .orbits import (load_periodic_orbit, load_periodic_orbit_inplace,
                      save_periodic_orbit)
+from .torus import load_torus, load_torus_inplace, save_torus
 
 __all__ = [
     "_ensure_dir",
@@ -22,4 +23,7 @@ __all__ = [
     "load_center_manifold",
     "save_hamiltonian",
     "load_hamiltonian",
+    "save_torus",
+    "load_torus",
+    "load_torus_inplace",
 ]

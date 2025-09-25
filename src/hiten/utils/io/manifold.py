@@ -18,13 +18,12 @@ import h5py
 import numpy as np
 
 from hiten.utils.io.common import _ensure_dir, _write_dataset
-from hiten.utils.io.orbits import (_read_orbit_group,
-                                              _write_orbit_group)
+from hiten.utils.io.orbits import _read_orbit_group, _write_orbit_group
 
 if TYPE_CHECKING:
-    from hiten.system.manifold import Manifold, ManifoldResult
+    from hiten.system.manifold import Manifold
+    from hiten.algorithms.types.adapters.manifold import _ManifoldResult
 
-__all__ = ["save_manifold", "load_manifold"]
 
 HDF5_VERSION = "1.0"
 """HDF5 format version for manifold data."""
@@ -78,7 +77,7 @@ def save_manifold(
         _write_orbit_group(ggrp, manifold._generating_orbit, compression=compression, level=level)
 
         if manifold._manifold_result is not None:
-            mr: "ManifoldResult" = manifold._manifold_result
+            mr: "_ManifoldResult" = manifold._manifold_result
             rgrp = f.create_group("result")
             _write_dataset(rgrp, "ysos", np.asarray(mr.ysos))
             _write_dataset(rgrp, "dysos", np.asarray(mr.dysos))
@@ -121,7 +120,8 @@ def load_manifold(path: str | Path) -> "Manifold":
     >>> manifold = load_manifold("my_manifold.h5")
     >>> print(f"Loaded manifold: stable={manifold.stable}, direction={manifold.direction}")
     """
-    from hiten.system.manifold import Manifold, ManifoldResult
+    from hiten.system.manifold import Manifold
+    from hiten.algorithms.types.adapters.manifold import _ManifoldResult
 
     path = Path(path)
     if not path.exists():
@@ -155,7 +155,7 @@ def load_manifold(path: str | Path) -> "Manifold":
                     states_list.append(sub["states"][()])
                     times_list.append(sub["times"][()])
 
-            man._manifold_result = ManifoldResult(
+            man._manifold_result = _ManifoldResult(
                 ysos=list(ysos),
                 dysos=list(dysos),
                 states_list=states_list,

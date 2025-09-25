@@ -10,7 +10,7 @@ from typing import Callable, Literal
 
 import numpy as np
 
-from hiten.algorithms.utils.states import SynodicState
+from hiten.algorithms.types.states import SynodicState
 from hiten.system.orbits.base import PeriodicOrbit
 
 
@@ -84,7 +84,7 @@ class _OrbitContinuationConfig(_ContinuationConfig):
 
     Parameters
     ----------
-    state : :class:`~hiten.algorithms.utils.states.SynodicState` or None
+    state : :class:`~hiten.algorithms.types.states.SynodicState` or None
         Initial state for orbit construction. If None, uses default
         state from the orbit class.
     amplitude : bool, default False

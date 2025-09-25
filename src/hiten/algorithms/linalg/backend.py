@@ -294,7 +294,7 @@ class _LinalgBackend:
         """
 
         cleaned_vals = np.array([self._zero_small_imag_part(ev, tol=1e-14) for ev in eigvals])
-        cleaned_vecs = eigvecs.copy()
+        cleaned_vecs = eigvecs.astype(np.complex128)
 
         for k in range(cleaned_vecs.shape[1]):
             vec = cleaned_vecs[:, k]

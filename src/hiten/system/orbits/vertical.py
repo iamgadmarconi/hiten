@@ -21,7 +21,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from hiten.algorithms.poincare.singlehit.backend import _z_plane_crossing
-from hiten.algorithms.utils.states import SynodicState
+from hiten.algorithms.types.states import SynodicState
 from hiten.system.libration.collinear import CollinearPoint
 from hiten.system.orbits.base import PeriodicOrbit
 

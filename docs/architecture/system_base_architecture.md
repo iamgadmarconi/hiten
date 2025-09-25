@@ -21,7 +21,7 @@
 | Public API exports | `System`, helper factories, convenience functions                        |
 | Configuration DTOs | `SystemConfig`, `SystemSnapshot` with validated metadata only            |
 | Adapters           | `_SystemDynamicsAdapter`, `_SystemPersistenceAdapter`, `_SystemRegistry` |
-| Services           | `_LibrationPointRegistry`, `_DynamicsRegistry`, `_OrbitBuilder`          |
+| Services           | `_SystemServices`, `_LibrationPointRegistry`                             |
 | Internal utilities | Validation helpers, error translators, type aliases                      |
 
 ## Key Types
@@ -34,7 +34,7 @@
 - Offers ergonomic helpers: `propagate`, `get_libration_point`
 - Returns domain DTOs (`Trajectory`, `LibrationPointHandle`) instead of raw arrays
 
-### `SystemContext`
+### `SystemServices`
 
 - Lightweight container shared across child objects (libration points, orbits)
 - Holds references to adapters/registries
@@ -50,7 +50,8 @@
 
 - `_SystemDynamicsAdapter`: resolves algorithm engines (propagation, STM) and executes calls
 - `_SystemPersistenceAdapter`: bridges to `utils.io` loaders/savers
-- `_SystemRegistry`: central cache for created adapters, preventing duplicate instantiation
+- `_SystemAdapterRegistry`: optional central cache for adapter instances when multiple systems coexist
+- `_HamiltonianConversionAdapter`: registers and executes representation conversions (used by _HamiltonianPipeline)
 - All adapters live in private scope; they never appear in the public API
 
 ## Dependency Flow

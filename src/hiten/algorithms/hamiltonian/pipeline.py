@@ -1,6 +1,6 @@
 """Hamiltonian transformation pipeline for the CR3BP.
 
-This module provides the HamiltonianPipeline class that manages the transformation
+This module provides the _HamiltonianPipeline class that manages the transformation
 pipeline for different Hamiltonian representations in the circular restricted
 three-body problem. It handles caching, conversion between representations,
 and computation of Lie generating functions.
@@ -18,7 +18,7 @@ automatic path finding for multi-step transformations.
 """
 
 from collections import deque
-from typing import Dict, Optional
+from typing import TYPE_CHECKING, Callable, Dict, Optional, Tuple
 
 from hiten.algorithms.hamiltonian.center._lie import _lie_expansion
 from hiten.algorithms.hamiltonian.center._lie import \
@@ -28,15 +28,18 @@ from hiten.algorithms.hamiltonian.hamiltonian import (
     _build_physical_hamiltonian_triangular)
 from hiten.algorithms.hamiltonian.normal._lie import \
     _lie_transform as _lie_transform_full
-from hiten.system.hamiltonians.base import (_CONVERSION_REGISTRY, Hamiltonian,
-                                            LieGeneratingFunction)
-from hiten.system.libration.base import LibrationPoint
-from hiten.system.libration.collinear import CollinearPoint
-from hiten.system.libration.triangular import TriangularPoint
 from hiten.utils.log_config import logger
 
+if TYPE_CHECKING:
+    from hiten.system.hamiltonian import Hamiltonian, LieGeneratingFunction
+    from hiten.system.libration.base import LibrationPoint
 
-class HamiltonianPipeline:
+# Mapping: (src_name, dst_name) -> (converter_func, required_context, default_params)
+# Converter functions can return either Hamiltonian or (Hamiltonian, LieGeneratingFunction)
+_CONVERSION_REGISTRY: Dict[Tuple[str, str], Tuple[Callable[..., "Hamiltonian | tuple[Hamiltonian, LieGeneratingFunction]"], list, dict]] = {}
+
+
+class _HamiltonianPipeline:
     """
     Manages the transformation pipeline for Hamiltonian representations.
 
@@ -70,16 +73,29 @@ class HamiltonianPipeline:
     conversion path between any two Hamiltonian representations.
     """
 
-    def __init__(self, point: LibrationPoint, degree: int):
+    def __init__(
+        self,
+        point: "LibrationPoint",
+        degree: int,
+        *,
+        dynamics=None,
+        conversion=None,
+    ):
         if not isinstance(degree, int) or degree <= 0:
             raise ValueError("degree must be a positive integer")
 
         self._point = point
         self._max_degree = degree
-        self._hamiltonian_cache: Dict[str, Hamiltonian] = {}
-        self._generating_function_cache: Dict[str, LieGeneratingFunction] = {}
+        self._dynamics = dynamics
+        self._conversion = conversion
+
+        self._hamiltonian_cache: Dict[str, "Hamiltonian"] = {}
+        self._generating_function_cache: Dict[str, "LieGeneratingFunction"] = {}
 
         # Determine point-specific parameters
+        from hiten.system.libration.collinear import CollinearPoint
+        from hiten.system.libration.triangular import TriangularPoint
+
         if isinstance(self._point, CollinearPoint):
             self._build_hamiltonian = _build_physical_hamiltonian_collinear
             self._mix_pairs = (1, 2)
@@ -90,7 +106,7 @@ class HamiltonianPipeline:
             raise ValueError(f"Unsupported libration point type: {type(self._point)}")
 
     @property
-    def point(self) -> LibrationPoint:
+    def point(self) -> "LibrationPoint":
         """The libration point about which the normal form is computed."""
         return self._point
 
@@ -100,12 +116,12 @@ class HamiltonianPipeline:
         return self._max_degree
 
     def __str__(self) -> str:
-        return f"HamiltonianPipeline(point={self._point}, degree={self._max_degree})"
+        return f"_HamiltonianPipeline(point={self._point}, degree={self._max_degree})"
 
     def __repr__(self) -> str:
-        return f"HamiltonianPipeline(point={self._point!r}, degree={self._max_degree})"
+        return f"_HamiltonianPipeline(point={self._point!r}, degree={self._max_degree})"
 
-    def get_hamiltonian(self, form: str) -> Hamiltonian:
+    def get_hamiltonian(self, form: str) -> "Hamiltonian":
         """
         Get a specific Hamiltonian representation.
 
@@ -149,7 +165,7 @@ class HamiltonianPipeline:
 
         return self._hamiltonian_cache[form]
 
-    def _store_generating_functions(self, form_name: str, generating_functions: LieGeneratingFunction):
+    def _store_generating_functions(self, form_name: str, generating_functions: "LieGeneratingFunction"):
         """
         Store generating functions in the cache.
         
@@ -177,7 +193,7 @@ class HamiltonianPipeline:
         self._generating_function_cache[cache_key] = generating_functions
         logger.debug(f"Stored generating functions for {form_name} in cache")
 
-    def _compute_hamiltonian(self, form: str) -> Hamiltonian:
+    def _compute_hamiltonian(self, form: str) -> "Hamiltonian":
         """
         Compute a Hamiltonian representation, using conversion if needed.
 
@@ -219,15 +235,24 @@ class HamiltonianPipeline:
 
         # Get the source Hamiltonian and convert
         source_ham = self.get_hamiltonian(source_form)
-        
-        # If we found a direct conversion, use it
-        if (source_form, form) in _CONVERSION_REGISTRY:
-            return source_ham.to_state(form, point=self._point, _pipeline=self)
-        
+
+        try:
+            result = source_ham.to_state(form, point=self._point, _pipeline=self)
+            # Handle tuple returns (Hamiltonian, LieGeneratingFunction)
+            if isinstance(result, tuple):
+                new_ham, generating_functions = result
+                # Store generating functions if we have a pipeline reference
+                self._store_generating_functions(form, generating_functions)
+                return new_ham
+            else:
+                return result
+        except NotImplementedError:
+            pass
+
         # Otherwise, follow the multi-step conversion path
         return self._follow_conversion_path(source_form, form)
 
-    def _build_physical_hamiltonian(self) -> Hamiltonian:
+    def _build_physical_hamiltonian(self) -> "Hamiltonian":
         """
         Build the physical Hamiltonian from scratch.
 
@@ -246,6 +271,7 @@ class HamiltonianPipeline:
         function determined during initialization. It represents the full
         6D system in the rotating synodic frame.
         """
+        from hiten.system.hamiltonian import Hamiltonian
         logger.debug(f"Building physical Hamiltonian for {self._point}")
         poly_H = self._build_hamiltonian(self._point, self._max_degree)
         return Hamiltonian(poly_H, self._max_degree, ndof=3, name="physical")
@@ -275,17 +301,15 @@ class HamiltonianPipeline:
         """
         # Check if we have a direct conversion from any existing form
         for source_form in self._hamiltonian_cache:
-            if (source_form, target_form) in _CONVERSION_REGISTRY:
+            if self._can_convert(source_form, target_form):
                 return source_form
 
         # If no direct conversion, try building from physical
-        if ("physical", target_form) in _CONVERSION_REGISTRY:
+        if self._can_convert("physical", target_form):
             return "physical"
 
         # debug: Print available conversions
         logger.debug(f"Looking for conversion path to '{target_form}'")
-        logger.debug(f"Available conversions in registry: {list(_CONVERSION_REGISTRY.keys())}")
-        
         queue = deque([("physical", ["physical"])])
         visited = {"physical"}
         
@@ -293,7 +317,7 @@ class HamiltonianPipeline:
             current_form, path = queue.popleft()
             logger.debug(f"Exploring from '{current_form}' with path {path}")
             
-            # Check all possible conversions from current_form
+            # Check all possible conversions from current_form using registry
             for (src, dst), (_, required_context, _) in _CONVERSION_REGISTRY.items():
                 if src == current_form and dst not in visited:
                     # Check if we have the required context (point is always available)
@@ -313,7 +337,33 @@ class HamiltonianPipeline:
         logger.debug(f"No conversion path found to '{target_form}'. Visited: {visited}")
         return None
 
-    def _follow_conversion_path(self, start_form: str, target_form: str) -> Hamiltonian:
+    def _can_convert(self, src_form: str, dst_form: str) -> bool:
+        """
+        Check if a conversion from src_form to dst_form is possible without computing it.
+        
+        Parameters
+        ----------
+        src_form : str
+            Source form name
+        dst_form : str
+            Destination form name
+            
+        Returns
+        -------
+        bool
+            True if conversion is possible, False otherwise
+        """
+        # Check direct conversion in registry
+        if (src_form, dst_form) in _CONVERSION_REGISTRY:
+            return True
+            
+        # Check if conversion adapter has the conversion
+        if self._conversion is not None:
+            return self._conversion.get(src_form, dst_form) is not None
+            
+        return False
+
+    def _follow_conversion_path(self, start_form: str, target_form: str) -> "Hamiltonian":
         """
         Follow a multi-step conversion path from start_form to target_form.
         
@@ -369,7 +419,7 @@ class HamiltonianPipeline:
         
         raise NotImplementedError(f"No conversion path found from {start_form} to {target_form}")
 
-    def _execute_conversion_path(self, path: list[str]) -> Hamiltonian:
+    def _execute_conversion_path(self, path: list[str]) -> "Hamiltonian":
         """
         Execute a series of conversions along the given path.
         
@@ -400,8 +450,17 @@ class HamiltonianPipeline:
             current_form = path[i]
             next_form = path[i + 1]
             
-            logger.debug(f"Converting {current_form} -> {next_form}")
-            current_ham = current_ham.to_state(next_form, point=self._point, _pipeline=self)
+            logger.info(f"Converting {current_form} -> {next_form}")
+            result = current_ham.to_state(next_form, point=self._point, _pipeline=self)
+            
+            # Handle tuple returns (Hamiltonian, LieGeneratingFunction)
+            if isinstance(result, tuple):
+                current_ham, generating_functions = result
+                # Store generating functions if we have a pipeline reference
+                if hasattr(self, '_store_generating_functions'):
+                    self._store_generating_functions(next_form, generating_functions)
+            else:
+                current_ham = result
             
             # Cache the intermediate result
             self._hamiltonian_cache[next_form] = current_ham
@@ -436,7 +495,7 @@ class HamiltonianPipeline:
 
         return available
 
-    def compute(self, form: str = "center_manifold_real") -> Hamiltonian:
+    def compute(self, form: str = "center_manifold_real") -> "Hamiltonian":
         """
         Compute and return a specific Hamiltonian representation.
 
@@ -456,7 +515,7 @@ class HamiltonianPipeline:
         Notes
         -----
         This method is equivalent to 
-        :meth:`~hiten.system.hamiltonians.pipeline.HamiltonianPipeline.get_hamiltonian` 
+        :meth:`~hiten.system.hamiltonians.pipeline._HamiltonianPipeline.get_hamiltonian` 
         but provides a familiar interface for users migrating from the old CenterManifold.
         It is maintained for backward compatibility.
         """
@@ -523,7 +582,7 @@ class HamiltonianPipeline:
         Clear the Hamiltonian cache.
 
         This forces recomputation of all Hamiltonian representations on
-        the next call to :meth:`~hiten.system.hamiltonians.pipeline.HamiltonianPipeline.get_hamiltonian`.
+        the next call to :meth:`~hiten.system.hamiltonians.pipeline._HamiltonianPipeline.get_hamiltonian`.
 
         Notes
         -----
@@ -578,7 +637,7 @@ class HamiltonianPipeline:
         """
         return form in self._get_available_forms()
 
-    def get_generating_functions(self, transform_type: str = "partial", **kwargs) -> LieGeneratingFunction:
+    def get_generating_functions(self, transform_type: str = "partial", **kwargs) -> "LieGeneratingFunction":
         """
         Get Lie generating functions for coordinate transformations.
 
@@ -640,7 +699,7 @@ class HamiltonianPipeline:
         self._generating_function_cache[cache_key] = self._compute_generating_functions(transform_type, **kwargs)
         return self._generating_function_cache[cache_key]
 
-    def _compute_generating_functions(self, transform_type: str, **kwargs) -> LieGeneratingFunction:
+    def _compute_generating_functions(self, transform_type: str, **kwargs) -> "LieGeneratingFunction":
         """
         Compute Lie generating functions.
 
@@ -656,7 +715,7 @@ class HamiltonianPipeline:
 
         Returns
         -------
-        :class:`~hiten.system.hamiltonians.base.LieGeneratingFunction`
+        :class:`~hiten.system.hamiltonian.LieGeneratingFunction`
             The computed generating functions
 
         Notes
@@ -665,6 +724,8 @@ class HamiltonianPipeline:
         and applies the appropriate Lie transform algorithm based on the
         transform type.
         """
+        from hiten.system.hamiltonian import LieGeneratingFunction
+
         # Get the complex modal Hamiltonian as starting point
         complex_modal_ham = self.get_hamiltonian("complex_modal")
         

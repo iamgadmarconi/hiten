@@ -24,11 +24,11 @@ All positions and distances are expressed in nondimensional units where the
 distance between the primaries is unity and the orbital period is 2*pi.
 """
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Tuple
 
 import numpy as np
 
-from hiten.system.libration.base import LibrationPoint, LinearData
+from hiten.system.libration.base import LibrationPoint
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
@@ -66,8 +66,8 @@ class TriangularPoint(LibrationPoint):
     """
     ROUTH_CRITICAL_MU = (1.0 - np.sqrt(1.0 - (1.0/27.0))) / 2.0 # approx 0.03852
     
-    def __init__(self, system: "System"):
-        super().__init__(system)
+    def __init__(self, system: "System", *, services=None):
+        super().__init__(system, services=services)
         # Log stability warning based on mu
         if system.mu > self.ROUTH_CRITICAL_MU:
             logger.warning(f"Triangular points are potentially unstable for mu > {self.ROUTH_CRITICAL_MU:.6f} (current mu = {system.mu})")
@@ -114,21 +114,21 @@ class TriangularPoint(LibrationPoint):
         logger.info(f"{point_name} position calculated: x = {x:.6f}, y = {y:.6f}")
         return np.array([x, y, 0], dtype=np.float64)
 
-    def _get_linear_data(self) -> LinearData:
+    def _get_linear_data(self):
         """
         Get the linear data for the Libration point.
         
         Returns
         -------
-        :class:`~hiten.system.libration.LinearData`
+        :class:`~hiten.algorithms.types.adapters.libration._LinearData`
             Object containing the linear data for the Libration point.
         """
-        # Frequencies and canonical transform
         omega1, omega2, omega_z = self.linear_modes
         C, Cinv = self.normal_form_transform()
         
         # Create and return the LinearData object
-        return LinearData(
+        from hiten.algorithms.types.adapters.libration import _LinearData
+        return _LinearData(
             mu=self.mu,
             point=type(self).__name__[:2],  # 'L1', 'L2', 'L3'
             lambda1=None, 
@@ -148,28 +148,18 @@ class TriangularPoint(LibrationPoint):
         tuple
             (C, Cinv) where C is the symplectic transformation matrix and Cinv is its inverse.
         """
-        cache_key = ('normal_form_transform',)
-        cached = self.cache_get(cache_key)
-        if cached is not None:
-            return cached
+        return self._services.dynamics.triangular_normal_form(self)
 
-        # Canonical eigenvectors (rows) -> columns after transpose
-        eigvs = self._get_eigvs().T  # shape (6,6), columns are the vectors
-
-        # Scaling factors s_j
-        s = np.array([self._scaling_factor(0),
-                      self._scaling_factor(1),
-                      self._scaling_factor(2)])
-
-        # Build diagonal scaling matrix for u and v blocks
+    def _build_normal_form(self) -> Tuple[np.ndarray, np.ndarray]:
+        eigvs = self._get_eigvs().T
+        s = np.array([
+            self._scaling_factor(0),
+            self._scaling_factor(1),
+            self._scaling_factor(2),
+        ])
         S = np.diag(np.concatenate([s, s]))
-
-        C = eigvs @ np.linalg.inv(S)  # divide each column by its s_j
-
-        # Pre-compute inverse once - safer & cheaper later on
+        C = eigvs @ np.linalg.inv(S)
         Cinv = np.linalg.inv(C)
-
-        self.cache_set(cache_key, (C, Cinv))
         return C, Cinv
     
     def _compute_linear_modes(self):
@@ -279,13 +269,7 @@ class TriangularPoint(LibrationPoint):
             For triangular points all eigenvalues are purely imaginary so no
             hyperbolic mode is present.
         """
-        cached = self.cache_get(('linear_modes',))
-        if cached is not None:
-            return cached
-            
-        result = self._compute_linear_modes()
-        self.cache_set(('linear_modes',), result)
-        return result
+        return self._services.dynamics.triangular_linear_modes(self)
 
     def _J_hess_H2(self) -> np.ndarray:
         """
@@ -445,8 +429,8 @@ class L4Point(TriangularPoint):
         The CR3BP system containing the mass parameter mu.
     """
     
-    def __init__(self, system: "System"):
-        super().__init__(system)
+    def __init__(self, system: "System", *, services=None):
+        super().__init__(system, services=services)
     
     @property
     def idx(self) -> int:
@@ -475,8 +459,8 @@ class L5Point(TriangularPoint):
         The CR3BP system containing the mass parameter mu.
     """
     
-    def __init__(self, system: "System"):
-        super().__init__(system)
+    def __init__(self, system: "System", *, services=None):
+        super().__init__(system, services=services)
     
     @property
     def idx(self) -> int:

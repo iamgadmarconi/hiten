@@ -10,8 +10,10 @@ class extends the base return map functionality with center manifold-specific se
 strategies and visualization capabilities.
 """
 
+from __future__ import annotations
+
 from dataclasses import replace
-from typing import Literal, Optional, Sequence
+from typing import Literal, Optional, Sequence, TYPE_CHECKING
 
 import numpy as np
 
@@ -25,12 +27,15 @@ from hiten.algorithms.poincare.centermanifold.strategies import _make_strategy
 from hiten.algorithms.poincare.centermanifold.types import \
     CenterManifoldMapResults
 from hiten.algorithms.poincare.core.base import _ReturnMapBase
-from hiten.system.center import CenterManifold
 from hiten.system.orbits.base import GenericOrbit
 from hiten.utils.io.map import (load_poincare_map, load_poincare_map_inplace,
                                 save_poincare_map)
 from hiten.utils.log_config import logger
 from hiten.utils.plots import plot_poincare_map, plot_poincare_map_interactive
+
+
+if TYPE_CHECKING:
+    from hiten.system.center import CenterManifold
 
 
 class CenterManifoldMap(_ReturnMapBase):
@@ -143,11 +148,17 @@ class CenterManifoldMap(_ReturnMapBase):
             Configured backend for center manifold computations.
         """
 
-        return self.cm._get_or_create_backend(
+        return self.cm._services.dynamics.get_backend(
             self._energy,
             section_coord,
+            forward=1,
+            max_steps=self.config.max_steps,
             method=self.config.method,
             order=self.config.order,
+            pre_steps=self.config.pre_steps,
+            refine_steps=self.config.refine_steps,
+            bracket_dx=self.config.bracket_dx,
+            max_expand=self.config.max_expand,
             c_omega_heuristic=self.config.c_omega_heuristic,
         )
 
@@ -243,13 +254,19 @@ class CenterManifoldMap(_ReturnMapBase):
             return self._section.points
 
         # Build a temporary backend honoring runtime backend overrides
-        backend = self.cm._get_or_create_backend(
+        backend = self.cm._services.dynamics.get_backend(
             self._energy,
             key,
+            forward=1,
+            max_steps=self.config.max_steps,
             method=(method or self.config.method),
             order=(order or self.config.order),
+            pre_steps=self.config.pre_steps,
+            refine_steps=self.config.refine_steps,
+            bracket_dx=self.config.bracket_dx,
+            max_expand=self.config.max_expand,
             c_omega_heuristic=(
-                c_omega_heuristic if c_omega_heuristic is not None else self.config.c_omega_heuristic  # type: ignore[arg-type]
+                c_omega_heuristic if c_omega_heuristic is not None else self.config.c_omega_heuristic
             ),
         )
 
@@ -295,7 +312,7 @@ class CenterManifoldMap(_ReturnMapBase):
         self._section = results
         return results.points
 
-    def ic(self, pt: np.ndarray, *, section_coord: str | None = None) -> np.ndarray:
+    def to_synodic(self, pt: np.ndarray, *, section_coord: str | None = None) -> np.ndarray:
         """Convert a plane point to initial conditions for integration.
 
         Parameters
@@ -312,7 +329,7 @@ class CenterManifoldMap(_ReturnMapBase):
             Initial conditions [q1, q2, q3, p1, p2, p3] for integration.
         """
         key = section_coord or self.config.section_coord
-        return self.cm.ic(pt, self._energy, section_coord=key)
+        return self.cm.to_synodic(pt, self._energy, section_coord=key)
 
     def _propagate_from_point(
         self,
@@ -343,7 +360,7 @@ class CenterManifoldMap(_ReturnMapBase):
         :class:`~hiten.system.orbits.base.GenericOrbit`
             Propagated orbit object.
         """
-        ic = self.cm.ic(cm_point, energy, section_coord=self.config.section_coord)
+        ic = self.cm.to_synodic(cm_point, energy, section_coord=self.config.section_coord)
         logger.info("Initial conditions: %s", ic)
         orbit = GenericOrbit(self.cm.point, ic)
         if orbit.period is None:
@@ -600,8 +617,8 @@ class CenterManifoldMap(_ReturnMapBase):
             config=self.config,
             section_coord=key,
             energy=self._energy,
-            H_blocks=self.cm._hamsys.poly_H(),
-            clmo_table=self.cm._hamsys.clmo_table,
+            H_blocks=self.cm._services.dynamics.hamsys.poly_H(),
+            clmo_table=self.cm._services.dynamics.hamsys.clmo_table,
             dt=float(self.config.dt),
             n_iter=int(self.config.n_iter),
             n_workers=self.config.n_workers,

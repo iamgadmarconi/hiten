@@ -3,10 +3,12 @@
 This module provides the abstract base class for all Hiten classes.
 """
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Generic, Optional, TypeVar
+from typing import Any, Generic, Optional, TypeVar, Union
 
 import pandas as pd
 
@@ -142,10 +144,20 @@ class _HitenBase(ABC):
 
 
 DomainT = TypeVar("DomainT")
-ConfigT = TypeVar("ConfigT")
+
+ConfigT = TypeVar("ConfigT", bound=Union["_HitenBaseConfig", None])
+
 ProblemT = TypeVar("ProblemT", bound="_HitenBaseProblem")
+
 ResultT = TypeVar("ResultT", bound="_HitenBaseResults")
+
+BackendT = TypeVar("BackendT", bound="_HitenBaseBackend")
+
 OutputsT = TypeVar("OutputsT")
+
+InterfaceT = TypeVar("InterfaceT", bound="_HitenBaseInterface[Any, ConfigT, ProblemT, ResultT, OutputsT]")
+
+EngineT = TypeVar("EngineT", bound="_HitenBaseEngine[ProblemT, ResultT, OutputsT]")
 
 
 @dataclass(frozen=True)

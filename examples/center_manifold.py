@@ -19,7 +19,7 @@ def main() -> None:
     cm = l_point.get_center_manifold(degree=5)
     cm.compute()
 
-    cm.coefficients()
+    print(cm.coefficients())
 
 if __name__ == "__main__":
     main() 

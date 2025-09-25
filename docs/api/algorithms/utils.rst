@@ -155,7 +155,7 @@ Type Definitions
 
 The types module provides comprehensive type definitions and state vector containers for the CR3BP.
 
-.. currentmodule:: hiten.algorithms.utils.states
+.. currentmodule:: hiten.algorithms.types.states
 
 SynodicState()
 ^^^^^^^^^^^^^^

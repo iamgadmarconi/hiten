@@ -81,6 +81,21 @@ class _IntegrationConfig(ABC):
     method: Literal["fixed", "adaptive", "symplectic"] = "fixed"
     order: int = 8
     c_omega_heuristic: Optional[float] = 20.0
+    max_steps: int = 2000
+
+
+@dataclass(frozen=True)
+class _RefineConfig(ABC):
+    """Configuration for refinement parameters.
+    
+    This abstract base class defines the refinement-related
+    configuration parameters that control how the return map
+    is refined.
+    """
+    pre_steps: int = 1000
+    refine_steps: int = 3000
+    bracket_dx: float = 1e-10
+    max_expand: int = 500
 
 
 @dataclass(frozen=True)
@@ -143,7 +158,7 @@ class _SeedingConfig(ABC):
 
 # Backward-compatible umbrella config combining all mixins
 @dataclass(frozen=True)
-class _ReturnMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _IterationConfig, _SeedingConfig):
+class _ReturnMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _RefineConfig, _IterationConfig, _SeedingConfig):
     """Complete configuration for Poincare return map computation.
 
     This class combines all configuration mixins into a single
@@ -160,6 +175,7 @@ class _ReturnMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _IterationConfi
     This class inherits all parameters from:
     - :class:`~hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`: Base orchestration parameters
     - :class:`~hiten.algorithms.poincare.core.config._IntegrationConfig`: Numerical integration parameters
+    - :class:`~hiten.algorithms.poincare.core.config._RefineConfig`: Refinement parameters
     - :class:`~hiten.algorithms.poincare.core.config._IterationConfig`: Iteration control parameters
     - :class:`~hiten.algorithms.poincare.core.config._SeedingConfig`: Seeding strategy parameters
 
@@ -181,6 +197,24 @@ class _EngineConfigLike(Protocol):
     ----------
     dt : float
         Integration time step (nondimensional units).
+    max_steps : int
+        Maximum integration steps per trajectory.
+    method : {'fixed', 'symplectic', 'adaptive'}
+        Integration method.
+    order : int
+        Integration order for Runge-Kutta methods.
+    max_steps : int
+        Maximum integration steps per trajectory.
+    method : {'fixed', 'symplectic', 'adaptive'}
+        Integration method.
+    order : int
+        Integration order for Runge-Kutta methods.
+    refine_steps : int
+        Number of refinement steps for root finding.
+    bracket_dx : float
+        Initial bracket size for root finding.
+    max_expand : int
+        Maximum bracket expansion iterations.
     n_iter : int
         Number of return map iterations to compute.
     n_workers : int or None
@@ -197,6 +231,15 @@ class _EngineConfigLike(Protocol):
     control.
     """
     dt: float
+    max_steps: int
+    method: Literal["fixed", "symplectic", "adaptive"]
+    order: int
+    max_steps: int
+    method: Literal["fixed", "symplectic", "adaptive"]
+    refine_steps: int
+    bracket_dx: float
+    max_expand: int
+    c_omega_heuristic: float
     n_iter: int
     n_workers: int | None
 

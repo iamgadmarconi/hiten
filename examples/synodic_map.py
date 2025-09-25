@@ -20,7 +20,7 @@ def main() -> None:
     cm = l_point.get_center_manifold(degree=6)
     cm.compute()
 
-    ic_seed = cm.ic([0.0, 0.0], 0.6, "q3") # Good initial guess from CM
+    ic_seed = cm.to_synodic([0.0, 0.0], 0.6, "q3") # Good initial guess from CM
 
     orbit = VerticalOrbit(l_point, initial_state=ic_seed)
     orbit.correct(max_attempts=100, finite_difference=True)

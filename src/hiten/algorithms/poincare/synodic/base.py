@@ -198,8 +198,9 @@ class SynodicMap(_DetectionMapBase):
 
         interface = self._engine._interface
         problem = interface.create_problem(
+            config=self.config,
+            section_iface=self._section_iface,
             direction=direction,
-            n_workers=int(self.config.n_workers or 0),
             trajectories=trajectories,
         )
         sec = self._engine.solve(problem)
@@ -254,7 +255,7 @@ class SynodicMap(_DetectionMapBase):
 
         Parameters
         ----------
-        manifold : manifold object
+        manifold : :class:`~hiten.system.manifold.Manifold`
             The manifold object containing trajectory data. Must have
             a `manifold_result` attribute with `times_list` and `states_list`.
         direction : {1, -1, None}, optional
