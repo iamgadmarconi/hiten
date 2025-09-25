@@ -48,18 +48,14 @@ class _PeriodicOrbitContinuationInterface(
 ):
     """Adapter wiring periodic-orbit families to continuation backends."""
 
-    def __init__(self, seed: "PeriodicOrbit") -> None:
-        super().__init__(seed)
-        self._accepted: list["PeriodicOrbit"] = []
-        self._pending_tangent: np.ndarray | None = None
-        self._backend = None
-        self._config: _OrbitContinuationConfig | None = None
+    def __init__(self) -> None:
+        super().__init__()
 
-    def create_problem(self, *, config: _OrbitContinuationConfig) -> _ContinuationProblem:
-        self._config = config
+
+    def create_problem(self, *, seed: "PeriodicOrbit", config: _OrbitContinuationConfig) -> _ContinuationProblem:
         parameter_getter = self._parameter_getter(config)
         return _ContinuationProblem(
-            initial_solution=self.domain_object,
+            initial_solution=seed,
             parameter_getter=parameter_getter,
             target=np.asarray(config.target, dtype=float),
             step=np.asarray(config.step, dtype=float),
@@ -76,28 +72,85 @@ class _PeriodicOrbitContinuationInterface(
     def to_backend_inputs(self, problem: _ContinuationProblem) -> BackendCall:
         cfg = problem.cfg
         assert cfg is not None
+        seed = problem.initial_solution
 
         predictor = self._predictor(cfg)
-        seed_repr = self._representation(self.domain_object)
-        stepper = self._make_stepper(cfg, predictor)
-
+        seed_repr = self._representation(seed)
+        
         step_eff = np.asarray(cfg.step, dtype=float)
+        
+        # Create tangent function for secant stepper
+        _current_tangent = None
+        _seeded = False
+        
         if str(cfg.stepper).lower() == "secant":
+            # Calculate initial tangent
             try:
                 pred0 = predictor(seed_repr, step_eff)
                 diff0 = (np.asarray(pred0, dtype=float) - seed_repr).ravel()
                 norm0 = float(np.linalg.norm(diff0))
-                self._pending_tangent = None if norm0 == 0.0 else diff0 / norm0
+                initial_tangent = None if norm0 == 0.0 else diff0 / norm0
             except Exception:
-                self._pending_tangent = None
+                initial_tangent = None
+            
+            _current_tangent = initial_tangent
+            
+            def tangent_fn() -> np.ndarray | None:
+                nonlocal _current_tangent, _seeded
+                # First try to get updated tangent from backend
+                if hasattr(self, "_backend") and self._backend is not None and hasattr(self._backend, "get_tangent"):
+                    backend_tangent = self._backend.get_tangent()
+                    if backend_tangent is not None:
+                        _current_tangent = backend_tangent
+                        return _current_tangent
+                
+                # If we have an initial tangent and haven't seeded the backend yet, do it now
+                if not _seeded and initial_tangent is not None and hasattr(self, "_backend") and self._backend is not None and hasattr(self._backend, "seed_tangent"):
+                    try:
+                        self._backend.seed_tangent(initial_tangent)
+                        _seeded = True
+                    except Exception:
+                        pass
+                
+                return _current_tangent
         else:
-            self._pending_tangent = None
+            tangent_fn = None
+        
+        def update_tangent(new_tangent: np.ndarray) -> None:
+            nonlocal _current_tangent
+            _current_tangent = new_tangent
+        
+        stepper = self._make_stepper(cfg, predictor, tangent_fn)
 
         def corrector(prediction: np.ndarray) -> tuple[np.ndarray, float, bool]:
-            orbit = self._instantiate(prediction)
+            orbit = self._instantiate(seed, prediction)
             x_corr, _ = orbit.correct(**(cfg.extra_params or {}))
-            self._accepted.append(orbit)
             residual = float(np.linalg.norm(np.asarray(x_corr, dtype=float) - prediction))
+            
+            # Update tangent for secant stepper after successful correction
+            if str(cfg.stepper).lower() == "secant" and tangent_fn is not None:
+                # Get the last accepted solution from the backend if available
+                if hasattr(self, "_backend") and self._backend is not None and hasattr(self._backend, "_last_accepted"):
+                    last_accepted = self._backend._last_accepted
+                    if last_accepted is not None:
+                        # Compute secant between last accepted and current corrected solution
+                        diff = (np.asarray(x_corr, dtype=float) - np.asarray(last_accepted, dtype=float)).ravel()
+                        norm = float(np.linalg.norm(diff))
+                        if norm > 0.0:
+                            new_tangent = diff / norm
+                            # Update the tangent in the closure
+                            update_tangent(new_tangent)
+                            # Also update the backend's tangent
+                            if hasattr(self._backend, "seed_tangent"):
+                                try:
+                                    self._backend.seed_tangent(new_tangent)
+                                except Exception:
+                                    pass
+                
+                # Store the corrected solution for next iteration
+                if hasattr(self, "_backend") and self._backend is not None:
+                    self._backend._last_accepted = np.asarray(x_corr, dtype=float).copy()
+            
             return np.asarray(x_corr, dtype=float), residual, True
 
         return BackendCall(
@@ -133,27 +186,32 @@ class _PeriodicOrbitContinuationInterface(
         parameter_values = tuple(info.get("parameter_values", tuple()))
         denom = max(accepted_count + rejected_count, 1)
         success_rate = float(accepted_count) / float(denom)
-        family = tuple([self.domain_object, *self._accepted])
-        self._accepted = []
+
+        family = [problem.initial_solution]
+        for repr_vec in family_repr[1:]:
+            orbit = self._instantiate(problem.initial_solution, repr_vec)
+            family.append(orbit)
+        
         return ContinuationResult(
             accepted_count=accepted_count,
             rejected_count=rejected_count,
             success_rate=success_rate,
-            family=family,
+            family=tuple(family),
             parameter_values=parameter_values,
             iterations=iterations,
         )
 
-    def bind_backend(self, backend) -> None:
-        self._backend = backend
-
     def _representation(self, orbit) -> np.ndarray:
         return np.asarray(orbit.initial_state, dtype=float).copy()
 
-    def _instantiate(self, representation: np.ndarray):
-        orbit_cls = type(self.domain_object)
-        lp = getattr(self.domain_object, "libration_point", None)
-        return orbit_cls(libration_point=lp, initial_state=np.asarray(representation, dtype=float))
+    def _instantiate(self, seed: "PeriodicOrbit", representation: np.ndarray):
+        orbit_cls = type(seed)
+        lp = getattr(seed, "libration_point", None)
+        orbit = orbit_cls(libration_point=lp, initial_state=np.asarray(representation, dtype=float))
+        # Copy the period from the seed orbit if it has one
+        if seed.period is not None:
+            orbit.period = seed.period
+        return orbit
 
     def _parameter_getter(self, cfg: _OrbitContinuationConfig) -> Callable[[np.ndarray], np.ndarray]:
         state = getattr(cfg, "state", None)
@@ -189,25 +247,7 @@ class _PeriodicOrbitContinuationInterface(
 
         return _predict
 
-    def _make_stepper(self, cfg: _OrbitContinuationConfig, predictor: Callable[[np.ndarray, np.ndarray], np.ndarray]):
+    def _make_stepper(self, cfg: _OrbitContinuationConfig, predictor: Callable[[np.ndarray, np.ndarray], np.ndarray], tangent_fn: Callable[[], np.ndarray | None] | None = None):
         if str(cfg.stepper).lower() == "secant":
-            return make_secant_stepper(lambda v: np.asarray(v, dtype=float), self._tangent)
+            return make_secant_stepper(lambda v: np.asarray(v, dtype=float), tangent_fn)
         return make_natural_stepper(predictor)
-
-    def _tangent(self) -> np.ndarray | None:
-        if self._pending_tangent is not None:
-            tangent = self._pending_tangent
-            self._pending_tangent = None
-            backend = getattr(self, "_backend", None)
-            if backend is not None and hasattr(backend, "seed_tangent"):
-                try:
-                    backend.seed_tangent(tangent)
-                except Exception:
-                    pass
-            return tangent
-        backend = getattr(self, "_backend", None)
-        if backend is not None:
-            getter = getattr(backend, "get_tangent", None)
-            if callable(getter):
-                return getter()
-        return None

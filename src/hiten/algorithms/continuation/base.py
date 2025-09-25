@@ -5,7 +5,7 @@ provide a simple API to run continuation with domain-friendly inputs.
 """
 
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Literal, Sequence
 
 import numpy as np
 
@@ -55,7 +55,7 @@ class StateParameter:
         step_max: float = 1.0,
         extra_params: dict | None = None,
         shrink_policy=None,
-        stepper: str = "natural",
+        stepper: Literal["natural", "secant"] = "natural",
     ) -> ContinuationResult:
         # Normalize inputs for config construction
         target_arr = np.asarray(target, dtype=float)
@@ -76,9 +76,9 @@ class StateParameter:
             stepper=str(stepper),
         )
 
-        interface = _PeriodicOrbitContinuationInterface(seed)
+        interface = _PeriodicOrbitContinuationInterface()
         engine = _OrbitContinuationEngine(backend=self.engine.backend).with_interface(interface)
-        problem = interface.create_problem(config=cfg)
+        problem = interface.create_problem(seed=seed, config=cfg)
         return engine.solve(problem)
 
 

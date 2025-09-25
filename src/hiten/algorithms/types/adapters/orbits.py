@@ -86,10 +86,10 @@ class _OrbitCorrectionAdapter:
             stepper_factory = make_armijo_stepper(line_search)
 
         backend = _NewtonBackend(stepper_factory=stepper_factory)
-        interface = _PeriodicOrbitCorrectorInterface(orbit)
+        interface = _PeriodicOrbitCorrectorInterface()
         engine = _OrbitCorrectionEngine(backend=backend, interface=interface)
 
-        problem = interface.create_problem(config=cfg, stepper_factory=stepper_factory)
+        problem = interface.create_problem(orbit=orbit, config=cfg, stepper_factory=stepper_factory)
         result = engine.solve(problem)
         half_period = getattr(result, "half_period", None)
         if half_period is not None and not np.isnan(half_period):

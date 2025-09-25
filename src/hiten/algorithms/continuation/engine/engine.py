@@ -7,7 +7,7 @@ from hiten.algorithms.continuation.engine.base import _ContinuationEngine
 from hiten.algorithms.continuation.interfaces import (
     _PeriodicOrbitContinuationInterface,
 )
-from hiten.algorithms.continuation.types import _ContinuationProblem
+from hiten.algorithms.continuation.types import _ContinuationProblem, ContinuationResult
 from hiten.algorithms.types.exceptions import EngineError
 
 
@@ -33,14 +33,12 @@ class _OrbitContinuationEngine(_ContinuationEngine):
         raise EngineError("Orbit continuation failed") from exc
 
     def _invoke_backend(self, call):
-        interface = self._interface
-        interface.bind_backend(self._backend)
         return self._backend.solve(*call.args, **call.kwargs)
 
     def _after_backend_success(self, outputs, *, problem, domain_payload, interface) -> None:
         family_repr, info = outputs
         try:
-            last_repr = family_repr[-1] if family_repr else interface._representation(interface.domain_object)
+            last_repr = family_repr[-1] if family_repr else interface._representation(problem.initial_solution)
             self._backend.on_success(
                 np.asarray(last_repr, dtype=float),
                 iterations=int(info.get("iterations", 0)),

@@ -185,20 +185,17 @@ class _HitenBaseConfig(ABC):
 
     __slots__ = ()
 
+
 class _HitenBaseBackend(ABC):
     ...
+
 
 class _HitenBaseInterface(Generic[DomainT, ConfigT, ProblemT, ResultT, OutputsT], ABC):
     """Shared contract for translating between domain objects and backends."""
 
-    def __init__(self, domain_object: DomainT | None = None) -> None:
-        self._domain_object: DomainT | None = domain_object
+    def __init__(self) -> None:
         self._config: ConfigT | None = None
 
-    @property
-    def domain_object(self) -> DomainT | None:
-        return self._domain_object
-    
     @property
     def current_config(self) -> ConfigT | None:
         return self._config
@@ -225,7 +222,7 @@ class _HitenBaseInterface(Generic[DomainT, ConfigT, ProblemT, ResultT, OutputsT]
         """Package backend outputs into user-facing result objects."""
 
     def bind_backend(self, backend: _HitenBaseBackend) -> None:
-        return None
+        self._backend = backend
 
     def on_start(self, problem: ProblemT) -> None:
         return None
@@ -266,6 +263,7 @@ class _HitenBaseEngine(Generic[ProblemT, ResultT, OutputsT], ABC):
         """Execute the standard engine orchestration for ``problem``."""
 
         interface = self._get_interface(problem)
+        interface.bind_backend(self._backend)
         call = interface.to_backend_inputs(problem)
         interface.on_start(problem)
         self._before_backend(problem, call, interface)
@@ -312,7 +310,7 @@ class _HitenBaseEngine(Generic[ProblemT, ResultT, OutputsT], ABC):
         return None
 
     def _handle_backend_failure(self, exc: Exception, *, problem: ProblemT, call: BackendCall, interface: _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT]) -> None:
-        raise exc
+        raise EngineError(exc) from exc
 
     def _invoke_backend(self, call: BackendCall) -> OutputsT:
         backend_callable = getattr(self._backend, self._backend_method)
