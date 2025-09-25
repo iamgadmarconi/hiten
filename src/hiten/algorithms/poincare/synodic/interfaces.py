@@ -82,20 +82,6 @@ class _SynodicSectionInterface(_SectionInterface):
     def build_event(self, *, direction: Literal[1, -1, None] = None) -> _AffinePlaneEvent:
         return _AffinePlaneEvent(normal=self.normal, offset=self.offset, direction=direction)
 
-    def create_problem(
-        self,
-        *,
-        direction: Literal[1, -1, None] | None,
-        n_workers: int,
-        trajectories: Sequence[tuple[np.ndarray, np.ndarray]] | None,
-    ) -> _SynodicMapProblem:
-        return _SynodicMapProblem(
-            plane_coords=self.plane_coords,
-            direction=direction,
-            n_workers=n_workers,
-            trajectories=trajectories,
-        )
-
     def coordinate_index(self, axis: str) -> int:
         try:
             return int(SynodicState[axis.upper()])
@@ -111,20 +97,22 @@ class _SynodicInterface(
     def create_problem(
         *,
         config: _SynodicMapConfig,
-        section_iface: _SynodicSectionInterface,
+        plane_coords: Tuple[str, str],
+        normal: np.ndarray,
+        offset: float,
         direction: Literal[1, -1, None] | None,
         trajectories: Sequence[tuple[np.ndarray, np.ndarray]] | None,
     ) -> _SynodicMapProblem:
         from hiten.algorithms.poincare.synodic.config import _SynodicSectionConfig
         
         section_cfg = _SynodicSectionConfig(
-            normal=section_iface.normal,
-            offset=section_iface.offset,
-            plane_coords=section_iface.plane_coords
+            normal=normal,
+            offset=offset,
+            plane_coords=plane_coords
         )
         
         return _SynodicMapProblem(
-            plane_coords=section_iface.plane_coords,
+            plane_coords=plane_coords,
             direction=direction,
             n_workers=config.n_workers or 1,
             section_cfg=section_cfg,

@@ -199,7 +199,9 @@ class SynodicMap(_DetectionMapBase):
         interface = self._engine._interface
         problem = interface.create_problem(
             config=self.config,
-            section_iface=self._section_iface,
+            plane_coords=self._section_iface.plane_coords,
+            normal=self._section_iface.normal,
+            offset=self._section_iface.offset,
             direction=direction,
             trajectories=trajectories,
         )
