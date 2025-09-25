@@ -15,15 +15,16 @@ References
    *Dynamical Systems, the Three-Body Problem and Space Mission Design*.
    Springer.
 """
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 import numpy as np
 
 from hiten.algorithms.linalg.types import _StabilityType, _SystemType
+from hiten.algorithms.types.core import _HitenBaseBackend
 from hiten.algorithms.types.exceptions import BackendError
 
 
-class _LinalgBackend:
+class _LinalgBackend(_HitenBaseBackend):
     """Minimal backend for linear algebra operations.
 
     Stateless wrapper exposing the core linear-algebra routines used across
@@ -33,6 +34,16 @@ class _LinalgBackend:
 
     def __init__(self, system_type: _SystemType = _SystemType.CONTINUOUS):
         self.system_type = system_type
+
+    def run(self, **kwargs) -> Any:
+        """Run the linear algebra backend.
+        
+        Parameters
+        ----------
+        **kwargs
+            Additional keyword arguments passed to the run method.
+        """
+        raise NotImplementedError("Subclasses must implement the run method")
 
     def eigenvalue_decomposition(self, A: np.ndarray, delta: float = 1e-4) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Classify eigenvalue-eigenvector pairs into stable, unstable, and center subspaces.
