@@ -6,7 +6,7 @@ while the results type contains the computed section.
 """
 
 from dataclasses import dataclass
-from typing import Optional, Tuple, Callable
+from typing import Optional, Tuple, Callable, List
 
 import numpy as np
 from hiten.algorithms.poincare.core.types import _MapResults
@@ -35,6 +35,9 @@ class _CenterManifoldMapProblem:
     dt: float
     n_iter: int
     n_workers: int
+    jac_H: List[np.ndarray]
+    H_blocks: List[np.ndarray]
+    clmo_table: List[np.ndarray]
     solve_missing_coord_fn: Callable[[str, dict[str, float]], Optional[float]] | None = None
     find_turning_fn: Callable[[str], float] | None = None
 

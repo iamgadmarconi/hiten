@@ -93,10 +93,6 @@ class _CenterManifoldDynamicsAdapter(_CachedDynamicsAdapter[object]):
         
         def _factory() -> _CenterManifoldBackend:
             return _CenterManifoldBackend(
-                dynsys=self.hamsys,
-                surface=_PlaneEvent(coord=section_coord, value=0.0, direction=None),
-                section_coord=section_coord,
-                h0=energy,
                 forward=forward,
                 max_steps=max_steps,
                 method=method,

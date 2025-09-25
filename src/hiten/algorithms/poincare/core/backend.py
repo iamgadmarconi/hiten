@@ -15,9 +15,6 @@ from typing import Literal
 
 import numpy as np
 
-from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
-from hiten.algorithms.poincare.core.events import _SurfaceEvent
-
 
 class _ReturnMapBackend(ABC):
     """Abstract base class for Poincare return map backends.
@@ -28,10 +25,6 @@ class _ReturnMapBackend(ABC):
 
     Parameters
     ----------
-    dynsys : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
-        Dynamical system providing the equations of motion.
-    surface : :class:`~hiten.algorithms.poincare.core.events._SurfaceEvent`
-        Poincare section surface definition.
     forward : int, default=1
         Integration direction (1 for forward, -1 for backward).
     method : {'fixed', 'symplectic', 'adaptive'}, default='adaptive'
@@ -61,8 +54,6 @@ class _ReturnMapBackend(ABC):
     def __init__(
         self,
         *,
-        dynsys: "_DynamicalSystemProtocol",
-        surface: "_SurfaceEvent",
         forward: int = 1,
         method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
         order: int = 8,
@@ -71,8 +62,6 @@ class _ReturnMapBackend(ABC):
         bracket_dx: float = 1e-10,
         max_expand: int = 500,
     ) -> None:
-        self._dynsys = dynsys
-        self._surface = surface
         self._forward = 1 if forward >= 0 else -1
         self._method = method
         self._order = int(order)

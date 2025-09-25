@@ -81,18 +81,27 @@ class _SynodicEngine(_ReturnMapEngine):
         if not trajectories:
             raise EngineError("No trajectories provided to synodic engine")
 
-        section_iface = self._interface.section_interface
         n_workers = self._n_workers
 
         # Delegate detection to backend passed in at construction
         if n_workers <= 1 or len(trajectories) <= 1:
-            hits_lists = self._backend.detect_batch(trajectories, direction=direction)
+            hits_lists = self._backend.detect_batch(
+                trajectories, 
+                section_cfg=problem.section_cfg,
+                map_cfg=problem.map_cfg,
+                direction=direction
+            )
         else:
             chunks = np.array_split(np.arange(len(trajectories)), n_workers)
 
             def _worker(idx_arr: np.ndarray):
                 subset = [trajectories[i] for i in idx_arr.tolist()]
-                return self._backend.detect_batch(subset, direction=direction)
+                return self._backend.detect_batch(
+                    subset, 
+                    section_cfg=problem.section_cfg,
+                    map_cfg=problem.map_cfg,
+                    direction=direction
+                )
 
             parts: list[list[list]] = []
             with ThreadPoolExecutor(max_workers=n_workers) as ex:

@@ -106,23 +106,38 @@ class _SynodicSectionInterface(_SectionInterface):
 class _SynodicInterface(
     _PoincareBaseInterface[Tuple[np.ndarray, np.ndarray], _SynodicMapConfig, _SynodicMapProblem, SynodicMapResults, Tuple[np.ndarray, np.ndarray, np.ndarray | None]]
 ):
-    section_interface: _SynodicSectionInterface
 
+    @staticmethod
     def create_problem(
-        self,
         *,
         config: _SynodicMapConfig,
         section_iface: _SynodicSectionInterface,
         direction: Literal[1, -1, None] | None,
         trajectories: Sequence[tuple[np.ndarray, np.ndarray]] | None,
     ) -> _SynodicMapProblem:
-        self.section_interface = section_iface
-        return section_iface.create_problem(direction=direction, n_workers=config.n_workers or 1, trajectories=trajectories)
+        from hiten.algorithms.poincare.synodic.config import _SynodicSectionConfig
+        
+        section_cfg = _SynodicSectionConfig(
+            normal=section_iface.normal,
+            offset=section_iface.offset,
+            plane_coords=section_iface.plane_coords
+        )
+        
+        return _SynodicMapProblem(
+            plane_coords=section_iface.plane_coords,
+            direction=direction,
+            n_workers=config.n_workers or 1,
+            section_cfg=section_cfg,
+            map_cfg=config,
+            trajectories=trajectories,
+        )
 
-    def to_backend_inputs(self, problem: _SynodicMapProblem):
+    @staticmethod
+    def to_backend_inputs(problem: _SynodicMapProblem):
         return BackendCall(kwargs={"trajectories": problem.trajectories, "direction": problem.direction})
 
-    def to_results(self, outputs, *, problem: _SynodicMapProblem) -> SynodicMapResults:
+    @staticmethod
+    def to_results(outputs, *, problem: _SynodicMapProblem) -> SynodicMapResults:
         points, states, times = outputs
-        plane_coords = self.section_interface.plane_coords if self.section_interface is not None else problem.plane_coords
+        plane_coords = problem.plane_coords
         return SynodicMapResults(points, states, plane_coords, times)

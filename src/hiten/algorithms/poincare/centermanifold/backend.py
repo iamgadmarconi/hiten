@@ -391,14 +391,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
 
     Parameters
     ----------
-    dynsys : :class:`~hiten.algorithms.dynamics.protocols._HamiltonianSystemProtocol`
-        Hamiltonian system providing polynomial representation and CLMO tables.
-    surface : :class:`~hiten.algorithms.poincare.core.events._SurfaceEvent`
-        Poincare section surface definition.
-    section_coord : str
-        Section coordinate identifier ('q2', 'p2', 'q3', or 'p3').
-    h0 : float
-        Energy level for center manifold (nondimensional units).
     forward : int, default=1
         Integration direction (1 for forward, -1 for backward).
     max_steps : int, default=2000
@@ -421,15 +413,13 @@ class _CenterManifoldBackend(_ReturnMapBackend):
     Notes
     -----
     State vectors are ordered as [q1, q2, q3, p1, p2, p3].
+    The backend is stateless - all dynamic system data must be passed to
+    the step_to_section method as arguments.
     """
 
     def __init__(
         self,
         *,
-        dynsys: "_HamiltonianSystemProtocol",
-        surface: "_SurfaceEvent",
-        section_coord: str,
-        h0: float,
         forward: int = 1,
         max_steps: int = 2000,
         method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
@@ -441,8 +431,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         c_omega_heuristic: float = 20.0,
     ) -> None:
         super().__init__(
-            dynsys=dynsys,
-            surface=surface,
             forward=forward,
             method=method,
             order=order,
@@ -452,11 +440,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
             max_expand=max_expand,
         )
 
-        self._section_cfg = _get_section_interface(section_coord)
-        self._h0 = h0
-        self._H_blocks = dynsys.poly_H()
-        self._clmo_table = dynsys.clmo_table
-        self._jac_H = dynsys.jac_H
         self._order = order
         self._max_steps = max_steps
         self._use_symplectic = method == "symplectic"
@@ -468,6 +451,9 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         seeds: np.ndarray,
         *,
         dt: float = 1e-2,
+        jac_H,
+        clmo_table,
+        section_coord: str,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Propagate center manifold seeds until the next Poincare section crossing.
 
@@ -477,6 +463,12 @@ class _CenterManifoldBackend(_ReturnMapBackend):
             Array of initial seeds [q2, p2, q3, p3] (nondimensional units).
         dt : float, default=1e-2
             Integration time step (nondimensional units).
+        jac_H
+            Jacobian of the Hamiltonian system.
+        clmo_table
+            CLMO table for polynomial evaluation.
+        section_coord : str
+            Section coordinate identifier ('q2', 'p2', 'q3', or 'p3').
 
         Returns
         -------
@@ -504,13 +496,13 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         flags, q2p_arr, p2p_arr, q3p_arr, p3p_arr, t_arr = _poincare_map(
             np.ascontiguousarray(seeds, dtype=np.float64),
             dt,
-            self._jac_H,
-            self._clmo_table,
+            jac_H,
+            clmo_table,
             self._order,
             self._max_steps,
             self._use_symplectic,
             N_SYMPLECTIC_DOF,
-            self._section_cfg.section_coord,
+            section_coord,
             self._c_omega_heuristic,
         )
 

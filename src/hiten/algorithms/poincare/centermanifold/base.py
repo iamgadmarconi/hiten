@@ -297,14 +297,17 @@ class CenterManifoldMap(_ReturnMapBase):
             map_config=tmp_cfg,
             interface=_CenterManifoldInterface(),
         )
+        hamsys = self.cm._services.dynamics.hamsys
         problem = _CenterManifoldInterface.create_problem(
+            config=tmp_cfg,
             section_coord=key,
             energy=self._energy,
+            jac_H=hamsys.jac_H,
+            H_blocks=hamsys.poly_H(),
+            clmo_table=hamsys.clmo_table,
             dt=float(dt if dt is not None else tmp_cfg.dt),
             n_iter=int(n_iter if n_iter is not None else tmp_cfg.n_iter),
             n_workers=(int(n_workers) if n_workers is not None else tmp_cfg.n_workers),
-            H_blocks=backend._H_blocks,
-            clmo_table=backend._clmo_table,
         )
         results: CenterManifoldMapResults = engine.solve(problem)
 
@@ -613,12 +616,14 @@ class CenterManifoldMap(_ReturnMapBase):
 
         engine = self._engines[key]
         interface = engine._get_interface(problem=None)
+        hamsys = self.cm._services.dynamics.hamsys
         problem = interface.create_problem(
             config=self.config,
             section_coord=key,
             energy=self._energy,
-            H_blocks=self.cm._services.dynamics.hamsys.poly_H(),
-            clmo_table=self.cm._services.dynamics.hamsys.clmo_table,
+            jac_H=hamsys.jac_H,
+            H_blocks=hamsys.poly_H(),
+            clmo_table=hamsys.clmo_table,
             dt=float(self.config.dt),
             n_iter=int(self.config.n_iter),
             n_workers=self.config.n_workers,

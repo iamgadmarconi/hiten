@@ -127,9 +127,9 @@ class _CenterManifoldEngine(_ReturnMapEngine):
                     self._strategy.n_seeds, problem.n_iter, problem.n_workers)
 
         plane_pts = self._strategy.generate(
-            h0=self._backend._h0,
-            H_blocks=self._backend._H_blocks,
-            clmo_table=self._backend._clmo_table,
+            h0=problem.energy,
+            H_blocks=problem.H_blocks,
+            clmo_table=problem.clmo_table,
             solve_missing_coord_fn=lambda varname, fixed_vals: problem.solve_missing_coord_fn(varname, fixed_vals),
             find_turning_fn=lambda name: problem.find_turning_fn(name),
         )
@@ -139,9 +139,9 @@ class _CenterManifoldEngine(_ReturnMapEngine):
             self._interface.lift_plane_point(
                 p,
                 section_coord=section_coord,
-                h0=self._backend._h0,
-                H_blocks=self._backend._H_blocks,
-                clmo_table=self._backend._clmo_table,
+                h0=problem.energy,
+                H_blocks=problem.H_blocks,
+                clmo_table=problem.clmo_table,
             )
             for p in plane_pts
         ]
@@ -163,7 +163,13 @@ class _CenterManifoldEngine(_ReturnMapEngine):
                 except Exception:
                     pass
 
-                states, times, flags = self._backend.step_to_section(seeds, dt=problem.dt)
+                states, times, flags = self._backend.step_to_section(
+                    seeds, 
+                    dt=problem.dt,
+                    jac_H=problem.jac_H,
+                    clmo_table=problem.clmo_table,
+                    section_coord=section_coord
+                )
                 if states.size == 0:
                     try:
                         self._interface.on_failure(it)

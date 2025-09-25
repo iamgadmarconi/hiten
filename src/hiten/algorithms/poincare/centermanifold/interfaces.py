@@ -85,13 +85,8 @@ _CM_SECTION_TABLE: dict[str, dict[str, object]] = {
 }
 
 
-_SECTION_CACHE: dict[str, _CenterManifoldSectionInterface] = {}
-
-
 def _get_section_interface(section_coord: str) -> _CenterManifoldSectionInterface:
-    if section_coord not in _SECTION_CACHE:
-        _SECTION_CACHE[section_coord] = _CenterManifoldSectionInterface.from_section_coord(section_coord)
-    return _SECTION_CACHE[section_coord]
+    return _CenterManifoldSectionInterface.from_section_coord(section_coord)
 
 
 @dataclass
@@ -104,11 +99,6 @@ class _CenterManifoldInterface(
         tuple[np.ndarray | None, Optional[np.ndarray]],
     ]
 ):
-    cm_state: RestrictedCenterManifoldState | None = None
-    section_coord: str = "q3"
-    energy: float = 0.0
-    H_blocks: any = None
-    clmo_table: any = None
 
     _STATE_INDEX = {
         "q2": int(RestrictedCenterManifoldState.q2),
@@ -117,35 +107,66 @@ class _CenterManifoldInterface(
         "p3": int(RestrictedCenterManifoldState.p3),
     }
 
+    @staticmethod
     def create_problem(
-        self,
         *,
         config: _CenterManifoldMapConfig,
         section_coord: str,
         energy: float,
+        jac_H,
         H_blocks,
         clmo_table,
         dt: float,
         n_iter: int,
         n_workers: int | None,
     ) -> _CenterManifoldMapProblem:
-        self.section_coord = section_coord
-        self.energy = float(energy)
-        self.H_blocks = H_blocks
-        self.clmo_table = clmo_table
-        return self._create_problem_payload(section_coord, float(energy), dt=dt, n_iter=n_iter, n_workers=n_workers, H_blocks=H_blocks, clmo_table=clmo_table)
+        default_workers = os.cpu_count() or 1
+        resolved_workers = default_workers if (n_workers is None or int(n_workers) <= 0) else int(n_workers)
 
-    def to_backend_inputs(self, problem: _CenterManifoldMapProblem):
+        def solve_missing_coord_fn(varname: str, fixed_vals: dict[str, float]) -> Optional[float]:
+            return _CenterManifoldInterface.solve_missing_coord(
+                varname,
+                fixed_vals,
+                h0=energy,
+                H_blocks=H_blocks,
+                clmo_table=clmo_table,
+            )
+
+        def find_turning_fn(name: str) -> float:
+            return _CenterManifoldInterface.find_turning(
+                name,
+                h0=energy,
+                H_blocks=H_blocks,
+                clmo_table=clmo_table,
+            )
+
+        return _CenterManifoldMapProblem(
+            section_coord=section_coord,
+            energy=float(energy),
+            dt=float(dt),
+            n_iter=int(n_iter),
+            n_workers=resolved_workers,
+            jac_H=jac_H,
+            H_blocks=H_blocks,
+            clmo_table=clmo_table,
+            solve_missing_coord_fn=solve_missing_coord_fn,
+            find_turning_fn=find_turning_fn,
+        )
+
+    @staticmethod
+    def to_backend_inputs(problem: _CenterManifoldMapProblem):
         return BackendCall(kwargs={"section_coord": problem.section_coord, "dt": problem.dt})
 
-    def to_domain(self, outputs, *, problem: _CenterManifoldMapProblem):
+    @staticmethod
+    def to_domain(outputs, *, problem: _CenterManifoldMapProblem):
         states, info, extra = outputs
         return info
 
-    def to_results(self, outputs, *, problem: _CenterManifoldMapProblem) -> CenterManifoldMapResults:
+    @staticmethod
+    def to_results(outputs, *, problem: _CenterManifoldMapProblem) -> CenterManifoldMapResults:
         points, states, times = outputs
         section_coord = problem.section_coord
-        labels = self.plane_labels(section_coord)
+        labels = _CenterManifoldInterface.plane_labels(section_coord)
         return CenterManifoldMapResults(points, states, labels, times)
 
     @staticmethod
@@ -343,33 +364,3 @@ class _CenterManifoldInterface(
         sec_if = _get_section_interface(section_coord)
         return sec_if.plane_coords
 
-    def _create_problem_payload(self, section_coord: str, energy: float, *, dt: float, n_iter: int, n_workers: int | None, H_blocks=None, clmo_table=None) -> _CenterManifoldMapProblem:
-        default_workers = os.cpu_count() or 1
-        resolved_workers = default_workers if (n_workers is None or int(n_workers) <= 0) else int(n_workers)
-
-        def solve_missing_coord_fn(varname: str, fixed_vals: dict[str, float]) -> Optional[float]:
-            return _CenterManifoldInterface.solve_missing_coord(
-                varname,
-                fixed_vals,
-                h0=energy,
-                H_blocks=H_blocks,
-                clmo_table=clmo_table,
-            )
-
-        def find_turning_fn(name: str) -> float:
-            return _CenterManifoldInterface.find_turning(
-                name,
-                h0=energy,
-                H_blocks=H_blocks,
-                clmo_table=clmo_table,
-            )
-
-        return _CenterManifoldMapProblem(
-            section_coord=section_coord,
-            energy=float(energy),
-            dt=float(dt),
-            n_iter=int(n_iter),
-            n_workers=resolved_workers,
-            solve_missing_coord_fn=solve_missing_coord_fn,
-            find_turning_fn=find_turning_fn,
-        )

@@ -757,19 +757,22 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
     All time units are in nondimensional units unless otherwise specified.
     """
 
-    def __init__(self, *, section_cfg: _SynodicSectionConfig, map_cfg: _SynodicMapConfig) -> None:
-        # The stored surface is inert; we build an event per call to include direction.
-        super().__init__(dynsys=None, surface=section_cfg.build_event(direction=None))
-        self._section_cfg = section_cfg
-        self._cfg = map_cfg
-        # Cache frequently used numeric settings and projection axes
-        self._settings = _DetectionSettings.from_config(map_cfg=map_cfg, plane_coords=section_cfg.plane_coords)
+    def __init__(self) -> None:
+        super().__init__()
 
     # Required by abstract base, but unused for synodic
     def step_to_section(self, seeds: "np.ndarray", *, dt: float = 1e-2) -> tuple["np.ndarray", "np.ndarray"]:
         raise NotImplementedError("Synodic detection backend does not propagate seeds")
 
-    def detect_on_trajectory(self, times: np.ndarray, states: np.ndarray, *, direction: Literal[1, -1, None] | None = None) -> "list[_SectionHit]":
+    def detect_on_trajectory(
+        self, 
+        times: np.ndarray, 
+        states: np.ndarray, 
+        *,
+        section_cfg: _SynodicSectionConfig,
+        map_cfg: _SynodicMapConfig,
+        direction: Literal[1, -1, None] | None = None
+    ) -> "list[_SectionHit]":
         """Detect crossings on a single trajectory.
 
         Parameters
@@ -799,9 +802,9 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         """
         if times.size < 2:
             return []
-        event = self._section_cfg.build_event(direction=direction)
-        proj = self._settings.proj
-        settings = self._settings
+        event = section_cfg.build_event(direction=direction)
+        settings = _DetectionSettings.from_config(map_cfg=map_cfg, plane_coords=section_cfg.plane_coords)
+        proj = settings.proj
 
         g_all = _compute_event_values(event, states)
 
@@ -850,7 +853,14 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
             settings.max_hits_per_traj,
         )
 
-    def detect_batch(self, trajectories: "Sequence[tuple[np.ndarray, np.ndarray]]", *, direction: Literal[1, -1, None] | None = None) -> "list[list[_SectionHit]]":
+    def detect_batch(
+        self, 
+        trajectories: "Sequence[tuple[np.ndarray, np.ndarray]]", 
+        *,
+        section_cfg: _SynodicSectionConfig,
+        map_cfg: _SynodicMapConfig,
+        direction: Literal[1, -1, None] | None = None
+    ) -> "list[list[_SectionHit]]":
         """Detect crossings on a batch of trajectories.
 
         Parameters
@@ -878,24 +888,12 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         """
         out: "list[list[_SectionHit]]" = []
         for (times, states) in trajectories:
-            out.append(self.detect_on_trajectory(times, states, direction=direction))
+            out.append(self.detect_on_trajectory(
+                times, states, 
+                section_cfg=section_cfg, 
+                map_cfg=map_cfg, 
+                direction=direction
+            ))
         return out
 
-    @property
-    def plane_coords(self) -> "tuple[str, str]":
-        """Get the plane coordinate labels for the section.
-
-        Returns
-        -------
-        tuple[str, str]
-            Tuple of two coordinate labels that define the section
-            plane (e.g., ("x", "y") or ("y", "z")).
-
-        Notes
-        -----
-        This property provides access to the plane coordinate labels
-        from the section configuration. These labels define which
-        coordinates are used for the 2D projection of the section.
-        """
-        return self._section_cfg.plane_coords
 

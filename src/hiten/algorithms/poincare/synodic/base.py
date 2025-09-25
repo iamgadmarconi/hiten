@@ -137,7 +137,7 @@ class SynodicMap(_DetectionMapBase):
         for synodic Poincare sections.
         """
         adapter = _SynodicEngineConfig.from_config(self.config, self._section_iface)
-        backend = _SynodicDetectionBackend(section_cfg=adapter.section_interface, map_cfg=adapter.config)
+        backend = _SynodicDetectionBackend()
         strategy = _NoOpStrategy(adapter.section_interface, adapter)
         interface = _SynodicInterface()
         return _SynodicEngine(
