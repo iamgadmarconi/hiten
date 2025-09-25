@@ -19,19 +19,27 @@ class StabilityProperties:
     """Facade exposing linear stability results on demand."""
 
     _engine: _LinearStabilityEngine
-    _interface: _EigenDecompositionInterface
     _result: EigenDecompositionResults | None = None
+    _config: _EigenDecompositionConfig | None = None
 
     @classmethod
-    def with_default_engine(cls, *, config: _EigenDecompositionConfig) -> "StabilityProperties":
-        interface = _EigenDecompositionInterface(config=config)
+    def with_default_engine(cls) -> "StabilityProperties":
+        from hiten.algorithms.linalg.config import _EigenDecompositionConfig
+        from hiten.algorithms.linalg.types import _ProblemType, _SystemType
+        config = _EigenDecompositionConfig(
+            problem_type=_ProblemType.ALL,
+            system_type=_SystemType.DISCRETE,
+        )
+        interface = _EigenDecompositionInterface()
         backend = _LinalgBackend()
         engine = _LinearStabilityEngine(backend=backend).with_interface(interface)
-        return cls(engine, interface)
+        return cls(engine, _config=config)
 
     @property
     def config(self) -> _EigenDecompositionConfig:
-        return self._interface.config
+        if self._config is None:
+            raise ValueError("Configuration not set")
+        return self._config
 
     def compute(
         self,
@@ -42,7 +50,7 @@ class StabilityProperties:
     ) -> EigenDecompositionResults:
         """Compose a problem from *matrix* and run the engine."""
 
-        cfg = self._interface.config
+        cfg = self._config
         if system_type is not None or problem_type is not None:
             cfg = _EigenDecompositionConfig(
                 system_type=system_type or cfg.system_type,
@@ -50,11 +58,12 @@ class StabilityProperties:
                 delta=cfg.delta,
                 tol=cfg.tol,
             )
-            self._interface = _EigenDecompositionInterface(config=cfg)
-            self._engine.with_interface(self._interface)
 
-        problem = self._interface.create_problem(matrix=np.asarray(matrix, dtype=float))
-        self._engine.with_interface(self._interface)
+        # Create a new interface instance for this computation (stateless)
+        interface = _EigenDecompositionInterface()
+        self._engine.with_interface(interface)
+        
+        problem = interface.create_problem(matrix=np.asarray(matrix, dtype=float), config=cfg)
         self._result = self._engine.solve(problem)
         return self._result
 

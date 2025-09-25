@@ -27,11 +27,11 @@ from hiten.algorithms.connections.backends import _ConnectionsBackend
 from hiten.algorithms.connections.interfaces import _ManifoldInterface
 from hiten.algorithms.connections.types import (ConnectionResults,
                                                 _ConnectionProblem)
+from hiten.algorithms.types.core import _HitenBaseEngine
 from hiten.algorithms.types.exceptions import EngineError
-from hiten.system.manifold import Manifold
 
 
-class _ConnectionEngine:
+class _ConnectionEngine(_HitenBaseEngine[_ConnectionProblem, ConnectionResults, list]):
     """Provide the main engine for orchestrating connection discovery between manifolds.
 
     This class serves as the central coordinator for the connection discovery
@@ -71,66 +71,19 @@ class _ConnectionEngine:
         High-level user interface that uses this engine.
     """
 
-    def __init__(self, backend: _ConnectionsBackend, *, interface_factory: Callable[[Manifold], _ManifoldInterface] | None = None):
+    def __init__(self, *, backend: _ConnectionsBackend, interface: _ManifoldInterface | None = None):
         """Initialize the connection engine with a backend implementation.
 
         Parameters
         ----------
         backend : :class:`~hiten.algorithms.connections.backends._ConnectionsBackend`
             Backend responsible for the computational steps of connection discovery.
+        interface : :class:`~hiten.algorithms.connections.interfaces._ManifoldInterface`, optional
+            Interface for handling connection problems. If None, a default interface is used.
         """
-        self._backend = backend
-        self._interface_factory = interface_factory or (lambda m: _ManifoldInterface(manifold=m))
+        super().__init__(backend=backend, interface=interface)
 
-    def solve(self, problem: _ConnectionProblem) -> ConnectionResults:
-        """Solve a connection discovery problem from a composed Problem.
 
-        Parameters
-        ----------
-        problem : :class:`~hiten.algorithms.connections.types._ConnectionProblem`
-            The problem to solve.
-
-        Returns
-        -------
-        :class:`~hiten.algorithms.connections.types.ConnectionResults`
-            Engine-level result containing the backend connection records.
-        """
-
-        src_if = self._interface_factory(problem.source)
-        tgt_if = self._interface_factory(problem.target)
-
-        try:
-            self._backend.on_start(problem)
-        except Exception:
-            pass
-
-        try:
-            pu, Xu = src_if.to_numeric(problem.section, direction=problem.direction)
-            ps, Xs = tgt_if.to_numeric(problem.section, direction=problem.direction)
-
-            eps = float(getattr(problem.search, "eps2d", 1e-4)) if problem.search else 1e-4
-            dv_tol = float(getattr(problem.search, "delta_v_tol", 1e-3)) if problem.search else 1e-3
-            bal_tol = float(getattr(problem.search, "ballistic_tol", 1e-8)) if problem.search else 1e-8
-
-            records = self._backend.solve(
-                pu,
-                ps,
-                Xu,
-                Xs,
-                eps=eps,
-                dv_tol=dv_tol,
-                bal_tol=bal_tol,
-            )
-        except Exception as exc:
-            try:
-                self._backend.on_failure(exc)
-            except Exception:
-                pass
-            raise EngineError("Connection engine failed") from exc
-
-        try:
-            self._backend.on_success(records)
-        except Exception:
-            pass
-
-        return ConnectionResults(records)
+    def _invoke_backend(self, call):
+        """Invoke the backend with the provided call."""
+        return self._backend.solve(*call.args, **call.kwargs)

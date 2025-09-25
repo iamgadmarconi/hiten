@@ -43,14 +43,13 @@ class _CenterManifoldSectionInterface(_SectionInterface):
     section_coord: str
     plane_coords: tuple[str, str]
 
-    @staticmethod
-    def from_section_coord(section_coord: str) -> "_CenterManifoldSectionInterface":
+    def from_section_coord(self, section_coord: str) -> "_CenterManifoldSectionInterface":
         cfg = _CM_SECTION_TABLE.get(section_coord)
         if cfg is None:
             raise BackendError(f"Unsupported section_coord: {section_coord}")
         return _CenterManifoldSectionInterface(section_coord=section_coord, plane_coords=cfg["plane_coords"])  # type: ignore[index]
 
-    def build_constraint_dict(self, **kwargs) -> dict[str, float]:
+    def build_constraint_dict(self, **kwargs: float) -> dict[str, float]:
         out: dict[str, float] = {self.section_coord: 0.0}
         for k, v in kwargs.items():
             if k in {"q1", "q2", "q3", "p1", "p2", "p3"}:
@@ -84,12 +83,17 @@ _CM_SECTION_TABLE: dict[str, dict[str, object]] = {
     "p2": {"plane_coords": ("q3", "p3")},
 }
 
+_STATE_INDEX = {
+    "q2": int(RestrictedCenterManifoldState.q2),
+    "p2": int(RestrictedCenterManifoldState.p2),
+    "q3": int(RestrictedCenterManifoldState.q3),
+    "p3": int(RestrictedCenterManifoldState.p3),
+}
 
 def _get_section_interface(section_coord: str) -> _CenterManifoldSectionInterface:
     return _CenterManifoldSectionInterface.from_section_coord(section_coord)
 
 
-@dataclass
 class _CenterManifoldInterface(
     _PoincareBaseInterface[
         object,
@@ -100,15 +104,11 @@ class _CenterManifoldInterface(
     ]
 ):
 
-    _STATE_INDEX = {
-        "q2": int(RestrictedCenterManifoldState.q2),
-        "p2": int(RestrictedCenterManifoldState.p2),
-        "q3": int(RestrictedCenterManifoldState.q3),
-        "p3": int(RestrictedCenterManifoldState.p3),
-    }
+    def __init__(self) -> None:
+        super().__init__()
 
-    @staticmethod
     def create_problem(
+        self,
         *,
         config: _CenterManifoldMapConfig,
         section_coord: str,
@@ -124,7 +124,7 @@ class _CenterManifoldInterface(
         resolved_workers = default_workers if (n_workers is None or int(n_workers) <= 0) else int(n_workers)
 
         def solve_missing_coord_fn(varname: str, fixed_vals: dict[str, float]) -> Optional[float]:
-            return _CenterManifoldInterface.solve_missing_coord(
+            return self.solve_missing_coord(
                 varname,
                 fixed_vals,
                 h0=energy,
@@ -133,7 +133,7 @@ class _CenterManifoldInterface(
             )
 
         def find_turning_fn(name: str) -> float:
-            return _CenterManifoldInterface.find_turning(
+            return self.find_turning(
                 name,
                 h0=energy,
                 H_blocks=H_blocks,
@@ -153,41 +153,24 @@ class _CenterManifoldInterface(
             find_turning_fn=find_turning_fn,
         )
 
-    @staticmethod
-    def to_backend_inputs(problem: _CenterManifoldMapProblem):
+    def to_backend_inputs(self, problem: _CenterManifoldMapProblem):
         return BackendCall(kwargs={"section_coord": problem.section_coord, "dt": problem.dt})
 
-    @staticmethod
-    def to_domain(outputs, *, problem: _CenterManifoldMapProblem):
+    def to_domain(self, outputs, *, problem: _CenterManifoldMapProblem):
         states, info, extra = outputs
         return info
 
-    @staticmethod
-    def to_results(outputs, *, problem: _CenterManifoldMapProblem) -> CenterManifoldMapResults:
+    def to_results(self, outputs, *, problem: _CenterManifoldMapProblem) -> CenterManifoldMapResults:
         points, states, times = outputs
         section_coord = problem.section_coord
         labels = _CenterManifoldInterface.plane_labels(section_coord)
         return CenterManifoldMapResults(points, states, labels, times)
 
-    @staticmethod
-    def create_constraints(section_coord: str, **kwargs: float) -> dict[str, float]:
+    def create_constraints(self, section_coord: str, **kwargs: float) -> dict[str, float]:
         sec_if = _get_section_interface(section_coord)
         return sec_if.build_constraint_dict(**kwargs)
 
-    @staticmethod
-    def solve_missing_coord(
-        varname: str,
-        fixed_vals: dict[str, float],
-        *,
-        h0: float,
-        H_blocks,
-        clmo_table,
-        initial_guess: float = 1e-3,
-        expand_factor: float = 2.0,
-        max_expand: int = 40,
-        symmetric: bool = False,
-        xtol: float = 1e-12,
-    ) -> Optional[float]:
+    def solve_missing_coord(self, varname: str, fixed_vals: dict[str, float], *, h0: float, H_blocks, clmo_table, initial_guess: float = 1e-3, expand_factor: float = 2.0, max_expand: int = 40, symmetric: bool = False, xtol: float = 1e-12) -> Optional[float]:
         """Solve H(q,p) = h0 for one coordinate given fixed values.
 
         Returns the coordinate value (root) if a valid bracket is found
@@ -248,19 +231,7 @@ class _CenterManifoldInterface(
 
         return None
 
-    @staticmethod
-    def find_turning(
-        q_or_p: str,
-        *,
-        h0: float,
-        H_blocks,
-        clmo_table,
-        initial_guess: float = 1e-3,
-        expand_factor: float = 2.0,
-        max_expand: int = 40,
-        symmetric: bool = False,
-        xtol: float = 1e-12,
-    ) -> float:
+    def find_turning(self, q_or_p: str, *, h0: float, H_blocks, clmo_table, initial_guess: float = 1e-3, expand_factor: float = 2.0, max_expand: int = 40, symmetric: bool = False, xtol: float = 1e-12) -> float:
         """Find absolute turning point for a CM coordinate.
 
         Solves for the maximum absolute value of the coordinate where the
@@ -268,7 +239,7 @@ class _CenterManifoldInterface(
         set to zero.
         """
         fixed_vals = {coord: 0.0 for coord in ("q2", "p2", "q3", "p3") if coord != q_or_p}
-        root = _CenterManifoldInterface.solve_missing_coord(
+        root = self.solve_missing_coord(
             q_or_p,
             fixed_vals,
             h0=h0,
@@ -284,20 +255,7 @@ class _CenterManifoldInterface(
             raise ConvergenceError(f"Failed to locate turning point for {q_or_p}")
         return float(root)
 
-    @staticmethod
-    def lift_plane_point(
-        plane: Tuple[float, float],
-        *,
-        section_coord: str,
-        h0: float,
-        H_blocks,
-        clmo_table,
-        initial_guess: float = 1e-3,
-        expand_factor: float = 2.0,
-        max_expand: int = 40,
-        symmetric: bool = False,
-        xtol: float = 1e-12,
-    ) -> Optional[Tuple[float, float, float, float]]:
+    def lift_plane_point(self, plane: Tuple[float, float], *, section_coord: str, h0: float, H_blocks, clmo_table, initial_guess: float = 1e-3, expand_factor: float = 2.0, max_expand: int = 40, symmetric: bool = False, xtol: float = 1e-12) -> Optional[Tuple[float, float, float, float]]:
         """Lift a 2D plane point to a 4D center-manifold state.
 
         Returns (q2, p2, q3, p3) on the section if solvable; otherwise None.
@@ -308,7 +266,7 @@ class _CenterManifoldInterface(
             sec_if.plane_coords[1]: float(plane[1]),
         })
 
-        missing_val = _CenterManifoldInterface.solve_missing_coord(
+        missing_val = self.solve_missing_coord(
             missing_coord := {
                 "q3": "p3",
                 "p3": "q3",
@@ -339,28 +297,25 @@ class _CenterManifoldInterface(
 
         return sec_if.build_state((float(plane[0]), float(plane[1])), tuple(other_vals))
 
-    @staticmethod
-    def enforce_section_coordinate(states: np.ndarray, *, section_coord: str) -> np.ndarray:
+    def enforce_section_coordinate(self, states: np.ndarray, *, section_coord: str) -> np.ndarray:
         arr = np.asarray(states, dtype=np.float64)
         if arr.size == 0:
             return arr.reshape(0, 4)
-        idx = _CenterManifoldInterface._STATE_INDEX[section_coord]
+        idx = self._STATE_INDEX[section_coord]
         out = np.array(arr, copy=True, order="C")
         out[:, idx] = 0.0
         return out
 
-    @staticmethod
-    def plane_points_from_states(states: np.ndarray, *, section_coord: str) -> np.ndarray:
+    def plane_points_from_states(self, states: np.ndarray, *, section_coord: str) -> np.ndarray:
         arr = np.asarray(states, dtype=np.float64)
         if arr.size == 0:
             return np.empty((0, 2), dtype=np.float64)
         sec_if = _get_section_interface(section_coord)
-        idx0 = _CenterManifoldInterface._STATE_INDEX[sec_if.plane_coords[0]]
-        idx1 = _CenterManifoldInterface._STATE_INDEX[sec_if.plane_coords[1]]
+        idx0 = _STATE_INDEX[sec_if.plane_coords[0]]
+        idx1 = _STATE_INDEX[sec_if.plane_coords[1]]
         return arr[:, (idx0, idx1)]
 
-    @staticmethod
-    def plane_labels(section_coord: str) -> tuple[str, str]:
+    def plane_labels(self, section_coord: str) -> tuple[str, str]:
         sec_if = _get_section_interface(section_coord)
         return sec_if.plane_coords
 

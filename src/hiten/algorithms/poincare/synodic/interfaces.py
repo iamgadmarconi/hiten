@@ -93,9 +93,11 @@ class _SynodicInterface(
     _PoincareBaseInterface[Tuple[np.ndarray, np.ndarray], _SynodicMapConfig, _SynodicMapProblem, SynodicMapResults, Tuple[np.ndarray, np.ndarray, np.ndarray | None]]
 ):
 
-    @staticmethod
+    def __init__(self) -> None:
+        super().__init__()
+
     def create_problem(
-        *,
+        self,
         config: _SynodicMapConfig,
         plane_coords: Tuple[str, str],
         normal: np.ndarray,
@@ -120,12 +122,10 @@ class _SynodicInterface(
             trajectories=trajectories,
         )
 
-    @staticmethod
-    def to_backend_inputs(problem: _SynodicMapProblem):
+    def to_backend_inputs(self, problem: _SynodicMapProblem):
         return BackendCall(kwargs={"trajectories": problem.trajectories, "direction": problem.direction})
 
-    @staticmethod
-    def to_results(outputs, *, problem: _SynodicMapProblem) -> SynodicMapResults:
+    def to_results(self, outputs, *, problem: _SynodicMapProblem) -> SynodicMapResults:
         points, states, times = outputs
         plane_coords = problem.plane_coords
         return SynodicMapResults(points, states, plane_coords, times)

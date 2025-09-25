@@ -299,7 +299,7 @@ class _ManifoldDynamicsAdapter(_CachedDynamicsAdapter["_ManifoldResult"]):
                 problem_type=_ProblemType.ALL,
                 system_type=_SystemType.DISCRETE,
             )
-            stability = StabilityProperties.with_default_engine(config=config)
+            stability = StabilityProperties.with_default_engine()
             _, _, phi_T, _ = self.compute_stm(steps=2000)
             stability.compute(
                 matrix=phi_T,

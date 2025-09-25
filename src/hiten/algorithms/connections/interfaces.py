@@ -21,36 +21,36 @@ See Also
     Connection engine that uses these interfaces.
 """
 
-from dataclasses import dataclass
-from typing import Literal
+from typing import Literal, TYPE_CHECKING
 
 import numpy as np
 
+from hiten.algorithms.connections.types import _ManifoldProblem, _ManifoldResult, _ConnectionProblem, ConnectionResults
 from hiten.algorithms.poincare.core.base import _Section
 from hiten.algorithms.poincare.synodic.base import SynodicMap
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
+from hiten.algorithms.types.core import _HitenBaseInterface
 from hiten.algorithms.types.exceptions import EngineError
-from hiten.system.manifold import Manifold
+
+if TYPE_CHECKING:
+    from hiten.system.manifold import Manifold
 
 
-@dataclass
-class _ManifoldInterface:
+class _ManifoldInterface(
+    _HitenBaseInterface[
+        "Manifold",
+        _SynodicMapConfig,
+        _ConnectionProblem,
+        ConnectionResults,
+        list,
+    ]
+):
     """Provide an interface for accessing manifold data in connection discovery.
 
     This class provides a clean interface for extracting synodic section
     intersections from manifolds. It handles the conversion between manifold
     trajectory data and the section intersection data needed for connection
     analysis.
-
-    Parameters
-    ----------
-    manifold : :class:`~hiten.system.manifold.Manifold`
-        The manifold object containing computed trajectory data.
-
-    Attributes
-    ----------
-    manifold : :class:`~hiten.system.manifold.Manifold`
-        The wrapped manifold object.
 
     Notes
     -----
@@ -72,9 +72,9 @@ class _ManifoldInterface:
     >>> from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
     >>> 
     >>> # Assuming manifold is computed
-    >>> interface = _ManifoldInterface(manifold=computed_manifold)
+    >>> interface = _ManifoldInterface()
     >>> section_cfg = _SynodicMapConfig(x=0.8)
-    >>> section = interface.to_section(config=section_cfg, direction=1)
+    >>> section = interface.to_section(manifold=computed_manifold, config=section_cfg, direction=1)
     >>> print(f"Found {len(section.points)} intersection points")
 
     See Also
@@ -86,10 +86,53 @@ class _ManifoldInterface:
     :class:`~hiten.algorithms.connections.engine._ConnectionProblem`
         Problem specification that uses these interfaces.
     """
-    manifold: Manifold
+
+    def __init__(self) -> None:
+        """Initialize the manifold interface."""
+        super().__init__()
+
+    def create_problem(
+        self,
+        *,
+        source: "Manifold",
+        target: "Manifold",
+        section: _SynodicMapConfig,
+        direction: Literal[1, -1, None] | None = None,
+        search: dict | None = None,
+    ) -> _ConnectionProblem:
+        """Create a connection problem specification."""
+        return _ConnectionProblem(
+            source=source,
+            target=target,
+            section=section,
+            direction=direction,
+            search=search,
+        )
+
+    def to_backend_inputs(self, problem: _ConnectionProblem) -> tuple:
+        """Convert problem to backend inputs."""
+        # Extract section data from both manifolds
+        pu, Xu = self.to_numeric(problem.source, problem.section, direction=problem.direction)
+        ps, Xs = self.to_numeric(problem.target, problem.section, direction=problem.direction)
+        
+        # Extract search parameters
+        eps = float(getattr(problem.search, "eps2d", 1e-4)) if problem.search else 1e-4
+        dv_tol = float(getattr(problem.search, "delta_v_tol", 1e-3)) if problem.search else 1e-3
+        bal_tol = float(getattr(problem.search, "ballistic_tol", 1e-8)) if problem.search else 1e-8
+        
+        from hiten.algorithms.types.core import BackendCall
+        return BackendCall(
+            args=(pu, ps, Xu, Xs),
+            kwargs={"eps": eps, "dv_tol": dv_tol, "bal_tol": bal_tol}
+        )
+
+    def to_results(self, outputs: list, *, problem: _ConnectionProblem) -> ConnectionResults:
+        """Convert backend outputs to connection results."""
+        return ConnectionResults(outputs)
 
     def to_section(
         self,
+        manifold: "Manifold",
         config: _SynodicMapConfig | None = None,
         *,
         direction: Literal[1, -1, None] | None = None,
@@ -166,20 +209,22 @@ class _ManifoldInterface:
             Method to compute manifold data before section extraction.
         """
 
-        if self.manifold.manifold_result is None:
+        if manifold.manifold_result is None:
             raise EngineError("Manifold must be computed before extracting section hits")
 
         cfg = config or _SynodicMapConfig()
         syn = SynodicMap(cfg)
-        return syn.from_manifold(self.manifold, direction=direction)
+        return syn.from_manifold(manifold, direction=direction)
 
-    def to_numeric(self, config: _SynodicMapConfig | None = None, *, direction: Literal[1, -1, None] | None = None):
+    def to_numeric(self, manifold: "Manifold", config: _SynodicMapConfig | None = None, *, direction: Literal[1, -1, None] | None = None):
         """Return (points2d, states6d) arrays for this manifold on a section.
 
         Parameters
         ----------
+        manifold : :class:`~hiten.system.manifold.Manifold`
+            The manifold object containing computed trajectory data.
         config : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`, optional
             Configuration for the synodic section geometry and detection settings.
         """
-        sec = self.to_section(config=config, direction=direction)
+        sec = self.to_section(manifold=manifold, config=config, direction=direction)
         return (np.asarray(sec.points, dtype=float), np.asarray(sec.states, dtype=float))

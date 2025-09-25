@@ -4,7 +4,6 @@ Currently provides a CR3BP interface that turns a position into a Jacobian
 matrix suitable for eigen-structure classification.
 """
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 import numpy as np
@@ -19,7 +18,6 @@ if TYPE_CHECKING:
     from hiten.system.libration.base import LibrationPoint
 
 
-@dataclass
 class _EigenDecompositionInterface(
     _HitenBaseInterface[
         np.ndarray,
@@ -31,25 +29,19 @@ class _EigenDecompositionInterface(
 ):
     """Adapter producing eigen-decomposition problems from matrices."""
 
-    config: _EigenDecompositionConfig
-
-    def __post_init__(self) -> None:
-        super().__init__(domain_object=None)
-        self._config = self.config
+    def __init__(self) -> None:
+        super().__init__()
 
     def create_problem(
         self,
         *,
+        matrix: np.ndarray,
         config: Optional[_EigenDecompositionConfig] = None,
-        matrix: Optional[np.ndarray] = None,
     ) -> _EigenDecompositionProblem:
-        cfg = config or self.config
-        if matrix is not None:
-            self._domain_object = np.asarray(matrix, dtype=float)
-        if self._domain_object is None:
-            raise ValueError("matrix must be provided for eigen decomposition problem")
-        self._config = cfg
-        return _EigenDecompositionProblem(A=self._domain_object, config=cfg)
+        if config is None:
+            raise ValueError("config must be provided for eigen decomposition problem")
+        matrix_arr = np.asarray(matrix, dtype=float)
+        return _EigenDecompositionProblem(A=matrix_arr, config=config)
 
     def to_backend_inputs(self, problem: _EigenDecompositionProblem) -> BackendCall:
         return BackendCall(args=(problem,))
@@ -58,7 +50,6 @@ class _EigenDecompositionInterface(
         return outputs
 
 
-@dataclass
 class _LibrationPointInterface(
     _HitenBaseInterface[
         "LibrationPoint",
@@ -68,32 +59,25 @@ class _LibrationPointInterface(
         EigenDecompositionResults,
     ]
 ):
-    config: _EigenDecompositionConfig
 
-    def __post_init__(self) -> None:
-        super().__init__(domain_object=None)
-        self._config = self.config
+    def __init__(self) -> None:
+        super().__init__()
 
     def create_problem(
         self,
         *,
+        point: "LibrationPoint",
         config: Optional[_EigenDecompositionConfig] = None,
-        point: Optional["LibrationPoint"] = None,
     ) -> _EigenDecompositionProblem:
-        cfg = config or self.config
-        if point is not None:
-            self._domain_object = point
-        if self._domain_object is None:
-            raise ValueError("libration point required to build stability problem")
-        point_obj = self._domain_object
+        if config is None:
+            raise ValueError("config must be provided for eigen decomposition problem")
         jac = _jacobian_crtbp(
-            point_obj.position[0],
-            point_obj.position[1],
-            point_obj.position[2],
-            point_obj.mu,
+            point.position[0],
+            point.position[1],
+            point.position[2],
+            point.mu,
         )
-        self._config = cfg
-        return _EigenDecompositionProblem(A=jac, config=cfg)
+        return _EigenDecompositionProblem(A=jac, config=config)
 
     def to_backend_inputs(self, problem: _EigenDecompositionProblem) -> BackendCall:
         return BackendCall(args=(problem,))

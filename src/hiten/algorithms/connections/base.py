@@ -29,6 +29,7 @@ import numpy as np
 from hiten.algorithms.connections.backends import _ConnectionsBackend
 from hiten.algorithms.connections.config import _SearchConfig
 from hiten.algorithms.connections.engine import _ConnectionEngine
+from hiten.algorithms.connections.interfaces import _ManifoldInterface
 from hiten.algorithms.connections.types import (Connections,
                                                 _ConnectionProblem,
                                                 _ConnectionResult)
@@ -132,8 +133,8 @@ class Connection:
     search_cfg: _SearchConfig | None = None
 
     # Internal cache for plot convenience
-    _last_source: Manifold | None = None
-    _last_target: Manifold | None = None
+    _last_source = None
+    _last_target = None
     _last_results: list[_ConnectionResult] | None = None
 
     # Injected engine dependency (required)
@@ -160,7 +161,8 @@ class Connection:
             A connection facade instance with a default engine injected.
         """
         backend = _ConnectionsBackend()
-        engine = _ConnectionEngine(backend)
+        interface = _ManifoldInterface()
+        engine = _ConnectionEngine(backend=backend, interface=interface)
         return cls(section=section, direction=direction, search_cfg=search_cfg, _engine=engine)
 
     def solve(self, source: Manifold, target: Manifold) -> Connections:
@@ -305,14 +307,12 @@ class Connection:
         # Use cached artifacts; user should call solve() first
         if self._last_source is None or self._last_target is None:
             raise EngineError("Nothing to plot: call solve(source, target) first.")
-        from hiten.algorithms.connections.interfaces import \
-            _ManifoldInterface  # internal
-        src_if = _ManifoldInterface(manifold=self._last_source)
-        tgt_if = _ManifoldInterface(manifold=self._last_target)
+
+        manifold_if = _ManifoldInterface()
 
         # Build section hits for both manifolds on the configured synodic section
-        sec_u = src_if.to_section(self.section, direction=self.direction)
-        sec_s = tgt_if.to_section(self.section, direction=self.direction)
+        sec_u = manifold_if.to_section(manifold=self._last_source, config=self.section, direction=self.direction)
+        sec_s = manifold_if.to_section(manifold=self._last_target, config=self.section, direction=self.direction)
 
         pts_u = np.asarray(sec_u.points, dtype=float)
         pts_s = np.asarray(sec_s.points, dtype=float)
