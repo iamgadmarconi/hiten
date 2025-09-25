@@ -74,7 +74,7 @@ class _PeriodicOrbitCorrectorInterface(
             },
         )
 
-    def to_domain(self,outputs: tuple[np.ndarray, dict[str, Any]], *, problem: _OrbitCorrectionProblem) -> dict[str, Any]:
+    def to_domain(self, outputs: tuple[np.ndarray, dict[str, Any]], *, problem: _OrbitCorrectionProblem) -> dict[str, Any]:
         x_corr, info = outputs
         control_indices = list(problem.cfg.control_indices)
         base_state = problem.orbit.initial_state.copy()

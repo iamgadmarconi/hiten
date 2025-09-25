@@ -21,11 +21,12 @@ See Also
     Connection engine that uses these interfaces.
 """
 
-from typing import Literal, TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
-from hiten.algorithms.connections.types import _ManifoldProblem, _ManifoldResult, _ConnectionProblem, ConnectionResults
+from hiten.algorithms.connections.types import (ConnectionResults,
+                                                _ConnectionProblem)
 from hiten.algorithms.poincare.core.base import _Section
 from hiten.algorithms.poincare.synodic.base import SynodicMap
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig

@@ -761,7 +761,7 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         super().__init__()
 
     # Required by abstract base, but unused for synodic
-    def step_to_section(self, seeds: "np.ndarray", *, dt: float = 1e-2) -> tuple["np.ndarray", "np.ndarray"]:
+    def run(self, seeds: "np.ndarray", *, dt: float = 1e-2) -> tuple["np.ndarray", "np.ndarray"]:
         raise NotImplementedError("Synodic detection backend does not propagate seeds")
 
     def detect_on_trajectory(
@@ -895,5 +895,3 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
                 direction=direction
             ))
         return out
-
-

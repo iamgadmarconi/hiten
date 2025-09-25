@@ -11,12 +11,14 @@ expansion.
 """
 
 from abc import ABC, abstractmethod
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 
+from hiten.algorithms.types.core import _HitenBaseBackend
 
-class _ReturnMapBackend(ABC):
+
+class _ReturnMapBackend(_HitenBaseBackend):
     """Abstract base class for Poincare return map backends.
 
     This class defines the interface that all concrete return map backends
@@ -78,7 +80,7 @@ class _ReturnMapBackend(ABC):
     # layer is then responsible for looping / caching / parallelism.
 
     @abstractmethod
-    def step_to_section(
+    def run(
         self,
         seeds: "np.ndarray",
         *,
@@ -115,30 +117,3 @@ class _ReturnMapBackend(ABC):
         initial conditions and returning their next intersection with
         the section. The engine layer handles iteration and caching.
         """
-
-    def on_iteration(self, iteration: int, seeds: "np.ndarray | None" = None) -> None:
-        """Hook called at the start of each iteration in the engine."""
-        return None
-
-    def on_success(
-        self,
-        iteration: int,
-        points: "np.ndarray",
-        states: "np.ndarray",
-        times: "np.ndarray | None" = None,
-    ) -> None:
-        """Hook called when an iteration produces crossings."""
-        return None
-
-    def on_failure(self, iteration: int) -> None:
-        """Hook called when an iteration produces no crossings for a chunk."""
-        return None
-
-    def on_accept(
-        self,
-        points: "np.ndarray",
-        states: "np.ndarray",
-        times: "np.ndarray | None" = None,
-    ) -> None:
-        """Hook called after the engine aggregates final results."""
-        return None

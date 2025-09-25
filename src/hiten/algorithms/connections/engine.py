@@ -86,4 +86,4 @@ class _ConnectionEngine(_HitenBaseEngine[_ConnectionProblem, ConnectionResults, 
 
     def _invoke_backend(self, call):
         """Invoke the backend with the provided call."""
-        return self._backend.solve(*call.args, **call.kwargs)
+        return self._backend.run(*call.args, **call.kwargs)

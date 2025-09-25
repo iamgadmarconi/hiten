@@ -33,7 +33,7 @@ class _OrbitCorrectionEngine(_CorrectionEngine):
         raise EngineError("Unexpected error during orbit correction") from exc
 
     def _invoke_backend(self, call):
-        return self._backend.correct(*call.args, **call.kwargs)
+        return self._backend.run(*call.args, **call.kwargs)
 
     def _after_backend_success(self, outputs, *, problem, domain_payload, interface) -> None:
         x_corr, info = outputs

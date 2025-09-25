@@ -84,32 +84,6 @@ class _NewtonBackend(_CorrectorBackend):
         """
         return norm_fn(residual)
 
-    def on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:
-        """Public hook invoked after each iteration. Safe no-op by default."""
-        try:
-            self._on_iteration(k, x, r_norm)
-        except Exception:
-            # Hooks must never disrupt solver
-            pass
-
-    def on_accept(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
-        """Public hook invoked when the backend detects convergence."""
-        try:
-            self._on_accept(x, iterations=iterations, residual_norm=residual_norm)
-        except Exception:
-            pass
-
-    def on_failure(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
-        """Public hook invoked when the backend completes without converging."""
-        try:
-            self._on_failure(x, iterations=iterations, residual_norm=residual_norm)
-        except Exception:
-            pass
-
-    def on_success(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
-        """Public hook intended to be called by the Engine after final acceptance."""
-        return
-
     def _compute_jacobian(
         self,
         x: np.ndarray,
@@ -205,7 +179,7 @@ class _NewtonBackend(_CorrectorBackend):
                 delta = np.linalg.lstsq(J, -r, rcond=None)[0]
         return delta
 
-    def correct(
+    def run(
         self,
         x0: np.ndarray,
         residual_fn: ResidualFn,

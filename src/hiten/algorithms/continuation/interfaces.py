@@ -51,7 +51,6 @@ class _PeriodicOrbitContinuationInterface(
     def __init__(self) -> None:
         super().__init__()
 
-
     def create_problem(self, *, seed: "PeriodicOrbit", config: _OrbitContinuationConfig) -> _ContinuationProblem:
         parameter_getter = self._parameter_getter(config)
         return _ContinuationProblem(

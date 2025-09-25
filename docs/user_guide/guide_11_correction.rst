@@ -305,16 +305,7 @@ by extending the base correction framework:
            
            # Fall back to finite difference for first iteration
            return super()._compute_jacobian(x, residual_fn, jacobian_fn, fd_step)
-       
-       def _on_iteration(self, k, x, r_norm):
-           """Update Jacobian after each iteration."""
-           if k > 0 and hasattr(self, '_prev_x') and hasattr(self, '_prev_residual'):
-               delta_x = x - self._prev_x
-               delta_r = self._compute_residual(x, self._residual_fn) - self._prev_residual
-               self._update_jacobian(delta_x, delta_r)
-           
-           self._prev_x = x.copy()
-           self._prev_residual = self._compute_residual(x, self._residual_fn).copy()
+
 
    # Usage example
    config = _QuasiNewtonConfig(tol=1e-10, max_attempts=30)

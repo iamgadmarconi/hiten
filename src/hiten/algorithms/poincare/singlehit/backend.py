@@ -131,7 +131,7 @@ class _SingleHitBackend(_ReturnMapBackend):
             max_expand=max_expand,
         )
 
-    def step_to_section(
+    def run(
         self,
         seeds: np.ndarray,
         *,
@@ -310,6 +310,7 @@ class _SingleHitBackend(_ReturnMapBackend):
         return hit
 
 
+
 def find_crossing(dynsys, state0, surface, **kwargs):
     """Find a single crossing for a given state and surface.
 
@@ -338,7 +339,7 @@ def find_crossing(dynsys, state0, surface, **kwargs):
     backend instance explicitly.
     """
     be = _SingleHitBackend(**kwargs)
-    return be.step_to_section(np.asarray(state0, float), dynsys=dynsys, surface=surface)
+    return be.run(np.asarray(state0, float), dynsys=dynsys, surface=surface)
 
 
 def _plane_crossing_factory(coord: str, value: float = 0.0, direction: int | None = None):

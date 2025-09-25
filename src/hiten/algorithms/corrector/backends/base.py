@@ -27,9 +27,10 @@ import numpy as np
 
 from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
 from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
+from hiten.algorithms.types.core import _HitenBaseBackend
 
 
-class _CorrectorBackend(ABC):
+class _CorrectorBackend(_HitenBaseBackend):
     """Define an abstract base class for iterative correction algorithms.
 
     This class defines the interface for iterative correction algorithms
@@ -81,7 +82,7 @@ class _CorrectorBackend(ABC):
     # - Recommended parameter ranges for different problem types
 
     @abstractmethod
-    def correct(
+    def run(
         self,
         x0: np.ndarray,
         residual_fn: ResidualFn,
@@ -199,19 +200,3 @@ class _CorrectorBackend(ABC):
         """
         # Subclasses must provide concrete implementation
         raise NotImplementedError("Subclasses must implement the correct method")
-
-    def on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:
-        """Called after each iteration. Default: no-op."""
-        return
-
-    def on_accept(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
-        """Called when the backend detects convergence. Default: no-op."""
-        return
-
-    def on_failure(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
-        """Called when the backend completes without converging. Default: no-op."""
-        return
-
-    def on_success(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
-        """Called by the Engine after final acceptance. Default: no-op."""
-        return

@@ -33,7 +33,7 @@ class _OrbitContinuationEngine(_ContinuationEngine):
         raise EngineError("Orbit continuation failed") from exc
 
     def _invoke_backend(self, call):
-        return self._backend.solve(*call.args, **call.kwargs)
+        return self._backend.run(*call.args, **call.kwargs)
 
     def _after_backend_success(self, outputs, *, problem, domain_payload, interface) -> None:
         family_repr, info = outputs

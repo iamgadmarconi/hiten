@@ -29,7 +29,7 @@ class _PCContinuationBackend(_ContinuationBackend):
     def seed_tangent(self, tangent: np.ndarray | None) -> None:
         self._tangent = None if tangent is None else np.asarray(tangent, dtype=float).copy()
 
-    def solve(
+    def run(
         self,
         *,
         seed_repr: np.ndarray,

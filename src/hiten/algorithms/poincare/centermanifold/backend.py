@@ -446,7 +446,7 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         self._n_dof = N_SYMPLECTIC_DOF
         self._c_omega_heuristic = c_omega_heuristic
 
-    def step_to_section(
+    def run(
         self,
         seeds: np.ndarray,
         *,

@@ -14,12 +14,13 @@ See Also
     High-level connection engine interface.
 """
 
-from typing import Tuple
+from typing import Any, Tuple
 
 import numpy as np
 import numba
 
 from hiten.algorithms.connections.types import _ConnectionResult
+from hiten.algorithms.types.core import _HitenBaseBackend
 
 
 @numba.njit(cache=False)
@@ -402,7 +403,7 @@ def _refine_pairs_on_section(pu: np.ndarray, ps: np.ndarray, pairs: np.ndarray, 
     return rstar, u0, u1, s0, s1, sval, tval, valid
 
 
-class _ConnectionsBackend:
+class _ConnectionsBackend(_HitenBaseBackend):
     """Encapsulate matching/refinement and Delta-V computation for connections.
 
     This backend orchestrates the end-to-end process for discovering
@@ -417,7 +418,7 @@ class _ConnectionsBackend:
         Result objects returned by the solve method.
     """
 
-    def solve(
+    def run(
         self,
         pu: np.ndarray,
         ps: np.ndarray,
