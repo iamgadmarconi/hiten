@@ -33,10 +33,10 @@ class OrbitFamily(_HitenBase):
         orbits: List[PeriodicOrbit] | None = None,
         parameter_name: str = "param",
         parameter_values: np.ndarray | None = None,
-        *,
-        services: _OrbitFamilyServices | None = None,
-    ) -> None:
-        super().__init__()
+) -> None:
+
+        services = _OrbitFamilyServices.default(self)
+        super().__init__(services)
         self.orbits: List[PeriodicOrbit] = list(orbits) if orbits is not None else []
         self.parameter_name = parameter_name
 
@@ -48,41 +48,11 @@ class OrbitFamily(_HitenBase):
                 raise ValueError("Length of parameter_values must match number of orbits")
             self.parameter_values = arr
 
-        self._services: _OrbitFamilyServices = services or _OrbitFamilyServices.default()
+    def __repr__(self) -> str:
+        return f"OrbitFamily(n_orbits={len(self)}, parameter='{self.parameter_name}')"
 
-    @classmethod
-    def from_result(cls, result, parameter_name: str | None = None):
-        """Build an OrbitFamily from a ContinuationResult.
-
-        Parameters
-        ----------
-        result : ContinuationResult
-            Result object returned by the new continuation engine/facade.
-        parameter_name : str or None, optional
-            Name for the continuation parameter. If None, defaults to "param".
-
-        Returns
-        -------
-        :class:`~hiten.system.family.OrbitFamily`
-            A new OrbitFamily instance containing the orbits from the result.
-        """
-        if parameter_name is None:
-            parameter_name = "param"
-
-        orbits = list(result.family)
-
-        # Coerce tuple of parameter vectors to 1D array (one value per orbit)
-        param_vals_list: list[float] = []
-        for vec in result.parameter_values:
-            arr = np.asarray(vec, dtype=float)
-            if arr.ndim == 0 or arr.size == 1:
-                param_vals_list.append(float(arr.reshape(-1)[0]))
-            else:
-                # Use Euclidean norm for multi-parameter continuation by default
-                param_vals_list.append(float(np.linalg.norm(arr)))
-        param_vals = np.asarray(param_vals_list, dtype=float)
-
-        return cls(orbits, parameter_name, param_vals)
+    def __str__(self) -> str:
+        return f"OrbitFamily(n_orbits={len(self)}, parameter='{self.parameter_name}')"
 
     def __len__(self) -> int:
         return len(self.orbits)
@@ -113,7 +83,7 @@ class OrbitFamily(_HitenBase):
         numpy.ndarray
             Array of Jacobi constants (dimensionless).
         """
-        return np.array([o.jacobi_constant for o in self.orbits])
+        return np.array([o.jacobi for o in self.orbits])
     
     def propagate(self, **kwargs) -> None:
         """Propagate all orbits in the family.
@@ -125,10 +95,6 @@ class OrbitFamily(_HitenBase):
         """
         for orb in self.orbits:
             orb.propagate(**kwargs)
-
-    def save(self, filepath: str | Path, *, compression: str = "gzip", level: int = 4) -> None:
-        """Save the family to an HDF5 file."""
-        self._services.persistence.save(self, filepath, compression=compression, level=level)
 
     def to_csv(self, filepath: str, **kwargs) -> None:
         """
@@ -177,17 +143,69 @@ class OrbitFamily(_HitenBase):
             }
         )
 
+    def __getstate__(self):
+        """Customise pickling by omitting adapter caches."""
+        state = super().__getstate__()
+        return state
+
+    def __setstate__(self, state):
+        """Restore adapter wiring after unpickling."""
+        super().__setstate__(state)
+        self._setup_services(_OrbitFamilyServices.default(self))
+
+    @classmethod
+    def from_result(cls, result, parameter_name: str | None = None):
+        """Build an OrbitFamily from a ContinuationResult.
+
+        Parameters
+        ----------
+        result : ContinuationResult
+            Result object returned by the new continuation engine/facade.
+        parameter_name : str or None, optional
+            Name for the continuation parameter. If None, defaults to "param".
+
+        Returns
+        -------
+        :class:`~hiten.system.family.OrbitFamily`
+            A new OrbitFamily instance containing the orbits from the result.
+        """
+        if parameter_name is None:
+            parameter_name = "param"
+
+        orbits = list(result.family)
+
+        # Coerce tuple of parameter vectors to 1D array (one value per orbit)
+        param_vals_list: list[float] = []
+        for vec in result.parameter_values:
+            arr = np.asarray(vec, dtype=float)
+            if arr.ndim == 0 or arr.size == 1:
+                param_vals_list.append(float(arr.reshape(-1)[0]))
+            else:
+                # Use Euclidean norm for multi-parameter continuation by default
+                param_vals_list.append(float(np.linalg.norm(arr)))
+        param_vals = np.asarray(param_vals_list, dtype=float)
+
+        return cls(orbits, parameter_name, param_vals)
+
+    def save(self, filepath: str | Path, *, compression: str = "gzip", level: int = 4) -> None:
+        """Save the family to an HDF5 file."""
+        self.persistence.save(self, filepath, compression=compression, level=level)
+
     @classmethod
     def load(cls, filepath: str | Path):
         """Load a family previously saved with save method."""
-        services = _OrbitFamilyServices.default()
-        orbits, parameter_name, parameter_values = services.persistence.load(filepath)
-        family = cls(orbits, parameter_name, parameter_values)
-        family._services = services
-        return family
-
-    def __repr__(self) -> str:
-        return f"OrbitFamily(n_orbits={len(self)}, parameter='{self.parameter_name}')"
+        def services_factory(family):
+            return _OrbitFamilyServices.default(family)
+        
+        def persistence_factory():
+            services = _OrbitFamilyServices.default()
+            return services.persistence
+        
+        return cls._load_with_services(
+            filepath, 
+            persistence_factory(), 
+            services_factory, 
+        )
 
     def plot(self, *, dark_mode: bool = True, save: bool = False, filepath: str = "orbit_family.svg", **kwargs):
         """Visualise the family trajectories in rotating frame.

@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path    
 from typing import TYPE_CHECKING
 
-from hiten.algorithms.types.services.base import (_PersistenceServiceBase,
+from hiten.algorithms.types.services.base import (_DynamicsServiceBase, _PersistenceServiceBase,
                                                   _ServiceBundleBase)
 from hiten.utils.io.family import load_family, load_family_inplace, save_family
 
@@ -27,16 +27,29 @@ class _OrbitFamilyPersistenceService(_PersistenceServiceBase):
         )
 
 
+class _OrbitFamilyDynamicsService(_DynamicsServiceBase):
+
+    def __init__(self, family: "OrbitFamily") -> None:
+        super().__init__(family)
 @dataclass
 class _OrbitFamilyServices(_ServiceBundleBase):
 
     domain_obj: "OrbitFamily"
     persistence: _OrbitFamilyPersistenceService
+    dynamics: _OrbitFamilyDynamicsService
 
     @classmethod
     def default(cls, family: "OrbitFamily") -> "_OrbitFamilyServices":
         return cls(
             domain_obj=family,
-            persistence=_OrbitFamilyPersistenceService()
+            persistence=_OrbitFamilyPersistenceService(),
+            dynamics=_OrbitFamilyDynamicsService(family)
         )
 
+    @classmethod
+    def with_shared_dynamics(cls, dynamics: _OrbitFamilyDynamicsService) -> "_OrbitFamilyServices":
+        return cls(
+            domain_obj=dynamics._domain_obj,
+            persistence=_OrbitFamilyPersistenceService(),
+            dynamics=dynamics
+        )
