@@ -24,7 +24,7 @@ All positions and distances are expressed in nondimensional units where the
 distance between the primaries is unity and the orbital period is 2*pi.
 """
 
-from typing import TYPE_CHECKING, Tuple
+from typing import TYPE_CHECKING
 
 import numpy as np
 

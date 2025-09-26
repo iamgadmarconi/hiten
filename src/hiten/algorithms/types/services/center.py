@@ -19,6 +19,7 @@ from hiten.algorithms.hamiltonian.transforms import (_coordlocal2realmodal,
                                                      _synodic2local_triangular)
 from hiten.algorithms.poincare.centermanifold.backend import \
     _CenterManifoldBackend
+from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
 from hiten.algorithms.poincare.centermanifold.config import \
     _CenterManifoldMapConfig
 from hiten.algorithms.poincare.centermanifold.interfaces import (
@@ -26,9 +27,8 @@ from hiten.algorithms.poincare.centermanifold.interfaces import (
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
                                                   _ServiceBundleBase)
-from hiten.algorithms.types.services.hamiltonian import (
-    _HamiltonianConversionService, _HamiltonianPipeline,
-    get_hamiltonian_services)
+from hiten.algorithms.types.services.hamiltonian import \
+    get_hamiltonian_services
 from hiten.utils.io.center import load_center_manifold, save_center_manifold
 from hiten.utils.log_config import logger
 from hiten.utils.printing import _format_poly_table
@@ -37,6 +37,7 @@ if TYPE_CHECKING:
     from hiten.system.center import CenterManifold
     from hiten.system.hamiltonian import Hamiltonian
     from hiten.system.libration.base import LibrationPoint
+    from hiten.algorithms.hamiltonian.pipeline import _HamiltonianPipeline
 
 
 class _CenterManifoldPersistenceService(_PersistenceServiceBase):
@@ -59,24 +60,42 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
         self._ham_dynamics = self._services.dynamics
         self._ham_conversion = self._services.conversion
         self._ham_pipeline = self._services.pipeline
-        self._pipeline = self._ham_pipeline.get(point, degree)
         self._hamsys = None
         self._configure_point()
 
     @property
-    def pipeline(self):
-        if self._pipeline is None:
-            self._pipeline = self._ham_pipeline.get(self._domain_obj, self._degree)
-            self._hamsys = None
-        return self._pipeline
+    def point(self) -> "LibrationPoint":
+        return self._domain_obj
 
-    def pipeline_for_degree(self, degree: int):
-        if self._pipeline is None or degree != self._degree:
-            self._degree = degree
-            self._pipeline = self._ham_pipeline.set(self._domain_obj, degree)
+    @property
+    def degree(self) -> int:
+        return self._degree
+
+    @degree.setter
+    def degree(self, value: int) -> None:
+        if not isinstance(value, int) or value <= 0:
+            raise ValueError("degree must be a positive integer.")
+        if value != self._degree:
+            self.reset(self.make_key("pipeline", self._degree))
+            self.reset(self.make_key("pipeline", value))
+            self._degree = value
             self._hamsys = None
-            self.reset()
-        return self._pipeline
+
+    @property
+    def pipeline(self) -> _HamiltonianPipeline:
+        """Get or create the pipeline for the current point and degree."""
+        cache_key = self.make_key("pipeline", self._degree)
+        
+        def _factory():
+            return self._ham_pipeline.get(self._domain_obj, self._degree)
+        
+        return self.get_or_create(cache_key, _factory)
+
+    def pipeline_for_degree(self, degree: int) -> _HamiltonianPipeline:
+        """Get pipeline for a specific degree, changing current degree if needed."""
+        if degree != self._degree:
+            self.degree = degree
+        return self.pipeline
 
     def get_backend(self, energy: float, section_coord: str, *, forward: int = 1, max_steps: int = 2000, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8, pre_steps: int = 1000, refine_steps: int = 3000, bracket_dx: float = 1e-10, max_expand: int = 500, c_omega_heuristic: float = 20.0) -> _CenterManifoldBackend:
         key = self.make_key(id(self._domain_obj), self._degree, energy, section_coord, forward, max_steps, method, order, pre_steps, refine_steps, bracket_dx, max_expand, c_omega_heuristic)
@@ -98,17 +117,20 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
         return self.get_or_create(key, _factory)
 
     def clear_caches(self) -> None:
-        if self._pipeline is not None:
-            self._pipeline.cache_clear()
         self.reset()
+        try:
+            pipeline = self._ham_pipeline.get(self._domain_obj, self._degree)
+            if hasattr(pipeline, 'cache_clear'):
+                pipeline.cache_clear()
+        except Exception:
+            pass
         self._hamsys = None
 
     def format_coefficients(self, ham: "Hamiltonian", degree: int) -> str:
         return _format_poly_table(ham.poly_H, ham._clmo, degree)
 
     def get_map(self, cm: "CenterManifold", energy: float, **kwargs):
-        from hiten.algorithms.poincare.centermanifold.base import \
-            CenterManifoldMap
+
         config_fields = set(_CenterManifoldMapConfig.__dataclass_fields__.keys())
         config_kwargs = {}
         for key, value in kwargs.items():
@@ -126,23 +148,13 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
 
         return self.get_or_create(cache_key, _factory)
 
-    def invalidate_hamsys(self) -> None:
-        self._hamsys = None
-
     @property
     def hamsys(self):
         if self._hamsys is None:
             self._hamsys = self.pipeline.get_hamiltonian("center_manifold_real").hamsys
         return self._hamsys
 
-    def cm_point_to_synodic(
-        self,
-        cm_point: np.ndarray,
-        *,
-        energy: float | None,
-        section_coord: str = "q3",
-        tol: float = 1e-14,
-    ) -> np.ndarray:
+    def cm_point_to_synodic(self, cm_point: np.ndarray, *, energy: float | None, section_coord: str = "q3", tol: float = 1e-14) -> np.ndarray:
         cm_point = np.asarray(cm_point)
         if cm_point.size == 2:
             if energy is None:
@@ -174,27 +186,6 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
             restricted[2],
             restricted[5],
         ], dtype=np.float64)
-
-    def _configure_point(self) -> None:
-        from hiten.system.libration.collinear import CollinearPoint, L3Point
-        from hiten.system.libration.triangular import TriangularPoint
-
-        if isinstance(self._domain_obj, CollinearPoint):
-            self._local2synodic = _local2synodic_collinear
-            self._synodic2local = _synodic2local_collinear
-            self._mix_pairs = (1, 2)
-            if isinstance(self._domain_obj, L3Point):
-                logger.warning(
-                    "L3 point has not been verified for centre manifold / normal form computations!"
-                )
-                raise NotImplementedError("L3 points are not supported yet.")
-        elif isinstance(self._domain_obj, TriangularPoint):
-            logger.warning(
-                "Triangular points have not been verified for centre manifold / normal form computations!"
-            )
-            raise NotImplementedError("Triangular points are not supported yet.")
-        else:
-            raise ValueError(f"Unsupported libration point type: {type(self._domain_obj)}")
 
     def _cm_point_to_synodic_from_section(
         self,
@@ -268,6 +259,30 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
                     arr[idx] = 0.0
                     continue
         return coords
+
+    def _configure_point(self) -> None:
+        from hiten.system.libration.collinear import CollinearPoint, L3Point
+        from hiten.system.libration.triangular import TriangularPoint
+
+        if isinstance(self._domain_obj, CollinearPoint):
+            self._local2synodic = _local2synodic_collinear
+            self._synodic2local = _synodic2local_collinear
+            self._mix_pairs = (1, 2)
+            if isinstance(self._domain_obj, L3Point):
+                logger.warning(
+                    "L3 point has not been verified for centre manifold / normal form computations!"
+                )
+                raise NotImplementedError("L3 points are not supported yet.")
+        elif isinstance(self._domain_obj, TriangularPoint):
+            self._local2synodic = _local2synodic_triangular
+            self._synodic2local = _synodic2local_triangular
+            self._mix_pairs = (0, 1, 2)
+            logger.warning(
+                "Triangular points have not been verified for centre manifold / normal form computations!"
+            )
+            raise NotImplementedError("Triangular points are not supported yet.")
+        else:
+            raise ValueError(f"Unsupported libration point type: {type(self._domain_obj)}")
 
 
 @dataclass

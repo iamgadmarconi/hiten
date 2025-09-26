@@ -23,90 +23,70 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from hiten.algorithms.types.services.center import _CenterManifoldServices
 from hiten.algorithms.types.core import _HitenBase
+from hiten.algorithms.types.services.center import (
+    _CenterManifoldPersistenceService, _CenterManifoldServices)
 from hiten.system.libration.base import LibrationPoint
-from hiten.utils.io.center import load_center_manifold, save_center_manifold
 
 if TYPE_CHECKING:
     from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
-
+    from hiten.system.hamiltonian import Hamiltonian
 
 class CenterManifold(_HitenBase):
     """Centre manifold normal-form builder orchestrating adapter services."""
 
-    def __init__(
-        self,
-        point: LibrationPoint,
-        degree: int,
-    ) -> None:
-        services = _CenterManifoldServices.default(point, degree)
-        super().__init__(services)
+    def __init__(self, point: LibrationPoint, degree: int):
         self._point = point
         self._max_degree = degree
+        services = _CenterManifoldServices.default(point, degree)
+        super().__init__(services)
 
     @property
     def point(self) -> LibrationPoint:
-        return self._point
+        return self.dynamics.point
 
     @property
     def degree(self) -> int:
-        return self._max_degree
+        return self.dynamics.degree
 
     @degree.setter
     def degree(self, value: int) -> None:
-        if not isinstance(value, int) or value <= 0:
-            raise ValueError("degree must be a positive integer.")
-
-        if value != self._max_degree:
-            self._max_degree = value
-            self._services.dynamics.pipeline_for_degree(value)
-
-    @property
-    def pipeline(self):
-        return self._services.dynamics.pipeline
+        self.dynamics.degree = value
 
     def __str__(self) -> str:
-        return f"CenterManifold(point={self._point}, degree={self._max_degree})"
+        return f"CenterManifold(point={self.point}, degree={self.degree})"
 
     def __repr__(self) -> str:
         return self.__str__()
 
-    def __getstate__(self):
-        return {
-            "_point": self._point,
-            "_max_degree": self._max_degree,
-        }
+    def compute(self, form: str = "center_manifold_real") -> "Hamiltonian":
+        return self.dynamics.pipeline.get_hamiltonian(form)
 
-    def __setstate__(self, state):
-        self._point = state["_point"]
-        self._max_degree = state["_max_degree"]
-        self._services = _CenterManifoldServices.from_point(self._point, self._max_degree)
-
-    def compute(self, form: str = "center_manifold_real"):
-        pipeline = self._services.dynamics.pipeline
-        return pipeline.get_hamiltonian(form).poly_H
-
-    def coefficients(
-        self,
-        form: str = "center_manifold_real",
-        degree = None,
-    ) -> str:
-        pipeline = self._services.dynamics.pipeline
-        ham = pipeline.get_hamiltonian(form)
-        return self._services.dynamics.format_coefficients(ham, degree)
-
-    def cache_clear(self):
-        self._services.dynamics.clear_caches()
+    def coefficients(self,form: str = "center_manifold_real", degree = None) -> str:
+        return self.dynamics.format_coefficients(self.dynamics.pipeline.get_hamiltonian(form), degree)
 
     def to_synodic(self, cm_point, energy: Optional[float] = None, section_coord: str = "q3", tol: float = 1e-14):
-        return self._services.dynamics.cm_point_to_synodic(cm_point, energy=energy, section_coord=section_coord, tol=tol)
+        return self.dynamics.cm_point_to_synodic(cm_point, energy=energy, section_coord=section_coord, tol=tol)
 
     def to_cm(self, synodic_6d, tol=1e-14):
-        return self._services.dynamics.synodic_to_cm(synodic_6d, tol=tol)
+        return self.dynamics.synodic_to_cm(synodic_6d, tol=tol)
 
     def poincare_map(self, energy: float, **kwargs) -> "CenterManifoldMap":
-        return self._services.dynamics.get_map(self, energy, **kwargs)
+        return self.dynamics.get_map(self, energy, **kwargs)
+
+    def __getstate__(self):
+        """Customise pickling by omitting adapter caches."""
+        state = super().__getstate__()
+        state["_point"] = self._point
+        state["_max_degree"] = self._max_degree
+        return state
+
+    def __setstate__(self, state):
+        """Restore adapter wiring after unpickling."""
+        super().__setstate__(state)
+        self._point = state["_point"]
+        self._max_degree = state["_max_degree"]
+        self._setup_services(_CenterManifoldServices.from_point(self._point, self._max_degree))
 
     def save(self, dir_path: str, **kwargs):
         """
@@ -123,7 +103,7 @@ class CenterManifold(_HitenBase):
         **kwargs
             Additional keyword arguments for the save operation.
         """
-        save_center_manifold(self, dir_path, **kwargs)
+        self.persistence.save(self, dir_path, **kwargs)
 
     @classmethod
     def load(cls, dir_path: str, **kwargs) -> "CenterManifold":
@@ -145,7 +125,12 @@ class CenterManifold(_HitenBase):
         :class:`~hiten.system.center.CenterManifold`
             The loaded CenterManifold instance with its Poincare maps.
         """
-        return load_center_manifold(dir_path, **kwargs)
+        return cls._load_with_services(
+            dir_path, 
+            _CenterManifoldPersistenceService(), 
+            lambda cm: _CenterManifoldServices.from_point(cm._point, cm._max_degree), 
+            **kwargs
+        )
 
 
 
