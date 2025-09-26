@@ -8,7 +8,7 @@ from hiten.algorithms.linalg.backend import _LinalgBackend
 from hiten.algorithms.linalg.types import (EigenDecompositionResults,
                                            _EigenDecompositionProblem,
                                            _ProblemType)
-from hiten.algorithms.types.core import BackendCall, _HitenBaseEngine
+from hiten.algorithms.types.core import _BackendCall, _HitenBaseEngine
 
 
 @dataclass
@@ -18,7 +18,7 @@ class _LinearStabilityEngine(_HitenBaseEngine[_EigenDecompositionProblem, EigenD
     def __init__(self, backend: _LinalgBackend) -> None:
         super().__init__(backend=backend, backend_method="solve")
 
-    def _invoke_backend(self, call: BackendCall) -> EigenDecompositionResults:
+    def _invoke_backend(self, call: _BackendCall) -> EigenDecompositionResults:
         problem = call.args[0]
         self.backend.system_type = problem.config.system_type
         problem_type = problem.config.problem_type

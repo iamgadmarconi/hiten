@@ -29,7 +29,7 @@ from typing import Literal, Optional, Tuple
 import numpy as np
 
 from hiten.algorithms.dynamics.base import _DynamicalSystem
-from hiten.algorithms.types.adapters.torus import _TorusServices
+from hiten.algorithms.types.services.torus import _TorusServices
 from hiten.algorithms.types.core import _HitenBase
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint

@@ -9,18 +9,17 @@ from typing import TYPE_CHECKING, Iterable, Tuple
 import numpy as np
 
 from hiten.algorithms.dynamics.rtbp import _compute_stm
-from hiten.algorithms.types.adapters.base import (_CachedDynamicsAdapter,
-                                                  _PersistenceAdapterMixin,
+from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
+                                                  _PersistenceServiceBase,
                                                   _ServiceBundleBase)
-from hiten.utils.log_config import logger
 from hiten.utils.io.torus import load_torus, load_torus_inplace, save_torus
+from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
-    from hiten.system.orbits.base import PeriodicOrbit
     from hiten.system.torus import InvariantTori, Torus
 
 
-class _TorusPersistenceAdapter(_PersistenceAdapterMixin):
+class _TorusPersistenceService(_PersistenceServiceBase):
     """Persistence helpers for invariant tori."""
 
     def __init__(self) -> None:
@@ -31,33 +30,26 @@ class _TorusPersistenceAdapter(_PersistenceAdapterMixin):
         )
 
 
-class _TorusDynamicsAdapter(_CachedDynamicsAdapter[tuple]):
+class _TorusDynamicsService(_DynamicsServiceBase):
     """Provide STM preparation and torus construction helpers."""
 
     def __init__(self, torus: "InvariantTori") -> None:
-        super().__init__()
-        self._torus = torus
-        self._orbit = self._torus.orbit
+        super().__init__(torus)
+        self._orbit = self._domain_obj.orbit
         self._latest_grid: np.ndarray | None = None
         self._latest_params: dict | None = None
 
     def eigen_data(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        key = self._make_cache_key(id(self._orbit))
+        key = self.make_key(id(self._orbit))
         
         def _factory() -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
             monodromy = self._orbit.monodromy
             evals, evecs = np.linalg.eig(monodromy)
             return monodromy, evals, evecs
         
-        return self._get_or_create(key, _factory)
+        return self.get_or_create(key, _factory)
 
-    def prepare(
-        self,
-        *,
-        n_theta1: int,
-        method: str,
-        order: int,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    def prepare(self, *, n_theta1: int, method: str, order: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Prepare STM and eigen data for invariant torus construction.
         
         Returns
@@ -77,7 +69,7 @@ class _TorusDynamicsAdapter(_CachedDynamicsAdapter[tuple]):
         eigenvectors : np.ndarray
             Eigenvectors of the monodromy matrix.
         """
-        cache_key = self._make_cache_key(id(self._orbit), n_theta1, method, order)
+        cache_key = self.make_key(id(self._orbit), n_theta1, method, order)
 
         def _factory() -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
             monodromy, evals, evecs = self.eigen_data()
@@ -122,7 +114,7 @@ class _TorusDynamicsAdapter(_CachedDynamicsAdapter[tuple]):
                 evecs,
             )
 
-        return self._get_or_create(cache_key, _factory)
+        return self.get_or_create(cache_key, _factory)
 
     def state(
         self,
@@ -164,7 +156,7 @@ class _TorusDynamicsAdapter(_CachedDynamicsAdapter[tuple]):
         method: str,
         order: int,
     ) -> np.ndarray:
-        cache_key = self._make_cache_key(epsilon, n_theta1, n_theta2, method, order)
+        cache_key = self.make_key(epsilon, n_theta1, n_theta2, method, order)
         
         def _factory() -> np.ndarray:
             _, ubar, y_series, _, _, _, _ = self.prepare(n_theta1=n_theta1, method=method, order=order)
@@ -184,7 +176,7 @@ class _TorusDynamicsAdapter(_CachedDynamicsAdapter[tuple]):
                 )
             )
         
-        grid = self._get_or_create(cache_key, _factory)
+        grid = self.get_or_create(cache_key, _factory)
         
         # Store the latest grid and parameters
         self._latest_grid = grid
@@ -341,13 +333,23 @@ class _TorusDynamicsAdapter(_CachedDynamicsAdapter[tuple]):
 
 @dataclass
 class _TorusServices(_ServiceBundleBase):
-    dynamics: _TorusDynamicsAdapter
-    persistence: _TorusPersistenceAdapter
+    domain_obj: "InvariantTori"
+    dynamics: _TorusDynamicsService
+    persistence: _TorusPersistenceService
 
     @classmethod
-    def from_torus(cls, torus: "InvariantTori") -> "_TorusServices":
+    def default(cls, torus: "InvariantTori") -> "_TorusServices":
         return cls(
-            dynamics=_TorusDynamicsAdapter(torus),
-            persistence=_TorusPersistenceAdapter(),
+            domain_obj=torus,
+            dynamics=_TorusDynamicsService(torus),
+            persistence=_TorusPersistenceService(),
+        )
+
+    @classmethod
+    def with_shared_dynamics(cls, dynamics: _TorusDynamicsService) -> "_TorusServices":
+        return cls(
+            domain_obj=dynamics._domain_obj,
+            dynamics=dynamics,
+            persistence=_TorusPersistenceService(),
         )
 

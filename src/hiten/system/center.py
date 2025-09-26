@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Optional
 
-from hiten.algorithms.types.adapters.center import _CenterManifoldServices
+from hiten.algorithms.types.services.center import _CenterManifoldServices
 from hiten.algorithms.types.core import _HitenBase
 from hiten.system.libration.base import LibrationPoint
 from hiten.utils.io.center import load_center_manifold, save_center_manifold
@@ -39,12 +39,11 @@ class CenterManifold(_HitenBase):
         self,
         point: LibrationPoint,
         degree: int,
-        *,
-        services: Optional[_CenterManifoldServices] = None,
     ) -> None:
+        services = _CenterManifoldServices.default(point, degree)
+        super().__init__(services)
         self._point = point
         self._max_degree = degree
-        self._services = services or _CenterManifoldServices.from_point(point, degree)
 
     @property
     def point(self) -> LibrationPoint:

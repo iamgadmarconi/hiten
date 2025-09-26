@@ -44,7 +44,7 @@ class StateParameter:
 
     def solve(
         self,
-        seed: PeriodicOrbit,
+        domain_obj: PeriodicOrbit,
         *,
         state: SynodicState | Sequence[SynodicState] | int | Sequence[int] | None,
         target: Sequence[float] | np.ndarray,
@@ -78,7 +78,5 @@ class StateParameter:
 
         interface = _PeriodicOrbitContinuationInterface()
         engine = _OrbitContinuationEngine(backend=self.engine.backend).with_interface(interface)
-        problem = interface.create_problem(seed=seed, config=cfg)
+        problem = interface.create_problem(domain_obj=domain_obj, config=cfg)
         return engine.solve(problem)
-
-

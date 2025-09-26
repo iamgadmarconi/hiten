@@ -168,10 +168,10 @@ class _OrbitCorrectionProblem(_CorrectionProblem):
     
     Attributes
     ----------
-    orbit: Any
+    domain_obj: Any
         Orbit to be corrected.
     cfg: _OrbitCorrectionConfig
         Configuration for the correction.
     """
-    orbit: Any
+    domain_obj: Any
     cfg: _OrbitCorrectionConfig

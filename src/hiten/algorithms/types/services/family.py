@@ -3,14 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path    
+from typing import TYPE_CHECKING
 
-from hiten.algorithms.types.adapters.base import (_PersistenceAdapterMixin,
+from hiten.algorithms.types.services.base import (_PersistenceServiceBase,
                                                   _ServiceBundleBase)
 from hiten.utils.io.family import load_family, load_family_inplace, save_family
 
+if TYPE_CHECKING:
+    from hiten.system.family import OrbitFamily
 
-class _OrbitFamilyPersistenceAdapter(_PersistenceAdapterMixin):
+
+
+
+class _OrbitFamilyPersistenceService(_PersistenceServiceBase):
     """Handle HDF5 serialisation for orbit families."""
 
     def __init__(self) -> None:
@@ -23,9 +29,14 @@ class _OrbitFamilyPersistenceAdapter(_PersistenceAdapterMixin):
 
 @dataclass
 class _OrbitFamilyServices(_ServiceBundleBase):
-    persistence: _OrbitFamilyPersistenceAdapter
+
+    domain_obj: "OrbitFamily"
+    persistence: _OrbitFamilyPersistenceService
 
     @classmethod
-    def default(cls) -> "_OrbitFamilyServices":
-        return cls(persistence=_OrbitFamilyPersistenceAdapter())
+    def default(cls, family: "OrbitFamily") -> "_OrbitFamilyServices":
+        return cls(
+            domain_obj=family,
+            persistence=_OrbitFamilyPersistenceService()
+        )
 

@@ -16,7 +16,7 @@ from hiten.algorithms.corrector.types import (JacobianFn, NormFn,
                                               StepperFactory,
                                               _OrbitCorrectionProblem)
 from hiten.algorithms.dynamics.rtbp import _compute_stm
-from hiten.algorithms.types.core import BackendCall, _HitenBaseInterface
+from hiten.algorithms.types.core import _BackendCall, _HitenBaseInterface
 
 if TYPE_CHECKING:
     from hiten.system.orbits.base import PeriodicOrbit
@@ -24,11 +24,10 @@ if TYPE_CHECKING:
 
 class _PeriodicOrbitCorrectorInterface(
     _HitenBaseInterface[
-        "PeriodicOrbit",
         _OrbitCorrectionConfig,
         _OrbitCorrectionProblem,
         OrbitCorrectionResult,
-        tuple[np.ndarray, dict[str, Any]],
+        tuple[np.ndarray, int, float],
     ]
 ):
     """Adapter wiring periodic orbits to the Newton correction backend."""
@@ -39,28 +38,28 @@ class _PeriodicOrbitCorrectorInterface(
     def create_problem(
         self,
         *, 
-        orbit: "PeriodicOrbit", 
+        domain_obj: "PeriodicOrbit", 
         config: _OrbitCorrectionConfig, 
         stepper_factory: StepperFactory | None = None
     ) -> _OrbitCorrectionProblem:
         forward = getattr(config, "forward", 1)
-        residual_fn = self._residual_fn(orbit, config, forward)
-        jacobian_fn = self._jacobian_fn(orbit, config, forward)
+        residual_fn = self._residual_fn(domain_obj, config, forward)
+        jacobian_fn = self._jacobian_fn(domain_obj, config, forward)
         norm_fn = self._norm_fn()
-        initial_guess = self._initial_guess(orbit, config)
+        initial_guess = self._initial_guess(domain_obj, config)
         problem = _OrbitCorrectionProblem(
             initial_guess=initial_guess,
             residual_fn=residual_fn,
             jacobian_fn=jacobian_fn,
             norm_fn=norm_fn,
             stepper_factory=stepper_factory,
-            orbit=orbit,
+            domain_obj=domain_obj,
             cfg=config,
         )
         return problem
 
-    def to_backend_inputs(self, problem: _OrbitCorrectionProblem) -> BackendCall:
-        return BackendCall(
+    def to_backend_inputs(self, problem: _OrbitCorrectionProblem) -> _BackendCall:
+        return _BackendCall(
             args=(problem.initial_guess,),
             kwargs={
                 "residual_fn": problem.residual_fn,
@@ -74,72 +73,70 @@ class _PeriodicOrbitCorrectorInterface(
             },
         )
 
-    def to_domain(self, outputs: tuple[np.ndarray, dict[str, Any]], *, problem: _OrbitCorrectionProblem) -> dict[str, Any]:
-        x_corr, info = outputs
+    def to_domain(self, outputs: tuple[np.ndarray, int, float], *, problem: _OrbitCorrectionProblem) -> dict[str, Any]:
+        x_corr, iterations, residual_norm = outputs
         control_indices = list(problem.cfg.control_indices)
-        base_state = problem.orbit.initial_state.copy()
+        base_state = problem.domain_obj.initial_state.copy()
         x_full = self._to_full_state(base_state, control_indices, x_corr)
-        half_period = self._half_period(problem.orbit, x_full, problem.cfg)
-        problem.orbit._reset()
-        problem.orbit._initial_state = x_full
-        problem.orbit._period = 2.0 * half_period
-        info = dict(info)
-        info["half_period"] = half_period
-        info["x_full"] = x_full
-        return info
+        half_period = self._half_period(problem.domain_obj, x_full, problem.cfg)
+        problem.domain_obj._reset()
+        problem.domain_obj._initial_state = x_full
+        problem.domain_obj._period = 2.0 * half_period
+        return {
+            "iterations": iterations,
+            "residual_norm": residual_norm,
+            "half_period": half_period,
+            "x_full": x_full
+        }
 
-    def to_results(self, outputs: tuple[np.ndarray, dict[str, Any]], *, problem: _OrbitCorrectionProblem) -> OrbitCorrectionResult:
-        x_corr, info = outputs
-        info = dict(info)
-        iterations = int(info.get("iterations", 0))
-        residual_norm = float(info.get("residual_norm", np.nan))
-        half_period = float(info.get("half_period", np.nan))
-        x_full = info.get("x_full")
-        if x_full is None:
-            control_indices = list(problem.cfg.control_indices)
-            base_state = problem.orbit.initial_state.copy()
-            x_full = self._to_full_state(base_state, control_indices, x_corr)
+    def to_results(self, outputs: tuple[np.ndarray, int, float], *, problem: _OrbitCorrectionProblem, domain_payload: dict[str, Any] = None) -> OrbitCorrectionResult:
+        x_corr, iterations, residual_norm = outputs
+        control_indices = list(problem.cfg.control_indices)
+        base_state = problem.domain_obj.initial_state.copy()
+        x_full = self._to_full_state(base_state, control_indices, x_corr)
+        half_period = self._half_period(problem.domain_obj, x_full, problem.cfg)
+        
         return OrbitCorrectionResult(
             converged=True,
             x_corrected=x_full,
-            residual_norm=residual_norm,
-            iterations=iterations,
+            residual_norm=float(residual_norm),
+            iterations=int(iterations),
             half_period=half_period,
         )
 
-    def _initial_guess(self, orbit: "PeriodicOrbit", cfg: _OrbitCorrectionConfig) -> np.ndarray:
+    def _initial_guess(self, domain_obj: "PeriodicOrbit", cfg: _OrbitCorrectionConfig) -> np.ndarray:
         indices = list(cfg.control_indices)
-        return orbit.initial_state[indices].copy()
+        return domain_obj.initial_state[indices].copy()
 
     def _norm_fn(self) -> NormFn:
         return lambda r: float(np.linalg.norm(r, ord=np.inf))
 
-    def _residual_fn(self, orbit: "PeriodicOrbit", cfg: _OrbitCorrectionConfig, forward: int) -> Callable[[np.ndarray], np.ndarray]:
-        base_state = orbit.initial_state.copy()
+    def _residual_fn(self, domain_obj: "PeriodicOrbit", cfg: _OrbitCorrectionConfig, forward: int) -> Callable[[np.ndarray], np.ndarray]:
+        base_state = domain_obj.initial_state.copy()
         control_indices = list(cfg.control_indices)
         residual_indices = list(cfg.residual_indices)
         target_vec = np.asarray(cfg.target, dtype=float)
 
         def _fn(params: np.ndarray) -> np.ndarray:
             x_full = self._to_full_state(base_state, control_indices, params)
-            _, x_event = self._evaluate_event(orbit, x_full, cfg, forward)
+            _, x_event = self._evaluate_event(domain_obj, x_full, cfg, forward)
             return x_event[residual_indices] - target_vec
 
         return _fn
 
-    def _jacobian_fn(self, orbit: "PeriodicOrbit", cfg: _OrbitCorrectionConfig, forward: int) -> JacobianFn | None:
+    def _jacobian_fn(self, domain_obj: "PeriodicOrbit", cfg: _OrbitCorrectionConfig, forward: int) -> JacobianFn | None:
         if bool(getattr(cfg, "finite_difference", False)):
             return None
 
-        base_state = orbit.initial_state.copy()
+        base_state = domain_obj.initial_state.copy()
         control_indices = list(cfg.control_indices)
         residual_indices = list(cfg.residual_indices)
 
         def _fn(params: np.ndarray) -> np.ndarray:
             x_full = self._to_full_state(base_state, control_indices, params)
-            t_event, x_event = self._evaluate_event(orbit, x_full, cfg, forward)
+            t_event, x_event = self._evaluate_event(domain_obj, x_full, cfg, forward)
             _, _, Phi_flat, _ = _compute_stm(
-                orbit.var_dynsys,
+                domain_obj.var_dynsys,
                 x_full,
                 t_event,
                 steps=cfg.steps,
@@ -153,21 +150,21 @@ class _PeriodicOrbitCorrectorInterface(
 
         return _fn
 
-    def _half_period(self, orbit: "PeriodicOrbit", corrected_state: np.ndarray, cfg: _OrbitCorrectionConfig) -> float:
+    def _half_period(self, domain_obj: "PeriodicOrbit", corrected_state: np.ndarray, cfg: _OrbitCorrectionConfig) -> float:
         forward = getattr(cfg, "forward", 1)
         try:
             t_final, _ = cfg.event_func(
-                dynsys=orbit.system.dynsys,
+                dynsys=domain_obj.system.dynsys,
                 x0=corrected_state,
                 forward=forward,
             )
             return float(t_final)
         except Exception:
             try:
-                fallback, _ = self._evaluate_event(orbit, corrected_state, cfg, forward)
+                fallback, _ = self._evaluate_event(domain_obj, corrected_state, cfg, forward)
                 return float(fallback)
             except Exception as exc:
-                raise ValueError("Failed to evaluate orbit event for corrected state") from exc
+                raise ValueError("Failed to evaluate domain_obj event for corrected state") from exc
 
     def _to_full_state(self, base_state: np.ndarray, control_indices: list[int], params: np.ndarray) -> np.ndarray:
         x_full = base_state.copy()
@@ -176,13 +173,13 @@ class _PeriodicOrbitCorrectorInterface(
 
     def _evaluate_event(
         self,
-        orbit: "PeriodicOrbit",
+        domain_obj: "PeriodicOrbit",
         full_state: np.ndarray,
         cfg: _OrbitCorrectionConfig,
         forward: int,
     ) -> tuple[float, np.ndarray]:
         return cfg.event_func(
-            dynsys=orbit.system.dynsys,
+            dynsys=domain_obj.system.dynsys,
             x0=full_state,
             forward=forward,
         )

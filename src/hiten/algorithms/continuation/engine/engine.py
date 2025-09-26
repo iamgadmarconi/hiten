@@ -7,7 +7,7 @@ from hiten.algorithms.continuation.engine.base import _ContinuationEngine
 from hiten.algorithms.continuation.interfaces import (
     _PeriodicOrbitContinuationInterface,
 )
-from hiten.algorithms.continuation.types import _ContinuationProblem, ContinuationResult
+from hiten.algorithms.continuation.types import _ContinuationProblem
 from hiten.algorithms.types.exceptions import EngineError
 
 

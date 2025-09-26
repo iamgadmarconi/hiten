@@ -7,15 +7,15 @@ from typing import TYPE_CHECKING, Tuple
 
 import numpy as np
 
-from hiten.algorithms.common.energy import crtbp_energy, energy_to_jacobi
 from hiten.algorithms.dynamics.hamiltonian import _HamiltonianSystem
-from hiten.algorithms.types.adapters.center import _CenterManifoldServices
-from hiten.algorithms.types.adapters.libration import _LibrationServices
 from hiten.algorithms.types.core import _HitenBase
+from hiten.algorithms.types.services.libration import (
+    _LibrationPersistenceService, _LibrationServices)
 
 if TYPE_CHECKING:
     from hiten.system.base import System
     from hiten.system.center import CenterManifold
+    from hiten.system.hamiltonian import Hamiltonian, LieGeneratingFunction
     from hiten.system.orbits.base import PeriodicOrbit
 
 
@@ -79,15 +79,9 @@ class LibrationPoint(_HitenBase, ABC):
     array([...])
     """
     
-    def __init__(self, system: "System", services: _LibrationServices | None = None):
-        super().__init__()
-        self._system = system
-        self._mu = system.mu
-
-        self._linear_data = None
-        self._cm_registry = {}
-        self._services = services or _LibrationServices.default()
-        self._center_services = {}
+    def __init__(self, system: "System"):
+        services : _LibrationServices = _LibrationServices.default(self)
+        super().__init__(services)
 
     def __str__(self) -> str:
         return f"{type(self).__name__}(mu={self.mu:.6e})"
@@ -95,27 +89,15 @@ class LibrationPoint(_HitenBase, ABC):
     def __repr__(self) -> str:
         return f"{type(self).__name__}(mu={self.mu:.6e})"
 
-    def cache_clear(self) -> None:
-        """
-        Clear all cached data, including computed properties.
-        
-        This method resets all cached properties to None, forcing them to be
-        recomputed on next access.
-        """
-        super().cache_clear()
-        self._linear_data = None
-        self._center_services.clear()
-        self._services.dynamics.reset_point(self)
-
     @property
     def system(self) -> "System":
         """The system this libration point belongs to."""
-        return self._system
+        return self.dynamics.system
     
     @property
     def mu(self) -> float:
         """The mass parameter of the system."""
-        return self._mu
+        return self.dynamics.mu
 
     @property
     def dynsys(self):
@@ -126,7 +108,7 @@ class LibrationPoint(_HitenBase, ABC):
         :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
             The underlying vector field instance.
         """
-        return self.system.dynsys
+        return self.dynamics.dynsys
 
     @property
     def var_dynsys(self):
@@ -137,7 +119,7 @@ class LibrationPoint(_HitenBase, ABC):
         :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
             The underlying variational equations system.
         """
-        return self.system.var_dynsys
+        return self.dynamics.var_dynsys
 
     @property
     def jacobian_dynsys(self):
@@ -148,7 +130,7 @@ class LibrationPoint(_HitenBase, ABC):
         :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
             The underlying Jacobian evaluation system.
         """
-        return self.system.jacobian_dynsys
+        return self.dynamics.jacobian_dynsys
 
     @property
     @abstractmethod
@@ -161,21 +143,6 @@ class LibrationPoint(_HitenBase, ABC):
             The libration point index (1-5 for L1-L5).
         """
         pass
-
-    @property
-    def position(self) -> np.ndarray:
-        """
-        Get the position of the Libration point in the rotating frame.
-        
-        Returns
-        -------
-        numpy.ndarray, shape (3,)
-            3D vector [x, y, z] representing the position in nondimensional units.
-        """
-        cached = self.cache_get(('position',))
-        if cached is None:
-            cached = self.cache_set(('position',), self._calculate_position())
-        return cached
     
     @property
     def energy(self) -> float:
@@ -187,14 +154,10 @@ class LibrationPoint(_HitenBase, ABC):
         float
             The mechanical energy in nondimensional units.
         """
-        cached = self.cache_get(('energy',))
-        if cached is None:
-            state = np.concatenate([self.position, np.array([0.0, 0.0, 0.0])])
-            cached = self.cache_set(('energy',), crtbp_energy(state, self.mu))
-        return cached
+        return self.dynamics.energy
     
     @property
-    def jacobi_constant(self) -> float:
+    def jacobi(self) -> float:
         """
         Get the Jacobi constant of the Libration point.
         
@@ -203,10 +166,7 @@ class LibrationPoint(_HitenBase, ABC):
         float
             The Jacobi constant in nondimensional units.
         """
-        cached = self.cache_get(('jacobi_constant',))
-        if cached is None:
-            cached = self.cache_set(('jacobi_constant',), energy_to_jacobi(self.energy))
-        return cached
+        return self.dynamics.jacobi
     
     @property
     def is_stable(self) -> bool:
@@ -222,8 +182,7 @@ class LibrationPoint(_HitenBase, ABC):
         bool
             True if the libration point is linearly stable.
         """
-        props = self._services.dynamics.compute(self)
-        return props.is_stable
+        return self.dynamics.is_stable
 
     @property
     def eigenvalues(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -236,8 +195,7 @@ class LibrationPoint(_HitenBase, ABC):
             (stable_eigenvalues, unstable_eigenvalues, center_eigenvalues)
             Each array contains eigenvalues in nondimensional units.
         """
-        props = self._services.dynamics.compute(self)
-        return props.eigenvalues
+        return self.dynamics.eigenvalues
     
     @property
     def eigenvectors(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -250,48 +208,10 @@ class LibrationPoint(_HitenBase, ABC):
             (stable_eigenvectors, unstable_eigenvectors, center_eigenvectors)
             Each array contains eigenvectors as column vectors.
         """
-        props = self._services.dynamics.compute(self)
-        return props.eigenvectors
+        return self.dynamics.eigenvectors
 
-    @property
-    def linear_data(self):
-        """
-        Get the linear data for the Libration point.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.types.adapters.libration._LinearData`
-            The linear data containing eigenvalues and eigenvectors.
-        """
-        if self._linear_data is None:
-            self._linear_data = self._get_linear_data()
-        return self._linear_data
-
-    @abstractmethod
-    def _calculate_position(self) -> np.ndarray:
-        """
-        Calculate the position of the Libration point.
-        
-        This is an abstract method that must be implemented by subclasses.
-        
-        Returns
-        -------
-        numpy.ndarray, shape (3,)
-            3D vector [x, y, z] representing the position in nondimensional units.
-        """
-        pass
-
-    @abstractmethod
-    def _get_linear_data(self):
-        """
-        Get the linear data for the Libration point.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.types.adapters.libration._LinearData`
-            The linear data containing eigenvalues and eigenvectors.
-        """
-        pass
+    def create_orbit(self, family: str | type["PeriodicOrbit"], /, **kwargs) -> "PeriodicOrbit":
+        return self.dynamics.create_orbit(family, **kwargs)
 
     def get_center_manifold(self, degree: int) -> "CenterManifold":
         """
@@ -311,16 +231,29 @@ class LibrationPoint(_HitenBase, ABC):
         :class:`~hiten.system.center.CenterManifold`
             The center manifold instance.
         """
-        from hiten.system.center import CenterManifold
+        return self.dynamics.center_manifold(degree)
 
-        if degree not in self._cm_registry:
-            if (self.idx, degree) not in self._center_services:
-                self._center_services[(self.idx, degree)] = _CenterManifoldServices.from_point(self, degree)
-            services = self._center_services[(self.idx, degree)]
-            self._cm_registry[degree] = CenterManifold(self, degree, services=services)
-        return self._cm_registry[degree]
+    def hamiltonian(self, max_deg: int, form: str = "physical") -> "Hamiltonian":
+        """
+        Return a Hamiltonian object from the associated CenterManifold.
 
-    def hamiltonian(self, max_deg: int) -> dict:
+        Parameters
+        ----------
+        max_deg : int
+            The maximum degree of the Hamiltonian expansion.
+        form : str
+            The Hamiltonian form to get coefficients for. Default is "physical".
+            Available forms: 'physical', 'real_normal', 'complex_normal', 
+            'normalized', 'center_manifold_complex', 'center_manifold_real'.
+            
+        Returns
+        -------
+        Hamiltonian
+            The Hamiltonian object with the specified form and degree.
+        """
+        return self.dynamics.hamiltonian(max_deg, form)
+
+    def hamiltonians(self, max_deg: int) -> dict[str, "Hamiltonian"]:
         """
         Return all Hamiltonian representations from the associated CenterManifold.
 
@@ -331,27 +264,12 @@ class LibrationPoint(_HitenBase, ABC):
             
         Returns
         -------
-        dict
+        dict[str, Hamiltonian]
             Dictionary with keys: 'physical', 'real_normal', 'complex_normal', 
             'normalized', 'center_manifold_complex', 'center_manifold_real'.
-            Each value is a list of coefficient arrays.
+            Each value is a Hamiltonian object.
         """
-        center_manifold = self.get_center_manifold(max_deg)
-        center_manifold.compute()
-
-        reprs = {}
-        for label in (
-            'physical',
-            'real_normal',
-            'complex_normal',
-            'normalized',
-            'center_manifold_complex',
-            'center_manifold_real',
-        ):
-            data = center_manifold.cache_get(('hamiltonian', max_deg, label))
-            if data is not None:
-                reprs[label] = [arr.copy() for arr in data]
-        return reprs
+        return self.dynamics.hamiltonians(max_deg)
 
     def hamiltonian_system(self, form: str, max_deg: int) -> _HamiltonianSystem:
         """
@@ -369,10 +287,9 @@ class LibrationPoint(_HitenBase, ABC):
         :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem`
             The Hamiltonian system instance.
         """
-        center_manifold = self.get_center_manifold(max_deg)
-        return center_manifold._get_hamsys(form)
+        return self.dynamics.hamsys(max_deg, form)
 
-    def generating_functions(self, max_deg: int):
+    def generating_functions(self, max_deg: int) -> list["LieGeneratingFunction"]:
         """
         Return the Lie-series generating functions from CenterManifold.
         
@@ -383,14 +300,38 @@ class LibrationPoint(_HitenBase, ABC):
             
         Returns
         -------
-        list
-            List of generating function coefficient arrays.
+        list[LieGeneratingFunction]
+            List of LieGeneratingFunction objects.
         """
-        center_manifold = self.get_center_manifold(max_deg)
-        center_manifold.compute()
-        data = center_manifold.cache_get(('generating_functions', max_deg))
-        return [] if data is None else [g.copy() for g in data]
+        return self.dynamics.generating_functions(max_deg)
 
+    @property
+    @abstractmethod
+    def position(self) -> np.ndarray:
+        """
+        Get the position of the Libration point in the rotating frame.
+        
+        Returns
+        -------
+        numpy.ndarray, shape (3,)
+            3D vector [x, y, z] representing the position in nondimensional units.
+        """
+        pass
+
+    @property
+    @abstractmethod
+    def linear_data(self):
+        """
+        Get the linear data for the Libration point.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.services.libration._LinearData`
+            The linear data containing eigenvalues and eigenvectors.
+        """
+        pass
+
+    @property
     @abstractmethod
     def normal_form_transform(self) -> Tuple[np.ndarray, np.ndarray]:
         """
@@ -404,95 +345,21 @@ class LibrationPoint(_HitenBase, ABC):
         """
         pass
 
-    def __getstate__(self):
-        """Customise pickling by omitting adapter caches."""
-        state = super().__getstate__()
-        state.pop("_services", None)
-        state.pop("_center_services", None)
-        state["_cm_registry"] = {}
-        return state
-
     def __setstate__(self, state):
         """Restore adapter wiring after unpickling."""
         super().__setstate__(state)
-        self._services = _LibrationServices.default()
-        self._center_services = {}
-        if not hasattr(self, "_cm_registry") or self._cm_registry is None:
-            self._cm_registry = {}
-        self._services.dynamics.reset_point(self)
-
-    def create_orbit(self, family: str | type["PeriodicOrbit"], /, **kwargs) -> "PeriodicOrbit":
-        """
-        Create a periodic orbit family anchored at this libration point.
-
-        The helper transparently instantiates the appropriate concrete
-        subclass of :class:`~hiten.system.orbits.base.PeriodicOrbit` and
-        returns it.  The mapping is based on the family string or directly
-        on a subclass type::
-
-            L1 = system.get_libration_point(1)
-            orb1 = L1.create_orbit("halo", amplitude_z=0.03, zenith="northern")
-            orb2 = L1.create_orbit("lyapunov", amplitude_x=0.05)
-
-        Parameters
-        ----------
-        family : str or :class:`~hiten.system.orbits.base.PeriodicOrbit` subclass
-            Identifier of the orbit family or an explicit subclass type.
-            Accepted strings (case-insensitive): "halo", "lyapunov",
-            "vertical_lyapunov" and "generic".  If a subclass is
-            passed, it is instantiated directly.
-        **kwargs
-            Forwarded verbatim to the underlying orbit constructor.
-
-        Returns
-        -------
-        :class:`~hiten.system.orbits.base.PeriodicOrbit`
-            Newly created orbit instance.
-        """
-        from hiten.system.orbits.base import GenericOrbit, PeriodicOrbit
-        from hiten.system.orbits.halo import HaloOrbit
-        from hiten.system.orbits.lyapunov import LyapunovOrbit
-        from hiten.system.orbits.vertical import VerticalOrbit
-
-        if isinstance(family, type) and issubclass(family, PeriodicOrbit):
-            orbit_cls = family
-            return orbit_cls(self, **kwargs)
-
-        key = family.lower().strip()
-        mapping: dict[str, type[PeriodicOrbit]] = {
-            "halo": HaloOrbit,
-            "lyapunov": LyapunovOrbit,
-            "vertical_lyapunov": VerticalOrbit,
-            "vertical": VerticalOrbit,
-            "generic": GenericOrbit,
-        }
-
-        if key not in mapping:
-            raise ValueError(
-                f"Unknown orbit family '{family}'. Available options: {', '.join(mapping.keys())} "
-                "or pass a PeriodicOrbit subclass directly."
-            )
-
-        orbit_cls = mapping[key]
-        return orbit_cls(self, **kwargs)
-
-    def save(self, file_path: str | Path, **kwargs) -> None:
-        self._services.persistence.save(self, file_path, **kwargs)
+        self._setup_services(_LibrationServices.default(self))
 
     @classmethod
     def load(cls, file_path: str | Path, **kwargs) -> "LibrationPoint":
-        system: System | None = kwargs.get("system")
-        services = _LibrationServices.default()
-        point = services.persistence.load(file_path, system=system)
-        point._services = services
-        point._center_services = _CenterManifoldServices()
-        if system is not None:
-            shared_dynamics = system._libration_dynamics
-            point._services = _LibrationServices.with_shared_dynamics(shared_dynamics)
-        point._services.dynamics.reset_point(point)
-        return point
+        return cls._load_with_services(
+            file_path, 
+            _LibrationPersistenceService(), 
+            _LibrationServices.default, 
+            **kwargs
+        )
 
     def load_inplace(self, file_path: str | Path) -> "LibrationPoint":
-        self._services.persistence.load_inplace(self, file_path)
-        self._services.dynamics.reset_point(self)
+        self.persistence.load_inplace(self, file_path)
+        self.dynamics.reset()
         return self

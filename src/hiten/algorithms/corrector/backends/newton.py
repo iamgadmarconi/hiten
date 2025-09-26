@@ -191,7 +191,7 @@ class _NewtonBackend(_CorrectorBackend):
         max_attempts: int = 25,
         max_delta: float | None = 1e-2,
         fd_step: float = 1e-8,
-    ) -> Tuple[np.ndarray, dict[str, Any]]:
+    ) -> Tuple[np.ndarray, int, float]:
         """Solve nonlinear system using Newton-Raphson method.
 
         Parameters
@@ -217,8 +217,10 @@ class _NewtonBackend(_CorrectorBackend):
         -------
         x_solution : ndarray
             Converged solution vector.
-        info : dict
-            Convergence information with keys 'iterations' and 'residual_norm'.
+        iterations : int
+            Number of iterations performed.
+        residual_norm : float
+            Final residual norm achieved.
             
         Raises
         ------
@@ -229,7 +231,6 @@ class _NewtonBackend(_CorrectorBackend):
             norm_fn = lambda r: float(np.linalg.norm(r))
 
         x = x0.copy()
-        info: dict[str, Any] = {}
 
         # Obtain the stepper callable from the injected factory
         factory = self._stepper_factory if stepper_factory is None else stepper_factory
@@ -246,13 +247,12 @@ class _NewtonBackend(_CorrectorBackend):
 
             if r_norm < tol:
                 logger.info("Newton converged after %d iterations (|R|=%.2e)", k, r_norm)
-                info.update(iterations=k, residual_norm=r_norm)
                 # Notify acceptance hook (public)
                 try:
                     self.on_accept(x, iterations=k, residual_norm=r_norm)
                 except Exception:
                     pass
-                return x, info
+                return x, k, r_norm
 
             J = self._compute_jacobian(x, residual_fn, jacobian_fn, fd_step)
             delta = self._solve_delta(J, r)
@@ -273,6 +273,7 @@ class _NewtonBackend(_CorrectorBackend):
         # Call acceptance hook if converged in the final check
         if r_final_norm < tol:
             self.on_accept(x, iterations=max_attempts, residual_norm=r_final_norm)
+            return x, max_attempts, r_final_norm
 
         self.on_failure(x, iterations=max_attempts, residual_norm=r_final_norm)
 

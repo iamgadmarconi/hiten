@@ -40,7 +40,7 @@ from hiten.algorithms.poincare.centermanifold.types import (
     _CenterManifoldMapProblem,
 )
 from hiten.algorithms.poincare.core.engine import _ReturnMapEngine
-from hiten.algorithms.types.core import BackendCall
+from hiten.algorithms.types.core import _BackendCall
 from hiten.algorithms.types.exceptions import EngineError
 from hiten.utils.log_config import logger
 

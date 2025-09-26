@@ -11,26 +11,26 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional, Sequence, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional, Sequence
 
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
 from hiten.algorithms.dynamics.rtbp import (jacobian_dynsys, rtbp_dynsys,
                                             variational_dynsys)
 from hiten.algorithms.integrators.base import _Solution
-from hiten.algorithms.types.adapters.base import (_CachedDynamicsAdapter,
-                                                  _PersistenceAdapterMixin,
+from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
+                                                  _PersistenceServiceBase,
                                                   _ServiceBundleBase)
 from hiten.algorithms.utils.coordinates import _get_mass_parameter
 from hiten.utils.io.system import load_system, load_system_inplace, save_system
 
-
 if TYPE_CHECKING:
+    from hiten.system.base import System
     from hiten.system.body import Body
 
 
 
-class _SystemPersistenceAdapter(_PersistenceAdapterMixin):
+class _SystemPersistenceService(_PersistenceServiceBase):
     """Thin adapter around system IO helpers for testability and indirection."""
 
     def __init__(self) -> None:
@@ -41,45 +41,67 @@ class _SystemPersistenceAdapter(_PersistenceAdapterMixin):
         )
 
 
-class _SystemsDynamicsAdapter(_CachedDynamicsAdapter[_DynamicalSystemProtocol]):
+class _SystemsDynamicsService(_DynamicsServiceBase):
     """Lazily construct and cache dynamical system backends for a CR3BP system."""
 
-    def __init__(self, primary: "Body", secondary: "Body", distance: float) -> None:
-        super().__init__()
-        self._primary = primary
-        self._secondary = secondary
-        self._distance = distance
-        self._mu = _get_mass_parameter(primary.mass, secondary.mass)
+    def __init__(self, domain_obj: "System") -> None:
+        super().__init__(domain_obj)
+        self._primary = domain_obj.primary
+        self._secondary = domain_obj.secondary
+        self._distance = domain_obj.distance
+        self._mu = _get_mass_parameter(domain_obj.primary.mass, domain_obj.secondary.mass)
+
+    @property
+    def primary(self) -> "Body":
+        return self._primary
+
+    @property
+    def secondary(self) -> "Body":
+        return self._secondary
+
+    @property
+    def distance(self) -> float:
+        return self._distance
+
+    @property
+    def mu(self) -> float:
+        return self._mu
 
     @property
     def dynsys(self) -> _DynamicalSystemProtocol:
-        return self._get_or_create(
-            "dynsys",
-            lambda: rtbp_dynsys(self._mu, name=_make_dynsys_name(self._primary, self._secondary, "rtbp")),
+        key = self.make_key(id(self._primary), id(self._secondary), self._distance, "dynsys")
+        return self.get_or_create(
+            key,
+            lambda: rtbp_dynsys(self._mu, name=self._make_dynsys_name("rtbp")),
         )
 
     @property
     def variational(self) -> _DynamicalSystemProtocol:
-        return self._get_or_create(
-            "variational",
+        key = self.make_key(id(self._primary), id(self._secondary), self._distance, "variational")
+        return self.get_or_create(
+            key,
             lambda: variational_dynsys(
                 self._mu,
-                name=_make_dynsys_name(self._primary, self._secondary, "variational"),
+                name=self._make_dynsys_name("variational"),
             ),
         )
 
     @property
     def jacobian(self) -> _DynamicalSystemProtocol:
-        return self._get_or_create(
-            "jacobian",
+        key = self.make_key(id(self._primary), id(self._secondary), self._distance, "jacobian")
+        return self.get_or_create(
+            key,
             lambda: jacobian_dynsys(
                 self._mu,
-                name=_make_dynsys_name(self._primary, self._secondary, "jacobian"),
+                name=self._make_dynsys_name("jacobian"),
             ),
         )
+    
+    def _make_dynsys_name(self, suffix: str) -> str:
+        return f"{self._primary.name}_{self._secondary.name}_{suffix}"
 
     def reset(self) -> None:
-        self.reset_cache()
+        super().reset()
 
     def propagate(
         self,
@@ -110,32 +132,18 @@ class _SystemsDynamicsAdapter(_CachedDynamicsAdapter[_DynamicalSystemProtocol]):
 
 @dataclass
 class _SystemServices(_ServiceBundleBase):
-    primary: "Body"
-    secondary: "Body"
-    distance: float
-    mu: float
-    dynamics: _SystemsDynamicsAdapter
-    persistence: _SystemPersistenceAdapter
+    domain_obj: "System"
+    dynamics: _SystemsDynamicsService
+    persistence: _SystemPersistenceService
 
     @classmethod
-    def from_bodies(cls, primary: "Body", secondary: "Body", distance: float) -> "_SystemServices":
-        mu = _get_mass_parameter(primary.mass, secondary.mass)
-        dynamics = _SystemsDynamicsAdapter(primary, secondary, distance)
-        persistence = _SystemPersistenceAdapter()
-        return cls(
-            primary=primary,
-            secondary=secondary,
-            distance=distance,
-            mu=mu,
-            dynamics=dynamics,
-            persistence=persistence,
-        )
+    def default(cls, system: "System") -> "_SystemServices":
+        dynamics = _SystemsDynamicsService(system)
+        persistence = _SystemPersistenceService()
+        return cls(domain_obj=system, dynamics=dynamics, persistence=persistence)
 
     @classmethod
-    def from_file(cls, file_path: str | Path) -> "_SystemServices":
-        system = load_system(file_path)
-        return cls.from_bodies(system.primary, system.secondary, system.distance)
+    def with_shared_dynamics(cls, dynamics: _SystemsDynamicsService) -> "_SystemServices":
+        return cls(domain_obj=dynamics._domain_obj, dynamics=dynamics, persistence=_SystemPersistenceService())
 
 
-def _make_dynsys_name(primary: "Body", secondary: "Body", suffix: str) -> str:
-    return f"{primary.name}_{secondary.name}_{suffix}"

@@ -30,7 +30,7 @@ from hiten.algorithms.continuation.stepping import (make_natural_stepper,
                                                     make_secant_stepper)
 from hiten.algorithms.continuation.types import (ContinuationResult,
                                                  _ContinuationProblem)
-from hiten.algorithms.types.core import BackendCall, _HitenBaseInterface
+from hiten.algorithms.types.core import _BackendCall, _HitenBaseInterface
 from hiten.algorithms.types.states import SynodicState
 
 if TYPE_CHECKING:
@@ -39,7 +39,6 @@ if TYPE_CHECKING:
 
 class _PeriodicOrbitContinuationInterface(
     _HitenBaseInterface[
-        "PeriodicOrbit",
         _OrbitContinuationConfig,
         _ContinuationProblem,
         ContinuationResult,
@@ -51,10 +50,10 @@ class _PeriodicOrbitContinuationInterface(
     def __init__(self) -> None:
         super().__init__()
 
-    def create_problem(self, *, seed: "PeriodicOrbit", config: _OrbitContinuationConfig) -> _ContinuationProblem:
+    def create_problem(self, *, domain_obj: "PeriodicOrbit", config: _OrbitContinuationConfig) -> _ContinuationProblem:
         parameter_getter = self._parameter_getter(config)
         return _ContinuationProblem(
-            initial_solution=seed,
+            initial_solution=domain_obj,
             parameter_getter=parameter_getter,
             target=np.asarray(config.target, dtype=float),
             step=np.asarray(config.step, dtype=float),
@@ -68,13 +67,13 @@ class _PeriodicOrbitContinuationInterface(
             cfg=config,
         )
 
-    def to_backend_inputs(self, problem: _ContinuationProblem) -> BackendCall:
+    def to_backend_inputs(self, problem: _ContinuationProblem) -> _BackendCall:
         cfg = problem.cfg
         assert cfg is not None
-        seed = problem.initial_solution
+        domain_obj = problem.initial_solution
 
         predictor = self._predictor(cfg)
-        seed_repr = self._representation(seed)
+        domain_obj_repr = self._representation(domain_obj)
         
         step_eff = np.asarray(cfg.step, dtype=float)
         
@@ -85,8 +84,8 @@ class _PeriodicOrbitContinuationInterface(
         if str(cfg.stepper).lower() == "secant":
             # Calculate initial tangent
             try:
-                pred0 = predictor(seed_repr, step_eff)
-                diff0 = (np.asarray(pred0, dtype=float) - seed_repr).ravel()
+                pred0 = predictor(domain_obj_repr, step_eff)
+                diff0 = (np.asarray(pred0, dtype=float) - domain_obj_repr).ravel()
                 norm0 = float(np.linalg.norm(diff0))
                 initial_tangent = None if norm0 == 0.0 else diff0 / norm0
             except Exception:
@@ -122,7 +121,7 @@ class _PeriodicOrbitContinuationInterface(
         stepper = self._make_stepper(cfg, predictor, tangent_fn)
 
         def corrector(prediction: np.ndarray) -> tuple[np.ndarray, float, bool]:
-            orbit = self._instantiate(seed, prediction)
+            orbit = self._instantiate(domain_obj, prediction)
             x_corr, _ = orbit.correct(**(cfg.extra_params or {}))
             residual = float(np.linalg.norm(np.asarray(x_corr, dtype=float) - prediction))
             
@@ -152,9 +151,9 @@ class _PeriodicOrbitContinuationInterface(
             
             return np.asarray(x_corr, dtype=float), residual, True
 
-        return BackendCall(
+        return _BackendCall(
             kwargs={
-                "seed_repr": seed_repr,
+                "domain_obj_repr": domain_obj_repr,
                 "stepper": stepper,
                 "parameter_getter": problem.parameter_getter,
                 "corrector": corrector,
@@ -203,13 +202,13 @@ class _PeriodicOrbitContinuationInterface(
     def _representation(self, orbit) -> np.ndarray:
         return np.asarray(orbit.initial_state, dtype=float).copy()
 
-    def _instantiate(self, seed: "PeriodicOrbit", representation: np.ndarray):
-        orbit_cls = type(seed)
-        lp = getattr(seed, "libration_point", None)
+    def _instantiate(self, domain_obj: "PeriodicOrbit", representation: np.ndarray):
+        orbit_cls = type(domain_obj)
+        lp = getattr(domain_obj, "libration_point", None)
         orbit = orbit_cls(libration_point=lp, initial_state=np.asarray(representation, dtype=float))
-        # Copy the period from the seed orbit if it has one
-        if seed.period is not None:
-            orbit.period = seed.period
+        # Copy the period from the domain_obj orbit if it has one
+        if domain_obj.period is not None:
+            orbit.period = domain_obj.period
         return orbit
 
     def _parameter_getter(self, cfg: _OrbitContinuationConfig) -> Callable[[np.ndarray], np.ndarray]:

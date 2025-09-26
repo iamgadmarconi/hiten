@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 
 from hiten.algorithms.types.core import _HitenBase
-from hiten.algorithms.types.adapters.family import _OrbitFamilyServices
+from hiten.algorithms.types.services.family import _OrbitFamilyServices
 from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.io.common import _ensure_dir
 from hiten.utils.log_config import logger

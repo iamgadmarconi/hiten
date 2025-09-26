@@ -1,7 +1,7 @@
 from abc import ABC
 from typing import Tuple
 
-from hiten.algorithms.types.core import (ConfigT, DomainT, OutputsT, ProblemT,
+from hiten.algorithms.types.core import (ConfigT, OutputsT, ProblemT,
                                          ResultT, _HitenBaseInterface)
 
 
@@ -10,7 +10,14 @@ class _SectionInterface(ABC):
     plane_coords: Tuple[str, str]
 
 
-class _PoincareBaseInterface(_HitenBaseInterface[DomainT, ConfigT, ProblemT, ResultT, OutputsT]):
+class _PoincareBaseInterface(
+    _HitenBaseInterface[
+        ConfigT, 
+        ProblemT, 
+        ResultT, 
+        OutputsT
+    ]
+):
     """Shared functionality for poincare map interfaces."""
 
     section_interface: _SectionInterface | None = None

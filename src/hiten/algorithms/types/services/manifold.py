@@ -16,8 +16,8 @@ from hiten.algorithms.dynamics.rtbp import _compute_stm
 from hiten.algorithms.linalg.base import StabilityProperties
 from hiten.algorithms.linalg.config import _EigenDecompositionConfig
 from hiten.algorithms.linalg.types import _ProblemType, _SystemType
-from hiten.algorithms.types.adapters.base import (_CachedDynamicsAdapter,
-                                                  _PersistenceAdapterMixin,
+from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
+                                                  _PersistenceServiceBase,
                                                   _ServiceBundleBase)
 from hiten.utils.io.manifold import load_manifold, save_manifold
 from hiten.utils.log_config import logger
@@ -26,62 +26,7 @@ if TYPE_CHECKING:
     from hiten.system.manifold import Manifold
 
 
-@dataclass
-class _ManifoldResult:
-    """
-    Output container produced by :meth:`~hiten.system.manifold.Manifold.compute`.
-
-    Parameters
-    ----------
-    ysos : list[float]
-        y-coordinates of Poincare section crossings in nondimensional units.
-    dysos : list[float]
-        Corresponding y-velocity values in nondimensional units.
-    states_list : list[numpy.ndarray]
-        Propagated state arrays, one per trajectory.
-    times_list : list[numpy.ndarray]
-        Time grids associated with states_list in nondimensional units.
-    _successes : int
-        Number of trajectories that intersected the section.
-    _attempts : int
-        Total number of trajectories launched.
-
-    Attributes
-    ----------
-    success_rate : float
-        Success rate as _successes / max(1, _attempts).
-    """
-    ysos: List[float]
-    dysos: List[float]
-    states_list: List[float]
-    times_list: List[float]
-    _successes: int
-    _attempts: int
-
-    @property
-    def success_rate(self) -> float:
-        """Success rate of manifold computation.
-        
-        Returns
-        -------
-        float
-            Success rate as _successes / max(1, _attempts).
-        """
-        return self._successes / max(self._attempts, 1)
-    
-    def __iter__(self):
-        """Return an iterator over the manifold data.
-        
-        Returns
-        -------
-        iterator
-            Iterator over (ysos, dysos, states_list, times_list).
-        """
-        return iter((self.ysos, self.dysos, self.states_list, self.times_list))
-
-
-
-class _ManifoldPersistenceAdapter(_PersistenceAdapterMixin):
+class _ManifoldPersistenceService(_PersistenceServiceBase):
     """Persistence helpers for manifold objects."""
 
     def __init__(self) -> None:
@@ -91,22 +36,22 @@ class _ManifoldPersistenceAdapter(_PersistenceAdapterMixin):
         )
 
 
-class _ManifoldDynamicsAdapter(_CachedDynamicsAdapter["_ManifoldResult"]):
+class _ManifoldDynamicsService(_DynamicsServiceBase):
     """Manage STM computation and manifold trajectory generation."""
 
     def __init__(self, manifold: "Manifold") -> None:
-        super().__init__()
-        self._manifold = manifold
-        self._orbit = self._manifold.generating_orbit
+        super().__init__(manifold)
+        self._domain_obj = manifold
+        self._orbit = self._domain_obj.generating_orbit
         self._system = self._orbit.system
-        self._forward = - self._manifold.stable
+        self._forward = - self._domain_obj.stable
 
     def compute_stm(
         self,
         *,
         steps: int,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        cache_key = self._make_cache_key(id(self._orbit), steps, self._forward)
+        cache_key = self.make_key(id(self._orbit), steps, self._forward)
         
         def _factory() -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
             return _compute_stm(
@@ -117,7 +62,7 @@ class _ManifoldDynamicsAdapter(_CachedDynamicsAdapter["_ManifoldResult"]):
                 forward=self._forward,
             )
         
-        return self._get_or_create(cache_key, _factory)
+        return self.get_or_create(cache_key, _factory)
 
     def compute_manifold(
         self,
@@ -132,11 +77,11 @@ class _ManifoldDynamicsAdapter(_CachedDynamicsAdapter["_ManifoldResult"]):
         energy_tol: float,
         safe_distance: float,
         show_progress: bool,
-    ) -> "_ManifoldResult":
-        cache_key = self._make_cache_key(
+    ) -> Tuple[float, float, List[np.ndarray], List[np.ndarray], int, int]:
+        cache_key = self.make_key(
             id(self._orbit),
-            self._manifold.stable,
-            self._manifold.direction,
+            self._domain_obj.stable,
+            self._domain_obj.direction,
             step,
             integration_fraction,
             NN,
@@ -148,7 +93,7 @@ class _ManifoldDynamicsAdapter(_CachedDynamicsAdapter["_ManifoldResult"]):
             safe_distance,
         )
 
-        def _factory() -> "_ManifoldResult":
+        def _factory() -> Tuple[float, float, List[np.ndarray], List[np.ndarray], int, int]:
             return self._run_compute(
                 step=step,
                 integration_fraction=integration_fraction,
@@ -162,10 +107,10 @@ class _ManifoldDynamicsAdapter(_CachedDynamicsAdapter["_ManifoldResult"]):
                 show_progress=show_progress,
             )
 
-        return self._get_or_create(cache_key, _factory)
+        return self.get_or_create(cache_key, _factory)
 
     def reset(self) -> None:
-        self.reset_cache()
+        super().reset()
 
     def _run_compute(
         self,
@@ -180,7 +125,7 @@ class _ManifoldDynamicsAdapter(_CachedDynamicsAdapter["_ManifoldResult"]):
         energy_tol: float,
         safe_distance: float,
         show_progress: bool,
-    ) -> "_ManifoldResult":
+    ) -> Tuple[float, float, List[np.ndarray], List[np.ndarray], int, int]:
         orbit = self._orbit
         mu = self._system.mu
         forward = self._forward
@@ -199,7 +144,7 @@ class _ManifoldDynamicsAdapter(_CachedDynamicsAdapter["_ManifoldResult"]):
         _, unreal_vecs = stability.get_real_eigenvectors(Wu, un)  
 
         col_idx = NN - 1
-        if self._manifold.stable == 1:
+        if self._domain_obj.stable == 1:
             if snreal_vecs.shape[1] <= col_idx or col_idx < 0:
                 raise ValueError(
                     f"Requested stable eigenvector {NN} not available. "
@@ -287,12 +232,10 @@ class _ManifoldDynamicsAdapter(_CachedDynamicsAdapter["_ManifoldResult"]):
                 logger.error(f"Error computing manifold: {exc}")
                 continue
 
-        return _ManifoldResult(ysos, dysos, states_list, times_list, successes, attempts)
+        return (ysos, dysos, states_list, times_list, successes, attempts)
 
-    def compute_stability(
-        self,
-    ) -> StabilityProperties:
-        key = self._make_cache_key(id(self._manifold))
+    def compute_stability(self) -> StabilityProperties:
+        key = self.make_key(id(self._domain_obj))
         
         def _factory() -> StabilityProperties:
             config = _EigenDecompositionConfig(
@@ -308,7 +251,7 @@ class _ManifoldDynamicsAdapter(_CachedDynamicsAdapter["_ManifoldResult"]):
             )
             return stability
         
-        return self._get_or_create(key, _factory)
+        return self.get_or_create(key, _factory)
 
     def _compute_manifold_section(
         self,
@@ -331,7 +274,7 @@ class _ManifoldDynamicsAdapter(_CachedDynamicsAdapter["_ManifoldResult"]):
         phi_frac_flat = PHI[mfrac_idx, :36]
         phi_frac = phi_frac_flat.reshape((6, 6))
 
-        MAN = self._manifold.direction * (phi_frac @ eigvec)
+        MAN = self._domain_obj.direction * (phi_frac @ eigvec)
 
         disp_magnitude = np.linalg.norm(MAN[0:3])
 
@@ -358,21 +301,31 @@ class _ManifoldDynamicsAdapter(_CachedDynamicsAdapter["_ManifoldResult"]):
 
 @dataclass
 class _ManifoldServices(_ServiceBundleBase):
-    dynamics: _ManifoldDynamicsAdapter
-    persistence: _ManifoldPersistenceAdapter
+    domain_obj: "Manifold"
+    dynamics: _ManifoldDynamicsService
+    persistence: _ManifoldPersistenceService
 
     @classmethod
-    def for_manifold(cls, manifold: "Manifold") -> "_ManifoldServices":
+    def default(cls, manifold: "Manifold") -> "_ManifoldServices":
         return cls(
-            dynamics=_ManifoldDynamicsAdapter(manifold),
-            persistence=_ManifoldPersistenceAdapter(),
+            domain_obj=manifold,
+            dynamics=_ManifoldDynamicsService(manifold),
+            persistence=_ManifoldPersistenceService()
         )
     
     @classmethod
-    def for_loading(cls) -> "_ManifoldServices":
+    def with_shared_dynamics(cls, dynamics: _ManifoldDynamicsService) -> "_ManifoldServices":
+        return cls(
+            domain_obj=dynamics._domain_obj,
+            dynamics=dynamics,
+            persistence=_ManifoldPersistenceService()
+        )
+    
+    @classmethod
+    def for_loading(cls, manifold: "Manifold") -> "_ManifoldServices":
         """Create services for loading operations that don't need dynamics adapter."""
         return cls(
-            dynamics=None,  # Not needed for loading
-            persistence=_ManifoldPersistenceAdapter(),
+            domain_obj=manifold,
+            dynamics=None,
+            persistence=_ManifoldPersistenceService()
         )
-

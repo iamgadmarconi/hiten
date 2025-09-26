@@ -8,140 +8,14 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Generic, Optional, TypeVar, Union
+from typing import Any, Generic, TypeVar, Union
 
 import pandas as pd
 
 from hiten.algorithms.types.exceptions import EngineError
-
-
-class _HitenBase(ABC):
-    """Abstract base class for public Hiten classes.
-    """
-
-    def __init__(self):
-        self._cache = {}
-
-    def cache_get(self, key: Any, default: Any = None) -> Any:
-        """Get item from cache.
-
-        Parameters
-        ----------
-        key : Any
-            The cache key.
-        default : Any, optional
-            The default value to return if the key is not found.
-            
-        Returns
-        -------
-        Any
-            The cached value or the default value if the key is not found.
-        """
-        return self._cache.get(key, default)
-    
-    def cache_set(self, key: Any, value: Any) -> Any:
-        """Set item in cache.
-
-        Parameters
-        ----------
-        key : Any
-            The cache key.
-        value : Any
-            The value to cache.
-            
-        Returns
-        -------
-        Any
-            The cached value.
-        """
-        self._cache[key] = value
-        return value
-    
-    def cache_clear(self) -> None:
-        """Clear cache.
-
-        This method resets all cached properties to None, forcing them to be
-        recomputed on next access.
-        """
-        self._cache.clear()
-
-    def __str__(self) -> str:
-        return f"{self.__class__.__name__}()"
-    
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}()"
-
-    def __getstate__(self):
-        """Get state for pickling.
-        """
-        return self.__dict__.copy()
-    
-    def __setstate__(self, state):
-        """Set state after unpickling.
-        """
-        self.__dict__.update(state)
-        if not hasattr(self, "_cache") or self._cache is None:
-            self._cache = {}
-
-    @abstractmethod
-    def save(self, file_path: str | Path, **kwargs) -> None:
-        """Save the object to a file.
-
-        Parameters
-        ----------
-        file_path : str or Path
-            The path to the file to save the object to.
-        **kwargs
-            Additional keyword arguments passed to the save method.
-        """
-        ...
-
-    @classmethod
-    @abstractmethod
-    def load(cls, file_path: str | Path, **kwargs) -> "_HitenBase":
-        """Load the object from a file.
-        
-        Parameters
-        ----------
-        file_path : str or Path
-            The path to the file to load the object from.
-        **kwargs
-            Additional keyword arguments passed to the load method.
-            
-        Returns
-        -------
-        :class:`~hiten.system.base._HitenBase`
-            The loaded object.
-        """
-        ...
-
-    def to_csv(self, file_path: str | Path, **kwargs) -> None:
-        """Save the object to a CSV file.
-
-        Parameters
-        ----------
-        file_path : str or Path
-            The path to the file to save the object to.
-        **kwargs
-            Additional keyword arguments passed to the save method.
-        """
-        ...
-
-    def to_df(cls, **kwargs) -> pd.DataFrame:
-        """Convert the object to a pandas DataFrame.
-
-        Parameters
-        ----------
-        **kwargs
-            Additional keyword arguments passed to the to_df method.
-            
-        Returns
-        -------
-        pandas.DataFrame
-            The converted object.
-        """
-        ...
-
+from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
+                                                  _PersistenceServiceBase,
+                                                  _ServiceBundleBase)
 
 DomainT = TypeVar("DomainT")
 
@@ -155,13 +29,15 @@ BackendT = TypeVar("BackendT", bound="_HitenBaseBackend")
 
 OutputsT = TypeVar("OutputsT")
 
-InterfaceT = TypeVar("InterfaceT", bound="_HitenBaseInterface[Any, ConfigT, ProblemT, ResultT, OutputsT]")
+InterfaceT = TypeVar("InterfaceT", bound="_HitenBaseInterface[ConfigT, ProblemT, ResultT, OutputsT]")
 
 EngineT = TypeVar("EngineT", bound="_HitenBaseEngine[ProblemT, ResultT, OutputsT]")
 
+FacadeT = TypeVar("FacadeT", bound="_HitenBaseFacade")
+
 
 @dataclass(frozen=True)
-class BackendCall:
+class _BackendCall:
     """Describe a backend call with positional and keyword arguments."""
 
     args: tuple[Any, ...] = ()
@@ -190,7 +66,7 @@ class _HitenBaseBackend(ABC):
     ...
 
 
-class _HitenBaseInterface(Generic[DomainT, ConfigT, ProblemT, ResultT, OutputsT], ABC):
+class _HitenBaseInterface(Generic[ConfigT, ProblemT, ResultT, OutputsT], ABC):
     """Shared contract for translating between domain objects and backends."""
 
     def __init__(self) -> None:
@@ -205,10 +81,10 @@ class _HitenBaseInterface(Generic[DomainT, ConfigT, ProblemT, ResultT, OutputsT]
         """Compose an immutable problem payload for the backend."""
 
     @abstractmethod
-    def to_backend_inputs(self, problem: ProblemT) -> BackendCall:
+    def to_backend_inputs(self, problem: ProblemT) -> _BackendCall:
         """Translate a problem into backend invocation arguments."""
 
-    def from_domain(self, *, config: ConfigT | None = None, **kwargs) -> BackendCall:
+    def from_domain(self, *, config: ConfigT | None = None, **kwargs) -> _BackendCall:
         """Convenience helper to build backend inputs directly from config."""
         problem = self.create_problem(config=config, **kwargs)
         return self.to_backend_inputs(problem)
@@ -218,7 +94,7 @@ class _HitenBaseInterface(Generic[DomainT, ConfigT, ProblemT, ResultT, OutputsT]
         return None
 
     @abstractmethod
-    def to_results(self, outputs: OutputsT, *, problem: ProblemT) -> ResultT:
+    def to_results(self, outputs: OutputsT, *, problem: ProblemT, domain_payload: Any = None) -> ResultT:
         """Package backend outputs into user-facing result objects."""
 
     def bind_backend(self, backend: _HitenBaseBackend) -> None:
@@ -240,21 +116,19 @@ class _HitenBaseEngine(Generic[ProblemT, ResultT, OutputsT], ABC):
     def __init__(
         self,
         *,
-        backend: Any,
-        interface: _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT] | None = None,
-        backend_method: str = "solve",
+        backend: _HitenBaseBackend[ProblemT, ResultT, OutputsT],
+        interface: _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT] | None = None,
     ) -> None:
         self._backend = backend
-        self._backend_method = backend_method
         self._interface = interface
 
     @property
-    def backend(self) -> Any:
+    def backend(self) -> _HitenBaseBackend[ProblemT, ResultT, OutputsT]:
         return self._backend
 
     def with_interface(
         self,
-        interface: _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT],
+        interface: _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT],
     ) -> "_HitenBaseEngine[ProblemT, ResultT, OutputsT]":
         self._interface = interface
         return self
@@ -278,12 +152,12 @@ class _HitenBaseEngine(Generic[ProblemT, ResultT, OutputsT], ABC):
         domain_payload = interface.to_domain(outputs, problem=problem)
         interface.on_success(outputs, problem=problem, domain_payload=domain_payload)
         self._after_backend_success(outputs, problem=problem, domain_payload=domain_payload, interface=interface)
-        return interface.to_results(outputs, problem=problem)
+        return interface.to_results(outputs, problem=problem, domain_payload=domain_payload)
 
     def _get_interface(
         self,
         problem: ProblemT,
-    ) -> _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT]:
+    ) -> _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT]:
         if self._interface is None:
             raise EngineError(
                 f"{self.__class__.__name__} must be configured with an interface before solving."
@@ -292,32 +166,32 @@ class _HitenBaseEngine(Generic[ProblemT, ResultT, OutputsT], ABC):
 
     def set_interface(
         self,
-        interface: _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT],
+        interface: _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT],
     ) -> None:
         self._interface = interface
 
     def with_interface(
         self,
-        interface: _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT],
+        interface: _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT],
     ) -> "_HitenBaseEngine[ProblemT, ResultT, OutputsT]":
         self.set_interface(interface)
         return self
 
-    def _before_backend(self, problem: ProblemT, call: BackendCall, interface: _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT]) -> None:
+    def _before_backend(self, problem: ProblemT, call: _BackendCall, interface: _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT]) -> None:
         return None
 
-    def _after_backend_success(self, outputs: OutputsT, *, problem: ProblemT, domain_payload: Any, interface: _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT]) -> None:
+    def _after_backend_success(self, outputs: OutputsT, *, problem: ProblemT, domain_payload: Any, interface: _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT]) -> None:
         return None
 
-    def _handle_backend_failure(self, exc: Exception, *, problem: ProblemT, call: BackendCall, interface: _HitenBaseInterface[Any, Any, ProblemT, ResultT, OutputsT]) -> None:
+    def _handle_backend_failure(self, exc: Exception, *, problem: ProblemT, call: _BackendCall, interface: _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT]) -> None:
         raise EngineError(exc) from exc
 
-    def _invoke_backend(self, call: BackendCall) -> OutputsT:
-        backend_callable = getattr(self._backend, self._backend_method)
+    def _invoke_backend(self, call: _BackendCall) -> OutputsT:
+        backend_callable = getattr(self._backend, "run")
         return backend_callable(*call.args, **call.kwargs)
 
 
-class _HitenBaseBackend(ABC):
+class _HitenBaseBackend(Generic[ProblemT, ResultT, OutputsT]):
     """Abstract base class for all backend implementations in the Hiten framework.
     
     This class defines the common interface and lifecycle hooks that all backend
@@ -343,12 +217,12 @@ class _HitenBaseBackend(ABC):
     Examples
     --------
     >>> class MyBackend(_HitenBaseBackend):
-    ...     def solve(self, **kwargs):
+    ...     def run(self, **kwargs):
     ...         # Implementation here
     ...         pass
     >>> 
     >>> backend = MyBackend()
-    >>> result = backend.solve(input_data)
+    >>> result = backend.run(input_data)
     """
 
     def __init__(self) -> None:
@@ -356,7 +230,7 @@ class _HitenBaseBackend(ABC):
         pass
 
     @abstractmethod
-    def run(self, **kwargs) -> Any:
+    def run(self, **kwargs) -> OutputsT:
         """Run the backend.
         
         Parameters
@@ -424,3 +298,351 @@ class _HitenBaseBackend(ABC):
             Final residual norm or convergence metric.
         """
         return
+
+
+class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
+    """Abstract base class for user-facing facades in the Hiten framework.
+    
+    This class provides a common pattern for building facades that orchestrate
+    the entire pipeline: facade → engine → interface → backend. Facades serve
+    as the main entry point for users and handle dependency injection, configuration
+    management, and result processing.
+    
+    The facade pattern provides:
+    - Clean user-facing APIs that hide implementation complexity
+    - Consistent dependency injection patterns
+    - Factory methods for easy construction with default components
+    - Configuration management and validation
+    - Result processing and caching
+    
+    Notes
+    -----
+    Facades should follow these patterns:
+    1. Accept engines via constructor (dependency injection)
+    2. Provide `with_default_engine()` class methods for easy construction
+    3. Delegate computation to engines while handling configuration
+    4. Provide domain-specific methods like plotting, caching, etc.
+    5. Handle result processing and user-friendly error messages
+    
+    Examples
+    --------
+    >>> class MyFacade(_HitenBaseFacade):
+    ...     def __init__(self, config, engine=None):
+    ...         super().__init__()
+    ...         self.config = config
+    ...         self._engine = engine
+    ...     
+    ...     @classmethod
+    ...     def with_default_engine(cls, config):
+    ...         backend = MyBackend()
+    ...         interface = MyInterface()
+    ...         engine = MyEngine(backend=backend, interface=interface)
+    ...         return cls(config, engine=engine)
+    ...     
+    ...     def solve(self, **kwargs):
+    ...         problem = self._create_problem(**kwargs)
+    ...         return self._engine.solve(problem)
+    """
+
+    def __init__(self, config, interface, engine) -> None:
+        """Initialize the facade."""
+        self._make_pipeline(config, interface, engine)  
+
+    @classmethod
+    @abstractmethod
+    def with_default_engine(cls, config, interface) -> "_HitenBaseFacade[ConfigT, ProblemT, ResultT]":
+        pass
+    
+    @abstractmethod
+    def solve(self, **kwargs) -> ResultT:
+        """Solve the problem using the configured engine.
+        
+        This method should be implemented by concrete facades to define
+        the main entry point for the algorithm. It typically:
+        1. Creates a problem from the input parameters
+        2. Delegates to the engine for computation
+        3. Processes and returns the results
+        
+        Parameters
+        ----------
+        **kwargs
+            Problem-specific parameters that vary by facade implementation.
+            Common parameters may include:
+            - Input data (orbits, manifolds, etc.)
+            - Configuration overrides
+            - Algorithm-specific options
+            
+        Returns
+        -------
+        Any
+            Domain-specific results, typically containing:
+            - Computed data structures
+            - Convergence information
+            - Metadata and diagnostics
+        """
+        ...
+
+    def update_config(self, **kwargs) -> None:
+        """Update configuration parameters.
+        
+        Parameters
+        ----------
+        **kwargs
+            Configuration parameters to update.
+            
+        Notes
+        -----
+        This method should be implemented by concrete facades to handle
+        configuration updates specific to their domain.
+        """
+        for key, value in kwargs.items():
+            if hasattr(self._config, key):
+                setattr(self._config, key, value)
+            else:
+                raise ValueError(f"Unknown configuration parameter: {key}")
+
+    def _set_engine(self, engine: _HitenBaseEngine[ProblemT, ResultT, OutputsT]) -> None:
+        self._engine = engine
+
+    def _set_interface(self, interface: _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT]) -> None:
+        self._interface = interface
+
+    def _set_backend(self, backend: _HitenBaseBackend[ProblemT, ResultT, OutputsT]) -> None:
+        self._backend = backend
+
+    def _get_engine(self) -> _HitenBaseEngine[ProblemT, ResultT, OutputsT]:
+        return self._engine
+
+    def _get_interface(self) -> _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT]:
+        return self._interface
+
+    def _get_backend(self) -> _HitenBaseBackend[ProblemT, ResultT, OutputsT]:
+        return self._backend
+
+    def _get_config(self) -> ConfigT:
+        return self._config
+
+    def _create_problem(self, *, domain_obj: DomainT, **kwargs) -> ProblemT:
+        """Create a problem object from input parameters.
+        
+        This method can be overridden by concrete facades to handle
+        problem creation logic specific to their domain.
+        
+        Parameters
+        ----------
+        domain_obj : DomainT
+            The domain object to create a problem for.
+        **kwargs
+            Input parameters for problem creation.
+            
+        Returns
+        -------
+        Any
+            Problem object suitable for the engine.
+        """
+        interface = self._get_interface()
+        config = self._get_config()
+        return interface.create_problem(config=config, domain_obj=domain_obj, **kwargs)
+
+    def _make_pipeline(self, config, interface, engine):
+        self._config: ConfigT = config
+        self._interface: _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT] = interface
+        self._engine: _HitenBaseEngine[ProblemT, ResultT, OutputsT] = engine
+        self._engine.set_interface(interface)
+        self._backend: _HitenBaseBackend[ProblemT, ResultT, OutputsT] = engine.backend
+        interface.bind_backend(self._backend)
+
+    def _validate_config(self, config: ConfigT) -> None:
+        """Validate the configuration object.
+        
+        This method can be overridden by concrete facades to perform
+        domain-specific configuration validation.
+        """
+        pass
+
+    @property
+    def results(self) -> ResultT:
+        return self._results
+
+
+
+class _HitenBase(ABC):
+    """Abstract base class for public Hiten classes.
+    """
+
+    def __init__(self, services: _ServiceBundleBase):
+        self._services = services
+        self._persistence = services.persistence
+        self._dynamics = services.dynamics
+
+    @property
+    def services(self) -> _ServiceBundleBase:
+        return self._services
+
+    @property
+    def persistence(self) -> _PersistenceServiceBase:
+        return self._persistence
+    
+    @property
+    def dynamics(self) -> _DynamicsServiceBase:
+        return self._dynamics
+
+    def __str__(self) -> str:
+        return f"{self.__class__.__name__}()"
+    
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}()"
+
+    def __getstate__(self):
+        """Get state for pickling.
+        
+        Excludes services from pickling as they often contain
+        non-serializable objects like numba-compiled functions.
+        """
+        state = self.__dict__.copy()
+        state.pop("_services", None)
+        state.pop("_persistence", None)
+        state.pop("_dynamics", None)
+        return state
+    
+    def __setstate__(self, state):
+        """Set state after unpickling.
+        """
+        self.__dict__.update(state)
+        if not hasattr(self, "_cache") or self._cache is None:
+            self._cache = {}
+
+    def _bind_services(self) -> None:
+        """Bind individual service properties from the service bundle.
+        
+        This method should be called by child classes after setting up _services
+        in their __setstate__ or load methods to ensure the parent class properties
+        (self.persistence, self.dynamics) work correctly.
+        """
+        if hasattr(self, "_services") and self._services is not None:
+            self._persistence = self._services.persistence
+            self._dynamics = self._services.dynamics
+
+    def _setup_services(self, services: _ServiceBundleBase) -> None:
+        """Complete service setup including binding and cache reset.
+        
+        This method handles the full service setup pattern:
+        1. Sets the service bundle
+        2. Binds individual service properties
+        3. Resets the dynamics cache
+        
+        Parameters
+        ----------
+        services : _ServiceBundleBase
+            The service bundle to set up
+        """
+        self._services = services
+        self._bind_services()
+        self._services.dynamics.reset()
+
+    @classmethod
+    def _load_with_services(cls, file_path: str | Path, persistence_service, services_factory, **kwargs) -> "_HitenBase":
+        """Generic load method that handles the common pattern.
+        
+        This method abstracts the common load pattern:
+        1. Load object from file using persistence service
+        2. Create services using the factory
+        3. Initialize the object with services
+        4. Return the loaded object
+        
+        Parameters
+        ----------
+        file_path : str or Path
+            Path to the file to load from
+        persistence_service : _PersistenceServiceBase
+            The persistence service to use for loading
+        services_factory : callable
+            Function that takes the loaded object and returns services
+        **kwargs
+            Additional arguments passed to the load method
+            
+        Returns
+        -------
+        _HitenBase
+            The loaded object with services properly initialized
+        """
+        obj = persistence_service.load(file_path, **kwargs)
+        services = services_factory(obj)
+        super(cls, obj).__init__(services)
+        return obj
+
+    def save(self, file_path: str | Path, **kwargs) -> None:
+        """Save the object to a file.
+
+        Parameters
+        ----------
+        file_path : str or Path
+            The path to the file to save the object to.
+        **kwargs
+            Additional keyword arguments passed to the save method.
+        """
+        self.persistence.save(self, file_path, **kwargs)
+
+    def load_inplace(self, file_path: str | Path, **kwargs) -> "_HitenBase":
+        """Load data into this object from a file (in place).
+
+        Parameters
+        ----------
+        file_path : str or Path
+            The path to the file to load the object from.
+        **kwargs
+            Additional keyword arguments passed to the load method.
+            
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.core._HitenBase`
+            The object with loaded data (self).
+        """
+        self.persistence.load_inplace(self, file_path, **kwargs)
+        return self
+
+    @classmethod
+    @abstractmethod
+    def load(cls, file_path: str | Path, **kwargs) -> "_HitenBase":
+        """Load the object from a file.
+        
+        Parameters
+        ----------
+        file_path : str or Path
+            The path to the file to load the object from.
+        **kwargs
+            Additional keyword arguments passed to the load method.
+            
+        Returns
+        -------
+        :class:`~hiten.system.base._HitenBase`
+            The loaded object.
+        """
+        ...
+
+    def to_csv(self, file_path: str | Path, **kwargs) -> None:
+        """Save the object to a CSV file.
+
+        Parameters
+        ----------
+        file_path : str or Path
+            The path to the file to save the object to.
+        **kwargs
+            Additional keyword arguments passed to the save method.
+        """
+        ...
+
+    def to_df(cls, **kwargs) -> pd.DataFrame:
+        """Convert the object to a pandas DataFrame.
+
+        Parameters
+        ----------
+        **kwargs
+            Additional keyword arguments passed to the to_df method.
+            
+        Returns
+        -------
+        pandas.DataFrame
+            The converted object.
+        """
+        ...

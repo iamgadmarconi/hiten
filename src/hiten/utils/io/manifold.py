@@ -22,7 +22,7 @@ from hiten.utils.io.orbits import _read_orbit_group, _write_orbit_group
 
 if TYPE_CHECKING:
     from hiten.system.manifold import Manifold
-    from hiten.algorithms.types.adapters.manifold import _ManifoldResult
+    from hiten.algorithms.types.services.manifold import _ManifoldResult
 
 
 HDF5_VERSION = "1.0"
@@ -121,7 +121,7 @@ def load_manifold(path: str | Path) -> "Manifold":
     >>> print(f"Loaded manifold: stable={manifold.stable}, direction={manifold.direction}")
     """
     from hiten.system.manifold import Manifold
-    from hiten.algorithms.types.adapters.manifold import _ManifoldResult
+    from hiten.algorithms.types.services.manifold import _ManifoldResult
 
     path = Path(path)
     if not path.exists():

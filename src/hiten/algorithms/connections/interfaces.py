@@ -39,7 +39,6 @@ if TYPE_CHECKING:
 
 class _ManifoldInterface(
     _HitenBaseInterface[
-        "Manifold",
         _SynodicMapConfig,
         _ConnectionProblem,
         ConnectionResults,
@@ -121,8 +120,8 @@ class _ManifoldInterface(
         dv_tol = float(getattr(problem.search, "delta_v_tol", 1e-3)) if problem.search else 1e-3
         bal_tol = float(getattr(problem.search, "ballistic_tol", 1e-8)) if problem.search else 1e-8
         
-        from hiten.algorithms.types.core import BackendCall
-        return BackendCall(
+        from hiten.algorithms.types.core import _BackendCall
+        return _BackendCall(
             args=(pu, ps, Xu, Xs),
             kwargs={"eps": eps, "dv_tol": dv_tol, "bal_tol": bal_tol}
         )

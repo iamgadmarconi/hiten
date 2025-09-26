@@ -31,21 +31,6 @@ from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
 from hiten.system.manifold import Manifold
 
 
-
-class _ManifoldProblem:
-    """Problem specification for manifold section extraction."""
-    def __init__(self, manifold: "Manifold", config: _SynodicMapConfig, direction: Literal[1, -1, None] | None = None):
-        self.manifold = manifold
-        self.config = config
-        self.direction = direction
-
-
-class _ManifoldResult:
-    """Result from manifold section extraction."""
-    def __init__(self, points: np.ndarray, states: np.ndarray):
-        self.points = points
-        self.states = states
-
 @dataclass
 class _ConnectionResult:
     """Store an individual connection result between two manifolds.

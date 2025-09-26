@@ -18,12 +18,9 @@ from typing import Dict, Literal, Sequence
 
 import numpy as np
 
-from hiten.algorithms.types.adapters.libration import (
-    _LibrationDynamicsAdapter,
-    _LibrationServices,
-)
-from hiten.algorithms.types.adapters.system import _SystemServices
 from hiten.algorithms.types.core import _HitenBase
+from hiten.algorithms.types.services.system import (_SystemPersistenceService,
+                                                    _SystemServices)
 from hiten.algorithms.types.states import (ReferenceFrame, SynodicStateVector,
                                            Trajectory)
 from hiten.system.body import Body
@@ -68,14 +65,11 @@ class System(_HitenBase):
     libration point classes; this wrapper simply orchestrates them.
     """
     def __init__(self, primary: Body, secondary: Body, distance: float):
-        super().__init__()
-        self._services = _SystemServices.from_bodies(primary, secondary, distance)
-        self._primary: Body = self._services.primary
-        self._secondary: Body = self._services.secondary
-        self._distance: float = self._services.distance
-        self._mu: float = self._services.mu
+
+        services : _SystemServices = _SystemServices.default(self)
+        super().__init__(services)
+
         self._libration_points: Dict[int, LibrationPoint] = {}
-        self._libration_dynamics = _LibrationDynamicsAdapter()
 
     def __str__(self) -> str:
         return f"{self.secondary.name} orbiting {self.primary.name}"
@@ -92,7 +86,7 @@ class System(_HitenBase):
         :class:`~hiten.system.body.Body`
             The primary gravitating body.
         """
-        return self._primary
+        return self.dynamics.primary
 
     @property
     def secondary(self) -> Body:
@@ -103,7 +97,7 @@ class System(_HitenBase):
         :class:`~hiten.system.body.Body`
             The secondary gravitating body.
         """
-        return self._secondary
+        return self.dynamics.secondary
 
     @property
     def distance(self) -> float:
@@ -114,7 +108,7 @@ class System(_HitenBase):
         float
             The characteristic separation between the bodies in km.
         """
-        return self._distance
+        return self.dynamics.distance
 
     @property
     def mu(self) -> float:
@@ -125,7 +119,7 @@ class System(_HitenBase):
         float
             The mass parameter mu = m2 / (m1 + m2) (dimensionless).
         """
-        return self._mu
+        return self.dynamics.mu
 
     @property
     def libration_points(self) -> Dict[int, LibrationPoint]:
@@ -147,7 +141,7 @@ class System(_HitenBase):
         :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
             The underlying vector field instance.
         """
-        return self._services.dynamics.dynsys
+        return self.dynamics.dynsys
 
     @property
     def var_dynsys(self):
@@ -158,7 +152,7 @@ class System(_HitenBase):
         :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
             The underlying variational equations system.
         """
-        return self._services.dynamics.variational
+        return self.dynamics.variational
 
     @property
     def jacobian_dynsys(self):
@@ -169,7 +163,7 @@ class System(_HitenBase):
         :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
             The underlying Jacobian evaluation system.
         """
-        return self._services.dynamics.jacobian
+        return self.dynamics.jacobian
 
     def get_libration_point(self, index: int) -> LibrationPoint:
         """
@@ -201,8 +195,8 @@ class System(_HitenBase):
 
     def _build_libration_point(self, index: int) -> LibrationPoint:
         """Instantiate and wire a libration point with shared services."""
-        from hiten.system.libration.collinear import (L1Point, L2Point, L3Point)
-        from hiten.system.libration.triangular import (L4Point, L5Point)
+        from hiten.system.libration.collinear import L1Point, L2Point, L3Point
+        from hiten.system.libration.triangular import L4Point, L5Point
 
         mapping: Dict[int, type[LibrationPoint]] = {
             1: L1Point,
@@ -216,8 +210,7 @@ class System(_HitenBase):
         except KeyError as exc:
             raise ValueError("Libration point index must be in {1,2,3,4,5}.") from exc
 
-        services = _LibrationServices.with_shared_dynamics(self._libration_dynamics)
-        return point_cls(self, services=services)
+        return point_cls(self)
 
     def propagate(
         self,
@@ -227,7 +220,8 @@ class System(_HitenBase):
         steps: int = 1000,
         method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
         order: int = 8,
-        **kwargs
+        forward: int = 1,
+        flip_indices: Sequence[int] | None = None,
     ) -> Trajectory:
         """
         Propagate arbitrary initial conditions in the CR3BP.
@@ -249,8 +243,8 @@ class System(_HitenBase):
             Integration backend to employ (Hiten integrators).
         order : int, default 8
             Formal order of the integrator when applicable.
-        **kwargs
-            Additional keyword arguments passed to the integrator.
+        flip_indices: Sequence[int] | None, default None
+            Flip indices for backward integration. Default is None.
 
         Returns
         -------
@@ -258,20 +252,18 @@ class System(_HitenBase):
             The propagated trajectory.
         """
 
-        forward = kwargs.get("forward", 1)
-
-        sol = self._services.dynamics.propagate(
+        sol = self.dynamics.propagate(
             initial_conditions,
             tf=tf,
             steps=steps,
             method=method,
             order=order,
             forward=forward,
-            extra_kwargs={k: v for k, v in kwargs.items() if k != "forward"},
+            flip_indices=flip_indices,
         )
 
         return Trajectory.from_solution(
-            sol,
+            solution=sol,
             state_vector_cls=SynodicStateVector,
             frame=ReferenceFrame.ROTATING,
         )
@@ -342,23 +334,6 @@ class System(_HitenBase):
         distance = 1.0
         return cls(primary, secondary, distance)
 
-    def __getstate__(self):
-        """Custom state extractor to enable pickling.
-
-        The underlying dynamical system instance stored in _dynsys often
-        contains numba-compiled objects that cannot be serialised. We exclude
-        it from the pickled representation and recreate it automatically when
-        the object is re-loaded.
-        
-        Returns
-        -------
-        dict
-            Dictionary containing the serializable state of the System.
-        """
-        state = self.__dict__.copy()
-        state.pop("_services", None)
-        return state
-
     def __setstate__(self, state):
         """Restore the System instance after unpickling.
 
@@ -371,24 +346,15 @@ class System(_HitenBase):
         state : dict
             Dictionary containing the serialized state of the System.
         """
-        self.__dict__.update(state)
-
-        if not hasattr(self, "_services"):
-            self._services = _SystemServices.from_bodies(self._primary, self._secondary, self._distance)
-
-    def save(self, file_path: str | Path, **kwargs) -> None:
-        """Save this System to a file."""
-        self._services.persistence.save(self, file_path)
+        super().__setstate__(state)
+        self._setup_services(_SystemServices.default(self))
 
     @classmethod
     def load(cls, file_path: str | Path, **kwargs) -> "System":
         """Load a System from a file (new instance)."""
-        services = _SystemServices.from_file(file_path)
-        system = services.persistence.load(file_path)
-        system._services = services
-        return system
-
-    def load_inplace(self, file_path: str | Path) -> "System":
-        """Load data into this System instance from a file (in place)."""
-        self._services.persistence.load_inplace(self, file_path)
-        return self
+        return cls._load_with_services(
+            file_path, 
+            _SystemPersistenceService(), 
+            _SystemServices.default, 
+            **kwargs
+        )

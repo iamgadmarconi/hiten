@@ -10,7 +10,7 @@ import sympy as sp
 
 from hiten.algorithms.polynomial.conversion import poly2sympy
 from hiten.algorithms.polynomial.operations import _polynomial_evaluate
-from hiten.algorithms.types.adapters.hamiltonian import (
+from hiten.algorithms.types.services.hamiltonian import (
     _HamiltonianServices,
     get_hamiltonian_services,
 )
@@ -26,13 +26,14 @@ class Hamiltonian(_HitenBase):
         degree: int,
         ndof: int = 3,
         name: str = "Hamiltonian",
-        *,
-        services: _HamiltonianServices | None = None,
     ) -> None:
         if degree <= 0:
             raise ValueError("degree must be a positive integer")
 
-        self._services = services or get_hamiltonian_services()
+        if ndof != 3:
+            raise NotImplementedError("Polynomial kernel only supports 3 degrees of freedom")
+
+        self._services = get_hamiltonian_services()
 
         self._poly_H: list[np.ndarray] = poly_H
         self._degree: int = degree

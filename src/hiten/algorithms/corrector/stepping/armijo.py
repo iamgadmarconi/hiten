@@ -10,45 +10,10 @@ import numpy as np
 from hiten.algorithms.corrector.config import _LineSearchConfig
 from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
 from hiten.algorithms.corrector.stepping.base import _CorrectorStepBase
+from hiten.algorithms.corrector.stepping.norm import _default_norm
 from hiten.algorithms.corrector.types import NormFn, ResidualFn
 from hiten.algorithms.types.exceptions import BackendError
 from hiten.utils.log_config import logger
-
-
-def _default_norm(r: np.ndarray) -> float:
-    """Compute L2 norm of residual vector.
-
-    Parameters
-    ----------
-    r : ndarray
-        Residual vector.
-        
-    Returns
-    -------
-    float
-        L2 norm of the residual.
-        
-    Notes
-    -----
-    Uses L2 norm as default because most invariance residuals
-    are already normalized by the number of components.
-    """
-    return float(np.linalg.norm(r))
-
-def _infinity_norm(r: np.ndarray) -> float:
-    """Compute infinity norm of residual vector.
-
-    Parameters
-    ----------
-    r : ndarray
-        Residual vector.
-        
-    Returns
-    -------
-    float
-        Maximum absolute component of the residual.
-    """
-    return float(np.linalg.norm(r, ord=np.inf))
 
 
 class _ArmijoLineSearch:

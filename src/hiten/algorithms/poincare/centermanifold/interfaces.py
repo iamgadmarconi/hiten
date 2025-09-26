@@ -29,7 +29,7 @@ from hiten.algorithms.poincare.core.interfaces import (
     _PoincareBaseInterface,
     _SectionInterface,
 )
-from hiten.algorithms.types.core import BackendCall
+from hiten.algorithms.types.core import _BackendCall
 from hiten.algorithms.polynomial.operations import _polynomial_evaluate
 from hiten.algorithms.types.exceptions import BackendError, ConvergenceError
 from hiten.algorithms.utils.rootfinding import solve_bracketed_brent
@@ -96,7 +96,6 @@ def _get_section_interface(section_coord: str) -> _CenterManifoldSectionInterfac
 
 class _CenterManifoldInterface(
     _PoincareBaseInterface[
-        object,
         _CenterManifoldMapConfig,
         _CenterManifoldMapProblem,
         CenterManifoldMapResults,
@@ -154,7 +153,7 @@ class _CenterManifoldInterface(
         )
 
     def to_backend_inputs(self, problem: _CenterManifoldMapProblem):
-        return BackendCall(kwargs={"section_coord": problem.section_coord, "dt": problem.dt})
+        return _BackendCall(kwargs={"section_coord": problem.section_coord, "dt": problem.dt})
 
     def to_domain(self, outputs, *, problem: _CenterManifoldMapProblem):
         states, info, extra = outputs

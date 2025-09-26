@@ -105,14 +105,7 @@ class TriangularPoint(LibrationPoint):
         numpy.ndarray, shape (3,)
             3D vector [x, y, 0] giving the position in nondimensional units.
         """
-        point_name = self.__class__.__name__
-        logger.debug(f"Calculating {point_name} position directly.")
-        
-        x = 0.5 - self.mu
-        y = self.sign * np.sqrt(3) / 2.0
-        
-        logger.info(f"{point_name} position calculated: x = {x:.6f}, y = {y:.6f}")
-        return np.array([x, y, 0], dtype=np.float64)
+        return self._services.dynamics.position()
 
     def _get_linear_data(self):
         """
@@ -120,24 +113,11 @@ class TriangularPoint(LibrationPoint):
         
         Returns
         -------
-        :class:`~hiten.algorithms.types.adapters.libration._LinearData`
+        tuple
+            (None, omega1, omega2, omega_z, C, Cinv)
             Object containing the linear data for the Libration point.
         """
-        omega1, omega2, omega_z = self.linear_modes
-        C, Cinv = self.normal_form_transform()
-        
-        # Create and return the LinearData object
-        from hiten.algorithms.types.adapters.libration import _LinearData
-        return _LinearData(
-            mu=self.mu,
-            point=type(self).__name__[:2],  # 'L1', 'L2', 'L3'
-            lambda1=None, 
-            omega1=omega1, 
-            omega2=omega2,
-            omega3=omega_z,
-            C=C, 
-            Cinv=Cinv
-        )
+        return self._services.dynamics.linear_data()
 
     def normal_form_transform(self):
         """
@@ -148,111 +128,9 @@ class TriangularPoint(LibrationPoint):
         tuple
             (C, Cinv) where C is the symplectic transformation matrix and Cinv is its inverse.
         """
-        return self._services.dynamics.triangular_normal_form(self)
+        return self._services.dynamics.triangular_normal_form()
 
-    def _build_normal_form(self) -> Tuple[np.ndarray, np.ndarray]:
-        eigvs = self._get_eigvs().T
-        s = np.array([
-            self._scaling_factor(0),
-            self._scaling_factor(1),
-            self._scaling_factor(2),
-        ])
-        S = np.diag(np.concatenate([s, s]))
-        C = eigvs @ np.linalg.inv(S)
-        Cinv = np.linalg.inv(C)
-        return C, Cinv
     
-    def _compute_linear_modes(self):
-        """
-        Compute the three frequencies (omega_1, omega_2, omega_z) following the convention:
-        omega_1 > 0 with omega_1^2 < 1/2, omega_2 < 0, omega_z is vertical frequency = 1.
-        
-        Returns
-        -------
-        tuple
-            (omega_1, omega_2, omega_z) in nondimensional units.
-            
-        Raises
-        ------
-        RuntimeError
-            If the expected number of eigenvalues or frequency groups are not found.
-        """
-        J_full = self._J_hess_H2()
-        eigvals = np.linalg.eigvals(J_full)
-
-        # Extract purely imaginary eigenvalues (should be 6 values: +- i omega)
-        imag_eigs = eigvals[np.abs(eigvals.real) < 1e-12]
-        omegas_with_sign = imag_eigs.imag  # Keep the signs
-
-        # Get unique frequencies (positive and negative)
-        omegas_unique = []
-        for omega in omegas_with_sign:
-            if not any(np.isclose(omega, existing, atol=1e-12) for existing in omegas_unique):
-                omegas_unique.append(omega)
-
-        if len(omegas_unique) != 6:
-            raise RuntimeError(f"Expected 6 eigenvalues (+-3 frequencies), got {len(omegas_unique)}.")
-
-        # Identify the vertical frequency (close to +-1)
-        # Group frequencies by their absolute values to handle numerical duplicates
-        freq_groups = {}
-        for omega in omegas_unique:
-            abs_omega = abs(omega)
-            found_group = False
-            for key in freq_groups:
-                if np.isclose(abs_omega, key, rtol=1e-10):
-                    freq_groups[key].append(omega)
-                    found_group = True
-                    break
-            if not found_group:
-                freq_groups[abs_omega] = [omega]
-        
-        # Find the group closest to 1.0 (vertical frequency)
-        vertical_group_key = min(freq_groups.keys(), key=lambda x: abs(x - 1.0))
-        if not np.isclose(vertical_group_key, 1.0, rtol=1e-2):
-            raise RuntimeError(f"No frequency group found near 1.0, closest is {vertical_group_key}")
-        
-        omega_z = vertical_group_key
-        vertical_omegas = freq_groups[vertical_group_key]
-        
-        # Get planar frequencies (all other groups)
-        planar_omegas = []
-        for key, omegas_list in freq_groups.items():
-            if not np.isclose(key, vertical_group_key, rtol=1e-10):
-                planar_omegas.extend(omegas_list)
-        
-        # Get the distinct planar frequency magnitudes (should be 2 groups, each with +- pairs)
-        planar_freq_groups = {}
-        for omega in planar_omegas:
-            abs_omega = abs(omega)
-            found_group = False
-            for key in planar_freq_groups:
-                if np.isclose(abs_omega, key, rtol=1e-10):
-                    planar_freq_groups[key].append(omega)
-                    found_group = True
-                    break
-            if not found_group:
-                planar_freq_groups[abs_omega] = [omega]
-        
-        if len(planar_freq_groups) != 2:
-            raise RuntimeError(f"Expected 2 distinct planar frequency groups, got {len(planar_freq_groups)} groups with magnitudes {list(planar_freq_groups.keys())}")
-
-        # Get the two planar frequency magnitudes and sort them
-        planar_mags = sorted(planar_freq_groups.keys())
-        smaller_mag, larger_mag = planar_mags
-        
-        # Apply the updated convention described above.
-        # Ideally we have |smaller| < sqrt(1/2) < |larger|, but we still
-        # enforce sign ordering even if the threshold split fails (rare).
-
-        omega1 = larger_mag           # positive, expected > sqrt(1/2)
-        omega2 = -smaller_mag         # negative, expected < -sqrt(1/2)
-
-        # Sanity check - warn (do not fail) if the magnitudes violate the desired split
-        if not (omega1**2 > 0.5 and omega2**2 < 0.5):
-            raise RuntimeError(f"Computed planar frequencies do not strictly satisfy the requested ordering: omega_1={omega1:.4f}, omega_2={omega2:.4f}.")
-
-        return (float(omega1), float(omega2), float(omega_z))
 
     @property
     def linear_modes(self):
@@ -269,150 +147,7 @@ class TriangularPoint(LibrationPoint):
             For triangular points all eigenvalues are purely imaginary so no
             hyperbolic mode is present.
         """
-        return self._services.dynamics.triangular_linear_modes(self)
-
-    def _J_hess_H2(self) -> np.ndarray:
-        """
-        Compute the 6x6 symplectic matrix for the quadratic Hamiltonian H2.
-        
-        Returns
-        -------
-        numpy.ndarray, shape (6, 6)
-            The symplectic matrix J for the quadratic Hamiltonian.
-        """
-        # Planar 4x4 block (x, y, p_x, p_y)
-        J_planar = np.array([
-            [0.0, 1.0, 1.0, 0.0],
-            [-1.0, 0.0, 0.0, 1.0],
-            [-0.25, self.a, 0.0, 1.0],
-            [self.a, 1.25, -1.0, 0.0],
-        ], dtype=np.float64)
-
-        # Vertical 2x2 block: simple harmonic oscillator with omega_z = 1
-        J_vert = np.array([[0.0, 1.0], [-1.0, 0.0]], dtype=np.float64)
-
-        # Assemble full 6x6 Jacobian 
-        J_full = np.zeros((6, 6), dtype=np.float64)
-        J_full[:4, :4] = J_planar
-        J_full[4:, 4:] = J_vert
-        return J_full # x, y, p_x, p_y, z, p_z
-    
-    def _rs(self, idx):
-        """
-        Compute the scaling factor for the given mode index.
-        
-        Parameters
-        ----------
-        idx : int
-            The mode index (0 or 1 for planar modes).
-            
-        Returns
-        -------
-        float
-            The scaling factor (dimensionless).
-            
-        Raises
-        ------
-        ValueError
-            If idx is not 0 or 1.
-        """
-        if idx not in [0, 1]:
-            raise ValueError(f"Invalid index {idx} for scaling factor calculation")
-        return np.sqrt(self.linear_modes[idx] * (4*self.linear_modes[idx]**4 + self.linear_modes[idx]**2 - 1.5))
-
-    def _get_eigvs(self):
-        """
-        Return the six real eigenvectors (u_1, u_2, u_3, v_1, v_2, v_3)
-        providing a canonical basis of the centre sub-space.
-
-        For triangular points the flow decomposes into a planar 2-DOF part
-        and a vertical 1-DOF harmonic oscillator uncoupled from the plane.
-        The planar eigenvectors are constructed analytically following the
-        classical derivation (see Gomez et al., 1993, par3.2).  They live in
-        the first four coordinates (x, y, p_x, p_y).  We simply append two
-        zeros to embed them in the full 6-D phase-space.  The vertical pair
-        is trivial thanks to the decoupling: (z, p_z) already form a
-        canonical coordinate pair.
-        
-        Returns
-        -------
-        numpy.ndarray, shape (6, 6)
-            Matrix of eigenvectors as rows.
-        """
-
-        a = self.a
-        omega1, omega2, omega_z = self.linear_modes  # omega_z == 1
-
-        # The vectors are written in the (x, y, p_x, p_y) ordering used by
-        # _J_hess_H2.  They are then embedded into 6-D by appending zeros
-        # for the vertical coordinates (z, p_z). 
-        u1_planar = np.array([a, -omega1**2 - 0.75, -omega1**2 + 0.75, a])
-        u2_planar = np.array([a, -omega2**2 - 0.75, -omega2**2 + 0.75, a])
-        v1_planar = np.array([2 * omega1, 0.0, a * omega1, -omega1**3 + 1.25 * omega1])
-        v2_planar = np.array([2 * omega2, 0.0, a * omega2, -omega2**3 + 1.25 * omega2])
-
-        # Build full 6-D vectors with zeros in the vertical coordinates
-        # (z, p_z) = (index 2, 5).
-        u1 = np.zeros(6)
-        u2 = np.zeros(6)
-        v1 = np.zeros(6)
-        v2 = np.zeros(6)
-
-        # Assign planar components.
-        u1[[0, 1, 3, 4]] = u1_planar
-        u2[[0, 1, 3, 4]] = u2_planar
-        v1[[0, 1, 3, 4]] = v1_planar
-        v2[[0, 1, 3, 4]] = v2_planar
-
-        sqrt_omega_z = np.sqrt(abs(omega_z))  # positive by construction
-        u3 = np.zeros(6)
-        v3 = np.zeros(6)
-        u3[2] = 1.0 / sqrt_omega_z  # z coordinate
-        v3[5] = sqrt_omega_z        # p_z coordinate
-
-        # Stack as rows.
-        eigv_matrix = np.vstack([u1, u2, u3, v1, v2, v3])
-        return eigv_matrix
-    
-    def _d_omega(self, idx):
-        """
-        Compute the derivative term for the given mode index.
-        
-        Parameters
-        ----------
-        idx : int
-            The mode index.
-            
-        Returns
-        -------
-        float
-            The derivative term (dimensionless).
-        """
-        omegas = self.linear_modes
-        omega = omegas[idx]
-
-        return omega * (2*omega**4+0.5*omega**2-0.75)
-    
-    def _scaling_factor(self, idx):
-        """
-        Compute the scaling factor for the given mode index.
-        
-        Parameters
-        ----------
-        idx : int
-            The mode index (0, 1 for planar modes, 2 for vertical).
-            
-        Returns
-        -------
-        float
-            The scaling factor (dimensionless).
-        """
-        # Planar modes: use Gomez et al. formula.  Vertical mode: already
-        # rescaled directly in the eigenvectors, so the scaling factor is 1.
-        if idx == 2:
-            return 1.0
-        return np.sqrt(self._d_omega(idx))
-
+        return self._services.dynamics.triangular_linear_modes()
 
 class L4Point(TriangularPoint):
     """

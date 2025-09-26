@@ -15,34 +15,20 @@ All masses are expressed in kilograms and radii in metres (SI units).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
-from hiten.algorithms.types.adapters.body import _BodyPersistenceAdapter
 from hiten.algorithms.types.core import _HitenBase
-
-
-@dataclass
-class BodyContext:
-    persistence: _BodyPersistenceAdapter
-
-    @classmethod
-    def default(cls) -> "BodyContext":
-        return cls(persistence=_BodyPersistenceAdapter())
+from hiten.algorithms.types.services.body import (_BodyPersistenceService,
+                                                  _BodyServices)
 
 
 class Body(_HitenBase):
     """Celestial body container bound to a lightweight persistence adapter."""
 
-    def __init__(self, name: str, mass: float, radius: float, color: str = "#000000", parent: Optional["Body"] = None, *, context: Optional[BodyContext] = None):
-        super().__init__()
-        self._name = name
-        self._mass = mass
-        self._radius = radius
-        self._color = color
-        self._parent = parent or self
-        self._context = context or BodyContext.default()
+    def __init__(self, name: str, mass: float, radius: float, color: str = "#000000", parent: Optional["Body"] = None):
+        services : _BodyServices = _BodyServices.default(self)
+        super().__init__(services)
 
     def __str__(self) -> str:
         parent_desc = f"orbiting {self.parent.name}" if self.parent is not self else "(Primary)"
@@ -58,47 +44,44 @@ class Body(_HitenBase):
 
     @property
     def name(self) -> str:
-        return self._name
+        return self.dynamics.name
 
     @property
     def mass(self) -> float:
-        return self._mass
+        return self.dynamics.mass
 
     @property
     def radius(self) -> float:
-        return self._radius
+        return self.dynamics.radius
     
     @property
     def color(self) -> str:
-        return self._color
+        return self.dynamics.color
 
     @property
     def parent(self) -> "Body":
-        return self._parent
-    
-    def save(self, file_path: str | Path, **kwargs) -> None:
-        self._context.persistence.save(self, file_path, **kwargs)
+        return self.dynamics.parent
+
+    def __setstate__(self, state):
+        """Restore the Body instance after unpickling.
+
+        The heavy, non-serialisable dynamics is reconstructed lazily
+        using the stored value of name, mass, radius, color and parent.
+        
+        Parameters
+        ----------
+        state : dict
+            Dictionary containing the serialized state of the Body.
+        """
+        super().__setstate__(state)
+        self._setup_services(_BodyServices.default(self))
 
     @classmethod
     def load(cls, file_path: str | Path, **kwargs) -> "Body":
-        adapter = BodyContext.default().persistence
-        body = adapter.load(file_path, **kwargs)
-        if isinstance(body, cls) and not getattr(body, "_context", None):
-            body._context = BodyContext.default()
-        return body
-
-    def load_inplace(self, file_path: str | Path) -> "Body":
-        self._context.persistence.load_inplace(self, file_path)
-        return self
-    
-    def __getstate__(self):
-        """Custom pickle state that excludes unpicklable context."""
-        state = self.__dict__.copy()
-        state.pop("_context", None)
-        return state
-    
-    def __setstate__(self, state):
-        """Restore state and recreate context."""
-        self.__dict__.update(state)
-        if not hasattr(self, "_context"):
-            self._context = BodyContext.default()
+        """Load a Body from a file (new instance)."""
+        return cls._load_with_services(
+            file_path, 
+            _BodyPersistenceService(), 
+            _BodyServices.default, 
+            **kwargs
+        )

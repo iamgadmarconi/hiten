@@ -27,7 +27,7 @@ from hiten.algorithms.common.energy import crtbp_energy, energy_to_jacobi
 from hiten.algorithms.corrector.config import (_LineSearchConfig,
                                                _OrbitCorrectionConfig)
 from hiten.algorithms.dynamics.base import _DynamicalSystem
-from hiten.algorithms.types.adapters.orbits import _OrbitServices, _OrbitPersistenceAdapter
+from hiten.algorithms.types.services.orbits import _OrbitServices, _OrbitPersistenceService
 from hiten.algorithms.types.core import _HitenBase
 from hiten.algorithms.types.states import (ReferenceFrame, SynodicStateVector,
                                            Trajectory)
@@ -682,21 +682,24 @@ class PeriodicOrbit(_HitenBase, ABC):
         """Load an orbit from a file."""
         if not os.path.exists(filepath):
             raise FileNotFoundError(f"Orbit file not found: {filepath}")
-        adapter = _OrbitPersistenceAdapter()
-        orbit = adapter.load(filepath, **kwargs)
-        system = getattr(orbit, "_system", None)
-        if system is None:
-            raise ValueError("Serialized orbit is missing system metadata and cannot be rehydrated.")
-        orbit._services = _OrbitServices.for_system(system)
-        return orbit
+        
+        def services_factory(orbit):
+            system = getattr(orbit, "_system", None)
+            if system is None:
+                raise ValueError("Serialized orbit is missing system metadata and cannot be rehydrated.")
+            return _OrbitServices.for_system(system)
+        
+        return cls._load_with_services(
+            filepath, 
+            _OrbitPersistenceService(), 
+            services_factory, 
+            **kwargs
+        )
 
     def __setstate__(self, state):
         """Restore the PeriodicOrbit instance after unpickling."""
-        self.__dict__.update(state)
-        if getattr(self, "_system", None) is not None:
-            self._services = _OrbitServices.for_system(self._system)
-        else:
-            self._services = _OrbitServices.for_system(System.__new__(System))
+        super().__setstate__(state)
+        self._setup_services(_OrbitServices.for_system(self._system))
 
     def __getstate__(self):
         """Custom state extractor to enable pickling."""

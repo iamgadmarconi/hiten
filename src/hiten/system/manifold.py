@@ -30,7 +30,7 @@ from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.io.common import _ensure_dir
 from hiten.utils.log_config import logger
 from hiten.utils.plots import plot_manifold
-from hiten.algorithms.types.adapters.manifold import _ManifoldServices
+from hiten.algorithms.types.services.manifold import _ManifoldServices
 from hiten.algorithms.types.core import _HitenBase
 
 

@@ -36,12 +36,13 @@ class _OrbitCorrectionEngine(_CorrectionEngine):
         return self._backend.run(*call.args, **call.kwargs)
 
     def _after_backend_success(self, outputs, *, problem, domain_payload, interface) -> None:
-        x_corr, info = outputs
+        x_corr, iterations, residual_norm = outputs
         try:
             self._backend.on_success(
                 x_corr,
-                iterations=int(info.get("iterations", 0)),
-                residual_norm=float(info.get("residual_norm", np.nan)),
+                iterations=int(iterations),
+                residual_norm=float(residual_norm),
             )
+            
         except Exception:
             pass

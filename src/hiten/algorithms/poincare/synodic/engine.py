@@ -22,7 +22,7 @@ from hiten.algorithms.poincare.synodic.types import (
     SynodicMapResults,
     _SynodicMapProblem,
 )
-from hiten.algorithms.types.core import BackendCall
+from hiten.algorithms.types.core import _BackendCall
 from hiten.algorithms.types.exceptions import EngineError
 
 

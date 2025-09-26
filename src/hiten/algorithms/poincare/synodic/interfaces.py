@@ -20,7 +20,7 @@ from hiten.algorithms.poincare.synodic.types import (
     _SynodicMapProblem,
 )
 from hiten.algorithms.types.states import SynodicState
-from hiten.algorithms.types.core import BackendCall
+from hiten.algorithms.types.core import _BackendCall
 
 
 @dataclass(frozen=True)
@@ -90,7 +90,12 @@ class _SynodicSectionInterface(_SectionInterface):
 
 
 class _SynodicInterface(
-    _PoincareBaseInterface[Tuple[np.ndarray, np.ndarray], _SynodicMapConfig, _SynodicMapProblem, SynodicMapResults, Tuple[np.ndarray, np.ndarray, np.ndarray | None]]
+    _PoincareBaseInterface[
+        _SynodicMapConfig, 
+        _SynodicMapProblem, 
+        SynodicMapResults, 
+        Tuple[np.ndarray, np.ndarray, np.ndarray | None]
+    ]
 ):
 
     def __init__(self) -> None:
@@ -98,6 +103,7 @@ class _SynodicInterface(
 
     def create_problem(
         self,
+        *,
         config: _SynodicMapConfig,
         plane_coords: Tuple[str, str],
         normal: np.ndarray,
@@ -123,7 +129,7 @@ class _SynodicInterface(
         )
 
     def to_backend_inputs(self, problem: _SynodicMapProblem):
-        return BackendCall(kwargs={"trajectories": problem.trajectories, "direction": problem.direction})
+        return _BackendCall(kwargs={"trajectories": problem.trajectories, "direction": problem.direction})
 
     def to_results(self, outputs, *, problem: _SynodicMapProblem) -> SynodicMapResults:
         points, states, times = outputs
