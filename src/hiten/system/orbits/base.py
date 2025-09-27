@@ -91,12 +91,11 @@ class PeriodicOrbit(_HitenBase, ABC):
     call :meth:`~hiten.system.orbits.base.PeriodicOrbit.correct` (or manually set
     period) followed by :meth:`~hiten.system.orbits.base.PeriodicOrbit.propagate`.
     """
-    
-    # This should be overridden by subclasses
+
     _family: str = "generic"
 
     def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None):
-        services = _OrbitServices.default(self)
+        services = _OrbitServices.default(self, initial_state=initial_state)
         super().__init__(services)
 
     def __str__(self):
@@ -220,6 +219,11 @@ class PeriodicOrbit(_HitenBase, ABC):
             The corrected state and period.
         """
         result = self._correction.correct(self, **kwargs)
+        return result.corrected_state, result.period
+
+    def generate(self, **kwargs) -> tuple[np.ndarray, float]:
+        """Generate a family of periodic orbits."""
+        result = self._continuation.generate(self, **kwargs)
         return result.corrected_state, result.period
 
     def propagate(self, steps: int = 1000, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8) -> Trajectory:
@@ -420,62 +424,36 @@ class GenericOrbit(PeriodicOrbit):
     _family = "generic"
     
     def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None):
-        super().__init__(libration_point, initial_state)
-        self._custom_correction_config: Optional["_OrbitCorrectionConfig"] = None
-        self._custom_continuation_config: Optional["_OrbitContinuationConfig"] = None
-        if self._period is None:
-            self._period = np.pi
-
-        self._amplitude = None
+        services = _OrbitServices.default(self, initial_state=initial_state)
+        super().__init__(services)
+    
+        if self.dynamics.period is None:
+            self.dynamics.period = np.pi
 
     @property
-    def correction_config(self) -> Optional["_OrbitCorrectionConfig"]:
-        """
-        Get or set the user-defined differential correction configuration.
-
-        This property must be set to a valid :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
-        instance before calling :meth:`~hiten.system.orbits.base.PeriodicOrbit.correct` on a
-        :class:`~hiten.system.orbits.base.GenericOrbit` object.
+    def amplitude(self) -> float:
+        """(Read-only) Current amplitude of the orbit.
         
         Returns
         -------
-        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig` or None
-            The correction configuration, or None if not set.
+        float or None
+            The orbit amplitude in nondimensional units, or None if not set.
         """
-        return self._custom_correction_config
+        return self.dynamics.amplitude
 
-    @correction_config.setter
-    def correction_config(self, value: Optional["_OrbitCorrectionConfig"]):
-        """Set the correction configuration.
+    @amplitude.setter
+    def amplitude(self, value: float):
+        """Set the orbit amplitude.
         
         Parameters
         ----------
-        value : :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig` or None
-            The correction configuration to set.
-            
-        Raises
-        ------
-        TypeError
-            If value is not an instance of :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig` or None.
+        value : float
+            The orbit amplitude in nondimensional units.
         """
-        from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
-        if value is not None and not isinstance(value, _OrbitCorrectionConfig):
-            raise TypeError("correction_config must be an instance of _OrbitCorrectionConfig or None.")
-        self._custom_correction_config = value
+        self.dynamics.amplitude = value
 
     @property
-    def eccentricity(self):
-        """Eccentricity is not well-defined for generic orbits.
-        
-        Returns
-        -------
-        float
-            NaN since eccentricity is not defined for generic orbits.
-        """
-        return np.nan
-
-    @property
-    def _correction_config(self) -> "_OrbitCorrectionConfig":
+    def correction_config(self) -> Optional["_OrbitCorrectionConfig"]:
         """
         Provides the differential correction configuration.
 
@@ -492,34 +470,23 @@ class GenericOrbit(PeriodicOrbit):
         NotImplementedError
             If correction_config is not set.
         """
-        if self.correction_config is not None:
-            return self.correction_config
-        raise NotImplementedError(
-            "Differential correction is not defined for a GenericOrbit unless the "
-            "`correction_config` property is set with a valid :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`."
-        )
+        return self._correction.correction_config
 
-    @property
-    def amplitude(self) -> float:
-        """(Read-only) Current amplitude of the orbit.
-        
-        Returns
-        -------
-        float or None
-            The orbit amplitude in nondimensional units, or None if not set.
-        """
-        return self._amplitude
-
-    @amplitude.setter
-    def amplitude(self, value: float):
-        """Set the orbit amplitude.
+    @correction_config.setter
+    def correction_config(self, value: Optional["_OrbitCorrectionConfig"]):
+        """Set the correction configuration.
         
         Parameters
         ----------
-        value : float
-            The orbit amplitude in nondimensional units.
+        value : :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig` or None
+            The correction configuration to set.
+            
+        Raises
+        ------
+        TypeError
+            If value is not an instance of :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig` or None.
         """
-        self._amplitude = value
+        self._correction.correction_config = value
 
     @property
     def continuation_config(self) -> Optional["_OrbitContinuationConfig"]:
@@ -530,7 +497,7 @@ class GenericOrbit(PeriodicOrbit):
         :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None
             The continuation configuration, or None if not set.
         """
-        return self._custom_continuation_config
+        return self._continuation.continuation_config
 
     @continuation_config.setter
     def continuation_config(self, cfg: Optional["_OrbitContinuationConfig"]):
@@ -546,50 +513,5 @@ class GenericOrbit(PeriodicOrbit):
         TypeError
             If cfg is not an instance of :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None.
         """
-        from hiten.algorithms.continuation.config import \
-            _OrbitContinuationConfig
-        if cfg is not None and not isinstance(cfg, _OrbitContinuationConfig):
-            raise TypeError("continuation_config must be a _OrbitContinuationConfig instance or None")
-        self._custom_continuation_config = cfg
+        self._continuation.continuation_config = cfg
 
-    @property
-    def _continuation_config(self) -> "_OrbitContinuationConfig":  # used by engines
-        """Provides the continuation configuration for engines.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
-            The continuation configuration.
-            
-        Raises
-        ------
-        NotImplementedError
-            If continuation_config is not set.
-        """
-        if self._custom_continuation_config is None:
-            raise NotImplementedError(
-                "GenericOrbit requires 'continuation_config' to be set before using continuation engines."
-            )
-        return self._custom_continuation_config
-
-    def _initial_guess(self, **kwargs):
-        """Generate initial guess for GenericOrbit.
-        
-        Parameters
-        ----------
-        **kwargs
-            Additional keyword arguments (unused).
-            
-        Returns
-        -------
-        numpy.ndarray, shape (6,)
-            The initial state vector in nondimensional units.
-            
-        Raises
-        ------
-        ValueError
-            If no initial state is provided.
-        """
-        if hasattr(self, '_initial_state') and self._initial_state is not None:
-            return self._initial_state
-        raise ValueError("No initial state provided for GenericOrbit.")

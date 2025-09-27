@@ -41,10 +41,8 @@ class _NewtonBackend(_CorrectorBackend):
         self,
         *,
         stepper_factory: StepperFactory | None = None,
-        **kwargs,
     ) -> None:
-        super().__init__(**kwargs)
-        # Dependency-injected factory building the stepper per problem
+        super().__init__()
         self._stepper_factory: StepperFactory
         self._stepper_factory = make_plain_stepper() if stepper_factory is None else stepper_factory
 

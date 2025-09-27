@@ -5,7 +5,9 @@ works with any domain through the interface pattern. The facade orchestrates
 the complete pipeline: facade → engine → interface → backend.
 """
 
-from typing import Any, Generic, Optional
+from typing import Any, Callable, Generic, Literal, Optional
+
+import numpy as np
 
 from hiten.algorithms.corrector.backends.newton import _NewtonBackend
 from hiten.algorithms.corrector.config import _LineSearchConfig
@@ -16,7 +18,8 @@ from hiten.algorithms.corrector.stepping import (make_armijo_stepper,
                                                  make_plain_stepper)
 from hiten.algorithms.corrector.stepping.norm import (_default_norm,
                                                       _infinity_norm)
-from hiten.algorithms.corrector.types import CorrectionResult
+from hiten.algorithms.corrector.types import CorrectionResult, StepperFactory
+from hiten.algorithms.poincare.singlehit.backend import _y_plane_crossing
 from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
                                          _HitenBaseFacade)
 
@@ -97,7 +100,28 @@ class Corrector(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
         engine = _CorrectionEngine(backend=backend, interface=intf)
         return cls(config, intf, engine)
 
-    def correct(self, domain_obj: DomainT, **kwargs) -> ResultT:
+    def correct(
+        self, 
+        domain_obj: DomainT,
+        override: bool = False,
+        *,
+        max_attempts: Optional[int] = None,
+        tol: Optional[float] = None,
+        max_delta: Optional[float] = None,
+        line_search_config: Optional[_LineSearchConfig] = None,
+        finite_difference: Optional[bool] = None,
+        fd_step: Optional[float] = None,  
+        method: Optional[Literal["fixed", "adaptive", "symplectic"]] = None,
+        order: Optional[int] = None,
+        steps: Optional[int] = None,
+        forward: Optional[int] = None,
+        residual_indices: Optional[tuple[int, ...]] = None,
+        control_indices: Optional[tuple[int, ...]] = None,
+        extra_jacobian: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None,
+        target: Optional[tuple[float, ...]] = None,
+        event_func: Optional[Callable[..., tuple[float, np.ndarray]]] = None,
+        stepper: Optional[StepperFactory] = None,
+        ) -> ResultT:
         """Correct the domain object using the configured engine.
         
         This method corrects any domain object using the configured
@@ -123,7 +147,26 @@ class Corrector(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
             - Convergence information
             - Algorithm diagnostics
         """
-        problem = self._create_problem(domain_obj=domain_obj, **kwargs)
+
+        kwargs = {
+            "max_attempts": max_attempts,
+            "tol": tol,
+            "max_delta": max_delta,
+            "line_search_config": line_search_config,
+            "finite_difference": finite_difference,
+            "fd_step": fd_step,
+            "method": method,
+            "order": order,
+            "steps": steps,
+            "forward": forward,
+            "residual_indices": residual_indices,
+            "control_indices": control_indices,
+            "extra_jacobian": extra_jacobian,
+            "target": target,
+            "event_func": event_func,
+        }
+
+        problem = self._create_problem(domain_obj=domain_obj, override=override, stepper_factory=stepper, **kwargs)
         engine = self._get_engine()
         self._results = engine.solve(problem)
         return self._results

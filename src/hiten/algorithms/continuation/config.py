@@ -87,9 +87,6 @@ class _OrbitContinuationConfig(_ContinuationConfig):
     state : :class:`~hiten.algorithms.types.states.SynodicState` or None
         Initial state for orbit construction. If None, uses default
         state from the orbit class.
-    amplitude : bool, default False
-        Whether to use amplitude-based continuation instead of
-        natural parameter continuation.
     getter : callable or None
         Function to extract continuation parameter from periodic orbit.
         Should take a :class:`~hiten.system.orbits.base.PeriodicOrbit` and return float.
@@ -99,7 +96,6 @@ class _OrbitContinuationConfig(_ContinuationConfig):
         Common keys include tolerances, maximum iterations, etc.
     """
     state: SynodicState | None = None
-    amplitude: bool = False
     getter: Callable[["PeriodicOrbit"], float] | None = None
     extra_params: dict | None = None
     stepper: Literal["natural", "secant"] = "natural"

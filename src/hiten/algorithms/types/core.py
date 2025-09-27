@@ -77,7 +77,7 @@ class _HitenBaseInterface(Generic[ConfigT, ProblemT, ResultT, OutputsT], ABC):
         return self._config
 
     @abstractmethod
-    def create_problem(self, *, config: ConfigT | None = None, **kwargs) -> ProblemT:
+    def create_problem(self, config: ConfigT | None = None, *args) -> ProblemT:
         """Compose an immutable problem payload for the backend."""
 
     @abstractmethod
@@ -395,11 +395,26 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
         ValueError
             If the configuration parameter is not valid.
         """
-        for key, value in kwargs.items():
+        # Filter out None values
+        filtered_kwargs = {k: v for k, v in kwargs.items() if v is not None}
+        
+        if not filtered_kwargs:
+            return
+            
+        # Get all fields from the current config
+        config_dict = {}
+        for field in self._config.__dataclass_fields__:
+            config_dict[field] = getattr(self._config, field)
+        
+        # Apply overrides
+        for key, value in filtered_kwargs.items():
             if hasattr(self._config, key):
-                setattr(self._config, key, value)
+                config_dict[key] = value
             else:
                 raise ValueError(f"Unknown configuration parameter: {key}")
+        
+        # Create new instance and update internal state
+        self._config = type(self._config)(**config_dict)
 
     def _set_engine(self, engine: _HitenBaseEngine[ProblemT, ResultT, OutputsT]) -> None:
         self._engine = engine
@@ -422,7 +437,7 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
     def _get_config(self) -> ConfigT:
         return self._config
 
-    def _create_problem(self, *, domain_obj: DomainT, **kwargs) -> ProblemT:
+    def _create_problem(self, domain_obj: DomainT, override: bool = False, *args, **kwargs) -> ProblemT:
         """Create a problem object from input parameters.
         
         This method can be overridden by concrete facades to handle
@@ -432,17 +447,25 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
         ----------
         domain_obj : DomainT
             The domain object to create a problem for.
+        override : bool, default=False
+            Whether to override configuration with provided kwargs.
+        *args
+            Additional positional arguments to pass to interface.create_problem.
         **kwargs
-            Input parameters for problem creation.
+            Configuration parameters to update if override=True
             
         Returns
         -------
         Any
             Problem object suitable for the engine.
         """
+        if override and kwargs:
+            self.update_config(**kwargs)
+        
         interface = self._get_interface()
         config = self._get_config()
-        return interface.create_problem(config=config, domain_obj=domain_obj, **kwargs)
+        return interface.create_problem(config=config, domain_obj=domain_obj, *args)
+
 
     def _make_pipeline(self, config, interface, engine):
         self._config: ConfigT = config
@@ -463,7 +486,6 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
     @property
     def results(self) -> ResultT:
         return self._results
-
 
 
 class _HitenBase(ABC):

@@ -3,19 +3,17 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Literal
+from typing import TYPE_CHECKING, Any, Dict, Literal, Optional, Tuple
 
 import numpy as np
 
 from hiten.algorithms.common.energy import crtbp_energy, energy_to_jacobi
+from hiten.algorithms.continuation.base import StateParameter
 from hiten.algorithms.continuation.config import _OrbitContinuationConfig
 from hiten.algorithms.corrector.base import Corrector
-from hiten.algorithms.corrector.config import (_LineSearchConfig,
-                                               _OrbitCorrectionConfig)
-from hiten.algorithms.corrector.stepping import (make_armijo_stepper,
-                                                 make_plain_stepper)
+from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
 from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_monodromy, _compute_stm
 from hiten.algorithms.linalg.backend import _LinalgBackend
@@ -32,7 +30,7 @@ from hiten.utils.io.orbits import (load_periodic_orbit,
 if TYPE_CHECKING:
     from hiten.system.base import System
     from hiten.system.libration.base import LibrationPoint
-    from hiten.system.orbits.base import PeriodicOrbit
+    from hiten.system.orbits.base import PeriodicOrbit, GenericOrbit
 
 
 class _OrbitPersistenceService(_PersistenceServiceBase):
@@ -54,11 +52,13 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
         self._corrector = Corrector.with_default_engine(config=self.correction_config)
 
     def correct(self, *, overrides: Dict[str, Any] | None = None) -> Tuple[np.ndarray, float]:
+        """Differential correction wrapper."""
         cache_key = self.make_key("correct", overrides)
 
         def _factory() -> Tuple[np.ndarray, float]:
-            self.update_correction(**overrides)
-            results = self.corrector.correct(self._domain_obj)
+            if overrides:
+                override = True
+            results = self.corrector.correct(self._domain_obj, override=override, **overrides)
 
             return results.corrected_state, 2 * results.half_period
 
@@ -88,13 +88,38 @@ class _OrbitContinuationService(_DynamicsServiceBase):
 
     def __init__(self, domain_obj: "PeriodicOrbit") -> None:
         super().__init__(domain_obj)
+        self._generator = StateParameter.with_default_engine(config=self.continuation_config)
+
+    @property
+    def generator(self) -> StateParameter:
+        return self._generator
+
+    def generate(self, *, overrides: Dict[str, Any] | None = None) -> Tuple[np.ndarray, float]:
+        """Generate a family of periodic orbits."""
+        cache_key = self.make_key("generate", overrides)
+
+        def _factory() -> Tuple[np.ndarray, float]:
+            if overrides:
+                override = True
+            results = self.generator.generate(self._domain_obj, override=override, **overrides)
+
+            return results
+
+        return self.get_or_create(cache_key, _factory)
+
+    def update_continuation(self, **kwargs) -> None:
+        """Update algorithm-level continuation parameters for this orbit.
+
+        Allowed keys: tol, max_attempts, max_delta, line_search_config,
+        finite_difference, forward.
+        """
+        self.generator.update_config(**kwargs)
 
     @property
     @abstractmethod
     def continuation_config(self) -> "_OrbitContinuationConfig":
         """Default parameter for family continuation (must be overridden)."""
         pass
-
 
 
 class _OrbitDynamicsService(ABC, _DynamicsServiceBase):
@@ -356,9 +381,141 @@ class _OrbitDynamicsService(ABC, _DynamicsServiceBase):
         """(Read-only) Current amplitude of the orbit."""
         pass
 
+    @amplitude.setter
+    def amplitude(self, value: float):
+        """Set the orbit amplitude."""
+        self._amplitude = value
+
     @abstractmethod
     def _initial_guess(self) -> np.ndarray:
         pass
+
+
+class _GenericOrbitCorrectionService(_OrbitCorrectionService):
+    """Drive Newton-based differential correction for generic orbits."""
+
+    def __init__(self, orbit: "GenericOrbit") -> None:
+        super().__init__(orbit)
+        self._corrector = Corrector.with_default_engine(config=self.correction_config)
+
+    @property
+    def correction_config(self) -> "_OrbitCorrectionConfig":
+        """Provides the differential correction configuration for generic orbits.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
+            The correction configuration.
+            
+        Raises
+        ------
+        NotImplementedError
+            If correction_config is not set on the orbit.
+        """
+        if self.orbit.correction_config is not None:
+            return self.orbit.correction_config
+        raise NotImplementedError(
+            "Differential correction is not defined for a GenericOrbit unless the "
+            "`correction_config` property is set with a valid :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`."
+        )
+
+    @correction_config.setter
+    def correction_config(self, value: "_OrbitCorrectionConfig"):
+        """Set the correction configuration."""
+        from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
+        if value is not None and not isinstance(value, _OrbitCorrectionConfig):
+            raise TypeError("correction_config must be an instance of _OrbitCorrectionConfig or None.")
+        self.orbit.correction_config = value
+
+
+class _GenericOrbitContinuationService(_OrbitContinuationService):
+    """Drive continuation for generic orbits."""
+
+    def __init__(self, orbit: "GenericOrbit") -> None:
+        super().__init__(orbit)
+        self._generator = StateParameter.with_default_engine(config=self.continuation_config)
+
+    @property
+    def continuation_config(self) -> "_OrbitContinuationConfig":
+        """Provides the continuation configuration for generic orbits.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
+            The continuation configuration.
+            
+        Raises
+        ------
+        NotImplementedError
+            If continuation_config is not set on the orbit.
+        """
+        if self.orbit.continuation_config is not None:
+            return self.orbit.continuation_config
+        raise NotImplementedError(
+            "GenericOrbit requires 'continuation_config' to be set before using continuation engines."
+        )
+
+    @continuation_config.setter
+    def continuation_config(self, value: "_OrbitContinuationConfig"):
+        """Set the continuation configuration."""
+        from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+        if value is not None and not isinstance(value, _OrbitContinuationConfig):
+            raise TypeError("continuation_config must be an instance of _OrbitContinuationConfig or None.")
+        self.orbit.continuation_config = value
+
+
+class _GenericOrbitDynamicsService(_OrbitDynamicsService):
+    """Dynamics service for generic orbits with custom amplitude handling."""
+
+    def __init__(self, orbit: "GenericOrbit", *, initial_state: np.ndarray | None = None) -> None:
+        super().__init__(orbit, initial_state=initial_state)
+        self._amplitude = None
+
+    @property
+    def amplitude(self) -> float:
+        """(Read-only) Current amplitude of the orbit.
+        
+        Returns
+        -------
+        float or None
+            The orbit amplitude in nondimensional units, or None if not set.
+        """
+        return self._amplitude
+
+    @amplitude.setter
+    def amplitude(self, value: float):
+        """Set the orbit amplitude.
+        
+        Parameters
+        ----------
+        value : float
+            The orbit amplitude in nondimensional units.
+        """
+        self._amplitude = value
+
+    def _initial_guess(self) -> np.ndarray:
+        """Generate initial guess for GenericOrbit.
+        
+        Parameters
+        ----------
+        **kwargs
+            Additional keyword arguments (unused).
+            
+        Returns
+        -------
+        numpy.ndarray, shape (6,)
+            The initial state vector in nondimensional units.
+            
+        Raises
+        ------
+        ValueError
+            If no initial state is provided.
+        """
+        # Check if the orbit has an initial state set
+        if hasattr(self.orbit, '_initial_state') and self.orbit._initial_state is not None:
+            return np.asarray(self.orbit._initial_state, dtype=np.float64)
+        raise ValueError("No initial state provided for GenericOrbit.")
+
 
 
 @dataclass
@@ -370,12 +527,12 @@ class _OrbitServices(_ServiceBundleBase):
     persistence: _OrbitPersistenceService
 
     @classmethod
-    def default(cls, orbit: "PeriodicOrbit") -> "_OrbitServices":
+    def default(cls, orbit: "PeriodicOrbit", *, initial_state = Optional[np.ndarray] = None) -> "_OrbitServices":
         return cls(
             domain_obj=orbit,
             correction=_OrbitCorrectionService(orbit),
             continuation=_OrbitContinuationService(orbit),
-            dynamics=_OrbitDynamicsService(orbit),
+            dynamics=_OrbitDynamicsService(orbit, initial_state=initial_state),
             persistence=_OrbitPersistenceService()
         )
 
