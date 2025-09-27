@@ -72,53 +72,6 @@ class TriangularPoint(LibrationPoint):
         if system.mu > self.ROUTH_CRITICAL_MU:
             logger.warning(f"Triangular points are potentially unstable for mu > {self.ROUTH_CRITICAL_MU:.6f} (current mu = {system.mu})")
 
-    @property
-    def sign(self) -> int:
-        """
-        Sign convention distinguishing L4 and L5.
-
-        Returns
-        -------
-        int
-            +1 for :class:`~hiten.system.libration.triangular.L4Point`, -1 for :class:`~hiten.system.libration.triangular.L5Point`.
-        """
-        return 1 if isinstance(self, L4Point) else -1
-    
-    @property
-    def a(self) -> float:
-        """
-        Offset a along the x axis used in frame changes.
-        
-        Returns
-        -------
-        float
-            The offset value a (dimensionless).
-        """
-        return self.sign * 3 * np.sqrt(3) / 4 * (1 - 2 * self.mu)
-
-    def _calculate_position(self) -> np.ndarray:
-        """
-        Calculate the position of a triangular point (L4 or L5).
-        
-        Returns
-        -------
-        numpy.ndarray, shape (3,)
-            3D vector [x, y, 0] giving the position in nondimensional units.
-        """
-        return self._services.dynamics.position()
-
-    def _get_linear_data(self):
-        """
-        Get the linear data for the Libration point.
-        
-        Returns
-        -------
-        tuple
-            (None, omega1, omega2, omega_z, C, Cinv)
-            Object containing the linear data for the Libration point.
-        """
-        return self._services.dynamics.linear_data()
-
     def normal_form_transform(self):
         """
         Build the 6x6 symplectic matrix C that sends H2 to normal form.
@@ -128,9 +81,7 @@ class TriangularPoint(LibrationPoint):
         tuple
             (C, Cinv) where C is the symplectic transformation matrix and Cinv is its inverse.
         """
-        return self._services.dynamics.triangular_normal_form()
-
-    
+        return self.dynamics.normal_form_transform
 
     @property
     def linear_modes(self):
@@ -147,7 +98,11 @@ class TriangularPoint(LibrationPoint):
             For triangular points all eigenvalues are purely imaginary so no
             hyperbolic mode is present.
         """
-        return self._services.dynamics.triangular_linear_modes()
+        return self.dynamics.linear_modes
+
+    @property
+    def linear_data(self):
+        return self.dynamics.linear_data
 
 class L4Point(TriangularPoint):
     """

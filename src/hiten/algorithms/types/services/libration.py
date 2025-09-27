@@ -378,40 +378,74 @@ class _LibrationDynamicsService(ABC, _DynamicsServiceBase):
         """
         pass
 
-    @abstractmethod
+    @property
     def position(self) -> np.ndarray:
-        """
-        Calculate the position of the Libration point.
+        """Calculate the position of the triangular libration point.
         
         Returns
         -------
         numpy.ndarray, shape (3,)
             Position vector [x, y, z] in nondimensional units.
         """
-        pass
-
-    @abstractmethod
-    def linear_data(self):
-        """
-        Get the linear data for the Libration point.
+        cache_key = self.make_key(id(self._domain_obj), "position")
         
-        Returns
-        -------
-        :class:`~hiten.algorithms.types.services.libration._LinearData`
-            The linear data containing eigenvalues and eigenvectors.
-        """
-        pass
+        def _factory() -> np.ndarray:
+            return self._compute_position()
+        
+        return self.get_or_create(cache_key, _factory)
 
-    @abstractmethod
-    def normal_form_transform(self) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Get the normal form transform for the Libration point.
+    @property
+    def linear_data(self):
+        """Get the linear data for the collinear libration point.
         
         Returns
         -------
         tuple
-            (C, Cinv) where C is the symplectic transformation matrix
-            and Cinv is its inverse.
+            (lambda1, omega1, omega2, None, C, Cinv)
+            Object containing the linear data for the libration point.
+        """
+        cache_key = self.make_key(id(self._domain_obj), "linear_data")
+        
+        def _factory():
+            return self._compute_linear_data()
+        
+        return self.get_or_create(cache_key, _factory)
+
+    @property
+    def linear_modes(self) -> Tuple[float, float, float | None]:
+        """
+        Compute the linear modes (lambda1, omega1, omega2) for the collinear libration point.
+        
+        Returns
+        -------
+        tuple
+            (lambda1, omega1, omega2) values in nondimensional units.
+        """
+        cache_key = self.make_key(id(self._domain_obj), "linear_modes")
+        
+        def _factory() -> Tuple[float, float, float | None]:
+            return self._compute_linear_modes()
+        
+        return self.get_or_create(cache_key, _factory)
+
+    @property
+    def normal_form_transform(self) -> Tuple[np.ndarray, np.ndarray]:
+        cache_key = self.make_key(id(self._domain_obj), "normal_form_transform")
+        
+        def _factory() -> Tuple[np.ndarray, np.ndarray]:
+            return self._build_normal_form()
+        
+        return self.get_or_create(cache_key, _factory)
+
+    @abstractmethod
+    def scale_factor(self, lambda1: float, omega1: float) -> Tuple[float, float]:
+        """
+        Compute the scale factor for the collinear libration point.
+        
+        Returns
+        -------
+        tuple
+            (s1, s2) scale factors for the hyperbolic and elliptic components.
         """
         pass
 
@@ -446,6 +480,22 @@ class _CollinearDynamicsService(ABC, _LibrationDynamicsService):
         
         return self.get_or_create(cache_key, _factory)
 
+    def scale_factor(self, lambda1: float, omega1: float) -> Tuple[float, float]:
+        """
+        Compute the scale factor for the collinear libration point.
+        
+        Returns
+        -------
+        tuple
+            (s1, s2) scale factors for the hyperbolic and elliptic components.
+        """
+        cache_key = self.make_key(id(self._domain_obj), "scale_factor")
+        
+        def _factory() -> Tuple[float, float]:
+            return self._compute_scale_factor(lambda1, omega1)
+        
+        return self.get_or_create(cache_key, _factory)
+
     def cn(self, n: int) -> float:
         """
         Compute the cn coefficient for the collinear libration point.
@@ -467,70 +517,6 @@ class _CollinearDynamicsService(ABC, _LibrationDynamicsService):
         
         return self.get_or_create(cache_key, _factory)
 
-    @property
-    @abstractmethod
-    def linear_modes(self) -> Tuple[float, float, float | None]:
-        """
-        Compute the linear modes (lambda1, omega1, omega2) for the collinear libration point.
-        
-        Returns
-        -------
-        tuple
-            (lambda1, omega1, omega2) values in nondimensional units.
-        """
-        cache_key = self.make_key(id(self._domain_obj), "linear_modes")
-        
-        def _factory() -> Tuple[float, float, float | None]:
-            return self._compute_linear_modes()
-        
-        return self.get_or_create(cache_key, _factory)
-
-    @property
-    def normal_form_transform(self) -> Tuple[np.ndarray, np.ndarray]:
-        cache_key = self.make_key(id(self._domain_obj), "normal_form_transform")
-        
-        def _factory() -> Tuple[np.ndarray, np.ndarray]:
-            return self._build_normal_form()
-        
-        return self.get_or_create(cache_key, _factory)
-
-    @property
-    def position(self) -> np.ndarray:
-        """Calculate the position of the collinear libration point.
-        
-        Returns
-        -------
-        numpy.ndarray, shape (3,)
-            Position vector [x, y, z] in nondimensional units.
-        """
-        cache_key = self.make_key(id(self._domain_obj), "position")
-        
-        def _factory() -> np.ndarray:
-            x = self._find_position(self._position_search_interval)
-            return np.array([x, 0, 0], dtype=np.float64)
-        
-        return self.get_or_create(cache_key, _factory)
-
-    @property
-    def linear_data(self):
-        """Get the linear data for the collinear libration point.
-        
-        Returns
-        -------
-        tuple
-            (lambda1, omega1, omega2, None, C, Cinv)
-            Object containing the linear data for the libration point.
-        """
-        cache_key = self.make_key(id(self._domain_obj), "linear_data")
-        
-        def _factory():
-            lambda1, omega1, omega2 = self.linear_modes
-            C, Cinv = self.normal_form_transform
-            
-            return lambda1, omega1, omega2, None, C, Cinv
-        
-        return self.get_or_create(cache_key, _factory)
-
     def _compute_gamma(self) -> float:
         """Compute gamma for the collinear libration point by solving the quintic polynomial.
         
@@ -542,7 +528,7 @@ class _CollinearDynamicsService(ABC, _LibrationDynamicsService):
         coeffs, search_range = self._gamma_poly_def
         return self._solve_gamma_polynomial(coeffs, search_range)
 
-    def _find_position(self, primary_interval: list) -> float:
+    def _compute_position(self, primary_interval: list) -> float:
         """Find the x-coordinate of a collinear point using retry logic.
         
         Parameters
@@ -560,7 +546,6 @@ class _CollinearDynamicsService(ABC, _LibrationDynamicsService):
         RuntimeError
             If both primary and fallback searches fail.
         """
- 
         func = lambda x_val: self._dOmega_dx(x_val)
         
         try:
@@ -749,8 +734,14 @@ class _CollinearDynamicsService(ABC, _LibrationDynamicsService):
             omega1_val, omega2_val = omega2_val, omega1_val
 
         return (float(lambda1), float(omega1_val), float(omega2_val))
+    
+    def _compute_linear_data(self):
+        lambda1, omega1, omega2 = self.linear_modes
+        C, Cinv = self.normal_form_transform
+        
+        return lambda1, omega1, omega2, None, C, Cinv
 
-    def _scale_factor(self, lambda1, omega1):
+    def _compute_scale_factor(self, lambda1, omega1):
         """Calculate the normalization factors s1 and s2 used in the normal form transformation.
         
         Parameters
@@ -802,7 +793,7 @@ class _CollinearDynamicsService(ABC, _LibrationDynamicsService):
         
         lambda1, omega1, omega2 = self.linear_modes
         c2 = self.cn(2)
-        s1, s2 = self._scale_factor(lambda1, omega1)
+        s1, s2 = self.scale_factor(lambda1, omega1)
 
         if abs(omega2) < 1e-12:
             logger.warning(
@@ -1082,63 +1073,26 @@ class _TriangularDynamicsService(ABC,_LibrationDynamicsService):
     def __init__(self, point: "TriangularPoint") -> None:
         super().__init__(point)
 
-
-
-    @property
-    def linear_modes(self) -> Tuple[float, float, float]:
-        cache_key = self.make_key(id(self._domain_obj), "triangular_modes")
-        
-        def _factory() -> Tuple[float, float, float]:
-            return self._compute_linear_modes()
-        
-        return self.get_or_create(cache_key, _factory)
-
-    @property
-    def normal_form_transform(self) -> Tuple[np.ndarray, np.ndarray]:
-        cache_key = self.make_key(id(self._domain_obj), "triangular_normal_form")
-        
-        def _factory() -> Tuple[np.ndarray, np.ndarray]:
-            return self._build_normal_form()
-        
-        return self.get_or_create(cache_key, _factory)
-
-    @property
-    def position(self) -> np.ndarray:
-        """Calculate the position of the triangular libration point.
-        
-        Returns
-        -------
-        numpy.ndarray, shape (3,)
-            Position vector [x, y, z] in nondimensional units.
+    def scale_factor(self, idx: int) -> Tuple[float, float]:
         """
-        cache_key = self.make_key(id(self._domain_obj), "position")
-        
-        def _factory() -> np.ndarray:
-            x = 0.5 - self.mu
-            y = self.sign * np.sqrt(3) / 2.0
-            return np.array([x, y, 0], dtype=np.float64)
-        
-        return self.get_or_create(cache_key, _factory)
-
-    @property
-    def linear_data(self):
-        """Get the linear data for the triangular libration point.
+        Compute the scale factor for the collinear libration point.
         
         Returns
         -------
         tuple
-            (None, omega1, omega2, omega_z, C, Cinv)
-            Object containing the linear data for the libration point.
+            (s1, s2) scale factors for the hyperbolic and elliptic components.
         """
-        cache_key = self.make_key(id(self._domain_obj), "linear_data")
+        cache_key = self.make_key(id(self._domain_obj), "scale_factor")
         
-        def _factory():
-            omega1, omega2, omega_z = self.linear_modes
-            C, Cinv = self.normal_form_transform
-            
-            return None, omega1, omega2, omega_z, C, Cinv
+        def _factory() -> Tuple[float, float]:
+            return self._compute_scale_factor(idx)
         
         return self.get_or_create(cache_key, _factory)
+
+    def _compute_position(self):
+        x = 0.5 - self.mu
+        y = self.sign * np.sqrt(3) / 2.0
+        return np.array([x, y, 0], dtype=np.float64)
 
     def _compute_linear_modes(self):
         """Compute the three frequencies (omega_1, omega_2, omega_z) following the convention:
@@ -1218,6 +1172,12 @@ class _TriangularDynamicsService(ABC,_LibrationDynamicsService):
 
         return (float(omega1), float(omega2), float(omega_z))
 
+    def _compute_linear_data(self):
+        omega1, omega2, omega_z = self.linear_modes
+        C, Cinv = self.normal_form_transform
+        
+        return None, omega1, omega2, omega_z, C, Cinv
+
     def _J_hess_H2(self) -> np.ndarray:
         """Compute the 6x6 symplectic matrix for the quadratic Hamiltonian H2.
         
@@ -1242,7 +1202,7 @@ class _TriangularDynamicsService(ABC,_LibrationDynamicsService):
         J_full[4:, 4:] = J_vert
         return J_full
 
-    def _scale_factor(self, idx):
+    def _compute_scale_factor(self, idx: int) -> float:
         """Compute the scaling factor for the given mode index.
         
         Parameters
@@ -1270,9 +1230,9 @@ class _TriangularDynamicsService(ABC,_LibrationDynamicsService):
         """
         eigvs = self._get_eigvs().T
         s = np.array([
-            self._scale_factor(0),
-            self._scale_factor(1),
-            self._scale_factor(2),
+            self.scale_factor(0),
+            self.scale_factor(1),
+            self.scale_factor(2),
         ])
         S = np.diag(np.concatenate([s, s]))
         C = eigvs @ np.linalg.inv(S)
@@ -1329,7 +1289,7 @@ class _TriangularDynamicsService(ABC,_LibrationDynamicsService):
         eigv_matrix = np.vstack([u1, u2, u3, v1, v2, v3])
         return eigv_matrix
 
-    def _d_omega(self, idx):
+    def _d_omega(self, idx: int) -> float:
         """Compute the derivative term for the given mode index.
         
         Parameters

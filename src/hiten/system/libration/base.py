@@ -306,7 +306,6 @@ class LibrationPoint(_HitenBase, ABC):
         return self.dynamics.generating_functions(max_deg)
 
     @property
-    @abstractmethod
     def position(self) -> np.ndarray:
         """
         Get the position of the Libration point in the rotating frame.
@@ -316,10 +315,9 @@ class LibrationPoint(_HitenBase, ABC):
         numpy.ndarray, shape (3,)
             3D vector [x, y, z] representing the position in nondimensional units.
         """
-        pass
+        return self._services.dynamics.position
 
     @property
-    @abstractmethod
     def linear_data(self):
         """
         Get the linear data for the Libration point.
@@ -329,10 +327,9 @@ class LibrationPoint(_HitenBase, ABC):
         :class:`~hiten.algorithms.types.services.libration._LinearData`
             The linear data containing eigenvalues and eigenvectors.
         """
-        pass
+        return self._services.dynamics.linear_data
 
     @property
-    @abstractmethod
     def normal_form_transform(self) -> Tuple[np.ndarray, np.ndarray]:
         """
         Get the normal form transform for the Libration point.
@@ -343,7 +340,7 @@ class LibrationPoint(_HitenBase, ABC):
             (C, Cinv) where C is the symplectic transformation matrix
             and Cinv is its inverse.
         """
-        pass
+        return self._services.dynamics.normal_form_transform
 
     def __setstate__(self, state):
         """Restore adapter wiring after unpickling."""

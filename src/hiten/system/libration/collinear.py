@@ -66,9 +66,13 @@ class CollinearPoint(LibrationPoint):
         """
         return self.dynamics.linear_modes
 
+    @property
     def normal_form_transform(self) -> Tuple[np.ndarray, np.ndarray]:
         return self.dynamics.normal_form_transform
 
+    @property
+    def linear_data(self):
+        return self.dynamics.linear_data
 
 
 class L1Point(CollinearPoint):
