@@ -75,7 +75,7 @@ class OrbitFamily(_HitenBase):
         return np.array([o.period if o.period is not None else np.nan for o in self.orbits])
 
     @property
-    def jacobi_constants(self) -> np.ndarray:
+    def jacobis(self) -> np.ndarray:
         """Array of Jacobi constants for all orbits.
         
         Returns
@@ -139,7 +139,7 @@ class OrbitFamily(_HitenBase):
                 "orbit": self.orbits,
                 self.parameter_name: self.parameter_values,
                 "period": self.periods,
-                "jacobi_constant": self.jacobi_constants,
+                "jacobi_constant": self.jacobis,
             }
         )
 

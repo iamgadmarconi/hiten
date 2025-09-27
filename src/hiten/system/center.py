@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
     from hiten.system.hamiltonian import Hamiltonian
 
+
 class CenterManifold(_HitenBase):
     """Centre manifold normal-form builder orchestrating adapter services."""
 

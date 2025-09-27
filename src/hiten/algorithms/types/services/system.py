@@ -21,6 +21,8 @@ from hiten.algorithms.integrators.base import _Solution
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
                                                   _ServiceBundleBase)
+from hiten.algorithms.types.states import (ReferenceFrame, SynodicStateVector,
+                                           Trajectory)
 from hiten.algorithms.utils.coordinates import _get_mass_parameter
 from hiten.utils.io.system import load_system, load_system_inplace, save_system
 
@@ -70,32 +72,29 @@ class _SystemsDynamicsService(_DynamicsServiceBase):
     @property
     def dynsys(self) -> _DynamicalSystemProtocol:
         key = self.make_key(id(self._primary), id(self._secondary), self._distance, "dynsys")
-        return self.get_or_create(
-            key,
-            lambda: rtbp_dynsys(self._mu, name=self._make_dynsys_name("rtbp")),
-        )
+
+        def _factory() -> _DynamicalSystemProtocol:
+            return rtbp_dynsys(self._mu, name=self._make_dynsys_name("rtbp"))
+
+        return self.get_or_create(key, _factory)
 
     @property
     def variational(self) -> _DynamicalSystemProtocol:
         key = self.make_key(id(self._primary), id(self._secondary), self._distance, "variational")
-        return self.get_or_create(
-            key,
-            lambda: variational_dynsys(
-                self._mu,
-                name=self._make_dynsys_name("variational"),
-            ),
-        )
+
+        def _factory() -> _DynamicalSystemProtocol:
+            return variational_dynsys(self._mu, name=self._make_dynsys_name("variational"))
+
+        return self.get_or_create(key, _factory)
 
     @property
     def jacobian(self) -> _DynamicalSystemProtocol:
         key = self.make_key(id(self._primary), id(self._secondary), self._distance, "jacobian")
-        return self.get_or_create(
-            key,
-            lambda: jacobian_dynsys(
-                self._mu,
-                name=self._make_dynsys_name("jacobian"),
-            ),
-        )
+
+        def _factory() -> _DynamicalSystemProtocol:
+            return jacobian_dynsys(self._mu, name=self._make_dynsys_name("jacobian"))
+
+        return self.get_or_create(key, _factory)
     
     def _make_dynsys_name(self, suffix: str) -> str:
         return f"{self._primary.name}_{self._secondary.name}_{suffix}"
@@ -113,21 +112,31 @@ class _SystemsDynamicsService(_DynamicsServiceBase):
         order: int,
         forward: int,
         extra_kwargs: Optional[dict[str, Any]] = None,
-    ) -> _Solution:
+    ) -> Trajectory:
         """Delegate propagation to the shared CR3BP integrator."""
+        cache_key = self.make_key("propagate", state0, tf, steps, method, order, forward, extra_kwargs)
 
-        kwargs = extra_kwargs or {}
-        return _propagate_dynsys(
-            dynsys=self.dynsys,
-            state0=state0,
-            t0=0.0,
-            tf=tf,
-            forward=forward,
-            steps=steps,
-            method=method,
-            order=order,
-            **kwargs,
-        )
+        def _factory() -> Trajectory:
+            kwargs = extra_kwargs or {}
+            sol = _propagate_dynsys(
+                dynsys=self.dynsys,
+                state0=state0,
+                t0=0.0,
+                tf=tf,
+                forward=forward,
+                steps=steps,
+                method=method,
+                order=order,
+                **kwargs,
+            )
+            traj = Trajectory.from_solution(
+                solution=sol,
+                state_vector_cls=SynodicStateVector,
+                frame=ReferenceFrame.ROTATING,
+            )
+            return traj
+
+        return self.get_or_create(cache_key, _factory)
 
 
 @dataclass

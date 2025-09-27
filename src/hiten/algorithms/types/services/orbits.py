@@ -2,22 +2,25 @@
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
 
 import numpy as np
 
+from hiten.algorithms.common.energy import crtbp_energy, energy_to_jacobi
+from hiten.algorithms.continuation.config import _OrbitContinuationConfig
 from hiten.algorithms.corrector.base import Corrector
 from hiten.algorithms.corrector.config import (_LineSearchConfig,
                                                _OrbitCorrectionConfig)
 from hiten.algorithms.corrector.stepping import (make_armijo_stepper,
                                                  make_plain_stepper)
-from hiten.algorithms.dynamics.base import _propagate_dynsys
+from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_monodromy, _compute_stm
 from hiten.algorithms.linalg.backend import _LinalgBackend
-from hiten.algorithms.types.services.base import (_PersistenceServiceBase,
-                                                  _DynamicsServiceBase,
+from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
+                                                  _PersistenceServiceBase,
                                                   _ServiceBundleBase)
 from hiten.algorithms.types.states import (ReferenceFrame, SynodicStateVector,
                                            Trajectory)
@@ -26,6 +29,8 @@ from hiten.utils.io.orbits import (load_periodic_orbit,
                                    save_periodic_orbit)
 
 if TYPE_CHECKING:
+    from hiten.system.base import System
+    from hiten.system.libration.base import LibrationPoint
     from hiten.system.orbits.base import PeriodicOrbit
 
 
@@ -43,51 +48,261 @@ class _OrbitPersistenceService(_PersistenceServiceBase):
 class _OrbitCorrectionService(_DynamicsServiceBase):
     """Drive Newton-based differential correction for periodic orbits."""
 
-    def __init__(self, domain_obj: Any = None) -> None:
+    def __init__(self, domain_obj: "PeriodicOrbit") -> None:
         super().__init__(domain_obj)
 
     def correct(self, *, overrides: Dict[str, Any] | None = None) -> Tuple[np.ndarray, float]:
-        overrides = overrides or {}
+        cache_key = self.make_key("correct", overrides)
 
-        cfg_base: "_OrbitCorrectionConfig" = self._domain_obj._correction_config
-        cfg = replace(cfg_base, **{k: v for k, v in overrides.items() if hasattr(cfg_base, k)})
+        def _factory() -> Tuple[np.ndarray, float]:
+            
+            overrides = overrides or {}
 
-        line_search = overrides.get("line_search_config", cfg.line_search_config)
-        if line_search is True:
-            stepper_factory = make_armijo_stepper(_LineSearchConfig())
-        elif line_search is False or line_search is None:
-            stepper_factory = make_plain_stepper()
-        else:
-            stepper_factory = make_armijo_stepper(line_search)
+            cfg_base: "_OrbitCorrectionConfig" = self._domain_obj._correction_config
+            cfg = replace(cfg_base, **{k: v for k, v in overrides.items() if hasattr(cfg_base, k)})
 
-        corrector = Corrector.with_default_engine(config=cfg)
+            line_search = overrides.get("line_search_config", cfg.line_search_config)
+            if line_search is True:
+                stepper_factory = make_armijo_stepper(_LineSearchConfig())
+            elif line_search is False or line_search is None:
+                stepper_factory = make_plain_stepper()
+            else:
+                stepper_factory = make_armijo_stepper(line_search)
 
-        results = corrector.correct(self._domain_obj)
+            corrector = Corrector.with_default_engine(config=cfg)
+            corrector.update_config({"stepper_factory": stepper_factory})
 
-        return results.corrected_state, 2 * results.half_period
+            results = corrector.correct(self._domain_obj)
+
+            return results.corrected_state, 2 * results.half_period
+
+        return self.get_or_create(cache_key, _factory)
 
 
-class _OrbitDynamicsService(_DynamicsServiceBase):
+class _OrbitContinuationService(_DynamicsServiceBase):
+    """Drive continuation for periodic orbits."""
+
+    def __init__(self, domain_obj: "PeriodicOrbit") -> None:
+        super().__init__(domain_obj)
+
+
+
+class _OrbitDynamicsService(ABC, _DynamicsServiceBase):
     """Integrate periodic orbits using the system dynamics."""
 
     def __init__(self, orbit: "PeriodicOrbit", *, initial_state: np.ndarray | None = None) -> None:
         super().__init__(orbit)
-        self._system = self._domain_obj.system
+
         self._initial_state = initial_state
+    
+        if self._initial_state is not None:
+            self._initial_state = np.asarray(initial_state, dtype=np.float64)
+        else:
+            self._initial_state = self._initial_guess()
 
-    def propagate(self, *, steps: int, method: str, order: int) -> Tuple[np.ndarray, float]:
+        self._period = None
+        self._trajectory = None
+        self._times = None
+        self._stability_info = None
+        
+        self._correction_overrides: dict[str, object] = {}
 
+    @property
+    def orbit(self) -> PeriodicOrbit:
+        return self._domain_obj
+
+    @property
+    def libration_point(self) -> LibrationPoint:
+        return self.orbit.libration_point
+
+    @property
+    def system(self) -> System:
+        return self.orbit.system
+
+    @property
+    def mu(self) -> float:
+        return self.system.mu
+
+    @property
+    def is_stable(self) -> bool:
+        """
+        Check if the orbit is linearly stable.
+        
+        Returns
+        -------
+        bool
+            True if all stability indices have magnitude <= 1, False otherwise.
+        """
+        if self._stability_info is None:
+            self.compute_stability()
+        
+        indices = self.stability_indices
+        
+        # An orbit is stable if all stability indices have magnitude <= 1
+        return np.all(np.abs(indices) <= 1.0)
+
+    @property
+    def stability_indices(self) -> Optional[Tuple]:
+        if self._stability_info is None:
+            self.compute_stability()
+        return self._stability_info[0]
+    
+    @property
+    def eigenvalues(self) -> Optional[Tuple]:
+        if self._stability_info is None:
+            self.compute_stability()
+        return self._stability_info[1]
+    
+    @property
+    def eigenvectors(self) -> Optional[Tuple]:
+        if self._stability_info is None:
+            self.compute_stability()
+        return self._stability_info[2]
+
+    @property
+    def energy(self) -> float:
+        """
+        Compute the energy of the orbit at the initial state.
+        
+        Returns
+        -------
+        float
+            The energy value in nondimensional units.
+        """
+        energy_val = crtbp_energy(self.initial_state, self.mu)
+        return energy_val
+    
+    @property
+    def jacobi_constant(self) -> float:
+        """
+        Compute the Jacobi constant of the orbit.
+        
+        Returns
+        -------
+        float
+            The Jacobi constant value (dimensionless).
+        """
+        return energy_to_jacobi(self.energy)
+
+    @property
+    def dynsys(self) -> _DynamicalSystem:
+        """Underlying vector field instance.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
+            The underlying vector field instance.
+        """
+        return self.system.dynsys
+
+    @property
+    def var_dynsys(self) -> _DynamicalSystem:
+        """Underlying variational equations system.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
+            The underlying variational equations system.
+        """
+        return self.system.var_dynsys
+
+    @property
+    def jacobian_dynsys(self) -> _DynamicalSystem:
+        """Underlying Jacobian evaluation system.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
+            The underlying Jacobian evaluation system.
+        """
+        return self.system.jacobian_dynsys
+
+    @property
+    def initial_state(self) -> np.ndarray:
+        return self._initial_state
+
+    @property
+    def period(self) -> float:
+        return self._period
+
+    @period.setter
+    def period(self, value: Optional[float]):
+        """Set the orbit period and invalidate cached data.
+
+        Setting the period manually allows users (or serialization logic)
+        to override the value obtained via differential correction. Any time
+        the period changes we must invalidate cached trajectory, time array
+        and stability information so they can be recomputed consistently.
+
+        Parameters
+        ----------
+        value : float or None
+            The orbit period in nondimensional units, or None to clear.
+
+        Raises
+        ------
+        ValueError
+            If value is not positive.
+        """
+
+        if value is not None and value <= 0:
+            raise ValueError("period must be a positive number or None.")
+
+        if value != self.period:
+
+            self._period = value
+
+
+            # Also invalidate service attributes and caches that depend on period
+            self._trajectory = None
+            self._stability_info = None
+            self.reset()
+
+    @property
+    def trajectory(self) -> Optional[Trajectory]:
+        """
+        Get the computed trajectory points.
+
+        Returns
+        -------
+        Trajectory or None
+            Array of shape (steps, 6) containing state vectors at each time step,
+            or None if the trajectory hasn't been computed yet.
+        """
+        if self._trajectory is None:
+            raise ValueError("Trajectory not computed. Call propagate() first.")
+        return self._trajectory
+
+    @property
+    def monodromy(self):
+        if self.initial_state is None:
+            raise ValueError("Initial state must be provided")
+
+        if self.period is None:
+            raise ValueError("Period must be set before computing monodromy")
+
+        cache_key = self.make_key("monodromy")
+
+        def _factory() -> np.ndarray:
+            return _compute_monodromy(self.var_dynsys, self.initial_state, self.period)
+
+        return self.get_or_create(cache_key, _factory)
+
+    def propagate(self, *, steps: int, method: str, order: int) -> Trajectory:
         if self._initial_state is None:
             raise ValueError("Initial state must be provided")
 
-        key = self.make_key("propagate", steps, method, order)
-        
-        def _factory() -> Tuple[np.ndarray, float]:
+        if self._period is None:
+            raise ValueError("Period must be set before propagation")
+
+        cache_key = self.make_key("propagate", steps, method, order)
+
+        def _factory() -> Trajectory:
             sol = _propagate_dynsys(
-                dynsys=self._system.dynsys,
-                state0=self._domain_obj.initial_state,
+                dynsys=self.system.dynsys,
+                state0=self.initial_state,
                 t0=0.0,
-                tf=self._domain_obj.period,
+                tf=self._period,
                 forward=1,
                 steps=steps,
                 method=method,
@@ -99,38 +314,57 @@ class _OrbitDynamicsService(_DynamicsServiceBase):
                 state_vector_cls=SynodicStateVector,
                 frame=ReferenceFrame.ROTATING,
             )
-            return sol, traj.period
-        
-        return self.get_or_create(key, _factory)
+            self._trajectory = traj
+            return traj
 
-    def monodromy(self):
-        key = self.make_key("monodromy")
-
-        def _factory() -> np.ndarray:
-            return _compute_monodromy(self._system.var_dynsys, self._domain_obj.initial_state, self._domain_obj.period)
-
-        return self.get_or_create(key, _factory)
+        return self.get_or_create(cache_key, _factory)
 
     def compute_stability(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        key = self.make_key("stability")
+        if self.initial_state is None:
+            raise ValueError("Initial state must be provided")
+
+        if self.period is None:
+            raise ValueError("Period must be set before computing stability")
+
+        cache_key = self.make_key("stability")
 
         def _factory() -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-            Phi = _compute_stm(self._system.var_dynsys, self._domain_obj.initial_state, self._domain_obj.period)[2]
+            _, _, Phi, _ = _compute_stm(self.var_dynsys, self.initial_state, self.period)
             backend = _LinalgBackend()
             indices, eigvals, eigvecs = backend.stability_indices(Phi)
+            self._stability_info = (indices, eigvals, eigvecs)
             return indices, eigvals, eigvecs
 
-        return self.get_or_create(key, _factory)
-    
-    def reset(self) -> None:
-        """Reset all cached data."""
-        super().reset()
+        return self.get_or_create(cache_key, _factory)
+
+    @property
+    @abstractmethod
+    def amplitude(self) -> float:
+        """(Read-only) Current amplitude of the orbit."""
+        pass
+
+    @abstractmethod
+    def _initial_guess(self) -> np.ndarray:
+        pass
+
+    @property
+    @abstractmethod
+    def _correction_config(self) -> "_OrbitCorrectionConfig":
+        """Provides the differential correction configuration for this orbit family."""
+        pass
+
+    @property
+    @abstractmethod
+    def _continuation_config(self) -> "_OrbitContinuationConfig":
+        """Default parameter for family continuation (must be overridden)."""
+        raise NotImplementedError
 
 
 @dataclass
 class _OrbitServices(_ServiceBundleBase):
     domain_obj: "PeriodicOrbit"
     correction: _OrbitCorrectionService
+    continuation: _OrbitContinuationService
     dynamics: _OrbitDynamicsService
     persistence: _OrbitPersistenceService
 
@@ -139,6 +373,7 @@ class _OrbitServices(_ServiceBundleBase):
         return cls(
             domain_obj=orbit,
             correction=_OrbitCorrectionService(orbit),
+            continuation=_OrbitContinuationService(orbit),
             dynamics=_OrbitDynamicsService(orbit),
             persistence=_OrbitPersistenceService()
         )
@@ -148,6 +383,7 @@ class _OrbitServices(_ServiceBundleBase):
         return cls(
             domain_obj=dynamics._domain_obj,
             correction=_OrbitCorrectionService(dynamics._domain_obj),
+            continuation=_OrbitContinuationService(dynamics._domain_obj),
             dynamics=dynamics,
             persistence=_OrbitPersistenceService()
         )

@@ -30,9 +30,6 @@ class Hamiltonian(_HitenBase):
 
         super().__init__(services)
 
-        self._conversion = services.conversion
-        self._pipeline = services.pipeline
-
         self._poly_H: list[np.ndarray] = poly_H
         self._degree: int = degree
         self._ndof: int = ndof
@@ -180,9 +177,6 @@ class LieGeneratingFunction:
     ) -> None:
         services = get_hamiltonian_services()
         super().__init__(services)
-
-        self._conversion = services.conversion
-        self._pipeline = services.pipeline
 
         self._poly_G = poly_G
         self._poly_elim = poly_elim

@@ -27,8 +27,10 @@ from hiten.algorithms.common.energy import crtbp_energy, energy_to_jacobi
 from hiten.algorithms.corrector.config import (_LineSearchConfig,
                                                _OrbitCorrectionConfig)
 from hiten.algorithms.dynamics.base import _DynamicalSystem
-from hiten.algorithms.types.services.orbits import _OrbitServices, _OrbitPersistenceService
 from hiten.algorithms.types.core import _HitenBase
+from hiten.algorithms.types.services.orbits import (_OrbitCorrectionService,
+                                                    _OrbitPersistenceService,
+                                                    _OrbitServices)
 from hiten.algorithms.types.states import (ReferenceFrame, SynodicStateVector,
                                            Trajectory)
 from hiten.system.base import System
@@ -94,38 +96,8 @@ class PeriodicOrbit(_HitenBase, ABC):
     _family: str = "generic"
 
     def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None):
-        self._libration_point = libration_point
-        self._system = self._libration_point.system
-        self._mu = self._system.mu
-        self._services = _OrbitServices.for_system(self._system)
-
-        # Determine how the initial state will be obtained and log accordingly
-        if initial_state is not None:
-            logger.info(
-                "Using provided initial conditions for %s orbit around L%d: %s",
-                self.family,
-                self.libration_point.idx,
-                np.array2string(np.asarray(initial_state, dtype=np.float64), precision=12, suppress_small=True),
-            )
-            self._initial_state = np.asarray(initial_state, dtype=np.float64)
-        else:
-            logger.info(
-                "No initial conditions provided; computing analytical approximation for %s orbit around L%d.",
-                self.family,
-                self.libration_point.idx,
-            )
-            self._initial_state = self._initial_guess()
-
-        self._period = None
-        self._trajectory = None
-        self._times = None
-        self._stability_info = None
-        
-        # General initialization log
-        logger.info(f"Initialized {self.family} orbit around L{self.libration_point.idx}")
-
-        # Algorithm-level correction parameter overrides (applied to config lazily)
-        self._correction_overrides: dict[str, object] = {}
+        services = _OrbitServices.default(self)
+        super().__init__(services)
 
     def __str__(self):
         return f"{self.family} orbit around {self._libration_point}."
@@ -146,40 +118,6 @@ class PeriodicOrbit(_HitenBase, ABC):
         return self._family
 
     @property
-    def libration_point(self) -> LibrationPoint:
-        """The libration point instance that anchors the family.
-        
-        Returns
-        -------
-        :class:`~hiten.system.libration.base.LibrationPoint`
-            The libration point instance.
-        """
-        return self._libration_point
-
-    @property
-    def system(self) -> System:
-        """The system this orbit belongs to.
-        
-        Returns
-        -------
-        :class:`~hiten.system.base.System`
-            The system this orbit belongs to.
-        """
-        return self._system
-
-    @property
-    def mu(self) -> float:
-        """The mass ratio of the system.
-        
-        Returns
-        -------
-        float
-            The mass ratio of the system.
-        """
-        return self._mu
-
-
-    @property
     def initial_state(self) -> npt.NDArray[np.float64]:
         """
         Get the initial state vector of the orbit.
@@ -189,143 +127,19 @@ class PeriodicOrbit(_HitenBase, ABC):
         numpy.ndarray, shape (6,)
             The initial state vector [x, y, z, vx, vy, vz] in nondimensional units.
         """
-        return self._initial_state
+        return self.dynamics.initial_state
     
     @property
-    def trajectory(self) -> Optional[npt.NDArray[np.float64]]:
-        """
-        Get the computed trajectory points.
-        
-        Returns
-        -------
-        numpy.ndarray or None
-            Array of shape (steps, 6) containing state vectors at each time step,
-            or None if the trajectory hasn't been computed yet.
-        """
-        if self._trajectory is None:
-            logger.warning("Trajectory not computed. Call propagate() first.")
-        return self._trajectory
+    def stability_indices(self) -> Optional[Tuple]:
+        return self.dynamics.stability_indices
+
+    @property
+    def eigenvalues(self) -> Optional[Tuple]:
+        return self.dynamics.eigenvalues
     
     @property
-    def times(self) -> Optional[npt.NDArray[np.float64]]:
-        """
-        Get the time points corresponding to the trajectory.
-        
-        Returns
-        -------
-        numpy.ndarray or None
-            Array of time points in nondimensional units, or None if the trajectory
-            hasn't been computed yet.
-        """
-        if self._times is None:
-            logger.warning("Time points not computed. Call propagate() first.")
-        return self._times
-    
-    @property
-    def stability_info(self) -> Optional[Tuple]:
-        """
-        Get the stability information for the orbit.
-        
-        Returns
-        -------
-        tuple or None
-            Tuple containing (_stability_indices, eigenvalues, eigenvectors),
-            or None if stability hasn't been computed yet.
-        """
-        if self._stability_info is None:
-            logger.warning("Stability information not computed. Call compute_stability() first.")
-        return self._stability_info
-
-    @property
-    def dynsys(self) -> _DynamicalSystem:
-        """Underlying vector field instance.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
-            The underlying vector field instance.
-        """
-        return self.system.dynsys
-
-    @property
-    def var_dynsys(self) -> _DynamicalSystem:
-        """Underlying variational equations system.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
-            The underlying variational equations system.
-        """
-        return self.system.var_dynsys
-
-    @property
-    def jacobian_dynsys(self) -> _DynamicalSystem:
-        """Underlying Jacobian evaluation system.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
-            The underlying Jacobian evaluation system.
-        """
-        return self.system.jacobian_dynsys
-
-    @property
-    @abstractmethod
-    def amplitude(self) -> float:
-        """(Read-only) Current amplitude of the orbit."""
-        pass
-
-    @property
-    def period(self) -> Optional[float]:
-        """Orbit period, set after a successful correction.
-        
-        Returns
-        -------
-        float or None
-            The orbit period in nondimensional units, or None if not set.
-        """
-        return self._period
-
-    @period.setter
-    def period(self, value: Optional[float]):
-        """Set the orbit period and invalidate cached data.
-
-        Setting the period manually allows users (or serialization logic)
-        to override the value obtained via differential correction. Any time
-        the period changes we must invalidate cached trajectory, time array
-        and stability information so they can be recomputed consistently.
-        
-        Parameters
-        ----------
-        value : float or None
-            The orbit period in nondimensional units, or None to clear.
-            
-        Raises
-        ------
-        ValueError
-            If value is not positive.
-        """
-        # Basic validation: positive period or None
-        if value is not None and value <= 0:
-            raise ValueError("period must be a positive number or None.")
-
-        # Only act if the period actually changes to avoid unnecessary resets
-        current_period = getattr(self, "_period", None)
-        if value != current_period:
-            # Ensure the private attribute exists before use
-            self._period = value
-
-            # Invalidate caches that depend on the period, if they already exist
-            if hasattr(self, "_trajectory"):
-                self._trajectory = None
-            if hasattr(self, "_times"):
-                self._times = None
-            if hasattr(self, "_stability_info"):
-                self._stability_info = None
-            if hasattr(self, "_monodromy"):
-                self._monodromy = None
-
-            logger.info("Period updated, cached trajectory, times and stability information cleared")
+    def eigenvectors(self) -> Optional[Tuple]:
+        return self.dynamics.eigenvectors
 
     @property
     def system(self) -> System:
@@ -336,7 +150,18 @@ class PeriodicOrbit(_HitenBase, ABC):
         :class:`~hiten.system.base.System`
             The parent CR3BP system.
         """
-        return self._system
+        return self.dynamics.system
+
+    @property
+    def libration_point(self) -> LibrationPoint:
+        """Get the libration point around which the orbit is computed.
+        
+        Returns
+        -------
+        :class:`~hiten.system.libration.base.LibrationPoint`
+            The libration point around which the orbit is computed.
+        """
+        return self.dynamics.libration_point
 
     @property
     def mu(self) -> float:
@@ -347,52 +172,7 @@ class PeriodicOrbit(_HitenBase, ABC):
         float
             The mass ratio (dimensionless).
         """
-        return self._mu
-
-    @property
-    def is_stable(self) -> bool:
-        """
-        Check if the orbit is linearly stable.
-        
-        Returns
-        -------
-        bool
-            True if all stability indices have magnitude <= 1, False otherwise.
-        """
-        if self._stability_info is None:
-            logger.info("Computing stability for stability check")
-            self.compute_stability()
-        
-        indices = self._stability_info[0]  # nu values from _stability_indices
-        
-        # An orbit is stable if all stability indices have magnitude <= 1
-        return np.all(np.abs(indices) <= 1.0)
-
-    @property
-    def energy(self) -> float:
-        """
-        Compute the energy of the orbit at the initial state.
-        
-        Returns
-        -------
-        float
-            The energy value in nondimensional units.
-        """
-        energy_val = crtbp_energy(self._initial_state, self.mu)
-        logger.debug(f"Computed orbit energy: {energy_val}")
-        return energy_val
-    
-    @property
-    def jacobi_constant(self) -> float:
-        """
-        Compute the Jacobi constant of the orbit.
-        
-        Returns
-        -------
-        float
-            The Jacobi constant value (dimensionless).
-        """
-        return energy_to_jacobi(self.energy)
+        return self.dynamics.mu
     
     @property
     def monodromy(self) -> np.ndarray:
@@ -409,38 +189,7 @@ class PeriodicOrbit(_HitenBase, ABC):
         ValueError
             If period is not set.
         """
-        if self.period is None:
-            raise ValueError("Period must be set before computing monodromy")
-        return self._services.dynamics.monodromy(self)
-
-    @property
-    @abstractmethod
-    def _correction_config(self) -> "_OrbitCorrectionConfig":
-        """Provides the differential correction configuration for this orbit family."""
-        pass
-
-    @property
-    @abstractmethod
-    def _continuation_config(self) -> "_OrbitContinuationConfig":
-        """Default parameter for family continuation (must be overridden)."""
-        raise NotImplementedError
-
-    def _reset(self) -> None:
-        """
-        Reset all computed properties when the initial state is changed.
-        Called internally after differential correction or any other operation
-        that modifies the initial state.
-        """
-        self._trajectory = None
-        self._times = None
-        self._stability_info = None
-        self._period = None
-        self._monodromy = None
-
-    @abstractmethod
-    def _initial_guess(self, **kwargs):
-        """Provides the initial guess for the differential correction."""
-        raise NotImplementedError
+        return self.dynamics.monodromy
 
     def update_correction(self, **kwargs) -> None:
         """Update algorithm-level correction parameters for this orbit.
@@ -453,24 +202,6 @@ class PeriodicOrbit(_HitenBase, ABC):
         if invalid:
             raise KeyError(f"Invalid correction parameter(s): {invalid}. Allowed: {sorted(allowed)}")
         self._correction_overrides.update({k: v for k, v in kwargs.items() if v is not None})
-
-    def clear_correction_overrides(self) -> None:
-        """Clear any previously set correction parameter overrides."""
-        self._correction_overrides.clear()
-
-    def _apply_correction_overrides(self, cfg: "_OrbitCorrectionConfig") -> "_OrbitCorrectionConfig":
-        if not self._correction_overrides:
-            return cfg
-        from dataclasses import replace as _dc_replace
-
-        # Apply only attributes that exist on the config
-        valid = {k: v for k, v in self._correction_overrides.items() if hasattr(cfg, k)}
-        return _dc_replace(cfg, **valid)
-
-    @abstractmethod
-    def _correction_config(self) -> _OrbitCorrectionConfig:
-        """Provides the differential correction configuration for this orbit family."""
-        raise NotImplementedError
 
     def correct(
             self,
@@ -507,41 +238,9 @@ class PeriodicOrbit(_HitenBase, ABC):
         self._stability_info = None
         return result.corrected_state, result.period
 
-    def propagate(
-        self,
-        steps: int = 1000,
-        method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
-        order: int = 8,
-        *,
-        as_trajectory: bool = False,
-    ) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]] | Trajectory:
-        if self.period is None:
-            raise ValueError("Period must be set before propagation")
-
-        sol = self._services.dynamics.propagate(
-            self,
-            steps=steps,
-            method=method,
-            order=order,
-        )
-
-        self._trajectory = sol.solution.states
-        self._times = sol.solution.times
-
-        traj = sol.trajectory
-        if as_trajectory:
-            return traj
-        return self._times, self._trajectory
-
-    def compute_stability(self, **kwargs) -> Tuple:
-        if self.period is None:
-            msg = "Period must be set before stability analysis"
-            logger.error(msg)
-            raise ValueError(msg)
-
-        stability = self._services.dynamics.compute_stability(self)
-        self._stability_info = (stability.indices, stability.eigenvalues, stability.eigenvectors)
-        return self._stability_info
+    def propagate(self, steps: int = 1000, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8) -> Trajectory:
+        """Propagate the orbit."""
+        return self.dynamics.propagate(steps=steps, method=method, order=order)
 
     def manifold(self, stable: bool = True, direction: Literal["positive", "negative"] = "positive") -> "Manifold":
         """Create a manifold object for this orbit.
