@@ -24,17 +24,17 @@ point for more sophisticated methods.
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, Optional, Tuple
+from typing import Literal, Tuple
 
 import numpy as np
 
 from hiten.algorithms.dynamics.base import _DynamicalSystem
-from hiten.algorithms.types.services.torus import _TorusServices
 from hiten.algorithms.types.core import _HitenBase
+from hiten.algorithms.types.services.torus import (_TorusPersistenceService,
+                                                   _TorusServices)
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.orbits.base import PeriodicOrbit
-from hiten.utils.log_config import logger
 from hiten.utils.plots import plot_invariant_torus
 
 
@@ -110,27 +110,8 @@ class InvariantTori(_HitenBase):
     """
 
     def __init__(self, orbit: PeriodicOrbit):
-        if orbit.period is None:
-            raise ValueError("The generating orbit must be corrected first (period is None).")
-
-        self._orbit = orbit
-
-        self._services = _TorusServices.from_torus(self)
-        monodromy, evals, evecs = self._services.dynamics.eigen_data()
-
-        self._monodromy = monodromy
-        self._evals = evals
-        self._evecs = evecs
-
-        # Internal caches populated via services.
-        self._theta1: Optional[np.ndarray] = None
-        self._ubar: Optional[np.ndarray] = None
-        self._y_series: Optional[np.ndarray] = None
-        self._grid: Optional[np.ndarray] = None
-        self._v_curve_prev: Optional[np.ndarray] = None
-        self._family_tangent: Optional[np.ndarray] = None
-
-
+        services = _TorusServices.default(self, orbit=orbit)
+        super().__init__(services)
 
     def __str__(self) -> str:
         return f"InvariantTori object for seed orbit={self.orbit} at point={self.libration_point})"
@@ -141,47 +122,52 @@ class InvariantTori(_HitenBase):
     @property
     def orbit(self) -> PeriodicOrbit:
         """Periodic orbit about which the torus is constructed."""
-        return self._orbit
+        return self.dynamics.orbit
 
     @property
     def libration_point(self) -> LibrationPoint:
         """Libration point anchoring the family."""
-        return self.orbit.libration_point
+        return self.dynamics.libration_point
 
     @property
     def system(self) -> System:
         """Parent CR3BP system."""
-        return self.libration_point.system
+        return self.dynamics.system
     
     @property
     def dynsys(self):
         """Dynamical system."""
-        return self.system.dynsys
+        return self.dynamics.dynsys
 
     @property
     def var_dynsys(self) -> _DynamicalSystem:
         """Variational equations system."""
-        return self.system.var_dynsys
+        return self.dynamics.var_dynsys
 
     @property
     def jacobian_dynsys(self) -> _DynamicalSystem:
         """Jacobian evaluation system."""
-        return self.system.jacobian_dynsys
+        return self.dynamics.jacobian_dynsys
     
     @property
     def period(self) -> float:
         """Orbit period."""
-        return float(self.orbit.period)
+        return self.dynamics.period
     
     @property
     def jacobi(self) -> float:
         """Jacobi constant."""
-        return float(self.orbit.jacobi_constant)
+        return self.dynamics.jacobi
+
+    @property
+    def energy(self) -> float:
+        """Orbit energy."""
+        return self.dynamics.energy
 
     @property
     def grid(self) -> np.ndarray:
         """Invariant torus grid."""
-        return self._services.dynamics.grid
+        return self.dynamics.grid
 
     def compute(
         self,
@@ -215,14 +201,14 @@ class InvariantTori(_HitenBase):
         The grid is cached for subsequent plotting and state export.
         """
 
-        u_grid = self._services.dynamics.compute_grid(
+        u_grid = self.dynamics.compute_grid(
             epsilon=epsilon,
             n_theta1=n_theta1,
             n_theta2=n_theta2,
             method=method,
             order=order,
         )
-        self._grid = u_grid
+
         return u_grid
 
     def plot(
@@ -267,18 +253,33 @@ class InvariantTori(_HitenBase):
             **kwargs,
         )
 
-    def save(self, path: str | Path, **kwargs) -> None:
-        """Persist this torus using the configured services."""
-        self._services.persistence.save(self, path, **kwargs)
+
+    def __setstate__(self, state):
+        """Restore the InvariantTori instance after unpickling.
+
+        The heavy, non-serialisable dynamical system is reconstructed lazily
+        using the stored value of orbit.
+        
+        Parameters
+        ----------
+        state : dict
+            Dictionary containing the serialized state of the InvariantTori.
+        """
+        super().__setstate__(state)
+        self._setup_services(_TorusServices.default(self))
 
     @classmethod
-    def load(cls, path: str | Path) -> "InvariantTori":
+    def load(cls, filepath: str | Path, **kwargs) -> "InvariantTori":
         """Load an invariant torus from disk using the adapter."""
-        services = _TorusServices.from_torus(cls)
-        torus = services.persistence.load(path)
-        torus._services = services
-        return torus
+        return cls._load_with_services(
+            filepath, 
+            _TorusPersistenceService(), 
+            _TorusServices.default, 
+            **kwargs
+        )
 
-    def load_inplace(self, path: str | Path, **kwargs) -> None:
-        """Populate this torus instance from persisted data."""
-        self._services.persistence.load_inplace(self, path, **kwargs)
+    def load_inplace(self, filepath: str, **kwargs) -> None:
+        """Load invariant torus data from a file in place."""
+        self.persistence.load_inplace(self, filepath)
+        self.dynamics.reset()
+        return self

@@ -20,19 +20,19 @@ and Space Mission Design".
 """
 
 import os
-from typing import Literal
+from typing import List, Literal
 
 import pandas as pd
 
-from hiten.algorithms.dynamics.base import _DynamicalSystem
+from hiten.algorithms.types.core import _HitenBase
+from hiten.algorithms.types.services.manifold import (
+    _ManifoldPersistenceService, _ManifoldServices)
+from hiten.algorithms.types.states import Trajectory
 from hiten.system.base import System
 from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.io.common import _ensure_dir
 from hiten.utils.log_config import logger
 from hiten.utils.plots import plot_manifold
-from hiten.algorithms.types.services.manifold import _ManifoldServices
-from hiten.algorithms.types.core import _HitenBase
-
 
 
 class Manifold(_HitenBase):
@@ -75,16 +75,14 @@ class Manifold(_HitenBase):
             stable: bool = True, 
             direction: Literal["positive", "negative"] = "positive", 
         ):
-        self._generating_orbit = generating_orbit
-        self._libration_point = self._generating_orbit.libration_point
-        self._system = self._generating_orbit.system
-        self._mu = self._system.mu
-        self._stable = 1 if stable else -1
-        self._direction = 1 if direction == "positive" else -1
+        services = _ManifoldServices.default(self, stable=stable, direction=direction)
+        super().__init__(services)
 
-        self._last_compute_params: dict = None
-        self._manifold_result = None
-        self._services = _ManifoldServices.for_manifold(self)
+    def __str__(self):
+        return f"Manifold(stable={self.stable}, direction={self.direction}) of {self.generating_orbit}"
+    
+    def __repr__(self):
+        return self.__str__()
 
     @property
     def generating_orbit(self) -> PeriodicOrbit:
@@ -95,7 +93,7 @@ class Manifold(_HitenBase):
         :class:`~hiten.system.orbits.base.PeriodicOrbit`
             The generating periodic orbit.
         """
-        return self._generating_orbit
+        return self.dynamics.orbit
 
     @property
     def libration_point(self):
@@ -106,7 +104,7 @@ class Manifold(_HitenBase):
         :class:`~hiten.system.libration.base.LibrationPoint`
             The libration point associated with the generating orbit.
         """
-        return self._libration_point
+        return self.dynamics.libration_point
 
     @property
     def system(self) -> System:
@@ -117,7 +115,7 @@ class Manifold(_HitenBase):
         :class:`~hiten.system.base.System`
             The system this manifold belongs to.
         """
-        return self._system
+        return self.dynamics.system
 
     @property
     def mu(self) -> float:
@@ -128,7 +126,7 @@ class Manifold(_HitenBase):
         float
             The mass ratio (dimensionless).
         """
-        return self._mu
+        return self.dynamics.mu
 
     @property
     def stable(self) -> int:
@@ -139,7 +137,7 @@ class Manifold(_HitenBase):
         int
             Encoded stability: 1 for stable, -1 for unstable.
         """
-        return self._stable
+        return self.dynamics.stable
 
     @property
     def direction(self) -> int:
@@ -150,43 +148,10 @@ class Manifold(_HitenBase):
         int
             Encoded direction: 1 for 'positive', -1 for 'negative'.
         """
-        return self._direction
+        return self.dynamics.direction
 
     @property
-    def dynsys(self) -> _DynamicalSystem:
-        """Dynamical system of the manifold.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
-            The dynamical system of the manifold.
-        """
-        return self.system.dynsys
-
-    @property
-    def var_dynsys(self) -> _DynamicalSystem:
-        """Variational equations system of the manifold.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
-            The variational equations system of the manifold.
-        """
-        return self.system.var_dynsys
-
-    @property
-    def jacobian_dynsys(self) -> _DynamicalSystem:
-        """Jacobian evaluation system of the manifold.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.dynamics.base._DynamicalSystem`
-            The Jacobian evaluation system of the manifold.
-        """
-        return self.system.jacobian_dynsys
-
-    @property
-    def manifold_result(self):
+    def result(self):
         """Cached result from the last successful compute call.
         
         Returns
@@ -194,13 +159,11 @@ class Manifold(_HitenBase):
         :class:`~hiten.system.manifold.ManifoldResult` or None
             The cached manifold result, or None if not computed.
         """
-        return self._manifold_result
+        return self.dynamics.manifold_result
 
-    def __str__(self):
-        return f"Manifold(stable={self.stable}, direction={self.direction}) of {self.generating_orbit}"
-    
-    def __repr__(self):
-        return self.__str__()
+    @property
+    def trajectories(self) -> List[Trajectory]:
+        return self.dynamics.trajectories
 
     def compute(self, step: float = 0.02, integration_fraction: float = 0.75, NN: int = 1, displacement: float = 1e-6, dt: float = 1e-3, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8, **kwargs):
         """
@@ -266,7 +229,7 @@ class Manifold(_HitenBase):
         kwargs.setdefault("energy_tol", 1e-6)
         kwargs.setdefault("safe_distance", 2.0)
 
-        result = self._services.dynamics.compute_manifold(
+        result = self.dynamics.compute_manifold(
             step=step,
             integration_fraction=integration_fraction,
             NN=NN,
@@ -279,7 +242,6 @@ class Manifold(_HitenBase):
             show_progress=kwargs["show_progress"],
         )
 
-        self._manifold_result = result
         return result
 
     def plot(self, dark_mode: bool = True, save: bool = False, filepath: str = 'manifold.svg', **kwargs):
@@ -344,40 +306,43 @@ class Manifold(_HitenBase):
         ValueError
             If manifold_result is None.
         """
-        if self._manifold_result is None:
-            err = "Manifold result not computed. Please compute the manifold first."
-            logger.error(err)
-            raise ValueError(err)
+        df = self.to_df(**kwargs)
+        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+        df.to_csv(filepath, index=False)
+
+    def to_df(self, **kwargs):
+        """
+        Export manifold trajectory data to a pandas DataFrame.
+        """
+        if self.trajectories is None:
+            raise ValueError("Manifold result not computed. Please compute the manifold first.")
 
         data = []
-        for i, (states, times) in enumerate(zip(self._manifold_result.states_list, self._manifold_result.times_list)):
+        for i, (states, times) in enumerate(zip(self.trajectories.states, self.trajectories.times)):
             for j in range(states.shape[0]):
                 data.append(
                     [i, times[j], states[j, 0], states[j, 1], states[j, 2], states[j, 3], states[j, 4], states[j, 5]]
                 )
         
-        df = pd.DataFrame(data, columns=['trajectory_id', 'time', 'x', 'y', 'z', 'vx', 'vy', 'vz'])
+        return pd.DataFrame(data, columns=['trajectory_id', 'time', 'x', 'y', 'z', 'vx', 'vy', 'vz'])
 
-        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+    def __setstate__(self, state):
+        """Restore the Manifold instance after unpickling.
 
-        df.to_csv(filepath, index=False)
-        logger.info(f"Manifold data successfully exported to {filepath}")
-
-    def save(self, filepath: str, **kwargs) -> None:
-        """Save the manifold to a file.
+        The heavy, non-serialisable dynamical system is reconstructed lazily
+        using the stored value of stable and direction.
+        secondary bodies.
         
         Parameters
         ----------
-        filepath : str
-            Path where to save the manifold data.
-        **kwargs
-            Additional keyword arguments for the save operation.
+        state : dict
+            Dictionary containing the serialized state of the Manifold.
         """
-        self._services.persistence.save(self, filepath, **kwargs)
-        return
+        super().__setstate__(state)
+        self._setup_services(_ManifoldServices.default(self))
 
     @classmethod
-    def load(cls, filepath: str) -> "Manifold":
+    def load(cls, filepath: str, **kwargs) -> "Manifold":
         """Load a manifold from a file.
         
         Parameters
@@ -395,7 +360,9 @@ class Manifold(_HitenBase):
         FileNotFoundError
             If the file does not exist.
         """
-        if not os.path.exists(filepath):
-            raise FileNotFoundError(f"Manifold file not found: {filepath}")
-        manifold = _ManifoldServices.for_loading().persistence.load(filepath)
-        return manifold
+        return cls._load_with_services(
+            filepath, 
+            _ManifoldPersistenceService(), 
+            _ManifoldServices.default, 
+            **kwargs
+        )

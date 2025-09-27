@@ -12,11 +12,15 @@ from hiten.algorithms.dynamics.rtbp import _compute_stm
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
                                                   _ServiceBundleBase)
+from hiten.algorithms.dynamics.base import _DynamicalSystem
 from hiten.utils.io.torus import load_torus, load_torus_inplace, save_torus
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
     from hiten.system.torus import InvariantTori, Torus
+    from hiten.system.orbits.base import PeriodicOrbit
+    from hiten.system.base import System
+    from hiten.system.libration.base import LibrationPoint
 
 
 class _TorusPersistenceService(_PersistenceServiceBase):
@@ -33,11 +37,94 @@ class _TorusPersistenceService(_PersistenceServiceBase):
 class _TorusDynamicsService(_DynamicsServiceBase):
     """Provide STM preparation and torus construction helpers."""
 
-    def __init__(self, torus: "InvariantTori") -> None:
+    def __init__(self, torus: "InvariantTori", *, orbit: PeriodicOrbit) -> None:
+        if orbit.period is None:
+            raise ValueError("The generating orbit must be corrected first (period is None).")
+
         super().__init__(torus)
-        self._orbit = self._domain_obj.orbit
+        self._orbit = orbit
         self._latest_grid: np.ndarray | None = None
         self._latest_params: dict | None = None
+
+    @property
+    def orbit(self) -> PeriodicOrbit:
+        return self._orbit
+
+    @property
+    def initial_state(self) -> np.ndarray:
+        return self.orbit.initial_state
+
+    @property
+    def period(self) -> float:
+        return self.orbit.period
+    
+    @property
+    def jacobi(self) -> float:
+        return self.orbit.jacobi
+
+    @property
+    def energy(self) -> float:
+        return self.orbit.energy
+
+    @property
+    def libration_point(self) -> LibrationPoint:
+        return self.orbit.libration_point
+
+    @property
+    def system(self) -> System:
+        return self.libration_point.system
+
+    @property
+    def mu(self) -> float:
+        return self.system.mu
+
+    @property
+    def dynsys(self) -> _DynamicalSystem:
+        return self.system.dynsys
+
+    @property
+    def var_dynsys(self) -> _DynamicalSystem:
+        return self.system.var_dynsys
+
+    @property
+    def jacobian_dynsys(self) -> _DynamicalSystem:
+        return self.system.jacobian_dynsys
+
+    @property
+    def monodromy(self) -> np.ndarray:
+        return self.eigen_data()[0]
+
+    @property
+    def eigenvalues(self) -> np.ndarray:
+        return self.eigen_data()[1]
+
+    @property
+    def eigenvectors(self) -> np.ndarray:
+        return self.eigen_data()[2]
+
+    @property
+    def grid(self) -> np.ndarray:
+        """Return the latest computed grid.
+        
+        Returns
+        -------
+        np.ndarray
+            The most recently computed torus grid.
+            
+        Raises
+        ------
+        ValueError
+            If no grid has been computed yet.
+        """
+        if self._latest_grid is None:
+            raise ValueError("No grid has been computed yet. Call compute_grid() first.")
+        return self._latest_grid
+
+    @property
+    def params(self) -> dict:
+        if self._latest_params is None:
+            raise ValueError("No parameters have been computed yet. Call compute_grid() first.")
+        return self._latest_params
 
     def eigen_data(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         key = self.make_key(id(self._orbit))
@@ -80,9 +167,9 @@ class _TorusDynamicsService(_DynamicsServiceBase):
             )
 
             x_series, times, _, phi_flat = _compute_stm(
-                self._orbit.system.var_dynsys,
-                self._orbit.initial_state,
-                self._orbit.period,
+                self.var_dynsys,
+                self.initial_state,
+                self.period,
                 steps=n_theta1,
                 forward=1,
                 method=method,
@@ -90,7 +177,7 @@ class _TorusDynamicsService(_DynamicsServiceBase):
             )
 
             phi_mats = phi_flat[:, :36].reshape((n_theta1, 6, 6))
-            theta1 = 2.0 * np.pi * times / self._orbit.period
+            theta1 = 2.0 * np.pi * times / self.period
 
             idx, lam_c = self._select_unit_circle_eigenvalue(evals)
             y0 = evecs[:, idx]
@@ -101,8 +188,6 @@ class _TorusDynamicsService(_DynamicsServiceBase):
             y_series = np.empty((n_theta1, 6), dtype=np.complex128)
             for k in range(n_theta1):
                 y_series[k] = phase[k] * phi_mats[k] @ y0
-
-            logger.info("Cached STM and eigen-vector field for torus initialisation.")
 
             return (
                 theta1.copy(),
@@ -190,23 +275,7 @@ class _TorusDynamicsService(_DynamicsServiceBase):
         
         return grid
 
-    @property
-    def grid(self) -> np.ndarray:
-        """Return the latest computed grid.
-        
-        Returns
-        -------
-        np.ndarray
-            The most recently computed torus grid.
-            
-        Raises
-        ------
-        ValueError
-            If no grid has been computed yet.
-        """
-        if self._latest_grid is None:
-            raise ValueError("No grid has been computed yet. Call compute_grid() first.")
-        return self._latest_grid
+
 
     def initial_section_curve(
         self,
@@ -338,10 +407,10 @@ class _TorusServices(_ServiceBundleBase):
     persistence: _TorusPersistenceService
 
     @classmethod
-    def default(cls, torus: "InvariantTori") -> "_TorusServices":
+    def default(cls, torus: "InvariantTori", *, orbit: PeriodicOrbit) -> "_TorusServices":
         return cls(
             domain_obj=torus,
-            dynamics=_TorusDynamicsService(torus),
+            dynamics=_TorusDynamicsService(torus, orbit=orbit),
             persistence=_TorusPersistenceService(),
         )
 

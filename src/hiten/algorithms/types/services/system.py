@@ -46,11 +46,11 @@ class _SystemPersistenceService(_PersistenceServiceBase):
 class _SystemsDynamicsService(_DynamicsServiceBase):
     """Lazily construct and cache dynamical system backends for a CR3BP system."""
 
-    def __init__(self, domain_obj: "System") -> None:
+    def __init__(self, domain_obj: "System", *, primary: "Body", secondary: "Body", distance: float) -> None:
         super().__init__(domain_obj)
-        self._primary = domain_obj.primary
-        self._secondary = domain_obj.secondary
-        self._distance = domain_obj.distance
+        self._primary = primary
+        self._secondary = secondary
+        self._distance = distance
         self._mu = _get_mass_parameter(domain_obj.primary.mass, domain_obj.secondary.mass)
 
     @property
@@ -146,8 +146,8 @@ class _SystemServices(_ServiceBundleBase):
     persistence: _SystemPersistenceService
 
     @classmethod
-    def default(cls, system: "System") -> "_SystemServices":
-        dynamics = _SystemsDynamicsService(system)
+    def default(cls, system: "System", *, primary: "Body", secondary: "Body", distance: float) -> "_SystemServices":
+        dynamics = _SystemsDynamicsService(system, primary=primary, secondary=secondary, distance=distance)
         persistence = _SystemPersistenceService()
         return cls(domain_obj=system, dynamics=dynamics, persistence=persistence)
 

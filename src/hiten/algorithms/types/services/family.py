@@ -14,8 +14,6 @@ if TYPE_CHECKING:
     from hiten.system.family import OrbitFamily
 
 
-
-
 class _OrbitFamilyPersistenceService(_PersistenceServiceBase):
     """Handle HDF5 serialisation for orbit families."""
 

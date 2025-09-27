@@ -170,7 +170,7 @@ class _OrbitDynamicsService(ABC, _DynamicsServiceBase):
 
     @property
     def system(self) -> System:
-        return self.orbit.system
+        return self.libration_point.system
 
     @property
     def mu(self) -> float:

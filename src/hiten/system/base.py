@@ -21,8 +21,7 @@ import numpy as np
 from hiten.algorithms.types.core import _HitenBase
 from hiten.algorithms.types.services.system import (_SystemPersistenceService,
                                                     _SystemServices)
-from hiten.algorithms.types.states import (ReferenceFrame, SynodicStateVector,
-                                           Trajectory)
+from hiten.algorithms.types.states import Trajectory
 from hiten.system.body import Body
 from hiten.system.libration.base import LibrationPoint
 from hiten.utils.constants import Constants
@@ -65,8 +64,7 @@ class System(_HitenBase):
     libration point classes; this wrapper simply orchestrates them.
     """
     def __init__(self, primary: Body, secondary: Body, distance: float):
-
-        services : _SystemServices = _SystemServices.default(self)
+        services = _SystemServices.default(self, primary=primary, secondary=secondary, distance=distance)
         super().__init__(services)
 
         self._libration_points: Dict[int, LibrationPoint] = {}
