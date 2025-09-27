@@ -55,7 +55,13 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
 
     def __init__(self, domain_obj: "PeriodicOrbit") -> None:
         super().__init__(domain_obj)
-        self._corrector = Corrector.with_default_engine(config=self.correction_config)
+        self._corrector = None
+
+    @property
+    def corrector(self) -> Corrector:
+        if self._corrector is None:
+            self._corrector = Corrector.with_default_engine(config=self.correction_config)
+        return self._corrector
 
     def correct(self, *, overrides: Dict[str, Any] | None = None, **kwargs) -> Tuple[np.ndarray, float]:
         """Differential correction wrapper.
@@ -125,7 +131,7 @@ class _OrbitContinuationService(_DynamicsServiceBase):
     def __init__(self, domain_obj: "PeriodicOrbit") -> None:
         super().__init__(domain_obj)
         self._initial_state = self.domain_obj._initial_state
-        self._generator = StateParameter.with_default_engine(config=self.continuation_config)
+        self._generator = None
 
     @property
     def initial_state(self) -> np.ndarray:
@@ -133,6 +139,8 @@ class _OrbitContinuationService(_DynamicsServiceBase):
 
     @property
     def generator(self) -> StateParameter:
+        if self._generator is None:
+            self._generator = StateParameter.with_default_engine(config=self.continuation_config)
         return self._generator
 
     def generate(self, *, overrides: Dict[str, Any] | None = None) -> Tuple[np.ndarray, float]:
@@ -179,6 +187,7 @@ class _OrbitDynamicsService(_DynamicsServiceBase):
         super().__init__(orbit)
 
         self._initial_state = self.domain_obj._initial_state
+        self._libration_point = self.domain_obj._libration_point
     
         if self._initial_state is not None:
             self._initial_state = np.asarray(self._initial_state, dtype=np.float64)
@@ -198,7 +207,7 @@ class _OrbitDynamicsService(_DynamicsServiceBase):
 
     @property
     def libration_point(self) -> LibrationPoint:
-        return self.domain_obj._libration_point
+        return self._libration_point
 
     @property
     def system(self) -> System:
@@ -611,21 +620,26 @@ class _HaloOrbitDynamicsService(_OrbitDynamicsService):
     """Dynamics service for halo orbits."""
 
     def __init__(self, orbit: "HaloOrbit") -> None:
-        super().__init__(orbit)
-        self._amplitude = self.domain_obj._amplitude_z
-        self._zenith = self.domain_obj._zenith
-        self._initial_state = self.domain_obj._initial_state
-        self._libration_point = self.domain_obj._libration_point
-
-        if self._initial_state is not None and (self._amplitude is not None or self._zenith is not None):
+        # Set amplitude and zenith before calling parent __init__ to avoid AttributeError
+        self._amplitude = orbit._amplitude_z
+        self._zenith = orbit._zenith
+        
+        # Validate parameters before calling parent __init__
+        if orbit._initial_state is not None and (self._amplitude is not None or self._zenith is not None):
             raise ValueError("Cannot provide both an initial_state and analytical parameters (amplitude_z, zenith).")
-        if not isinstance(self._libration_point, "CollinearPoint"):
+        
+        super().__init__(orbit)
+
+        from hiten.system.libration.collinear import CollinearPoint, L1Point, L2Point
+        if not isinstance(self._libration_point, CollinearPoint):
             raise TypeError(f"Halo orbits are only defined for CollinearPoint, but got {type(self._libration_point)}.")
         if self._initial_state is None:
             if self._amplitude is None or self._zenith is None:
                 raise ValueError("Halo orbits require an 'amplitude_z' (z-amplitude) and 'zenith' ('northern'/'southern') parameter when an initial_state is not provided.")
-            if not isinstance(self._libration_point, ("L1Point", "L2Point")):
+            if not isinstance(self._libration_point, (L1Point, L2Point)):
                 raise ValueError("The analytical guess for L3 Halo orbits is experimental.\n Convergence is not guaranteed and may require more iterations.")
+
+            self._initial_state = self.initial_guess()
 
         if self._initial_state is not None:
             if self._zenith is None:
@@ -659,14 +673,14 @@ class _HaloOrbitDynamicsService(_OrbitDynamicsService):
     def initial_guess(self) -> np.ndarray:
 
         amplitude_z = self.amplitude
-        gamma = self.libration_point.gamma
-        won, primary = self.libration_point.won
+        gamma = self.libration_point.dynamics.gamma
+        won, primary = self.libration_point.dynamics.won
         
         c = [0.0, 0.0, 0.0, 0.0, 0.0]  # just to keep 5 slots: c[2], c[3], c[4]
         for n in [2, 3, 4]:
-            c[n] = self.libration_point.cn(n)
+            c[n] = self.libration_point.dynamics.cn(n)
 
-        lambda1, _, _ = self.libration_point.linear_modes
+        lambda1, _, _ = self.libration_point.dynamics.linear_modes
         lam = lambda1
 
         k = 2 * lam / (lam**2 + 1 - c[2])
@@ -875,13 +889,14 @@ class _LyapunovOrbitDynamicsService(_OrbitDynamicsService):
     """Dynamics service for Lyapunov orbits."""
 
     def __init__(self, orbit: "LyapunovOrbit") -> None:
-        super().__init__(orbit)
-        self._amplitude_x = self.domain_obj._amplitude_x
-        self._initial_state = self.domain_obj._initial_state
-        self._libration_point = self.domain_obj._libration_point
+        self._amplitude_x = orbit._amplitude_x
 
         if self._initial_state is not None and self._amplitude_x is not None:
             raise ValueError("Cannot provide both an initial_state and an analytical parameter (amplitude_x).")
+
+        super().__init__(orbit)
+
+        from hiten.system.libration.collinear import CollinearPoint, L1Point, L2Point
         if not isinstance(self._libration_point, CollinearPoint):
             raise TypeError(f"Lyapunov orbits are only defined for CollinearPoint, but got {type(self.libration_point)}.")
         if self._initial_state is None:
@@ -889,7 +904,7 @@ class _LyapunovOrbitDynamicsService(_OrbitDynamicsService):
                 raise ValueError("Lyapunov orbits require an 'amplitude_x' (x-amplitude) parameter when an initial_state is not provided.")
             if not isinstance(self._libration_point, (L1Point, L2Point)):
                 raise ValueError(f"Analytical guess is only available for L1/L2 points. An initial_state must be provided for {self._libration_point.name}.")
-
+            self._initial_state = self.initial_guess()
 
         if self._initial_state is not None and self._amplitude_x is None:
             self._amplitude_x = self._initial_state[SynodicState.X] - self._libration_point.position[0]
@@ -899,8 +914,8 @@ class _LyapunovOrbitDynamicsService(_OrbitDynamicsService):
     def initial_guess(self) -> np.ndarray:
         L_i = self.libration_point.position
         x_L_i: float = L_i[0]
-        c2 = self.libration_point.cn(2)
-        nu_1 = self.libration_point.linear_modes[1]
+        c2 = self.libration_point.dynamics.cn(2)
+        nu_1 = self.libration_point.dynamics.linear_modes[1]
         a = 2 * c2 + 1
         tau = - (nu_1 **2 + a) / (2*nu_1)
         u = np.array([1, 0, 0, nu_1 * tau]) 
@@ -974,7 +989,6 @@ class _VerticalOrbitDynamicsService(_OrbitDynamicsService):
 
     def __init__(self, orbit: "VerticalOrbit") -> None:
         super().__init__(orbit)
-        self._initial_state = self.domain_obj._initial_state
         if self._initial_state is None:
             raise ValueError("Vertical orbits require an initial_state.")
 

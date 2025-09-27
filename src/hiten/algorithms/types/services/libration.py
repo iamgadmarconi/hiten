@@ -349,7 +349,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
             )
 
         orbit_cls = mapping[key]
-        return orbit_cls(self, **kwargs)
+        return orbit_cls(self.domain_obj, **kwargs)
 
     @property
     @abstractmethod
