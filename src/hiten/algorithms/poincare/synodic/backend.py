@@ -760,10 +760,6 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
     def __init__(self) -> None:
         super().__init__()
 
-    # Required by abstract base, but unused for synodic
-    def run(self, seeds: "np.ndarray", *, dt: float = 1e-2) -> tuple["np.ndarray", "np.ndarray"]:
-        raise NotImplementedError("Synodic detection backend does not propagate seeds")
-
     def detect_on_trajectory(
         self, 
         times: np.ndarray, 
@@ -853,7 +849,7 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
             settings.max_hits_per_traj,
         )
 
-    def detect_batch(
+    def run(
         self, 
         trajectories: "Sequence[tuple[np.ndarray, np.ndarray]]", 
         *,

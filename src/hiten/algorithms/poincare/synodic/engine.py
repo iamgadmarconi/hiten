@@ -18,11 +18,8 @@ from hiten.algorithms.poincare.core.engine import _ReturnMapEngine
 from hiten.algorithms.poincare.synodic.backend import _SynodicDetectionBackend
 from hiten.algorithms.poincare.synodic.interfaces import _SynodicInterface
 from hiten.algorithms.poincare.synodic.strategies import _NoOpStrategy
-from hiten.algorithms.poincare.synodic.types import (
-    SynodicMapResults,
-    _SynodicMapProblem,
-)
-from hiten.algorithms.types.core import _BackendCall
+from hiten.algorithms.poincare.synodic.types import (SynodicMapResults,
+                                                     _SynodicMapProblem)
 from hiten.algorithms.types.exceptions import EngineError
 
 
@@ -85,7 +82,7 @@ class _SynodicEngine(_ReturnMapEngine):
 
         # Delegate detection to backend passed in at construction
         if n_workers <= 1 or len(trajectories) <= 1:
-            hits_lists = self._backend.detect_batch(
+            hits_lists = self._backend.run(
                 trajectories, 
                 section_cfg=problem.section_cfg,
                 map_cfg=problem.map_cfg,
@@ -96,7 +93,7 @@ class _SynodicEngine(_ReturnMapEngine):
 
             def _worker(idx_arr: np.ndarray):
                 subset = [trajectories[i] for i in idx_arr.tolist()]
-                return self._backend.detect_batch(
+                return self._backend.run(
                     subset, 
                     section_cfg=problem.section_cfg,
                     map_cfg=problem.map_cfg,

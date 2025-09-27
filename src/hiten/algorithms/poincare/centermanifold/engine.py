@@ -163,7 +163,7 @@ class _CenterManifoldEngine(_ReturnMapEngine):
                 except Exception:
                     pass
 
-                states, times, flags = self._backend.step_to_section(
+                states, times, flags = self._backend.run(
                     seeds, 
                     dt=problem.dt,
                     jac_H=problem.jac_H,
