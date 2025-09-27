@@ -235,13 +235,11 @@ class OrbitFamily(_HitenBase):
         states_list = []
         times_list = []
         for orb in self.orbits:
-            if orb.trajectory is None or orb.times is None:
-                err = "Orbit has no trajectory data. Please call propagate() before plotting."
-                logger.error(err)
-                raise ValueError(err)
+            if orb.trajectory is None:
+                raise ValueError("Orbit has no trajectory data. Please call propagate() before plotting.")
 
-            states_list.append(orb.trajectory)
-            times_list.append(orb.times)
+            states_list.append(orb.trajectory.states)
+            times_list.append(orb.trajectory.times)
 
         first_orbit = self.orbits[0]
         bodies = [first_orbit.system.primary, first_orbit.system.secondary]

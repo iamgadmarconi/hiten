@@ -64,21 +64,18 @@ class StateParameter(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
         getter: Optional[Callable[["PeriodicOrbit"], float]] = None,
         stepper: Optional[Literal["natural", "secant"]] = None,
     ) -> ContinuationResult:
-        target_arr = np.asarray(target, dtype=float)
-        step_arr = np.asarray(step, dtype=float)
-
         kwargs = {
-            "target": target_arr,
-            "step": step_arr,
-            "max_members": int(max_members),
-            "max_retries_per_step": int(max_retries_per_step),
-            "step_min": float(step_min),
-            "step_max": float(step_max),
+            "target": target,
+            "step": step,
+            "max_members": max_members,
+            "max_retries_per_step": max_retries_per_step,
+            "step_min": step_min,
+            "step_max": step_max,
             "state": state,
             "getter": getter,
-            "extra_params": extra_params or {},
+            "extra_params": extra_params,
             "shrink_policy": shrink_policy,
-            "stepper": str(stepper),
+            "stepper": stepper,
         }
 
         problem = self._create_problem(domain_obj=domain_obj, override=override, **kwargs)

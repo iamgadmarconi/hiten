@@ -21,7 +21,7 @@ See Also
     Correction algorithms used by continuation interfaces.
 """
 
-from typing import TYPE_CHECKING, Callable, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Sequence
 
 import numpy as np
 
@@ -153,7 +153,7 @@ class _PeriodicOrbitContinuationInterface(
 
         return _BackendCall(
             kwargs={
-                "domain_obj_repr": domain_obj_repr,
+                "seed_repr": domain_obj_repr,
                 "stepper": stepper,
                 "parameter_getter": problem.parameter_getter,
                 "corrector": corrector,
@@ -175,7 +175,7 @@ class _PeriodicOrbitContinuationInterface(
         info.setdefault("parameter_values", tuple())
         return info
 
-    def to_results(self, outputs: tuple[list[np.ndarray], dict[str, object]], *, problem: _ContinuationProblem) -> ContinuationResult:
+    def to_results(self, outputs: tuple[list[np.ndarray], dict[str, object]], *, problem: _ContinuationProblem, domain_payload: Any = None) -> ContinuationResult:
         family_repr, info = outputs
         info = dict(info)
         accepted_count = int(info.get("accepted_count", len(family_repr)))

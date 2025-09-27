@@ -33,17 +33,17 @@ class _OrbitFamilyDynamicsService(_DynamicsServiceBase):
 
 class _OrbitFamilyServices(_ServiceBundleBase):
     
-    def __init__(self, family: "OrbitFamily", persistence: _OrbitFamilyPersistenceService, dynamics: _OrbitFamilyDynamicsService) -> None:
-        super().__init__(family)
+    def __init__(self, domain_obj: "OrbitFamily", persistence: _OrbitFamilyPersistenceService, dynamics: _OrbitFamilyDynamicsService) -> None:
+        super().__init__(domain_obj)
         self.persistence = persistence
         self.dynamics = dynamics
 
     @classmethod
-    def default(cls, family: "OrbitFamily") -> "_OrbitFamilyServices":
+    def default(cls, domain_obj: "OrbitFamily") -> "_OrbitFamilyServices":
         return cls(
-            domain_obj=family,
+            domain_obj=domain_obj,
             persistence=_OrbitFamilyPersistenceService(),
-            dynamics=_OrbitFamilyDynamicsService(family)
+            dynamics=_OrbitFamilyDynamicsService(domain_obj)
         )
 
     @classmethod
