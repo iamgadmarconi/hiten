@@ -107,10 +107,6 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
         self.corrector.update_config(**kwargs)
 
     @property
-    def corrector(self) -> Corrector:
-        return self._corrector
-
-    @property
     @abstractmethod
     def correction_config(self) -> "_OrbitCorrectionConfig":
         """Provides the differential correction configuration for this orbit family."""
