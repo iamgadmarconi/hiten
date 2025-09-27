@@ -45,7 +45,7 @@ class StateParameter(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
         backend = _PCContinuationBackend()
         intf = interface or _PeriodicOrbitContinuationInterface()
         engine = _OrbitContinuationEngine(backend=backend, interface=intf)
-        return cls(config, interface, engine)
+        return cls(config, intf, engine)
 
     def generate(
         self,
