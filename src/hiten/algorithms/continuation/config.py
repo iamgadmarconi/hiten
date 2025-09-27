@@ -20,9 +20,9 @@ class _ContinuationConfig:
     target: np.ndarray
     step: np.ndarray
     max_members: int
-    max_retries_per_step: int
-    step_min: float
-    step_max: float
+    max_retries_per_step: int = 50
+    step_min: float = 1e-10
+    step_max: float = 1.0
     shrink_policy: Callable[[np.ndarray], np.ndarray] | None = None
 
     def __post_init__(self) -> None:
