@@ -25,8 +25,8 @@ def main() -> None:
     pm = cm.poincare_map(
         energy=0.7,
         section_coord="p3",
-        n_seeds=50,
-        n_iter=100,
+        n_seeds=20,
+        n_iter=20,
         seed_strategy="axis_aligned",
         n_workers=8
     )

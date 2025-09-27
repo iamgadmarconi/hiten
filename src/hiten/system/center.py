@@ -32,6 +32,7 @@ if TYPE_CHECKING:
     from hiten.system.hamiltonian import Hamiltonian
     from hiten.system.libration.base import LibrationPoint
 
+
 class CenterManifold(_HitenBase):
     """Centre manifold normal-form builder orchestrating adapter services."""
 
@@ -88,23 +89,6 @@ class CenterManifold(_HitenBase):
         self._max_degree = state["_max_degree"]
         self._setup_services(_CenterManifoldServices.default(self._point, self._max_degree))
 
-    def save(self, dir_path: str, **kwargs):
-        """
-        Save the :class:`~hiten.system.center.CenterManifold` instance to a directory.
-
-        This method serializes the main object to 'manifold.pkl' and saves
-        each associated Poincare map to a separate file within a 'poincare_maps'
-        subdirectory.
-
-        Parameters
-        ----------
-        dir_path : str or path-like object
-            The path to the directory where the data will be saved.
-        **kwargs
-            Additional keyword arguments for the save operation.
-        """
-        self.persistence.save(self, dir_path, **kwargs)
-
     @classmethod
     def load(cls, dir_path: str, **kwargs) -> "CenterManifold":
         """
@@ -131,6 +115,3 @@ class CenterManifold(_HitenBase):
             lambda cm: _CenterManifoldServices.from_point(cm._point, cm._max_degree), 
             **kwargs
         )
-
-
-

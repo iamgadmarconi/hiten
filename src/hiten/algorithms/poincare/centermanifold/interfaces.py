@@ -8,10 +8,6 @@ logic for:
 - Building constraint dictionaries for the energy equation H(q,p) = h0
 - Solving for the missing coordinate on a section using root finding
 - Lifting plane points to 4D center-manifold states (q2, p2, q3, p3)
-
-The interface exposes pure functions (implemented as @staticmethods) so it is
-easy to test and does not carry state. All numerical inputs (Hamiltonian
-blocks, CLMO tables, energy) are passed explicitly per call.
 """
 
 import os
@@ -163,7 +159,7 @@ class _CenterManifoldInterface(
     def to_results(self, outputs, *, problem: _CenterManifoldMapProblem) -> CenterManifoldMapResults:
         points, states, times = outputs
         section_coord = problem.section_coord
-        labels = _CenterManifoldInterface.plane_labels(section_coord)
+        labels = self.plane_labels(section_coord)
         return CenterManifoldMapResults(points, states, labels, times)
 
     def create_constraints(self, section_coord: str, **kwargs: float) -> dict[str, float]:
@@ -301,7 +297,7 @@ class _CenterManifoldInterface(
         arr = np.asarray(states, dtype=np.float64)
         if arr.size == 0:
             return arr.reshape(0, 4)
-        idx = self._STATE_INDEX[section_coord]
+        idx = _STATE_INDEX[section_coord]
         out = np.array(arr, copy=True, order="C")
         out[:, idx] = 0.0
         return out
