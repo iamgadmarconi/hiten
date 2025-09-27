@@ -188,14 +188,45 @@ class _ServiceBundleBase(ABC):
 
     __slots__ = ()
 
+    def __init__(self, domain_obj: Any) -> None:
+        self._domain_obj = domain_obj
+
+    @property
+    def domain_obj(self) -> Any:
+        return self._domain_obj
+
+    def __getitem__(self, service_name: str):
+        """Get a service by name.
+        
+        This method allows dynamic access to any service in the service bundle.
+        
+        Parameters
+        ----------
+        service_name : str
+            The name of the service to retrieve (e.g., 'correction', 'continuation')
+            
+        Returns
+        -------
+        Any
+            The requested service instance
+            
+        Raises
+        ------
+        AttributeError
+            If the requested service is not available
+        """
+        if hasattr(self, service_name):
+            return getattr(self, service_name)
+        raise AttributeError(f"No '{service_name}' service available in this service bundle")
+
     @classmethod
     @abstractmethod
-    def default(cls) -> "_ServiceBundleBase":
+    def default(cls, domain_obj: Any) -> "_ServiceBundleBase":
         """Create a default service bundle."""
         pass
 
     @classmethod
     @abstractmethod
-    def with_shared_dynamics(cls, dynamics: "_DynamicsServiceBase") -> "_ServiceBundleBase":
+    def with_shared_dynamics(cls, domain_obj: Any, dynamics: "_DynamicsServiceBase") -> "_ServiceBundleBase":
         """Create a service bundle with a shared dynamics service."""
         pass

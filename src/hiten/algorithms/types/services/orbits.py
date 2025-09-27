@@ -11,29 +11,30 @@ import numpy as np
 
 from hiten.algorithms.common.energy import crtbp_energy, energy_to_jacobi
 from hiten.algorithms.continuation.base import StateParameter
-from hiten.algorithms.continuation.config import _OrbitContinuationConfig
 from hiten.algorithms.corrector.base import Corrector
-from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
 from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_monodromy, _compute_stm
 from hiten.algorithms.linalg.backend import _LinalgBackend
-from hiten.algorithms.poincare.singlehit.backend import _y_plane_crossing, _z_plane_crossing
+from hiten.algorithms.poincare.singlehit.backend import (_y_plane_crossing,
+                                                         _z_plane_crossing)
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
                                                   _ServiceBundleBase)
-from hiten.algorithms.types.states import (ReferenceFrame, SynodicStateVector,
-                                           SynodicState, Trajectory)
+from hiten.algorithms.types.states import (ReferenceFrame, SynodicState,
+                                           SynodicStateVector, Trajectory)
 from hiten.system.manifold import Manifold
 from hiten.utils.io.orbits import (load_periodic_orbit,
                                    load_periodic_orbit_inplace,
                                    save_periodic_orbit)
 
 if TYPE_CHECKING:
+    from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+    from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
     from hiten.system.base import System
     from hiten.system.libration.base import LibrationPoint
-    from hiten.system.orbits.base import PeriodicOrbit, GenericOrbit
-    from hiten.system.libration.collinear import CollinearPoint, L1Point, L2Point, L3Point
-
+    from hiten.system.libration.collinear import (CollinearPoint, L1Point,
+                                                  L2Point, L3Point)
+    from hiten.system.orbits.base import GenericOrbit, PeriodicOrbit
 
 class _OrbitPersistenceService(_PersistenceServiceBase):
     """Thin wrapper around orbit persistence helpers."""
@@ -134,13 +135,14 @@ class _OrbitContinuationService(_DynamicsServiceBase):
     @continuation_config.setter
     def continuation_config(self, value: "_OrbitContinuationConfig"):
         """Set the continuation configuration."""
-        from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+        from hiten.algorithms.continuation.config import \
+            _OrbitContinuationConfig
         if value is not None and not isinstance(value, _OrbitContinuationConfig):
             raise TypeError("continuation_config must be an instance of _OrbitContinuationConfig or None.")
         self.generator._set_config(value)
 
 
-class _OrbitDynamicsService(ABC, _DynamicsServiceBase):
+class _OrbitDynamicsService(_DynamicsServiceBase):
     """Integrate periodic orbits using the system dynamics."""
 
     def __init__(self, orbit: "PeriodicOrbit", *, initial_state: np.ndarray | None = None) -> None:
@@ -511,6 +513,7 @@ class _HaloOrbitCorrectionService(_OrbitCorrectionService):
         :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
             The correction configuration.
         """
+        from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
         return _OrbitCorrectionConfig(
             event_func=_y_plane_crossing,
             residual_indices=(SynodicState.VX, SynodicState.VZ),
@@ -567,6 +570,8 @@ class _HaloOrbitContinuationService(_OrbitContinuationService):
         :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
             The continuation configuration.
         """
+        from hiten.algorithms.continuation.config import \
+            _OrbitContinuationConfig
         return _OrbitContinuationConfig(
             target=([self.initial_state[SynodicState.Z]], [self.initial_state[SynodicState.Z] + 1.0]),
             step=((1 - self.initial_state[SynodicState.Z]) / (50 - 1),),
@@ -825,7 +830,8 @@ class _LyapunovOrbitContinuationService(_OrbitContinuationService):
         :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
             The continuation configuration.
         """
-        from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+        from hiten.algorithms.continuation.config import \
+            _OrbitContinuationConfig
         return _OrbitContinuationConfig(
             target=(
                 [self.initial_state[SynodicState.X], self.initial_state[SynodicState.Y]],
@@ -917,11 +923,12 @@ class _VerticalOrbitContinuationService(_OrbitContinuationService):
         :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
             The continuation configuration for Vertical orbits.
         """
-        from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+        from hiten.algorithms.continuation.config import \
+            _OrbitContinuationConfig
         return _OrbitContinuationConfig(
             target=(
-                [self.initial_state[SynodicState.X], self.initial_state[SynodicState.Y]], self.initial_state[SynodicState.Z]
-                [self.initial_state[SynodicState.X] + 1.0, self.initial_state[SynodicState.Y] + 1.0], self.initial_state[SynodicState.Z] + 1.0]),
+                [self.initial_state[SynodicState.X], self.initial_state[SynodicState.Y], self.initial_state[SynodicState.Z]],
+                [self.initial_state[SynodicState.X] + 1.0, self.initial_state[SynodicState.Y] + 1.0, self.initial_state[SynodicState.Z] + 1.0]),
             step=(
                 (1 - self.initial_state[SynodicState.X]) / (50 - 1),
                 (1 - self.initial_state[SynodicState.Y]) / (50 - 1),
@@ -954,8 +961,11 @@ class _OrbitServices(_ServiceBundleBase):
     dynamics: _OrbitDynamicsService
     persistence: _OrbitPersistenceService
 
+    def __init__(self, orbit: "PeriodicOrbit", initial_state: Optional[np.ndarray] = None, *args) -> None:
+        super().__init__(orbit)
+
     @classmethod
-    def default(cls, orbit: "PeriodicOrbit", *, initial_state = Optional[np.ndarray] = None, *args) -> "_OrbitServices":
+    def default(cls, orbit: "PeriodicOrbit", initial_state: Optional[np.ndarray] = None, *args) -> "_OrbitServices":
         
         correction, continuation, dynamics = cls._check_orbit_type(orbit)
         

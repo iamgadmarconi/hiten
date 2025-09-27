@@ -26,24 +26,23 @@ from typing import TYPE_CHECKING, Optional
 from hiten.algorithms.types.core import _HitenBase
 from hiten.algorithms.types.services.center import (
     _CenterManifoldPersistenceService, _CenterManifoldServices)
-from hiten.system.libration.base import LibrationPoint
 
 if TYPE_CHECKING:
     from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
     from hiten.system.hamiltonian import Hamiltonian
-
+    from hiten.system.libration.base import LibrationPoint
 
 class CenterManifold(_HitenBase):
     """Centre manifold normal-form builder orchestrating adapter services."""
 
-    def __init__(self, point: LibrationPoint, degree: int):
+    def __init__(self, point: "LibrationPoint", degree: int):
         self._point = point
         self._max_degree = degree
         services = _CenterManifoldServices.default(point, degree)
         super().__init__(services)
 
     @property
-    def point(self) -> LibrationPoint:
+    def point(self) -> "LibrationPoint":
         return self.dynamics.point
 
     @property

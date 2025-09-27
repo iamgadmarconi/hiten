@@ -497,31 +497,7 @@ class _HitenBase(ABC):
 
     def __init__(self, services: _ServiceBundleBase):
         self._services = services
-        self._unpack_services(services)
-
-    def _unpack_services(self, services: _ServiceBundleBase) -> None:
-        """Dynamically unpack services from the service bundle.
-        
-        This method introspects the service bundle and creates individual
-        service attributes based on the available services. This allows
-        the base class to work with arbitrary service bundles that may
-        have different service types (e.g., correction, continuation, etc.).
-        
-        Parameters
-        ----------
-        services : _ServiceBundleBase
-            The service bundle to unpack
-        """
-        # Get all attributes from the service bundle that are not private
-        service_attrs = {
-            name: getattr(services, name) 
-            for name in dir(services) 
-            if not name.startswith('_') and not callable(getattr(services, name))
-        }
-        
-        # Create individual service attributes
-        for service_name, service_instance in service_attrs.items():
-            setattr(self, f"_{service_name}", service_instance)
+        self._unpack_services()
 
     @property
     def services(self) -> _ServiceBundleBase:
@@ -541,30 +517,6 @@ class _HitenBase(ABC):
             return self._dynamics
         raise AttributeError("No dynamics service available in this service bundle")
     
-    def get_service(self, service_name: str):
-        """Get a service by name.
-        
-        This method allows dynamic access to any service in the service bundle.
-        
-        Parameters
-        ----------
-        service_name : str
-            The name of the service to retrieve (e.g., 'correction', 'continuation')
-            
-        Returns
-        -------
-        Any
-            The requested service instance
-            
-        Raises
-        ------
-        AttributeError
-            If the requested service is not available
-        """
-        attr_name = f"_{service_name}"
-        if hasattr(self, attr_name):
-            return getattr(self, attr_name)
-        raise AttributeError(f"No '{service_name}' service available in this service bundle")
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}()"
@@ -579,9 +531,7 @@ class _HitenBase(ABC):
         non-serializable objects like numba-compiled functions.
         """
         state = self.__dict__.copy()
-        # Remove all service-related attributes
         state.pop("_services", None)
-        # Remove dynamically created service attributes
         service_attrs = [name for name in dir(self) if name.startswith('_') and not name.startswith('__')]
         for attr in service_attrs:
             if hasattr(self, attr) and not callable(getattr(self, attr)):
@@ -595,6 +545,26 @@ class _HitenBase(ABC):
         if not hasattr(self, "_cache") or self._cache is None:
             self._cache = {}
 
+    def _unpack_services(self) -> None:
+        """Unpack services from the service bundle into individual attributes.
+        
+        This method extracts services from the service bundle and creates
+        individual attributes on this instance for easy access.
+        """
+        if not hasattr(self, "_services") or self._services is None:
+            return
+            
+        # Get all attributes from the service bundle that are not private
+        service_attrs = {
+            name: getattr(self._services, name) 
+            for name in dir(self._services) 
+            if not name.startswith('_') and not callable(getattr(self._services, name))
+        }
+        
+        # Create individual service attributes on this instance
+        for service_name, service_instance in service_attrs.items():
+            setattr(self, f"_{service_name}", service_instance)
+
     def _bind_services(self) -> None:
         """Bind individual service properties from the service bundle.
         
@@ -603,7 +573,7 @@ class _HitenBase(ABC):
         work correctly.
         """
         if hasattr(self, "_services") and self._services is not None:
-            self._unpack_services(self._services)
+            self._unpack_services()
 
     def _setup_services(self, services: _ServiceBundleBase) -> None:
         """Complete service setup including binding and cache reset.

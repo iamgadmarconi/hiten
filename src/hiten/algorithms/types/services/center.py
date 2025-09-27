@@ -19,7 +19,6 @@ from hiten.algorithms.hamiltonian.transforms import (_coordlocal2realmodal,
                                                      _synodic2local_triangular)
 from hiten.algorithms.poincare.centermanifold.backend import \
     _CenterManifoldBackend
-from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
 from hiten.algorithms.poincare.centermanifold.config import \
     _CenterManifoldMapConfig
 from hiten.algorithms.poincare.centermanifold.interfaces import (
@@ -34,10 +33,11 @@ from hiten.utils.log_config import logger
 from hiten.utils.printing import _format_poly_table
 
 if TYPE_CHECKING:
+    from hiten.algorithms.hamiltonian.pipeline import _HamiltonianPipeline
+    from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
     from hiten.system.center import CenterManifold
     from hiten.system.hamiltonian import Hamiltonian
     from hiten.system.libration.base import LibrationPoint
-    from hiten.algorithms.hamiltonian.pipeline import _HamiltonianPipeline
 
 
 class _CenterManifoldPersistenceService(_PersistenceServiceBase):
@@ -144,6 +144,8 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
         cache_key = self.make_key(id(self._domain_obj), self._degree, energy, config_tuple)
 
         def _factory():
+            from hiten.algorithms.poincare.centermanifold.base import \
+                CenterManifoldMap
             return CenterManifoldMap.with_default_engine(cm, energy, cfg)
 
         return self.get_or_create(cache_key, _factory)
@@ -292,6 +294,9 @@ class _CenterManifoldServices(_ServiceBundleBase):
     degree: int
     persistence: _CenterManifoldPersistenceService
     dynamics: _CenterManifoldDynamicsService
+
+    def __init__(self, domain_obj: "LibrationPoint", degree: int) -> None:
+        super().__init__(domain_obj)
 
     @classmethod
     def default(cls, point: "LibrationPoint", degree: int) -> "_CenterManifoldServices":

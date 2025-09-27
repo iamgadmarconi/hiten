@@ -4,20 +4,20 @@ These facades assemble the engine, backend, and interface using DI and
 provide a simple API to run continuation with domain-friendly inputs.
 """
 
-from typing import Callable, Generic, Literal, Optional, Sequence
+from typing import (TYPE_CHECKING, Callable, Generic, Literal, Optional,
+                    Sequence)
 
 import numpy as np
 
-from hiten.algorithms.continuation.backends.pc import _PCContinuationBackend
-from hiten.algorithms.continuation.engine.engine import \
-    _OrbitContinuationEngine
-from hiten.algorithms.continuation.interfaces import \
-    _PeriodicOrbitContinuationInterface
 from hiten.algorithms.continuation.types import ContinuationResult
-from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT,
-                                         ResultT, _HitenBaseFacade)
+from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
+                                         _HitenBaseFacade)
 from hiten.algorithms.types.states import SynodicState
-from hiten.system.orbits.base import PeriodicOrbit
+
+if TYPE_CHECKING:
+    from hiten.algorithms.continuation.engine.engine import \
+        _OrbitContinuationEngine
+    from hiten.system.orbits.base import PeriodicOrbit
 
 
 class StateParameter(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
@@ -28,13 +28,20 @@ class StateParameter(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
     and the periodic-orbit interface.
     """
 
-    def __init__(self, config: ConfigT, interface, engine: _OrbitContinuationEngine = None) -> None:
+    def __init__(self, config: ConfigT, interface, engine: "_OrbitContinuationEngine" = None) -> None:
         super().__init__(config, interface, engine)
 
     @classmethod
     def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None) -> "StateParameter[DomainT, ConfigT, ResultT]":
         """Create a facade instance with a default engine (factory).
         """
+        from hiten.algorithms.continuation.backends.pc import \
+            _PCContinuationBackend
+        from hiten.algorithms.continuation.engine.engine import \
+            _OrbitContinuationEngine
+        from hiten.algorithms.continuation.interfaces import \
+            _PeriodicOrbitContinuationInterface
+
         backend = _PCContinuationBackend()
         intf = interface or _PeriodicOrbitContinuationInterface()
         engine = _OrbitContinuationEngine(backend=backend, interface=intf)
@@ -54,7 +61,7 @@ class StateParameter(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
         step_max: Optional[float] = None,
         extra_params: Optional[dict] = None,
         shrink_policy: Optional[Callable[[np.ndarray], np.ndarray]] = None,
-        getter: Optional[Callable[[PeriodicOrbit], float]] = None,
+        getter: Optional[Callable[["PeriodicOrbit"], float]] = None,
         stepper: Optional[Literal["natural", "secant"]] = None,
     ) -> ContinuationResult:
         target_arr = np.asarray(target, dtype=float)

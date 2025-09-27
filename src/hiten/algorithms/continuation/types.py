@@ -1,11 +1,14 @@
 """Types for the continuation module."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import Callable, Tuple
+from typing import TYPE_CHECKING, Callable, Optional, Tuple
 
 import numpy as np
 
-from hiten.algorithms.continuation.config import _ContinuationConfig
+if TYPE_CHECKING:
+    from hiten.algorithms.continuation.config import _ContinuationConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,8 +55,8 @@ class _ContinuationProblem:
     max_members: int
     max_retries_per_step: int
     corrector_kwargs: dict
-    representation_of: Callable[[np.ndarray], np.ndarray] | None = None
-    shrink_policy: Callable[[np.ndarray], np.ndarray] | None = None
+    representation_of: Optional[Callable[[np.ndarray], np.ndarray]] = None
+    shrink_policy: Optional[Callable[[np.ndarray], np.ndarray]] = None
     step_min: float = 1e-10
     step_max: float = 1.0
-    cfg: _ContinuationConfig | None = None
+    cfg: Optional["_ContinuationConfig"] = None

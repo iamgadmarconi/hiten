@@ -148,6 +148,9 @@ class _HamiltonianServices(_ServiceBundleBase):
     conversion: _HamiltonianConversionService
     pipeline: _HamiltonianPipelineService
 
+    def __init__(self, domain_obj: Any = None) -> None:
+        super().__init__(domain_obj)
+
     @classmethod
     def default(cls, domain_obj: Any = None) -> "_HamiltonianServices":
         dynamics = _HamiltonianDynamicsService(domain_obj)

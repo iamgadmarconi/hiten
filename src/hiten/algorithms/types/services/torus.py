@@ -406,6 +406,9 @@ class _TorusServices(_ServiceBundleBase):
     dynamics: _TorusDynamicsService
     persistence: _TorusPersistenceService
 
+    def __init__(self, torus: "InvariantTori", *, orbit: PeriodicOrbit) -> None:
+        super().__init__(torus)
+
     @classmethod
     def default(cls, torus: "InvariantTori", *, orbit: PeriodicOrbit) -> "_TorusServices":
         return cls(

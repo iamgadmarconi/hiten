@@ -56,9 +56,12 @@ class _BodyServices(_ServiceBundleBase):
     persistence: _BodyPersistenceService
     dynamics: _BodyDynamicsService
 
+    def __init__(self, domain_obj: "Body") -> None:
+        super().__init__(domain_obj)
+
     @classmethod
-    def default(cls, body: "Body") -> _BodyServices:
-        return cls(domain_obj=body, persistence=_BodyPersistenceService(), dynamics=_BodyDynamicsService(body))
+    def default(cls, domain_obj: "Body") -> _BodyServices:
+        return cls(domain_obj=domain_obj, persistence=_BodyPersistenceService(), dynamics=_BodyDynamicsService(domain_obj))
 
     @classmethod
     def with_shared_dynamics(cls, dynamics: _BodyDynamicsService) -> _BodyServices:

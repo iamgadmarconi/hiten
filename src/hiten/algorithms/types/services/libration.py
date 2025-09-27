@@ -48,7 +48,7 @@ class _LibrationPersistenceService(_PersistenceServiceBase):
         )
 
 
-class _LibrationDynamicsService(ABC, _DynamicsServiceBase):
+class _LibrationDynamicsService(_DynamicsServiceBase):
     """Provide stability analysis and geometry helpers for libration points."""
 
     def __init__(self, point: "LibrationPoint") -> None:
@@ -450,7 +450,7 @@ class _LibrationDynamicsService(ABC, _DynamicsServiceBase):
         pass
 
 
-class _CollinearDynamicsService(ABC, _LibrationDynamicsService):
+class _CollinearDynamicsService(_LibrationDynamicsService):
 
     def __init__(self, point: "CollinearPoint") -> None:
         super().__init__(point)
@@ -1068,7 +1068,7 @@ class _L3DynamicsService(_CollinearDynamicsService):
         return term1 * (term2 + term3)
 
 
-class _TriangularDynamicsService(ABC,_LibrationDynamicsService):
+class _TriangularDynamicsService(_LibrationDynamicsService):
 
     def __init__(self, point: "TriangularPoint") -> None:
         super().__init__(point)
@@ -1341,6 +1341,9 @@ class _LibrationServices(_ServiceBundleBase):
     domain_obj: "LibrationPoint"
     persistence: _LibrationPersistenceService
     dynamics: _LibrationDynamicsService
+
+    def __init__(self, point: "LibrationPoint") -> None:
+        super().__init__(point)
 
     @classmethod
     def default(cls, point: "LibrationPoint") -> "_LibrationServices":

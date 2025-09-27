@@ -19,8 +19,10 @@ Koon, W. S., Lo, M. W., Marsden, J. E., & Ross, S. D. (2016). "Dynamical Systems
 and Space Mission Design".
 """
 
+from __future__ import annotations
+
 import os
-from typing import List, Literal
+from typing import TYPE_CHECKING, List, Literal
 
 import pandas as pd
 
@@ -29,10 +31,13 @@ from hiten.algorithms.types.services.manifold import (
     _ManifoldPersistenceService, _ManifoldServices)
 from hiten.algorithms.types.states import Trajectory
 from hiten.system.base import System
-from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.io.common import _ensure_dir
 from hiten.utils.log_config import logger
 from hiten.utils.plots import plot_manifold
+
+if TYPE_CHECKING:
+    from hiten.system.base import System
+    from hiten.system.orbits.base import PeriodicOrbit
 
 
 class Manifold(_HitenBase):
@@ -71,7 +76,7 @@ class Manifold(_HitenBase):
 
     def __init__(
             self, 
-            generating_orbit: PeriodicOrbit, 
+            generating_orbit: "PeriodicOrbit", 
             stable: bool = True, 
             direction: Literal["positive", "negative"] = "positive", 
         ):
@@ -85,7 +90,7 @@ class Manifold(_HitenBase):
         return self.__str__()
 
     @property
-    def generating_orbit(self) -> PeriodicOrbit:
+    def generating_orbit(self) -> "PeriodicOrbit":
         """Orbit that seeds the manifold.
         
         Returns

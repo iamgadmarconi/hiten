@@ -448,6 +448,9 @@ class _ManifoldServices(_ServiceBundleBase):
     dynamics: _ManifoldDynamicsService
     persistence: _ManifoldPersistenceService
 
+    def __init__(self, manifold: "Manifold", *, stable: bool, direction: Literal["positive", "negative"]) -> None:
+        super().__init__(manifold)
+
     @classmethod
     def default(cls, manifold: "Manifold", *, stable: bool, direction: Literal["positive", "negative"]) -> "_ManifoldServices":
         return cls(

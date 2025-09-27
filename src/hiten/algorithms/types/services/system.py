@@ -17,7 +17,6 @@ from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
 from hiten.algorithms.dynamics.rtbp import (jacobian_dynsys, rtbp_dynsys,
                                             variational_dynsys)
-from hiten.algorithms.integrators.base import _Solution
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
                                                   _ServiceBundleBase)
@@ -144,6 +143,9 @@ class _SystemServices(_ServiceBundleBase):
     domain_obj: "System"
     dynamics: _SystemsDynamicsService
     persistence: _SystemPersistenceService
+
+    def __init__(self, system: "System", *, primary: "Body", secondary: "Body", distance: float) -> None:
+        super().__init__(system)
 
     @classmethod
     def default(cls, system: "System", *, primary: "Body", secondary: "Body", distance: float) -> "_SystemServices":
