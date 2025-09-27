@@ -956,11 +956,14 @@ class _OrbitServices(_ServiceBundleBase):
 
     @classmethod
     def default(cls, orbit: "PeriodicOrbit", *, initial_state = Optional[np.ndarray] = None, *args) -> "_OrbitServices":
+        
+        correction, continuation, dynamics = cls._check_orbit_type(orbit)
+        
         return cls(
             domain_obj=orbit,
-            correction=_OrbitCorrectionService(orbit),
-            continuation=_OrbitContinuationService(orbit),
-            dynamics=_OrbitDynamicsService(orbit, initial_state=initial_state, *args),
+            correction=correction(orbit),
+            continuation=continuation(orbit),
+            dynamics=dynamics(orbit, initial_state=initial_state, *args),
             persistence=_OrbitPersistenceService()
         )
 
