@@ -52,12 +52,10 @@ class _BodyDynamicsService(_DynamicsServiceBase):
 
 class _BodyServices(_ServiceBundleBase):
 
-    domain_obj: "Body"
-    persistence: _BodyPersistenceService
-    dynamics: _BodyDynamicsService
-
-    def __init__(self, domain_obj: "Body") -> None:
+    def __init__(self, domain_obj: "Body", persistence: _BodyPersistenceService, dynamics: _BodyDynamicsService) -> None:
         super().__init__(domain_obj)
+        self._persistence = persistence
+        self._dynamics = dynamics
 
     @classmethod
     def default(cls, domain_obj: "Body") -> _BodyServices:

@@ -1336,14 +1336,12 @@ class _L5DynamicsService(_TriangularDynamicsService):
         return self.sign * 3 * np.sqrt(3) / 4 * (1 - 2 * self.mu)
 
 
-@dataclass
 class _LibrationServices(_ServiceBundleBase):
-    domain_obj: "LibrationPoint"
-    persistence: _LibrationPersistenceService
-    dynamics: _LibrationDynamicsService
 
-    def __init__(self, point: "LibrationPoint") -> None:
+    def __init__(self, point: "LibrationPoint", persistence: _LibrationPersistenceService, dynamics: _LibrationDynamicsService) -> None:
         super().__init__(point)
+        self._persistence = persistence
+        self._dynamics = dynamics
 
     @classmethod
     def default(cls, point: "LibrationPoint") -> "_LibrationServices":

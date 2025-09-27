@@ -66,8 +66,9 @@ class LyapunovOrbit(PeriodicOrbit):
     def __init__(
             self, 
             libration_point: LibrationPoint, 
-            amplitude_x: Optional[float] = None,
-            initial_state: Optional[Sequence[float]] = None
+            initial_state: Optional[Sequence[float]] = None,
+            amplitude_x: Optional[float] = None
         ):
+        self._amplitude_x = amplitude_x
 
-        super().__init__(libration_point, initial_state, amplitude_x=amplitude_x)
+        super().__init__(libration_point, initial_state=initial_state)

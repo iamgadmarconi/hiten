@@ -86,7 +86,7 @@ class CenterManifold(_HitenBase):
         super().__setstate__(state)
         self._point = state["_point"]
         self._max_degree = state["_max_degree"]
-        self._setup_services(_CenterManifoldServices.from_point(self._point, self._max_degree))
+        self._setup_services(_CenterManifoldServices.default(self._point, self._max_degree))
 
     def save(self, dir_path: str, **kwargs):
         """

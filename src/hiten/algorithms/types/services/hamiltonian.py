@@ -140,16 +140,14 @@ class _HamiltonianPipelineService:
         self._pipelines.pop(id(point), None)
 
 
-@dataclass
 class _HamiltonianServices(_ServiceBundleBase):
-    domain_obj: Any
-    dynamics: _HamiltonianDynamicsService
-    persistence: _HamiltonianPersistenceService
-    conversion: _HamiltonianConversionService
-    pipeline: _HamiltonianPipelineService
 
-    def __init__(self, domain_obj: Any = None) -> None:
+    def __init__(self, domain_obj: Any, dynamics: _HamiltonianDynamicsService, persistence: _HamiltonianPersistenceService, conversion: _HamiltonianConversionService, pipeline: _HamiltonianPipelineService) -> None:
         super().__init__(domain_obj)
+        self._dynamics = dynamics
+        self._persistence = persistence
+        self._conversion = conversion
+        self._pipeline = pipeline
 
     @classmethod
     def default(cls, domain_obj: Any = None) -> "_HamiltonianServices":

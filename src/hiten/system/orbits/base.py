@@ -40,7 +40,7 @@ if TYPE_CHECKING:
     from hiten.system.manifold import Manifold
 
 
-class PeriodicOrbit(_HitenBase, ABC):
+class PeriodicOrbit(_HitenBase):
     """
     Abstract base-class that encapsulates a CR3BP periodic orbit.
 
@@ -87,10 +87,12 @@ class PeriodicOrbit(_HitenBase, ABC):
     period) followed by :meth:`~hiten.system.orbits.base.PeriodicOrbit.propagate`.
     """
 
-    _family: str = "generic"
+    _family: str = "base"
 
-    def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None, *args):
-        services = _OrbitServices.default(self, initial_state=initial_state, *args)
+    def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None):
+        self._libration_point = libration_point
+        self._initial_state = initial_state
+        services = _OrbitServices.default(self)
         super().__init__(services)
 
     def __str__(self):
@@ -504,8 +506,7 @@ class GenericOrbit(PeriodicOrbit):
     _family = "generic"
     
     def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None):
-        services = _OrbitServices.default(self, initial_state=initial_state)
-        super().__init__(services)
+        super().__init__(libration_point, initial_state=initial_state)
     
         if self.dynamics.period is None:
             self.dynamics.period = np.pi

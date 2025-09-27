@@ -181,12 +181,9 @@ class _DynamicsServiceBase(ABC):
         return self._cache.reset(key)
 
 
-
 class _ServiceBundleBase(ABC):
     """Lightweight helper for service bundles offering ergonomic helpers.
     """
-
-    __slots__ = ()
 
     def __init__(self, domain_obj: Any) -> None:
         self._domain_obj = domain_obj

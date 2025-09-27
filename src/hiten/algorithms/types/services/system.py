@@ -45,12 +45,12 @@ class _SystemPersistenceService(_PersistenceServiceBase):
 class _SystemsDynamicsService(_DynamicsServiceBase):
     """Lazily construct and cache dynamical system backends for a CR3BP system."""
 
-    def __init__(self, domain_obj: "System", *, primary: "Body", secondary: "Body", distance: float) -> None:
+    def __init__(self, domain_obj: "System") -> None:
         super().__init__(domain_obj)
-        self._primary = primary
-        self._secondary = secondary
-        self._distance = distance
-        self._mu = _get_mass_parameter(domain_obj.primary.mass, domain_obj.secondary.mass)
+        self._primary = self.domain_obj.primary
+        self._secondary = self.domain_obj.secondary
+        self._distance = self.domain_obj.distance
+        self._mu = _get_mass_parameter(self._primary.mass, self._secondary.mass)
 
     @property
     def primary(self) -> "Body":
@@ -138,18 +138,16 @@ class _SystemsDynamicsService(_DynamicsServiceBase):
         return self.get_or_create(cache_key, _factory)
 
 
-@dataclass
 class _SystemServices(_ServiceBundleBase):
-    domain_obj: "System"
-    dynamics: _SystemsDynamicsService
-    persistence: _SystemPersistenceService
 
-    def __init__(self, system: "System", *, primary: "Body", secondary: "Body", distance: float) -> None:
-        super().__init__(system)
+    def __init__(self, domain_obj: "System", dynamics: _SystemsDynamicsService, persistence: _SystemPersistenceService) -> None:
+        super().__init__(domain_obj)
+        self._dynamics = dynamics
+        self._persistence = persistence
 
     @classmethod
-    def default(cls, system: "System", *, primary: "Body", secondary: "Body", distance: float) -> "_SystemServices":
-        dynamics = _SystemsDynamicsService(system, primary=primary, secondary=secondary, distance=distance)
+    def default(cls, system: "System") -> "_SystemServices":
+        dynamics = _SystemsDynamicsService(system)
         persistence = _SystemPersistenceService()
         return cls(domain_obj=system, dynamics=dynamics, persistence=persistence)
 

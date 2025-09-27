@@ -54,18 +54,19 @@ class HaloOrbit(PeriodicOrbit):
     """
     
     _family = "halo"
-    
-    amplitude_z: Optional[float] # Amplitude of the halo orbit
-    zenith: Optional[Literal["northern", "southern"]]
 
     def __init__(
             self, 
             libration_point: LibrationPoint, 
+            initial_state: Optional[Sequence[float]] = None,
             amplitude_z: Optional[float] = None,
-            zenith: Optional[Literal["northern", "southern"]] = None,
-            initial_state: Optional[Sequence[float]] = None
+            zenith: Optional[Literal["northern", "southern"]] = None
         ):
-        super().__init__(libration_point, initial_state=initial_state, amplitude_z=amplitude_z, zenith=zenith)
+
+        self._amplitude_z = amplitude_z
+        self._zenith = zenith
+
+        super().__init__(libration_point, initial_state=initial_state)
 
     @property
     def zenith(self) -> Literal["northern", "southern"]:

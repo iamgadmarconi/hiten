@@ -80,7 +80,11 @@ class Manifold(_HitenBase):
             stable: bool = True, 
             direction: Literal["positive", "negative"] = "positive", 
         ):
-        services = _ManifoldServices.default(self, stable=stable, direction=direction)
+        self._generating_orbit = generating_orbit
+        self._stable = stable
+        self._direction = direction
+
+        services = _ManifoldServices.default(self)
         super().__init__(services)
 
     def __str__(self):

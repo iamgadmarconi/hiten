@@ -35,6 +35,9 @@ if TYPE_CHECKING:
     from hiten.system.libration.collinear import (CollinearPoint, L1Point,
                                                   L2Point, L3Point)
     from hiten.system.orbits.base import GenericOrbit, PeriodicOrbit
+    from hiten.system.orbits.halo import HaloOrbit
+    from hiten.system.orbits.lyapunov import LyapunovOrbit
+    from hiten.system.orbits.vertical import VerticalOrbit
 
 class _OrbitPersistenceService(_PersistenceServiceBase):
     """Thin wrapper around orbit persistence helpers."""
@@ -145,13 +148,13 @@ class _OrbitContinuationService(_DynamicsServiceBase):
 class _OrbitDynamicsService(_DynamicsServiceBase):
     """Integrate periodic orbits using the system dynamics."""
 
-    def __init__(self, orbit: "PeriodicOrbit", *, initial_state: np.ndarray | None = None) -> None:
+    def __init__(self, orbit: "PeriodicOrbit") -> None:
         super().__init__(orbit)
 
-        self._initial_state = initial_state
+        self._initial_state = self.domain_obj.initial_state
     
         if self._initial_state is not None:
-            self._initial_state = np.asarray(initial_state, dtype=np.float64)
+            self._initial_state = np.asarray(self._initial_state, dtype=np.float64)
         else:
             self._initial_state = self.initial_guess()
 
@@ -468,9 +471,8 @@ class _GenericOrbitContinuationService(_OrbitContinuationService):
 class _GenericOrbitDynamicsService(_OrbitDynamicsService):
     """Dynamics service for generic orbits with custom amplitude handling."""
 
-    def __init__(self, orbit: "GenericOrbit", *, initial_state: np.ndarray | None = None) -> None:
-        super().__init__(orbit, initial_state=initial_state)
-        self._amplitude = None
+    def __init__(self, orbit: "GenericOrbit") -> None:
+        super().__init__(orbit)
 
     def initial_guess(self) -> np.ndarray:
         """Generate initial guess for GenericOrbit.
@@ -585,25 +587,26 @@ class _HaloOrbitContinuationService(_OrbitContinuationService):
 class _HaloOrbitDynamicsService(_OrbitDynamicsService):
     """Dynamics service for halo orbits."""
 
-    def __init__(self, orbit: "HaloOrbit", *, initial_state: Optional[np.ndarray] = None, amplitude_z: Optional[float] = None, zenith: Optional[Literal["northern", "southern"]] = None) -> None:
-        if initial_state is not None and (amplitude_z is not None or zenith is not None):
+    def __init__(self, orbit: "HaloOrbit") -> None:
+        super().__init__(orbit)
+        self._amplitude = self.domain_obj._amplitude_z
+        self._zenith = self.domain_obj._zenith
+        self._initial_state = self.domain_obj._initial_state
+        self._libration_point = self.domain_obj._libration_point
+
+        if self._initial_state is not None and (self._amplitude is not None or self._zenith is not None):
             raise ValueError("Cannot provide both an initial_state and analytical parameters (amplitude_z, zenith).")
-        if not isinstance(self.libration_point, "CollinearPoint"):
-            raise TypeError(f"Halo orbits are only defined for CollinearPoint, but got {type(self.libration_point)}.")
-        if initial_state is None:
-            if amplitude_z is None or zenith is None:
+        if not isinstance(self._libration_point, "CollinearPoint"):
+            raise TypeError(f"Halo orbits are only defined for CollinearPoint, but got {type(self._libration_point)}.")
+        if self._initial_state is None:
+            if self._amplitude is None or self._zenith is None:
                 raise ValueError("Halo orbits require an 'amplitude_z' (z-amplitude) and 'zenith' ('northern'/'southern') parameter when an initial_state is not provided.")
-            if not isinstance(self.libration_point, ("L1Point", "L2Point")):
+            if not isinstance(self._libration_point, ("L1Point", "L2Point")):
                 raise ValueError("The analytical guess for L3 Halo orbits is experimental.\n Convergence is not guaranteed and may require more iterations.")
 
-        super().__init__(orbit, initial_state=initial_state)
-
-        self._amplitude = amplitude_z
-        self._zenith = zenith
-
-        if initial_state is not None:
-            if self.zenith is None:
-                self.zenith = "northern" if self._initial_state[SynodicState.Z] > 0 else "southern"
+        if self._initial_state is not None:
+            if self._zenith is None:
+                self._zenith = "northern" if self._initial_state[SynodicState.Z] > 0 else "southern"
             # Infer missing amplitude
             if self._amplitude is None:
                 self._amplitude = self._initial_state[SynodicState.Z]
@@ -850,23 +853,27 @@ class _LyapunovOrbitContinuationService(_OrbitContinuationService):
 class _LyapunovOrbitDynamicsService(_OrbitDynamicsService):
     """Dynamics service for Lyapunov orbits."""
 
-    def __init__(self, orbit: "LyapunovOrbit", *, initial_state: Optional[np.ndarray] = None, amplitude_x: Optional[float] = None) -> None:
-        if initial_state is not None and amplitude_x is not None:
+    def __init__(self, orbit: "LyapunovOrbit") -> None:
+        super().__init__(orbit)
+        self._amplitude_x = self.domain_obj._amplitude_x
+        self._initial_state = self.domain_obj._initial_state
+        self._libration_point = self.domain_obj._libration_point
+
+        if self._initial_state is not None and self._amplitude_x is not None:
             raise ValueError("Cannot provide both an initial_state and an analytical parameter (amplitude_x).")
-        if not isinstance(libration_point, CollinearPoint):
+        if not isinstance(self._libration_point, CollinearPoint):
             raise TypeError(f"Lyapunov orbits are only defined for CollinearPoint, but got {type(self.libration_point)}.")
-        if initial_state is None:
-            if amplitude_x is None:
+        if self._initial_state is None:
+            if self._amplitude_x is None:
                 raise ValueError("Lyapunov orbits require an 'amplitude_x' (x-amplitude) parameter when an initial_state is not provided.")
-            if not isinstance(libration_point, (L1Point, L2Point)):
-                raise ValueError(f"Analytical guess is only available for L1/L2 points. An initial_state must be provided for {libration_point.name}.")
+            if not isinstance(self._libration_point, (L1Point, L2Point)):
+                raise ValueError(f"Analytical guess is only available for L1/L2 points. An initial_state must be provided for {self._libration_point.name}.")
 
-        super().__init__(orbit, initial_state=initial_state)
 
-        if initial_state is not None and self._amplitude_x is None:
-            self._amplitude_x = self._initial_state[SynodicState.X] - self.libration_point.position[0]
+        if self._initial_state is not None and self._amplitude_x is None:
+            self._amplitude_x = self._initial_state[SynodicState.X] - self._libration_point.position[0]
 
-        self._amplitude = amplitude_x
+        self._amplitude = self._amplitude_x
 
     def initial_guess(self) -> np.ndarray:
         L_i = self.libration_point.position
@@ -944,28 +951,27 @@ class _VerticalOrbitContinuationService(_OrbitContinuationService):
 class _VerticalOrbitDynamicsService(_OrbitDynamicsService):
     """Dynamics service for Vertical orbits."""
 
-    def __init__(self, orbit: "VerticalOrbit", *, initial_state: Optional[np.ndarray] = None) -> None:
-        if initial_state is None:
+    def __init__(self, orbit: "VerticalOrbit") -> None:
+        super().__init__(orbit)
+        self._initial_state = self.domain_obj._initial_state
+        if self._initial_state is None:
             raise ValueError("Vertical orbits require an initial_state.")
-        super().__init__(orbit, initial_state=initial_state)
 
     def initial_guess(self) -> np.ndarray:
         return self._initial_state
 
 
-@dataclass
 class _OrbitServices(_ServiceBundleBase):
-    domain_obj: "PeriodicOrbit"
-    correction: _OrbitCorrectionService
-    continuation: _OrbitContinuationService
-    dynamics: _OrbitDynamicsService
-    persistence: _OrbitPersistenceService
-
-    def __init__(self, orbit: "PeriodicOrbit", initial_state: Optional[np.ndarray] = None, *args) -> None:
+    
+    def __init__(self, orbit: "PeriodicOrbit", correction: _OrbitCorrectionService, continuation: _OrbitContinuationService, dynamics: _OrbitDynamicsService, persistence: _OrbitPersistenceService) -> None:
         super().__init__(orbit)
+        self._correction = correction
+        self._continuation = continuation
+        self._dynamics = dynamics
+        self._persistence = persistence
 
     @classmethod
-    def default(cls, orbit: "PeriodicOrbit", initial_state: Optional[np.ndarray] = None, *args) -> "_OrbitServices":
+    def default(cls, orbit: "PeriodicOrbit") -> "_OrbitServices":
         
         correction, continuation, dynamics = cls._check_orbit_type(orbit)
         
@@ -973,7 +979,7 @@ class _OrbitServices(_ServiceBundleBase):
             domain_obj=orbit,
             correction=correction(orbit),
             continuation=continuation(orbit),
-            dynamics=dynamics(orbit, initial_state=initial_state, *args),
+            dynamics=dynamics(orbit),
             persistence=_OrbitPersistenceService()
         )
 

@@ -110,7 +110,9 @@ class InvariantTori(_HitenBase):
     """
 
     def __init__(self, orbit: PeriodicOrbit):
-        services = _TorusServices.default(self, orbit=orbit)
+        self._orbit = orbit
+
+        services = _TorusServices.default(self)
         super().__init__(services)
 
     def __str__(self) -> str:

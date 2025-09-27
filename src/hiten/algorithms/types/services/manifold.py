@@ -42,13 +42,12 @@ class _ManifoldPersistenceService(_PersistenceServiceBase):
 class _ManifoldDynamicsService(_DynamicsServiceBase):
     """Manage STM computation and manifold trajectory generation."""
 
-    def __init__(self, manifold: "Manifold", *, stable: bool, direction: Literal["positive", "negative"]) -> None:
+    def __init__(self, manifold: "Manifold") -> None:
         super().__init__(manifold)
 
-        self._stable = 1 if stable else -1
-        self._direction = 1 if direction == "positive" else -1
+        self._stable = 1 if self.domain_obj.stable else -1
+        self._direction = 1 if self.domain_obj.direction == "positive" else -1
         self._forward = - self._stable
-
         self._manifold_result = None
 
     @property
@@ -442,20 +441,19 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
         return I
 
 
-@dataclass
 class _ManifoldServices(_ServiceBundleBase):
-    domain_obj: "Manifold"
-    dynamics: _ManifoldDynamicsService
-    persistence: _ManifoldPersistenceService
-
-    def __init__(self, manifold: "Manifold", *, stable: bool, direction: Literal["positive", "negative"]) -> None:
+    
+    def __init__(self, manifold: "Manifold", persistence: _ManifoldPersistenceService, dynamics: _ManifoldDynamicsService) -> None:
         super().__init__(manifold)
+        self._dynamics = dynamics
+        self._persistence = persistence
 
+ 
     @classmethod
-    def default(cls, manifold: "Manifold", *, stable: bool, direction: Literal["positive", "negative"]) -> "_ManifoldServices":
+    def default(cls, manifold: "Manifold") -> "_ManifoldServices":
         return cls(
             domain_obj=manifold,
-            dynamics=_ManifoldDynamicsService(manifold, stable=stable, direction=direction),
+            dynamics=_ManifoldDynamicsService(manifold),
             persistence=_ManifoldPersistenceService()
         )
     

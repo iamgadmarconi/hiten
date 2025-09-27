@@ -287,16 +287,13 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
             raise ValueError(f"Unsupported libration point type: {type(self._domain_obj)}")
 
 
-@dataclass
 class _CenterManifoldServices(_ServiceBundleBase):
 
-    domain_obj: "LibrationPoint"
-    degree: int
-    persistence: _CenterManifoldPersistenceService
-    dynamics: _CenterManifoldDynamicsService
-
-    def __init__(self, domain_obj: "LibrationPoint", degree: int) -> None:
+    def __init__(self, domain_obj: "LibrationPoint", degree: int, persistence: _CenterManifoldPersistenceService, dynamics: _CenterManifoldDynamicsService) -> None:
         super().__init__(domain_obj)
+        self._degree = degree
+        self._persistence = persistence
+        self._dynamics = dynamics
 
     @classmethod
     def default(cls, point: "LibrationPoint", degree: int) -> "_CenterManifoldServices":

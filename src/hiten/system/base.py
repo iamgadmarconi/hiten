@@ -64,7 +64,11 @@ class System(_HitenBase):
     libration point classes; this wrapper simply orchestrates them.
     """
     def __init__(self, primary: Body, secondary: Body, distance: float):
-        services = _SystemServices.default(self, primary=primary, secondary=secondary, distance=distance)
+        self._primary = primary
+        self._secondary = secondary
+        self._distance = distance
+
+        services = _SystemServices.default(self)
         super().__init__(services)
 
         self._libration_points: Dict[int, LibrationPoint] = {}

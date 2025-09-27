@@ -37,12 +37,11 @@ class _TorusPersistenceService(_PersistenceServiceBase):
 class _TorusDynamicsService(_DynamicsServiceBase):
     """Provide STM preparation and torus construction helpers."""
 
-    def __init__(self, torus: "InvariantTori", *, orbit: PeriodicOrbit) -> None:
-        if orbit.period is None:
+    def __init__(self, torus: "InvariantTori") -> None:
+        super().__init__(torus)
+        if self.domain_obj._orbit.period is None:
             raise ValueError("The generating orbit must be corrected first (period is None).")
 
-        super().__init__(torus)
-        self._orbit = orbit
         self._latest_grid: np.ndarray | None = None
         self._latest_params: dict | None = None
 
@@ -400,20 +399,17 @@ class _TorusDynamicsService(_DynamicsServiceBase):
         return idx, evals[idx]
 
 
-@dataclass
 class _TorusServices(_ServiceBundleBase):
-    domain_obj: "InvariantTori"
-    dynamics: _TorusDynamicsService
-    persistence: _TorusPersistenceService
-
-    def __init__(self, torus: "InvariantTori", *, orbit: PeriodicOrbit) -> None:
-        super().__init__(torus)
+    def __init__(self, domain_obj: "InvariantTori", dynamics: _TorusDynamicsService, persistence: _TorusPersistenceService) -> None:
+        super().__init__(domain_obj)
+        self._dynamics = dynamics
+        self._persistence = persistence
 
     @classmethod
-    def default(cls, torus: "InvariantTori", *, orbit: PeriodicOrbit) -> "_TorusServices":
+    def default(cls, torus: "InvariantTori") -> "_TorusServices":
         return cls(
             domain_obj=torus,
-            dynamics=_TorusDynamicsService(torus, orbit=orbit),
+            dynamics=_TorusDynamicsService(torus),
             persistence=_TorusPersistenceService(),
         )
 
