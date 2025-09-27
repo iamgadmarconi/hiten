@@ -44,8 +44,8 @@ def main() -> None:
         {
             "cls": LyapunovOrbit,
             "name": "Planar Lyapunov",
-            "kwargs": {"amplitude_x": 0.2},
-            "diff_corr_attempts": 25,
+            "kwargs": {"amplitude_x": 0.1},
+            "diff_corr_attempts": 100,
             "finite_difference": False,
         },
     ]

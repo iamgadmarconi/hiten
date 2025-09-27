@@ -87,13 +87,11 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
             overrides = overrides.copy()
         overrides.update(kwargs)
         
-        # Convert dictionary to hashable format for cache key
         overrides_tuple = tuple(sorted(overrides.items())) if overrides else ()
         cache_key = self.make_key("correct", overrides_tuple)
 
         def _factory() -> Tuple[np.ndarray, float]:
-            # Pass all parameters directly to the corrector
-            results = self.corrector.correct(self.domain_obj, **overrides)
+            results = self.corrector.correct(self.domain_obj, override=True, **overrides)
             return results.x_corrected, 2 * results.half_period
 
         return self.get_or_create(cache_key, _factory)
@@ -141,12 +139,20 @@ class _OrbitContinuationService(_DynamicsServiceBase):
 
     def generate(self, *, overrides: Dict[str, Any] | None = None) -> Tuple[np.ndarray, float]:
         """Generate a family of periodic orbits."""
-        cache_key = self.make_key("generate", overrides)
+        # Merge overrides with kwargs, with kwargs taking precedence
+        if overrides is None:
+            overrides = {}
+        else:
+            overrides = overrides.copy()
+        overrides.update(kwargs)
+        
+        overrides_tuple = tuple(sorted(overrides.items())) if overrides else ()
+        cache_key = self.make_key("correct", overrides_tuple)
 
         def _factory() -> Tuple[np.ndarray, float]:
             # Automatically infer if there are overrides based on whether overrides are provided
             override = bool(overrides)
-            results = self.generator.generate(self.domain_obj, override=override, **overrides or {})
+            results = self.generator.generate(self.domain_obj, override=True, **overrides)
 
             return results
 
@@ -793,8 +799,6 @@ class _HaloOrbitDynamicsService(_OrbitDynamicsService):
             + deltan * d21 * amplitude_x * amplitude_z * (np.cos(2 * tau1) - 3)
             + deltan * (d32 * amplitude_z * amplitude_x**2 - d31 * amplitude_z**3) * np.cos(3 * tau1)
         )
-        print(f"deltan: {deltan}, amplitude_x: {amplitude_x}, amplitude_z: {amplitude_z}, tau1: {tau1}, d21: {d21}, d32: {d32}, d31: {d31}")
-
         xdot = (
             lam * amplitude_x * np.sin(tau1)
             - 2 * lam * (a23 * amplitude_x**2 - a24 * amplitude_z**2) * np.sin(2 * tau1)
