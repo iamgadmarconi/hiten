@@ -138,8 +138,8 @@ def save_center_manifold(
         point_blob = pickle.dumps(cm.point, protocol=pickle.HIGHEST_PROTOCOL)
         f.create_dataset("point_pickle", data=np.frombuffer(point_blob, dtype=np.uint8))
 
-        if include_hamiltonians and cm.pipeline._hamiltonian_cache:
-            ham_blob = _serialize_hamiltonians(cm.pipeline)
+        if include_hamiltonians and cm.dynamics.pipeline._hamiltonian_cache:
+            ham_blob = _serialize_hamiltonians(cm.dynamics.pipeline)
             _write_dataset(f, "hamiltonians_pickle", np.frombuffer(ham_blob, dtype=np.uint8))
 
     # Get cached maps from the dynamics adapter
@@ -210,9 +210,9 @@ def load_center_manifold(dir_path: str | Path) -> "CenterManifold":
 
         if "hamiltonians_pickle" in f:
             ham_blob = f["hamiltonians_pickle"][()]
-            _deserialize_hamiltonians(ham_blob.tobytes(), cm.pipeline)
+            _deserialize_hamiltonians(ham_blob.tobytes(), cm.dynamics.pipeline)
             # Refresh internal Hamiltonian system reference to the deserialized one
-            cm._hamsys = cm.pipeline.get_hamiltonian("center_manifold_real").hamsys
+            cm._hamsys = cm.dynamics.pipeline.get_hamiltonian("center_manifold_real").hamsys
 
     maps_key_file = dir_path / "poincare_maps_keys.json"
     maps_dir = dir_path / "maps"

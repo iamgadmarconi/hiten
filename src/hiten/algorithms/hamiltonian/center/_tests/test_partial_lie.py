@@ -45,10 +45,10 @@ def lie_test_setup():
     # Patch legacy attributes expected by the historical test-suite
     # ------------------------------------------------------------------
     # The new implementation stores most low-level data inside
-    # ``cm.pipeline``.  To keep changes local to the test we monkey-patch
+    # ``cm.dynamics.pipeline``.  To keep changes local to the test we monkey-patch
     # the individual CenterManifold *instance* instead of the library code.
 
-    _ham = cm.pipeline.get_hamiltonian("center_manifold_real")
+    _ham = cm.dynamics.pipeline.get_hamiltonian("center_manifold_real")
 
     # Legacy private tables (read-only in tests)
     cm._psi = _ham._psi
@@ -65,14 +65,14 @@ def lie_test_setup():
             _, deg, form = key
             if deg != cm.degree:
                 cm.degree = int(deg)
-            return cm.pipeline.get_hamiltonian(form).poly_H
+            return cm.dynamics.pipeline.get_hamiltonian(form).poly_H
 
         if key[0] == "generating_functions":
             # ('generating_functions', degree)
             _, deg = key
             if deg != cm.degree:
                 cm.degree = int(deg)
-            return cm.pipeline.get_generating_functions("partial").poly_G
+            return cm.dynamics.pipeline.get_generating_functions("partial").poly_G
 
         raise KeyError(f"Unsupported cache key: {key}")
 

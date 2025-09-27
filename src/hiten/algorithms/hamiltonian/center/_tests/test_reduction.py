@@ -33,7 +33,7 @@ def reduction_test_setup():
     cm_se.compute()
 
     def _patch_cm(cm):
-        ham = cm.pipeline.get_hamiltonian("center_manifold_real")
+        ham = cm.dynamics.pipeline.get_hamiltonian("center_manifold_real")
         cm._psi = ham._psi
         cm._clmo = ham._clmo
         cm._encode_dict_list = ham._encode_dict_list
@@ -46,13 +46,13 @@ def reduction_test_setup():
                 _, deg, form = key
                 if deg != cm.degree:
                     cm.degree = int(deg)
-                return cm.pipeline.get_hamiltonian(form).poly_H
+                return cm.dynamics.pipeline.get_hamiltonian(form).poly_H
 
             if key[0] == "generating_functions":
                 _, deg = key
                 if deg != cm.degree:
                     cm.degree = int(deg)
-                return cm.pipeline.get_generating_functions("partial").poly_G
+                return cm.dynamics.pipeline.get_generating_functions("partial").poly_G
 
             raise KeyError(f"Unsupported cache key: {key}")
 
