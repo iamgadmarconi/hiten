@@ -21,20 +21,20 @@ See Also
     Manifold classes for CR3BP invariant structures.
 """
 
-from typing import Generic, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Generic, Optional
 
 import numpy as np
-
 
 from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
                                          _HitenBaseFacade)
 from hiten.algorithms.types.exceptions import EngineError
-from hiten.utils.log_config import logger
-from hiten.utils.plots import plot_poincare_connections_map
+from hiten.utils.plots import (plot_connection_trajectories,
+                               plot_poincare_connections_map)
 
 if TYPE_CHECKING:
     from hiten.algorithms.connections.engine import _ConnectionEngine
-    from hiten.algorithms.connections.types import Connections, _ConnectionResult
+    from hiten.algorithms.connections.types import (Connections,
+                                                    _ConnectionResult)
 
 class Connection(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
     """Provide a user-facing facade for connection discovery and plotting in CR3BP.
@@ -318,33 +318,6 @@ class Connection(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT
             **kwargs,
         )
 
-    def _validate_config(self, config: ConfigT) -> None:
-        """Validate the configuration object.
-        
-        This method can be overridden by concrete facades to perform
-        domain-specific configuration validation.
-        
-        Parameters
-        ----------
-        config : ConfigT
-            The configuration object to validate.
-            
-        Raises
-        ------
-        ValueError
-            If the configuration is invalid.
-        """
-        super()._validate_config(config)
-        
-        if hasattr(config, 'section') and config.section is None:
-            raise ValueError("Section configuration is required")
-        if hasattr(config, 'delta_v_tol') and config.delta_v_tol <= 0:
-            raise ValueError("Delta-V tolerance must be positive")
-        if hasattr(config, 'ballistic_tol') and config.ballistic_tol <= 0:
-            raise ValueError("Ballistic tolerance must be positive")
-        if hasattr(config, 'eps2d') and config.eps2d <= 0:
-            raise ValueError("2D epsilon must be positive")
-
     def plot_connection(self, connection_index: int, **kwargs):
         """Plot the specific trajectories forming a connection.
 
@@ -404,11 +377,38 @@ class Connection(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT
         bodies = [system.primary, system.secondary]
         system_distance = system.distance
         
-        # Call the dedicated plotting function
-        from hiten.utils.plots import plot_connection_trajectories
         return plot_connection_trajectories(
             connection,
+            self._last_source,
+            self._last_target,
             bodies,
             system_distance,
             **kwargs
         )
+
+    def _validate_config(self, config: ConfigT) -> None:
+        """Validate the configuration object.
+        
+        This method can be overridden by concrete facades to perform
+        domain-specific configuration validation.
+        
+        Parameters
+        ----------
+        config : ConfigT
+            The configuration object to validate.
+            
+        Raises
+        ------
+        ValueError
+            If the configuration is invalid.
+        """
+        super()._validate_config(config)
+        
+        if hasattr(config, 'section') and config.section is None:
+            raise ValueError("Section configuration is required")
+        if hasattr(config, 'delta_v_tol') and config.delta_v_tol <= 0:
+            raise ValueError("Delta-V tolerance must be positive")
+        if hasattr(config, 'ballistic_tol') and config.ballistic_tol <= 0:
+            raise ValueError("Ballistic tolerance must be positive")
+        if hasattr(config, 'eps2d') and config.eps2d <= 0:
+            raise ValueError("2D epsilon must be positive")

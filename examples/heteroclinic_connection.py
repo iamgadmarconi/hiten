@@ -67,8 +67,11 @@ def main() -> None:
     conn.solve(manifold_l1, manifold_l2)
     
     conn.plot(dark_mode=True)
+
+    print(conn.results)
     
-    for i, _ in enumerate(conn.results):
+    for i, conn_result in enumerate(conn.results):
+        print(f"Plotting connection {i} | {conn_result}")
         conn.plot_connection(i, dark_mode=True)
 
 

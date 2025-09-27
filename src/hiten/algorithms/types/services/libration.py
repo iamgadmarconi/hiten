@@ -1290,15 +1290,15 @@ class _TriangularDynamicsService(_LibrationDynamicsService):
         v2 = np.zeros(6)
 
         # Assign planar components.
-        u1[[0, 1, 3, 4]] = u1_planar
-        u2[[0, 1, 3, 4]] = u2_planar
-        v1[[0, 1, 3, 4]] = v1_planar
-        v2[[0, 1, 3, 4]] = v2_planar
+        u1[[0, 1, 2, 3]] = u1_planar
+        u2[[0, 1, 2, 3]] = u2_planar
+        v1[[0, 1, 2, 3]] = v1_planar
+        v2[[0, 1, 2, 3]] = v2_planar
 
         sqrt_omega_z = np.sqrt(abs(omega_z))  # positive by construction
         u3 = np.zeros(6)
         v3 = np.zeros(6)
-        u3[2] = 1.0 / sqrt_omega_z  # z coordinate
+        u3[4] = 1.0 / sqrt_omega_z  # z coordinate
         v3[5] = sqrt_omega_z        # p_z coordinate
 
         # Stack as rows.
