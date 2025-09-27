@@ -87,7 +87,7 @@ class _SystemsDynamicsService(_DynamicsServiceBase):
         return self.get_or_create(key, _factory)
 
     @property
-    def variational(self) -> _DynamicalSystemProtocol:
+    def var_dynsys(self) -> _DynamicalSystemProtocol:
         key = self.make_key(id(self._primary), id(self._secondary), self._distance, "variational")
 
         def _factory() -> _DynamicalSystemProtocol:
@@ -96,7 +96,7 @@ class _SystemsDynamicsService(_DynamicsServiceBase):
         return self.get_or_create(key, _factory)
 
     @property
-    def jacobian(self) -> _DynamicalSystemProtocol:
+    def jacobian_dynsys(self) -> _DynamicalSystemProtocol:
         key = self.make_key(id(self._primary), id(self._secondary), self._distance, "jacobian")
 
         def _factory() -> _DynamicalSystemProtocol:

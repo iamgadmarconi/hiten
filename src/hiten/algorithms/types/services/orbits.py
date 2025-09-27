@@ -57,15 +57,37 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
         super().__init__(domain_obj)
         self._corrector = Corrector.with_default_engine(config=self.correction_config)
 
-    def correct(self, *, overrides: Dict[str, Any] | None = None) -> Tuple[np.ndarray, float]:
-        """Differential correction wrapper."""
-        cache_key = self.make_key("correct", overrides)
+    def correct(self, *, overrides: Dict[str, Any] | None = None, **kwargs) -> Tuple[np.ndarray, float]:
+        """Differential correction wrapper.
+        
+        Parameters
+        ----------
+        overrides : Dict[str, Any] or None, optional
+            Dictionary of parameter overrides to pass to the corrector.
+        **kwargs
+            Additional correction parameters that are passed directly to the corrector.
+            Common parameters include:
+            - max_attempts: int
+            - tol: float  
+            - max_delta: float
+            - finite_difference: bool
+            - forward: int
+            - line_search_config: _LineSearchConfig
+        """
+        # Merge overrides with kwargs, with kwargs taking precedence
+        if overrides is None:
+            overrides = {}
+        else:
+            overrides = overrides.copy()
+        overrides.update(kwargs)
+        
+        # Convert dictionary to hashable format for cache key
+        overrides_tuple = tuple(sorted(overrides.items())) if overrides else ()
+        cache_key = self.make_key("correct", overrides_tuple)
 
         def _factory() -> Tuple[np.ndarray, float]:
-            if overrides:
-                override = True
-            results = self.corrector.correct(self.domain_obj, override=override, **overrides)
-
+            # Pass all parameters directly to the corrector
+            results = self.corrector.correct(self.domain_obj, **overrides)
             return results.corrected_state, 2 * results.half_period
 
         return self.get_or_create(cache_key, _factory)
@@ -176,7 +198,7 @@ class _OrbitDynamicsService(_DynamicsServiceBase):
 
     @property
     def libration_point(self) -> LibrationPoint:
-        return self.orbit.libration_point
+        return self.domain_obj._libration_point
 
     @property
     def system(self) -> System:
@@ -962,23 +984,23 @@ class _VerticalOrbitDynamicsService(_OrbitDynamicsService):
 
 class _OrbitServices(_ServiceBundleBase):
     
-    def __init__(self, orbit: "PeriodicOrbit", correction: _OrbitCorrectionService, continuation: _OrbitContinuationService, dynamics: _OrbitDynamicsService, persistence: _OrbitPersistenceService) -> None:
-        super().__init__(orbit)
+    def __init__(self, domain_obj: "PeriodicOrbit", correction: _OrbitCorrectionService, continuation: _OrbitContinuationService, dynamics: _OrbitDynamicsService, persistence: _OrbitPersistenceService) -> None:
+        super().__init__(domain_obj)
         self.correction = correction
         self.continuation = continuation
         self.dynamics = dynamics
         self.persistence = persistence
 
     @classmethod
-    def default(cls, orbit: "PeriodicOrbit") -> "_OrbitServices":
+    def default(cls, domain_obj: "PeriodicOrbit") -> "_OrbitServices":
         
-        correction, continuation, dynamics = cls._check_orbit_type(orbit)
+        correction, continuation, dynamics = cls._check_orbit_type(domain_obj)
         
         return cls(
-            domain_obj=orbit,
-            correction=correction(orbit),
-            continuation=continuation(orbit),
-            dynamics=dynamics(orbit),
+            domain_obj=domain_obj,
+            correction=correction(domain_obj),
+            continuation=continuation(domain_obj),
+            dynamics=dynamics(domain_obj),
             persistence=_OrbitPersistenceService()
         )
 
@@ -1000,10 +1022,10 @@ class _OrbitServices(_ServiceBundleBase):
         from hiten.system.orbits.vertical import VerticalOrbit
 
         mapping = {
-            GenericOrbit: (_GenericOrbitDynamicsService, _GenericOrbitCorrectionService, _GenericOrbitContinuationService),
-            HaloOrbit: (_HaloOrbitDynamicsService, _HaloOrbitCorrectionService, _HaloOrbitContinuationService),
-            LyapunovOrbit: (_LyapunovOrbitDynamicsService, _LyapunovOrbitCorrectionService, _LyapunovOrbitContinuationService),
-            VerticalOrbit: (_VerticalOrbitDynamicsService, _VerticalOrbitCorrectionService, _VerticalOrbitContinuationService),
+            GenericOrbit: (_GenericOrbitCorrectionService, _GenericOrbitContinuationService, _GenericOrbitDynamicsService),
+            HaloOrbit: (_HaloOrbitCorrectionService, _HaloOrbitContinuationService, _HaloOrbitDynamicsService),
+            LyapunovOrbit: (_LyapunovOrbitCorrectionService, _LyapunovOrbitContinuationService, _LyapunovOrbitDynamicsService),
+            VerticalOrbit: (_VerticalOrbitCorrectionService, _VerticalOrbitContinuationService, _VerticalOrbitDynamicsService),
         }
 
         return mapping[type(orbit)]

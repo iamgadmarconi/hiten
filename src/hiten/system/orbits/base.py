@@ -300,13 +300,13 @@ class PeriodicOrbit(_HitenBase):
         tuple[np.ndarray, float]
             The corrected state and period.
         """
-        result = self._correction.correct(self, **kwargs)
-        return result.corrected_state, result.period
+        result = self._correction.correct(**kwargs)
+        return result
 
     def generate(self, **kwargs) -> tuple[np.ndarray, float]:
         """Generate a family of periodic orbits."""
-        result = self._continuation.generate(self, **kwargs)
-        return result.corrected_state, result.period
+        result = self._continuation.generate(**kwargs)
+        return result
 
     def propagate(self, steps: int = 1000, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8) -> Trajectory:
         """Propagate the orbit.

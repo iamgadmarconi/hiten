@@ -136,7 +136,7 @@ class _PeriodicOrbitCorrectorInterface(
             x_full = self._to_full_state(base_state, control_indices, params)
             t_event, x_event = self._evaluate_event(domain_obj, x_full, cfg, forward)
             _, _, Phi_flat, _ = _compute_stm(
-                domain_obj.var_dynsys,
+                domain_obj.dynamics.var_dynsys,
                 x_full,
                 t_event,
                 steps=cfg.steps,
@@ -154,7 +154,7 @@ class _PeriodicOrbitCorrectorInterface(
         forward = getattr(cfg, "forward", 1)
         try:
             t_final, _ = cfg.event_func(
-                dynsys=domain_obj.system.dynsys,
+                dynsys=domain_obj.dynamics.dynsys,
                 x0=corrected_state,
                 forward=forward,
             )
@@ -179,7 +179,7 @@ class _PeriodicOrbitCorrectorInterface(
         forward: int,
     ) -> tuple[float, np.ndarray]:
         return cfg.event_func(
-            dynsys=domain_obj.system.dynsys,
+            dynsys=domain_obj.dynamics.dynsys,
             x0=full_state,
             forward=forward,
         )
