@@ -170,13 +170,13 @@ def test_gamma_values(l1_earth_moon, l2_earth_moon, l3_earth_moon):
 
 def test_cn_coefficients(l1_earth_moon, l2_earth_moon, l3_earth_moon, l1_sun_earth, l2_sun_earth, l3_sun_jupiter):
     """Test calculation of cn coefficients for collinear points."""
-    c2_l1_em = l1_earth_moon._cn(2)
-    c2_l2_em = l2_earth_moon._cn(2)
-    c2_l3_em = l3_earth_moon._cn(2)
+    c2_l1_em = l1_earth_moon.cn(2)
+    c2_l2_em = l2_earth_moon.cn(2)
+    c2_l3_em = l3_earth_moon.cn(2)
 
-    c2_l1_se = l1_sun_earth._cn(2)
-    c2_l2_se = l2_sun_earth._cn(2)
-    c2_l3_sj = l3_sun_jupiter._cn(2)
+    c2_l1_se = l1_sun_earth.cn(2)
+    c2_l2_se = l2_sun_earth.cn(2)
+    c2_l3_sj = l3_sun_jupiter.cn(2)
 
     assert c2_l1_em > 1.0
     assert c2_l2_em > 1.0
@@ -195,7 +195,7 @@ def test_linear_modes(l1_earth_moon, l2_earth_moon, l3_earth_moon):
     assert omega1 > 0
     assert omega2 > 0
 
-    c2 = l1_earth_moon._cn(2)
+    c2 = l1_earth_moon.cn(2)
     
     discriminant = 9 * c2**2 - 8 * c2
     eta1 = (c2 - 2 - np.sqrt(discriminant)) / 2
@@ -218,7 +218,7 @@ def test_linear_modes(l1_earth_moon, l2_earth_moon, l3_earth_moon):
     assert omega1 > 0
     assert omega2 > 0
 
-    c2_l2 = l2_earth_moon._cn(2)
+    c2_l2 = l2_earth_moon.cn(2)
     
     discriminant_l2 = 9 * c2_l2**2 - 8 * c2_l2
     eta1_l2 = (c2_l2 - 2 - np.sqrt(discriminant_l2)) / 2
@@ -241,7 +241,7 @@ def test_linear_modes(l1_earth_moon, l2_earth_moon, l3_earth_moon):
     assert omega1 > 0
     assert omega2 > 0
 
-    c2_l3 = l3_earth_moon._cn(2)
+    c2_l3 = l3_earth_moon.cn(2)
     
     discriminant_l3 = 9 * c2_l3**2 - 8 * c2_l3
     eta1_l3 = (c2_l3 - 2 - np.sqrt(discriminant_l3)) / 2
@@ -280,22 +280,22 @@ def test_scale_factors(l1_earth_moon, l2_earth_moon, l3_earth_moon):
 
 def test_normal_form_transform(l1_earth_moon, l2_earth_moon, l3_earth_moon, l4_earth_moon, l5_earth_moon):
     """Test normal form transform for collinear points."""
-    C_l1, Cinv_l1 = l1_earth_moon.normal_form_transform()
+    C_l1, Cinv_l1 = l1_earth_moon.normal_form_transform
     assert is_symplectic(C_l1)
     assert is_symplectic(Cinv_l1)
 
-    C_l2, Cinv_l2 = l2_earth_moon.normal_form_transform()
+    C_l2, Cinv_l2 = l2_earth_moon.normal_form_transform
     assert is_symplectic(C_l2)
     assert is_symplectic(Cinv_l2)
 
-    C_l3, Cinv_l3 = l3_earth_moon.normal_form_transform()
+    C_l3, Cinv_l3 = l3_earth_moon.normal_form_transform
     assert is_symplectic(C_l3)
     assert is_symplectic(Cinv_l3)
 
-    C_l4, Cinv_l4 = l4_earth_moon.normal_form_transform()
+    C_l4, Cinv_l4 = l4_earth_moon.normal_form_transform
     assert is_symplectic(C_l4)
     assert is_symplectic(Cinv_l4)
 
-    C_l5, Cinv_l5 = l5_earth_moon.normal_form_transform()
+    C_l5, Cinv_l5 = l5_earth_moon.normal_form_transform
     assert is_symplectic(C_l5)
     assert is_symplectic(Cinv_l5)

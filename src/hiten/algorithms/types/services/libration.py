@@ -182,8 +182,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
         cache_key = self.make_key(id(self.domain_obj), "center_manifold", degree)
         
         def _factory() -> CenterManifold:
-            services = _CenterManifoldServices.default(self.domain_obj, degree)
-            return CenterManifold(self.domain_obj, degree, services=services)
+            return CenterManifold(self.domain_obj, degree)
         
         return self.get_or_create(cache_key, _factory)
 
@@ -476,7 +475,7 @@ class _CollinearDynamicsService(_LibrationDynamicsService):
         cache_key = self.make_key(id(self.domain_obj), "gamma")
         
         def _factory() -> float:
-            return self.domain_obj._compute_gamma()
+            return self._compute_gamma()
         
         return self.get_or_create(cache_key, _factory)
 
@@ -513,7 +512,7 @@ class _CollinearDynamicsService(_LibrationDynamicsService):
         cache_key = self.make_key(id(self.domain_obj), "cn", n)
         
         def _factory() -> float:
-            return self.domain_obj._compute_cn(n)
+            return self._compute_cn(n)
         
         return self.get_or_create(cache_key, _factory)
 
@@ -1338,16 +1337,16 @@ class _L5DynamicsService(_TriangularDynamicsService):
 
 class _LibrationServices(_ServiceBundleBase):
 
-    def __init__(self, point: "LibrationPoint", persistence: _LibrationPersistenceService, dynamics: _LibrationDynamicsService) -> None:
-        super().__init__(point)
+    def __init__(self, domain_obj: "LibrationPoint", persistence: _LibrationPersistenceService, dynamics: _LibrationDynamicsService) -> None:
+        super().__init__(domain_obj)
         self.persistence = persistence
         self.dynamics = dynamics
 
     @classmethod
-    def default(cls, point: "LibrationPoint") -> "_LibrationServices":
-        dynamics = _LibrationServices._check_point_type(point)
+    def default(cls, domain_obj: "LibrationPoint") -> "_LibrationServices":
+        dynamics = _LibrationServices._check_point_type(domain_obj)
         return cls(
-            domain_obj=point,
+            domain_obj=domain_obj,
             persistence=_LibrationPersistenceService(),
             dynamics=dynamics
         )
@@ -1361,7 +1360,7 @@ class _LibrationServices(_ServiceBundleBase):
         )
 
     @staticmethod
-    def _check_point_type(point: "LibrationPoint") -> _LibrationDynamicsService:
+    def _check_point_type(domain_obj: "LibrationPoint") -> _LibrationDynamicsService:
         from hiten.system.libration.collinear import L1Point, L2Point, L3Point
         from hiten.system.libration.triangular import L4Point, L5Point
 
@@ -1373,4 +1372,4 @@ class _LibrationServices(_ServiceBundleBase):
             L5Point: _L5DynamicsService,
         }
         
-        return mapping[type(point)](point)
+        return mapping[type(domain_obj)](domain_obj)

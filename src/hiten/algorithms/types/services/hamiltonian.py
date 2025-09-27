@@ -13,7 +13,10 @@ from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
                                                   _ServiceBundleBase)
-from hiten.utils.io.hamiltonian import load_hamiltonian, save_hamiltonian
+from hiten.utils.io.hamiltonian import (load_hamiltonian,
+                                        load_lie_generating_function,
+                                        save_hamiltonian,
+                                        save_lie_generating_function)
 
 
 class _HamiltonianPersistenceService(_PersistenceServiceBase):
@@ -23,6 +26,15 @@ class _HamiltonianPersistenceService(_PersistenceServiceBase):
         super().__init__(
             save_fn=lambda ham, path, **kw: save_hamiltonian(ham, Path(path), **kw),
             load_fn=lambda path, **kw: load_hamiltonian(Path(path), **kw),
+        )
+
+class _LieGeneratingFunctionPersistenceService(_PersistenceServiceBase):
+    """Encapsulate save/load helpers for LieGeneratingFunction objects."""
+    
+    def __init__(self) -> None:
+        super().__init__(
+            save_fn=lambda lgf, path, **kw: save_lie_generating_function(lgf, Path(path), **kw),
+            load_fn=lambda path, **kw: load_lie_generating_function(Path(path), **kw),
         )
 
 
@@ -42,7 +54,8 @@ class _HamiltonianDynamicsService(_DynamicsServiceBase):
         return create_hamiltonian_system(poly_H, degree, psi, clmo, encode_dict, ndof, name)
 
     def list_registered_forms(self):
-        from hiten.algorithms.hamiltonian.pipeline import _CONVERSION_REGISTRY as _GLOBAL_CONVERSIONS
+        from hiten.algorithms.hamiltonian.pipeline import \
+            _CONVERSION_REGISTRY as _GLOBAL_CONVERSIONS
         forms = set()
         for src, dst in _GLOBAL_CONVERSIONS:
             forms.add(src)
@@ -142,10 +155,11 @@ class _HamiltonianPipelineService:
 
 class _HamiltonianServices(_ServiceBundleBase):
 
-    def __init__(self, domain_obj: Any, dynamics: _HamiltonianDynamicsService, persistence: _HamiltonianPersistenceService, conversion: _HamiltonianConversionService, pipeline: _HamiltonianPipelineService) -> None:
+    def __init__(self, domain_obj: Any, dynamics: _HamiltonianDynamicsService, persistence: _HamiltonianPersistenceService, lgf_persistence: _LieGeneratingFunctionPersistenceService, conversion: _HamiltonianConversionService, pipeline: _HamiltonianPipelineService) -> None:
         super().__init__(domain_obj)
         self.dynamics = dynamics
         self.persistence = persistence
+        self.lgf_persistence = lgf_persistence
         self.conversion = conversion
         self.pipeline = pipeline
 
@@ -157,6 +171,7 @@ class _HamiltonianServices(_ServiceBundleBase):
             domain_obj=domain_obj,
             dynamics=dynamics,
             persistence=_HamiltonianPersistenceService(),
+            lgf_persistence=_LieGeneratingFunctionPersistenceService(),
             conversion=conversion,
             pipeline=_HamiltonianPipelineService(dynamics, conversion)
         )
@@ -167,6 +182,7 @@ class _HamiltonianServices(_ServiceBundleBase):
             domain_obj=dynamics.domain_obj,
             dynamics=dynamics,
             persistence=_HamiltonianPersistenceService(),
+            lgf_persistence=_LieGeneratingFunctionPersistenceService(),
             conversion=_HamiltonianConversionService(),
             pipeline=_HamiltonianPipelineService(dynamics, _HamiltonianConversionService())
         )
@@ -191,6 +207,7 @@ def get_hamiltonian_services() -> _HamiltonianServices:
             domain_obj=None,
             dynamics=dynamics,
             persistence=_HamiltonianPersistenceService(),
+            lgf_persistence=_LieGeneratingFunctionPersistenceService(),
             conversion=conversion,
             pipeline=_HamiltonianPipelineService(dynamics, conversion),
         )

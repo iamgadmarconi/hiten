@@ -164,7 +164,7 @@ class Hamiltonian(_HitenBase):
         services.conversion.register(src, dst, converter, required_context, default_params)
 
 
-class LieGeneratingFunction:
+class LieGeneratingFunction(_HitenBase):
     """Class for Lie generating functions in canonical transformations."""
 
     def __init__(
@@ -229,6 +229,25 @@ class LieGeneratingFunction:
     @property
     def name(self) -> str:
         return self._name
+
+    @classmethod
+    def load(cls, filepath: str | Path, **kwargs) -> "LieGeneratingFunction":
+        """Load a LieGeneratingFunction from a file.
+        
+        Parameters
+        ----------
+        filepath : str or Path
+            The path to the file to load the object from.
+        **kwargs
+            Additional keyword arguments passed to the load method.
+            
+        Returns
+        -------
+        :class:`~hiten.system.hamiltonian.LieGeneratingFunction`
+            The loaded object.
+        """
+        services = get_hamiltonian_services()
+        return services.lgf_persistence.load(filepath, **kwargs)
 
 
 

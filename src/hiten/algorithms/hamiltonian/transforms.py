@@ -379,7 +379,7 @@ def _polylocal2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi,
     real modal coordinates using the transformation matrix obtained
     from the point object.
     """
-    C, _ = point.normal_form_transform()
+    C, _ = point.normal_form_transform
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
     return _polynomial_clean(_substitute_linear(poly_local, C, max_deg, psi, clmo, encode_dict_list), tol)
 
@@ -411,7 +411,7 @@ def _polyrealmodal2local(point, poly_realmodal: List[np.ndarray], max_deg: int, 
     local coordinates using the inverse of the transformation matrix obtained
     from the point object.
     """
-    _, C_inv = point.normal_form_transform()
+    _, C_inv = point.normal_form_transform
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
     return _polynomial_clean(_substitute_linear(poly_realmodal, C_inv, max_deg, psi, clmo, encode_dict_list), tol)
 
@@ -436,7 +436,7 @@ def _coordrealmodal2local(point, modal_coords: np.ndarray, tol=1e-30) -> np.ndar
     - Modal coordinates are ordered as [q1, q2, q3, px1, px2, px3].
     - Local coordinates are ordered as [x1, x2, x3, px1, px2, px3].
     """
-    C, _ = point.normal_form_transform()
+    C, _ = point.normal_form_transform
     return _clean_coordinates(C.dot(modal_coords), tol)
 
 def _coordlocal2realmodal(point, local_coords: np.ndarray, tol=1e-30) -> np.ndarray:
@@ -460,7 +460,7 @@ def _coordlocal2realmodal(point, local_coords: np.ndarray, tol=1e-30) -> np.ndar
     - Local coordinates are ordered as [x1, x2, x3, px1, px2, px3].
     - Modal coordinates are ordered as [q1, q2, q3, px1, px2, px3].
     """
-    _, C_inv = point.normal_form_transform()
+    _, C_inv = point.normal_form_transform
     return _clean_coordinates(C_inv.dot(local_coords), tol)
 
 def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray, tol=1e-14) -> np.ndarray:
