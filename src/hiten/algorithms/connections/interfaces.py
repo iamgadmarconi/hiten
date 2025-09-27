@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 
+from hiten.algorithms.connections.config import _ConnectionConfig
 from hiten.algorithms.connections.types import (ConnectionResults,
                                                 _ConnectionProblem)
 from hiten.algorithms.poincare.core.base import _Section
@@ -39,7 +40,7 @@ if TYPE_CHECKING:
 
 class _ManifoldInterface(
     _HitenBaseInterface[
-        _SynodicMapConfig,
+        _ConnectionConfig,
         _ConnectionProblem,
         ConnectionResults,
         list,
@@ -94,31 +95,33 @@ class _ManifoldInterface(
     def create_problem(
         self,
         *,
-        source: "Manifold",
-        target: "Manifold",
-        section: _SynodicMapConfig,
-        direction: Literal[1, -1, None] | None = None,
-        search: dict | None = None,
+        domain_obj: tuple["Manifold", "Manifold"] | None = None,
+        config: _ConnectionConfig | None = None,
     ) -> _ConnectionProblem:
         """Create a connection problem specification."""
+        if domain_obj is None:
+            raise ValueError("domain_obj (source, target) is required")
+        if config is None:
+            raise ValueError("config is required")
+        
+        source, target = domain_obj
+        
         return _ConnectionProblem(
             source=source,
             target=target,
-            section=section,
-            direction=direction,
-            search=search,
+            config=config,
         )
 
     def to_backend_inputs(self, problem: _ConnectionProblem) -> tuple:
         """Convert problem to backend inputs."""
         # Extract section data from both manifolds
-        pu, Xu = self.to_numeric(problem.source, problem.section, direction=problem.direction)
-        ps, Xs = self.to_numeric(problem.target, problem.section, direction=problem.direction)
+        pu, Xu = self.to_numeric(problem.source, problem.config.section, direction=problem.config.direction)
+        ps, Xs = self.to_numeric(problem.target, problem.config.section, direction=problem.config.direction)
         
-        # Extract search parameters
-        eps = float(getattr(problem.search, "eps2d", 1e-4)) if problem.search else 1e-4
-        dv_tol = float(getattr(problem.search, "delta_v_tol", 1e-3)) if problem.search else 1e-3
-        bal_tol = float(getattr(problem.search, "ballistic_tol", 1e-8)) if problem.search else 1e-8
+        # Extract search parameters from the config
+        eps = float(problem.config.eps2d)
+        dv_tol = float(problem.config.delta_v_tol)
+        bal_tol = float(problem.config.ballistic_tol)
         
         from hiten.algorithms.types.core import _BackendCall
         return _BackendCall(

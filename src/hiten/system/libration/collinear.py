@@ -74,6 +74,19 @@ class CollinearPoint(LibrationPoint):
     def linear_data(self):
         return self.dynamics.linear_data
 
+    @property
+    def gamma(self) -> float:
+        """
+        Get the gamma value (distance ratio) for the collinear libration point.
+        
+        Returns
+        -------
+        float
+            The gamma value (dimensionless), representing the distance ratio
+            from the libration point to the nearest primary.
+        """
+        return self.dynamics.gamma
+
 
 class L1Point(CollinearPoint):
     """

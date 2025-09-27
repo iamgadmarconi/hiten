@@ -21,27 +21,27 @@ See Also
     Manifold classes for CR3BP invariant structures.
 """
 
-from dataclasses import dataclass
-from typing import Literal
+from typing import Generic, Literal, Optional
 
 import numpy as np
 
 from hiten.algorithms.connections.backends import _ConnectionsBackend
-from hiten.algorithms.connections.config import _SearchConfig
+from hiten.algorithms.connections.config import _SearchConfig, _ConnectionConfig
 from hiten.algorithms.connections.engine import _ConnectionEngine
 from hiten.algorithms.connections.interfaces import _ManifoldInterface
 from hiten.algorithms.connections.types import (Connections,
                                                 _ConnectionProblem,
                                                 _ConnectionResult)
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
+from hiten.algorithms.types.core import (ConfigT, DomainT, ResultT,
+                                         _HitenBaseFacade, InterfaceT)
 from hiten.algorithms.types.exceptions import EngineError
 from hiten.system.manifold import Manifold
 from hiten.utils.log_config import logger
 from hiten.utils.plots import plot_poincare_connections_map
 
 
-@dataclass
-class Connection:
+class Connection(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
     """Provide a user-facing facade for connection discovery and plotting in CR3BP.
 
     This class provides a high-level interface for discovering ballistic and
@@ -51,14 +51,13 @@ class Connection:
 
     Parameters
     ----------
-    section : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
-        Configuration for the synodic section where manifolds are intersected.
-    direction : {1, -1, None}, optional
-        Direction for section crossings. 1 for positive, -1 for negative,
-        None for both directions (default: None).
-    search_cfg : :class:`~hiten.algorithms.connections.config._SearchConfig`, optional
-        Configuration for connection search parameters including tolerances
-        and geometric constraints (default: None).
+    config : :class:`~hiten.algorithms.connections.config._ConnectionConfig`
+        Configuration object containing section, direction, and search parameters.
+    interface : :class:`~hiten.algorithms.connections.interfaces._ManifoldInterface`
+        Interface for translating between domain objects and backend inputs.
+    engine : :class:`~hiten.algorithms.connections.engine._ConnectionEngine`, optional
+        Engine instance to use for connection discovery. If None, must be set later
+        or use with_default_engine() factory method.
 
     Examples
     --------
@@ -100,10 +99,14 @@ class Connection:
     >>>     n_workers=None,
     >>> )
     >>> 
-    >>> conn = Connection(
-    >>>     section=section_cfg,
-    >>>     direction=None,
-    >>>     search_cfg=SearchConfig(delta_v_tol=1, ballistic_tol=1e-8, eps2d=1e-3),
+    >>> conn = Connection.with_default_engine(
+    >>>     config=_ConnectionConfig(
+    >>>         section=section_cfg,
+    >>>         direction=None,
+    >>>         delta_v_tol=1,
+    >>>         ballistic_tol=1e-8,
+    >>>         eps2d=1e-3,
+    >>>     )
     >>> )
     >>> 
     >>> conn.solve(manifold_l1, manifold_l2)
@@ -125,35 +128,27 @@ class Connection:
     :class:`~hiten.algorithms.connections.types.Connections`
         Container for connection results with convenient access methods.
     """
-    # User-provided single section configuration and direction
-    section: _SynodicMapConfig
-    direction: Literal[1, -1, None] | None = None
 
-    # Optional search config
-    search_cfg: _SearchConfig | None = None
-
-    # Internal cache for plot convenience
-    _last_source = None
-    _last_target = None
-    _last_results: list[_ConnectionResult] | None = None
-
-    # Injected engine dependency (required)
-    _engine: _ConnectionEngine | None = None
+    def __init__(self, config: ConfigT, interface, engine: _ConnectionEngine = None) -> None:
+        super().__init__(config, interface, engine)
+        
+        self._last_source = None
+        self._last_target = None
+        self._last_results: list[_ConnectionResult] | None = None
 
     @classmethod
-    def with_default_engine(cls, *, section: _SynodicMapConfig, direction: Literal[1, -1, None] | None = None, search_cfg: _SearchConfig | None = None) -> "Connection":
-        """Create a facade instance wired with the default engine and backend.
+    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None) -> "Connection[DomainT, ConfigT, ResultT]":
+        """Create a facade instance with a default engine (factory).
 
         The default engine uses :class:`~hiten.algorithms.connections.backends._ConnectionsBackend`.
 
         Parameters
         ----------
-        section : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
-            Synodic section configuration.
-        direction : {1, -1, None}, optional
-            Crossing direction filter, by default None.
-        search_cfg : :class:`~hiten.algorithms.connections.config._SearchConfig`, optional
-            Search tolerances, by default None.
+        config : :class:`~hiten.algorithms.connections.config._ConnectionConfig`
+            Configuration object containing section, direction, and search parameters.
+        interface : :class:`~hiten.algorithms.connections.interfaces._ManifoldInterface`, optional
+            Interface for translating between domain objects and backend inputs.
+            If None, uses the default _ManifoldInterface.
 
         Returns
         -------
@@ -161,11 +156,11 @@ class Connection:
             A connection facade instance with a default engine injected.
         """
         backend = _ConnectionsBackend()
-        interface = _ManifoldInterface()
-        engine = _ConnectionEngine(backend=backend, interface=interface)
-        return cls(section=section, direction=direction, search_cfg=search_cfg, _engine=engine)
+        intf = interface or _ManifoldInterface()
+        engine = _ConnectionEngine(backend=backend, interface=intf)
+        return cls(config, intf, engine)
 
-    def solve(self, source: Manifold, target: Manifold) -> Connections:
+    def solve(self, source: DomainT, target: DomainT, *, override: bool = False, **kwargs) -> Connections:
         """Discover connections between two manifolds.
 
         This method finds ballistic and impulsive transfers between the source
@@ -178,10 +173,14 @@ class Connection:
             Source manifold (e.g., unstable manifold of a periodic orbit).
         target : :class:`~hiten.system.manifold.Manifold`
             Target manifold (e.g., stable manifold of another periodic orbit).
+        override : bool, default=False
+            Whether to override configuration with provided kwargs.
+        **kwargs
+            Configuration parameters to update if override=True.
 
         Returns
         -------
-        list of :class:`~hiten.algorithms.connections.types._ConnectionResult`
+        :class:`~hiten.algorithms.connections.types.Connections`
             Connection results sorted by increasing Delta-V requirement.
             Each result contains transfer type, Delta-V, intersection points,
             and 6D states at the connection.
@@ -204,17 +203,11 @@ class Connection:
         >>> results = connection.solve(unstable_manifold, stable_manifold)
         >>> print(results)
         """
-        if self._engine is None:
-            raise EngineError("Connection requires an injected _ConnectionEngine; provide via constructor.")
-
-        problem = _ConnectionProblem(
-            source=source,
-            target=target,
-            section=self.section,
-            direction=self.direction,
-            search=self.search_cfg,
-        )
-        engine_result = self._engine.solve(problem)
+        domain_obj = (source, target)
+        
+        problem = self._create_problem(domain_obj=domain_obj, override=override, **kwargs)
+        engine = self._get_engine()
+        engine_result = engine.solve(problem)
         records = engine_result.connections
         self._last_source = source
         self._last_target = target
@@ -229,7 +222,6 @@ class Connection:
         Returns
         -------
         :class:`~hiten.algorithms.connections.types.Connections`
-        :class:`~hiten.algorithms.connections.types.Connections` 
             A view over the latest results with friendly printing and
             convenient access methods. Returns an empty view if 
             :meth:`~hiten.algorithms.connections.base.Connection.solve`
@@ -239,7 +231,7 @@ class Connection:
         -----
         This property provides access to cached results from the most recent
         call to :meth:`~hiten.algorithms.connections.base.Connection.solve`. 
-        The :class:`~hiten.algorithms.connections.results.Connections` 
+        The :class:`~hiten.algorithms.connections.types.Connections` 
         wrapper provides enhanced formatting and filtering capabilities.
 
         Examples
@@ -249,16 +241,6 @@ class Connection:
         >>> ballistic = connection.results.ballistic  # Filter by type
         """
         return Connections(self._last_results)
-
-    def __repr__(self) -> str:
-        n = len(self._last_results or [])
-        sec = type(self.section).__name__ if self.section is not None else "None"
-        return f"Connection(section={sec}, direction={self.direction}, results={n})"
-
-    def __str__(self) -> str:
-        header = self.__repr__()
-        res_str = str(self.results)
-        return f"{header}\n{res_str}"
 
     def plot(self, **kwargs):
         """Create a visualization of the connection results on the synodic section.
@@ -308,11 +290,12 @@ class Connection:
         if self._last_source is None or self._last_target is None:
             raise EngineError("Nothing to plot: call solve(source, target) first.")
 
-        manifold_if = _ManifoldInterface()
+        manifold_if = self._get_interface()
+        config = self._get_config()
 
         # Build section hits for both manifolds on the configured synodic section
-        sec_u = manifold_if.to_section(manifold=self._last_source, config=self.section, direction=self.direction)
-        sec_s = manifold_if.to_section(manifold=self._last_target, config=self.section, direction=self.direction)
+        sec_u = manifold_if.to_section(manifold=self._last_source, config=config.section, direction=config.direction)
+        sec_s = manifold_if.to_section(manifold=self._last_target, config=config.section, direction=config.direction)
 
         pts_u = np.asarray(sec_u.points, dtype=float)
         pts_s = np.asarray(sec_s.points, dtype=float)
@@ -336,3 +319,32 @@ class Connection:
             match_values=match_vals,
             **kwargs,
         )
+
+    def _validate_config(self, config: ConfigT) -> None:
+        """Validate the configuration object.
+        
+        This method can be overridden by concrete facades to perform
+        domain-specific configuration validation.
+        
+        Parameters
+        ----------
+        config : ConfigT
+            The configuration object to validate.
+            
+        Raises
+        ------
+        ValueError
+            If the configuration is invalid.
+        """
+        super()._validate_config(config)
+        
+        if hasattr(config, 'section') and config.section is None:
+            raise ValueError("Section configuration is required")
+        if hasattr(config, 'search_cfg') and config.search_cfg is not None:
+            search_cfg = config.search_cfg
+            if hasattr(search_cfg, 'delta_v_tol') and search_cfg.delta_v_tol <= 0:
+                raise ValueError("Delta-V tolerance must be positive")
+            if hasattr(search_cfg, 'ballistic_tol') and search_cfg.ballistic_tol <= 0:
+                raise ValueError("Ballistic tolerance must be positive")
+            if hasattr(search_cfg, 'eps2d') and search_cfg.eps2d <= 0:
+                raise ValueError("2D epsilon must be positive")

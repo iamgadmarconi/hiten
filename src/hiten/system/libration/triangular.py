@@ -66,8 +66,8 @@ class TriangularPoint(LibrationPoint):
     """
     ROUTH_CRITICAL_MU = (1.0 - np.sqrt(1.0 - (1.0/27.0))) / 2.0 # approx 0.03852
     
-    def __init__(self, system: "System", *, services=None):
-        super().__init__(system, services=services)
+    def __init__(self, system: "System"):
+        super().__init__(system)
         # Log stability warning based on mu
         if system.mu > self.ROUTH_CRITICAL_MU:
             logger.warning(f"Triangular points are potentially unstable for mu > {self.ROUTH_CRITICAL_MU:.6f} (current mu = {system.mu})")
@@ -119,8 +119,8 @@ class L4Point(TriangularPoint):
         The CR3BP system containing the mass parameter mu.
     """
     
-    def __init__(self, system: "System", *, services=None):
-        super().__init__(system, services=services)
+    def __init__(self, system: "System"):
+        super().__init__(system)
     
     @property
     def idx(self) -> int:
@@ -149,8 +149,8 @@ class L5Point(TriangularPoint):
         The CR3BP system containing the mass parameter mu.
     """
     
-    def __init__(self, system: "System", *, services=None):
-        super().__init__(system, services=services)
+    def __init__(self, system: "System"):
+        super().__init__(system)
     
     @property
     def idx(self) -> int:

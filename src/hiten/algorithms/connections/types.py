@@ -22,13 +22,14 @@ See Also
 """
 
 from dataclasses import dataclass
-from typing import Iterator, Literal, Sequence, Tuple
+from typing import TYPE_CHECKING, Iterator, Literal, Sequence, Tuple
 
 import numpy as np
 
-from hiten.algorithms.connections.config import _SearchConfig
-from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
 from hiten.system.manifold import Manifold
+
+if TYPE_CHECKING:
+    from hiten.algorithms.connections.config import _ConnectionConfig
 
 
 @dataclass
@@ -265,22 +266,17 @@ class _ConnectionProblem:
     """Define a problem specification for connection discovery between two manifolds.
 
     This dataclass encapsulates all the parameters needed to define a connection
-    discovery problem, including the source and target manifolds, the synodic
-    section for intersection, crossing direction, and search configuration.
+    discovery problem, including the source and target manifolds and the unified
+    configuration containing section, direction, and search parameters.
 
     Parameters
     ----------
-    source : :class:`~hiten.algorithms.connections.interfaces._ManifoldInterface`
-        Interface to the source manifold (typically unstable manifold).
-    target : :class:`~hiten.algorithms.connections.interfaces._ManifoldInterface`
-        Interface to the target manifold (typically stable manifold).
-    section : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
-        Configuration for the synodic section where manifolds are intersected.
-    direction : {1, -1, None}, optional
-        Direction for section crossings. 1 for positive crossings, -1 for
-        negative crossings, None for both directions.
-    search : :class:`~hiten.algorithms.connections.config._SearchConfig`
-        Search configuration including tolerances and geometric parameters.
+    source : :class:`~hiten.system.manifold.Manifold`
+        Source manifold (typically unstable manifold).
+    target : :class:`~hiten.system.manifold.Manifold`
+        Target manifold (typically stable manifold).
+    config : :class:`~hiten.algorithms.connections.config._ConnectionConfig`
+        Unified configuration containing section, direction, and search parameters.
 
     Notes
     -----
@@ -294,18 +290,22 @@ class _ConnectionProblem:
 
     Examples
     --------
-    >>> from hiten.algorithms.connections.config import _SearchConfig
+    >>> from hiten.algorithms.connections.config import _ConnectionConfig
     >>> from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
     >>> 
-    >>> section_cfg = _SynodicMapConfig(x=0.8)
-    >>> search_cfg = _SearchConfig(delta_v_tol=1e-3)
+    >>> section_cfg = _SynodicMapConfig(section_axis="x", section_offset=0.8)
+    >>> config = _ConnectionConfig(
+    ...     section=section_cfg,
+    ...     direction=1,
+    ...     delta_v_tol=1e-3,
+    ...     ballistic_tol=1e-8,
+    ...     eps2d=1e-4
+    ... )
     >>> 
     >>> problem = _ConnectionProblem(
     ...     source=unstable_manifold,
     ...     target=stable_manifold,
-    ...     section=section_cfg,
-    ...     direction=1,
-    ...     search=search_cfg
+    ...     config=config
     ... )
 
     See Also
@@ -317,6 +317,4 @@ class _ConnectionProblem:
     """
     source: Manifold
     target: Manifold
-    section: _SynodicMapConfig
-    direction: Literal[1, -1, None] | None
-    search: _SearchConfig | None
+    config: "_ConnectionConfig"
