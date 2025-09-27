@@ -389,11 +389,11 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
         ----------
         **kwargs
             Configuration parameters to update.
-            
-        Notes
-        -----
-        This method should be implemented by concrete facades to handle
-        configuration updates specific to their domain.
+        
+        Raises
+        ------
+        ValueError
+            If the configuration parameter is not valid.
         """
         for key, value in kwargs.items():
             if hasattr(self._config, key):
@@ -600,7 +600,7 @@ class _HitenBase(ABC):
             self._dynamics.reset()
 
     @classmethod
-    def _load_with_services(cls, file_path: str | Path, persistence_service, services_factory, **kwargs) -> "_HitenBase":
+    def _load_with_services(cls, filepath: str | Path, persistence_service, services_factory, **kwargs) -> "_HitenBase":
         """Generic load method that handles the common pattern.
         
         This method abstracts the common load pattern:
@@ -611,7 +611,7 @@ class _HitenBase(ABC):
         
         Parameters
         ----------
-        file_path : str or Path
+        filepath : str or Path
             Path to the file to load from
         persistence_service : _PersistenceServiceBase
             The persistence service to use for loading
@@ -625,29 +625,29 @@ class _HitenBase(ABC):
         _HitenBase
             The loaded object with services properly initialized
         """
-        obj = persistence_service.load(file_path, **kwargs)
+        obj = persistence_service.load(filepath, **kwargs)
         services = services_factory(obj)
         super(cls, obj).__init__(services)
         return obj
 
-    def save(self, file_path: str | Path, **kwargs) -> None:
+    def save(self, filepath: str | Path, **kwargs) -> None:
         """Save the object to a file.
 
         Parameters
         ----------
-        file_path : str or Path
+        filepath : str or Path
             The path to the file to save the object to.
         **kwargs
             Additional keyword arguments passed to the save method.
         """
-        self.persistence.save(self, file_path, **kwargs)
+        self.persistence.save(self, filepath, **kwargs)
 
-    def load_inplace(self, file_path: str | Path, **kwargs) -> "_HitenBase":
+    def load_inplace(self, filepath: str | Path, **kwargs) -> "_HitenBase":
         """Load data into this object from a file (in place).
 
         Parameters
         ----------
-        file_path : str or Path
+        filepath : str or Path
             The path to the file to load the object from.
         **kwargs
             Additional keyword arguments passed to the load method.
@@ -657,17 +657,17 @@ class _HitenBase(ABC):
         :class:`~hiten.algorithms.types.core._HitenBase`
             The object with loaded data (self).
         """
-        self.persistence.load_inplace(self, file_path, **kwargs)
+        self.persistence.load_inplace(self, filepath, **kwargs)
         return self
 
     @classmethod
     @abstractmethod
-    def load(cls, file_path: str | Path, **kwargs) -> "_HitenBase":
+    def load(cls, filepath: str | Path, **kwargs) -> "_HitenBase":
         """Load the object from a file.
         
         Parameters
         ----------
-        file_path : str or Path
+        filepath : str or Path
             The path to the file to load the object from.
         **kwargs
             Additional keyword arguments passed to the load method.
@@ -679,12 +679,12 @@ class _HitenBase(ABC):
         """
         ...
 
-    def to_csv(self, file_path: str | Path, **kwargs) -> None:
+    def to_csv(self, filepath: str | Path, **kwargs) -> None:
         """Save the object to a CSV file.
 
         Parameters
         ----------
-        file_path : str or Path
+        filepath : str or Path
             The path to the file to save the object to.
         **kwargs
             Additional keyword arguments passed to the save method.

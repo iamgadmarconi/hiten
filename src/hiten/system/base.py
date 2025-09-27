@@ -252,7 +252,7 @@ class System(_HitenBase):
             The propagated trajectory.
         """
 
-        sol = self.dynamics.propagate(
+        traj = self.dynamics.propagate(
             initial_conditions,
             tf=tf,
             steps=steps,
@@ -262,11 +262,7 @@ class System(_HitenBase):
             flip_indices=flip_indices,
         )
 
-        return Trajectory.from_solution(
-            solution=sol,
-            state_vector_cls=SynodicStateVector,
-            frame=ReferenceFrame.ROTATING,
-        )
+        return traj
 
     @classmethod
     def from_bodies(cls, primary_name: str, secondary_name: str) -> "System":
@@ -350,10 +346,10 @@ class System(_HitenBase):
         self._setup_services(_SystemServices.default(self))
 
     @classmethod
-    def load(cls, file_path: str | Path, **kwargs) -> "System":
+    def load(cls, filepath: str | Path, **kwargs) -> "System":
         """Load a System from a file (new instance)."""
         return cls._load_with_services(
-            file_path, 
+            filepath, 
             _SystemPersistenceService(), 
             _SystemServices.default, 
             **kwargs

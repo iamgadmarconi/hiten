@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, Optional, Tuple, Literal
 
 import numpy as np
 
@@ -24,6 +24,7 @@ from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _ServiceBundleBase)
 from hiten.algorithms.types.states import (ReferenceFrame, SynodicStateVector,
                                            Trajectory)
+from hiten.system.manifold import Manifold
 from hiten.utils.io.orbits import (load_periodic_orbit,
                                    load_periodic_orbit_inplace,
                                    save_periodic_orbit)
@@ -50,33 +51,36 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
 
     def __init__(self, domain_obj: "PeriodicOrbit") -> None:
         super().__init__(domain_obj)
+        self._corrector = Corrector.with_default_engine(config=self.correction_config)
 
     def correct(self, *, overrides: Dict[str, Any] | None = None) -> Tuple[np.ndarray, float]:
         cache_key = self.make_key("correct", overrides)
 
         def _factory() -> Tuple[np.ndarray, float]:
-            
-            overrides = overrides or {}
-
-            cfg_base: "_OrbitCorrectionConfig" = self._domain_obj._correction_config
-            cfg = replace(cfg_base, **{k: v for k, v in overrides.items() if hasattr(cfg_base, k)})
-
-            line_search = overrides.get("line_search_config", cfg.line_search_config)
-            if line_search is True:
-                stepper_factory = make_armijo_stepper(_LineSearchConfig())
-            elif line_search is False or line_search is None:
-                stepper_factory = make_plain_stepper()
-            else:
-                stepper_factory = make_armijo_stepper(line_search)
-
-            corrector = Corrector.with_default_engine(config=cfg)
-            corrector.update_config({"stepper_factory": stepper_factory})
-
-            results = corrector.correct(self._domain_obj)
+            self.update_correction(**overrides)
+            results = self.corrector.correct(self._domain_obj)
 
             return results.corrected_state, 2 * results.half_period
 
         return self.get_or_create(cache_key, _factory)
+
+    def update_correction(self, **kwargs) -> None:
+        """Update algorithm-level correction parameters for this orbit.
+
+        Allowed keys: tol, max_attempts, max_delta, line_search_config,
+        finite_difference, forward.
+        """
+        self.corrector.update_config(**kwargs)
+
+    @property
+    def corrector(self) -> Corrector:
+        return self._corrector
+
+    @property
+    @abstractmethod
+    def correction_config(self) -> "_OrbitCorrectionConfig":
+        """Provides the differential correction configuration for this orbit family."""
+        pass
 
 
 class _OrbitContinuationService(_DynamicsServiceBase):
@@ -84,6 +88,12 @@ class _OrbitContinuationService(_DynamicsServiceBase):
 
     def __init__(self, domain_obj: "PeriodicOrbit") -> None:
         super().__init__(domain_obj)
+
+    @property
+    @abstractmethod
+    def continuation_config(self) -> "_OrbitContinuationConfig":
+        """Default parameter for family continuation (must be overridden)."""
+        pass
 
 
 
@@ -319,6 +329,9 @@ class _OrbitDynamicsService(ABC, _DynamicsServiceBase):
 
         return self.get_or_create(cache_key, _factory)
 
+    def manifold(self, stable: bool = True, direction: Literal["positive", "negative"] = "positive") -> "Manifold":
+        return Manifold(self.orbit, stable=stable, direction=direction)
+
     def compute_stability(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         if self.initial_state is None:
             raise ValueError("Initial state must be provided")
@@ -346,18 +359,6 @@ class _OrbitDynamicsService(ABC, _DynamicsServiceBase):
     @abstractmethod
     def _initial_guess(self) -> np.ndarray:
         pass
-
-    @property
-    @abstractmethod
-    def _correction_config(self) -> "_OrbitCorrectionConfig":
-        """Provides the differential correction configuration for this orbit family."""
-        pass
-
-    @property
-    @abstractmethod
-    def _continuation_config(self) -> "_OrbitContinuationConfig":
-        """Default parameter for family continuation (must be overridden)."""
-        raise NotImplementedError
 
 
 @dataclass

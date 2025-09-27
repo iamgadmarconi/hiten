@@ -350,16 +350,16 @@ class LibrationPoint(_HitenBase, ABC):
         super().__setstate__(state)
         self._setup_services(_LibrationServices.default(self))
 
+    def load_inplace(self, filepath: str | Path) -> "LibrationPoint":
+        self.persistence.load_inplace(self, filepath)
+        self.dynamics.reset()
+        return self
+
     @classmethod
-    def load(cls, file_path: str | Path, **kwargs) -> "LibrationPoint":
+    def load(cls, filepath: str | Path, **kwargs) -> "LibrationPoint":
         return cls._load_with_services(
-            file_path, 
+            filepath, 
             _LibrationPersistenceService(), 
             _LibrationServices.default, 
             **kwargs
         )
-
-    def load_inplace(self, file_path: str | Path) -> "LibrationPoint":
-        self.persistence.load_inplace(self, file_path)
-        self.dynamics.reset()
-        return self

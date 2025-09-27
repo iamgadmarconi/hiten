@@ -27,16 +27,16 @@ class _PersistenceServiceBase(ABC):
         self._load_fn = load_fn
         self._load_inplace_fn = load_inplace_fn
 
-    def save(self, target: Any, file_path: Any, **kwargs) -> Any:
-        return self._save_fn(target, file_path, **kwargs)
+    def save(self, target: Any, filepath: Any, **kwargs) -> Any:
+        return self._save_fn(target, filepath, **kwargs)
 
-    def load(self, file_path: Any, **kwargs) -> Any:
-        return self._load_fn(file_path, **kwargs)
+    def load(self, filepath: Any, **kwargs) -> Any:
+        return self._load_fn(filepath, **kwargs)
 
-    def load_inplace(self, target: Any, file_path: Any, **kwargs) -> Any:
+    def load_inplace(self, target: Any, filepath: Any, **kwargs) -> Any:
         if self._load_inplace_fn is None:
             raise NotImplementedError("load_inplace is not supported by this adapter")
-        self._load_inplace_fn(target, file_path, **kwargs)
+        self._load_inplace_fn(target, filepath, **kwargs)
         return target
 
 

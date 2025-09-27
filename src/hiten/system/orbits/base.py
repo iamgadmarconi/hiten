@@ -191,55 +191,54 @@ class PeriodicOrbit(_HitenBase, ABC):
         """
         return self.dynamics.monodromy
 
-    def update_correction(self, **kwargs) -> None:
-        """Update algorithm-level correction parameters for this orbit.
+    def correct(self, **kwargs) -> tuple[np.ndarray, float]:
+        """Differential correction wrapper.
+        
+        Parameters
+        ----------
+        **kwargs
+            Additional keyword arguments passed to the correction method.
 
-        Allowed keys: tol, max_attempts, max_delta, line_search_config,
-        finite_difference, forward.
+            - tol: float
+                Convergence tolerance for the residual norm.
+            - max_attempts: int
+                Maximum number of Newton iterations to attempt before declaring
+                convergence failure.
+            - max_delta: float
+                Maximum allowed infinity norm of Newton steps.
+            - line_search_config: :class:`~hiten.algorithms.corrector.config._LineSearchConfig`
+                Configuration for line search behavior.
+            - finite_difference: bool
+                Force finite-difference approximation of Jacobians even when
+                analytic Jacobians are available.
+            - forward: int
+                Integration direction (1 for forward, -1 for backward).
+            
+        Returns
+        -------
+        tuple[np.ndarray, float]
+            The corrected state and period.
         """
-        allowed = {"tol", "max_attempts", "max_delta", "line_search_config", "finite_difference", "forward"}
-        invalid = [k for k in kwargs.keys() if k not in allowed]
-        if invalid:
-            raise KeyError(f"Invalid correction parameter(s): {invalid}. Allowed: {sorted(allowed)}")
-        self._correction_overrides.update({k: v for k, v in kwargs.items() if v is not None})
-
-    def correct(
-            self,
-            *,
-            tol: float | None = None,
-            max_attempts: int | None = None,
-            forward: int | None = None,
-            max_delta: float | None = None,
-            line_search_config: _LineSearchConfig | bool | None = None,
-            finite_difference: bool | None = None,
-        ) -> tuple[np.ndarray, float]:
-        """Differential correction wrapper."""
-        overrides: dict[str, object] = {}
-        if tol is not None:
-            overrides["tol"] = tol
-        if max_attempts is not None:
-            overrides["max_attempts"] = max_attempts
-        if forward is not None:
-            overrides["forward"] = forward
-        if max_delta is not None:
-            overrides["max_delta"] = max_delta
-        if line_search_config is not None:
-            overrides["line_search_config"] = line_search_config
-        if finite_difference is not None:
-            overrides["finite_difference"] = finite_difference
-        if overrides:
-            self.update_correction(**overrides)
-
-        result = self._services.correction.correct(self, overrides=overrides)
-        self._initial_state = result.corrected_state
-        self._period = result.period
-        self._trajectory = None
-        self._times = None
-        self._stability_info = None
+        result = self._correction.correct(self, **kwargs)
         return result.corrected_state, result.period
 
     def propagate(self, steps: int = 1000, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8) -> Trajectory:
-        """Propagate the orbit."""
+        """Propagate the orbit.
+        
+        Parameters
+        ----------
+        steps: int, default 1000
+            Number of integration steps. Default is 1000.
+        method: Literal["fixed", "adaptive", "symplectic"]
+            Integration method. Default is "adaptive".
+        order: int, default 8
+            Integration order.
+            
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.states.Trajectory`
+            The propagated trajectory.
+        """
         return self.dynamics.propagate(steps=steps, method=method, order=order)
 
     def manifold(self, stable: bool = True, direction: Literal["positive", "negative"] = "positive") -> "Manifold":
@@ -249,7 +248,7 @@ class PeriodicOrbit(_HitenBase, ABC):
         ----------
         stable : bool, optional
             Whether to create a stable manifold. Default is True.
-        direction : str, optional
+        direction : Literal["positive", "negative"], optional
             Direction of the manifold ("positive" or "negative"). Default is "positive".
             
         Returns
@@ -257,8 +256,7 @@ class PeriodicOrbit(_HitenBase, ABC):
         :class:`~hiten.system.manifold.Manifold`
             The manifold object.
         """
-        from hiten.system.manifold import Manifold
-        return Manifold(self, stable=stable, direction=direction)
+        return self.dynamics.manifold(stable=stable, direction=direction)
 
     def plot(self, frame: Literal["rotating", "inertial"] = "rotating", dark_mode: bool = True, save: bool = False, filepath: str = f'orbit.svg', **kwargs):
         """Plot the orbit trajectory.
@@ -365,48 +363,41 @@ class PeriodicOrbit(_HitenBase, ABC):
         df.to_csv(filepath, index=False)
         logger.info(f"Orbit trajectory successfully exported to {filepath}")
 
-    def save(self, filepath: str, **kwargs) -> None:
-        """Save the orbit to a file."""
-        self._services.persistence.save(self, filepath, **kwargs)
-
-    def load_inplace(self, filepath: str, **kwargs) -> None:
-        """Load orbit data from a file in place."""
-        self._services.persistence.load_inplace(self, filepath, **kwargs)
-        if getattr(self, "_system", None) is not None:
-            self._services = _OrbitServices.for_system(self._system)
-        return
-
-    @classmethod
-    def load(cls, filepath: str, **kwargs) -> "PeriodicOrbit":
-        """Load an orbit from a file."""
-        if not os.path.exists(filepath):
-            raise FileNotFoundError(f"Orbit file not found: {filepath}")
+    def to_df(self, **kwargs) -> pd.DataFrame:
+        """Export the orbit trajectory to a pandas DataFrame.
         
-        def services_factory(orbit):
-            system = getattr(orbit, "_system", None)
-            if system is None:
-                raise ValueError("Serialized orbit is missing system metadata and cannot be rehydrated.")
-            return _OrbitServices.for_system(system)
+        Parameters
+        ----------
+        **kwargs
+            Additional keyword arguments passed to pandas.DataFrame.to_csv.
+        """
+        if self._trajectory is None or self._times is None:
+            err = "Trajectory not computed. Please call propagate() first."
+            logger.error(err)
+            raise ValueError(err)
         
-        return cls._load_with_services(
-            filepath, 
-            _OrbitPersistenceService(), 
-            services_factory, 
-            **kwargs
-        )
+        return pd.DataFrame(np.column_stack((self._times, self._trajectory)), columns=["time", "x", "y", "z", "vx", "vy", "vz"])
 
     def __setstate__(self, state):
         """Restore the PeriodicOrbit instance after unpickling."""
         super().__setstate__(state)
-        self._setup_services(_OrbitServices.for_system(self._system))
+        self._setup_services(_OrbitServices.default(self))
 
-    def __getstate__(self):
-        """Custom state extractor to enable pickling."""
-        state = self.__dict__.copy()
-        state.pop("_services", None)
-        if "_cached_dynsys" in state:
-            state["_cached_dynsys"] = None
-        return state
+    def load_inplace(self, filepath: str, **kwargs) -> None:
+        """Load orbit data from a file in place."""
+        self.persistence.load_inplace(self, filepath)
+        self.dynamics.reset()
+        return self
+
+    @classmethod
+    def load(cls, filepath: str, **kwargs) -> "PeriodicOrbit":
+        """Load an orbit from a file."""
+        return cls._load_with_services(
+            filepath, 
+            _OrbitPersistenceService(), 
+            _OrbitServices.default, 
+            **kwargs
+        )
 
 
 class GenericOrbit(PeriodicOrbit):

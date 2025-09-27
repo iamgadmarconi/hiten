@@ -77,10 +77,10 @@ class Body(_HitenBase):
         self._setup_services(_BodyServices.default(self))
 
     @classmethod
-    def load(cls, file_path: str | Path, **kwargs) -> "Body":
+    def load(cls, filepath: str | Path, **kwargs) -> "Body":
         """Load a Body from a file (new instance)."""
         return cls._load_with_services(
-            file_path, 
+            filepath, 
             _BodyPersistenceService(), 
             _BodyServices.default, 
             **kwargs
