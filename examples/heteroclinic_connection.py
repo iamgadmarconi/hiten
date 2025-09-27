@@ -1,5 +1,8 @@
 """Example script: Detecting heteroclinic connections between two manifolds.
 
+This example demonstrates how to use the Connection class with the to find impulsive transfers between
+manifolds in the CR3BP.
+
 Run with
     python examples/heteroclinic_connection.py
 """
@@ -9,7 +12,8 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from hiten.algorithms.connections import Connection, SearchConfig
+from hiten.algorithms.connections import Connection
+from hiten.algorithms.connections.config import _ConnectionConfig
 from hiten.algorithms.poincare import SynodicMapConfig
 from hiten.system import System
 
@@ -48,11 +52,17 @@ def main() -> None:
         n_workers=None,
     )
 
-    conn = Connection.with_default_engine(
-        section=section_cfg,
-        direction=None,
-        search_cfg=SearchConfig(delta_v_tol=1, ballistic_tol=1e-8, eps2d=1e-3),
+    # Create unified configuration with all parameters in one object
+    config = _ConnectionConfig(
+        section=section_cfg,        # Synodic section configuration
+        direction=None,             # Crossing direction (None = both directions)
+        delta_v_tol=1,             # Maximum Delta-V tolerance
+        ballistic_tol=1e-8,        # Threshold for ballistic classification
+        eps2d=1e-3,                # 2D pairing radius
     )
+    
+    # Create connection using the factory method with unified config
+    conn = Connection.with_default_engine(config=config)
 
     conn.solve(manifold_l1, manifold_l2)
     print(conn)
