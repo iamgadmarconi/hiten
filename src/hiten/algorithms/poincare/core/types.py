@@ -61,6 +61,9 @@ class _SectionHit(NamedTuple):
         2D coordinates of the point in the section plane (e.g.,
         (q2, p2) or (x, x_dot)). Stored separately so callers
         do not have to re-project the full state vector.
+    trajectory_index : int
+        Index of the trajectory that produced this intersection
+        within the input trajectory list.
 
     Notes
     -----
@@ -76,6 +79,7 @@ class _SectionHit(NamedTuple):
     time: float
     state: np.ndarray  # shape (n,)
     point2d: np.ndarray  # shape (2,)
+    trajectory_index: int
 
     def __repr__(self):
         return (f"SectionHit(t={self.time:.3e}, state={np.array2string(self.state, precision=3)}, "

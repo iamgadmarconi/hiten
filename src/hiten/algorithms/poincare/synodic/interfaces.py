@@ -132,6 +132,6 @@ class _SynodicInterface(
         return _BackendCall(kwargs={"trajectories": problem.trajectories, "direction": problem.direction})
 
     def to_results(self, outputs, *, problem: _SynodicMapProblem) -> SynodicMapResults:
-        points, states, times = outputs
+        points, states, times, trajectory_indices = outputs
         plane_coords = problem.plane_coords
-        return SynodicMapResults(points, states, plane_coords, times)
+        return SynodicMapResults(points, states, plane_coords, times, trajectory_indices)

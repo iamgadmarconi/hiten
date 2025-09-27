@@ -424,6 +424,8 @@ class _ConnectionsBackend(_HitenBaseBackend):
         ps: np.ndarray,
         Xu: np.ndarray,
         Xs: np.ndarray,
+        traj_indices_u: np.ndarray | None,
+        traj_indices_s: np.ndarray | None,
         *,
         eps: float,
         dv_tol: float,
@@ -441,6 +443,10 @@ class _ConnectionsBackend(_HitenBaseBackend):
             6D states corresponding to ``pu``.
         Xs : ndarray, shape (M, 6)
             6D states corresponding to ``ps``.
+        traj_indices_u : ndarray or None, shape (N,)
+            Trajectory indices for source manifold intersections.
+        traj_indices_s : ndarray or None, shape (M,)
+            Trajectory indices for target manifold intersections.
         eps : float
             Pairing radius on the 2D section plane.
         dv_tol : float
@@ -505,7 +511,9 @@ class _ConnectionsBackend(_HitenBaseBackend):
                 if dv <= dv_tol:
                     kind = "ballistic" if dv <= bal_tol else "impulsive"
                     pt = (float(rstar[k, 0]), float(rstar[k, 1]))
-                    results.append(_ConnectionResult(kind=kind, delta_v=dv, point2d=pt, state_u=Xu_seg.copy(), state_s=Xs_seg.copy(), index_u=int(i), index_s=int(j)))
+                    traj_idx_u = int(traj_indices_u[i]) if traj_indices_u is not None else 0
+                    traj_idx_s = int(traj_indices_s[j]) if traj_indices_s is not None else 0
+                    results.append(_ConnectionResult(kind=kind, delta_v=dv, point2d=pt, state_u=Xu_seg.copy(), state_s=Xs_seg.copy(), index_u=int(i), index_s=int(j), trajectory_index_u=traj_idx_u, trajectory_index_s=traj_idx_s))
             else:
                 vu = Xu[i, 3:6]
                 vs = Xs[j, 3:6]
@@ -513,7 +521,9 @@ class _ConnectionsBackend(_HitenBaseBackend):
                 if dv <= dv_tol:
                     kind = "ballistic" if dv <= bal_tol else "impulsive"
                     pt = (float(pu[i, 0]), float(pu[i, 1]))
-                    results.append(_ConnectionResult(kind=kind, delta_v=dv, point2d=pt, state_u=Xu[i].copy(), state_s=Xs[j].copy(), index_u=int(i), index_s=int(j)))
+                    traj_idx_u = int(traj_indices_u[i]) if traj_indices_u is not None else 0
+                    traj_idx_s = int(traj_indices_s[j]) if traj_indices_s is not None else 0
+                    results.append(_ConnectionResult(kind=kind, delta_v=dv, point2d=pt, state_u=Xu[i].copy(), state_s=Xs[j].copy(), index_u=int(i), index_s=int(j), trajectory_index_u=traj_idx_u, trajectory_index_s=traj_idx_s))
 
         results.sort(key=lambda r: r.delta_v)
         return results

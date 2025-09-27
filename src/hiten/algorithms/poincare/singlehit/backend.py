@@ -260,7 +260,7 @@ class _SingleHitBackend(_ReturnMapBackend):
         t_hit = t_start + t_hit_rel
         if t_hit_rel < span and t_hit_rel >= 0.0:
             # diagnostics disabled by default
-            return _SectionHit(time=t_hit, state=y_hit, point2d=y_hit[:2].copy())
+            return _SectionHit(time=t_hit, state=y_hit, point2d=y_hit[:2].copy(), trajectory_index=0)
         # diagnostics disabled by default
         return None
 

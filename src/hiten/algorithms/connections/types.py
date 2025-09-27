@@ -67,6 +67,12 @@ class _ConnectionResult:
     index_s : int
         Index of the connection point within the target manifold's
         section intersection data.
+    trajectory_index_u : int
+        Index of the trajectory within the source manifold that
+        produced the connection point.
+    trajectory_index_s : int
+        Index of the trajectory within the target manifold that
+        produced the connection point.
 
     Notes
     -----
@@ -102,6 +108,8 @@ class _ConnectionResult:
     state_s: np.ndarray
     index_u: int
     index_s: int
+    trajectory_index_u: int
+    trajectory_index_s: int
 
 
 @dataclass

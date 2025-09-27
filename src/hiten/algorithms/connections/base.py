@@ -370,6 +370,9 @@ class Connection(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT
                            f"Available connections: 0 to {len(self._last_results) - 1}")
         
         connection = self._last_results[connection_index]
+
+        source_traj = self._last_source.trajectories[connection.trajectory_index_u]
+        target_traj = self._last_target.trajectories[connection.trajectory_index_s]
         
         source_manifold = self._last_source
         orbit = source_manifold.generating_orbit
@@ -378,9 +381,9 @@ class Connection(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT
         system_distance = system.distance
         
         return plot_connection_trajectories(
+            source_traj,
+            target_traj,
             connection,
-            self._last_source,
-            self._last_target,
             bodies,
             system_distance,
             **kwargs

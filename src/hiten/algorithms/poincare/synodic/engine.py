@@ -107,15 +107,17 @@ class _SynodicEngine(_ReturnMapEngine):
                     parts.append(fut.result())
             hits_lists = [hits for part in parts for hits in part]
 
-        pts, sts, ts = [], [], []
+        pts, sts, ts, traj_indices = [], [], [], []
         for hits in hits_lists:
             for h in hits:
                 pts.append(h.point2d)
                 sts.append(h.state)
                 ts.append(h.time)
+                traj_indices.append(h.trajectory_index)
 
         pts_np = np.asarray(pts, dtype=float) if pts else np.empty((0, 2))
         sts_np = np.asarray(sts, dtype=float) if sts else np.empty((0, 6))
         ts_np = np.asarray(ts, dtype=float) if ts else None
+        traj_indices_np = np.asarray(traj_indices, dtype=int) if traj_indices else np.empty((0,), dtype=int)
 
-        return self._interface.to_results((pts_np, sts_np, ts_np), problem=problem)
+        return self._interface.to_results((pts_np, sts_np, ts_np, traj_indices_np), problem=problem)

@@ -1160,9 +1160,9 @@ def plot_manifolds(
     return fig, ax
 
 def plot_connection_trajectories(
+    source_trajectory,
+    target_trajectory,
     connection_result,
-    source_manifold,
-    target_manifold,
     bodies: List[Body],
     system_distance: float,
     *,
@@ -1175,18 +1175,18 @@ def plot_connection_trajectories(
 ) -> Tuple[plt.Figure, plt.Axes]:
     """Plot the trajectories forming a specific connection.
 
-    This function visualizes the individual connection by showing the source
-    and target manifold trajectories that form the connection, along with
+    This function visualizes the individual connection by showing the specific
+    source and target trajectories that form the connection, along with
     the connection point and Delta-V vector.
 
     Parameters
     ----------
+    source_trajectory : :class:`~hiten.algorithms.types.states.Trajectory`
+        The source trajectory that forms the connection.
+    target_trajectory : :class:`~hiten.algorithms.types.states.Trajectory`
+        The target trajectory that forms the connection.
     connection_result : :class:`~hiten.algorithms.connections.types._ConnectionResult`
-        The connection result object containing connection point and indices.
-    source_manifold : :class:`~hiten.system.manifold.Manifold`
-        The source manifold containing trajectory data.
-    target_manifold : :class:`~hiten.system.manifold.Manifold`
-        The target manifold containing trajectory data.
+        The connection result object containing connection point and Delta-V info.
     bodies : list of :class:`~hiten.system.body.Body`
         Primary and secondary bodies of the CR3BP.
     system_distance : float
@@ -1196,9 +1196,9 @@ def plot_connection_trajectories(
     dark_mode : bool, default False
         Whether to use dark mode styling.
     src_color : str, default 'C0'
-        Color for the source manifold trajectory.
+        Color for the source trajectory.
     tgt_color : str, default 'C1'
-        Color for the target manifold trajectory.
+        Color for the target trajectory.
     connection_color : str, default 'gold'
         Color for the connection point.
     delta_v_color : str, default 'orange'
@@ -1212,8 +1212,8 @@ def plot_connection_trajectories(
     Notes
     -----
     The plot shows:
-    - Source manifold trajectory segment leading to the connection point
-    - Target manifold trajectory segment from the connection point
+    - Source trajectory that leads to the connection point
+    - Target trajectory that starts from the connection point
     - Connection point with Delta-V vector
     - 3D trajectory visualization in the rotating frame
     - Primary body positions for reference
@@ -1222,16 +1222,20 @@ def plot_connection_trajectories(
     --------
     >>> from hiten.utils.plots import plot_connection_trajectories
     >>> 
-    >>> # Plot the first connection
+    >>> # Plot a connection
     >>> fig, ax = plot_connection_trajectories(
-    ...     connection_results[0], 
+    ...     source_traj, 
+    ...     target_traj,
+    ...     connection_result,
     ...     bodies, 
     ...     system_distance
     ... )
     >>> 
     >>> # Plot with custom styling
     >>> fig, ax = plot_connection_trajectories(
-    ...     connection_results[0],
+    ...     source_traj,
+    ...     target_traj,
+    ...     connection_result,
     ...     bodies,
     ...     system_distance,
     ...     dark_mode=True,
@@ -1239,11 +1243,6 @@ def plot_connection_trajectories(
     ... )
     """
 
-    # Extract trajectory data from the manifolds
-    # Plot all manifold trajectories and highlight the connection points
-    source_trajectories = source_manifold.trajectories
-    target_trajectories = target_manifold.trajectories
-    
     # Get connection point from the 6D states (both states should be at the same point)
     connection_point = connection_result.state_u[:3]  # Use source state position
     
@@ -1254,21 +1253,15 @@ def plot_connection_trajectories(
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection='3d')
     
-    # Plot source trajectories (unstable manifold)
-    for traj in source_trajectories:
-        ax.plot(traj.states[:, 0], traj.states[:, 1], traj.states[:, 2], 
-                color=src_color, linewidth=1, alpha=0.6)
-    # Add label for legend (only once)
-    if source_trajectories:
-        ax.plot([], [], color=src_color, linewidth=2, alpha=0.7, label='Source manifold')
+    # Plot the source trajectory
+    if source_trajectory is not None:
+        ax.plot(source_trajectory.states[:, 0], source_trajectory.states[:, 1], source_trajectory.states[:, 2], 
+                color=src_color, linewidth=2, alpha=0.8, label='Source trajectory')
     
-    # Plot target trajectories (stable manifold)
-    for traj in target_trajectories:
-        ax.plot(traj.states[:, 0], traj.states[:, 1], traj.states[:, 2], 
-                color=tgt_color, linewidth=1, alpha=0.6)
-    # Add label for legend (only once)
-    if target_trajectories:
-        ax.plot([], [], color=tgt_color, linewidth=2, alpha=0.7, label='Target manifold')
+    # Plot the target trajectory
+    if target_trajectory is not None:
+        ax.plot(target_trajectory.states[:, 0], target_trajectory.states[:, 1], target_trajectory.states[:, 2], 
+                color=tgt_color, linewidth=2, alpha=0.8, label='Target trajectory')
     
     # Plot connection point
     ax.scatter(connection_point[0], connection_point[1], connection_point[2], 

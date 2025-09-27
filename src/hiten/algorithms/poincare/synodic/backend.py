@@ -471,6 +471,7 @@ def _order_and_dedup_hits(
     dedup_time_tol: float,
     dedup_point_tol: float,
     max_hits_per_traj: int | None,
+    trajectory_index: int,
 ) -> "list[_SectionHit]":
     """Order and deduplicate crossing hits.
 
@@ -490,6 +491,8 @@ def _order_and_dedup_hits(
         Point tolerance for deduplication.
     max_hits_per_traj : int or None
         Maximum number of hits per trajectory.
+    trajectory_index : int
+        Index of the trajectory that produced these hits.
 
     Returns
     -------
@@ -530,7 +533,7 @@ def _order_and_dedup_hits(
             dv = pt[1] - prev.point2d[1]
             if (du * du + dv * dv) <= (dedup_point_tol * dedup_point_tol):
                 continue
-        hits.append(_SectionHit(time=th, state=st, point2d=pt))
+        hits.append(_SectionHit(time=th, state=st, point2d=pt, trajectory_index=trajectory_index))
         if max_hits_per_traj is not None and len(hits) >= max_hits_per_traj:
             break
     return hits
@@ -544,6 +547,7 @@ def _detect_with_segment_refine(
     event: "_SurfaceEvent",
     proj: "tuple[str, str] | Callable[[np.ndarray], tuple[float, float]]",
     settings: "_DetectionSettings",
+    trajectory_index: int,
 ) -> "list[_SectionHit]":
     """Detect crossings with segment refinement for dense detection.
 
@@ -716,6 +720,7 @@ def _detect_with_segment_refine(
         settings.dedup_time_tol,
         settings.dedup_point_tol,
         settings.max_hits_per_traj,
+        trajectory_index,
     )
 
 
@@ -767,7 +772,8 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         *,
         section_cfg: _SynodicSectionConfig,
         map_cfg: _SynodicMapConfig,
-        direction: Literal[1, -1, None] | None = None
+        direction: Literal[1, -1, None] | None = None,
+        trajectory_index: int = 0
     ) -> "list[_SectionHit]":
         """Detect crossings on a single trajectory.
 
@@ -780,6 +786,8 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         direction : {1, -1, None}, optional
             Crossing direction filter. If None, uses the default
             direction from the section configuration.
+        trajectory_index : int, default 0
+            Index of this trajectory within the input trajectory list.
 
         Returns
         -------
@@ -806,7 +814,7 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
 
         # Segment refinement path (optional)
         if int(settings.segment_refine) > 0:
-            return _detect_with_segment_refine(times, states, g_all, event=event, proj=proj, settings=settings)
+            return _detect_with_segment_refine(times, states, g_all, event=event, proj=proj, settings=settings, trajectory_index=trajectory_index)
 
         g0 = g_all[:-1]
         g1 = g_all[1:]
@@ -847,6 +855,7 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
             settings.dedup_time_tol,
             settings.dedup_point_tol,
             settings.max_hits_per_traj,
+            trajectory_index,
         )
 
     def run(
@@ -883,11 +892,12 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         are returned as a list of lists.
         """
         out: "list[list[_SectionHit]]" = []
-        for (times, states) in trajectories:
+        for i, (times, states) in enumerate(trajectories):
             out.append(self.detect_on_trajectory(
                 times, states, 
                 section_cfg=section_cfg, 
                 map_cfg=map_cfg, 
-                direction=direction
+                direction=direction,
+                trajectory_index=i
             ))
         return out

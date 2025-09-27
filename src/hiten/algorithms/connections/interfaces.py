@@ -115,8 +115,8 @@ class _ManifoldInterface(
     def to_backend_inputs(self, problem: _ConnectionProblem) -> tuple:
         """Convert problem to backend inputs."""
         # Extract section data from both manifolds
-        pu, Xu = self.to_numeric(problem.source, problem.config.section, direction=problem.config.direction)
-        ps, Xs = self.to_numeric(problem.target, problem.config.section, direction=problem.config.direction)
+        pu, Xu, traj_indices_u = self.to_numeric(problem.source, problem.config.section, direction=problem.config.direction)
+        ps, Xs, traj_indices_s = self.to_numeric(problem.target, problem.config.section, direction=problem.config.direction)
         
         # Extract search parameters from the config
         eps = float(problem.config.eps2d)
@@ -125,7 +125,7 @@ class _ManifoldInterface(
         
         from hiten.algorithms.types.core import _BackendCall
         return _BackendCall(
-            args=(pu, ps, Xu, Xs),
+            args=(pu, ps, Xu, Xs, traj_indices_u, traj_indices_s),
             kwargs={"eps": eps, "dv_tol": dv_tol, "bal_tol": bal_tol}
         )
 
@@ -220,7 +220,7 @@ class _ManifoldInterface(
         return syn.from_manifold(manifold, direction=direction)
 
     def to_numeric(self, manifold: "Manifold", config: _SynodicMapConfig | None = None, *, direction: Literal[1, -1, None] | None = None):
-        """Return (points2d, states6d) arrays for this manifold on a section.
+        """Return (points2d, states6d, trajectory_indices) arrays for this manifold on a section.
 
         Parameters
         ----------
@@ -230,4 +230,5 @@ class _ManifoldInterface(
             Configuration for the synodic section geometry and detection settings.
         """
         sec = self.to_section(manifold=manifold, config=config, direction=direction)
-        return (np.asarray(sec.points, dtype=float), np.asarray(sec.states, dtype=float))
+        trajectory_indices = getattr(sec, 'trajectory_indices', None)
+        return (np.asarray(sec.points, dtype=float), np.asarray(sec.states, dtype=float), np.asarray(trajectory_indices, dtype=int))

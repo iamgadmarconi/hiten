@@ -18,7 +18,10 @@ class SynodicMapResults(_MapResults):
     """User-facing results for synodic sections (extends 
     :class:`~hiten.algorithms.poincare.core.types._MapResults`).
     """
-    pass
+    
+    def __init__(self, points: np.ndarray, states: np.ndarray, labels: tuple[str, str], times: np.ndarray | None = None, trajectory_indices: np.ndarray | None = None):
+        super().__init__(points, states, labels, times)
+        self.trajectory_indices: np.ndarray | None = trajectory_indices
 
 
 @dataclass(frozen=True)
