@@ -691,7 +691,7 @@ def _build_physical_hamiltonian_triangular(point, max_deg: int) -> List[np.ndarr
     _polynomial_add_inplace(poly_H, poly_C, 1.0)
 
     mu = float(point.mu)
-    sgn = float(point.sign)  # +1 for L4, -1 for L5
+    sgn = float(point.dynamics.sign)  # +1 for L4, -1 for L5
 
     poly_linear = _polynomial_zero_list(max_deg, psi_table)
     _polynomial_add_inplace(poly_linear, poly_x, 0.5 - mu)

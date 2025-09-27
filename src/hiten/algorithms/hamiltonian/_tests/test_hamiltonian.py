@@ -452,7 +452,7 @@ def test_triangular_inverse_distance_expansion_accuracy(system: System, max_deg)
 
     # Use the L5 point (sign = -1)
     point = system.get_libration_point(5)
-    sgn = point.sign  # Should be -1 for L5
+    sgn = point.dynamics.sign  # Should be -1 for L5
 
     # Coordinates of primaries in the *shifted* frame used by the expansion
     d_Sx, d_Sy = 0.5, sgn * np.sqrt(3) / 2.0

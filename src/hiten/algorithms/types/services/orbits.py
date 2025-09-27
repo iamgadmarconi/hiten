@@ -102,7 +102,12 @@ class _OrbitContinuationService(_DynamicsServiceBase):
 
     def __init__(self, domain_obj: "PeriodicOrbit") -> None:
         super().__init__(domain_obj)
+        self._initial_state = self.domain_obj._initial_state
         self._generator = StateParameter.with_default_engine(config=self.continuation_config)
+
+    @property
+    def initial_state(self) -> np.ndarray:
+        return self._initial_state
 
     @property
     def generator(self) -> StateParameter:
@@ -151,7 +156,7 @@ class _OrbitDynamicsService(_DynamicsServiceBase):
     def __init__(self, orbit: "PeriodicOrbit") -> None:
         super().__init__(orbit)
 
-        self._initial_state = self.domain_obj.initial_state
+        self._initial_state = self.domain_obj._initial_state
     
         if self._initial_state is not None:
             self._initial_state = np.asarray(self._initial_state, dtype=np.float64)
@@ -416,7 +421,6 @@ class _GenericOrbitCorrectionService(_OrbitCorrectionService):
 
     def __init__(self, orbit: "GenericOrbit") -> None:
         super().__init__(orbit)
-        self._corrector = Corrector.with_default_engine(config=self.correction_config)
 
     @property
     def correction_config(self) -> "_OrbitCorrectionConfig":
@@ -445,7 +449,6 @@ class _GenericOrbitContinuationService(_OrbitContinuationService):
 
     def __init__(self, orbit: "GenericOrbit") -> None:
         super().__init__(orbit)
-        self._generator = StateParameter.with_default_engine(config=self.continuation_config)
 
     @property
     def continuation_config(self) -> "_OrbitContinuationConfig":
@@ -504,7 +507,6 @@ class _HaloOrbitCorrectionService(_OrbitCorrectionService):
 
     def __init__(self, orbit: "HaloOrbit") -> None:
         super().__init__(orbit)
-        self._corrector = Corrector.with_default_engine(config=self.correction_config)
 
     @property
     def correction_config(self) -> "_OrbitCorrectionConfig":
@@ -561,7 +563,6 @@ class _HaloOrbitContinuationService(_OrbitContinuationService):
 
     def __init__(self, orbit: "HaloOrbit") -> None:
         super().__init__(orbit)
-        self._generator = StateParameter.with_default_engine(config=self.continuation_config)
 
     @property
     def continuation_config(self) -> "_OrbitContinuationConfig":
@@ -796,8 +797,7 @@ class _LyapunovOrbitCorrectionService(_OrbitCorrectionService):
 
     def __init__(self, orbit: "LyapunovOrbit") -> None:
         super().__init__(orbit)
-        self._corrector = Corrector.with_default_engine(config=self.correction_config)
-        
+
     @property
     def correction_config(self) -> "_OrbitCorrectionConfig":
         """Provides the differential correction configuration for Lyapunov orbits.
@@ -822,8 +822,7 @@ class _LyapunovOrbitContinuationService(_OrbitContinuationService):
 
     def __init__(self, orbit: "LyapunovOrbit") -> None:
         super().__init__(orbit)
-        self._generator = StateParameter.with_default_engine(config=self.continuation_config)
-        
+
     @property
     def continuation_config(self) -> "_OrbitContinuationConfig":
         """Provides the continuation configuration for Lyapunov orbits.
@@ -895,8 +894,8 @@ class _VerticalOrbitCorrectionService(_OrbitCorrectionService):
 
     def __init__(self, orbit: "VerticalOrbit") -> None:
         super().__init__(orbit)
-        self._corrector = Corrector.with_default_engine(config=self.correction_config)
-        
+
+    @property
     def correction_config(self) -> "_OrbitCorrectionConfig":
         """Provides the differential correction configuration for Vertical orbits.
         
@@ -920,8 +919,8 @@ class _VerticalOrbitContinuationService(_OrbitContinuationService):
 
     def __init__(self, orbit: "VerticalOrbit") -> None:
         super().__init__(orbit)
-        self._generator = StateParameter.with_default_engine(config=self.continuation_config)
-        
+
+    @property
     def continuation_config(self) -> "_OrbitContinuationConfig":
         """Provides the continuation configuration for Vertical orbits.
         
@@ -994,7 +993,7 @@ class _OrbitServices(_ServiceBundleBase):
         )
 
     @staticmethod
-    def _check_orbit_type(orbit: "PeriodicOrbit") -> _OrbitDynamicsService:
+    def _check_orbit_type(orbit: "PeriodicOrbit") -> tuple:
         from hiten.system.orbits.base import GenericOrbit
         from hiten.system.orbits.halo import HaloOrbit
         from hiten.system.orbits.lyapunov import LyapunovOrbit
@@ -1007,4 +1006,4 @@ class _OrbitServices(_ServiceBundleBase):
             VerticalOrbit: (_VerticalOrbitDynamicsService, _VerticalOrbitCorrectionService, _VerticalOrbitContinuationService),
         }
 
-        return mapping[type(orbit)](orbit)
+        return mapping[type(orbit)]
