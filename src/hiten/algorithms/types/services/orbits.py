@@ -94,7 +94,7 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
         def _factory() -> Tuple[np.ndarray, float]:
             # Pass all parameters directly to the corrector
             results = self.corrector.correct(self.domain_obj, **overrides)
-            return results.corrected_state, 2 * results.half_period
+            return results.x_corrected, 2 * results.half_period
 
         return self.get_or_create(cache_key, _factory)
 
@@ -144,9 +144,9 @@ class _OrbitContinuationService(_DynamicsServiceBase):
         cache_key = self.make_key("generate", overrides)
 
         def _factory() -> Tuple[np.ndarray, float]:
-            if overrides:
-                override = True
-            results = self.generator.generate(self.domain_obj, override=override, **overrides)
+            # Automatically infer if there are overrides based on whether overrides are provided
+            override = bool(overrides)
+            results = self.generator.generate(self.domain_obj, override=override, **overrides or {})
 
             return results
 
@@ -941,6 +941,7 @@ class _VerticalOrbitCorrectionService(_OrbitCorrectionService):
         return _OrbitCorrectionConfig(
             residual_indices=(SynodicState.VX, SynodicState.Y),     # Want VX=0 and Y=0
             control_indices=(SynodicState.VZ, SynodicState.VY),     # Adjust initial VZ and VY
+            finite_difference=True,
             target=(0.0, 0.0),
             extra_jacobian=None,
             event_func=_z_plane_crossing,

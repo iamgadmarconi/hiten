@@ -79,9 +79,11 @@ class _PeriodicOrbitCorrectorInterface(
         base_state = problem.domain_obj.initial_state.copy()
         x_full = self._to_full_state(base_state, control_indices, x_corr)
         half_period = self._half_period(problem.domain_obj, x_full, problem.cfg)
-        problem.domain_obj._reset()
-        problem.domain_obj._initial_state = x_full
-        problem.domain_obj._period = 2.0 * half_period
+        
+        problem.domain_obj.dynamics.reset()
+        problem.domain_obj.dynamics._initial_state = x_full
+        problem.domain_obj.dynamics.period = 2.0 * half_period
+        
         return {
             "iterations": iterations,
             "residual_norm": residual_norm,
@@ -143,9 +145,9 @@ class _PeriodicOrbitCorrectorInterface(
                 method=cfg.method,
                 order=cfg.order,
             )
-            jac = Phi_flat[np.ix_(residual_indices, control_indices)]  # type: ignore[index]
+            jac = Phi_flat[np.ix_(residual_indices, control_indices)]
             if cfg.extra_jacobian is not None:
-                jac -= cfg.extra_jacobian(x_event, Phi_flat)  # type: ignore[arg-type]
+                jac -= cfg.extra_jacobian(x_event, Phi_flat)
             return jac
 
         return _fn

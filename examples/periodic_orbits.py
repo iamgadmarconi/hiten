@@ -39,14 +39,12 @@ def main() -> None:
             "name": "Halo",
             "kwargs": {"amplitude_z": 0.2, "zenith": "southern"},
             "diff_corr_attempts": 10,
-            "finite_difference": False,
         },
         {
             "cls": LyapunovOrbit,
             "name": "Planar Lyapunov",
             "kwargs": {"amplitude_x": 4e-3},
             "diff_corr_attempts": 25,
-            "finite_difference": False,
         },
     ]
 

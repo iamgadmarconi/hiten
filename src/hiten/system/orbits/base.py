@@ -124,69 +124,6 @@ class PeriodicOrbit(_HitenBase):
         self.dynamics.amplitude = value
 
     @property
-    def correction_config(self) -> Optional["_OrbitCorrectionConfig"]:
-        """
-        Provides the differential correction configuration.
-
-        For GenericOrbit, this must be set via the `correction_config` property
-        to enable differential correction.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
-            The correction configuration.
-            
-        Raises
-        ------
-        NotImplementedError
-            If correction_config is not set.
-        """
-        return self._correction.correction_config
-
-    @correction_config.setter
-    def correction_config(self, value: Optional["_OrbitCorrectionConfig"]):
-        """Set the correction configuration.
-        
-        Parameters
-        ----------
-        value : :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig` or None
-            The correction configuration to set.
-            
-        Raises
-        ------
-        TypeError
-            If value is not an instance of :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig` or None.
-        """
-        self._correction.correction_config = value
-
-    @property
-    def continuation_config(self) -> Optional["_OrbitContinuationConfig"]:
-        """Get or set the continuation parameter for this orbit.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None
-            The continuation configuration, or None if not set.
-        """
-        return self._continuation.continuation_config
-
-    @continuation_config.setter
-    def continuation_config(self, cfg: Optional["_OrbitContinuationConfig"]):
-        """Set the continuation configuration.
-        
-        Parameters
-        ----------
-        cfg : :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None
-            The continuation configuration to set.
-            
-        Raises
-        ------
-        TypeError
-            If cfg is not an instance of :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None.
-        """
-        self._continuation.continuation_config = cfg
-
-    @property
     def family(self) -> str:
         """
         Get the orbit family name.
@@ -256,6 +193,32 @@ class PeriodicOrbit(_HitenBase):
         return self.dynamics.mu
     
     @property
+    def period(self) -> Optional[float]:
+        """Orbit period.
+        
+        Returns
+        -------
+        float or None
+            The orbit period in nondimensional units, or None if not set.
+        """
+        return self.dynamics.period
+    
+    @period.setter
+    def period(self, value: Optional[float]):
+        """Set the orbit period.
+        
+        Parameters
+        ----------
+        value : float or None
+            The orbit period in nondimensional units, or None to clear.
+        """
+        self.dynamics.period = value
+
+    @property
+    def trajectory(self) -> Optional[Trajectory]:
+        return self.dynamics.trajectory
+    
+    @property
     def monodromy(self) -> np.ndarray:
         """
         Compute the monodromy matrix of the orbit.
@@ -271,6 +234,69 @@ class PeriodicOrbit(_HitenBase):
             If period is not set.
         """
         return self.dynamics.monodromy
+
+    @property
+    def correction_config(self) -> Optional["_OrbitCorrectionConfig"]:
+        """
+        Provides the differential correction configuration.
+
+        For GenericOrbit, this must be set via the `correction_config` property
+        to enable differential correction.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
+            The correction configuration.
+            
+        Raises
+        ------
+        NotImplementedError
+            If correction_config is not set.
+        """
+        return self._correction.correction_config
+
+    @correction_config.setter
+    def correction_config(self, value: Optional["_OrbitCorrectionConfig"]):
+        """Set the correction configuration.
+        
+        Parameters
+        ----------
+        value : :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig` or None
+            The correction configuration to set.
+            
+        Raises
+        ------
+        TypeError
+            If value is not an instance of :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig` or None.
+        """
+        self._correction.correction_config = value
+
+    @property
+    def continuation_config(self) -> Optional["_OrbitContinuationConfig"]:
+        """Get or set the continuation parameter for this orbit.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None
+            The continuation configuration, or None if not set.
+        """
+        return self._continuation.continuation_config
+
+    @continuation_config.setter
+    def continuation_config(self, cfg: Optional["_OrbitContinuationConfig"]):
+        """Set the continuation configuration.
+        
+        Parameters
+        ----------
+        cfg : :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None
+            The continuation configuration to set.
+            
+        Raises
+        ------
+        TypeError
+            If cfg is not an instance of :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None.
+        """
+        self._continuation.continuation_config = cfg
 
     def correct(self, **kwargs) -> tuple[np.ndarray, float]:
         """Differential correction wrapper.
@@ -300,12 +326,14 @@ class PeriodicOrbit(_HitenBase):
         tuple[np.ndarray, float]
             The corrected state and period.
         """
-        result = self._correction.correct(**kwargs)
+        override = bool(kwargs)
+        result = self._correction.correct(overrides=kwargs if override else None)
         return result
 
     def generate(self, **kwargs) -> tuple[np.ndarray, float]:
         """Generate a family of periodic orbits."""
-        result = self._continuation.generate(**kwargs)
+        override = bool(kwargs)
+        result = self._continuation.generate(overrides=kwargs if override else None)
         return result
 
     def propagate(self, steps: int = 1000, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8) -> Trajectory:
@@ -372,35 +400,34 @@ class PeriodicOrbit(_HitenBase):
         ValueError
             If frame is invalid.
         """
-        if self._trajectory is None:
-            msg = "No trajectory to plot. Call propagate() first."
-            logger.error(msg)
-            raise RuntimeError(msg)
-            
+        if self.trajectory is None:
+            raise RuntimeError("No trajectory to plot. Call propagate() first.")
+
+        states = self.trajectory.states
+        times = self.trajectory.times
+        
         if frame.lower() == "rotating":
             return plot_rotating_frame(
-                states=self._trajectory, 
-                times=self._times, 
-                bodies=[self._system.primary, self._system.secondary], 
-                system_distance=self._system.distance, 
+                states=states, 
+                times=times, 
+                bodies=[self.system.primary, self.system.secondary], 
+                system_distance=self.system.distance, 
                 dark_mode=dark_mode, 
                 save=save,
                 filepath=filepath,
                 **kwargs)
         elif frame.lower() == "inertial":
             return plot_inertial_frame(
-                states=self._trajectory, 
-                times=self._times, 
-                bodies=[self._system.primary, self._system.secondary], 
-                system_distance=self._system.distance, 
+                states=states, 
+                times=times, 
+                bodies=[self.system.primary, self.system.secondary], 
+                system_distance=self.system.distance, 
                 dark_mode=dark_mode, 
                 save=save,
                 filepath=filepath,
                 **kwargs)
         else:
-            msg = f"Invalid frame '{frame}'. Must be 'rotating' or 'inertial'."
-            logger.error(msg)
-            raise ValueError(msg)
+            raise ValueError(f"Invalid frame '{frame}'. Must be 'rotating' or 'inertial'.")
         
     def animate(self, **kwargs):
         """Create an animation of the orbit trajectory.
@@ -415,11 +442,11 @@ class PeriodicOrbit(_HitenBase):
         tuple or None
             Animation objects, or None if trajectory is not computed.
         """
-        if self._trajectory is None:
+        if self.trajectory is None:
             logger.warning("No trajectory to animate. Call propagate() first.")
             return None, None
         
-        return animate_trajectories(self._trajectory, self._times, [self._system.primary, self._system.secondary], self._system.distance, **kwargs)
+        return animate_trajectories(self.trajectory.states, self.trajectory.times, [self.system.primary, self.system.secondary], self.system.distance, **kwargs)
 
     def to_csv(self, filepath: str, **kwargs):
         """Export the orbit trajectory to a CSV file.
@@ -436,13 +463,10 @@ class PeriodicOrbit(_HitenBase):
         ValueError
             If trajectory is not computed.
         """
-        if self._trajectory is None or self._times is None:
-            err = "Trajectory not computed. Please call propagate() first."
-            logger.error(err)
-            raise ValueError(err)
+        if self.trajectory is None:
+            raise ValueError("Trajectory not computed. Please call propagate() first.")
 
-        # Assemble the data: time followed by the six-dimensional state vector
-        data = np.column_stack((self._times, self._trajectory))
+        data = np.column_stack((self.trajectory.times, self.trajectory.states))
         df = pd.DataFrame(data, columns=["time", "x", "y", "z", "vx", "vy", "vz"])
 
         _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
@@ -457,12 +481,10 @@ class PeriodicOrbit(_HitenBase):
         **kwargs
             Additional keyword arguments passed to pandas.DataFrame.to_csv.
         """
-        if self._trajectory is None or self._times is None:
-            err = "Trajectory not computed. Please call propagate() first."
-            logger.error(err)
-            raise ValueError(err)
+        if self.trajectory is None:
+            raise ValueError("Trajectory not computed. Please call propagate() first.")
         
-        return pd.DataFrame(np.column_stack((self._times, self._trajectory)), columns=["time", "x", "y", "z", "vx", "vy", "vz"])
+        return pd.DataFrame(np.column_stack((self.trajectory.times, self.trajectory.states)), columns=["time", "x", "y", "z", "vx", "vy", "vz"])
 
     def __setstate__(self, state):
         """Restore the PeriodicOrbit instance after unpickling."""
