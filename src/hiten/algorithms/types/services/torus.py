@@ -402,8 +402,8 @@ class _TorusDynamicsService(_DynamicsServiceBase):
 class _TorusServices(_ServiceBundleBase):
     def __init__(self, domain_obj: "InvariantTori", dynamics: _TorusDynamicsService, persistence: _TorusPersistenceService) -> None:
         super().__init__(domain_obj)
-        self._dynamics = dynamics
-        self._persistence = persistence
+        self.dynamics = dynamics
+        self.persistence = persistence
 
     @classmethod
     def default(cls, torus: "InvariantTori") -> "_TorusServices":

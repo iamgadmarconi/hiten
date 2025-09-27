@@ -9,9 +9,8 @@ system module.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Dict, Optional, Sequence
 
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
@@ -28,6 +27,7 @@ from hiten.utils.io.system import load_system, load_system_inplace, save_system
 if TYPE_CHECKING:
     from hiten.system.base import System
     from hiten.system.body import Body
+    from hiten.system.libration.base import LibrationPoint
 
 
 
@@ -47,10 +47,23 @@ class _SystemsDynamicsService(_DynamicsServiceBase):
 
     def __init__(self, domain_obj: "System") -> None:
         super().__init__(domain_obj)
-        self._primary = self.domain_obj.primary
-        self._secondary = self.domain_obj.secondary
-        self._distance = self.domain_obj.distance
-        self._mu = _get_mass_parameter(self._primary.mass, self._secondary.mass)
+        self._primary = self.domain_obj._primary
+        self._secondary = self.domain_obj._secondary
+        self._distance = self.domain_obj._distance
+        self._libration_points: Dict[int, "LibrationPoint"] = {}
+
+    @property
+    def mu(self) -> float:
+        cache_key = self.make_key(id(self._primary), id(self._secondary), "mu")
+
+        def _factory() -> float:
+            return _get_mass_parameter(self._primary._mass, self._secondary._mass)
+
+        return self.get_or_create(cache_key, _factory)
+
+    @property
+    def libration_points(self) -> Dict[int, "LibrationPoint"]:
+        return self._libration_points
 
     @property
     def primary(self) -> "Body":
@@ -65,15 +78,11 @@ class _SystemsDynamicsService(_DynamicsServiceBase):
         return self._distance
 
     @property
-    def mu(self) -> float:
-        return self._mu
-
-    @property
     def dynsys(self) -> _DynamicalSystemProtocol:
         key = self.make_key(id(self._primary), id(self._secondary), self._distance, "dynsys")
 
         def _factory() -> _DynamicalSystemProtocol:
-            return rtbp_dynsys(self._mu, name=self._make_dynsys_name("rtbp"))
+            return rtbp_dynsys(self.mu, name=self._make_dynsys_name("rtbp"))
 
         return self.get_or_create(key, _factory)
 
@@ -82,7 +91,7 @@ class _SystemsDynamicsService(_DynamicsServiceBase):
         key = self.make_key(id(self._primary), id(self._secondary), self._distance, "variational")
 
         def _factory() -> _DynamicalSystemProtocol:
-            return variational_dynsys(self._mu, name=self._make_dynsys_name("variational"))
+            return variational_dynsys(self.mu, name=self._make_dynsys_name("variational"))
 
         return self.get_or_create(key, _factory)
 
@@ -91,15 +100,14 @@ class _SystemsDynamicsService(_DynamicsServiceBase):
         key = self.make_key(id(self._primary), id(self._secondary), self._distance, "jacobian")
 
         def _factory() -> _DynamicalSystemProtocol:
-            return jacobian_dynsys(self._mu, name=self._make_dynsys_name("jacobian"))
+            return jacobian_dynsys(self.mu, name=self._make_dynsys_name("jacobian"))
 
         return self.get_or_create(key, _factory)
     
-    def _make_dynsys_name(self, suffix: str) -> str:
-        return f"{self._primary.name}_{self._secondary.name}_{suffix}"
-
-    def reset(self) -> None:
-        super().reset()
+    def get_point(self, index: int) -> "LibrationPoint":
+        if index not in self._libration_points:
+            self._libration_points[index] = self._build_libration_point(index)
+        return self._libration_points[index]
 
     def propagate(
         self,
@@ -137,13 +145,35 @@ class _SystemsDynamicsService(_DynamicsServiceBase):
 
         return self.get_or_create(cache_key, _factory)
 
+    def _build_libration_point(self, index: int) -> "LibrationPoint":
+        """Instantiate and wire a libration point with shared services."""
+        from hiten.system.libration.collinear import L1Point, L2Point, L3Point
+        from hiten.system.libration.triangular import L4Point, L5Point
+
+        mapping: Dict[int, type["LibrationPoint"]] = {
+            1: L1Point,
+            2: L2Point,
+            3: L3Point,
+            4: L4Point,
+            5: L5Point,
+        }
+        try:
+            point_cls = mapping[index]
+        except KeyError as exc:
+            raise ValueError("Libration point index must be in {1,2,3,4,5}.") from exc
+
+        return point_cls(self)
+
+    def _make_dynsys_name(self, suffix: str) -> str:
+        return f"{self._primary.name}_{self._secondary.name}_{suffix}"
+
 
 class _SystemServices(_ServiceBundleBase):
 
     def __init__(self, domain_obj: "System", dynamics: _SystemsDynamicsService, persistence: _SystemPersistenceService) -> None:
         super().__init__(domain_obj)
-        self._dynamics = dynamics
-        self._persistence = persistence
+        self.dynamics = dynamics
+        self.persistence = persistence
 
     @classmethod
     def default(cls, system: "System") -> "_SystemServices":

@@ -965,10 +965,10 @@ class _OrbitServices(_ServiceBundleBase):
     
     def __init__(self, orbit: "PeriodicOrbit", correction: _OrbitCorrectionService, continuation: _OrbitContinuationService, dynamics: _OrbitDynamicsService, persistence: _OrbitPersistenceService) -> None:
         super().__init__(orbit)
-        self._correction = correction
-        self._continuation = continuation
-        self._dynamics = dynamics
-        self._persistence = persistence
+        self.correction = correction
+        self.continuation = continuation
+        self.dynamics = dynamics
+        self.persistence = persistence
 
     @classmethod
     def default(cls, orbit: "PeriodicOrbit") -> "_OrbitServices":

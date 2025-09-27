@@ -31,31 +31,31 @@ class _BodyDynamicsService(_DynamicsServiceBase):
 
     @property
     def name(self) -> str:
-        return self.domain_obj.name
-    
+        return self.domain_obj._name
+
     @property
     def mass(self) -> float:
-        return self.domain_obj.mass
-    
+        return self.domain_obj._mass
+
     @property
     def radius(self) -> float:
-        return self.domain_obj.radius
-    
+        return self.domain_obj._radius
+
     @property
     def color(self) -> str:
-        return self.domain_obj.color
-    
+        return self.domain_obj._color
+
     @property
     def parent(self) -> "Body":
-        return self.domain_obj.parent
+        return self.domain_obj._parent
 
 
 class _BodyServices(_ServiceBundleBase):
 
     def __init__(self, domain_obj: "Body", persistence: _BodyPersistenceService, dynamics: _BodyDynamicsService) -> None:
         super().__init__(domain_obj)
-        self._persistence = persistence
-        self._dynamics = dynamics
+        self.persistence = persistence
+        self.dynamics = dynamics
 
     @classmethod
     def default(cls, domain_obj: "Body") -> _BodyServices:

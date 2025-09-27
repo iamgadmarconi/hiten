@@ -445,8 +445,8 @@ class _ManifoldServices(_ServiceBundleBase):
     
     def __init__(self, manifold: "Manifold", persistence: _ManifoldPersistenceService, dynamics: _ManifoldDynamicsService) -> None:
         super().__init__(manifold)
-        self._dynamics = dynamics
-        self._persistence = persistence
+        self.dynamics = dynamics
+        self.persistence = persistence
 
  
     @classmethod

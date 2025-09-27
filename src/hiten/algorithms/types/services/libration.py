@@ -57,7 +57,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
     @property
     def system(self) -> "System":
         return self.domain_obj.system
-    
+
     @property
     def mu(self) -> float:
         return self.system.mu
@@ -1340,8 +1340,8 @@ class _LibrationServices(_ServiceBundleBase):
 
     def __init__(self, point: "LibrationPoint", persistence: _LibrationPersistenceService, dynamics: _LibrationDynamicsService) -> None:
         super().__init__(point)
-        self._persistence = persistence
-        self._dynamics = dynamics
+        self.persistence = persistence
+        self.dynamics = dynamics
 
     @classmethod
     def default(cls, point: "LibrationPoint") -> "_LibrationServices":

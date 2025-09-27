@@ -35,8 +35,8 @@ class _OrbitFamilyServices(_ServiceBundleBase):
     
     def __init__(self, family: "OrbitFamily", persistence: _OrbitFamilyPersistenceService, dynamics: _OrbitFamilyDynamicsService) -> None:
         super().__init__(family)
-        self._persistence = persistence
-        self._dynamics = dynamics
+        self.persistence = persistence
+        self.dynamics = dynamics
 
     @classmethod
     def default(cls, family: "OrbitFamily") -> "_OrbitFamilyServices":

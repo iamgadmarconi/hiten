@@ -27,7 +27,13 @@ class Body(_HitenBase):
     """Celestial body container bound to a lightweight persistence adapter."""
 
     def __init__(self, name: str, mass: float, radius: float, color: str = "#000000", parent: Optional["Body"] = None):
-        services : _BodyServices = _BodyServices.default(self)
+        self._name = name
+        self._mass = mass
+        self._radius = radius
+        self._color = color
+        self._parent = parent
+        
+        services = _BodyServices.default(self)
         super().__init__(services)
 
     def __str__(self) -> str:

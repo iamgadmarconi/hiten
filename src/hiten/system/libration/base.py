@@ -80,7 +80,8 @@ class LibrationPoint(_HitenBase, ABC):
     """
     
     def __init__(self, system: "System"):
-        services : _LibrationServices = _LibrationServices.default(self)
+        self._system = system
+        services = _LibrationServices.default(self)
         super().__init__(services)
 
     def __str__(self) -> str:
@@ -92,12 +93,12 @@ class LibrationPoint(_HitenBase, ABC):
     @property
     def system(self) -> "System":
         """The system this libration point belongs to."""
-        return self.dynamics.system
+        return self._system
     
     @property
     def mu(self) -> float:
         """The mass parameter of the system."""
-        return self.dynamics.mu
+        return self._system.mu
 
     @property
     def dynsys(self):

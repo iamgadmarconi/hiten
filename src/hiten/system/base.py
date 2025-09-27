@@ -71,8 +71,6 @@ class System(_HitenBase):
         services = _SystemServices.default(self)
         super().__init__(services)
 
-        self._libration_points: Dict[int, LibrationPoint] = {}
-
     def __str__(self) -> str:
         return f"{self.secondary.name} orbiting {self.primary.name}"
 
@@ -132,7 +130,7 @@ class System(_HitenBase):
         dict[int, LibrationPoint]
             Dictionary mapping integer identifiers {1,...,5} to libration point objects.
         """
-        return self._libration_points
+        return self.dynamics.libration_points
         
     @property
     def dynsys(self):
@@ -191,28 +189,7 @@ class System(_HitenBase):
         >>> sys = System(primary, secondary, distance)
         >>> L1 = sys.get_libration_point(1)
         """
-        if index not in self._libration_points:
-            self._libration_points[index] = self._build_libration_point(index)
-        return self._libration_points[index]
-
-    def _build_libration_point(self, index: int) -> LibrationPoint:
-        """Instantiate and wire a libration point with shared services."""
-        from hiten.system.libration.collinear import L1Point, L2Point, L3Point
-        from hiten.system.libration.triangular import L4Point, L5Point
-
-        mapping: Dict[int, type[LibrationPoint]] = {
-            1: L1Point,
-            2: L2Point,
-            3: L3Point,
-            4: L4Point,
-            5: L5Point,
-        }
-        try:
-            point_cls = mapping[index]
-        except KeyError as exc:
-            raise ValueError("Libration point index must be in {1,2,3,4,5}.") from exc
-
-        return point_cls(self)
+        return self.dynamics.get_point(index)
 
     def propagate(
         self,
