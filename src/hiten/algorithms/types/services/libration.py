@@ -455,6 +455,23 @@ class _CollinearDynamicsService(_LibrationDynamicsService):
         super().__init__(point)
 
     @property
+    def position(self) -> np.ndarray:
+        """Calculate the position of the collinear libration point.
+        
+        Returns
+        -------
+        numpy.ndarray, shape (3,)
+            Position vector [x, y, z] in nondimensional units.
+        """
+        cache_key = self.make_key(id(self.domain_obj), "position")
+        
+        def _factory() -> np.ndarray:
+            x = self._compute_position(self._position_search_interval)
+            return np.array([x, 0, 0], dtype=np.float64)
+        
+        return self.get_or_create(cache_key, _factory)
+
+    @property
     @abstractmethod
     def won(self) -> Tuple[int, float]:
         """

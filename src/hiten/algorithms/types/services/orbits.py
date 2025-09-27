@@ -674,11 +674,11 @@ class _HaloOrbitDynamicsService(_OrbitDynamicsService):
         won, primary = self.libration_point.dynamics.won
         
         c = [0.0, 0.0, 0.0, 0.0, 0.0]  # just to keep 5 slots: c[2], c[3], c[4]
-        for n in [2, 3, 4]:
-            c[n] = self.libration_point.dynamics.cn(n)
+        for N in [2, 3, 4]:
+            c[N] = self.libration_point.dynamics.cn(N)
 
-        lambda1, _, _ = self.libration_point.dynamics.linear_modes
-        lam = lambda1
+        _, lambda2, _ = self.libration_point.dynamics.linear_modes
+        lam = lambda2
 
         k = 2 * lam / (lam**2 + 1 - c[2])
         delta = lam**2 - c[2]
@@ -772,10 +772,9 @@ class _HaloOrbitDynamicsService(_OrbitDynamicsService):
         l1 = a1 + 2 * lam**2 * s1
         l2 = a2 + 2 * lam**2 * s2
 
-        deltan = -n
+        deltan = - self.n
 
         amplitude_x = np.sqrt((-delta - l2 * amplitude_z**2) / l1)
-
         tau1 = 0.0
         
         x = (
@@ -794,6 +793,7 @@ class _HaloOrbitDynamicsService(_OrbitDynamicsService):
             + deltan * d21 * amplitude_x * amplitude_z * (np.cos(2 * tau1) - 3)
             + deltan * (d32 * amplitude_z * amplitude_x**2 - d31 * amplitude_z**3) * np.cos(3 * tau1)
         )
+        print(f"deltan: {deltan}, amplitude_x: {amplitude_x}, amplitude_z: {amplitude_z}, tau1: {tau1}, d21: {d21}, d32: {d32}, d31: {d31}")
 
         xdot = (
             lam * amplitude_x * np.sin(tau1)
@@ -821,7 +821,6 @@ class _HaloOrbitDynamicsService(_OrbitDynamicsService):
         vx = gamma * xdot
         vy = gamma * ydot
         vz = gamma * zdot
-
         return np.array([rx, ry, rz, vx, vy, vz], dtype=np.float64)
 
 
@@ -888,7 +887,7 @@ class _LyapunovOrbitDynamicsService(_OrbitDynamicsService):
     def __init__(self, orbit: "LyapunovOrbit") -> None:
         self._amplitude_x = orbit._amplitude_x
 
-        if self._initial_state is not None and self._amplitude_x is not None:
+        if orbit._initial_state is not None and self._amplitude_x is not None:
             raise ValueError("Cannot provide both an initial_state and an analytical parameter (amplitude_x).")
 
         super().__init__(orbit)
