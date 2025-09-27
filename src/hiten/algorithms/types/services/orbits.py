@@ -17,11 +17,12 @@ from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
 from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_monodromy, _compute_stm
 from hiten.algorithms.linalg.backend import _LinalgBackend
+from hiten.algorithms.poincare.singlehit.backend import _y_plane_crossing, _z_plane_crossing
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
                                                   _ServiceBundleBase)
 from hiten.algorithms.types.states import (ReferenceFrame, SynodicStateVector,
-                                           Trajectory)
+                                           SynodicState, Trajectory)
 from hiten.system.manifold import Manifold
 from hiten.utils.io.orbits import (load_periodic_orbit,
                                    load_periodic_orbit_inplace,
@@ -31,6 +32,7 @@ if TYPE_CHECKING:
     from hiten.system.base import System
     from hiten.system.libration.base import LibrationPoint
     from hiten.system.orbits.base import PeriodicOrbit, GenericOrbit
+    from hiten.system.libration.collinear import CollinearPoint, L1Point, L2Point, L3Point
 
 
 class _OrbitPersistenceService(_PersistenceServiceBase):
@@ -82,6 +84,14 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
         """Provides the differential correction configuration for this orbit family."""
         pass
 
+    @correction_config.setter
+    def correction_config(self, value: "_OrbitCorrectionConfig"):
+        """Set the correction configuration."""
+        from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
+        if value is not None and not isinstance(value, _OrbitCorrectionConfig):
+            raise TypeError("correction_config must be an instance of _OrbitCorrectionConfig or None.")
+        self.corrector._set_config(value)
+
 
 class _OrbitContinuationService(_DynamicsServiceBase):
     """Drive continuation for periodic orbits."""
@@ -121,6 +131,14 @@ class _OrbitContinuationService(_DynamicsServiceBase):
         """Default parameter for family continuation (must be overridden)."""
         pass
 
+    @continuation_config.setter
+    def continuation_config(self, value: "_OrbitContinuationConfig"):
+        """Set the continuation configuration."""
+        from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+        if value is not None and not isinstance(value, _OrbitContinuationConfig):
+            raise TypeError("continuation_config must be an instance of _OrbitContinuationConfig or None.")
+        self.generator._set_config(value)
+
 
 class _OrbitDynamicsService(ABC, _DynamicsServiceBase):
     """Integrate periodic orbits using the system dynamics."""
@@ -133,7 +151,7 @@ class _OrbitDynamicsService(ABC, _DynamicsServiceBase):
         if self._initial_state is not None:
             self._initial_state = np.asarray(initial_state, dtype=np.float64)
         else:
-            self._initial_state = self._initial_guess()
+            self._initial_state = self.initial_guess()
 
         self._period = None
         self._trajectory = None
@@ -376,18 +394,15 @@ class _OrbitDynamicsService(ABC, _DynamicsServiceBase):
         return self.get_or_create(cache_key, _factory)
 
     @property
-    @abstractmethod
     def amplitude(self) -> float:
-        """(Read-only) Current amplitude of the orbit."""
-        pass
-
+        return self._amplitude
+    
     @amplitude.setter
     def amplitude(self, value: float):
-        """Set the orbit amplitude."""
         self._amplitude = value
 
     @abstractmethod
-    def _initial_guess(self) -> np.ndarray:
+    def initial_guess(self) -> np.ndarray:
         pass
 
 
@@ -419,14 +434,6 @@ class _GenericOrbitCorrectionService(_OrbitCorrectionService):
             "`correction_config` property is set with a valid :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`."
         )
 
-    @correction_config.setter
-    def correction_config(self, value: "_OrbitCorrectionConfig"):
-        """Set the correction configuration."""
-        from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
-        if value is not None and not isinstance(value, _OrbitCorrectionConfig):
-            raise TypeError("correction_config must be an instance of _OrbitCorrectionConfig or None.")
-        self.orbit.correction_config = value
-
 
 class _GenericOrbitContinuationService(_OrbitContinuationService):
     """Drive continuation for generic orbits."""
@@ -455,14 +462,6 @@ class _GenericOrbitContinuationService(_OrbitContinuationService):
             "GenericOrbit requires 'continuation_config' to be set before using continuation engines."
         )
 
-    @continuation_config.setter
-    def continuation_config(self, value: "_OrbitContinuationConfig"):
-        """Set the continuation configuration."""
-        from hiten.algorithms.continuation.config import _OrbitContinuationConfig
-        if value is not None and not isinstance(value, _OrbitContinuationConfig):
-            raise TypeError("continuation_config must be an instance of _OrbitContinuationConfig or None.")
-        self.orbit.continuation_config = value
-
 
 class _GenericOrbitDynamicsService(_OrbitDynamicsService):
     """Dynamics service for generic orbits with custom amplitude handling."""
@@ -471,29 +470,7 @@ class _GenericOrbitDynamicsService(_OrbitDynamicsService):
         super().__init__(orbit, initial_state=initial_state)
         self._amplitude = None
 
-    @property
-    def amplitude(self) -> float:
-        """(Read-only) Current amplitude of the orbit.
-        
-        Returns
-        -------
-        float or None
-            The orbit amplitude in nondimensional units, or None if not set.
-        """
-        return self._amplitude
-
-    @amplitude.setter
-    def amplitude(self, value: float):
-        """Set the orbit amplitude.
-        
-        Parameters
-        ----------
-        value : float
-            The orbit amplitude in nondimensional units.
-        """
-        self._amplitude = value
-
-    def _initial_guess(self) -> np.ndarray:
+    def initial_guess(self) -> np.ndarray:
         """Generate initial guess for GenericOrbit.
         
         Parameters
@@ -518,6 +495,457 @@ class _GenericOrbitDynamicsService(_OrbitDynamicsService):
 
 
 
+class _HaloOrbitCorrectionService(_OrbitCorrectionService):
+    """Drive Newton-based differential correction for halo orbits."""
+
+    def __init__(self, orbit: "HaloOrbit") -> None:
+        super().__init__(orbit)
+        self._corrector = Corrector.with_default_engine(config=self.correction_config)
+
+    @property
+    def correction_config(self) -> "_OrbitCorrectionConfig":
+        """Provides the differential correction configuration for halo orbits.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
+            The correction configuration.
+        """
+        return _OrbitCorrectionConfig(
+            event_func=_y_plane_crossing,
+            residual_indices=(SynodicState.VX, SynodicState.VZ),
+            control_indices=(SynodicState.X, SynodicState.VY),
+            extra_jacobian=self._halo_quadratic_term
+        )
+
+    def _halo_quadratic_term(self, X_ev, Phi):
+        """
+        Evaluate the quadratic part of the Jacobian for differential correction.
+
+        Parameters
+        ----------
+        X_ev : numpy.ndarray, shape (6,)
+            State vector at the event time (half-period) in nondimensional units.
+        Phi : numpy.ndarray
+            State-transition matrix evaluated at the same event.
+            
+        Returns
+        -------
+        numpy.ndarray, shape (2, 2)
+            Reduced Jacobian matrix employed by the
+            :meth:`~hiten.system.orbits.base.PeriodicOrbit.correct`
+            solver.
+        """
+        x, y, z, vx, vy, vz = X_ev
+        mu2 = 1 - self.mu
+        rho_1 = 1/(((x+self.mu)**2 + y**2 + z**2)**1.5)
+        rho_2 = 1/(((x-mu2 )**2 + y**2 + z**2)**1.5)
+        omega_x  = -(mu2*(x+self.mu)*rho_1) - (self.mu*(x-mu2)*rho_2) + x
+        DDx = 2*vy + omega_x
+        DDz = -(mu2*z*rho_1) - (self.mu*z*rho_2)
+
+        if abs(vy) < 1e-9:
+            logger.warning(f"Denominator 'vy' is very small ({vy:.2e}). Correction step may be inaccurate.")
+            vy = np.sign(vy) * 1e-9 if vy != 0 else 1e-9
+            
+        return np.array([[DDx],[DDz]]) @ Phi[[SynodicState.Y],:][:, (SynodicState.X,SynodicState.VY)] / vy
+
+
+class _HaloOrbitContinuationService(_OrbitContinuationService):
+    """Drive continuation for halo orbits."""
+
+    def __init__(self, orbit: "HaloOrbit") -> None:
+        super().__init__(orbit)
+        self._generator = StateParameter.with_default_engine(config=self.continuation_config)
+
+    @property
+    def continuation_config(self) -> "_OrbitContinuationConfig":
+        """Provides the continuation configuration for halo orbits.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
+            The continuation configuration.
+        """
+        return _OrbitContinuationConfig(
+            target=([self.initial_state[SynodicState.Z]], [self.initial_state[SynodicState.Z] + 1.0]),
+            step=((1 - self.initial_state[SynodicState.Z]) / (50 - 1),),
+            state=(SynodicState.Z,),
+            max_members=50,
+            extra_params=dict(max_attempts=50, tol=1e-12),
+            stepper="secant",
+        )
+
+
+class _HaloOrbitDynamicsService(_OrbitDynamicsService):
+    """Dynamics service for halo orbits."""
+
+    def __init__(self, orbit: "HaloOrbit", *, initial_state: Optional[np.ndarray] = None, amplitude_z: Optional[float] = None, zenith: Optional[Literal["northern", "southern"]] = None) -> None:
+        if initial_state is not None and (amplitude_z is not None or zenith is not None):
+            raise ValueError("Cannot provide both an initial_state and analytical parameters (amplitude_z, zenith).")
+        if not isinstance(self.libration_point, "CollinearPoint"):
+            raise TypeError(f"Halo orbits are only defined for CollinearPoint, but got {type(self.libration_point)}.")
+        if initial_state is None:
+            if amplitude_z is None or zenith is None:
+                raise ValueError("Halo orbits require an 'amplitude_z' (z-amplitude) and 'zenith' ('northern'/'southern') parameter when an initial_state is not provided.")
+            if not isinstance(self.libration_point, ("L1Point", "L2Point")):
+                raise ValueError("The analytical guess for L3 Halo orbits is experimental.\n Convergence is not guaranteed and may require more iterations.")
+
+        super().__init__(orbit, initial_state=initial_state)
+
+        self._amplitude = amplitude_z
+        self._zenith = zenith
+
+        if initial_state is not None:
+            if self.zenith is None:
+                self.zenith = "northern" if self._initial_state[SynodicState.Z] > 0 else "southern"
+            # Infer missing amplitude
+            if self._amplitude is None:
+                self._amplitude = self._initial_state[SynodicState.Z]
+
+    @property
+    def zenith(self) -> Literal["northern", "southern"]:
+        """(Read-only) Current zenith of the orbit.
+        
+        Returns
+        -------
+        Literal["northern", "southern"]
+            The orbit zenith.
+        """
+        return self._zenith
+
+    @property
+    def n(self) -> int:
+        """(Read-only) Current n value of the orbit.
+        
+        Returns
+        -------
+        int
+            The orbit n value.
+        """
+        return 1 if self.zenith == "northern" else -1
+
+    def initial_guess(self) -> np.ndarray:
+
+        amplitude_z = self.amplitude
+        gamma = self.libration_point.gamma
+        won, primary = self.libration_point.won
+        
+        c = [0.0, 0.0, 0.0, 0.0, 0.0]  # just to keep 5 slots: c[2], c[3], c[4]
+        for n in [2, 3, 4]:
+            c[n] = self.libration_point.cn(n)
+
+        lambda1, _, _ = self.libration_point.linear_modes
+        lam = lambda1
+
+        k = 2 * lam / (lam**2 + 1 - c[2])
+        delta = lam**2 - c[2]
+
+        d1 = (3 * lam**2 / k) * (k * (6 * lam**2 - 1) - 2 * lam)
+        d2 = (8 * lam**2 / k) * (k * (11 * lam**2 - 1) - 2 * lam)
+
+        a21 = (3 * c[3] * (k**2 - 2)) / (4 * (1 + 2 * c[2]))
+        a22 = (3 * c[3]) / (4 * (1 + 2 * c[2]))
+        a23 = - (3 * c[3] * lam / (4 * k * d1)) * (
+            3 * k**3 * lam - 6 * k * (k - lam) + 4
+        )
+        a24 = - (3 * c[3] * lam / (4 * k * d1)) * (2 + 3 * k * lam)
+
+        b21 = - (3 * c[3] * lam / (2 * d1)) * (3 * k * lam - 4)
+        b22 = (3 * c[3] * lam) / d1
+
+        d21 = - c[3] / (2 * lam**2)
+
+        a31 = (
+            - (9 * lam / (4 * d2)) 
+            * (4 * c[3] * (k * a23 - b21) + k * c[4] * (4 + k**2)) 
+            + ((9 * lam**2 + 1 - c[2]) / (2 * d2)) 
+            * (
+                3 * c[3] * (2 * a23 - k * b21) 
+                + c[4] * (2 + 3 * k**2)
+            )
+        )
+        a32 = (
+            - (1 / d2)
+            * (
+                (9 * lam / 4) * (4 * c[3] * (k * a24 - b22) + k * c[4]) 
+                + 1.5 * (9 * lam**2 + 1 - c[2]) 
+                * (c[3] * (k * b22 + d21 - 2 * a24) - c[4])
+            )
+        )
+
+        b31 = (
+            0.375 / d2
+            * (
+                8 * lam 
+                * (3 * c[3] * (k * b21 - 2 * a23) - c[4] * (2 + 3 * k**2))
+                + (9 * lam**2 + 1 + 2 * c[2])
+                * (4 * c[3] * (k * a23 - b21) + k * c[4] * (4 + k**2))
+            )
+        )
+        b32 = (
+            (1 / d2)
+            * (
+                9 * lam 
+                * (c[3] * (k * b22 + d21 - 2 * a24) - c[4])
+                + 0.375 * (9 * lam**2 + 1 + 2 * c[2])
+                * (4 * c[3] * (k * a24 - b22) + k * c[4])
+            )
+        )
+
+        d31 = (3 / (64 * lam**2)) * (4 * c[3] * a24 + c[4])
+        d32 = (3 / (64 * lam**2)) * (4 * c[3] * (a23 - d21) + c[4] * (4 + k**2))
+
+        s1 = (
+            1 
+            / (2 * lam * (lam * (1 + k**2) - 2 * k))
+            * (
+                1.5 * c[3] 
+                * (
+                    2 * a21 * (k**2 - 2) 
+                    - a23 * (k**2 + 2) 
+                    - 2 * k * b21
+                )
+                - 0.375 * c[4] * (3 * k**4 - 8 * k**2 + 8)
+            )
+        )
+        s2 = (
+            1 
+            / (2 * lam * (lam * (1 + k**2) - 2 * k))
+            * (
+                1.5 * c[3] 
+                * (
+                    2 * a22 * (k**2 - 2) 
+                    + a24 * (k**2 + 2) 
+                    + 2 * k * b22 
+                    + 5 * d21
+                )
+                + 0.375 * c[4] * (12 - k**2)
+            )
+        )
+
+        a1 = -1.5 * c[3] * (2 * a21 + a23 + 5 * d21) - 0.375 * c[4] * (12 - k**2)
+        a2 = 1.5 * c[3] * (a24 - 2 * a22) + 1.125 * c[4]
+
+        l1 = a1 + 2 * lam**2 * s1
+        l2 = a2 + 2 * lam**2 * s2
+
+        deltan = -n
+
+        amplitude_x = np.sqrt((-delta - l2 * amplitude_z**2) / l1)
+
+        tau1 = 0.0
+        
+        x = (
+            a21 * amplitude_x**2 + a22 * amplitude_z**2
+            - amplitude_x * np.cos(tau1)
+            + (a23 * amplitude_x**2 - a24 * amplitude_z**2) * np.cos(2 * tau1)
+            + (a31 * amplitude_x**3 - a32 * amplitude_x * amplitude_z**2) * np.cos(3 * tau1)
+        )
+        y = (
+            k * amplitude_x * np.sin(tau1)
+            + (b21 * amplitude_x**2 - b22 * amplitude_z**2) * np.sin(2 * tau1)
+            + (b31 * amplitude_x**3 - b32 * amplitude_x * amplitude_z**2) * np.sin(3 * tau1)
+        )
+        z = (
+            deltan * amplitude_z * np.cos(tau1)
+            + deltan * d21 * amplitude_x * amplitude_z * (np.cos(2 * tau1) - 3)
+            + deltan * (d32 * amplitude_z * amplitude_x**2 - d31 * amplitude_z**3) * np.cos(3 * tau1)
+        )
+
+        xdot = (
+            lam * amplitude_x * np.sin(tau1)
+            - 2 * lam * (a23 * amplitude_x**2 - a24 * amplitude_z**2) * np.sin(2 * tau1)
+            - 3 * lam * (a31 * amplitude_x**3 - a32 * amplitude_x * amplitude_z**2) * np.sin(3 * tau1)
+        )
+        ydot = (
+            lam
+            * (
+                k * amplitude_x * np.cos(tau1)
+                + 2 * (b21 * amplitude_x**2 - b22 * amplitude_z**2) * np.cos(2 * tau1)
+                + 3 * (b31 * amplitude_x**3 - b32 * amplitude_x * amplitude_z**2) * np.cos(3 * tau1)
+            )
+        )
+        zdot = (
+            - lam * deltan * amplitude_z * np.sin(tau1)
+            - 2 * lam * deltan * d21 * amplitude_x * amplitude_z * np.sin(2 * tau1)
+            - 3 * lam * deltan * (d32 * amplitude_z * amplitude_x**2 - d31 * amplitude_z**3) * np.sin(3 * tau1)
+        )
+
+        rx = primary + gamma * (-won + x)
+        ry = -gamma * y
+        rz = gamma * z
+
+        vx = gamma * xdot
+        vy = gamma * ydot
+        vz = gamma * zdot
+
+        return np.array([rx, ry, rz, vx, vy, vz], dtype=np.float64)
+
+
+class _LyapunovOrbitCorrectionService(_OrbitCorrectionService):
+    """Dynamics service for Lyapunov orbits."""
+
+    def __init__(self, orbit: "LyapunovOrbit") -> None:
+        super().__init__(orbit)
+        self._corrector = Corrector.with_default_engine(config=self.correction_config)
+        
+    @property
+    def correction_config(self) -> "_OrbitCorrectionConfig":
+        """Provides the differential correction configuration for Lyapunov orbits.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
+            The correction configuration.
+        """
+        from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
+        return _OrbitCorrectionConfig(
+            residual_indices=(SynodicState.VX, SynodicState.Z),
+            control_indices=(SynodicState.VY, SynodicState.VZ),
+            target=(0.0, 0.0),
+            extra_jacobian=None,
+            event_func=_y_plane_crossing,
+        )
+
+
+class _LyapunovOrbitContinuationService(_OrbitContinuationService):
+    """Dynamics service for Lyapunov orbits."""
+
+    def __init__(self, orbit: "LyapunovOrbit") -> None:
+        super().__init__(orbit)
+        self._generator = StateParameter.with_default_engine(config=self.continuation_config)
+        
+    @property
+    def continuation_config(self) -> "_OrbitContinuationConfig":
+        """Provides the continuation configuration for Lyapunov orbits.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
+            The continuation configuration.
+        """
+        from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+        return _OrbitContinuationConfig(
+            target=(
+                [self.initial_state[SynodicState.X], self.initial_state[SynodicState.Y]],
+                [self.initial_state[SynodicState.X] + 1.0, self.initial_state[SynodicState.Y] + 1.0]),
+            step=(
+                (1 - self.initial_state[SynodicState.X]) / (50 - 1),
+                (1 - self.initial_state[SynodicState.Y]) / (50 - 1),
+            ),
+            state=(SynodicState.X, SynodicState.Y),
+            max_members=50,
+            extra_params=dict(max_attempts=50, tol=1e-12),
+            stepper="secant",
+        )
+
+
+class _LyapunovOrbitDynamicsService(_OrbitDynamicsService):
+    """Dynamics service for Lyapunov orbits."""
+
+    def __init__(self, orbit: "LyapunovOrbit", *, initial_state: Optional[np.ndarray] = None, amplitude_x: Optional[float] = None) -> None:
+        if initial_state is not None and amplitude_x is not None:
+            raise ValueError("Cannot provide both an initial_state and an analytical parameter (amplitude_x).")
+        if not isinstance(libration_point, CollinearPoint):
+            raise TypeError(f"Lyapunov orbits are only defined for CollinearPoint, but got {type(self.libration_point)}.")
+        if initial_state is None:
+            if amplitude_x is None:
+                raise ValueError("Lyapunov orbits require an 'amplitude_x' (x-amplitude) parameter when an initial_state is not provided.")
+            if not isinstance(libration_point, (L1Point, L2Point)):
+                raise ValueError(f"Analytical guess is only available for L1/L2 points. An initial_state must be provided for {libration_point.name}.")
+
+        super().__init__(orbit, initial_state=initial_state)
+
+        if initial_state is not None and self._amplitude_x is None:
+            self._amplitude_x = self._initial_state[SynodicState.X] - self.libration_point.position[0]
+
+        self._amplitude = amplitude_x
+
+    def initial_guess(self) -> np.ndarray:
+        L_i = self.libration_point.position
+        x_L_i: float = L_i[0]
+        c2 = self.libration_point.cn(2)
+        nu_1 = self.libration_point.linear_modes[1]
+        a = 2 * c2 + 1
+        tau = - (nu_1 **2 + a) / (2*nu_1)
+        u = np.array([1, 0, 0, nu_1 * tau]) 
+
+        displacement = self._amplitude_x * u
+        state_4d = np.array([x_L_i, 0, 0, 0], dtype=np.float64) + displacement
+        state_6d = np.array([state_4d[0], state_4d[1], 0, state_4d[2], state_4d[3], 0], dtype=np.float64)
+        return state_6d
+
+
+class _VerticalOrbitCorrectionService(_OrbitCorrectionService):
+    """Dynamics service for Vertical orbits."""
+
+    def __init__(self, orbit: "VerticalOrbit") -> None:
+        super().__init__(orbit)
+        self._corrector = Corrector.with_default_engine(config=self.correction_config)
+        
+    def correction_config(self) -> "_OrbitCorrectionConfig":
+        """Provides the differential correction configuration for Vertical orbits.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
+            The correction configuration for Vertical orbits.
+        """
+        from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
+        return _OrbitCorrectionConfig(
+            residual_indices=(SynodicState.VX, SynodicState.Y),     # Want VX=0 and Y=0
+            control_indices=(SynodicState.VZ, SynodicState.VY),     # Adjust initial VZ and VY
+            target=(0.0, 0.0),
+            extra_jacobian=None,
+            event_func=_z_plane_crossing,
+        )
+
+
+class _VerticalOrbitContinuationService(_OrbitContinuationService):
+    """Dynamics service for Vertical orbits."""
+
+    def __init__(self, orbit: "VerticalOrbit") -> None:
+        super().__init__(orbit)
+        self._generator = StateParameter.with_default_engine(config=self.continuation_config)
+        
+    def continuation_config(self) -> "_OrbitContinuationConfig":
+        """Provides the continuation configuration for Vertical orbits.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
+            The continuation configuration for Vertical orbits.
+        """
+        from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+        return _OrbitContinuationConfig(
+            target=(
+                [self.initial_state[SynodicState.X], self.initial_state[SynodicState.Y]], self.initial_state[SynodicState.Z]
+                [self.initial_state[SynodicState.X] + 1.0, self.initial_state[SynodicState.Y] + 1.0], self.initial_state[SynodicState.Z] + 1.0]),
+            step=(
+                (1 - self.initial_state[SynodicState.X]) / (50 - 1),
+                (1 - self.initial_state[SynodicState.Y]) / (50 - 1),
+                (1 - self.initial_state[SynodicState.Z]) / (50 - 1),
+            ),
+            state=(SynodicState.X, SynodicState.Y, SynodicState.Z),
+            max_members=50,
+            extra_params=dict(max_attempts=50, tol=1e-12),
+            stepper="secant",
+        )
+
+
+class _VerticalOrbitDynamicsService(_OrbitDynamicsService):
+    """Dynamics service for Vertical orbits."""
+
+    def __init__(self, orbit: "VerticalOrbit", *, initial_state: Optional[np.ndarray] = None) -> None:
+        if initial_state is None:
+            raise ValueError("Vertical orbits require an initial_state.")
+        super().__init__(orbit, initial_state=initial_state)
+
+    def initial_guess(self) -> np.ndarray:
+        return self._initial_state
+
+
 @dataclass
 class _OrbitServices(_ServiceBundleBase):
     domain_obj: "PeriodicOrbit"
@@ -527,12 +955,12 @@ class _OrbitServices(_ServiceBundleBase):
     persistence: _OrbitPersistenceService
 
     @classmethod
-    def default(cls, orbit: "PeriodicOrbit", *, initial_state = Optional[np.ndarray] = None) -> "_OrbitServices":
+    def default(cls, orbit: "PeriodicOrbit", *, initial_state = Optional[np.ndarray] = None, *args) -> "_OrbitServices":
         return cls(
             domain_obj=orbit,
             correction=_OrbitCorrectionService(orbit),
             continuation=_OrbitContinuationService(orbit),
-            dynamics=_OrbitDynamicsService(orbit, initial_state=initial_state),
+            dynamics=_OrbitDynamicsService(orbit, initial_state=initial_state, *args),
             persistence=_OrbitPersistenceService()
         )
 
@@ -545,3 +973,19 @@ class _OrbitServices(_ServiceBundleBase):
             dynamics=dynamics,
             persistence=_OrbitPersistenceService()
         )
+
+    @staticmethod
+    def _check_orbit_type(orbit: "PeriodicOrbit") -> _OrbitDynamicsService:
+        from hiten.system.orbits.base import GenericOrbit
+        from hiten.system.orbits.halo import HaloOrbit
+        from hiten.system.orbits.lyapunov import LyapunovOrbit
+        from hiten.system.orbits.vertical import VerticalOrbit
+
+        mapping = {
+            GenericOrbit: (_GenericOrbitDynamicsService, _GenericOrbitCorrectionService, _GenericOrbitContinuationService),
+            HaloOrbit: (_HaloOrbitDynamicsService, _HaloOrbitCorrectionService, _HaloOrbitContinuationService),
+            LyapunovOrbit: (_LyapunovOrbitDynamicsService, _LyapunovOrbitCorrectionService, _LyapunovOrbitContinuationService),
+            VerticalOrbit: (_VerticalOrbitDynamicsService, _VerticalOrbitCorrectionService, _VerticalOrbitContinuationService),
+        }
+
+        return mapping[type(orbit)](orbit)

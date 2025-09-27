@@ -62,23 +62,6 @@ class VerticalOrbit(PeriodicOrbit):
     def __init__(self, libration_point: CollinearPoint, initial_state: Optional[Sequence[float]] = None):
         super().__init__(libration_point, initial_state)
 
-    def _initial_guess(self) -> NDArray[np.float64]:
-        """Generate initial guess for Vertical orbit.
-        
-        This method is not yet implemented for vertical orbits.
-        
-        Returns
-        -------
-        numpy.ndarray, shape (6,)
-            The initial state vector in nondimensional units.
-            
-        Raises
-        ------
-        NotImplementedError
-            Initial guess generation is not yet implemented for vertical orbits.
-        """
-        raise NotImplementedError("Initial guess is not implemented for Vertical orbits.")
-
     @property
     def amplitude(self) -> float:
         """(Read-only) Current z-amplitude of the vertical orbit.
@@ -88,23 +71,10 @@ class VerticalOrbit(PeriodicOrbit):
         float
             The z-amplitude in nondimensional units.
         """
-        if getattr(self, "_initial_state", None) is not None:
-            return float(abs(self._initial_state[SynodicState.Z]))
-        return float(self._amplitude_z)
+        return self.dynamics.amplitude
 
     @property
-    def eccentricity(self) -> float:
-        """Eccentricity is not a well-defined concept for vertical orbits.
-        
-        Returns
-        -------
-        float
-            NaN since eccentricity is not defined for vertical orbits.
-        """
-        return np.nan
-
-    @property
-    def _correction_config(self) -> "_OrbitCorrectionConfig":
+    def correction_config(self) -> "_OrbitCorrectionConfig":
         """Provides the differential correction configuration for vertical orbits.
         
         Returns
@@ -112,14 +82,12 @@ class VerticalOrbit(PeriodicOrbit):
         :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
             The correction configuration for vertical orbits.
         """
-        from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
-        return _OrbitCorrectionConfig(
-            residual_indices=(SynodicState.VX, SynodicState.Y),     # Want VX=0 and Y=0
-            control_indices=(SynodicState.VZ, SynodicState.VY),     # Adjust initial VZ and VY
-            target=(0.0, 0.0),
-            extra_jacobian=None,
-            event_func=_z_plane_crossing,
-        )
+        return self._correction.correction_config
+
+    @correction_config.setter
+    def correction_config(self, value: "_OrbitCorrectionConfig"):
+        """Set the correction configuration."""
+        self._correction.correction_config = value
 
     @property
     def _continuation_config(self) -> "_OrbitContinuationConfig":

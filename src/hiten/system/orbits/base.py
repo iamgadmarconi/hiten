@@ -94,8 +94,8 @@ class PeriodicOrbit(_HitenBase, ABC):
 
     _family: str = "generic"
 
-    def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None):
-        services = _OrbitServices.default(self, initial_state=initial_state)
+    def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None, *args):
+        services = _OrbitServices.default(self, initial_state=initial_state, *args)
         super().__init__(services)
 
     def __str__(self):

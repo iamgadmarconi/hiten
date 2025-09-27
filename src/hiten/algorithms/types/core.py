@@ -425,6 +425,9 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
     def _set_backend(self, backend: _HitenBaseBackend[ProblemT, ResultT, OutputsT]) -> None:
         self._backend = backend
 
+    def _set_config(self, config: ConfigT) -> None:
+        self._config = config
+
     def _get_engine(self) -> _HitenBaseEngine[ProblemT, ResultT, OutputsT]:
         return self._engine
 

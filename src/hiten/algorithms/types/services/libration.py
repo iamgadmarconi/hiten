@@ -422,6 +422,14 @@ class _CollinearDynamicsService(ABC, _LibrationDynamicsService):
         super().__init__(point)
 
     @property
+    @abstractmethod
+    def won(self) -> Tuple[int, float]:
+        """
+        Get the won value for the collinear libration point.
+        """
+        pass
+
+    @property
     def gamma(self) -> float:
         """
         Compute the gamma value for the collinear libration point.
@@ -871,6 +879,9 @@ class _L1DynamicsService(_CollinearDynamicsService):
     def a(self) -> float:
         return -1 + self.gamma
 
+    @property
+    def won(self) -> Tuple[int, float]:
+        return (+1, 1 - self.mu)
 
     @property
     def _position_search_interval(self) -> list:
@@ -940,6 +951,10 @@ class _L2DynamicsService(_CollinearDynamicsService):
         return -1 - self.gamma
 
     @property
+    def won(self) -> Tuple[int, float]:
+        return (-1, 1 - self.mu)
+
+    @property
     def _position_search_interval(self) -> list:
         """
         Search interval for L2's x-position.
@@ -1004,6 +1019,10 @@ class _L3DynamicsService(_CollinearDynamicsService):
     @property
     def a(self) -> float:
         return self.gamma
+
+    @property
+    def won(self) -> Tuple[int, float]:
+        return (+1, -self.mu)
 
     @property
     def _position_search_interval(self) -> list:
