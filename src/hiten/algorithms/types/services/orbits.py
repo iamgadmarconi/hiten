@@ -184,7 +184,7 @@ class _OrbitDynamicsService(_DynamicsServiceBase):
 
         self._initial_state = self.domain_obj._initial_state
         self._libration_point = self.domain_obj._libration_point
-    
+
         if self._initial_state is not None:
             self._initial_state = np.asarray(self._initial_state, dtype=np.float64)
         else:
@@ -571,12 +571,13 @@ class _HaloOrbitCorrectionService(_OrbitCorrectionService):
             solver.
         """
         x, y, z, vx, vy, vz = X_ev
-        mu2 = 1 - self.mu
-        rho_1 = 1/(((x+self.mu)**2 + y**2 + z**2)**1.5)
+        mu = self.domain_obj.mu
+        mu2 = 1 - mu
+        rho_1 = 1/(((x+mu)**2 + y**2 + z**2)**1.5)
         rho_2 = 1/(((x-mu2 )**2 + y**2 + z**2)**1.5)
-        omega_x  = -(mu2*(x+self.mu)*rho_1) - (self.mu*(x-mu2)*rho_2) + x
+        omega_x  = -(mu2*(x+mu)*rho_1) - (mu*(x-mu2)*rho_2) + x
         DDx = 2*vy + omega_x
-        DDz = -(mu2*z*rho_1) - (self.mu*z*rho_2)
+        DDz = -(mu2*z*rho_1) - (mu*z*rho_2)
 
         if abs(vy) < 1e-9:
             logger.warning(f"Denominator 'vy' is very small ({vy:.2e}). Correction step may be inaccurate.")

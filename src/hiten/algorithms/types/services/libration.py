@@ -331,7 +331,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
 
         if isinstance(family, type) and issubclass(family, PeriodicOrbit):
             orbit_cls = family
-            return orbit_cls(self, **kwargs)
+            return orbit_cls(self.domain_obj, **kwargs)
 
         key = family.lower().strip()
         mapping: dict[str, type[PeriodicOrbit]] = {
