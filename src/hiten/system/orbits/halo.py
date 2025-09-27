@@ -12,14 +12,10 @@ Richardson, D. L. (1980). "Analytic construction of periodic orbits about the
 collinear libration points".
 """
 
-from typing import TYPE_CHECKING, Literal, Optional, Sequence
+from typing import Literal, Optional, Sequence
 
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.orbits.base import PeriodicOrbit
-
-if TYPE_CHECKING:
-    from hiten.algorithms.continuation.config import _OrbitContinuationConfig
-    from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
 
 
 class HaloOrbit(PeriodicOrbit):
@@ -71,18 +67,6 @@ class HaloOrbit(PeriodicOrbit):
         ):
         super().__init__(libration_point, initial_state=initial_state, amplitude_z=amplitude_z, zenith=zenith)
 
-
-    @property
-    def amplitude(self) -> float:
-        """(Read-only) Current z-amplitude of the orbit in the synodic frame.
-        
-        Returns
-        -------
-        float
-            The z-amplitude in nondimensional units.
-        """
-        return self.dynamics.amplitude
-
     @property
     def zenith(self) -> Literal["northern", "southern"]:
         """(Read-only) Current zenith of the orbit.
@@ -93,35 +77,3 @@ class HaloOrbit(PeriodicOrbit):
             The orbit zenith.
         """
         return self.dynamics.zenith
-
-    @property
-    def correction_config(self) -> "_OrbitCorrectionConfig":
-        """Provides the differential correction configuration for halo orbits.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
-            The correction configuration for halo orbits.
-        """
-        return self._correction.correction_config
-
-    @correction_config.setter
-    def correction_config(self, value: "_OrbitCorrectionConfig"):
-        """Set the correction configuration."""
-        self._correction.correction_config = value
-
-    @property
-    def continuation_config(self) -> "_OrbitContinuationConfig":
-        """Provides the continuation configuration for halo orbits.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
-            The continuation configuration for halo orbits.
-        """
-        return self._continuation.continuation_config
-
-    @continuation_config.setter
-    def continuation_config(self, value: "_OrbitContinuationConfig"):
-        """Set the continuation configuration."""
-        self._continuation.continuation_config = value

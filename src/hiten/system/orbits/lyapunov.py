@@ -15,14 +15,10 @@ References
 Szebehely, V. (1967). "Theory of Orbits".
 """
 
-from typing import TYPE_CHECKING, Optional, Sequence
+from typing import Optional, Sequence
 
 from hiten.system.libration.base import LibrationPoint
 from hiten.system.orbits.base import PeriodicOrbit
-
-if TYPE_CHECKING:
-    from hiten.algorithms.continuation.config import _OrbitContinuationConfig
-    from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
 
 
 class LyapunovOrbit(PeriodicOrbit):
@@ -75,46 +71,3 @@ class LyapunovOrbit(PeriodicOrbit):
         ):
 
         super().__init__(libration_point, initial_state, amplitude_x=amplitude_x)
-
-    @property
-    def amplitude(self) -> float:
-        """(Read-only) Current x-amplitude relative to the libration point.
-        
-        Returns
-        -------
-        float
-            The x-amplitude in nondimensional units.
-        """
-        return self.dynamics.amplitude
-
-    @property
-    def correction_config(self) -> "_OrbitCorrectionConfig":
-        """Provides the differential correction configuration for planar Lyapunov orbits.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
-            The correction configuration for Lyapunov orbits.
-        """
-        return self._correction.correction_config
-
-    @correction_config.setter
-    def correction_config(self, value: "_OrbitCorrectionConfig"):
-        """Set the correction configuration."""
-        self._correction.correction_config = value
-
-    @property
-    def continuation_config(self) -> "_OrbitContinuationConfig":
-        """Provides the continuation configuration for Lyapunov orbits.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
-            The continuation configuration for Lyapunov orbits.
-        """
-        return self._continuation.continuation_config
-
-    @continuation_config.setter
-    def continuation_config(self, value: "_OrbitContinuationConfig"):
-        """Set the continuation configuration."""
-        self._continuation.continuation_config = value

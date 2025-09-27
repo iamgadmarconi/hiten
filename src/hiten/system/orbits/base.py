@@ -16,23 +16,18 @@ Szebehely, V. (1967). "Theory of Orbits - The Restricted Problem of Three
 Bodies".
 """
 import os
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import TYPE_CHECKING, Literal, Optional, Sequence, Tuple
 
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
-from hiten.algorithms.common.energy import crtbp_energy, energy_to_jacobi
-from hiten.algorithms.corrector.config import (_LineSearchConfig,
-                                               _OrbitCorrectionConfig)
-from hiten.algorithms.dynamics.base import _DynamicalSystem
+from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
 from hiten.algorithms.types.core import _HitenBase
-from hiten.algorithms.types.services.orbits import (_OrbitCorrectionService,
-                                                    _OrbitPersistenceService,
+from hiten.algorithms.types.services.orbits import (_OrbitPersistenceService,
                                                     _OrbitServices)
-from hiten.algorithms.types.states import (ReferenceFrame, SynodicStateVector,
-                                           Trajectory)
+from hiten.algorithms.types.states import Trajectory
 from hiten.system.base import System
 from hiten.system.libration.base import LibrationPoint
 from hiten.utils.io.common import _ensure_dir
@@ -103,6 +98,91 @@ class PeriodicOrbit(_HitenBase, ABC):
 
     def __repr__(self):
         return f"{self.__class__.__name__}(family={self.family}, libration_point={self._libration_point})"
+
+    @property
+    def amplitude(self) -> float:
+        """(Read-only) Current amplitude of the orbit.
+        
+        Returns
+        -------
+        float or None
+            The orbit amplitude in nondimensional units, or None if not set.
+        """
+        return self.dynamics.amplitude
+
+    @amplitude.setter
+    def amplitude(self, value: float):
+        """Set the orbit amplitude.
+        
+        Parameters
+        ----------
+        value : float
+            The orbit amplitude in nondimensional units.
+        """
+        self.dynamics.amplitude = value
+
+    @property
+    def correction_config(self) -> Optional["_OrbitCorrectionConfig"]:
+        """
+        Provides the differential correction configuration.
+
+        For GenericOrbit, this must be set via the `correction_config` property
+        to enable differential correction.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
+            The correction configuration.
+            
+        Raises
+        ------
+        NotImplementedError
+            If correction_config is not set.
+        """
+        return self._correction.correction_config
+
+    @correction_config.setter
+    def correction_config(self, value: Optional["_OrbitCorrectionConfig"]):
+        """Set the correction configuration.
+        
+        Parameters
+        ----------
+        value : :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig` or None
+            The correction configuration to set.
+            
+        Raises
+        ------
+        TypeError
+            If value is not an instance of :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig` or None.
+        """
+        self._correction.correction_config = value
+
+    @property
+    def continuation_config(self) -> Optional["_OrbitContinuationConfig"]:
+        """Get or set the continuation parameter for this orbit.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None
+            The continuation configuration, or None if not set.
+        """
+        return self._continuation.continuation_config
+
+    @continuation_config.setter
+    def continuation_config(self, cfg: Optional["_OrbitContinuationConfig"]):
+        """Set the continuation configuration.
+        
+        Parameters
+        ----------
+        cfg : :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None
+            The continuation configuration to set.
+            
+        Raises
+        ------
+        TypeError
+            If cfg is not an instance of :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None.
+        """
+        self._continuation.continuation_config = cfg
 
     @property
     def family(self) -> str:
@@ -430,88 +510,5 @@ class GenericOrbit(PeriodicOrbit):
         if self.dynamics.period is None:
             self.dynamics.period = np.pi
 
-    @property
-    def amplitude(self) -> float:
-        """(Read-only) Current amplitude of the orbit.
-        
-        Returns
-        -------
-        float or None
-            The orbit amplitude in nondimensional units, or None if not set.
-        """
-        return self.dynamics.amplitude
 
-    @amplitude.setter
-    def amplitude(self, value: float):
-        """Set the orbit amplitude.
-        
-        Parameters
-        ----------
-        value : float
-            The orbit amplitude in nondimensional units.
-        """
-        self.dynamics.amplitude = value
-
-    @property
-    def correction_config(self) -> Optional["_OrbitCorrectionConfig"]:
-        """
-        Provides the differential correction configuration.
-
-        For GenericOrbit, this must be set via the `correction_config` property
-        to enable differential correction.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
-            The correction configuration.
-            
-        Raises
-        ------
-        NotImplementedError
-            If correction_config is not set.
-        """
-        return self._correction.correction_config
-
-    @correction_config.setter
-    def correction_config(self, value: Optional["_OrbitCorrectionConfig"]):
-        """Set the correction configuration.
-        
-        Parameters
-        ----------
-        value : :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig` or None
-            The correction configuration to set.
-            
-        Raises
-        ------
-        TypeError
-            If value is not an instance of :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig` or None.
-        """
-        self._correction.correction_config = value
-
-    @property
-    def continuation_config(self) -> Optional["_OrbitContinuationConfig"]:
-        """Get or set the continuation parameter for this orbit.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None
-            The continuation configuration, or None if not set.
-        """
-        return self._continuation.continuation_config
-
-    @continuation_config.setter
-    def continuation_config(self, cfg: Optional["_OrbitContinuationConfig"]):
-        """Set the continuation configuration.
-        
-        Parameters
-        ----------
-        cfg : :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None
-            The continuation configuration to set.
-            
-        Raises
-        ------
-        TypeError
-            If cfg is not an instance of :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None.
-        """
-        self._continuation.continuation_config = cfg
 

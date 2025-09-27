@@ -15,19 +15,10 @@ References
 Szebehely, V. (1967). "Theory of Orbits".
 """
 
-from typing import TYPE_CHECKING, Optional, Sequence
+from typing import Optional, Sequence
 
-import numpy as np
-from numpy.typing import NDArray
-
-from hiten.algorithms.poincare.singlehit.backend import _z_plane_crossing
-from hiten.algorithms.types.states import SynodicState
 from hiten.system.libration.collinear import CollinearPoint
 from hiten.system.orbits.base import PeriodicOrbit
-
-if TYPE_CHECKING:
-    from hiten.algorithms.continuation.config import _OrbitContinuationConfig
-    from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
 
 
 class VerticalOrbit(PeriodicOrbit):
@@ -61,42 +52,3 @@ class VerticalOrbit(PeriodicOrbit):
 
     def __init__(self, libration_point: CollinearPoint, initial_state: Optional[Sequence[float]] = None):
         super().__init__(libration_point, initial_state)
-
-    @property
-    def amplitude(self) -> float:
-        """(Read-only) Current z-amplitude of the vertical orbit.
-        
-        Returns
-        -------
-        float
-            The z-amplitude in nondimensional units.
-        """
-        return self.dynamics.amplitude
-
-    @property
-    def correction_config(self) -> "_OrbitCorrectionConfig":
-        """Provides the differential correction configuration for vertical orbits.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
-            The correction configuration for vertical orbits.
-        """
-        return self._correction.correction_config
-
-    @correction_config.setter
-    def correction_config(self, value: "_OrbitCorrectionConfig"):
-        """Set the correction configuration."""
-        self._correction.correction_config = value
-
-    @property
-    def _continuation_config(self) -> "_OrbitContinuationConfig":
-        """Default continuation parameter: vary the out-of-plane amplitude.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
-            The continuation configuration for vertical orbits.
-        """
-        from hiten.algorithms.continuation.config import _OrbitContinuationConfig
-        return _OrbitContinuationConfig(state=SynodicState.Z, amplitude=True)
