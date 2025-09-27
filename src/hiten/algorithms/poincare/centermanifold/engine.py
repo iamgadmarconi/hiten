@@ -86,7 +86,7 @@ class _CenterManifoldEngine(_ReturnMapEngine):
         map_config: _CenterManifoldMapConfig,
         interface: _CenterManifoldInterface,
     ) -> None:
-        super().__init__(backend=backend, seed_strategy=seed_strategy, map_config=map_config, interface=interface, backend_method="step_to_section")
+        super().__init__(backend=backend, seed_strategy=seed_strategy, map_config=map_config, interface=interface)
 
     def solve(self, problem: _CenterManifoldMapProblem) -> CenterManifoldMapResults:
         """Compute the Poincare section for the center manifold.

@@ -329,10 +329,10 @@ class Manifold(_HitenBase):
             raise ValueError("Manifold result not computed. Please compute the manifold first.")
 
         data = []
-        for i, (states, times) in enumerate(zip(self.trajectories.states, self.trajectories.times)):
-            for j in range(states.shape[0]):
+        for i, traj in enumerate(self.trajectories):
+            for j in range(traj.states.shape[0]):
                 data.append(
-                    [i, times[j], states[j, 0], states[j, 1], states[j, 2], states[j, 3], states[j, 4], states[j, 5]]
+                    [i, traj.times[j], traj.states[j, 0], traj.states[j, 1], traj.states[j, 2], traj.states[j, 3], traj.states[j, 4], traj.states[j, 5]]
                 )
         
         return pd.DataFrame(data, columns=['trajectory_id', 'time', 'x', 'y', 'z', 'vx', 'vy', 'vz'])

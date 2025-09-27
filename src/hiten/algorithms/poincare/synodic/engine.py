@@ -72,7 +72,7 @@ class _SynodicEngine(_ReturnMapEngine):
         map_config,
         interface: _SynodicInterface,
     ) -> None:
-        super().__init__(backend=backend, seed_strategy=seed_strategy, map_config=map_config, interface=interface, backend_method="detect_batch")
+        super().__init__(backend=backend, seed_strategy=seed_strategy, map_config=map_config, interface=interface)
 
     def solve(self, problem: _SynodicMapProblem) -> SynodicMapResults:
         """Compute the synodic Poincare section from the composed problem."""

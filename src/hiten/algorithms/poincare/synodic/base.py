@@ -219,7 +219,7 @@ class SynodicMap(_DetectionMapBase):
         ----------
         orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             The periodic orbit to analyze. Must be propagated before calling
-            this method (i.e., `orbit.times` and `orbit.trajectory` must not be None).
+            this method (i.e., `orbit.trajectory` must not be None).
         direction : {1, -1, None}, optional
             Crossing direction filter. If None, uses the default
             direction from the section configuration.
@@ -234,7 +234,7 @@ class SynodicMap(_DetectionMapBase):
         Raises
         ------
         ValueError
-            If the orbit has not been propagated (times or trajectory is None).
+            If the orbit has not been propagated (trajectory is None).
 
         Notes
         -----
@@ -247,9 +247,9 @@ class SynodicMap(_DetectionMapBase):
 
         All time units are in nondimensional units.
         """
-        if orbit.times is None or orbit.trajectory is None:
+        if orbit.trajectory is None:
             raise ValueError("Orbit must be propagated before extracting trajectories")
-        traj = [(np.asarray(orbit.times, dtype=np.float64), np.asarray(orbit.trajectory, dtype=np.float64))]
+        traj = [(orbit.trajectory.times, orbit.trajectory.states)]
         return self.from_trajectories(traj, direction=direction, recompute=recompute)
 
     def from_manifold(self, manifold, *, direction: Literal[1, -1, None] = None, recompute: bool = False) -> _Section:
@@ -258,8 +258,8 @@ class SynodicMap(_DetectionMapBase):
         Parameters
         ----------
         manifold : :class:`~hiten.system.manifold.Manifold`
-            The manifold object containing trajectory data. Must have
-            a `manifold_result` attribute with `times_list` and `states_list`.
+            The manifold object containing trajectory data. Must be computed
+            before calling this method (i.e., `manifold.trajectories` must not be None).
         direction : {1, -1, None}, optional
             Crossing direction filter. If None, uses the default
             direction from the section configuration.
@@ -274,30 +274,27 @@ class SynodicMap(_DetectionMapBase):
         Raises
         ------
         ValueError
-            If the manifold result contains no valid trajectories.
+            If the manifold has not been computed or contains no valid trajectories.
 
         Notes
         -----
         This method extracts trajectory data from a manifold structure
         and computes the corresponding synodic Poincare section. The
-        manifold must contain valid trajectory data in the expected format.
+        manifold must be computed before calling this method.
 
-        The method automatically validates the trajectory data and
-        converts it to the appropriate format for the detection backend.
-        It filters out invalid trajectories and ensures all trajectories
-        have the correct dimensions (6D state vectors).
+        The method automatically extracts the trajectory data from the
+        manifold's trajectories property and converts it to the appropriate
+        format for the detection backend.
 
         All time units are in nondimensional units.
         """
-        manifold_result = manifold.manifold_result
+        if manifold.trajectories is None:
+            raise ValueError("Manifold must be computed before extracting trajectories")
+        
         trajs = []
-        for times, states in zip(getattr(manifold_result, "times_list", []), getattr(manifold_result, "states_list", [])):
-            if times is None or states is None:
-                continue
-            t_arr = np.asarray(times, dtype=np.float64)
-            x_arr = np.asarray(states, dtype=np.float64)
-            if t_arr.ndim == 1 and x_arr.ndim == 2 and len(t_arr) == len(x_arr) and x_arr.shape[1] == 6:
-                trajs.append((t_arr, x_arr))
+        for traj in manifold.trajectories:
+            if traj is not None:
+                trajs.append((traj.times, traj.states))
 
         if not trajs:
             raise ValueError("Manifold result contains no valid trajectories")

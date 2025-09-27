@@ -81,9 +81,8 @@ class _ReturnMapEngine(_HitenBaseEngine[ProblemT, ResultT, OutputsT], Generic[Pr
         seed_strategy: _SeedingStrategyBase,
         map_config: _EngineConfigLike,
         interface=None,
-        backend_method: str = "step_to_section",
     ) -> None:
-        super().__init__(backend=backend, interface=interface, backend_method=backend_method)
+        super().__init__(backend=backend, interface=interface)
         self._strategy = seed_strategy
         self._map_config = map_config
         self._n_iter = int(self._map_config.n_iter)

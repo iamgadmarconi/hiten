@@ -47,7 +47,7 @@ class _TorusDynamicsService(_DynamicsServiceBase):
 
     @property
     def orbit(self) -> PeriodicOrbit:
-        return self._orbit
+        return self.domain_obj._orbit
 
     @property
     def initial_state(self) -> np.ndarray:
@@ -126,10 +126,10 @@ class _TorusDynamicsService(_DynamicsServiceBase):
         return self._latest_params
 
     def eigen_data(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-        key = self.make_key(id(self._orbit))
+        key = self.make_key(id(self.orbit))
         
         def _factory() -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-            monodromy = self._orbit.monodromy
+            monodromy = self.orbit.monodromy
             evals, evecs = np.linalg.eig(monodromy)
             return monodromy, evals, evecs
         
@@ -155,7 +155,7 @@ class _TorusDynamicsService(_DynamicsServiceBase):
         eigenvectors : np.ndarray
             Eigenvectors of the monodromy matrix.
         """
-        cache_key = self.make_key(id(self._orbit), n_theta1, method, order)
+        cache_key = self.make_key(id(self.orbit), n_theta1, method, order)
 
         def _factory() -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
             monodromy, evals, evecs = self.eigen_data()
@@ -360,7 +360,7 @@ class _TorusDynamicsService(_DynamicsServiceBase):
         # Get eigenvalues for frequency computation
         _, _, _, _, _, evals, _ = self.prepare(n_theta1=n_theta1, method=method, order=order)
 
-        omega_long = 2.0 * np.pi / self._orbit.period
+        omega_long = 2.0 * np.pi / self.orbit.period
 
         tol_mag = 1e-6
         cand_idx = [
@@ -374,13 +374,13 @@ class _TorusDynamicsService(_DynamicsServiceBase):
 
         idx = max(cand_idx, key=lambda i: np.imag(evals[i]))
         lam_c = evals[idx]
-        omega_lat = np.angle(lam_c) / self._orbit.period
+        omega_lat = np.angle(lam_c) / self.orbit.period
 
         omega = np.array([omega_long, omega_lat], dtype=float)
 
-        C0 = self._orbit.jacobi
+        C0 = self.orbit.jacobi
 
-        return Torus(grid=grid.copy(), omega=omega, C0=C0, system=self._orbit.system)
+        return Torus(grid=grid.copy(), omega=omega, C0=C0, system=self.orbit.system)
 
     @staticmethod
     def _select_unit_circle_eigenvalue(evals: np.ndarray) -> Tuple[int, complex]:

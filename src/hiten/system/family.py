@@ -113,12 +113,17 @@ class OrbitFamily(_HitenBase):
             If no trajectory data is available to export.
         """
         _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+        df = self.to_df(**kwargs)
+        df.to_csv(filepath, index=False)
+        logger.info(f"Orbit family trajectories successfully exported to {filepath}")
 
+    def to_df(self, **kwargs) -> pd.DataFrame:
+        """Return a DataFrame summarising the family."""
         data = []
         for idx, orbit in enumerate(self.orbits):
-            if orbit.trajectory is None or orbit.times is None:
+            if orbit.trajectory is None:
                 orbit.propagate(**kwargs)
-            for t, state in zip(orbit.times, orbit.trajectory):
+            for t, state in zip(orbit.trajectory.times, orbit.trajectory.states):
                 data.append([idx, self.parameter_values[idx], t, *state])
 
         if not data:
@@ -129,19 +134,7 @@ class OrbitFamily(_HitenBase):
             "x", "y", "z", "vx", "vy", "vz",
         ]
         df = pd.DataFrame(data, columns=columns)
-        df.to_csv(filepath, index=False)
-        logger.info(f"Orbit family trajectories successfully exported to {filepath}")
-
-    def to_df(self, **kwargs) -> pd.DataFrame:
-        """Return a DataFrame summarising the family."""
-        return pd.DataFrame(
-            {
-                "orbit": self.orbits,
-                self.parameter_name: self.parameter_values,
-                "period": self.periods,
-                "jacobi_constant": self.jacobis,
-            }
-        )
+        return df
 
     def __getstate__(self):
         """Customise pickling by omitting adapter caches."""

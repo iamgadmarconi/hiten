@@ -1059,7 +1059,7 @@ def plot_manifolds(
     ----------
     manifolds : list of :class:`~hiten.system.manifold.Manifold`
         Collection of previously-computed Manifold objects. Each item must
-        have a non-empty manifold_result.
+        have been computed (trajectories property is not None).
     figsize : tuple, default (10, 8)
         Size of the matplotlib figure in inches.
     save : bool, default False
@@ -1121,11 +1121,11 @@ def plot_manifolds(
     ax = fig.add_subplot(111, projection='3d')
 
     for mfld, col, lab in zip(manifolds, colors, labels):
-        if mfld.manifold_result is None:
+        if mfld.trajectories is None:
             raise ValueError(f"Manifold '{mfld}' has not been computed yet.")
 
-        for traj in mfld.manifold_result.states_list:
-            ax.plot(traj[:, 0], traj[:, 1], traj[:, 2], color=col, lw=1.5, alpha=alpha)
+        for traj in mfld.trajectories:
+            ax.plot(traj.states[:, 0], traj.states[:, 1], traj.states[:, 2], color=col, lw=1.5, alpha=alpha)
 
         # Put a label only once per manifold (for legend clarity)
         ax.plot([], [], [], color=col, label=lab)

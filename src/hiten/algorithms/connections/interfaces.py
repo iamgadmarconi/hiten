@@ -126,7 +126,7 @@ class _ManifoldInterface(
             kwargs={"eps": eps, "dv_tol": dv_tol, "bal_tol": bal_tol}
         )
 
-    def to_results(self, outputs: list, *, problem: _ConnectionProblem) -> ConnectionResults:
+    def to_results(self, outputs: list, *, problem: _ConnectionProblem, domain_payload=None) -> ConnectionResults:
         """Convert backend outputs to connection results."""
         return ConnectionResults(outputs)
 
@@ -209,7 +209,7 @@ class _ManifoldInterface(
             Method to compute manifold data before section extraction.
         """
 
-        if manifold.manifold_result is None:
+        if manifold.result is None:
             raise EngineError("Manifold must be computed before extracting section hits")
 
         cfg = config or _SynodicMapConfig()
