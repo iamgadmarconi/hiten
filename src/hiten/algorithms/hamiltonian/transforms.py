@@ -518,7 +518,7 @@ def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray, to
     ----------
     Szebehely, V. (1967). Theory of Orbits. Academic Press, Chapter 7.
     """
-    gamma, mu, sgn, a = point.gamma, point.mu, point.sign, point.a
+    gamma, mu, sgn, a = point.dynamics.gamma, point.mu, point.sign, point.a
 
     c_complex = np.asarray(local_coords, dtype=np.complex128)
     if np.any(np.abs(np.imag(c_complex)) > tol):
@@ -580,7 +580,7 @@ def _synodic2local_collinear(point: CollinearPoint, synodic_coords: np.ndarray, 
         If *synodic_coords* is not a flat array of length 6 or contains an
         imaginary part larger than the tolerance (``1e-16``).
     """
-    gamma, mu, sgn, a = point.gamma, point.mu, point.sign, point.a
+    gamma, mu, sgn, a = point.dynamics.gamma, point.mu, point.sign, point.a
 
     s_complex = np.asarray(synodic_coords, dtype=np.complex128)
     if np.any(np.abs(np.imag(s_complex)) > tol):

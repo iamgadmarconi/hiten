@@ -43,11 +43,12 @@ class _CenterManifoldSectionInterface(_SectionInterface):
     section_coord: str
     plane_coords: tuple[str, str]
 
-    def from_section_coord(self, section_coord: str) -> "_CenterManifoldSectionInterface":
+    @classmethod
+    def from_section_coord(cls, section_coord: str) -> "_CenterManifoldSectionInterface":
         cfg = _CM_SECTION_TABLE.get(section_coord)
         if cfg is None:
             raise BackendError(f"Unsupported section_coord: {section_coord}")
-        return _CenterManifoldSectionInterface(section_coord=section_coord, plane_coords=cfg["plane_coords"])  # type: ignore[index]
+        return cls(section_coord=section_coord, plane_coords=cfg["plane_coords"])  # type: ignore[index]
 
     def build_constraint_dict(self, **kwargs: float) -> dict[str, float]:
         out: dict[str, float] = {self.section_coord: 0.0}

@@ -204,7 +204,8 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
 
         var_to_solve = {"q3": "p3", "p3": "q3", "q2": "p2", "p2": "q2"}[sec_if.section_coord]
 
-        solved_val = _CenterManifoldInterface.solve_missing_coord(
+        cm_interface = _CenterManifoldInterface()
+        solved_val = cm_interface.solve_missing_coord(
             var_to_solve,
             known_vars,
             h0=float(energy),
