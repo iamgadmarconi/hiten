@@ -21,27 +21,22 @@ See Also
     Manifold classes for CR3BP invariant structures.
 """
 
-from typing import Generic, Literal, Optional
+from typing import Generic, Optional, TYPE_CHECKING
 
 import numpy as np
 
-from hiten.algorithms.connections.backends import _ConnectionsBackend
-from hiten.algorithms.connections.config import _SearchConfig, _ConnectionConfig
-from hiten.algorithms.connections.engine import _ConnectionEngine
-from hiten.algorithms.connections.interfaces import _ManifoldInterface
-from hiten.algorithms.connections.types import (Connections,
-                                                _ConnectionProblem,
-                                                _ConnectionResult)
-from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
-from hiten.algorithms.types.core import (ConfigT, DomainT, ResultT,
-                                         _HitenBaseFacade, InterfaceT)
+
+from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
+                                         _HitenBaseFacade)
 from hiten.algorithms.types.exceptions import EngineError
-from hiten.system.manifold import Manifold
 from hiten.utils.log_config import logger
 from hiten.utils.plots import plot_poincare_connections_map
 
+if TYPE_CHECKING:
+    from hiten.algorithms.connections.engine import _ConnectionEngine
+    from hiten.algorithms.connections.types import Connections, _ConnectionResult
 
-class Connection(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
+class Connection(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
     """Provide a user-facing facade for connection discovery and plotting in CR3BP.
 
     This class provides a high-level interface for discovering ballistic and
@@ -129,12 +124,12 @@ class Connection(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
         Container for connection results with convenient access methods.
     """
 
-    def __init__(self, config: ConfigT, interface, engine: _ConnectionEngine = None) -> None:
+    def __init__(self, config: ConfigT, interface: InterfaceT, engine: "_ConnectionEngine" = None) -> None:
         super().__init__(config, interface, engine)
         
         self._last_source = None
         self._last_target = None
-        self._last_results: list[_ConnectionResult] | None = None
+        self._last_results: list["_ConnectionResult"] | None = None
 
     @classmethod
     def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None) -> "Connection[DomainT, ConfigT, ResultT]":
@@ -155,12 +150,15 @@ class Connection(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
         :class:`~hiten.algorithms.connections.base.Connection`
             A connection facade instance with a default engine injected.
         """
+        from hiten.algorithms.connections.backends import _ConnectionsBackend
+        from hiten.algorithms.connections.engine import _ConnectionEngine
+        from hiten.algorithms.connections.interfaces import _ManifoldInterface
         backend = _ConnectionsBackend()
         intf = interface or _ManifoldInterface()
         engine = _ConnectionEngine(backend=backend, interface=intf)
         return cls(config, intf, engine)
 
-    def solve(self, source: DomainT, target: DomainT, *, override: bool = False, **kwargs) -> Connections:
+    def solve(self, source: DomainT, target: DomainT, *, override: bool = False, **kwargs) -> "Connections":
         """Discover connections between two manifolds.
 
         This method finds ballistic and impulsive transfers between the source
@@ -212,11 +210,10 @@ class Connection(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
         self._last_source = source
         self._last_target = target
         self._last_results = records
-        logger.info(f"Found {len(records)} connection(s)")
         return engine_result.to_results()
 
     @property
-    def results(self) -> Connections:
+    def results(self) -> "Connections":
         """Access the latest connection results with convenient formatting.
 
         Returns
@@ -240,6 +237,7 @@ class Connection(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
         >>> print(connection.results)  # Pretty-printed summary
         >>> ballistic = connection.results.ballistic  # Filter by type
         """
+        from hiten.algorithms.connections.types import Connections
         return Connections(self._last_results)
 
     def plot(self, **kwargs):
@@ -340,11 +338,77 @@ class Connection(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
         
         if hasattr(config, 'section') and config.section is None:
             raise ValueError("Section configuration is required")
-        if hasattr(config, 'search_cfg') and config.search_cfg is not None:
-            search_cfg = config.search_cfg
-            if hasattr(search_cfg, 'delta_v_tol') and search_cfg.delta_v_tol <= 0:
-                raise ValueError("Delta-V tolerance must be positive")
-            if hasattr(search_cfg, 'ballistic_tol') and search_cfg.ballistic_tol <= 0:
-                raise ValueError("Ballistic tolerance must be positive")
-            if hasattr(search_cfg, 'eps2d') and search_cfg.eps2d <= 0:
-                raise ValueError("2D epsilon must be positive")
+        if hasattr(config, 'delta_v_tol') and config.delta_v_tol <= 0:
+            raise ValueError("Delta-V tolerance must be positive")
+        if hasattr(config, 'ballistic_tol') and config.ballistic_tol <= 0:
+            raise ValueError("Ballistic tolerance must be positive")
+        if hasattr(config, 'eps2d') and config.eps2d <= 0:
+            raise ValueError("2D epsilon must be positive")
+
+    def plot_connection(self, connection_index: int, **kwargs):
+        """Plot the specific trajectories forming a connection.
+
+        This method visualizes the individual connection by showing the source
+        and target manifold trajectories that form the connection, along with
+        the connection point and Delta-V vector.
+
+        Parameters
+        ----------
+        connection_index : int
+            Index of the connection to plot (0-based). Must be within the range
+            of available connections from the last solve() call.
+        **kwargs
+            Additional keyword arguments passed to the plotting function.
+            Common options include figure size, colors, and styling parameters.
+
+        Returns
+        -------
+        matplotlib figure or axes
+            The plot object showing the connection trajectories.
+
+        Raises
+        ------
+        ValueError
+            If no connections are available or the index is out of range.
+        EngineError
+            If solve() has not been called yet.
+
+        Notes
+        -----
+        The plot shows:
+        - Source manifold trajectory segment leading to the connection point
+        - Target manifold trajectory segment from the connection point
+        - Connection point with Delta-V vector
+        - 3D trajectory visualization in the rotating frame
+
+        Examples
+        --------
+        >>> connection.solve(source_manifold, target_manifold)
+        >>> # Plot the first (lowest Delta-V) connection
+        >>> fig = connection.plot_connection(0, figsize=(12, 8))
+        >>> # Plot the third connection
+        >>> fig = connection.plot_connection(2, dark_mode=True)
+        """
+        if self._last_results is None or len(self._last_results) == 0:
+            raise EngineError("No connections available: call solve(source, target) first.")
+        
+        if connection_index < 0 or connection_index >= len(self._last_results):
+            raise ValueError(f"Connection index {connection_index} out of range. "
+                           f"Available connections: 0 to {len(self._last_results) - 1}")
+        
+        connection = self._last_results[connection_index]
+        
+        source_manifold = self._last_source
+        orbit = source_manifold.generating_orbit
+        system = orbit.system
+        bodies = [system.primary, system.secondary]
+        system_distance = system.distance
+        
+        # Call the dedicated plotting function
+        from hiten.utils.plots import plot_connection_trajectories
+        return plot_connection_trajectories(
+            connection,
+            bodies,
+            system_distance,
+            **kwargs
+        )

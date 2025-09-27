@@ -1273,7 +1273,7 @@ class _TriangularDynamicsService(_LibrationDynamicsService):
         numpy.ndarray, shape (6, 6)
             Matrix of eigenvectors as rows.
         """
-        a = self.domain_obj.a
+        a = self.a
         omega1, omega2, omega_z = self.linear_modes  # omega_z == 1
 
         # The vectors are written in the (x, y, p_x, p_y) ordering used by

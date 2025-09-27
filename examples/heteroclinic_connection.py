@@ -65,8 +65,12 @@ def main() -> None:
     conn = Connection.with_default_engine(config=config)
 
     conn.solve(manifold_l1, manifold_l2)
-    print(conn)
+    
     conn.plot(dark_mode=True)
+    
+    for i, _ in enumerate(conn.results):
+        conn.plot_connection(i, dark_mode=True)
+
 
 if __name__ == "__main__":
     main()

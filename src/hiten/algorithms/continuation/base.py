@@ -15,12 +15,11 @@ from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
 from hiten.algorithms.types.states import SynodicState
 
 if TYPE_CHECKING:
-    from hiten.algorithms.continuation.engine.engine import \
-        _OrbitContinuationEngine
+    from hiten.algorithms.continuation.engine.base import _ContinuationEngine
     from hiten.system.orbits.base import PeriodicOrbit
 
 
-class StateParameter(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
+class StateParameter(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
     """Facade for natural-parameter continuation varying selected state components.
 
     Users supply an engine (DI). Use `StateParameter.with_default_engine()` to
@@ -28,7 +27,7 @@ class StateParameter(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
     and the periodic-orbit interface.
     """
 
-    def __init__(self, config: ConfigT, interface, engine: "_OrbitContinuationEngine" = None) -> None:
+    def __init__(self, config: ConfigT, interface: InterfaceT, engine: "_ContinuationEngine" = None) -> None:
         super().__init__(config, interface, engine)
 
     @classmethod
@@ -82,7 +81,6 @@ class StateParameter(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
         engine = self._get_engine()
         self._results = engine.solve(problem)
         return self._results
-
 
     def _validate_config(self, config: ConfigT) -> None:
         """Validate the configuration object.

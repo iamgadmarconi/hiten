@@ -1315,3 +1315,138 @@ def _set_dark_mode(fig: plt.Figure, ax: plt.Axes, title: Optional[str] = None) -
         
         for text_obj in legend.get_texts():
             text_obj.set_color(text_color) # White text for legend
+
+
+def plot_connection_trajectories(
+    connection_result,
+    bodies: List[Body],
+    system_distance: float,
+    *,
+    figsize: Tuple[int, int] = (12, 8),
+    dark_mode: bool = False,
+    src_color: str = 'C0',
+    tgt_color: str = 'C1',
+    connection_color: str = 'gold',
+    delta_v_color: str = 'orange',
+) -> Tuple[plt.Figure, plt.Axes]:
+    """Plot the trajectories forming a specific connection.
+
+    This function visualizes the individual connection by showing the source
+    and target manifold trajectories that form the connection, along with
+    the connection point and Delta-V vector.
+
+    Parameters
+    ----------
+    connection_result : :class:`~hiten.algorithms.connections.types._ConnectionResult`
+        The connection result object containing trajectory data.
+    bodies : list of :class:`~hiten.system.body.Body`
+        Primary and secondary bodies of the CR3BP.
+    system_distance : float
+        Characteristic distance in meters - required to scale the body radii.
+    figsize : tuple of int, default (12, 8)
+        Figure size (width, height) in inches.
+    dark_mode : bool, default False
+        Whether to use dark mode styling.
+    src_color : str, default 'C0'
+        Color for the source manifold trajectory.
+    tgt_color : str, default 'C1'
+        Color for the target manifold trajectory.
+    connection_color : str, default 'gold'
+        Color for the connection point.
+    delta_v_color : str, default 'orange'
+        Color for the Delta-V vector.
+
+    Returns
+    -------
+    tuple of (matplotlib.figure.Figure, matplotlib.axes.Axes)
+        The figure and axes objects for further customization.
+
+    Notes
+    -----
+    The plot shows:
+    - Source manifold trajectory segment leading to the connection point
+    - Target manifold trajectory segment from the connection point
+    - Connection point with Delta-V vector
+    - 3D trajectory visualization in the rotating frame
+    - Primary body positions for reference
+
+    Examples
+    --------
+    >>> from hiten.utils.plots import plot_connection_trajectories
+    >>> 
+    >>> # Plot the first connection
+    >>> fig, ax = plot_connection_trajectories(
+    ...     connection_results[0], 
+    ...     bodies, 
+    ...     system_distance
+    ... )
+    >>> 
+    >>> # Plot with custom styling
+    >>> fig, ax = plot_connection_trajectories(
+    ...     connection_results[0],
+    ...     bodies,
+    ...     system_distance,
+    ...     dark_mode=True,
+    ...     figsize=(14, 10)
+    ... )
+    """
+
+    # Extract trajectory data from the connection
+    source_traj = connection_result.source_trajectory
+    target_traj = connection_result.target_trajectory
+    connection_point = connection_result.point3d
+    delta_v = connection_result.delta_v_vector
+    
+    # Create the plot
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111, projection='3d')
+    
+    # Plot source trajectory (unstable manifold)
+    ax.plot(source_traj[:, 0], source_traj[:, 1], source_traj[:, 2], 
+            color=src_color, linewidth=2, alpha=0.7, label='Source manifold')
+    
+    # Plot target trajectory (stable manifold)
+    ax.plot(target_traj[:, 0], target_traj[:, 1], target_traj[:, 2], 
+            color=tgt_color, linewidth=2, alpha=0.7, label='Target manifold')
+    
+    # Plot connection point
+    ax.scatter(connection_point[0], connection_point[1], connection_point[2], 
+              color=connection_color, s=100, label='Connection point', zorder=5)
+    
+    # Plot Delta-V vector
+    if delta_v is not None and np.linalg.norm(delta_v) > 1e-10:
+        ax.quiver(connection_point[0], connection_point[1], connection_point[2],
+                 delta_v[0], delta_v[1], delta_v[2], 
+                 color=delta_v_color, arrow_length_ratio=0.1, linewidth=3,
+                 label=f'delta_v = {connection_result.delta_v:.2e}')
+    
+    # Add primary bodies for reference using existing helpers
+    mu = _get_mass_parameter(bodies[0].mass, bodies[1].mass)
+    
+    # Primary and secondary in rotating-frame canonical positions
+    primary_pos = np.array([-mu, 0, 0])
+    secondary_pos = np.array([1 - mu, 0, 0])
+    _plot_body(ax, primary_pos, bodies[0].radius / system_distance,
+               _get_body_color(bodies[0], 'royalblue'), bodies[0].name)
+    _plot_body(ax, secondary_pos, bodies[1].radius / system_distance,
+               _get_body_color(bodies[1], 'slategray'), bodies[1].name)
+    
+    # Set labels and title
+    ax.set_xlabel('X (nondimensional)')
+    ax.set_ylabel('Y (nondimensional)')
+    ax.set_zlabel('Z (nondimensional)')
+    title = f'Connection: dv = {connection_result.delta_v:.2e} ({connection_result.transfer_type})'
+    ax.set_title(title)
+    
+    # Add legend
+    ax.legend()
+    
+    # Use existing helper for equal aspect ratio
+    _set_axes_equal(ax)
+    
+    # Use existing helper for dark mode styling
+    if dark_mode:
+        _set_dark_mode(fig, ax, title)
+    
+    plt.tight_layout()
+    return fig, ax

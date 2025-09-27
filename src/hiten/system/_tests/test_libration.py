@@ -170,13 +170,13 @@ def test_gamma_values(l1_earth_moon, l2_earth_moon, l3_earth_moon):
 
 def test_cn_coefficients(l1_earth_moon, l2_earth_moon, l3_earth_moon, l1_sun_earth, l2_sun_earth, l3_sun_jupiter):
     """Test calculation of cn coefficients for collinear points."""
-    c2_l1_em = l1_earth_moon.cn(2)
-    c2_l2_em = l2_earth_moon.cn(2)
-    c2_l3_em = l3_earth_moon.cn(2)
+    c2_l1_em = l1_earth_moon.dynamics.cn(2)
+    c2_l2_em = l2_earth_moon.dynamics.cn(2)
+    c2_l3_em = l3_earth_moon.dynamics.cn(2)
 
-    c2_l1_se = l1_sun_earth.cn(2)
-    c2_l2_se = l2_sun_earth.cn(2)
-    c2_l3_sj = l3_sun_jupiter.cn(2)
+    c2_l1_se = l1_sun_earth.dynamics.cn(2)
+    c2_l2_se = l2_sun_earth.dynamics.cn(2)
+    c2_l3_sj = l3_sun_jupiter.dynamics.cn(2)
 
     assert c2_l1_em > 1.0
     assert c2_l2_em > 1.0
@@ -195,7 +195,7 @@ def test_linear_modes(l1_earth_moon, l2_earth_moon, l3_earth_moon):
     assert omega1 > 0
     assert omega2 > 0
 
-    c2 = l1_earth_moon.cn(2)
+    c2 = l1_earth_moon.dynamics.cn(2)
     
     discriminant = 9 * c2**2 - 8 * c2
     eta1 = (c2 - 2 - np.sqrt(discriminant)) / 2
@@ -218,7 +218,7 @@ def test_linear_modes(l1_earth_moon, l2_earth_moon, l3_earth_moon):
     assert omega1 > 0
     assert omega2 > 0
 
-    c2_l2 = l2_earth_moon.cn(2)
+    c2_l2 = l2_earth_moon.dynamics.cn(2)
     
     discriminant_l2 = 9 * c2_l2**2 - 8 * c2_l2
     eta1_l2 = (c2_l2 - 2 - np.sqrt(discriminant_l2)) / 2
@@ -241,7 +241,7 @@ def test_linear_modes(l1_earth_moon, l2_earth_moon, l3_earth_moon):
     assert omega1 > 0
     assert omega2 > 0
 
-    c2_l3 = l3_earth_moon.cn(2)
+    c2_l3 = l3_earth_moon.dynamics.cn(2)
     
     discriminant_l3 = 9 * c2_l3**2 - 8 * c2_l3
     eta1_l3 = (c2_l3 - 2 - np.sqrt(discriminant_l3)) / 2
@@ -261,19 +261,19 @@ def test_linear_modes(l1_earth_moon, l2_earth_moon, l3_earth_moon):
 def test_scale_factors(l1_earth_moon, l2_earth_moon, l3_earth_moon):
     """Test that scale factors s1 and s2 are always positive."""
     lambda1, omega1, omega2 = l1_earth_moon.linear_modes
-    s1, s2 = l1_earth_moon._scale_factor(lambda1, omega1)
+    s1, s2 = l1_earth_moon.dynamics.scale_factor(lambda1, omega1)
     
     assert s1 > 0, "s1 scale factor should be positive"
     assert s2 > 0, "s2 scale factor should be positive"
     
     lambda1_l2, omega1_l2, omega2_l2 = l2_earth_moon.linear_modes
-    s1_l2, s2_l2 = l2_earth_moon._scale_factor(lambda1_l2, omega1_l2)
+    s1_l2, s2_l2 = l2_earth_moon.dynamics.scale_factor(lambda1_l2, omega1_l2)
     
     assert s1_l2 > 0, "s1 scale factor should be positive for L2"
     assert s2_l2 > 0, "s2 scale factor should be positive for L2"
     
     lambda1_l3, omega1_l3, omega2_l3 = l3_earth_moon.linear_modes
-    s1_l3, s2_l3 = l3_earth_moon._scale_factor(lambda1_l3, omega1_l3)
+    s1_l3, s2_l3 = l3_earth_moon.dynamics.scale_factor(lambda1_l3, omega1_l3)
     
     assert s1_l3 > 0, "s1 scale factor should be positive for L3"
     assert s2_l3 > 0, "s2 scale factor should be positive for L3"

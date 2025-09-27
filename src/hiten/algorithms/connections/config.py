@@ -129,7 +129,7 @@ class _ConnectionConfig(_SearchConfig):
     :class:`~hiten.algorithms.connections.base.Connection`
         Main class that uses this configuration.
     """
-    section: _SynodicMapConfig
+    section: _SynodicMapConfig = _SynodicMapConfig()
     direction: Optional[Literal[1, -1]] = None
     n_workers: Optional[int] = 1
 

@@ -72,6 +72,7 @@ class TriangularPoint(LibrationPoint):
         if system.mu > self.ROUTH_CRITICAL_MU:
             logger.warning(f"Triangular points are potentially unstable for mu > {self.ROUTH_CRITICAL_MU:.6f} (current mu = {system.mu})")
 
+    @property
     def normal_form_transform(self):
         """
         Build the 6x6 symplectic matrix C that sends H2 to normal form.
