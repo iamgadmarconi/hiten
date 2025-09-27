@@ -153,6 +153,6 @@ class _SystemServices(_ServiceBundleBase):
 
     @classmethod
     def with_shared_dynamics(cls, dynamics: _SystemsDynamicsService) -> "_SystemServices":
-        return cls(domain_obj=dynamics._domain_obj, dynamics=dynamics, persistence=_SystemPersistenceService())
+        return cls(domain_obj=dynamics.domain_obj, dynamics=dynamics, persistence=_SystemPersistenceService())
 
 

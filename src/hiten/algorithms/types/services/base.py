@@ -125,7 +125,11 @@ class _DynamicsServiceBase(ABC):
     def __init__(self, domain_obj: Any) -> None:
         self._domain_obj = domain_obj
         self._cache = _CacheServiceBase()
-    
+
+    @property
+    def domain_obj(self) -> Any:
+        return self._domain_obj
+
     def get_or_create(self, key: Any, factory: Callable[[], CacheValueT]) -> CacheValueT:
         """Get or create a cache value.
         
@@ -146,7 +150,7 @@ class _DynamicsServiceBase(ABC):
         *args
             Additional arguments to include in the cache key.
         """
-        return (inspect.currentframe().f_back.f_code.co_name, self._domain_obj, *args)
+        return (inspect.currentframe().f_back.f_code.co_name, self.domain_obj, *args)
 
     def __getitem__(self, key: Any) -> CacheValueT:
         """Get a cache value.

@@ -65,7 +65,7 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
 
     @property
     def point(self) -> "LibrationPoint":
-        return self._domain_obj
+        return self.domain_obj
 
     @property
     def degree(self) -> int:
@@ -87,7 +87,7 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
         cache_key = self.make_key("pipeline", self._degree)
         
         def _factory():
-            return self._ham_pipeline.get(self._domain_obj, self._degree)
+            return self._ham_pipeline.get(self.domain_obj, self._degree)
         
         return self.get_or_create(cache_key, _factory)
 
@@ -98,7 +98,7 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
         return self.pipeline
 
     def get_backend(self, energy: float, section_coord: str, *, forward: int = 1, max_steps: int = 2000, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8, pre_steps: int = 1000, refine_steps: int = 3000, bracket_dx: float = 1e-10, max_expand: int = 500, c_omega_heuristic: float = 20.0) -> _CenterManifoldBackend:
-        key = self.make_key(id(self._domain_obj), self._degree, energy, section_coord, forward, max_steps, method, order, pre_steps, refine_steps, bracket_dx, max_expand, c_omega_heuristic)
+        key = self.make_key(id(self.domain_obj), self._degree, energy, section_coord, forward, max_steps, method, order, pre_steps, refine_steps, bracket_dx, max_expand, c_omega_heuristic)
         
         def _factory() -> _CenterManifoldBackend:
 
@@ -119,7 +119,7 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
     def clear_caches(self) -> None:
         self.reset()
         try:
-            pipeline = self._ham_pipeline.get(self._domain_obj, self._degree)
+            pipeline = self._ham_pipeline.get(self.domain_obj, self._degree)
             if hasattr(pipeline, 'cache_clear'):
                 pipeline.cache_clear()
         except Exception:
@@ -141,7 +141,7 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
 
         cfg = _CenterManifoldMapConfig(**config_kwargs)
         config_tuple = tuple(sorted(asdict(cfg).items()))
-        cache_key = self.make_key(id(self._domain_obj), self._degree, energy, config_tuple)
+        cache_key = self.make_key(id(self.domain_obj), self._degree, energy, config_tuple)
 
         def _factory():
             from hiten.algorithms.poincare.centermanifold.base import \
@@ -173,8 +173,8 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
 
     def synodic_to_cm(self, synodic_6d: np.ndarray, tol: float = 1e-14) -> np.ndarray:
         synodic_6d = np.asarray(synodic_6d, dtype=np.float64).reshape(6)
-        local_6d = self._synodic2local(self._domain_obj, synodic_6d, tol)
-        real_modal_6d = _coordlocal2realmodal(self._domain_obj, local_6d, tol)
+        local_6d = self._synodic2local(self.domain_obj, synodic_6d, tol)
+        real_modal_6d = _coordlocal2realmodal(self.domain_obj, local_6d, tol)
         complex_modal_6d = _solve_complex(real_modal_6d, tol=tol, mix_pairs=self._mix_pairs)
 
         expansions = self.pipeline.get_lie_expansions(inverse=True, tol=tol)
@@ -241,8 +241,8 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
         complex_6d = _evaluate_transform(expansions, complex_6d_cm, self.hamsys.clmo_H)
 
         real_6d = _solve_real(complex_6d, tol=tol, mix_pairs=self._mix_pairs)
-        local_6d = _coordrealmodal2local(self._domain_obj, real_6d, tol)
-        return self._local2synodic(self._domain_obj, local_6d, tol)
+        local_6d = _coordrealmodal2local(self.domain_obj, real_6d, tol)
+        return self._local2synodic(self.domain_obj, local_6d, tol)
 
     def _restrict_to_center_manifold(self, coords: np.ndarray) -> np.ndarray:
         coords = coords.copy()
@@ -266,16 +266,16 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
         from hiten.system.libration.collinear import CollinearPoint, L3Point
         from hiten.system.libration.triangular import TriangularPoint
 
-        if isinstance(self._domain_obj, CollinearPoint):
+        if isinstance(self.domain_obj, CollinearPoint):
             self._local2synodic = _local2synodic_collinear
             self._synodic2local = _synodic2local_collinear
             self._mix_pairs = (1, 2)
-            if isinstance(self._domain_obj, L3Point):
+            if isinstance(self.domain_obj, L3Point):
                 logger.warning(
                     "L3 point has not been verified for centre manifold / normal form computations!"
                 )
                 raise NotImplementedError("L3 points are not supported yet.")
-        elif isinstance(self._domain_obj, TriangularPoint):
+        elif isinstance(self.domain_obj, TriangularPoint):
             self._local2synodic = _local2synodic_triangular
             self._synodic2local = _synodic2local_triangular
             self._mix_pairs = (0, 1, 2)
@@ -284,7 +284,7 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
             )
             raise NotImplementedError("Triangular points are not supported yet.")
         else:
-            raise ValueError(f"Unsupported libration point type: {type(self._domain_obj)}")
+            raise ValueError(f"Unsupported libration point type: {type(self.domain_obj)}")
 
 
 class _CenterManifoldServices(_ServiceBundleBase):
@@ -307,7 +307,7 @@ class _CenterManifoldServices(_ServiceBundleBase):
     @classmethod
     def with_shared_dynamics(cls, dynamics: _CenterManifoldDynamicsService) -> "_CenterManifoldServices":
         return cls(
-            domain_obj=dynamics._domain_obj,
+            domain_obj=dynamics.domain_obj,
             degree=dynamics._degree,
             persistence=_CenterManifoldPersistenceService(),
             dynamics=dynamics

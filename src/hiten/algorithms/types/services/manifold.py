@@ -460,7 +460,7 @@ class _ManifoldServices(_ServiceBundleBase):
     @classmethod
     def with_shared_dynamics(cls, dynamics: _ManifoldDynamicsService) -> "_ManifoldServices":
         return cls(
-            domain_obj=dynamics._domain_obj,
+            domain_obj=dynamics.domain_obj,
             dynamics=dynamics,
             persistence=_ManifoldPersistenceService()
         )

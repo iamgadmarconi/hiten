@@ -64,7 +64,7 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
         def _factory() -> Tuple[np.ndarray, float]:
             if overrides:
                 override = True
-            results = self.corrector.correct(self._domain_obj, override=override, **overrides)
+            results = self.corrector.correct(self.domain_obj, override=override, **overrides)
 
             return results.corrected_state, 2 * results.half_period
 
@@ -115,7 +115,7 @@ class _OrbitContinuationService(_DynamicsServiceBase):
         def _factory() -> Tuple[np.ndarray, float]:
             if overrides:
                 override = True
-            results = self.generator.generate(self._domain_obj, override=override, **overrides)
+            results = self.generator.generate(self.domain_obj, override=override, **overrides)
 
             return results
 
@@ -167,7 +167,7 @@ class _OrbitDynamicsService(_DynamicsServiceBase):
 
     @property
     def orbit(self) -> PeriodicOrbit:
-        return self._domain_obj
+        return self.domain_obj
 
     @property
     def libration_point(self) -> LibrationPoint:
@@ -986,9 +986,9 @@ class _OrbitServices(_ServiceBundleBase):
     @classmethod
     def with_shared_dynamics(cls, dynamics: _OrbitDynamicsService) -> "_OrbitServices":
         return cls(
-            domain_obj=dynamics._domain_obj,
-            correction=_OrbitCorrectionService(dynamics._domain_obj),
-            continuation=_OrbitContinuationService(dynamics._domain_obj),
+            domain_obj=dynamics.domain_obj,
+            correction=_OrbitCorrectionService(dynamics.domain_obj),
+            continuation=_OrbitContinuationService(dynamics.domain_obj),
             dynamics=dynamics,
             persistence=_OrbitPersistenceService()
         )

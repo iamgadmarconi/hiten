@@ -56,7 +56,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
 
     @property
     def system(self) -> "System":
-        return self._domain_obj.system
+        return self.domain_obj.system
     
     @property
     def mu(self) -> float:
@@ -85,7 +85,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
         _HamiltonianSystem
             The Hamiltonian system instance.
         """
-        cache_key = self.make_key(id(self._domain_obj), "hamsys", degree, form)
+        cache_key = self.make_key(id(self.domain_obj), "hamsys", degree, form)
         
         def _factory() -> _HamiltonianSystem:
             # Get the Hamiltonian object for the specified form and degree
@@ -119,10 +119,10 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
         float
             The mechanical energy in nondimensional units.
         """
-        cache_key = self.make_key(id(self._domain_obj), "energy")
+        cache_key = self.make_key(id(self.domain_obj), "energy")
         
         def _factory() -> float:
-            state = np.concatenate([self._domain_obj.position, np.array([0.0, 0.0, 0.0])])
+            state = np.concatenate([self.domain_obj.position, np.array([0.0, 0.0, 0.0])])
             return crtbp_energy(state, self.mu)
         
         return self.get_or_create(cache_key, _factory)
@@ -136,7 +136,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
         float
             The Jacobi constant in nondimensional units.
         """
-        cache_key = self.make_key(id(self._domain_obj), "jacobi_constant")
+        cache_key = self.make_key(id(self.domain_obj), "jacobi_constant")
         
         def _factory() -> float:
             return energy_to_jacobi(self.energy)
@@ -144,7 +144,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
         return self.get_or_create(cache_key, _factory)
 
     def compute_stability(self, *, delta: float = 1e-6, tol: float = 1e-8) -> StabilityProperties:
-        cache_key = self.make_key(id(self._domain_obj), delta, tol)
+        cache_key = self.make_key(id(self.domain_obj), delta, tol)
 
         def _factory() -> StabilityProperties:
             config = _EigenDecompositionConfig(
@@ -155,7 +155,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
             )
             props = StabilityProperties.with_default_engine(config=config)
             interface = _LibrationPointInterface(config=config)
-            problem = interface.create_problem(self._domain_obj)
+            problem = interface.create_problem(self.domain_obj)
             props.compute(
                 problem.A,
                 system_type=config.system_type,
@@ -179,11 +179,11 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
         CenterManifold
             The center manifold instance.
         """
-        cache_key = self.make_key(id(self._domain_obj), "center_manifold", degree)
+        cache_key = self.make_key(id(self.domain_obj), "center_manifold", degree)
         
         def _factory() -> CenterManifold:
-            services = _CenterManifoldServices.default(self._domain_obj, degree)
-            return CenterManifold(self._domain_obj, degree, services=services)
+            services = _CenterManifoldServices.default(self.domain_obj, degree)
+            return CenterManifold(self.domain_obj, degree, services=services)
         
         return self.get_or_create(cache_key, _factory)
 
@@ -205,7 +205,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
         Hamiltonian
             The Hamiltonian object with the specified form and degree.
         """
-        cache_key = self.make_key(id(self._domain_obj), "hamiltonian", max_deg, form)
+        cache_key = self.make_key(id(self.domain_obj), "hamiltonian", max_deg, form)
         
         def _factory() -> Hamiltonian:
             center_manifold = self.center_manifold(max_deg)
@@ -219,7 +219,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
                 poly_H=[arr.copy() for arr in data],
                 degree=max_deg,
                 ndof=3,
-                name=f"L{self._domain_obj.idx}_{form}_{max_deg}"
+                name=f"L{self.domain_obj.idx}_{form}_{max_deg}"
             )
         
         return self.get_or_create(cache_key, _factory)
@@ -272,7 +272,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
         list[LieGeneratingFunction]
             List of LieGeneratingFunction objects.
         """
-        cache_key = self.make_key(id(self._domain_obj), "generating_functions", max_deg)
+        cache_key = self.make_key(id(self.domain_obj), "generating_functions", max_deg)
         
         def _factory() -> list[LieGeneratingFunction]:
             center_manifold = self.center_manifold(max_deg)
@@ -289,7 +289,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
                     poly_elim=[],
                     degree=max_deg,
                     ndof=3,
-                    name=f"L{self._domain_obj.idx}_G{i}_{max_deg}"
+                    name=f"L{self.domain_obj.idx}_G{i}_{max_deg}"
                 )
                 generating_functions.append(gf)
             
@@ -387,7 +387,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
         numpy.ndarray, shape (3,)
             Position vector [x, y, z] in nondimensional units.
         """
-        cache_key = self.make_key(id(self._domain_obj), "position")
+        cache_key = self.make_key(id(self.domain_obj), "position")
         
         def _factory() -> np.ndarray:
             return self._compute_position()
@@ -404,7 +404,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
             (lambda1, omega1, omega2, None, C, Cinv)
             Object containing the linear data for the libration point.
         """
-        cache_key = self.make_key(id(self._domain_obj), "linear_data")
+        cache_key = self.make_key(id(self.domain_obj), "linear_data")
         
         def _factory():
             return self._compute_linear_data()
@@ -421,7 +421,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
         tuple
             (lambda1, omega1, omega2) values in nondimensional units.
         """
-        cache_key = self.make_key(id(self._domain_obj), "linear_modes")
+        cache_key = self.make_key(id(self.domain_obj), "linear_modes")
         
         def _factory() -> Tuple[float, float, float | None]:
             return self._compute_linear_modes()
@@ -430,7 +430,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
 
     @property
     def normal_form_transform(self) -> Tuple[np.ndarray, np.ndarray]:
-        cache_key = self.make_key(id(self._domain_obj), "normal_form_transform")
+        cache_key = self.make_key(id(self.domain_obj), "normal_form_transform")
         
         def _factory() -> Tuple[np.ndarray, np.ndarray]:
             return self._build_normal_form()
@@ -473,10 +473,10 @@ class _CollinearDynamicsService(_LibrationDynamicsService):
         float
             The gamma value (dimensionless).
         """
-        cache_key = self.make_key(id(self._domain_obj), "gamma")
+        cache_key = self.make_key(id(self.domain_obj), "gamma")
         
         def _factory() -> float:
-            return self._domain_obj._compute_gamma()
+            return self.domain_obj._compute_gamma()
         
         return self.get_or_create(cache_key, _factory)
 
@@ -489,7 +489,7 @@ class _CollinearDynamicsService(_LibrationDynamicsService):
         tuple
             (s1, s2) scale factors for the hyperbolic and elliptic components.
         """
-        cache_key = self.make_key(id(self._domain_obj), "scale_factor")
+        cache_key = self.make_key(id(self.domain_obj), "scale_factor")
         
         def _factory() -> Tuple[float, float]:
             return self._compute_scale_factor(lambda1, omega1)
@@ -510,10 +510,10 @@ class _CollinearDynamicsService(_LibrationDynamicsService):
         float
             The cn coefficient value (dimensionless).
         """
-        cache_key = self.make_key(id(self._domain_obj), "cn", n)
+        cache_key = self.make_key(id(self.domain_obj), "cn", n)
         
         def _factory() -> float:
-            return self._domain_obj._compute_cn(n)
+            return self.domain_obj._compute_cn(n)
         
         return self.get_or_create(cache_key, _factory)
 
@@ -557,7 +557,7 @@ class _CollinearDynamicsService(_LibrationDynamicsService):
             return x
         except Exception as e:
 
-            raise RuntimeError(f"{self._domain_obj.__class__.__name__}: Primary interval {primary_interval} failed: {e}") from e
+            raise RuntimeError(f"{self.domain_obj.__class__.__name__}: Primary interval {primary_interval} failed: {e}") from e
 
     def _solve_gamma_polynomial(self, coeffs: list, gamma_range: tuple) -> float:
         """Solve the quintic polynomial for gamma with validation and fallback.
@@ -627,7 +627,7 @@ class _CollinearDynamicsService(_LibrationDynamicsService):
                 except Exception:
                     continue
         
-        raise RuntimeError(f"No valid polynomial root found for {self._domain_obj.__class__.__name__} in range {gamma_range}")
+        raise RuntimeError(f"No valid polynomial root found for {self.domain_obj.__class__.__name__} in range {gamma_range}")
 
     def _dOmega_dx(self, x: float) -> float:
         """Compute the derivative of the effective potential with respect to x.
@@ -1082,7 +1082,7 @@ class _TriangularDynamicsService(_LibrationDynamicsService):
         tuple
             (s1, s2) scale factors for the hyperbolic and elliptic components.
         """
-        cache_key = self.make_key(id(self._domain_obj), "scale_factor")
+        cache_key = self.make_key(id(self.domain_obj), "scale_factor")
         
         def _factory() -> Tuple[float, float]:
             return self._compute_scale_factor(idx)
@@ -1257,7 +1257,7 @@ class _TriangularDynamicsService(_LibrationDynamicsService):
         numpy.ndarray, shape (6, 6)
             Matrix of eigenvectors as rows.
         """
-        a = self._domain_obj.a
+        a = self.domain_obj.a
         omega1, omega2, omega_z = self.linear_modes  # omega_z == 1
 
         # The vectors are written in the (x, y, p_x, p_y) ordering used by
@@ -1355,7 +1355,7 @@ class _LibrationServices(_ServiceBundleBase):
     @classmethod
     def with_shared_dynamics(cls, dynamics: _LibrationDynamicsService) -> "_LibrationServices":
         return cls(
-            domain_obj=dynamics._domain_obj,
+            domain_obj=dynamics.domain_obj,
             persistence=_LibrationPersistenceService(),
             dynamics=dynamics
         )

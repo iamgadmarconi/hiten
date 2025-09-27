@@ -31,23 +31,23 @@ class _BodyDynamicsService(_DynamicsServiceBase):
 
     @property
     def name(self) -> str:
-        return self._domain_obj.name
+        return self.domain_obj.name
     
     @property
     def mass(self) -> float:
-        return self._domain_obj.mass
+        return self.domain_obj.mass
     
     @property
     def radius(self) -> float:
-        return self._domain_obj.radius
+        return self.domain_obj.radius
     
     @property
     def color(self) -> str:
-        return self._domain_obj.color
+        return self.domain_obj.color
     
     @property
     def parent(self) -> "Body":
-        return self._domain_obj.parent
+        return self.domain_obj.parent
 
 
 class _BodyServices(_ServiceBundleBase):
@@ -63,4 +63,4 @@ class _BodyServices(_ServiceBundleBase):
 
     @classmethod
     def with_shared_dynamics(cls, dynamics: _BodyDynamicsService) -> _BodyServices:
-        return cls(domain_obj=dynamics._domain_obj, persistence=_BodyPersistenceService(), dynamics=dynamics)
+        return cls(domain_obj=dynamics.domain_obj, persistence=_BodyPersistenceService(), dynamics=dynamics)

@@ -49,7 +49,7 @@ class _OrbitFamilyServices(_ServiceBundleBase):
     @classmethod
     def with_shared_dynamics(cls, dynamics: _OrbitFamilyDynamicsService) -> "_OrbitFamilyServices":
         return cls(
-            domain_obj=dynamics._domain_obj,
+            domain_obj=dynamics.domain_obj,
             persistence=_OrbitFamilyPersistenceService(),
             dynamics=dynamics
         )

@@ -416,7 +416,7 @@ class _TorusServices(_ServiceBundleBase):
     @classmethod
     def with_shared_dynamics(cls, dynamics: _TorusDynamicsService) -> "_TorusServices":
         return cls(
-            domain_obj=dynamics._domain_obj,
+            domain_obj=dynamics.domain_obj,
             dynamics=dynamics,
             persistence=_TorusPersistenceService(),
         )
