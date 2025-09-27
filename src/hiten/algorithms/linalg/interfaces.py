@@ -45,7 +45,7 @@ class _EigenDecompositionInterface(
     def to_backend_inputs(self, problem: _EigenDecompositionProblem) -> _BackendCall:
         return _BackendCall(args=(problem,))
 
-    def to_results(self, outputs: EigenDecompositionResults, *, problem: _EigenDecompositionProblem) -> EigenDecompositionResults:
+    def to_results(self, outputs: EigenDecompositionResults, *, problem: _EigenDecompositionProblem, domain_payload: any = None) -> EigenDecompositionResults:
         return outputs
 
 
@@ -80,5 +80,5 @@ class _LibrationPointInterface(
     def to_backend_inputs(self, problem: _EigenDecompositionProblem) -> _BackendCall:
         return _BackendCall(args=(problem,))
 
-    def to_results(self, outputs: EigenDecompositionResults, *, problem: _EigenDecompositionProblem) -> EigenDecompositionResults:
+    def to_results(self, outputs: EigenDecompositionResults, *, problem: _EigenDecompositionProblem, domain_payload: any = None) -> EigenDecompositionResults:
         return outputs

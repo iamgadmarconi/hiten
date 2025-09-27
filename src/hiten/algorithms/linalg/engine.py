@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from hiten.algorithms.linalg.backend import _LinalgBackend
+from hiten.algorithms.linalg.interfaces import _EigenDecompositionInterface
 from hiten.algorithms.linalg.types import (EigenDecompositionResults,
                                            _EigenDecompositionProblem,
                                            _ProblemType)
@@ -15,8 +16,8 @@ from hiten.algorithms.types.core import _BackendCall, _HitenBaseEngine
 class _LinearStabilityEngine(_HitenBaseEngine[_EigenDecompositionProblem, EigenDecompositionResults, EigenDecompositionResults]):
     backend: _LinalgBackend
 
-    def __init__(self, backend: _LinalgBackend) -> None:
-        super().__init__(backend=backend, backend_method="solve")
+    def __init__(self, backend: _LinalgBackend, interface: _EigenDecompositionInterface | None = None) -> None:
+        super().__init__(backend=backend, interface=interface)
 
     def _invoke_backend(self, call: _BackendCall) -> EigenDecompositionResults:
         problem = call.args[0]

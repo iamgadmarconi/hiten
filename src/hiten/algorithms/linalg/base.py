@@ -63,7 +63,7 @@ class StabilityProperties:
         interface = _EigenDecompositionInterface()
         self._engine.with_interface(interface)
         
-        problem = interface.create_problem(matrix=np.asarray(matrix, dtype=float), config=cfg)
+        problem = interface.create_problem(domain_obj=np.asarray(matrix, dtype=float), config=cfg)
         self._result = self._engine.solve(problem)
         return self._result
 

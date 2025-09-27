@@ -45,14 +45,14 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
     def __init__(self, manifold: "Manifold") -> None:
         super().__init__(manifold)
 
-        self._stable = 1 if self.domain_obj.stable else -1
-        self._direction = 1 if self.domain_obj.direction == "positive" else -1
+        self._stable = 1 if self.domain_obj._stable else -1
+        self._direction = 1 if self.domain_obj._direction == "positive" else -1
         self._forward = - self._stable
         self._manifold_result = None
 
     @property
     def orbit(self) -> "PeriodicOrbit":
-        return self.domain_obj.generating_orbit
+        return self.domain_obj._generating_orbit
 
     @property
     def period(self) -> float:
@@ -140,11 +140,10 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
 
     @property
     def trajectories(self) -> List[Trajectory]:
-        times_list = self._manifold_result[2]
-        states_list = self._manifold_result[3]
+        states_list = self._manifold_result[2]
+        times_list = self._manifold_result[3]
         return [Trajectory(times, states) for times, states in zip(times_list, states_list)]
 
-    @property
     def compute_stm(
         self,
         *,
@@ -296,7 +295,7 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
                     order=order,
                     flip_indices=slice(0, 6),
                 )
-                states, times = sol.states, sol.times
+                times, states = sol.times, sol.states
 
                 x = states[:, 0]
                 y = states[:, 1]
@@ -448,28 +447,18 @@ class _ManifoldServices(_ServiceBundleBase):
         self.dynamics = dynamics
         self.persistence = persistence
 
- 
     @classmethod
     def default(cls, manifold: "Manifold") -> "_ManifoldServices":
         return cls(
-            domain_obj=manifold,
-            dynamics=_ManifoldDynamicsService(manifold),
-            persistence=_ManifoldPersistenceService()
+            manifold,
+            _ManifoldPersistenceService(),
+            _ManifoldDynamicsService(manifold)
         )
-    
+
     @classmethod
     def with_shared_dynamics(cls, dynamics: _ManifoldDynamicsService) -> "_ManifoldServices":
         return cls(
-            domain_obj=dynamics.domain_obj,
-            dynamics=dynamics,
-            persistence=_ManifoldPersistenceService()
-        )
-    
-    @classmethod
-    def for_loading(cls, manifold: "Manifold") -> "_ManifoldServices":
-        """Create services for loading operations that don't need dynamics adapter."""
-        return cls(
-            domain_obj=manifold,
-            dynamics=None,
-            persistence=_ManifoldPersistenceService()
+            dynamics.domain_obj,
+            _ManifoldPersistenceService(),
+            dynamics
         )

@@ -278,14 +278,16 @@ class Manifold(_HitenBase):
         ValueError
             If manifold_result is None.
         """
-        if self._manifold_result is None:
-            err = "Manifold result not computed. Please compute the manifold first."
-            logger.error(err)
-            raise ValueError(err)
+        if self.trajectories is None:
+            raise ValueError("Manifold result not computed. Please compute the manifold first.")
+
+        # Extract states and times from the list of trajectories
+        states_list = [traj.states for traj in self.trajectories]
+        times_list = [traj.times for traj in self.trajectories]
 
         return plot_manifold(
-            states_list=self._manifold_result.states_list,
-            times_list=self._manifold_result.times_list,
+            states_list=states_list,
+            times_list=times_list,
             bodies=[self.system.primary, self.system.secondary],
             system_distance=self.system.distance,
             dark_mode=dark_mode,
