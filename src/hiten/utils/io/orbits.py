@@ -63,23 +63,25 @@ def _write_orbit_group(
     grp.attrs["mu"] = float(orbit.mu)
     grp.attrs["period"] = -1.0 if orbit.period is None else float(orbit.period)
 
-    _write_dataset(grp, "initial_state", np.asarray(orbit._initial_state))
+    _write_dataset(grp, "initial_state", np.asarray(orbit.initial_state))
 
-    if getattr(orbit, "_system", None) is not None:
-        grp.attrs["primary"] = orbit._system.primary.name
-        grp.attrs["secondary"] = orbit._system.secondary.name
-        grp.attrs["distance_km"] = float(orbit._system.distance)
+    if getattr(orbit, "system", None) is not None:
+        grp.attrs["primary"] = orbit.system.primary.name
+        grp.attrs["secondary"] = orbit.system.secondary.name
+        grp.attrs["distance_km"] = float(orbit.system.distance)
 
     if getattr(orbit, "libration_point", None) is not None:
         grp.attrs["libration_index"] = int(orbit.libration_point.idx)
 
-    if orbit._trajectory is not None:
-        _write_dataset(grp, "trajectory", np.asarray(orbit._trajectory), compression=compression, level=level)
-        _write_dataset(grp, "times", np.asarray(orbit._times), compression=compression, level=level)
+    # Check if trajectory exists without triggering the error
+    if hasattr(orbit.dynamics, '_trajectory') and orbit.dynamics._trajectory is not None:
+        _write_dataset(grp, "trajectory", np.asarray(orbit.dynamics._trajectory.states), compression=compression, level=level)
+        _write_dataset(grp, "times", np.asarray(orbit.dynamics._trajectory.times), compression=compression, level=level)
 
-    if orbit._stability_info is not None:
+    # Check if stability info exists without triggering computation
+    if hasattr(orbit.dynamics, '_stability_info') and orbit.dynamics._stability_info is not None:
         sgrp = grp.create_group("stability")
-        indices, eigvals, eigvecs = orbit._stability_info
+        indices, eigvals, eigvecs = orbit.dynamics._stability_info
         _write_dataset(sgrp, "indices", np.asarray(indices))
         _write_dataset(sgrp, "eigvals", np.asarray(eigvals))
         _write_dataset(sgrp, "eigvecs", np.asarray(eigvecs))
@@ -171,12 +173,8 @@ def _read_orbit_group(grp: h5py.Group) -> "PeriodicOrbit":
 
     orbit._family = str(grp.attrs.get("family", orbit._family))
     orbit._mu = float(grp.attrs.get("mu", np.nan))
-
-    period_val = float(grp.attrs.get("period", -1.0))
-    orbit.period = None if period_val < 0 else period_val
-
     orbit._initial_state = grp["initial_state"][()]
-
+    
     try:
         primary_name = grp.attrs.get("primary")
         secondary_name = grp.attrs.get("secondary")
@@ -202,6 +200,19 @@ def _read_orbit_group(grp: h5py.Group) -> "PeriodicOrbit":
                 orbit._libration_point = system.get_libration_point(lib_idx)
     except Exception:
         pass
+
+    # Set HaloOrbit-specific attributes if this is a HaloOrbit
+    if orbit_cls.__name__ == "HaloOrbit":
+        orbit._amplitude_z = None
+        orbit._zenith = None
+    
+    # Initialize the services after setting the required attributes
+    from hiten.algorithms.types.services.orbits import _OrbitServices
+    orbit._services = _OrbitServices.default(orbit)
+    orbit._unpack_services()
+
+    period_val = float(grp.attrs.get("period", -1.0))
+    orbit.period = None if period_val < 0 else period_val
 
     if "trajectory" in grp:
         orbit._trajectory = grp["trajectory"][()]

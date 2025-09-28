@@ -22,7 +22,6 @@ from hiten.utils.io.orbits import _read_orbit_group, _write_orbit_group
 
 if TYPE_CHECKING:
     from hiten.system.manifold import Manifold
-    from hiten.algorithms.types.services.manifold import _ManifoldResult
 
 
 HDF5_VERSION = "1.0"
@@ -70,22 +69,22 @@ def save_manifold(
     with h5py.File(path, "w") as f:
         f.attrs["format_version"] = HDF5_VERSION
         f.attrs["class"] = manifold.__class__.__name__
-        f.attrs["stable"] = bool(manifold._stable == 1)
-        f.attrs["direction"] = "positive" if manifold._direction == 1 else "negative"
+        f.attrs["stable"] = bool(manifold.stable == 1)
+        f.attrs["direction"] = "positive" if manifold.direction == 1 else "negative"
 
         ggrp = f.create_group("generating_orbit")
         _write_orbit_group(ggrp, manifold._generating_orbit, compression=compression, level=level)
 
-        if manifold._manifold_result is not None:
-            mr: "_ManifoldResult" = manifold._manifold_result
+        if manifold.result is not None:
+            mr = manifold.result
             rgrp = f.create_group("result")
-            _write_dataset(rgrp, "ysos", np.asarray(mr.ysos))
-            _write_dataset(rgrp, "dysos", np.asarray(mr.dysos))
-            rgrp.attrs["_successes"] = int(mr._successes)
-            rgrp.attrs["_attempts"] = int(mr._attempts)
+            _write_dataset(rgrp, "ysos", np.asarray(mr[0]))
+            _write_dataset(rgrp, "dysos", np.asarray(mr[1]))
+            rgrp.attrs["_successes"] = int(mr[4])
+            rgrp.attrs["_attempts"] = int(mr[5])
 
             tgrp = rgrp.create_group("trajectories")
-            for i, (states, times) in enumerate(zip(mr.states_list, mr.times_list)):
+            for i, (states, times) in enumerate(zip(mr[2], mr[3])):
                 sub = tgrp.create_group(str(i))
                 _write_dataset(sub, "states", np.asarray(states), compression=compression, level=level)
                 _write_dataset(sub, "times", np.asarray(times), compression=compression, level=level)
@@ -121,7 +120,6 @@ def load_manifold(path: str | Path) -> "Manifold":
     >>> print(f"Loaded manifold: stable={manifold.stable}, direction={manifold.direction}")
     """
     from hiten.system.manifold import Manifold
-    from hiten.algorithms.types.services.manifold import _ManifoldResult
 
     path = Path(path)
     if not path.exists():
@@ -155,13 +153,13 @@ def load_manifold(path: str | Path) -> "Manifold":
                     states_list.append(sub["states"][()])
                     times_list.append(sub["times"][()])
 
-            man._manifold_result = _ManifoldResult(
-                ysos=list(ysos),
-                dysos=list(dysos),
-                states_list=states_list,
-                times_list=times_list,
-                _successes=succ,
-                _attempts=attm,
+            man.dynamics._manifold_result = (
+                float(ysos),
+                float(dysos),
+                states_list,
+                times_list,
+                succ,
+                attm,
             )
 
     return man

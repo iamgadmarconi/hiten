@@ -112,6 +112,6 @@ class CenterManifold(_HitenBase):
         return cls._load_with_services(
             dir_path, 
             _CenterManifoldPersistenceService(), 
-            lambda cm: _CenterManifoldServices.from_point(cm._point, cm._max_degree), 
+            lambda cm: _CenterManifoldServices.default(cm._point, cm._max_degree), 
             **kwargs
         )

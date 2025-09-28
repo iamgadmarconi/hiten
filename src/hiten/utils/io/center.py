@@ -143,9 +143,12 @@ def save_center_manifold(
             _write_dataset(f, "hamiltonians_pickle", np.frombuffer(ham_blob, dtype=np.uint8))
 
     # Get cached maps from the dynamics adapter
-    cached_maps = getattr(cm._services.dynamics, '_cache', {})
-    poincare_maps = {key: value for key, value in cached_maps.items() 
-                    if hasattr(value, '__class__') and 'CenterManifoldMap' in str(value.__class__)}
+    cached_maps = getattr(cm._services.dynamics, '_cache', None)
+    if cached_maps is not None:
+        poincare_maps = {key: value for key, value in cached_maps._cache.items() 
+                        if hasattr(value, '__class__') and 'CenterManifoldMap' in str(value.__class__)}
+    else:
+        poincare_maps = {}
     
     if poincare_maps:
         maps_dir = dir_path / "maps"
