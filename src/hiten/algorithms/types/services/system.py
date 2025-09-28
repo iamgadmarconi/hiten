@@ -50,7 +50,6 @@ class _SystemsDynamicsService(_DynamicsServiceBase):
         self._primary = self.domain_obj._primary
         self._secondary = self.domain_obj._secondary
         self._distance = self.domain_obj._distance
-        self._libration_points: Dict[int, "LibrationPoint"] = {}
 
     @property
     def mu(self) -> float:
@@ -63,7 +62,7 @@ class _SystemsDynamicsService(_DynamicsServiceBase):
 
     @property
     def libration_points(self) -> Dict[int, "LibrationPoint"]:
-        return self._libration_points
+        return self.domain_obj._libration_points
 
     @property
     def primary(self) -> "Body":
@@ -105,9 +104,9 @@ class _SystemsDynamicsService(_DynamicsServiceBase):
         return self.get_or_create(key, _factory)
     
     def get_point(self, index: int) -> "LibrationPoint":
-        if index not in self._libration_points:
-            self._libration_points[index] = self._build_libration_point(index)
-        return self._libration_points[index]
+        if index not in self.domain_obj._libration_points:
+            self.domain_obj._libration_points[index] = self._build_libration_point(index)
+        return self.domain_obj._libration_points[index]
 
     def propagate(
         self,

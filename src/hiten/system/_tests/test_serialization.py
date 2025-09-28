@@ -139,10 +139,40 @@ def test_body_serialization() -> None:
     assert moon_loaded.mass == moon.mass
     assert moon_loaded.radius == moon.radius
     assert moon_loaded.color == moon.color
-    # Note: parent relationship is not preserved in serialization
+    # Parent relationship should now be preserved with pickle serialization
+    assert moon_loaded.parent.name == moon.parent.name
     logger.info("[Body] Moon round-trip OK")
     
     logger.info("[Body] serialization tests passed\n")
+
+
+def test_system_serialization() -> None:
+    """Test System class serialization."""
+    _reset_tmp_dir()
+    
+    logger.info("\n[SET-UP] Testing System serialization ...")
+    
+    # Create a system
+    system = System.from_bodies("earth", "moon")
+    
+    # Test System serialization
+    system_path = TMP_DIR / "system.h5"
+    logger.info("[System] saving: %s", system_path)
+    system.save(str(system_path))
+    
+    system_loaded = System.load(str(system_path))
+    assert system_loaded.mu == system.mu
+    assert system_loaded.distance == system.distance
+    assert system_loaded.primary.name == system.primary.name
+    assert system_loaded.secondary.name == system.secondary.name
+    
+    # Test that parent relationships are preserved
+    assert system_loaded.secondary.parent.name == system.secondary.parent.name
+    assert system_loaded.primary.parent is system_loaded.primary  # Primary should be self-parent
+    assert system_loaded.secondary.parent is system_loaded.primary  # Secondary should reference primary
+    
+    logger.info("[System] round-trip OK")
+    logger.info("[System] serialization tests passed\n")
 
 
 def test_libration_point_serialization() -> None:
@@ -166,6 +196,10 @@ def test_libration_point_serialization() -> None:
     assert l1_loaded.idx == L1.idx
     assert l1_loaded.mu == L1.mu
     _assert_equal("L1Point.position", L1.position, l1_loaded.position)
+    # Test that system relationship is preserved
+    assert l1_loaded.system.mu == L1.system.mu
+    assert l1_loaded.system.primary.name == L1.system.primary.name
+    assert l1_loaded.system.secondary.name == L1.system.secondary.name
     logger.info("[L1Point] round-trip OK")
     
     # Test L2 serialization
@@ -177,6 +211,10 @@ def test_libration_point_serialization() -> None:
     assert l2_loaded.idx == L2.idx
     assert l2_loaded.mu == L2.mu
     _assert_equal("L2Point.position", L2.position, l2_loaded.position)
+    # Test that system relationship is preserved
+    assert l2_loaded.system.mu == L2.system.mu
+    assert l2_loaded.system.primary.name == L2.system.primary.name
+    assert l2_loaded.system.secondary.name == L2.system.secondary.name
     logger.info("[L2Point] round-trip OK")
     
     # Test L4 serialization
@@ -188,6 +226,10 @@ def test_libration_point_serialization() -> None:
     assert l4_loaded.idx == L4.idx
     assert l4_loaded.mu == L4.mu
     _assert_equal("L4Point.position", L4.position, l4_loaded.position)
+    # Test that system relationship is preserved
+    assert l4_loaded.system.mu == L4.system.mu
+    assert l4_loaded.system.primary.name == L4.system.primary.name
+    assert l4_loaded.system.secondary.name == L4.system.secondary.name
     logger.info("[L4Point] round-trip OK")
     
     logger.info("[LibrationPoint] serialization tests passed\n")

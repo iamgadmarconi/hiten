@@ -153,9 +153,9 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
                 delta=delta,
                 tol=tol,
             )
-            props = StabilityProperties.with_default_engine(config=config)
-            interface = _LibrationPointInterface(config=config)
-            problem = interface.create_problem(self.domain_obj)
+            props = StabilityProperties.with_default_engine()
+            interface = _LibrationPointInterface()
+            problem = interface.create_problem(domain_obj=self.domain_obj, config=config)
             props.compute(
                 problem.A,
                 system_type=config.system_type,

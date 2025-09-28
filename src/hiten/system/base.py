@@ -67,6 +67,7 @@ class System(_HitenBase):
         self._primary = primary
         self._secondary = secondary
         self._distance = distance
+        self._libration_points: Dict[int, LibrationPoint] = {}
 
         services = _SystemServices.default(self)
         super().__init__(services)
@@ -130,7 +131,7 @@ class System(_HitenBase):
         dict[int, LibrationPoint]
             Dictionary mapping integer identifiers {1,...,5} to libration point objects.
         """
-        return self.dynamics.libration_points
+        return self._libration_points
         
     @property
     def dynsys(self):
@@ -189,7 +190,9 @@ class System(_HitenBase):
         >>> sys = System(primary, secondary, distance)
         >>> L1 = sys.get_libration_point(1)
         """
-        return self.dynamics.get_point(index)
+        if index not in self._libration_points:
+            self._libration_points[index] = self.dynamics.get_point(index)
+        return self._libration_points[index]
 
     def propagate(
         self,
