@@ -516,11 +516,10 @@ class _HitenBase(ABC):
         if hasattr(self, '_dynamics'):
             return self._dynamics
         raise AttributeError("No dynamics service available in this service bundle")
-    
 
     def __str__(self) -> str:
         return f"{self.__class__.__name__}()"
-    
+
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
 
@@ -560,6 +559,7 @@ class _HitenBase(ABC):
         3. Are not callable (methods)
         4. Are not basic types like strings, ints, bools (computed data)
         5. Are not abstract base class internals
+        6. Are not properties with no setters
         
         Parameters
         ----------
@@ -637,18 +637,11 @@ class _HitenBase(ABC):
         if not hasattr(self, "_cache") or self._cache is None:
             self._cache = {}
         
-        # Collect computed properties from the state
-        computed_data = {}
+        # Store computed properties temporarily for later restoration
+        self._computed_properties_to_restore = {}
         for attr_name, value in state.items():
             if self._is_computed_property(attr_name, value):
-                computed_data[attr_name] = value
-        
-        # Restore computed properties to the target object if available
-        target = self._set_computed_properties_target()
-        if target is not None:
-            for attr_name, value in computed_data.items():
-                if hasattr(target, attr_name):
-                    setattr(target, attr_name, value)
+                self._computed_properties_to_restore[attr_name] = value
 
     def _unpack_services(self) -> None:
         """Unpack services from the service bundle into individual attributes.
@@ -687,6 +680,7 @@ class _HitenBase(ABC):
         1. Sets the service bundle
         2. Binds individual service properties
         3. Resets the dynamics cache if available (but preserves computed properties)
+        4. Restores computed properties from serialization if available
         
         Parameters
         ----------
@@ -695,6 +689,21 @@ class _HitenBase(ABC):
         """
         self._services = services
         self._bind_services()
+        
+        # Restore computed properties if they were stored during deserialization
+        if hasattr(self, '_computed_properties_to_restore'):
+            target = self._set_computed_properties_target()
+            if target is not None:
+                for attr_name, value in self._computed_properties_to_restore.items():
+                    if hasattr(target, attr_name):
+                        try:
+                            setattr(target, attr_name, value)
+                        except (AttributeError, TypeError):
+                            # Skip properties that can't be set (e.g., read-only properties)
+                            continue
+            # Clean up the temporary storage
+            delattr(self, '_computed_properties_to_restore')
+        
         # Reset dynamics cache if dynamics service is available, but preserve computed properties
         if hasattr(self, '_dynamics') and self._dynamics is not None:
             # Check if dynamics service has computed properties that should be preserved

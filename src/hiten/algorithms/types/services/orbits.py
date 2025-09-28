@@ -626,9 +626,9 @@ class _HaloOrbitDynamicsService(_OrbitDynamicsService):
         self._amplitude = orbit._amplitude_z
         self._zenith = orbit._zenith
         
-        # Validate parameters before calling parent __init__
         if orbit._initial_state is not None and (self._amplitude is not None or self._zenith is not None):
-            raise ValueError("Cannot provide both an initial_state and analytical parameters (amplitude_z, zenith).")
+            self._amplitude = None
+            self._zenith = None
         
         super().__init__(orbit)
 
@@ -889,10 +889,10 @@ class _LyapunovOrbitDynamicsService(_OrbitDynamicsService):
 
     def __init__(self, orbit: "LyapunovOrbit") -> None:
         self._amplitude_x = orbit._amplitude_x
-
+        
         if orbit._initial_state is not None and self._amplitude_x is not None:
-            raise ValueError("Cannot provide both an initial_state and an analytical parameter (amplitude_x).")
-
+            self._amplitude_x = None
+        
         super().__init__(orbit)
 
         from hiten.system.libration.collinear import CollinearPoint, L1Point, L2Point
