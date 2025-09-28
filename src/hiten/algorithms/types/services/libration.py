@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from abc import abstractmethod
 from pathlib import Path
 from typing import TYPE_CHECKING, Tuple
 
@@ -19,7 +18,6 @@ from hiten.algorithms.linalg.types import _ProblemType, _SystemType
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
                                                   _ServiceBundleBase)
-from hiten.algorithms.types.services.center import _CenterManifoldServices
 from hiten.algorithms.utils.rootfinding import (expand_bracket,
                                                 solve_bracketed_brent)
 from hiten.system.center import CenterManifold
@@ -32,8 +30,10 @@ from hiten.utils.log_config import logger
 if TYPE_CHECKING:
     from hiten.system.base import System
     from hiten.system.libration.base import LibrationPoint
-    from hiten.system.libration.collinear import CollinearPoint, L1Point, L2Point, L3Point
-    from hiten.system.libration.triangular import TriangularPoint, L4Point, L5Point
+    from hiten.system.libration.collinear import (CollinearPoint, L1Point,
+                                                  L2Point, L3Point)
+    from hiten.system.libration.triangular import (L4Point, L5Point,
+                                                   TriangularPoint)
     from hiten.system.orbits.base import PeriodicOrbit
 
 
@@ -147,21 +147,8 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
         cache_key = self.make_key(id(self.domain_obj), delta, tol)
 
         def _factory() -> StabilityProperties:
-            config = _EigenDecompositionConfig(
-                problem_type=_ProblemType.EIGENVALUE_DECOMPOSITION,
-                system_type=_SystemType.CONTINUOUS,
-                delta=delta,
-                tol=tol,
-            )
-            props = StabilityProperties.with_default_engine()
-            interface = _LibrationPointInterface()
-            problem = interface.create_problem(domain_obj=self.domain_obj, config=config)
-            props.compute(
-                problem.A,
-                system_type=config.system_type,
-                problem_type=config.problem_type,
-            )
-
+            props = StabilityProperties.with_default_engine(config=self.eigendecomposition_config, interface=_LibrationPointInterface())
+            props.compute(self.domain_obj)
             return props
 
         return self.get_or_create(cache_key, _factory)
@@ -447,6 +434,19 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
             (s1, s2) scale factors for the hyperbolic and elliptic components.
         """
         pass
+    
+    @property
+    def eigendecomposition_config(self) -> _EigenDecompositionConfig:
+        return _EigenDecompositionConfig(
+            problem_type=_ProblemType.EIGENVALUE_DECOMPOSITION,
+            system_type=_SystemType.CONTINUOUS,
+            delta=1e-6,
+            tol=1e-6,
+        )
+    
+    @eigendecomposition_config.setter
+    def eigendecomposition_config(self, config: _EigenDecompositionConfig) -> None:
+        self.eigendecomposition_config = config
 
 
 class _CollinearDynamicsService(_LibrationDynamicsService):

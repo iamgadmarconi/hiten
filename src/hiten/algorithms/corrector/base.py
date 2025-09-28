@@ -14,17 +14,14 @@ from hiten.algorithms.corrector.config import _LineSearchConfig
 from hiten.algorithms.corrector.engine.base import _CorrectionEngine
 from hiten.algorithms.corrector.interfaces import \
     _PeriodicOrbitCorrectorInterface
-from hiten.algorithms.corrector.stepping import (make_armijo_stepper,
-                                                 make_plain_stepper)
-from hiten.algorithms.corrector.stepping.norm import (_default_norm,
-                                                      _infinity_norm)
-from hiten.algorithms.corrector.types import CorrectionResult, StepperFactory
-from hiten.algorithms.poincare.singlehit.backend import _y_plane_crossing
+from hiten.algorithms.corrector.stepping import make_armijo_stepper
+from hiten.algorithms.corrector.stepping.norm import _infinity_norm
+from hiten.algorithms.corrector.types import StepperFactory
 from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
                                          _HitenBaseFacade)
 
 
-class Corrector(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
+class Corrector(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
     """Generic facade for correction algorithms.
     
     This facade provides a clean, high-level interface for correcting
@@ -94,7 +91,7 @@ class Corrector(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
         super().__init__(config, interface, engine)
 
     @classmethod
-    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None) -> "Corrector[DomainT, ConfigT, ResultT]":
+    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None) -> "Corrector[DomainT, InterfaceT, ConfigT, ResultT]":
         backend = _NewtonBackend(stepper_factory=make_armijo_stepper(_LineSearchConfig(norm_fn=_infinity_norm)))
         intf = interface or _PeriodicOrbitCorrectorInterface()
         engine = _CorrectionEngine(backend=backend, interface=intf)
@@ -171,31 +168,6 @@ class Corrector(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
         self._results = engine.solve(problem)
         return self._results
 
-    def _validate_config(self, config: ConfigT) -> None:
-        """Validate the configuration object.
-        
-        This method can be overridden by concrete facades to perform
-        domain-specific configuration validation.
-        
-        Parameters
-        ----------
-        config : ConfigT
-            The configuration object to validate.
-            
-        Raises
-        ------
-        ValueError
-            If the configuration is invalid.
-        """
-        super()._validate_config(config)
-        
-        if hasattr(config, 'tol') and config.tol <= 0:
-            raise ValueError("Tolerance must be positive")
-        if hasattr(config, 'max_attempts') and config.max_attempts <= 0:
-            raise ValueError("Max attempts must be positive")
-        if hasattr(config, 'max_delta') and config.max_delta is not None and config.max_delta <= 0:
-            raise ValueError("Max delta must be positive")
-
     def get_convergence_summary(self) -> dict[str, Any]:
         """Get a summary of convergence statistics for batch results.
         
@@ -235,3 +207,28 @@ class Corrector(_HitenBaseFacade, Generic[DomainT, ConfigT, ResultT]):
             "avg_iterations": avg_iterations,
             "avg_residual_norm": avg_residual_norm
         }
+
+    def _validate_config(self, config: ConfigT) -> None:
+        """Validate the configuration object.
+        
+        This method can be overridden by concrete facades to perform
+        domain-specific configuration validation.
+        
+        Parameters
+        ----------
+        config : ConfigT
+            The configuration object to validate.
+            
+        Raises
+        ------
+        ValueError
+            If the configuration is invalid.
+        """
+        super()._validate_config(config)
+        
+        if hasattr(config, 'tol') and config.tol <= 0:
+            raise ValueError("Tolerance must be positive")
+        if hasattr(config, 'max_attempts') and config.max_attempts <= 0:
+            raise ValueError("Max attempts must be positive")
+        if hasattr(config, 'max_delta') and config.max_delta is not None and config.max_delta <= 0:
+            raise ValueError("Max delta must be positive")

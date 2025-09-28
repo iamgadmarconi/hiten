@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Iterable, List, Literal, Tuple
+from typing import TYPE_CHECKING, Iterable, List, Tuple
 
 import numpy as np
 from tqdm import tqdm
@@ -333,17 +332,9 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
         key = self.make_key(id(self.domain_obj))
         
         def _factory() -> StabilityProperties:
-            config = _EigenDecompositionConfig(
-                problem_type=_ProblemType.ALL,
-                system_type=_SystemType.DISCRETE,
-            )
-            stability = StabilityProperties.with_default_engine()
+            stability = StabilityProperties.with_default_engine(config=self.eigendecomposition_config)
             _, _, phi_T, _ = self.compute_stm(steps=2000)
-            stability.compute(
-                matrix=phi_T,
-                system_type=config.system_type,
-                problem_type=config.problem_type,
-            )
+            stability.compute(domain_obj=phi_T)
             return stability
         
         return self.get_or_create(key, _factory)
@@ -438,6 +429,19 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
             I[k] = np.argmin(diff)
         
         return I
+
+    @property
+    def eigendecomposition_config(self) -> _EigenDecompositionConfig:
+        return _EigenDecompositionConfig(
+            system_type=_SystemType.DISCRETE,
+            problem_type=_ProblemType.EIGENVALUE_DECOMPOSITION,
+            delta=1e-6,
+            tol=1e-6,
+        )
+    
+    @eigendecomposition_config.setter
+    def eigendecomposition_config(self, config: _EigenDecompositionConfig) -> None:
+        self.eigendecomposition_config = config
 
 
 class _ManifoldServices(_ServiceBundleBase):
