@@ -532,10 +532,13 @@ class _HitenBase(ABC):
         """
         state = self.__dict__.copy()
         state.pop("_services", None)
+        # Only remove service-related attributes, not all private attributes
         service_attrs = [name for name in dir(self) if name.startswith('_') and not name.startswith('__')]
         for attr in service_attrs:
             if hasattr(self, attr) and not callable(getattr(self, attr)):
-                state.pop(attr, None)
+                # Only remove attributes that are clearly service-related
+                if attr in ['_cache', '_persistence', '_dynamics', '_correction', '_continuation', 'pipeline', '_conversion'] or attr.endswith('_service'):
+                    state.pop(attr, None)
         return state
     
     def __setstate__(self, state):
