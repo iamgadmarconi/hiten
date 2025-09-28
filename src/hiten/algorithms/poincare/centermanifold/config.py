@@ -18,7 +18,7 @@ from hiten.utils.log_config import logger
 
 
 @dataclass(frozen=True)
-class _CenterManifoldMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _RefineConfig, _IterationConfig, _SeedingConfig):
+class _CenterManifoldMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _IterationConfig, _SeedingConfig):
     """Configuration for center manifold Poincare maps.
 
     This dataclass combines configuration from multiple base classes to provide
@@ -45,7 +45,6 @@ class _CenterManifoldMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _Refine
     The configuration inherits from multiple base classes:
     - :class:`~hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`: Basic return map settings
     - :class:`~hiten.algorithms.poincare.core.config._IntegrationConfig`: Integration method and parameters
-    - :class:`~hiten.algorithms.poincare.core.config._RefineConfig`: Refinement parameters
     - :class:`~hiten.algorithms.poincare.core.config._IterationConfig`: Iteration control parameters
     - :class:`~hiten.algorithms.poincare.core.config._SeedingConfig`: Seeding strategy parameters
 

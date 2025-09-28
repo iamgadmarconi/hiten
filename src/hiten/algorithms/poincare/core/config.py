@@ -25,10 +25,6 @@ class _ReturnMapBaseConfig(ABC):
 
     Parameters
     ----------
-    compute_on_init : bool, default=False
-        Whether to automatically compute the return map upon
-        initialization. If True, the map is computed immediately
-        after object creation.
     n_workers : int or None, default=None
         Number of parallel workers for computation. If None,
         uses the default number of workers (typically the number
@@ -43,7 +39,6 @@ class _ReturnMapBaseConfig(ABC):
     All time units are in nondimensional units unless otherwise
     specified.
     """
-    compute_on_init: bool = False
     n_workers: int | None = None
 
 

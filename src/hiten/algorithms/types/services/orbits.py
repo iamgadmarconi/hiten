@@ -91,7 +91,8 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
         cache_key = self.make_key("correct", overrides_tuple)
 
         def _factory() -> Tuple[np.ndarray, float]:
-            results = self.corrector.correct(self.domain_obj, override=True, **overrides)
+            override = bool(overrides)
+            results = self.corrector.correct(self.domain_obj, override=override, **overrides)
             return results.x_corrected, 2 * results.half_period
 
         return self.get_or_create(cache_key, _factory)
@@ -113,9 +114,6 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
     @correction_config.setter
     def correction_config(self, value: "_OrbitCorrectionConfig"):
         """Set the correction configuration."""
-        from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
-        if value is not None and not isinstance(value, _OrbitCorrectionConfig):
-            raise TypeError("correction_config must be an instance of _OrbitCorrectionConfig or None.")
         self.corrector._set_config(value)
 
 
@@ -152,7 +150,7 @@ class _OrbitContinuationService(_DynamicsServiceBase):
         def _factory() -> Tuple[np.ndarray, float]:
             # Automatically infer if there are overrides based on whether overrides are provided
             override = bool(overrides)
-            results = self.generator.generate(self.domain_obj, override=True, **overrides)
+            results = self.generator.generate(self.domain_obj, override=override, **overrides)
 
             return results
 
@@ -175,10 +173,6 @@ class _OrbitContinuationService(_DynamicsServiceBase):
     @continuation_config.setter
     def continuation_config(self, value: "_OrbitContinuationConfig"):
         """Set the continuation configuration."""
-        from hiten.algorithms.continuation.config import \
-            _OrbitContinuationConfig
-        if value is not None and not isinstance(value, _OrbitContinuationConfig):
-            raise TypeError("continuation_config must be an instance of _OrbitContinuationConfig or None.")
         self.generator._set_config(value)
 
 

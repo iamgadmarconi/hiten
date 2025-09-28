@@ -27,8 +27,6 @@ class _CenterManifoldSeedingBase(_SeedingStrategyBase):
 
     Parameters
     ----------
-    section_interface : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
-        Configuration for the Poincare section.
     map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Configuration for the center manifold map.
 
@@ -44,8 +42,23 @@ class _CenterManifoldSeedingBase(_SeedingStrategyBase):
     separation as the length unit.
     """
 
-    def __init__(self, section_interface: _CenterManifoldSectionInterface, map_config: _CenterManifoldMapConfig) -> None:
-        super().__init__(section_interface, map_config)
+    def __init__(self, map_config: _CenterManifoldMapConfig) -> None:
+        super().__init__(map_config)
+
+    def _get_plane_coords(self, section_coord: str) -> tuple[str, str]:
+        """Get the plane coordinates for a given section coordinate.
+        
+        Parameters
+        ----------
+        section_coord : str
+            Section coordinate identifier ('q2', 'p2', 'q3', or 'p3').
+            
+        Returns
+        -------
+        tuple[str, str]
+            Tuple of two coordinate labels that define the section plane.
+        """
+        return _CenterManifoldSectionInterface.get_plane_coords(section_coord)
 
     def _hill_boundary_limits(
         self,
@@ -132,7 +145,7 @@ class _CenterManifoldSeedingBase(_SeedingStrategyBase):
 
         cfg = self.config
 
-        constraints = cfg.build_constraint_dict(**{
+        constraints = _CenterManifoldSectionInterface.build_constraint_dict(cfg.section_coord, **{
             cfg.plane_coords[0]: plane_vals[0],
             cfg.plane_coords[1]: plane_vals[1],
         })

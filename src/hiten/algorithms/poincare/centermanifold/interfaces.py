@@ -11,8 +11,7 @@ logic for:
 """
 
 import os
-from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple
 
 import numpy as np
 
@@ -31,41 +30,47 @@ from hiten.algorithms.types.exceptions import BackendError, ConvergenceError
 from hiten.algorithms.utils.rootfinding import solve_bracketed_brent
 from hiten.algorithms.types.states import RestrictedCenterManifoldState
 
+if TYPE_CHECKING:
+    from hiten.system.center import CenterManifold
 
-@dataclass(frozen=True)
+
 class _CenterManifoldSectionInterface(_SectionInterface):
-    """Section interface for center manifold sections (q2/p2/q3/p3 planes)."""
+    """Stateless section interface for center manifold sections (q2/p2/q3/p3 planes)."""
 
-    section_coord: str
-    plane_coords: tuple[str, str]
-
-    @classmethod
-    def from_section_coord(cls, section_coord: str) -> "_CenterManifoldSectionInterface":
+    @staticmethod
+    def get_plane_coords(section_coord: str) -> tuple[str, str]:
+        """Get the plane coordinates for a given section coordinate."""
         cfg = _CM_SECTION_TABLE.get(section_coord)
         if cfg is None:
             raise BackendError(f"Unsupported section_coord: {section_coord}")
-        return cls(section_coord=section_coord, plane_coords=cfg["plane_coords"])  # type: ignore[index]
+        return cfg["plane_coords"]  # type: ignore[index]
 
-    def build_constraint_dict(self, **kwargs: float) -> dict[str, float]:
-        out: dict[str, float] = {self.section_coord: 0.0}
+    @staticmethod
+    def build_constraint_dict(section_coord: str, **kwargs: float) -> dict[str, float]:
+        """Build constraint dictionary for a given section coordinate."""
+        out: dict[str, float] = {section_coord: 0.0}
         for k, v in kwargs.items():
             if k in {"q1", "q2", "q3", "p1", "p2", "p3"}:
                 out[k] = float(v)
         return out
 
-    def build_state(self, plane_vals: Tuple[float, float], other_vals: Tuple[float, float]) -> Tuple[float, float, float, float]:
+    @staticmethod
+    def build_state(section_coord: str, plane_vals: Tuple[float, float], other_vals: Tuple[float, float]) -> Tuple[float, float, float, float]:
+        """Build state from plane values and other values for a given section coordinate."""
+        plane_coords = _CenterManifoldSectionInterface.get_plane_coords(section_coord)
+        
         q2 = p2 = q3 = p3 = 0.0
-        if self.plane_coords == ("q2", "p2"):
+        if plane_coords == ("q2", "p2"):
             q2, p2 = plane_vals
             q3, p3 = other_vals
         else:
             q3, p3 = plane_vals
             q2, p2 = other_vals
-        if self.section_coord == "q2":
+        if section_coord == "q2":
             q2 = 0.0
-        elif self.section_coord == "p2":
+        elif section_coord == "p2":
             p2 = 0.0
-        elif self.section_coord == "q3":
+        elif section_coord == "q3":
             q3 = 0.0
         else:  # p3
             p3 = 0.0
@@ -87,8 +92,9 @@ _STATE_INDEX = {
     "p3": int(RestrictedCenterManifoldState.p3),
 }
 
-def _get_section_interface(section_coord: str) -> _CenterManifoldSectionInterface:
-    return _CenterManifoldSectionInterface.from_section_coord(section_coord)
+def _get_plane_coords(section_coord: str) -> tuple[str, str]:
+    """Get plane coordinates for a section coordinate."""
+    return _CenterManifoldSectionInterface.get_plane_coords(section_coord)
 
 
 class _CenterManifoldInterface(
@@ -106,16 +112,22 @@ class _CenterManifoldInterface(
     def create_problem(
         self,
         *,
+        domain_obj: "CenterManifold",
         config: _CenterManifoldMapConfig,
-        section_coord: str,
-        energy: float,
-        jac_H,
-        H_blocks,
-        clmo_table,
-        dt: float,
-        n_iter: int,
-        n_workers: int | None,
     ) -> _CenterManifoldMapProblem:
+        # Extract hamiltonian data from the domain object
+        hamsys = domain_obj.dynamics.hamsys
+        energy = domain_obj.energy
+        
+        jac_H = hamsys.jac_H
+        H_blocks = hamsys.poly_H()
+        clmo_table = hamsys.clmo_table
+        
+        section_coord = config.section_coord
+        dt = config.dt
+        n_iter = config.n_iter
+        n_workers = config.n_workers
+        
         default_workers = os.cpu_count() or 1
         resolved_workers = default_workers if (n_workers is None or int(n_workers) <= 0) else int(n_workers)
 
@@ -163,8 +175,7 @@ class _CenterManifoldInterface(
         return CenterManifoldMapResults(points, states, labels, times)
 
     def create_constraints(self, section_coord: str, **kwargs: float) -> dict[str, float]:
-        sec_if = _get_section_interface(section_coord)
-        return sec_if.build_constraint_dict(**kwargs)
+        return _CenterManifoldSectionInterface.build_constraint_dict(section_coord, **kwargs)
 
     def solve_missing_coord(self, varname: str, fixed_vals: dict[str, float], *, h0: float, H_blocks, clmo_table, initial_guess: float = 1e-3, expand_factor: float = 2.0, max_expand: int = 40, symmetric: bool = False, xtol: float = 1e-12) -> Optional[float]:
         """Solve H(q,p) = h0 for one coordinate given fixed values.
@@ -256,10 +267,10 @@ class _CenterManifoldInterface(
 
         Returns (q2, p2, q3, p3) on the section if solvable; otherwise None.
         """
-        sec_if = _get_section_interface(section_coord)
-        constraints = sec_if.build_constraint_dict(**{
-            sec_if.plane_coords[0]: float(plane[0]),
-            sec_if.plane_coords[1]: float(plane[1]),
+        plane_coords = _get_plane_coords(section_coord)
+        constraints = _CenterManifoldSectionInterface.build_constraint_dict(section_coord, **{
+            plane_coords[0]: float(plane[0]),
+            plane_coords[1]: float(plane[1]),
         })
 
         missing_val = self.solve_missing_coord(
@@ -268,7 +279,7 @@ class _CenterManifoldInterface(
                 "p3": "q3",
                 "q2": "p2",
                 "p2": "q2",
-            }[sec_if.section_coord],
+            }[section_coord],
             constraints,
             h0=h0,
             H_blocks=H_blocks,
@@ -286,12 +297,12 @@ class _CenterManifoldInterface(
         other_vals = [0.0, 0.0]
         # Infer which other coord was solved based on section_coord
         missing_coord = missing_coord
-        other_coords = ("q3", "p3") if sec_if.plane_coords == ("q2", "p2") else ("q2", "p2")
+        other_coords = ("q3", "p3") if plane_coords == ("q2", "p2") else ("q2", "p2")
         idx = 0 if missing_coord == other_coords[0] else 1
 
         other_vals[idx] = float(missing_val)
 
-        return sec_if.build_state((float(plane[0]), float(plane[1])), tuple(other_vals))
+        return _CenterManifoldSectionInterface.build_state(section_coord, (float(plane[0]), float(plane[1])), tuple(other_vals))
 
     def enforce_section_coordinate(self, states: np.ndarray, *, section_coord: str) -> np.ndarray:
         arr = np.asarray(states, dtype=np.float64)
@@ -306,12 +317,11 @@ class _CenterManifoldInterface(
         arr = np.asarray(states, dtype=np.float64)
         if arr.size == 0:
             return np.empty((0, 2), dtype=np.float64)
-        sec_if = _get_section_interface(section_coord)
-        idx0 = _STATE_INDEX[sec_if.plane_coords[0]]
-        idx1 = _STATE_INDEX[sec_if.plane_coords[1]]
+        plane_coords = _get_plane_coords(section_coord)
+        idx0 = _STATE_INDEX[plane_coords[0]]
+        idx1 = _STATE_INDEX[plane_coords[1]]
         return arr[:, (idx0, idx1)]
 
     def plane_labels(self, section_coord: str) -> tuple[str, str]:
-        sec_if = _get_section_interface(section_coord)
-        return sec_if.plane_coords
+        return _get_plane_coords(section_coord)
 

@@ -49,6 +49,14 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
         self._forward = - self._stable
         self._manifold_result = None
 
+        self._generator = None
+
+    @property
+    def generator(self) -> StabilityProperties:
+        if self._generator is None:
+            self._generator = StabilityProperties.with_default_engine(config=self.eigendecomposition_config)
+        return self._generator
+
     @property
     def orbit(self) -> "PeriodicOrbit":
         return self.domain_obj._generating_orbit
@@ -332,10 +340,9 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
         key = self.make_key(id(self.domain_obj))
         
         def _factory() -> StabilityProperties:
-            stability = StabilityProperties.with_default_engine(config=self.eigendecomposition_config)
             _, _, phi_T, _ = self.compute_stm(steps=2000)
-            stability.compute(domain_obj=phi_T)
-            return stability
+            results = self.generator.compute(domain_obj=phi_T)
+            return results
         
         return self.get_or_create(key, _factory)
 
@@ -441,7 +448,7 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
     
     @eigendecomposition_config.setter
     def eigendecomposition_config(self, config: _EigenDecompositionConfig) -> None:
-        self.eigendecomposition_config = config
+        self.generator._set_config(config)
 
 
 class _ManifoldServices(_ServiceBundleBase):

@@ -6,9 +6,8 @@ from hiten.algorithms.types.core import (ConfigT, OutputsT, ProblemT,
 
 
 class _SectionInterface(ABC):
-    section_coord: str
-    plane_coords: Tuple[str, str]
 
+    pass
 
 class _PoincareBaseInterface(
     _HitenBaseInterface[
@@ -19,5 +18,4 @@ class _PoincareBaseInterface(
     ]
 ):
     """Shared functionality for poincare map interfaces."""
-
-    section_interface: _SectionInterface | None = None
+    pass

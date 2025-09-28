@@ -53,6 +53,13 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
 
     def __init__(self, point: "LibrationPoint") -> None:
         super().__init__(point)
+        self._generator = None
+
+    @property
+    def generator(self) -> StabilityProperties:
+        if self._generator is None:
+            self._generator = StabilityProperties.with_default_engine(config=self.eigendecomposition_config)
+        return self._generator
 
     @property
     def system(self) -> "System":
@@ -147,9 +154,8 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
         cache_key = self.make_key(id(self.domain_obj), delta, tol)
 
         def _factory() -> StabilityProperties:
-            props = StabilityProperties.with_default_engine(config=self.eigendecomposition_config, interface=_LibrationPointInterface())
-            props.compute(self.domain_obj)
-            return props
+            results =self.generator.compute(self.domain_obj)
+            return results
 
         return self.get_or_create(cache_key, _factory)
 
@@ -446,7 +452,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
     
     @eigendecomposition_config.setter
     def eigendecomposition_config(self, config: _EigenDecompositionConfig) -> None:
-        self.eigendecomposition_config = config
+        self.generator._set_config(config)
 
 
 class _CollinearDynamicsService(_LibrationDynamicsService):
