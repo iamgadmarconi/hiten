@@ -53,31 +53,10 @@ class _ReturnMapBackend(_HitenBaseBackend):
     All time units are in nondimensional units unless otherwise specified.
     """
 
-    def __init__(
-        self,
-        *,
-        forward: int = 1,
-        method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
-        order: int = 8,
-        pre_steps: int = 1000,
-        refine_steps: int = 3000,
-        bracket_dx: float = 1e-10,
-        max_expand: int = 500,
-    ) -> None:
-        self._forward = 1 if forward >= 0 else -1
-        self._method = method
-        self._order = int(order)
-        self._pre_steps = int(pre_steps)
-        self._refine_steps = int(refine_steps)
-        self._bracket_dx = float(bracket_dx)
-        self._max_expand = int(max_expand)
+    def __init__(self) -> None:
 
         self._section_cache = None
         self._grid_cache = None
-
-    # Each backend must implement a *single-step* worker that takes an array
-    # of seeds and returns the crossings produced from those seeds. The engine
-    # layer is then responsible for looping / caching / parallelism.
 
     @abstractmethod
     def run(
@@ -85,6 +64,13 @@ class _ReturnMapBackend(_HitenBaseBackend):
         seeds: "np.ndarray",
         *,
         dt: float = 1e-2,
+        forward: int = 1,
+        method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
+        order: int = 8,
+        pre_steps: int = 1000,
+        refine_steps: int = 3000,
+        bracket_dx: float = 1e-10,
+        max_expand: int = 500,
     ) -> tuple["np.ndarray", "np.ndarray"]:
         """Propagate seeds to the next surface crossing.
 

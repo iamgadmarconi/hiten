@@ -80,12 +80,32 @@ class _SynodicEngine(_ReturnMapEngine):
 
         n_workers = self._n_workers
 
+        # Extract parameters from config objects
+        normal = problem.section_cfg.normal
+        offset = problem.section_cfg.offset
+        plane_coords = problem.section_cfg.plane_coords
+        interp_kind = problem.map_cfg.interp_kind
+        segment_refine = problem.map_cfg.segment_refine
+        tol_on_surface = problem.map_cfg.tol_on_surface
+        dedup_time_tol = problem.map_cfg.dedup_time_tol
+        dedup_point_tol = problem.map_cfg.dedup_point_tol
+        max_hits_per_traj = problem.map_cfg.max_hits_per_traj
+        newton_max_iter = problem.map_cfg.newton_max_iter
+
         # Delegate detection to backend passed in at construction
         if n_workers <= 1 or len(trajectories) <= 1:
             hits_lists = self._backend.run(
                 trajectories, 
-                section_cfg=problem.section_cfg,
-                map_cfg=problem.map_cfg,
+                normal=normal,
+                offset=offset,
+                plane_coords=plane_coords,
+                interp_kind=interp_kind,
+                segment_refine=segment_refine,
+                tol_on_surface=tol_on_surface,
+                dedup_time_tol=dedup_time_tol,
+                dedup_point_tol=dedup_point_tol,
+                max_hits_per_traj=max_hits_per_traj,
+                newton_max_iter=newton_max_iter,
                 direction=direction
             )
         else:
@@ -95,8 +115,16 @@ class _SynodicEngine(_ReturnMapEngine):
                 subset = [trajectories[i] for i in idx_arr.tolist()]
                 return self._backend.run(
                     subset, 
-                    section_cfg=problem.section_cfg,
-                    map_cfg=problem.map_cfg,
+                    normal=normal,
+                    offset=offset,
+                    plane_coords=plane_coords,
+                    interp_kind=interp_kind,
+                    segment_refine=segment_refine,
+                    tol_on_surface=tol_on_surface,
+                    dedup_time_tol=dedup_time_tol,
+                    dedup_point_tol=dedup_point_tol,
+                    max_hits_per_traj=max_hits_per_traj,
+                    newton_max_iter=newton_max_iter,
                     direction=direction
                 )
 

@@ -10,7 +10,6 @@ extends the abstract base class to provide detection capabilities on precomputed
 including cubic interpolation and Newton refinement for high accuracy.
 """
 
-from dataclasses import dataclass
 from typing import Callable, Literal, Sequence
 
 import numpy as np
@@ -18,94 +17,10 @@ import numpy as np
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
 from hiten.algorithms.poincare.core.events import _PlaneEvent, _SurfaceEvent
 from hiten.algorithms.poincare.core.types import _SectionHit
-from hiten.algorithms.poincare.synodic.config import (_SynodicMapConfig,
-                                                      _SynodicSectionConfig)
 from hiten.algorithms.poincare.utils import _hermite_der, _hermite_scalar
 
 
-@dataclass
-class _DetectionSettings:
-    """Cached numerical settings for efficient detection and refinement.
 
-    This dataclass caches frequently used numerical parameters derived
-    from the map and section configuration to avoid repeated attribute
-    lookups during detection and refinement routines.
-
-    Parameters
-    ----------
-    use_cubic : bool
-        Whether to use cubic Hermite interpolation for high accuracy.
-    segment_refine : int
-        Number of refinement segments for dense crossing detection.
-    tol_on_surface : float
-        Tolerance for considering a point to be on the surface.
-    dedup_time_tol : float
-        Time tolerance for deduplicating nearby crossings.
-    dedup_point_tol : float
-        Point tolerance for deduplicating nearby crossings.
-    max_hits_per_traj : int or None
-        Maximum number of hits per trajectory (None for unlimited).
-    proj : tuple[str, str]
-        Projection axes for 2D coordinates.
-    newton_max_iter : int
-        Maximum Newton iterations for root refinement.
-
-    Notes
-    -----
-    This class provides a performance optimization by caching configuration
-    values that are accessed frequently during the detection process. The
-    values are derived once from the configuration objects and reused
-    throughout the computation.
-
-    All tolerances are in nondimensional units unless otherwise specified.
-    """
-
-    use_cubic: bool
-    segment_refine: int
-    tol_on_surface: float
-    dedup_time_tol: float
-    dedup_point_tol: float
-    max_hits_per_traj: int | None
-    proj: "tuple[str, str]"
-    newton_max_iter: int
-
-    @classmethod
-    def from_config(
-        cls,
-        *,
-        map_cfg: "_SynodicMapConfig",
-        plane_coords: "tuple[str, str]",
-    ) -> "_DetectionSettings":
-        """Create detection settings from configuration objects.
-
-        Parameters
-        ----------
-        map_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
-            Map configuration containing detection parameters.
-        plane_coords : tuple[str, str]
-            Plane coordinate labels for projection.
-
-        Returns
-        -------
-        :class:`~hiten.algorithms.poincare.synodic.backend._DetectionSettings`
-            Configured detection settings object.
-
-        Notes
-        -----
-        This class method extracts numerical parameters from the
-        configuration objects and creates a settings object optimized
-        for efficient access during detection routines.
-        """
-        return cls(
-            use_cubic=(getattr(map_cfg, "interp_kind", "linear") == "cubic"),
-            segment_refine=int(getattr(map_cfg, "segment_refine", 0)),
-            tol_on_surface=float(getattr(map_cfg, "tol_on_surface", 1e-12)),
-            dedup_time_tol=float(getattr(map_cfg, "dedup_time_tol", 1e-9)),
-            dedup_point_tol=float(getattr(map_cfg, "dedup_point_tol", 1e-12)),
-            max_hits_per_traj=getattr(map_cfg, "max_hits_per_traj", None),
-            proj=(str(plane_coords[0]), str(plane_coords[1])),
-            newton_max_iter=int(getattr(map_cfg, "newton_max_iter", 4)),
-        )
 
 
 def _project_batch(
@@ -546,7 +461,13 @@ def _detect_with_segment_refine(
     *,
     event: "_SurfaceEvent",
     proj: "tuple[str, str] | Callable[[np.ndarray], tuple[float, float]]",
-    settings: "_DetectionSettings",
+    use_cubic: bool,
+    segment_refine: int,
+    tol_on_surface: float,
+    dedup_time_tol: float,
+    dedup_point_tol: float,
+    max_hits_per_traj: int | None,
+    newton_max_iter: int,
     trajectory_index: int,
 ) -> "list[_SectionHit]":
     """Detect crossings with segment refinement for dense detection.
@@ -563,8 +484,22 @@ def _detect_with_segment_refine(
         The surface event defining the Poincare section.
     proj : tuple[str, str] or callable
         Projection specification for 2D coordinates.
-    settings : :class:`~hiten.algorithms.poincare.synodic.backend._DetectionSettings`
-        Detection settings including refinement parameters.
+    use_cubic : bool
+        Whether to use cubic Hermite interpolation for high accuracy.
+    segment_refine : int
+        Number of refinement segments for dense crossing detection.
+    tol_on_surface : float
+        Tolerance for considering a point to be on the surface.
+    dedup_time_tol : float
+        Time tolerance for deduplicating nearby crossings.
+    dedup_point_tol : float
+        Point tolerance for deduplicating nearby crossings.
+    max_hits_per_traj : int or None
+        Maximum number of hits per trajectory (None for unlimited).
+    newton_max_iter : int
+        Maximum Newton iterations for root refinement.
+    trajectory_index : int
+        Index of the trajectory that produced these hits.
 
     Returns
     -------
@@ -585,12 +520,11 @@ def _detect_with_segment_refine(
     All time units are in nondimensional units.
     """
     N = times.shape[0]
-    r = int(settings.segment_refine)
+    r = int(segment_refine)
     if r <= 0 or N < 2:
         return []
 
     step = 1.0 / (r + 1)
-    use_cubic = settings.use_cubic
 
     cand_times: list[float] = []
     cand_states: list[np.ndarray] = []
@@ -618,7 +552,7 @@ def _detect_with_segment_refine(
 
         # Direction-aware on-surface at s=0
         accept_left = False
-        if abs(gk) < settings.tol_on_surface:
+        if abs(gk) < tol_on_surface:
             if event.direction is None:
                 accept_left = True
             elif event.direction == 1:
@@ -673,7 +607,7 @@ def _detect_with_segment_refine(
 
             # Optional Newton refinement on the full base segment (cubic g)
             if use_cubic and dt > 0.0:
-                for _ in range(settings.newton_max_iter):
+                for _ in range(newton_max_iter):
                     f = _hermite_scalar(s_star, gk, gk1, d0, d1, dt)
                     df = _hermite_der(s_star, gk, gk1, d0, d1, dt)
                     if df == 0.0:
@@ -717,9 +651,9 @@ def _detect_with_segment_refine(
         cand_states,
         proj,
         seg_order,
-        settings.dedup_time_tol,
-        settings.dedup_point_tol,
-        settings.max_hits_per_traj,
+        dedup_time_tol,
+        dedup_point_tol,
+        max_hits_per_traj,
         trajectory_index,
     )
 
@@ -735,22 +669,6 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
     Unlike propagating backends, this backend does not integrate forward from
     seeds. It performs section detection on (time, state) samples supplied by
     the engine and returns crossings with refined hit states and 2D projections.
-
-    Parameters
-    ----------
-    section_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicSectionConfig`
-        Section configuration containing section parameters and projection axes.
-    map_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
-        Map configuration containing detection and refinement parameters.
-
-    Attributes
-    ----------
-    _section_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicSectionConfig`
-        The section configuration.
-    _cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
-        The map configuration.
-    _settings : :class:`~hiten.algorithms.poincare.synodic.backend._DetectionSettings`
-        Cached detection settings for efficient access.
 
     Notes
     -----
@@ -770,8 +688,16 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         times: np.ndarray, 
         states: np.ndarray, 
         *,
-        section_cfg: _SynodicSectionConfig,
-        map_cfg: _SynodicMapConfig,
+        normal: "np.ndarray | Sequence[float]",
+        offset: float = 0.0,
+        plane_coords: "tuple[str, str]" = ("y", "vy"),
+        interp_kind: Literal["linear", "cubic"] = "linear",
+        segment_refine: int = 0,
+        tol_on_surface: float = 1e-12,
+        dedup_time_tol: float = 1e-9,
+        dedup_point_tol: float = 1e-12,
+        max_hits_per_traj: int | None = None,
+        newton_max_iter: int = 4,
         direction: Literal[1, -1, None] | None = None,
         trajectory_index: int = 0
     ) -> "list[_SectionHit]":
@@ -783,9 +709,29 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
             Array of time points (nondimensional units).
         states : ndarray, shape (n, m)
             Array of state vectors at each time point.
+        normal : array_like, shape (6,)
+            Hyperplane normal vector in synodic coordinates.
+        offset : float, default 0.0
+            Hyperplane offset value (nondimensional units).
+        plane_coords : tuple[str, str], default ("y", "vy")
+            Names of the 2D axes for section point projection.
+        interp_kind : {"linear", "cubic"}, default "linear"
+            Interpolation method for crossing refinement.
+        segment_refine : int, default 0
+            Number of refinement segments for dense crossing detection.
+        tol_on_surface : float, default 1e-12
+            Tolerance for considering a point to be on the surface.
+        dedup_time_tol : float, default 1e-9
+            Time tolerance for deduplicating nearby crossings.
+        dedup_point_tol : float, default 1e-12
+            Point tolerance for deduplicating nearby crossings.
+        max_hits_per_traj : int or None, default None
+            Maximum number of hits per trajectory (None for unlimited).
+        newton_max_iter : int, default 4
+            Maximum Newton iterations for root refinement.
         direction : {1, -1, None}, optional
-            Crossing direction filter. If None, uses the default
-            direction from the section configuration.
+            Crossing direction filter. If None, no direction filtering
+            is applied.
         trajectory_index : int, default 0
             Index of this trajectory within the input trajectory list.
 
@@ -797,7 +743,7 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         Notes
         -----
         This method performs crossing detection on a single trajectory
-        using the configured detection settings. It supports both
+        using the specified detection settings. It supports both
         standard and dense detection modes and applies the appropriate
         refinement method (linear or cubic) based on the configuration.
 
@@ -806,15 +752,31 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         """
         if times.size < 2:
             return []
-        event = section_cfg.build_event(direction=direction)
-        settings = _DetectionSettings.from_config(map_cfg=map_cfg, plane_coords=section_cfg.plane_coords)
-        proj = settings.proj
+        
+        # Create event from raw parameters
+        from hiten.algorithms.poincare.synodic.events import _AffinePlaneEvent
+        event = _AffinePlaneEvent(normal=normal, offset=offset, direction=direction)
+        
+        # Use raw parameters directly
+        use_cubic = (interp_kind == "cubic")
+        proj = plane_coords
 
         g_all = _compute_event_values(event, states)
 
         # Segment refinement path (optional)
-        if int(settings.segment_refine) > 0:
-            return _detect_with_segment_refine(times, states, g_all, event=event, proj=proj, settings=settings, trajectory_index=trajectory_index)
+        if int(segment_refine) > 0:
+            return _detect_with_segment_refine(
+                times, states, g_all, 
+                event=event, proj=proj, 
+                use_cubic=use_cubic,
+                segment_refine=segment_refine,
+                tol_on_surface=tol_on_surface,
+                dedup_time_tol=dedup_time_tol,
+                dedup_point_tol=dedup_point_tol,
+                max_hits_per_traj=max_hits_per_traj,
+                newton_max_iter=newton_max_iter,
+                trajectory_index=trajectory_index
+            )
 
         g0 = g_all[:-1]
         g1 = g_all[1:]
@@ -823,7 +785,7 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         x0 = states[:-1]
         x1 = states[1:]
 
-        on_idx = _on_surface_indices(g_all, settings.tol_on_surface, event.direction)
+        on_idx = _on_surface_indices(g_all, tol_on_surface, event.direction)
         on_mask = np.zeros_like(g0, dtype=bool)
         on_mask[on_idx] = True
 
@@ -835,9 +797,8 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
 
         cr_idx, alpha = _crossing_indices_and_alpha(g0, g1, on_mask=on_mask, direction=event.direction)
         if cr_idx.size:
-            use_cubic = settings.use_cubic
             if use_cubic:
-                thit, xhit = _refine_hits_cubic(times, states, g_all, cr_idx, alpha, max_iter=settings.newton_max_iter)
+                thit, xhit = _refine_hits_cubic(times, states, g_all, cr_idx, alpha, max_iter=newton_max_iter)
             else:
                 thit, xhit = _refine_hits_linear(t0, t1, x0, x1, cr_idx, alpha)
             cand_times.extend(thit.tolist())
@@ -852,9 +813,9 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
             cand_states,
             proj,
             seg_order,
-            settings.dedup_time_tol,
-            settings.dedup_point_tol,
-            settings.max_hits_per_traj,
+            dedup_time_tol,
+            dedup_point_tol,
+            max_hits_per_traj,
             trajectory_index,
         )
 
@@ -862,8 +823,16 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         self, 
         trajectories: "Sequence[tuple[np.ndarray, np.ndarray]]", 
         *,
-        section_cfg: _SynodicSectionConfig,
-        map_cfg: _SynodicMapConfig,
+        normal: "np.ndarray | Sequence[float]",
+        offset: float = 0.0,
+        plane_coords: "tuple[str, str]" = ("y", "vy"),
+        interp_kind: Literal["linear", "cubic"] = "linear",
+        segment_refine: int = 0,
+        tol_on_surface: float = 1e-12,
+        dedup_time_tol: float = 1e-9,
+        dedup_point_tol: float = 1e-12,
+        max_hits_per_traj: int | None = None,
+        newton_max_iter: int = 4,
         direction: Literal[1, -1, None] | None = None
     ) -> "list[list[_SectionHit]]":
         """Detect crossings on a batch of trajectories.
@@ -872,9 +841,29 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         ----------
         trajectories : sequence of tuple[ndarray, ndarray]
             Sequence of (times, states) tuples for each trajectory.
+        normal : array_like, shape (6,)
+            Hyperplane normal vector in synodic coordinates.
+        offset : float, default 0.0
+            Hyperplane offset value (nondimensional units).
+        plane_coords : tuple[str, str], default ("y", "vy")
+            Names of the 2D axes for section point projection.
+        interp_kind : {"linear", "cubic"}, default "linear"
+            Interpolation method for crossing refinement.
+        segment_refine : int, default 0
+            Number of refinement segments for dense crossing detection.
+        tol_on_surface : float, default 1e-12
+            Tolerance for considering a point to be on the surface.
+        dedup_time_tol : float, default 1e-9
+            Time tolerance for deduplicating nearby crossings.
+        dedup_point_tol : float, default 1e-12
+            Point tolerance for deduplicating nearby crossings.
+        max_hits_per_traj : int or None, default None
+            Maximum number of hits per trajectory (None for unlimited).
+        newton_max_iter : int, default 4
+            Maximum Newton iterations for root refinement.
         direction : {1, -1, None}, optional
-            Crossing direction filter. If None, uses the default
-            direction from the section configuration.
+            Crossing direction filter. If None, no direction filtering
+            is applied.
 
         Returns
         -------
@@ -895,8 +884,16 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         for i, (times, states) in enumerate(trajectories):
             out.append(self.detect_on_trajectory(
                 times, states, 
-                section_cfg=section_cfg, 
-                map_cfg=map_cfg, 
+                normal=normal,
+                offset=offset,
+                plane_coords=plane_coords,
+                interp_kind=interp_kind,
+                segment_refine=segment_refine,
+                tol_on_surface=tol_on_surface,
+                dedup_time_tol=dedup_time_tol,
+                dedup_point_tol=dedup_point_tol,
+                max_hits_per_traj=max_hits_per_traj,
+                newton_max_iter=newton_max_iter,
                 direction=direction,
                 trajectory_index=i
             ))

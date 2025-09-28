@@ -80,23 +80,6 @@ class _SingleHitBackend(_ReturnMapBackend):
     1. Coarse integration to get near the section
     2. Fine root finding to locate the exact crossing point
 
-    Parameters
-    ----------
-    forward : int, default=1
-        Integration direction (1 for forward, -1 for backward).
-    method : {'fixed', 'symplectic', 'adaptive'}, default='adaptive'
-        Integration method to use.
-    order : int, default=8
-        Integration order for Runge-Kutta methods.
-    pre_steps : int, default=1000
-        Number of pre-integration steps for coarse integration.
-    refine_steps : int, default=3000
-        Number of refinement steps for root finding.
-    bracket_dx : float, default=1e-10
-        Initial bracket size for root finding.
-    max_expand : int, default=500
-        Maximum bracket expansion iterations.
-
     Notes
     -----
     This backend is optimized for single-hit computations where only
@@ -112,24 +95,8 @@ class _SingleHitBackend(_ReturnMapBackend):
 
     def __init__(
         self,
-        *,
-        forward: int = 1,
-        method: Literal["fixed", "symplectic", "adaptive"] = "adaptive",
-        order: int = 8,
-        pre_steps: int = 1000,
-        refine_steps: int = 3000,
-        bracket_dx: float = 1e-10,
-        max_expand: int = 500,
     ) -> None:
-        super().__init__(
-            forward=forward,
-            method=method,
-            order=order,
-            pre_steps=pre_steps,
-            refine_steps=refine_steps,
-            bracket_dx=bracket_dx,
-            max_expand=max_expand,
-        )
+        super().__init__()
 
     def run(
         self,
@@ -139,6 +106,9 @@ class _SingleHitBackend(_ReturnMapBackend):
         surface: "_SurfaceEvent",
         dt: float = 1e-2,
         t_guess: float | None = None,
+        forward: int = 1,
+        method: Literal["fixed", "symplectic", "adaptive"] = "adaptive",
+        order: int = 8,
     ) -> tuple[np.ndarray, np.ndarray]:
         """Find the next crossing for every seed.
 
@@ -157,7 +127,7 @@ class _SingleHitBackend(_ReturnMapBackend):
         t_guess : float, optional
             Initial guess for the crossing time. If None, uses a
             default value based on the orbital period.
-
+    
         Returns
         -------
         points : ndarray, shape (k, 2)
@@ -182,7 +152,7 @@ class _SingleHitBackend(_ReturnMapBackend):
         """
         pts, states = [], []
         for s in seeds:
-            hit = self._cross(s, dynsys=dynsys, surface=surface, t_guess=t_guess)
+            hit = self._cross(s, dynsys=dynsys, surface=surface, t_guess=t_guess, forward=forward)
             if hit is not None:
                 pts.append(hit.point2d)
                 states.append(hit.state.copy())
@@ -191,7 +161,7 @@ class _SingleHitBackend(_ReturnMapBackend):
             return np.asarray(pts, float), np.asarray(states, float)
         return np.empty((0, 2)), np.empty((0, 6))
 
-    def _cross_event_driven(self, state0: np.ndarray, *, dynsys: "_DynamicalSystemProtocol", surface: "_SurfaceEvent", t0: float, tmax: float) -> _SectionHit | None:
+    def _cross_event_driven(self, state0: np.ndarray, *, dynsys: "_DynamicalSystemProtocol", surface: "_SurfaceEvent", t0: float, tmax: float, forward: int) -> _SectionHit | None:
         """Find a single crossing using event-driven integration.
 
         Parameters
@@ -244,7 +214,7 @@ class _SingleHitBackend(_ReturnMapBackend):
             y_start,
             0.0,
             t_start,
-            forward=self._forward,
+            forward=forward,
             steps=2,
             method="adaptive",
             order=8,
@@ -264,7 +234,7 @@ class _SingleHitBackend(_ReturnMapBackend):
         # diagnostics disabled by default
         return None
 
-    def _cross(self, state0: np.ndarray, *, dynsys: "_DynamicalSystemProtocol", surface: "_SurfaceEvent", t_guess: float | None = None, t0_offset: float = 0.15, t_window: float | None = None):
+    def _cross(self, state0: np.ndarray, *, dynsys: "_DynamicalSystemProtocol", surface: "_SurfaceEvent", t_guess: float | None = None, t0_offset: float = 0.15, t_window: float | None = None, forward: int = 1):
         """Find a single crossing using event-driven integrators."""
         # If a hint is provided, confine search to a small window around it to keep branch selection consistent.
         if (t_guess is not None) and (t_window is not None) and (t_window > 0.0):
@@ -282,7 +252,7 @@ class _SingleHitBackend(_ReturnMapBackend):
             t0 = float(max(t_start - half_span, 0.0))
             tmax = float(t0 + 2.0 * half_span)
         # diagnostics disabled by default
-        hit = self._cross_event_driven(np.asarray(state0, float), dynsys=dynsys, surface=surface, t0=t0, tmax=tmax)
+        hit = self._cross_event_driven(np.asarray(state0, float), dynsys=dynsys, surface=surface, t0=t0, tmax=tmax, forward=forward)
         # If a hint was used and no hit was found, progressively widen the window (up to pi) then fall back
         if hit is None and t_guess is not None:
             span = float(t_window if (t_window is not None and t_window > 0.0) else 0.1)
@@ -291,7 +261,7 @@ class _SingleHitBackend(_ReturnMapBackend):
                 t0_try = float(max(t_guess - 0.5 * span, 0.0))
                 tmax_try = float(t0_try + span)
                 # diagnostics disabled by default
-                hit = self._cross_event_driven(np.asarray(state0, float), dynsys=dynsys, surface=surface, t0=t0_try, tmax=tmax_try)
+                hit = self._cross_event_driven(np.asarray(state0, float), dynsys=dynsys, surface=surface, t0=t0_try, tmax=tmax_try, forward=forward)
                 if hit is not None:
                     # diagnostics disabled by default
                     break
@@ -306,12 +276,12 @@ class _SingleHitBackend(_ReturnMapBackend):
             t0_fb = t_start
             tmax_fb = t_start + float(np.pi)
             # diagnostics disabled by default
-            hit = self._cross_event_driven(np.asarray(state0, float), dynsys=dynsys, surface=surface, t0=t0_fb, tmax=tmax_fb)
+            hit = self._cross_event_driven(np.asarray(state0, float), dynsys=dynsys, surface=surface, t0=t0_fb, tmax=tmax_fb, forward=forward)
         return hit
 
 
 
-def find_crossing(dynsys, state0, surface, **kwargs):
+def find_crossing(dynsys, state0, surface, forward: int = 1, **kwargs):
     """Find a single crossing for a given state and surface.
 
     Parameters
@@ -339,7 +309,7 @@ def find_crossing(dynsys, state0, surface, **kwargs):
     backend instance explicitly.
     """
     be = _SingleHitBackend(**kwargs)
-    return be.run(np.asarray(state0, float), dynsys=dynsys, surface=surface)
+    return be.run(np.asarray(state0, float), dynsys=dynsys, surface=surface, forward=forward)
 
 
 def _plane_crossing_factory(coord: str, value: float = 0.0, direction: int | None = None):
@@ -387,9 +357,9 @@ def _plane_crossing_factory(coord: str, value: float = 0.0, direction: int | Non
     except Exception:
         pass
 
-    def _section_crossing(*, dynsys, x0, forward: int = 1, t_guess: float | None = None, t_window: float | None = None, **kwargs):
-        be = _SingleHitBackend(forward=forward, **kwargs)
-        hit = be._cross(np.asarray(x0, float), dynsys=dynsys, surface=event, t_guess=t_guess, t_window=t_window)
+    def _section_crossing(*, dynsys, x0, forward: int = 1, t_guess: float | None = None, t_window: float | None = None):
+        be = _SingleHitBackend()
+        hit = be._cross(np.asarray(x0, float), dynsys=dynsys, surface=event, t_guess=t_guess, t_window=t_window, forward=forward)
         if hit is None:
             return None, None
         return hit.time, hit.state

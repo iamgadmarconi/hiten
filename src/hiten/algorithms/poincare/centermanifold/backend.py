@@ -389,27 +389,6 @@ class _CenterManifoldBackend(_ReturnMapBackend):
     using Numba-compiled kernels for Hamiltonian integration and Poincare map
     evaluation. It supports both Runge-Kutta and symplectic integration methods.
 
-    Parameters
-    ----------
-    forward : int, default=1
-        Integration direction (1 for forward, -1 for backward).
-    max_steps : int, default=2000
-        Maximum integration steps per trajectory.
-    method : {'fixed', 'symplectic', 'adaptive'}, default='adaptive'
-        Integration method.
-    order : int, default=8
-        Integration order for Runge-Kutta methods.
-    pre_steps : int, default=1000
-        Pre-integration steps for trajectory stabilization.
-    refine_steps : int, default=3000
-        Refinement steps for root finding.
-    bracket_dx : float, default=1e-10
-        Initial bracket size for root finding.
-    max_expand : int, default=500
-        Maximum bracket expansion iterations.
-    c_omega_heuristic : float, default=20.0
-        Heuristic parameter for symplectic integration.
-
     Notes
     -----
     State vectors are ordered as [q1, q2, q3, p1, p2, p3].
@@ -419,32 +398,8 @@ class _CenterManifoldBackend(_ReturnMapBackend):
 
     def __init__(
         self,
-        *,
-        forward: int = 1,
-        max_steps: int = 2000,
-        method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
-        order: int = 8,
-        pre_steps: int = 1000,
-        refine_steps: int = 3000,
-        bracket_dx: float = 1e-10,
-        max_expand: int = 500,
-        c_omega_heuristic: float = 20.0,
     ) -> None:
-        super().__init__(
-            forward=forward,
-            method=method,
-            order=order,
-            pre_steps=pre_steps,
-            refine_steps=refine_steps,
-            bracket_dx=bracket_dx,
-            max_expand=max_expand,
-        )
-
-        self._order = order
-        self._max_steps = max_steps
-        self._use_symplectic = method == "symplectic"
-        self._n_dof = N_SYMPLECTIC_DOF
-        self._c_omega_heuristic = c_omega_heuristic
+        super().__init__()
 
     def run(
         self,
@@ -454,6 +409,11 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         jac_H,
         clmo_table,
         section_coord: str,
+        forward: int = 1,
+        max_steps: int = 2000,
+        method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
+        order: int = 8,
+        c_omega_heuristic: float = 20.0,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Propagate center manifold seeds until the next Poincare section crossing.
 
@@ -498,12 +458,12 @@ class _CenterManifoldBackend(_ReturnMapBackend):
             dt,
             jac_H,
             clmo_table,
-            self._order,
-            self._max_steps,
-            self._use_symplectic,
+            order,
+            max_steps,
+            method == "symplectic",
             N_SYMPLECTIC_DOF,
             section_coord,
-            self._c_omega_heuristic,
+            c_omega_heuristic,
         )
 
         states_list: list[tuple[float, float, float, float]] = []
