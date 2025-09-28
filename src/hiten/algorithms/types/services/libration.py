@@ -1098,7 +1098,7 @@ class _TriangularDynamicsService(_LibrationDynamicsService):
         tuple
             (s1, s2) scale factors for the hyperbolic and elliptic components.
         """
-        cache_key = self.make_key(id(self.domain_obj), "scale_factor")
+        cache_key = self.make_key(id(self.domain_obj), "scale_factor", idx)
         
         def _factory() -> Tuple[float, float]:
             return self._compute_scale_factor(idx)

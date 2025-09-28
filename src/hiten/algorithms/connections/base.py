@@ -28,8 +28,7 @@ import numpy as np
 from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
                                          _HitenBaseFacade)
 from hiten.algorithms.types.exceptions import EngineError
-from hiten.utils.plots import (plot_connection_trajectories,
-                               plot_poincare_connections_map)
+from hiten.utils.plots import plot_poincare_connections_map
 
 if TYPE_CHECKING:
     from hiten.algorithms.connections.engine import _ConnectionEngine
