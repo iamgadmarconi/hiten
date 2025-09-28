@@ -183,6 +183,25 @@ class _DynamicsServiceBase(ABC):
             The cache key to reset. If None, the entire cache is cleared.
         """
         return self._cache.reset(key)
+    
+    def __getstate__(self):
+        """Get state for pickling.
+        
+        Preserves computed properties and cache that are expensive to recompute.
+        Excludes only the domain_obj to avoid circular references.
+        """
+        state = self.__dict__.copy()
+        state.pop('_domain_obj', None)
+        return state
+    
+    def __setstate__(self, state):
+        """Set state after unpickling.
+        
+        Restores computed properties and cache, reinitializes only domain_obj.
+        """
+        self.__dict__.update(state)
+        # Only reinitialize domain_obj (will be set by the parent object)
+        self._domain_obj = None
 
 
 class _ServiceBundleBase(ABC):

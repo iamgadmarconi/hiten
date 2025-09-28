@@ -524,29 +524,131 @@ class _HitenBase(ABC):
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}()"
 
-    def __getstate__(self):
-        """Get state for pickling.
+    def _get_computed_properties_source(self):
+        """Get the source object for computed properties.
         
-        Excludes services from pickling as they often contain
-        non-serializable objects like numba-compiled functions.
+        By default, uses the dynamics service if available. Subclasses can override to use
+        a different source object or multiple sources.
+        
+        Returns
+        -------
+        object or None
+            The object containing the computed properties, or None if no source available.
         """
+        return getattr(self, 'dynamics', None) if hasattr(self, 'dynamics') else None
+    
+    def _set_computed_properties_target(self):
+        """Get the target object for restoring computed properties.
+        
+        By default, uses the dynamics service if available. Subclasses can override to use
+        a different target object.
+        
+        Returns
+        -------
+        object or None
+            The object where computed properties should be restored, or None if no target available.
+        """
+        return getattr(self, 'dynamics', None) if hasattr(self, 'dynamics') else None
+    
+    def _is_computed_property(self, attr_name, value):
+        """Determine if an attribute represents a computed property that should be preserved.
+        
+        This method can be overridden by subclasses to define custom logic for
+        identifying computed properties. By default, preserves attributes that:
+        1. Start with underscore (private attributes)
+        2. Are not None
+        3. Are not callable (methods)
+        4. Are not basic types like strings, ints, bools (computed data)
+        5. Are not abstract base class internals
+        
+        Parameters
+        ----------
+        attr_name : str
+            The name of the attribute
+        value : any
+            The value of the attribute
+            
+        Returns
+        -------
+        bool
+            True if this attribute should be preserved during serialization
+        """
+        # Skip if None or callable
+        if value is None or callable(value):
+            return False
+            
+        # Skip basic immutable types that are typically configuration, not computed data
+        if isinstance(value, (str, int, float, bool, type(None))):
+            return False
+            
+        # Skip service-related attributes
+        if attr_name in ['_services', '_cache', '_domain_obj']:
+            return False
+            
+        # Skip abstract base class internals
+        if attr_name.startswith('_abc_'):
+            return False
+            
+        # Skip module references
+        if hasattr(value, '__module__') and value.__module__ == 'abc':
+            return False
+            
+        # Skip known problematic types
+        if isinstance(value, (type, type(None))):
+            return False
+            
+        # Preserve private attributes that contain computed data
+        if attr_name.startswith('_'):
+            return True
+            
+        return False
+
+    def __getstate__(self):
+        """Get state for pickling, preserving computed properties."""
         state = self.__dict__.copy()
         state.pop("_services", None)
-        # Only remove service-related attributes, not all private attributes
+
+        source = self._get_computed_properties_source()
+        if source is not None:
+            # Automatically detect computed properties
+            for attr_name in dir(source):
+                if not attr_name.startswith('__'):  # Skip magic methods
+                    try:
+                        value = getattr(source, attr_name)
+                        if self._is_computed_property(attr_name, value):
+                            state[attr_name] = value
+                    except (AttributeError, TypeError):
+                        # Skip attributes that can't be accessed
+                        continue
+        
+        # Remove other service-related attributes
         service_attrs = [name for name in dir(self) if name.startswith('_') and not name.startswith('__')]
         for attr in service_attrs:
             if hasattr(self, attr) and not callable(getattr(self, attr)):
                 # Only remove attributes that are clearly service-related
                 if attr in ['_cache', '_persistence', '_dynamics', '_correction', '_continuation', 'pipeline', '_conversion'] or attr.endswith('_service'):
                     state.pop(attr, None)
+        
         return state
     
     def __setstate__(self, state):
-        """Set state after unpickling.
-        """
+        """Set state after unpickling, restoring computed properties."""
         self.__dict__.update(state)
         if not hasattr(self, "_cache") or self._cache is None:
             self._cache = {}
+        
+        # Collect computed properties from the state
+        computed_data = {}
+        for attr_name, value in state.items():
+            if self._is_computed_property(attr_name, value):
+                computed_data[attr_name] = value
+        
+        # Restore computed properties to the target object if available
+        target = self._set_computed_properties_target()
+        if target is not None:
+            for attr_name, value in computed_data.items():
+                if hasattr(target, attr_name):
+                    setattr(target, attr_name, value)
 
     def _unpack_services(self) -> None:
         """Unpack services from the service bundle into individual attributes.
@@ -584,7 +686,7 @@ class _HitenBase(ABC):
         This method handles the full service setup pattern:
         1. Sets the service bundle
         2. Binds individual service properties
-        3. Resets the dynamics cache if available
+        3. Resets the dynamics cache if available (but preserves computed properties)
         
         Parameters
         ----------
@@ -593,9 +695,16 @@ class _HitenBase(ABC):
         """
         self._services = services
         self._bind_services()
-        # Reset dynamics cache if dynamics service is available
+        # Reset dynamics cache if dynamics service is available, but preserve computed properties
         if hasattr(self, '_dynamics') and self._dynamics is not None:
-            self._dynamics.reset()
+            # Check if dynamics service has computed properties that should be preserved
+            has_computed_properties = any(
+                hasattr(self._dynamics, attr) and getattr(self._dynamics, attr) is not None
+                for attr in ['_period', '_trajectory', '_times', '_stability_info']
+            )
+            
+            if not has_computed_properties:
+                self._dynamics.reset()
 
     @classmethod
     def _load_with_services(cls, filepath: str | Path, persistence_service, services_factory, **kwargs) -> "_HitenBase":
@@ -624,8 +733,12 @@ class _HitenBase(ABC):
             The loaded object with services properly initialized
         """
         obj = persistence_service.load(filepath, **kwargs)
-        services = services_factory(obj)
-        obj._setup_services(services)
+        if not hasattr(obj, '_services') or obj._services is None:
+            services = services_factory(obj)
+            obj._setup_services(services)
+        else:
+            obj._unpack_services()
+        
         return obj
 
     def save(self, filepath: str | Path, **kwargs) -> None:
