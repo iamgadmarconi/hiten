@@ -1170,8 +1170,6 @@ def plot_connection_trajectories(
     dark_mode: bool = False,
     src_color: str = 'C0',
     tgt_color: str = 'C1',
-    connection_color: str = 'gold',
-    delta_v_color: str = 'orange',
 ) -> Tuple[plt.Figure, plt.Axes]:
     """Plot the trajectories forming a specific connection.
 
@@ -1199,10 +1197,6 @@ def plot_connection_trajectories(
         Color for the source trajectory.
     tgt_color : str, default 'C1'
         Color for the target trajectory.
-    connection_color : str, default 'gold'
-        Color for the connection point.
-    delta_v_color : str, default 'orange'
-        Color for the Delta-V vector.
 
     Returns
     -------
@@ -1243,41 +1237,48 @@ def plot_connection_trajectories(
     ... )
     """
 
-    # Get connection point from the 6D states (both states should be at the same point)
     connection_point = connection_result.state_u[:3]  # Use source state position
     
-    # Calculate delta-v vector from velocity difference
-    delta_v = connection_result.state_u[3:6] - connection_result.state_s[3:6]
-    
-    # Create the plot
     fig = plt.figure(figsize=figsize)
     ax = fig.add_subplot(111, projection='3d')
     
-    # Plot the source trajectory
+    def find_closest_point_index(trajectory_states, target_point):
+        """Find the index of the trajectory point closest to the target point."""
+        if trajectory_states is None or len(trajectory_states) == 0:
+            return None
+        
+        distances = np.linalg.norm(trajectory_states[:, :3] - target_point, axis=1)
+        return np.argmin(distances)
+    
     if source_trajectory is not None:
-        ax.plot(source_trajectory.states[:, 0], source_trajectory.states[:, 1], source_trajectory.states[:, 2], 
-                color=src_color, linewidth=2, alpha=0.8, label='Source trajectory')
+        src_closest_idx = find_closest_point_index(source_trajectory.states, connection_point)
+        
+        if src_closest_idx is not None:
+            src_x = np.concatenate([source_trajectory.states[:src_closest_idx+1, 0], [connection_point[0]]])
+            src_y = np.concatenate([source_trajectory.states[:src_closest_idx+1, 1], [connection_point[1]]])
+            src_z = np.concatenate([source_trajectory.states[:src_closest_idx+1, 2], [connection_point[2]]])
+            
+            ax.plot(src_x, src_y, src_z, 
+                   color=src_color, linewidth=2, alpha=0.8, label='Source trajectory')
+        else:
+            ax.plot(source_trajectory.states[:, 0], source_trajectory.states[:, 1], source_trajectory.states[:, 2], 
+                    color=src_color, linewidth=2, alpha=0.8, label='Source trajectory')
     
-    # Plot the target trajectory
     if target_trajectory is not None:
-        ax.plot(target_trajectory.states[:, 0], target_trajectory.states[:, 1], target_trajectory.states[:, 2], 
-                color=tgt_color, linewidth=2, alpha=0.8, label='Target trajectory')
+        tgt_closest_idx = find_closest_point_index(target_trajectory.states, connection_point)
+        
+        if tgt_closest_idx is not None:
+            tgt_x = np.concatenate([[connection_point[0]], target_trajectory.states[tgt_closest_idx:, 0]])
+            tgt_y = np.concatenate([[connection_point[1]], target_trajectory.states[tgt_closest_idx:, 1]])
+            tgt_z = np.concatenate([[connection_point[2]], target_trajectory.states[tgt_closest_idx:, 2]])
+            
+            ax.plot(tgt_x, tgt_y, tgt_z, 
+                   color=tgt_color, linewidth=2, alpha=0.8, label='Target trajectory')
+        else:
+            ax.plot(target_trajectory.states[:, 0], target_trajectory.states[:, 1], target_trajectory.states[:, 2], 
+                    color=tgt_color, linewidth=2, alpha=0.8, label='Target trajectory')
     
-    # Plot connection point
-    ax.scatter(connection_point[0], connection_point[1], connection_point[2], 
-              color=connection_color, s=100, label='Connection point', zorder=5)
-    
-    # Plot Delta-V vector
-    if delta_v is not None and np.linalg.norm(delta_v) > 1e-10:
-        ax.quiver(connection_point[0], connection_point[1], connection_point[2],
-                 delta_v[0], delta_v[1], delta_v[2], 
-                 color=delta_v_color, arrow_length_ratio=0.1, linewidth=3,
-                 label=f'delta_v = {connection_result.delta_v:.2e}')
-    
-    # Add primary bodies for reference using existing helpers
     mu = _get_mass_parameter(bodies[0].mass, bodies[1].mass)
-    
-    # Primary and secondary in rotating-frame canonical positions
     primary_pos = np.array([-mu, 0, 0])
     secondary_pos = np.array([1 - mu, 0, 0])
     _plot_body(ax, primary_pos, bodies[0].radius / system_distance,
@@ -1285,20 +1286,16 @@ def plot_connection_trajectories(
     _plot_body(ax, secondary_pos, bodies[1].radius / system_distance,
                _get_body_color(bodies[1], 'slategray'), bodies[1].name)
     
-    # Set labels and title
     ax.set_xlabel('X (nondimensional)')
     ax.set_ylabel('Y (nondimensional)')
     ax.set_zlabel('Z (nondimensional)')
     title = f'Connection: dv = {connection_result.delta_v:.2e} ({connection_result.kind})'
     ax.set_title(title)
     
-    # Add legend
     ax.legend()
     
-    # Use existing helper for equal aspect ratio
     _set_axes_equal(ax)
     
-    # Use existing helper for dark mode styling
     if dark_mode:
         _set_dark_mode(fig, ax, title)
     
