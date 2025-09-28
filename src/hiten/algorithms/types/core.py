@@ -577,10 +577,6 @@ class _HitenBase(ABC):
         if value is None or callable(value):
             return False
             
-        # Skip basic immutable types that are typically configuration, not computed data
-        if isinstance(value, (str, int, float, bool, type(None))):
-            return False
-            
         # Skip service-related attributes
         if attr_name in ['_services', '_cache', '_domain_obj']:
             return False
