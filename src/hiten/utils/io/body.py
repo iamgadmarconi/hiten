@@ -43,7 +43,7 @@ def save_body(body: "Body", path: str | Path) -> None:
         f.attrs["color"] = body.color
 
         # For secondaries, store parent name (optional metadata)
-        parent_name = body.parent.name if body.parent is not body else None
+        parent_name = body.parent.name if body.parent is not None and body.parent is not body else None
         if parent_name is not None:
             f.attrs["parent_name"] = parent_name
 

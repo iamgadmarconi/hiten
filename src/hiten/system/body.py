@@ -31,20 +31,18 @@ class Body(_HitenBase):
         self._mass = mass
         self._radius = radius
         self._color = color
-        self._parent = parent
+        self._parent = parent if parent is not None else self
         
         services = _BodyServices.default(self)
         super().__init__(services)
+
 
     def __str__(self) -> str:
         parent_desc = f"orbiting {self.parent.name}" if self.parent is not self else "(Primary)"
         return f"{self.name} {parent_desc}"
 
     def __repr__(self) -> str:
-        if self.parent is self:
-            parent_repr = ""
-        else:
-            parent_repr = f", parent=Body(name='{self.parent.name}', ...)"
+        parent_repr = f", parent=Body(name='{self.parent.name}', ...)" if self.parent is not self else ""
 
         return f"Body(name={self.name!r}, mass={self.mass}, radius={self.radius}, color={self.color!r}{parent_repr})"
 

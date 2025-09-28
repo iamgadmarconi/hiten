@@ -4,7 +4,9 @@ from pathlib import Path
 
 import numpy as np
 
-from hiten.system import (CenterManifold, HaloOrbit, Manifold, System,
+from hiten.system import (Body, CenterManifold, HaloOrbit, Hamiltonian, 
+                          InvariantTori, LieGeneratingFunction, L1Point, 
+                          L2Point, L4Point, Manifold, OrbitFamily, System,
                           CenterManifoldMap)
 from hiten.utils.log_config import logger
 
@@ -102,3 +104,245 @@ def test_serialization() -> None:
     logger.info("[CenterManifoldMap] round-trip OK\n")
 
     logger.info("\nAll serialisation tests passed")
+
+
+def test_body_serialization() -> None:
+    """Test Body class serialization."""
+    _reset_tmp_dir()
+    
+    logger.info("\n[SET-UP] Testing Body serialization ...")
+    
+    # Create a Body instance
+    earth = Body("Earth", 5.972e24, 6.371e6, color="blue")
+    moon = Body("Moon", 7.342e22, 1.737e6, color="gray", parent=earth)
+    
+    # Test Earth serialization
+    earth_path = TMP_DIR / "earth.h5"
+    logger.info("[Body] saving Earth: %s", earth_path)
+    earth.save(str(earth_path))
+    
+    earth_loaded = Body.load(str(earth_path))
+    assert earth_loaded.name == earth.name
+    assert earth_loaded.mass == earth.mass
+    assert earth_loaded.radius == earth.radius
+    assert earth_loaded.color == earth.color
+    assert earth_loaded.parent is earth_loaded  # Primary body
+    logger.info("[Body] Earth round-trip OK")
+    
+    # Test Moon serialization
+    moon_path = TMP_DIR / "moon.h5"
+    logger.info("[Body] saving Moon: %s", moon_path)
+    moon.save(str(moon_path))
+    
+    moon_loaded = Body.load(str(moon_path))
+    assert moon_loaded.name == moon.name
+    assert moon_loaded.mass == moon.mass
+    assert moon_loaded.radius == moon.radius
+    assert moon_loaded.color == moon.color
+    # Note: parent relationship is not preserved in serialization
+    logger.info("[Body] Moon round-trip OK")
+    
+    logger.info("[Body] serialization tests passed\n")
+
+
+def test_libration_point_serialization() -> None:
+    """Test LibrationPoint classes serialization."""
+    _reset_tmp_dir()
+    
+    logger.info("\n[SET-UP] Testing LibrationPoint serialization ...")
+    
+    # Create a system and libration points
+    system = System.from_bodies("earth", "moon")
+    L1 = system.get_libration_point(1)
+    L2 = system.get_libration_point(2)
+    L4 = system.get_libration_point(4)
+    
+    # Test L1 serialization
+    l1_path = TMP_DIR / "l1.h5"
+    logger.info("[L1Point] saving: %s", l1_path)
+    L1.save(str(l1_path))
+    
+    l1_loaded = L1Point.load(str(l1_path))
+    assert l1_loaded.idx == L1.idx
+    assert l1_loaded.mu == L1.mu
+    _assert_equal("L1Point.position", L1.position, l1_loaded.position)
+    logger.info("[L1Point] round-trip OK")
+    
+    # Test L2 serialization
+    l2_path = TMP_DIR / "l2.h5"
+    logger.info("[L2Point] saving: %s", l2_path)
+    L2.save(str(l2_path))
+    
+    l2_loaded = L2Point.load(str(l2_path))
+    assert l2_loaded.idx == L2.idx
+    assert l2_loaded.mu == L2.mu
+    _assert_equal("L2Point.position", L2.position, l2_loaded.position)
+    logger.info("[L2Point] round-trip OK")
+    
+    # Test L4 serialization
+    l4_path = TMP_DIR / "l4.h5"
+    logger.info("[L4Point] saving: %s", l4_path)
+    L4.save(str(l4_path))
+    
+    l4_loaded = L4Point.load(str(l4_path))
+    assert l4_loaded.idx == L4.idx
+    assert l4_loaded.mu == L4.mu
+    _assert_equal("L4Point.position", L4.position, l4_loaded.position)
+    logger.info("[L4Point] round-trip OK")
+    
+    logger.info("[LibrationPoint] serialization tests passed\n")
+
+
+def test_hamiltonian_serialization() -> None:
+    """Test Hamiltonian class serialization."""
+    _reset_tmp_dir()
+    
+    logger.info("\n[SET-UP] Testing Hamiltonian serialization ...")
+    
+    # Create a system and center manifold to get a Hamiltonian
+    system = System.from_bodies("earth", "moon")
+    L1 = system.get_libration_point(1)
+    cm = CenterManifold(L1, degree=4)
+    
+    # Get a Hamiltonian from the center manifold
+    hamiltonian = cm.compute()
+    
+    # Test Hamiltonian serialization
+    ham_path = TMP_DIR / "hamiltonian.h5"
+    logger.info("[Hamiltonian] saving: %s", ham_path)
+    hamiltonian.save(str(ham_path))
+    
+    ham_loaded = Hamiltonian.load(str(ham_path))
+    assert ham_loaded.name == hamiltonian.name
+    assert ham_loaded.degree == hamiltonian.degree
+    assert ham_loaded.ndof == hamiltonian.ndof
+    assert len(ham_loaded.poly_H) == len(hamiltonian.poly_H)
+    
+    # Compare polynomial coefficients
+    for i, (orig, loaded) in enumerate(zip(hamiltonian.poly_H, ham_loaded.poly_H)):
+        _assert_equal(f"Hamiltonian.poly_H[{i}]", orig, loaded)
+    
+    logger.info("[Hamiltonian] round-trip OK")
+    logger.info("[Hamiltonian] serialization tests passed\n")
+
+
+def test_lie_generating_function_serialization() -> None:
+    """Test LieGeneratingFunction class serialization."""
+    _reset_tmp_dir()
+    
+    logger.info("\n[SET-UP] Testing LieGeneratingFunction serialization ...")
+    
+    # Create a system and center manifold to get generating functions
+    system = System.from_bodies("earth", "moon")
+    L1 = system.get_libration_point(1)
+    cm = CenterManifold(L1, degree=4)
+    
+    # Get generating functions from the center manifold
+    generating_functions = L1.generating_functions(4)
+    
+    if generating_functions:  # Only test if generating functions exist
+        lgf = generating_functions[0]  # Test the first one
+        
+        # Test LieGeneratingFunction serialization
+        lgf_path = TMP_DIR / "lie_generating_function.h5"
+        logger.info("[LieGeneratingFunction] saving: %s", lgf_path)
+        lgf.save(str(lgf_path))
+        
+        lgf_loaded = LieGeneratingFunction.load(str(lgf_path))
+        assert lgf_loaded.name == lgf.name
+        assert lgf_loaded.degree == lgf.degree
+        assert lgf_loaded.ndof == lgf.ndof
+        assert len(lgf_loaded.poly_G) == len(lgf.poly_G)
+        
+        # Compare polynomial coefficients
+        for i, (orig, loaded) in enumerate(zip(lgf.poly_G, lgf_loaded.poly_G)):
+            _assert_equal(f"LieGeneratingFunction.poly_G[{i}]", orig, loaded)
+        
+        logger.info("[LieGeneratingFunction] round-trip OK")
+    else:
+        logger.info("[LieGeneratingFunction] No generating functions available, skipping test")
+    
+    logger.info("[LieGeneratingFunction] serialization tests passed\n")
+
+
+def test_orbit_family_serialization() -> None:
+    """Test OrbitFamily class serialization."""
+    _reset_tmp_dir()
+    
+    logger.info("\n[SET-UP] Testing OrbitFamily serialization ...")
+    
+    # Create a system and some orbits
+    system = System.from_bodies("earth", "moon")
+    L1 = system.get_libration_point(1)
+    
+    # Create a few orbits
+    orbits = []
+    for i in range(3):
+        orbit = HaloOrbit(L1, amplitude_z=0.01 + i*0.005, zenith="northern")
+        orbit.period = 2 * math.pi + i * 0.1  # Different periods
+        orbits.append(orbit)
+    
+    # Create orbit family
+    family = OrbitFamily(orbits, parameter_name="amplitude", 
+                        parameter_values=np.array([0.01, 0.015, 0.02]))
+    
+    # Test OrbitFamily serialization
+    family_path = TMP_DIR / "orbit_family.h5"
+    logger.info("[OrbitFamily] saving: %s", family_path)
+    family.save(str(family_path))
+    
+    family_loaded = OrbitFamily.load(str(family_path))
+    assert family_loaded.parameter_name == family.parameter_name
+    assert len(family_loaded.orbits) == len(family.orbits)
+    _assert_equal("OrbitFamily.parameter_values", 
+                  family.parameter_values, 
+                  family_loaded.parameter_values)
+    
+    # Compare orbits
+    for i, (orig, loaded) in enumerate(zip(family.orbits, family_loaded.orbits)):
+        _assert_equal(f"OrbitFamily.orbits[{i}].initial_state", 
+                      orig.initial_state, 
+                      loaded.initial_state)
+        assert orig.period == loaded.period
+    
+    logger.info("[OrbitFamily] round-trip OK")
+    logger.info("[OrbitFamily] serialization tests passed\n")
+
+
+def test_invariant_tori_serialization() -> None:
+    """Test InvariantTori class serialization."""
+    _reset_tmp_dir()
+    
+    logger.info("\n[SET-UP] Testing InvariantTori serialization ...")
+    
+    # Create a system and orbit
+    system = System.from_bodies("earth", "moon")
+    L1 = system.get_libration_point(1)
+    orbit = HaloOrbit(L1, amplitude_z=0.01, zenith="northern")
+    orbit.period = 2 * math.pi
+    orbit.correct()
+    orbit.propagate()
+    
+    # Create invariant tori
+    tori = InvariantTori(orbit)
+    
+    # Compute the torus grid
+    epsilon = 0.1
+    n_theta1, n_theta2 = 10, 8
+    grid = tori.compute(epsilon=epsilon, n_theta1=n_theta1, n_theta2=n_theta2)
+    
+    # Test InvariantTori serialization
+    tori_path = TMP_DIR / "invariant_tori.h5"
+    logger.info("[InvariantTori] saving: %s", tori_path)
+    tori.save(str(tori_path))
+    
+    tori_loaded = InvariantTori.load(str(tori_path))
+    assert tori_loaded.period == tori.period
+    assert tori_loaded.jacobi == tori.jacobi
+    assert tori_loaded.energy == tori.energy
+    
+    # Compare grids
+    _assert_equal("InvariantTori.grid", tori.grid, tori_loaded.grid)
+    
+    logger.info("[InvariantTori] round-trip OK")
+    logger.info("[InvariantTori] serialization tests passed\n")

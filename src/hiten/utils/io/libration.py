@@ -8,6 +8,7 @@ system context to aid reconstruction.
 
 from __future__ import annotations
 
+import pickle
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -47,34 +48,16 @@ def save_libration_point(lp: "LibrationPoint", path: str | Path, *, compression:
         f.attrs["class"] = lp.__class__.__name__
         f.attrs["mu"] = float(lp.mu)
 
-        # System context for convenience (non-binding during load)
+        # Serialize the system object as pickle
         sys = lp.system
-        try:
-            f.attrs["primary"] = sys.primary.name
-            f.attrs["secondary"] = sys.secondary.name
-            f.attrs["distance_km"] = float(sys.distance)
-        except Exception:
-            pass
-
-        # Optional cached values from cache store
-        try:
-            pos = lp.cache_get(("position",))
-            if pos is not None:
-                _write_dataset(f, "position", np.asarray(pos), compression=compression, level=level)
-        except Exception:
-            pass
-        try:
-            energy = lp.cache_get(("energy",))
-            if energy is not None:
-                f.attrs["energy"] = float(energy)
-        except Exception:
-            pass
-        try:
-            jacobi = lp.cache_get(("jacobi_constant",))
-            if jacobi is not None:
-                f.attrs["jacobi"] = float(jacobi)
-        except Exception:
-            pass
+        system_blob = pickle.dumps(sys, protocol=pickle.HIGHEST_PROTOCOL)
+        f.create_dataset("system_pickle", data=np.frombuffer(system_blob, dtype=np.uint8))
+        pos = lp.cache_get(("position",))
+        _write_dataset(f, "position", np.asarray(pos), compression=compression, level=level)    
+        energy = lp.cache_get(("energy",))
+        f.attrs["energy"] = float(energy)
+        jacobi = lp.cache_get(("jacobi_constant",))
+        f.attrs["jacobi"] = float(jacobi)
 
         if getattr(lp, "_stability_info", None) is not None:
             sgrp = f.create_group("stability")
@@ -107,15 +90,16 @@ def _construct_lp_by_class(class_name: str, system: "System") -> "LibrationPoint
     raise ImportError(f"LibrationPoint class '{class_name}' not found in expected modules.")
 
 
-def load_libration_point(path: str | Path, system: "System") -> "LibrationPoint":
+def load_libration_point(path: str | Path, system: "System" = None) -> "LibrationPoint":
     """Load a LibrationPoint from an HDF5 file given a System.
 
     Parameters
     ----------
     path : str or pathlib.Path
         File path containing the libration point data.
-    system : :class:`~hiten.system.base.System`
-        The system to attach the libration point to.
+    system : :class:`~hiten.system.base.System`, optional
+        The system to attach the libration point to. If None, the system
+        will be reconstructed from the saved data in the file.
 
     Returns
     -------
@@ -128,9 +112,34 @@ def load_libration_point(path: str | Path, system: "System") -> "LibrationPoint"
 
     with h5py.File(path, "r") as f:
         class_name = str(f.attrs.get("class", "L1Point"))
+        
+        # If no system provided, try to load from saved data
+        if system is None:
+            try:
+                # First try to load the serialized system object
+                if "system_pickle" in f:
+                    system_blob = f["system_pickle"][()]
+                    system = pickle.loads(system_blob.tobytes())
+                else:
+                    # Fallback to reconstructing from metadata
+                    primary_name = str(f.attrs.get("primary", ""))
+                    secondary_name = str(f.attrs.get("secondary", ""))
+                    if primary_name and secondary_name:
+                        from hiten.system.base import System
+                        system = System.from_bodies(primary_name, secondary_name)
+                    else:
+                        raise ValueError("No system provided and system information not found in file")
+            except Exception as e:
+                raise ValueError(f"Could not reconstruct system from file data: {e}") from e
 
     lp = _construct_lp_by_class(class_name, system)
     load_libration_point_inplace(lp, path)
+    
+    # Initialize services for the loaded libration point
+    from hiten.algorithms.types.services.libration import _LibrationServices
+    services = _LibrationServices.default(lp)
+    lp._setup_services(services)
+    
     return lp
 
 

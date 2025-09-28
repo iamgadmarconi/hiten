@@ -23,6 +23,7 @@ from .orbits.halo import HaloOrbit
 from .orbits.lyapunov import LyapunovOrbit
 from .orbits.vertical import VerticalOrbit
 from .torus import InvariantTori, Torus
+from .hamiltonian import Hamiltonian, LieGeneratingFunction
 
 __all__ = [
     "Body",
@@ -48,4 +49,6 @@ __all__ = [
     "OrbitFamily",
     "InvariantTori",
     "Torus",
+    "Hamiltonian",
+    "LieGeneratingFunction",
 ]
