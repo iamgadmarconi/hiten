@@ -81,7 +81,8 @@ class CenterManifold(_HitenBase):
     def __getstate__(self):
         """Customise pickling by omitting adapter caches."""
         state = super().__getstate__()
-        state["_point"] = self._point
+        # Use the helper method to clean the point object for serialization
+        state["_point"] = self._clean_for_serialization(self._point)
         state["_max_degree"] = self._max_degree
         return state
 

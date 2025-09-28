@@ -599,6 +599,30 @@ class _HitenBase(ABC):
             
         return False
 
+    def _get_service_related_attrs(self):
+        """Get list of service-related attribute names that should be excluded from serialization."""
+        return ['_services', '_cache', '_persistence', '_dynamics', '_correction', 
+                '_continuation', '_conversion', 'pipeline', '_ham_conversion', 
+                '_ham_dynamics', '_ham_pipeline', '_lgf_persistence']
+
+    def _is_service_related_attr(self, attr_name):
+        """Check if an attribute name is service-related and should be excluded from serialization."""
+        service_attrs = self._get_service_related_attrs()
+        return (attr_name in service_attrs or 
+                (attr_name.startswith('_') and not attr_name.startswith('__') and attr_name.endswith('_service')))
+
+    def _clean_for_serialization(self, obj):
+        """Helper method to clean an object for serialization by removing service-related attributes."""
+        from copy import copy
+        clean_obj = copy(obj)
+        
+        # Remove service-related attributes
+        for attr_name in dir(clean_obj):
+            if self._is_service_related_attr(attr_name) and hasattr(clean_obj, attr_name):
+                delattr(clean_obj, attr_name)
+        
+        return clean_obj
+
     def __getstate__(self):
         """Get state for pickling, preserving computed properties."""
         state = self.__dict__.copy()
@@ -617,13 +641,10 @@ class _HitenBase(ABC):
                         # Skip attributes that can't be accessed
                         continue
         
-        # Remove other service-related attributes
-        service_attrs = [name for name in dir(self) if name.startswith('_') and not name.startswith('__')]
-        for attr in service_attrs:
-            if hasattr(self, attr) and not callable(getattr(self, attr)):
-                # Only remove attributes that are clearly service-related
-                if attr in ['_cache', '_persistence', '_dynamics', '_correction', '_continuation', 'pipeline', '_conversion'] or attr.endswith('_service'):
-                    state.pop(attr, None)
+        # Remove other service-related attributes using the shared logic
+        for attr_name in list(state.keys()):
+            if self._is_service_related_attr(attr_name):
+                state.pop(attr_name, None)
         
         return state
     

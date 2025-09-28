@@ -54,7 +54,7 @@ class Hamiltonian(_HitenBase):
 
     def __str__(self) -> str:
         q1, q2, q3, p1, p2, p3 = sp.symbols("q1 q2 q3 p1 p2 p3")
-        return poly2sympy(self._poly_H, [q1, q2, q3, p1, p2, p3], self._psi, self._clmo)
+        return str(poly2sympy(self._poly_H, [q1, q2, q3, p1, p2, p3], self._psi, self._clmo))
 
     def __bool__(self):
         return bool(self._poly_H)
@@ -193,7 +193,7 @@ class LieGeneratingFunction(_HitenBase):
         )
     
     def __str__(self) -> str:
-        return poly2sympy(self._poly_G, self._poly_elim, self._psi, self._clmo)
+        return str(poly2sympy(self._poly_G, self._poly_elim, self._psi, self._clmo))
     
     def __bool__(self):
         return bool(self._poly_G)
@@ -230,24 +230,35 @@ class LieGeneratingFunction(_HitenBase):
     def name(self) -> str:
         return self._name
 
+    def __getstate__(self):
+        """Customise pickling by omitting adapter caches and computed values."""
+        state = super().__getstate__()
+        # Remove computed values that can be recalculated
+        state.pop("_hamsys", None)
+        state.pop("_psi", None)
+        state.pop("_clmo", None)
+        state.pop("_encode_dict_list", None)
+        return state
+
+    def __setstate__(self, state):
+        """Restore adapter wiring after unpickling."""
+        super().__setstate__(state)
+        # Set up services if not already set
+        if not hasattr(self, "_services") or self._services is None:
+            self._setup_services(get_hamiltonian_services())
+        # Recalculate computed values
+        self._psi, self._clmo = self.dynamics.init_tables(self._degree)
+        self._encode_dict_list = self.dynamics.build_encode_dict(self._clmo)
+        self._hamsys = None  # Will be computed lazily when accessed
+
+    def save(self, filepath: str | Path, **kwargs) -> None:
+        self.persistence.save(self, filepath, **kwargs)
+
     @classmethod
-    def load(cls, filepath: str | Path, **kwargs) -> "LieGeneratingFunction":
-        """Load a LieGeneratingFunction from a file.
-        
-        Parameters
-        ----------
-        filepath : str or Path
-            The path to the file to load the object from.
-        **kwargs
-            Additional keyword arguments passed to the load method.
-            
-        Returns
-        -------
-        :class:`~hiten.system.hamiltonian.LieGeneratingFunction`
-            The loaded object.
-        """
-        services = get_hamiltonian_services()
-        return services.lgf_persistence.load(filepath, **kwargs)
-
-
-
+    def load(cls, filepath: str | Path, **kwargs):
+        return cls._load_with_services(
+            filepath, 
+            get_hamiltonian_services().persistence, 
+            lambda ham: get_hamiltonian_services(), 
+            **kwargs
+        )
