@@ -137,7 +137,7 @@ class _OrbitContinuationService(_DynamicsServiceBase):
             self._generator = StateParameter.with_default_engine(config=self.continuation_config)
         return self._generator
 
-    def generate(self, *, overrides: Dict[str, Any] | None = None) -> Tuple[np.ndarray, float]:
+    def generate(self, *, overrides: Dict[str, Any] | None = None, **kwargs) -> Tuple[np.ndarray, float]:
         """Generate a family of periodic orbits."""
         # Merge overrides with kwargs, with kwargs taking precedence
         if overrides is None:
@@ -586,7 +586,6 @@ class _HaloOrbitCorrectionService(_OrbitCorrectionService):
         DDz = -(mu2*z*rho_1) - (mu*z*rho_2)
 
         if abs(vy) < 1e-9:
-            logger.warning(f"Denominator 'vy' is very small ({vy:.2e}). Correction step may be inaccurate.")
             vy = np.sign(vy) * 1e-9 if vy != 0 else 1e-9
             
         return np.array([[DDx],[DDz]]) @ Phi[[SynodicState.Y],:][:, (SynodicState.X,SynodicState.VY)] / vy

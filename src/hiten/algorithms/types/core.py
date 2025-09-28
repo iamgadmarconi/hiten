@@ -625,7 +625,7 @@ class _HitenBase(ABC):
         """
         obj = persistence_service.load(filepath, **kwargs)
         services = services_factory(obj)
-        super(cls, obj).__init__(services)
+        obj._setup_services(services)
         return obj
 
     def save(self, filepath: str | Path, **kwargs) -> None:

@@ -37,7 +37,7 @@ def test_serialization() -> None:
     orbit = HaloOrbit(L1, amplitude_z=0.01, zenith="northern")
     orbit.period = 2 * math.pi  # quick dummy value to avoid runtime checks
 
-    orbit_path = TMP_DIR / "halo_orbit.h5"
+    orbit_path = TMP_DIR / "halo_orbit.pkl"
     logger.info("[PeriodicOrbit] saving: %s", orbit_path)
     orbit.save(str(orbit_path))
 
@@ -45,10 +45,15 @@ def test_serialization() -> None:
     orbit_loaded.load_inplace(str(orbit_path))
     _assert_equal("PeriodicOrbit.initial_state", orbit.initial_state, orbit_loaded.initial_state)
     assert math.isclose(orbit.period or 0.0, orbit_loaded.period or 0.0, rel_tol=1e-12)
+    # Test that system and libration point relationships are preserved
+    assert orbit_loaded.system.mu == orbit.system.mu
+    assert orbit_loaded.system.primary.name == orbit.system.primary.name
+    assert orbit_loaded.system.secondary.name == orbit.system.secondary.name
+    assert orbit_loaded.libration_point.idx == orbit.libration_point.idx
     logger.info("[PeriodicOrbit] round-trip OK\n")
 
     manifold = Manifold(orbit)
-    man_path = TMP_DIR / "manifold.h5"
+    man_path = TMP_DIR / "manifold.pkl"
     logger.info("[Manifold] saving: %s", man_path)
     manifold.save(str(man_path))
 
@@ -60,6 +65,9 @@ def test_serialization() -> None:
     _assert_equal("Manifold.generating_orbit.state",
                   manifold.generating_orbit.initial_state,
                   manifold_loaded.generating_orbit.initial_state)
+    # Test that generating orbit relationships are preserved
+    assert manifold_loaded.generating_orbit.system.mu == manifold.generating_orbit.system.mu
+    assert manifold_loaded.generating_orbit.libration_point.idx == manifold.generating_orbit.libration_point.idx
     logger.info("[Manifold] round-trip OK\n")
 
     cm = CenterManifold(L1, degree=6)
@@ -84,7 +92,7 @@ def test_serialization() -> None:
     energy_level = 0.2
     pmap = CenterManifoldMap(cm, energy=energy_level)
 
-    pmap_path = TMP_DIR / "poincare_map.h5"
+    pmap_path = TMP_DIR / "poincare_map.pkl"
     logger.info("[CenterManifoldMap] saving: %s", pmap_path)
     pmap.save(str(pmap_path))
 
@@ -117,7 +125,7 @@ def test_body_serialization() -> None:
     moon = Body("Moon", 7.342e22, 1.737e6, color="gray", parent=earth)
     
     # Test Earth serialization
-    earth_path = TMP_DIR / "earth.h5"
+    earth_path = TMP_DIR / "earth.pkl"
     logger.info("[Body] saving Earth: %s", earth_path)
     earth.save(str(earth_path))
     
@@ -130,7 +138,7 @@ def test_body_serialization() -> None:
     logger.info("[Body] Earth round-trip OK")
     
     # Test Moon serialization
-    moon_path = TMP_DIR / "moon.h5"
+    moon_path = TMP_DIR / "moon.pkl"
     logger.info("[Body] saving Moon: %s", moon_path)
     moon.save(str(moon_path))
     
@@ -156,7 +164,7 @@ def test_system_serialization() -> None:
     system = System.from_bodies("earth", "moon")
     
     # Test System serialization
-    system_path = TMP_DIR / "system.h5"
+    system_path = TMP_DIR / "system.pkl"
     logger.info("[System] saving: %s", system_path)
     system.save(str(system_path))
     
@@ -188,7 +196,7 @@ def test_libration_point_serialization() -> None:
     L4 = system.get_libration_point(4)
     
     # Test L1 serialization
-    l1_path = TMP_DIR / "l1.h5"
+    l1_path = TMP_DIR / "l1.pkl"
     logger.info("[L1Point] saving: %s", l1_path)
     L1.save(str(l1_path))
     
@@ -203,7 +211,7 @@ def test_libration_point_serialization() -> None:
     logger.info("[L1Point] round-trip OK")
     
     # Test L2 serialization
-    l2_path = TMP_DIR / "l2.h5"
+    l2_path = TMP_DIR / "l2.pkl"
     logger.info("[L2Point] saving: %s", l2_path)
     L2.save(str(l2_path))
     
@@ -218,7 +226,7 @@ def test_libration_point_serialization() -> None:
     logger.info("[L2Point] round-trip OK")
     
     # Test L4 serialization
-    l4_path = TMP_DIR / "l4.h5"
+    l4_path = TMP_DIR / "l4.pkl"
     logger.info("[L4Point] saving: %s", l4_path)
     L4.save(str(l4_path))
     
@@ -250,7 +258,7 @@ def test_hamiltonian_serialization() -> None:
     hamiltonian = cm.compute()
     
     # Test Hamiltonian serialization
-    ham_path = TMP_DIR / "hamiltonian.h5"
+    ham_path = TMP_DIR / "hamiltonian.pkl"
     logger.info("[Hamiltonian] saving: %s", ham_path)
     hamiltonian.save(str(ham_path))
     
@@ -286,7 +294,7 @@ def test_lie_generating_function_serialization() -> None:
         lgf = generating_functions[0]  # Test the first one
         
         # Test LieGeneratingFunction serialization
-        lgf_path = TMP_DIR / "lie_generating_function.h5"
+        lgf_path = TMP_DIR / "lie_generating_function.pkl"
         logger.info("[LieGeneratingFunction] saving: %s", lgf_path)
         lgf.save(str(lgf_path))
         
@@ -329,7 +337,7 @@ def test_orbit_family_serialization() -> None:
                         parameter_values=np.array([0.01, 0.015, 0.02]))
     
     # Test OrbitFamily serialization
-    family_path = TMP_DIR / "orbit_family.h5"
+    family_path = TMP_DIR / "orbit_family.pkl"
     logger.info("[OrbitFamily] saving: %s", family_path)
     family.save(str(family_path))
     
@@ -346,6 +354,11 @@ def test_orbit_family_serialization() -> None:
                       orig.initial_state, 
                       loaded.initial_state)
         assert orig.period == loaded.period
+        # Test that orbit relationships are preserved
+        assert loaded.system.mu == orig.system.mu
+        assert loaded.libration_point.idx == orig.libration_point.idx
+        assert loaded.system.primary.name == orig.system.primary.name
+        assert loaded.system.secondary.name == orig.system.secondary.name
     
     logger.info("[OrbitFamily] round-trip OK")
     logger.info("[OrbitFamily] serialization tests passed\n")
@@ -374,7 +387,7 @@ def test_invariant_tori_serialization() -> None:
     grid = tori.compute(epsilon=epsilon, n_theta1=n_theta1, n_theta2=n_theta2)
     
     # Test InvariantTori serialization
-    tori_path = TMP_DIR / "invariant_tori.h5"
+    tori_path = TMP_DIR / "invariant_tori.pkl"
     logger.info("[InvariantTori] saving: %s", tori_path)
     tori.save(str(tori_path))
     
@@ -385,6 +398,12 @@ def test_invariant_tori_serialization() -> None:
     
     # Compare grids
     _assert_equal("InvariantTori.grid", tori.grid, tori_loaded.grid)
+    
+    # Test that orbit relationships are preserved
+    assert tori_loaded.orbit.system.mu == tori.orbit.system.mu
+    assert tori_loaded.orbit.libration_point.idx == tori.orbit.libration_point.idx
+    assert tori_loaded.orbit.system.primary.name == tori.orbit.system.primary.name
+    assert tori_loaded.orbit.system.secondary.name == tori.orbit.system.secondary.name
     
     logger.info("[InvariantTori] round-trip OK")
     logger.info("[InvariantTori] serialization tests passed\n")
