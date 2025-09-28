@@ -362,6 +362,8 @@ class Connection(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT
         >>> # Plot the third connection
         >>> fig = connection.plot_connection(2, dark_mode=True)
         """
+        raise NotImplementedError("This method is not implemented yet.")
+
         if self._last_results is None or len(self._last_results) == 0:
             raise EngineError("No connections available: call solve(source, target) first.")
         
