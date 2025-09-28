@@ -160,6 +160,28 @@ class PeriodicOrbit(_HitenBase):
         return self.dynamics.eigenvectors
 
     @property
+    def energy(self) -> float:
+        """Orbit energy.
+        
+        Returns
+        -------
+        float
+            The energy value in nondimensional units.
+        """
+        return self.dynamics.energy
+
+    @property
+    def jacobi(self) -> float:
+        """Jacobi constant.
+        
+        Returns
+        -------
+        float
+            The Jacobi constant value (dimensionless).
+        """
+        return self.dynamics.jacobi_constant
+
+    @property
     def system(self) -> System:
         """Get the parent CR3BP system.
         

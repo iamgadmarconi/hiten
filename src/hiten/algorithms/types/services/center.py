@@ -91,6 +91,15 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
         
         return self.get_or_create(cache_key, _factory)
 
+    def hamiltonian(self, degree: int) -> "Hamiltonian":
+
+        cache_key = self.make_key("hamiltonian", degree)
+
+        def _factory():
+            return self.pipeline_for_degree(degree).get_hamiltonian("center_manifold_real")
+        
+        return self.get_or_create(cache_key, _factory)
+
     def pipeline_for_degree(self, degree: int) -> _HamiltonianPipeline:
         """Get pipeline for a specific degree, changing current degree if needed."""
         if degree != self._degree:

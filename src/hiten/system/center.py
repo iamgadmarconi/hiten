@@ -54,6 +54,9 @@ class CenterManifold(_HitenBase):
     def degree(self, value: int) -> None:
         self.dynamics.degree = value
 
+    def hamiltonian(self, degree: int) -> "Hamiltonian":
+        return self.dynamics.hamiltonian(degree)
+
     def __str__(self) -> str:
         return f"CenterManifold(point={self.point}, degree={self.degree})"
 
