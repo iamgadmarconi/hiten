@@ -10,13 +10,13 @@ import numpy as np
 
 from hiten.algorithms.dynamics.hamiltonian import _HamiltonianSystem
 from hiten.algorithms.poincare.centermanifold.base import \
-    _CenterManifoldMapFacade
+    CenterManifoldMapPipeline
 from hiten.algorithms.poincare.centermanifold.config import \
     _CenterManifoldMapConfig
 from hiten.algorithms.poincare.centermanifold.types import \
     CenterManifoldMapResults
 from hiten.algorithms.poincare.core.types import _Section
-from hiten.algorithms.poincare.synodic.base import _SynodicMapFacade
+from hiten.algorithms.poincare.synodic.base import SynodicMapPipeline
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
 from hiten.algorithms.poincare.synodic.types import SynodicMapResults
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
@@ -426,8 +426,8 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
         orbit.propagate(steps=steps, method=method, order=order)
         return orbit
 
-    def _build_generator(self) -> _CenterManifoldMapFacade:
-        return _CenterManifoldMapFacade.with_default_engine(config=self.map_config)
+    def _build_generator(self) -> CenterManifoldMapPipeline:
+        return CenterManifoldMapPipeline.with_default_engine(config=self.map_config)
 
     @property
     def map_config(self) -> _CenterManifoldMapConfig:
@@ -491,8 +491,8 @@ class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
 
         return self.get_or_create(cache_key, _factory)
 
-    def _build_generator(self) -> _SynodicMapFacade:
-        return _SynodicMapFacade.with_default_engine(config=self.map_config)
+    def _build_generator(self) -> SynodicMapPipeline:
+        return SynodicMapPipeline.with_default_engine(config=self.map_config)
 
     @property
     def map_config(self) -> _SynodicMapConfig:

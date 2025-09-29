@@ -64,7 +64,7 @@ from hiten.algorithms.hamiltonian.center._lie import \
 from hiten.algorithms.hamiltonian.normal._lie import \
     _lie_transform as _lie_transform_full
 from hiten.algorithms.hamiltonian.pipeline import (
-    _CONVERSION_REGISTRY,
+    get_hamiltonian_services,
 )
 from hiten.algorithms.hamiltonian.transforms import (
     _polylocal2realmodal, _polyrealmodal2local,
@@ -146,8 +146,10 @@ def register_conversion(src_name: str, dst: "type[Hamiltonian] | str",
     else:
         dst_name = dst.name
 
+    registry = get_hamiltonian_services()
+
     def _decorator(func):
-        _CONVERSION_REGISTRY[(src_name, dst_name)] = (
+        registry._CONVERSION_REGISTRY[(src_name, dst_name)] = (
             func, 
             required_context or [], 
             default_params or {}

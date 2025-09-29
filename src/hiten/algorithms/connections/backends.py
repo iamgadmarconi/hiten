@@ -457,7 +457,7 @@ class _ConnectionsBackend(_HitenBaseBackend):
         Returns
         -------
         list of :class:`~hiten.algorithms.connections.types._ConnectionResult`
-            Connection results sorted by increasing delta_v (velocity change).
+            ConnectionPipeline results sorted by increasing delta_v (velocity change).
 
         Notes
         -----

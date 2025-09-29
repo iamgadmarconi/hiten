@@ -9,8 +9,8 @@ from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple
 import numpy as np
 
 from hiten.algorithms.common.energy import crtbp_energy, energy_to_jacobi
-from hiten.algorithms.continuation.base import StateParameter
-from hiten.algorithms.corrector.base import Corrector
+from hiten.algorithms.continuation.base import ContinuationPipeline
+from hiten.algorithms.corrector.base import CorrectorPipeline
 from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_monodromy, _compute_stm
 from hiten.algorithms.linalg.backend import _LinalgBackend
@@ -55,9 +55,9 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
         self._corrector = None
 
     @property
-    def corrector(self) -> Corrector:
+    def corrector(self) -> CorrectorPipeline:
         if self._corrector is None:
-            self._corrector = Corrector.with_default_engine(config=self.correction_config)
+            self._corrector = CorrectorPipeline.with_default_engine(config=self.correction_config)
         return self._corrector
 
     def correct(self, *, overrides: Dict[str, Any] | None = None, **kwargs) -> Tuple[np.ndarray, float]:
@@ -127,9 +127,9 @@ class _OrbitContinuationService(_DynamicsServiceBase):
         return self._initial_state
 
     @property
-    def generator(self) -> StateParameter:
+    def generator(self) -> ContinuationPipeline:
         if self._generator is None:
-            self._generator = StateParameter.with_default_engine(config=self.continuation_config)
+            self._generator = ContinuationPipeline.with_default_engine(config=self.continuation_config)
         return self._generator
 
     def generate(self, *, overrides: Dict[str, Any] | None = None, **kwargs) -> Tuple[np.ndarray, float]:

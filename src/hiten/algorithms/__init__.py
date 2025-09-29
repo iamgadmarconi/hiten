@@ -1,7 +1,7 @@
 """ Public API for the :mod:`~hiten.algorithms` package.
 """
 
-from .continuation.base import StateParameter
+from .continuation.base import ContinuationPipeline
 from .continuation.config import \
     _OrbitContinuationConfig as OrbitContinuationConfig
 from .corrector.config import _LineSearchConfig as LineSearchConfig
@@ -11,7 +11,7 @@ from .poincare.centermanifold.config import \
 from .poincare.synodic.config import _SynodicMapConfig as SynodicMapConfig
 
 __all__ = [
-    "StateParameter",
+    "ContinuationPipeline",
     "CenterManifoldMapConfig",
     "SynodicMapConfig",
     "LineSearchConfig",

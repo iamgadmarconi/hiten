@@ -7,7 +7,7 @@ with synodic sections to geometric analysis and Delta-V computation.
 
 Examples
 --------
->>> from hiten.algorithms.connections import Connection, SearchConfig
+>>> from hiten.algorithms.connections import ConnectionPipeline, SearchConfig
 >>> from hiten.algorithms.poincare import SynodicMapConfig
 >>> 
 >>> # Configure synodic section
@@ -17,7 +17,7 @@ Examples
 >>> search = SearchConfig(delta_v_tol=1e-3, eps2d=1e-4)
 >>> 
 >>> # Create facade with a default engine
->>> conn = Connection.with_default_engine(section=section, search_cfg=search)
+>>> conn = ConnectionPipeline.with_default_engine(section=section, search_cfg=search)
 >>> 
 >>> # Discover connections
 >>> results = conn.solve(unstable_manifold, stable_manifold)
@@ -36,12 +36,12 @@ See Also
     CR3BP system definition and libration points.
 """
 
-from .base import Connection
+from .base import ConnectionPipeline
 from .config import _SearchConfig as SearchConfig
 
 __all__ = [
     # Main interface
-    "Connection",
+    "ConnectionPipeline",
     # Configuration
     "SearchConfig",
 ]

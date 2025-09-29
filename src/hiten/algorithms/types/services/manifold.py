@@ -12,7 +12,7 @@ from hiten.algorithms.common.energy import _max_rel_energy_error
 from hiten.algorithms.types.states import Trajectory
 from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_stm
-from hiten.algorithms.linalg.base import StabilityProperties
+from hiten.algorithms.linalg.base import StabilityPipeline
 from hiten.algorithms.linalg.config import _EigenDecompositionConfig
 from hiten.algorithms.linalg.types import _ProblemType, _SystemType
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
@@ -52,9 +52,9 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
         self._generator = None
 
     @property
-    def generator(self) -> StabilityProperties:
+    def generator(self) -> StabilityPipeline:
         if self._generator is None:
-            self._generator = StabilityProperties.with_default_engine(config=self.eigendecomposition_config)
+            self._generator = StabilityPipeline.with_default_engine(config=self.eigendecomposition_config)
         return self._generator
 
     @property
@@ -138,7 +138,7 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
         return self.stability.Wc        
 
     @property
-    def stability(self) -> StabilityProperties:
+    def stability(self) -> StabilityPipeline:
         return self.compute_stability()
 
     @property
@@ -336,10 +336,10 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
 
         return (ysos, dysos, states_list, times_list, successes, attempts)
 
-    def compute_stability(self) -> StabilityProperties:
+    def compute_stability(self) -> StabilityPipeline:
         key = self.make_key(id(self.domain_obj))
         
-        def _factory() -> StabilityProperties:
+        def _factory() -> StabilityPipeline:
             _, _, phi_T, _ = self.compute_stm(steps=2000)
             self.generator.compute(domain_obj=phi_T)
             return self.generator

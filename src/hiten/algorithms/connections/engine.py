@@ -16,7 +16,7 @@ See Also
 :mod:`~hiten.algorithms.connections.backends`
     Backend algorithms for connection computation.
 :mod:`~hiten.algorithms.connections.base`
-    User-facing Connection class that uses this engine.
+    User-facing ConnectionPipeline class that uses this engine.
 :mod:`~hiten.algorithms.connections.interfaces`
     Interface classes for manifold data access.
 """
@@ -67,7 +67,7 @@ class _ConnectionEngine(_HitenBaseEngine[_ConnectionProblem, ConnectionResults, 
         Problem specification structure processed by this engine.
     :class:`~hiten.algorithms.connections.backends._ConnectionsBackend`
         Backend algorithms that perform the actual computations.
-    :class:`~hiten.algorithms.connections.base.Connection`
+    :class:`~hiten.algorithms.connections.base.ConnectionPipeline`
         High-level user interface that uses this engine.
     """
 

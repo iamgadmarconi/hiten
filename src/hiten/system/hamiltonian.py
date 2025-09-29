@@ -9,11 +9,11 @@ import numpy as np
 import sympy as sp
 
 from hiten.algorithms.polynomial.conversion import poly2sympy
-from hiten.algorithms.polynomial.operations import _polynomial_evaluate
 from hiten.algorithms.types.core import _HitenBase
 from hiten.algorithms.types.services.hamiltonian import (
-    _HamiltonianConversionService, _HamiltonianPipeline,
-    get_hamiltonian_services)
+    _HamiltonianDynamicsService, _HamiltonianPersistenceService,
+    _HamiltonianServices, _LieGeneratingFunctionPersistenceService,
+    _LieGeneratingFunctionServices)
 
 
 class Hamiltonian(_HitenBase):
@@ -26,25 +26,13 @@ class Hamiltonian(_HitenBase):
         if ndof != 3:
             raise NotImplementedError("Polynomial kernel only supports 3 degrees of freedom")
 
-        services = get_hamiltonian_services()
-
-        super().__init__(services)
-
         self._poly_H: list[np.ndarray] = poly_H
         self._degree: int = degree
         self._ndof: int = ndof
         self._name: str = name
-        self._psi, self._clmo = self.dynamics.init_tables(degree)
-        self._encode_dict_list = self.dynamics.build_encode_dict(self._clmo)
-        self._hamsys = self.dynamics.build_hamsys(
-            poly_H,
-            degree,
-            self._psi,
-            self._clmo,
-            self._encode_dict_list,
-            ndof,
-            name,
-        )
+
+        services = _HamiltonianServices.default(self)
+        super().__init__(services)
 
     def __repr__(self) -> str:
         return (
@@ -54,35 +42,23 @@ class Hamiltonian(_HitenBase):
 
     def __str__(self) -> str:
         q1, q2, q3, p1, p2, p3 = sp.symbols("q1 q2 q3 p1 p2 p3")
-        return str(poly2sympy(self._poly_H, [q1, q2, q3, p1, p2, p3], self._psi, self._clmo))
+        return str(poly2sympy(self.poly_H, [q1, q2, q3, p1, p2, p3], self.dynamics.psi, self.dynamics.clmo))
 
     def __bool__(self):
-        return bool(self._poly_H)
+        return bool(self.poly_H)
 
     def __len__(self) -> int:
-        return len(self._poly_H)
+        return len(self.poly_H)
 
     def __getitem__(self, key):
-        return self._poly_H[key]
+        return self.poly_H[key]
 
     def __call__(self, coords: np.ndarray) -> float:
-        return _polynomial_evaluate(self._poly_H, coords, self._clmo)
-
-    @property
-    def conversion(self) -> _HamiltonianConversionService:
-        return self._conversion
-
-    @property
-    def pipeline(self) -> _HamiltonianPipeline:
-        return self._pipeline
+        return self.dynamics.evaluate(coords)
 
     @property
     def name(self) -> str:
         return self._name
-
-    @property
-    def poly_H(self) -> list[np.ndarray]:
-        return self._poly_H
 
     @property
     def degree(self) -> int:
@@ -93,62 +69,49 @@ class Hamiltonian(_HitenBase):
         return self._ndof
 
     @property
-    def jacobian(self) -> np.ndarray:
-        return self._hamsys.jac_H
+    def hamsys(self):
+        return self.dynamics.hamsys
 
     @property
-    def hamsys(self):
-        if self._hamsys is None:
-            self._hamsys = self.dynamics.build_hamsys(
-                self._poly_H,
-                self._degree,
-                self._psi,
-                self._clmo,
-                self._encode_dict_list,
-                self._ndof,
-                self._name,
-            )
-        return self._hamsys
+    def jacobian(self) -> np.ndarray:
+        return self.dynamics.jac_H
+
+    @property
+    def poly_H(self) -> list[np.ndarray]:
+        return self.dynamics.poly_H
 
     @classmethod
     def from_state(cls, other: "Hamiltonian", **kwargs) -> "Hamiltonian":
-        services = other.conversion
-        result = services.conversion.convert(other, cls, **kwargs)
-        return cls(result.poly_H, result.degree, result.ndof, result.name, services=services)
+        """Convert another Hamiltonian to this class using the dynamics service."""
+        # Create a temporary dynamics service to handle the conversion
+        temp_dynamics = _HamiltonianDynamicsService(other)
+        return temp_dynamics.from_state(other, cls, **kwargs)
 
     def to_state(self, target_form: Union[type["Hamiltonian"], str], **kwargs) -> "Hamiltonian":
-        return self.conversion.convert(self, target_form, **kwargs)
-
-    def __getstate__(self):
-        """Customise pickling by omitting adapter caches and computed values."""
-        state = super().__getstate__()
-        # Remove computed values that can be recalculated
-        state.pop("_hamsys", None)
-        state.pop("_psi", None)
-        state.pop("_clmo", None)
-        state.pop("_encode_dict_list", None)
-        return state
+        """Convert this Hamiltonian to another form using the dynamics service."""
+        return self.dynamics.to_state(target_form, **kwargs)
 
     def __setstate__(self, state):
-        """Restore adapter wiring after unpickling."""
-        super().__setstate__(state)
-        # Set up services if not already set
-        if not hasattr(self, "_services") or self._services is None:
-            self._setup_services(get_hamiltonian_services())
-        # Recalculate computed values
-        self._psi, self._clmo = self.dynamics.init_tables(self._degree)
-        self._encode_dict_list = self.dynamics.build_encode_dict(self._clmo)
-        self._hamsys = None  # Will be computed lazily when accessed
+        """Restore the Hamiltonian instance after unpickling.
 
-    def save(self, filepath: str | Path, **kwargs) -> None:
-        self.persistence.save(self, filepath, **kwargs)
+        The heavy, non-serialisable dynamical system is reconstructed lazily
+        using the stored value of poly_H, degree, ndof, and name.
+        
+        Parameters
+        ----------
+        state : dict
+            Dictionary containing the serialized state of the Hamiltonian.
+        """
+        super().__setstate__(state)
+        self._setup_services(_HamiltonianServices.default(self))
 
     @classmethod
-    def load(cls, filepath: str | Path, **kwargs):
+    def load(cls, filepath: str | Path, **kwargs) -> "Hamiltonian":
+        """Load a System from a file (new instance)."""
         return cls._load_with_services(
             filepath, 
-            get_hamiltonian_services().persistence, 
-            lambda ham: get_hamiltonian_services(), 
+            _HamiltonianPersistenceService(),
+            _HamiltonianServices.default, 
             **kwargs
         )
 
@@ -160,8 +123,9 @@ class Hamiltonian(_HitenBase):
         required_context: list,
         default_params: dict,
     ) -> None:
-        services = get_hamiltonian_services()
-        services.conversion.register(src, dst, converter, required_context, default_params)
+        """Register a conversion function using the shared conversion service."""
+        from hiten.algorithms.types.services.hamiltonian import _SHARED_REGISTRY
+        _SHARED_REGISTRY.register_conversion(src, dst, converter, required_context, default_params)
 
 
 class LieGeneratingFunction(_HitenBase):
@@ -175,16 +139,14 @@ class LieGeneratingFunction(_HitenBase):
         ndof: int = 3,
         name: str | None = None,
     ) -> None:
-        services = get_hamiltonian_services()
-        super().__init__(services)
-
         self._poly_G = poly_G
         self._poly_elim = poly_elim
         self._degree = degree
         self._ndof = ndof
         self._name = name
-        self._psi, self._clmo = self.dynamics.init_tables(degree)
-        self._encode_dict_list = self.dynamics.build_encode_dict(self._clmo)
+
+        services = _LieGeneratingFunctionServices.default(self)
+        super().__init__(services)
 
     def __repr__(self) -> str:
         return (
@@ -193,72 +155,62 @@ class LieGeneratingFunction(_HitenBase):
         )
     
     def __str__(self) -> str:
-        return str(poly2sympy(self._poly_G, self._poly_elim, self._psi, self._clmo))
+        return str(poly2sympy(self.poly_G, self.poly_elim, self.dynamics.psi, self.dynamics.clmo))
     
     def __bool__(self):
-        return bool(self._poly_G)
+        return bool(self.poly_G)
     
     def __len__(self) -> int:
-        return len(self._poly_G)
+        return len(self.poly_G)
     
     def __getitem__(self, key):
-        return self._poly_G[key]
+        return self.poly_G[key]
     
     def __call__(self, coords: np.ndarray) -> float:
-        return _polynomial_evaluate(self._poly_G, coords, self._clmo)
+        return self.dynamics.evaluate(coords)
 
     @property
     def poly_G(self) -> list[np.ndarray]:
         """Return the packed coefficient blocks `[G_0, G_2, ..., G_N]`."""
-        return self._poly_G
+        return self.dynamics.poly_G
     
     @property
     def degree(self) -> int:
         """Return the maximum total degree *N* represented in *poly_G*."""
-        return self._degree
+        return self.dynamics.degree
 
     @property
     def ndof(self) -> int:
         """Return the number of degrees of freedom."""
-        return self._ndof
+        return self.dynamics.ndof
 
     @property
     def poly_elim(self) -> list[np.ndarray]:
-        return self._poly_elim
+        return self.dynamics.poly_elim
 
     @property
     def name(self) -> str:
-        return self._name
-
-    def __getstate__(self):
-        """Customise pickling by omitting adapter caches and computed values."""
-        state = super().__getstate__()
-        # Remove computed values that can be recalculated
-        state.pop("_hamsys", None)
-        state.pop("_psi", None)
-        state.pop("_clmo", None)
-        state.pop("_encode_dict_list", None)
-        return state
+        return self.dynamics.name
 
     def __setstate__(self, state):
-        """Restore adapter wiring after unpickling."""
-        super().__setstate__(state)
-        # Set up services if not already set
-        if not hasattr(self, "_services") or self._services is None:
-            self._setup_services(get_hamiltonian_services())
-        # Recalculate computed values
-        self._psi, self._clmo = self.dynamics.init_tables(self._degree)
-        self._encode_dict_list = self.dynamics.build_encode_dict(self._clmo)
-        self._hamsys = None  # Will be computed lazily when accessed
+        """Restore the LieGeneratingFunction instance after unpickling.
 
-    def save(self, filepath: str | Path, **kwargs) -> None:
-        self.persistence.save(self, filepath, **kwargs)
+        The heavy, non-serialisable dynamical system is reconstructed lazily
+        using the stored value of poly_G, poly_elim, degree, ndof, and name.
+        
+        Parameters
+        ----------
+        state : dict
+            Dictionary containing the serialized state of the LieGeneratingFunction.
+        """
+        super().__setstate__(state)
+        self._setup_services(_LieGeneratingFunctionServices.default(self))
 
     @classmethod
     def load(cls, filepath: str | Path, **kwargs):
         return cls._load_with_services(
             filepath, 
-            get_hamiltonian_services().persistence, 
-            lambda ham: get_hamiltonian_services(), 
+            _LieGeneratingFunctionPersistenceService(),
+            _LieGeneratingFunctionServices.default, 
             **kwargs
         )

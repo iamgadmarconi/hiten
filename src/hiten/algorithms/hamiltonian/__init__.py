@@ -45,7 +45,3 @@ and the N-Body Problem. Springer-Verlag.
 Gomez, G., Llibre, J., Martinez, R., Simo, C. (2001). Dynamics and Mission Design
 Near Libration Points. World Scientific.
 """
-
-from .wrappers import _CONVERSION_REGISTRY
-
-__all__ = ["_CONVERSION_REGISTRY"]

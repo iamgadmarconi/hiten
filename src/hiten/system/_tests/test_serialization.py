@@ -91,6 +91,9 @@ def test_serialization() -> None:
 
     energy_level = 0.2
     pmap = CenterManifoldMap(cm, energy=energy_level)
+    
+    # Compute a section to have data to compare
+    pmap.compute(section_coord="q3")
 
     pmap_path = TMP_DIR / "poincare_map.pkl"
     logger.info("[CenterManifoldMap] saving: %s", pmap_path)

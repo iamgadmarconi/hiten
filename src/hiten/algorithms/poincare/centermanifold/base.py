@@ -29,7 +29,7 @@ from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
                                          _HitenBaseFacade)
 
 
-class _CenterManifoldMapFacade(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
+class CenterManifoldMapPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
     """Poincare return map restricted to the center manifold of a collinear libration point.
 
     This class provides the main interface for computing and analyzing Poincare
@@ -69,10 +69,10 @@ class _CenterManifoldMapFacade(_HitenBaseFacade, Generic[DomainT, InterfaceT, Co
         cls,
         config: _CenterManifoldMapConfig,
         interface: Optional[_CenterManifoldInterface] = None,\
-    ) -> "_CenterManifoldMapFacade":
+    ) -> "CenterManifoldMapPipeline":
         """Construct a map with a default-wired engine injected.
 
-        This mirrors the DI-friendly facades (e.g., Connection) by creating
+        This mirrors the DI-friendly facades (e.g., ConnectionPipeline) by creating
         a default engine using the current configuration and injecting it.
         The engine is wired for the default section coordinate in the config.
         """

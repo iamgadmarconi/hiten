@@ -19,10 +19,10 @@ if TYPE_CHECKING:
     from hiten.system.orbits.base import PeriodicOrbit
 
 
-class StateParameter(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
+class ContinuationPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
     """Facade for natural-parameter continuation varying selected state components.
 
-    Users supply an engine (DI). Use `StateParameter.with_default_engine()` to
+    Users supply an engine (DI). Use `ContinuationPipeline.with_default_engine()` to
     construct a default engine wired with the generic predict-correct backend
     and the periodic-orbit interface.
     """
@@ -31,7 +31,7 @@ class StateParameter(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, Res
         super().__init__(config, interface, engine)
 
     @classmethod
-    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None) -> "StateParameter[DomainT, ConfigT, ResultT]":
+    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None) -> "ContinuationPipeline[DomainT, ConfigT, ResultT]":
         """Create a facade instance with a default engine (factory).
         """
         from hiten.algorithms.continuation.backends.pc import \

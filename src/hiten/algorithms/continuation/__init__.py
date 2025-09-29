@@ -5,7 +5,7 @@ This module provides a comprehensive framework for numerical continuation of sol
 
 from .backends import _ContinuationBackend, _PCContinuationBackend
 from .engine import _ContinuationEngine, _OrbitContinuationEngine
-from .base import StateParameter
+from .base import ContinuationPipeline
 from .interfaces import _PeriodicOrbitContinuationInterface
 from .types import ContinuationResult, _ContinuationProblem
 
@@ -17,5 +17,5 @@ __all__ = [
     "_PeriodicOrbitContinuationInterface",
     "ContinuationResult",
     "_ContinuationProblem",
-    "StateParameter",
+    "ContinuationPipeline",
 ]

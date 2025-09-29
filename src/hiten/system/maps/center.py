@@ -38,10 +38,17 @@ class CenterManifoldMap(_HitenBase):
         return self.dynamics.energy
 
     @property
-    def sections(self) -> list[str]:
-        return self.dynamics.list_sections()
+    def config(self):
+        """Get the map configuration."""
+        return self.dynamics.map_config
+
+    @config.setter
+    def config(self, value):
+        self.dynamics.map_config = value
 
     @property
+    def sections(self) -> list[str]:
+        return self.dynamics.list_sections()
 
     def get_section(self, section_coord: str) -> _Section:
         return self.dynamics.get_section(section_coord)

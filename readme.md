@@ -95,7 +95,7 @@ manifold.plot()
 
    ```python
    from hiten import System, OrbitFamily
-   from hiten.algorithms import StateParameter
+   from hiten.algorithms import ContinuationPipeline
    from hiten.algorithms.types.states import SynodicState
 
    system = System.from_bodies("earth", "moon")
@@ -111,7 +111,7 @@ manifold.plot()
    # Step in amplitude space (predictor still tweaks X component)
    step = (target_amp - current_amp) / (num_orbits - 1)
 
-   engine = StateParameter(
+   engine = ContinuationPipeline(
        initial_orbit=seed,
        state=SynodicState.X,   # underlying coordinate that gets nudged
        amplitude=True,         # but the continuation parameter is A_x
@@ -197,7 +197,7 @@ manifold.plot()
    The toolkit can detect heteroclinic connections between two manifolds.
 
    ```python
-   from hiten.algorithms.connections import Connection, SearchConfig
+   from hiten.algorithms.connections import ConnectionPipeline, SearchConfig
    from hiten.algorithms.poincare import SynodicMapConfig
    from hiten.system import System
 
@@ -234,7 +234,7 @@ manifold.plot()
       n_workers=None,
    )
 
-   conn = Connection.with_default_engine(
+   conn = ConnectionPipeline.with_default_engine(
       section=section_cfg,
       direction=None,
       search_cfg=SearchConfig(delta_v_tol=1, ballistic_tol=1e-8, eps2d=1e-3),

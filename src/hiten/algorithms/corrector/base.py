@@ -21,7 +21,7 @@ from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
                                          _HitenBaseFacade)
 
 
-class Corrector(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
+class CorrectorPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
     """Generic facade for correction algorithms.
     
     This facade provides a clean, high-level interface for correcting
@@ -91,7 +91,7 @@ class Corrector(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]
         super().__init__(config, interface, engine)
 
     @classmethod
-    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None) -> "Corrector[DomainT, InterfaceT, ConfigT, ResultT]":
+    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None) -> "CorrectorPipeline[DomainT, InterfaceT, ConfigT, ResultT]":
         backend = _NewtonBackend(stepper_factory=make_armijo_stepper(_LineSearchConfig(norm_fn=_infinity_norm)))
         intf = interface or _PeriodicOrbitCorrectorInterface()
         engine = _CorrectionEngine(backend=backend, interface=intf)

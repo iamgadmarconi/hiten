@@ -11,7 +11,7 @@ import numpy as np
 from hiten.algorithms.common.energy import crtbp_energy, energy_to_jacobi
 from hiten.algorithms.dynamics.base import _DynamicalSystem
 from hiten.algorithms.dynamics.hamiltonian import _HamiltonianSystem
-from hiten.algorithms.linalg.base import StabilityProperties
+from hiten.algorithms.linalg.base import StabilityPipeline
 from hiten.algorithms.linalg.config import _EigenDecompositionConfig
 from hiten.algorithms.linalg.interfaces import _LibrationPointInterface
 from hiten.algorithms.linalg.types import _ProblemType, _SystemType
@@ -56,9 +56,9 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
         self._generator = None
 
     @property
-    def generator(self) -> StabilityProperties:
+    def generator(self) -> StabilityPipeline:
         if self._generator is None:
-            self._generator = StabilityProperties.with_default_engine(config=self.eigendecomposition_config)
+            self._generator = StabilityPipeline.with_default_engine(config=self.eigendecomposition_config)
         return self._generator
 
     @property
@@ -150,10 +150,10 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
         
         return self.get_or_create(cache_key, _factory)
 
-    def compute_stability(self, *, delta: float = 1e-6, tol: float = 1e-8) -> StabilityProperties:
+    def compute_stability(self, *, delta: float = 1e-6, tol: float = 1e-8) -> StabilityPipeline:
         cache_key = self.make_key(id(self.domain_obj), delta, tol)
 
-        def _factory() -> StabilityProperties:
+        def _factory() -> StabilityPipeline:
             results =self.generator.compute(self.domain_obj)
             return results
 

@@ -1,6 +1,6 @@
 """Hamiltonian transformation pipeline for the CR3BP.
 
-This module provides the _HamiltonianPipeline class that manages the transformation
+This module provides the HamiltonianPipeline class that manages the transformation
 pipeline for different Hamiltonian representations in the circular restricted
 three-body problem. It handles caching, conversion between representations,
 and computation of Lie generating functions.
@@ -28,18 +28,16 @@ from hiten.algorithms.hamiltonian.hamiltonian import (
     _build_physical_hamiltonian_triangular)
 from hiten.algorithms.hamiltonian.normal._lie import \
     _lie_transform as _lie_transform_full
+from hiten.algorithms.types.services.hamiltonian import _PipelineService
+from hiten.algorithms.types.services.hamiltonian import get_hamiltonian_services
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
     from hiten.system.hamiltonian import Hamiltonian, LieGeneratingFunction
     from hiten.system.libration.base import LibrationPoint
 
-# Mapping: (src_name, dst_name) -> (converter_func, required_context, default_params)
-# Converter functions can return either Hamiltonian or (Hamiltonian, LieGeneratingFunction)
-_CONVERSION_REGISTRY: Dict[Tuple[str, str], Tuple[Callable[..., "Hamiltonian | tuple[Hamiltonian, LieGeneratingFunction]"], list, dict]] = {}
 
-
-class _HamiltonianPipeline:
+class HamiltonianPipeline:
     """
     Manages the transformation pipeline for Hamiltonian representations.
 
@@ -76,23 +74,16 @@ class _HamiltonianPipeline:
     def __init__(
         self,
         point: "LibrationPoint",
-        degree: int,
-        *,
-        dynamics=None,
-        conversion=None,
-    ):
+        degree: int):
         if not isinstance(degree, int) or degree <= 0:
             raise ValueError("degree must be a positive integer")
 
         self._point = point
         self._max_degree = degree
-        self._dynamics = dynamics
-        self._conversion = conversion
-
         self._hamiltonian_cache: Dict[str, "Hamiltonian"] = {}
         self._generating_function_cache: Dict[str, "LieGeneratingFunction"] = {}
+        self._registry = get_hamiltonian_services()
 
-        # Determine point-specific parameters
         from hiten.system.libration.collinear import CollinearPoint
         from hiten.system.libration.triangular import TriangularPoint
 
@@ -106,6 +97,10 @@ class _HamiltonianPipeline:
             raise ValueError(f"Unsupported libration point type: {type(self._point)}")
 
     @property
+    def registry(self) -> _PipelineService:
+        return self._registry
+
+    @property
     def point(self) -> "LibrationPoint":
         """The libration point about which the normal form is computed."""
         return self._point
@@ -116,10 +111,10 @@ class _HamiltonianPipeline:
         return self._max_degree
 
     def __str__(self) -> str:
-        return f"_HamiltonianPipeline(point={self._point}, degree={self._max_degree})"
+        return f"HamiltonianPipeline(point={self._point}, degree={self._max_degree})"
 
     def __repr__(self) -> str:
-        return f"_HamiltonianPipeline(point={self._point!r}, degree={self._max_degree})"
+        return f"HamiltonianPipeline(point={self._point!r}, degree={self._max_degree})"
 
     def get_hamiltonian(self, form: str) -> "Hamiltonian":
         """
@@ -318,7 +313,7 @@ class _HamiltonianPipeline:
             logger.debug(f"Exploring from '{current_form}' with path {path}")
             
             # Check all possible conversions from current_form using registry
-            for (src, dst), (_, required_context, _) in _CONVERSION_REGISTRY.items():
+            for (src, dst), (_, required_context, _) in self.registry._CONVERSION_REGISTRY.items():
                 if src == current_form and dst not in visited:
                     # Check if we have the required context (point is always available)
                     if not required_context or "point" in required_context:
@@ -354,12 +349,12 @@ class _HamiltonianPipeline:
             True if conversion is possible, False otherwise
         """
         # Check direct conversion in registry
-        if (src_form, dst_form) in _CONVERSION_REGISTRY:
+        if (src_form, dst_form) in self.registry._CONVERSION_REGISTRY:
             return True
             
         # Check if conversion adapter has the conversion
-        if self._conversion is not None:
-            return self._conversion.get(src_form, dst_form) is not None
+        if self.registry.conversion is not None:
+            return self.registry.conversion.get(src_form, dst_form) is not None
             
         return False
 
@@ -402,7 +397,7 @@ class _HamiltonianPipeline:
             current_form, path = queue.popleft()
             
             # Check all possible conversions from current_form
-            for (src, dst), (_, required_context, _) in _CONVERSION_REGISTRY.items():
+            for (src, dst), (_, required_context, _) in self.registry._CONVERSION_REGISTRY.items():
                 if src == current_form and dst not in visited:
                     # Check if we have the required context (point is always available)
                     if not required_context or "point" in required_context:
@@ -487,7 +482,7 @@ class _HamiltonianPipeline:
         available = {"physical"}  # Always available
         
         # Add forms that can be converted from physical
-        for (src, dst), (_, required_context, _) in _CONVERSION_REGISTRY.items():
+        for (src, dst), (_, required_context, _) in self.registry._CONVERSION_REGISTRY.items():
             if src == "physical" and not required_context:
                 available.add(dst)
             elif src == "physical" and "point" in required_context:
@@ -515,7 +510,7 @@ class _HamiltonianPipeline:
         Notes
         -----
         This method is equivalent to 
-        :meth:`~hiten.system.hamiltonians.pipeline._HamiltonianPipeline.get_hamiltonian` 
+        :meth:`~hiten.system.hamiltonians.pipeline.HamiltonianPipeline.get_hamiltonian` 
         but provides a familiar interface for users migrating from the old CenterManifold.
         It is maintained for backward compatibility.
         """
@@ -582,7 +577,7 @@ class _HamiltonianPipeline:
         Clear the Hamiltonian cache.
 
         This forces recomputation of all Hamiltonian representations on
-        the next call to :meth:`~hiten.system.hamiltonians.pipeline._HamiltonianPipeline.get_hamiltonian`.
+        the next call to :meth:`~hiten.system.hamiltonians.pipeline.HamiltonianPipeline.get_hamiltonian`.
 
         Notes
         -----

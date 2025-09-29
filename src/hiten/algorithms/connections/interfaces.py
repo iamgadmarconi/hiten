@@ -18,7 +18,7 @@ See Also
 :mod:`~hiten.algorithms.poincare.synodic.base`
     Synodic map functionality used for section intersections.
 :mod:`~hiten.algorithms.connections.engine`
-    Connection engine that uses these interfaces.
+    ConnectionPipeline engine that uses these interfaces.
 """
 
 from typing import TYPE_CHECKING, Literal

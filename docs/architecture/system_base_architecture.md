@@ -51,7 +51,7 @@
 - `_SystemDynamicsAdapter`: resolves algorithm engines (propagation, STM) and executes calls
 - `_SystemPersistenceService`: bridges to `utils.io` loaders/savers
 - `_SystemAdapterRegistry`: optional central cache for adapter instances when multiple systems coexist
-- `_HamiltonianConversionService`: registers and executes representation conversions (used by _HamiltonianPipeline)
+- `_HamiltonianConversionService`: registers and executes representation conversions (used by HamiltonianPipeline)
 - All adapters live in private scope; they never appear in the public API
 
 ## Dependency Flow

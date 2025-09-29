@@ -33,8 +33,20 @@ class SynodicMap(_HitenBase):
         return self.dynamics.trajectories
 
     @property
+    def source(self) -> Literal[PeriodicOrbit, Manifold]:
+        return self.dynamics.source
+
+    @property
     def sections(self) -> list[str]:
         return self.dynamics.list_sections()
+
+    @property
+    def config(self):
+        return self.dynamics.map_config
+
+    @config.setter
+    def config(self, value):
+        self.dynamics.map_config = value
 
     def get_section(self, section_coord: str) -> _Section:
         return self.dynamics.get_section(section_coord)

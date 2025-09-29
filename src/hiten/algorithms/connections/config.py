@@ -10,9 +10,9 @@ All distance and velocity tolerances are in nondimensional CR3BP rotating-frame 
 See Also
 --------
 :mod:`~hiten.algorithms.connections.base`
-    Main Connection class that uses these configuration objects.
+    Main ConnectionPipeline class that uses these configuration objects.
 :mod:`~hiten.algorithms.connections.engine`
-    Connection engine that applies these parameters during computation.
+    ConnectionPipeline engine that applies these parameters during computation.
 """
 
 from dataclasses import dataclass
@@ -80,7 +80,7 @@ class _SearchConfig:
     --------
     :class:`~hiten.algorithms.connections.config._ConnectionConfig`
         Extended configuration including computational parameters.
-    :class:`~hiten.algorithms.connections.base.Connection`
+    :class:`~hiten.algorithms.connections.base.ConnectionPipeline`
         Main class that uses this configuration.
     """
     delta_v_tol: float = 1e-3
@@ -126,7 +126,7 @@ class _ConnectionConfig(_SearchConfig):
         Search parameters and tolerances.
     :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
         Synodic section configuration.
-    :class:`~hiten.algorithms.connections.base.Connection`
+    :class:`~hiten.algorithms.connections.base.ConnectionPipeline`
         Main class that uses this configuration.
     """
     section: _SynodicMapConfig = _SynodicMapConfig()

@@ -27,7 +27,7 @@ from hiten.utils.log_config import logger
 from hiten.utils.printing import _format_poly_table
 
 if TYPE_CHECKING:
-    from hiten.algorithms.hamiltonian.pipeline import _HamiltonianPipeline
+    from hiten.algorithms.hamiltonian.pipeline import HamiltonianPipeline
     from hiten.system.center import CenterManifold
     from hiten.system.hamiltonian import Hamiltonian
     from hiten.system.libration.base import LibrationPoint
@@ -52,7 +52,6 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
 
         super().__init__(domain_obj)
         self._services = get_hamiltonian_services()
-        self._ham_dynamics = self._services.dynamics
         self._ham_conversion = self._services.conversion
         self._ham_pipeline = self._services.pipeline
         self._hamsys = None
@@ -77,7 +76,7 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
             self._hamsys = None
 
     @property
-    def pipeline(self) -> _HamiltonianPipeline:
+    def pipeline(self) -> HamiltonianPipeline:
         """Get or create the pipeline for the current point and degree."""
         cache_key = self.make_key("pipeline", self.degree)
         
@@ -95,7 +94,7 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
         
         return self.get_or_create(cache_key, _factory)
 
-    def pipeline_for_degree(self, degree: int) -> _HamiltonianPipeline:
+    def pipeline_for_degree(self, degree: int) -> HamiltonianPipeline:
         """Get pipeline for a specific degree, changing current degree if needed."""
         if degree != self._degree:
             self.degree = degree

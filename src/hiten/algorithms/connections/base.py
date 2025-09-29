@@ -1,6 +1,6 @@
 """Provide a user-facing interface for discovering connections between manifolds in CR3BP.
 
-This module provides the main :class:`~hiten.algorithms.connections.base.Connection` class, which serves as a
+This module provides the main :class:`~hiten.algorithms.connections.base.ConnectionPipeline` class, which serves as a
 high-level facade for the connection discovery algorithm. It wraps the lower-level
 connection engine and provides convenient methods for solving connection problems
 and visualizing results.
@@ -35,7 +35,7 @@ if TYPE_CHECKING:
     from hiten.algorithms.connections.types import (Connections,
                                                     _ConnectionResult)
 
-class Connection(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
+class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
     """Provide a user-facing facade for connection discovery and plotting in CR3BP.
 
     This class provides a high-level interface for discovering ballistic and
@@ -56,7 +56,7 @@ class Connection(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT
     Examples
     --------
 
-    >>> from hiten.algorithms.connections import Connection, SearchConfig
+    >>> from hiten.algorithms.connections import ConnectionPipeline, SearchConfig
     >>> from hiten.algorithms.poincare import SynodicMapConfig
     >>> from hiten.system import System
     >>>
@@ -93,7 +93,7 @@ class Connection(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT
     >>>     n_workers=None,
     >>> )
     >>> 
-    >>> conn = Connection.with_default_engine(
+    >>> conn = ConnectionPipeline.with_default_engine(
     >>>     config=_ConnectionConfig(
     >>>         section=section_cfg,
     >>>         direction=None,
@@ -131,7 +131,7 @@ class Connection(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT
         self._last_results: list["_ConnectionResult"] | None = None
 
     @classmethod
-    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None) -> "Connection[DomainT, ConfigT, ResultT]":
+    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None) -> "ConnectionPipeline[DomainT, ConfigT, ResultT]":
         """Create a facade instance with a default engine (factory).
 
         The default engine uses :class:`~hiten.algorithms.connections.backends._ConnectionsBackend`.
@@ -146,7 +146,7 @@ class Connection(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT
 
         Returns
         -------
-        :class:`~hiten.algorithms.connections.base.Connection`
+        :class:`~hiten.algorithms.connections.base.ConnectionPipeline`
             A connection facade instance with a default engine injected.
         """
         from hiten.algorithms.connections.backends import _ConnectionsBackend
@@ -178,16 +178,16 @@ class Connection(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT
         Returns
         -------
         :class:`~hiten.algorithms.connections.types.Connections`
-            Connection results sorted by increasing Delta-V requirement.
+            ConnectionPipeline results sorted by increasing Delta-V requirement.
             Each result contains transfer type, Delta-V, intersection points,
             and 6D states at the connection.
 
         Notes
         -----
         Results are cached internally for convenient access via the 
-        :attr:`~hiten.algorithms.connections.base.Connection.results`
+        :attr:`~hiten.algorithms.connections.base.ConnectionPipeline.results`
         property and for plotting with the
-        :meth:`~hiten.algorithms.connections.base.Connection.plot` method.
+        :meth:`~hiten.algorithms.connections.base.ConnectionPipeline.plot` method.
 
         The algorithm performs these steps:
         1. Convert manifolds to section interfaces
@@ -220,13 +220,13 @@ class Connection(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT
         :class:`~hiten.algorithms.connections.types.Connections`
             A view over the latest results with friendly printing and
             convenient access methods. Returns an empty view if 
-            :meth:`~hiten.algorithms.connections.base.Connection.solve`
+            :meth:`~hiten.algorithms.connections.base.ConnectionPipeline.solve`
             has not been called yet.
 
         Notes
         -----
         This property provides access to cached results from the most recent
-        call to :meth:`~hiten.algorithms.connections.base.Connection.solve`. 
+        call to :meth:`~hiten.algorithms.connections.base.ConnectionPipeline.solve`. 
         The :class:`~hiten.algorithms.connections.types.Connections` 
         wrapper provides enhanced formatting and filtering capabilities.
 
@@ -261,7 +261,7 @@ class Connection(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT
         Raises
         ------
         ValueError
-            If :meth:`~hiten.algorithms.connections.base.Connection.solve` 
+            If :meth:`~hiten.algorithms.connections.base.ConnectionPipeline.solve` 
             has not been called yet (no cached data to plot).
 
         Notes
@@ -269,7 +269,7 @@ class Connection(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT
         The plot shows:
         - Source manifold intersection points (typically unstable manifold)
         - Target manifold intersection points (typically stable manifold)
-        - Connection points with color-coded Delta-V requirements
+        - ConnectionPipeline points with color-coded Delta-V requirements
         - Section coordinate labels and axes
 
         Examples

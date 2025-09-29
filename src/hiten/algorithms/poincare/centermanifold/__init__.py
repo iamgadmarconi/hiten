@@ -9,7 +9,7 @@ The module exports a factory function :func:`~hiten.algorithms.poincare.centerma
 that creates concrete seeding strategy instances based on a string identifier.
 """
 
-from .base import _CenterManifoldMapFacade
+from .base import CenterManifoldMapPipeline
 from .config import _CenterManifoldMapConfig
 from .engine import _CenterManifoldEngine
 from .interfaces import _CenterManifoldInterface
@@ -20,7 +20,7 @@ from .types import CenterManifoldMapResults
 __all__ = [
     "_CenterManifoldMapConfig",
     "CenterManifoldMapResults",
-    "_CenterManifoldMapFacade",
+    "CenterManifoldMapPipeline",
     "_CenterManifoldEngine",
     "_CenterManifoldInterface",
     "_CenterManifoldSeedingBase",

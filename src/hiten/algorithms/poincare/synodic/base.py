@@ -23,7 +23,7 @@ from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
                                          _HitenBaseFacade)
 
 
-class _SynodicMapFacade(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
+class SynodicMapPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
     """User-facing interface for synodic Poincare section detection.
 
     This class provides a facade that mirrors the API of other return-map
@@ -70,10 +70,10 @@ class _SynodicMapFacade(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
         cls,
         config: _SynodicMapConfig,
         interface: Optional[_SynodicInterface] = None,
-    ) -> "_SynodicMapFacade":
+    ) -> "SynodicMapPipeline":
         """Construct a map with a default-wired engine injected.
 
-        This mirrors the DI-friendly facades (e.g., Connection) by creating
+        This mirrors the DI-friendly facades (e.g., ConnectionPipeline) by creating
         a default engine using the current configuration and injecting it.
         The engine is wired for the default section coordinate in the config.
         """

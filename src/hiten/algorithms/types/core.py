@@ -623,6 +623,72 @@ class _HitenBase(ABC):
         
         return clean_obj
 
+    def _make_serializable(self, obj):
+        """Convert an object to a serializable format, handling Numba objects and other problematic types.
+        
+        Parameters
+        ----------
+        obj : any
+            The object to convert to serializable format
+            
+        Returns
+        -------
+        any
+            The object in a serializable format, or a placeholder if conversion is not possible
+        """
+        if obj is None:
+            return None
+            
+        # Handle Numba objects - these cannot be pickled
+        if hasattr(obj, '__module__') and obj.__module__ and 'numba' in obj.__module__:
+            return None  # Return None for Numba objects, they can be reconstructed
+            
+        # Handle Numba compiled functions
+        if hasattr(obj, '__name__') and hasattr(obj, '__module__') and obj.__module__ and 'numba' in obj.__module__:
+            return None  # Return None for Numba functions, they can be reconstructed
+            
+        # Handle Numba memory info objects
+        if hasattr(obj, '__class__') and 'nrt_python' in str(type(obj)):
+            return None  # Return None for Numba memory objects
+            
+        # Handle dictionaries that might contain Numba objects
+        if isinstance(obj, dict):
+            return {k: self._make_serializable(v) for k, v in obj.items()}
+            
+        # Handle lists that might contain Numba objects
+        if isinstance(obj, (list, tuple)):
+            if isinstance(obj, tuple):
+                return tuple(self._make_serializable(item) for item in obj)
+            else:
+                return [self._make_serializable(item) for item in obj]
+                
+        # Handle objects with Numba attributes
+        if hasattr(obj, '__dict__'):
+            try:
+                # Try to serialize the object normally first
+                import pickle
+                pickle.dumps(obj)
+                return obj  # If it works, return as-is
+            except (TypeError, pickle.PicklingError):
+                # If it fails, try to create a serializable version
+                if hasattr(obj, '__class__'):
+                    # For objects that can't be pickled, return a placeholder
+                    # that indicates the type and can be used for reconstruction
+                    return {
+                        '_serialization_placeholder': True,
+                        '_class_name': obj.__class__.__name__,
+                        '_module': getattr(obj.__class__, '__module__', None)
+                    }
+        
+        # For other types, try to return as-is
+        try:
+            import pickle
+            pickle.dumps(obj)
+            return obj
+        except (TypeError, pickle.PicklingError):
+            # If it can't be pickled, return None
+            return None
+
     def __getstate__(self):
         """Get state for pickling, preserving computed properties."""
         state = self.__dict__.copy()
@@ -636,9 +702,10 @@ class _HitenBase(ABC):
                     try:
                         value = getattr(source, attr_name)
                         if self._is_computed_property(attr_name, value):
-                            state[attr_name] = value
-                    except (AttributeError, TypeError):
-                        # Skip attributes that can't be accessed
+                            # Convert value to serializable format if needed
+                            state[attr_name] = self._make_serializable(value)
+                    except (AttributeError, TypeError, ValueError):
+                        # Skip attributes that can't be accessed or raise errors
                         continue
         
         # Remove other service-related attributes using the shared logic
@@ -650,15 +717,58 @@ class _HitenBase(ABC):
     
     def __setstate__(self, state):
         """Set state after unpickling, restoring computed properties."""
-        self.__dict__.update(state)
+        # Process state to handle serialization placeholders
+        processed_state = {}
+        for attr_name, value in state.items():
+            if isinstance(value, dict) and value.get('_serialization_placeholder', False):
+                # Skip serialization placeholders - these objects will be reconstructed
+                continue
+            processed_state[attr_name] = value
+            
+        self.__dict__.update(processed_state)
         if not hasattr(self, "_cache") or self._cache is None:
             self._cache = {}
         
         # Store computed properties temporarily for later restoration
         self._computed_properties_to_restore = {}
         for attr_name, value in state.items():
-            if self._is_computed_property(attr_name, value):
+            if self._is_computed_property(attr_name, value) and not (isinstance(value, dict) and value.get('_serialization_placeholder', False)):
                 self._computed_properties_to_restore[attr_name] = value
+        
+        # Mark that this object needs reconstruction of excluded objects
+        self._needs_reconstruction = True
+
+    def _reconstruct_excluded_objects(self):
+        """Reconstruct objects that were excluded during serialization.
+        
+        This method is called after services are set up to reconstruct objects
+        that couldn't be serialized (like Numba-compiled functions, generators, etc.).
+        Subclasses can override this method to implement specific reconstruction logic.
+        """
+        if not hasattr(self, '_needs_reconstruction') or not self._needs_reconstruction:
+            return
+            
+        # Reconstruct common excluded objects
+        self._reconstruct_generators()
+
+    def _reconstruct_generators(self):
+        """Reconstruct generator objects that were excluded during serialization.
+        
+        This method resets generator attributes to None so they get lazily reconstructed
+        when accessed. This is a common pattern for objects containing Numba-compiled functions.
+        """
+        # Reset generator in dynamics service if it exists
+        if hasattr(self, 'dynamics') and self.dynamics is not None:
+            if hasattr(self.dynamics, '_generator'):
+                self.dynamics._generator = None
+                
+        # Reset generator in other services if they exist
+        for service_name in ['_correction', '_continuation', '_conversion', '_ham_conversion', 
+                           '_ham_dynamics', '_ham_pipeline', '_lgf_persistence']:
+            if hasattr(self, service_name):
+                service = getattr(self, service_name)
+                if service is not None and hasattr(service, '_generator'):
+                    service._generator = None
 
     def _unpack_services(self) -> None:
         """Unpack services from the service bundle into individual attributes.
@@ -731,6 +841,13 @@ class _HitenBase(ABC):
             
             if not has_computed_properties:
                 self._dynamics.reset()
+        
+        # Reconstruct excluded objects if needed
+        self._reconstruct_excluded_objects()
+        
+        # Clear the reconstruction flag
+        if hasattr(self, '_needs_reconstruction'):
+            delattr(self, '_needs_reconstruction')
 
     @classmethod
     def _load_with_services(cls, filepath: str | Path, persistence_service, services_factory, **kwargs) -> "_HitenBase":

@@ -13,14 +13,14 @@ from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
                                          _HitenBaseFacade)
 
 
-class StabilityProperties(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
+class StabilityPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
     """Facade exposing linear stability results on demand."""
 
     def __init__(self, config: ConfigT, interface, engine: _LinearStabilityEngine = None) -> None:
         super().__init__(config, interface, engine)
 
     @classmethod
-    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None) -> "StabilityProperties[DomainT, InterfaceT, ConfigT, ResultT]":
+    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None) -> "StabilityPipeline[DomainT, InterfaceT, ConfigT, ResultT]":
         backend = _LinalgBackend()
         intf = interface or _EigenDecompositionInterface()
         engine = _LinearStabilityEngine(backend=backend, interface=intf)

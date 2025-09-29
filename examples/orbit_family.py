@@ -10,7 +10,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from hiten import System
-from hiten.algorithms import StateParameter
+from hiten.algorithms import ContinuationPipeline
 from hiten.algorithms.types.states import SynodicState
 from hiten.algorithms.continuation.config import _OrbitContinuationConfig
 from hiten.system.family import OrbitFamily
@@ -20,7 +20,7 @@ from hiten.utils.log_config import logger
 def main() -> None:
     """Generate and save a small Halo halo_family around the Earth-Moon L1 point.
     
-    This example demonstrates how to use the StateParameter predictor to
+    This example demonstrates how to use the ContinuationPipeline predictor to
     generate a halo_family of Halo orbits around the Earth-Moon L1 point.
     """
     num_orbits = 50
@@ -43,7 +43,7 @@ def main() -> None:
         stepper="secant",
     )
 
-    state_parameter = StateParameter.with_default_engine(config=config)
+    state_parameter = ContinuationPipeline.with_default_engine(config=config)
 
     result = state_parameter.generate(halo_seed)
 
