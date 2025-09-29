@@ -22,8 +22,8 @@ from hiten.utils.io.hamiltonian import (load_hamiltonian,
                                         save_lie_generating_function)
 
 if TYPE_CHECKING:
-    from hiten.system.hamiltonian import Hamiltonian, LieGeneratingFunction
     from hiten.algorithms.hamiltonian.pipeline import HamiltonianPipeline
+    from hiten.system.hamiltonian import Hamiltonian, LieGeneratingFunction
 
 class _HamiltonianPersistenceService(_PersistenceServiceBase):
     """Encapsulate save/load helpers for Hamiltonian objects."""

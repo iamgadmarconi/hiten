@@ -29,7 +29,7 @@ from hiten.algorithms.hamiltonian.hamiltonian import (
 from hiten.algorithms.hamiltonian.normal._lie import \
     _lie_transform as _lie_transform_full
 from hiten.algorithms.types.services.hamiltonian import _PipelineService
-from hiten.algorithms.types.services.hamiltonian import get_hamiltonian_services
+from hiten.algorithms.types.services import get_hamiltonian_services
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
@@ -467,7 +467,8 @@ class HamiltonianPipeline:
         Get all available Hamiltonian forms.
 
         This method determines which Hamiltonian forms can be computed
-        based on the conversion registry and available context.
+        based on the conversion registry and available context using
+        breadth-first search to find all reachable forms.
 
         Returns
         -------
@@ -476,17 +477,29 @@ class HamiltonianPipeline:
 
         Notes
         -----
-        The method checks the conversion registry for forms that can be
-        converted from "physical" with the available context (point).
+        The method uses BFS to find all forms that can be reached from
+        "physical" through any number of conversion steps, not just direct
+        conversions. This ensures that multi-step conversion paths like
+        physical -> real_modal -> complex_modal -> ... -> center_manifold_real
+        are properly detected.
         """
-        available = {"physical"}  # Always available
+        from collections import deque
         
-        # Add forms that can be converted from physical
-        for (src, dst), (_, required_context, _) in self.registry._CONVERSION_REGISTRY.items():
-            if src == "physical" and not required_context:
-                available.add(dst)
-            elif src == "physical" and "point" in required_context:
-                available.add(dst)
+        available = {"physical"}  # Always available
+        queue = deque(["physical"])
+        visited = {"physical"}
+        
+        while queue:
+            current_form = queue.popleft()
+            
+            # Check all possible conversions from current_form using registry
+            for (src, dst), (_, required_context, _) in self.registry._CONVERSION_REGISTRY.items():
+                if src == current_form and dst not in visited:
+                    # Check if we have the required context (point is always available)
+                    if not required_context or "point" in required_context:
+                        visited.add(dst)
+                        available.add(dst)
+                        queue.append(dst)
 
         return available
 

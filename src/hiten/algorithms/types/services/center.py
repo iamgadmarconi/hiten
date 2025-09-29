@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -16,11 +16,10 @@ from hiten.algorithms.hamiltonian.transforms import (_coordlocal2realmodal,
                                                      _solve_real,
                                                      _synodic2local_collinear,
                                                      _synodic2local_triangular)
+from hiten.algorithms.types.services import get_hamiltonian_services
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
                                                   _ServiceBundleBase)
-from hiten.algorithms.types.services.hamiltonian import \
-    get_hamiltonian_services
 from hiten.system.maps.center import CenterManifoldMap
 from hiten.utils.io.center import load_center_manifold, save_center_manifold
 from hiten.utils.log_config import logger

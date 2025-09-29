@@ -63,14 +63,11 @@ from hiten.algorithms.hamiltonian.center._lie import \
     _lie_transform as _lie_transform_partial
 from hiten.algorithms.hamiltonian.normal._lie import \
     _lie_transform as _lie_transform_full
-from hiten.algorithms.hamiltonian.pipeline import (
-    get_hamiltonian_services,
-)
 from hiten.algorithms.hamiltonian.transforms import (
     _polylocal2realmodal, _polyrealmodal2local,
     _restrict_poly_to_center_manifold, _substitute_complex, _substitute_real)
-from hiten.system.hamiltonian import (Hamiltonian,
-                                            LieGeneratingFunction)
+from hiten.algorithms.types.services import get_hamiltonian_services
+from hiten.system.hamiltonian import Hamiltonian, LieGeneratingFunction
 
 if TYPE_CHECKING:
     from hiten.system.libration.collinear import CollinearPoint
