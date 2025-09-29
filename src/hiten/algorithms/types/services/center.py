@@ -33,7 +33,17 @@ if TYPE_CHECKING:
 
 
 class _CenterManifoldPersistenceService(_PersistenceServiceBase):
-    """Handle persistence for center manifold objects."""
+    """Handle persistence for center manifold objects.
+    
+    Parameters
+    ----------
+    save_fn : Callable[..., Any]
+        The function to save the object.
+    load_fn : Callable[..., Any]
+        The function to load the object.
+    load_inplace_fn : Optional[Callable[..., Any]] = None
+        The function to load the object in place.
+    """
 
     def __init__(self) -> None:
         super().__init__(
@@ -43,7 +53,13 @@ class _CenterManifoldPersistenceService(_PersistenceServiceBase):
 
 
 class _CenterManifoldDynamicsService(_DynamicsServiceBase):
-    """Provide numerical operations for center manifold computations."""
+    """Provide numerical operations for center manifold computations.
+    
+    Parameters
+    ----------
+    domain_obj : :class:`~hiten.system.center.CenterManifold`
+        The domain object.
+    """
 
     def __init__(self, domain_obj: "CenterManifold") -> None:
         self._point = domain_obj._point
@@ -58,14 +74,17 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
 
     @property
     def point(self) -> "LibrationPoint":
+        """Get the libration point."""
         return self._point
 
     @property
     def degree(self) -> int:
+        """Get the degree of the center manifold."""
         return self._degree
 
     @degree.setter
     def degree(self, value: int) -> None:
+        """Set the degree of the center manifold."""
         if not isinstance(value, int) or value <= 0:
             raise ValueError("degree must be a positive integer.")
         if value != self._degree:
@@ -76,7 +95,13 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
 
     @property
     def pipeline(self) -> HamiltonianPipeline:
-        """Get or create the pipeline for the current point and degree."""
+        """Get or create the pipeline for the current point and degree.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.hamiltonian.pipeline.HamiltonianPipeline`
+            The pipeline.
+        """
         cache_key = self.make_key("pipeline", self.degree)
         
         def _factory():
@@ -85,7 +110,18 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
         return self.get_or_create(cache_key, _factory)
 
     def hamiltonian(self, degree: int) -> "Hamiltonian":
+        """Get the Hamiltonian for the given degree.
+        
+        Parameters
+        ----------
+        degree : int
+            The degree of the Hamiltonian.
 
+        Returns
+        -------
+        :class:`~hiten.system.hamiltonian.Hamiltonian`
+            The Hamiltonian.
+        """
         cache_key = self.make_key("hamiltonian", degree)
 
         def _factory():
@@ -94,12 +130,24 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
         return self.get_or_create(cache_key, _factory)
 
     def pipeline_for_degree(self, degree: int) -> HamiltonianPipeline:
-        """Get pipeline for a specific degree, changing current degree if needed."""
+        """Get pipeline for a specific degree, changing current degree if needed.
+        
+        Parameters
+        ----------
+        degree : int
+            The degree of the pipeline.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.hamiltonian.pipeline.HamiltonianPipeline`
+            The pipeline.
+        """
         if degree != self._degree:
             self.degree = degree
         return self.pipeline
 
     def clear_caches(self) -> None:
+        """Clear the caches."""
         self.reset()
         try:
             pipeline = self._ham_pipeline.get(self.domain_obj, self.degree)
@@ -110,10 +158,35 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
         self._hamsys = None
 
     def format_coefficients(self, ham: "Hamiltonian", degree: int) -> str:
+        """Format the coefficients of the Hamiltonian.
+        
+        Parameters
+        ----------
+        ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
+            The Hamiltonian.
+        degree : int
+            The degree of the Hamiltonian.
+
+        Returns
+        -------
+        str
+            The formatted coefficients.
+        """
         return _format_poly_table(ham.dynamics.poly_H, ham.dynamics.clmo, degree)
 
     def get_map(self, energy: float):
+        """Get the map for the given energy.
+        
+        Parameters
+        ----------
+        energy : float
+            The energy.
 
+        Returns
+        -------
+        :class:`~hiten.system.maps.center.CenterManifoldMap`
+            The map.
+        """
         cache_key = self.make_key(id(self.domain_obj), self._degree, energy)
 
         def _factory():
@@ -123,11 +196,30 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
 
     @property
     def hamsys(self):
+        """Get the Hamiltonian system."""
         if self._hamsys is None:
             self._hamsys = self.pipeline.get_hamiltonian("center_manifold_real").hamsys
         return self._hamsys
 
     def cm_point_to_synodic(self, cm_point: np.ndarray, *, energy: float | None, section_coord: str = "q3", tol: float = 1e-14) -> np.ndarray:
+        """Convert the center manifold point to synodic coordinates.
+        
+        Parameters
+        ----------
+        cm_point : np.ndarray
+            The center manifold point.
+        energy : float | None
+            The energy.
+        section_coord : str, optional
+            The section coordinate.
+        tol : float, optional
+            The tolerance.
+
+        Returns
+        -------
+        np.ndarray
+            The synodic coordinates.
+        """
         cm_point = np.asarray(cm_point)
         if cm_point.size == 2:
             if energy is None:
@@ -143,6 +235,20 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
         )
 
     def synodic_to_cm(self, synodic_6d: np.ndarray, tol: float = 1e-14) -> np.ndarray:
+        """Convert the synodic coordinates to the center manifold coordinates.
+        
+        Parameters
+        ----------
+        synodic_6d : np.ndarray
+            The synodic coordinates.
+        tol : float, optional
+            The tolerance.
+
+        Returns
+        -------
+        np.ndarray
+            The center manifold coordinates.
+        """
         synodic_6d = np.asarray(synodic_6d, dtype=np.float64).reshape(6)
         local_6d = self._synodic2local(self._point, synodic_6d, tol)
         real_modal_6d = _coordlocal2realmodal(self._point, local_6d, tol)
@@ -161,10 +267,42 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
         ], dtype=np.float64)
 
     def _cm_point_to_synodic_from_section(self, energy: float, poincare_point: np.ndarray, section_coord: str, tol: float) -> np.ndarray:
+        """Convert the center manifold point to synodic coordinates from a section.
+        
+        Parameters
+        ----------
+        energy : float
+            The energy.
+        poincare_point : np.ndarray
+            The Poincaré point.
+        section_coord : str
+            The section coordinate.
+        tol : float
+            The tolerance.
+
+        Returns
+        -------
+        np.ndarray
+            The center manifold coordinates.
+        """
         real_4d_cm = self.get_map(energy).dynamics._to_real_4d_cm(poincare_point, section_coord)
         return self._cm_point_to_synodic_4d(real_4d_cm, tol)
 
     def _cm_point_to_synodic_4d(self, cm_coords_4d: np.ndarray, tol: float) -> np.ndarray:
+        """Convert the center manifold point to synodic coordinates from a 4D point.
+        
+        Parameters
+        ----------
+        cm_coords_4d : np.ndarray
+            The center manifold coordinates.
+        tol : float
+            The tolerance.
+        
+        Returns
+        -------
+        np.ndarray
+            The synodic coordinates.
+        """
         cm_coords_4d = np.asarray(cm_coords_4d, dtype=np.float64).reshape(4)
 
         real_6d_cm = np.zeros(6, dtype=np.complex128)
@@ -182,6 +320,18 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
         return self._local2synodic(self._point, local_6d, tol)
 
     def _restrict_to_center_manifold(self, coords: np.ndarray) -> np.ndarray:
+        """Restrict the coordinates to the center manifold.
+        
+        Parameters
+        ----------
+        coords : np.ndarray
+            The coordinates.
+
+        Returns
+        -------
+        np.ndarray
+            The restricted coordinates.
+        """
         coords = coords.copy()
         if coords.ndim == 1:
             coords = coords.astype(np.complex128, copy=False)
@@ -200,6 +350,7 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
         return coords
 
     def _configure_point(self) -> None:
+        """Configure the point."""
         from hiten.system.libration.collinear import CollinearPoint, L3Point
         from hiten.system.libration.triangular import TriangularPoint
 
@@ -225,6 +376,17 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
 
 
 class _CenterManifoldServices(_ServiceBundleBase):
+    """Encapsulate services for center manifold.
+    
+    Parameters
+    ----------
+    domain_obj : :class:`~hiten.system.center.CenterManifold`
+        The domain object.
+    persistence : :class:`~hiten.algorithms.types.services.center._CenterManifoldPersistenceService`
+        The persistence service.
+    dynamics : :class:`~hiten.algorithms.types.services.center._CenterManifoldDynamicsService`
+        The dynamics service.
+    """
 
     def __init__(self, domain_obj: "CenterManifold", persistence: _CenterManifoldPersistenceService, dynamics: _CenterManifoldDynamicsService) -> None:
         super().__init__(domain_obj)
@@ -234,6 +396,18 @@ class _CenterManifoldServices(_ServiceBundleBase):
 
     @classmethod
     def default(cls, domain_obj: "CenterManifold") -> "_CenterManifoldServices":
+        """Create a default service bundle.
+        
+        Parameters
+        ----------
+        domain_obj : :class:`~hiten.system.center.CenterManifold`
+            The domain object.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.services.center._CenterManifoldServices`
+            The service bundle.
+        """
         return cls(
             domain_obj=domain_obj,
             persistence=_CenterManifoldPersistenceService(),
@@ -242,6 +416,18 @@ class _CenterManifoldServices(_ServiceBundleBase):
 
     @classmethod
     def with_shared_dynamics(cls, dynamics: _CenterManifoldDynamicsService) -> "_CenterManifoldServices":
+        """Create a service bundle with a shared dynamics service.
+        
+        Parameters
+        ----------
+        dynamics : :class:`~hiten.algorithms.types.services.center._CenterManifoldDynamicsService`
+            The dynamics service.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.services.center._CenterManifoldServices`
+            The service bundle.
+        """
         return cls(
             domain_obj=dynamics.domain_obj,
             persistence=_CenterManifoldPersistenceService(),

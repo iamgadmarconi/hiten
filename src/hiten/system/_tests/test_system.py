@@ -211,12 +211,12 @@ class TestPropagation:
         trajectory = earth_moon_system.propagate(initial_conditions, tf=0.1, steps=10)
         
         assert trajectory is not None
-        # Trajectory is a tuple of (times, states)
-        assert isinstance(trajectory, tuple)
-        assert len(trajectory) == 2
-        times, states = trajectory
-        assert len(times) == 10
-        assert len(states) == 10
+        # Trajectory is a Trajectory object with times and states properties
+        assert hasattr(trajectory, 'times')
+        assert hasattr(trajectory, 'states')
+        assert trajectory.n_samples == 10
+        assert len(trajectory.times) == 10
+        assert len(trajectory.states) == 10
     
     def test_propagate_with_different_methods(self, earth_moon_system):
         """Test propagation with different integration methods."""
@@ -235,8 +235,7 @@ class TestPropagation:
                 method=method
             )
             assert trajectory is not None
-            times, states = trajectory
-            assert len(states) == 5
+            assert trajectory.n_samples == 5
     
     def test_propagate_with_parameters(self, earth_moon_system):
         """Test propagation with various parameters."""
@@ -256,9 +255,9 @@ class TestPropagation:
         )
         
         assert trajectory is not None
-        times, states = trajectory
-        assert len(states) == 20
-        assert len(times) == 20
+        assert trajectory.n_samples == 20
+        assert len(trajectory.times) == 20
+        assert len(trajectory.states) == 20
     
     def test_propagate_backward_integration(self, earth_moon_system):
         """Test backward integration."""
@@ -275,8 +274,7 @@ class TestPropagation:
         )
         
         assert trajectory is not None
-        times, states = trajectory
-        assert len(states) == 10
+        assert trajectory.n_samples == 10
 
 
 class TestFactoryMethods:
@@ -391,9 +389,9 @@ class TestSystemIntegration:
         trajectory = system.propagate(initial_conditions, tf=0.1, steps=10)
         
         # Verify trajectory
-        times, states = trajectory
-        assert len(states) == 10
-        assert len(times) == 10
+        assert trajectory.n_samples == 10
+        assert len(trajectory.times) == 10
+        assert len(trajectory.states) == 10
         
         # Test that we can access all dynamical systems
         assert system.dynsys is not None

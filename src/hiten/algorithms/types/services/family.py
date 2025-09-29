@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path    
+from pathlib import Path
 from typing import TYPE_CHECKING
 
-from hiten.algorithms.types.services.base import (_DynamicsServiceBase, _PersistenceServiceBase,
+from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
+                                                  _PersistenceServiceBase,
                                                   _ServiceBundleBase)
 from hiten.utils.io.family import load_family, load_family_inplace, save_family
 
@@ -15,7 +15,17 @@ if TYPE_CHECKING:
 
 
 class _OrbitFamilyPersistenceService(_PersistenceServiceBase):
-    """Handle HDF5 serialisation for orbit families."""
+    """Handle serialization for orbit families.
+    
+    Parameters
+    ----------
+    save_fn : Callable[..., Any]
+        The function to save the object.
+    load_fn : Callable[..., Any]
+        The function to load the object.
+    load_inplace_fn : Optional[Callable[..., Any]] = None
+        The function to load the object in place.
+    """
 
     def __init__(self) -> None:
         super().__init__(
@@ -26,13 +36,29 @@ class _OrbitFamilyPersistenceService(_PersistenceServiceBase):
 
 
 class _OrbitFamilyDynamicsService(_DynamicsServiceBase):
-
+    """Encapsulate services for orbit family.
+    
+    Parameters
+    ----------
+    family : :class:`~hiten.system.family.OrbitFamily`
+        The domain object.
+    """
     def __init__(self, family: "OrbitFamily") -> None:
         super().__init__(family)
 
 
 class _OrbitFamilyServices(_ServiceBundleBase):
+    """Encapsulate services for orbit family.
     
+    Parameters
+    ----------
+    domain_obj : :class:`~hiten.system.family.OrbitFamily`
+        The domain object.
+    persistence : :class:`~hiten.algorithms.types.services.family._OrbitFamilyPersistenceService`
+        The persistence service.
+    dynamics : :class:`~hiten.algorithms.types.services.family._OrbitFamilyDynamicsService`
+        The dynamics service.
+    """
     def __init__(self, domain_obj: "OrbitFamily", persistence: _OrbitFamilyPersistenceService, dynamics: _OrbitFamilyDynamicsService) -> None:
         super().__init__(domain_obj)
         self.persistence = persistence
@@ -40,6 +66,18 @@ class _OrbitFamilyServices(_ServiceBundleBase):
 
     @classmethod
     def default(cls, domain_obj: "OrbitFamily") -> "_OrbitFamilyServices":
+        """Create a default service bundle.
+        
+        Parameters
+        ----------
+        domain_obj : :class:`~hiten.system.family.OrbitFamily`
+            The domain object.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.services.family._OrbitFamilyServices`
+            The service bundle.
+        """
         return cls(
             domain_obj=domain_obj,
             persistence=_OrbitFamilyPersistenceService(),
@@ -48,6 +86,18 @@ class _OrbitFamilyServices(_ServiceBundleBase):
 
     @classmethod
     def with_shared_dynamics(cls, dynamics: _OrbitFamilyDynamicsService) -> "_OrbitFamilyServices":
+        """Create a service bundle with a shared dynamics service.
+        
+        Parameters
+        ----------
+        dynamics : :class:`~hiten.algorithms.types.services.family._OrbitFamilyDynamicsService`
+            The dynamics service.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.services.family._OrbitFamilyServices`
+            The service bundle.
+        """
         return cls(
             domain_obj=dynamics.domain_obj,
             persistence=_OrbitFamilyPersistenceService(),
