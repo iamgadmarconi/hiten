@@ -713,8 +713,8 @@ class HamiltonianPipeline(_SerializeBase):
             poly_trans, poly_G_total, poly_elim_total = _lie_transform_partial(
                 self._point, 
                 complex_modal_ham.poly_H, 
-                complex_modal_ham._psi, 
-                complex_modal_ham._clmo, 
+                complex_modal_ham.dynamics.psi, 
+                complex_modal_ham.dynamics.clmo, 
                 complex_modal_ham.degree, 
                 tol=tol_lie
             )
@@ -727,8 +727,8 @@ class HamiltonianPipeline(_SerializeBase):
             poly_trans, poly_G_total, poly_elim_total = _lie_transform_full(
                 self._point,
                 complex_modal_ham.poly_H,
-                complex_modal_ham._psi,
-                complex_modal_ham._clmo,
+                complex_modal_ham.dynamics.psi,
+                complex_modal_ham.dynamics.clmo,
                 complex_modal_ham.degree,
                 tol=tol_lie,
                 resonance_tol=resonance_tol
@@ -775,8 +775,8 @@ class HamiltonianPipeline(_SerializeBase):
         expansions = _lie_expansion(
             gen_funcs.poly_G,
             gen_funcs.degree,
-            gen_funcs._psi,
-            gen_funcs._clmo,
+            gen_funcs.dynamics.psi,
+            gen_funcs.dynamics.clmo,
             tol,
             inverse=inverse,
             sign=sign,

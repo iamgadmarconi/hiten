@@ -34,9 +34,9 @@ def reduction_test_setup():
 
     def _patch_cm(cm):
         ham = cm.dynamics.pipeline.get_hamiltonian("center_manifold_real")
-        cm._psi = ham._psi
-        cm._clmo = ham._clmo
-        cm._encode_dict_list = ham._encode_dict_list
+        cm._psi = ham.dynamics.psi
+        cm._clmo = ham.dynamics.clmo
+        cm._encode_dict_list = ham.dynamics.encode_dict_list
 
         def _cache_get(key):
             if not isinstance(key, tuple):

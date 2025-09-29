@@ -204,16 +204,16 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
             center_manifold = self.center_manifold(max_deg)
             center_manifold.compute()
             
-            data = center_manifold.cache_get(('hamiltonian', max_deg, form))
-            if data is None:
-                raise ValueError(f"No Hamiltonian data available for form '{form}' at degree {max_deg}")
-            
-            return Hamiltonian(
-                poly_H=[arr.copy() for arr in data],
-                degree=max_deg,
-                ndof=3,
-                name=f"L{self.domain_obj.idx}_{form}_{max_deg}"
-            )
+            # Get Hamiltonian from the pipeline
+            try:
+                hamiltonian = center_manifold.dynamics.pipeline.get_hamiltonian(form)
+                if hamiltonian is None:
+                    raise ValueError(f"No Hamiltonian data available for form '{form}' at degree {max_deg}")
+                
+                # Return the Hamiltonian object directly
+                return hamiltonian
+            except Exception as e:
+                raise ValueError(f"No Hamiltonian data available for form '{form}' at degree {max_deg}: {e}")
         
         return self.get_or_create(cache_key, _factory)
 
@@ -270,23 +270,27 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
         def _factory() -> list[LieGeneratingFunction]:
             center_manifold = self.center_manifold(max_deg)
             center_manifold.compute()
-            data = center_manifold.cache_get(('generating_functions', max_deg))
             
-            if data is None:
+            try:
+                gen_funcs = center_manifold.dynamics.pipeline.get_generating_functions("partial")
+                if gen_funcs is None:
+                    return []
+                
+                generating_functions = []
+                if gen_funcs.poly_G:
+                    for i, g_data in enumerate(gen_funcs.poly_G):
+                        gf = LieGeneratingFunction(
+                            poly_G=[g_data.copy()],
+                            poly_elim=[],
+                            degree=max_deg,
+                            ndof=3,
+                            name=f"L{self.domain_obj.idx}_G{i}_{max_deg}"
+                        )
+                        generating_functions.append(gf)
+                
+                return generating_functions
+            except Exception:
                 return []
-            
-            generating_functions = []
-            for i, g_data in enumerate(data):
-                gf = LieGeneratingFunction(
-                    poly_G=[g_data.copy()],
-                    poly_elim=[],
-                    degree=max_deg,
-                    ndof=3,
-                    name=f"L{self.domain_obj.idx}_G{i}_{max_deg}"
-                )
-                generating_functions.append(gf)
-            
-            return generating_functions
         
         return self.get_or_create(cache_key, _factory)
 
@@ -554,17 +558,17 @@ class _CollinearDynamicsService(_LibrationDynamicsService):
 
     def _compute_position(self, primary_interval: list) -> float:
         """Find the x-coordinate of a collinear point using retry logic.
-        
+
         Parameters
         ----------
         primary_interval : list
             Initial interval [a, b] to search for the root in nondimensional units.
-            
+
         Returns
         -------
         float
             x-coordinate of the libration point in nondimensional units.
-            
+
         Raises
         ------
         RuntimeError
@@ -572,6 +576,7 @@ class _CollinearDynamicsService(_LibrationDynamicsService):
         """
         func = lambda x_val: self._dOmega_dx(x_val)
         
+        # Try primary interval first
         try:
             a, b = primary_interval
             x = solve_bracketed_brent(func, a, b, xtol=1e-12, max_iter=200)
@@ -580,8 +585,20 @@ class _CollinearDynamicsService(_LibrationDynamicsService):
                 raise ValueError("Root not found in primary interval")
             return x
         except Exception as e:
+            # Fallback: try a wider interval
+            try:
+                fallback_a = max(- self.mu + 0.001, a - 0.1)  # Ensure we don't go too close to primary
+                fallback_b = min(1 - self.mu - 0.001, b + 0.1)  # Ensure we don't go too close to secondary
+                
+                # Try with more relaxed tolerance
+                x = solve_bracketed_brent(func, fallback_a, fallback_b, xtol=1e-10, max_iter=500)
+                
+                if x is None:
+                    raise ValueError("Root not found in fallback interval")
+                return x
 
-            raise RuntimeError(f"{self.domain_obj.__class__.__name__}: Primary interval {primary_interval} failed: {e}") from e
+            except Exception as fallback_e:
+                raise RuntimeError(f"{self.domain_obj.__class__.__name__}: Both primary interval {primary_interval} and fallback failed. Primary error: {e}, Fallback error: {fallback_e}") from fallback_e
 
     def _solve_gamma_polynomial(self, coeffs: list, gamma_range: tuple) -> float:
         """Solve the quintic polynomial for gamma with validation and fallback.

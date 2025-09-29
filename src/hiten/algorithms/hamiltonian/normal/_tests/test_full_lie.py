@@ -39,9 +39,9 @@ def center_manifold(libration_point):
     cm.compute()  # Triggers all intermediate computations and caches results
 
     ham_cm_real = cm.dynamics.pipeline.get_hamiltonian("center_manifold_real")
-    cm._psi = ham_cm_real._psi
-    cm._clmo = ham_cm_real._clmo
-    cm._encode_dict_list = ham_cm_real._encode_dict_list
+    cm._psi = ham_cm_real.dynamics.psi
+    cm._clmo = ham_cm_real.dynamics.clmo
+    cm._encode_dict_list = ham_cm_real.dynamics.encode_dict_list
 
     def _get_complex_modal_form():
         return cm.dynamics.pipeline.get_hamiltonian("complex_modal").poly_H
