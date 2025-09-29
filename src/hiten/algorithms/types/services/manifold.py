@@ -9,7 +9,6 @@ import numpy as np
 from tqdm import tqdm
 
 from hiten.algorithms.common.energy import _max_rel_energy_error
-from hiten.algorithms.types.states import Trajectory
 from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_stm
 from hiten.algorithms.linalg.base import StabilityPipeline
@@ -18,6 +17,7 @@ from hiten.algorithms.linalg.types import _ProblemType, _SystemType
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
                                                   _ServiceBundleBase)
+from hiten.algorithms.types.states import Trajectory
 from hiten.utils.io.manifold import load_manifold, save_manifold
 from hiten.utils.log_config import logger
 
@@ -29,7 +29,15 @@ if TYPE_CHECKING:
 
 
 class _ManifoldPersistenceService(_PersistenceServiceBase):
-    """Persistence helpers for manifold objects."""
+    """Persistence helpers for manifold objects.
+    
+    Parameters
+    ----------
+    save_fn : Callable[[Manifold, Path, Any], None]
+        The function to save the manifold.
+    load_fn : Callable[[Path, Any], Manifold]
+        The function to load the manifold.
+    """
 
     def __init__(self) -> None:
         super().__init__(
@@ -39,7 +47,26 @@ class _ManifoldPersistenceService(_PersistenceServiceBase):
 
 
 class _ManifoldDynamicsService(_DynamicsServiceBase):
-    """Manage STM computation and manifold trajectory generation."""
+    """Manage STM computation and manifold trajectory generation.
+    
+    Parameters
+    ----------
+    domain_obj : :class:`~hiten.system.manifold.Manifold`
+        The manifold.
+    
+    Attributes
+    ----------
+    stable : int
+        The stability of the manifold.
+    direction : int
+        The direction of the manifold.
+    forward : int
+        The forward direction of the manifold.
+    manifold_result : Tuple[float, float, List[np.ndarray], List[np.ndarray], int, int]
+        The manifold result.
+    generator : :class:`~hiten.algorithms.linalg.base.StabilityPipeline`
+        The stability pipeline.
+    """
 
     def __init__(self, manifold: "Manifold") -> None:
         super().__init__(manifold)
@@ -53,100 +80,124 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
 
     @property
     def generator(self) -> StabilityPipeline:
+        """The stability pipeline."""
         if self._generator is None:
             self._generator = StabilityPipeline.with_default_engine(config=self.eigendecomposition_config)
         return self._generator
 
     @property
     def orbit(self) -> "PeriodicOrbit":
+        """The generatingorbit of the manifold."""
         return self.domain_obj._generating_orbit
 
     @property
     def period(self) -> float:
+        """The period of the orbit."""
         return self.orbit.period
 
     @property
     def stable(self) -> bool:
+        """The stability of the manifold."""
         return self._stable
 
     @property
     def direction(self) -> bool:
+        """The direction of the manifold."""
         return self._direction
 
     @property
     def forward(self) -> bool:
+        """The forward direction of the manifold."""
         return self._forward
 
     @property
     def libration_point(self) -> "LibrationPoint":
+        """The libration point of the manifold."""
         return self.orbit.libration_point
 
     @property
     def system(self) -> "System":
+        """The system of the manifold."""
         return self.libration_point.system
 
     @property
     def mu(self) -> float:
+        """The mu of the system."""
         return self.system.mu
 
     @property
     def dynsys(self) -> _DynamicalSystem:
+        """The dynsys of the system."""
         return self.system.dynsys
     
     @property
     def var_dynsys(self) -> _DynamicalSystem:
+        """The var_dynsys of the system."""
         return self.system.var_dynsys
     
     @property
     def jacobian_dynsys(self) -> _DynamicalSystem:
+        """The jacobian_dynsys of the system."""
         return self.system.jacobian_dynsys
 
     @property
     def stm(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """The stm of the manifold."""
         return self.compute_stm(steps=2000)
 
     @property
     def eigenvalues(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """The eigenvalues of the system."""
         return self.stability.eigenvalues
 
     @property
     def eigenvectors(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """The eigenvectors of the system."""
         return self.stability.eigenvectors
 
     @property
     def sn(self) -> np.ndarray:
+        """The stable eigenvectors of the system."""
         return self.stability.stable
 
     @property
     def un(self) -> np.ndarray:
+        """The unstable eigenvectors of the system."""
         return self.stability.unstable
 
     @property
     def cn(self) -> np.ndarray:
+        """The center eigenvectors of the system."""
         return self.stability.center
     
     @property
     def wsn(self) -> np.ndarray:
+        """The real stable eigenvectors of the system."""
         return self.stability.Ws
 
     @property
     def wun(self) -> np.ndarray:
+        """The real unstable eigenvectors of the system."""
         return self.stability.Wu
 
     @property
     def wcn(self) -> np.ndarray:
+        """The complex center eigenvectors of the system."""
         return self.stability.Wc        
 
     @property
     def stability(self) -> StabilityPipeline:
+        """The stability of the manifold."""
         return self.compute_stability()
 
     @property
     def manifold_result(self) -> Tuple[float, float, List[np.ndarray], List[np.ndarray], int, int]:
+        """The manifold result."""
         return self._manifold_result
 
     @property
     def trajectories(self) -> List[Trajectory]:
+        """The trajectories of the manifold."""
         states_list = self._manifold_result[2]
         times_list = self._manifold_result[3]
         return [Trajectory(times, states) for times, states in zip(times_list, states_list)]
@@ -156,6 +207,20 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
         *,
         steps: int,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """The stm of the manifold.
+        
+        This function computes the state transition matrix (STM) of the manifold.
+
+        Parameters
+        ----------
+        steps : int
+            The number of steps to take.
+
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]
+            The stm of the manifold.
+        """
         cache_key = self.make_key(id(self.orbit), steps, self.forward)
         
         def _factory() -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
@@ -230,6 +295,36 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
         show_progress: bool,
     ) -> Tuple[float, float, List[np.ndarray], List[np.ndarray], int, int]:
         orbit = self.orbit
+        """The main kernel to compute the manifold.
+        
+        Parameters
+        ----------
+        step : float
+            The step size.
+        integration_fraction : float
+            The integration fraction.
+        NN : int
+            The index of the real eigenvector to follow.
+        displacement : float
+            The displacement magnitude in the eigenvector direction.
+        method : str
+            The integration method to use.
+        order : int
+            The order of the integration method to use.
+        dt : float
+            The time step.
+        energy_tol : float
+            The energy deviation tolerance for which to discard a trajectory.
+        safe_distance : float
+            The safe distance from the nearest primary for which to discard a trajectory.
+        show_progress : bool
+            Whether to show a progress bar.
+
+        Returns
+        -------
+        Tuple[float, float, List[np.ndarray], List[np.ndarray], int, int]
+            The manifold result.
+        """
         mu = self.mu
         forward = self.forward
 
@@ -337,6 +432,7 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
         return (ysos, dysos, states_list, times_list, successes, attempts)
 
     def compute_stability(self) -> StabilityPipeline:
+        """Compute the stability of the manifold."""
         key = self.make_key(id(self.domain_obj))
         
         def _factory() -> StabilityPipeline:
@@ -357,6 +453,30 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
         PHI: np.ndarray,
         eigvec: np.ndarray,
     ) -> np.ndarray:
+        """Compute the manifold section.
+        
+        Parameters
+        ----------
+        period : float
+            The period of the orbit.
+        fraction : float
+            The fraction of the period to compute the manifold section.
+        displacement : float
+            The displacement magnitude in the eigenvector direction.
+        xx : np.ndarray
+            The stm.
+        tt : np.ndarray
+            The times.
+        PHI : np.ndarray
+            The stm.
+        eigvec : np.ndarray
+            The eigenvector.
+
+        Returns
+        -------
+        np.ndarray
+            The manifold section.
+        """
         mfrac = self._totime(tt, fraction * period)
 
         if np.isscalar(mfrac):
@@ -414,16 +534,6 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
         - Uses absolute time values, so signs are ignored
         - Particularly useful for periodic orbit analysis
         - Returns single index for scalar tf, array of indices for array tf
-        
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from hiten.algorithms.common.mani import _totime
-        >>> t = np.linspace(0, 10, 101)  # Time array
-        >>> tf = [2.5, 7.1]  # Target times
-        >>> indices = _totime(t, tf)
-        >>> t[indices]  # Closest actual times
-        array([2.5, 7.1])
         """
         # Convert to absolute values and ensure tf is array
         t = np.abs(t)
@@ -439,6 +549,7 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
 
     @property
     def eigendecomposition_config(self) -> _EigenDecompositionConfig:
+        """The eigen decomposition configuration."""
         return _EigenDecompositionConfig(
             system_type=_SystemType.DISCRETE,
             problem_type=_ProblemType.EIGENVALUE_DECOMPOSITION,
@@ -448,10 +559,22 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
     
     @eigendecomposition_config.setter
     def eigendecomposition_config(self, config: _EigenDecompositionConfig) -> None:
+        """Set the eigen decomposition configuration."""
         self.generator._set_config(config)
 
 
 class _ManifoldServices(_ServiceBundleBase):
+    """Bundle all manifold services together.
+    
+    Parameters
+    ----------
+    manifold : :class:`~hiten.system.manifold.Manifold`
+        The manifold.
+    persistence : :class:`~hiten.algorithms.types.services.manifold._ManifoldPersistenceService`
+        The persistence service.
+    dynamics : :class:`~hiten.algorithms.types.services.manifold._ManifoldDynamicsService`
+        The dynamics service.
+    """
     
     def __init__(self, manifold: "Manifold", persistence: _ManifoldPersistenceService, dynamics: _ManifoldDynamicsService) -> None:
         super().__init__(manifold)
@@ -460,6 +583,18 @@ class _ManifoldServices(_ServiceBundleBase):
 
     @classmethod
     def default(cls, manifold: "Manifold") -> "_ManifoldServices":
+        """Create a default service bundle.
+        
+        Parameters
+        ----------
+        manifold : :class:`~hiten.system.manifold.Manifold`
+            The manifold.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.services.manifold._ManifoldServices`
+            The service bundle.
+        """
         return cls(
             manifold,
             _ManifoldPersistenceService(),
@@ -468,6 +603,18 @@ class _ManifoldServices(_ServiceBundleBase):
 
     @classmethod
     def with_shared_dynamics(cls, dynamics: _ManifoldDynamicsService) -> "_ManifoldServices":
+        """Create a service bundle with a shared dynamics service.
+        
+        Parameters
+        ----------
+        dynamics : :class:`~hiten.algorithms.types.services.manifold._ManifoldDynamicsService`
+            The dynamics service.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.services.manifold._ManifoldServices`
+            The service bundle.
+        """
         return cls(
             dynamics.domain_obj,
             _ManifoldPersistenceService(),

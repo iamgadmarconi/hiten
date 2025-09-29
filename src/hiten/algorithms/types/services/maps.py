@@ -37,7 +37,17 @@ if TYPE_CHECKING:
 
 
 class _MapPersistenceService(_PersistenceServiceBase):
-    """Handle persistence for map objects."""
+    """Handle persistence for map objects.
+    
+    Parameters
+    ----------
+    save_fn : Callable[..., Any]
+        The function to save the object.
+    load_fn : Callable[..., Any]
+        The function to load the object.
+    load_inplace_fn : Optional[Callable[..., Any]] = None
+        The function to load the object in place.
+    """
 
     def __init__(self) -> None:
         super().__init__(
@@ -48,7 +58,24 @@ class _MapPersistenceService(_PersistenceServiceBase):
 
 
 class _MapDynamicsServiceBase(_DynamicsServiceBase):
-    """Base class for map dynamics services with caching."""
+    """Base class for map dynamics services with caching.
+    
+    Parameters
+    ----------
+    domain_obj : Any
+        The domain object.
+
+    Attributes
+    ----------
+    section_coord : str
+        The section coordinate.
+    sections : dict[str, :class:`~hiten.algorithms.poincare.core.base._Section`]
+        The sections.
+    section : :class:`~hiten.algorithms.poincare.core.base._Section`
+        The section.
+    generator : str
+        The key for the section.
+    """
 
     def __init__(self, domain_obj) -> None:
         super().__init__(domain_obj)
@@ -59,14 +86,14 @@ class _MapDynamicsServiceBase(_DynamicsServiceBase):
 
     @property
     def generator(self) -> str:
-        """The key for the section."""
+        """The pipeline to generate the map."""
         if self._generator is None:
             self._generator = self._build_generator()
         return self._generator
 
     @property
     @abstractmethod
-    def map_config(self) -> str:
+    def map_config(self):
         """The map configuration."""
         raise NotImplementedError
 
@@ -76,7 +103,7 @@ class _MapDynamicsServiceBase(_DynamicsServiceBase):
         self._generator = self._build_generator()
 
     @abstractmethod
-    def _build_generator(self) -> str:
+    def _build_generator(self):
         """Build the generator."""
         raise NotImplementedError
 
@@ -258,7 +285,24 @@ class _MapDynamicsServiceBase(_DynamicsServiceBase):
 
 
 class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
-    """Dynamics service for center manifold maps with caching."""
+    """Dynamics service for center manifold maps with caching.
+    
+    Parameters
+    ----------
+    domain_obj : :class:`~hiten.system.maps.center.CenterManifoldMap`
+        The domain object.
+
+    Attributes
+    ----------
+    center_manifold : :class:`~hiten.system.center.CenterManifold`
+        The center manifold.
+    energy : float
+        The energy.
+    generator : :class:`~hiten.algorithms.poincare.centermanifold.base.CenterManifoldMapPipeline`
+        The generator.
+    section_coord : str
+        The section coordinate.
+    """
 
     def __init__(self, domain_obj: "CenterManifoldMap") -> None:
         self._energy = domain_obj._energy
@@ -270,17 +314,31 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
 
     @property
     def center_manifold(self) -> "CenterManifold":
+        """The center manifold."""
         return self._center_manifold
 
     @property
     def energy(self) -> float:
+        """The energy."""
         return self._energy
 
     @property
     def hamsys(self) -> _HamiltonianSystem:
+        """The Hamiltonian system."""
         return self.center_manifold.dynamics.hamsys
 
     def compute(self, *, section_coord: str = "q3", overrides: dict[str, Any] | None = None, **kwargs):
+        """Compute or retrieve the return map for the specified section.
+        
+        Parameters
+        ----------
+        section_coord : str
+            The section coordinate.
+        overrides : dict[str, Any]
+            The overrides.
+        kwargs : dict[str, Any]
+            The keyword arguments.
+        """
         if overrides is None:
             overrides = {}
         else:
@@ -325,6 +383,13 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
         This method extends the base implementation to allow projections
         mixing plane coordinates with the missing coordinate by using the
         stored 4-D center manifold states.
+
+        Parameters
+        ----------
+        section_coord : str
+            The section coordinate.
+        axes : tuple[str, str]
+            The axes to project onto.
         """
         if axes is None:
             return self.get_points(section_coord=section_coord)
@@ -354,6 +419,22 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
         return np.column_stack(cols)
 
     def to_synodic(self, poincare_point: np.ndarray, section_coord: Optional[str], tol: float) -> np.ndarray:
+        """Convert the Poincare point to synodic coordinates.
+        
+        Parameters
+        ----------
+        poincare_point : np.ndarray
+            The Poincaré point.
+        section_coord : str
+            The section coordinate.
+        tol : float
+            The tolerance.
+
+        Returns
+        -------
+        np.ndarray
+            The synodic coordinates.
+        """
         if section_coord is None:
             section_coord = self.section_coord
         return self.center_manifold.dynamics.cm_point_to_synodic(cm_point=poincare_point, energy=self.energy, section_coord=section_coord, tol=tol)
@@ -363,6 +444,20 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
         poincare_point: np.ndarray,
         section_coord: str,
     ) -> np.ndarray:
+        """Convert the Poincare point to real 4D center manifold coordinates.
+        
+        Parameters
+        ----------
+        poincare_point : np.ndarray
+            The Poincare point.
+        section_coord : str
+            The section coordinate.
+        
+        Returns
+        -------
+        np.ndarray
+            The real 4D center manifold coordinates.
+        """
         # Get plane coordinates from the generator's interface
         plane_coords = self.generator._get_interface().plane_labels(section_coord)
 
@@ -427,10 +522,12 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
         return orbit
 
     def _build_generator(self) -> CenterManifoldMapPipeline:
+        """Build the generator."""
         return CenterManifoldMapPipeline.with_default_engine(config=self.map_config)
 
     @property
     def map_config(self) -> _CenterManifoldMapConfig:
+        """The map configuration."""
         return _CenterManifoldMapConfig(
             n_seeds=20,
             n_iter=40,
@@ -447,7 +544,20 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
 
 
 class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
-    """Dynamics service for synodic maps with detection-based computation."""
+    """Dynamics service for synodic maps with detection-based computation.
+    
+    Parameters
+    ----------
+    domain_obj : :class:`~hiten.system.maps.synodic.SynodicMap`
+        The domain object.
+
+    Attributes
+    ----------
+    trajectories : List[:class:`~hiten.algorithms.types.states.Trajectory`]
+        The trajectories.
+    source : Literal[:class:`~hiten.system.orbits.base.PeriodicOrbit`, :class:`~hiten.system.manifold.Manifold`]
+        The source.
+    """
 
     def __init__(self, domain_obj: "SynodicMap") -> None:
         self._trajectories = domain_obj._trajectories
@@ -456,13 +566,32 @@ class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
 
     @property
     def trajectories(self) -> List[Trajectory]:
+        """The trajectories."""
         return self._trajectories
 
     @property
     def source(self) -> Literal[PeriodicOrbit, Manifold]:
+        """The source."""
         return self._source
 
     def compute(self, *, section_axis: str, section_offset: float, plane_coords: tuple[str, str], direction: Literal[1, -1, None], overrides: dict[str, Any] | None = None, **kwargs):
+        """Compute the synodic map.
+        
+        Parameters
+        ----------
+        section_axis : str
+            The section axis.
+        section_offset : float
+            The section offset.
+        plane_coords : tuple[str, str]
+            The plane coordinates.
+        direction : Literal[1, -1, None]
+            The direction.
+        overrides : dict[str, Any]
+            The overrides.
+        kwargs : dict[str, Any]
+            The keyword arguments.
+        """
         if overrides is None:
             overrides = {}
         else:
@@ -492,10 +621,12 @@ class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
         return self.get_or_create(cache_key, _factory)
 
     def _build_generator(self) -> SynodicMapPipeline:
+        """Build the generator."""
         return SynodicMapPipeline.with_default_engine(config=self.map_config)
 
     @property
     def map_config(self) -> _SynodicMapConfig:
+        """The map configuration."""
         return _SynodicMapConfig(
             section_axis= "x",
             section_offset= 0.0,
@@ -514,7 +645,20 @@ class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
 
 
 class _MapServices(_ServiceBundleBase):
-    """Bundle all map services together."""
+    """Bundle all map services together.
+    
+    Parameters
+    ----------
+    domain_obj : :class:`~hiten.system.maps.base.Map`
+        The domain object.
+
+    Attributes
+    ----------
+    dynamics : :class:`~hiten.algorithms.types.services.maps._MapDynamicsServiceBase`
+        The dynamics service.
+    persistence : :class:`~hiten.algorithms.types.services.maps._MapPersistenceService`
+        The persistence service.
+    """
     
     def __init__(self, domain_obj, persistence: _MapPersistenceService, dynamics: _MapDynamicsServiceBase) -> None:
         super().__init__(domain_obj)
@@ -523,6 +667,18 @@ class _MapServices(_ServiceBundleBase):
 
     @classmethod
     def default(cls, domain_obj) -> "_MapServices":
+        """Create a default service bundle.
+        
+        Parameters
+        ----------
+        domain_obj : :class:`~hiten.system.maps.base.Map`
+            The domain object.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.services.maps._MapServices`
+            The service bundle.
+        """
         dynamics = cls._check_map_type(domain_obj)
         return cls(
             domain_obj,
@@ -532,6 +688,18 @@ class _MapServices(_ServiceBundleBase):
 
     @classmethod
     def with_shared_dynamics(cls, dynamics: _MapDynamicsServiceBase) -> "_MapServices":
+        """Create a service bundle with a shared dynamics service.
+        
+        Parameters
+        ----------
+        dynamics : :class:`~hiten.algorithms.types.services.maps._MapDynamicsServiceBase`
+            The dynamics service.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.services.maps._MapServices`
+            The service bundle.
+        """
         return cls(
             dynamics.domain_obj,
             _MapPersistenceService(),
@@ -540,6 +708,18 @@ class _MapServices(_ServiceBundleBase):
 
     @staticmethod
     def _check_map_type(domain_obj) -> type:
+        """Check the type of the map and return the corresponding dynamics service.
+        
+        Parameters
+        ----------
+        domain_obj : :class:`~hiten.system.maps.base.Map`
+            The map.
+
+        Returns
+        -------
+        type
+            The dynamics service.
+        """
         from hiten.system.maps.center import CenterManifoldMap
         from hiten.system.maps.synodic import SynodicMap
 
