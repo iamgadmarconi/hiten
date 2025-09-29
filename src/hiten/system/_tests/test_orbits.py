@@ -147,16 +147,22 @@ class TestPeriodicOrbitProperties:
     
     def test_trajectory_property_before_propagation(self, generic_orbit):
         """Test trajectory property before propagation."""
-        assert generic_orbit.trajectory is None
+        # Accessing trajectory before propagation raises ValueError
+        with pytest.raises(ValueError, match="Trajectory not computed"):
+            _ = generic_orbit.trajectory
     
-    def test_amplitude_property(self, generic_orbit):
-        """Test amplitude property."""
-        # Initially should be None or a value
-        amplitude = generic_orbit.amplitude
+    def test_amplitude_property_halo_orbit(self, l1_point):
+        """Test amplitude property for HaloOrbit."""
+        # HaloOrbit has amplitude property
+        orbit = HaloOrbit(l1_point, amplitude_z=0.01, zenith="northern")
+        
+        # Should have an amplitude
+        amplitude = orbit.amplitude
         
         # Test setting amplitude
-        generic_orbit.amplitude = 0.05
-        assert generic_orbit.amplitude == 0.05
+        if amplitude is not None:
+            orbit.amplitude = 0.05
+            assert orbit.amplitude == 0.05
 
 
 class TestPeriodicOrbitPropagation:

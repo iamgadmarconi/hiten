@@ -27,7 +27,7 @@ from hiten.utils.io.orbits import (load_periodic_orbit,
                                    save_periodic_orbit)
 
 if TYPE_CHECKING:
-    from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+    from hiten.algorithms.continuation.config import _OrbitContinuationConfig   
     from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
     from hiten.system.base import System
     from hiten.system.libration.base import LibrationPoint
@@ -37,7 +37,17 @@ if TYPE_CHECKING:
     from hiten.system.orbits.vertical import VerticalOrbit
 
 class _OrbitPersistenceService(_PersistenceServiceBase):
-    """Thin wrapper around orbit persistence helpers."""
+    """Thin wrapper around orbit persistence helpers.
+    
+    Parameters
+    ----------
+    save_fn : Callable[..., Any]
+        The function to save the object.
+    load_fn : Callable[..., Any]
+        The function to load the object.
+    load_inplace_fn : Callable[..., Any]
+        The function to load the object in place.
+    """
 
     def __init__(self) -> None:
         super().__init__(
@@ -48,7 +58,18 @@ class _OrbitPersistenceService(_PersistenceServiceBase):
 
 
 class _OrbitCorrectionService(_DynamicsServiceBase):
-    """Drive Newton-based differential correction for periodic orbits."""
+    """Drive Newton-based differential correction for periodic orbits.
+    
+    Parameters
+    ----------
+    domain_obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
+        The domain object.
+
+    Attributes
+    ----------
+    corrector : :class:`~hiten.algorithms.corrector.base.CorrectorPipeline`
+        The corrector.
+    """
 
     def __init__(self, domain_obj: "PeriodicOrbit") -> None:
         super().__init__(domain_obj)
@@ -56,6 +77,7 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
 
     @property
     def corrector(self) -> CorrectorPipeline:
+        """The corrector."""
         if self._corrector is None:
             self._corrector = CorrectorPipeline.with_default_engine(config=self.correction_config)
         return self._corrector
@@ -69,13 +91,11 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
             Dictionary of parameter overrides to pass to the corrector.
         **kwargs
             Additional correction parameters that are passed directly to the corrector.
-            Common parameters include:
-            - max_attempts: int
-            - tol: float  
-            - max_delta: float
-            - finite_difference: bool
-            - forward: int
-            - line_search_config: _LineSearchConfig
+
+        Returns
+        -------
+        Tuple[np.ndarray, float]
+            The corrected state and period.
         """
         # Merge overrides with kwargs, with kwargs taking precedence
         if overrides is None:
@@ -97,8 +117,10 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
     def update_correction(self, **kwargs) -> None:
         """Update algorithm-level correction parameters for this orbit.
 
-        Allowed keys: tol, max_attempts, max_delta, line_search_config,
-        finite_difference, forward.
+        Parameters
+        ----------
+        **kwargs
+            Additional correction parameters that are passed directly to the corrector.
         """
         self.corrector.update_config(**kwargs)
 
@@ -115,7 +137,18 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
 
 
 class _OrbitContinuationService(_DynamicsServiceBase):
-    """Drive continuation for periodic orbits."""
+    """Drive continuation for periodic orbits.
+    
+    Parameters
+    ----------
+    domain_obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
+        The domain object.
+
+    Attributes
+    ----------
+    generator : :class:`~hiten.algorithms.continuation.base.ContinuationPipeline`
+        The generator.
+    """
 
     def __init__(self, domain_obj: "PeriodicOrbit") -> None:
         super().__init__(domain_obj)
@@ -124,16 +157,29 @@ class _OrbitContinuationService(_DynamicsServiceBase):
 
     @property
     def initial_state(self) -> np.ndarray:
+        """The initial state."""
         return self._initial_state
 
     @property
     def generator(self) -> ContinuationPipeline:
+        """The continuation pipeline."""
         if self._generator is None:
             self._generator = ContinuationPipeline.with_default_engine(config=self.continuation_config)
         return self._generator
 
     def generate(self, *, overrides: Dict[str, Any] | None = None, **kwargs) -> Tuple[np.ndarray, float]:
-        """Generate a family of periodic orbits."""
+        """Generate a family of periodic orbits.
+        
+        Parameters
+        ----------
+        overrides : Dict[str, Any] or None, optional
+            Dictionary of parameter overrides to pass to the generator.
+
+        Returns
+        -------
+        Tuple[np.ndarray, float]
+            The generated state and period.
+        """
         # Merge overrides with kwargs, with kwargs taking precedence
         if overrides is None:
             overrides = {}
@@ -156,8 +202,10 @@ class _OrbitContinuationService(_DynamicsServiceBase):
     def update_continuation(self, **kwargs) -> None:
         """Update algorithm-level continuation parameters for this orbit.
 
-        Allowed keys: tol, max_attempts, max_delta, line_search_config,
-        finite_difference, forward.
+        Parameters
+        ----------
+        **kwargs
+            Additional continuation parameters that are passed directly to the generator.
         """
         self.generator.update_config(**kwargs)
 
@@ -174,7 +222,13 @@ class _OrbitContinuationService(_DynamicsServiceBase):
 
 
 class _OrbitDynamicsService(_DynamicsServiceBase):
-    """Integrate periodic orbits using the system dynamics."""
+    """Integrate periodic orbits using the system dynamics.
+    
+    Parameters
+    ----------
+    orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
+        The orbit.
+    """
 
     def __init__(self, orbit: "PeriodicOrbit") -> None:
         super().__init__(orbit)
@@ -196,18 +250,22 @@ class _OrbitDynamicsService(_DynamicsServiceBase):
 
     @property
     def orbit(self) -> PeriodicOrbit:
+        """The orbit."""
         return self.domain_obj
 
     @property
     def libration_point(self) -> LibrationPoint:
+        """The libration point."""
         return self._libration_point
 
     @property
     def system(self) -> System:
+        """The system."""
         return self.libration_point.system
 
     @property
     def mu(self) -> float:
+        """The mass ratio."""
         return self.system.mu
 
     @property
@@ -230,18 +288,21 @@ class _OrbitDynamicsService(_DynamicsServiceBase):
 
     @property
     def stability_indices(self) -> Optional[Tuple]:
+        """The stability indices."""
         if self._stability_info is None:
             self.compute_stability()
         return self._stability_info[0]
     
     @property
     def eigenvalues(self) -> Optional[Tuple]:
+        """The eigenvalues."""
         if self._stability_info is None:
             self.compute_stability()
         return self._stability_info[1]
     
     @property
     def eigenvectors(self) -> Optional[Tuple]:
+        """The eigenvectors."""
         if self._stability_info is None:
             self.compute_stability()
         return self._stability_info[2]
@@ -306,10 +367,12 @@ class _OrbitDynamicsService(_DynamicsServiceBase):
 
     @property
     def initial_state(self) -> np.ndarray:
+        """The initial state."""
         return self._initial_state
 
     @property
     def period(self) -> float:
+        """The period."""
         return self._period
 
     @period.setter
@@ -362,13 +425,14 @@ class _OrbitDynamicsService(_DynamicsServiceBase):
 
     @property
     def trajectories(self) -> List[Trajectory]:
-        """Compatibility helper for SynodicMap.trajectories"""
+        """Compatibility helper for SynodicMap.trajectories."""
         states_list = self._trajectory.states
         times_list = self._trajectory.times
         return [Trajectory(times, states) for times, states in zip(times_list, states_list)]
 
     @property
     def monodromy(self):
+        """The monodromy."""
         if self.initial_state is None:
             raise ValueError("Initial state must be provided")
 
@@ -383,6 +447,17 @@ class _OrbitDynamicsService(_DynamicsServiceBase):
         return self.get_or_create(cache_key, _factory)
 
     def propagate(self, *, steps: int, method: str, order: int) -> Trajectory:
+        """Propagate the orbit.
+        
+        Parameters
+        ----------
+        steps : int
+            The number of steps to take.
+        method : str
+            The method to use for propagation.
+        order : int
+            The order of the method to use for propagation.
+        """
         if self._initial_state is None:
             raise ValueError("Initial state must be provided")
 
@@ -414,9 +489,30 @@ class _OrbitDynamicsService(_DynamicsServiceBase):
         return self.get_or_create(cache_key, _factory)
 
     def manifold(self, stable: bool = True, direction: Literal["positive", "negative"] = "positive") -> "Manifold":
+        """Create a manifold for the orbit.
+
+        Parameters
+        ----------
+        stable : bool
+            Whether to create a stable manifold.
+        direction : Literal["positive", "negative"]
+            The direction of the manifold.
+
+        Returns
+        -------
+        :class:`~hiten.system.manifold.Manifold`
+            The manifold.
+        """
         return Manifold(self.orbit, stable=stable, direction=direction)
 
     def compute_stability(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Compute the stability of the orbit.
+        
+        Returns
+        -------
+        Tuple[np.ndarray, np.ndarray, np.ndarray]
+            The stability of the orbit.
+        """
         if self.initial_state is None:
             raise ValueError("Initial state must be provided")
 
@@ -436,19 +532,40 @@ class _OrbitDynamicsService(_DynamicsServiceBase):
 
     @property
     def amplitude(self) -> float:
+        """The amplitude of the orbit."""
         return self._amplitude
     
     @amplitude.setter
     def amplitude(self, value: float):
+        """Set the amplitude of the orbit.
+        
+        Parameters
+        ----------
+        value : float
+            The amplitude of the orbit.
+        """
         self._amplitude = value
 
     @abstractmethod
     def initial_guess(self) -> np.ndarray:
+        """Generate an initial guess for the orbit.
+        
+        Returns
+        -------
+        np.ndarray
+            The initial guess for the orbit.
+        """
         pass
 
 
 class _GenericOrbitCorrectionService(_OrbitCorrectionService):
-    """Drive Newton-based differential correction for generic orbits."""
+    """Drive Newton-based differential correction for generic orbits.
+    
+    Parameters
+    ----------
+    orbit : :class:`~hiten.system.orbits.base.GenericOrbit`
+        The orbit.
+    """
 
     def __init__(self, orbit: "GenericOrbit") -> None:
         super().__init__(orbit)
@@ -476,7 +593,13 @@ class _GenericOrbitCorrectionService(_OrbitCorrectionService):
 
 
 class _GenericOrbitContinuationService(_OrbitContinuationService):
-    """Drive continuation for generic orbits."""
+    """Drive continuation for generic orbits.
+    
+    Parameters
+    ----------
+    orbit : :class:`~hiten.system.orbits.base.GenericOrbit`
+        The orbit.
+    """
 
     def __init__(self, orbit: "GenericOrbit") -> None:
         super().__init__(orbit)
@@ -503,7 +626,13 @@ class _GenericOrbitContinuationService(_OrbitContinuationService):
 
 
 class _GenericOrbitDynamicsService(_OrbitDynamicsService):
-    """Dynamics service for generic orbits with custom amplitude handling."""
+    """Dynamics service for generic orbits with custom amplitude handling.
+    
+    Parameters
+    ----------
+    orbit : :class:`~hiten.system.orbits.base.GenericOrbit`
+        The orbit.
+    """
 
     def __init__(self, orbit: "GenericOrbit") -> None:
         super().__init__(orbit)
@@ -534,7 +663,13 @@ class _GenericOrbitDynamicsService(_OrbitDynamicsService):
 
 
 class _HaloOrbitCorrectionService(_OrbitCorrectionService):
-    """Drive Newton-based differential correction for halo orbits."""
+    """Drive Newton-based differential correction for halo orbits.
+    
+    Parameters
+    ----------
+    orbit : :class:`~hiten.system.orbits.base.HaloOrbit`
+        The orbit.
+    """
 
     def __init__(self, orbit: "HaloOrbit") -> None:
         super().__init__(orbit)
@@ -590,7 +725,13 @@ class _HaloOrbitCorrectionService(_OrbitCorrectionService):
 
 
 class _HaloOrbitContinuationService(_OrbitContinuationService):
-    """Drive continuation for halo orbits."""
+    """Drive continuation for halo orbits.
+    
+    Parameters
+    ----------
+    orbit : :class:`~hiten.system.orbits.base.HaloOrbit`
+        The orbit.
+    """
 
     def __init__(self, orbit: "HaloOrbit") -> None:
         super().__init__(orbit)
@@ -617,7 +758,13 @@ class _HaloOrbitContinuationService(_OrbitContinuationService):
 
 
 class _HaloOrbitDynamicsService(_OrbitDynamicsService):
-    """Dynamics service for halo orbits."""
+    """Dynamics service for halo orbits.
+    
+    Parameters
+    ----------
+    orbit : :class:`~hiten.system.orbits.base.HaloOrbit`
+        The orbit.
+    """
 
     def __init__(self, orbit: "HaloOrbit") -> None:
         # Set amplitude and zenith before calling parent __init__ to avoid AttributeError
@@ -672,7 +819,18 @@ class _HaloOrbitDynamicsService(_OrbitDynamicsService):
         return 1 if self.zenith == "northern" else -1
 
     def initial_guess(self) -> np.ndarray:
+        """Generate an initial guess for the orbit. using Richardson's third-order analytical approximation.
+        
+        Returns
+        -------
+        np.ndarray
+            The initial guess for the orbit.
 
+        References
+        ----------
+        .. [Richardson1980] Richardson, D. L. (1980). "Analytic construction of periodic orbits about the
+        collinear libration points".
+        """
         amplitude_z = self.amplitude
         gamma = self.libration_point.dynamics.gamma
         won, primary = self.libration_point.dynamics.won
@@ -827,7 +985,13 @@ class _HaloOrbitDynamicsService(_OrbitDynamicsService):
 
 
 class _LyapunovOrbitCorrectionService(_OrbitCorrectionService):
-    """Dynamics service for Lyapunov orbits."""
+    """Dynamics service for Lyapunov orbits.
+    
+    Parameters
+    ----------
+    orbit : :class:`~hiten.system.orbits.base.LyapunovOrbit`
+        The orbit.
+    """
 
     def __init__(self, orbit: "LyapunovOrbit") -> None:
         super().__init__(orbit)
@@ -852,7 +1016,13 @@ class _LyapunovOrbitCorrectionService(_OrbitCorrectionService):
 
 
 class _LyapunovOrbitContinuationService(_OrbitContinuationService):
-    """Dynamics service for Lyapunov orbits."""
+    """Dynamics service for Lyapunov orbits.
+    
+    Parameters
+    ----------
+    orbit : :class:`~hiten.system.orbits.base.LyapunovOrbit`
+        The orbit.
+    """
 
     def __init__(self, orbit: "LyapunovOrbit") -> None:
         super().__init__(orbit)
@@ -884,7 +1054,13 @@ class _LyapunovOrbitContinuationService(_OrbitContinuationService):
 
 
 class _LyapunovOrbitDynamicsService(_OrbitDynamicsService):
-    """Dynamics service for Lyapunov orbits."""
+    """Dynamics service for Lyapunov orbits.
+    
+    Parameters
+    ----------
+    orbit : :class:`~hiten.system.orbits.base.LyapunovOrbit`
+        The orbit.
+    """
 
     def __init__(self, orbit: "LyapunovOrbit") -> None:
         self._amplitude_x = orbit._amplitude_x
@@ -911,6 +1087,18 @@ class _LyapunovOrbitDynamicsService(_OrbitDynamicsService):
         self._amplitude = self._amplitude_x
 
     def initial_guess(self) -> np.ndarray:
+        """Generate an initial guess for the orbit using the analytical approximation.
+        
+        Returns
+        -------
+        np.ndarray
+            The initial guess for the orbit.
+
+        References
+        ----------
+        .. [Richardson1980] Richardson, D. L. (1980). "Analytic construction of periodic orbits about the
+        collinear libration points".
+        """
         L_i = self.libration_point.position
         x_L_i: float = L_i[0]
         c2 = self.libration_point.dynamics.cn(2)
@@ -926,7 +1114,13 @@ class _LyapunovOrbitDynamicsService(_OrbitDynamicsService):
 
 
 class _VerticalOrbitCorrectionService(_OrbitCorrectionService):
-    """Dynamics service for Vertical orbits."""
+    """Dynamics service for Vertical orbits.
+    
+    Parameters
+    ----------
+    orbit : :class:`~hiten.system.orbits.base.VerticalOrbit`
+        The orbit.
+    """
 
     def __init__(self, orbit: "VerticalOrbit") -> None:
         super().__init__(orbit)
@@ -952,7 +1146,13 @@ class _VerticalOrbitCorrectionService(_OrbitCorrectionService):
 
 
 class _VerticalOrbitContinuationService(_OrbitContinuationService):
-    """Dynamics service for Vertical orbits."""
+    """Dynamics service for Vertical orbits.
+    
+    Parameters
+    ----------
+    orbit : :class:`~hiten.system.orbits.base.VerticalOrbit`
+        The orbit.
+    """
 
     def __init__(self, orbit: "VerticalOrbit") -> None:
         super().__init__(orbit)
@@ -985,7 +1185,13 @@ class _VerticalOrbitContinuationService(_OrbitContinuationService):
 
 
 class _VerticalOrbitDynamicsService(_OrbitDynamicsService):
-    """Dynamics service for Vertical orbits."""
+    """Dynamics service for Vertical orbits.
+    
+    Parameters
+    ----------
+    orbit : :class:`~hiten.system.orbits.base.VerticalOrbit`
+        The orbit.
+    """
 
     def __init__(self, orbit: "VerticalOrbit") -> None:
         super().__init__(orbit)
@@ -993,10 +1199,33 @@ class _VerticalOrbitDynamicsService(_OrbitDynamicsService):
             raise ValueError("Vertical orbits require an initial_state.")
 
     def initial_guess(self) -> np.ndarray:
+        """Generate an initial guess for the orbit. using the initial_state.
+        
+        Returns
+        -------
+        np.ndarray
+            The initial guess for the orbit.
+        """
         return self._initial_state
 
 
 class _OrbitServices(_ServiceBundleBase):
+    """Bundle all orbit services together.
+    
+    Parameters
+    ----------
+    domain_obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
+        The domain object.
+    
+    correction : :class:`~hiten.algorithms.types.services.orbits._OrbitCorrectionService`
+        The correction service.
+    continuation : :class:`~hiten.algorithms.types.services.orbits._OrbitContinuationService`
+        The continuation service.
+    dynamics : :class:`~hiten.algorithms.types.services.orbits._OrbitDynamicsService`
+        The dynamics service.
+    persistence : :class:`~hiten.algorithms.types.services.orbits._OrbitPersistenceService`
+        The persistence service.
+    """
     
     def __init__(self, domain_obj: "PeriodicOrbit", correction: _OrbitCorrectionService, continuation: _OrbitContinuationService, dynamics: _OrbitDynamicsService, persistence: _OrbitPersistenceService) -> None:
         super().__init__(domain_obj)
@@ -1007,7 +1236,18 @@ class _OrbitServices(_ServiceBundleBase):
 
     @classmethod
     def default(cls, domain_obj: "PeriodicOrbit") -> "_OrbitServices":
+        """Create a default service bundle.
         
+        Parameters
+        ----------
+        domain_obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
+            The domain object.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.services.orbits._OrbitServices`
+            The service bundle.
+        """
         correction, continuation, dynamics = cls._check_orbit_type(domain_obj)
         
         return cls(
@@ -1020,6 +1260,18 @@ class _OrbitServices(_ServiceBundleBase):
 
     @classmethod
     def with_shared_dynamics(cls, dynamics: _OrbitDynamicsService) -> "_OrbitServices":
+        """Create a service bundle with a shared dynamics service.
+        
+        Parameters
+        ----------
+        dynamics : :class:`~hiten.algorithms.types.services.orbits._OrbitDynamicsService`
+            The dynamics service.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.services.orbits._OrbitServices`
+            The service bundle.
+        """
         return cls(
             domain_obj=dynamics.domain_obj,
             correction=_OrbitCorrectionService(dynamics.domain_obj),
@@ -1030,6 +1282,18 @@ class _OrbitServices(_ServiceBundleBase):
 
     @staticmethod
     def _check_orbit_type(orbit: "PeriodicOrbit") -> tuple:
+        """Check the type of the orbit and return the corresponding correction, continuation, and dynamics services.
+        
+        Parameters
+        ----------
+        orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
+            The orbit.
+
+        Returns
+        -------
+        tuple
+            The correction, continuation, and dynamics services.
+        """
         from hiten.system.orbits.base import GenericOrbit
         from hiten.system.orbits.halo import HaloOrbit
         from hiten.system.orbits.lyapunov import LyapunovOrbit
