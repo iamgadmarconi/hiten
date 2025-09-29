@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from abc import abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Literal, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple
 
 import numpy as np
 
@@ -32,8 +31,6 @@ if TYPE_CHECKING:
     from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
     from hiten.system.base import System
     from hiten.system.libration.base import LibrationPoint
-    from hiten.system.libration.collinear import (CollinearPoint, L1Point,
-                                                  L2Point, L3Point)
     from hiten.system.orbits.base import GenericOrbit, PeriodicOrbit
     from hiten.system.orbits.halo import HaloOrbit
     from hiten.system.orbits.lyapunov import LyapunovOrbit
@@ -364,6 +361,13 @@ class _OrbitDynamicsService(_DynamicsServiceBase):
         return self._trajectory
 
     @property
+    def trajectories(self) -> List[Trajectory]:
+        """Compatibility helper for SynodicMap.trajectories"""
+        states_list = self._trajectory.states
+        times_list = self._trajectory.times
+        return [Trajectory(times, states) for times, states in zip(times_list, states_list)]
+
+    @property
     def monodromy(self):
         if self.initial_state is None:
             raise ValueError("Initial state must be provided")
@@ -626,7 +630,8 @@ class _HaloOrbitDynamicsService(_OrbitDynamicsService):
         
         super().__init__(orbit)
 
-        from hiten.system.libration.collinear import CollinearPoint, L1Point, L2Point
+        from hiten.system.libration.collinear import (CollinearPoint, L1Point,
+                                                      L2Point)
         if not isinstance(self._libration_point, CollinearPoint):
             raise TypeError(f"Halo orbits are only defined for CollinearPoint, but got {type(self._libration_point)}.")
         if self._initial_state is None:
@@ -889,7 +894,8 @@ class _LyapunovOrbitDynamicsService(_OrbitDynamicsService):
         
         super().__init__(orbit)
 
-        from hiten.system.libration.collinear import CollinearPoint, L1Point, L2Point
+        from hiten.system.libration.collinear import (CollinearPoint, L1Point,
+                                                      L2Point)
         if not isinstance(self._libration_point, CollinearPoint):
             raise TypeError(f"Lyapunov orbits are only defined for CollinearPoint, but got {type(self.libration_point)}.")
         if self._initial_state is None:

@@ -15,10 +15,12 @@ References
 Szebehely, V. (1967). "Theory of Orbits".
 """
 
-from typing import Optional, Sequence
+from typing import TYPE_CHECKING, Optional, Sequence
 
-from hiten.system.libration.base import LibrationPoint
 from hiten.system.orbits.base import PeriodicOrbit
+
+if TYPE_CHECKING:
+    from hiten.system.libration.collinear import CollinearPoint
 
 
 class LyapunovOrbit(PeriodicOrbit):
@@ -65,7 +67,7 @@ class LyapunovOrbit(PeriodicOrbit):
     
     def __init__(
             self, 
-            libration_point: LibrationPoint, 
+            libration_point: "CollinearPoint", 
             initial_state: Optional[Sequence[float]] = None,
             amplitude_x: Optional[float] = None
         ):

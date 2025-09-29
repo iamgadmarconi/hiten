@@ -16,7 +16,6 @@ Szebehely, V. (1967). "Theory of Orbits - The Restricted Problem of Three
 Bodies".
 """
 import os
-from abc import ABC
 from typing import TYPE_CHECKING, Literal, Optional, Sequence, Tuple
 
 import numpy as np
@@ -28,8 +27,6 @@ from hiten.algorithms.types.core import _HitenBase
 from hiten.algorithms.types.services.orbits import (_OrbitPersistenceService,
                                                     _OrbitServices)
 from hiten.algorithms.types.states import Trajectory
-from hiten.system.base import System
-from hiten.system.libration.base import LibrationPoint
 from hiten.utils.io.common import _ensure_dir
 from hiten.utils.log_config import logger
 from hiten.utils.plots import (animate_trajectories, plot_inertial_frame,
@@ -37,8 +34,9 @@ from hiten.utils.plots import (animate_trajectories, plot_inertial_frame,
 
 if TYPE_CHECKING:
     from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+    from hiten.system.base import System
+    from hiten.system.libration.base import LibrationPoint
     from hiten.system.manifold import Manifold
-
 
 class PeriodicOrbit(_HitenBase):
     """
@@ -89,7 +87,7 @@ class PeriodicOrbit(_HitenBase):
 
     _family: str = "base"
 
-    def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None):
+    def __init__(self, libration_point: "LibrationPoint", initial_state: Optional[Sequence[float]] = None):
         self._libration_point = libration_point
         self._initial_state = initial_state
         services = _OrbitServices.default(self)
@@ -182,7 +180,7 @@ class PeriodicOrbit(_HitenBase):
         return self.dynamics.jacobi_constant
 
     @property
-    def system(self) -> System:
+    def system(self) -> "System":
         """Get the parent CR3BP system.
         
         Returns
@@ -193,7 +191,7 @@ class PeriodicOrbit(_HitenBase):
         return self.dynamics.system
 
     @property
-    def libration_point(self) -> LibrationPoint:
+    def libration_point(self) -> "LibrationPoint":
         """Get the libration point around which the orbit is computed.
         
         Returns
@@ -549,7 +547,7 @@ class GenericOrbit(PeriodicOrbit):
     
     _family = "generic"
     
-    def __init__(self, libration_point: LibrationPoint, initial_state: Optional[Sequence[float]] = None):
+    def __init__(self, libration_point: "LibrationPoint", initial_state: Optional[Sequence[float]] = None):
         super().__init__(libration_point, initial_state=initial_state)
     
         if self.dynamics.period is None:

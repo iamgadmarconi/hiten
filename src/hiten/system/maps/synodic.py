@@ -17,8 +17,9 @@ from hiten.utils.plots import plot_poincare_map
 
 class SynodicMap(_HitenBase):
 
-    def __init__(self, domain_obj: Literal[PeriodicOrbit, Manifold, List[Trajectory]]):
-        self._domain_obj = domain_obj
+    def __init__(self, domain_obj: Literal[PeriodicOrbit, Manifold]):
+        self._trajectories = domain_obj.dynamics.trajectories
+        self._source = domain_obj
         services = _MapServices.default(self)
         super().__init__(services)
 
@@ -27,6 +28,9 @@ class SynodicMap(_HitenBase):
     
     def __repr__(self) -> str:
         return self.__str__()
+    
+    def trajectories(self) -> list[Trajectory]:
+        return self.dynamics.trajectories
 
     @property
     def sections(self) -> list[str]:

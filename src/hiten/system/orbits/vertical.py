@@ -15,10 +15,12 @@ References
 Szebehely, V. (1967). "Theory of Orbits".
 """
 
-from typing import Optional, Sequence
+from typing import Optional, Sequence, TYPE_CHECKING
 
-from hiten.system.libration.collinear import CollinearPoint
 from hiten.system.orbits.base import PeriodicOrbit
+
+if TYPE_CHECKING:
+    from hiten.system.libration.collinear import CollinearPoint
 
 
 class VerticalOrbit(PeriodicOrbit):
@@ -50,5 +52,5 @@ class VerticalOrbit(PeriodicOrbit):
     
     _family = "vertical"
 
-    def __init__(self, libration_point: CollinearPoint, initial_state: Optional[Sequence[float]] = None):
+    def __init__(self, libration_point: "CollinearPoint", initial_state: Optional[Sequence[float]] = None):
         super().__init__(libration_point, initial_state)

@@ -12,10 +12,12 @@ Richardson, D. L. (1980). "Analytic construction of periodic orbits about the
 collinear libration points".
 """
 
-from typing import Literal, Optional, Sequence
+from typing import TYPE_CHECKING, Literal, Optional, Sequence
 
-from hiten.system.libration.base import LibrationPoint
 from hiten.system.orbits.base import PeriodicOrbit
+
+if TYPE_CHECKING:
+    from hiten.system.libration.collinear import CollinearPoint
 
 
 class HaloOrbit(PeriodicOrbit):
@@ -57,7 +59,7 @@ class HaloOrbit(PeriodicOrbit):
 
     def __init__(
             self, 
-            libration_point: LibrationPoint, 
+            libration_point: "CollinearPoint", 
             initial_state: Optional[Sequence[float]] = None,
             amplitude_z: Optional[float] = None,
             zenith: Optional[Literal["northern", "southern"]] = None

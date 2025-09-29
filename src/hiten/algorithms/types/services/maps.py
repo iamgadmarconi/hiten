@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, Literal, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional
 
 import numpy as np
 
@@ -22,7 +22,7 @@ from hiten.algorithms.poincare.synodic.types import SynodicMapResults
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
                                                   _ServiceBundleBase)
-from hiten.system.center import CenterManifold
+from hiten.algorithms.types.states import Trajectory
 from hiten.system.orbits.base import GenericOrbit
 from hiten.utils.io.map import (load_poincare_map, load_poincare_map_inplace,
                                 save_poincare_map)
@@ -30,8 +30,10 @@ from hiten.utils.io.map import (load_poincare_map, load_poincare_map_inplace,
 if TYPE_CHECKING:
     from hiten.algorithms.poincare.core.types import _Section
     from hiten.system.center import CenterManifold
+    from hiten.system.manifold import Manifold
     from hiten.system.maps.center import CenterManifoldMap
     from hiten.system.maps.synodic import SynodicMap
+    from hiten.system.orbits.base import PeriodicOrbit
 
 
 class _MapPersistenceService(_PersistenceServiceBase):
@@ -50,15 +52,10 @@ class _MapDynamicsServiceBase(_DynamicsServiceBase):
 
     def __init__(self, domain_obj) -> None:
         super().__init__(domain_obj)
-        self._domain_obj = domain_obj
         self._sections: dict[str, "_Section"] = {}
         self._section: Optional["_Section"] = None
         self._section_coord = None
         self._generator = None
-
-    @property
-    def domain_obj(self):
-        return self._domain_obj
 
     @property
     def generator(self) -> str:
@@ -67,8 +64,8 @@ class _MapDynamicsServiceBase(_DynamicsServiceBase):
             self._generator = self._build_generator()
         return self._generator.section_key
 
-    @abstractmethod
     @property
+    @abstractmethod
     def map_config(self) -> str:
         """The map configuration."""
         raise NotImplementedError
@@ -272,7 +269,7 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
         self._section_coord = None
 
     @property
-    def center_manifold(self) -> CenterManifold:
+    def center_manifold(self) -> "CenterManifold":
         return self._center_manifold
 
     @property
@@ -437,7 +434,17 @@ class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
     """Dynamics service for synodic maps with detection-based computation."""
 
     def __init__(self, domain_obj: "SynodicMap") -> None:
+        self._trajectories = domain_obj._trajectories
+        self._source = domain_obj._source
         super().__init__(domain_obj)
+
+    @property
+    def trajectories(self) -> List[Trajectory]:
+        return self._trajectories
+
+    @property
+    def source(self) -> Literal[PeriodicOrbit, Manifold]:
+        return self._source
 
     def compute(self, *, section_axis: str, section_offset: float, plane_coords: tuple[str, str], direction: Literal[1, -1, None], overrides: dict[str, Any] | None = None, **kwargs):
         if overrides is None:
@@ -458,7 +465,7 @@ class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
                         "direction": direction}
 
             self.generator.update_config(**updates)
-            results = self.generator.generate(self.domain_obj, override=override, **overrides)
+            results = self.generator.generate(self.source, override=override, **overrides)
             return results
 
         return self.get_or_create(cache_key, _factory)

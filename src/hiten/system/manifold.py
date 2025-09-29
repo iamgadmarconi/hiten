@@ -30,9 +30,7 @@ from hiten.algorithms.types.core import _HitenBase
 from hiten.algorithms.types.services.manifold import (
     _ManifoldPersistenceService, _ManifoldServices)
 from hiten.algorithms.types.states import Trajectory
-from hiten.system.base import System
 from hiten.utils.io.common import _ensure_dir
-from hiten.utils.log_config import logger
 from hiten.utils.plots import plot_manifold
 
 if TYPE_CHECKING:
@@ -116,7 +114,7 @@ class Manifold(_HitenBase):
         return self.dynamics.libration_point
 
     @property
-    def system(self) -> System:
+    def system(self) -> "System":
         """The system this manifold belongs to.
         
         Returns

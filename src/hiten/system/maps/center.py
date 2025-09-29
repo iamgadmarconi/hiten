@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Literal, Optional, Sequence
 
 import numpy as np
 
@@ -9,14 +9,15 @@ from hiten.algorithms.poincare.core.types import _Section
 from hiten.algorithms.types.core import _HitenBase
 from hiten.algorithms.types.services.maps import (_MapPersistenceService,
                                                   _MapServices)
-from hiten.system.center import CenterManifold
 from hiten.utils.plots import plot_poincare_map, plot_poincare_map_interactive
 
+if TYPE_CHECKING:
+    from hiten.system.center import CenterManifold
 
 class CenterManifoldMap(_HitenBase):
     """Poincare map for a center manifold."""
 
-    def __init__(self, center_manifold: CenterManifold, energy: float):
+    def __init__(self, center_manifold: "CenterManifold", energy: float):
         self._center_manifold = center_manifold
         self._energy = energy
         services = _MapServices.default(self)
@@ -29,7 +30,7 @@ class CenterManifoldMap(_HitenBase):
         return self.__str__()
 
     @property
-    def center_manifold(self) -> CenterManifold:
+    def center_manifold(self) -> "CenterManifold":
         return self.dynamics.center_manifold
     
     @property
