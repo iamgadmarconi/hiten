@@ -161,7 +161,7 @@ class _SystemsDynamicsService(_DynamicsServiceBase):
         except KeyError as exc:
             raise ValueError("Libration point index must be in {1,2,3,4,5}.") from exc
 
-        return point_cls(self)
+        return point_cls(self.domain_obj)
 
     def _make_dynsys_name(self, suffix: str) -> str:
         return f"{self._primary.name}_{self._secondary.name}_{suffix}"

@@ -12,8 +12,8 @@ from hiten.algorithms.common.energy import crtbp_energy, energy_to_jacobi
 from hiten.algorithms.dynamics.base import _DynamicalSystem
 from hiten.algorithms.dynamics.hamiltonian import _HamiltonianSystem
 from hiten.algorithms.linalg.base import StabilityPipeline
-from hiten.algorithms.linalg.interfaces import _LibrationPointInterface
 from hiten.algorithms.linalg.config import _EigenDecompositionConfig
+from hiten.algorithms.linalg.interfaces import _LibrationPointInterface
 from hiten.algorithms.linalg.types import _ProblemType, _SystemType
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
@@ -38,7 +38,17 @@ if TYPE_CHECKING:
 
 
 class _LibrationPersistenceService(_PersistenceServiceBase):
-    """Encapsulate libration point IO helpers for testability."""
+    """Encapsulate libration point IO helpers for testability.
+    
+    Parameters
+    ----------
+    save_fn : Callable[..., Any]
+        The function to save the object.
+    load_fn : Callable[..., Any]
+        The function to load the object.
+    load_inplace_fn : Callable[..., Any]
+        The function to load the object in place.
+    """
 
     def __init__(self) -> None:
         super().__init__(
@@ -49,7 +59,18 @@ class _LibrationPersistenceService(_PersistenceServiceBase):
 
 
 class _LibrationDynamicsService(_DynamicsServiceBase):
-    """Provide stability analysis and geometry helpers for libration points."""
+    """Provide stability analysis and geometry helpers for libration points.
+    
+    Parameters
+    ----------
+    point : :class:`~hiten.system.libration.base.LibrationPoint`
+        The libration point.
+
+    Attributes
+    ----------
+    generator : :class:`~hiten.algorithms.linalg.base.StabilityPipeline`
+        The stability pipeline.
+    """
 
     def __init__(self, point: "LibrationPoint") -> None:
         super().__init__(point)
@@ -57,6 +78,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
 
     @property
     def generator(self) -> StabilityPipeline:
+        """The stability pipeline."""
         if self._generator is None:
             self._generator = StabilityPipeline.with_default_engine(
                 config=self.eigendecomposition_config, interface=_LibrationPointInterface())
@@ -64,18 +86,22 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
 
     @property
     def system(self) -> "System":
+        """The system."""
         return self.domain_obj.system
 
     @property
     def mu(self) -> float:
+        """The mass parameter."""
         return self.system.mu
 
     @property
     def dynsys(self) -> _DynamicalSystem:
+        """The dynamical system."""
         return self.system.dynsys
     
     @property
     def var_dynsys(self) -> _DynamicalSystem:
+        """The variational equations system."""
         return self.system.var_dynsys
 
     def hamsys(self, degree: int, form: str = "center_manifold_real") -> _HamiltonianSystem:
@@ -90,7 +116,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
             
         Returns
         -------
-        _HamiltonianSystem
+        :class:`~hiten.algorithms.dynamics.hamiltonian._HamiltonianSystem`
             The Hamiltonian system instance.
         """
         cache_key = self.make_key(id(self.domain_obj), "hamsys", degree, form)
@@ -104,23 +130,27 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
 
     @property
     def jacobian_dynsys(self) -> _DynamicalSystem:
+        """The Jacobian evaluation system."""
         return self.system.jacobian_dynsys
 
     @property
     def is_stable(self) -> bool:
+        """The stability of the libration point."""
         return self.compute_stability().is_stable
 
     @property
     def eigenvalues(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """The eigenvalues of the libration point."""
         return self.compute_stability().eigenvalues
     
     @property
     def eigenvectors(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """The eigenvectors of the libration point."""
         return self.compute_stability().eigenvectors
     
     @property
     def energy(self) -> float:
-        """Compute the energy of the libration point.
+        """The energy of the libration point.
         
         Returns
         -------
@@ -152,6 +182,20 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
         return self.get_or_create(cache_key, _factory)
 
     def compute_stability(self, *, delta: float = 1e-6, tol: float = 1e-8) -> StabilityPipeline:
+        """Compute the stability of the libration point.
+        
+        Parameters
+        ----------
+        delta : float
+            The delta parameter.
+        tol : float
+            The tolerance parameter.
+            
+        Returns
+        -------
+        :class:`~hiten.algorithms.linalg.base.StabilityPipeline`
+            The stability pipeline.
+        """
         cache_key = self.make_key(id(self.domain_obj), delta, tol)
 
         def _factory() -> StabilityPipeline:
@@ -170,7 +214,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
             
         Returns
         -------
-        CenterManifold
+        :class:`~hiten.system.center.CenterManifold`
             The center manifold instance.
         """
         cache_key = self.make_key(id(self.domain_obj), "center_manifold", degree)
@@ -195,7 +239,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
             
         Returns
         -------
-        Hamiltonian
+        :class:`~hiten.system.hamiltonian.Hamiltonian`
             The Hamiltonian object with the specified form and degree.
         """
         cache_key = self.make_key(id(self.domain_obj), "hamiltonian", max_deg, form)
@@ -228,7 +272,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
             
         Returns
         -------
-        dict[str, Hamiltonian]
+        dict[str, :class:`~hiten.system.hamiltonian.Hamiltonian`]
             Dictionary with keys: 'physical', 'real_normal', 'complex_normal', 
             'normalized', 'center_manifold_complex', 'center_manifold_real'.
             Each value is a Hamiltonian object.
@@ -262,7 +306,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
             
         Returns
         -------
-        list[LieGeneratingFunction]
+        list[:class:`~hiten.system.hamiltonian.LieGeneratingFunction`]
             List of LieGeneratingFunction objects.
         """
         cache_key = self.make_key(id(self.domain_obj), "generating_functions", max_deg)
@@ -319,7 +363,11 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
 
         Returns
         -------
-        :class:`~hiten.system.orbits.base.PeriodicOrbit`
+        :class:`~hiten.system.orbits.base.PeriodicOrbit` 
+        | :class:`~hiten.system.orbits.base.GenericOrbit` 
+        | :class:`~hiten.system.orbits.base.HaloOrbit` 
+        | :class:`~hiten.system.orbits.base.LyapunovOrbit` 
+        | :class:`~hiten.system.orbits.base.VerticalOrbit`
             Newly created orbit instance.
         """
         from hiten.system.orbits.base import GenericOrbit, PeriodicOrbit
@@ -427,6 +475,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
 
     @property
     def normal_form_transform(self) -> Tuple[np.ndarray, np.ndarray]:
+        """The normal form transform for the collinear libration point."""
         cache_key = self.make_key(id(self.domain_obj), "normal_form_transform")
         
         def _factory() -> Tuple[np.ndarray, np.ndarray]:
@@ -448,6 +497,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
     
     @property
     def eigendecomposition_config(self) -> _EigenDecompositionConfig:
+        """The eigen decomposition configuration for the collinear libration point."""
         return _EigenDecompositionConfig(
             problem_type=_ProblemType.EIGENVALUE_DECOMPOSITION,
             system_type=_SystemType.CONTINUOUS,
@@ -457,11 +507,18 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
     
     @eigendecomposition_config.setter
     def eigendecomposition_config(self, config: _EigenDecompositionConfig) -> None:
+        """Set the eigen decomposition configuration for the collinear libration point."""
         self.generator._set_config(config)
 
 
 class _CollinearDynamicsService(_LibrationDynamicsService):
+    """Provide stability analysis and geometry helpers for collinear libration points.
     
+    Parameters
+    ----------
+    point : :class:`~hiten.system.libration.collinear.CollinearPoint`
+        The collinear libration point.  
+    """
 
     def __init__(self, point: "CollinearPoint") -> None:
         super().__init__(point)
@@ -488,13 +545,18 @@ class _CollinearDynamicsService(_LibrationDynamicsService):
     def won(self) -> Tuple[int, float]:
         """
         Get the won value for the collinear libration point.
+        
+        Returns
+        -------
+        tuple
+            (sign, won) where sign is the sign convention and won is the won value.
         """
         pass
 
     @property
     def gamma(self) -> float:
         """
-        Compute the gamma value for the collinear libration point.
+        The gamma value for the collinear libration point.
         
         Returns
         -------
@@ -510,7 +572,7 @@ class _CollinearDynamicsService(_LibrationDynamicsService):
 
     def scale_factor(self, lambda1: float, omega1: float) -> Tuple[float, float]:
         """
-        Compute the scale factor for the collinear libration point.
+        The scale factor for the collinear libration point.
         
         Returns
         -------
@@ -526,7 +588,7 @@ class _CollinearDynamicsService(_LibrationDynamicsService):
 
     def cn(self, n: int) -> float:
         """
-        Compute the cn coefficient for the collinear libration point.
+        The cn coefficient for the collinear libration point.
         
         Parameters
         ----------
@@ -777,13 +839,14 @@ class _CollinearDynamicsService(_LibrationDynamicsService):
         return (float(lambda1), float(omega1_val), float(omega2_val))
     
     def _compute_linear_data(self):
+        """Compute the linear data for the collinear libration point."""
         lambda1, omega1, omega2 = self.linear_modes
         C, Cinv = self.normal_form_transform
         
         return lambda1, omega1, omega2, None, C, Cinv
 
     def _compute_scale_factor(self, lambda1, omega1):
-        """Calculate the normalization factors s1 and s2 used in the normal form transformation.
+        """The normalization factors s1 and s2 used in the normal form transformation.
         
         Parameters
         ----------
@@ -823,7 +886,7 @@ class _CollinearDynamicsService(_LibrationDynamicsService):
         return np.sqrt(expr1), np.sqrt(expr2)
 
     def _build_normal_form(self) -> Tuple[np.ndarray, np.ndarray]:
-        """Build the normal form transformation matrices.
+        """The normal form transformation matrices.
         
         Returns
         -------
@@ -874,7 +937,7 @@ class _CollinearDynamicsService(_LibrationDynamicsService):
     @abstractmethod
     def _position_search_interval(self) -> list:
         """
-        Defines the search interval for finding the x-position.
+        The search interval for finding the x-position.
         
         Returns
         -------
@@ -887,7 +950,7 @@ class _CollinearDynamicsService(_LibrationDynamicsService):
     @abstractmethod
     def _gamma_poly_def(self) -> Tuple[list, tuple]:
         """
-        Defines the quintic polynomial for gamma calculation.
+        The quintic polynomial for gamma calculation.
         
         Returns
         -------
@@ -899,26 +962,30 @@ class _CollinearDynamicsService(_LibrationDynamicsService):
 
 
 class _L1DynamicsService(_CollinearDynamicsService):
+    """Provide stability analysis and geometry helpers for L1 libration points."""
 
     def __init__(self, point: "L1Point") -> None:
         super().__init__(point)
 
     @property
     def sign(self) -> int:
+        """The sign convention for L1 libration points."""
         return -1
     
     @property
     def a(self) -> float:
+        """The offset along the x-axis used in frame changes for L1 libration points."""
         return -1 + self.gamma
 
     @property
     def won(self) -> Tuple[int, float]:
+        """The won value for L1 libration points."""
         return (+1, 1 - self.mu)
 
     @property
     def _position_search_interval(self) -> list:
         """
-        Search interval for L1's x-position.
+        The search interval for L1's x-position.
         
         Returns
         -------
@@ -932,7 +999,7 @@ class _L1DynamicsService(_CollinearDynamicsService):
     @property
     def _gamma_poly_def(self) -> Tuple[list, tuple]:
         """
-        Quintic polynomial definition for L1's gamma value.
+        The quintic polynomial definition for L1's gamma value.
         
         Returns
         -------
@@ -946,8 +1013,7 @@ class _L1DynamicsService(_CollinearDynamicsService):
         return coeffs, (0, 1)
 
     def _compute_cn(self, n: int) -> float:
-        """
-        Compute cn coefficient for L1 using Jorba & Masdemont (1999), eq. (3).
+        """The cn coefficient for L1 using Jorba & Masdemont (1999), eq. (3).
         
         Parameters
         ----------
@@ -970,26 +1036,30 @@ class _L1DynamicsService(_CollinearDynamicsService):
 
 
 class _L2DynamicsService(_CollinearDynamicsService):
+    """Provide stability analysis and geometry helpers for L2 libration points."""
 
     def __init__(self, point: "L2Point") -> None:
         super().__init__(point)
 
     @property
     def sign(self) -> int:
+        """The sign convention for L2 libration points."""
         return -1
     
     @property
     def a(self) -> float:
+        """The offset along the x-axis used in frame changes for L2 libration points."""
         return -1 - self.gamma
 
     @property
     def won(self) -> Tuple[int, float]:
+        """The won value for L2 libration points."""
         return (-1, 1 - self.mu)
 
     @property
     def _position_search_interval(self) -> list:
         """
-        Search interval for L2's x-position.
+        The search interval for L2's x-position.
         
         Returns
         -------
@@ -1003,7 +1073,7 @@ class _L2DynamicsService(_CollinearDynamicsService):
     @property
     def _gamma_poly_def(self) -> Tuple[list, tuple]:
         """
-        Quintic polynomial definition for L2's gamma value.
+        The quintic polynomial definition for L2's gamma value.
         
         Returns
         -------
@@ -1018,7 +1088,7 @@ class _L2DynamicsService(_CollinearDynamicsService):
 
     def _compute_cn(self, n: int) -> float:
         """
-        Compute cn coefficient for L2 using Jorba & Masdemont (1999), eq. (3).
+        The cn coefficient for L2 using Jorba & Masdemont (1999), eq. (3).
         
         Parameters
         ----------
@@ -1040,26 +1110,30 @@ class _L2DynamicsService(_CollinearDynamicsService):
         return term1 * (term2 + term3)
 
 class _L3DynamicsService(_CollinearDynamicsService):
+    """Provide stability analysis and geometry helpers for L3 libration points."""
 
     def __init__(self, point: "L3Point") -> None:
         super().__init__(point)
 
     @property
     def sign(self) -> int:
+        """The sign convention for L3 libration points."""
         return 1
     
     @property
     def a(self) -> float:
+        """The offset along the x-axis used in frame changes for L3 libration points."""
         return self.gamma
 
     @property
     def won(self) -> Tuple[int, float]:
+        """The won value for L3 libration points."""
         return (+1, -self.mu)
 
     @property
     def _position_search_interval(self) -> list:
         """
-        Search interval for L3's x-position.
+        The search interval for L3's x-position.
         
         Returns
         -------
@@ -1072,7 +1146,7 @@ class _L3DynamicsService(_CollinearDynamicsService):
     @property
     def _gamma_poly_def(self) -> Tuple[list, tuple]:
         """
-        Quintic polynomial definition for L3's gamma value.
+        The quintic polynomial definition for L3's gamma value.
         
         Returns
         -------
@@ -1087,7 +1161,7 @@ class _L3DynamicsService(_CollinearDynamicsService):
 
     def _compute_cn(self, n: int) -> float:
         """
-        Compute cn coefficient for L3 using Jorba & Masdemont (1999), eq. (3).
+        The cn coefficient for L3 using Jorba & Masdemont (1999), eq. (3).
         
         Parameters
         ----------
@@ -1110,6 +1184,7 @@ class _L3DynamicsService(_CollinearDynamicsService):
 
 
 class _TriangularDynamicsService(_LibrationDynamicsService):
+    """Provide stability analysis and geometry helpers for triangular libration points."""
 
     def __init__(self, point: "TriangularPoint") -> None:
         super().__init__(point)
@@ -1214,13 +1289,21 @@ class _TriangularDynamicsService(_LibrationDynamicsService):
         return (float(omega1), float(omega2), float(omega_z))
 
     def _compute_linear_data(self):
+        """Compute the linear data for the triangular libration point.
+        
+        Returns
+        -------
+        tuple
+            (lambda1, omega1, omega2, omega_z, C, Cinv)
+            Object containing the linear data for the libration point.
+        """
         omega1, omega2, omega_z = self.linear_modes
         C, Cinv = self.normal_form_transform
         
         return None, omega1, omega2, omega_z, C, Cinv
 
     def _J_hess_H2(self) -> np.ndarray:
-        """Compute the 6x6 symplectic matrix for the quadratic Hamiltonian H2.
+        """The 6x6 symplectic matrix for the quadratic Hamiltonian H2.
         
         Returns
         -------
@@ -1244,7 +1327,7 @@ class _TriangularDynamicsService(_LibrationDynamicsService):
         return J_full
 
     def _compute_scale_factor(self, idx: int) -> float:
-        """Compute the scaling factor for the given mode index.
+        """The scaling factor for the given mode index.
         
         Parameters
         ----------
@@ -1261,7 +1344,7 @@ class _TriangularDynamicsService(_LibrationDynamicsService):
         return np.sqrt(self._d_omega(idx))
 
     def _build_normal_form(self) -> Tuple[np.ndarray, np.ndarray]:
-        """Build the normal form transformation matrices.
+        """The normal form transformation matrices.
         
         Returns
         -------
@@ -1281,7 +1364,7 @@ class _TriangularDynamicsService(_LibrationDynamicsService):
         return C, Cinv
 
     def _get_eigvs(self):
-        """Return the six real eigenvectors (u_1, u_2, u_3, v_1, v_2, v_3)
+        """The six real eigenvectors (u_1, u_2, u_3, v_1, v_2, v_3)
         providing a canonical basis of the centre sub-space.
 
         For triangular points the flow decomposes into a planar 2-DOF part
@@ -1331,7 +1414,7 @@ class _TriangularDynamicsService(_LibrationDynamicsService):
         return eigv_matrix
 
     def _d_omega(self, idx: int) -> float:
-        """Compute the derivative term for the given mode index.
+        """The derivative term for the given mode index.
         
         Parameters
         ----------
@@ -1350,34 +1433,51 @@ class _TriangularDynamicsService(_LibrationDynamicsService):
 
 
 class _L4DynamicsService(_TriangularDynamicsService):
+    """Provide stability analysis and geometry helpers for L4 libration points."""
 
     def __init__(self, point: "L4Point") -> None:
         super().__init__(point)
 
     @property
     def sign(self) -> int:
+        """The sign convention for L4 libration points."""
         return 1
 
     @property
     def a(self) -> float:
+        """The offset along the x-axis used in frame changes for L4 libration points."""
         return self.sign * 3 * np.sqrt(3) / 4 * (1 - 2 * self.mu)
 
 
 class _L5DynamicsService(_TriangularDynamicsService):
+    """Provide stability analysis and geometry helpers for L5 libration points."""
 
     def __init__(self, point: "L5Point") -> None:
         super().__init__(point)
 
     @property
     def sign(self) -> int:
+        """The sign convention for L5 libration points."""
         return -1
 
     @property
     def a(self) -> float:
+        """The offset along the x-axis used in frame changes for L5 libration points."""
         return self.sign * 3 * np.sqrt(3) / 4 * (1 - 2 * self.mu)
 
 
 class _LibrationServices(_ServiceBundleBase):
+    """Provide stability analysis and geometry helpers for libration points
+    
+    Parameters
+    ----------
+    domain_obj : :class:`~hiten.system.libration.base.LibrationPoint`
+        The libration point.
+    persistence : :class:`~hiten.algorithms.types.services.libration._LibrationPersistenceService`
+        The persistence service.
+    dynamics : :class:`~hiten.algorithms.types.services.libration._LibrationDynamicsService`
+        The dynamics service.
+    """
 
     def __init__(self, domain_obj: "LibrationPoint", persistence: _LibrationPersistenceService, dynamics: _LibrationDynamicsService) -> None:
         super().__init__(domain_obj)
@@ -1386,6 +1486,18 @@ class _LibrationServices(_ServiceBundleBase):
 
     @classmethod
     def default(cls, domain_obj: "LibrationPoint") -> "_LibrationServices":
+        """Create a default service bundle for a libration point.
+        
+        Parameters
+        ----------
+        domain_obj : :class:`~hiten.system.libration.base.LibrationPoint`
+            The libration point.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.services.libration._LibrationServices`
+            The service bundle.
+        """
         dynamics = _LibrationServices._check_point_type(domain_obj)
         return cls(
             domain_obj=domain_obj,
@@ -1395,6 +1507,18 @@ class _LibrationServices(_ServiceBundleBase):
 
     @classmethod
     def with_shared_dynamics(cls, dynamics: _LibrationDynamicsService) -> "_LibrationServices":
+        """Create a service bundle with a shared dynamics service.
+        
+        Parameters
+        ----------
+        dynamics : :class:`~hiten.algorithms.types.services.libration._LibrationDynamicsService`
+            The dynamics service.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.services.libration._LibrationServices`
+            The service bundle.
+        """
         return cls(
             domain_obj=dynamics.domain_obj,
             persistence=_LibrationPersistenceService(),
@@ -1403,6 +1527,18 @@ class _LibrationServices(_ServiceBundleBase):
 
     @staticmethod
     def _check_point_type(domain_obj: "LibrationPoint") -> _LibrationDynamicsService:
+        """Check the type of the libration point and return the corresponding dynamics service.
+        
+        Parameters
+        ----------
+        domain_obj : :class:`~hiten.system.libration.base.LibrationPoint`
+            The libration point.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.services.libration._LibrationDynamicsService`
+            The dynamics service.   
+        """
         from hiten.system.libration.collinear import L1Point, L2Point, L3Point
         from hiten.system.libration.triangular import L4Point, L5Point
 
