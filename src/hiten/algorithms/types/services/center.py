@@ -102,7 +102,7 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
     def clear_caches(self) -> None:
         self.reset()
         try:
-            pipeline = self._ham_pipeline.get(self.domain_obj, self._degree)
+            pipeline = self._ham_pipeline.get(self.domain_obj, self.degree)
             if hasattr(pipeline, 'cache_clear'):
                 pipeline.cache_clear()
         except Exception:
@@ -110,7 +110,7 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
         self._hamsys = None
 
     def format_coefficients(self, ham: "Hamiltonian", degree: int) -> str:
-        return _format_poly_table(ham.poly_H, ham._clmo, degree)
+        return _format_poly_table(ham.dynamics.poly_H, ham.dynamics.clmo, degree)
 
     def get_map(self, energy: float):
 
