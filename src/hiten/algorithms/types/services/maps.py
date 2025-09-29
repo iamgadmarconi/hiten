@@ -29,7 +29,6 @@ if TYPE_CHECKING:
     from hiten.algorithms.poincare.core.types import _Section
 
 
-
 class _MapPersistenceService(_PersistenceServiceBase):
     """Handle persistence for map objects."""
 
@@ -49,6 +48,10 @@ class _MapDynamicsServiceBase(_DynamicsServiceBase):
         self._section: Optional["_Section"] = None
         self._section_coord = None
         self._generator = None
+
+    @property
+    def domain_obj(self):
+        return super().domain_obj
 
     @property
     def generator(self) -> str:
@@ -258,10 +261,6 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
         self._generator = None
         self._section_coord = None
 
-    @property
-    def domain_obj(self) -> "CenterManifold":
-        return super().domain_obj
-
     def compute(self, *, section_coord: str = "q3", overrides: dict[str, Any] | None = None, **kwargs) -> np.ndarray:
         if overrides is None:
             overrides = {}
@@ -400,10 +399,30 @@ class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
 
     def __init__(self, domain_obj) -> None:
         super().__init__(domain_obj)
-        self._engine = None
 
-    def compute(self) -> SynodicMapResults:
-        pass
+    def compute(self, *, section_axis: str, section_offset: float, plane_coords: tuple[str, str], direction: Literal[1, -1, None], overrides: dict[str, Any] | None = None, **kwargs) -> np.ndarray:
+        if overrides is None:
+            overrides = {}
+        else:
+            overrides = overrides.copy()
+        overrides.update(kwargs)
+        
+        overrides_tuple = tuple(sorted(overrides.items())) if overrides else ()
+        cache_key = self.make_key("generate", overrides_tuple)
+
+        def _factory() -> SynodicMapResults:
+            override = bool(overrides)
+
+            updates = {"section_axis": section_axis,
+                        "section_offset": section_offset,
+                        "plane_coords": plane_coords,
+                        "direction": direction}
+
+            self.generator.update_config(**updates)
+            results = self.generator.generate(self.domain_obj, override=override, **overrides)
+            return results
+
+        return self.get_or_create(cache_key, _factory)
 
     def _build_generator(self) -> _SynodicMapFacade:
         return _SynodicMapFacade.with_default_engine(config=self.map_config)
