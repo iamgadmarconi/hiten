@@ -85,8 +85,9 @@ class _ReturnMapEngine(_HitenBaseEngine[ProblemT, ResultT, OutputsT], Generic[Pr
         super().__init__(backend=backend, interface=interface)
         self._strategy = seed_strategy
         self._map_config = map_config
-        self._n_iter = int(self._map_config.n_iter)
-        self._dt = float(self._map_config.dt)
+        # Use getattr with defaults for optional attributes to make engine more flexible
+        self._n_iter = int(getattr(self._map_config, 'n_iter', 40))
+        self._dt = float(getattr(self._map_config, 'dt', 0.01))
         self._n_workers = self._map_config.n_workers or os.cpu_count() or 1
 
     @abstractmethod

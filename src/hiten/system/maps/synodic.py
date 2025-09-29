@@ -45,7 +45,7 @@ class SynodicMap(_HitenBase):
     def clear_sections(self) -> None:
         return self.dynamics.clear_sections()
 
-    def compute(self, *, section_axis: str, section_offset: float, plane_coords: tuple[str, str], direction: Literal[1, -1, None], overrides: dict[str, Any] | None = None, **kwargs) -> np.ndarray:
+    def compute(self, *, section_axis: str, section_offset: float, plane_coords: tuple[str, str], direction: Optional[Literal[1, -1, None]] = None, overrides: dict[str, Any] | None = None, **kwargs) -> np.ndarray:
         return self.dynamics.compute(section_axis=section_axis, section_offset=section_offset, plane_coords=plane_coords, direction=direction, overrides=overrides, **kwargs)
 
     def get_points(self, axes: Optional[tuple[str, str]] = None) -> np.ndarray:

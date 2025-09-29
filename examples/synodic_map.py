@@ -9,8 +9,7 @@ import sys
 
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from hiten.algorithms.poincare import SynodicMap, SynodicMapConfig
-from hiten.system import System, VerticalOrbit
+from hiten.system import SynodicMap, System, VerticalOrbit
 
 
 def main() -> None:
@@ -30,16 +29,13 @@ def main() -> None:
     manifold.compute(step=0.005)
     manifold.plot()
 
-    section_cfg = SynodicMapConfig(
-        section_axis="y",
-        section_offset=0.0,
-        plane_coords=("x", "z"),
-        interp_kind="cubic",
-        segment_refine=30,
-        newton_max_iter=10,
-    )
-    synodic_map = SynodicMap(section_cfg)
-    synodic_map.from_manifold(manifold)
+    synodic_map = SynodicMap(manifold)
+    overrides = {
+        "interp_kind": "cubic",
+        "segment_refine": 30,
+        "newton_max_iter": 10,
+    }
+    synodic_map.compute(section_axis="y", section_offset=0.0, plane_coords=("x", "z"), overrides=overrides)
     synodic_map.plot()
 
 

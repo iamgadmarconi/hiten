@@ -107,7 +107,7 @@ class _SynodicInterface(
         offset = config.section_offset
         plane_coords = config.plane_coords
         direction = config.direction
-        trajectories = domain_obj.trajectories.as_array()
+        trajectories = [traj.as_arrays() for traj in domain_obj.trajectories]
         return _SynodicMapProblem(
             plane_coords=plane_coords,
             direction=direction,

@@ -32,6 +32,7 @@ from hiten.algorithms.poincare.core.types import _Section
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
 from hiten.algorithms.types.core import _HitenBaseInterface
 from hiten.algorithms.types.exceptions import EngineError
+from hiten.system.maps.synodic import SynodicMap
 
 if TYPE_CHECKING:
     from hiten.system.manifold import Manifold
@@ -121,11 +122,11 @@ class _ManifoldInterface(
     def to_backend_inputs(self, problem: _ConnectionProblem) -> tuple:
         """Convert problem to backend inputs."""
         # Create section config from problem parameters
-        from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
         section_config = _SynodicMapConfig(
             section_axis=problem.section_axis,
             section_offset=problem.section_offset,
-            plane_coords=problem.plane_coords
+            plane_coords=problem.plane_coords,
+            direction=problem.direction
         )
         
         # Extract section data from both manifolds
@@ -162,6 +163,8 @@ class _ManifoldInterface(
 
         Parameters
         ----------
+        manifold : :class:`~hiten.system.manifold.Manifold`
+            The manifold object containing computed trajectory data.
         config : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`, optional
             Configuration for the synodic section geometry and detection settings.
             Includes section axis, offset, coordinate system, interpolation method,
@@ -173,7 +176,7 @@ class _ManifoldInterface(
 
         Returns
         -------
-        :class:`~hiten.algorithms.poincare.core.base._Section`
+        :class:`~hiten.algorithms.poincare.core.types._Section`
             Section object containing intersection data with attributes:
             
             - points : 2D coordinates on the section plane
@@ -183,13 +186,13 @@ class _ManifoldInterface(
 
         Raises
         ------
-        ValueError
-            If the manifold has not been computed (manifold_result is None).
+        EngineError
+            If the manifold has not been computed (manifold.result is None).
             Call manifold.compute() before using this method.
 
         Notes
         -----
-        This method delegates to :class:`~hiten.algorithms.poincare.synodic.base.SynodicMap`
+        This method delegates to :class:`~hiten.system.maps.synodic.SynodicMap`
         for the actual intersection computation. The synodic map handles:
         
         - Trajectory interpolation and root finding
@@ -203,7 +206,7 @@ class _ManifoldInterface(
         Examples
         --------
         >>> # Basic usage with default section
-        >>> section = interface.to_section()
+        >>> section = interface.to_section(manifold)
         >>> 
         >>> # Custom section at x = 0.8 with positive crossings only
         >>> from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
@@ -212,13 +215,13 @@ class _ManifoldInterface(
         ...     section_offset=0.8,
         ...     plane_coords=("y", "z")
         ... )
-        >>> section = interface.to_section(config=config, direction=1)
+        >>> section = interface.to_section(manifold, config=config, direction=1)
         >>> print(f"Points: {section.points.shape}")
         >>> print(f"States: {section.states.shape}")
 
         See Also
         --------
-        :class:`~hiten.algorithms.poincare.synodic.base.SynodicMap`
+        :class:`~hiten.system.maps.synodic.SynodicMap`
             Underlying synodic map implementation.
         :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
             Configuration class for section parameters.
@@ -229,9 +232,43 @@ class _ManifoldInterface(
         if manifold.result is None:
             raise EngineError("Manifold must be computed before extracting section hits")
 
-        cfg = config or _SynodicMapConfig()
-        syn = SynodicMap(cfg)
-        return syn.from_manifold(manifold, direction=direction)
+        # Create synodic map from the manifold
+        synodic_map = SynodicMap(manifold)
+        
+        # Extract configuration parameters
+        if config is not None:
+            section_axis = config.section_axis
+            section_offset = config.section_offset
+            plane_coords = config.plane_coords
+            overrides = {
+                "interp_kind": config.interp_kind,
+                "segment_refine": config.segment_refine,
+                "newton_max_iter": config.newton_max_iter,
+                "tol_on_surface": config.tol_on_surface,
+                "dedup_time_tol": config.dedup_time_tol,
+                "dedup_point_tol": config.dedup_point_tol,
+                "max_hits_per_traj": config.max_hits_per_traj,
+                "n_workers": config.n_workers,
+            }
+        else:
+            # Use default configuration
+            section_axis = "x"
+            section_offset = 0.0
+            plane_coords = ("y", "vy")
+            overrides = {}
+        
+        # Compute the section
+        synodic_map.compute(
+            section_axis=section_axis,
+            section_offset=section_offset,
+            plane_coords=plane_coords,
+            direction=direction,
+            overrides=overrides
+        )
+        
+        # Get the section data using the same ID format as the dynamics service
+        section_id = f"{section_axis}_{section_offset}_{plane_coords[0]}_{plane_coords[1]}_{direction}"
+        return synodic_map.get_section(section_id)
 
     def to_numeric(self, manifold: "Manifold", config: _SynodicMapConfig | None = None, *, direction: Literal[1, -1, None] | None = None):
         """Return (points2d, states6d, trajectory_indices) arrays for this manifold on a section.
@@ -242,7 +279,24 @@ class _ManifoldInterface(
             The manifold object containing computed trajectory data.
         config : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`, optional
             Configuration for the synodic section geometry and detection settings.
+        direction : {1, -1, None}, optional
+            Filter for section crossing direction. 1 selects positive crossings
+            (increasing coordinate), -1 selects negative crossings (decreasing
+            coordinate), None accepts both directions (default: None).
+
+        Returns
+        -------
+        tuple
+            A tuple containing (points2d, states6d, trajectory_indices) where:
+            - points2d : ndarray, shape (n, 2)
+                2D coordinates on the section plane
+            - states6d : ndarray, shape (n, 6) 
+                6D phase space states at intersections
+            - trajectory_indices : ndarray, shape (n,) or None
+                Indices of trajectories that produced each intersection point
         """
         sec = self.to_section(manifold=manifold, config=config, direction=direction)
         trajectory_indices = getattr(sec, 'trajectory_indices', None)
-        return (np.asarray(sec.points, dtype=float), np.asarray(sec.states, dtype=float), np.asarray(trajectory_indices, dtype=int))
+        if trajectory_indices is not None:
+            trajectory_indices = np.asarray(trajectory_indices, dtype=int)
+        return (np.asarray(sec.points, dtype=float), np.asarray(sec.states, dtype=float), trajectory_indices)

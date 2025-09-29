@@ -341,8 +341,8 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
         
         def _factory() -> StabilityProperties:
             _, _, phi_T, _ = self.compute_stm(steps=2000)
-            results = self.generator.compute(domain_obj=phi_T)
-            return results
+            self.generator.compute(domain_obj=phi_T)
+            return self.generator
         
         return self.get_or_create(key, _factory)
 
