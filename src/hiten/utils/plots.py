@@ -431,13 +431,13 @@ def plot_inertial_frame(
     _plot_body(ax, primary_pos, primary_radius, primary_color, bodies[0].name)
     
     theta = times  # Time is angle in canonical units
-    secondary_x = (1-mu)
+    secondary_x = np.full_like(theta, (1-mu))
     secondary_y = np.zeros_like(theta)
     secondary_z = np.zeros_like(theta)
-    
-    ax.plot(secondary_x, secondary_y, secondary_z, '--', color=bodies[1].color, 
+
+    ax.plot(secondary_x, secondary_y, secondary_z, '--', color=bodies[1].color,
             alpha=0.5, label=f'{bodies[1].name} Orbit')
-    
+
     secondary_pos = np.array([secondary_x[-1], secondary_y[-1], secondary_z[-1]])
     secondary_radius = bodies[1].radius / system_distance  # Convert to canonical units
     secondary_color = _get_body_color(bodies[1], 'slategray')

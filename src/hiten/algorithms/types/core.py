@@ -18,28 +18,45 @@ from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
                                                   _ServiceBundleBase)
 
+# Type variables for the Hiten base classes
 DomainT = TypeVar("DomainT")
 
+# Type variable for the configuration type
 ConfigT = TypeVar("ConfigT", bound=Union["_HitenBaseConfig", None])
 
+# Type variable for the problem type
 ProblemT = TypeVar("ProblemT", bound="_HitenBaseProblem")
 
+# Type variable for the result type
 ResultT = TypeVar("ResultT", bound="_HitenBaseResults")
 
+# Type variable for the backend type
 BackendT = TypeVar("BackendT", bound="_HitenBaseBackend")
 
+# Type variable for the outputs type
 OutputsT = TypeVar("OutputsT")
 
+# Type variable for the interface type
 InterfaceT = TypeVar("InterfaceT", bound="_HitenBaseInterface[ConfigT, ProblemT, ResultT, OutputsT]")
 
+# Type variable for the engine type
 EngineT = TypeVar("EngineT", bound="_HitenBaseEngine[ProblemT, ResultT, OutputsT]")
 
+# Type variable for the facade type
 FacadeT = TypeVar("FacadeT", bound="_HitenBaseFacade")
 
 
 @dataclass(frozen=True)
 class _BackendCall:
-    """Describe a backend call with positional and keyword arguments."""
+    """Describe a backend call with positional and keyword arguments.
+    
+    Parameters
+    ----------
+    args : tuple[Any, ...]
+        Positional arguments to pass to the backend.
+    kwargs : dict[str, Any]
+        Keyword arguments to pass to the backend.
+    """
 
     args: tuple[Any, ...] = ()
     kwargs: dict[str, Any] = field(default_factory=dict)
@@ -57,6 +74,12 @@ class _HitenBaseResults(ABC):
     __slots__ = ()
 
 
+class _HitenBaseResults(ABC):
+    """Marker base class for user-facing results returned by engines."""
+
+    __slots__ = ()
+
+
 class _HitenBaseConfig(ABC):
     """Marker base class for configuration payloads produced by interfaces."""
 
@@ -64,55 +87,173 @@ class _HitenBaseConfig(ABC):
 
 
 class _HitenBaseBackend(ABC):
+    """Abstract base class for all backend implementations in the Hiten framework."""
+
     ...
 
 
 class _HitenBaseInterface(Generic[ConfigT, ProblemT, ResultT, OutputsT], ABC):
-    """Shared contract for translating between domain objects and backends."""
+    """Shared contract for translating between domain objects and backends.
+    
+    Parameters
+    ----------
+    :class:`~hiten.algorithms.types.core.ConfigT` : TypeVar
+        The configuration type.
+    :class:`~hiten.algorithms.types.core.ProblemT` : TypeVar
+        The problem type.
+    :class:`~hiten.algorithms.types.core.ResultT` : TypeVar
+        The result type.
+    :class:`~hiten.algorithms.types.core.OutputsT` : TypeVar
+        The outputs type.
+    """
 
     def __init__(self) -> None:
         self._config: ConfigT | None = None
 
     @property
     def current_config(self) -> ConfigT | None:
+        """Get the current configuration."""
         return self._config
 
     @abstractmethod
     def create_problem(self, config: ConfigT | None = None, *args) -> ProblemT:
-        """Compose an immutable problem payload for the backend."""
+        """Compose an immutable problem payload for the backend.
+        
+        Parameters
+        ----------
+        config : :class:`~hiten.algorithms.types.core.ConfigT` | None, optional
+            The configuration to use for the problem
+        *args : Any
+            Additional arguments to pass to the problem.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.core.ProblemT`
+            The problem payload.
+        """
 
     @abstractmethod
     def to_backend_inputs(self, problem: ProblemT) -> _BackendCall:
-        """Translate a problem into backend invocation arguments."""
+        """Translate a problem into backend invocation arguments.
+        
+        Parameters
+        ----------
+        problem : :class:`~hiten.algorithms.types.core.ProblemT`
+            The problem to translate into backend invocation arguments.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.core._BackendCall`
+            The backend invocation arguments.
+        """
 
     def from_domain(self, *, config: ConfigT | None = None, **kwargs) -> _BackendCall:
-        """Convenience helper to build backend inputs directly from config."""
+        """Convenience helper to build backend inputs directly from config.
+        
+        Parameters
+        ----------
+        config : :class:`~hiten.algorithms.types.core.ConfigT` | None, optional
+            The configuration to use for the problem
+        **kwargs : Any
+            Additional arguments to pass to the problem.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.core._BackendCall`
+            The backend invocation arguments.
+        """
         problem = self.create_problem(config=config, **kwargs)
         return self.to_backend_inputs(problem)
 
     def to_domain(self, outputs: OutputsT, *, problem: ProblemT) -> Any:
-        """Optional hook to mutate or derive domain artefacts from outputs."""
+        """Optional hook to mutate or derive domain artefacts from outputs.
+        
+        Parameters
+        ----------
+        outputs : :class:`~hiten.algorithms.types.core.OutputsT`
+            The outputs to mutate or derive domain artefacts from.
+        problem : :class:`~hiten.algorithms.types.core.ProblemT`
+            The problem to mutate or derive domain artefacts from.
+        
+        Returns
+        -------
+        Any
+            The domain artefacts.
+        """
         return None
 
     @abstractmethod
     def to_results(self, outputs: OutputsT, *, problem: ProblemT, domain_payload: Any = None) -> ResultT:
-        """Package backend outputs into user-facing result objects."""
+        """Package backend outputs into user-facing result objects.
+        
+        Parameters
+        ----------
+        outputs : :class:`~hiten.algorithms.types.core.OutputsT`
+            The outputs to package into user-facing result objects.
+        problem : :class:`~hiten.algorithms.types.core.ProblemT`
+            The problem to package into user-facing result objects.
+        domain_payload : Any, optional
+            The domain payload to package into user-facing result objects.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.core.ResultT`
+            The user-facing result objects.
+        """
 
     def bind_backend(self, backend: _HitenBaseBackend) -> None:
+        """Bind the backend to the interface.
+        
+        Parameters
+        ----------
+        backend : :class:`~hiten.algorithms.types.core._HitenBaseBackend`
+            The backend to bind to the interface.
+        """
         self._backend = backend
 
     def on_start(self, problem: ProblemT) -> None:
+        """Called when the interface starts.
+        
+        Parameters
+        ----------
+        problem : :class:`~hiten.algorithms.types.core.ProblemT`
+            The problem to start.
+        """
         return None
 
     def on_success(self, outputs: OutputsT, *, problem: ProblemT, domain_payload: Any = None) -> None:
+        """Called when the interface succeeds.
+        
+        Parameters
+        ----------
+        outputs : :class:`~hiten.algorithms.types.core.OutputsT`
+            The outputs to succeed.
+        """
         return None
 
     def on_failure(self, exc: Exception, *, problem: ProblemT) -> None:
+        """Called when the interface fails.
+        
+        Parameters
+        ----------
+        exc : Exception
+            The exception to fail.
+        """
         return None
 
 
 class _HitenBaseEngine(Generic[ProblemT, ResultT, OutputsT], ABC):
-    """Template providing the canonical engine flow."""
+    """Template providing the canonical engine flow.
+    
+    Parameters
+    ----------
+    :class:`~hiten.algorithms.types.core.ProblemT` : TypeVar
+        The problem type.
+    :class:`~hiten.algorithms.types.core.ResultT` : TypeVar
+        The result type.
+    :class:`~hiten.algorithms.types.core.OutputsT` : TypeVar
+        The outputs type.
+    """
 
     def __init__(
         self,
@@ -125,17 +266,22 @@ class _HitenBaseEngine(Generic[ProblemT, ResultT, OutputsT], ABC):
 
     @property
     def backend(self) -> _HitenBaseBackend[ProblemT, ResultT, OutputsT]:
+        """Get the backend."""
         return self._backend
 
-    def with_interface(
-        self,
-        interface: _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT],
-    ) -> "_HitenBaseEngine[ProblemT, ResultT, OutputsT]":
-        self._interface = interface
-        return self
-
     def solve(self, problem: ProblemT) -> ResultT:
-        """Execute the standard engine orchestration for ``problem``."""
+        """Execute the standard engine orchestration for ``problem``.
+        
+        Parameters
+        ----------
+        problem : :class:`~hiten.algorithms.types.core.ProblemT`
+            The problem to solve.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.core.ResultT`
+            The result of the engine.
+        """
 
         interface = self._get_interface(problem)
         interface.bind_backend(self._backend)
@@ -159,6 +305,7 @@ class _HitenBaseEngine(Generic[ProblemT, ResultT, OutputsT], ABC):
         self,
         problem: ProblemT,
     ) -> _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT]:
+        """Get the interface."""
         if self._interface is None:
             raise EngineError(
                 f"{self.__class__.__name__} must be configured with an interface before solving."
@@ -169,25 +316,89 @@ class _HitenBaseEngine(Generic[ProblemT, ResultT, OutputsT], ABC):
         self,
         interface: _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT],
     ) -> None:
+        """Set the interface.
+        
+        Parameters
+        ----------
+        interface : :class:`~hiten.algorithms.types.core._HitenBaseInterface`
+            The interface to set.
+        """
         self._interface = interface
 
     def with_interface(
         self,
         interface: _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT],
     ) -> "_HitenBaseEngine[ProblemT, ResultT, OutputsT]":
+        """Set the interface.
+        
+        Parameters
+        ----------
+        interface : :class:`~hiten.algorithms.types.core._HitenBaseInterface`
+            The interface to set.
+        """
         self.set_interface(interface)
         return self
 
     def _before_backend(self, problem: ProblemT, call: _BackendCall, interface: _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT]) -> None:
+        """Called before the backend is invoked.
+        
+        Parameters
+        ----------
+        problem : :class:`~hiten.algorithms.types.core.ProblemT`
+            The problem to solve.
+        call : :class:`~hiten.algorithms.types.core._BackendCall`
+            The call to the backend.
+        interface : :class:`~hiten.algorithms.types.core._HitenBaseInterface`
+            The interface.
+        """
         return None
 
     def _after_backend_success(self, outputs: OutputsT, *, problem: ProblemT, domain_payload: Any, interface: _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT]) -> None:
+        """Called after the backend is invoked.
+        
+        Parameters
+        ----------
+        outputs : :class:`~hiten.algorithms.types.core.OutputsT`
+            The outputs to succeed.
+
+        problem : :class:`~hiten.algorithms.types.core.ProblemT`
+            The problem to succeed.
+        domain_payload : Any
+            The domain payload to succeed.
+        interface : :class:`~hiten.algorithms.types.core._HitenBaseInterface`
+            The interface.
+        """
         return None
 
     def _handle_backend_failure(self, exc: Exception, *, problem: ProblemT, call: _BackendCall, interface: _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT]) -> None:
+        """Handle backend failure.
+        
+        Parameters
+        ----------
+        exc : Exception
+            The exception to fail.
+        problem : :class:`~hiten.algorithms.types.core.ProblemT`
+            The problem to fail.
+        call : :class:`~hiten.algorithms.types.core._BackendCall`
+            The call to the backend.
+        interface : :class:`~hiten.algorithms.types.core._HitenBaseInterface`
+            The interface.
+        """
         raise EngineError(exc) from exc
 
     def _invoke_backend(self, call: _BackendCall) -> OutputsT:
+        """Invoke the backend.
+        
+        Parameters
+        ----------
+        call : :class:`~hiten.algorithms.types.core._BackendCall`
+            The call to the backend.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.core.OutputsT`
+            The outputs of the backend.
+        """
         backend_callable = getattr(self._backend, "run")
         return backend_callable(*call.args, **call.kwargs)
 
@@ -238,6 +449,11 @@ class _HitenBaseBackend(Generic[ProblemT, ResultT, OutputsT]):
         ----------
         **kwargs
             Additional keyword arguments passed to the run method.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.core.OutputsT`
+            The outputs of the backend.
         """
         ...
 
@@ -252,6 +468,10 @@ class _HitenBaseBackend(Generic[ProblemT, ResultT, OutputsT]):
             Current solution estimate or state.
         r_norm : float
             Current residual norm or convergence metric.
+
+        Returns
+        -------
+        None
         """
         return
 
@@ -266,6 +486,10 @@ class _HitenBaseBackend(Generic[ProblemT, ResultT, OutputsT]):
             Total number of iterations performed.
         residual_norm : float
             Final residual norm or convergence metric.
+
+        Returns
+        -------
+        None
         """
         return
 
@@ -280,6 +504,10 @@ class _HitenBaseBackend(Generic[ProblemT, ResultT, OutputsT]):
             Total number of iterations performed.
         residual_norm : float
             Final residual norm or convergence metric.
+
+        Returns
+        -------
+        None
         """
         return
 
@@ -297,6 +525,10 @@ class _HitenBaseBackend(Generic[ProblemT, ResultT, OutputsT]):
             Total number of iterations performed.
         residual_norm : float
             Final residual norm or convergence metric.
+
+        Returns
+        -------
+        None
         """
         return
 
@@ -352,6 +584,15 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
     @classmethod
     @abstractmethod
     def with_default_engine(cls, config, interface) -> "_HitenBaseFacade[ConfigT, ProblemT, ResultT]":
+        """Create a facade instance with a default engine (factory).
+        
+        Parameters
+        ----------
+        config : :class:`~hiten.algorithms.types.core.ConfigT`
+            The configuration to use for the facade.
+        interface : :class:`~hiten.algorithms.types.core.InterfaceT`
+            The interface to use for the facade.
+        """
         pass
     
     @abstractmethod
@@ -418,27 +659,35 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
         self._config = type(self._config)(**config_dict)
 
     def _set_engine(self, engine: _HitenBaseEngine[ProblemT, ResultT, OutputsT]) -> None:
+        """Set the engine."""
         self._engine = engine
 
     def _set_interface(self, interface: _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT]) -> None:
+        """Set the interface."""
         self._interface = interface
 
     def _set_backend(self, backend: _HitenBaseBackend[ProblemT, ResultT, OutputsT]) -> None:
+        """Set the backend."""
         self._backend = backend
 
     def _set_config(self, config: ConfigT) -> None:
+        """Set the config."""
         self._config = config
 
     def _get_engine(self) -> _HitenBaseEngine[ProblemT, ResultT, OutputsT]:
+        """Get the engine."""
         return self._engine
 
     def _get_interface(self) -> _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT]:
+        """Get the interface."""
         return self._interface
 
     def _get_backend(self) -> _HitenBaseBackend[ProblemT, ResultT, OutputsT]:
+        """Get the backend."""
         return self._backend
 
     def _get_config(self) -> ConfigT:
+        """Get the config."""
         return self._config
 
     def _create_problem(self, domain_obj: DomainT, override: bool = False, *args, **kwargs) -> ProblemT:
@@ -472,6 +721,17 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
 
 
     def _make_pipeline(self, config, interface, engine):
+        """Make the pipeline.
+        
+        Parameters
+        ----------
+        config : :class:`~hiten.algorithms.types.core.ConfigT`
+            The configuration to use for the pipeline.
+        interface : :class:`~hiten.algorithms.types.core.InterfaceT`
+            The interface to use for the pipeline.
+        engine : :class:`~hiten.algorithms.types.core.EngineT`
+            The engine to use for the pipeline.
+        """
         self._config: ConfigT = config
         self._interface: _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT] = interface
         self._engine: _HitenBaseEngine[ProblemT, ResultT, OutputsT] = engine
@@ -484,24 +744,37 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
         
         This method can be overridden by concrete facades to perform
         domain-specific configuration validation.
+
+        Parameters
+        ----------
+        config : :class:`~hiten.algorithms.types.core.ConfigT`
+            The configuration to validate.
         """
         pass
 
     @property
     def results(self) -> ResultT:
+        """Get the results."""
         return self._results
 
 
 class _HitenBase(_SerializeBase, ABC):
     """Abstract base class for public Hiten classes.
+
+    Parameters
+    ----------
+    services : :class:`~hiten.algorithms.types.core._ServiceBundleBase`
+        The services to use for the base class.
     """
 
     def __init__(self, services: _ServiceBundleBase):
+        """Initialize the service bundle."""
         self._services = services
         self._unpack_services()
 
     @property
     def services(self) -> _ServiceBundleBase:
+        """Get the services."""
         return self._services
 
     @property

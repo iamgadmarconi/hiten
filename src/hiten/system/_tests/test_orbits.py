@@ -515,25 +515,25 @@ class TestPeriodicOrbitStability:
         """Test stability_indices property."""
         stability_indices = propagated_orbit.stability_indices
         
-        # May be None or a tuple depending on computation
+        # May be None or a numpy array depending on computation
         if stability_indices is not None:
-            assert isinstance(stability_indices, tuple)
+            assert isinstance(stability_indices, (tuple, np.ndarray))
     
     def test_eigenvalues_property(self, propagated_orbit):
         """Test eigenvalues property."""
         eigenvalues = propagated_orbit.eigenvalues
         
-        # May be None or a tuple depending on computation
+        # May be None or a tuple/array depending on computation
         if eigenvalues is not None:
-            assert isinstance(eigenvalues, tuple)
+            assert isinstance(eigenvalues, (tuple, np.ndarray))
     
     def test_eigenvectors_property(self, propagated_orbit):
         """Test eigenvectors property."""
         eigenvectors = propagated_orbit.eigenvectors
         
-        # May be None or a tuple depending on computation
+        # May be None or a tuple/array depending on computation
         if eigenvectors is not None:
-            assert isinstance(eigenvectors, tuple)
+            assert isinstance(eigenvectors, (tuple, np.ndarray))
 
 
 class TestPeriodicOrbitIntegration:

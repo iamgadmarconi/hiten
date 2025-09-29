@@ -420,7 +420,10 @@ class PeriodicOrbit(_HitenBase):
         ValueError
             If frame is invalid.
         """
-        if self.trajectory is None:
+        try:
+            if self.trajectory is None:
+                raise RuntimeError("No trajectory to plot. Call propagate() first.")
+        except ValueError:
             raise RuntimeError("No trajectory to plot. Call propagate() first.")
 
         states = self.trajectory.states
@@ -462,7 +465,11 @@ class PeriodicOrbit(_HitenBase):
         tuple or None
             Animation objects, or None if trajectory is not computed.
         """
-        if self.trajectory is None:
+        try:
+            if self.trajectory is None:
+                logger.warning("No trajectory to animate. Call propagate() first.")
+                return None, None
+        except ValueError:
             logger.warning("No trajectory to animate. Call propagate() first.")
             return None, None
         
@@ -483,10 +490,16 @@ class PeriodicOrbit(_HitenBase):
         ValueError
             If trajectory is not computed.
         """
-        if self.trajectory is None:
-            raise ValueError("Trajectory not computed. Please call propagate() first.")
+        try:
+            traj = self.trajectory
+            if traj is None:
+                raise ValueError("Trajectory not computed. Please call propagate() first.")
+        except ValueError as e:
+            if "Trajectory not computed" in str(e):
+                raise ValueError("Trajectory not computed. Please call propagate() first.") from e
+            raise
 
-        data = np.column_stack((self.trajectory.times, self.trajectory.states))
+        data = np.column_stack((traj.times, traj.states))
         df = pd.DataFrame(data, columns=["time", "x", "y", "z", "vx", "vy", "vz"])
 
         _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
@@ -501,10 +514,16 @@ class PeriodicOrbit(_HitenBase):
         **kwargs
             Additional keyword arguments passed to pandas.DataFrame.to_csv.
         """
-        if self.trajectory is None:
-            raise ValueError("Trajectory not computed. Please call propagate() first.")
+        try:
+            traj = self.trajectory
+            if traj is None:
+                raise ValueError("Trajectory not computed. Please call propagate() first.")
+        except ValueError as e:
+            if "Trajectory not computed" in str(e):
+                raise ValueError("Trajectory not computed. Please call propagate() first.") from e
+            raise
         
-        return pd.DataFrame(np.column_stack((self.trajectory.times, self.trajectory.states)), columns=["time", "x", "y", "z", "vx", "vy", "vz"])
+        return pd.DataFrame(np.column_stack((traj.times, traj.states)), columns=["time", "x", "y", "z", "vx", "vy", "vz"])
 
     def __setstate__(self, state):
         """Restore the PeriodicOrbit instance after unpickling."""
