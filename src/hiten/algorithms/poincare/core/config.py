@@ -11,7 +11,7 @@ requirements.
 
 from abc import ABC
 from dataclasses import dataclass
-from typing import Literal, Optional, Protocol, Tuple, runtime_checkable
+from typing import Literal, Optional, Protocol, runtime_checkable
 
 
 @dataclass(frozen=True)
@@ -87,10 +87,13 @@ class _RefineConfig(ABC):
     configuration parameters that control how the return map
     is refined.
     """
-    pre_steps: int = 1000
-    refine_steps: int = 3000
-    bracket_dx: float = 1e-10
-    max_expand: int = 500
+    interp_kind: Literal["linear", "cubic"] = "linear"
+    segment_refine: int = 0
+    tol_on_surface: float = 1e-12
+    dedup_time_tol: float = 1e-9
+    dedup_point_tol: float = 1e-12
+    max_hits_per_traj: int | None = None
+    newton_max_iter: int = 4
 
 
 @dataclass(frozen=True)
@@ -178,88 +181,3 @@ class _ReturnMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _RefineConfig, 
     specified.
     """
     pass
-
-
-@runtime_checkable
-class _EngineConfigLike(Protocol):
-    """Protocol for engine configuration objects.
-
-    This protocol defines the interface that engine configuration
-    objects must implement. It specifies the minimum set of
-    attributes required for engine configuration.
-
-    Attributes
-    ----------
-    dt : float
-        Integration time step (nondimensional units).
-    max_steps : int
-        Maximum integration steps per trajectory.
-    method : {'fixed', 'symplectic', 'adaptive'}
-        Integration method.
-    order : int
-        Integration order for Runge-Kutta methods.
-    max_steps : int
-        Maximum integration steps per trajectory.
-    method : {'fixed', 'symplectic', 'adaptive'}
-        Integration method.
-    order : int
-        Integration order for Runge-Kutta methods.
-    refine_steps : int
-        Number of refinement steps for root finding.
-    bracket_dx : float
-        Initial bracket size for root finding.
-    max_expand : int
-        Maximum bracket expansion iterations.
-    n_iter : int
-        Number of return map iterations to compute.
-    n_workers : int or None
-        Number of parallel workers for computation.
-
-    Notes
-    -----
-    This protocol is used for type checking and runtime validation
-    of engine configuration objects. Any object that implements
-    these attributes can be used as an engine configuration.
-
-    The protocol ensures that engine configurations have the
-    necessary parameters for numerical integration and iteration
-    control.
-    """
-    dt: float
-    max_steps: int
-    method: Literal["fixed", "symplectic", "adaptive"]
-    order: int
-    max_steps: int
-    method: Literal["fixed", "symplectic", "adaptive"]
-    refine_steps: int
-    bracket_dx: float
-    max_expand: int
-    c_omega_heuristic: float
-    n_iter: int
-    n_workers: int | None
-
-
-@runtime_checkable
-class _SeedingConfigLike(Protocol):
-    """Protocol for seeding configuration objects.
-
-    This protocol defines the interface that seeding configuration
-    objects must implement. It specifies the minimum set of
-    attributes required for seeding configuration.
-
-    Attributes
-    ----------
-    n_seeds : int
-        Number of initial seeds to generate for return map
-        computation.
-
-    Notes
-    -----
-    This protocol is used for type checking and runtime validation
-    of seeding configuration objects. Any object that implements
-    this attribute can be used as a seeding configuration.
-
-    The protocol ensures that seeding configurations have the
-    necessary parameters for generating initial conditions.
-    """
-    n_seeds: int

@@ -4,7 +4,7 @@ Currently provides a CR3BP interface that turns a position into a Jacobian
 matrix suitable for eigen-structure classification.
 """
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import numpy as np
 
@@ -35,12 +35,16 @@ class _EigenDecompositionInterface(
         self,
         *,
         domain_obj: np.ndarray,
-        config: Optional[_EigenDecompositionConfig] = None,
+        config: _EigenDecompositionConfig,
     ) -> _EigenDecompositionProblem:
-        if config is None:
-            raise ValueError("config must be provided for eigen decomposition problem")
         matrix_arr = np.asarray(domain_obj, dtype=float)
-        return _EigenDecompositionProblem(A=matrix_arr, config=config)
+        return _EigenDecompositionProblem(
+            A=matrix_arr, 
+            problem_type=config.problem_type,
+            system_type=config.system_type,
+            delta=config.delta,
+            tol=config.tol
+        )
 
     def to_backend_inputs(self, problem: _EigenDecompositionProblem) -> _BackendCall:
         return _BackendCall(args=(problem,))
@@ -65,17 +69,21 @@ class _LibrationPointInterface(
         self,
         *,
         domain_obj: "LibrationPoint",
-        config: Optional[_EigenDecompositionConfig] = None,
+        config: _EigenDecompositionConfig,
     ) -> _EigenDecompositionProblem:
-        if config is None:
-            raise ValueError("config must be provided for eigen decomposition problem")
         jac = _jacobian_crtbp(
             domain_obj.position[0],
             domain_obj.position[1],
             domain_obj.position[2],
             domain_obj.mu,
         )
-        return _EigenDecompositionProblem(A=jac, config=config)
+        return _EigenDecompositionProblem(
+            A=jac, 
+            problem_type=config.problem_type,
+            system_type=config.system_type,
+            delta=config.delta,
+            tol=config.tol
+        )
 
     def to_backend_inputs(self, problem: _EigenDecompositionProblem) -> _BackendCall:
         return _BackendCall(args=(problem,))

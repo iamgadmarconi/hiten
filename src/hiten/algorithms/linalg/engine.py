@@ -21,8 +21,8 @@ class _LinearStabilityEngine(_HitenBaseEngine[_EigenDecompositionProblem, EigenD
 
     def _invoke_backend(self, call: _BackendCall) -> EigenDecompositionResults:
         problem = call.args[0]
-        self.backend.system_type = problem.config.system_type
-        problem_type = problem.config.problem_type
+        self.backend.system_type = problem.system_type
+        problem_type = problem.problem_type
 
         n = problem.A.shape[0]
         empty_vals = np.array([], dtype=np.complex128)
@@ -41,11 +41,11 @@ class _LinearStabilityEngine(_HitenBaseEngine[_EigenDecompositionProblem, EigenD
         )
 
         if problem_type in (_ProblemType.EIGENVALUE_DECOMPOSITION, _ProblemType.ALL):
-            sn, un, cn, Ws, Wu, Wc = self.backend.eigenvalue_decomposition(problem.A, problem.config.delta)
+            sn, un, cn, Ws, Wu, Wc = self.backend.eigenvalue_decomposition(problem.A, problem.delta)
             results = results.__class__(sn, un, cn, Ws, Wu, Wc, results.nu, results.eigvals, results.eigvecs)
 
         if problem_type in (_ProblemType.STABILITY_INDICES, _ProblemType.ALL):
-            nu, eigvals, eigvecs = self.backend.stability_indices(problem.A, problem.config.tol)
+            nu, eigvals, eigvecs = self.backend.stability_indices(problem.A, problem.tol)
             results = results.__class__(
                 results.stable,
                 results.unstable,

@@ -52,6 +52,7 @@ class _PeriodicOrbitContinuationInterface(
 
     def create_problem(self, *, domain_obj: "PeriodicOrbit", config: _OrbitContinuationConfig) -> _ContinuationProblem:
         parameter_getter = self._parameter_getter(config)
+        state_indices = self._get_state_indices(config)
         return _ContinuationProblem(
             initial_solution=domain_obj,
             parameter_getter=parameter_getter,
@@ -64,24 +65,25 @@ class _PeriodicOrbitContinuationInterface(
             shrink_policy=config.shrink_policy,
             step_min=float(config.step_min),
             step_max=float(config.step_max),
-            cfg=config,
+            stepper=config.stepper,
+            state_indices=state_indices,
         )
 
     def to_backend_inputs(self, problem: _ContinuationProblem) -> _BackendCall:
-        cfg = problem.cfg
-        assert cfg is not None
         domain_obj = problem.initial_solution
 
-        predictor = self._predictor(cfg)
+        stepper_type = problem.stepper
+        
+        predictor = self._predictor_from_problem(problem)
         domain_obj_repr = self._representation(domain_obj)
         
-        step_eff = np.asarray(cfg.step, dtype=float)
+        step_eff = np.asarray(problem.step, dtype=float)
         
         # Create tangent function for secant stepper
         _current_tangent = None
         _seeded = False
         
-        if str(cfg.stepper).lower() == "secant":
+        if str(stepper_type).lower() == "secant":
             # Calculate initial tangent
             try:
                 pred0 = predictor(domain_obj_repr, step_eff)
@@ -118,15 +120,15 @@ class _PeriodicOrbitContinuationInterface(
             nonlocal _current_tangent
             _current_tangent = new_tangent
         
-        stepper = self._make_stepper(cfg, predictor, tangent_fn)
+        stepper = self._make_stepper_from_problem(problem, predictor, tangent_fn)
 
         def corrector(prediction: np.ndarray) -> tuple[np.ndarray, float, bool]:
             orbit = self._instantiate(domain_obj, prediction)
-            x_corr, _ = orbit.correct(**(cfg.extra_params or {}))
+            x_corr, _ = orbit.correct(**(problem.corrector_kwargs or {}))
             residual = float(np.linalg.norm(np.asarray(x_corr, dtype=float) - prediction))
             
             # Update tangent for secant stepper after successful correction
-            if str(cfg.stepper).lower() == "secant" and tangent_fn is not None:
+            if str(stepper_type).lower() == "secant" and tangent_fn is not None:
                 # Get the last accepted solution from the backend if available
                 if hasattr(self, "_backend") and self._backend is not None and hasattr(self._backend, "_last_accepted"):
                     last_accepted = self._backend._last_accepted
@@ -159,12 +161,12 @@ class _PeriodicOrbitContinuationInterface(
                 "corrector": corrector,
                 "representation_of": problem.representation_of or (lambda v: np.asarray(v, dtype=float)),
                 "step": step_eff,
-                "target": np.asarray(cfg.target, dtype=float),
-                "max_members": int(cfg.max_members),
-                "max_retries_per_step": int(cfg.max_retries_per_step),
-                "shrink_policy": cfg.shrink_policy,
-                "step_min": float(cfg.step_min),
-                "step_max": float(cfg.step_max),
+                "target": np.asarray(problem.target, dtype=float),
+                "max_members": int(problem.max_members),
+                "max_retries_per_step": int(problem.max_retries_per_step),
+                "shrink_policy": problem.shrink_policy,
+                "step_min": float(problem.step_min),
+                "step_max": float(problem.step_max),
             }
         )
 
@@ -244,6 +246,38 @@ class _PeriodicOrbitContinuationInterface(
             return last
 
         return _predict
+
+    def _get_state_indices(self, config: _OrbitContinuationConfig) -> np.ndarray:
+        state = getattr(config, "state", None)
+        if state is None:
+            return None
+        if isinstance(state, SynodicState):
+            indices = [int(state.value)]
+        elif isinstance(state, Sequence):
+            indices = [int(s.value) if isinstance(s, SynodicState) else int(s) for s in state]
+        else:
+            indices = [int(state)]
+        return np.asarray(indices, dtype=int)
+
+    def _predictor_from_problem(self, problem: _ContinuationProblem) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
+        if problem.state_indices is None:
+            return lambda last, step: np.asarray(last, dtype=float) + np.asarray(step, dtype=float)
+        
+        idx_arr = problem.state_indices
+
+        def _predict(last: np.ndarray, step: np.ndarray) -> np.ndarray:
+            last = np.asarray(last, dtype=float).copy()
+            step = np.asarray(step, dtype=float)
+            for idx, d in zip(idx_arr, step):
+                last[idx] += d
+            return last
+
+        return _predict
+
+    def _make_stepper_from_problem(self, problem: _ContinuationProblem, predictor: Callable[[np.ndarray, np.ndarray], np.ndarray], tangent_fn: Callable[[], np.ndarray | None] | None = None):
+        if str(problem.stepper).lower() == "secant":
+            return make_secant_stepper(lambda v: np.asarray(v, dtype=float), tangent_fn)
+        return make_natural_stepper(predictor)
 
     def _make_stepper(self, cfg: _OrbitContinuationConfig, predictor: Callable[[np.ndarray, np.ndarray], np.ndarray], tangent_fn: Callable[[], np.ndarray | None] | None = None):
         if str(cfg.stepper).lower() == "secant":

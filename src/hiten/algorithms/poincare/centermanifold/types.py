@@ -29,7 +29,6 @@ class _CenterManifoldMapProblem:
     n_workers : int
         Number of parallel workers.
     """
-
     section_coord: str
     energy: float
     dt: float

@@ -6,7 +6,6 @@ from hiten.algorithms.types.core import (ConfigT, OutputsT, ProblemT,
 
 
 class _SectionInterface(ABC):
-
     pass
 
 class _PoincareBaseInterface(

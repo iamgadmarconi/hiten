@@ -52,9 +52,23 @@ class _PeriodicOrbitCorrectorInterface(
             residual_fn=residual_fn,
             jacobian_fn=jacobian_fn,
             norm_fn=norm_fn,
+            max_attempts=config.max_attempts,
+            tol=config.tol,
+            max_delta=config.max_delta,
+            line_search_config=config.line_search_config,
+            finite_difference=config.finite_difference,
+            fd_step=config.fd_step,
+            method=config.method,
+            order=config.order,
+            steps=config.steps,
+            forward=config.forward,
             stepper_factory=stepper_factory,
             domain_obj=domain_obj,
-            cfg=config,
+            residual_indices=config.residual_indices,
+            control_indices=config.control_indices,
+            extra_jacobian=config.extra_jacobian,
+            target=config.target,
+            event_func=config.event_func,
         )
         return problem
 
@@ -66,19 +80,19 @@ class _PeriodicOrbitCorrectorInterface(
                 "jacobian_fn": problem.jacobian_fn,
                 "norm_fn": problem.norm_fn,
                 "stepper_factory": problem.stepper_factory,
-                "tol": problem.cfg.tol,
-                "max_attempts": problem.cfg.max_attempts,
-                "max_delta": problem.cfg.max_delta,
-                "fd_step": problem.cfg.fd_step,
+                "tol": problem.tol,
+                "max_attempts": problem.max_attempts,
+                "max_delta": problem.max_delta,
+                "fd_step": problem.fd_step,
             },
         )
 
     def to_domain(self, outputs: tuple[np.ndarray, int, float], *, problem: _OrbitCorrectionProblem) -> dict[str, Any]:
         x_corr, iterations, residual_norm = outputs
-        control_indices = list(problem.cfg.control_indices)
+        control_indices = list(problem.control_indices)
         base_state = problem.domain_obj.initial_state.copy()
         x_full = self._to_full_state(base_state, control_indices, x_corr)
-        half_period = self._half_period(problem.domain_obj, x_full, problem.cfg)
+        half_period = self._half_period(problem.domain_obj, x_full, problem)
         
         problem.domain_obj.dynamics.reset()
         problem.domain_obj.dynamics._initial_state = x_full
@@ -93,10 +107,10 @@ class _PeriodicOrbitCorrectorInterface(
 
     def to_results(self, outputs: tuple[np.ndarray, int, float], *, problem: _OrbitCorrectionProblem, domain_payload: dict[str, Any] = None) -> OrbitCorrectionResult:
         x_corr, iterations, residual_norm = outputs
-        control_indices = list(problem.cfg.control_indices)
+        control_indices = list(problem.control_indices)
         base_state = problem.domain_obj.initial_state.copy()
         x_full = self._to_full_state(base_state, control_indices, x_corr)
-        half_period = self._half_period(problem.domain_obj, x_full, problem.cfg)
+        half_period = self._half_period(problem.domain_obj, x_full, problem)
         
         return OrbitCorrectionResult(
             converged=True,
@@ -136,7 +150,31 @@ class _PeriodicOrbitCorrectorInterface(
 
         def _fn(params: np.ndarray) -> np.ndarray:
             x_full = self._to_full_state(base_state, control_indices, params)
-            t_event, x_event = self._evaluate_event(domain_obj, x_full, cfg, forward)
+            # Create a temporary problem object for _evaluate_event
+            temp_problem = _OrbitCorrectionProblem(
+                initial_guess=np.array([]),
+                residual_fn=lambda x: x,
+                jacobian_fn=None,
+                norm_fn=None,
+                max_attempts=0,
+                tol=0.0,
+                max_delta=0.0,
+                line_search_config=None,
+                finite_difference=False,
+                fd_step=0.0,
+                method=cfg.method,
+                order=cfg.order,
+                steps=cfg.steps,
+                forward=forward,
+                stepper_factory=None,
+                domain_obj=domain_obj,
+                residual_indices=cfg.residual_indices,
+                control_indices=cfg.control_indices,
+                extra_jacobian=cfg.extra_jacobian,
+                target=cfg.target,
+                event_func=cfg.event_func,
+            )
+            t_event, x_event = self._evaluate_event(domain_obj, x_full, temp_problem, forward)
             _, _, Phi_flat, _ = _compute_stm(
                 domain_obj.dynamics.var_dynsys,
                 x_full,
@@ -152,10 +190,10 @@ class _PeriodicOrbitCorrectorInterface(
 
         return _fn
 
-    def _half_period(self, domain_obj: "PeriodicOrbit", corrected_state: np.ndarray, cfg: _OrbitCorrectionConfig) -> float:
-        forward = getattr(cfg, "forward", 1)
+    def _half_period(self, domain_obj: "PeriodicOrbit", corrected_state: np.ndarray, problem: _OrbitCorrectionProblem) -> float:
+        forward = problem.forward
         try:
-            t_final, _ = cfg.event_func(
+            t_final, _ = problem.event_func(
                 dynsys=domain_obj.dynamics.dynsys,
                 x0=corrected_state,
                 forward=forward,
@@ -163,7 +201,7 @@ class _PeriodicOrbitCorrectorInterface(
             return float(t_final)
         except Exception:
             try:
-                fallback, _ = self._evaluate_event(domain_obj, corrected_state, cfg, forward)
+                fallback, _ = self._evaluate_event(domain_obj, corrected_state, problem, forward)
                 return float(fallback)
             except Exception as exc:
                 raise ValueError("Failed to evaluate domain_obj event for corrected state") from exc
@@ -177,10 +215,10 @@ class _PeriodicOrbitCorrectorInterface(
         self,
         domain_obj: "PeriodicOrbit",
         full_state: np.ndarray,
-        cfg: _OrbitCorrectionConfig,
+        problem: _OrbitCorrectionProblem,
         forward: int,
     ) -> tuple[float, np.ndarray]:
-        return cfg.event_func(
+        return problem.event_func(
             dynsys=domain_obj.dynamics.dynsys,
             x0=full_state,
             forward=forward,

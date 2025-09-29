@@ -5,12 +5,11 @@ This module provides the types for the corrector module.
 """
 
 from dataclasses import dataclass
-from typing import Any, Callable, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import numpy as np
 
-from hiten.algorithms.corrector.config import (_BaseCorrectionConfig,
-                                               _OrbitCorrectionConfig)
+from hiten.algorithms.corrector.config import _LineSearchConfig
 
 if TYPE_CHECKING:
     from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
@@ -149,8 +148,26 @@ class _CorrectionProblem:
         Optional analytical Jacobian.
     norm_fn : :class:`~hiten.algorithms.corrector.types.NormFn` | None
         Optional norm function for convergence checks.
-    cfg : :class:`~hiten.algorithms.corrector.config._BaseCorrectionConfig`
-        Configuration object holding numeric tolerances and solver options.
+    max_attempts : int
+        Maximum number of Newton iterations to attempt.
+    tol : float
+        Convergence tolerance for the residual norm.
+    max_delta : float
+        Maximum allowed infinity norm of Newton steps.
+    line_search_config : _LineSearchConfig | bool | None
+        Configuration for line search behavior.
+    finite_difference : bool
+        Force finite-difference approximation of Jacobians.
+    fd_step : float
+        Finite-difference step size.
+    method : str
+        Integration method for trajectory computation.
+    order : int
+        Integration order for numerical methods.
+    steps : int
+        Number of integration steps.
+    forward : int
+        Integration direction (1 for forward, -1 for backward).
     stepper_factory : callable or None
         Optional factory producing a stepper compatible with the backend.
     """
@@ -158,7 +175,16 @@ class _CorrectionProblem:
     residual_fn: ResidualFn
     jacobian_fn: Optional[JacobianFn]
     norm_fn: Optional[NormFn]
-    cfg: _BaseCorrectionConfig
+    max_attempts: int
+    tol: float
+    max_delta: float
+    line_search_config: _LineSearchConfig | bool | None
+    finite_difference: bool
+    fd_step: float
+    method: str
+    order: int
+    steps: int
+    forward: int
     stepper_factory: Optional[StepperFactory]
 
 
@@ -170,8 +196,20 @@ class _OrbitCorrectionProblem(_CorrectionProblem):
     ----------
     domain_obj: Any
         Orbit to be corrected.
-    cfg: _OrbitCorrectionConfig
-        Configuration for the correction.
+    residual_indices : tuple of int
+        State components used to build the residual vector.
+    control_indices : tuple of int
+        State components allowed to change during correction.
+    extra_jacobian : callable or None
+        Additional Jacobian contribution function.
+    target : tuple of float
+        Target values for the residual components.
+    event_func : callable
+        Function to detect Poincare section crossings.
     """
     domain_obj: Any
-    cfg: _OrbitCorrectionConfig
+    residual_indices: tuple[int, ...]
+    control_indices: tuple[int, ...]
+    extra_jacobian: Callable[[np.ndarray, np.ndarray], np.ndarray] | None
+    target: tuple[float, ...]
+    event_func: Callable[..., tuple[float, np.ndarray]]

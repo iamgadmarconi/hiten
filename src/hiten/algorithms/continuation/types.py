@@ -3,12 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Optional, Tuple
+from typing import Callable, Optional, Tuple
 
 import numpy as np
-
-if TYPE_CHECKING:
-    from hiten.algorithms.continuation.config import _ContinuationConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,6 +43,14 @@ class _ContinuationProblem:
         Maximum number of retries per failed continuation step.
     corrector_kwargs : dict
         Additional keyword arguments passed to the corrector method.
+    representation_of : callable or None
+        Function to convert solution objects to vector representations.
+    shrink_policy : callable or None
+        Policy for shrinking step sizes when continuation fails.
+    step_min : float
+        Minimum allowed step size.
+    step_max : float
+        Maximum allowed step size.
     """
 
     initial_solution: object
@@ -59,4 +64,5 @@ class _ContinuationProblem:
     shrink_policy: Optional[Callable[[np.ndarray], np.ndarray]] = None
     step_min: float = 1e-10
     step_max: float = 1.0
-    cfg: Optional["_ContinuationConfig"] = None
+    stepper: str = "natural"
+    state_indices: Optional[np.ndarray] = None

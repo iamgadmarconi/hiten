@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Optional, Sequence
 
@@ -15,6 +14,9 @@ from hiten.algorithms.poincare.centermanifold.config import \
     _CenterManifoldMapConfig
 from hiten.algorithms.poincare.centermanifold.types import \
     CenterManifoldMapResults
+from hiten.algorithms.poincare.synodic.base import _SynodicMapFacade
+from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
+from hiten.algorithms.poincare.synodic.types import SynodicMapResults
 from hiten.algorithms.poincare.core.types import _Section
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
@@ -25,7 +27,6 @@ from hiten.utils.io.map import load_poincare_map, save_poincare_map
 
 if TYPE_CHECKING:
     from hiten.algorithms.poincare.core.types import _Section
-    from hiten.system.orbits.base import PeriodicOrbit
 
 
 
@@ -47,6 +48,30 @@ class _MapDynamicsServiceBase(_DynamicsServiceBase):
         self._sections: dict[str, "_Section"] = {}
         self._section: Optional["_Section"] = None
         self._section_coord = None
+        self._generator = None
+
+    @property
+    def generator(self) -> str:
+        """The key for the section."""
+        if self._generator is None:
+            self._generator = self._build_generator()
+        return self._generator.section_key
+
+    @abstractmethod
+    @property
+    def map_config(self) -> str:
+        """The map configuration."""
+        raise NotImplementedError
+
+    @map_config.setter
+    def map_config(self, value):
+        self.generator._set_config(value)
+        self._generator = self._build_generator()
+
+    @abstractmethod
+    def _build_generator(self) -> str:
+        """Build the generator."""
+        raise NotImplementedError
 
     @property
     def section_coord(self) -> str:
@@ -234,12 +259,6 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
         self._section_coord = None
 
     @property
-    def generator(self) -> _CenterManifoldMapFacade:
-        if self._generator is None:
-            self._generator = _CenterManifoldMapFacade.with_default_engine(config=self.map_config)
-        return self._generator
-
-    @property
     def domain_obj(self) -> "CenterManifold":
         return super().domain_obj
 
@@ -356,6 +375,9 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
         orbit.propagate(steps=steps, method=method, order=order)
         return orbit
 
+    def _build_generator(self) -> _CenterManifoldMapFacade:
+        return _CenterManifoldMapFacade.with_default_engine(config=self.map_config)
+
     @property
     def map_config(self) -> _CenterManifoldMapConfig:
         return _CenterManifoldMapConfig(
@@ -372,10 +394,6 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
             section_coord="q3"
         )
 
-    @map_config.setter
-    def map_config(self, value: _CenterManifoldMapConfig):
-        self.generator._set_config(value)
-
 
 class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
     """Dynamics service for synodic maps with detection-based computation."""
@@ -384,89 +402,28 @@ class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
         super().__init__(domain_obj)
         self._engine = None
 
-    def _get_or_compute_section(self, key: str) -> "_Section":
-        """Return the cached section for synodic maps."""
-        if key not in self._sections:
-            raise KeyError(
-                f"Section '{key}' has not been computed. "
-                f"Available: {list(self._sections.keys())}"
-            )
-        return self._sections[key]
+    def compute(self) -> SynodicMapResults:
+        pass
 
-    def from_trajectories(
-        self,
-        trajectories: "Sequence[tuple[np.ndarray, np.ndarray]]",
-        *,
-        direction: Literal[1, -1, None] = None,
-        recompute: bool = False,
-    ) -> "_Section":
-        """Compute synodic Poincare section from custom trajectories."""
-        if self._engine is None:
-            self._engine = self._build_engine()
+    def _build_generator(self) -> _SynodicMapFacade:
+        return _SynodicMapFacade.with_default_engine(config=self.map_config)
 
-        interface = self._engine._interface
-        problem = interface.create_problem(
-            config=self.domain_obj.config,
-            plane_coords=self.domain_obj._section_iface.plane_coords,
-            normal=self.domain_obj._section_iface.normal,
-            offset=self.domain_obj._section_iface.offset,
-            direction=direction,
-            trajectories=trajectories,
-        )
-        sec = self._engine.solve(problem)
-
-        key = self._section_key()
-        self._sections[key] = sec
-        self._section = sec
-        return sec
-
-    def from_orbit(self, orbit: "PeriodicOrbit", *, direction: Literal[1, -1, None] = None, recompute: bool = False) -> "_Section":
-        """Compute synodic Poincare section from a periodic orbit."""
-        if orbit.trajectory is None:
-            raise ValueError("Orbit must be propagated before extracting trajectories")
-        traj = [(orbit.trajectory.times, orbit.trajectory.states)]
-        return self.from_trajectories(traj, direction=direction, recompute=recompute)
-
-    def from_manifold(self, manifold, *, direction: Literal[1, -1, None] = None, recompute: bool = False) -> "_Section":
-        """Compute synodic Poincare section from a manifold structure."""
-        if manifold.trajectories is None:
-            raise ValueError("Manifold must be computed before extracting trajectories")
-        
-        trajs = []
-        for traj in manifold.trajectories:
-            if traj is not None:
-                trajs.append((traj.times, traj.states))
-
-        if not trajs:
-            raise ValueError("Manifold result contains no valid trajectories")
-        return self.from_trajectories(trajs, direction=direction, recompute=recompute)
-
-    def _section_key(self) -> str:
-        """Generate a stable cache key for the section."""
-        n = self.domain_obj._section_iface.normal
-        n_key = ",".join(f"{float(v):.12g}" for v in n.tolist())
-        c = float(self.domain_obj._section_iface.offset)
-        i, j = self.domain_obj._section_iface.plane_coords
-        return f"synodic[{i},{j}]_c={c:.12g}_n=({n_key})"
-
-    def _build_engine(self):
-        """Build the detection engine for synodic Poincare sections."""
-        from hiten.algorithms.poincare.synodic.backend import \
-            _SynodicDetectionBackend
-        from hiten.algorithms.poincare.synodic.engine import _SynodicEngine
-        from hiten.algorithms.poincare.synodic.interfaces import (
-            _SynodicEngineConfig, _SynodicInterface)
-        from hiten.algorithms.poincare.synodic.strategies import _NoOpStrategy
-
-        adapter = _SynodicEngineConfig.from_config(self.domain_obj.config, self.domain_obj._section_iface)
-        backend = _SynodicDetectionBackend()
-        strategy = _NoOpStrategy(adapter.section_interface, adapter)
-        interface = _SynodicInterface()
-        return _SynodicEngine(
-            backend=backend,
-            seed_strategy=strategy,
-            map_config=adapter,
-            interface=interface,
+    @property
+    def map_config(self) -> _SynodicMapConfig:
+        return _SynodicMapConfig(
+            section_axis= "x",
+            section_offset= 0.0,
+            section_normal= None,
+            plane_coords= ("y", "vy"),
+            direction= None,
+            n_workers= 8,
+            interp_kind= "cubic",
+            segment_refine= 50,
+            tol_on_surface= 1e-6,
+            dedup_time_tol= 1e-9,
+            dedup_point_tol= 1e-6,
+            max_hits_per_traj= None,
+            newton_max_iter= 10
         )
 
 

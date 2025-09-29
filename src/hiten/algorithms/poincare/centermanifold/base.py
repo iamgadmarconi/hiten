@@ -12,17 +12,14 @@ strategies and visualization capabilities.
 
 from __future__ import annotations
 
-from dataclasses import replace
-from typing import TYPE_CHECKING, Literal, Optional, Sequence, Generic
-
-import numpy as np
+from typing import Generic, Literal, Optional
 
 from hiten.algorithms.poincare.centermanifold.config import \
     _CenterManifoldMapConfig
 from hiten.algorithms.poincare.centermanifold.engine import \
     _CenterManifoldEngine
-from hiten.algorithms.poincare.centermanifold.interfaces import (
-    _CenterManifoldInterface, _get_plane_coords)
+from hiten.algorithms.poincare.centermanifold.interfaces import \
+    _CenterManifoldInterface
 from hiten.algorithms.poincare.centermanifold.seeding import \
     _CenterManifoldSeedingBase
 from hiten.algorithms.poincare.centermanifold.strategies import _make_strategy
@@ -30,14 +27,6 @@ from hiten.algorithms.poincare.centermanifold.types import \
     CenterManifoldMapResults
 from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
                                          _HitenBaseFacade)
-from hiten.system.orbits.base import GenericOrbit
-from hiten.utils.io.map import (load_poincare_map, load_poincare_map_inplace,
-                                save_poincare_map)
-from hiten.utils.log_config import logger
-from hiten.utils.plots import plot_poincare_map, plot_poincare_map_interactive
-
-if TYPE_CHECKING:
-    from hiten.system.center import CenterManifold
 
 
 class _CenterManifoldMapFacade(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):

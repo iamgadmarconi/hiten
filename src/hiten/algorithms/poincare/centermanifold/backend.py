@@ -18,15 +18,11 @@ from numba import njit, prange
 
 from hiten.algorithms.dynamics.hamiltonian import (_eval_dH_dP, _eval_dH_dQ,
                                                    _hamiltonian_rhs)
-from hiten.algorithms.dynamics.protocols import _HamiltonianSystemProtocol
 from hiten.algorithms.integrators.rk import (RK4_A, RK4_B, RK4_C, RK6_A, RK6_B,
                                              RK6_C, RK8_A, RK8_B, RK8_C)
 from hiten.algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
                                                      _integrate_symplectic)
-from hiten.algorithms.poincare.centermanifold.interfaces import \
-    _get_section_interface
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
-from hiten.algorithms.poincare.core.events import _SurfaceEvent
 from hiten.algorithms.poincare.utils import _hermite_scalar
 from hiten.algorithms.utils.config import FASTMATH
 

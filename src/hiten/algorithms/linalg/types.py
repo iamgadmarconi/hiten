@@ -9,8 +9,6 @@ from enum import Enum
 
 import numpy as np
 
-from .config import _EigenDecompositionConfig
-
 
 class _ProblemType(Enum):
     """Problem type for eigenvalue decomposition.
@@ -108,14 +106,22 @@ class _EigenDecompositionProblem:
     ----------
     A : np.ndarray
         Matrix to decompose.
-    config : :class:`~hiten.algorithms.linalg.config._EigenDecompositionConfig`
-        Configuration for the eigenvalue decomposition.
     problem_type : :class:`~hiten.algorithms.linalg.types._ProblemType`
         Problem type for the eigenvalue decomposition.
+    system_type : :class:`~hiten.algorithms.linalg.types._SystemType`
+        Classification mode: 0 for continuous-time (sign of real parts),
+        1 for discrete-time (modulus relative to unity).
+    delta : float
+        Tolerance used in eigenvalue classification.
+    tol : float
+        Tolerance used in stability index calculation.
     """
 
     A: np.ndarray
-    config: _EigenDecompositionConfig
+    problem_type: "_ProblemType"
+    system_type: "_SystemType"
+    delta: float
+    tol: float
 
 
 @dataclass(frozen=True)

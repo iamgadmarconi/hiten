@@ -78,19 +78,17 @@ class _SynodicEngine(_ReturnMapEngine):
         if not trajectories:
             raise EngineError("No trajectories provided to synodic engine")
 
-        n_workers = self._n_workers
-
-        # Extract parameters from config objects
-        normal = problem.section_cfg.normal
-        offset = problem.section_cfg.offset
-        plane_coords = problem.section_cfg.plane_coords
-        interp_kind = problem.map_cfg.interp_kind
-        segment_refine = problem.map_cfg.segment_refine
-        tol_on_surface = problem.map_cfg.tol_on_surface
-        dedup_time_tol = problem.map_cfg.dedup_time_tol
-        dedup_point_tol = problem.map_cfg.dedup_point_tol
-        max_hits_per_traj = problem.map_cfg.max_hits_per_traj
-        newton_max_iter = problem.map_cfg.newton_max_iter
+        n_workers = problem.n_workers
+        normal = problem.normal
+        offset = problem.offset
+        plane_coords = problem.plane_coords
+        interp_kind = problem.interp_kind
+        segment_refine = problem.segment_refine
+        tol_on_surface = problem.tol_on_surface
+        dedup_time_tol = problem.dedup_time_tol
+        dedup_point_tol = problem.dedup_point_tol
+        max_hits_per_traj = problem.max_hits_per_traj
+        newton_max_iter = problem.newton_max_iter
 
         # Delegate detection to backend passed in at construction
         if n_workers <= 1 or len(trajectories) <= 1:

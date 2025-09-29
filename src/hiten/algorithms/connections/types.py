@@ -22,14 +22,11 @@ See Also
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterator, Literal, Sequence, Tuple
+from typing import Iterator, Literal, Sequence, Tuple
 
 import numpy as np
 
 from hiten.system.manifold import Manifold
-
-if TYPE_CHECKING:
-    from hiten.algorithms.connections.config import _ConnectionConfig
 
 
 @dataclass
@@ -283,8 +280,22 @@ class _ConnectionProblem:
         Source manifold (typically unstable manifold).
     target : :class:`~hiten.system.manifold.Manifold`
         Target manifold (typically stable manifold).
-    config : :class:`~hiten.algorithms.connections.config._ConnectionConfig`
-        Unified configuration containing section, direction, and search parameters.
+    section_axis : str
+        Axis for the synodic section (e.g., "x", "y", "z").
+    section_offset : float
+        Offset value for the synodic section.
+    plane_coords : tuple of str
+        Coordinate labels for the section plane projection.
+    direction : int or None
+        Direction for section crossings (1, -1, or None for both).
+    n_workers : int or None
+        Number of parallel workers for computation.
+    delta_v_tol : float
+        Maximum Delta-V tolerance for accepting a connection.
+    ballistic_tol : float
+        Threshold for classifying connections as ballistic vs impulsive.
+    eps2d : float
+        Radius for initial 2D pairing of points on the synodic section.
 
     Notes
     -----
@@ -298,22 +309,17 @@ class _ConnectionProblem:
 
     Examples
     --------
-    >>> from hiten.algorithms.connections.config import _ConnectionConfig
-    >>> from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
-    >>> 
-    >>> section_cfg = _SynodicMapConfig(section_axis="x", section_offset=0.8)
-    >>> config = _ConnectionConfig(
-    ...     section=section_cfg,
-    ...     direction=1,
-    ...     delta_v_tol=1e-3,
-    ...     ballistic_tol=1e-8,
-    ...     eps2d=1e-4
-    ... )
-    >>> 
     >>> problem = _ConnectionProblem(
     ...     source=unstable_manifold,
     ...     target=stable_manifold,
-    ...     config=config
+    ...     section_axis="x",
+    ...     section_offset=0.8,
+    ...     plane_coords=("y", "z"),
+    ...     direction=1,
+    ...     n_workers=1,
+    ...     delta_v_tol=1e-3,
+    ...     ballistic_tol=1e-8,
+    ...     eps2d=1e-4
     ... )
 
     See Also
@@ -325,4 +331,11 @@ class _ConnectionProblem:
     """
     source: Manifold
     target: Manifold
-    config: "_ConnectionConfig"
+    section_axis: str
+    section_offset: float
+    plane_coords: tuple[str, str]
+    direction: int | None
+    n_workers: int | None
+    delta_v_tol: float
+    ballistic_tol: float
+    eps2d: float

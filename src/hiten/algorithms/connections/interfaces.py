@@ -28,8 +28,7 @@ import numpy as np
 from hiten.algorithms.connections.config import _ConnectionConfig
 from hiten.algorithms.connections.types import (ConnectionResults,
                                                 _ConnectionProblem)
-from hiten.algorithms.poincare.core.base import _Section
-from hiten.algorithms.poincare.synodic.base import SynodicMap
+from hiten.algorithms.poincare.core.types import _Section
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
 from hiten.algorithms.types.core import _HitenBaseInterface
 from hiten.algorithms.types.exceptions import EngineError
@@ -109,19 +108,34 @@ class _ManifoldInterface(
         return _ConnectionProblem(
             source=source,
             target=target,
-            config=config,
+            section_axis=config.section.section_axis,
+            section_offset=config.section.section_offset,
+            plane_coords=config.section.plane_coords,
+            direction=config.direction,
+            n_workers=config.n_workers,
+            delta_v_tol=config.delta_v_tol,
+            ballistic_tol=config.ballistic_tol,
+            eps2d=config.eps2d,
         )
 
     def to_backend_inputs(self, problem: _ConnectionProblem) -> tuple:
         """Convert problem to backend inputs."""
-        # Extract section data from both manifolds
-        pu, Xu, traj_indices_u = self.to_numeric(problem.source, problem.config.section, direction=problem.config.direction)
-        ps, Xs, traj_indices_s = self.to_numeric(problem.target, problem.config.section, direction=problem.config.direction)
+        # Create section config from problem parameters
+        from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
+        section_config = _SynodicMapConfig(
+            section_axis=problem.section_axis,
+            section_offset=problem.section_offset,
+            plane_coords=problem.plane_coords
+        )
         
-        # Extract search parameters from the config
-        eps = float(problem.config.eps2d)
-        dv_tol = float(problem.config.delta_v_tol)
-        bal_tol = float(problem.config.ballistic_tol)
+        # Extract section data from both manifolds
+        pu, Xu, traj_indices_u = self.to_numeric(problem.source, section_config, direction=problem.direction)
+        ps, Xs, traj_indices_s = self.to_numeric(problem.target, section_config, direction=problem.direction)
+        
+        # Extract search parameters from the problem
+        eps = float(problem.eps2d)
+        dv_tol = float(problem.delta_v_tol)
+        bal_tol = float(problem.ballistic_tol)
         
         from hiten.algorithms.types.core import _BackendCall
         return _BackendCall(

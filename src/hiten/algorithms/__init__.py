@@ -11,8 +11,6 @@ from .poincare.centermanifold.config import \
     _CenterManifoldMapConfig as CenterManifoldMapConfig
 from .poincare.synodic.base import SynodicMap
 from .poincare.synodic.config import _SynodicMapConfig as SynodicMapConfig
-from .poincare.synodic.config import \
-    _SynodicSectionConfig as SynodicSectionConfig
 
 __all__ = [
     "StateParameter",
@@ -20,7 +18,6 @@ __all__ = [
     "CenterManifoldMapConfig",
     "SynodicMap",
     "SynodicMapConfig",
-    "SynodicSectionConfig",
     "LineSearchConfig",
     "OrbitCorrectionConfig",
     "OrbitContinuationConfig",

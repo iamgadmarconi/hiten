@@ -766,3 +766,7 @@ class Trajectory:
     def reversed(self) -> "Trajectory":
         """Return a new trajectory with reversed time order."""
         return Trajectory(self._times[::-1].copy(), self._states[::-1].copy())
+
+    def to_arrays(self) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+        """Return the underlying arrays as a tuple (times, states)."""
+        return self._times, self._states
