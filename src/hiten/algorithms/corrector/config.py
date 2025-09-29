@@ -7,12 +7,14 @@ the correction algorithms.
 """
 
 from dataclasses import dataclass
-from typing import Callable, Literal, NamedTuple, Optional
+from typing import TYPE_CHECKING, Callable, Literal, NamedTuple, Optional
 
 import numpy as np
 
-from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
 from hiten.algorithms.poincare.singlehit.backend import _y_plane_crossing
+
+if TYPE_CHECKING:
+    from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
 
 
 class _LineSearchConfig(NamedTuple):
@@ -35,9 +37,9 @@ class _LineSearchConfig(NamedTuple):
     armijo_c : float, default=0.1
         Armijo parameter for sufficient decrease condition.
     """
-    norm_fn: Optional[NormFn] = None
-    residual_fn: Optional[ResidualFn] = None
-    jacobian_fn: Optional[JacobianFn] = None
+    norm_fn: Optional["NormFn"] = None
+    residual_fn: Optional["ResidualFn"] = None
+    jacobian_fn: Optional["JacobianFn"] = None
     max_delta: float = 1e-2
     alpha_reduction: float = 0.5
     min_alpha: float = 1e-4

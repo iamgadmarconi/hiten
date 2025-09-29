@@ -12,12 +12,34 @@ from hiten.algorithms.utils.config import FASTMATH
 
 @njit(fastmath=FASTMATH, cache=False)
 def _fpoly_add(p: np.ndarray, q: np.ndarray, out: np.ndarray) -> None:
+    """Add two Fourier polynomial coefficient arrays element-wise.
+    
+    Parameters
+    ----------
+    p : np.ndarray
+        First Fourier polynomial coefficient array.
+    q : np.ndarray
+        Second Fourier polynomial coefficient array.
+    out : np.ndarray
+        Output Fourier polynomial coefficient array.
+    """
     for i in range(p.shape[0]):
         out[i] = p[i] + q[i]
 
 
 @njit(fastmath=FASTMATH, cache=False)
 def _fpoly_scale(p: np.ndarray, alpha, out: np.ndarray) -> None:
+    """Scale a Fourier polynomial coefficient array by a constant factor.
+    
+    Parameters
+    ----------
+    p : np.ndarray
+        Fourier polynomial coefficient array.
+    alpha : float
+        Scaling factor.
+    out : np.ndarray
+        Output Fourier polynomial coefficient array.
+    """
     for i in range(p.shape[0]):
         out[i] = alpha * p[i]
 
@@ -32,6 +54,30 @@ def _fpoly_mul(
     clmoF,
     encodeF,
 ) -> np.ndarray:
+    """Multiply two Fourier polynomial coefficient arrays.
+    
+    Parameters
+    ----------
+    p : np.ndarray
+        First Fourier polynomial coefficient array.
+    deg_p : int
+        Degree of the first polynomial.
+    q : np.ndarray
+        Second Fourier polynomial coefficient array.
+    deg_q : int
+        Degree of the second polynomial.
+    psiF : np.ndarray
+        Combinatorial table from _init_index_tables.
+    clmoF : numba.typed.List
+        List of arrays containing packed multi-indices.
+    encodeF : numba.typed.List
+        List of dictionaries mapping packed multi-indices to their positions.
+        
+    Returns
+    -------
+    np.ndarray
+        Output Fourier polynomial coefficient array.
+    """
     deg_r = deg_p + deg_q
     out_len = psiF[deg_r]
     out = np.zeros(out_len, dtype=np.complex128)
@@ -72,6 +118,23 @@ def _fpoly_diff_action(
     clmoF,
     encodeF,
 ) -> np.ndarray:
+    """Differentiate a Fourier polynomial coefficient array with respect to an action.
+    
+    Parameters
+    ----------
+    p : np.ndarray
+        Fourier polynomial coefficient array.
+    deg_p : int
+        Degree of the polynomial.
+    action_idx : int
+        Index of the action to differentiate with respect to.
+    psiF : np.ndarray
+        Combinatorial table from _init_index_tables.
+    clmoF : numba.typed.List
+        List of arrays containing packed multi-indices.
+    encodeF : numba.typed.List
+        List of dictionaries mapping packed multi-indices to their positions.
+    """
     if deg_p == 0:
         return np.zeros_like(p)
 
@@ -103,6 +166,19 @@ def _fpoly_diff_angle(
     angle_idx: int,
     clmoF,
 ) -> np.ndarray:
+    """Differentiate a Fourier polynomial coefficient array with respect to an angle.
+    
+    Parameters
+    ----------
+    p : np.ndarray
+        Fourier polynomial coefficient array.
+    deg_p : int
+        Degree of the polynomial.
+    angle_idx : int
+        Index of the angle to differentiate with respect to.
+    clmoF : numba.typed.List
+        List of arrays containing packed multi-indices.
+    """
     out = np.zeros_like(p)
 
     for i in range(p.shape[0]):
@@ -132,6 +208,25 @@ def _fpoly_poisson(
     clmoF,
     encodeF,
 ) -> np.ndarray:
+    """Compute the Poisson bracket of two Fourier polynomial coefficient arrays.
+    
+    Parameters
+    ----------
+    p : np.ndarray
+        First Fourier polynomial coefficient array.
+    deg_p : int
+        Degree of the first polynomial.
+    q : np.ndarray
+        Second Fourier polynomial coefficient array.
+    deg_q : int
+        Degree of the second polynomial.
+    psiF : np.ndarray
+        Combinatorial table from _init_index_tables.
+    clmoF : numba.typed.List
+        List of arrays containing packed multi-indices.
+    encodeF : numba.typed.List
+        List of dictionaries mapping packed multi-indices to their positions.
+    """
     if deg_p == 0 and deg_q == 0:
         return np.zeros(psiF[0], dtype=np.complex128)
 
@@ -175,6 +270,21 @@ def _fpoly_block_evaluate(
     theta_vals: np.ndarray,
     clmoF,
 ):
+    """Evaluate a Fourier polynomial coefficient block at a specific point.
+    
+    Parameters
+    ----------
+    coeffs_block : np.ndarray
+        Fourier polynomial coefficient block.
+    degree : int
+        Degree of the polynomial.
+    I_vals : np.ndarray
+        Values of the actions.
+    theta_vals : np.ndarray
+        Values of the angles.
+    clmoF : numba.typed.List
+        List of arrays containing packed multi-indices.
+    """
     if coeffs_block.shape[0] == 0:
         return 0.0 + 0.0j
 
@@ -217,6 +327,21 @@ def _fpoly_block_gradient(
     theta_vals: np.ndarray,
     clmoF,
 ):
+    """Compute the gradient of a Fourier polynomial coefficient block.
+    
+    Parameters
+    ----------
+    coeffs_block : np.ndarray
+        Fourier polynomial coefficient block.
+    degree : int
+        Degree of the polynomial.
+    I_vals : np.ndarray
+        Values of the actions.
+    theta_vals : np.ndarray
+        Values of the angles.
+    clmoF : numba.typed.List
+        List of arrays containing packed multi-indices.
+    """
     if coeffs_block.shape[0] == 0:
         return 0.0 + 0.0j, np.zeros(3, dtype=np.complex128), np.zeros(3, dtype=np.complex128)
 
@@ -273,6 +398,21 @@ def _fpoly_block_hessian(
     theta_vals: np.ndarray,
     clmoF,
 ):
+    """Compute the Hessian matrix of a Fourier polynomial coefficient block.
+    
+    Parameters
+    ----------
+    coeffs_block : np.ndarray
+        Fourier polynomial coefficient block.
+    degree : int
+        Degree of the polynomial.
+    I_vals : np.ndarray
+        Values of the actions.
+    theta_vals : np.ndarray
+        Values of the angles.
+    clmoF : numba.typed.List
+        List of arrays containing packed multi-indices.
+    """
     H = np.zeros((6, 6), dtype=np.complex128)
 
     if coeffs_block.shape[0] == 0:

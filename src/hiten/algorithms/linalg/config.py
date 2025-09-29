@@ -13,6 +13,8 @@ class _EigenDecompositionConfig:
     
     Parameters
     ----------
+    problem_type : :class:`~hiten.algorithms.linalg.types._ProblemType`
+        Problem type for the eigenvalue decomposition.
     system_type : :class:`~hiten.algorithms.linalg.types._SystemType`
         Classification mode: 0 for continuous-time (sign of real parts),
         1 for discrete-time (modulus relative to unity).

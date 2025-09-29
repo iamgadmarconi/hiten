@@ -105,6 +105,7 @@ class _CacheServiceBase(Generic[CacheValueT]):
         """Create a cache key with the current function name as the first element.
 
         This helps avoid cache key collisions between different methods.
+        Automatically handles unhashable types by converting them to hashable equivalents.
         
         Parameters
         ----------
@@ -116,7 +117,27 @@ class _CacheServiceBase(Generic[CacheValueT]):
         tuple
             Cache key with function name as first element.
         """
-        return (inspect.currentframe().f_back.f_code.co_name, *args)
+        def _make_hashable(obj: Any) -> Any:
+            """Convert unhashable objects to hashable equivalents."""
+            # Check if object is actually hashable by trying to hash it
+            try:
+                hash(obj)
+                return obj
+            except TypeError:
+                # Object is not hashable, convert it
+                if hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes)):
+                    # Convert iterables (like numpy arrays) to tuples
+                    try:
+                        return tuple(_make_hashable(item) for item in obj)
+                    except TypeError:
+                        # If we can't iterate, convert to string representation
+                        return str(obj)
+                else:
+                    # For other unhashable types, use string representation
+                    return str(obj)
+        
+        hashable_args = [_make_hashable(arg) for arg in args]
+        return (inspect.currentframe().f_back.f_code.co_name, *hashable_args)
 
 
 class _DynamicsServiceBase(ABC):

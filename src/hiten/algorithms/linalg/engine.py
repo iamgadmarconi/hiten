@@ -12,14 +12,33 @@ from hiten.algorithms.linalg.types import (EigenDecompositionResults,
 from hiten.algorithms.types.core import _BackendCall, _HitenBaseEngine
 
 
-@dataclass
 class _LinearStabilityEngine(_HitenBaseEngine[_EigenDecompositionProblem, EigenDecompositionResults, EigenDecompositionResults]):
-    backend: _LinalgBackend
+    """Engine orchestrating linalg backends and interfaces.
+    
+    Parameters
+    ----------
+    backend : :class:`~hiten.algorithms.linalg.backend._LinalgBackend`
+        Backend responsible for the computational steps of eigenvalue decomposition.
+    interface : :class:`~hiten.algorithms.linalg.interfaces._EigenDecompositionInterface`, optional
+        Interface for handling eigenvalue decomposition problems. If None, a default interface is used.
+    """
 
     def __init__(self, backend: _LinalgBackend, interface: _EigenDecompositionInterface | None = None) -> None:
         super().__init__(backend=backend, interface=interface)
 
     def _invoke_backend(self, call: _BackendCall) -> EigenDecompositionResults:
+        """Invoke the backend with the provided call
+        
+        Parameters
+        ----------
+        call : :class:`~hiten.algorithms.types.core._BackendCall`
+            Call to the backend.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.linalg.types.EigenDecompositionResults`
+            Eigen decomposition results.
+        """
         problem = call.args[0]
         self.backend.system_type = problem.system_type
         problem_type = problem.problem_type

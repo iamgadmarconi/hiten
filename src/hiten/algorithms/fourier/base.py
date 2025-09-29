@@ -34,7 +34,28 @@ _MAX_K = _K_OFFSET - 1
 
 @njit(fastmath=FASTMATH, cache=False)
 def _pack_fourier_index(n1: int, n2: int, n3: int, k1: int, k2: int, k3: int) -> np.uint64:  
-    """Pack exponents into a 64-bit key for constant-time lookup."""
+    """Pack exponents into a 64-bit key for constant-time lookup.
+    
+    Parameters
+    ----------
+    n1 : int
+        First action exponent.
+    n2 : int
+        Second action exponent.
+    n3 : int
+        Third action exponent.
+    k1 : int
+        First Fourier index.
+    k2 : int
+        Second Fourier index.
+    k3 : int
+        Third Fourier index.
+        
+    Returns
+    -------
+    np.uint64
+        A 64-bit integer representing the packed Fourier index.
+    """
 
     if (n1 < 0 or n1 > _MAX_N or
         n2 < 0 or n2 > _MAX_N or
@@ -63,7 +84,13 @@ def _pack_fourier_index(n1: int, n2: int, n3: int, k1: int, k2: int, k3: int) ->
 
 @njit(fastmath=FASTMATH, cache=False)
 def _decode_fourier_index(key: np.uint64):  
-    """Inverse of :pyfunc:`~_pack_fourier_index`."""
+    """Inverse of :pyfunc:`~_pack_fourier_index`.
+    
+    Parameters
+    ----------
+    key : np.uint64
+        A 64-bit integer representing the packed Fourier index.
+    """
     key_int = int(key)
 
     n1 = key_int & _N_MASK
@@ -132,7 +159,18 @@ def _init_fourier_tables(degree: int, k_max: int):
 
 @njit(fastmath=FASTMATH, cache=False)
 def _create_encode_dict_fourier(clmoF: List):  
-    """Create a list of dictionaries mapping packed index -> position for each degree."""
+    """Create a list of dictionaries mapping packed index -> position for each degree.
+    
+    Parameters
+    ----------
+    clmoF : List
+        List of arrays containing packed multi-indices.
+        
+    Returns
+    -------
+    List
+        List of dictionaries mapping packed multi-indices to their positions.
+    """
     encode_list = List()
     for arr in clmoF:
         d_map = Dict.empty(key_type=types.int64, value_type=types.int32)
@@ -144,6 +182,17 @@ def _create_encode_dict_fourier(clmoF: List):
 
 @njit(fastmath=FASTMATH, cache=False)
 def _encode_fourier_index(idx_tuple, degree: int, encode_dict_list):  
+    """Encode a Fourier index tuple to find its position in the coefficient array.
+    
+    Parameters
+    ----------
+    idx_tuple : tuple
+        Tuple of integers representing the Fourier index.
+    degree : int
+        Degree of the polynomial.
+    encode_dict_list : List
+        List of dictionaries mapping packed multi-indices to their positions.
+    """
     n1, n2, n3, k1, k2, k3 = idx_tuple
     key = _pack_fourier_index(n1, n2, n3, k1, k2, k3)
     if key == np.uint64(0xFFFFFFFFFFFFFFFF):

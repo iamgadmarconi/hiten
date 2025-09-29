@@ -30,6 +30,12 @@ class _LinalgBackend(_HitenBaseBackend):
     Stateless wrapper exposing the core linear-algebra routines used across
     the library. Provides a small object interface while preserving the
     existing module-level API for backward compatibility.
+
+    Parameters
+    ----------
+    system_type : :class:`~hiten.algorithms.linalg.types._SystemType`, optional
+        The type of system to analyze. Default is 
+        :class:`~hiten.algorithms.linalg.types._SystemType.CONTINUOUS`.
     """
 
     def __init__(self, system_type: _SystemType = _SystemType.CONTINUOUS):
@@ -54,7 +60,7 @@ class _LinalgBackend(_HitenBaseBackend):
 
         Parameters
         ----------
-        A : ndarray, shape (n, n)
+        A : numpy.ndarray, shape (n, n)
             Real or complex square matrix to analyze.
         delta : float, optional
             Half-width of neutral band around stability threshold. Default is 1e-4.
@@ -63,19 +69,19 @@ class _LinalgBackend(_HitenBaseBackend):
 
         Returns
         -------
-        sn : ndarray
+        sn : numpy.ndarray
             Stable eigenvalues. For continuous: real part of lambda < -delta.
             For discrete: absolute value of lambda < 1-delta.
-        un : ndarray
+        un : numpy.ndarray
             Unstable eigenvalues. For continuous: real part of lambda > +delta.
             For discrete: absolute value of lambda > 1+delta.
-        cn : ndarray
+        cn : numpy.ndarray
             Center eigenvalues (neutral spectrum within delta band).
-        Ws : ndarray, shape (n, n_s)
+        Ws : numpy.ndarray, shape (n, n_s)
             Stable eigenvectors stacked column-wise.
-        Wu : ndarray, shape (n, n_u)
+        Wu : numpy.ndarray, shape (n, n_u)
             Unstable eigenvectors stacked column-wise.
-        Wc : ndarray, shape (n, n_c)
+        Wc : numpy.ndarray, shape (n, n_c)
             Center eigenvectors stacked column-wise.
 
         Raises
@@ -147,7 +153,7 @@ class _LinalgBackend(_HitenBaseBackend):
 
         Parameters
         ----------
-        M : ndarray, shape (6, 6)
+        M : numpy.ndarray, shape (6, 6)
             Monodromy matrix from one-period state transition matrix integration.
             Expected to be symplectic for CR3BP applications.
         tol : float, optional
@@ -156,12 +162,12 @@ class _LinalgBackend(_HitenBaseBackend):
 
         Returns
         -------
-        nu : ndarray, shape (3,)
+        nu : numpy.ndarray, shape (3,)
             Stability indices nu_i = (lambda_i + 1/lambda_i)/2.
             Contains np.nan for unpaired eigenvalues.
-        eigvals : ndarray, shape (6,)
+        eigvals : numpy.ndarray, shape (6,)
             Eigenvalues sorted by decreasing magnitude.
-        eigvecs : ndarray, shape (6, 6)
+        eigvecs : numpy.ndarray, shape (6, 6)
             Corresponding eigenvectors.
 
         Raises
@@ -208,8 +214,15 @@ class _LinalgBackend(_HitenBaseBackend):
         
         Parameters
         ----------
-        A : np.ndarray
+        A : numpy.ndarray
             Matrix to decompose.
+
+        Returns
+        -------
+        numpy.ndarray
+            Eigenvalues.
+        numpy.ndarray
+            Eigenvectors.
         """
         try:
             eigvals, eigvecs = np.linalg.eig(A)
@@ -227,11 +240,11 @@ class _LinalgBackend(_HitenBaseBackend):
         ----------
         val : complex
             Eigenvalue to classify.
-        vec : np.ndarray
+        vec : numpy.ndarray
             Eigenvector corresponding to the eigenvalue.
         delta : float
             Half-width of neutral band around stability threshold.
-        sn : List[complex]
+        sn : list[complex]
             List of stable eigenvalues.
         un : List[complex]
             List of unstable eigenvalues.
@@ -327,23 +340,60 @@ class _LinalgBackend(_HitenBaseBackend):
         return cleaned_vals, cleaned_vecs
 
     def _validate_monodromy_shape(self, M: np.ndarray) -> None:
-        """Ensure monodromy matrix has expected shape (6, 6)."""
+        """Ensure monodromy matrix has expected shape (6, 6).
+        
+        Parameters
+        ----------
+        M : numpy.ndarray
+            Monodromy matrix to validate.
+
+        Raises
+        ------
+        :class:`~hiten.algorithms.types.exceptions.BackendError`
+            If M has incorrect shape.
+        """
         if M.shape != (6, 6):
             raise BackendError("Input matrix M has incorrect shape {M.shape}, expected (6, 6).")
 
     def _compute_sorted_spectrum(self, A: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
-        """Compute, clean and sort the eigenspectrum of matrix A."""
+        """Compute, clean and sort the eigenspectrum of matrix A.
+        
+        Parameters
+        ----------
+        A : numpy.ndarray
+            Matrix to compute the eigenspectrum of.
+
+        Returns
+        -------
+        numpy.ndarray
+            Eigenvalues.
+        numpy.ndarray
+            Eigenvectors.   
+        """
         eigvals_raw, eigvecs_raw = self._compute_eigendecomposition(A)
         eigvals_clean = np.array([self._zero_small_imag_part(ev, tol=1e-12) for ev in eigvals_raw])
         eigvals_sorted, eigvecs_sorted = self._sort_eigenvalues(eigvals_clean, eigvecs_raw)
         return eigvals_sorted, eigvecs_sorted
 
     def _calc_stability_index(self, eigval: complex) -> complex:
-        """Compute stability index nu = (lambda + 1/lambda) / 2 for eigenvalue."""
+        """Compute stability index nu = (lambda + 1/lambda) / 2 for eigenvalue.
+        
+        Parameters
+        ----------
+        eigval : complex
+            Eigenvalue to compute the stability index of.
+        """
         return (eigval + 1.0 / eigval) / 2.0
 
     def _compute_nu_from_eigvals(self, eigvals_sorted: np.ndarray, tol: float) -> np.ndarray:
         """Compute up to three stability indices from sorted eigenvalues.
+
+        Parameters
+        ----------
+        eigvals_sorted : numpy.ndarray
+            Sorted eigenvalues.
+        tol : float
+            Tolerance for eigenvalue comparison.
 
         Strategy:
         - Prefer a trivial pair near unit modulus first (if present)
@@ -399,14 +449,14 @@ class _LinalgBackend(_HitenBaseBackend):
         return np.array(nu_list, dtype=np.complex128)
 
     def _remove_infinitesimals_in_place(self, vec: np.ndarray, tol: float = 1e-14) -> None:
-        r"""Remove numerical noise from complex vector components in-place.
+        """Remove numerical noise from complex vector components in-place.
 
         Sets real and imaginary parts smaller than tolerance to exactly zero,
         helping prevent numerical artifacts from affecting downstream calculations.
 
         Parameters
         ----------
-        vec : ndarray
+        vec : numpy.ndarray
             Complex vector to clean in-place.
         tol : float, optional
             Tolerance below which components are zeroed. Default is 1e-14.
@@ -431,21 +481,21 @@ class _LinalgBackend(_HitenBaseBackend):
             vec[i] = re + 1j*im
 
     def _remove_infinitesimals_array(self, vec: np.ndarray, tol: float = 1e-12) -> np.ndarray:
-        r"""Create cleaned copy of vector with numerical noise removed.
+        """Create cleaned copy of vector with numerical noise removed.
 
         Returns a copy of the input vector with real and imaginary components
         smaller than tolerance set to exactly zero. Preserves the original vector.
 
         Parameters
         ----------
-        vec : ndarray
+        vec : numpy.ndarray
             Complex vector to clean.
         tol : float, optional
             Tolerance below which components are zeroed. Default is 1e-12.
 
         Returns
         -------
-        ndarray
+        numpy.ndarray
             Copy of input vector with small values replaced by exact zeros.
         
         See Also
@@ -458,7 +508,7 @@ class _LinalgBackend(_HitenBaseBackend):
         return vcopy
 
     def _zero_small_imag_part(self, eig_val: complex, tol: float = 1e-12) -> complex:
-        r"""Remove small imaginary part from complex number.
+        """Remove small imaginary part from complex number.
 
         Sets imaginary part to zero if smaller than tolerance. Useful for
         cleaning eigenvalues that should be real but have numerical artifacts.

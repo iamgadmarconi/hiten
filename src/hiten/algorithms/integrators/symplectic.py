@@ -183,11 +183,11 @@ def _eval_hamiltonian_derivative(
     jac_H: List[List[np.ndarray]],
     clmo_H: List[np.ndarray]
 ) -> np.ndarray:
-    """Evaluate time derivative dy/dt = J·∇H for Hamiltonian system.
+    """Evaluate time derivative dy/dt = J * nabla_H for Hamiltonian system.
     
     For a Hamiltonian system with coordinates [Q, P]:
-    - dQ/dt = ∂H/∂P
-    - dP/dt = -∂H/∂Q
+    - dQ/dt = dH/dP
+    - dP/dt = -dH/dQ
     
     Parameters
     ----------
@@ -255,10 +255,10 @@ def _hermite_eval_dense_symplectic(y0, f0, y1, f1, x, h):
     Notes
     -----
     Uses cubic Hermite basis functions:
-    - H00 = 2x³ - 3x² + 1
-    - H10 = x³ - 2x² + x
-    - H01 = -2x³ + 3x²
-    - H11 = x³ - x²
+    - H00 = 2x^3 - 3x^2 + 1
+    - H10 = x^3 - 2x^2 + x
+    - H01 = -2x^3 + 3x^2
+    - H11 = x^3 - x^2
     """
     dim = y0.size
     y = np.empty(dim, dtype=np.float64)
@@ -952,19 +952,7 @@ class _ExtendedSymplectic(_Integrator):
 
         # Event-enabled path: check for zero crossings and refine with Hermite interpolation
         if event_fn is not None:
-            # Compile event function with fixed signature
-            from numba import types
-            import numba
-            try:
-                from numba.core.registry import CPUDispatcher
-                if not isinstance(event_fn, CPUDispatcher):
-                    event_sig = types.float64(types.float64, types.float64[:])
-                    event_compiled = numba.njit(event_sig, cache=False, fastmath=FASTMATH)(event_fn)
-                else:
-                    event_compiled = event_fn
-            except Exception:
-                event_sig = types.float64(types.float64, types.float64[:])
-                event_compiled = numba.njit(event_sig, cache=False, fastmath=FASTMATH)(event_fn)
+            event_compiled = self._compile_event_function(event_fn)
             
             # Extract event configuration parameters
             direction = 0 if event_cfg is None else int(event_cfg.direction)

@@ -9,6 +9,15 @@ from hiten.algorithms.utils.config import FASTMATH
 
 @njit(fastmath=FASTMATH, cache=False)
 def _make_fourier_poly(degree: int, psiF: np.ndarray):  
+    """Create a new Fourier polynomial coefficient array of specified degree.
+    
+    Parameters
+    ----------
+    degree : int
+        Degree of the polynomial.
+    psiF : np.ndarray
+        Combinatorial table from _init_index_tables.
+    """
     size = psiF[degree]
     return np.zeros(size, dtype=np.complex128)
 
@@ -20,6 +29,19 @@ def _fourier_evaluate(
     theta_vals: np.ndarray,
     clmoF,
 ):
+    """Evaluate a Fourier polynomial at specific action and angle values.
+    
+    Parameters
+    ----------
+    coeffs_list : List
+        List of Fourier polynomial coefficient arrays.
+    I_vals : np.ndarray
+        Values of the actions.
+    theta_vals : np.ndarray
+        Values of the angles.
+    clmoF : List
+        List of arrays containing packed multi-indices.
+    """
     val = 0.0 + 0.0j
     max_deg = len(coeffs_list) - 1
     for d in range(max_deg + 1):
@@ -36,6 +58,19 @@ def _fourier_evaluate_with_grad(
     theta_vals: np.ndarray,
     clmoF,
 ):
+    """Evaluate a Fourier polynomial with gradient at specific action and angle values.
+    
+    Parameters
+    ----------
+    coeffs_list : List
+        List of Fourier polynomial coefficient arrays.
+    I_vals : np.ndarray
+        Values of the actions.
+    theta_vals : np.ndarray
+        Values of the angles.
+    clmoF : List
+        List of arrays containing packed multi-indices.
+    """
     val = 0.0 + 0.0j
     gI = np.zeros(3, dtype=np.complex128)
     gT = np.zeros(3, dtype=np.complex128)
@@ -60,6 +95,19 @@ def _fourier_hessian(
     theta_vals: np.ndarray,
     clmoF,
 ):
+    """Compute the Hessian matrix of a Fourier polynomial.
+    
+    Parameters
+    ----------
+    coeffs_list : List
+        List of Fourier polynomial coefficient arrays.
+    I_vals : np.ndarray
+        Values of the actions.
+    theta_vals : np.ndarray
+        Values of the angles.
+    clmoF : List
+        List of arrays containing packed multi-indices.
+    """
     H_total = np.zeros((6, 6), dtype=np.complex128)
     max_deg = len(coeffs_list) - 1
     for d in range(max_deg + 1):

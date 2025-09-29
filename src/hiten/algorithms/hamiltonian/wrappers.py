@@ -112,7 +112,7 @@ def register_conversion(src_name: str, dst: "type[Hamiltonian] | str",
     Hamiltonians must be transformed through multiple coordinate systems.
 
     Registered functions should follow the signature:
-    conversion_func(ham: Hamiltonian, kwargs) returns :class:`~hiten.system.hamiltonians.base.Hamiltonian` or tuple
+    conversion_func(ham: Hamiltonian, kwargs) returns :class:`~hiten.system.hamiltonian.Hamiltonian` or tuple
 
     The kwargs typically include context (like libration points) and numerical
     parameters (like tolerances). Some conversions return tuples containing
@@ -120,7 +120,7 @@ def register_conversion(src_name: str, dst: "type[Hamiltonian] | str",
 
     See Also
     --------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Base Hamiltonian class used in conversions.
     :func:`~hiten.system.hamiltonians.base._CONVERSION_REGISTRY`
         Global registry storing conversion functions.
@@ -168,7 +168,7 @@ def _physical_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in physical coordinates, with polynomial coefficients
         in nondimensional energy units.
     kwargs
@@ -181,7 +181,7 @@ def _physical_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Transformed Hamiltonian in real modal coordinates with name "real_modal".
 
     Notes
@@ -220,7 +220,7 @@ def _real_modal_to_physical(ham: Hamiltonian, **kwargs) -> Hamiltonian:
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in real modal coordinates, with polynomial coefficients
         in nondimensional energy units.
     kwargs
@@ -233,7 +233,7 @@ def _real_modal_to_physical(ham: Hamiltonian, **kwargs) -> Hamiltonian:
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Transformed Hamiltonian in physical coordinates with name "physical".
 
     Notes
@@ -271,7 +271,7 @@ def _real_modal_to_complex_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in real modal coordinates, with polynomial coefficients
         in nondimensional energy units.
     kwargs
@@ -284,7 +284,7 @@ def _real_modal_to_complex_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Transformed Hamiltonian in complex modal coordinates with name "complex_modal".
 
     Notes
@@ -331,7 +331,7 @@ def _complex_modal_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in complex modal coordinates, with polynomial coefficients
         in nondimensional energy units.
     kwargs
@@ -344,7 +344,7 @@ def _complex_modal_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Transformed Hamiltonian in real modal coordinates with name "real_modal".
 
     Notes
@@ -390,7 +390,7 @@ def _complex_modal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -> tupl
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in complex modal coordinates, with polynomial
         coefficients in nondimensional energy units.
     kwargs
@@ -403,7 +403,7 @@ def _complex_modal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -> tupl
 
     Returns
     -------
-    tuple of (:class:`~hiten.system.hamiltonians.base.Hamiltonian`, :class:`~hiten.system.hamiltonians.base.LieGeneratingFunction`)
+    tuple of (:class:`~hiten.system.hamiltonian.Hamiltonian`, :class:`~hiten.system.hamiltonian.LieGeneratingFunction`)
         - Transformed Hamiltonian in partial normal form with name "complex_partial_normal"
         - Generating functions used in the transformation, containing both the
           total generating function and eliminated terms
@@ -429,7 +429,7 @@ def _complex_modal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -> tupl
         Underlying partial normal form computation.
     :func:`~hiten.algorithms.hamiltonian.wrappers._complex_modal_to_complex_full_normal`
         Complete normal form transformation.
-    :class:`~hiten.system.hamiltonians.base.LieGeneratingFunction`
+    :class:`~hiten.system.hamiltonian.LieGeneratingFunction`
         Container for generating function data.
     """
     point = kwargs["point"]
@@ -455,7 +455,7 @@ def _complex_partial_normal_to_real_partial_normal(ham: Hamiltonian, **kwargs) -
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in complex partial normal form, with polynomial
         coefficients in nondimensional energy units.
     kwargs
@@ -468,7 +468,7 @@ def _complex_partial_normal_to_real_partial_normal(ham: Hamiltonian, **kwargs) -
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Transformed Hamiltonian in real partial normal form with name "real_partial_normal".
 
     Notes
@@ -520,7 +520,7 @@ def _real_partial_normal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in real partial normal form, with polynomial
         coefficients in nondimensional energy units.
     kwargs
@@ -533,7 +533,7 @@ def _real_partial_normal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Transformed Hamiltonian in complex partial normal form with name "complex_partial_normal".
 
     Notes
@@ -581,7 +581,7 @@ def _complex_partial_normal_to_center_manifold_complex(ham: Hamiltonian, **kwarg
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in complex partial normal form, with polynomial
         coefficients in nondimensional energy units.
     kwargs
@@ -594,7 +594,7 @@ def _complex_partial_normal_to_center_manifold_complex(ham: Hamiltonian, **kwarg
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Restricted Hamiltonian on center manifold with name "center_manifold_complex".
 
     Notes
@@ -643,7 +643,7 @@ def _center_manifold_complex_to_center_manifold_real(ham: Hamiltonian, **kwargs)
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in complex center manifold representation, with polynomial
         coefficients in nondimensional energy units.
     kwargs
@@ -656,7 +656,7 @@ def _center_manifold_complex_to_center_manifold_real(ham: Hamiltonian, **kwargs)
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Transformed Hamiltonian in real center manifold representation with name "center_manifold_real".
 
     Notes
@@ -707,7 +707,7 @@ def _center_manifold_real_to_center_manifold_complex(ham: Hamiltonian, **kwargs)
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in real center manifold representation, with polynomial
         coefficients in nondimensional energy units.
     kwargs
@@ -720,7 +720,7 @@ def _center_manifold_real_to_center_manifold_complex(ham: Hamiltonian, **kwargs)
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Transformed Hamiltonian in complex center manifold representation with name "center_manifold_complex".
 
     Notes
@@ -770,13 +770,14 @@ def _complex_modal_to_complex_full_normal(ham: Hamiltonian, **kwargs) -> tuple[H
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in complex modal coordinates, with polynomial
         coefficients in nondimensional energy units.
     kwargs
         Conversion context and parameters:
         
-        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or :class:`~hiten.system.libration.triangular.TriangularPoint`
+        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or 
+            :class:`~hiten.system.libration.triangular.TriangularPoint`
             Libration point providing eigenvalue information for resonance analysis.
         - tol_lie : float, default 1e-30
             Numerical tolerance for Lie series computations and coefficient cleaning.
@@ -785,7 +786,7 @@ def _complex_modal_to_complex_full_normal(ham: Hamiltonian, **kwargs) -> tuple[H
 
     Returns
     -------
-    tuple of (:class:`~hiten.system.hamiltonians.base.Hamiltonian`, :class:`~hiten.system.hamiltonians.base.LieGeneratingFunction`)
+    tuple of (:class:`~hiten.system.hamiltonian.Hamiltonian`, :class:`~hiten.system.hamiltonian.LieGeneratingFunction`)
         - Transformed Hamiltonian in full normal form with name "complex_full_normal"
         - Generating functions used in the transformation, containing both the
           total generating function and eliminated terms
@@ -816,7 +817,7 @@ def _complex_modal_to_complex_full_normal(ham: Hamiltonian, **kwargs) -> tuple[H
         Underlying full normal form computation.
     :func:`~hiten.algorithms.hamiltonian.wrappers._complex_modal_to_complex_partial_normal`
         Partial normal form transformation.
-    :class:`~hiten.system.hamiltonians.base.LieGeneratingFunction`
+    :class:`~hiten.system.hamiltonian.LieGeneratingFunction`
         Container for generating function data.
     """
     point = kwargs["point"]
@@ -842,20 +843,21 @@ def _complex_full_normal_to_real_full_normal(ham: Hamiltonian, **kwargs) -> Hami
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in complex full normal form, with polynomial
         coefficients in nondimensional energy units.
     kwargs
         Conversion context and parameters:
         
-        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or :class:`~hiten.system.libration.triangular.TriangularPoint`
+        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or 
+            :class:`~hiten.system.libration.triangular.TriangularPoint`
             Libration point determining which coordinate pairs to realify.
         - tol : float, default 1e-14
             Numerical tolerance for cleaning small coefficients.
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Transformed Hamiltonian in real full normal form with name "real_full_normal".
 
     Notes
@@ -907,7 +909,7 @@ def _real_full_normal_to_complex_full_normal(ham: Hamiltonian, **kwargs) -> Hami
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in real full normal form, with polynomial
         coefficients in nondimensional energy units.
     kwargs
@@ -920,7 +922,7 @@ def _real_full_normal_to_complex_full_normal(ham: Hamiltonian, **kwargs) -> Hami
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Transformed Hamiltonian in complex full normal form with name "complex_full_normal".
 
     Notes

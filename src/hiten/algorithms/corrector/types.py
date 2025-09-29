@@ -154,7 +154,7 @@ class _CorrectionProblem:
         Convergence tolerance for the residual norm.
     max_delta : float
         Maximum allowed infinity norm of Newton steps.
-    line_search_config : _LineSearchConfig | bool | None
+    line_search_config : :class:`~hiten.algorithms.corrector.config._LineSearchConfig` | bool | None
         Configuration for line search behavior.
     finite_difference : bool
         Force finite-difference approximation of Jacobians.
