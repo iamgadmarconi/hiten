@@ -19,7 +19,7 @@ logic.
 from abc import ABC, abstractmethod
 from typing import Any, List, Tuple
 
-from hiten.algorithms.poincare.core.config import _SeedingConfig
+from hiten.algorithms.poincare.core.config import _SeedingConfig, _ReturnMapConfig
 
 
 class _SeedingStrategyBase(ABC):
@@ -81,12 +81,12 @@ class _SeedingStrategyBase(ABC):
         return self._map_cfg
 
     @property
-    def map_config(self) -> "_SeedingConfig":
+    def map_config(self) -> "_ReturnMapConfig":
         """Get the seeding configuration.
 
         Returns
         -------
-        :class:`~hiten.algorithms.poincare.core.config._SeedingConfig`
+        :class:`~hiten.algorithms.poincare.core.config._MapConfig`
             The seeding configuration containing parameters such as
             the number of seeds to generate.
 
@@ -129,7 +129,7 @@ class _SeedingStrategyBase(ABC):
         This property provides access to the plane coordinate labels
         from the section configuration.
         """
-        return self._section_cfg.plane_coords
+        return self._map_cfg.plane_coords
     
     @abstractmethod
     def generate(self, *, h0: float, H_blocks: Any, clmo_table: Any, solve_missing_coord_fn: Any, find_turning_fn: Any) -> List[Tuple[float, float, float, float]]:

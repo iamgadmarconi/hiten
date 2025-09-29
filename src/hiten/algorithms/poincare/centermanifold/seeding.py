@@ -45,6 +45,17 @@ class _CenterManifoldSeedingBase(_SeedingStrategyBase):
     def __init__(self, map_config: _CenterManifoldMapConfig) -> None:
         super().__init__(map_config)
 
+    @property
+    def plane_coords(self) -> tuple[str, str]:
+        """Get the plane coordinate labels from the config's section coordinate.
+        
+        Returns
+        -------
+        tuple[str, str]
+            Tuple of two coordinate labels that define the section plane.
+        """
+        return self._get_plane_coords(self.config.section_coord)
+
     def _get_plane_coords(self, section_coord: str) -> tuple[str, str]:
         """Get the plane coordinates for a given section coordinate.
         
@@ -144,10 +155,11 @@ class _CenterManifoldSeedingBase(_SeedingStrategyBase):
         """
 
         cfg = self.config
+        plane_coords = self._get_plane_coords(cfg.section_coord)
 
         constraints = _CenterManifoldSectionInterface.build_constraint_dict(cfg.section_coord, **{
-            cfg.plane_coords[0]: plane_vals[0],
-            cfg.plane_coords[1]: plane_vals[1],
+            plane_coords[0]: plane_vals[0],
+            plane_coords[1]: plane_vals[1],
         })
 
         missing_coord = {

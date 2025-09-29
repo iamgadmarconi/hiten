@@ -28,9 +28,9 @@ from hiten.algorithms.types.services.center import (
     _CenterManifoldPersistenceService, _CenterManifoldServices)
 
 if TYPE_CHECKING:
-    from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
     from hiten.system.hamiltonian import Hamiltonian
     from hiten.system.libration.base import LibrationPoint
+    from hiten.system.maps.center import CenterManifoldMap
 
 
 class CenterManifold(_HitenBase):
@@ -75,8 +75,8 @@ class CenterManifold(_HitenBase):
     def to_cm(self, synodic_6d, tol=1e-14):
         return self.dynamics.synodic_to_cm(synodic_6d, tol=tol)
 
-    def poincare_map(self, energy: float, **kwargs) -> "CenterManifoldMap":
-        return self.dynamics.get_map(self, energy, **kwargs)
+    def poincare_map(self, energy: float) -> "CenterManifoldMap":
+        return self.dynamics.get_map(energy)
 
     def __getstate__(self):
         """Customise pickling by omitting adapter caches."""

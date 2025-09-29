@@ -286,15 +286,30 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
         else:
             overrides = overrides.copy()
         overrides.update(kwargs)
+
+        config_params = {}
+        runtime_overrides = {}
+        
+        for key, value in overrides.items():
+            if key in ['n_seeds', 'seed_strategy', 'seed_axis']:
+                config_params[key] = value
+            else:
+                runtime_overrides[key] = value
+        
+        config_params['section_coord'] = section_coord
         
         overrides_tuple = tuple(sorted(overrides.items())) if overrides else ()
         cache_key = self.make_key("generate", section_coord, overrides_tuple)
 
         def _factory() -> CenterManifoldMapResults:
             override = bool(overrides)
-            updates = {"section_coord": section_coord}
-            self.generator.update_config(**updates)
-            results = self.generator.generate(self.domain_obj, override=override, **overrides)
+            # Update config with config parameters
+            self.generator.update_config(**config_params)
+            # Pass only runtime overrides to generate
+            results = self.generator.generate(self.domain_obj, override=override, **runtime_overrides)
+            # Store the results in the sections cache
+            self._sections[section_coord] = results
+            self._section_coord = section_coord
             return results
 
         return self.get_or_create(cache_key, _factory)
@@ -466,6 +481,11 @@ class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
 
             self.generator.update_config(**updates)
             results = self.generator.generate(self.source, override=override, **overrides)
+            # Create a section identifier from the parameters
+            section_id = f"{section_axis}_{section_offset}_{plane_coords[0]}_{plane_coords[1]}_{direction}"
+            # Store the results in the sections cache
+            self._sections[section_id] = results
+            self._section_coord = section_id
             return results
 
         return self.get_or_create(cache_key, _factory)

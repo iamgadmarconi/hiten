@@ -41,6 +41,8 @@ class CenterManifoldMap(_HitenBase):
     def sections(self) -> list[str]:
         return self.dynamics.list_sections()
 
+    @property
+
     def get_section(self, section_coord: str) -> _Section:
         return self.dynamics.get_section(section_coord)
     
@@ -129,7 +131,7 @@ class CenterManifoldMap(_HitenBase):
             section = self.dynamics.get_section(section_coord)
             lbls = section.labels
         else:
-            pts = self.dynamics.get_points(section_coord=section_coord, axes=tuple(axes))
+            pts = self.dynamics.get_points_with_4d_states(section_coord=section_coord, axes=tuple(axes))
             lbls = tuple(axes)
 
         return plot_poincare_map(
@@ -185,7 +187,7 @@ class CenterManifoldMap(_HitenBase):
             if axes is None:
                 section_pt = pt_np
             else:
-                proj_pts = self.dynamics.get_points(section_coord=section_coord, axes=tuple(axes))
+                proj_pts = self.dynamics.get_points_with_4d_states(section_coord=section_coord, axes=tuple(axes))
                 distances = np.linalg.norm(proj_pts - pt_np, axis=1)
                 section = self.dynamics.get_section(section_coord)
                 section_pt = section.points[np.argmin(distances)]
@@ -208,7 +210,7 @@ class CenterManifoldMap(_HitenBase):
             section = self.dynamics.get_section(section_coord)
             lbls = section.labels
         else:
-            pts = self.dynamics.get_points(section_coord=section_coord, axes=tuple(axes))
+            pts = self.dynamics.get_points_with_4d_states(section_coord=section_coord, axes=tuple(axes))
             lbls = tuple(axes)
 
         return plot_poincare_map_interactive(
