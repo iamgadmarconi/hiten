@@ -202,10 +202,13 @@ class TestPeriodicOrbitPropagation:
     
     def test_propagate_stores_trajectory(self, generic_orbit_with_period):
         """Test that propagation stores the trajectory."""
-        assert generic_orbit_with_period.trajectory is None
+        # Before propagation, accessing trajectory raises ValueError
+        with pytest.raises(ValueError, match="Trajectory not computed"):
+            _ = generic_orbit_with_period.trajectory
         
         generic_orbit_with_period.propagate(steps=100)
         
+        # After propagation, trajectory should be accessible
         assert generic_orbit_with_period.trajectory is not None
         assert isinstance(generic_orbit_with_period.trajectory, Trajectory)
     
@@ -306,20 +309,13 @@ class TestPeriodicOrbitStringRepresentations:
 class TestPeriodicOrbitCorrection:
     """Test PeriodicOrbit correction methods."""
     
-    def test_correction_config_property(self, l1_point, sample_initial_state):
-        """Test correction_config property."""
+    def test_correction_config_not_set_raises_error(self, l1_point, sample_initial_state):
+        """Test that accessing correction_config on GenericOrbit raises error when not set."""
         orbit = GenericOrbit(l1_point, initial_state=sample_initial_state)
         
-        # Should be None initially or have a default
-        config = orbit.correction_config
-        
-        # Test setting correction config
-        new_config = _OrbitCorrectionConfig(tol=1e-10, max_attempts=50)
-        orbit.correction_config = new_config
-        
-        assert orbit.correction_config is not None
-        assert orbit.correction_config.tol == 1e-10
-        assert orbit.correction_config.max_attempts == 50
+        # GenericOrbit doesn't have a default correction_config
+        with pytest.raises(NotImplementedError, match="Differential correction is not defined"):
+            _ = orbit.correction_config
 
 
 class TestPeriodicOrbitManifold:

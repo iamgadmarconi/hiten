@@ -2,29 +2,38 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Iterable, Tuple
 
 import numpy as np
 
+from hiten.algorithms.dynamics.base import _DynamicalSystem
 from hiten.algorithms.dynamics.rtbp import _compute_stm
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
                                                   _ServiceBundleBase)
-from hiten.algorithms.dynamics.base import _DynamicalSystem
 from hiten.utils.io.torus import load_torus, load_torus_inplace, save_torus
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
-    from hiten.system.torus import InvariantTori, Torus
-    from hiten.system.orbits.base import PeriodicOrbit
     from hiten.system.base import System
     from hiten.system.libration.base import LibrationPoint
+    from hiten.system.orbits.base import PeriodicOrbit
+    from hiten.system.torus import InvariantTori, Torus
 
 
 class _TorusPersistenceService(_PersistenceServiceBase):
-    """Persistence helpers for invariant tori."""
+    """Persistence helpers for invariant tori.
+    
+    Parameters
+    ----------
+    save_fn : Callable[..., Any]
+        The function to save the object.
+    load_fn : Callable[..., Any]
+        The function to load the object.
+    load_inplace_fn : Callable[..., Any]
+        The function to load the object in place.
+    """
 
     def __init__(self) -> None:
         super().__init__(
@@ -35,7 +44,20 @@ class _TorusPersistenceService(_PersistenceServiceBase):
 
 
 class _TorusDynamicsService(_DynamicsServiceBase):
-    """Provide STM preparation and torus construction helpers."""
+    """Provide STM preparation and torus construction helpers.
+    
+    Parameters
+    ----------
+    domain_obj : :class:`~hiten.system.torus.InvariantTori`
+        The domain object.
+
+    Attributes
+    ----------
+    latest_grid : np.ndarray | None
+        The latest computed grid.
+    latest_params : dict | None
+        The latest computed parameters.
+    """
 
     def __init__(self, torus: "InvariantTori") -> None:
         super().__init__(torus)
@@ -47,58 +69,72 @@ class _TorusDynamicsService(_DynamicsServiceBase):
 
     @property
     def orbit(self) -> PeriodicOrbit:
+        """The generating periodic orbit."""
         return self.domain_obj._orbit
 
     @property
     def initial_state(self) -> np.ndarray:
+        """The initial state of the generating periodic orbit."""
         return self.orbit.initial_state
 
     @property
     def period(self) -> float:
+        """The period of the generating periodic orbit."""
         return self.orbit.period
     
     @property
     def jacobi(self) -> float:
+        """The Jacobi constant of the generating periodic orbit."""
         return self.orbit.jacobi
 
     @property
     def energy(self) -> float:
+        """The energy of the generating periodic orbit."""
         return self.orbit.energy
 
     @property
     def libration_point(self) -> LibrationPoint:
+        """The libration point around which the invariant torus is constructed."""
         return self.orbit.libration_point
 
     @property
     def system(self) -> System:
+        """The parent CR3BP system."""
         return self.libration_point.system
 
     @property
     def mu(self) -> float:
+        """The mass parameter of the parent CR3BP system."""
         return self.system.mu
 
     @property
     def dynsys(self) -> _DynamicalSystem:
+        """The dynamical system of the parent CR3BP system."""
         return self.system.dynsys
 
     @property
     def var_dynsys(self) -> _DynamicalSystem:
+        """The variational dynamical system of the parent CR3BP system."""
         return self.system.var_dynsys
 
     @property
     def jacobian_dynsys(self) -> _DynamicalSystem:
+        """The Jacobian dynamical system of the parent CR3BP system."""
         return self.system.jacobian_dynsys
 
     @property
     def monodromy(self) -> np.ndarray:
+        """The monodromy matrix of the generating periodic orbit."""
         return self.eigen_data()[0]
 
     @property
     def eigenvalues(self) -> np.ndarray:
+        """The eigenvalues of the monodromy matrix of the generating periodic orbit."""
         return self.eigen_data()[1]
 
     @property
     def eigenvectors(self) -> np.ndarray:
+        """The eigenvectors of the monodromy matrix of the generating periodic orbit."""
         return self.eigen_data()[2]
 
     @property
@@ -121,11 +157,13 @@ class _TorusDynamicsService(_DynamicsServiceBase):
 
     @property
     def params(self) -> dict:
+        """The parameters of the latest computed grid."""
         if self._latest_params is None:
             raise ValueError("No parameters have been computed yet. Call compute_grid() first.")
         return self._latest_params
 
     def eigen_data(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """The monodromy matrix, eigenvalues, and eigenvectors of the generating periodic orbit."""
         key = self.make_key(id(self.orbit))
         
         def _factory() -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -138,6 +176,15 @@ class _TorusDynamicsService(_DynamicsServiceBase):
     def prepare(self, *, n_theta1: int, method: str, order: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Prepare STM and eigen data for invariant torus construction.
         
+        Parameters
+        ----------
+        n_theta1 : int
+            The number of points in the theta1 direction.
+        method : str
+            The method to use for the integration.
+        order : int
+            The order of the method to use for the integration.
+
         Returns
         -------
         theta1 : np.ndarray
@@ -210,6 +257,23 @@ class _TorusDynamicsService(_DynamicsServiceBase):
         method: str,
         order: int,
     ) -> np.ndarray:
+        """The state of the invariant torus at the given theta1 and theta2 values.
+        
+        Parameters
+        ----------
+        theta1 : float
+            The theta1 value.
+        theta2 : float
+            The theta2 value.
+        epsilon : float
+            The amplitude of the invariant torus.
+        n_theta1 : int
+            The number of points in the theta1 direction.
+        method : str
+            The method to use for the integration.
+        order : int
+            The order of the method to use for the integration.
+        """
         theta1_vals, ubar, y_series, _, _, _, _ = self.prepare(n_theta1=n_theta1, method=method, order=order)
         th1 = np.mod(theta1, 2.0 * np.pi)
         th2 = np.mod(theta2, 2.0 * np.pi)
@@ -240,6 +304,26 @@ class _TorusDynamicsService(_DynamicsServiceBase):
         method: str,
         order: int,
     ) -> np.ndarray:
+        """Compute the invariant torus grid.
+        
+        Parameters
+        ----------
+        epsilon : float
+            The amplitude of the invariant torus.
+        n_theta1 : int
+            The number of points in the theta1 direction.
+        n_theta2 : int
+            The number of points in the theta2 direction.
+        method : str
+            The method to use for the integration.
+        order : int
+            The order of the method to use for the integration.
+
+        Returns
+        -------
+        np.ndarray
+            The invariant torus grid.
+        """
         cache_key = self.make_key(epsilon, n_theta1, n_theta2, method, order)
         
         def _factory() -> np.ndarray:
@@ -274,8 +358,6 @@ class _TorusDynamicsService(_DynamicsServiceBase):
         
         return grid
 
-
-
     def initial_section_curve(
         self,
         *,
@@ -286,6 +368,28 @@ class _TorusDynamicsService(_DynamicsServiceBase):
         method: str,
         order: int,
     ) -> Tuple[np.ndarray, float]:
+        """Compute the initial section curve of the invariant torus.
+        
+        Parameters
+        ----------
+        epsilon : float
+            The amplitude of the invariant torus.
+        n_theta2 : int
+            The number of points in the theta2 direction.
+        phi_idx : int
+            The index of the phi point.
+        n_theta1 : int
+            The number of points in the theta1 direction.
+        method : str
+            The method to use for the integration.
+        order : int
+            The order of the method to use for the integration.
+
+        Returns
+        -------
+        Tuple[np.ndarray, float]
+            The initial section curve and the phase of the complex unit-circle eigenvalue.
+        """
         _, ubar, y_series, _, _, _, _ = self.prepare(n_theta1=n_theta1, method=method, order=order)
         theta2_vals = np.linspace(0.0, 2.0 * np.pi, num=n_theta2, endpoint=False)
         cos_t2 = np.cos(theta2_vals)
@@ -384,6 +488,18 @@ class _TorusDynamicsService(_DynamicsServiceBase):
 
     @staticmethod
     def _select_unit_circle_eigenvalue(evals: np.ndarray) -> Tuple[int, complex]:
+        """Select the complex eigenvalue of modulus one with the largest imaginary part.
+        
+        Parameters
+        ----------
+        evals : np.ndarray
+            The eigenvalues of the monodromy matrix.
+
+        Returns
+        -------
+        Tuple[int, complex]
+            The index and value of the complex eigenvalue of modulus one with the largest imaginary part.
+        """
         tol_mag = 1e-6
         candidates: Iterable[int] = (
             idx
@@ -400,6 +516,18 @@ class _TorusDynamicsService(_DynamicsServiceBase):
 
 
 class _TorusServices(_ServiceBundleBase):
+    """Bundle all torus services together.
+    
+    Parameters
+    ----------
+    domain_obj : :class:`~hiten.system.torus.InvariantTori`
+        The domain object.
+    dynamics : :class:`~hiten.algorithms.types.services.torus._TorusDynamicsService`
+        The dynamics service.
+    persistence : :class:`~hiten.algorithms.types.services.torus._TorusPersistenceService`
+        The persistence service.
+    """
+
     def __init__(self, domain_obj: "InvariantTori", dynamics: _TorusDynamicsService, persistence: _TorusPersistenceService) -> None:
         super().__init__(domain_obj)
         self.dynamics = dynamics
@@ -407,6 +535,18 @@ class _TorusServices(_ServiceBundleBase):
 
     @classmethod
     def default(cls, torus: "InvariantTori") -> "_TorusServices":
+        """Create a default service bundle.
+        
+        Parameters
+        ----------
+        torus : :class:`~hiten.system.torus.InvariantTori`
+            The domain object.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.services.torus._TorusServices`
+            The service bundle.
+        """
         return cls(
             domain_obj=torus,
             dynamics=_TorusDynamicsService(torus),
@@ -415,6 +555,18 @@ class _TorusServices(_ServiceBundleBase):
 
     @classmethod
     def with_shared_dynamics(cls, dynamics: _TorusDynamicsService) -> "_TorusServices":
+        """Create a service bundle with a shared dynamics service.
+        
+        Parameters
+        ----------
+        dynamics : :class:`~hiten.algorithms.types.services.torus._TorusDynamicsService`
+            The dynamics service.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.services.torus._TorusServices`
+            The service bundle.
+        """
         return cls(
             domain_obj=dynamics.domain_obj,
             dynamics=dynamics,

@@ -584,8 +584,8 @@ class _GenericOrbitCorrectionService(_OrbitCorrectionService):
         NotImplementedError
             If correction_config is not set on the orbit.
         """
-        if self.orbit.correction_config is not None:
-            return self.orbit.correction_config
+        if hasattr(self.domain_obj, '_correction_config') and self.domain_obj._correction_config is not None:
+            return self.domain_obj._correction_config
         raise NotImplementedError(
             "Differential correction is not defined for a GenericOrbit unless the "
             "`correction_config` property is set with a valid :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`."
