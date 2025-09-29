@@ -118,6 +118,17 @@ class RestrictedCenterManifoldState(IntEnum):
     restricted center manifold coordinate system. The coordinates are
     ordered as position components (q2, q3) followed by momentum components
     (p2, p3).
+
+    Attributes
+    ----------
+    q2 : int
+        Second position component (index 0)
+    p2 : int
+        Second momentum component (index 1)
+    q3 : int
+        Third position component (index 2)
+    p3 : int
+        Third momentum component (index 3)
     """
     q2=0
     p2=1
@@ -237,16 +248,20 @@ class _BaseStateContainer:
 
     @property
     def dim(self) -> int:
+        """Return the dimension of the state vector."""
         return self._values.shape[0]
 
     def as_tuple(self) -> Tuple[float, ...]:
+        """Return the state vector as a tuple."""
         return tuple(float(v) for v in self._values.tolist())
 
     def as_dict(self) -> dict:
+        """Return the state vector as a dictionary."""
         members = type(self)._enum  # type: ignore[attr-defined]
         return {name.lower(): float(self._values[members[name]]) for name in members.__members__.keys()}  # type: ignore[index]
 
     def _resolve_index(self, key: Union[int, str, IntEnum]) -> int:
+        """Resolve the index of a key."""
         if isinstance(key, int):
             return key
         if isinstance(key, IntEnum):
@@ -259,6 +274,7 @@ class _BaseStateContainer:
         raise TypeError("key must be int, IntEnum member, or a valid field name")
 
     def _assign_by_name(self, name: str, value: float) -> None:
+        """Assign a value to a key by name."""
         idx = self._resolve_index(name)
         self._values[idx] = value
 
@@ -361,50 +377,62 @@ class SynodicStateVector(_BaseStateContainer):
 
     @property
     def x(self) -> float:
+        """Return the X position component."""
         return float(self._values[SynodicState.X])
 
     @x.setter
     def x(self, value: float) -> None:
+        """Assign a value to the X position component."""
         self._values[SynodicState.X] = float(value)
 
     @property
     def y(self) -> float:
+        """Return the Y position component."""
         return float(self._values[SynodicState.Y])
 
     @y.setter
     def y(self, value: float) -> None:
+        """Assign a value to the Y position component."""
         self._values[SynodicState.Y] = float(value)
 
     @property
     def z(self) -> float:
+        """Return the Z position component."""
         return float(self._values[SynodicState.Z])
 
     @z.setter
     def z(self, value: float) -> None:
+        """Assign a value to the Z position component."""
         self._values[SynodicState.Z] = float(value)
 
     @property
     def vx(self) -> float:
+        """Return the X velocity component."""
         return float(self._values[SynodicState.VX])
 
     @vx.setter
     def vx(self, value: float) -> None:
+        """Assign a value to the X velocity component."""
         self._values[SynodicState.VX] = float(value)
 
     @property
     def vy(self) -> float:
+        """Return the Y velocity component."""
         return float(self._values[SynodicState.VY])
 
     @vy.setter
     def vy(self, value: float) -> None:
+        """Assign a value to the Y velocity component."""
         self._values[SynodicState.VY] = float(value)
 
     @property
     def vz(self) -> float:
+        """Return the Z velocity component."""
         return float(self._values[SynodicState.VZ])
 
     @vz.setter
     def vz(self, value: float) -> None:
+        """Assign a value to the Z velocity component."""
         self._values[SynodicState.VZ] = float(value)
 
 
@@ -448,50 +476,62 @@ class CenterManifoldStateVector(_BaseStateContainer):
 
     @property
     def q1(self) -> float:
+        """Return the first position component."""
         return float(self._values[CenterManifoldState.q1])
 
     @q1.setter
     def q1(self, value: float) -> None:
+        """Assign a value to the first position component."""
         self._values[CenterManifoldState.q1] = float(value)
 
     @property
     def q2(self) -> float:
+        """Return the second position component."""
         return float(self._values[CenterManifoldState.q2])
 
     @q2.setter
     def q2(self, value: float) -> None:
+        """Assign a value to the second position component."""
         self._values[CenterManifoldState.q2] = float(value)
 
     @property
     def q3(self) -> float:
+        """Return the third position component."""
         return float(self._values[CenterManifoldState.q3])
 
     @q3.setter
     def q3(self, value: float) -> None:
+        """Assign a value to the third position component."""
         self._values[CenterManifoldState.q3] = float(value)
 
     @property
     def p1(self) -> float:
+        """Return the first momentum component."""
         return float(self._values[CenterManifoldState.p1])
 
     @p1.setter
     def p1(self, value: float) -> None:
+        """Assign a value to the first momentum component."""
         self._values[CenterManifoldState.p1] = float(value)
 
     @property
     def p2(self) -> float:
+        """Return the second momentum component."""
         return float(self._values[CenterManifoldState.p2])
 
     @p2.setter
     def p2(self, value: float) -> None:
+        """Assign a value to the second momentum component."""
         self._values[CenterManifoldState.p2] = float(value)
 
     @property
     def p3(self) -> float:
+        """Return the third momentum component."""
         return float(self._values[CenterManifoldState.p3])
 
     @p3.setter
     def p3(self, value: float) -> None:
+        """Assign a value to the third momentum component."""
         self._values[CenterManifoldState.p3] = float(value)
 
 
@@ -532,34 +572,42 @@ class RestrictedCenterManifoldStateVector(_BaseStateContainer):
 
     @property
     def q2(self) -> float:
+        """Return the second position component."""
         return float(self._values[RestrictedCenterManifoldState.q2])
 
     @q2.setter
     def q2(self, value: float) -> None:
+        """Assign a value to the second position component."""
         self._values[RestrictedCenterManifoldState.q2] = float(value)
 
     @property
     def p2(self) -> float:
+        """Return the second momentum component."""
         return float(self._values[RestrictedCenterManifoldState.p2])
 
     @p2.setter
     def p2(self, value: float) -> None:
+        """Assign a value to the second momentum component."""
         self._values[RestrictedCenterManifoldState.p2] = float(value)
 
     @property
     def q3(self) -> float:
+        """Return the third position component."""
         return float(self._values[RestrictedCenterManifoldState.q3])
 
     @q3.setter
     def q3(self, value: float) -> None:
+        """Assign a value to the third position component."""
         self._values[RestrictedCenterManifoldState.q3] = float(value)
 
     @property
     def p3(self) -> float:
+        """Return the third momentum component."""
         return float(self._values[RestrictedCenterManifoldState.p3])
 
     @p3.setter
     def p3(self, value: float) -> None:
+        """Assign a value to the third momentum component."""
         self._values[RestrictedCenterManifoldState.p3] = float(value)
 
 class Trajectory:
@@ -633,10 +681,12 @@ class Trajectory:
 
     @property
     def times(self) -> npt.NDArray[np.float64]:
+        """Return the time array."""
         return self._times
 
     @property
     def states(self) -> npt.NDArray[np.float64]:
+        """Return the state array."""
         return self._states
 
     @property
