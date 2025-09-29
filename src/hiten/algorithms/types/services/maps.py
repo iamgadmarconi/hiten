@@ -332,7 +332,8 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
         key = section_coord or self.section_coord
 
         # Ensure section is computed and cached
-        self.compute(section_coord=key)
+        if key not in self._sections:
+            self.compute(section_coord=key)
         sec = self._sections[key]
 
         # Mapping for full 4-D CM state stored in `sec.states`
