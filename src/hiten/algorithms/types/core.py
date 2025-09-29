@@ -13,6 +13,7 @@ from typing import Any, Generic, TypeVar, Union
 import pandas as pd
 
 from hiten.algorithms.types.exceptions import EngineError
+from hiten.algorithms.types.serialization import _SerializeBase
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
                                                   _ServiceBundleBase)
@@ -491,7 +492,7 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
         return self._results
 
 
-class _HitenBase(ABC):
+class _HitenBase(_SerializeBase, ABC):
     """Abstract base class for public Hiten classes.
     """
 
@@ -623,72 +624,6 @@ class _HitenBase(ABC):
         
         return clean_obj
 
-    def _make_serializable(self, obj):
-        """Convert an object to a serializable format, handling Numba objects and other problematic types.
-        
-        Parameters
-        ----------
-        obj : any
-            The object to convert to serializable format
-            
-        Returns
-        -------
-        any
-            The object in a serializable format, or a placeholder if conversion is not possible
-        """
-        if obj is None:
-            return None
-            
-        # Handle Numba objects - these cannot be pickled
-        if hasattr(obj, '__module__') and obj.__module__ and 'numba' in obj.__module__:
-            return None  # Return None for Numba objects, they can be reconstructed
-            
-        # Handle Numba compiled functions
-        if hasattr(obj, '__name__') and hasattr(obj, '__module__') and obj.__module__ and 'numba' in obj.__module__:
-            return None  # Return None for Numba functions, they can be reconstructed
-            
-        # Handle Numba memory info objects
-        if hasattr(obj, '__class__') and 'nrt_python' in str(type(obj)):
-            return None  # Return None for Numba memory objects
-            
-        # Handle dictionaries that might contain Numba objects
-        if isinstance(obj, dict):
-            return {k: self._make_serializable(v) for k, v in obj.items()}
-            
-        # Handle lists that might contain Numba objects
-        if isinstance(obj, (list, tuple)):
-            if isinstance(obj, tuple):
-                return tuple(self._make_serializable(item) for item in obj)
-            else:
-                return [self._make_serializable(item) for item in obj]
-                
-        # Handle objects with Numba attributes
-        if hasattr(obj, '__dict__'):
-            try:
-                # Try to serialize the object normally first
-                import pickle
-                pickle.dumps(obj)
-                return obj  # If it works, return as-is
-            except (TypeError, pickle.PicklingError):
-                # If it fails, try to create a serializable version
-                if hasattr(obj, '__class__'):
-                    # For objects that can't be pickled, return a placeholder
-                    # that indicates the type and can be used for reconstruction
-                    return {
-                        '_serialization_placeholder': True,
-                        '_class_name': obj.__class__.__name__,
-                        '_module': getattr(obj.__class__, '__module__', None)
-                    }
-        
-        # For other types, try to return as-is
-        try:
-            import pickle
-            pickle.dumps(obj)
-            return obj
-        except (TypeError, pickle.PicklingError):
-            # If it can't be pickled, return None
-            return None
-
     def __getstate__(self):
         """Get state for pickling, preserving computed properties."""
         state = self.__dict__.copy()
@@ -713,8 +648,12 @@ class _HitenBase(ABC):
             if self._is_service_related_attr(attr_name):
                 state.pop(attr_name, None)
         
+        # Convert all remaining values to serializable format
+        for key, value in state.items():
+            state[key] = self._make_serializable(value)
+        
         return state
-    
+
     def __setstate__(self, state):
         """Set state after unpickling, restoring computed properties."""
         # Process state to handle serialization placeholders

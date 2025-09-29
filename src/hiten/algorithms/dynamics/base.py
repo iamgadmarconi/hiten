@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Callable, Dict, Literal, Sequence
 import numpy as np
 
 from hiten.algorithms.integrators.configs import _EventConfig
+from hiten.algorithms.types.serialization import _SerializeBase
 from hiten.algorithms.utils.config import FASTMATH
 from hiten.utils.log_config import logger
 
@@ -34,7 +35,7 @@ _RHS_DISPATCH_CACHE: Dict[Callable[[float, np.ndarray], np.ndarray], Callable[[f
 
 
 
-class _DynamicalSystem(ABC):
+class _DynamicalSystem(_SerializeBase, ABC):
     """Provide an abstract base class for dynamical systems.
 
     Provides common functionality and interface definition for concrete

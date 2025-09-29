@@ -18,7 +18,7 @@ automatic path finding for multi-step transformations.
 """
 
 from collections import deque
-from typing import TYPE_CHECKING, Callable, Dict, Optional, Tuple
+from typing import TYPE_CHECKING, Dict, Optional
 
 from hiten.algorithms.hamiltonian.center._lie import _lie_expansion
 from hiten.algorithms.hamiltonian.center._lie import \
@@ -28,6 +28,7 @@ from hiten.algorithms.hamiltonian.hamiltonian import (
     _build_physical_hamiltonian_triangular)
 from hiten.algorithms.hamiltonian.normal._lie import \
     _lie_transform as _lie_transform_full
+from hiten.algorithms.types.serialization import _SerializeBase
 from hiten.algorithms.types.services.hamiltonian import _PipelineService
 from hiten.algorithms.types.services import get_hamiltonian_services
 from hiten.utils.log_config import logger
@@ -37,7 +38,7 @@ if TYPE_CHECKING:
     from hiten.system.libration.base import LibrationPoint
 
 
-class HamiltonianPipeline:
+class HamiltonianPipeline(_SerializeBase):
     """
     Manages the transformation pipeline for Hamiltonian representations.
 
@@ -552,38 +553,6 @@ class HamiltonianPipeline:
         It provides the actual integration interface for the Hamiltonian.
         """
         return self.get_hamiltonian(form).hamsys
-
-    def coefficients(self, form: str = "center_manifold_real", degree=None) -> str:
-        """
-        Get a formatted string representation of the Hamiltonian coefficients.
-
-        This method provides a human-readable representation of the polynomial
-        coefficients in the requested Hamiltonian form.
-
-        Parameters
-        ----------
-        form : str, optional
-            The Hamiltonian form to get coefficients for
-        degree : int or iterable, optional
-            Degree filter for the coefficients
-
-        Returns
-        -------
-        str
-            Formatted coefficient table
-
-        Notes
-        -----
-        The coefficient table shows the polynomial terms and their coefficients
-        in a formatted table. The degree parameter can be used to filter
-        specific degree terms.
-        """
-        from hiten.utils.printing import _format_poly_table
-        
-        ham = self.get_hamiltonian(form)
-        table = _format_poly_table(ham.poly_H, ham._clmo, degree)
-        logger.debug(f'{form} coefficients:\n\n{table}\n\n')
-        return table
 
     def cache_clear(self):
         """
