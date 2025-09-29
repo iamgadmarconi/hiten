@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal, Sequence
+from typing import Any, Literal, Optional, Sequence
 
 import numpy as np
 
+from hiten.algorithms.poincare.core.types import _Section
 from hiten.algorithms.types.core import _HitenBase
 from hiten.algorithms.types.services.maps import (_MapPersistenceService,
                                                   _MapServices)
@@ -26,7 +27,7 @@ class CenterManifoldMap(_HitenBase):
     
     def __repr__(self) -> str:
         return self.__str__()
-    
+
     @property
     def center_manifold(self) -> CenterManifold:
         return self.dynamics.center_manifold
@@ -35,14 +36,68 @@ class CenterManifoldMap(_HitenBase):
     def energy(self) -> float:
         return self.dynamics.energy
 
+    @property
+    def sections(self) -> list[str]:
+        return self.dynamics.list_sections()
+
+    def get_section(self, section_coord: str) -> _Section:
+        return self.dynamics.get_section(section_coord)
+    
+    def has_section(self, section_coord: str) -> bool:
+        return self.dynamics.has_section(section_coord)
+    
+    def clear_sections(self) -> None:
+        return self.dynamics.clear_sections()
+
+    def compute(self, section_coord: Optional[str] = "q3", overrides: Optional[dict[str, Any]] = None, **kwargs) -> np.ndarray:
+        return self.dynamics.compute(section_coord=section_coord, overrides=overrides, **kwargs)
+
+    def get_states(self, section_coord: Optional[str] = "q3", axes: Optional[tuple[str, str]] = None) -> np.ndarray:
+        return self.dynamics.get_points_with_4d_states(section_coord=section_coord, axes=axes)
+
+    def get_points(self, section_coord: Optional[str] = None, axes: Optional[tuple[str, str]] = None) -> np.ndarray:
+        """Get points from the Poincare map.
+
+        Parameters
+        ----------
+        section_coord : str, optional
+            Section coordinate identifier. If None, uses the default section.
+        axes : tuple[str, str], optional
+            Axes to project onto. If None, uses the section plane coordinates.
+
+        Returns
+        -------
+        ndarray, shape (n, 2)
+            Array of 2D points in the section plane.
+        """
+        return self.dynamics.get_points(section_coord=section_coord, axes=axes)
+
+    def to_synodic(self, pt: np.ndarray, *, section_coord: Optional[str]) -> np.ndarray:
+        """Convert a plane point to initial conditions for integration.
+
+        Parameters
+        ----------
+        pt : ndarray, shape (2,)
+            Point on the Poincare section plane.
+        section_coord : str, optional
+            Section coordinate identifier. If None, uses the default
+            section coordinate from configuration.
+
+        Returns
+        -------
+        ndarray, shape (6,)
+            Initial conditions [q1, q2, q3, p1, p2, p3] for integration.
+        """
+        return self.dynamics.to_synodic(pt, section_coord=section_coord)
+
     def plot(
         self,
-        section_coord: str | None = None,
+        section_coord: Optional[str] = None,
         *,
         dark_mode: bool = True,
         save: bool = False,
         filepath: str = "poincare_map.svg",
-        axes: Sequence[str] | None = None,
+        axes: Optional[Sequence[str]] = None,
         **kwargs,
     ):
         """Plot the Poincare map.
@@ -67,27 +122,13 @@ class CenterManifoldMap(_HitenBase):
         matplotlib.figure.Figure
             The generated plot figure.
         """
-        # Determine section
-        if section_coord is not None:
-            if not self.has_section(section_coord):
-                self._solve_and_cache(section_coord)
-            section = self.get_section(section_coord)
-        else:
-            if self._section is None:
-                self._solve_and_cache(None)
-            section = self._section
-
-        # Decide projection
+        # Get points using dynamics service
         if axes is None:
-            pts = section.points
+            pts = self.dynamics.get_points(section_coord=section_coord)
+            section = self.dynamics.get_section(section_coord)
             lbls = section.labels
         else:
-            prev_sec = self._section
-            self._section = section
-            try:
-                pts = self.get_points(section_coord=section_coord, axes=tuple(axes))
-            finally:
-                self._section = prev_sec
+            pts = self.dynamics.get_points(section_coord=section_coord, axes=tuple(axes))
             lbls = tuple(axes)
 
         return plot_poincare_map(
@@ -107,8 +148,8 @@ class CenterManifoldMap(_HitenBase):
         order=6,
         frame="rotating",
         dark_mode: bool = True,
-        axes: Sequence[str] | None = None,
-        section_coord: str | None = None,
+        axes: Optional[Sequence[str]] = None,
+        section_coord: Optional[str] = None,
     ):
         """Create an interactive plot of the Poincare map.
 
@@ -139,30 +180,16 @@ class CenterManifoldMap(_HitenBase):
         Clicking on points in the plot will propagate trajectories from
         those points and display the resulting orbits.
         """
-        # Ensure section exists
-        if section_coord is not None:
-            if not self.has_section(section_coord):
-                self._solve_and_cache(section_coord)
-            section = self.get_section(section_coord)
-        else:
-            if self._section is None:
-                self._solve_and_cache(None)
-            section = self._section
-
         def _on_select(pt_np: np.ndarray):
             if axes is None:
                 section_pt = pt_np
             else:
-                prev_sec = self._section
-                self._section = section
-                try:
-                    proj_pts = self.get_points(section_coord=section_coord, axes=tuple(axes))
-                finally:
-                    self._section = prev_sec
+                proj_pts = self.dynamics.get_points(section_coord=section_coord, axes=tuple(axes))
                 distances = np.linalg.norm(proj_pts - pt_np, axis=1)
+                section = self.dynamics.get_section(section_coord)
                 section_pt = section.points[np.argmin(distances)]
 
-            orbit = self._propagate_from_point(
+            orbit = self.dynamics._propagate_from_point(
                 section_pt,
                 self.energy,
                 steps=steps,
@@ -174,16 +201,13 @@ class CenterManifoldMap(_HitenBase):
 
             return orbit
 
+        # Get points using dynamics service
         if axes is None:
-            pts = section.points
+            pts = self.dynamics.get_points(section_coord=section_coord)
+            section = self.dynamics.get_section(section_coord)
             lbls = section.labels
         else:
-            prev_sec = self._section
-            self._section = section
-            try:
-                pts = self.get_points(section_coord=section_coord, axes=tuple(axes))
-            finally:
-                self._section = prev_sec
+            pts = self.dynamics.get_points(section_coord=section_coord, axes=tuple(axes))
             lbls = tuple(axes)
 
         return plot_poincare_map_interactive(

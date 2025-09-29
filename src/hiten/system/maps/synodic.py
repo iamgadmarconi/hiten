@@ -1,16 +1,17 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal, Sequence, List
+from typing import Any, List, Literal, Optional, Sequence
 
 import numpy as np
 
+from hiten.algorithms.poincare.core.types import _Section
 from hiten.algorithms.types.core import _HitenBase
 from hiten.algorithms.types.services.maps import (_MapPersistenceService,
                                                   _MapServices)
+from hiten.algorithms.types.states import Trajectory
 from hiten.system.manifold import Manifold
 from hiten.system.orbits.base import PeriodicOrbit
-from hiten.algorithms.types.states import Trajectory
 from hiten.utils.plots import plot_poincare_map
 
 
@@ -27,10 +28,41 @@ class SynodicMap(_HitenBase):
     def __repr__(self) -> str:
         return self.__str__()
 
+    @property
+    def sections(self) -> list[str]:
+        return self.dynamics.list_sections()
+
+    def get_section(self, section_coord: str) -> _Section:
+        return self.dynamics.get_section(section_coord)
+    
+    def has_section(self, section_coord: str) -> bool:
+        return self.dynamics.has_section(section_coord)
+    
+    def clear_sections(self) -> None:
+        return self.dynamics.clear_sections()
+
+    def compute(self, *, section_axis: str, section_offset: float, plane_coords: tuple[str, str], direction: Literal[1, -1, None], overrides: dict[str, Any] | None = None, **kwargs) -> np.ndarray:
+        return self.dynamics.compute(section_axis=section_axis, section_offset=section_offset, plane_coords=plane_coords, direction=direction, overrides=overrides, **kwargs)
+
+    def get_points(self, axes: Optional[tuple[str, str]] = None) -> np.ndarray:
+        """Get points from the Poincare map.
+
+        Parameters
+        ----------
+        axes : tuple[str, str], optional
+            Axes to project onto. If None, uses the section plane coordinates.
+
+        Returns
+        -------
+        ndarray, shape (n, 2)
+            Array of 2D points in the section plane.
+        """
+        return self.dynamics.get_points(axes=axes)
+
     def plot(
         self,
         *,
-        axes: Sequence[str] | None = None,
+        axes: Optional[Sequence[str]] = None,
         dark_mode: bool = True,
         save: bool = False,
         filepath: str = "poincare_map.svg",
@@ -77,24 +109,13 @@ class SynodicMap(_HitenBase):
         coordinate system, providing a visual representation of the
         section's structure.
         """
-        if self._section is None:
-            raise ValueError("No synodic section cached. Compute from orbit or manifold first.")
-
-        section = self._section
-
+        # Get points using dynamics service
         if axes is None:
-            pts = section.points
+            pts = self.dynamics.get_points()
+            section = self.dynamics.get_section()
             lbls = section.labels
         else:
-            cols = []
-            for ax in axes:
-                if ax in section.labels:
-                    idx = section.labels.index(ax)
-                    cols.append(section.points[:, idx])
-                else:
-                    idx = self._section_iface.coordinate_index(ax)
-                    cols.append(section.states[:, idx])
-            pts = np.column_stack(cols)
+            pts = self.dynamics.get_points(axes=tuple(axes))
             lbls = tuple(axes)
 
         return plot_poincare_map(

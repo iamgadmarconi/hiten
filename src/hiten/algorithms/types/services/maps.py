@@ -274,7 +274,7 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
     def energy(self) -> float:
         return self._energy
 
-    def compute(self, *, section_coord: str = "q3", overrides: dict[str, Any] | None = None, **kwargs) -> np.ndarray:
+    def compute(self, *, section_coord: str = "q3", overrides: dict[str, Any] | None = None, **kwargs):
         if overrides is None:
             overrides = {}
         else:
@@ -329,7 +329,6 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
                     f"Axis '{ax}' not recognised; allowed are q2, p2, q3, p3"
                 )
 
-        # Stack the two 1-D arrays column-wise into shape (n, 2)
         return np.column_stack(cols)
 
     def to_synodic(self, pt: np.ndarray, *, section_coord: str | None = None) -> np.ndarray:
@@ -413,7 +412,7 @@ class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
     def __init__(self, domain_obj) -> None:
         super().__init__(domain_obj)
 
-    def compute(self, *, section_axis: str, section_offset: float, plane_coords: tuple[str, str], direction: Literal[1, -1, None], overrides: dict[str, Any] | None = None, **kwargs) -> np.ndarray:
+    def compute(self, *, section_axis: str, section_offset: float, plane_coords: tuple[str, str], direction: Literal[1, -1, None], overrides: dict[str, Any] | None = None, **kwargs):
         if overrides is None:
             overrides = {}
         else:
