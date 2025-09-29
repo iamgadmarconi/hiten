@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Dict, Literal
+from typing import TYPE_CHECKING, Optional
 
 import numpy as np
 
@@ -17,24 +16,18 @@ from hiten.algorithms.hamiltonian.transforms import (_coordlocal2realmodal,
                                                      _solve_real,
                                                      _synodic2local_collinear,
                                                      _synodic2local_triangular)
-from hiten.algorithms.poincare.centermanifold.backend import \
-    _CenterManifoldBackend
-from hiten.algorithms.poincare.centermanifold.config import \
-    _CenterManifoldMapConfig
-from hiten.algorithms.poincare.centermanifold.interfaces import (
-    _CenterManifoldInterface, _get_section_interface)
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
                                                   _ServiceBundleBase)
 from hiten.algorithms.types.services.hamiltonian import \
     get_hamiltonian_services
+from hiten.system.maps.center import CenterManifoldMap
 from hiten.utils.io.center import load_center_manifold, save_center_manifold
 from hiten.utils.log_config import logger
 from hiten.utils.printing import _format_poly_table
 
 if TYPE_CHECKING:
     from hiten.algorithms.hamiltonian.pipeline import _HamiltonianPipeline
-    from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
     from hiten.system.center import CenterManifold
     from hiten.system.hamiltonian import Hamiltonian
     from hiten.system.libration.base import LibrationPoint
@@ -53,9 +46,11 @@ class _CenterManifoldPersistenceService(_PersistenceServiceBase):
 class _CenterManifoldDynamicsService(_DynamicsServiceBase):
     """Provide numerical operations for center manifold computations."""
 
-    def __init__(self, point: "LibrationPoint", degree: int) -> None:
-        super().__init__(point)
-        self._degree = degree
+    def __init__(self, domain_obj: "CenterManifold") -> None:
+        self._point = domain_obj._point
+        self._degree = domain_obj._max_degree
+
+        super().__init__(domain_obj)
         self._services = get_hamiltonian_services()
         self._ham_dynamics = self._services.dynamics
         self._ham_conversion = self._services.conversion
@@ -65,7 +60,7 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
 
     @property
     def point(self) -> "LibrationPoint":
-        return self.domain_obj
+        return self._point
 
     @property
     def degree(self) -> int:
@@ -84,10 +79,10 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
     @property
     def pipeline(self) -> _HamiltonianPipeline:
         """Get or create the pipeline for the current point and degree."""
-        cache_key = self.make_key("pipeline", self._degree)
+        cache_key = self.make_key("pipeline", self.degree)
         
         def _factory():
-            return self._ham_pipeline.get(self.domain_obj, self._degree)
+            return self._ham_pipeline.get(self.point, self.degree)
         
         return self.get_or_create(cache_key, _factory)
 
@@ -106,25 +101,6 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
             self.degree = degree
         return self.pipeline
 
-    def get_backend(self, energy: float, section_coord: str, *, forward: int = 1, max_steps: int = 2000, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8, pre_steps: int = 1000, refine_steps: int = 3000, bracket_dx: float = 1e-10, max_expand: int = 500, c_omega_heuristic: float = 20.0) -> _CenterManifoldBackend:
-        key = self.make_key(id(self.domain_obj), self._degree, energy, section_coord, forward, max_steps, method, order, pre_steps, refine_steps, bracket_dx, max_expand, c_omega_heuristic)
-        
-        def _factory() -> _CenterManifoldBackend:
-
-            return _CenterManifoldBackend(
-                forward=forward,
-                max_steps=max_steps,
-                method=method,
-                order=order,
-                pre_steps=pre_steps,
-                refine_steps=refine_steps,
-                bracket_dx=bracket_dx,
-                max_expand=max_expand,
-                c_omega_heuristic=c_omega_heuristic,
-            )
-        
-        return self.get_or_create(key, _factory)
-
     def clear_caches(self) -> None:
         self.reset()
         try:
@@ -138,24 +114,12 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
     def format_coefficients(self, ham: "Hamiltonian", degree: int) -> str:
         return _format_poly_table(ham.poly_H, ham._clmo, degree)
 
-    def get_map(self, cm: "CenterManifold", energy: float, **kwargs):
+    def get_map(self, energy: float):
 
-        config_fields = set(_CenterManifoldMapConfig.__dataclass_fields__.keys())
-        config_kwargs = {}
-        for key, value in kwargs.items():
-            if key in config_fields:
-                config_kwargs[key] = value
-            else:
-                raise TypeError(f"'{key}' is not a valid keyword argument for PoincareMap configuration.")
-
-        cfg = _CenterManifoldMapConfig(**config_kwargs)
-        config_tuple = tuple(sorted(asdict(cfg).items()))
-        cache_key = self.make_key(id(self.domain_obj), self._degree, energy, config_tuple)
+        cache_key = self.make_key(id(self.domain_obj), self._degree, energy)
 
         def _factory():
-            from hiten.algorithms.poincare.centermanifold.base import \
-                CenterManifoldMap
-            return CenterManifoldMap.with_default_engine(cm, energy, cfg)
+            return CenterManifoldMap(self.domain_obj, energy)
 
         return self.get_or_create(cache_key, _factory)
 
@@ -172,7 +136,7 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
                 raise ValueError(
                     "energy must be specified when converting a 2-D Poincaré point to initial conditions."
                 )
-            return self._cm_point_to_synodic_from_section(cm_point, float(energy), section_coord, tol)
+            return self._cm_point_to_synodic_from_section(float(energy), cm_point, section_coord, tol)
         if cm_point.size == 4:
             return self._cm_point_to_synodic_4d(cm_point, tol)
         raise ValueError(
@@ -198,43 +162,8 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
             restricted[5],
         ], dtype=np.float64)
 
-    def _cm_point_to_synodic_from_section(
-        self,
-        poincare_point: np.ndarray,
-        energy: float,
-        section_coord: str,
-        tol: float,
-    ) -> np.ndarray:
-        sec_if = _get_section_interface(section_coord)
-
-        known_vars: Dict[str, float] = {sec_if.section_coord: 0.0}
-        known_vars[sec_if.plane_coords[0]] = float(poincare_point[0])
-        known_vars[sec_if.plane_coords[1]] = float(poincare_point[1])
-
-        var_to_solve = {"q3": "p3", "p3": "q3", "q2": "p2", "p2": "q2"}[sec_if.section_coord]
-
-        cm_interface = _CenterManifoldInterface()
-        solved_val = cm_interface.solve_missing_coord(
-            var_to_solve,
-            known_vars,
-            h0=float(energy),
-            H_blocks=self.hamsys.poly_H(),
-            clmo_table=self.hamsys.clmo_table,
-        )
-
-        full_cm_coords = known_vars.copy()
-        full_cm_coords[var_to_solve] = solved_val
-
-        if any(v is None for v in full_cm_coords.values()):
-            raise RuntimeError("Failed to reconstruct full CM coordinates - root finding did not converge.")
-
-        real_4d_cm = np.array([
-            full_cm_coords["q2"],
-            full_cm_coords["p2"],
-            full_cm_coords["q3"],
-            full_cm_coords["p3"],
-        ], dtype=np.float64)
-
+    def _cm_point_to_synodic_from_section(self, energy: float, poincare_point: np.ndarray, section_coord: str, tol: float) -> np.ndarray:
+        real_4d_cm = self.get_map(energy)._to_real_4d_cm(poincare_point, section_coord)
         return self._cm_point_to_synodic_4d(real_4d_cm, tol)
 
     def _cm_point_to_synodic_4d(self, cm_coords_4d: np.ndarray, tol: float) -> np.ndarray:
@@ -276,16 +205,16 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
         from hiten.system.libration.collinear import CollinearPoint, L3Point
         from hiten.system.libration.triangular import TriangularPoint
 
-        if isinstance(self.domain_obj, CollinearPoint):
+        if isinstance(self._point, CollinearPoint):
             self._local2synodic = _local2synodic_collinear
             self._synodic2local = _synodic2local_collinear
             self._mix_pairs = (1, 2)
-            if isinstance(self.domain_obj, L3Point):
+            if isinstance(self._point, L3Point):
                 logger.warning(
                     "L3 point has not been verified for centre manifold / normal form computations!"
                 )
                 raise NotImplementedError("L3 points are not supported yet.")
-        elif isinstance(self.domain_obj, TriangularPoint):
+        elif isinstance(self._point, TriangularPoint):
             self._local2synodic = _local2synodic_triangular
             self._synodic2local = _synodic2local_triangular
             self._mix_pairs = (0, 1, 2)
@@ -294,31 +223,29 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
             )
             raise NotImplementedError("Triangular points are not supported yet.")
         else:
-            raise ValueError(f"Unsupported libration point type: {type(self.domain_obj)}")
+            raise ValueError(f"Unsupported libration point type: {type(self._point)}")
 
 
 class _CenterManifoldServices(_ServiceBundleBase):
 
-    def __init__(self, domain_obj: "LibrationPoint", degree: int, persistence: _CenterManifoldPersistenceService, dynamics: _CenterManifoldDynamicsService) -> None:
+    def __init__(self, domain_obj: "CenterManifold", persistence: _CenterManifoldPersistenceService, dynamics: _CenterManifoldDynamicsService) -> None:
         super().__init__(domain_obj)
-        self.degree = degree
+        self.degree = domain_obj._max_degree
         self.persistence = persistence
         self.dynamics = dynamics
 
     @classmethod
-    def default(cls, point: "LibrationPoint", degree: int) -> "_CenterManifoldServices":
+    def default(cls, domain_obj: "CenterManifold") -> "_CenterManifoldServices":
         return cls(
-            domain_obj=point,
-            degree=degree,
+            domain_obj=domain_obj,
             persistence=_CenterManifoldPersistenceService(),
-            dynamics=_CenterManifoldDynamicsService(point, degree)
+            dynamics=_CenterManifoldDynamicsService(domain_obj)
         )
 
     @classmethod
     def with_shared_dynamics(cls, dynamics: _CenterManifoldDynamicsService) -> "_CenterManifoldServices":
         return cls(
             domain_obj=dynamics.domain_obj,
-            degree=dynamics._degree,
             persistence=_CenterManifoldPersistenceService(),
             dynamics=dynamics
         )

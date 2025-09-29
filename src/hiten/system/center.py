@@ -39,7 +39,7 @@ class CenterManifold(_HitenBase):
     def __init__(self, point: "LibrationPoint", degree: int):
         self._point = point
         self._max_degree = degree
-        services = _CenterManifoldServices.default(point, degree)
+        services = _CenterManifoldServices.default(self)
         super().__init__(services)
 
     @property
@@ -91,7 +91,7 @@ class CenterManifold(_HitenBase):
         super().__setstate__(state)
         self._point = state["_point"]
         self._max_degree = state["_max_degree"]
-        self._setup_services(_CenterManifoldServices.default(self._point, self._max_degree))
+        self._setup_services(_CenterManifoldServices.default(self))
 
     @classmethod
     def load(cls, dir_path: str, **kwargs) -> "CenterManifold":
@@ -116,6 +116,6 @@ class CenterManifold(_HitenBase):
         return cls._load_with_services(
             dir_path, 
             _CenterManifoldPersistenceService(), 
-            lambda cm: _CenterManifoldServices.default(cm._point, cm._max_degree), 
+            lambda cm: _CenterManifoldServices.default(cm), 
             **kwargs
         )

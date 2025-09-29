@@ -20,9 +20,6 @@ from hiten.algorithms.poincare.core.types import _SectionHit
 from hiten.algorithms.poincare.utils import _hermite_der, _hermite_scalar
 
 
-
-
-
 def _project_batch(
     proj: "tuple[str, str] | Callable[[np.ndarray], tuple[float, float]]",
     x: "np.ndarray",

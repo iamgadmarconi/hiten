@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Dict, Literal, Optional
 
 import numpy as np
 
+from hiten.algorithms.dynamics.hamiltonian import _HamiltonianSystem
 from hiten.algorithms.poincare.centermanifold.base import \
     _CenterManifoldMapFacade
 from hiten.algorithms.poincare.centermanifold.config import \
@@ -28,6 +29,9 @@ from hiten.utils.io.map import (load_poincare_map, load_poincare_map_inplace,
 
 if TYPE_CHECKING:
     from hiten.algorithms.poincare.core.types import _Section
+    from hiten.system.center import CenterManifold
+    from hiten.system.maps.center import CenterManifoldMap
+    from hiten.system.maps.synodic import SynodicMap
 
 
 class _MapPersistenceService(_PersistenceServiceBase):
@@ -259,10 +263,11 @@ class _MapDynamicsServiceBase(_DynamicsServiceBase):
 class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
     """Dynamics service for center manifold maps with caching."""
 
-    def __init__(self, domain_obj: "CenterManifold") -> None:
-        super().__init__(domain_obj)
-        self._energy = self.domain_obj.energy
+    def __init__(self, domain_obj: "CenterManifoldMap") -> None:
+        self._energy = self.domain_obj._energy
         self._center_manifold = self.domain_obj._center_manifold
+
+        super().__init__(domain_obj)
         self._generator = None
         self._section_coord = None
 
@@ -273,6 +278,10 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
     @property
     def energy(self) -> float:
         return self._energy
+
+    @property
+    def hamsys(self) -> _HamiltonianSystem:
+        return self.center_manifold.dynamics.hamsys
 
     def compute(self, *, section_coord: str = "q3", overrides: dict[str, Any] | None = None, **kwargs):
         if overrides is None:
@@ -331,24 +340,42 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
 
         return np.column_stack(cols)
 
-    def to_synodic(self, pt: np.ndarray, *, section_coord: str | None = None) -> np.ndarray:
-        """Convert a plane point to initial conditions for integration.
+    def to_synodic(self, poincare_point: np.ndarray, section_coord: Optional[str], tol: float) -> np.ndarray:
+        if section_coord is None:
+            section_coord = self.section_coord
+        return self.center_manifold.dynamics.cm_point_to_synodic(cm_point=poincare_point, energy=self.energy, section_coord=section_coord, tol=tol)
 
-        Parameters
-        ----------
-        pt : ndarray, shape (2,)
-            Point on the Poincare section plane.
-        section_coord : str, optional
-            Section coordinate identifier. If None, uses the default
-            section coordinate from configuration.
+    def _to_real_4d_cm(
+        self,
+        poincare_point: np.ndarray,
+        section_coord: str,
+    ) -> np.ndarray:
+        # Get plane coordinates from the generator's interface
+        plane_coords = self.generator.interface.plane_labels(section_coord)
 
-        Returns
-        -------
-        ndarray, shape (6,)
-            Initial conditions [q1, q2, q3, p1, p2, p3] for integration.
-        """
-        key = section_coord or self.section_coord
-        return self.domain_obj.to_synodic(pt, self._energy, section_coord=key)
+        known_vars: Dict[str, float] = {section_coord: 0.0}
+        known_vars[plane_coords[0]] = float(poincare_point[0])
+        known_vars[plane_coords[1]] = float(poincare_point[1])
+
+        solved_val = self.generator.interface.lift_plane_point(
+            (float(poincare_point[0]), float(poincare_point[1])),
+            section_coord=section_coord,
+            h0=float(self.energy),
+            H_blocks=self.hamsys.poly_H(),
+            clmo_table=self.hamsys.clmo_table,
+        )
+
+        if solved_val is None:
+            raise RuntimeError("Failed to reconstruct full CM coordinates - root finding did not converge.")
+
+        real_4d_cm = np.array([
+            solved_val[0],  # q2
+            solved_val[1],  # p2
+            solved_val[2],  # q3
+            solved_val[3],  # p3
+        ], dtype=np.float64)
+
+        return real_4d_cm
 
     def _propagate_from_point(
         self,
@@ -409,7 +436,7 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
 class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
     """Dynamics service for synodic maps with detection-based computation."""
 
-    def __init__(self, domain_obj) -> None:
+    def __init__(self, domain_obj: "SynodicMap") -> None:
         super().__init__(domain_obj)
 
     def compute(self, *, section_axis: str, section_offset: float, plane_coords: tuple[str, str], direction: Literal[1, -1, None], overrides: dict[str, Any] | None = None, **kwargs):
