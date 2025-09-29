@@ -24,7 +24,21 @@ from hiten.algorithms.types.services.body import (_BodyPersistenceService,
 
 
 class Body(_HitenBase):
-    """Celestial body container bound to a lightweight persistence adapter."""
+    """Celestial body container bound to a lightweight persistence adapter.
+    
+    Parameters
+    ----------
+    name : str
+        The name of the body.
+    mass : float
+        The mass of the body.
+    radius : float
+        The radius of the body.
+    color : str
+        The color of the body.
+    parent : :class:`~hiten.system.body.Body`
+        The parent of the body.
+    """
 
     def __init__(self, name: str, mass: float, radius: float, color: str = "#000000", parent: Optional["Body"] = None):
         self._name = name
@@ -48,22 +62,27 @@ class Body(_HitenBase):
 
     @property
     def name(self) -> str:
+        """Return the name of the body."""
         return self.dynamics.name
 
     @property
     def mass(self) -> float:
+        """Return the mass of the body in kg."""
         return self.dynamics.mass
 
     @property
     def radius(self) -> float:
+        """Return the radius of the body in km."""
         return self.dynamics.radius
     
     @property
     def color(self) -> str:
+        """Return the color of the body."""
         return self.dynamics.color
 
     @property
     def parent(self) -> "Body":
+        """Return the parent of the body."""
         return self.dynamics.parent
 
     def __setstate__(self, state):
@@ -74,7 +93,7 @@ class Body(_HitenBase):
         
         Parameters
         ----------
-        state : dict
+        state : dict[str, Any]
             Dictionary containing the serialized state of the Body.
         """
         super().__setstate__(state)

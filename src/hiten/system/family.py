@@ -10,6 +10,7 @@ Notes
 All positions and velocities are expressed in nondimensional units where the
 distance between the primaries is unity and the orbital period is 2*pi.
 """
+
 import os
 from pathlib import Path
 from typing import Iterator, List
@@ -27,7 +28,17 @@ from hiten.utils.plots import plot_orbit_family
 
 
 class OrbitFamily(_HitenBase):
-    """Container for an ordered family of periodic orbits."""
+    """Container for an ordered family of periodic orbits.
+    
+    Parameters
+    ----------
+    orbits : List[:class:`~hiten.system.orbits.base.PeriodicOrbit`]
+        The orbits in the family.
+    parameter_name : str
+        The name of the parameter that is varied.
+    parameter_values : np.ndarray
+        The values of the parameter that is varied.
+    """
 
     def __init__(
         self,
@@ -103,7 +114,7 @@ class OrbitFamily(_HitenBase):
 
         Parameters
         ----------
-        filepath : str
+        filepath : str or Path
             Destination CSV file path.
         **kwargs
             Extra keyword arguments passed to :meth:`~hiten.system.orbits.base.PeriodicOrbit.propagate`.
@@ -119,7 +130,13 @@ class OrbitFamily(_HitenBase):
         logger.info(f"Orbit family trajectories successfully exported to {filepath}")
 
     def to_df(self, **kwargs) -> pd.DataFrame:
-        """Return a DataFrame summarising the family."""
+        """Return a DataFrame summarising the family.
+        
+        Parameters
+        ----------
+        **kwargs
+            Additional keyword arguments passed to :meth:`~hiten.system.orbits.base.PeriodicOrbit.propagate`.
+        """
         data = []
         for idx, orbit in enumerate(self.orbits):
             if orbit.trajectory is None:
@@ -138,12 +155,10 @@ class OrbitFamily(_HitenBase):
         return df
 
     def __getstate__(self):
-        """Customise pickling by omitting adapter caches."""
         state = super().__getstate__()
         return state
 
     def __setstate__(self, state):
-        """Restore adapter wiring after unpickling."""
         super().__setstate__(state)
         self._setup_services(_OrbitFamilyServices.default(self))
 
@@ -182,12 +197,30 @@ class OrbitFamily(_HitenBase):
         return cls(orbits, parameter_name, param_vals)
 
     def save(self, filepath: str | Path, *, compression: str = "gzip", level: int = 4) -> None:
-        """Save the family to an HDF5 file."""
+        """Save the family to an pickle file.
+        
+        Parameters
+        ----------
+        filepath : str or Path
+            The path to the file to save the family to.
+        compression : str, default "gzip"
+            The compression algorithm to use.
+        level : int, default 4
+            The compression level to use.
+        """
         self.persistence.save(self, filepath, compression=compression, level=level)
 
     @classmethod
     def load(cls, filepath: str | Path, **kwargs) -> "OrbitFamily":
-        """Load a Body from a file (new instance)."""
+        """Load a OrbitFamily from a file (new instance).
+        
+        Parameters
+        ----------
+        filepath : str or Path
+            The path to the file to load the family from.
+        **kwargs
+            Additional keyword arguments for the load operation.
+        """
         return cls._load_with_services(
             filepath, 
             _OrbitFamilyPersistenceService(), 

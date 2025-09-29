@@ -93,8 +93,6 @@ class InvariantTori(_HitenBase):
         performed here; we only integrate the variational equations to
         obtain the state-transition matrices required by the algorithm.
 
-    Mathematical Background
-    ----------------------
     The invariant torus is parameterized by two angles:
     - theta1: longitudinal angle along the periodic orbit
     - theta2: latitudinal angle in the transverse direction

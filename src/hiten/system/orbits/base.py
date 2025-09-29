@@ -147,14 +147,17 @@ class PeriodicOrbit(_HitenBase):
     
     @property
     def stability_indices(self) -> Optional[Tuple]:
+        """The stability indices of the orbit."""
         return self.dynamics.stability_indices
 
     @property
     def eigenvalues(self) -> Optional[Tuple]:
+        """The eigenvalues of the orbit."""
         return self.dynamics.eigenvalues
     
     @property
     def eigenvectors(self) -> Optional[Tuple]:
+        """The eigenvectors of the orbit."""
         return self.dynamics.eigenvectors
 
     @property
@@ -236,6 +239,7 @@ class PeriodicOrbit(_HitenBase):
 
     @property
     def trajectory(self) -> Optional[Trajectory]:
+        """The trajectory of the orbit."""
         return self.dynamics.trajectory
     
     @property

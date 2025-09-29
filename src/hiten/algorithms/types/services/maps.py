@@ -338,6 +338,11 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
             The overrides.
         kwargs : dict[str, Any]
             The keyword arguments.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.poincare.centermanifold.types.CenterManifoldMapResults`
+            The results of the Poincare map.
         """
         if overrides is None:
             overrides = {}

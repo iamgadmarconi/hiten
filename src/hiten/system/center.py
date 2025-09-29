@@ -34,7 +34,15 @@ if TYPE_CHECKING:
 
 
 class CenterManifold(_HitenBase):
-    """Centre manifold normal-form builder orchestrating adapter services."""
+    """Centre manifold normal-form builder orchestrating adapter services.
+    
+    Parameters
+    ----------
+    point : :class:`~hiten.system.libration.base.LibrationPoint`
+        The libration point.
+    degree : int
+        The degree of the center manifold.
+    """
 
     def __init__(self, point: "LibrationPoint", degree: int):
         self._point = point
@@ -44,17 +52,21 @@ class CenterManifold(_HitenBase):
 
     @property
     def point(self) -> "LibrationPoint":
+        """Return the libration point."""
         return self.dynamics.point
 
     @property
     def degree(self) -> int:
+        """Return the degree of the center manifold."""
         return self.dynamics.degree
 
     @degree.setter
     def degree(self, value: int) -> None:
+        """Set the degree of the center manifold."""
         self.dynamics.degree = value
 
     def hamiltonian(self, degree: int) -> "Hamiltonian":
+        """Return the Hamiltonian of the center manifold."""
         return self.dynamics.hamiltonian(degree)
 
     def __str__(self) -> str:
@@ -64,22 +76,27 @@ class CenterManifold(_HitenBase):
         return self.__str__()
 
     def compute(self, form: str = "center_manifold_real") -> "Hamiltonian":
+        """Compute the Hamiltonian of the center manifold."""
         return self.dynamics.pipeline.get_hamiltonian(form)
 
     def coefficients(self,form: str = "center_manifold_real", degree = None) -> str:
+        """Return the coefficients of the center manifold."""
         return self.dynamics.format_coefficients(self.dynamics.pipeline.get_hamiltonian(form), degree)
 
     def to_synodic(self, cm_point, energy: Optional[float] = None, section_coord: str = "q3", tol: float = 1e-14):
+        """Convert the center manifold point to synodic coordinates."""
         return self.dynamics.cm_point_to_synodic(cm_point, energy=energy, section_coord=section_coord, tol=tol)
 
     def to_cm(self, synodic_6d, tol=1e-14):
+        """Convert the synodic coordinates to center manifold coordinates."""
         return self.dynamics.synodic_to_cm(synodic_6d, tol=tol)
 
     def poincare_map(self, energy: float) -> "CenterManifoldMap":
+        """Return the Poincare map of the center manifold."""
         return self.dynamics.get_map(energy)
 
     def __setstate__(self, state):
-        """Restore adapter wiring after unpickling."""
+        """Restore the CenterManifold instance after unpickling."""
         super().__setstate__(state)
         self._point = state["_point"]
         self._max_degree = state["_max_degree"]
@@ -95,7 +112,7 @@ class CenterManifold(_HitenBase):
 
         Parameters
         ----------
-        dir_path : str or path-like object
+        dir_path : str or Path
             The path to the directory from which to load the data.
         **kwargs
             Additional keyword arguments for the load operation.

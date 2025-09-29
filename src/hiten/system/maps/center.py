@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Any, Literal, Optional, Sequence
 
 import numpy as np
 
+from hiten.algorithms.poincare.centermanifold.types import \
+    CenterManifoldMapResults
 from hiten.algorithms.poincare.core.types import _Section
 from hiten.algorithms.types.core import _HitenBase
 from hiten.algorithms.types.services.maps import (_MapPersistenceService,
@@ -15,7 +17,22 @@ if TYPE_CHECKING:
     from hiten.system.center import CenterManifold
 
 class CenterManifoldMap(_HitenBase):
-    """Poincare map for a center manifold."""
+    """Poincare map for a center manifold.
+    
+    Parameters
+    ----------
+    center_manifold : :class:`~hiten.system.center.CenterManifold`
+        The center manifold.
+    energy : float
+        The energy of the center manifold.
+    
+    Attributes
+    ----------
+    center_manifold : :class:`~hiten.system.center.CenterManifold`
+        The center manifold.
+    energy : float
+        The energy of the center manifold.
+    """
 
     def __init__(self, center_manifold: "CenterManifold", energy: float):
         self._center_manifold = center_manifold
@@ -31,10 +48,12 @@ class CenterManifoldMap(_HitenBase):
 
     @property
     def center_manifold(self) -> "CenterManifold":
+        """The center manifold."""
         return self.dynamics.center_manifold
     
     @property
     def energy(self) -> float:
+        """The energy of the center manifold."""
         return self.dynamics.energy
 
     @property
@@ -48,21 +67,55 @@ class CenterManifoldMap(_HitenBase):
 
     @property
     def sections(self) -> list[str]:
+        """The sections of the center manifold."""
         return self.dynamics.list_sections()
 
     def get_section(self, section_coord: str) -> _Section:
+        """Get the section of the center manifold."""
         return self.dynamics.get_section(section_coord)
     
     def has_section(self, section_coord: str) -> bool:
+        """Check if the center manifold has a section."""
         return self.dynamics.has_section(section_coord)
     
     def clear_sections(self) -> None:
+        """Clear the sections of the center manifold."""
         return self.dynamics.clear_sections()
 
-    def compute(self, section_coord: Optional[str] = "q3", overrides: Optional[dict[str, Any]] = None, **kwargs) -> np.ndarray:
+    def compute(self, section_coord: Optional[str] = "q3", overrides: Optional[dict[str, Any]] = None, **kwargs) -> CenterManifoldMapResults:
+        """Compute the Poincare map.
+        
+        Parameters
+        ----------
+        section_coord : str, optional
+            Section coordinate identifier. If None, uses the default section.
+        overrides : dict[str, Any], optional
+            Overrides for the Poincare map.
+        kwargs : dict[str, Any], optional
+            Keyword arguments for the Poincare map.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.poincare.centermanifold.types.CenterManifoldMapResults`
+            The results of the Poincare map.
+        """
         return self.dynamics.compute(section_coord=section_coord, overrides=overrides, **kwargs)
 
     def get_states(self, section_coord: Optional[str] = "q3", axes: Optional[tuple[str, str]] = None) -> np.ndarray:
+        """Get the states of the Poincare map.
+        
+        Parameters
+        ----------
+        section_coord : str, optional
+            Section coordinate identifier. If None, uses the default section.
+        axes : tuple[str, str], optional
+            Axes to project onto. If None, uses the section plane coordinates.
+
+        Returns
+        -------
+        np.ndarray, shape (n, 4)
+            Array of 4D states in the section plane.
+        """
         return self.dynamics.get_points_with_4d_states(section_coord=section_coord, axes=axes)
 
     def get_points(self, section_coord: Optional[str] = None, axes: Optional[tuple[str, str]] = None) -> np.ndarray:

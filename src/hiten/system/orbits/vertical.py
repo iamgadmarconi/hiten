@@ -39,11 +39,6 @@ class VerticalOrbit(PeriodicOrbit):
         Six-dimensional initial state vector [x, y, z, vx, vy, vz] in
         nondimensional units. If None, must be provided manually.
 
-    Attributes
-    ----------
-    _amplitude_z : float or None
-        z-amplitude of the vertical orbit (nondimensional units).
-
     Notes
     -----
     The implementation of the analytical seed and the Jacobian adjustment for

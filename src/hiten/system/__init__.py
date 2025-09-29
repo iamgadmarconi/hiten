@@ -6,7 +6,8 @@ simply write::
 >>> from hiten.system import System, Body, L1Point, HaloOrbit
 """
 
-from ..algorithms.poincare.centermanifold.config import _CenterManifoldMapConfig
+from ..algorithms.poincare.centermanifold.config import \
+    _CenterManifoldMapConfig
 from ..algorithms.poincare.synodic.config import _SynodicMapConfig
 from ..algorithms.types.states import SynodicState
 from .base import System

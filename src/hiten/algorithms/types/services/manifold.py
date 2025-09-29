@@ -198,6 +198,8 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
     @property
     def trajectories(self) -> List[Trajectory]:
         """The trajectories of the manifold."""
+        if self._manifold_result is None:
+            return None
         states_list = self._manifold_result[2]
         times_list = self._manifold_result[3]
         return [Trajectory(times, states) for times, states in zip(times_list, states_list)]

@@ -170,6 +170,13 @@ class Manifold(_HitenBase):
 
     @property
     def trajectories(self) -> List[Trajectory]:
+        """The trajectories of the manifold.
+        
+        Returns
+        -------
+        List[:class:`~hiten.algorithms.types.states.Trajectory`]
+            The trajectories of the manifold.
+        """
         return self.dynamics.trajectories
 
     def compute(self, step: float = 0.02, integration_fraction: float = 0.75, NN: int = 1, displacement: float = 1e-6, dt: float = 1e-3, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8, **kwargs):

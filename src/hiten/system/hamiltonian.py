@@ -17,7 +17,19 @@ from hiten.algorithms.types.services.hamiltonian import (
 
 
 class Hamiltonian(_HitenBase):
-    """User-facing container delegating Hamiltonian numerics to adapters."""
+    """User-facing container delegating Hamiltonian numerics to adapters.
+    
+    Parameters
+    ----------
+    poly_H : list[np.ndarray]
+        The polynomial Hamiltonian blocks.
+    degree : int
+        The degree of the Hamiltonian.
+    ndof : int, default 3
+        The number of degrees of freedom.
+    name : str, default "Hamiltonian"
+        The name of the Hamiltonian.
+    """
 
     def __init__(self, poly_H: list[np.ndarray], degree: int, ndof: int = 3, name: str = "Hamiltonian") -> None:
         if degree <= 0:
@@ -54,30 +66,37 @@ class Hamiltonian(_HitenBase):
         return self.poly_H[key]
 
     def __call__(self, coords: np.ndarray) -> float:
+        """Evaluate the Hamiltonian at the given coordinates."""
         return self.dynamics.evaluate(coords)
 
     @property
     def name(self) -> str:
+        """Return the name of the Hamiltonian."""
         return self._name
 
     @property
     def degree(self) -> int:
+        """Return the degree of the Hamiltonian."""
         return self._degree
 
     @property
     def ndof(self) -> int:
+        """Return the number of degrees of freedom."""
         return self._ndof
 
     @property
     def hamsys(self):
+        """Return the Hamiltonian system."""
         return self.dynamics.hamsys
 
     @property
     def jacobian(self) -> np.ndarray:
+        """Return the Jacobian of the Hamiltonian."""
         return self.dynamics.jac_H
 
     @property
     def poly_H(self) -> list[np.ndarray]:
+        """Return the polynomial Hamiltonian blocks."""
         return self.dynamics.poly_H
 
     @classmethod
@@ -107,7 +126,15 @@ class Hamiltonian(_HitenBase):
 
     @classmethod
     def load(cls, filepath: str | Path, **kwargs) -> "Hamiltonian":
-        """Load a System from a file (new instance)."""
+        """Load a Hamiltonian from a file (new instance).
+        
+        Parameters
+        ----------
+        filepath : str or Path
+            The path to the file to load the Hamiltonian from.
+        **kwargs
+            Additional keyword arguments for the load operation.
+        """
         return cls._load_with_services(
             filepath, 
             _HamiltonianPersistenceService(),
@@ -124,12 +151,27 @@ class Hamiltonian(_HitenBase):
         default_params: dict,
     ) -> None:
         """Register a conversion function using the shared conversion service."""
-        from hiten.algorithms.types.services.hamiltonian import _SHARED_REGISTRY
+        from hiten.algorithms.types.services.hamiltonian import \
+            _SHARED_REGISTRY
         _SHARED_REGISTRY.register_conversion(src, dst, converter, required_context, default_params)
 
 
 class LieGeneratingFunction(_HitenBase):
-    """Class for Lie generating functions in canonical transformations."""
+    """Class for Lie generating functions in canonical transformations.
+    
+    Parameters
+    ----------
+    poly_G : list[np.ndarray]
+        The polynomial G blocks.
+    poly_elim : list[np.ndarray]
+        The polynomial elimination blocks.
+    degree : int
+        The degree of the Lie generating function.
+    ndof : int, default 3
+        The number of degrees of freedom.
+    name : str, default "LieGeneratingFunction"
+        The name of the Lie generating function.
+    """
 
     def __init__(
         self,
@@ -167,6 +209,7 @@ class LieGeneratingFunction(_HitenBase):
         return self.poly_G[key]
     
     def __call__(self, coords: np.ndarray) -> float:
+        """Evaluate the Lie generating function at the given coordinates."""
         return self.dynamics.evaluate(coords)
 
     @property
@@ -186,10 +229,12 @@ class LieGeneratingFunction(_HitenBase):
 
     @property
     def poly_elim(self) -> list[np.ndarray]:
+        """Return the polynomial elimination blocks."""
         return self.dynamics.poly_elim
 
     @property
     def name(self) -> str:
+        """Return the name of the Lie generating function."""
         return self.dynamics.name
 
     def __setstate__(self, state):
@@ -208,6 +253,15 @@ class LieGeneratingFunction(_HitenBase):
 
     @classmethod
     def load(cls, filepath: str | Path, **kwargs):
+        """Load a LieGeneratingFunction from a file (new instance).
+        
+        Parameters
+        ----------
+        filepath : str or Path
+            The path to the file to load the LieGeneratingFunction from.
+        **kwargs
+            Additional keyword arguments for the load operation.
+        """
         return cls._load_with_services(
             filepath, 
             _LieGeneratingFunctionPersistenceService(),
