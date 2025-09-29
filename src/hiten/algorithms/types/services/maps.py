@@ -62,7 +62,7 @@ class _MapDynamicsServiceBase(_DynamicsServiceBase):
         """The key for the section."""
         if self._generator is None:
             self._generator = self._build_generator()
-        return self._generator.section_key
+        return self._generator
 
     @property
     @abstractmethod
@@ -261,8 +261,8 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
     """Dynamics service for center manifold maps with caching."""
 
     def __init__(self, domain_obj: "CenterManifoldMap") -> None:
-        self._energy = self.domain_obj._energy
-        self._center_manifold = self.domain_obj._center_manifold
+        self._energy = domain_obj._energy
+        self._center_manifold = domain_obj._center_manifold
 
         super().__init__(domain_obj)
         self._generator = None
@@ -348,13 +348,13 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
         section_coord: str,
     ) -> np.ndarray:
         # Get plane coordinates from the generator's interface
-        plane_coords = self.generator.interface.plane_labels(section_coord)
+        plane_coords = self.generator._get_interface().plane_labels(section_coord)
 
         known_vars: Dict[str, float] = {section_coord: 0.0}
         known_vars[plane_coords[0]] = float(poincare_point[0])
         known_vars[plane_coords[1]] = float(poincare_point[1])
 
-        solved_val = self.generator.interface.lift_plane_point(
+        solved_val = self.generator._get_interface().lift_plane_point(
             (float(poincare_point[0]), float(poincare_point[1])),
             section_coord=section_coord,
             h0=float(self.energy),

@@ -146,8 +146,8 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
 
     def synodic_to_cm(self, synodic_6d: np.ndarray, tol: float = 1e-14) -> np.ndarray:
         synodic_6d = np.asarray(synodic_6d, dtype=np.float64).reshape(6)
-        local_6d = self._synodic2local(self.domain_obj, synodic_6d, tol)
-        real_modal_6d = _coordlocal2realmodal(self.domain_obj, local_6d, tol)
+        local_6d = self._synodic2local(self._point, synodic_6d, tol)
+        real_modal_6d = _coordlocal2realmodal(self._point, local_6d, tol)
         complex_modal_6d = _solve_complex(real_modal_6d, tol=tol, mix_pairs=self._mix_pairs)
 
         expansions = self.pipeline.get_lie_expansions(inverse=True, tol=tol)
@@ -163,7 +163,7 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
         ], dtype=np.float64)
 
     def _cm_point_to_synodic_from_section(self, energy: float, poincare_point: np.ndarray, section_coord: str, tol: float) -> np.ndarray:
-        real_4d_cm = self.get_map(energy)._to_real_4d_cm(poincare_point, section_coord)
+        real_4d_cm = self.get_map(energy).dynamics._to_real_4d_cm(poincare_point, section_coord)
         return self._cm_point_to_synodic_4d(real_4d_cm, tol)
 
     def _cm_point_to_synodic_4d(self, cm_coords_4d: np.ndarray, tol: float) -> np.ndarray:
@@ -180,8 +180,8 @@ class _CenterManifoldDynamicsService(_DynamicsServiceBase):
         complex_6d = _evaluate_transform(expansions, complex_6d_cm, self.hamsys.clmo_H)
 
         real_6d = _solve_real(complex_6d, tol=tol, mix_pairs=self._mix_pairs)
-        local_6d = _coordrealmodal2local(self.domain_obj, real_6d, tol)
-        return self._local2synodic(self.domain_obj, local_6d, tol)
+        local_6d = _coordrealmodal2local(self._point, real_6d, tol)
+        return self._local2synodic(self._point, local_6d, tol)
 
     def _restrict_to_center_manifold(self, coords: np.ndarray) -> np.ndarray:
         coords = coords.copy()
