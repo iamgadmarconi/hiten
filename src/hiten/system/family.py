@@ -18,7 +18,8 @@ import numpy as np
 import pandas as pd
 
 from hiten.algorithms.types.core import _HitenBase
-from hiten.algorithms.types.services.family import _OrbitFamilyServices
+from hiten.algorithms.types.services.family import (
+    _OrbitFamilyPersistenceService, _OrbitFamilyServices)
 from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.io.common import _ensure_dir
 from hiten.utils.log_config import logger
@@ -185,20 +186,15 @@ class OrbitFamily(_HitenBase):
         self.persistence.save(self, filepath, compression=compression, level=level)
 
     @classmethod
-    def load(cls, filepath: str | Path):
-        """Load a family previously saved with save method."""
-        def services_factory(family):
-            return _OrbitFamilyServices.default(family)
-        
-        def persistence_factory():
-            services = _OrbitFamilyServices.default()
-            return services.persistence
-        
+    def load(cls, filepath: str | Path, **kwargs) -> "OrbitFamily":
+        """Load a Body from a file (new instance)."""
         return cls._load_with_services(
             filepath, 
-            persistence_factory(), 
-            services_factory, 
+            _OrbitFamilyPersistenceService(), 
+            _OrbitFamilyServices.default, 
+            **kwargs
         )
+
 
     def plot(self, *, dark_mode: bool = True, save: bool = False, filepath: str = "orbit_family.svg", **kwargs):
         """Visualise the family trajectories in rotating frame.
