@@ -25,6 +25,15 @@ class ContinuationPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, Config
     Users supply an engine (DI). Use `ContinuationPipeline.with_default_engine()` to
     construct a default engine wired with the generic predict-correct backend
     and the periodic-orbit interface.
+
+    Parameters
+    ----------
+    config : :class:`~hiten.algorithms.types.core.ConfigT`
+        Configuration object for the continuation algorithm.
+    interface : :class:`~hiten.algorithms.types.core.InterfaceT`
+        Interface object for the continuation algorithm.
+    engine : :class:`~hiten.algorithms.continuation.engine.base._ContinuationEngine`
+        Engine object for the continuation algorithm.
     """
 
     def __init__(self, config: ConfigT, interface: InterfaceT, engine: "_ContinuationEngine" = None) -> None:
@@ -63,6 +72,44 @@ class ContinuationPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, Config
         getter: Optional[Callable[["PeriodicOrbit"], float]] = None,
         stepper: Optional[Literal["natural", "secant"]] = None,
     ) -> ContinuationResult:
+        """Generate a continuation result.
+        
+        Parameters
+        ----------
+        domain_obj : :class:`~hiten.algorithms.types.core.DomainT`
+            The domain object to continue.
+        override : bool
+            Whether to override the default configuration.
+        state : Optional[:class:`~hiten.algorithms.types.states.SynodicState` 
+                | Sequence[:class:`~hiten.algorithms.types.states.SynodicState`] 
+                | int | Sequence[int]]
+            The state to continue.
+        target : Optional[Sequence[float] | np.ndarray]
+            The target to continue.
+        step : Optional[float | Sequence[float] | np.ndarray]
+            The step to continue.
+        max_members : Optional[int]
+            The maximum number of members to continue.
+        max_retries_per_step : Optional[int]
+            The maximum number of retries per step.
+        step_min : Optional[float]
+            The minimum step size.
+        step_max : Optional[float]
+            The maximum step size.
+        extra_params : Optional[dict]
+            The extra parameters to continue.
+        shrink_policy : Optional[Callable[[np.ndarray], np.ndarray]]
+            The shrink policy to continue.
+        getter : Optional[Callable[["PeriodicOrbit"], float]]
+            The getter to continue.
+        stepper : Optional[Literal["natural", "secant"]]
+            The stepper to continue.
+
+        Returns
+        -------
+        ContinuationResult
+            The continuation result.
+        """
         kwargs = {
             "target": target,
             "step": step,
@@ -90,7 +137,7 @@ class ContinuationPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, Config
         
         Parameters
         ----------
-        config : ConfigT
+        config : :class:`~hiten.algorithms.types.core.ConfigT`
             The configuration object to validate.
             
         Raises

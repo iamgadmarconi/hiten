@@ -26,23 +26,8 @@ class _NaturalParameterStep(_ContinuationStepBase):
     ----------
     predictor : callable
         Function that generates solution predictions. Should have signature:
-        ``predictor(solution: object, step: ndarray) -> ndarray``
+        ``predictor(solution: object, step: np.ndarray) -> np.ndarray``
         Returns numerical representation of the predicted next solution.
-
-    Notes
-    -----
-    This implementation provides:
-    
-    - **Simple delegation**: All prediction logic in user function
-    - **No step adaptation**: Step sizes remain unchanged
-    - **Stateless operation**: No internal state maintenance
-    - **No-op hooks**: All event hooks are empty implementations
-    
-    The strategy is most suitable for:
-    - Natural parameter continuation with simple prediction
-    - Cases where step adaptation is handled by the continuation engine
-    - Domain-specific prediction logic that doesn't need strategy state
-    - Rapid prototyping and simple continuation scenarios
 
     Examples
     --------
@@ -76,14 +61,14 @@ class _NaturalParameterStep(_ContinuationStepBase):
         ----------
         last_solution : object
             Current solution object for prediction.
-        step : ndarray
+        step : np.ndarray
             Current step size array.
 
         Returns
         -------
-        prediction : ndarray
+        prediction : np.ndarray
             Result of the predictor function.
-        step : ndarray
+        step : np.ndarray
             Unchanged step size (no adaptation).
 
         Notes

@@ -10,7 +10,23 @@ import numpy as np
 
 @dataclass(frozen=True, slots=True)
 class ContinuationResult:
-    """Standardized result for a continuation run."""
+    """Standardized result for a continuation run.
+    
+    Attributes
+    ----------
+    accepted_count : int
+        The number of accepted solutions.
+    rejected_count : int
+        The number of rejected solutions.
+    success_rate : float
+        The success rate.
+    family : Tuple[object, ...]
+        The family of solutions.
+    parameter_values : Tuple[np.ndarray, ...]
+        The parameter values.
+    iterations : int
+        The number of iterations.
+    """
 
     accepted_count: int
     rejected_count: int
@@ -51,6 +67,10 @@ class _ContinuationProblem:
         Minimum allowed step size.
     step_max : float
         Maximum allowed step size.
+    stepper : str
+        The stepper to use.
+    state_indices : Optional[np.ndarray]
+        The state indices.
     """
 
     initial_solution: object

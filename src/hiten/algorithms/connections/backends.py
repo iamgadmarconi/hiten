@@ -14,10 +14,10 @@ See Also
     High-level connection engine interface.
 """
 
-from typing import Any, Tuple
+from typing import Tuple
 
-import numpy as np
 import numba
+import numpy as np
 
 from hiten.algorithms.connections.types import _ConnectionResult
 from hiten.algorithms.types.core import _HitenBaseBackend
@@ -29,16 +29,16 @@ def _pair_counts(query: np.ndarray, ref: np.ndarray, r2: float) -> np.ndarray:
 
     Parameters
     ----------
-    query : ndarray, shape (N, 2)
+    query : np.ndarray, shape (N, 2)
         2D coordinates of query points.
-    ref : ndarray, shape (M, 2)
+    ref : np.ndarray, shape (M, 2)
         2D coordinates of reference points.
     r2 : float
         Radius squared for distance comparison.
 
     Returns
     -------
-    ndarray, shape (N,)
+    np.ndarray, shape (N,)
         For each query point, the count of reference points with distance^2 <= r2.
 
     Notes
@@ -69,12 +69,12 @@ def _exclusive_prefix_sum(a: np.ndarray) -> np.ndarray:
 
     Parameters
     ----------
-    a : ndarray
+    a : np.ndarray
         Input integer array of length N.
 
     Returns
     -------
-    ndarray, shape (N+1,)
+    np.ndarray, shape (N+1,)
         Exclusive prefix sums where out[0] = 0 and out[i+1] = sum_{k=0}^{i} a[k].
 
     Notes
@@ -98,16 +98,16 @@ def _radpair2d(query: np.ndarray, ref: np.ndarray, radius: float) -> np.ndarray:
 
     Parameters
     ----------
-    query : ndarray, shape (N, 2)
+    query : np.ndarray, shape (N, 2)
         Query points in 2D.
-    ref : ndarray, shape (M, 2)
+    ref : np.ndarray, shape (M, 2)
         Reference points in 2D.
     radius : float
         Matching radius in the same units as query/ref coordinates.
 
     Returns
     -------
-    ndarray, shape (total, 2)
+    np.ndarray, shape (total, 2)
         Each row is a pair (i, j) indicating a match between query[i] and ref[j].
 
     Notes
@@ -172,12 +172,12 @@ def _nearest_neighbor_2d_numba(points: np.ndarray) -> np.ndarray:
 
     Parameters
     ----------
-    points : ndarray, shape (N, 2)
+    points : np.ndarray, shape (N, 2)
         2D coordinates of points.
 
     Returns
     -------
-    ndarray, shape (N,)
+    np.ndarray, shape (N,)
         For each point i, the index j of its nearest neighbor (j != i).
         Returns -1 if no valid neighbor exists.
 
@@ -211,12 +211,12 @@ def _nearest_neighbor_2d(points: np.ndarray) -> np.ndarray:
 
     Parameters
     ----------
-    points : ndarray, shape (N, 2)
+    points : np.ndarray, shape (N, 2)
         2D coordinates of points.
 
     Returns
     -------
-    ndarray, shape (N,)
+    np.ndarray, shape (N,)
         For each point i, the index j of its nearest neighbor (j != i).
         Returns -1 if no valid neighbor exists.
 
@@ -321,26 +321,26 @@ def _refine_pairs_on_section(pu: np.ndarray, ps: np.ndarray, pairs: np.ndarray, 
 
     Parameters
     ----------
-    pu : ndarray, shape (N, 2)
+    pu : np.ndarray, shape (N, 2)
         2D points on the unstable (source) section.
-    ps : ndarray, shape (M, 2)
+    ps : np.ndarray, shape (M, 2)
         2D points on the stable (target) section.
-    pairs : ndarray, shape (k, 2)
+    pairs : np.ndarray, shape (k, 2)
         Initial matched pairs as (i, j) indices.
-    nn_u : ndarray, shape (N,)
+    nn_u : np.ndarray, shape (N,)
         Nearest neighbor indices for unstable section points.
-    nn_s : ndarray, shape (M,)
+    nn_s : np.ndarray, shape (M,)
         Nearest neighbor indices for stable section points.
     max_seg_len : float, optional
         Maximum allowed segment length for refinement (default: 1e9).
 
     Returns
     -------
-    rstar : ndarray, shape (k, 2)
+    rstar : np.ndarray, shape (k, 2)
         Refined common points (midpoint of segment closest points).
-    u_idx0, u_idx1 : ndarray, shape (k,)
+    u_idx0, u_idx1 : np.ndarray, shape (k,)
         Endpoint indices used on the unstable section.
-    s_idx0, s_idx1 : ndarray, shape (k,)
+    s_idx0, s_idx1 : np.ndarray, shape (k,)
         Endpoint indices used on the stable section.
     sval, tval : ndarray, shape (k,)
         Interpolation parameters on U and S segments.
@@ -435,15 +435,15 @@ class _ConnectionsBackend(_HitenBaseBackend):
 
         Parameters
         ----------
-        pu : ndarray, shape (N, 2)
+        pu : np.ndarray, shape (N, 2)
             2D points on the unstable/source section.
-        ps : ndarray, shape (M, 2)
+        ps : np.ndarray, shape (M, 2)
             2D points on the stable/target section.
-        Xu : ndarray, shape (N, 6)
+        Xu : np.ndarray, shape (N, 6)
             6D states corresponding to ``pu``.
         Xs : ndarray, shape (M, 6)
             6D states corresponding to ``ps``.
-        traj_indices_u : ndarray or None, shape (N,)
+        traj_indices_u : np.ndarray or None, shape (N,)
             Trajectory indices for source manifold intersections.
         traj_indices_s : ndarray or None, shape (M,)
             Trajectory indices for target manifold intersections.
@@ -529,10 +529,13 @@ class _ConnectionsBackend(_HitenBaseBackend):
         return results
 
     def on_start(self, problem) -> None:  # Engine notifies before solving
+        """Called by the engine before solving."""
         pass
 
     def on_success(self, results: list[_ConnectionResult]) -> None:  # Engine notifies after successful solve
+        """Called by the engine after successful solve."""
         pass
 
     def on_failure(self, error: Exception) -> None:  # Engine notifies on failure
+        """Called by the engine on failure."""
         pass

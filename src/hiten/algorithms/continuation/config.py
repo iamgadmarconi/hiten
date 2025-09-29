@@ -16,7 +16,25 @@ from hiten.system.orbits.base import PeriodicOrbit
 
 @dataclass(frozen=True, slots=True)
 class _ContinuationConfig:
-    """Define configuration parameters for continuation algorithms."""
+    """Define configuration parameters for continuation algorithms.
+    
+    Parameters
+    ----------
+    target : np.ndarray
+        The target to continue.
+    step : np.ndarray
+        The step to continue.
+    max_members : int
+        The maximum number of members to continue.
+    max_retries_per_step : int
+        The maximum number of retries per step.
+    step_min : float
+        The minimum step size.
+    step_max : float
+        The maximum step size.
+    shrink_policy : Callable[[np.ndarray], np.ndarray] | None
+        The shrink policy to continue.
+    """
     target: np.ndarray
     step: np.ndarray
     max_members: int
@@ -94,6 +112,8 @@ class _OrbitContinuationConfig(_ContinuationConfig):
     extra_params : dict or None
         Additional parameters passed to orbit correction methods.
         Common keys include tolerances, maximum iterations, etc.
+    stepper : Literal["natural", "secant"]
+        The stepper to continue.
     """
     state: SynodicState | None = None
     getter: Callable[["PeriodicOrbit"], float] | None = None

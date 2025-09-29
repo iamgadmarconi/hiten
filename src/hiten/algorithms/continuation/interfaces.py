@@ -51,6 +51,20 @@ class _PeriodicOrbitContinuationInterface(
         super().__init__()
 
     def create_problem(self, *, domain_obj: "PeriodicOrbit", config: _OrbitContinuationConfig) -> _ContinuationProblem:
+        """Create a continuation problem.
+        
+        Parameters
+        ----------
+        domain_obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
+            The domain object to continue.
+        config : :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
+            The configuration for the continuation problem.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.continuation.types._ContinuationProblem`
+            The continuation problem.
+        """
         parameter_getter = self._parameter_getter(config)
         state_indices = self._get_state_indices(config)
         return _ContinuationProblem(
@@ -70,6 +84,18 @@ class _PeriodicOrbitContinuationInterface(
         )
 
     def to_backend_inputs(self, problem: _ContinuationProblem) -> _BackendCall:
+        """Convert the continuation problem to backend inputs.
+        
+        Parameters
+        ----------
+        problem : :class:`~hiten.algorithms.continuation.types._ContinuationProblem`
+            The continuation problem.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.core._BackendCall`
+            The backend inputs.
+        """
         domain_obj = problem.initial_solution
 
         stepper_type = problem.stepper
@@ -96,6 +122,13 @@ class _PeriodicOrbitContinuationInterface(
             _current_tangent = initial_tangent
             
             def tangent_fn() -> np.ndarray | None:
+                """Get the tangent.
+                
+                Returns
+                -------
+                np.ndarray | None
+                    The tangent.
+                """
                 nonlocal _current_tangent, _seeded
                 # First try to get updated tangent from backend
                 if hasattr(self, "_backend") and self._backend is not None and hasattr(self._backend, "get_tangent"):
@@ -123,6 +156,18 @@ class _PeriodicOrbitContinuationInterface(
         stepper = self._make_stepper_from_problem(problem, predictor, tangent_fn)
 
         def corrector(prediction: np.ndarray) -> tuple[np.ndarray, float, bool]:
+            """Correct the prediction.
+            
+            Parameters
+            ----------
+            prediction : np.ndarray
+                The prediction to correct.
+            
+            Returns
+            -------
+            tuple[np.ndarray, float, bool]
+                The corrected prediction, the residual, and whether the correction was successful.
+            """
             orbit = self._instantiate(domain_obj, prediction)
             x_corr, _ = orbit.correct(**(problem.corrector_kwargs or {}))
             residual = float(np.linalg.norm(np.asarray(x_corr, dtype=float) - prediction))
@@ -171,6 +216,20 @@ class _PeriodicOrbitContinuationInterface(
         )
 
     def to_domain(self, outputs: tuple[list[np.ndarray], dict[str, object]], *, problem: _ContinuationProblem) -> dict[str, object]:
+        """Convert the continuation outputs to a domain object.
+        
+        Parameters
+        ----------
+        outputs : tuple[list[np.ndarray], dict[str, object]]
+            The continuation outputs.
+        problem : :class:`~hiten.algorithms.continuation.types._ContinuationProblem`
+            The continuation problem.
+        
+        Returns
+        -------
+        dict[str, object]
+            The domain object.
+        """
         family_repr, info = outputs
         info = dict(info)
         info.setdefault("accepted_count", len(family_repr))
@@ -178,6 +237,22 @@ class _PeriodicOrbitContinuationInterface(
         return info
 
     def to_results(self, outputs: tuple[list[np.ndarray], dict[str, object]], *, problem: _ContinuationProblem, domain_payload: Any = None) -> ContinuationResult:
+        """Convert the continuation outputs to a results object.
+        
+        Parameters
+        ----------
+        outputs : tuple[list[np.ndarray], dict[str, object]]
+            The continuation outputs.
+        problem : :class:`~hiten.algorithms.continuation.types._ContinuationProblem`
+            The continuation problem.
+        domain_payload : Any, optional
+            The domain payload.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.continuation.types.ContinuationResult`
+            The results object.
+        """
         family_repr, info = outputs
         info = dict(info)
         accepted_count = int(info.get("accepted_count", len(family_repr)))
@@ -202,9 +277,35 @@ class _PeriodicOrbitContinuationInterface(
         )
 
     def _representation(self, orbit) -> np.ndarray:
+        """Convert the orbit to a representation.
+        
+        Parameters
+        ----------
+        orbit : :class:`~hiten.system.orbits.base.PeriodicOrbit`
+            The orbit.
+        
+        Returns
+        -------
+        np.ndarray
+            The representation.
+        """
         return np.asarray(orbit.initial_state, dtype=float).copy()
 
     def _instantiate(self, domain_obj: "PeriodicOrbit", representation: np.ndarray):
+        """Instantiate an orbit from a representation.
+        
+        Parameters
+        ----------
+        domain_obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
+            The domain object.
+        representation : np.ndarray
+            The representation.
+        
+        Returns
+        -------
+        :class:`~hiten.system.orbits.base.PeriodicOrbit`
+            The orbit.
+        """
         orbit_cls = type(domain_obj)
         lp = getattr(domain_obj, "libration_point", None)
         orbit = orbit_cls(libration_point=lp, initial_state=np.asarray(representation, dtype=float))
@@ -214,6 +315,18 @@ class _PeriodicOrbitContinuationInterface(
         return orbit
 
     def _parameter_getter(self, cfg: _OrbitContinuationConfig) -> Callable[[np.ndarray], np.ndarray]:
+        """Get the parameter from the representation.
+        
+        Parameters
+        ----------
+        cfg : :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
+            The configuration.
+        
+        Returns
+        -------
+        Callable[[np.ndarray], np.ndarray]
+            The parameter getter.
+        """
         state = getattr(cfg, "state", None)
         if state is None:
             return lambda repr_vec: np.asarray(repr_vec, dtype=float)
@@ -227,6 +340,18 @@ class _PeriodicOrbitContinuationInterface(
         return lambda repr_vec: np.asarray(repr_vec, dtype=float)[idx_arr]
 
     def _predictor(self, cfg: _OrbitContinuationConfig) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
+        """Get the predictor.
+        
+        Parameters
+        ----------
+        cfg : :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
+            The configuration.
+        
+        Returns
+        -------
+        Callable[[np.ndarray, np.ndarray], np.ndarray]
+            The predictor.
+        """
         state = getattr(cfg, "state", None)
         if state is None:
             return lambda last, step: np.asarray(last, dtype=float) + np.asarray(step, dtype=float)
@@ -239,6 +364,20 @@ class _PeriodicOrbitContinuationInterface(
         idx_arr = np.asarray(indices, dtype=int)
 
         def _predict(last: np.ndarray, step: np.ndarray) -> np.ndarray:
+            """Predict the next state.
+            
+            Parameters
+            ----------
+            last : np.ndarray
+                The last state.
+            step : np.ndarray
+                The step size.
+            
+            Returns
+            -------
+            np.ndarray
+                The next state.
+            """
             last = np.asarray(last, dtype=float).copy()
             step = np.asarray(step, dtype=float)
             for idx, d in zip(idx_arr, step):
@@ -248,6 +387,18 @@ class _PeriodicOrbitContinuationInterface(
         return _predict
 
     def _get_state_indices(self, config: _OrbitContinuationConfig) -> np.ndarray:
+        """Get the state indices.
+        
+        Parameters
+        ----------
+        config : :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
+            The configuration.
+        
+        Returns
+        -------
+        np.ndarray
+            The state indices.
+        """
         state = getattr(config, "state", None)
         if state is None:
             return None
@@ -260,12 +411,38 @@ class _PeriodicOrbitContinuationInterface(
         return np.asarray(indices, dtype=int)
 
     def _predictor_from_problem(self, problem: _ContinuationProblem) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
+        """Get the predictor from the problem.
+        
+        Parameters
+        ----------
+        problem : :class:`~hiten.algorithms.continuation.types._ContinuationProblem`
+            The problem.
+        
+        Returns
+        -------
+        Callable[[np.ndarray, np.ndarray], np.ndarray]
+            The predictor.
+        """
         if problem.state_indices is None:
             return lambda last, step: np.asarray(last, dtype=float) + np.asarray(step, dtype=float)
         
         idx_arr = problem.state_indices
 
         def _predict(last: np.ndarray, step: np.ndarray) -> np.ndarray:
+            """Predict the next state.
+            
+            Parameters
+            ----------
+            last : np.ndarray
+                The last state.
+            step : np.ndarray
+                The step size.
+            
+            Returns
+            -------
+            np.ndarray
+                The next state.
+            """
             last = np.asarray(last, dtype=float).copy()
             step = np.asarray(step, dtype=float)
             for idx, d in zip(idx_arr, step):
@@ -275,11 +452,45 @@ class _PeriodicOrbitContinuationInterface(
         return _predict
 
     def _make_stepper_from_problem(self, problem: _ContinuationProblem, predictor: Callable[[np.ndarray, np.ndarray], np.ndarray], tangent_fn: Callable[[], np.ndarray | None] | None = None):
+        """Make a stepper from the problem.
+        
+        Parameters
+        ----------
+        problem : :class:`~hiten.algorithms.continuation.types._ContinuationProblem`
+            The problem.
+        predictor : Callable[[np.ndarray, np.ndarray], np.ndarray]
+            The predictor.
+        tangent_fn : Callable[[], np.ndarray | None] | None, optional
+            The tangent function.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.continuation.stepping.base._ContinuationStepBase`
+            The stepper.
+        """
+        
         if str(problem.stepper).lower() == "secant":
             return make_secant_stepper(lambda v: np.asarray(v, dtype=float), tangent_fn)
         return make_natural_stepper(predictor)
 
     def _make_stepper(self, cfg: _OrbitContinuationConfig, predictor: Callable[[np.ndarray, np.ndarray], np.ndarray], tangent_fn: Callable[[], np.ndarray | None] | None = None):
+        """Make a stepper from the configuration.
+        
+        Parameters
+        ----------
+        cfg : :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
+            The configuration.
+        predictor : Callable[[np.ndarray, np.ndarray], np.ndarray]
+            The predictor.
+        tangent_fn : Callable[[], np.ndarray | None] | None, optional
+            The tangent function.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.continuation.stepping.base._ContinuationStepBase`
+            The stepper.
+        """
+        
         if str(cfg.stepper).lower() == "secant":
             return make_secant_stepper(lambda v: np.asarray(v, dtype=float), tangent_fn)
         return make_natural_stepper(predictor)

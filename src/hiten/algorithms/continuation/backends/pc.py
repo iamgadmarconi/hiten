@@ -14,6 +14,13 @@ class _PCContinuationBackend(_ContinuationBackend):
     user-provided predictor and corrector, adapting the step size based
     on success/failure and stopping when either the member limit is
     reached or parameters exit the configured bounds.
+
+    Parameters
+    ----------
+    tangent : np.ndarray | None
+        The initial tangent vector.
+    last_residual : float
+        The last residual.
     """
 
     def __init__(self) -> None:
@@ -21,12 +28,17 @@ class _PCContinuationBackend(_ContinuationBackend):
         self._last_residual: float = float("nan")
 
     def _reset_state(self) -> None:
+        """Reset the state of the backend."""
         self._last_residual = float("nan")
 
     def get_tangent(self) -> np.ndarray | None:
+        """Return the current tangent vector maintained by the backend."""
         return None if self._tangent is None else self._tangent.copy()
 
     def seed_tangent(self, tangent: np.ndarray | None) -> None:
+        """Seed the backend with an initial tangent vector prior to 
+        :meth:`~hiten.algorithms.continuation.backends.pc._PCContinuationBackend.run`.
+        """
         self._tangent = None if tangent is None else np.asarray(tangent, dtype=float).copy()
 
     def run(
@@ -66,7 +78,7 @@ class _PCContinuationBackend(_ContinuationBackend):
             Function that takes a representation and returns the numerical representation.
         step : np.ndarray
             Initial step vector.
-        target : np.ndarray
+        target : np.ndarray, shape (2, m)
             Target parameter range.
         max_members : int
             Maximum number of accepted members.
@@ -81,7 +93,7 @@ class _PCContinuationBackend(_ContinuationBackend):
         
         Returns
         -------
-        family : list[np.ndarray]
+        family : list of np.ndarray
             List of accepted member representations.
         info : dict
             Dictionary containing the accepted count, rejected count, iterations, parameter values, and final step vector.
@@ -100,6 +112,7 @@ class _PCContinuationBackend(_ContinuationBackend):
         target_max = np.asarray(target[1], dtype=float)
 
         def _clamp_step(vec: np.ndarray) -> np.ndarray:
+            """Clamp the step vector to the minimum and maximum step sizes."""
             mag = np.clip(np.abs(vec), step_min, step_max)
             return np.sign(vec) * mag
 

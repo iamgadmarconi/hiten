@@ -21,14 +21,11 @@ See Also
     Interface classes for manifold data access.
 """
 
-from typing import Callable
-
 from hiten.algorithms.connections.backends import _ConnectionsBackend
 from hiten.algorithms.connections.interfaces import _ManifoldInterface
 from hiten.algorithms.connections.types import (ConnectionResults,
                                                 _ConnectionProblem)
 from hiten.algorithms.types.core import _HitenBaseEngine
-from hiten.algorithms.types.exceptions import EngineError
 
 
 class _ConnectionEngine(_HitenBaseEngine[_ConnectionProblem, ConnectionResults, list]):

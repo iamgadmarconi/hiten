@@ -20,7 +20,7 @@ class _SecantStep(_ContinuationStepBase):
         Maps a solution object to its numerical representation.
     tangent_provider : callable
         Returns the current unit tangent vector in representation space.
-        Should return ndarray with shape matching the representation.
+        Should return np.ndarray with shape matching the representation.
     """
 
     def __init__(
@@ -32,6 +32,7 @@ class _SecantStep(_ContinuationStepBase):
         self._tangent_provider = tangent_provider
 
     def __call__(self, last_solution: object, step) -> tuple[np.ndarray, np.ndarray]:
+        """Generate prediction using the supplied representation function and tangent provider."""
         r_last = self._repr_fn(last_solution)
         tan = self._tangent_provider()
 

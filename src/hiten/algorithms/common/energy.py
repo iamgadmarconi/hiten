@@ -29,7 +29,7 @@ def _max_rel_energy_error(states: np.ndarray, mu: float) -> float:
     
     Parameters
     ----------
-    states : ndarray, shape (N, 6)
+    states : np.ndarray, shape (N, 6)
         Array of state vectors [x, y, z, vx, vy, vz] along trajectory.
     mu : float
         Mass parameter of the CR3BP system.
@@ -164,11 +164,11 @@ def hill_region(
 
     Returns
     -------
-    X : ndarray, shape (n_grid, n_grid)
+    X : np.ndarray, shape (n_grid, n_grid)
         Meshgrid of x-coordinates.
-    Y : ndarray, shape (n_grid, n_grid)
+    Y : np.ndarray, shape (n_grid, n_grid)
         Meshgrid of y-coordinates.
-    Z : ndarray, shape (n_grid, n_grid)
+    Z : np.ndarray, shape (n_grid, n_grid)
         Values of Omega - C/2. Positive values indicate forbidden motion.
 
     Raises
@@ -492,4 +492,4 @@ def secondary_distance(state: Sequence[float], mu: float) -> float:
     x, y, z, vx, vy, vz = state
     mu_1 = 1 - mu
     r2 = np.sqrt((x - mu_1)**2 + y**2 + z**2)
-    return r2 
+    return r2

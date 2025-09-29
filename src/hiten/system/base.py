@@ -153,7 +153,7 @@ class System(_HitenBase):
         :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
             The underlying variational equations system.
         """
-        return self.dynamics.variational
+        return self.dynamics.var_dynsys
 
     @property
     def jacobian_dynsys(self):

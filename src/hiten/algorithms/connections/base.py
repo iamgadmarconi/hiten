@@ -1,9 +1,9 @@
 """Provide a user-facing interface for discovering connections between manifolds in CR3BP.
 
-This module provides the main :class:`~hiten.algorithms.connections.base.ConnectionPipeline` class, which serves as a
-high-level facade for the connection discovery algorithm. It wraps the lower-level
-connection engine and provides convenient methods for solving connection problems
-and visualizing results.
+This module provides the main :class:`~hiten.algorithms.connections.base.ConnectionPipeline`
+class, which serves as a high-level facade for the connection discovery algorithm. It wraps 
+the lower-level connection engine and provides convenient methods for solving connection 
+problemsand visualizing results.
 
 The connection discovery process finds ballistic and impulsive transfers between
 two manifolds by intersecting them with a common synodic section and analyzing
@@ -325,7 +325,7 @@ class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
         
         Parameters
         ----------
-        config : ConfigT
+        config : :class:`~hiten.algorithms.connections.config._ConnectionConfig`
             The configuration object to validate.
             
         Raises

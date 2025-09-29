@@ -50,11 +50,11 @@ class _ConnectionResult:
     point2d : tuple of float
         2D coordinates (x, y) of the connection point on the synodic section
         plane, in nondimensional CR3BP distance units.
-    state_u : ndarray, shape (6,)
+    state_u : np.ndarray, shape (6,)
         6D phase space state [x, y, z, vx, vy, vz] at the connection point
         on the source (typically unstable) manifold, in nondimensional
         CR3BP units.
-    state_s : ndarray, shape (6,)
+    state_s : np.ndarray, shape (6,)
         6D phase space state [x, y, z, vx, vy, vz] at the connection point
         on the target (typically stable) manifold, in nondimensional
         CR3BP units.
@@ -116,11 +116,28 @@ class ConnectionResults:
     Encapsulates the backend-produced connection records so engines can
     return a standardized result object. Provides a helper to obtain the
     user-facing collection wrapper.
+
+    Parameters
+    ----------
+    connections : list of :class:`~hiten.algorithms.connections.types._ConnectionResult`
+        The connection results.
+
+    Returns
+    -------
+    :class:`~hiten.algorithms.connections.types.Connections`
+        The connection results.
     """
 
     connections: list[_ConnectionResult]
 
     def to_results(self) -> "Connections":
+        """Convert to a :class:`~hiten.algorithms.connections.types.Connections` object.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.connections.types.Connections`
+            The connection results.
+        """
         return Connections(self.connections)
 
 
@@ -276,9 +293,9 @@ class _ConnectionProblem:
 
     Parameters
     ----------
-    source : :class:`~hiten.system.manifold.Manifold`
+    source : :class:`~hiten.system.manifold.Manifold` | :class:`~hiten.system.orbits.base.PeriodicOrbit`
         Source manifold (typically unstable manifold).
-    target : :class:`~hiten.system.manifold.Manifold`
+    target : :class:`~hiten.system.manifold.Manifold` | :class:`~hiten.system.orbits.base.PeriodicOrbit`
         Target manifold (typically stable manifold).
     section_axis : str
         Axis for the synodic section (e.g., "x", "y", "z").

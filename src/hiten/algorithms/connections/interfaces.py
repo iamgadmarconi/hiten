@@ -89,7 +89,6 @@ class _ManifoldInterface(
     """
 
     def __init__(self) -> None:
-        """Initialize the manifold interface."""
         super().__init__()
 
     def create_problem(
@@ -98,7 +97,20 @@ class _ManifoldInterface(
         domain_obj: tuple["Manifold", "Manifold"] | None = None,
         config: _ConnectionConfig | None = None,
     ) -> _ConnectionProblem:
-        """Create a connection problem specification."""
+        """Create a connection problem specification.
+        
+        Parameters
+        ----------
+        domain_obj : tuple of :class:`~hiten.system.manifold.Manifold`
+            The source and target manifolds.
+        config : :class:`~hiten.algorithms.connections.config._ConnectionConfig`
+            The configuration for the connection problem.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.connections.types._ConnectionProblem`
+            The connection problem.
+        """
         if domain_obj is None:
             raise ValueError("domain_obj (source, target) is required")
         if config is None:
@@ -120,7 +132,18 @@ class _ManifoldInterface(
         )
 
     def to_backend_inputs(self, problem: _ConnectionProblem) -> tuple:
-        """Convert problem to backend inputs."""
+        """Convert problem to backend inputs.
+        
+        Parameters
+        ----------
+        problem : :class:`~hiten.algorithms.connections.types._ConnectionProblem`
+            The problem to convert to backend inputs.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.core._BackendCall`
+            The backend inputs.
+        """
         # Create section config from problem parameters
         section_config = _SynodicMapConfig(
             section_axis=problem.section_axis,
@@ -145,7 +168,24 @@ class _ManifoldInterface(
         )
 
     def to_results(self, outputs: list, *, problem: _ConnectionProblem, domain_payload=None) -> ConnectionResults:
-        """Convert backend outputs to connection results."""
+        """Convert backend outputs to connection results
+        
+        This method converts the backend outputs to connection results.
+
+        Parameters
+        ----------
+        outputs : list[Any]
+            The backend outputs to convert to connection results.
+        problem : :class:`~hiten.algorithms.connections.types._ConnectionProblem`
+            The problem to convert to connection results.
+        domain_payload : Any, optional
+            The domain payload to convert to connection results.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.connections.types.ConnectionResults`
+            The connection results.
+        """
         return ConnectionResults(outputs)
 
     def to_section(
@@ -186,7 +226,7 @@ class _ManifoldInterface(
 
         Raises
         ------
-        EngineError
+        :class:`~hiten.algorithms.types.exceptions.EngineError`
             If the manifold has not been computed (manifold.result is None).
             Call manifold.compute() before using this method.
 
