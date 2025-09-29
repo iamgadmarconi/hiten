@@ -4,16 +4,14 @@ This module provides functions for serializing and deserializing Poincare map
 objects using pickle, which preserves object relationships automatically.
 """
 
+import pickle
 from pathlib import Path
 from typing import TYPE_CHECKING
-
-import pickle
 
 from hiten.utils.io.common import _ensure_dir
 
 if TYPE_CHECKING:
-    from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
-    from hiten.system.center import CenterManifold
+    from hiten.system.maps.center import CenterManifoldMap
 
 
 def save_poincare_map(pmap: "CenterManifoldMap", path: str | Path, **kwargs) -> None:
@@ -21,7 +19,7 @@ def save_poincare_map(pmap: "CenterManifoldMap", path: str | Path, **kwargs) -> 
 
     Parameters
     ----------
-    pmap : :class:`~hiten.algorithms.poincare.centermanifold.base.CenterManifoldMap`
+    pmap : :class:`~hiten.system.maps.center.CenterManifoldMap`
         The Poincare map object to serialize.
     path : str or pathlib.Path
         File path where to save the Poincare map data.
@@ -31,10 +29,10 @@ def save_poincare_map(pmap: "CenterManifoldMap", path: str | Path, **kwargs) -> 
     Examples
     --------
     >>> from hiten.system import System
-    >>> from hiten.system.center import CenterManifold
+    >>> from hiten.system.maps.center import CenterManifoldMap
     >>> system = System.from_bodies("earth", "moon")
     >>> L2 = system.get_libration_point(2)
-    >>> cm = CenterManifold(L2, degree=10)
+    >>> cm = CenterManifoldMap(L2, degree=10)
     >>> pmap = cm.poincare_map(energy=0.1)
     >>> save_poincare_map(pmap, "my_poincare_map.pkl")
     """
@@ -50,7 +48,7 @@ def load_poincare_map_inplace(obj: "CenterManifoldMap", path: str | Path) -> Non
     
     Parameters
     ----------
-    obj : :class:`~hiten.algorithms.poincare.centermanifold.base.CenterManifoldMap`
+    obj : :class:`~hiten.system.maps.center.CenterManifoldMap`
         The Poincare map object to populate with data.
     path : str or pathlib.Path
         File path containing the Poincare map data.
@@ -62,22 +60,22 @@ def load_poincare_map_inplace(obj: "CenterManifoldMap", path: str | Path) -> Non
         
     Examples
     --------
-    >>> from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
+    >>> from hiten.system.maps.center import CenterManifoldMap
     >>> pmap = CenterManifoldMap(cm, energy=0.1)
     >>> load_poincare_map_inplace(pmap, "my_poincare_map.pkl")
     """
-    tmp = load_poincare_map(path, obj.center_manifold)
+    tmp = load_poincare_map(path)
     obj.__dict__.update(tmp.__dict__)
 
 
-def load_poincare_map(path: str | Path, cm: "CenterManifold") -> "CenterManifoldMap":
+def load_poincare_map(path: str | Path) -> "CenterManifoldMap":
     """Load a Poincare map from a pickle file.
     
     Parameters
     ----------
     path : str or pathlib.Path
         File path containing the Poincare map data.
-    cm : :class:`~hiten.system.center.CenterManifold`
+    cm : :class:`~hiten.system.maps.center.CenterManifoldMap`
         The center manifold object to associate with the map.
         
     Returns
