@@ -50,10 +50,10 @@ class _HamiltonianDynamicsService(_DynamicsServiceBase):
 
     def __init__(self, domain_obj: "Hamiltonian") -> None:
 
-        self._name = domain_obj.name
-        self._degree = domain_obj.degree
-        self._ndof = domain_obj.ndof
-        self._poly_H = domain_obj.poly_H
+        self._name = domain_obj._name
+        self._degree = domain_obj._degree
+        self._ndof = domain_obj._ndof
+        self._poly_H = domain_obj._poly_H
 
         super().__init__(domain_obj)
         self._psi, self._clmo = self.init_tables(self._degree)
@@ -151,11 +151,11 @@ class _LieGeneratingFunctionDynamicsService(_DynamicsServiceBase):
     """Provide helper utilities for Lie generating function construction."""
 
     def __init__(self, domain_obj: "LieGeneratingFunction") -> None:
-        self._name = domain_obj.name
-        self._degree = domain_obj.degree
-        self._ndof = domain_obj.ndof
-        self._poly_G = domain_obj.poly_G
-        self._poly_elim = domain_obj.poly_elim
+        self._name = domain_obj._name
+        self._degree = domain_obj._degree
+        self._ndof = domain_obj._ndof
+        self._poly_G = domain_obj._poly_G
+        self._poly_elim = domain_obj._poly_elim
 
         super().__init__(domain_obj)
         self._psi, self._clmo = self.init_tables(self._degree)
