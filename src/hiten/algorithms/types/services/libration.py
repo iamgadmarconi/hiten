@@ -12,8 +12,8 @@ from hiten.algorithms.common.energy import crtbp_energy, energy_to_jacobi
 from hiten.algorithms.dynamics.base import _DynamicalSystem
 from hiten.algorithms.dynamics.hamiltonian import _HamiltonianSystem
 from hiten.algorithms.linalg.base import StabilityPipeline
-from hiten.algorithms.linalg.config import _EigenDecompositionConfig
 from hiten.algorithms.linalg.interfaces import _LibrationPointInterface
+from hiten.algorithms.linalg.config import _EigenDecompositionConfig
 from hiten.algorithms.linalg.types import _ProblemType, _SystemType
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
@@ -58,7 +58,8 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
     @property
     def generator(self) -> StabilityPipeline:
         if self._generator is None:
-            self._generator = StabilityPipeline.with_default_engine(config=self.eigendecomposition_config)
+            self._generator = StabilityPipeline.with_default_engine(
+                config=self.eigendecomposition_config, interface=_LibrationPointInterface())
         return self._generator
 
     @property
@@ -154,8 +155,8 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
         cache_key = self.make_key(id(self.domain_obj), delta, tol)
 
         def _factory() -> StabilityPipeline:
-            results =self.generator.compute(self.domain_obj)
-            return results
+            self.generator.compute(self.domain_obj)
+            return self.generator
 
         return self.get_or_create(cache_key, _factory)
 
@@ -456,6 +457,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
 
 
 class _CollinearDynamicsService(_LibrationDynamicsService):
+    
 
     def __init__(self, point: "CollinearPoint") -> None:
         super().__init__(point)

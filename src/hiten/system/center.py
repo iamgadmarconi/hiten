@@ -78,14 +78,6 @@ class CenterManifold(_HitenBase):
     def poincare_map(self, energy: float) -> "CenterManifoldMap":
         return self.dynamics.get_map(energy)
 
-    def __getstate__(self):
-        """Customise pickling by omitting adapter caches."""
-        state = super().__getstate__()
-        # Use the helper method to clean the point object for serialization
-        state["_point"] = self._clean_for_serialization(self._point)
-        state["_max_degree"] = self._max_degree
-        return state
-
     def __setstate__(self, state):
         """Restore adapter wiring after unpickling."""
         super().__setstate__(state)

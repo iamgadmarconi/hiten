@@ -764,7 +764,7 @@ class _HitenBase(ABC):
                 
         # Reset generator in other services if they exist
         for service_name in ['_correction', '_continuation', '_conversion', '_ham_conversion', 
-                           '_ham_dynamics', '_ham_pipeline', '_lgf_persistence']:
+                            '_ham_dynamics', '_ham_pipeline', '_lgf_persistence']:
             if hasattr(self, service_name):
                 service = getattr(self, service_name)
                 if service is not None and hasattr(service, '_generator'):
