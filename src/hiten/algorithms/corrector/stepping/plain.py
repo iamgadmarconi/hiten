@@ -23,28 +23,6 @@ class _CorrectorPlainStep(_CorrectorStepBase):
     instability. This makes it suitable for a wide range of problems
     while maintaining the simplicity of the basic Newton method.
 
-    Features:
-    - Full Newton steps (alpha = 1.0) when possible
-    - Infinity-norm capping for numerical stability
-    - Minimal computational overhead
-    - Predictable behavior for debugging and analysis
-
-    This stepping strategy is recommended for:
-    - Well-conditioned problems with good initial guesses
-    - Problems where Newton's method converges reliably
-    - Situations where computational efficiency is prioritized
-    - Debugging and development of correction algorithms
-
-    Notes
-    -----
-    While simple, this interface provides a solid foundation for more
-    sophisticated stepping strategies. The optional step size capping
-    prevents the most common failure modes while preserving the fast
-    convergence properties of Newton's method.
-
-    The implementation uses the infinity norm for step size measurement,
-    which provides component-wise control and is computationally efficient.
-
     See Also
     --------
     :class:`~hiten.algorithms.corrector.stepping.armijo._ArmijoStep`

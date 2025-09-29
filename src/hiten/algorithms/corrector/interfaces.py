@@ -42,6 +42,22 @@ class _PeriodicOrbitCorrectorInterface(
         config: _OrbitCorrectionConfig, 
         stepper_factory: StepperFactory | None = None
     ) -> _OrbitCorrectionProblem:
+        """Create a correction problem.
+        
+        Parameters
+        ----------
+        domain_obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
+            The domain object to correct.
+        config : :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
+            The configuration for the correction problem.
+        stepper_factory : :class:`~hiten.algorithms.corrector.types.StepperFactory` or None
+            The stepper factory for the correction problem.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.corrector.types._OrbitCorrectionProblem`
+            The correction problem.
+        """
         forward = getattr(config, "forward", 1)
         residual_fn = self._residual_fn(domain_obj, config, forward)
         jacobian_fn = self._jacobian_fn(domain_obj, config, forward)
@@ -73,6 +89,18 @@ class _PeriodicOrbitCorrectorInterface(
         return problem
 
     def to_backend_inputs(self, problem: _OrbitCorrectionProblem) -> _BackendCall:
+        """Convert a correction problem to backend inputs.
+        
+        Parameters
+        ----------
+        problem : :class:`~hiten.algorithms.corrector.types._OrbitCorrectionProblem`
+            The correction problem.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.types.core._BackendCall`
+            The backend inputs.
+        """
         return _BackendCall(
             args=(problem.initial_guess,),
             kwargs={
@@ -88,6 +116,20 @@ class _PeriodicOrbitCorrectorInterface(
         )
 
     def to_domain(self, outputs: tuple[np.ndarray, int, float], *, problem: _OrbitCorrectionProblem) -> dict[str, Any]:
+        """Convert backend outputs to domain results.
+        
+        Parameters
+        ----------
+        outputs : tuple of :class:`~numpy.ndarray`, int, float
+            The backend outputs.
+        problem : :class:`~hiten.algorithms.corrector.types._OrbitCorrectionProblem`
+            The correction problem.
+        
+        Returns
+        -------
+        dict of str, Any
+            The domain results.
+        """
         x_corr, iterations, residual_norm = outputs
         control_indices = list(problem.control_indices)
         base_state = problem.domain_obj.initial_state.copy()
@@ -106,6 +148,22 @@ class _PeriodicOrbitCorrectorInterface(
         }
 
     def to_results(self, outputs: tuple[np.ndarray, int, float], *, problem: _OrbitCorrectionProblem, domain_payload: dict[str, Any] = None) -> OrbitCorrectionResult:
+        """Convert backend outputs to domain results.
+        
+        Parameters
+        ----------
+        outputs : tuple of :class:`~numpy.ndarray`, int, float
+            The backend outputs.
+        problem : :class:`~hiten.algorithms.corrector.types._OrbitCorrectionProblem`
+            The correction problem.
+        domain_payload : dict of str, Any
+            The domain payload.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.corrector.types.OrbitCorrectionResult`
+            The domain results.
+        """
         x_corr, iterations, residual_norm = outputs
         control_indices = list(problem.control_indices)
         base_state = problem.domain_obj.initial_state.copy()
@@ -121,19 +179,68 @@ class _PeriodicOrbitCorrectorInterface(
         )
 
     def _initial_guess(self, domain_obj: "PeriodicOrbit", cfg: _OrbitCorrectionConfig) -> np.ndarray:
+        """Get the initial guess.
+        
+        Parameters
+        ----------
+        domain_obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
+            The domain object.
+        cfg : :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
+            The configuration.
+        
+        Returns
+        -------
+        :class:`~numpy.ndarray`
+            The initial guess.
+        """
         indices = list(cfg.control_indices)
         return domain_obj.initial_state[indices].copy()
 
     def _norm_fn(self) -> NormFn:
+        """Get the norm function.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.corrector.types.NormFn`
+            The norm function.
+        """
         return lambda r: float(np.linalg.norm(r, ord=np.inf))
 
     def _residual_fn(self, domain_obj: "PeriodicOrbit", cfg: _OrbitCorrectionConfig, forward: int) -> Callable[[np.ndarray], np.ndarray]:
+        """Get the residual function.
+        
+        Parameters
+        ----------
+        domain_obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
+            The domain object.
+        cfg : :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
+            The configuration.
+        forward : int
+            The forward direction.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.corrector.types.ResidualFn`
+            The residual function.
+        """
         base_state = domain_obj.initial_state.copy()
         control_indices = list(cfg.control_indices)
         residual_indices = list(cfg.residual_indices)
         target_vec = np.asarray(cfg.target, dtype=float)
 
         def _fn(params: np.ndarray) -> np.ndarray:
+            """Get the residual function.
+            
+            Parameters
+            ----------
+            params : np.ndarray
+                The parameters.
+            
+            Returns
+            -------
+            np.ndarray
+                The residual.
+            """
             x_full = self._to_full_state(base_state, control_indices, params)
             _, x_event = self._evaluate_event(domain_obj, x_full, cfg, forward)
             return x_event[residual_indices] - target_vec
@@ -141,6 +248,22 @@ class _PeriodicOrbitCorrectorInterface(
         return _fn
 
     def _jacobian_fn(self, domain_obj: "PeriodicOrbit", cfg: _OrbitCorrectionConfig, forward: int) -> JacobianFn | None:
+        """Get the Jacobian function.
+        
+        Parameters
+        ----------
+        domain_obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
+            The domain object.
+        cfg : :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
+            The configuration.
+        forward : int
+            The forward direction.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.corrector.types.JacobianFn` | None
+            The Jacobian function.
+        """
         if bool(getattr(cfg, "finite_difference", False)):
             return None
 
@@ -149,6 +272,18 @@ class _PeriodicOrbitCorrectorInterface(
         residual_indices = list(cfg.residual_indices)
 
         def _fn(params: np.ndarray) -> np.ndarray:
+            """Get the Jacobian function.
+            
+            Parameters
+            ----------
+            params : np.ndarray
+                The parameters.
+            
+            Returns
+            -------
+            np.ndarray
+                The Jacobian.
+            """
             x_full = self._to_full_state(base_state, control_indices, params)
             # Create a temporary problem object for _evaluate_event
             temp_problem = _OrbitCorrectionProblem(
@@ -191,6 +326,22 @@ class _PeriodicOrbitCorrectorInterface(
         return _fn
 
     def _half_period(self, domain_obj: "PeriodicOrbit", corrected_state: np.ndarray, problem: _OrbitCorrectionProblem) -> float:
+        """Get the half period.
+        
+        Parameters
+        ----------
+        domain_obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
+            The domain object.
+        corrected_state : np.ndarray
+            The corrected state.
+        problem : :class:`~hiten.algorithms.corrector.types._OrbitCorrectionProblem`
+            The correction problem.
+        
+        Returns
+        -------
+        float
+            The half period.
+        """
         forward = problem.forward
         try:
             t_final, _ = problem.event_func(
@@ -207,6 +358,22 @@ class _PeriodicOrbitCorrectorInterface(
                 raise ValueError("Failed to evaluate domain_obj event for corrected state") from exc
 
     def _to_full_state(self, base_state: np.ndarray, control_indices: list[int], params: np.ndarray) -> np.ndarray:
+        """Get the full state.
+        
+        Parameters
+        ----------
+        base_state : np.ndarray
+            The base state.
+        control_indices : list[int]
+            The control indices.
+        params : np.ndarray
+            The parameters.
+        
+        Returns
+        -------
+        np.ndarray
+            The full state.
+        """
         x_full = base_state.copy()
         x_full[control_indices] = params
         return x_full
@@ -218,6 +385,24 @@ class _PeriodicOrbitCorrectorInterface(
         problem: _OrbitCorrectionProblem,
         forward: int,
     ) -> tuple[float, np.ndarray]:
+        """Get the event function.
+        
+        Parameters
+        ----------
+        domain_obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
+            The domain object.
+        full_state : np.ndarray
+            The full state.
+        problem : :class:`~hiten.algorithms.corrector.types._OrbitCorrectionProblem`
+            The correction problem.
+        forward : int
+            The forward direction.
+        
+        Returns
+        -------
+        tuple[float, np.ndarray]
+            The event function.
+        """
         return problem.event_func(
             dynsys=domain_obj.dynamics.dynsys,
             x0=full_state,

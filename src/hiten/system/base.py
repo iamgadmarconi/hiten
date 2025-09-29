@@ -164,7 +164,7 @@ class System(_HitenBase):
         :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
             The underlying Jacobian evaluation system.
         """
-        return self.dynamics.jacobian
+        return self.dynamics.jacobian_dynsys
 
     def get_libration_point(self, index: int) -> LibrationPoint:
         """
@@ -203,7 +203,6 @@ class System(_HitenBase):
         method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
         order: int = 8,
         forward: int = 1,
-        flip_indices: Sequence[int] | None = None,
     ) -> Trajectory:
         """
         Propagate arbitrary initial conditions in the CR3BP.
@@ -225,8 +224,6 @@ class System(_HitenBase):
             Integration backend to employ (Hiten integrators).
         order : int, default 8
             Formal order of the integrator when applicable.
-        flip_indices: Sequence[int] | None, default None
-            Flip indices for backward integration. Default is None.
 
         Returns
         -------
@@ -241,7 +238,6 @@ class System(_HitenBase):
             method=method,
             order=order,
             forward=forward,
-            flip_indices=flip_indices,
         )
 
         return traj

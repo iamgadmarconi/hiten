@@ -35,9 +35,11 @@ class CorrectorPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
     
     Parameters
     ----------
-    config : ConfigT
+    config : :class:`~hiten.algorithms.types.core.ConfigT`
         Configuration object for the correction algorithm.
-    engine : Any, optional
+    interface : :class:`~hiten.algorithms.types.core.InterfaceT`
+        Interface instance for the correction algorithm.
+    engine : :class:`~hiten.algorithms.corrector.engine.base._CorrectionEngine`, optional
         Engine instance to use for correction. If None, must be set later
         or use with_default_engine() factory method.
     
@@ -45,7 +47,7 @@ class CorrectorPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
     --------
     Basic usage with default settings:
     
-    >>> from hiten.algorithms.corrector import CorrectorFacade
+    >>> from hiten.algorithms.corrector import CorrectorPipeline
     >>> from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
     >>> from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
     >>> from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
@@ -58,40 +60,29 @@ class CorrectorPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
     >>> engine = _OrbitCorrectionEngine(backend=backend, interface=interface)
     >>> 
     >>> # Create facade
-    >>> corrector = CorrectorFacade(config, engine)
+    >>> corrector = CorrectorPipeline(config, interface, engine)
     >>> result = corrector.correct(orbit)
-    
-    Using the pipeline factory:
-    
-    >>> from hiten.algorithms.types.core import _PipelineFactory
-    >>> 
-    >>> pipeline = (_PipelineFactory()
-    ...     .with_backend(_NewtonBackend())
-    ...     .with_interface(_PeriodicOrbitCorrectorInterface())
-    ...     .with_engine(_OrbitCorrectionEngine)
-    ...     .with_config(_OrbitCorrectionConfig())
-    ...     .build_facade(CorrectorFacade))
-    >>> result = pipeline.correct(orbit)
-    
-    Notes
-    -----
-    The facade handles the complete correction workflow:
-    1. Validates the domain object and configuration
-    2. Creates a correction problem from the domain object
-    3. Delegates to the engine for computation
-    4. Processes and returns the results
-    
-    Domain-specific logic is handled by the interface, which:
-    - Translates domain objects to backend-compatible inputs
-    - Converts backend outputs to domain results
-    - Handles domain-specific validation and processing
     """
 
-    def __init__(self, config: ConfigT, interface, engine: _CorrectionEngine = None) -> None:
+    def __init__(self, config: ConfigT, interface: InterfaceT, engine: _CorrectionEngine = None) -> None:
         super().__init__(config, interface, engine)
 
     @classmethod
     def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None) -> "CorrectorPipeline[DomainT, InterfaceT, ConfigT, ResultT]":
+        """Create a facade instance with a default engine (factory).
+
+        Parameters
+        ----------
+        config : :class:`~hiten.algorithms.types.core.ConfigT`
+            Configuration object for the correction algorithm.
+        interface : :class:`~hiten.algorithms.types.core.InterfaceT`, optional
+            Interface instance for the correction algorithm. If None, uses the default _PeriodicOrbitCorrectorInterface.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.corrector.base.CorrectorPipeline`
+            A correction facade instance with a default engine injected.
+        """
         backend = _NewtonBackend(stepper_factory=make_armijo_stepper(_LineSearchConfig(norm_fn=_infinity_norm)))
         intf = interface or _PeriodicOrbitCorrectorInterface()
         engine = _CorrectionEngine(backend=backend, interface=intf)
@@ -127,8 +118,42 @@ class CorrectorPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
         
         Parameters
         ----------
-        domain_obj : DomainT
+        domain_obj : :class:`~hiten.algorithms.types.core.DomainT`
             The domain object to correct (e.g., PeriodicOrbit, Manifold).
+        override : bool
+            Whether to override the default configuration.
+        max_attempts : Optional[int]
+            The maximum number of attempts to correct the domain object.
+        tol : Optional[float]
+            The tolerance for the correction.
+        max_delta : Optional[float]
+            The maximum delta for the correction.
+        line_search_config : Optional[_LineSearchConfig]
+            The line search configuration.
+        finite_difference : Optional[bool]
+            Whether to use finite difference for the correction.
+        fd_step : Optional[float]
+            The finite difference step size.
+        method : Optional[Literal["fixed", "adaptive", "symplectic"]]
+            The method for the correction.
+        order : Optional[int]
+            The order for the correction.
+        steps : Optional[int]
+            The number of steps for the correction.
+        forward : Optional[int]
+            The direction for the correction.
+        residual_indices : Optional[tuple[int, ...]]
+            The indices for the residual.
+        control_indices : Optional[tuple[int, ...]]
+            The indices for the control.
+        extra_jacobian : Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]]
+            The extra jacobian for the correction.
+        target : Optional[tuple[float, ...]]
+            The target for the correction.
+        event_func : Optional[Callable[..., tuple[float, np.ndarray]]]
+            The event function for the correction.
+        stepper : Optional[StepperFactory]
+            The stepper factory for the correction.
         **kwargs
             Additional correction parameters that vary by facade implementation.
             Common parameters may include:
@@ -138,7 +163,7 @@ class CorrectorPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
             
         Returns
         -------
-        ResultT
+        :class:`~hiten.algorithms.types.core.ResultT`
             Domain-specific correction result containing:
             - Corrected parameters
             - Convergence information
@@ -173,13 +198,14 @@ class CorrectorPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
         
         Parameters
         ----------
-        results : list[ResultT]
+        results : list[:class:`~hiten.algorithms.types.core.ResultT`]
             List of correction results.
             
         Returns
         -------
         dict[str, Any]
             Summary statistics including:
+
             - total_objects: Total number of objects
             - converged: Number of converged objects
             - failed: Number of failed objects
@@ -216,7 +242,7 @@ class CorrectorPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
         
         Parameters
         ----------
-        config : ConfigT
+        config : :class:`~hiten.algorithms.types.core.ConfigT`
             The configuration object to validate.
             
         Raises

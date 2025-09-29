@@ -11,6 +11,7 @@ from typing import Callable, Literal, NamedTuple, Optional
 
 import numpy as np
 
+from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
 from hiten.algorithms.poincare.singlehit.backend import _y_plane_crossing
 
 
@@ -19,11 +20,11 @@ class _LineSearchConfig(NamedTuple):
     
     Parameters
     ----------
-    norm_fn : NormFn or None, default=None
+    norm_fn : :class:`~hiten.algorithms.corrector.types.NormFn` or None, default=None
         Function to compute residual norm. Uses L2 norm if None.
-    residual_fn : ResidualFn or None, default=None
+    residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn` or None, default=None
         Function to compute residual vector. Must be provided.
-    jacobian_fn : JacobianFn or None, default=None
+    jacobian_fn : :class:`~hiten.algorithms.corrector.types.JacobianFn` or None, default=None
         Jacobian function (currently unused).
     max_delta : float, default=1e-2
         Maximum allowed step size (infinity norm).
@@ -34,9 +35,9 @@ class _LineSearchConfig(NamedTuple):
     armijo_c : float, default=0.1
         Armijo parameter for sufficient decrease condition.
     """
-    norm_fn: Optional[Callable[[np.ndarray], float]] = None
-    residual_fn: Optional[Callable[[np.ndarray], np.ndarray]] = None
-    jacobian_fn: Optional[Callable[[np.ndarray], np.ndarray]] = None
+    norm_fn: Optional[NormFn] = None
+    residual_fn: Optional[ResidualFn] = None
+    jacobian_fn: Optional[JacobianFn] = None
     max_delta: float = 1e-2
     alpha_reduction: float = 0.5
     min_alpha: float = 1e-4

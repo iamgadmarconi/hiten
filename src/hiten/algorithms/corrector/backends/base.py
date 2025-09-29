@@ -20,13 +20,13 @@ See Also
     Step-size control interfaces for robust convergence.
 """
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import Any, Callable, Tuple
 
 import numpy as np
 
-from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
 from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
+from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
 from hiten.algorithms.types.core import _HitenBaseBackend
 
 
@@ -155,30 +155,6 @@ class _CorrectorBackend(_HitenBaseBackend):
             maximum number of iterations or encounters numerical difficulties.
         ValueError
             If input parameters are invalid or incompatible.
-        
-        Notes
-        -----
-        Convergence Criteria:
-        The algorithm terminates successfully when ||R(x)|| < tolerance,
-        where the norm is computed using the provided norm_fn or a default
-        choice. The tolerance should be chosen considering:
-        - Required solution accuracy
-        - Numerical conditioning of the problem
-        - Computational cost constraints
-
-        Robustness Considerations:
-        Implementations should include safeguards for:
-        - Step size control to prevent divergence
-        - Detection and handling of singular Jacobians
-        - Graceful degradation for poorly conditioned problems
-        - Meaningful error reporting for debugging
-
-        Performance Optimization:
-        For computationally intensive problems, consider:
-        - Reusing Jacobian evaluations when possible
-        - Exploiting problem structure (sparsity, symmetry)
-        - Adaptive tolerance and iteration limits
-        - Warm starting from previous solutions
 
         Examples
         --------

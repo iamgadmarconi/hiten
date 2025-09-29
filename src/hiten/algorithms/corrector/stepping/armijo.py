@@ -55,16 +55,16 @@ class _ArmijoLineSearch:
 
         Parameters
         ----------
-        x0 : ndarray
+        x0 : np.ndarray
             Current parameter vector.
-        delta : ndarray
+        delta : np.ndarray
             Newton step direction.
         current_norm : float
             Norm of residual at current point.
 
         Returns
         -------
-        x_new : ndarray
+        x_new : np.ndarray
             Updated parameter vector.
         r_norm_new : float
             Norm of residual at new point.
@@ -75,7 +75,7 @@ class _ArmijoLineSearch:
         ------
         ValueError
             If residual function is not provided in configuration.
-        BackendError
+        :class:`~hiten.algorithms.types.exceptions.BackendError`
             If line search fails to find any productive step.
         """
         if self.residual_fn is None:
@@ -159,22 +159,6 @@ class _ArmijoStep(_CorrectorStepBase):
     Armijo line search (for robustness), with the choice determined by
     configuration. This flexibility allows algorithms to adapt their
     stepping strategy based on problem characteristics or user preferences.
-
-    Features:
-    - Optional Armijo line search with backtracking
-    - Configurable line search parameters
-    - Fallback to plain Newton steps when line search is disabled
-    - Automatic sufficient decrease condition checking
-    - Robust convergence for challenging problems
-
-    The Armijo line search ensures sufficient decrease in the residual norm,
-    providing theoretical convergence guarantees under appropriate conditions.
-    This makes it suitable for:
-
-    - Poorly conditioned nonlinear systems
-    - Problems with bad initial guesses
-    - Situations requiring guaranteed convergence properties
-    - Production code where robustness is critical
 
     Attributes
     ----------

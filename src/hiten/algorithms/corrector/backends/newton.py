@@ -5,15 +5,14 @@ handling of ill-conditioned systems, finite-difference Jacobians, and
 extensible hooks for customization.
 """
 
-from typing import Any, Callable, Tuple
+from typing import Tuple
 
 import numpy as np
 
 from hiten.algorithms.corrector.backends.base import _CorrectorBackend
-from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
+from hiten.algorithms.corrector.stepping import make_plain_stepper
 from hiten.algorithms.corrector.types import (JacobianFn, NormFn, ResidualFn,
                                               StepperFactory)
-from hiten.algorithms.corrector.stepping import make_plain_stepper
 from hiten.algorithms.types.exceptions import ConvergenceError
 from hiten.utils.log_config import logger
 
@@ -26,10 +25,10 @@ class _NewtonBackend(_CorrectorBackend):
     customization. Uses multiple inheritance to separate step control
     from core Newton logic.
 
-    Dependency injection
-    --------------------
-    The backend receives a stepper factory that builds a step strategy per
-    problem. If not provided, a safe default plain-capped step is used.
+    Parameters
+    ----------
+    stepper_factory : :class:`~hiten.algorithms.corrector.types.StepperFactory`
+        The stepper factory to use.
 
     Notes
     -----
@@ -53,14 +52,14 @@ class _NewtonBackend(_CorrectorBackend):
 
         Parameters
         ----------
-        x : ndarray
+        x : np.ndarray
             Current parameter vector.
         residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
             Function to compute residual.
             
         Returns
         -------
-        ndarray
+        np.ndarray
             Residual vector R(x).
         """
         return residual_fn(x)
@@ -70,7 +69,7 @@ class _NewtonBackend(_CorrectorBackend):
 
         Parameters
         ----------
-        residual : ndarray
+        residual : np.ndarray
             Residual vector.
         norm_fn : :class:`~hiten.algorithms.corrector.types.NormFn`
             Function to compute norm.
@@ -96,7 +95,7 @@ class _NewtonBackend(_CorrectorBackend):
 
         Parameters
         ----------
-        x : ndarray
+        x : np.ndarray
             Current parameter vector.
         residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
             Function to compute residual.
@@ -107,7 +106,7 @@ class _NewtonBackend(_CorrectorBackend):
             
         Returns
         -------
-        ndarray
+        np.ndarray
             Jacobian matrix with shape (m, n) where m is residual size
             and n is parameter size.
         """
@@ -130,22 +129,23 @@ class _NewtonBackend(_CorrectorBackend):
         """Solve linear Newton system J * delta = -r.
 
         Handles ill-conditioned and rectangular systems automatically:
+
         - Applies Tikhonov regularization for ill-conditioned square systems
         - Uses least-squares for rectangular systems
         - Falls back to SVD for singular systems
 
         Parameters
         ----------
-        J : ndarray
+        J : np.ndarray
             Jacobian matrix.
-        r : ndarray
+        r : np.ndarray
             Residual vector.
         cond_threshold : float, default=1e8
             Condition number threshold for regularization.
             
         Returns
         -------
-        ndarray
+        np.ndarray
             Newton step vector delta.
         """
         try:
@@ -194,7 +194,7 @@ class _NewtonBackend(_CorrectorBackend):
 
         Parameters
         ----------
-        x0 : ndarray
+        x0 : np.ndarray
             Initial guess.
         residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
             Function to compute residual vector R(x).
@@ -213,7 +213,7 @@ class _NewtonBackend(_CorrectorBackend):
             
         Returns
         -------
-        x_solution : ndarray
+        x_solution : np.ndarray
             Converged solution vector.
         iterations : int
             Number of iterations performed.

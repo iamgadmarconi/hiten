@@ -6,7 +6,7 @@ def _default_norm(r: np.ndarray) -> float:
 
     Parameters
     ----------
-    r : ndarray
+    r : np.ndarray
         Residual vector.
         
     Returns
@@ -26,7 +26,7 @@ def _infinity_norm(r: np.ndarray) -> float:
 
     Parameters
     ----------
-    r : ndarray
+    r : np.ndarray
         Residual vector.
         
     Returns

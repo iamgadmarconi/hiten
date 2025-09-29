@@ -3,19 +3,25 @@
 This module provides the engine for the corrector module.
 """
 
-import numpy as np
-
 from hiten.algorithms.corrector.backends.newton import _NewtonBackend
 from hiten.algorithms.corrector.engine.base import _CorrectionEngine
-from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
-from hiten.algorithms.corrector.types import (OrbitCorrectionResult,
-                                              _OrbitCorrectionProblem)
+from hiten.algorithms.corrector.interfaces import \
+    _PeriodicOrbitCorrectorInterface
+from hiten.algorithms.corrector.types import _OrbitCorrectionProblem
 from hiten.algorithms.types.exceptions import (BackendError, ConvergenceError,
                                                EngineError)
 
 
 class _OrbitCorrectionEngine(_CorrectionEngine):
-    """Engine orchestrating periodic orbit correction via a backend and interface."""
+    """Engine orchestrating periodic orbit correction via a backend and interface.
+    
+    Parameters
+    ----------
+    backend : :class:`~hiten.algorithms.corrector.backends.newton._NewtonBackend`
+        The backend for the orbit correction.
+    interface : :class:`~hiten.algorithms.corrector.interfaces._PeriodicOrbitCorrectorInterface`
+        The interface for the orbit correction.
+    """
 
     def __init__(self, *, backend: _NewtonBackend, interface: _PeriodicOrbitCorrectorInterface) -> None:
         super().__init__(backend=backend, interface=interface)
@@ -28,14 +34,52 @@ class _OrbitCorrectionEngine(_CorrectionEngine):
         call,
         interface,
     ) -> None:
+        """Handle backend failure.
+        
+        Parameters
+        ----------
+        exc : Exception
+            The exception.
+        problem : :class:`~hiten.algorithms.corrector.types._OrbitCorrectionProblem`
+            The problem.
+        call : :class:`~hiten.algorithms.types.core._BackendCall`
+            The call.
+        interface : :class:`~hiten.algorithms.corrector.interfaces._PeriodicOrbitCorrectorInterface`
+            The interface.
+        
+        Raises
+        ------
+        :class:`~hiten.algorithms.types.exceptions.EngineError`
+            If the orbit correction failed.
+        """
         if isinstance(exc, (ConvergenceError, BackendError)):
             raise EngineError("Orbit correction failed") from exc
         raise EngineError("Unexpected error during orbit correction") from exc
 
     def _invoke_backend(self, call):
+        """Invoke the backend.
+        
+        Parameters
+        ----------
+        call : :class:`~hiten.algorithms.types.core._BackendCall`
+            The call to the backend.
+        """
         return self._backend.run(*call.args, **call.kwargs)
 
     def _after_backend_success(self, outputs, *, problem, domain_payload, interface) -> None:
+        """Handle backend success.
+        
+        Parameters
+        ----------
+        outputs : :class:`~hiten.algorithms.corrector.types._OrbitCorrectionResult`
+            The outputs from the backend.
+        problem : :class:`~hiten.algorithms.corrector.types._OrbitCorrectionProblem`
+            The problem.
+        domain_payload : :class:`~hiten.algorithms.corrector.types._OrbitCorrectionDomainPayload`
+            The domain payload.
+        interface : :class:`~hiten.algorithms.corrector.interfaces._PeriodicOrbitCorrectorInterface`
+            The interface.
+        """
         x_corr, iterations, residual_norm = outputs
         try:
             self._backend.on_success(
