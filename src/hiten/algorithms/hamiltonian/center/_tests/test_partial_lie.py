@@ -51,9 +51,9 @@ def lie_test_setup():
     _ham = cm.dynamics.pipeline.get_hamiltonian("center_manifold_real")
 
     # Legacy private tables (read-only in tests)
-    cm._psi = _ham._psi
-    cm._clmo = _ham._clmo
-    cm._encode_dict_list = _ham._encode_dict_list
+    cm._psi = _ham.dynamics.psi
+    cm._clmo = _ham.dynamics.clmo
+    cm._encode_dict_list = _ham.dynamics.encode_dict_list
 
     # Legacy cache_get helper used by a handful of unit tests
     def _cache_get(key):
