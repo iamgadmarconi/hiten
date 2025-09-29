@@ -1,7 +1,31 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Literal, Sequence, List
+
+import numpy as np
+
+from hiten.algorithms.types.core import _HitenBase
+from hiten.algorithms.types.services.maps import (_MapPersistenceService,
+                                                  _MapServices)
+from hiten.system.manifold import Manifold
+from hiten.system.orbits.base import PeriodicOrbit
+from hiten.algorithms.types.states import Trajectory
+from hiten.utils.plots import plot_poincare_map
 
 
-class SynodicMap:
+class SynodicMap(_HitenBase):
 
+    def __init__(self, domain_obj: Literal[PeriodicOrbit, Manifold, List[Trajectory]]):
+        self._domain_obj = domain_obj
+        services = _MapServices.default(self)
+        super().__init__(services)
+
+    def __str__(self) -> str:
+        return f"SynodicMap(domain_obj={self._domain_obj})"
+    
+    def __repr__(self) -> str:
+        return self.__str__()
 
     def plot(
         self,
@@ -82,3 +106,32 @@ class SynodicMap:
             **kwargs,
         )
 
+    def __setstate__(self, state):
+        """Restore the SynodicMap instance after unpickling.
+
+        The heavy, non-serialisable dynamical system is reconstructed lazily
+        using the stored value of domain_obj.
+        
+        Parameters
+        ----------
+        state : dict
+            Dictionary containing the serialized state of the SynodicMap.
+        """
+        super().__setstate__(state)
+        self._setup_services(_MapServices.default(self))
+
+    def load_inplace(self, filepath: str, **kwargs) -> None:
+        """Load orbit data from a file in place."""
+        self.persistence.load_inplace(self, filepath)
+        self.dynamics.reset()
+        return self
+
+    @classmethod
+    def load(cls, filepath: str | Path, **kwargs) -> "SynodicMap":
+        """Load a CenterManifoldMap from a file (new instance)."""
+        return cls._load_with_services(
+            filepath, 
+            _MapPersistenceService(), 
+            _MapServices.default, 
+            **kwargs
+        )

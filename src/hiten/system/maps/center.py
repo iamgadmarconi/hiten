@@ -1,10 +1,39 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Literal, Sequence
+
+import numpy as np
+
+from hiten.algorithms.types.core import _HitenBase
+from hiten.algorithms.types.services.maps import (_MapPersistenceService,
+                                                  _MapServices)
+from hiten.system.center import CenterManifold
+from hiten.utils.plots import plot_poincare_map, plot_poincare_map_interactive
 
 
-class CenterManifoldMap:
+class CenterManifoldMap(_HitenBase):
+    """Poincare map for a center manifold."""
 
     def __init__(self, center_manifold: CenterManifold, energy: float):
-        pass
+        self._center_manifold = center_manifold
+        self._energy = energy
+        services = _MapServices.default(self)
+        super().__init__(services)
 
+    def __str__(self) -> str:
+        return f"CenterManifoldMap(center_manifold={self._center_manifold}, energy={self._energy})"
+    
+    def __repr__(self) -> str:
+        return self.__str__()
+    
+    @property
+    def center_manifold(self) -> CenterManifold:
+        return self.dynamics.center_manifold
+    
+    @property
+    def energy(self) -> float:
+        return self.dynamics.energy
 
     def plot(
         self,
@@ -41,7 +70,6 @@ class CenterManifoldMap:
         # Determine section
         if section_coord is not None:
             if not self.has_section(section_coord):
-                logger.debug("Section %s not cached - computing now...", section_coord)
                 self._solve_and_cache(section_coord)
             section = self.get_section(section_coord)
         else:
@@ -114,7 +142,6 @@ class CenterManifoldMap:
         # Ensure section exists
         if section_coord is not None:
             if not self.has_section(section_coord):
-                logger.debug("Section %s not cached - computing now...", section_coord)
                 self._solve_and_cache(section_coord)
             section = self.get_section(section_coord)
         else:
@@ -166,52 +193,32 @@ class CenterManifoldMap:
             dark_mode=dark_mode,
         )
 
+    def __setstate__(self, state):
+        """Restore the CenterManifoldMap instance after unpickling.
 
-    def save(self, filepath: str, **kwargs) -> None:
-        """Save the Poincare map to file.
-
+        The heavy, non-serialisable dynamical system is reconstructed lazily
+        using the stored value of center_manifold and energy.
+        
         Parameters
         ----------
-        filepath : str
-            Path to save the map data.
-        **kwargs
-            Additional keyword arguments passed to the save function.
+        state : dict
+            Dictionary containing the serialized state of the CenterManifoldMap.
         """
-        save_poincare_map(self, filepath, **kwargs)
+        super().__setstate__(state)
+        self._setup_services(_MapServices.default(self))
 
     def load_inplace(self, filepath: str, **kwargs) -> None:
-        """Load Poincare map data from file in place.
-
-        Parameters
-        ----------
-        filepath : str
-            Path to load the map data from.
-        **kwargs
-            Additional keyword arguments passed to the load function.
-        """
-        load_poincare_map_inplace(self, filepath, **kwargs)
+        """Load orbit data from a file in place."""
+        self.persistence.load_inplace(self, filepath)
+        self.dynamics.reset()
+        return self
 
     @classmethod
-    def load(
-        cls,
-        filepath: str,
-        cm: CenterManifold,
-        **kwargs,
-    ) -> "CenterManifoldMap":
-        """Load a Poincare map from file.
-
-        Parameters
-        ----------
-        filepath : str
-            Path to load the map data from.
-        cm : :class:`~hiten.system.center.CenterManifold`
-            Center manifold object for the loaded map.
-        **kwargs
-            Additional keyword arguments passed to the load function.
-
-        Returns
-        -------
-        :class:`~hiten.algorithms.poincare.centermanifold.base.CenterManifoldMap`
-            Loaded center manifold map instance.
-        """
-        return load_poincare_map(filepath, cm, **kwargs)
+    def load(cls, filepath: str | Path, **kwargs) -> "CenterManifoldMap":
+        """Load a CenterManifoldMap from a file (new instance)."""
+        return cls._load_with_services(
+            filepath, 
+            _MapPersistenceService(), 
+            _MapServices.default, 
+            **kwargs
+        )

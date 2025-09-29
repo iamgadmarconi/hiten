@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Optional, Sequence
+from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import numpy as np
 
@@ -14,16 +14,17 @@ from hiten.algorithms.poincare.centermanifold.config import \
     _CenterManifoldMapConfig
 from hiten.algorithms.poincare.centermanifold.types import \
     CenterManifoldMapResults
+from hiten.algorithms.poincare.core.types import _Section
 from hiten.algorithms.poincare.synodic.base import _SynodicMapFacade
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
 from hiten.algorithms.poincare.synodic.types import SynodicMapResults
-from hiten.algorithms.poincare.core.types import _Section
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
                                                   _ServiceBundleBase)
 from hiten.system.center import CenterManifold
 from hiten.system.orbits.base import GenericOrbit
-from hiten.utils.io.map import load_poincare_map, save_poincare_map
+from hiten.utils.io.map import (load_poincare_map, load_poincare_map_inplace,
+                                save_poincare_map)
 
 if TYPE_CHECKING:
     from hiten.algorithms.poincare.core.types import _Section
@@ -36,6 +37,7 @@ class _MapPersistenceService(_PersistenceServiceBase):
         super().__init__(
             save_fn=lambda map, path, **kw: save_poincare_map(map, Path(path), **kw),
             load_fn=lambda path, **kw: load_poincare_map(Path(path), **kw),
+            load_inplace_fn=lambda map, path, **kw: load_poincare_map_inplace(map, Path(path), **kw),
         )
 
 
@@ -44,6 +46,7 @@ class _MapDynamicsServiceBase(_DynamicsServiceBase):
 
     def __init__(self, domain_obj) -> None:
         super().__init__(domain_obj)
+        self._domain_obj = domain_obj
         self._sections: dict[str, "_Section"] = {}
         self._section: Optional["_Section"] = None
         self._section_coord = None
@@ -51,7 +54,7 @@ class _MapDynamicsServiceBase(_DynamicsServiceBase):
 
     @property
     def domain_obj(self):
-        return super().domain_obj
+        return self._domain_obj
 
     @property
     def generator(self) -> str:
@@ -258,8 +261,18 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
 
     def __init__(self, domain_obj: "CenterManifold") -> None:
         super().__init__(domain_obj)
+        self._energy = self.domain_obj.energy
+        self._center_manifold = self.domain_obj._center_manifold
         self._generator = None
         self._section_coord = None
+
+    @property
+    def center_manifold(self) -> CenterManifold:
+        return self._center_manifold
+
+    @property
+    def energy(self) -> float:
+        return self._energy
 
     def compute(self, *, section_coord: str = "q3", overrides: dict[str, Any] | None = None, **kwargs) -> np.ndarray:
         if overrides is None:
