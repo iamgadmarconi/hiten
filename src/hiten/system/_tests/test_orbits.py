@@ -623,13 +623,8 @@ class TestPeriodicOrbitEdgeCases:
         orbit = GenericOrbit(l1_point, initial_state=sample_initial_state)
         orbit.period = 2.5
         
-        # Very few steps should still work (minimum is 2 for a trajectory)
-        try:
-            trajectory = orbit.propagate(steps=2)
-            assert trajectory.n_samples == 2
-        except (ValueError, RuntimeError):
-            # Some implementations may reject very few steps
-            pass
+        trajectory = orbit.propagate(steps=2)
+        assert trajectory.n_samples == 2
     
     def test_orbit_properties_consistency(self, l1_point, sample_initial_state):
         """Test that orbit properties are consistent across accesses."""

@@ -425,10 +425,10 @@ class _OrbitDynamicsService(_DynamicsServiceBase):
 
     @property
     def trajectories(self) -> List[Trajectory]:
-        """Compatibility helper for SynodicMap.trajectories."""
-        states_list = self._trajectory.states
-        times_list = self._trajectory.times
-        return [Trajectory(times, states) for times, states in zip(times_list, states_list)]
+        """Compatibility helper for SynodicMap - returns list with single trajectory."""
+        if self._trajectory is None:
+            raise ValueError("Trajectory not computed. Call propagate() first.")
+        return [self._trajectory]
 
     @property
     def monodromy(self):

@@ -39,7 +39,7 @@ class SynodicMap(_HitenBase):
         super().__init__(services)
 
     def __str__(self) -> str:
-        return f"SynodicMap(domain_obj={self._domain_obj})"
+        return f"SynodicMap(source={self._source.__class__.__name__})"
     
     def __repr__(self) -> str:
         return self.__str__()
@@ -90,7 +90,7 @@ class SynodicMap(_HitenBase):
     
     def clear_sections(self) -> None:
         """Clear the sections."""
-        return self.dynamics.clear_sections()
+        return self.dynamics.clear()
 
     def compute(self, *, section_axis: str, section_offset: float, plane_coords: tuple[str, str], direction: Optional[Literal[1, -1, None]] = None, overrides: dict[str, Any] | None = None, **kwargs) -> SynodicMapResults:
         """Compute the Poincare map.

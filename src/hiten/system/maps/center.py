@@ -80,7 +80,7 @@ class CenterManifoldMap(_HitenBase):
     
     def clear_sections(self) -> None:
         """Clear the sections of the center manifold."""
-        return self.dynamics.clear_sections()
+        return self.dynamics.clear()
 
     def compute(self, section_coord: Optional[str] = "q3", overrides: Optional[dict[str, Any]] = None, **kwargs) -> CenterManifoldMapResults:
         """Compute the Poincare map.
