@@ -99,39 +99,40 @@ manifold.plot()
    from hiten.algorithms.types.states import SynodicState
    from hiten.algorithms.continuation.config import _OrbitContinuationConfig
 
+   num_orbits = 50
    system = System.from_bodies("earth", "moon")
    l1 = system.get_libration_point(1)
+   
+   halo_seed = l1.create_orbit('halo', amplitude_z= 0.2, zenith='southern')
+   halo_seed.correct(max_attempts=25, max_delta=1e-3)
 
-   seed = l1.create_orbit('lyapunov', amplitude_x=1e-3)
-   seed.correct(max_attempts=25)
+   current_z = halo_seed.initial_state[SynodicState.Z]  # 0 for planar Lyapunov halo_seed
+   target_z = current_z + 5.0   # introduce out-of-plane Z
+   step_z = (target_z - current_z) / (num_orbits - 1)
 
-   target_amp = 1e-2  # grow A_x from 0.001 to 0.01 (relative amplitude)
-   current_amp = seed.initial_state[SynodicState.X]  # Get current X position
-   num_orbits = 10
-
-   # Step in amplitude space (predictor still tweaks X component)
-   step = (target_amp - current_amp) / (num_orbits - 1)
-
-   config = _OrbitContinuationConfig(
-       target=([current_amp], [target_amp]),
-       step=((step,),),
-       state=(SynodicState.X,),
-       max_members=num_orbits,
-       extra_params=dict(max_attempts=50, tol=1e-13),
-       stepper="secant",
+   config= _OrbitContinuationConfig(
+      target=([current_z], [target_z]),
+      step=((step_z),),
+      state=(SynodicState.Z,),
+      max_members=50,
+      extra_params=dict(max_attempts=50, tol=1e-12),
+      stepper="secant",
    )
 
-   pipeline = ContinuationPipeline.with_default_engine(config=config)
-   result = pipeline.generate(seed)
+   state_parameter = ContinuationPipeline.with_default_engine(config=config)
+
+   result = state_parameter.generate(halo_seed)
+
+   logger.info(f"Generated {len(result.family)} orbits (success rate {result.success_rate:.2%})")
 
    family = OrbitFamily.from_result(result)
    family.propagate()
    family.plot()
    ```
 
-    ![Lyapunov orbit family](results/plots/lyapunov_family.svg)
+    ![Halo orbit family](results/plots/halo_family.svg)
 
-    *Figure&nbsp;3 - Family of Earth-Moon \(L_1\) Lyapunov orbits.*
+    *Figure&nbsp;3 - Family of Earth-Moon \(L_1\) Halo orbits.*
 
 3. **Generating Poincare maps**
 
@@ -199,57 +200,69 @@ manifold.plot()
    The toolkit can detect heteroclinic connections between two manifolds.
 
    ```python
-   from hiten.algorithms.connections import ConnectionPipeline, SearchConfig
-   from hiten.algorithms.poincare import SynodicMapConfig
-   from hiten.system import System
+    system = System.from_bodies("earth", "moon")
+    mu = system.mu
 
-   system = System.from_bodies("earth", "moon")
-   mu = system.mu
+    l1 = system.get_libration_point(1)
+    l2 = system.get_libration_point(2)
 
-   l1 = system.get_libration_point(1)
-   l2 = system.get_libration_point(2)
+    halo_l1 = l1.create_orbit('halo', amplitude_z=0.5, zenith='southern')
+    halo_l1.correct()
+    halo_l1.propagate()
 
-   halo_l1 = l1.create_orbit('halo', amplitude_z=0.5, zenith='southern')
-   halo_l1.correct()
-   halo_l1.propagate()
+    halo_l2 = l2.create_orbit('halo', amplitude_z=0.3663368, zenith='northern')
+    halo_l2.correct()
+    halo_l2.propagate()
 
-   halo_l2 = l2.create_orbit('halo', amplitude_z=0.3663368, zenith='northern')
-   halo_l2.correct()
-   halo_l2.propagate()
+    manifold_l1 = halo_l1.manifold(stable=True, direction='positive')
+    manifold_l1.compute(integration_fraction=0.9, step=0.005)
 
-   manifold_l1 = halo_l1.manifold(stable=True, direction='positive')
-   manifold_l1.compute(integration_fraction=0.9, step=0.005)
+    manifold_l2 = halo_l2.manifold(stable=False, direction='negative')
+    manifold_l2.compute(integration_fraction=1.0, step=0.005)
 
-   manifold_l2 = halo_l2.manifold(stable=False, direction='negative')
-   manifold_l2.compute(integration_fraction=1.0, step=0.005)
+    section_cfg = SynodicMapConfig(
+        section_axis="x",
+        section_offset=1 - mu,
+        plane_coords=("y", "z"),
+        interp_kind="cubic",
+        segment_refine=30,
+        tol_on_surface=1e-9,
+        dedup_time_tol=1e-9,
+        dedup_point_tol=1e-9,
+        max_hits_per_traj=None,
+        n_workers=None,
+    )
 
-   section_cfg = SynodicMapConfig(
-      section_axis="x",
-      section_offset=1 - mu,
-      plane_coords=("y", "z"),
-      interp_kind="cubic",
-      segment_refine=30,
-      tol_on_surface=1e-9,
-      dedup_time_tol=1e-9,
-      dedup_point_tol=1e-9,
-      max_hits_per_traj=None,
-      n_workers=None,
-   )
+    # Create unified configuration with all parameters in one object
+    config = _ConnectionConfig(
+        section=section_cfg,        # Synodic section configuration
+        direction=-1,                # Crossing direction (None = both directions)
+        delta_v_tol=1,             # Maximum Delta-V tolerance
+        ballistic_tol=1e-8,        # Threshold for ballistic classification
+        eps2d=1e-3,                # 2D pairing radius
+    )
+    
+    # Create connection using the factory method with unified config
+    conn = ConnectionPipeline.with_default_engine(config=config)
 
-   conn = ConnectionPipeline.with_default_engine(
-      section=section_cfg,
-      direction=None,
-      search_cfg=SearchConfig(delta_v_tol=1, ballistic_tol=1e-8, eps2d=1e-3),
-   )
+    result = conn.solve(manifold_l1, manifold_l2)
 
-   conn.solve(manifold_l1, manifold_l2)
-   print(conn)
-   conn.plot(dark_mode=True)
+    print(result)
+
+    conn.plot(dark_mode=True)
+
+    conn.plot_connection(dark_mode=True)
    ```
 
    ![Heteroclinic connection](results/plots/heteroclinic_connection.svg)
 
    *Figure&nbsp;6 - Heteroclinic connection between the stable manifold of an Earth-Moon \(L_1\) halo orbit and the unstable manifold of an Earth-Moon \(L_2\) halo orbit.*
+
+   We can also plot the trajectories making up the connection:
+
+   ![Heteroclinic connection trajectories](results/plots/heteroclinic_trajectory.svg)
+
+   *Figure&nbsp;7 - One of the detected connections.*
 
 5. **Generating invariant tori**
 

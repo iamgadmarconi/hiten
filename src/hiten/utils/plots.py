@@ -1040,6 +1040,173 @@ def plot_invariant_torus(
     plt.close(fig)
     return fig, ax
 
+def plot_heteroclinic_connection(
+        trajectory_data: dict,
+        connection_result,
+        bodies: List[Body],
+        system_distance: float,
+        *,
+        figsize: Tuple[int, int] = (10, 8),
+        save: bool = False,
+        dark_mode: bool = True,
+        filepath: str = "heteroclinic_connection.svg",
+        src_color: str = "red",
+        tgt_color: str = "blue",
+        dv_arrow_scale: float = 0.05,
+        flow_arrow_spacing: int = 10,
+        equal_axes: bool = True,
+        **kwargs) -> Tuple[plt.Figure, plt.Axes]:
+    """Plot a heteroclinic connection between two manifold trajectories.
+
+    Parameters
+    ----------
+    trajectory_data : dict
+        Dictionary containing prepared trajectory data with keys:
+        
+        - 'states_u' : ndarray, shape (n, 6) - Source trajectory states
+        - 'states_s' : ndarray, shape (m, 6) - Target trajectory states
+        - 'state_u_conn' : ndarray, shape (6,) - Source state at connection
+        - 'state_s_conn' : ndarray, shape (6,) - Target state at connection
+        
+    connection_result : :class:`~hiten.algorithms.connections.types._ConnectionResult`
+        The connection result containing metadata (kind, delta_v, etc.).
+    bodies : list of :class:`~hiten.system.body.Body`
+        Primary and secondary bodies of the CR3BP.
+    system_distance : float
+        Characteristic distance in meters - required to scale the body radii.
+    figsize : tuple, default (10, 8)
+        Figure size in inches (width, height).
+    save : bool, default False
+        Whether to save the plot to a file.
+    dark_mode : bool, default True
+        Whether to use dark mode for the plot.
+    filepath : str, default "heteroclinic_connection.svg"
+        Path where to save the plot if save=True.
+    src_color : str, default "red"
+        Color for the source (unstable) trajectory.
+    tgt_color : str, default "blue"
+        Color for the target (stable) trajectory.
+    dv_arrow_scale : float, default 0.05
+        Scale factor for the Delta-V arrow visualization.
+    flow_arrow_spacing : int, default 10
+        Spacing between flow direction arrows along trajectories.
+    equal_axes : bool, default True
+        Whether to enforce equal axis scaling.
+    **kwargs
+        Additional keyword arguments for plot customization.
+
+    Returns
+    -------
+    tuple
+        (fig, ax) containing the figure and axis objects for further customization
+
+    Notes
+    -----
+    This is a pure visualization function that takes pre-processed trajectory
+    data and renders it. All data extraction and processing should be done
+    by the caller (typically ConnectionPipeline._extract_connection_trajectories).
+    
+    The plot shows trajectory portions from both manifolds leading to the
+    connection point, with flow direction arrows, a marked connection point,
+    and a Delta-V vector arrow.
+    """
+    # Extract data from trajectory_data dictionary
+    states_u = trajectory_data['states_u']
+    states_s = trajectory_data['states_s']
+    state_u_conn = trajectory_data['state_u_conn']
+    state_s_conn = trajectory_data['state_s_conn']
+
+    mu = _get_mass_parameter(bodies[0].mass, bodies[1].mass)
+
+    # Create figure
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(111, projection='3d')
+
+    # Plot source trajectory
+    ax.plot(states_u[:, 0], states_u[:, 1], states_u[:, 2], 
+            color=src_color, lw=2, label='Unstable manifold', alpha=0.8)
+
+    # Plot target trajectory
+    ax.plot(states_s[:, 0], states_s[:, 1], states_s[:, 2], 
+            color=tgt_color, lw=2, label='Stable manifold', alpha=0.8)
+
+    # Add flow direction arrows along trajectories
+    if flow_arrow_spacing > 0 and len(states_u) > flow_arrow_spacing:
+        for i in range(0, len(states_u) - 1, flow_arrow_spacing):
+            start = states_u[i, :3]
+            direction = states_u[i + 1, :3] - start
+            if np.linalg.norm(direction) > 1e-9:
+                direction = direction / np.linalg.norm(direction) * 0.02
+                ax.quiver(start[0], start[1], start[2],
+                         direction[0], direction[1], direction[2],
+                         color=src_color, arrow_length_ratio=0.3, alpha=0.5)
+
+    if flow_arrow_spacing > 0 and len(states_s) > flow_arrow_spacing:
+        for i in range(0, len(states_s) - 1, flow_arrow_spacing):
+            start = states_s[i, :3]
+            direction = states_s[i + 1, :3] - start
+            if np.linalg.norm(direction) > 1e-9:
+                direction = direction / np.linalg.norm(direction) * 0.02
+                ax.quiver(start[0], start[1], start[2],
+                         direction[0], direction[1], direction[2],
+                         color=tgt_color, arrow_length_ratio=0.3, alpha=0.5)
+
+    # Mark connection point
+    conn_pt = state_u_conn[:3]
+    ax.scatter(*conn_pt, color='yellow', s=100, marker='o', 
+              edgecolors='black', linewidths=2, zorder=10,
+              label='Connection point')
+
+    # Add Delta-V arrow if non-negligible
+    dv_vec = state_s_conn[3:6] - state_u_conn[3:6]
+    dv_mag = np.linalg.norm(dv_vec)
+    
+    if dv_mag > 1e-9:
+        # Scale the arrow for visibility
+        dv_arrow = dv_vec / dv_mag * dv_arrow_scale
+        ax.quiver(conn_pt[0], conn_pt[1], conn_pt[2],
+                 dv_arrow[0], dv_arrow[1], dv_arrow[2],
+                 color='magenta', arrow_length_ratio=0.3, linewidth=2,
+                 label=f'ΔV = {dv_mag:.3e}', zorder=9)
+
+    # Plot bodies
+    primary_pos = np.array([-mu, 0, 0])
+    secondary_pos = np.array([1 - mu, 0, 0])
+    _plot_body(ax, primary_pos, bodies[0].radius / system_distance,
+               _get_body_color(bodies[0], 'royalblue'), bodies[0].name)
+    _plot_body(ax, secondary_pos, bodies[1].radius / system_distance,
+               _get_body_color(bodies[1], 'slategray'), bodies[1].name)
+
+    # Set labels
+    ax.set_xlabel('X [canonical]')
+    ax.set_ylabel('Y [canonical]')
+    ax.set_zlabel('Z [canonical]')
+
+    # Add text annotation for connection info
+    conn_type = connection_result.kind
+    annotation_text = f'{conn_type.capitalize()}: ΔV = {dv_mag:.3e}'
+    ax.text2D(0.05, 0.95, annotation_text, transform=ax.transAxes,
+             fontsize=11, verticalalignment='top',
+             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+
+    if equal_axes:
+        _set_axes_equal(ax)
+
+    ax.legend(loc='best')
+
+    if dark_mode:
+        _set_dark_mode(fig, ax, title=None)
+
+    if save:
+        _ensure_dir(os.path.dirname(os.path.abspath(filepath)))
+        plt.savefig(filepath)
+
+    plt.show()
+    plt.close(fig)
+
+    return fig, ax
+
+
 def plot_manifolds(
         manifolds: List["Manifold"],
         *,
@@ -1111,9 +1278,9 @@ def plot_manifolds(
         labels = [f"Manifold {i + 1}" for i in range(len(manifolds))]
 
     first_mfld = manifolds[0]
-    bodies = [first_mfld.generating_orbit._system.primary,
-              first_mfld.generating_orbit._system.secondary]
-    system_distance = first_mfld.generating_orbit._system.distance
+    bodies = [first_mfld.generating_orbit.system.primary,
+              first_mfld.generating_orbit.system.secondary]
+    system_distance = first_mfld.generating_orbit.system.distance
 
     mu = _get_mass_parameter(bodies[0].mass, bodies[1].mass)
 
