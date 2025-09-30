@@ -41,20 +41,26 @@ See Also
 """
 
 from .backends.base import _CorrectorBackend
+from .backends.ms import _MultipleShootingBackend
 from .backends.newton import _NewtonBackend
 from .config import (_BaseCorrectionConfig, _LineSearchConfig,
+                     _MultipleShootingOrbitCorrectionConfig,
                      _OrbitCorrectionConfig)
 from .engine import _OrbitCorrectionEngine
-from .interfaces import _PeriodicOrbitCorrectorInterface
+from .interfaces import (_MultipleShootingCorrectorOrbitInterface,
+                         _PeriodicOrbitCorrectorInterface)
 
 __all__ = [
     "_NewtonBackend",
+    "_MultipleShootingBackend",
     
     "_BaseCorrectionConfig",
-    "_OrbitCorrectionConfig", 
+    "_OrbitCorrectionConfig",
+    "_MultipleShootingOrbitCorrectionConfig",
     "_LineSearchConfig",
     
     "_CorrectorBackend",
     "_PeriodicOrbitCorrectorInterface",
+    "_MultipleShootingCorrectorOrbitInterface",
     "_OrbitCorrectionEngine",
 ]

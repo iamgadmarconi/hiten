@@ -33,6 +33,7 @@ from hiten.utils.plots import (plot_heteroclinic_connection,
 
 if TYPE_CHECKING:
     from hiten.algorithms.connections.engine import _ConnectionEngine
+    from hiten.algorithms.connections.backends import _ConnectionsBackend
     from hiten.algorithms.connections.types import (Connections,
                                                     _ConnectionResult)
 
@@ -124,15 +125,15 @@ class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
         Container for connection results with convenient access methods.
     """
 
-    def __init__(self, config: ConfigT, interface: InterfaceT, engine: "_ConnectionEngine" = None) -> None:
-        super().__init__(config, interface, engine)
+    def __init__(self, config: ConfigT, engine: "_ConnectionEngine", interface: InterfaceT = None, backend: "_ConnectionsBackend" = None) -> None:
+        super().__init__(config, engine, interface, backend)
         
         self._last_source = None
         self._last_target = None
         self._last_results: list["_ConnectionResult"] | None = None
 
     @classmethod
-    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None) -> "ConnectionPipeline[DomainT, ConfigT, ResultT]":
+    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None, backend: Optional[_ConnectionsBackend] = None) -> "ConnectionPipeline[DomainT, ConfigT, ResultT]":
         """Create a facade instance with a default engine (factory).
 
         The default engine uses :class:`~hiten.algorithms.connections.backends._ConnectionsBackend`.
@@ -144,7 +145,8 @@ class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
         interface : :class:`~hiten.algorithms.connections.interfaces._ManifoldInterface`, optional
             Interface for translating between domain objects and backend inputs.
             If None, uses the default _ManifoldInterface.
-
+        backend : :class:`~hiten.algorithms.connections.backends._ConnectionsBackend`, optional
+            Backend instance for the connection algorithm. If None, uses the default _ConnectionsBackend.
         Returns
         -------
         :class:`~hiten.algorithms.connections.base.ConnectionPipeline`
@@ -153,10 +155,10 @@ class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
         from hiten.algorithms.connections.backends import _ConnectionsBackend
         from hiten.algorithms.connections.engine import _ConnectionEngine
         from hiten.algorithms.connections.interfaces import _ManifoldInterface
-        backend = _ConnectionsBackend()
+        backend = backend or _ConnectionsBackend()
         intf = interface or _ManifoldInterface()
         engine = _ConnectionEngine(backend=backend, interface=intf)
-        return cls(config, intf, engine)
+        return cls(config, engine, intf, backend)
 
     def solve(self, source: DomainT, target: DomainT, *, override: bool = False, **kwargs) -> "Connections":
         """Discover connections between two manifolds.

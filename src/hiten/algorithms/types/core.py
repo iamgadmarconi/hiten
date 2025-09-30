@@ -577,13 +577,46 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
     ...         return self._engine.solve(problem)
     """
 
-    def __init__(self, config, interface, engine) -> None:
-        """Initialize the facade."""
-        self._make_pipeline(config, interface, engine)  
+    def __init__(self, config, engine, interface=None, backend=None) -> None:
+        """Initialize the facade.
+        
+        Parameters
+        ----------
+        config : :class:`~hiten.algorithms.types.core.ConfigT`
+            The configuration to use for the facade.
+        engine : :class:`~hiten.algorithms.types.core.EngineT`
+            The engine to use for the facade. The engine should already be
+            configured with its backend and interface.
+        interface : :class:`~hiten.algorithms.types.core.InterfaceT`, optional
+            The interface to use. If not provided, uses engine's interface.
+            If provided, must match engine's interface.
+        backend : :class:`~hiten.algorithms.types.core.BackendT`, optional
+            The backend to use. If not provided, uses engine's backend.
+            If provided, must match engine's backend.
+            
+        Raises
+        ------
+        ValueError
+            If provided interface/backend differs from engine's interface/backend.
+        
+        Notes
+        -----
+        **Recommended usage**: Only pass `config` and `engine`:
+        
+        >>> backend = MyBackend()
+        >>> interface = MyInterface()
+        >>> engine = MyEngine(backend=backend, interface=interface)
+        >>> pipeline = MyPipeline(config=config, engine=engine)  # Clean!
+        
+        The interface and backend parameters are optional and mainly exist
+        for backwards compatibility. Always prefer extracting them from the
+        engine to avoid duplication and potential mismatches.
+        """
+        self._make_pipeline(config, interface, engine, backend)  
 
     @classmethod
     @abstractmethod
-    def with_default_engine(cls, config, interface) -> "_HitenBaseFacade[ConfigT, ProblemT, ResultT]":
+    def with_default_engine(cls, config, interface, backend) -> "_HitenBaseFacade[ConfigT, ProblemT, ResultT]":
         """Create a facade instance with a default engine (factory).
         
         Parameters
@@ -592,6 +625,8 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
             The configuration to use for the facade.
         interface : :class:`~hiten.algorithms.types.core.InterfaceT`
             The interface to use for the facade.
+        backend : :class:`~hiten.algorithms.types.core.BackendT`
+            The backend to use for the facade.
         """
         pass
     
@@ -720,24 +755,64 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
         return interface.create_problem(config=config, domain_obj=domain_obj, *args)
 
 
-    def _make_pipeline(self, config, interface, engine):
+    def _make_pipeline(self, config, interface, engine, backend):
         """Make the pipeline.
         
         Parameters
         ----------
         config : :class:`~hiten.algorithms.types.core.ConfigT`
             The configuration to use for the pipeline.
-        interface : :class:`~hiten.algorithms.types.core.InterfaceT`
-            The interface to use for the pipeline.
+        interface : :class:`~hiten.algorithms.types.core.InterfaceT` or None
+            The interface to use for the pipeline. If None, extracts from engine.
         engine : :class:`~hiten.algorithms.types.core.EngineT`
             The engine to use for the pipeline.
+        backend : :class:`~hiten.algorithms.types.core.BackendT` or None
+            The backend to use for the pipeline. If None, extracts from engine.
+            
+        Raises
+        ------
+        ValueError
+            If provided interface/backend differs from engine's interface/backend.
         """
         self._config: ConfigT = config
-        self._interface: _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT] = interface
         self._engine: _HitenBaseEngine[ProblemT, ResultT, OutputsT] = engine
-        self._engine.set_interface(interface)
-        self._backend: _HitenBaseBackend[ProblemT, ResultT, OutputsT] = engine.backend
-        interface.bind_backend(self._backend)
+        
+        # Extract interface from engine if not provided, otherwise validate consistency
+        if interface is None:
+            self._interface = self._engine._interface
+            if self._interface is None:
+                raise ValueError(
+                    "Engine has no interface configured. Either provide an interface "
+                    "parameter or configure the engine with an interface first."
+                )
+        else:
+            # Validate that provided interface matches engine's interface
+            if self._engine._interface is not None and interface is not self._engine._interface:
+                raise ValueError(
+                    f"Interface mismatch: the provided interface must be the same instance as "
+                    f"engine._interface. Got interface={interface} but engine._interface={self._engine._interface}. "
+                    f"To avoid this error, either omit the interface parameter (recommended) or ensure "
+                    f"interface is engine._interface."
+                )
+            self._interface = interface
+            self._engine.set_interface(interface)
+        
+        # Extract backend from engine if not provided, otherwise validate consistency
+        if backend is None:
+            self._backend = self._engine.backend
+        else:
+            # Validate that provided backend matches engine's backend
+            if backend is not self._engine.backend:
+                raise ValueError(
+                    f"Backend mismatch: the provided backend must be the same instance as "
+                    f"engine.backend. Got backend={backend} but engine.backend={self._engine.backend}. "
+                    f"To avoid this error, either omit the backend parameter (recommended) or ensure "
+                    f"backend is engine.backend."
+                )
+            self._backend = backend
+        
+        # Ensure interface is bound to the correct backend
+        self._interface.bind_backend(self._backend)
 
     def _validate_config(self, config: ConfigT) -> None:
         """Validate the configuration object.

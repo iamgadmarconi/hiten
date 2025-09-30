@@ -210,12 +210,12 @@ class CenterManifoldMap(_HitenBase):
         *,
         steps=1000,
         method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
-        order=6,
+        order=8,
         frame="rotating",
         dark_mode: bool = True,
         axes: Optional[Sequence[str]] = None,
         section_coord: Optional[str] = None,
-    ):
+    ) -> tuple[Any, dict]:
         """Create an interactive plot of the Poincare map.
 
         Parameters
@@ -237,14 +237,27 @@ class CenterManifoldMap(_HitenBase):
 
         Returns
         -------
-        matplotlib.figure.Figure
-            The interactive plot figure.
+        tuple[matplotlib.figure.Figure, dict]
+            A tuple containing:
+            - The interactive plot figure
+            - A dictionary with key 'orbit' that will contain the latest 
+              computed orbit after clicking on a point (initially None)
 
         Notes
         -----
         Clicking on points in the plot will propagate trajectories from
-        those points and display the resulting orbits.
+        those points and display the resulting orbits. The latest orbit
+        can be accessed via the returned dictionary.
+        
+        Examples
+        --------
+        >>> fig, orbit_container = pm.plot_interactive()
+        >>> # After clicking on a point in the plot
+        >>> latest_orbit = orbit_container['orbit']
         """
+        # Container to store the latest orbit
+        orbit_container = {'orbit': None}
+        
         def _on_select(pt_np: np.ndarray):
             if axes is None:
                 section_pt = pt_np
@@ -263,6 +276,9 @@ class CenterManifoldMap(_HitenBase):
             )
 
             orbit.plot(frame=frame, dark_mode=dark_mode, block=False, close_after=False)
+            
+            # Store the latest orbit in the container
+            orbit_container['orbit'] = orbit
 
             return orbit
 
@@ -275,12 +291,14 @@ class CenterManifoldMap(_HitenBase):
             pts = self.dynamics.get_points_with_4d_states(section_coord=section_coord, axes=tuple(axes))
             lbls = tuple(axes)
 
-        return plot_poincare_map_interactive(
+        fig = plot_poincare_map_interactive(
             points=pts,
             labels=lbls,
             on_select=_on_select,
             dark_mode=dark_mode,
         )
+        
+        return fig, orbit_container
 
     def __setstate__(self, state):
         """Restore the CenterManifoldMap instance after unpickling.

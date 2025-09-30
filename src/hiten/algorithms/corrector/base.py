@@ -9,6 +9,8 @@ from typing import Any, Callable, Generic, Literal, Optional
 
 import numpy as np
 
+from hiten.algorithms.corrector.backends.base import _CorrectorBackend
+from hiten.algorithms.corrector.backends.ms import _MultipleShootingBackend
 from hiten.algorithms.corrector.backends.newton import _NewtonBackend
 from hiten.algorithms.corrector.config import _LineSearchConfig
 from hiten.algorithms.corrector.engine.base import _CorrectionEngine
@@ -64,11 +66,11 @@ class CorrectorPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
     >>> result = corrector.correct(orbit)
     """
 
-    def __init__(self, config: ConfigT, interface: InterfaceT, engine: _CorrectionEngine = None) -> None:
-        super().__init__(config, interface, engine)
+    def __init__(self, config: ConfigT, engine: _CorrectionEngine, interface: InterfaceT = None, backend: _CorrectorBackend = None) -> None:
+        super().__init__(config, engine, interface, backend)
 
     @classmethod
-    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None) -> "CorrectorPipeline[DomainT, InterfaceT, ConfigT, ResultT]":
+    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None, backend: Optional[_CorrectorBackend] = None) -> "CorrectorPipeline[DomainT, InterfaceT, ConfigT, ResultT]":
         """Create a facade instance with a default engine (factory).
 
         Parameters
@@ -77,16 +79,18 @@ class CorrectorPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
             Configuration object for the correction algorithm.
         interface : :class:`~hiten.algorithms.types.core.InterfaceT`, optional
             Interface instance for the correction algorithm. If None, uses the default _PeriodicOrbitCorrectorInterface.
+        backend : :class:`~hiten.algorithms.corrector.backends.base._CorrectorBackend`, optional
+            Backend instance for the correction algorithm. If None, uses the default _NewtonBackend.
 
         Returns
         -------
         :class:`~hiten.algorithms.corrector.base.CorrectorPipeline`
             A correction facade instance with a default engine injected.
         """
-        backend = _NewtonBackend(stepper_factory=make_armijo_stepper(_LineSearchConfig(norm_fn=_infinity_norm)))
+        backend = backend or _NewtonBackend(stepper_factory=make_armijo_stepper(_LineSearchConfig(norm_fn=_infinity_norm)))
         intf = interface or _PeriodicOrbitCorrectorInterface()
         engine = _CorrectionEngine(backend=backend, interface=intf)
-        return cls(config, intf, engine)
+        return cls(config, engine, intf, backend)
 
     def correct(
         self, 

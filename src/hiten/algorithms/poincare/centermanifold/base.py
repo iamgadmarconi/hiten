@@ -14,6 +14,8 @@ from __future__ import annotations
 
 from typing import Generic, Literal, Optional
 
+from hiten.algorithms.poincare.centermanifold.backend import \
+    _CenterManifoldBackend
 from hiten.algorithms.poincare.centermanifold.config import \
     _CenterManifoldMapConfig
 from hiten.algorithms.poincare.centermanifold.engine import \
@@ -61,20 +63,35 @@ class CenterManifoldMapPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, C
     >>> poincare_map.plot()
     """
 
-    def __init__(self, config: _CenterManifoldMapConfig, interface: _CenterManifoldInterface, engine: _CenterManifoldEngine | None = None) -> None:
-        super().__init__(config, interface, engine)
+    def __init__(self, config: _CenterManifoldMapConfig, engine: _CenterManifoldEngine, interface: _CenterManifoldInterface = None, backend: _CenterManifoldBackend = None) -> None:
+        super().__init__(config, engine, interface, backend)
 
     @classmethod
     def with_default_engine(
         cls,
         config: _CenterManifoldMapConfig,
         interface: Optional[_CenterManifoldInterface] = None,\
+        backend: Optional[_CenterManifoldBackend] = None,
     ) -> "CenterManifoldMapPipeline":
         """Construct a map with a default-wired engine injected.
 
         This mirrors the DI-friendly facades (e.g., ConnectionPipeline) by creating
         a default engine using the current configuration and injecting it.
         The engine is wired for the default section coordinate in the config.
+
+        Parameters
+        ----------
+        config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
+            Configuration object for the center manifold map.
+        interface : :class:`~hiten.algorithms.poincare.centermanifold.interfaces._CenterManifoldInterface`, optional
+            Interface object for the center manifold map. If None, uses the default _CenterManifoldInterface.
+        backend : :class:`~hiten.algorithms.poincare.centermanifold.backend._CenterManifoldBackend`, optional
+            Backend instance for the center manifold map. If None, uses the default _CenterManifoldBackend.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.poincare.centermanifold.base.CenterManifoldMapPipeline`
+            A center manifold map facade instance with a default engine injected.
         """
         from hiten.algorithms.poincare.centermanifold.backend import \
             _CenterManifoldBackend
@@ -83,11 +100,11 @@ class CenterManifoldMapPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, C
         from hiten.algorithms.poincare.centermanifold.interfaces import \
             _CenterManifoldInterface
 
-        backend = _CenterManifoldBackend()
+        backend = backend or _CenterManifoldBackend()
         map_intf = interface or _CenterManifoldInterface()
         strategy = cls._build_strategy(config)
         engine = _CenterManifoldEngine(backend=backend, seed_strategy=strategy, map_config=config, interface=map_intf)
-        return cls(config, map_intf, engine)
+        return cls(config, engine, map_intf, backend)
 
     def generate(
         self,

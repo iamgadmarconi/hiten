@@ -519,8 +519,8 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
         :class:`~hiten.system.orbits.base.GenericOrbit`
             Propagated orbit object.
         """
-        ic = self.domain_obj.to_synodic(cm_point, energy, section_coord=self.config.section_coord)
-        orbit = GenericOrbit(self.domain_obj.point, ic)
+        ic = self.domain_obj.to_synodic(cm_point, section_coord=self.section_coord)
+        orbit = GenericOrbit(self.domain_obj.center_manifold.point, ic)
         if orbit.period is None:
             orbit.period = 2 * np.pi
         orbit.propagate(steps=steps, method=method, order=order)

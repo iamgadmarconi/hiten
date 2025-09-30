@@ -212,7 +212,7 @@ class _BaseStateContainer:
         if self._enum is None:
             raise TypeError("_BaseStateContainer cannot be instantiated directly; subclass and set _enum")
 
-        size = len(self._enum)  # type: ignore[arg-type]
+        size = len(self._enum)
 
         if values is not None:
             arr = np.asarray(values, dtype=np.float64)
@@ -257,8 +257,8 @@ class _BaseStateContainer:
 
     def as_dict(self) -> dict:
         """Return the state vector as a dictionary."""
-        members = type(self)._enum  # type: ignore[attr-defined]
-        return {name.lower(): float(self._values[members[name]]) for name in members.__members__.keys()}  # type: ignore[index]
+        members = type(self)._enum 
+        return {name.lower(): float(self._values[members[name]]) for name in members.__members__.keys()}
 
     def _resolve_index(self, key: Union[int, str, IntEnum]) -> int:
         """Resolve the index of a key."""
@@ -267,10 +267,10 @@ class _BaseStateContainer:
         if isinstance(key, IntEnum):
             return int(key)
         if isinstance(key, str):
-            members = type(self)._enum  # type: ignore[attr-defined]
+            members = type(self)._enum
             name = key.upper()
             if name in members.__members__:
-                return int(members[name])  # type: ignore[index]
+                return int(members[name])
         raise TypeError("key must be int, IntEnum member, or a valid field name")
 
     def _assign_by_name(self, name: str, value: float) -> None:
@@ -332,8 +332,8 @@ class _BaseStateContainer:
         arr = np.asarray(array, dtype=np.float64)
         if arr.ndim != 1:
             raise ValueError("array must be 1D")
-        if arr.shape[0] != len(cls._enum):  # type: ignore[arg-type]
-            raise ValueError(f"array must have length {len(cls._enum)}")  # type: ignore[arg-type]
+        if arr.shape[0] != len(cls._enum):
+            raise ValueError(f"array must have length {len(cls._enum)}")
         return cls(arr, copy=False, frame=frame)
 
 
@@ -728,7 +728,7 @@ class Trajectory:
         """Return the IntEnum representing the state indices, if a container class is bound."""
         if self._state_vector_cls is None:
             return None
-        return self._state_vector_cls._enum  # type: ignore[attr-defined]
+        return self._state_vector_cls._enum
 
     @property
     def frame(self) -> Optional[ReferenceFrame]:
@@ -752,7 +752,7 @@ class Trajectory:
         if self._state_vector_cls is None:
             raise ValueError("No state_vector_cls configured. Use with_state_vector(...) first.")
         row = self._states[index]
-        return self._state_vector_cls(row, copy=copy, frame=self._frame)  # type: ignore[call-arg]
+        return self._state_vector_cls(row, copy=copy, frame=self._frame)
 
     def iter_vectors(self, *, copy: bool = False) -> Iterator[_BaseStateContainer]:
         """Iterate over state rows yielding state-vector containers.
@@ -762,7 +762,7 @@ class Trajectory:
         if self._state_vector_cls is None:
             raise ValueError("No state_vector_cls configured. Use with_state_vector(...) first.")
         for i in range(self.n_samples):
-            yield self._state_vector_cls(self._states[i], copy=copy, frame=self._frame)  # type: ignore[call-arg]
+            yield self._state_vector_cls(self._states[i], copy=copy, frame=self._frame)
 
     def __len__(self) -> int:
         return self.n_samples

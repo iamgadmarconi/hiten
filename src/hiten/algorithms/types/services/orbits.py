@@ -767,7 +767,6 @@ class _HaloOrbitDynamicsService(_OrbitDynamicsService):
     """
 
     def __init__(self, orbit: "HaloOrbit") -> None:
-        # Set amplitude and zenith before calling parent __init__ to avoid AttributeError
         self._amplitude = orbit._amplitude_z
         self._zenith = orbit._zenith
         
@@ -778,7 +777,7 @@ class _HaloOrbitDynamicsService(_OrbitDynamicsService):
         super().__init__(orbit)
 
         from hiten.system.libration.collinear import (CollinearPoint, L1Point,
-                                                      L2Point)
+                                                        L2Point)
         if not isinstance(self._libration_point, CollinearPoint):
             raise TypeError(f"Halo orbits are only defined for CollinearPoint, but got {type(self._libration_point)}.")
         if self._initial_state is None:
