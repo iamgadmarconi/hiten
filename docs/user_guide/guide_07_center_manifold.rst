@@ -144,15 +144,17 @@ Basic Poincare Maps
 .. code-block:: python
 
    # Create Poincare map
-   poincare_map = center_manifold.poincare_map(
-       energy=0.7,                 # Energy level
-       section_coord="p3",         # Section coordinate
-       n_seeds=50,                 # Number of seed points
-       n_iter=100,                 # Number of iterations
-       seed_strategy="axis_aligned" # Seed strategy
-   )
+   poincare_map = center_manifold.poincare_map(energy=0.7)
    
-   print(f"Poincare map created: {poincare_map is not None}")
+   # Compute with configuration
+   overrides = {
+       "n_seeds": 50,
+       "n_iter": 100,
+       "seed_strategy": "axis_aligned",
+   }
+   poincare_map.compute(section_coord="p3", overrides=overrides)
+   
+   print(f"Poincare map computed")
 
 Poincare Map Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -162,28 +164,28 @@ Control Poincare map parameters:
 .. code-block:: python
 
    # High resolution map
-   poincare_map = center_manifold.poincare_map(
-       energy=0.7,
-       section_coord="p3",
-       n_seeds=100,                # More seeds
-       n_iter=200,                 # More iterations
-       seed_strategy="axis_aligned"
-   )
+   poincare_map = center_manifold.poincare_map(energy=0.7)
+   overrides = {
+       "n_seeds": 100,
+       "n_iter": 200,
+       "seed_strategy": "axis_aligned",
+   }
+   poincare_map.compute(section_coord="p3", overrides=overrides)
    
    # Different section coordinates
-   poincare_map_q1 = center_manifold.poincare_map(
-       energy=0.7,
-       section_coord="q1",
-       n_seeds=50,
-       n_iter=100
-   )
+   poincare_map_q1 = center_manifold.poincare_map(energy=0.7)
+   overrides_q1 = {
+       "n_seeds": 50,
+       "n_iter": 100,
+   }
+   poincare_map_q1.compute(section_coord="q1", overrides=overrides_q1)
    
-   poincare_map_q2 = center_manifold.poincare_map(
-       energy=0.7,
-       section_coord="q2",
-       n_seeds=50,
-       n_iter=100
-   )
+   poincare_map_q2 = center_manifold.poincare_map(energy=0.7)
+   overrides_q2 = {
+       "n_seeds": 50,
+       "n_iter": 100,
+   }
+   poincare_map_q2.compute(section_coord="q2", overrides=overrides_q2)
 
 Poincare Map Analysis
 ---------------------
@@ -195,28 +197,16 @@ Map Properties
 
 .. code-block:: python
 
-   # Map properties
-   print(f"Energy level: {poincare_map.energy}")
-   print(f"Section coordinate: {poincare_map.section_coord}")
-   print(f"Number of seeds: {poincare_map.n_seeds}")
-   print(f"Number of iterations: {poincare_map.n_iter}")
+   # Plot the computed map
+   poincare_map.plot(axes=("p2", "q3"))
 
 Map Data
 ~~~~~~~~
 
 .. code-block:: python
 
-   # Access map data
-   map_data = poincare_map.map_data
-   print(f"Map data shape: {map_data.shape}")
-   
-   # Access seed points
-   seeds = poincare_map.seeds
-   print(f"Seed points shape: {seeds.shape}")
-   
-   # Access iteration data
-   iterations = poincare_map.iterations
-   print(f"Iterations shape: {iterations.shape}")
+   # Plot the map with custom axes
+   poincare_map.plot(axes=("p2", "q3"))
 
 Map Visualization
 ~~~~~~~~~~~~~~~~~
@@ -225,21 +215,6 @@ Map Visualization
 
    # Plot Poincare map
    poincare_map.plot(axes=("p2", "q3"))
-   
-   # Custom plotting
-   import matplotlib.pyplot as plt
-   
-   fig, ax = plt.subplots(figsize=(10, 8))
-   
-   # Plot map data
-   map_data = poincare_map.map_data
-   ax.scatter(map_data[:, 0], map_data[:, 1], s=1, alpha=0.6)
-   
-   ax.set_xlabel('p2')
-   ax.set_ylabel('q3')
-   ax.set_title('Poincare Map')
-   ax.set_aspect('equal')
-   plt.show()
 
 Finding Orbits in Center Manifold
 ---------------------------------
@@ -305,13 +280,14 @@ Earth-Moon L1 Center Manifold
    center_manifold = l1.get_center_manifold(degree=6)
    center_manifold.compute()
    
-   # Create Poincare map
-   poincare_map = center_manifold.poincare_map(
-       energy=0.7,
-       section_coord="p3",
-       n_seeds=50,
-       n_iter=100
-   )
+   # Create and compute Poincare map
+   poincare_map = center_manifold.poincare_map(energy=0.7)
+   overrides = {
+       "n_seeds": 50,
+       "n_iter": 100,
+       "seed_strategy": "axis_aligned",
+   }
+   poincare_map.compute(section_coord="p3", overrides=overrides)
    
    # Plot map
    poincare_map.plot(axes=("p2", "q3"))
@@ -336,13 +312,14 @@ Sun-Earth L2 Center Manifold
    center_manifold = l2.get_center_manifold(degree=8)
    center_manifold.compute()
    
-   # Create Poincare map
-   poincare_map = center_manifold.poincare_map(
-       energy=0.5,
-       section_coord="q1",
-       n_seeds=100,
-       n_iter=200
-   )
+   # Create and compute Poincare map
+   poincare_map = center_manifold.poincare_map(energy=0.5)
+   overrides = {
+       "n_seeds": 100,
+       "n_iter": 200,
+       "seed_strategy": "axis_aligned",
+   }
+   poincare_map.compute(section_coord="q1", overrides=overrides)
    
    # Plot map
    poincare_map.plot(axes=("q2", "p1"))

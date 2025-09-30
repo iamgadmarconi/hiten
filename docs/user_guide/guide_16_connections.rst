@@ -14,7 +14,8 @@ Basic Connection Detection
 .. code-block:: python
 
    from hiten import System
-   from hiten.algorithms.connections import Connection, SearchConfig
+   from hiten.algorithms.connections import ConnectionPipeline
+   from hiten.algorithms.connections.config import _ConnectionConfig
    from hiten.algorithms.poincare import SynodicMapConfig
    import numpy as np
 
@@ -59,10 +60,11 @@ Poincare Section Configuration
        plane_coords=("y", "z"),            # Plot y vs z on the section
        interp_kind="cubic",                # Interpolation method
        segment_refine=30,                  # Refinement for intersection detection
-       newton_max_iter=10,                 # Newton iterations for refinement
        tol_on_surface=1e-9,                # Tolerance for surface intersection
        dedup_time_tol=1e-9,                # Time tolerance for deduplication
-       dedup_point_tol=1e-9                # Point tolerance for deduplication
+       dedup_point_tol=1e-9,               # Point tolerance for deduplication
+       max_hits_per_traj=None,             # Maximum hits per trajectory
+       n_workers=None                      # Number of workers for parallel processing
    )
 
 Search Configuration
@@ -70,8 +72,10 @@ Search Configuration
 
 .. code-block:: python
 
-   # Configure the connection search
-   search_cfg = SearchConfig(
+   # Create unified configuration with all parameters
+   config = _ConnectionConfig(
+       section=section_cfg,                # Synodic section configuration
+       direction=None,                     # Crossing direction (None = both)
        delta_v_tol=1.0,                    # Maximum delta-V for valid connections
        ballistic_tol=1e-8,                 # Tolerance for ballistic connections
        eps2d=1e-3                          # 2D distance tolerance
@@ -84,18 +88,13 @@ Search for connections between manifolds:
 
 .. code-block:: python
 
-   # Create connection object
-   conn = Connection.with_default_engine(
-       section=section_cfg,
-       direction=None,                     # Search in both directions
-       search_cfg=search_cfg
-   )
+   # Create connection pipeline using the factory method
+   conn = ConnectionPipeline.with_default_engine(config=config)
 
    # Solve for connections
-   conn.solve(manifold_l1, manifold_l2)
+   results = conn.solve(manifold_l1, manifold_l2)
 
    # Display results
-   results = conn.results
    print(f"Found {len(results)} connections")
    print(f"Search completed: {len(results) > 0}")
 
@@ -120,8 +119,9 @@ Connection Properties
 .. code-block:: python
 
    # Analyze connection properties
-   if results:
-       connection = results[0]  # Take first connection
+   results_list = list(results)  # Convert to list for indexing
+   if results_list:
+       connection = results_list[0]  # Take first connection
        
        print(f"Connection analysis:")
        print(f"  Delta-V required: {connection.delta_v:.6f}")
@@ -142,8 +142,9 @@ Energy Analysis
    from hiten.algorithms.dynamics.utils.energy import crtbp_energy
 
    # Analyze energy at connection points
-   if results:
-       connection = results[0]
+   results_list = list(results)
+   if results_list:
+       connection = results_list[0]
        
        # Get states at connection point
        state_u = connection.state_u
@@ -179,9 +180,8 @@ The most powerful way to create custom connection detection is by extending the 
 
 .. code-block:: python
 
-   from hiten.algorithms.connections.backends import _ConnectionsBackend
+   from hiten.algorithms.connections.backends.base import _ConnectionsBackend
    from hiten.algorithms.connections.types import _ConnectionResult
-   from hiten.algorithms.connections.backends import _radius_pairs_2d, _nearest_neighbor_2d
    import numpy as np
 
    class CustomConnectionsBackend(_ConnectionsBackend):
@@ -212,7 +212,9 @@ The most powerful way to create custom connection detection is by extending the 
            dv_tol = float(getattr(problem.search, "delta_v_tol", 1e-3)) if problem.search else 1e-3
            bal_tol = float(getattr(problem.search, "ballistic_tol", 1e-8)) if problem.search else 1e-8
 
-           # Find pairs using standard algorithm
+           # Find pairs using standard algorithm from backend
+           from hiten.algorithms.connections.backends.utils import _radius_pairs_2d, _nearest_neighbor_2d, _refine_pairs_on_section
+           
            pairs_arr = _radius_pairs_2d(pu, ps, eps)
            if pairs_arr.size == 0:
                return []
@@ -236,7 +238,6 @@ The most powerful way to create custom connection detection is by extending the 
            nn_u = _nearest_neighbor_2d(pu) if pu.shape[0] >= 2 else np.full(pu.shape[0], -1, dtype=int)
            nn_s = _nearest_neighbor_2d(ps) if ps.shape[0] >= 2 else np.full(ps.shape[0], -1, dtype=int)
            
-           from hiten.algorithms.connections.backends import _refine_pairs_on_section
            rstar, u0, u1, s0, s1, sval, tval, valid = _refine_pairs_on_section(pu, ps, pairs_np, nn_u, nn_s)
 
            # Create results with custom processing
@@ -319,15 +320,22 @@ Create custom engines that use different backends:
            """Solve using custom backend."""
            return self.backend.solve(problem)
 
-   # Use custom engine
+   # Use custom engine with proper configuration
+   from hiten.algorithms.connections.config import _ConnectionConfig
+   from hiten.algorithms.connections.interfaces import _ManifoldInterface
+   
    custom_engine = CustomConnectionEngine(CustomConnectionsBackend())
-   problem = _ConnectionProblem(
-       source=_ManifoldInterface(manifold_l1),
-       target=_ManifoldInterface(manifold_l2),
+   interface = _ManifoldInterface()
+   
+   config = _ConnectionConfig(
        section=section_cfg,
        direction=None,
-       search=search_cfg
+       delta_v_tol=1.0,
+       ballistic_tol=1e-8,
+       eps2d=1e-3
    )
+   
+   problem = interface.create_problem(domain_obj=(manifold_l1, manifold_l2), config=config)
    custom_results = custom_engine.solve(problem)
 
 Custom Connection Class
@@ -337,40 +345,30 @@ Extend the high-level Connection class to use custom engines:
 
 .. code-block:: python
 
-   from hiten.algorithms.connections.base import Connection
+   from hiten.algorithms.connections.base import ConnectionPipeline
+   from hiten.algorithms.connections.config import _ConnectionConfig
    from hiten.system.manifold import Manifold
 
-   class CustomConnection(Connection):
-       """Custom connection class with specialized engine."""
+   class CustomConnectionPipeline(ConnectionPipeline):
+       """Custom connection pipeline with specialized engine."""
        
-       def __init__(self, section, direction=None, search_cfg=None, engine=None):
-           super().__init__(section, direction, search_cfg)
-           self.engine = engine or CustomConnectionEngine()
-       
-       def solve(self, source: Manifold, target: Manifold):
-           """Solve using custom engine."""
-           from hiten.algorithms.connections.interfaces import _ManifoldInterface
-           
-           src_if = _ManifoldInterface(manifold=source)
-           tgt_if = _ManifoldInterface(manifold=target)
+       def __init__(self, config, interface, engine=None):
+           custom_engine = engine or CustomConnectionEngine(CustomConnectionsBackend())
+           super().__init__(config, interface, custom_engine)
 
-           problem = _ConnectionProblem(
-               source=src_if,
-               target=tgt_if,
-               section=self.section,
-               direction=self.direction,
-               search=self.search_cfg,
-           )
-           results = self.engine.solve(problem)
-           self._last_source = source
-           self._last_target = target
-           self._last_results = results
-           return results
-
-   # Use custom connection class
-   custom_conn = CustomConnection(
+   # Use custom connection pipeline
+   config = _ConnectionConfig(
        section=section_cfg,
-       search_cfg=search_cfg,
+       direction=None,
+       delta_v_tol=1.0,
+       ballistic_tol=1e-8,
+       eps2d=1e-3
+   )
+   
+   from hiten.algorithms.connections.interfaces import _ManifoldInterface
+   custom_conn = CustomConnectionPipeline(
+       config=config,
+       interface=_ManifoldInterface(),
        engine=CustomConnectionEngine(CustomConnectionsBackend())
    )
    custom_results = custom_conn.solve(manifold_l1, manifold_l2)
@@ -394,15 +392,16 @@ Visualize connections and their properties:
        ax1 = fig.add_subplot(131, projection='3d')
        
        # Plot manifold trajectories
-       for traj in manifold1.manifold_result.trajectories[:10]:  # Sample
-           ax1.plot(traj[:, 0], traj[:, 1], traj[:, 2], 'b-', alpha=0.3)
+       for traj in manifold1.trajectories[:10]:  # Sample
+           ax1.plot(traj.states[:, 0], traj.states[:, 1], traj.states[:, 2], 'b-', alpha=0.3)
        
-       for traj in manifold2.manifold_result.trajectories[:10]:  # Sample
-           ax1.plot(traj[:, 0], traj[:, 1], traj[:, 2], 'r-', alpha=0.3)
+       for traj in manifold2.trajectories[:10]:  # Sample
+           ax1.plot(traj.states[:, 0], traj.states[:, 1], traj.states[:, 2], 'r-', alpha=0.3)
        
        # Plot connection points
-       if conn.results:
-           for connection in conn.results:
+       results_list = list(conn.results)
+       if results_list:
+           for connection in results_list:
                state_u = connection.state_u
                state_s = connection.state_s
                ax1.scatter(state_u[0], state_u[1], state_u[2], c='g', s=50, marker='o')
@@ -422,9 +421,10 @@ Visualize connections and their properties:
        # Connection properties
        ax3 = fig.add_subplot(133)
        
-       if conn.results:
-           delta_vs = [c.delta_v for c in conn.results]
-           kinds = [c.kind for c in conn.results]
+       results_list = list(conn.results)
+       if results_list:
+           delta_vs = [c.delta_v for c in results_list]
+           kinds = [c.kind for c in results_list]
            
            # Color by connection type
            colors = ['blue' if k == 'ballistic' else 'red' for k in kinds]
@@ -452,7 +452,7 @@ The connection framework consists of several key components:
 
 **Base Connection Class** 
 
-    - `Connection`: High-level user-facing facade that provides convenient methods for connection discovery, result visualization, and problem specification.
+    - `ConnectionPipeline`: High-level user-facing facade that provides convenient methods for connection discovery, result visualization, and problem specification.
 
 **Connection Engine** 
 

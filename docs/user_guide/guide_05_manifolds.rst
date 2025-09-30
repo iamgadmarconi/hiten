@@ -43,11 +43,11 @@ Basic Computation
 .. code-block:: python
 
    # Compute stable manifold
-   result = stable_manifold.compute()
+   stable_manifold.compute()
    
-   print(f"Computation successful: {result is not None}")
-   print(f"Success rate: {result.success_rate:.2%}")
-   print(f"Number of trajectories: {len(result.trajectories)}")
+   # Access computed trajectories
+   trajectories = stable_manifold.trajectories
+   print(f"Number of trajectories: {len(trajectories)}")
 
 Advanced Computation
 ~~~~~~~~~~~~~~~~~~~~
@@ -57,14 +57,13 @@ Control computation parameters:
 .. code-block:: python
 
    # High accuracy computation
-   result = stable_manifold.compute(
+   stable_manifold.compute(
        step=0.01,                    # Smaller step for higher resolution
        integration_fraction=0.9,     # Integrate for 90% of period
        displacement=1e-6,            # Small displacement along eigenvector
-       method="adaptive",               # Integration method
-       order=8,                      # Integration order
-       energy_tol=1e-6,              # Energy conservation tolerance
-       safe_distance=1e-2            # Safety distance from primaries
+       dt=1e-3,                      # Integration time step
+       method="adaptive",            # Integration method
+       order=8                       # Integration order
    )
 
 Manifold Results
@@ -77,16 +76,16 @@ Accessing Trajectories
 
 .. code-block:: python
 
-   # Get trajectory data
-   trajectories = result.trajectories
-   times = result.times
+   # Get trajectory data after computing
+   trajectories = stable_manifold.trajectories
 
    print(f"Number of trajectories: {len(trajectories)}")
-   print(f"Trajectory lengths: {[len(traj) for traj in trajectories]}")
+   print(f"Trajectory shapes: {[traj.states.shape for traj in trajectories]}")
    
    # Access individual trajectory
    traj = trajectories[0]
-   print(f"First trajectory shape: {traj.shape}")
+   print(f"First trajectory time range: {traj.t0} to {traj.tf}")
+   print(f"First trajectory states shape: {traj.states.shape}")
 
 Invariant Tori
 --------------
@@ -152,13 +151,13 @@ Earth-Moon L1 Halo Manifolds
    unstable_manifold = halo.manifold(stable=False, direction="negative")
    
    # Compute manifolds
-   stable_result = stable_manifold.compute(
+   stable_manifold.compute(
        step=0.02,
        integration_fraction=0.8,
        displacement=1e-6
    )
    
-   unstable_result = unstable_manifold.compute(
+   unstable_manifold.compute(
        step=0.02,
        integration_fraction=0.8,
        displacement=1e-6
@@ -207,13 +206,13 @@ Multiple Manifold Types
    }
    
    # Compute all manifolds
-   results = {}
    for name, manifold in manifolds.items():
-       results[name] = manifold.compute(
+       manifold.compute(
            step=0.05,
            integration_fraction=0.75
        )
-       print(f"{name}: {results[name].success_rate:.2%} success rate")
+       trajectories = manifold.trajectories
+       print(f"{name}: {len(trajectories)} trajectories computed")
 
 Next Steps
 ----------

@@ -309,8 +309,8 @@ Energy Analysis
 
 .. code-block:: python
 
-   from hiten.algorithms.dynamics.utils import (crtbp_energy, kinetic_energy, 
-                                               effective_potential, hill_region)
+   from hiten.algorithms.common.energy import (crtbp_energy, kinetic_energy, 
+                                                effective_potential, hill_region)
    import numpy as np
 
    # CR3BP energy analysis
@@ -335,7 +335,7 @@ Stability Analysis
 
 .. code-block:: python
 
-   from hiten.algorithms.dynamics.utils import eigenvalue_decomposition
+   from hiten.algorithms.linalg.backend import _LinalgBackend
    from hiten.algorithms.dynamics import jacobian_dynsys
    import numpy as np
 
@@ -346,8 +346,9 @@ Stability Analysis
    state = np.array([0.8, 0, 0])
    jacobian = jac_system.rhs(0.0, state)
    
-   # Analyze stability
-   stable_vals, unstable_vals, center_vals, Ws, Wu, Wc = eigenvalue_decomposition(jacobian)
+   # Analyze stability using linalg backend
+   linalg_backend = _LinalgBackend()
+   stable_vals, unstable_vals, center_vals, Ws, Wu, Wc = linalg_backend.eigenvalue_decomposition(jacobian)
    
    print(f"Stable eigenvalues: {stable_vals}")
    print(f"Unstable eigenvalues: {unstable_vals}")

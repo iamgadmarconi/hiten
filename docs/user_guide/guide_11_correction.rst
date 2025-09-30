@@ -50,13 +50,14 @@ The most common correction method uses Newton's method with analytical or numeri
 
    # Create a Newton corrector using the engine pattern
    backend = _NewtonBackend(stepper_factory=make_plain_stepper())
-   interface = _PeriodicOrbitCorrectorInterface(orbit)
+   interface = _PeriodicOrbitCorrectorInterface()
    newton_corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
-   problem = interface.create_problem(config=cfg)
+   
+   # Correct the orbit using simple API
+   halo.correct()
    
    print(f"Correction successful: {halo.period is not None}")
    print(f"Final period: {halo.period}")
-   print(f"Half period: {half_period}")
 
 Finite Difference Correction
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -68,26 +69,8 @@ For orbits where analytical Jacobians are difficult to compute, finite differenc
    # Use finite difference for vertical orbits
    vertical = l1.create_orbit("vertical", initial_state=[0.8, 0, 0, 0, 0.1, 0])
    
-   # Create a corrector engine and use it for correction
-   from hiten.algorithms.corrector.backends.newton import _NewtonBackend
-   from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
-   from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
-   from hiten.algorithms.corrector.stepping import make_plain_stepper
-   from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
-   
-   backend = _NewtonBackend(stepper_factory=make_plain_stepper())
-   interface = _PeriodicOrbitCorrectorInterface(orbit)
-   corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
-   problem = interface.create_problem(config=orbit._correction_config)
-   
-   # Create configuration with finite difference settings
-   config = _OrbitCorrectionConfig(
-       max_attempts=100,
-       finite_difference=True,
-       tol=1e-10
-   )
-   
-   result, half_period = corrector.solve(vertical, config)
+   # Correct using finite difference
+   vertical.correct(max_attempts=100, finite_difference=True, tol=1e-10)
 
 Correction Parameters
 ---------------------------
@@ -100,31 +83,18 @@ Convergence Criteria
 .. code-block:: python
 
    # High accuracy correction
-   from hiten.algorithms.corrector.backends.newton import _NewtonBackend
-   from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
-   from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
-   from hiten.algorithms.corrector.stepping import make_armijo_stepper
-   from hiten.algorithms.corrector.config import _LineSearchConfig, _OrbitCorrectionConfig
-   
-   backend = _NewtonBackend(stepper_factory=make_armijo_stepper(_LineSearchConfig()))
-   interface = _PeriodicOrbitCorrectorInterface(orbit)
-   corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
-   
-   # High accuracy configuration
-   high_accuracy_config = _OrbitCorrectionConfig(
+   halo.correct(
        max_attempts=50,
        tol=1e-12,        # Very tight tolerance
        max_delta=1e-8    # Small maximum step size
    )
-   result, half_period = corrector.solve(halo, high_accuracy_config)
 
    # Fast correction configuration
-   fast_config = _OrbitCorrectionConfig(
+   halo.correct(
        max_attempts=10,
        tol=1e-6,         # Looser tolerance
        max_delta=1e-3    # Larger step size
    )
-   result, half_period = corrector.solve(halo, fast_config)
 
 Step Size Control
 ~~~~~~~~~~~~~~~~~
@@ -132,18 +102,10 @@ Step Size Control
 .. code-block:: python
 
    # Conservative correction (smaller steps)
-   conservative_config = _OrbitCorrectionConfig(
-       max_attempts=30,
-       max_delta=1e-8
-   )
-   result, half_period = corrector.solve(halo, conservative_config)
+   halo.correct(max_attempts=30, max_delta=1e-8)
 
    # Aggressive correction (larger steps)
-   aggressive_config = _OrbitCorrectionConfig(
-       max_attempts=20,
-       max_delta=1e-4
-   )
-   result, half_period = corrector.solve(halo, aggressive_config)
+   halo.correct(max_attempts=20, max_delta=1e-4)
 
 Line Search Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -162,7 +124,9 @@ For more advanced control over the line search behavior, you can use the `_LineS
        max_delta=1e-3        # Maximum step size
    )
 
-   # Use custom line search configuration
+   # Note: Line search configuration is primarily for advanced users
+   # creating custom correctors. The simple orbit.correct() API uses
+   # sensible defaults. For custom correction engines:
    from hiten.algorithms.corrector.backends.newton import _NewtonBackend
    from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
    from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
@@ -170,11 +134,12 @@ For more advanced control over the line search behavior, you can use the `_LineS
    from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
    
    backend = _NewtonBackend(stepper_factory=make_armijo_stepper(line_search_config))
-   interface = _PeriodicOrbitCorrectorInterface(orbit)
+   interface = _PeriodicOrbitCorrectorInterface()
    corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
    
    config = _OrbitCorrectionConfig(max_attempts=30)
-   result, half_period = corrector.solve(halo, config)
+   problem = interface.create_problem(domain_obj=halo, config=config)
+   result = corrector.solve(problem)
 
 Creating Custom Correctors
 --------------------------------
@@ -198,13 +163,14 @@ The simplest way to create a custom corrector is to use the existing `_NewtonBac
    backend = _NewtonBackend(
        stepper_factory=make_armijo_stepper(_LineSearchConfig(armijo_c=1e-4, alpha_reduction=0.5))
    )
-   interface = _PeriodicOrbitCorrectorInterface(orbit)
+   interface = _PeriodicOrbitCorrectorInterface()
    custom_corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
    
    halo = l1.create_orbit("halo", amplitude_z=0.2, zenith="southern")
-   result, half_period = custom_corrector.solve(halo, halo._correction_config)
-   print(f"Custom correction successful: {half_period is not None}")
-   print(f"Half period: {half_period}")
+   config = halo._correction_config
+   problem = interface.create_problem(domain_obj=halo, config=config)
+   result = custom_corrector.solve(problem)
+   print(f"Custom correction successful: {result is not None}")
 
 For more control, you can create a custom corrector engine with specialized behavior:
 
@@ -222,19 +188,20 @@ For more control, you can create a custom corrector engine with specialized beha
        def __init__(self, custom_tol=1e-8, **kwargs):
            # Create backend with custom stepper
            backend = _NewtonBackend(stepper_factory=make_armijo_stepper(_LineSearchConfig()))
-           interface = _PeriodicOrbitCorrectorInterface(orbit)
+           interface = _PeriodicOrbitCorrectorInterface()
            super().__init__(backend=backend, interface=interface, **kwargs)
            self.custom_tol = custom_tol
+           self.interface = interface
        
-       def solve(self, orbit, cfg=None):
+       def solve_orbit(self, orbit):
            """Solve with custom tolerance."""
-           if cfg is None:
-               cfg = _OrbitCorrectionConfig(tol=self.custom_tol)
-           return super().solve(orbit, cfg)
+           cfg = _OrbitCorrectionConfig(tol=self.custom_tol)
+           problem = self.interface.create_problem(domain_obj=orbit, config=cfg)
+           return super().solve(problem)
 
    # Use the custom corrector
    custom_corrector = CustomOrbitCorrectionEngine(custom_tol=1e-12)
-   result, half_period = custom_corrector.solve(halo)
+   result = custom_corrector.solve_orbit(halo)
 
 Advanced Custom Corrector for Generic Problems
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -353,21 +320,33 @@ The correction framework uses several key interfaces:
    from hiten.algorithms.corrector.stepping import _ArmijoStep
    from hiten.algorithms.corrector.newton import _NewtonBackend
 
-   # Create a custom corrector by combining interfaces
-   class CustomOrbitCorrector(_NewtonBackend, _PeriodicOrbitCorrectorInterface):
-       """Custom corrector combining Newton core with orbit interface.
+   # Create a custom corrector engine combining backend and interface
+   backend = _NewtonBackend(stepper_factory=make_plain_stepper())
+   interface = _PeriodicOrbitCorrectorInterface()
+   
+   class CustomOrbitCorrectionEngine(_OrbitCorrectionEngine):
+       """Custom correction engine with additional logic.
        
-       Note: _NewtonBackend must come first in inheritance order.
+       This allows you to add custom pre/post-processing or validation.
        """
        
-       def __init__(self, **kwargs):
-           super().__init__(**kwargs)
-           # Add custom initialization logic here
-           pass
-
+       def solve(self, problem):
+           """Solve with custom logic."""
+           # Add custom pre-processing here
+           result = super().solve(problem)
+           # Add custom post-processing here
+           return result
+   
    # Use the custom corrector
-   custom_corrector = CustomOrbitCorrector()
-   corrected_state, half_period = custom_corrector.correct(orbit)
+   from hiten.algorithms.corrector.stepping import make_plain_stepper
+   backend = _NewtonBackend(stepper_factory=make_plain_stepper())
+   interface = _PeriodicOrbitCorrectorInterface()
+   custom_corrector = CustomOrbitCorrectionEngine(backend=backend, interface=interface)
+   
+   # Correct an orbit
+   config = halo._correction_config
+   problem = interface.create_problem(domain_obj=halo, config=config)
+   result = custom_corrector.solve(problem)
 
 Custom Line Search Implementations
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -419,16 +398,11 @@ For specialized applications, you can implement custom line search strategies by
            
            return max(alpha, 1e-6)  # Minimum step size
 
-   # Use custom step interface
-   class CustomCorrector(_NewtonBackend, _PeriodicOrbitCorrectorInterface, CustomStepInterface):
-       """Custom corrector with custom step interface.
-       
-       Note: _NewtonBackend must come first in inheritance order.
-       """
-       pass
-
-   custom_corrector = CustomCorrector(custom_param=0.2)
-   corrected_state, half_period = custom_corrector.correct(orbit)
+   # Note: Custom step interfaces are advanced. The example above shows the concept,
+   # but integrating custom steppers into the correction engine requires careful
+   # consideration of the stepper factory pattern. For most use cases, using
+   # make_plain_stepper() or make_armijo_stepper() with custom LineSearchConfig
+   # is sufficient and much simpler.
 
 Advanced Line Search Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -471,11 +445,12 @@ The `_LineSearchConfig` class provides fine-grained control over line search beh
    from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
    
    backend = _NewtonBackend(stepper_factory=make_armijo_stepper(precise_config))
-   interface = _PeriodicOrbitCorrectorInterface(orbit)
+   interface = _PeriodicOrbitCorrectorInterface()
    corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
    
    config = _OrbitCorrectionConfig(max_attempts=50)
-   result, half_period = corrector.solve(orbit, config)
+   problem = interface.create_problem(domain_obj=halo, config=config)
+   result = corrector.solve(problem)
 
 Custom Jacobian Computation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -517,19 +492,11 @@ For specialized problems, you can implement custom Jacobian computation strategi
        
        return (r_plus[i] - r_minus[i]) / (2 * h)
 
-   # Use custom Jacobian in correction
-   from hiten.algorithms.corrector.backends.newton import _NewtonBackend
-   from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
-   from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
-   from hiten.algorithms.corrector.stepping import make_plain_stepper
-   
-   backend = _NewtonBackend(stepper_factory=make_plain_stepper())
-   interface = _PeriodicOrbitCorrectorInterface(orbit)
-   corrector = _OrbitCorrectionEngine(backend=backend, interface=interface)
-   
-   # Note: Custom Jacobian would need to be integrated into the backend
-   # This is a simplified example showing the engine pattern
-   result, half_period = corrector.solve(orbit, orbit._correction_config)
+   # Note: Custom Jacobian computation requires extending the _NewtonBackend class
+   # to override the _compute_jacobian method. The example above shows the concept
+   # of custom Jacobian elements, but full integration requires subclassing _NewtonBackend.
+   # For most applications, the built-in analytical and finite difference Jacobians
+   # are sufficient and well-optimized.
 
 Next Steps
 ----------
