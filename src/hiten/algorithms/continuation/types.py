@@ -1,40 +1,38 @@
-"""
-Types for the continuation module.
+"""Types for the continuation module."""
 
-Defines the standardized Result and Problem objects used by continuation
-engines, following the shared architecture used across algorithms.
-"""
+from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, NamedTuple
+from typing import Callable, Optional, Tuple
 
 import numpy as np
 
 
-class ContinuationResult(NamedTuple):
+@dataclass(frozen=True, slots=True)
+class ContinuationResult:
     """Standardized result for a continuation run.
     
     Attributes
     ----------
     accepted_count : int
-        Whether the continuation converged.
+        The number of accepted solutions.
     rejected_count : int
-        Number of rejected solutions.
+        The number of rejected solutions.
     success_rate : float
-        Success rate of the continuation.
-    family : list[object]
-        List of accepted solutions.
-    parameter_values : tuple[np.ndarray, ...]
-        Tuple of parameter values for each solution in the family.
+        The success rate.
+    family : Tuple[object, ...]
+        The family of solutions.
+    parameter_values : Tuple[np.ndarray, ...]
+        The parameter values.
     iterations : int
-        Total predict-correct iterations attempted.
+        The number of iterations.
     """
 
     accepted_count: int
     rejected_count: int
     success_rate: float
-    family: list[object]
-    parameter_values: tuple[np.ndarray, ...]
+    family: Tuple[object, ...]
+    parameter_values: Tuple[np.ndarray, ...]
     iterations: int
 
 
@@ -61,6 +59,18 @@ class _ContinuationProblem:
         Maximum number of retries per failed continuation step.
     corrector_kwargs : dict
         Additional keyword arguments passed to the corrector method.
+    representation_of : callable or None
+        Function to convert solution objects to vector representations.
+    shrink_policy : callable or None
+        Policy for shrinking step sizes when continuation fails.
+    step_min : float
+        Minimum allowed step size.
+    step_max : float
+        Maximum allowed step size.
+    stepper : str
+        The stepper to use.
+    state_indices : Optional[np.ndarray]
+        The state indices.
     """
 
     initial_solution: object
@@ -70,8 +80,9 @@ class _ContinuationProblem:
     max_members: int
     max_retries_per_step: int
     corrector_kwargs: dict
-    representation_of: Callable[[np.ndarray], np.ndarray] | None = None
-    set_tangent: Callable[[np.ndarray | None], None] | None = None
-    shrink_policy: Callable[[np.ndarray], np.ndarray] | None = None
+    representation_of: Optional[Callable[[np.ndarray], np.ndarray]] = None
+    shrink_policy: Optional[Callable[[np.ndarray], np.ndarray]] = None
     step_min: float = 1e-10
     step_max: float = 1.0
+    stepper: str = "natural"
+    state_indices: Optional[np.ndarray] = None

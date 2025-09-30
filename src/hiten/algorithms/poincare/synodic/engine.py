@@ -11,64 +11,16 @@ Newton refinement for precise crossing detection.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from typing import Literal, Sequence
 
 import numpy as np
 
 from hiten.algorithms.poincare.core.engine import _ReturnMapEngine
 from hiten.algorithms.poincare.synodic.backend import _SynodicDetectionBackend
-from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
+from hiten.algorithms.poincare.synodic.interfaces import _SynodicInterface
 from hiten.algorithms.poincare.synodic.strategies import _NoOpStrategy
 from hiten.algorithms.poincare.synodic.types import (SynodicMapResults,
                                                      _SynodicMapProblem)
-
-
-class _SynodicEngineInterface:
-    """Configuration adapter for synodic Poincare engine.
-
-    This adapter class provides the interface expected by the base
-    return map engine while adapting the synodic map configuration
-    to the required format. It handles the translation between
-    synodic-specific parameters and the generic engine interface.
-
-    Parameters
-    ----------
-    cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
-        The synodic map configuration to adapt.
-
-    Attributes
-    ----------
-    _cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
-        The original synodic map configuration.
-    dt : float
-        Time step (set to 0.0 for synodic maps since they use precomputed trajectories).
-    n_iter : int
-        Number of iterations (set to 1 for synodic maps).
-    n_workers : int
-        Number of parallel workers for batch processing.
-    n_seeds : int
-        Number of seeds (set to 0 for synodic maps since they use precomputed trajectories).
-
-    Notes
-    -----
-    This adapter is necessary because synodic Poincare maps operate on
-    precomputed trajectories rather than integrating from initial conditions.
-    The adapter provides the interface expected by the base engine while
-    setting appropriate values for the synodic use case.
-
-    All time units are in nondimensional units unless otherwise specified.
-    """
-
-    def __init__(self, cfg: _SynodicMapConfig) -> None:
-        self._cfg = cfg
-        self.dt = 0.0
-        self.n_iter = 1
-        self.n_workers = cfg.n_workers
-        # Satisfy _SeedingConfigLike for the no-op strategy
-        self.n_seeds = 0
-
-    def __repr__(self) -> str:
-        return f"SynodicEngineConfigAdapter(n_workers={self.n_workers})"
+from hiten.algorithms.types.exceptions import EngineError
 
 
 class _SynodicEngine(_ReturnMapEngine):
@@ -85,7 +37,7 @@ class _SynodicEngine(_ReturnMapEngine):
         The detection backend for synodic sections.
     seed_strategy : :class:`~hiten.algorithms.poincare.synodic.strategies._NoOpStrategy`
         The seeding strategy (no-op for synodic maps).
-    map_config : :class:`~hiten.algorithms.poincare.synodic.engine._SynodicEngineInterface`
+    map_config : :class:`~hiten.algorithms.poincare.synodic.interfaces._SynodicEngineInterface`
         The configuration adapter for the engine.
 
     Attributes
@@ -111,102 +63,87 @@ class _SynodicEngine(_ReturnMapEngine):
 
     def __init__(
         self,
+        *,
         backend: _SynodicDetectionBackend,
         seed_strategy: _NoOpStrategy,
-        map_config: _SynodicEngineInterface,
+        map_config,
+        interface: _SynodicInterface,
     ) -> None:
-        super().__init__(backend, seed_strategy, map_config)
-        self._trajectories: "Sequence[tuple[np.ndarray, np.ndarray]]" | None = None
-        self._direction: int | None = None
+        super().__init__(backend=backend, seed_strategy=seed_strategy, map_config=map_config, interface=interface)
 
-    def set_trajectories(
-        self,
-        trajectories: "Sequence[tuple[np.ndarray, np.ndarray]]",
-        *,
-        direction: Literal[1, -1, None] | None = None,
-    ) -> "_SynodicEngine":
-        """Set the trajectories to analyze and return self for chaining.
+    def solve(self, problem: _SynodicMapProblem) -> SynodicMapResults:
+        """Compute the synodic Poincare section from the composed problem."""
+        trajectories = problem.trajectories or []
+        direction = problem.direction
+        if not trajectories:
+            raise EngineError("No trajectories provided to synodic engine")
 
-        Parameters
-        ----------
-        trajectories : sequence of tuple[ndarray, ndarray]
-            Sequence of (times, states) tuples for each trajectory.
-            Each tuple contains:
-            - times: ndarray, shape (n,) - Time points (nondimensional units)
-            - states: ndarray, shape (n, 6) - State vectors at each time point
-        direction : {1, -1, None}, optional
-            Crossing direction filter. If None, uses the default
-            direction from the section configuration.
-
-        Returns
-        -------
-        :class:`~hiten.algorithms.poincare.synodic.engine._SynodicEngine`
-            Self for method chaining.
-
-        Notes
-        -----
-        This method sets the trajectories to analyze and clears any
-        cached results. It provides a fluent interface for chaining
-        method calls.
-
-        The method automatically clears the section cache when new
-        trajectories are set to ensure fresh computation.
-        """
-        self._trajectories = trajectories
-        self._direction = direction
-        self.clear_cache()
-        return self
-
-    def solve(self, *, recompute: bool = False) -> SynodicMapResults:
-        """Compute the synodic Poincare section from the set trajectories.
-
-        Notes
-        -----
-        This method conforms to the core engine interface. It delegates to
-        ``compute_section`` with caching enabled.
-        """
-        if self._section_cache is not None and not recompute:
-            return self._section_cache
-
-        if self._trajectories is None:
-            raise ValueError("No trajectories set. Call set_trajectories(...) first.")
-
-        # Assemble an immutable problem definition for clarity
-        problem = _SynodicMapProblem(
-            plane_coords=self._backend.plane_coords,
-            direction=self._direction,
-            n_workers=self._n_workers,
-            trajectories=self._trajectories,
-        )
+        n_workers = problem.n_workers
+        normal = problem.normal
+        offset = problem.offset
+        plane_coords = problem.plane_coords
+        interp_kind = problem.interp_kind
+        segment_refine = problem.segment_refine
+        tol_on_surface = problem.tol_on_surface
+        dedup_time_tol = problem.dedup_time_tol
+        dedup_point_tol = problem.dedup_point_tol
+        max_hits_per_traj = problem.max_hits_per_traj
+        newton_max_iter = problem.newton_max_iter
 
         # Delegate detection to backend passed in at construction
-        if problem.n_workers <= 1 or len(problem.trajectories) <= 1:  # type: ignore[arg-type]
-            hits_lists = self._backend.detect_batch(problem.trajectories, direction=problem.direction)  # type: ignore[arg-type]
+        if n_workers <= 1 or len(trajectories) <= 1:
+            hits_lists = self._backend.run(
+                trajectories, 
+                normal=normal,
+                offset=offset,
+                plane_coords=plane_coords,
+                interp_kind=interp_kind,
+                segment_refine=segment_refine,
+                tol_on_surface=tol_on_surface,
+                dedup_time_tol=dedup_time_tol,
+                dedup_point_tol=dedup_point_tol,
+                max_hits_per_traj=max_hits_per_traj,
+                newton_max_iter=newton_max_iter,
+                direction=direction
+            )
         else:
-            chunks = np.array_split(np.arange(len(problem.trajectories)), problem.n_workers)  # type: ignore[arg-type]
+            chunks = np.array_split(np.arange(len(trajectories)), n_workers)
 
             def _worker(idx_arr: np.ndarray):
-                subset = [problem.trajectories[i] for i in idx_arr.tolist()]  # type: ignore[index]
-                return self._backend.detect_batch(subset, direction=problem.direction)
+                subset = [trajectories[i] for i in idx_arr.tolist()]
+                return self._backend.run(
+                    subset, 
+                    normal=normal,
+                    offset=offset,
+                    plane_coords=plane_coords,
+                    interp_kind=interp_kind,
+                    segment_refine=segment_refine,
+                    tol_on_surface=tol_on_surface,
+                    dedup_time_tol=dedup_time_tol,
+                    dedup_point_tol=dedup_point_tol,
+                    max_hits_per_traj=max_hits_per_traj,
+                    newton_max_iter=newton_max_iter,
+                    direction=direction
+                )
 
             parts: list[list[list]] = []
-            with ThreadPoolExecutor(max_workers=problem.n_workers) as ex:
+            with ThreadPoolExecutor(max_workers=n_workers) as ex:
                 futs = [ex.submit(_worker, idxs) for idxs in chunks if len(idxs)]
                 for fut in as_completed(futs):
                     parts.append(fut.result())
             hits_lists = [hits for part in parts for hits in part]
 
-        pts, sts, ts = [], [], []
+        pts, sts, ts, traj_indices = [], [], [], []
         for hits in hits_lists:
             for h in hits:
                 pts.append(h.point2d)
                 sts.append(h.state)
                 ts.append(h.time)
+                traj_indices.append(h.trajectory_index)
 
         pts_np = np.asarray(pts, dtype=float) if pts else np.empty((0, 2))
         sts_np = np.asarray(sts, dtype=float) if sts else np.empty((0, 6))
         ts_np = np.asarray(ts, dtype=float) if ts else None
+        traj_indices_np = np.asarray(traj_indices, dtype=int) if traj_indices else np.empty((0,), dtype=int)
 
-        labels = problem.plane_coords
-        self._section_cache = SynodicMapResults(pts_np, sts_np, labels, ts_np)
-        return self._section_cache
+        return self._interface.to_results((pts_np, sts_np, ts_np, traj_indices_np), problem=problem)

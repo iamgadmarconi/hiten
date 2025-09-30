@@ -23,18 +23,25 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 
-from hiten.algorithms.poincare.centermanifold.backend import \
-    _CenterManifoldBackend
-from hiten.algorithms.poincare.centermanifold.config import \
-    _CenterManifoldMapConfig
-from hiten.algorithms.poincare.centermanifold.interfaces import \
-    _CenterManifoldInterface
-from hiten.algorithms.poincare.centermanifold.seeding import \
-    _CenterManifoldSeedingBase
+from hiten.algorithms.poincare.centermanifold.backend import (
+    _CenterManifoldBackend,
+)
+from hiten.algorithms.poincare.centermanifold.config import (
+    _CenterManifoldMapConfig,
+)
+from hiten.algorithms.poincare.centermanifold.interfaces import (
+    _CenterManifoldInterface,
+)
+from hiten.algorithms.poincare.centermanifold.seeding import (
+    _CenterManifoldSeedingBase,
+)
 from hiten.algorithms.poincare.centermanifold.types import (
-    CenterManifoldMapResults, _CenterManifoldMapProblem)
+    CenterManifoldMapResults,
+    _CenterManifoldMapProblem,
+)
 from hiten.algorithms.poincare.core.engine import _ReturnMapEngine
-from hiten.algorithms.utils.exceptions import EngineError
+from hiten.algorithms.types.core import _BackendCall
+from hiten.algorithms.types.exceptions import EngineError
 from hiten.utils.log_config import logger
 
 
@@ -73,22 +80,15 @@ class _CenterManifoldEngine(_ReturnMapEngine):
 
     def __init__(
         self,
+        *,
         backend: _CenterManifoldBackend,
         seed_strategy: _CenterManifoldSeedingBase,
         map_config: _CenterManifoldMapConfig,
-        *,
         interface: _CenterManifoldInterface,
     ) -> None:
-        super().__init__(backend, seed_strategy, map_config)
-        self._interface = interface
+        super().__init__(backend=backend, seed_strategy=seed_strategy, map_config=map_config, interface=interface)
 
-    def solve(
-        self,
-        *,
-        dt: float | None = None,
-        n_iter: int | None = None,
-        n_workers: int | None = None,
-    ) -> CenterManifoldMapResults:
+    def solve(self, problem: _CenterManifoldMapProblem) -> CenterManifoldMapResults:
         """Compute the Poincare section for the center manifold.
 
         This method generates the Poincare map by iteratively applying the
@@ -123,52 +123,25 @@ class _CenterManifoldEngine(_ReturnMapEngine):
         The method uses ThreadPoolExecutor for parallel processing, with the
         number of workers determined by the configuration.
         """
-        dt_ = float(self._dt if dt is None else dt)
-        n_iter_ = int(self._n_iter if n_iter is None else n_iter)
-        n_workers_ = int(self._n_workers if n_workers is None else n_workers)
-
-        problem = _CenterManifoldMapProblem(
-            section_coord=self._backend._section_cfg.section_coord,
-            energy=self._backend._h0,
-            dt=dt_,
-            n_iter=n_iter_,
-            n_workers=n_workers_,
-        )
-
         logger.info("Generating Poincare map: seeds=%d, iterations=%d, workers=%d",
                     self._strategy.n_seeds, problem.n_iter, problem.n_workers)
 
-        # Provide interface-bound helpers matching strategy signatures
-        solve_missing_coord_fn = lambda varname, fixed_vals: self._interface.solve_missing_coord(  # noqa: E731
-            varname,
-            fixed_vals,
-            h0=self._backend._h0,
-            H_blocks=self._backend._H_blocks,
-            clmo_table=self._backend._clmo_table,
-        )
-        find_turning_fn = lambda name: self._interface.find_turning(  # noqa: E731
-            name,
-            h0=self._backend._h0,
-            H_blocks=self._backend._H_blocks,
-            clmo_table=self._backend._clmo_table,
-        )
-
         plane_pts = self._strategy.generate(
-            h0=self._backend._h0,
-            H_blocks=self._backend._H_blocks,
-            clmo_table=self._backend._clmo_table,
-            solve_missing_coord_fn=solve_missing_coord_fn,
-            find_turning_fn=find_turning_fn,
+            h0=problem.energy,
+            H_blocks=problem.H_blocks,
+            clmo_table=problem.clmo_table,
+            solve_missing_coord_fn=lambda varname, fixed_vals: problem.solve_missing_coord_fn(varname, fixed_vals),
+            find_turning_fn=lambda name: problem.find_turning_fn(name),
         )
 
-        section_coord = self._backend._section_cfg.section_coord
+        section_coord = problem.section_coord
         seeds0 = [
             self._interface.lift_plane_point(
                 p,
                 section_coord=section_coord,
-                h0=self._backend._h0,
-                H_blocks=self._backend._H_blocks,
-                clmo_table=self._backend._clmo_table,
+                h0=problem.energy,
+                H_blocks=problem.H_blocks,
+                clmo_table=problem.clmo_table,
             )
             for p in plane_pts
         ]
@@ -177,62 +150,69 @@ class _CenterManifoldEngine(_ReturnMapEngine):
         if seeds0.size == 0:
             raise EngineError("Seed strategy produced no valid points inside Hill boundary")
 
-        chunks = np.array_split(seeds0, problem.n_workers)
+        n_workers_eff = max(1, int(problem.n_workers))
+        chunks = np.array_split(seeds0, n_workers_eff)
 
         def _worker(chunk: np.ndarray):
-            pts_accum, states_accum, times_accum = [], [], []
+            states_accum, times_accum = [], []
             seeds = chunk
             for it in range(problem.n_iter):
                 # Hook: iteration start
                 try:
-                    self._backend.on_iteration(it, seeds)
+                    self._interface.on_iteration(it, seeds)
                 except Exception:
                     pass
 
-                pts, states, times, flags = self._backend.step_to_section(seeds, dt=problem.dt)
-                if pts.size == 0:
+                states, times, flags = self._backend.run(
+                    seeds, 
+                    dt=problem.dt,
+                    jac_H=problem.jac_H,
+                    clmo_table=problem.clmo_table,
+                    section_coord=section_coord
+                )
+                if states.size == 0:
                     try:
-                        self._backend.on_failure(it)
+                        self._interface.on_failure(it)
                     except Exception:
                         pass
                     break
 
+                states = self._interface.enforce_section_coordinate(states, section_coord=section_coord)
+                pts = self._interface.plane_points_from_states(states, section_coord=section_coord)
                 try:
-                    self._backend.on_success(it, pts, states, times)
+                    self._interface.on_success(it, pts, states, times)
                 except Exception:
                     pass
 
-                pts_accum.append(pts)
                 states_accum.append(states)
                 times_accum.append(times)
                 seeds = states  # feed back
-            if pts_accum:
-                return np.vstack(pts_accum), np.vstack(states_accum), np.concatenate(times_accum)
-            return np.empty((0, 2)), np.empty((0, 4)), np.empty((0,))
+            if states_accum:
+                return np.vstack(states_accum), np.concatenate(times_accum)
+            return np.empty((0, 4)), np.empty((0,))
 
-        pts_list, states_list, times_list = [], [], []
-        with ThreadPoolExecutor(max_workers=problem.n_workers) as executor:
+        states_list, times_list = [], []
+        with ThreadPoolExecutor(max_workers=n_workers_eff) as executor:
             futures = [executor.submit(_worker, c) for c in chunks if c.size]
             for fut in as_completed(futures):
-                p, s, t = fut.result()
-                if p.size:
-                    pts_list.append(p)
+                s, t = fut.result()
+                if s.size:
                     states_list.append(s)
                     times_list.append(t)
 
-        pts_np = np.vstack(pts_list) if pts_list else np.empty((0, 2))
         cms_np = np.vstack(states_list) if states_list else np.empty((0, 4))
         times_np = np.concatenate(times_list) if times_list else None
 
+        cms_np = self._interface.enforce_section_coordinate(cms_np, section_coord=section_coord)
+        pts_np = self._interface.plane_points_from_states(cms_np, section_coord=section_coord)
+
         try:
-            self._backend.on_accept(pts_np, cms_np, times_np)
+            self._interface.on_accept(pts_np, cms_np, times_np)
         except Exception:
             pass
 
-        return CenterManifoldMapResults(
-            pts_np,
-            cms_np,
-            self._backend._section_cfg.plane_coords,
-            times_np,
+        return self._interface.to_results(
+            (pts_np, cms_np, times_np),
+            problem=problem,
         )
 

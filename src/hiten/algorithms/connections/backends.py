@@ -16,28 +16,29 @@ See Also
 
 from typing import Tuple
 
+import numba
 import numpy as np
-from numba import njit
 
 from hiten.algorithms.connections.types import _ConnectionResult
+from hiten.algorithms.types.core import _HitenBaseBackend
 
 
-@njit(cache=False)
+@numba.njit(cache=False)
 def _pair_counts(query: np.ndarray, ref: np.ndarray, r2: float) -> np.ndarray:
     """Return for each query point the number of reference points within radius^2.
 
     Parameters
     ----------
-    query : ndarray, shape (N, 2)
+    query : np.ndarray, shape (N, 2)
         2D coordinates of query points.
-    ref : ndarray, shape (M, 2)
+    ref : np.ndarray, shape (M, 2)
         2D coordinates of reference points.
     r2 : float
         Radius squared for distance comparison.
 
     Returns
     -------
-    ndarray, shape (N,)
+    np.ndarray, shape (N,)
         For each query point, the count of reference points with distance^2 <= r2.
 
     Notes
@@ -62,18 +63,18 @@ def _pair_counts(query: np.ndarray, ref: np.ndarray, r2: float) -> np.ndarray:
     return counts
 
 
-@njit(cache=False)
+@numba.njit(cache=False)
 def _exclusive_prefix_sum(a: np.ndarray) -> np.ndarray:
     """Compute exclusive prefix sum of an integer array.
 
     Parameters
     ----------
-    a : ndarray
+    a : np.ndarray
         Input integer array of length N.
 
     Returns
     -------
-    ndarray, shape (N+1,)
+    np.ndarray, shape (N+1,)
         Exclusive prefix sums where out[0] = 0 and out[i+1] = sum_{k=0}^{i} a[k].
 
     Notes
@@ -91,22 +92,22 @@ def _exclusive_prefix_sum(a: np.ndarray) -> np.ndarray:
     return out
 
 
-@njit(cache=False)
+@numba.njit(cache=False)
 def _radpair2d(query: np.ndarray, ref: np.ndarray, radius: float) -> np.ndarray:
     """Find all pairs (i,j) where distance(query[i], ref[j]) <= radius in 2D.
 
     Parameters
     ----------
-    query : ndarray, shape (N, 2)
+    query : np.ndarray, shape (N, 2)
         Query points in 2D.
-    ref : ndarray, shape (M, 2)
+    ref : np.ndarray, shape (M, 2)
         Reference points in 2D.
     radius : float
         Matching radius in the same units as query/ref coordinates.
 
     Returns
     -------
-    ndarray, shape (total, 2)
+    np.ndarray, shape (total, 2)
         Each row is a pair (i, j) indicating a match between query[i] and ref[j].
 
     Notes
@@ -165,18 +166,18 @@ def _radius_pairs_2d(query: np.ndarray, ref: np.ndarray, radius: float) -> np.nd
     return _radpair2d(q, r, float(radius))
 
 
-@njit(cache=False)
+@numba.njit(cache=False)
 def _nearest_neighbor_2d_numba(points: np.ndarray) -> np.ndarray:
     """Find the nearest neighbor for each point in a 2D array (numba-accelerated).
 
     Parameters
     ----------
-    points : ndarray, shape (N, 2)
+    points : np.ndarray, shape (N, 2)
         2D coordinates of points.
 
     Returns
     -------
-    ndarray, shape (N,)
+    np.ndarray, shape (N,)
         For each point i, the index j of its nearest neighbor (j != i).
         Returns -1 if no valid neighbor exists.
 
@@ -210,12 +211,12 @@ def _nearest_neighbor_2d(points: np.ndarray) -> np.ndarray:
 
     Parameters
     ----------
-    points : ndarray, shape (N, 2)
+    points : np.ndarray, shape (N, 2)
         2D coordinates of points.
 
     Returns
     -------
-    ndarray, shape (N,)
+    np.ndarray, shape (N,)
         For each point i, the index j of its nearest neighbor (j != i).
         Returns -1 if no valid neighbor exists.
 
@@ -228,7 +229,7 @@ def _nearest_neighbor_2d(points: np.ndarray) -> np.ndarray:
     return _nearest_neighbor_2d_numba(p)
 
 
-@njit(cache=False)
+@numba.njit(cache=False)
 def _closest_points_on_segments_2d(a0x: float, a0y: float, a1x: float, a1y: float,
                                    b0x: float, b0y: float, b1x: float, b1y: float) -> Tuple[float, float, float, float, float, float]:
     """Find the closest points between two 2D line segments.
@@ -314,32 +315,32 @@ def _closest_points_on_segments_2d(a0x: float, a0y: float, a1x: float, a1y: floa
     return s, t, px, py, qx, qy
 
 
-def _refine_pairs_on_section(pu: np.ndarray, ps: np.ndarray, pairs: np.ndarray, nn_u: np.ndarray, nn_s: np.ndarray,
-                             *, max_seg_len: float = 1e9) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+@numba.njit(cache=False)
+def _refine_pairs_on_section(pu: np.ndarray, ps: np.ndarray, pairs: np.ndarray, nn_u: np.ndarray, nn_s: np.ndarray, max_seg_len: float = 1e9) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Refine matched pairs using closest points between local segments.
 
     Parameters
     ----------
-    pu : ndarray, shape (N, 2)
+    pu : np.ndarray, shape (N, 2)
         2D points on the unstable (source) section.
-    ps : ndarray, shape (M, 2)
+    ps : np.ndarray, shape (M, 2)
         2D points on the stable (target) section.
-    pairs : ndarray, shape (k, 2)
+    pairs : np.ndarray, shape (k, 2)
         Initial matched pairs as (i, j) indices.
-    nn_u : ndarray, shape (N,)
+    nn_u : np.ndarray, shape (N,)
         Nearest neighbor indices for unstable section points.
-    nn_s : ndarray, shape (M,)
+    nn_s : np.ndarray, shape (M,)
         Nearest neighbor indices for stable section points.
     max_seg_len : float, optional
         Maximum allowed segment length for refinement (default: 1e9).
 
     Returns
     -------
-    rstar : ndarray, shape (k, 2)
+    rstar : np.ndarray, shape (k, 2)
         Refined common points (midpoint of segment closest points).
-    u_idx0, u_idx1 : ndarray, shape (k,)
+    u_idx0, u_idx1 : np.ndarray, shape (k,)
         Endpoint indices used on the unstable section.
-    s_idx0, s_idx1 : ndarray, shape (k,)
+    s_idx0, s_idx1 : np.ndarray, shape (k,)
         Endpoint indices used on the stable section.
     sval, tval : ndarray, shape (k,)
         Interpolation parameters on U and S segments.
@@ -402,7 +403,7 @@ def _refine_pairs_on_section(pu: np.ndarray, ps: np.ndarray, pairs: np.ndarray, 
     return rstar, u0, u1, s0, s1, sval, tval, valid
 
 
-class _ConnectionsBackend:
+class _ConnectionsBackend(_HitenBaseBackend):
     """Encapsulate matching/refinement and Delta-V computation for connections.
 
     This backend orchestrates the end-to-end process for discovering
@@ -417,12 +418,14 @@ class _ConnectionsBackend:
         Result objects returned by the solve method.
     """
 
-    def solve(
+    def run(
         self,
         pu: np.ndarray,
         ps: np.ndarray,
         Xu: np.ndarray,
         Xs: np.ndarray,
+        traj_indices_u: np.ndarray | None,
+        traj_indices_s: np.ndarray | None,
         *,
         eps: float,
         dv_tol: float,
@@ -432,14 +435,18 @@ class _ConnectionsBackend:
 
         Parameters
         ----------
-        pu : ndarray, shape (N, 2)
+        pu : np.ndarray, shape (N, 2)
             2D points on the unstable/source section.
-        ps : ndarray, shape (M, 2)
+        ps : np.ndarray, shape (M, 2)
             2D points on the stable/target section.
-        Xu : ndarray, shape (N, 6)
+        Xu : np.ndarray, shape (N, 6)
             6D states corresponding to ``pu``.
         Xs : ndarray, shape (M, 6)
             6D states corresponding to ``ps``.
+        traj_indices_u : np.ndarray or None, shape (N,)
+            Trajectory indices for source manifold intersections.
+        traj_indices_s : ndarray or None, shape (M,)
+            Trajectory indices for target manifold intersections.
         eps : float
             Pairing radius on the 2D section plane.
         dv_tol : float
@@ -450,7 +457,7 @@ class _ConnectionsBackend:
         Returns
         -------
         list of :class:`~hiten.algorithms.connections.types._ConnectionResult`
-            Connection results sorted by increasing delta_v (velocity change).
+            ConnectionPipeline results sorted by increasing delta_v (velocity change).
 
         Notes
         -----
@@ -504,7 +511,9 @@ class _ConnectionsBackend:
                 if dv <= dv_tol:
                     kind = "ballistic" if dv <= bal_tol else "impulsive"
                     pt = (float(rstar[k, 0]), float(rstar[k, 1]))
-                    results.append(_ConnectionResult(kind=kind, delta_v=dv, point2d=pt, state_u=Xu_seg.copy(), state_s=Xs_seg.copy(), index_u=int(i), index_s=int(j)))
+                    traj_idx_u = int(traj_indices_u[i]) if traj_indices_u is not None else 0
+                    traj_idx_s = int(traj_indices_s[j]) if traj_indices_s is not None else 0
+                    results.append(_ConnectionResult(kind=kind, delta_v=dv, point2d=pt, state_u=Xu_seg.copy(), state_s=Xs_seg.copy(), index_u=int(i), index_s=int(j), trajectory_index_u=traj_idx_u, trajectory_index_s=traj_idx_s))
             else:
                 vu = Xu[i, 3:6]
                 vs = Xs[j, 3:6]
@@ -512,16 +521,21 @@ class _ConnectionsBackend:
                 if dv <= dv_tol:
                     kind = "ballistic" if dv <= bal_tol else "impulsive"
                     pt = (float(pu[i, 0]), float(pu[i, 1]))
-                    results.append(_ConnectionResult(kind=kind, delta_v=dv, point2d=pt, state_u=Xu[i].copy(), state_s=Xs[j].copy(), index_u=int(i), index_s=int(j)))
+                    traj_idx_u = int(traj_indices_u[i]) if traj_indices_u is not None else 0
+                    traj_idx_s = int(traj_indices_s[j]) if traj_indices_s is not None else 0
+                    results.append(_ConnectionResult(kind=kind, delta_v=dv, point2d=pt, state_u=Xu[i].copy(), state_s=Xs[j].copy(), index_u=int(i), index_s=int(j), trajectory_index_u=traj_idx_u, trajectory_index_s=traj_idx_s))
 
         results.sort(key=lambda r: r.delta_v)
         return results
 
     def on_start(self, problem) -> None:  # Engine notifies before solving
+        """Called by the engine before solving."""
         pass
 
     def on_success(self, results: list[_ConnectionResult]) -> None:  # Engine notifies after successful solve
+        """Called by the engine after successful solve."""
         pass
 
     def on_failure(self, error: Exception) -> None:  # Engine notifies on failure
+        """Called by the engine on failure."""
         pass

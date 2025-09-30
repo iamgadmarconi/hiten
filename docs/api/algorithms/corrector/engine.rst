@@ -1,5 +1,5 @@
-Correction Engine
-=================
+Corrector Engine
+================
 
 The engine module provides orchestration for correction workflows.
 
@@ -8,14 +8,12 @@ The engine module provides orchestration for correction workflows.
 Base Engine
 -----------
 
-.. currentmodule:: hiten.algorithms.corrector.engine.base
-
 _CorrectionEngine()
 ^^^^^^^^^^^^^^^^^^^
 
-The :class:`_CorrectionEngine` class provides an abstract base class for correction engines.
+Abstract base class for correction engines.
 
-.. autoclass:: _CorrectionEngine()
+.. autoclass:: _CorrectionEngine
    :members:
    :undoc-members:
    :exclude-members: __init__
@@ -23,14 +21,12 @@ The :class:`_CorrectionEngine` class provides an abstract base class for correct
 Orbit Correction Engine
 -----------------------
 
-.. currentmodule:: hiten.algorithms.corrector.engine.engine
-
 _OrbitCorrectionEngine()
 ^^^^^^^^^^^^^^^^^^^^^^^^
 
-The :class:`_OrbitCorrectionEngine` class provides the main engine for orchestrating periodic orbit correction.
+Engine orchestrating periodic orbit correction via a backend and interface.
 
-.. autoclass:: _OrbitCorrectionEngine()
+.. autoclass:: _OrbitCorrectionEngine
    :members:
    :undoc-members:
    :exclude-members: __init__

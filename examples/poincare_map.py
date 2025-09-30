@@ -22,13 +22,14 @@ def main() -> None:
     cm = l_point.get_center_manifold(degree=6)
     cm.compute()
 
-    pm = cm.poincare_map(
-        energy=0.7,
-        section_coord="p3",
-        n_seeds=50,
-        n_iter=100,
-        seed_strategy="axis_aligned"
-    )
+    pm = cm.poincare_map(energy=0.7)
+    overrides = {
+        "n_seeds": 20,
+        "n_iter": 20,
+        "seed_strategy": "axis_aligned",
+        "n_workers": 8
+    }
+    pm.compute(section_coord="p3", overrides=overrides)
 
     pm.plot(axes=("p2", "q3"))
 

@@ -22,7 +22,7 @@ def main() -> None:
     cm = l_point.get_center_manifold(degree=6)
     cm.compute()
 
-    ic_seed = cm.ic([0.0, 0.0], 0.6, "q3") # Good initial guess from CM
+    ic_seed = cm.to_synodic([0.0, 0.0], 0.6, "q3") # Good initial guess from CM
     logger.info("Initial conditions (CM to physical coordinates): %s", ic_seed)
 
     # Specifications for each family we wish to generate
@@ -44,8 +44,8 @@ def main() -> None:
         {
             "cls": LyapunovOrbit,
             "name": "Planar Lyapunov",
-            "kwargs": {"amplitude_x": 4e-3},
-            "diff_corr_attempts": 25,
+            "kwargs": {"amplitude_x": 0.1},
+            "diff_corr_attempts": 100,
             "finite_difference": False,
         },
     ]

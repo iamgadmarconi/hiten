@@ -55,6 +55,10 @@ Meyer, K.R., Hall, G.R. (1992). Introduction to Hamiltonian Dynamical Systems
 and the N-Body Problem. Springer-Verlag, Chapters 4-5.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from hiten.algorithms.hamiltonian.center._lie import \
     _lie_transform as _lie_transform_partial
 from hiten.algorithms.hamiltonian.normal._lie import \
@@ -62,10 +66,12 @@ from hiten.algorithms.hamiltonian.normal._lie import \
 from hiten.algorithms.hamiltonian.transforms import (
     _polylocal2realmodal, _polyrealmodal2local,
     _restrict_poly_to_center_manifold, _substitute_complex, _substitute_real)
-from hiten.system.hamiltonians.base import (_CONVERSION_REGISTRY, Hamiltonian,
-                                            LieGeneratingFunction)
-from hiten.system.libration.collinear import CollinearPoint
-from hiten.system.libration.triangular import TriangularPoint
+from hiten.algorithms.types.services import get_hamiltonian_services
+from hiten.system.hamiltonian import Hamiltonian, LieGeneratingFunction
+
+if TYPE_CHECKING:
+    from hiten.system.libration.collinear import CollinearPoint
+    from hiten.system.libration.triangular import TriangularPoint
 
 
 def register_conversion(src_name: str, dst: "type[Hamiltonian] | str", 
@@ -106,7 +112,7 @@ def register_conversion(src_name: str, dst: "type[Hamiltonian] | str",
     Hamiltonians must be transformed through multiple coordinate systems.
 
     Registered functions should follow the signature:
-    conversion_func(ham: Hamiltonian, kwargs) returns :class:`~hiten.system.hamiltonians.base.Hamiltonian` or tuple
+    conversion_func(ham: Hamiltonian, kwargs) returns :class:`~hiten.system.hamiltonian.Hamiltonian` or tuple
 
     The kwargs typically include context (like libration points) and numerical
     parameters (like tolerances). Some conversions return tuples containing
@@ -114,7 +120,7 @@ def register_conversion(src_name: str, dst: "type[Hamiltonian] | str",
 
     See Also
     --------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Base Hamiltonian class used in conversions.
     :func:`~hiten.system.hamiltonians.base._CONVERSION_REGISTRY`
         Global registry storing conversion functions.
@@ -137,8 +143,10 @@ def register_conversion(src_name: str, dst: "type[Hamiltonian] | str",
     else:
         dst_name = dst.name
 
+    registry = get_hamiltonian_services()
+
     def _decorator(func):
-        _CONVERSION_REGISTRY[(src_name, dst_name)] = (
+        registry._CONVERSION_REGISTRY[(src_name, dst_name)] = (
             func, 
             required_context or [], 
             default_params or {}
@@ -160,7 +168,7 @@ def _physical_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in physical coordinates, with polynomial coefficients
         in nondimensional energy units.
     kwargs
@@ -173,7 +181,7 @@ def _physical_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Transformed Hamiltonian in real modal coordinates with name "real_modal".
 
     Notes
@@ -196,8 +204,8 @@ def _physical_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
     """
     point = kwargs["point"]
     tol = kwargs.get("tol", 1e-12)
-    new_poly = _polylocal2realmodal(point, ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol)
-    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="real_modal")
+    new_poly = _polylocal2realmodal(point, ham.dynamics.poly_H, ham.dynamics.degree, ham.dynamics.psi, ham.dynamics.clmo, tol=tol)
+    return Hamiltonian(new_poly, ham.dynamics.degree, ham.dynamics.ndof, name="real_modal")
 
 
 @register_conversion("real_modal", "physical", 
@@ -212,7 +220,7 @@ def _real_modal_to_physical(ham: Hamiltonian, **kwargs) -> Hamiltonian:
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in real modal coordinates, with polynomial coefficients
         in nondimensional energy units.
     kwargs
@@ -225,7 +233,7 @@ def _real_modal_to_physical(ham: Hamiltonian, **kwargs) -> Hamiltonian:
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Transformed Hamiltonian in physical coordinates with name "physical".
 
     Notes
@@ -247,8 +255,8 @@ def _real_modal_to_physical(ham: Hamiltonian, **kwargs) -> Hamiltonian:
     """
     point = kwargs["point"]
     tol = kwargs.get("tol", 1e-12)
-    new_poly = _polyrealmodal2local(point, ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol)
-    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="physical")
+    new_poly = _polyrealmodal2local(point, ham.dynamics.poly_H, ham.dynamics.degree, ham.dynamics.psi, ham.dynamics.clmo, tol=tol)
+    return Hamiltonian(new_poly, ham.dynamics.degree, ham.dynamics.ndof, name="physical")
 
 
 @register_conversion("real_modal", "complex_modal", 
@@ -263,7 +271,7 @@ def _real_modal_to_complex_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in real modal coordinates, with polynomial coefficients
         in nondimensional energy units.
     kwargs
@@ -276,7 +284,7 @@ def _real_modal_to_complex_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Transformed Hamiltonian in complex modal coordinates with name "complex_modal".
 
     Notes
@@ -299,14 +307,16 @@ def _real_modal_to_complex_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
         Inverse transformation back to real modal coordinates.
     """
     point = kwargs["point"]
+    from hiten.system.libration.collinear import CollinearPoint
+    from hiten.system.libration.triangular import TriangularPoint
     if isinstance(point, CollinearPoint):
         mix_pairs = (1, 2)
     elif isinstance(point, TriangularPoint):
         mix_pairs = (0, 1, 2)
 
     tol = kwargs.get("tol", 1e-12)
-    new_poly = _substitute_complex(ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
-    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="complex_modal")
+    new_poly = _substitute_complex(ham.dynamics.poly_H, ham.dynamics.degree, ham.dynamics.psi, ham.dynamics.clmo, tol=tol, mix_pairs=mix_pairs)
+    return Hamiltonian(new_poly, ham.dynamics.degree, ham.dynamics.ndof, name="complex_modal")
 
 
 @register_conversion("complex_modal", "real_modal", 
@@ -321,7 +331,7 @@ def _complex_modal_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in complex modal coordinates, with polynomial coefficients
         in nondimensional energy units.
     kwargs
@@ -334,7 +344,7 @@ def _complex_modal_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Transformed Hamiltonian in real modal coordinates with name "real_modal".
 
     Notes
@@ -356,14 +366,16 @@ def _complex_modal_to_real_modal(ham: Hamiltonian, **kwargs) -> Hamiltonian:
         Forward transformation to complex modal coordinates.
     """
     point = kwargs["point"]
+    from hiten.system.libration.collinear import CollinearPoint
+    from hiten.system.libration.triangular import TriangularPoint
     if isinstance(point, CollinearPoint):
         mix_pairs = (1, 2)
     elif isinstance(point, TriangularPoint):
         mix_pairs = (0, 1, 2)
 
     tol = kwargs.get("tol", 1e-12)
-    new_poly = _substitute_real(ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
-    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="real_modal")
+    new_poly = _substitute_real(ham.dynamics.poly_H, ham.dynamics.degree, ham.dynamics.psi, ham.dynamics.clmo, tol=tol, mix_pairs=mix_pairs)
+    return Hamiltonian(new_poly, ham.dynamics.degree, ham.dynamics.ndof, name="real_modal")
 
 
 @register_conversion("complex_modal", "complex_partial_normal", 
@@ -378,7 +390,7 @@ def _complex_modal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -> tupl
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in complex modal coordinates, with polynomial
         coefficients in nondimensional energy units.
     kwargs
@@ -391,7 +403,7 @@ def _complex_modal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -> tupl
 
     Returns
     -------
-    tuple of (:class:`~hiten.system.hamiltonians.base.Hamiltonian`, :class:`~hiten.system.hamiltonians.base.LieGeneratingFunction`)
+    tuple of (:class:`~hiten.system.hamiltonian.Hamiltonian`, :class:`~hiten.system.hamiltonian.LieGeneratingFunction`)
         - Transformed Hamiltonian in partial normal form with name "complex_partial_normal"
         - Generating functions used in the transformation, containing both the
           total generating function and eliminated terms
@@ -417,16 +429,16 @@ def _complex_modal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -> tupl
         Underlying partial normal form computation.
     :func:`~hiten.algorithms.hamiltonian.wrappers._complex_modal_to_complex_full_normal`
         Complete normal form transformation.
-    :class:`~hiten.system.hamiltonians.base.LieGeneratingFunction`
+    :class:`~hiten.system.hamiltonian.LieGeneratingFunction`
         Container for generating function data.
     """
     point = kwargs["point"]
     tol_lie = kwargs.get("tol_lie", 1e-30)
     # This returns (poly_trans, poly_G_total, poly_elim_total)
-    new_poly, poly_G_total, poly_elim_total = _lie_transform_partial(point, ham.poly_H, ham._psi, ham._clmo, ham.degree, tol=tol_lie)
+    new_poly, poly_G_total, poly_elim_total = _lie_transform_partial(point, ham.dynamics.poly_H, ham.dynamics.psi, ham.dynamics.clmo, ham.dynamics.degree, tol=tol_lie)
     
-    new_ham = Hamiltonian(new_poly, ham.degree, ham._ndof, name="complex_partial_normal")
-    generating_functions = LieGeneratingFunction(poly_G=poly_G_total, poly_elim=poly_elim_total, degree=ham.degree, ndof=ham._ndof, name="generating_functions_partial")
+    new_ham = Hamiltonian(new_poly, ham.dynamics.degree, ham.dynamics.ndof, name="complex_partial_normal")
+    generating_functions = LieGeneratingFunction(poly_G=poly_G_total, poly_elim=poly_elim_total, degree=ham.dynamics.degree, ndof=ham.dynamics.ndof, name="generating_functions_partial")
     
     return new_ham, generating_functions
 
@@ -443,7 +455,7 @@ def _complex_partial_normal_to_real_partial_normal(ham: Hamiltonian, **kwargs) -
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in complex partial normal form, with polynomial
         coefficients in nondimensional energy units.
     kwargs
@@ -456,7 +468,7 @@ def _complex_partial_normal_to_real_partial_normal(ham: Hamiltonian, **kwargs) -
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Transformed Hamiltonian in real partial normal form with name "real_partial_normal".
 
     Notes
@@ -483,15 +495,17 @@ def _complex_partial_normal_to_real_partial_normal(ham: Hamiltonian, **kwargs) -
         Inverse transformation back to complex partial normal form.
     """
     point = kwargs["point"]
+    from hiten.system.libration.collinear import CollinearPoint
+    from hiten.system.libration.triangular import TriangularPoint
     if isinstance(point, CollinearPoint):
         mix_pairs = (1, 2)
     elif isinstance(point, TriangularPoint):
         mix_pairs = (0, 1, 2)
 
     tol = kwargs.get("tol", 1e-14)
-    new_poly = _substitute_real(ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
+    new_poly = _substitute_real(ham.dynamics.poly_H, ham.dynamics.degree, ham.dynamics.psi, ham.dynamics.clmo, tol=tol, mix_pairs=mix_pairs)
     
-    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="real_partial_normal")
+    return Hamiltonian(new_poly, ham.dynamics.degree, ham.dynamics.ndof, name="real_partial_normal")
 
 
 @register_conversion("real_partial_normal", "complex_partial_normal", 
@@ -506,7 +520,7 @@ def _real_partial_normal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in real partial normal form, with polynomial
         coefficients in nondimensional energy units.
     kwargs
@@ -519,7 +533,7 @@ def _real_partial_normal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Transformed Hamiltonian in complex partial normal form with name "complex_partial_normal".
 
     Notes
@@ -551,8 +565,8 @@ def _real_partial_normal_to_complex_partial_normal(ham: Hamiltonian, **kwargs) -
         mix_pairs = (0, 1, 2)
 
     tol = kwargs.get("tol", 1e-14)
-    new_poly = _substitute_complex(ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
-    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="complex_partial_normal")
+    new_poly = _substitute_complex(ham.dynamics.poly_H, ham.dynamics.degree, ham.dynamics.psi, ham.dynamics.clmo, tol=tol, mix_pairs=mix_pairs)
+    return Hamiltonian(new_poly, ham.dynamics.degree, ham.dynamics.ndof, name="complex_partial_normal")
 
 
 @register_conversion("complex_partial_normal", "center_manifold_complex", 
@@ -567,7 +581,7 @@ def _complex_partial_normal_to_center_manifold_complex(ham: Hamiltonian, **kwarg
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in complex partial normal form, with polynomial
         coefficients in nondimensional energy units.
     kwargs
@@ -580,7 +594,7 @@ def _complex_partial_normal_to_center_manifold_complex(ham: Hamiltonian, **kwarg
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Restricted Hamiltonian on center manifold with name "center_manifold_complex".
 
     Notes
@@ -613,8 +627,8 @@ def _complex_partial_normal_to_center_manifold_complex(ham: Hamiltonian, **kwarg
     """
     point = kwargs["point"]
     tol = kwargs.get("tol", 1e-14)
-    new_poly = _restrict_poly_to_center_manifold(point, ham.poly_H, ham._clmo, tol=tol)
-    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="center_manifold_complex")
+    new_poly = _restrict_poly_to_center_manifold(point, ham.dynamics.poly_H, ham.dynamics.clmo, tol=tol)
+    return Hamiltonian(new_poly, ham.dynamics.degree, ham.dynamics.ndof, name="center_manifold_complex")
 
 
 @register_conversion("center_manifold_complex", "center_manifold_real", 
@@ -629,7 +643,7 @@ def _center_manifold_complex_to_center_manifold_real(ham: Hamiltonian, **kwargs)
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in complex center manifold representation, with polynomial
         coefficients in nondimensional energy units.
     kwargs
@@ -642,7 +656,7 @@ def _center_manifold_complex_to_center_manifold_real(ham: Hamiltonian, **kwargs)
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Transformed Hamiltonian in real center manifold representation with name "center_manifold_real".
 
     Notes
@@ -669,14 +683,16 @@ def _center_manifold_complex_to_center_manifold_real(ham: Hamiltonian, **kwargs)
         Inverse transformation back to complex center manifold representation.
     """
     point = kwargs["point"]
+    from hiten.system.libration.collinear import CollinearPoint
+    from hiten.system.libration.triangular import TriangularPoint
     if isinstance(point, CollinearPoint):
         mix_pairs = (1, 2)
     elif isinstance(point, TriangularPoint):
         mix_pairs = (0, 1, 2)
 
     tol = kwargs.get("tol", 1e-14)
-    new_poly = _substitute_real(ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
-    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="center_manifold_real")
+    new_poly = _substitute_real(ham.dynamics.poly_H, ham.dynamics.degree, ham.dynamics.psi, ham.dynamics.clmo, tol=tol, mix_pairs=mix_pairs)
+    return Hamiltonian(new_poly, ham.dynamics.degree, ham.dynamics.ndof, name="center_manifold_real")
 
 
 @register_conversion("center_manifold_real", "center_manifold_complex", 
@@ -691,7 +707,7 @@ def _center_manifold_real_to_center_manifold_complex(ham: Hamiltonian, **kwargs)
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in real center manifold representation, with polynomial
         coefficients in nondimensional energy units.
     kwargs
@@ -704,7 +720,7 @@ def _center_manifold_real_to_center_manifold_complex(ham: Hamiltonian, **kwargs)
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Transformed Hamiltonian in complex center manifold representation with name "center_manifold_complex".
 
     Notes
@@ -730,14 +746,16 @@ def _center_manifold_real_to_center_manifold_complex(ham: Hamiltonian, **kwargs)
         Inverse transformation back to real center manifold representation.
     """
     point = kwargs["point"]
+    from hiten.system.libration.collinear import CollinearPoint
+    from hiten.system.libration.triangular import TriangularPoint
     if isinstance(point, CollinearPoint):
         mix_pairs = (1, 2)
     elif isinstance(point, TriangularPoint):
         mix_pairs = (0, 1, 2)
 
     tol = kwargs.get("tol", 1e-14)
-    new_poly = _substitute_complex(ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
-    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="center_manifold_complex")
+    new_poly = _substitute_complex(ham.dynamics.poly_H, ham.dynamics.degree, ham.dynamics.psi, ham.dynamics.clmo, tol=tol, mix_pairs=mix_pairs)
+    return Hamiltonian(new_poly, ham.dynamics.degree, ham.dynamics.ndof, name="center_manifold_complex")
 
 
 @register_conversion("complex_modal", "complex_full_normal", 
@@ -752,13 +770,14 @@ def _complex_modal_to_complex_full_normal(ham: Hamiltonian, **kwargs) -> tuple[H
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in complex modal coordinates, with polynomial
         coefficients in nondimensional energy units.
     kwargs
         Conversion context and parameters:
         
-        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or :class:`~hiten.system.libration.triangular.TriangularPoint`
+        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or 
+            :class:`~hiten.system.libration.triangular.TriangularPoint`
             Libration point providing eigenvalue information for resonance analysis.
         - tol_lie : float, default 1e-30
             Numerical tolerance for Lie series computations and coefficient cleaning.
@@ -767,7 +786,7 @@ def _complex_modal_to_complex_full_normal(ham: Hamiltonian, **kwargs) -> tuple[H
 
     Returns
     -------
-    tuple of (:class:`~hiten.system.hamiltonians.base.Hamiltonian`, :class:`~hiten.system.hamiltonians.base.LieGeneratingFunction`)
+    tuple of (:class:`~hiten.system.hamiltonian.Hamiltonian`, :class:`~hiten.system.hamiltonian.LieGeneratingFunction`)
         - Transformed Hamiltonian in full normal form with name "complex_full_normal"
         - Generating functions used in the transformation, containing both the
           total generating function and eliminated terms
@@ -798,16 +817,16 @@ def _complex_modal_to_complex_full_normal(ham: Hamiltonian, **kwargs) -> tuple[H
         Underlying full normal form computation.
     :func:`~hiten.algorithms.hamiltonian.wrappers._complex_modal_to_complex_partial_normal`
         Partial normal form transformation.
-    :class:`~hiten.system.hamiltonians.base.LieGeneratingFunction`
+    :class:`~hiten.system.hamiltonian.LieGeneratingFunction`
         Container for generating function data.
     """
     point = kwargs["point"]
     tol_lie = kwargs.get("tol_lie", 1e-30)
     resonance_tol = kwargs.get("resonance_tol", 1e-14)
-    new_poly, poly_G_total, poly_elim_total = _lie_transform_full(point, ham.poly_H, ham._psi, ham._clmo, ham.degree, tol=tol_lie, resonance_tol=resonance_tol)
+    new_poly, poly_G_total, poly_elim_total = _lie_transform_full(point, ham.dynamics.poly_H, ham.dynamics.psi, ham.dynamics.clmo, ham.dynamics.degree, tol=tol_lie, resonance_tol=resonance_tol)
     
-    new_ham = Hamiltonian(new_poly, ham.degree, ham._ndof, name="complex_full_normal")
-    generating_functions = LieGeneratingFunction(poly_G=poly_G_total, poly_elim=poly_elim_total, degree=ham.degree, ndof=ham._ndof, name="generating_functions_full")
+    new_ham = Hamiltonian(new_poly, ham.dynamics.degree, ham.dynamics.ndof, name="complex_full_normal")
+    generating_functions = LieGeneratingFunction(poly_G=poly_G_total, poly_elim=poly_elim_total, degree=ham.dynamics.degree, ndof=ham.dynamics.ndof, name="generating_functions_full")
     
     return new_ham, generating_functions
 
@@ -824,20 +843,21 @@ def _complex_full_normal_to_real_full_normal(ham: Hamiltonian, **kwargs) -> Hami
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in complex full normal form, with polynomial
         coefficients in nondimensional energy units.
     kwargs
         Conversion context and parameters:
         
-        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or :class:`~hiten.system.libration.triangular.TriangularPoint`
+        - point : :class:`~hiten.system.libration.collinear.CollinearPoint` or 
+            :class:`~hiten.system.libration.triangular.TriangularPoint`
             Libration point determining which coordinate pairs to realify.
         - tol : float, default 1e-14
             Numerical tolerance for cleaning small coefficients.
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Transformed Hamiltonian in real full normal form with name "real_full_normal".
 
     Notes
@@ -865,14 +885,16 @@ def _complex_full_normal_to_real_full_normal(ham: Hamiltonian, **kwargs) -> Hami
         Inverse transformation back to complex full normal form.
     """
     point = kwargs["point"]
+    from hiten.system.libration.collinear import CollinearPoint
+    from hiten.system.libration.triangular import TriangularPoint
     if isinstance(point, CollinearPoint):
         mix_pairs = (1, 2)
     elif isinstance(point, TriangularPoint):
         mix_pairs = (0, 1, 2)
 
     tol = kwargs.get("tol", 1e-14)
-    new_poly = _substitute_real(ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
-    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="real_full_normal")
+    new_poly = _substitute_real(ham.dynamics.poly_H, ham.dynamics.degree, ham.dynamics.psi, ham.dynamics.clmo, tol=tol, mix_pairs=mix_pairs)
+    return Hamiltonian(new_poly, ham.dynamics.degree, ham.dynamics.ndof, name="real_full_normal")
 
 
 @register_conversion("real_full_normal", "complex_full_normal", 
@@ -887,7 +909,7 @@ def _real_full_normal_to_complex_full_normal(ham: Hamiltonian, **kwargs) -> Hami
 
     Parameters
     ----------
-    ham : :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    ham : :class:`~hiten.system.hamiltonian.Hamiltonian`
         Source Hamiltonian in real full normal form, with polynomial
         coefficients in nondimensional energy units.
     kwargs
@@ -900,7 +922,7 @@ def _real_full_normal_to_complex_full_normal(ham: Hamiltonian, **kwargs) -> Hami
 
     Returns
     -------
-    :class:`~hiten.system.hamiltonians.base.Hamiltonian`
+    :class:`~hiten.system.hamiltonian.Hamiltonian`
         Transformed Hamiltonian in complex full normal form with name "complex_full_normal".
 
     Notes
@@ -933,5 +955,5 @@ def _real_full_normal_to_complex_full_normal(ham: Hamiltonian, **kwargs) -> Hami
         mix_pairs = (0, 1, 2)
 
     tol = kwargs.get("tol", 1e-14)
-    new_poly = _substitute_complex(ham.poly_H, ham.degree, ham._psi, ham._clmo, tol=tol, mix_pairs=mix_pairs)
-    return Hamiltonian(new_poly, ham.degree, ham._ndof, name="complex_full_normal")
+    new_poly = _substitute_complex(ham.dynamics.poly_H, ham.dynamics.degree, ham.dynamics.psi, ham.dynamics.clmo, tol=tol, mix_pairs=mix_pairs)
+    return Hamiltonian(new_poly, ham.dynamics.degree, ham.dynamics.ndof, name="complex_full_normal")

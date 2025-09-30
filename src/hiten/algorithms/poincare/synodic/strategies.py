@@ -28,8 +28,6 @@ class _NoOpStrategy(_SeedingStrategyBase):
 
     Parameters
     ----------
-    section_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicSectionConfig`
-        The section configuration (unused).
     map_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
         The map configuration (unused).
 

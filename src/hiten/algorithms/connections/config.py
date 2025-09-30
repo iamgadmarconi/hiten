@@ -10,12 +10,15 @@ All distance and velocity tolerances are in nondimensional CR3BP rotating-frame 
 See Also
 --------
 :mod:`~hiten.algorithms.connections.base`
-    Main Connection class that uses these configuration objects.
+    Main ConnectionPipeline class that uses these configuration objects.
 :mod:`~hiten.algorithms.connections.engine`
-    Connection engine that applies these parameters during computation.
+    ConnectionPipeline engine that applies these parameters during computation.
 """
 
 from dataclasses import dataclass
+from typing import Literal, Optional
+
+from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
 
 
 @dataclass(frozen=True)
@@ -75,66 +78,58 @@ class _SearchConfig:
 
     See Also
     --------
-    :class:`~hiten.algorithms.connections.config.ConnectionConfig`
+    :class:`~hiten.algorithms.connections.config._ConnectionConfig`
         Extended configuration including computational parameters.
-    :class:`~hiten.algorithms.connections.base.Connection`
+    :class:`~hiten.algorithms.connections.base.ConnectionPipeline`
         Main class that uses this configuration.
     """
-
-    # Accept if ||Delta-V|| <= delta_v_tol
     delta_v_tol: float = 1e-3
-    # Classify ballistic if ||Delta-V|| <= ballistic_tol
     ballistic_tol: float = 1e-8
-    # Pairing radius on the section plane
     eps2d: float = 1e-4
 
-@dataclass(frozen=True)
-class ConnectionConfig(_SearchConfig):
-    """Define an extended configuration including computational parameters.
 
-    This class extends :class:`~hiten.algorithms.connections.config._SearchConfig` with additional parameters
-    for controlling the computational aspects of connection discovery,
-    such as parallel processing.
+@dataclass(frozen=True)
+class _ConnectionConfig(_SearchConfig):
+    """Define configuration for connection discovery including section and search parameters.
+
+    This class combines the synodic section configuration with search parameters
+    to provide a complete configuration for connection discovery between manifolds.
 
     Parameters
     ----------
-    n_workers : int, default 1
-        Number of worker processes to use for parallel computation.
-        Set to 1 for serial processing, or a higher value to enable
-        parallel processing of manifold intersections and connection searches.
-        
-    **kwargs
-        All parameters from :class:`~hiten.algorithms.connections.config._SearchConfig` are also available:
-        delta_v_tol, ballistic_tol, eps2d.
-
-    Notes
-    -----
-    Parallel processing can significantly speed up connection discovery
-    for large manifolds, but may not be beneficial for small problems
-    due to overhead. The optimal number of workers depends on the system
-    and problem size.
+    section : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+        Configuration for the synodic section where manifolds are intersected.
+    direction : {1, -1, None}, optional
+        Direction for section crossings. 1 for positive, -1 for negative,
+        None for both directions (default: None).
+    search_cfg : :class:`~hiten.algorithms.connections.config._SearchConfig`, optional
+        Configuration for connection search parameters including tolerances
+        and geometric constraints (default: None).
 
     Examples
     --------
-    >>> # Serial processing with custom tolerances
-    >>> config = ConnectionConfig(
-    ...     delta_v_tol=1e-3,
-    ...     ballistic_tol=1e-8,
-    ...     eps2d=1e-4,
-    ...     n_workers=1
-    ... )
+    >>> from hiten.algorithms.connections.config import _ConnectionConfig, _SearchConfig
+    >>> from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
     >>> 
-    >>> # Parallel processing for large problems
-    >>> parallel_config = ConnectionConfig(
-    ...     delta_v_tol=1e-3,
-    ...     n_workers=4
+    >>> section_cfg = _SynodicMapConfig(section_axis="x", section_offset=0.8)
+    >>> search_cfg = _SearchConfig(delta_v_tol=1e-3, ballistic_tol=1e-8, eps2d=1e-4)
+    >>> 
+    >>> config = _ConnectionConfig(
+    ...     section=section_cfg,
+    ...     direction=1,
+    ...     search_cfg=search_cfg
     ... )
 
     See Also
     --------
     :class:`~hiten.algorithms.connections.config._SearchConfig`
-        Base class with search and tolerance parameters.
-    :class:`~hiten.algorithms.connections.base.Connection`
+        Search parameters and tolerances.
+    :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+        Synodic section configuration.
+    :class:`~hiten.algorithms.connections.base.ConnectionPipeline`
         Main class that uses this configuration.
     """
-    n_workers: int = 1
+    section: _SynodicMapConfig = _SynodicMapConfig()
+    direction: Optional[Literal[1, -1]] = None
+    n_workers: Optional[int] = 1
+

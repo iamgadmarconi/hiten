@@ -15,7 +15,7 @@ The simplest way to create a system is using predefined celestial bodies:
 
 .. code-block:: python
 
-   from hiten import System
+   from hiten import System, Body
    
    # Create Earth-Moon system
    system = System.from_bodies("earth", "moon")
@@ -35,7 +35,7 @@ For custom systems or when you only know the mass parameter:
 
 .. code-block:: python
 
-   from hiten import System
+   from hiten import System, Body
    
    # Create system directly from mu
    system = System.from_mu(0.012150585609624)  # Earth-Moon mu
@@ -66,11 +66,11 @@ For maximum control, create custom bodies:
        mass=7.342e22,  # kg
        radius=1.737e6,  # m
        color="#F5A623",
-       _parent_input=primary
+       parent=primary
    )
    
    # Create system with custom bodies
-   system = System(primary, secondary, distance=384400e3)  # km
+   system = System(primary, secondary, 384400e3)  # m
 
 System Properties
 -----------------
@@ -83,7 +83,7 @@ Once created, systems provide access to key properties:
    print(f"Mass parameter: {system.mu}")
    print(f"Primary: {system.primary.name}")
    print(f"Secondary: {system.secondary.name}")
-   print(f"Distance: {system.distance} km")
+   print(f"Distance: {system.distance} m")
    
    # Libration points
    l1 = system.get_libration_point(1)
@@ -118,7 +118,7 @@ Bodies can be configured with various physical and visual properties:
        mass=7.342e22,
        radius=1.737e6,
        color="#C0C0C0",  # Silver color
-       _parent_input=earth
+       parent=earth
    )
 
 Body Properties
@@ -162,7 +162,7 @@ Earth-Moon System
 
    system = System.from_bodies("earth", "moon")
    # mu ≈ 0.01215
-   # Distance ≈ 384,400 km
+   # Distance ≈ 384,400,000 m
 
 Sun-Earth System
 ~~~~~~~~~~~~~~~~
@@ -170,8 +170,8 @@ Sun-Earth System
 .. code-block:: python
 
    system = System.from_bodies("sun", "earth")
-   # mu ≈ 0.000953875
-   # Distance ≈ 149.6 million km
+   # mu ≈ 3.00e-06
+   # Distance ≈ 149.6 billion m
 
 Sun-Jupiter System
 ~~~~~~~~~~~~~~~~~~
@@ -179,8 +179,8 @@ Sun-Jupiter System
 .. code-block:: python
 
    system = System.from_bodies("sun", "jupiter")
-   # mu ≈ 0.000953875
-   # Distance ≈ 778.5 million km
+   # mu ≈ 0.000953
+   # Distance ≈ 778.5 billion m
 
 Custom Binary System
 ~~~~~~~~~~~~~~~~~~~~
@@ -189,9 +189,9 @@ Custom Binary System
 
    # Example: Binary star system
    primary_star = Body("Primary Star", 2.0e30, 1.0e9)
-   secondary_star = Body("Secondary Star", 1.5e30, 8.0e8, _parent_input=primary_star)
+   secondary_star = Body("Secondary Star", 1.5e30, 8.0e8, parent=primary_star)
    
-   system = System(primary_star, secondary_star, distance=1.0e12)  # 1 AU
+   system = System(primary_star, secondary_star, 1.0e12)  # 1 AU
 
 Next Steps
 ----------

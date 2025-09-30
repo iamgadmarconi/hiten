@@ -20,8 +20,7 @@ Synodic sections are defined in the rotating frame:
 
 .. code-block:: python
 
-   from hiten.algorithms.poincare import SynodicMap, SynodicMapConfig
-   from hiten import System
+   from hiten.system import SynodicMap, System
    
    # Create system and orbit
    system = System.from_bodies("earth", "moon")
@@ -32,28 +31,24 @@ Synodic sections are defined in the rotating frame:
    halo.correct()
    halo.propagate()
    
-   # Create synodic section configuration
-   section_cfg = SynodicMapConfig(
-       section_axis="x",           # Section perpendicular to x-axis
-       section_offset=0.8,         # At x = 0.8
-       plane_coords=("y", "z"),    # Plot y vs z (default is ("y", "vy"))
-       interp_kind="cubic",        # Cubic interpolation
-       segment_refine=30,          # Refinement factor
-       tol_on_surface=1e-9,        # Surface tolerance (default is 1e-12)
-       dedup_time_tol=1e-9,        # Time deduplication tolerance
-       dedup_point_tol=1e-9,       # Point deduplication tolerance (default is 1e-12)
-       max_hits_per_traj=None,     # No limit on hits per trajectory
-       n_workers=None              # Use all available workers
-   )
-   
-   # Create synodic map
-   synodic_map = SynodicMap(map_cfg=section_cfg)
-   
    # Generate section from manifold
    stable_manifold = halo.manifold(stable=True, direction="positive")
    stable_manifold.compute()
    
-   synodic_map.from_manifold(stable_manifold)
+   # Create synodic map from manifold
+   synodic_map = SynodicMap(stable_manifold)
+   
+   # Compute section with configuration
+   overrides = {
+       "interp_kind": "cubic",
+       "segment_refine": 30,
+   }
+   synodic_map.compute(
+       section_axis="x",
+       section_offset=0.8,
+       plane_coords=("y", "z"),
+       overrides=overrides
+   )
 
 Center Manifold Sections
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -88,17 +83,17 @@ Basic Configuration
 .. code-block:: python
 
    # Simple x-section
-   section_cfg = SynodicMapConfig(
+   synodic_map.compute(
        section_axis="x",
        section_offset=0.8,
-       plane_coords=("y", "z")  # Override default ("y", "vy")
+       plane_coords=("y", "z")
    )
    
-   # Simple y-section
-   section_cfg = SynodicMapConfig(
+   # Simple y-section  
+   synodic_map.compute(
        section_axis="y",
        section_offset=0.0,
-       plane_coords=("x", "z")  # Override default ("y", "vy")
+       plane_coords=("x", "z")
    )
 
 Advanced Configuration
@@ -107,15 +102,15 @@ Advanced Configuration
 .. code-block:: python
 
    # High resolution section
-   section_cfg = SynodicMapConfig(
+   overrides = {
+       "interp_kind": "cubic",
+       "segment_refine": 50,
+   }
+   synodic_map.compute(
        section_axis="x",
        section_offset=0.8,
        plane_coords=("y", "z"),
-       interp_kind="cubic",
-       segment_refine=50,          # Higher refinement
-       tol_on_surface=1e-12,       # Higher accuracy
-       dedup_time_tol=1e-12,
-       dedup_point_tol=1e-12
+       overrides=overrides
    )
 
 Section Analysis
@@ -163,7 +158,9 @@ Creating Connections
 
 .. code-block:: python
 
-   from hiten.algorithms.connections import Connection, SearchConfig
+   from hiten.algorithms.connections import ConnectionPipeline
+   from hiten.algorithms.connections.config import _ConnectionConfig
+   from hiten.algorithms.poincare import SynodicMapConfig
    
    # Create two orbits
    l1 = system.get_libration_point(1)
@@ -190,48 +187,43 @@ Once you created the manifolds, you can create a connection between them by conf
 
 .. code-block:: python
 
-   # Section configuration
+   # Create unified configuration
    section_cfg = SynodicMapConfig(
        section_axis="x",
-       section_offset=1 - system.mu,  # Near secondary body
+       section_offset=1 - system.mu,
        plane_coords=("y", "z"),
        interp_kind="cubic",
        segment_refine=30,
        tol_on_surface=1e-9,
        dedup_time_tol=1e-9,
-       dedup_point_tol=1e-9
+       dedup_point_tol=1e-9,
+       max_hits_per_traj=None,
+       n_workers=None,
    )
    
-   # Search configuration
-   search_cfg = SearchConfig(
-       delta_v_tol=1.0,         # Delta-V tolerance (default is 1e-3)
-       ballistic_tol=1e-8,      # Ballistic tolerance
-       eps2d=1e-3               # 2D distance tolerance (default is 1e-4)
-   )
-   
-   # Create connection using the factory method
-   connection = Connection.with_default_engine(
+   config = _ConnectionConfig(
        section=section_cfg,
-       direction=None,           # Both directions
-       search_cfg=search_cfg
+       direction=None,
+       delta_v_tol=1.0,
+       ballistic_tol=1e-8,
+       eps2d=1e-3,
    )
+   
+   # Create connection pipeline
+   conn = ConnectionPipeline.with_default_engine(config=config)
 
 Then you can solve for connections between the manifolds.
 
 .. code-block:: python
 
    # Solve for connections
-   connection.solve(manifold_l1, manifold_l2)
+   conn.solve(manifold_l1, manifold_l2)
    
    # Check results
-   print(f"Connections found: {len(connection.results)}")
+   print(f"Connections found: {conn}")
    
-   # Access results
-   for i, result in enumerate(connection.results):
-       print(f"Connection {i}:")
-       print(f"  Delta-V: {result.delta_v}")
-       print(f"  Point: {result.point2d}")
-       print(f"  Type: {result.transfer_type}")
+   # Plot results
+   conn.plot(dark_mode=True)
 
 Connection Analysis
 -------------------
@@ -243,28 +235,16 @@ Connection Properties
 
 .. code-block:: python
 
-   # Access connection results
-   results = connection.results
-   
-   # Delta-V requirements
-   delta_vs = [r.delta_v for r in results]
-   print(f"Delta-V range: {min(delta_vs):.2e} to {max(delta_vs):.2e}")
-   
-   # Transfer types
-   transfer_types = [r.transfer_type for r in results]
-   print(f"Transfer types: {set(transfer_types)}")
+   # Plot and analyze results
+   conn.plot(dark_mode=True)
 
 Connection Classification
 ~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. code-block:: python
 
-   # Classify connections
-   ballistic_connections = [r for r in results if r.transfer_type == "ballistic"]
-   impulsive_connections = [r for r in results if r.transfer_type == "impulsive"]
-   
-   print(f"Ballistic connections: {len(ballistic_connections)}")
-   print(f"Impulsive connections: {len(impulsive_connections)}")
+   # Connection results are displayed via plot
+   conn.plot(dark_mode=True)
 
 Connection Visualization
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -272,7 +252,7 @@ Connection Visualization
 .. code-block:: python
 
    # Plot connections
-   connection.plot(dark_mode=True)
+   conn.plot(dark_mode=True)
 
 Practical Examples
 ------------------
@@ -283,7 +263,8 @@ Earth-Moon L1-L2 Connection
 .. code-block:: python
 
    from hiten import System
-   from hiten.algorithms.connections import Connection, SearchConfig
+   from hiten.algorithms.connections import ConnectionPipeline
+   from hiten.algorithms.connections.config import _ConnectionConfig
    from hiten.algorithms.poincare import SynodicMapConfig
    
    # Create system
@@ -322,22 +303,21 @@ Earth-Moon L1-L2 Connection
        dedup_point_tol=1e-9
    )
    
-   search_cfg = SearchConfig(
-       delta_v_tol=1.0,         # Large tolerance for this example
-       ballistic_tol=1e-8,      # Standard ballistic threshold
-       eps2d=1e-3               # 2D pairing tolerance (default is 1e-4)
+   config = _ConnectionConfig(
+       section=section_cfg,
+       direction=None,
+       delta_v_tol=1.0,
+       ballistic_tol=1e-8,
+       eps2d=1e-3,
    )
    
    # Find connections
-   connection = Connection.with_default_engine(
-       section=section_cfg, 
-       search_cfg=search_cfg
-   )
-   connection.solve(manifold_l1, manifold_l2)
+   conn = ConnectionPipeline.with_default_engine(config=config)
+   conn.solve(manifold_l1, manifold_l2)
    
    # Display results
-   print(connection)
-   connection.plot(dark_mode=True)
+   print(conn)
+   conn.plot(dark_mode=True)
 
 Sun-Earth L1-L2 Connection
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -380,22 +360,21 @@ Sun-Earth L1-L2 Connection
        dedup_point_tol=1e-10
    )
    
-   search_cfg = SearchConfig(
-       delta_v_tol=0.1,         # Moderate tolerance for Sun-Earth system
-       ballistic_tol=1e-10,     # Tight ballistic threshold
-       eps2d=1e-4               # Standard 2D pairing tolerance
+   config = _ConnectionConfig(
+       section=section_cfg,
+       direction=None,
+       delta_v_tol=0.1,
+       ballistic_tol=1e-10,
+       eps2d=1e-4,
    )
    
    # Find connections
-   connection = Connection.with_default_engine(
-       section=section_cfg, 
-       search_cfg=search_cfg
-   )
-   connection.solve(manifold_l1, manifold_l2)
+   conn = ConnectionPipeline.with_default_engine(config=config)
+   conn.solve(manifold_l1, manifold_l2)
    
    # Display results
-   print(connection)
-   connection.plot()
+   print(conn)
+   conn.plot()
 
 Next Steps
 ----------

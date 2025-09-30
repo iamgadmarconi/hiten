@@ -1,15 +1,14 @@
-Configuration Classes
-=====================
+Integrators Configuration
+=========================
 
 The configs module provides configuration classes for numerical integration.
 
 .. currentmodule:: hiten.algorithms.integrators.configs
 
-_EventConfig()
-^^^^^^^^^^^^^^
-
-The :class:`_EventConfig` class provides configuration for event functions.
+Configuration Classes
+---------------------
 
 .. autoclass:: _EventConfig()
    :members:
+   :undoc-members:
    :exclude-members: __init__

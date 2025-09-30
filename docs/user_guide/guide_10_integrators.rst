@@ -44,9 +44,9 @@ HITEN includes several explicit Runge-Kutta schemes with different orders of acc
    dop853 = AdaptiveRK(order=8)  # Dormand-Prince 8(5,3) with dual error estimation
 
    # Integration using System.propagate() method
-   times, states_rk4 = system.propagate(initial_state, tf=2*np.pi, method="rk", order=4)
-   times, states_rk8 = system.propagate(initial_state, tf=2*np.pi, method="rk", order=8)
-   times, states_adaptive = system.propagate(initial_state, tf=2*np.pi, method="adaptive", order=8)
+   traj_rk4 = system.propagate(initial_state, tf=2*np.pi, method="fixed", order=4)
+   traj_rk8 = system.propagate(initial_state, tf=2*np.pi, method="fixed", order=8)
+   traj_adaptive = system.propagate(initial_state, tf=2*np.pi, method="adaptive", order=8)
 
 Adaptive Step-Size Methods
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -70,8 +70,8 @@ The adaptive methods use embedded Runge-Kutta schemes that compute both high-ord
    # DOP853 uses _estimate_error() with both 5th and 3rd order estimates
 
    # Integration with error control
-   times, states_rk45 = system.propagate(initial_state, tf=2*np.pi, method="adaptive", order=5)
-   times, states_dop853 = system.propagate(initial_state, tf=2*np.pi, method="adaptive", order=8)
+   traj_rk45 = system.propagate(initial_state, tf=2*np.pi, method="adaptive", order=5)
+   traj_dop853 = system.propagate(initial_state, tf=2*np.pi, method="adaptive", order=8)
 
 Symplectic Integrators
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -128,7 +128,7 @@ The key advantage is that this approach can handle Hamiltonians that are natural
    )
 
    # Integration using System.propagate() method
-   times, states_symp = system.propagate(
+   traj_symp = system.propagate(
        initial_state, 
        tf=2*np.pi, 
        method="symplectic", 
@@ -347,57 +347,6 @@ Basic Custom Integrator
    # Use custom integrator with wrapped system
    solution_euler = euler.integrate(dynsys_dir, initial_state, times)
 
-Advanced Custom Integrator
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-For more advanced custom integrators, you can implement adaptive step-size control:
-
-.. code-block:: python
-
-   class AdaptiveEulerIntegrator(_Integrator):
-       """Adaptive Euler method with simple step size control."""
-       
-       def __init__(self, rtol=1e-6, atol=1e-8):
-           super().__init__("Adaptive Euler")
-           self.rtol = rtol
-           self.atol = atol
-       
-       @property
-       def order(self):
-           return 1
-       
-       def integrate(self, system: _DynamicalSystemProtocol, y0: np.ndarray, 
-                    t_vals: np.ndarray, **kwargs) -> _Solution:
-           """Integrate using adaptive Euler method."""
-           
-           self.validate_inputs(system, y0, t_vals)
-           
-           # Use the system's RHS method directly
-           rhs_func = system.rhs
-           
-           # Simple adaptive implementation
-           states = [y0.copy()]
-           times = [t_vals[0]]
-           derivatives = [rhs_func(t_vals[0], y0)]
-           
-           for i in range(len(t_vals) - 1):
-               t_curr = t_vals[i]
-               t_next = t_vals[i + 1]
-               dt = t_next - t_curr
-               
-               # Single Euler step
-               y_curr = states[-1]
-               dy = rhs_func(t_curr, y_curr)
-               y_next = y_curr + dt * dy
-               
-               states.append(y_next)
-               times.append(t_next)
-               derivatives.append(rhs_func(t_next, y_next))
-           
-           return _Solution(np.array(times), np.array(states), np.array(derivatives))
-
-
-
 Custom Symplectic Integrators
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -494,75 +443,6 @@ A symplectic integrator must preserve the symplectic 2-form ω = dp ∧ dq. This
    # Use custom integrator with wrapped system
    times = np.linspace(0, 2*np.pi, 1000)
    solution = custom_symplectic.integrate(dynsys_dir, initial_state, times)
-
-Advanced Symplectic Methods
-~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-For more sophisticated symplectic integrators, you can implement higher-order composition methods:
-
-.. code-block:: python
-
-   class HighOrderSymplecticIntegrator(_Integrator):
-       """High-order symplectic integrator using composition methods."""
-       
-       def __init__(self, order=4, composition_type="suzuki"):
-           if order < 2 or order % 2 != 0:
-               raise ValueError("Order must be even and >= 2")
-           super().__init__(f"High-Order Symplectic {order}")
-           self._order = order
-           self._composition_type = composition_type
-           self._coefficients = self._get_composition_coefficients()
-       
-       def _get_composition_coefficients(self):
-           """Get composition coefficients for high-order methods."""
-           if self._composition_type == "suzuki":
-               # Suzuki composition for 4th order
-               if self._order == 4:
-                   return [1/(4-4**(1/3)), 1-2/(4-4**(1/3)), 1/(4-4**(1/3))]
-               # Add more orders as needed
-           elif self._composition_type == "yoshida":
-               # Yoshida composition
-               if self._order == 4:
-                   return [1/(2-2**(1/3)), -2**(1/3)/(2-2**(1/3)), 1/(2-2**(1/3))]
-           
-           # Default to 2nd order
-           return [0.5, 0.5]
-       
-       def integrate(self, system: _DynamicalSystemProtocol, y0: np.ndarray, 
-                    t_vals: np.ndarray, **kwargs) -> _Solution:
-           """Integrate using high-order symplectic composition."""
-           
-           self.validate_inputs(system, y0, t_vals)
-           
-           # Use the system's RHS method directly
-           rhs_func = system.rhs
-           
-           states = np.zeros((len(t_vals), len(y0)), dtype=np.float64)
-           derivatives = np.zeros_like(states)
-           states[0] = y0.copy()
-           derivatives[0] = rhs_func(t_vals[0], y0)
-           
-           for i in range(len(t_vals) - 1):
-               dt = t_vals[i+1] - t_vals[i]
-               states[i+1] = self._composition_step(system, states[i], dt)
-               derivatives[i+1] = rhs_func(t_vals[i+1], states[i+1])
-           
-           return _Solution(t_vals.copy(), states, derivatives)
-       
-       def _composition_step(self, system, y, dt):
-           """Single step using composition method."""
-           current_y = y.copy()
-           
-           for coeff in self._coefficients:
-               current_y = self._basic_symplectic_step(system, current_y, coeff * dt)
-           
-           return current_y
-       
-       def _basic_symplectic_step(self, system, y, dt):
-           """Basic 2nd order symplectic step."""
-           # Implement basic symplectic step here
-           # This is a placeholder - real implementation would be more complex
-           return y
 
 Next Steps
 ----------

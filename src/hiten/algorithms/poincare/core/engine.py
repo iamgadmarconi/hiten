@@ -14,17 +14,20 @@ of concerns and enabling different computational strategies.
 """
 
 import os
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+from abc import abstractmethod
+from typing import TYPE_CHECKING, Generic
 
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
-from hiten.algorithms.poincare.core.config import _EngineConfigLike
+from hiten.algorithms.poincare.core.config import _ReturnMapBaseConfig
 from hiten.algorithms.poincare.core.strategies import _SeedingStrategyBase
+from hiten.algorithms.types.core import (OutputsT, ProblemT, ResultT,
+                                         _HitenBaseEngine)
 
 if TYPE_CHECKING:
-    from hiten.algorithms.poincare.core.base import _Section
+    from hiten.algorithms.poincare.core.types import _Section
 
-class _ReturnMapEngine(ABC):
+
+class _ReturnMapEngine(_HitenBaseEngine[ProblemT, ResultT, OutputsT], Generic[ProblemT, ResultT, OutputsT]):
     """Abstract base class for Poincare return map engines.
 
     This class defines the interface that all concrete return map
@@ -39,7 +42,7 @@ class _ReturnMapEngine(ABC):
     seed_strategy : :class:`~hiten.algorithms.poincare.core.strategies._SeedingStrategyBase`
         The seeding strategy for generating initial conditions
         on the section plane.
-    map_config : :class:`~hiten.algorithms.poincare.core.config._EngineConfigLike`
+    map_config : :class:`~hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`
         Configuration object containing engine parameters such as
         iteration count, time step, and worker count.
 
@@ -49,7 +52,7 @@ class _ReturnMapEngine(ABC):
         The numerical integration backend.
     _strategy : :class:`~hiten.algorithms.poincare.core.strategies._SeedingStrategyBase`
         The seeding strategy for initial conditions.
-    _map_config : :class:`~hiten.algorithms.poincare.core.config._EngineConfigLike`
+    _map_config : :class:`~hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`
         The engine configuration.
     _n_iter : int
         Number of return map iterations to compute.
@@ -57,7 +60,7 @@ class _ReturnMapEngine(ABC):
         Integration time step (nondimensional units).
     _n_workers : int
         Number of parallel workers for computation.
-    _section_cache : :class:`~hiten.algorithms.poincare.core.base._Section` or None
+    _section_cache : :class:`~hiten.algorithms.poincare.core.types._Section` or None
         Cache for the computed section to avoid redundant computation.
 
     Notes
@@ -71,38 +74,23 @@ class _ReturnMapEngine(ABC):
     All time units are in nondimensional units unless otherwise specified.
     """
 
-    def __init__(self, backend: _ReturnMapBackend, 
-                 seed_strategy: _SeedingStrategyBase,
-                 map_config: _EngineConfigLike) -> None:
-        self._backend = backend
+    def __init__(
+        self,
+        *,
+        backend: _ReturnMapBackend,
+        seed_strategy: _SeedingStrategyBase,
+        map_config: _ReturnMapBaseConfig,
+        interface=None,
+    ) -> None:
+        super().__init__(backend=backend, interface=interface)
         self._strategy = seed_strategy
         self._map_config = map_config
-        self._n_iter = int(self._map_config.n_iter)
-        self._dt = float(self._map_config.dt)
-        # Use configuration value for workers, falling back to CPU count
+        # Use getattr with defaults for optional attributes to make engine more flexible
+        self._n_iter = int(getattr(self._map_config, 'n_iter', 40))
+        self._dt = float(getattr(self._map_config, 'dt', 0.01))
         self._n_workers = self._map_config.n_workers or os.cpu_count() or 1
 
-        self._section_cache: "_Section" | None = None
-
     @abstractmethod
-    def solve(self) -> "_Section":
+    def solve(self, problem) -> "_Section":
         """Compute and return the section (or Results that inherit _Section)."""
         raise NotImplementedError
-
-    def clear_cache(self):
-        """Clear the cached section data.
-
-        Notes
-        -----
-        This method clears the internal section cache, forcing
-        recomputation on the next call to compute_section. Use
-        this method to free memory or force fresh computation
-        with updated parameters.
-        """
-        self._section_cache = None
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(n_iter={self._n_iter}, dt={self._dt}, n_workers={self._n_workers})"
-
-    def __str__(self) -> str:
-        return f"{self.__class__.__name__}(n_iter={self._n_iter}, dt={self._dt}, n_workers={self._n_workers})"

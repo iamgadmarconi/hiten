@@ -5,9 +5,14 @@ This module provides the types for the corrector module.
 """
 
 from dataclasses import dataclass
-from typing import Callable, NamedTuple, Optional
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import numpy as np
+
+from hiten.algorithms.corrector.config import _LineSearchConfig
+
+if TYPE_CHECKING:
+    from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
 
 #: Type alias for residual function signatures.
 #:
@@ -93,8 +98,11 @@ JacobianFn = Callable[[np.ndarray], np.ndarray]
 #: correction process to ensure proper convergence assessment.
 NormFn = Callable[[np.ndarray], float]
 
+StepperFactory = Callable[[ResidualFn, NormFn, float | None], "CorrectorStepProtocol"]
 
-class CorrectionResult(NamedTuple):
+
+@dataclass
+class CorrectionResult:
     """Standardized result for a backend correction run.
     
     Attributes
@@ -114,7 +122,19 @@ class CorrectionResult(NamedTuple):
     iterations: int
 
 
-@dataclass(frozen=True)
+@dataclass
+class OrbitCorrectionResult(CorrectionResult):
+    """Result for an orbit correction run.
+    
+    Attributes
+    ----------
+    half_period : float
+        Half-period associated with the corrected orbit.
+    """
+    half_period: float
+
+
+@dataclass
 class _CorrectionProblem:
     """Defines the inputs for a backend correction run.
 
@@ -128,20 +148,68 @@ class _CorrectionProblem:
         Optional analytical Jacobian.
     norm_fn : :class:`~hiten.algorithms.corrector.types.NormFn` | None
         Optional norm function for convergence checks.
-    tol : float
-        Convergence tolerance on residual norm.
     max_attempts : int
-        Maximum Newton iterations.
-    max_delta : float | None
-        Optional cap on infinity-norm of Newton step.
+        Maximum number of Newton iterations to attempt.
+    tol : float
+        Convergence tolerance for the residual norm.
+    max_delta : float
+        Maximum allowed infinity norm of Newton steps.
+    line_search_config : :class:`~hiten.algorithms.corrector.config._LineSearchConfig` | bool | None
+        Configuration for line search behavior.
+    finite_difference : bool
+        Force finite-difference approximation of Jacobians.
     fd_step : float
-        Finite-difference step if Jacobian is not provided.
+        Finite-difference step size.
+    method : str
+        Integration method for trajectory computation.
+    order : int
+        Integration order for numerical methods.
+    steps : int
+        Number of integration steps.
+    forward : int
+        Integration direction (1 for forward, -1 for backward).
+    stepper_factory : callable or None
+        Optional factory producing a stepper compatible with the backend.
     """
     initial_guess: np.ndarray
     residual_fn: ResidualFn
-    jacobian_fn: Optional[JacobianFn] = None
-    norm_fn: Optional[NormFn] = None
-    tol: float = 1e-10
-    max_attempts: int = 25
-    max_delta: float | None = 1e-2
-    fd_step: float = 1e-8
+    jacobian_fn: Optional[JacobianFn]
+    norm_fn: Optional[NormFn]
+    max_attempts: int
+    tol: float
+    max_delta: float
+    line_search_config: _LineSearchConfig | bool | None
+    finite_difference: bool
+    fd_step: float
+    method: str
+    order: int
+    steps: int
+    forward: int
+    stepper_factory: Optional[StepperFactory]
+
+
+@dataclass
+class _OrbitCorrectionProblem(_CorrectionProblem):
+    """Defines the inputs for a backend orbit correction run.
+    
+    Attributes
+    ----------
+    domain_obj: Any
+        Orbit to be corrected.
+    residual_indices : tuple of int
+        State components used to build the residual vector.
+    control_indices : tuple of int
+        State components allowed to change during correction.
+    extra_jacobian : callable or None
+        Additional Jacobian contribution function.
+    target : tuple of float
+        Target values for the residual components.
+    event_func : callable
+        Function to detect Poincare section crossings.
+    """
+    domain_obj: Any
+    residual_indices: tuple[int, ...]
+    control_indices: tuple[int, ...]
+    extra_jacobian: Callable[[np.ndarray, np.ndarray], np.ndarray] | None
+    target: tuple[float, ...]
+    event_func: Callable[..., tuple[float, np.ndarray]]

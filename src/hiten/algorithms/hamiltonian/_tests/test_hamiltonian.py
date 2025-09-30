@@ -66,13 +66,13 @@ def _get_symbolic_lindstedt_poincare_rhs(point: L1Point, max_deg: int, x_s: sp.S
     
     rhs_x_sym_expr = sp.Integer(0)
     for n_val in range(2, max_deg + 1):
-        cn_plus_1 = point._cn(n_val + 1)
+        cn_plus_1 = point.dynamics.cn(n_val + 1)
         rhs_x_sym_expr += sp.Float(cn_plus_1) * (n_val + 1) * T_n_sym_list[n_val]
     rhs_x_sym_expr = sp.expand(rhs_x_sym_expr)
 
     sum_term_yz_sym_expr = sp.Integer(0)
     for n_val in range(2, max_deg + 1):
-        cn_plus_1 = point._cn(n_val + 1)
+        cn_plus_1 = point.dynamics.cn(n_val + 1)
         if (n_val - 1) < len(R_n_sym_list):
             sum_term_yz_sym_expr += sp.Float(cn_plus_1) * R_n_sym_list[n_val - 1]
     rhs_y_sym_expr = sp.expand(y_s * sum_term_yz_sym_expr)
@@ -134,7 +134,7 @@ def _get_symbolic_physical_hamiltonian(point: L1Point, max_deg: int) -> sp.Expr:
     H = sp.Rational(1, 2) * (px**2 + py**2 + pz**2) + y * px - x * py
 
     for n in range(2, max_deg + 1):
-        cn = point._cn(n)
+        cn = point.dynamics.cn(n)
         Pn_expr = sp.legendre(n, x / rho)
         term_to_add = sp.simplify(cn * rho**n * Pn_expr)
         H -= term_to_add
@@ -452,7 +452,7 @@ def test_triangular_inverse_distance_expansion_accuracy(system: System, max_deg)
 
     # Use the L5 point (sign = -1)
     point = system.get_libration_point(5)
-    sgn = point.sign  # Should be -1 for L5
+    sgn = point.dynamics.sign  # Should be -1 for L5
 
     # Coordinates of primaries in the *shifted* frame used by the expansion
     d_Sx, d_Sy = 0.5, sgn * np.sqrt(3) / 2.0

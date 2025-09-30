@@ -38,6 +38,10 @@ Gomez, G., Llibre, J., Martinez, R., Simo, C. (2001). Dynamics and Mission Desig
 Near Libration Points. World Scientific, Chapter 3.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 import numpy as np
 from numba.typed import List
 
@@ -47,9 +51,11 @@ from hiten.algorithms.polynomial.coordinates import (_clean_coordinates,
                                                      _substitute_coordinates)
 from hiten.algorithms.polynomial.operations import (_polynomial_clean,
                                                     _substitute_linear)
-from hiten.system.libration.collinear import CollinearPoint
-from hiten.system.libration.triangular import TriangularPoint
 from hiten.utils.log_config import logger
+
+if TYPE_CHECKING:
+    from hiten.system.libration.collinear import CollinearPoint
+    from hiten.system.libration.triangular import TriangularPoint
 
 
 def _build_complexification_matrix(mix_indices):
@@ -373,7 +379,7 @@ def _polylocal2realmodal(point, poly_local: List[np.ndarray], max_deg: int, psi,
     real modal coordinates using the transformation matrix obtained
     from the point object.
     """
-    C, _ = point.normal_form_transform()
+    C, _ = point.normal_form_transform
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
     return _polynomial_clean(_substitute_linear(poly_local, C, max_deg, psi, clmo, encode_dict_list), tol)
 
@@ -405,7 +411,7 @@ def _polyrealmodal2local(point, poly_realmodal: List[np.ndarray], max_deg: int, 
     local coordinates using the inverse of the transformation matrix obtained
     from the point object.
     """
-    _, C_inv = point.normal_form_transform()
+    _, C_inv = point.normal_form_transform
     encode_dict_list = _create_encode_dict_from_clmo(clmo)
     return _polynomial_clean(_substitute_linear(poly_realmodal, C_inv, max_deg, psi, clmo, encode_dict_list), tol)
 
@@ -430,7 +436,7 @@ def _coordrealmodal2local(point, modal_coords: np.ndarray, tol=1e-30) -> np.ndar
     - Modal coordinates are ordered as [q1, q2, q3, px1, px2, px3].
     - Local coordinates are ordered as [x1, x2, x3, px1, px2, px3].
     """
-    C, _ = point.normal_form_transform()
+    C, _ = point.normal_form_transform
     return _clean_coordinates(C.dot(modal_coords), tol)
 
 def _coordlocal2realmodal(point, local_coords: np.ndarray, tol=1e-30) -> np.ndarray:
@@ -454,7 +460,7 @@ def _coordlocal2realmodal(point, local_coords: np.ndarray, tol=1e-30) -> np.ndar
     - Local coordinates are ordered as [x1, x2, x3, px1, px2, px3].
     - Modal coordinates are ordered as [q1, q2, q3, px1, px2, px3].
     """
-    _, C_inv = point.normal_form_transform()
+    _, C_inv = point.normal_form_transform
     return _clean_coordinates(C_inv.dot(local_coords), tol)
 
 def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray, tol=1e-14) -> np.ndarray:
@@ -512,7 +518,7 @@ def _local2synodic_collinear(point: CollinearPoint, local_coords: np.ndarray, to
     ----------
     Szebehely, V. (1967). Theory of Orbits. Academic Press, Chapter 7.
     """
-    gamma, mu, sgn, a = point.gamma, point.mu, point.sign, point.a
+    gamma, mu, sgn, a = point.dynamics.gamma, point.mu, point.dynamics.sign, point.dynamics.a
 
     c_complex = np.asarray(local_coords, dtype=np.complex128)
     if np.any(np.abs(np.imag(c_complex)) > tol):
@@ -574,7 +580,7 @@ def _synodic2local_collinear(point: CollinearPoint, synodic_coords: np.ndarray, 
         If *synodic_coords* is not a flat array of length 6 or contains an
         imaginary part larger than the tolerance (``1e-16``).
     """
-    gamma, mu, sgn, a = point.gamma, point.mu, point.sign, point.a
+    gamma, mu, sgn, a = point.dynamics.gamma, point.mu, point.dynamics.sign, point.dynamics.a
 
     s_complex = np.asarray(synodic_coords, dtype=np.complex128)
     if np.any(np.abs(np.imag(s_complex)) > tol):
@@ -640,7 +646,7 @@ def _local2synodic_triangular(point: TriangularPoint, local_coords: np.ndarray, 
         If *local_coords* is not a flat array of length 6 or contains an
         imaginary part larger than the tolerance (``1e-16``).
     """
-    mu, sgn = point.mu, point.sign
+    mu, sgn = point.mu, point.dynamics.sign
 
     c_complex = np.asarray(local_coords, dtype=np.complex128)
     if np.any(np.abs(np.imag(c_complex)) > tol):
@@ -702,7 +708,7 @@ def _synodic2local_triangular(point: TriangularPoint, synodic_coords: np.ndarray
         If *synodic_coords* is not a flat array of length 6 or contains an
         imaginary part larger than the tolerance (``1e-16``).
     """
-    mu, sgn = point.mu, point.sign
+    mu, sgn = point.mu, point.dynamics.sign
 
     s_complex = np.asarray(synodic_coords, dtype=np.complex128)
     if np.any(np.abs(np.imag(s_complex)) > tol):
@@ -795,7 +801,7 @@ def _restrict_poly_to_center_manifold(point, poly_H, clmo, tol=1e-14):
     # eliminate any terms involving (q1, p1).  The original behaviour of
     # zeroing these terms is only appropriate for collinear points where
     # (q1, p1) span the hyperbolic sub-space.
-
+    from hiten.system.libration.triangular import TriangularPoint
     if isinstance(point, TriangularPoint):
         # Simply return a *copy* of the input to avoid accidental mutation
         return [h.copy() for h in poly_H]

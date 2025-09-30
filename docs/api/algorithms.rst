@@ -12,9 +12,11 @@ systems analysis in the CR3BP.
    algorithms/continuation/index
    algorithms/corrector/index
    algorithms/bifurcation
-   algorithms/connections
+   algorithms/connections/index
    algorithms/fourier
    algorithms/hamiltonian
+   algorithms/linalg/index
    algorithms/poincare
    algorithms/polynomial/index
+   algorithms/types/index
    algorithms/utils

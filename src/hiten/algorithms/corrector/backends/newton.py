@@ -5,14 +5,15 @@ handling of ill-conditioned systems, finite-difference Jacobians, and
 extensible hooks for customization.
 """
 
-from typing import Any, Callable, Tuple
+from typing import Tuple
 
 import numpy as np
 
 from hiten.algorithms.corrector.backends.base import _CorrectorBackend
-from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
-from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
-from hiten.algorithms.utils.exceptions import ConvergenceError
+from hiten.algorithms.corrector.stepping import make_plain_stepper
+from hiten.algorithms.corrector.types import (JacobianFn, NormFn, ResidualFn,
+                                              StepperFactory)
+from hiten.algorithms.types.exceptions import ConvergenceError
 from hiten.utils.log_config import logger
 
 
@@ -24,10 +25,10 @@ class _NewtonBackend(_CorrectorBackend):
     customization. Uses multiple inheritance to separate step control
     from core Newton logic.
 
-    Dependency injection
-    --------------------
-    The backend receives a stepper factory that builds a step strategy per
-    problem. If not provided, a safe default plain-capped step is used.
+    Parameters
+    ----------
+    stepper_factory : :class:`~hiten.algorithms.corrector.types.StepperFactory`
+        The stepper factory to use.
 
     Notes
     -----
@@ -38,31 +39,11 @@ class _NewtonBackend(_CorrectorBackend):
     def __init__(
         self,
         *,
-        stepper_factory: Callable[[ResidualFn, NormFn, float | None], CorrectorStepProtocol] | None = None,
-        **kwargs,
+        stepper_factory: StepperFactory | None = None,
     ) -> None:
-        super().__init__(**kwargs)
-        # Dependency-injected factory building the stepper per problem
-        self._stepper_factory: Callable[[ResidualFn, NormFn, float | None], CorrectorStepProtocol]
-        if stepper_factory is None:
-            # Default to a simple capped plain stepper, keeping backend decoupled
-            def _default_factory(res_fn: ResidualFn, nrm_fn: NormFn, max_del: float | None) -> CorrectorStepProtocol:
-                def _plain_step(x: np.ndarray, delta: np.ndarray, current_norm: float):
-                    if (max_del is not None) and (not np.isinf(max_del)):
-                        delta_norm = float(np.linalg.norm(delta, ord=np.inf))
-                        if delta_norm > max_del:
-                            scale = max_del / delta_norm
-                            delta = delta * scale
-                            x_new_local = x + delta
-                            r_norm_new_local = nrm_fn(res_fn(x_new_local))
-                            return x_new_local, r_norm_new_local, float(scale)
-                    x_new_local = x + delta
-                    r_norm_new_local = nrm_fn(res_fn(x_new_local))
-                    return x_new_local, r_norm_new_local, 1.0
-                return _plain_step
-            self._stepper_factory = _default_factory
-        else:
-            self._stepper_factory = stepper_factory
+        super().__init__()
+        self._stepper_factory: StepperFactory
+        self._stepper_factory = make_plain_stepper() if stepper_factory is None else stepper_factory
 
     def _compute_residual(self, x: np.ndarray, residual_fn: ResidualFn) -> np.ndarray:
         """Compute residual vector R(x).
@@ -71,14 +52,14 @@ class _NewtonBackend(_CorrectorBackend):
 
         Parameters
         ----------
-        x : ndarray
+        x : np.ndarray
             Current parameter vector.
         residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
             Function to compute residual.
             
         Returns
         -------
-        ndarray
+        np.ndarray
             Residual vector R(x).
         """
         return residual_fn(x)
@@ -88,7 +69,7 @@ class _NewtonBackend(_CorrectorBackend):
 
         Parameters
         ----------
-        residual : ndarray
+        residual : np.ndarray
             Residual vector.
         norm_fn : :class:`~hiten.algorithms.corrector.types.NormFn`
             Function to compute norm.
@@ -99,32 +80,6 @@ class _NewtonBackend(_CorrectorBackend):
             Scalar norm value.
         """
         return norm_fn(residual)
-
-    def on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:
-        """Public hook invoked after each iteration. Safe no-op by default."""
-        try:
-            self._on_iteration(k, x, r_norm)
-        except Exception:
-            # Hooks must never disrupt solver
-            pass
-
-    def on_accept(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
-        """Public hook invoked when the backend detects convergence."""
-        try:
-            self._on_accept(x, iterations=iterations, residual_norm=residual_norm)
-        except Exception:
-            pass
-
-    def on_failure(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
-        """Public hook invoked when the backend completes without converging."""
-        try:
-            self._on_failure(x, iterations=iterations, residual_norm=residual_norm)
-        except Exception:
-            pass
-
-    def on_success(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
-        """Public hook intended to be called by the Engine after final acceptance."""
-        return
 
     def _compute_jacobian(
         self,
@@ -140,7 +95,7 @@ class _NewtonBackend(_CorrectorBackend):
 
         Parameters
         ----------
-        x : ndarray
+        x : np.ndarray
             Current parameter vector.
         residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
             Function to compute residual.
@@ -151,7 +106,7 @@ class _NewtonBackend(_CorrectorBackend):
             
         Returns
         -------
-        ndarray
+        np.ndarray
             Jacobian matrix with shape (m, n) where m is residual size
             and n is parameter size.
         """
@@ -174,22 +129,23 @@ class _NewtonBackend(_CorrectorBackend):
         """Solve linear Newton system J * delta = -r.
 
         Handles ill-conditioned and rectangular systems automatically:
+
         - Applies Tikhonov regularization for ill-conditioned square systems
         - Uses least-squares for rectangular systems
         - Falls back to SVD for singular systems
 
         Parameters
         ----------
-        J : ndarray
+        J : np.ndarray
             Jacobian matrix.
-        r : ndarray
+        r : np.ndarray
             Residual vector.
         cond_threshold : float, default=1e8
             Condition number threshold for regularization.
             
         Returns
         -------
-        ndarray
+        np.ndarray
             Newton step vector delta.
         """
         try:
@@ -221,23 +177,24 @@ class _NewtonBackend(_CorrectorBackend):
                 delta = np.linalg.lstsq(J, -r, rcond=None)[0]
         return delta
 
-    def correct(
+    def run(
         self,
         x0: np.ndarray,
         residual_fn: ResidualFn,
         *,
         jacobian_fn: JacobianFn | None = None,
         norm_fn: NormFn | None = None,
+        stepper_factory: StepperFactory | None = None,
         tol: float = 1e-10,
         max_attempts: int = 25,
         max_delta: float | None = 1e-2,
         fd_step: float = 1e-8,
-    ) -> Tuple[np.ndarray, dict[str, Any]]:
+    ) -> Tuple[np.ndarray, int, float]:
         """Solve nonlinear system using Newton-Raphson method.
 
         Parameters
         ----------
-        x0 : ndarray
+        x0 : np.ndarray
             Initial guess.
         residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
             Function to compute residual vector R(x).
@@ -256,10 +213,12 @@ class _NewtonBackend(_CorrectorBackend):
             
         Returns
         -------
-        x_solution : ndarray
+        x_solution : np.ndarray
             Converged solution vector.
-        info : dict
-            Convergence information with keys 'iterations' and 'residual_norm'.
+        iterations : int
+            Number of iterations performed.
+        residual_norm : float
+            Final residual norm achieved.
             
         Raises
         ------
@@ -270,10 +229,10 @@ class _NewtonBackend(_CorrectorBackend):
             norm_fn = lambda r: float(np.linalg.norm(r))
 
         x = x0.copy()
-        info: dict[str, Any] = {}
 
         # Obtain the stepper callable from the injected factory
-        stepper = self._stepper_factory(residual_fn, norm_fn, max_delta)
+        factory = self._stepper_factory if stepper_factory is None else stepper_factory
+        stepper = factory(residual_fn, norm_fn, max_delta)
 
         for k in range(max_attempts):
             r = self._compute_residual(x, residual_fn)
@@ -286,13 +245,12 @@ class _NewtonBackend(_CorrectorBackend):
 
             if r_norm < tol:
                 logger.info("Newton converged after %d iterations (|R|=%.2e)", k, r_norm)
-                info.update(iterations=k, residual_norm=r_norm)
                 # Notify acceptance hook (public)
                 try:
                     self.on_accept(x, iterations=k, residual_norm=r_norm)
                 except Exception:
                     pass
-                return x, info
+                return x, k, r_norm
 
             J = self._compute_jacobian(x, residual_fn, jacobian_fn, fd_step)
             delta = self._solve_delta(J, r)
@@ -313,6 +271,7 @@ class _NewtonBackend(_CorrectorBackend):
         # Call acceptance hook if converged in the final check
         if r_final_norm < tol:
             self.on_accept(x, iterations=max_attempts, residual_norm=r_final_norm)
+            return x, max_attempts, r_final_norm
 
         self.on_failure(x, iterations=max_attempts, residual_norm=r_final_norm)
 

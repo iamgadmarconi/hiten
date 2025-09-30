@@ -256,7 +256,7 @@ def _build_potential_U(poly_T, point, max_deg: int, psi_table) -> List[np.ndarra
     poly_T : List[List[ndarray]]
         Chebyshev polynomials T_n from :func:`~hiten.algorithms.hamiltonian.hamiltonian._build_T_polynomials`.
     point : object
-        Libration point object with method _cn(k) returning the potential
+        Libration point object with method cn(k) returning the potential
         coefficient c_k (dimensionless).
     max_deg : int
         Maximum polynomial degree for potential truncation.
@@ -292,7 +292,7 @@ def _build_potential_U(poly_T, point, max_deg: int, psi_table) -> List[np.ndarra
     """
     poly_U = _polynomial_zero_list(max_deg, psi_table)
     for n in range(2, max_deg + 1):
-        _polynomial_add_inplace(poly_U, poly_T[n], -point._cn(n))
+        _polynomial_add_inplace(poly_U, poly_T[n], -point.dynamics.cn(n))
     return poly_U
 
 
@@ -417,7 +417,7 @@ def _build_physical_hamiltonian_collinear(point, max_deg: int) -> List[np.ndarra
     Parameters
     ----------
     point : object
-        Libration point object with method _cn(k) returning the potential
+        Libration point object with method cn(k) returning the potential
         coefficient c_k (dimensionless) for the gravitational expansion.
     max_deg : int
         Maximum polynomial degree for Hamiltonian truncation.
@@ -691,7 +691,7 @@ def _build_physical_hamiltonian_triangular(point, max_deg: int) -> List[np.ndarr
     _polynomial_add_inplace(poly_H, poly_C, 1.0)
 
     mu = float(point.mu)
-    sgn = float(point.sign)  # +1 for L4, -1 for L5
+    sgn = float(point.dynamics.sign)  # +1 for L4, -1 for L5
 
     poly_linear = _polynomial_zero_list(max_deg, psi_table)
     _polynomial_add_inplace(poly_linear, poly_x, 0.5 - mu)
@@ -749,7 +749,7 @@ def _build_lindstedt_poincare_rhs_polynomials(point, max_deg: int) -> Tuple[List
     Parameters
     ----------
     point : object
-        Libration point object with method _cn(k) returning the potential
+        Libration point object with method cn(k) returning the potential
         coefficient c_k (dimensionless) for the gravitational expansion.
     max_deg : int
         Maximum polynomial degree for right-hand side truncation.
@@ -808,12 +808,12 @@ def _build_lindstedt_poincare_rhs_polynomials(point, max_deg: int) -> Tuple[List
     sum_term_for_y_z_eqs = _polynomial_zero_list(max_deg, psi_table)
 
     for n in range(2, max_deg + 1):
-        cn_plus_1 = point._cn(n + 1)
+        cn_plus_1 = point.dynamics.cn(n + 1)
         coeff = cn_plus_1 * float(n + 1)
         _polynomial_add_inplace(rhs_x_poly, poly_T_list[n], coeff)
 
     for n in range(2, max_deg + 1):
-        cn_plus_1 = point._cn(n + 1)
+        cn_plus_1 = point.dynamics.cn(n + 1)
         if (n - 1) < len(poly_R_list):
             _polynomial_add_inplace(sum_term_for_y_z_eqs, poly_R_list[n - 1], cn_plus_1)
 

@@ -11,7 +11,7 @@ requirements.
 
 from abc import ABC
 from dataclasses import dataclass
-from typing import Literal, Optional, Protocol, Tuple, runtime_checkable
+from typing import Literal, Optional, Protocol, runtime_checkable
 
 
 @dataclass(frozen=True)
@@ -25,10 +25,6 @@ class _ReturnMapBaseConfig(ABC):
 
     Parameters
     ----------
-    compute_on_init : bool, default=False
-        Whether to automatically compute the return map upon
-        initialization. If True, the map is computed immediately
-        after object creation.
     n_workers : int or None, default=None
         Number of parallel workers for computation. If None,
         uses the default number of workers (typically the number
@@ -43,7 +39,6 @@ class _ReturnMapBaseConfig(ABC):
     All time units are in nondimensional units unless otherwise
     specified.
     """
-    compute_on_init: bool = False
     n_workers: int | None = None
 
 
@@ -81,6 +76,24 @@ class _IntegrationConfig(ABC):
     method: Literal["fixed", "adaptive", "symplectic"] = "fixed"
     order: int = 8
     c_omega_heuristic: Optional[float] = 20.0
+    max_steps: int = 2000
+
+
+@dataclass(frozen=True)
+class _RefineConfig(ABC):
+    """Configuration for refinement parameters.
+    
+    This abstract base class defines the refinement-related
+    configuration parameters that control how the return map
+    is refined.
+    """
+    interp_kind: Literal["linear", "cubic"] = "linear"
+    segment_refine: int = 0
+    tol_on_surface: float = 1e-12
+    dedup_time_tol: float = 1e-9
+    dedup_point_tol: float = 1e-12
+    max_hits_per_traj: int | None = None
+    newton_max_iter: int = 4
 
 
 @dataclass(frozen=True)
@@ -143,7 +156,7 @@ class _SeedingConfig(ABC):
 
 # Backward-compatible umbrella config combining all mixins
 @dataclass(frozen=True)
-class _ReturnMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _IterationConfig, _SeedingConfig):
+class _ReturnMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _RefineConfig, _IterationConfig, _SeedingConfig):
     """Complete configuration for Poincare return map computation.
 
     This class combines all configuration mixins into a single
@@ -160,6 +173,7 @@ class _ReturnMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _IterationConfi
     This class inherits all parameters from:
     - :class:`~hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`: Base orchestration parameters
     - :class:`~hiten.algorithms.poincare.core.config._IntegrationConfig`: Numerical integration parameters
+    - :class:`~hiten.algorithms.poincare.core.config._RefineConfig`: Refinement parameters
     - :class:`~hiten.algorithms.poincare.core.config._IterationConfig`: Iteration control parameters
     - :class:`~hiten.algorithms.poincare.core.config._SeedingConfig`: Seeding strategy parameters
 
@@ -167,92 +181,3 @@ class _ReturnMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _IterationConfi
     specified.
     """
     pass
-
-
-class _SectionConfig(ABC):
-    """Abstract base class for Poincare section configuration.
-
-    This abstract base class defines the interface for section
-    configuration objects that specify the section coordinate
-    and plane coordinates for Poincare map computation.
-
-    Parameters
-    ----------
-    section_coord : str
-        The coordinate that defines the section (e.g., "q2", "p2").
-        This is the coordinate that is held constant on the section.
-    plane_coords : tuple[str, str]
-        Tuple of two coordinate labels that define the section plane
-        (e.g., ("q2", "p2")). These are the coordinates that vary
-        in the section plane.
-
-    Notes
-    -----
-    This class serves as the base for all section configuration
-    implementations. Concrete implementations should inherit from
-    this class and add their specific section parameters.
-
-    The section coordinate determines which coordinate is held
-    constant, while the plane coordinates determine which two
-    coordinates are used to represent points in the section.
-    """
-    section_coord: str
-    plane_coords: Tuple[str, str]
-
-
-@runtime_checkable
-class _EngineConfigLike(Protocol):
-    """Protocol for engine configuration objects.
-
-    This protocol defines the interface that engine configuration
-    objects must implement. It specifies the minimum set of
-    attributes required for engine configuration.
-
-    Attributes
-    ----------
-    dt : float
-        Integration time step (nondimensional units).
-    n_iter : int
-        Number of return map iterations to compute.
-    n_workers : int or None
-        Number of parallel workers for computation.
-
-    Notes
-    -----
-    This protocol is used for type checking and runtime validation
-    of engine configuration objects. Any object that implements
-    these attributes can be used as an engine configuration.
-
-    The protocol ensures that engine configurations have the
-    necessary parameters for numerical integration and iteration
-    control.
-    """
-    dt: float
-    n_iter: int
-    n_workers: int | None
-
-
-@runtime_checkable
-class _SeedingConfigLike(Protocol):
-    """Protocol for seeding configuration objects.
-
-    This protocol defines the interface that seeding configuration
-    objects must implement. It specifies the minimum set of
-    attributes required for seeding configuration.
-
-    Attributes
-    ----------
-    n_seeds : int
-        Number of initial seeds to generate for return map
-        computation.
-
-    Notes
-    -----
-    This protocol is used for type checking and runtime validation
-    of seeding configuration objects. Any object that implements
-    this attribute can be used as a seeding configuration.
-
-    The protocol ensures that seeding configurations have the
-    necessary parameters for generating initial conditions.
-    """
-    n_seeds: int

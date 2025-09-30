@@ -1,15 +1,17 @@
 """Abstract base class for continuation backends."""
 
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import Callable
 
 import numpy as np
 
+from hiten.algorithms.types.core import _HitenBaseBackend
 
-class _ContinuationBackend(ABC):
+
+class _ContinuationBackend(_HitenBaseBackend):
     
     @abstractmethod
-    def solve(
+    def run(
         self,
         *,
         seed_repr: np.ndarray,
@@ -17,7 +19,6 @@ class _ContinuationBackend(ABC):
         parameter_getter: Callable[[np.ndarray], np.ndarray],
         corrector: Callable[[np.ndarray], tuple[np.ndarray, float, bool]],
         representation_of: Callable[[np.ndarray], np.ndarray] | None,
-        set_tangent: Callable[[np.ndarray | None], None] | None,
         step: np.ndarray,
         target: np.ndarray,
         max_members: int,
@@ -30,19 +31,17 @@ class _ContinuationBackend(ABC):
 
         Parameters
         ----------
-        seed_repr : ndarray
+        seed_repr : np.ndarray
             Numerical representation of the seed solution.
         stepper : callable
-            stepper(last_repr, step) -> (next_prediction: ndarray, step_hint: ndarray)
+            stepper(last_repr, step) -> (next_prediction: np.ndarray, step_hint: np.ndarray)
         parameter_getter : callable
-            parameter_getter(repr) -> ndarray of continuation parameters.
+            parameter_getter(repr) -> np.ndarray of continuation parameters.
         corrector : callable
             corrector(prediction_repr) -> (corrected_repr, residual_norm, converged).
         representation_of : callable, optional
             Maps a domain solution to its numerical representation (for secant updates).
-        set_tangent : callable, optional
-            Setter to update the unit tangent vector maintained by the backend.
-        step : ndarray
+        step : np.ndarray
             Initial step vector (m,).
         target : ndarray
             Bounds array shaped (2, m): [mins; maxs].
@@ -59,25 +58,24 @@ class _ContinuationBackend(ABC):
 
         Returns
         -------
-        family_repr : list of ndarray
+        family_repr : list of np.ndarray
             Accepted member representations in order (including seed as first).
         info : dict
             Backend-specific telemetry (e.g., parameter history, counts, timings).
         """
         ...
 
-    def on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:
-        """Called after each iteration. Default: no-op."""
-        return
+    def get_tangent(self) -> np.ndarray | None:
+        """Return the current tangent vector maintained by the backend.
 
-    def on_accept(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
-        """Called when the backend detects convergence. Default: no-op."""
-        return
+        Stateless backends may return None.
+        """
+        return None
 
-    def on_failure(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
-        """Called when the backend completes without converging. Default: no-op."""
-        return
+    def seed_tangent(self, tangent: np.ndarray | None) -> None:
+        """Seed the backend with an initial tangent vector prior to 
+        :meth:`~hiten.algorithms.continuation.backends.base._ContinuationBackend.run`.
 
-    def on_success(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
-        """Called by the Engine after final acceptance. Default: no-op."""
+        Engines may call this at most once. Default implementation is a no-op.
+        """
         return

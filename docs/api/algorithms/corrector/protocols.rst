@@ -1,26 +1,30 @@
-Protocol Definitions
-====================
+Corrector Protocols
+===================
 
 The protocols module provides protocol definitions for the correction framework.
 
 .. currentmodule:: hiten.algorithms.corrector.protocols
 
+Corrector Step Protocol
+-----------------------
+
 CorrectorStepProtocol()
 ^^^^^^^^^^^^^^
 
-The :class:`CorrectorStepProtocol` class defines the protocol for step transformation functions in Newton-type methods.
+Protocol for step transformation functions in Newton-type methods.
 
-.. autoclass:: CorrectorStepProtocol()
+.. autoclass:: CorrectorStepProtocol
    :members:
    :undoc-members:
-   :exclude-members: __init__
+
+Corrector Backend Protocol
+--------------------------
 
 CorrectorBackendProtocol()
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The :class:`CorrectorBackendProtocol` class defines the protocol for backend correctors.
+Protocol for backend correctors.
 
-.. autoclass:: CorrectorBackendProtocol()
+.. autoclass:: CorrectorBackendProtocol
    :members:
    :undoc-members:
-   :exclude-members: __init__

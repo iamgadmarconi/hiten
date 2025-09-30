@@ -22,7 +22,6 @@ from typing import Callable, Optional
 
 import numba
 import numpy as np
-from numba import types
 from numba.typed import List
 
 from hiten.algorithms.dynamics.hamiltonian import _hamiltonian_rhs
@@ -122,37 +121,6 @@ class _RungeKuttaBase(_Integrator):
         """
         return self._p
 
-    def _compile_event_function(self, event_fn: Callable[[float, np.ndarray], float]) -> Callable[[float, np.ndarray], float]:
-        """Compile a scalar event function g(t, y) with a fixed Numba signature.
-
-        Ensures the kernel receives a callable with concrete native type
-        ``float64(float64, float64[:])`` so specialization happens once and
-        calls are inlined at full speed.
-
-        Parameters
-        ----------
-        event_fn : Callable[[float, ndarray], float]
-            Scalar event function g(t, y).
-
-        Returns
-        -------
-        Callable[[float, ndarray], float]
-            A function suitable for use inside njit regions. If ``event_fn``
-            is already a Numba dispatcher it is returned unchanged; otherwise
-            it is compiled with an explicit signature.
-        """
-        # Detect pre-compiled Numba dispatchers to avoid redundant compilation
-        try:
-            from numba.core.registry import CPUDispatcher
-            if isinstance(event_fn, CPUDispatcher):
-                return event_fn
-        except Exception:
-            pass
-
-        # Compile with explicit signature for stable typing inside kernels
-        event_sig = types.float64(types.float64, types.float64[:])
-        return numba.njit(event_sig, cache=False, fastmath=FASTMATH)(event_fn)
-    
     def _build_rhs_wrapper(self, system: _DynamicalSystemProtocol) -> Callable[[float, np.ndarray], np.ndarray]:
         """Return the compiled ``(t, y)`` RHS from the system.
 

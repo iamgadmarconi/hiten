@@ -10,19 +10,37 @@ from typing import Callable, Literal
 
 import numpy as np
 
-from hiten.algorithms.utils.types import SynodicState
+from hiten.algorithms.types.states import SynodicState
 from hiten.system.orbits.base import PeriodicOrbit
 
 
 @dataclass(frozen=True, slots=True)
 class _ContinuationConfig:
-    """Define configuration parameters for continuation algorithms."""
+    """Define configuration parameters for continuation algorithms.
+    
+    Parameters
+    ----------
+    target : np.ndarray
+        The target to continue.
+    step : np.ndarray
+        The step to continue.
+    max_members : int
+        The maximum number of members to continue.
+    max_retries_per_step : int
+        The maximum number of retries per step.
+    step_min : float
+        The minimum step size.
+    step_max : float
+        The maximum step size.
+    shrink_policy : Callable[[np.ndarray], np.ndarray] | None
+        The shrink policy to continue.
+    """
     target: np.ndarray
     step: np.ndarray
     max_members: int
-    max_retries_per_step: int
-    step_min: float
-    step_max: float
+    max_retries_per_step: int = 50
+    step_min: float = 1e-10
+    step_max: float = 1.0
     shrink_policy: Callable[[np.ndarray], np.ndarray] | None = None
 
     def __post_init__(self) -> None:
@@ -84,12 +102,9 @@ class _OrbitContinuationConfig(_ContinuationConfig):
 
     Parameters
     ----------
-    state : :class:`~hiten.algorithms.utils.types.SynodicState` or None
+    state : :class:`~hiten.algorithms.types.states.SynodicState` or None
         Initial state for orbit construction. If None, uses default
         state from the orbit class.
-    amplitude : bool, default False
-        Whether to use amplitude-based continuation instead of
-        natural parameter continuation.
     getter : callable or None
         Function to extract continuation parameter from periodic orbit.
         Should take a :class:`~hiten.system.orbits.base.PeriodicOrbit` and return float.
@@ -97,9 +112,10 @@ class _OrbitContinuationConfig(_ContinuationConfig):
     extra_params : dict or None
         Additional parameters passed to orbit correction methods.
         Common keys include tolerances, maximum iterations, etc.
+    stepper : Literal["natural", "secant"]
+        The stepper to continue.
     """
     state: SynodicState | None = None
-    amplitude: bool = False
     getter: Callable[["PeriodicOrbit"], float] | None = None
     extra_params: dict | None = None
     stepper: Literal["natural", "secant"] = "natural"

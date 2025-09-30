@@ -15,88 +15,96 @@ All masses are expressed in kilograms and radii in metres (SI units).
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Optional
 
-from hiten.utils.log_config import logger
+from hiten.algorithms.types.core import _HitenBase
+from hiten.algorithms.types.services.body import (_BodyPersistenceService,
+                                                  _BodyServices)
 
 
-@dataclass(frozen=True)
-class Body(object):
-    """
-    Celestial body container.
-
+class Body(_HitenBase):
+    """Celestial body container bound to a lightweight persistence adapter.
+    
     Parameters
     ----------
     name : str
-        Human-readable identifier, for example "Earth" or "Sun".
+        The name of the body.
     mass : float
-        Gravitational mass in kilograms.
+        The mass of the body.
     radius : float
-        Mean equatorial radius in metres.
-    color : str, optional
-        Hexadecimal RGB string used for visualisation. Default is "#000000".
-    _parent_input : :class:`~hiten.system.body.Body`, optional
-        Internal parameter for parent body specification. If None, the
-        object is treated as the primary and parent is set to the
-        instance itself.
-
-    Attributes
-    ----------
-    name : str
-        Human-readable identifier.
-    mass : float
-        Gravitational mass in kilograms.
-    radius : float
-        Mean equatorial radius in metres.
+        The radius of the body.
     color : str
-        Colour assigned for plotting purposes.
+        The color of the body.
     parent : :class:`~hiten.system.body.Body`
-        Central body around which this instance revolves.
-
-    Notes
-    -----
-    The class performs no unit or consistency checks; the responsibility of
-    providing coherent values lies with the caller.
-
-    Examples
-    --------
-    >>> sun = Body("Sun", 1.98847e30, 6.957e8, color="#FDB813")
-    >>> earth = Body("Earth", 5.9722e24, 6.371e6, _parent_input=sun)
-    >>> print(earth)
-    Earth orbiting Sun
+        The parent of the body.
     """
-    name: str
-    mass: float
-    radius: float
-    color: str = "#000000"
-    parent: Optional[Body] = field(default=None, init=False)
-    _parent_input: Optional[Body] = field(default=None, repr=False, compare=False)
 
-    def __post_init__(self):
-        """Initialize the parent attribute after dataclass creation.
+    def __init__(self, name: str, mass: float, radius: float, color: str = "#000000", parent: Optional["Body"] = None):
+        self._name = name
+        self._mass = mass
+        self._radius = radius
+        self._color = color
+        self._parent = parent if parent is not None else self
         
-        This method uses object.__setattr__ to bypass frozen=True protection,
-        which is a standard pattern for initializing fields in frozen dataclasses.
-        """
-        # Use object.__setattr__ to bypass frozen=True protection. This is a
-        # standard pattern for initializing fields in frozen dataclasses.
-        parent_to_set = self._parent_input or self
-        object.__setattr__(self, 'parent', parent_to_set)
+        services = _BodyServices.default(self)
+        super().__init__(services)
 
-        parent_name = self.parent.name if self.parent is not self else "None"
-        logger.info(f"Created Body: name='{self.name}', mass={self.mass}, radius={self.radius}, color='{self.color}', parent='{parent_name}'")
 
     def __str__(self) -> str:
         parent_desc = f"orbiting {self.parent.name}" if self.parent is not self else "(Primary)"
         return f"{self.name} {parent_desc}"
 
     def __repr__(self) -> str:
-        # For the parent, we show its name to avoid recursion.
-        # This makes the repr not perfectly eval-able for secondaries, but it's safe.
-        if self.parent is self:
-            parent_repr = ""
-        else:
-            parent_repr = f", _parent_input=Body(name='{self.parent.name}', ...)"
+        parent_repr = f", parent=Body(name='{self.parent.name}', ...)" if self.parent is not self else ""
 
         return f"Body(name={self.name!r}, mass={self.mass}, radius={self.radius}, color={self.color!r}{parent_repr})"
+
+    @property
+    def name(self) -> str:
+        """Return the name of the body."""
+        return self.dynamics.name
+
+    @property
+    def mass(self) -> float:
+        """Return the mass of the body in kg."""
+        return self.dynamics.mass
+
+    @property
+    def radius(self) -> float:
+        """Return the radius of the body in km."""
+        return self.dynamics.radius
+    
+    @property
+    def color(self) -> str:
+        """Return the color of the body."""
+        return self.dynamics.color
+
+    @property
+    def parent(self) -> "Body":
+        """Return the parent of the body."""
+        return self.dynamics.parent
+
+    def __setstate__(self, state):
+        """Restore the Body instance after unpickling.
+
+        The heavy, non-serialisable dynamics is reconstructed lazily
+        using the stored value of name, mass, radius, color and parent.
+        
+        Parameters
+        ----------
+        state : dict[str, Any]
+            Dictionary containing the serialized state of the Body.
+        """
+        super().__setstate__(state)
+        self._setup_services(_BodyServices.default(self))
+
+    @classmethod
+    def load(cls, filepath: str | Path, **kwargs) -> "Body":
+        """Load a Body from a file (new instance)."""
+        return cls._load_with_services(
+            filepath, 
+            _BodyPersistenceService(), 
+            _BodyServices.default, 
+            **kwargs
+        )

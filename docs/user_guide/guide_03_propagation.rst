@@ -20,15 +20,15 @@ The simplest way to propagate an orbit is using the system's built-in propagatio
    initial_state = np.array([0.8, 0.0, 0.0, 0.0, 0.1, 0.0])
    
    # Propagate for one orbital period
-   times, trajectory = system.propagate(
+   trajectory = system.propagate(
        initial_conditions=initial_state,
        tf=2 * np.pi,  # One orbital period
        steps=1000
    )
    
-   print(f"Propagated {len(times)} time steps")
-   print(f"Final time: {times[-1]}")
-   print(f"Final state: {trajectory[-1]}")
+   print(f"Propagated {trajectory.n_samples} time steps")
+   print(f"Final time: {trajectory.tf}")
+   print(f"Final state: {trajectory.states[-1]}")
 
 State Vector Format
 -------------------
@@ -82,7 +82,7 @@ Practical Examples
    # Custom initial conditions
    custom_state = np.array([0.7, 0.1, 0.05, 0.0, 0.15, 0.02])
    
-   times, trajectory = system.propagate(
+   trajectory = system.propagate(
        initial_conditions=custom_state,
        tf=10 * np.pi,  # 5 orbital periods
        steps=2000
@@ -98,16 +98,16 @@ Plot propagated trajectories:
    import matplotlib.pyplot as plt
    
    # Propagate orbit
-   times, trajectory = system.propagate(
+   trajectory = system.propagate(
        initial_conditions=initial_state,
        tf=2 * np.pi,
        steps=1000
    )
    
    # Extract position components
-   x = trajectory[:, 0]
-   y = trajectory[:, 1]
-   z = trajectory[:, 2]
+   x = trajectory.states[:, 0]
+   y = trajectory.states[:, 1]
+   z = trajectory.states[:, 2]
    
    # 3D plot
    fig = plt.figure(figsize=(10, 8))

@@ -25,13 +25,13 @@ def _nf2aa_ee(poly_nf_complex: np.ndarray) -> np.ndarray:
 
     Parameters
     ----------
-    poly_nf_complex : ndarray
+    poly_nf_complex : np.ndarray
         Coefficient array of Birkhoff normal form complex polynomial.
         Shape corresponds to canonical polynomial degree structure.
 
     Returns
     -------
-    ndarray
+    np.ndarray
         Action-angle polynomial coefficients. Returns zero array for
         odd-degree input polynomials (no valid action-angle monomials).
         
@@ -158,12 +158,12 @@ def _nf2aa_sc(poly_nf_complex: np.ndarray) -> np.ndarray:
 
     Parameters
     ----------
-    poly_nf_complex : ndarray
+    poly_nf_complex : np.ndarray
         Coefficient array of Birkhoff normal form complex polynomial.
 
     Returns
     -------
-    ndarray
+    np.ndarray
         Action-angle polynomial coefficients.
         
     Notes

@@ -9,11 +9,14 @@ Hairer, E., Norsett, S. P., and Wanner, G. (1993).
 from abc import ABC, abstractmethod
 from typing import Optional, Callable
 
+import numba
 import numpy as np
+from numba import types
 
 from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
 from hiten.algorithms.integrators.configs import _EventConfig
 from hiten.algorithms.integrators.types import _Solution
+from hiten.algorithms.utils.config import FASTMATH
 
 
 class _Integrator(ABC):
@@ -225,3 +228,31 @@ class _Integrator(ABC):
             derivs = np.repeat(deriv0[None, :], repeats=t_vals.size, axis=0)
             return _Solution(times=t_vals.copy(), states=states, derivatives=derivs)
         return None
+
+    def _compile_event_function(
+        self,
+        event_fn: "Callable[[float, np.ndarray], float] | None",
+    ) -> "Callable[[float, np.ndarray], float] | None":
+        """Return a Numba-compatible event function if provided.
+
+        Concrete integrators call this helper to ensure event callbacks share a
+        stable native signature.  Precompiled dispatchers are returned as-is,
+        while Python callables are compiled with an explicit ``float64``
+        signature so they can be used inside ``njit`` regions without
+        additional specialization overhead.
+        """
+        if event_fn is None:
+            return None
+
+        # Detect pre-compiled Numba dispatchers to avoid redundant compilation.
+        try:
+            from numba.core.registry import CPUDispatcher  # local import for optional dependency
+
+            if isinstance(event_fn, CPUDispatcher):
+                return event_fn
+        except Exception:
+            # If the registry import fails (e.g. different Numba version) we fallback to compilation.
+            pass
+
+        event_sig = types.float64(types.float64, types.float64[:])
+        return numba.njit(event_sig, cache=False, fastmath=FASTMATH)(event_fn)

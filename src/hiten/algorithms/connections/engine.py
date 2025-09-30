@@ -16,25 +16,19 @@ See Also
 :mod:`~hiten.algorithms.connections.backends`
     Backend algorithms for connection computation.
 :mod:`~hiten.algorithms.connections.base`
-    User-facing Connection class that uses this engine.
+    User-facing ConnectionPipeline class that uses this engine.
 :mod:`~hiten.algorithms.connections.interfaces`
     Interface classes for manifold data access.
 """
 
-from typing import Callable, Literal
-
-import numpy as np
-
 from hiten.algorithms.connections.backends import _ConnectionsBackend
-from hiten.algorithms.connections.config import _SearchConfig
 from hiten.algorithms.connections.interfaces import _ManifoldInterface
-from hiten.algorithms.connections.types import (_ConnectionProblem,
-                                                _ConnectionResult)
-from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
-from hiten.system.manifold import Manifold
+from hiten.algorithms.connections.types import (ConnectionResults,
+                                                _ConnectionProblem)
+from hiten.algorithms.types.core import _HitenBaseEngine
 
 
-class _ConnectionEngine:
+class _ConnectionEngine(_HitenBaseEngine[_ConnectionProblem, ConnectionResults, list]):
     """Provide the main engine for orchestrating connection discovery between manifolds.
 
     This class serves as the central coordinator for the connection discovery
@@ -70,68 +64,23 @@ class _ConnectionEngine:
         Problem specification structure processed by this engine.
     :class:`~hiten.algorithms.connections.backends._ConnectionsBackend`
         Backend algorithms that perform the actual computations.
-    :class:`~hiten.algorithms.connections.base.Connection`
+    :class:`~hiten.algorithms.connections.base.ConnectionPipeline`
         High-level user interface that uses this engine.
     """
 
-    def __init__(self, backend: _ConnectionsBackend, *, interface_factory: Callable[[Manifold], _ManifoldInterface] | None = None):
+    def __init__(self, *, backend: _ConnectionsBackend, interface: _ManifoldInterface | None = None):
         """Initialize the connection engine with a backend implementation.
 
         Parameters
         ----------
         backend : :class:`~hiten.algorithms.connections.backends._ConnectionsBackend`
             Backend responsible for the computational steps of connection discovery.
+        interface : :class:`~hiten.algorithms.connections.interfaces._ManifoldInterface`, optional
+            Interface for handling connection problems. If None, a default interface is used.
         """
-        self._backend = backend
-        self._interface_factory = interface_factory or (lambda m: _ManifoldInterface(manifold=m))
+        super().__init__(backend=backend, interface=interface)
 
-    def solve(self, source: Manifold, target: Manifold, section: "_SynodicMapConfig", direction: Literal[1, -1, None] | None, search: _SearchConfig | None) -> list[_ConnectionResult]:
-        """Solve a connection discovery problem (assemble problem internally).
 
-        This method assembles a problem specification internally for clarity and
-        orchestrates the connection discovery workflow, returning discovered
-        connections between the source and target manifolds.
-
-        Parameters
-        ----------
-        source : :class:`~hiten.system.manifold.Manifold`
-            Source manifold (typically unstable).
-        target : :class:`~hiten.system.manifold.Manifold`
-            Target manifold (typically stable).
-        section : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
-            Synodic section configuration.
-        direction : {1, -1, None}
-            Crossing direction filter.
-        search : :class:`~hiten.algorithms.connections.config._SearchConfig` or None
-            Tolerances and geometric parameters.
-
-        Returns
-        -------
-        list[:class:`~hiten.algorithms.connections.types._ConnectionResult`]
-            Discovered connections sorted by increasing Delta-V requirement.
-        """
-        # Assemble a problem object for traceability (not passed to backend)
-        problem = _ConnectionProblem(
-            source=source,
-            target=target,
-            section=section,
-            direction=direction,
-            search=search,
-        )
-
-        # Build numerical inputs via interfaces
-        src_if = self._interface_factory(problem.source)
-        tgt_if = self._interface_factory(problem.target)
-        sec_u = src_if.to_section(problem.section, direction=problem.direction)
-        sec_s = tgt_if.to_section(problem.section, direction=problem.direction)
-
-        pu = np.asarray(sec_u.points, dtype=float)
-        ps = np.asarray(sec_s.points, dtype=float)
-        Xu = np.asarray(sec_u.states, dtype=float)
-        Xs = np.asarray(sec_s.states, dtype=float)
-
-        eps = float(getattr(problem.search, "eps2d", 1e-4)) if problem.search else 1e-4
-        dv_tol = float(getattr(problem.search, "delta_v_tol", 1e-3)) if problem.search else 1e-3
-        bal_tol = float(getattr(problem.search, "ballistic_tol", 1e-8)) if problem.search else 1e-8
-
-        return self._backend.solve(pu, ps, Xu, Xs, eps=eps, dv_tol=dv_tol, bal_tol=bal_tol)
+    def _invoke_backend(self, call):
+        """Invoke the backend with the provided call."""
+        return self._backend.run(*call.args, **call.kwargs)

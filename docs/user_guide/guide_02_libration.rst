@@ -38,7 +38,7 @@ Each libration point provides access to key properties:
    
    # Energy and Jacobi constant
    print(f"L1 energy: {l1.energy}")
-   print(f"L1 Jacobi constant: {l1.jacobi_constant}")
+   print(f"L1 Jacobi constant: {l1.jacobi}")
    
    # Stability analysis
    print(f"L1 is stable: {l1.is_stable}")
@@ -72,8 +72,8 @@ Each libration point has associated energy and Jacobi constant:
    print(f"L2 energy: {l2.energy}")
    
    # Jacobi constant (CJ = -2*E)
-   print(f"L1 Jacobi constant: {l1.jacobi_constant}")
-   print(f"L2 Jacobi constant: {l2.jacobi_constant}")
+   print(f"L1 Jacobi constant: {l1.jacobi}")
+   print(f"L2 Jacobi constant: {l2.jacobi}")
 
 Stability Analysis
 ------------------
@@ -136,8 +136,6 @@ Collinear points have special properties and methods:
 
    # L1 point properties
    print(f"L1 gamma: {l1.gamma}")  # Distance ratio
-   print(f"L1 sign: {l1.sign}")    # Sign convention
-   print(f"L1 a: {l1.a}")          # Offset parameter
    
    # Linear modes
    lambda1, omega1, omega2 = l1.linear_modes
@@ -202,9 +200,9 @@ Libration points are integrated with the system's dynamical system:
    dynsys = l1.dynsys
    print(f"Dynamical system: {dynsys}")
    
-   # Access variational equations
-   var_system = l1.var_eq_system
-   print(f"Variational system: {var_system}")
+   # Access variational equations system
+   var_dynsys = l1.var_dynsys
+   print(f"Variational system: {var_dynsys}")
 
 Examples
 --------
@@ -223,7 +221,7 @@ Earth-Moon L1 Analysis
    print(f"Earth-Moon L1 position: {l1.position}")
    print(f"Mass parameter: {system.mu}")
    print(f"L1 stable: {l1.is_stable}")
-   print(f"L1 Jacobi constant: {l1.jacobi_constant}")
+   print(f"L1 Jacobi constant: {l1.jacobi}")
 
 Sun-Earth L2 Analysis
 ~~~~~~~~~~~~~~~~~~~~~

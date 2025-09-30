@@ -18,14 +18,11 @@ from numba import njit, prange
 
 from hiten.algorithms.dynamics.hamiltonian import (_eval_dH_dP, _eval_dH_dQ,
                                                    _hamiltonian_rhs)
-from hiten.algorithms.dynamics.protocols import _HamiltonianSystemProtocol
 from hiten.algorithms.integrators.rk import (RK4_A, RK4_B, RK4_C, RK6_A, RK6_B,
                                              RK6_C, RK8_A, RK8_B, RK8_C)
 from hiten.algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
                                                      _integrate_symplectic)
-from hiten.algorithms.poincare.centermanifold.config import _get_section_config
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
-from hiten.algorithms.poincare.core.events import _SurfaceEvent
 from hiten.algorithms.poincare.utils import _hermite_scalar
 from hiten.algorithms.utils.config import FASTMATH
 
@@ -388,86 +385,32 @@ class _CenterManifoldBackend(_ReturnMapBackend):
     using Numba-compiled kernels for Hamiltonian integration and Poincare map
     evaluation. It supports both Runge-Kutta and symplectic integration methods.
 
-    Parameters
-    ----------
-    dynsys : :class:`~hiten.algorithms.dynamics.protocols._HamiltonianSystemProtocol`
-        Hamiltonian system providing polynomial representation and CLMO tables.
-    surface : :class:`~hiten.algorithms.poincare.core.events._SurfaceEvent`
-        Poincare section surface definition.
-    section_coord : str
-        Section coordinate identifier ('q2', 'p2', 'q3', or 'p3').
-    h0 : float
-        Energy level for center manifold (nondimensional units).
-    forward : int, default=1
-        Integration direction (1 for forward, -1 for backward).
-    max_steps : int, default=2000
-        Maximum integration steps per trajectory.
-    method : {'fixed', 'symplectic', 'adaptive'}, default='adaptive'
-        Integration method.
-    order : int, default=8
-        Integration order for Runge-Kutta methods.
-    pre_steps : int, default=1000
-        Pre-integration steps for trajectory stabilization.
-    refine_steps : int, default=3000
-        Refinement steps for root finding.
-    bracket_dx : float, default=1e-10
-        Initial bracket size for root finding.
-    max_expand : int, default=500
-        Maximum bracket expansion iterations.
-    c_omega_heuristic : float, default=20.0
-        Heuristic parameter for symplectic integration.
-
     Notes
     -----
     State vectors are ordered as [q1, q2, q3, p1, p2, p3].
+    The backend is stateless - all dynamic system data must be passed to
+    the step_to_section method as arguments.
     """
 
     def __init__(
         self,
-        *,
-        dynsys: "_HamiltonianSystemProtocol",
-        surface: "_SurfaceEvent",
-        section_coord: str,
-        h0: float,
-        forward: int = 1,
-        max_steps: int = 2000,
-        method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
-        order: int = 8,
-        pre_steps: int = 1000,
-        refine_steps: int = 3000,
-        bracket_dx: float = 1e-10,
-        max_expand: int = 500,
-        c_omega_heuristic: float = 20.0,
     ) -> None:
-        super().__init__(
-            dynsys=dynsys,
-            surface=surface,
-            forward=forward,
-            method=method,
-            order=order,
-            pre_steps=pre_steps,
-            refine_steps=refine_steps,
-            bracket_dx=bracket_dx,
-            max_expand=max_expand,
-        )
+        super().__init__()
 
-        self._section_cfg = _get_section_config(section_coord)
-        self._h0 = h0
-        self._H_blocks = dynsys.poly_H()
-        self._clmo_table = dynsys.clmo_table
-        self._jac_H = dynsys.jac_H
-        self._order = order
-        self._max_steps = max_steps
-        self._use_symplectic = method == "symplectic"
-        self._n_dof = N_SYMPLECTIC_DOF
-        self._c_omega_heuristic = c_omega_heuristic
-
-    def step_to_section(
+    def run(
         self,
         seeds: np.ndarray,
         *,
         dt: float = 1e-2,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        jac_H,
+        clmo_table,
+        section_coord: str,
+        forward: int = 1,
+        max_steps: int = 2000,
+        method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
+        order: int = 8,
+        c_omega_heuristic: float = 20.0,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Propagate center manifold seeds until the next Poincare section crossing.
 
         Parameters
@@ -476,11 +419,15 @@ class _CenterManifoldBackend(_ReturnMapBackend):
             Array of initial seeds [q2, p2, q3, p3] (nondimensional units).
         dt : float, default=1e-2
             Integration time step (nondimensional units).
+        jac_H
+            Jacobian of the Hamiltonian system.
+        clmo_table
+            CLMO table for polynomial evaluation.
+        section_coord : str
+            Section coordinate identifier ('q2', 'p2', 'q3', or 'p3').
 
         Returns
         -------
-        pts : ndarray, shape (n_crossings, 2)
-            Plane coordinates of the section crossings.
         cm_states : ndarray, shape (n_crossings, 4)
             Center manifold coordinates of the crossings.
         times : ndarray, shape (n_crossings,)
@@ -497,56 +444,34 @@ class _CenterManifoldBackend(_ReturnMapBackend):
 
         if seeds.size == 0:
             return (
-                np.empty((0, 2)),
                 np.empty((0, 4)),
                 np.empty((0,)),
                 np.empty((0,), dtype=np.int64),
             )
 
-        max_steps = int(np.ceil(20.0 / dt))
-
         flags, q2p_arr, p2p_arr, q3p_arr, p3p_arr, t_arr = _poincare_map(
             np.ascontiguousarray(seeds, dtype=np.float64),
             dt,
-            self._jac_H,
-            self._clmo_table,
-            self._order,
+            jac_H,
+            clmo_table,
+            order,
             max_steps,
-            self._use_symplectic,
+            method == "symplectic",
             N_SYMPLECTIC_DOF,
-            self._section_cfg.section_coord,
-            self._c_omega_heuristic,
+            section_coord,
+            c_omega_heuristic,
         )
 
-        cfg = self._section_cfg
-        pts_list: list[tuple[float, float]] = []
         states_list: list[tuple[float, float, float, float]] = []
         times_list: list[float] = []
 
         for i in range(flags.shape[0]):
             if flags[i]:
                 state = (q2p_arr[i], p2p_arr[i], q3p_arr[i], p3p_arr[i])
-                # Ensure the returned seed lies EXACTLY on the section plane so that
-                # the following iteration does not detect the same crossing again.
-                # We zero the coordinate that defines the section (q2, p2, q3 or p3)
-                # to avoid re-registering the same hit in subsequent steps.
-                if cfg.section_coord == "q3":
-                    state = (state[0], state[1], 0.0, state[3])
-                elif cfg.section_coord == "p3":
-                    state = (state[0], state[1], state[2], 0.0)
-                elif cfg.section_coord == "q2":
-                    state = (0.0, state[1], state[2], state[3])
-                else:  # "p2"
-                    state = (state[0], 0.0, state[2], state[3])
                 states_list.append(state)
-                if cfg.plane_coords == ("q2", "p2"):
-                    pts_list.append((state[0], state[1]))
-                else:
-                    pts_list.append((state[2], state[3]))
                 times_list.append(float(t_arr[i]))
 
         return (
-            np.asarray(pts_list, dtype=np.float64),
             np.asarray(states_list, dtype=np.float64),
             np.asarray(times_list, dtype=np.float64),
             np.asarray(flags, dtype=np.int64),

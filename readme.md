@@ -74,7 +74,7 @@ manifold.plot()
    cm = l1.get_center_manifold(degree=10)
    cm.compute()
 
-   initial_state = cm.ic(poincare_point=[0.0, 0.0], energy=0.6, section_coord="q3")
+   initial_state = cm.to_synodic(poincare_point=[0.0, 0.0], energy=0.6, section_coord="q3")
 
    orbit = VerticalOrbit(l1, initial_state=initial_state)
    orbit.correct(max_attempts=100)
@@ -95,8 +95,8 @@ manifold.plot()
 
    ```python
    from hiten import System, OrbitFamily
-   from hiten.algorithms import StateParameter
-   from hiten.algorithms.utils.types import SynodicState
+   from hiten.algorithms import ContinuationPipeline
+   from hiten.algorithms.types.states import SynodicState
 
    system = System.from_bodies("earth", "moon")
    l1 = system.get_libration_point(1)
@@ -111,7 +111,7 @@ manifold.plot()
    # Step in amplitude space (predictor still tweaks X component)
    step = (target_amp - current_amp) / (num_orbits - 1)
 
-   engine = StateParameter(
+   engine = ContinuationPipeline(
        initial_orbit=seed,
        state=SynodicState.X,   # underlying coordinate that gets nudged
        amplitude=True,         # but the continuation parameter is A_x
@@ -165,7 +165,7 @@ manifold.plot()
    cm = l_point.get_center_manifold(degree=6)
    cm.compute()
 
-   ic_seed = cm.ic([0.0, 0.0], 0.6, "q3") # Good initial guess from CM
+   ic_seed = cm.to_synodic([0.0, 0.0], 0.6, "q3") # Good initial guess from CM
 
    orbit = VerticalOrbit(l_point, initial_state=ic_seed)
    orbit.correct(max_attempts=100, finite_difference=True)
@@ -197,7 +197,7 @@ manifold.plot()
    The toolkit can detect heteroclinic connections between two manifolds.
 
    ```python
-   from hiten.algorithms.connections import Connection, SearchConfig
+   from hiten.algorithms.connections import ConnectionPipeline, SearchConfig
    from hiten.algorithms.poincare import SynodicMapConfig
    from hiten.system import System
 
@@ -234,7 +234,7 @@ manifold.plot()
       n_workers=None,
    )
 
-   conn = Connection.with_default_engine(
+   conn = ConnectionPipeline.with_default_engine(
       section=section_cfg,
       direction=None,
       search_cfg=SearchConfig(delta_v_tol=1, ballistic_tol=1e-8, eps2d=1e-3),

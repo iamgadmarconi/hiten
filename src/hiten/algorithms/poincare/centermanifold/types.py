@@ -6,7 +6,7 @@ while the results type contains the computed section.
 """
 
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Callable, List
 
 import numpy as np
 from hiten.algorithms.poincare.core.types import _MapResults
@@ -29,16 +29,21 @@ class _CenterManifoldMapProblem:
     n_workers : int
         Number of parallel workers.
     """
-
     section_coord: str
     energy: float
     dt: float
     n_iter: int
     n_workers: int
+    jac_H: List[np.ndarray]
+    H_blocks: List[np.ndarray]
+    clmo_table: List[np.ndarray]
+    solve_missing_coord_fn: Callable[[str, dict[str, float]], Optional[float]] | None = None
+    find_turning_fn: Callable[[str], float] | None = None
 
 
 class CenterManifoldMapResults(_MapResults):
-    """User-facing results that behave as a _Section with extra helpers."""
+    """User-facing results that behave as a _Section with extra helpers.
+    """
     def __init__(self, points: np.ndarray, states: np.ndarray, labels: Tuple[str, str], times: Optional[np.ndarray] = None):
         super().__init__(points, states, labels, times)
 
@@ -46,5 +51,3 @@ class CenterManifoldMapResults(_MapResults):
         idx1 = self.labels.index(axes[0])
         idx2 = self.labels.index(axes[1])
         return self.points[:, (idx1, idx2)]
-
-

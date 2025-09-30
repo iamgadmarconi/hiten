@@ -431,13 +431,13 @@ def plot_inertial_frame(
     _plot_body(ax, primary_pos, primary_radius, primary_color, bodies[0].name)
     
     theta = times  # Time is angle in canonical units
-    secondary_x = (1-mu)
+    secondary_x = np.full_like(theta, (1-mu))
     secondary_y = np.zeros_like(theta)
     secondary_z = np.zeros_like(theta)
-    
-    ax.plot(secondary_x, secondary_y, secondary_z, '--', color=bodies[1].color, 
+
+    ax.plot(secondary_x, secondary_y, secondary_z, '--', color=bodies[1].color,
             alpha=0.5, label=f'{bodies[1].name} Orbit')
-    
+
     secondary_pos = np.array([secondary_x[-1], secondary_y[-1], secondary_z[-1]])
     secondary_radius = bodies[1].radius / system_distance  # Convert to canonical units
     secondary_color = _get_body_color(bodies[1], 'slategray')
@@ -1059,7 +1059,7 @@ def plot_manifolds(
     ----------
     manifolds : list of :class:`~hiten.system.manifold.Manifold`
         Collection of previously-computed Manifold objects. Each item must
-        have a non-empty manifold_result.
+        have been computed (trajectories property is not None).
     figsize : tuple, default (10, 8)
         Size of the matplotlib figure in inches.
     save : bool, default False
@@ -1121,11 +1121,11 @@ def plot_manifolds(
     ax = fig.add_subplot(111, projection='3d')
 
     for mfld, col, lab in zip(manifolds, colors, labels):
-        if mfld.manifold_result is None:
+        if mfld.trajectories is None:
             raise ValueError(f"Manifold '{mfld}' has not been computed yet.")
 
-        for traj in mfld.manifold_result.states_list:
-            ax.plot(traj[:, 0], traj[:, 1], traj[:, 2], color=col, lw=1.5, alpha=alpha)
+        for traj in mfld.trajectories:
+            ax.plot(traj.states[:, 0], traj.states[:, 1], traj.states[:, 2], color=col, lw=1.5, alpha=alpha)
 
         # Put a label only once per manifold (for legend clarity)
         ax.plot([], [], [], color=col, label=lab)

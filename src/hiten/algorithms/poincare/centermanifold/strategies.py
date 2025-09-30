@@ -8,16 +8,15 @@ from typing import Any, Callable, List, Optional, Tuple
 
 import numpy as np
 
-from hiten.algorithms.poincare.centermanifold.config import (
-    _CenterManifoldMapConfig, _CenterManifoldSectionConfig)
+from hiten.algorithms.poincare.centermanifold.config import \
+    _CenterManifoldMapConfig
 from hiten.algorithms.poincare.centermanifold.seeding import \
     _CenterManifoldSeedingBase
-from hiten.algorithms.utils.exceptions import EngineError
+from hiten.algorithms.types.exceptions import EngineError
 from hiten.utils.log_config import logger
 
 
-def _make_strategy(kind: str, section_config: "_CenterManifoldSectionConfig", 
-                   map_config: "_CenterManifoldMapConfig", **kwargs) -> "_CenterManifoldSeedingBase":
+def _make_strategy(map_config: "_CenterManifoldMapConfig", **kwargs) -> "_CenterManifoldSeedingBase":
     """Factory returning a concrete seeding strategy.
 
     Parameters
@@ -25,8 +24,6 @@ def _make_strategy(kind: str, section_config: "_CenterManifoldSectionConfig",
     kind : str
         Strategy identifier. Must be one of: 'single', 'axis_aligned', 
         'level_sets', 'radial', or 'random'.
-    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
-        Configuration describing the Poincare section parameters.
     map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Map-level configuration containing global parameters such as
         ``n_seeds`` and ``seed_axis``.
@@ -60,12 +57,11 @@ def _make_strategy(kind: str, section_config: "_CenterManifoldSectionConfig",
         "radial": _RadialSeeding,
         "random": _RandomSeeding,
     }
-    
     try:
-        cls = _STRATEGY_MAP[kind]
+        cls = _STRATEGY_MAP[map_config.seed_strategy]
     except KeyError as exc:
-        raise EngineError(f"Unknown seed_strategy '{kind}'") from exc
-    return cls(section_config, map_config, **kwargs)
+        raise EngineError(f"Unknown seed_strategy '{map_config.seed_strategy}'") from exc
+    return cls(map_config, **kwargs)
 
 
 class _SingleAxisSeeding(_CenterManifoldSeedingBase):
@@ -77,7 +73,6 @@ class _SingleAxisSeeding(_CenterManifoldSeedingBase):
 
     Parameters
     ----------
-    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
         Configuration for the Poincare section.
     map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Configuration for the center manifold map.
@@ -97,12 +92,11 @@ class _SingleAxisSeeding(_CenterManifoldSeedingBase):
 
     def __init__(
         self,
-        section_config: "_CenterManifoldSectionConfig",
         map_config: _CenterManifoldMapConfig,
         *,
         seed_axis: Optional[str] = None,
     ) -> None:
-        super().__init__(section_config, map_config)
+        super().__init__(map_config)
         # seed_axis can be provided explicitly or taken from map_config
         self._seed_axis = seed_axis or map_config.seed_axis
 
@@ -141,14 +135,13 @@ class _SingleAxisSeeding(_CenterManifoldSeedingBase):
         -0.9 * axis_max to 0.9 * axis_max, where axis_max is the Hill
         boundary limit for that coordinate.
         """
-        cfg = self.config
-
+        plane_coords = self._get_plane_coords(self.config.section_coord)
         axis_idx = 0
         if self._seed_axis is not None:
             try:
-                axis_idx = cfg.plane_coords.index(self._seed_axis)
+                axis_idx = plane_coords.index(self._seed_axis)
             except ValueError:
-                logger.warning("seed_axis %s not in plane coords %s - defaulting to first", self._seed_axis, cfg.plane_coords)
+                logger.warning("seed_axis %s not in plane coords %s - defaulting to first", self._seed_axis, plane_coords)
 
         limits = self._hill_boundary_limits(h0=h0, H_blocks=H_blocks, clmo_table=clmo_table, find_turning_fn=find_turning_fn)
         axis_max = limits[axis_idx]
@@ -174,7 +167,6 @@ class _AxisAlignedSeeding(_CenterManifoldSeedingBase):
 
     Parameters
     ----------
-    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
         Configuration for the Poincare section.
     map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Configuration for the center manifold map.
@@ -190,8 +182,8 @@ class _AxisAlignedSeeding(_CenterManifoldSeedingBase):
     separation as the length unit.
     """
 
-    def __init__(self, section_config: "_CenterManifoldSectionConfig", map_config: _CenterManifoldMapConfig) -> None:
-        super().__init__(section_config, map_config)
+    def __init__(self, map_config: _CenterManifoldMapConfig) -> None:
+        super().__init__(map_config)
 
     def generate(
         self,
@@ -227,8 +219,6 @@ class _AxisAlignedSeeding(_CenterManifoldSeedingBase):
         The seeds are distributed along both axes, with approximately
         half the seeds on each axis within the Hill boundary limits.
         """
-        cfg = self.config
-
         plane_maxes = self._hill_boundary_limits(h0=h0, H_blocks=H_blocks, clmo_table=clmo_table, find_turning_fn=find_turning_fn)
         max1, max2 = plane_maxes
         seeds: list[tuple[float, float]] = []
@@ -258,7 +248,6 @@ class _LevelSetsSeeding(_CenterManifoldSeedingBase):
 
     Parameters
     ----------
-    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
         Configuration for the Poincare section.
     map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Configuration for the center manifold map.
@@ -274,8 +263,8 @@ class _LevelSetsSeeding(_CenterManifoldSeedingBase):
     separation as the length unit.
     """
 
-    def __init__(self, section_config: "_CenterManifoldSectionConfig", map_config: _CenterManifoldMapConfig) -> None:
-        super().__init__(section_config, map_config)
+    def __init__(self, map_config: _CenterManifoldMapConfig) -> None:
+        super().__init__(map_config)
 
     def generate(
         self,
@@ -312,14 +301,14 @@ class _LevelSetsSeeding(_CenterManifoldSeedingBase):
         of each coordinate, with near-zero levels skipped to avoid
         redundancy with axis-aligned strategies.
         """
-        cfg = self.config
+        plane_coords = self._get_plane_coords(self.config.section_coord)
         plane_maxes = self._hill_boundary_limits(h0=h0, H_blocks=H_blocks, clmo_table=clmo_table, find_turning_fn=find_turning_fn)
 
         n_levels = max(2, int(np.sqrt(self.n_seeds)))
         seeds_per_level = max(1, self.n_seeds // (2 * n_levels))
 
         seeds: List[Tuple[float, float]] = []
-        for i, varying_coord in enumerate(cfg.plane_coords):
+        for i, _ in enumerate(plane_coords):
             other_coord_idx = 1 - i
             level_vals = np.linspace(
                 -0.7 * plane_maxes[other_coord_idx],
@@ -357,7 +346,6 @@ class _RadialSeeding(_CenterManifoldSeedingBase):
 
     Parameters
     ----------
-    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
         Configuration for the Poincare section.
     map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Configuration for the center manifold map.
@@ -376,8 +364,8 @@ class _RadialSeeding(_CenterManifoldSeedingBase):
     separation as the length unit.
     """
 
-    def __init__(self, section_config: "_CenterManifoldSectionConfig", map_config: _CenterManifoldMapConfig) -> None:
-        super().__init__(section_config, map_config)
+    def __init__(self, map_config: _CenterManifoldMapConfig) -> None:
+        super().__init__(map_config)
 
     def generate(
         self,
@@ -413,7 +401,6 @@ class _RadialSeeding(_CenterManifoldSeedingBase):
         The seeds are distributed on concentric circles with uniform
         angular spacing, providing good coverage in polar coordinates.
         """
-        cfg = self.config
         plane_maxes = self._hill_boundary_limits(h0=h0, H_blocks=H_blocks, clmo_table=clmo_table, find_turning_fn=find_turning_fn)
         max_radius = 0.8 * min(*plane_maxes)
 
@@ -452,7 +439,6 @@ class _RandomSeeding(_CenterManifoldSeedingBase):
 
     Parameters
     ----------
-    section_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldSectionConfig`
         Configuration for the Poincare section.
     map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
         Configuration for the center manifold map.
@@ -471,8 +457,8 @@ class _RandomSeeding(_CenterManifoldSeedingBase):
     separation as the length unit.
     """
 
-    def __init__(self, section_config: "_CenterManifoldSectionConfig", map_config: _CenterManifoldMapConfig) -> None:
-        super().__init__(section_config, map_config)
+    def __init__(self, map_config: _CenterManifoldMapConfig) -> None:
+        super().__init__(map_config)
 
     def generate(
         self,
@@ -508,7 +494,6 @@ class _RandomSeeding(_CenterManifoldSeedingBase):
         Uses rejection sampling with a maximum of 10 * n_seeds attempts
         to avoid infinite loops when the valid region is small.
         """
-        cfg = self.config
         plane_maxes = self._hill_boundary_limits(h0=h0, H_blocks=H_blocks, clmo_table=clmo_table, find_turning_fn=find_turning_fn)
 
         seeds: List[Tuple[float, float]] = []

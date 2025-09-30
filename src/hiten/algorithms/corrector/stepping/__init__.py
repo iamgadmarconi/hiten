@@ -18,6 +18,22 @@ from .plain import _CorrectorPlainStep
 def make_plain_stepper() -> Callable[[ResidualFn, NormFn, float | None], CorrectorStepProtocol]:
     """Return a factory that builds a plain capped stepper per problem."""
     def _factory(residual_fn: ResidualFn, norm_fn: NormFn, max_delta: float | None) -> CorrectorStepProtocol:
+        """Return a factory that builds a plain capped stepper per problem.
+        
+        Parameters
+        ----------
+        residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
+            The residual function.
+        norm_fn : :class:`~hiten.algorithms.corrector.types.NormFn`
+            The norm function.
+        max_delta : float or None
+            The maximum delta.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.corrector.protocols.CorrectorStepProtocol`
+            The plain capped stepper.
+        """
         return _CorrectorPlainStep()._build_line_searcher(residual_fn, norm_fn, max_delta)
     return _factory
 
@@ -31,6 +47,17 @@ def make_armijo_stepper(config: "_LineSearchConfig") -> Callable[[ResidualFn, No
         Configuration for Armijo line search.
     """
     def _factory(residual_fn: ResidualFn, norm_fn: NormFn, max_delta: float | None) -> CorrectorStepProtocol:
+        """Return a factory that builds an Armijo stepper per problem.
+        
+        Parameters
+        ----------
+        residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
+            The residual function.
+        norm_fn : :class:`~hiten.algorithms.corrector.types.NormFn`
+            The norm function.
+        max_delta : float or None
+            The maximum delta.
+        """
         return _ArmijoStep(line_search_config=config)._build_line_searcher(residual_fn, norm_fn, max_delta)
     return _factory
 

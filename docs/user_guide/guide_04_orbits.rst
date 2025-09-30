@@ -30,7 +30,6 @@ Halo orbits are three-dimensional periodic orbits that appear as halos around li
    halo.propagate(steps=1000)
    
    print(f"Halo period: {halo.period}")
-   print(f"Halo family: {halo.family}")
 
 To create a halo orbit, you need to specify the amplitude and zenith of the orbit. The amplitude is the maximum distance from the libration point in the z-direction, and the zenith is the family of the orbit.
 
@@ -228,12 +227,13 @@ Period and Stability
 
    # Basic properties
    print(f"Period: {halo.period}")
-   print(f"Family: {halo.family}")
-   print(f"Jacobi constant: {halo.jacobi_constant}")
+   print(f"Jacobi constant: {halo.jacobi}")
    
    # Stability analysis
-   stability_info = halo.compute_stability()
-   print(f"Stability info: {stability_info}")
+   eigenvalues = halo.eigenvalues
+   stability_indices = halo.stability_indices
+   print(f"Eigenvalues: {eigenvalues}")
+   print(f"Stability indices: {stability_indices}")
 
 Trajectory Access
 ~~~~~~~~~~~~~~~~~
@@ -241,16 +241,15 @@ Trajectory Access
 .. code-block:: python
 
    # Get trajectory data
-   times = halo.times
    trajectory = halo.trajectory
    
-   print(f"Trajectory shape: {trajectory.shape}")
-   print(f"Time range: {times[0]} to {times[-1]}")
+   print(f"Trajectory shape: {trajectory.states.shape}")
+   print(f"Time range: {trajectory.t0} to {trajectory.tf}")
    
    # Extract position components
-   x = trajectory[:, 0]
-   y = trajectory[:, 1]
-   z = trajectory[:, 2]
+   x = trajectory.states[:, 0]
+   y = trajectory.states[:, 1]
+   z = trajectory.states[:, 2]
 
 Energy Analysis
 ~~~~~~~~~~~~~~~
@@ -260,7 +259,7 @@ Energy Analysis
    from hiten.algorithms.dynamics.utils.energy import crtbp_energy
    
    # Compute energy along trajectory
-   energies = [crtbp_energy(state, system.mu) for state in trajectory]
+   energies = [crtbp_energy(state, system.mu) for state in trajectory.states]
    
    # Check energy conservation
    initial_energy = energies[0]
@@ -279,28 +278,33 @@ State Parameter Continuation
 
 .. code-block:: python
 
-   from hiten.algorithms import StateParameter
-   from hiten.algorithms.utils.types import SynodicState
+   from hiten.algorithms import ContinuationPipeline
+   from hiten.algorithms.types.states import SynodicState
+   from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+   from hiten.system.family import OrbitFamily
    
    # Create initial orbit
    initial_orbit = l1.create_orbit("halo", amplitude_z=0.2, zenith="southern")
    initial_orbit.correct()
    
-   # Set up continuation
-   state_engine = StateParameter(
-       initial_orbit=initial_orbit,
-       state=(SynodicState.X, SynodicState.Z),
-       amplitude=False,
-       target=([0.8, 0.0], [0.9, 0.3]),
-       step=(0.01, 0.03),
-       max_orbits=10
+   # Set up continuation config
+   config = _OrbitContinuationConfig(
+       target=([0.2], [0.5]),
+       step=((0.03,),),
+       state=(SynodicState.Z,),
+       max_members=10,
+       extra_params=dict(max_attempts=50, tol=1e-12),
+       stepper="secant",
    )
    
-   # Run continuation
-   state_engine.run()
+   # Create continuation pipeline
+   continuation = ContinuationPipeline.with_default_engine(config=config)
    
-   # Create family from continuation
-   family = OrbitFamily.from_engine(state_engine)
+   # Run continuation
+   result = continuation.generate(initial_orbit)
+   
+   # Create family from result
+   family = OrbitFamily.from_result(result)
    family.propagate()
 
 
@@ -313,8 +317,10 @@ Earth-Moon L1 Halo Family
 .. code-block:: python
 
    from hiten import System
-   from hiten.algorithms import StateParameter
-   from hiten.algorithms.utils.types import SynodicState
+   from hiten.algorithms import ContinuationPipeline
+   from hiten.algorithms.types.states import SynodicState
+   from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+   from hiten.system.family import OrbitFamily
    
    # Create system
    system = System.from_bodies("earth", "moon")
@@ -324,18 +330,21 @@ Earth-Moon L1 Halo Family
    halo = l1.create_orbit("halo", amplitude_z=0.2, zenith="southern")
    halo.correct(max_attempts=25)
    
-   # Generate family
-   state_engine = StateParameter(
-       initial_orbit=halo,
+   # Set up continuation config
+   config = _OrbitContinuationConfig(
+       target=([0.2], [0.5]),
+       step=((0.03,),),
        state=(SynodicState.Z,),
-       amplitude=True,
-       target=(0.1, 0.5),
-       step=0.05,
-       max_orbits=10
+       max_members=10,
+       extra_params=dict(max_attempts=50, tol=1e-12),
+       stepper="secant",
    )
    
-   state_engine.run()
-   family = OrbitFamily.from_engine(state_engine)
+   # Generate family
+   continuation = ContinuationPipeline.with_default_engine(config=config)
+   result = continuation.generate(halo)
+   
+   family = OrbitFamily.from_result(result)
    family.propagate()
    
    # Plot family
@@ -355,18 +364,21 @@ Sun-Earth L2 Halo Family
    halo_l2.correct()
    halo_l2.propagate()
    
-   # Generate family
-   state_engine = StateParameter(
-       initial_orbit=halo_l2,
+   # Set up continuation config
+   config = _OrbitContinuationConfig(
+       target=([0.1], [0.3]),
+       step=((0.025,),),
        state=(SynodicState.Z,),
-       amplitude=True,
-       target=(0.05, 0.3),
-       step=0.025,
-       max_orbits=15
+       max_members=15,
+       extra_params=dict(max_attempts=50, tol=1e-12),
+       stepper="secant",
    )
    
-   state_engine.run()
-   family = OrbitFamily.from_engine(state_engine)
+   # Generate family
+   continuation = ContinuationPipeline.with_default_engine(config=config)
+   result = continuation.generate(halo_l2)
+   
+   family = OrbitFamily.from_result(result)
    family.propagate()
 
 Common Issues

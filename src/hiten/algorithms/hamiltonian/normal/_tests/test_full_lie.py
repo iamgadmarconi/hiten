@@ -38,13 +38,13 @@ def center_manifold(libration_point):
     cm = CenterManifold(libration_point, TEST_MAX_DEG)
     cm.compute()  # Triggers all intermediate computations and caches results
 
-    ham_cm_real = cm.pipeline.get_hamiltonian("center_manifold_real")
-    cm._psi = ham_cm_real._psi
-    cm._clmo = ham_cm_real._clmo
-    cm._encode_dict_list = ham_cm_real._encode_dict_list
+    ham_cm_real = cm.dynamics.pipeline.get_hamiltonian("center_manifold_real")
+    cm._psi = ham_cm_real.dynamics.psi
+    cm._clmo = ham_cm_real.dynamics.clmo
+    cm._encode_dict_list = ham_cm_real.dynamics.encode_dict_list
 
     def _get_complex_modal_form():
-        return cm.pipeline.get_hamiltonian("complex_modal").poly_H
+        return cm.dynamics.pipeline.get_hamiltonian("complex_modal").poly_H
 
     cm._get_complex_modal_form = _get_complex_modal_form
 
@@ -57,13 +57,13 @@ def center_manifold(libration_point):
             _, deg, form = key
             if deg != cm.degree:
                 cm.degree = int(deg)
-            return cm.pipeline.get_hamiltonian(form).poly_H
+            return cm.dynamics.pipeline.get_hamiltonian(form).poly_H
 
         if key[0] == "generating_functions":
             _, deg = key
             if deg != cm.degree:
                 cm.degree = int(deg)
-            return cm.pipeline.get_generating_functions("partial").poly_G
+            return cm.dynamics.pipeline.get_generating_functions("partial").poly_G
 
         raise KeyError(f"Unsupported cache key: {key}")
 

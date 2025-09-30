@@ -25,6 +25,14 @@ Advanced Examples
    poincare_map
    synodic_map
 
+Benchmark Examples
+------------------
+
+.. toctree::
+   :maxdepth: 1
+
+   integrator_benchmark
+
 Running Examples
 ----------------
 

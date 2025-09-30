@@ -1,4 +1,4 @@
-Backend Algorithms
+Corrector Backends
 ==================
 
 The backends module provides core correction algorithms.
@@ -8,14 +8,12 @@ The backends module provides core correction algorithms.
 Base Backend
 ------------
 
-.. currentmodule:: hiten.algorithms.corrector.backends.base
-
 _CorrectorBackend()
 ^^^^^^^^^^^^^^^^^^^
 
-The :class:`_CorrectorBackend` class defines an abstract base class for iterative correction algorithms.
+Abstract base class for iterative correction algorithms.
 
-.. autoclass:: _CorrectorBackend()
+.. autoclass:: _CorrectorBackend
    :members:
    :undoc-members:
    :exclude-members: __init__
@@ -23,14 +21,12 @@ The :class:`_CorrectorBackend` class defines an abstract base class for iterativ
 Newton-Raphson Backend
 ----------------------
 
-.. currentmodule:: hiten.algorithms.corrector.backends.newton
-
 _NewtonBackend()
 ^^^^^^^^^^^^^^^^
 
-The :class:`_NewtonBackend` class implements the Newton-Raphson algorithm with robust linear algebra and step control.
+Implement the Newton-Raphson algorithm with robust linear algebra and step control.
 
-.. autoclass:: _NewtonBackend()
+.. autoclass:: _NewtonBackend
    :members:
    :undoc-members:
    :exclude-members: __init__

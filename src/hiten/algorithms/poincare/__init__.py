@@ -6,10 +6,8 @@ problem. It includes both center manifold and synodic Poincare section
 implementations with various seeding strategies.
 """
 
-from hiten.algorithms.poincare.centermanifold.base import CenterManifoldMap
 from hiten.algorithms.poincare.centermanifold.config import \
     _CenterManifoldMapConfig as CenterManifoldMapConfig
-from hiten.algorithms.poincare.synodic.base import SynodicMap
 from hiten.algorithms.poincare.synodic.config import \
     _SynodicMapConfig as SynodicMapConfig
 
@@ -23,7 +21,7 @@ def _build_seeding_strategy(section_cfg, config):
 
     Parameters
     ----------
-    section_cfg : :class:`~hiten.algorithms.poincare.core.config._SectionConfig`
+    section_cfg : :class:`~hiten.algorithms.poincare.core.interfaces._SectionInterface`
         The section configuration object.
     config : :class:`~hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`
         The map configuration containing the seed strategy specification.
@@ -77,8 +75,6 @@ def _build_seeding_strategy(section_cfg, config):
 
 __all__ = [
     "_build_seeding_strategy",
-    "CenterManifoldMap",   
     "CenterManifoldMapConfig",
-    "SynodicMap",
     "SynodicMapConfig",
 ]

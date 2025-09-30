@@ -11,15 +11,14 @@ expansion.
 """
 
 from abc import ABC, abstractmethod
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 
-from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
-from hiten.algorithms.poincare.core.events import _SurfaceEvent
+from hiten.algorithms.types.core import _HitenBaseBackend
 
 
-class _ReturnMapBackend(ABC):
+class _ReturnMapBackend(_HitenBaseBackend):
     """Abstract base class for Poincare return map backends.
 
     This class defines the interface that all concrete return map backends
@@ -28,10 +27,6 @@ class _ReturnMapBackend(ABC):
 
     Parameters
     ----------
-    dynsys : :class:`~hiten.algorithms.dynamics.protocols._DynamicalSystemProtocol`
-        Dynamical system providing the equations of motion.
-    surface : :class:`~hiten.algorithms.poincare.core.events._SurfaceEvent`
-        Poincare section surface definition.
     forward : int, default=1
         Integration direction (1 for forward, -1 for backward).
     method : {'fixed', 'symplectic', 'adaptive'}, default='adaptive'
@@ -58,11 +53,17 @@ class _ReturnMapBackend(ABC):
     All time units are in nondimensional units unless otherwise specified.
     """
 
-    def __init__(
+    def __init__(self) -> None:
+
+        self._section_cache = None
+        self._grid_cache = None
+
+    @abstractmethod
+    def run(
         self,
+        seeds: "np.ndarray",
         *,
-        dynsys: "_DynamicalSystemProtocol",
-        surface: "_SurfaceEvent",
+        dt: float = 1e-2,
         forward: int = 1,
         method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
         order: int = 8,
@@ -70,30 +71,6 @@ class _ReturnMapBackend(ABC):
         refine_steps: int = 3000,
         bracket_dx: float = 1e-10,
         max_expand: int = 500,
-    ) -> None:
-        self._dynsys = dynsys
-        self._surface = surface
-        self._forward = 1 if forward >= 0 else -1
-        self._method = method
-        self._order = int(order)
-        self._pre_steps = int(pre_steps)
-        self._refine_steps = int(refine_steps)
-        self._bracket_dx = float(bracket_dx)
-        self._max_expand = int(max_expand)
-
-        self._section_cache = None
-        self._grid_cache = None
-
-    # Each backend must implement a *single-step* worker that takes an array
-    # of seeds and returns the crossings produced from those seeds. The engine
-    # layer is then responsible for looping / caching / parallelism.
-
-    @abstractmethod
-    def step_to_section(
-        self,
-        seeds: "np.ndarray",
-        *,
-        dt: float = 1e-2,
     ) -> tuple["np.ndarray", "np.ndarray"]:
         """Propagate seeds to the next surface crossing.
 
@@ -126,30 +103,3 @@ class _ReturnMapBackend(ABC):
         initial conditions and returning their next intersection with
         the section. The engine layer handles iteration and caching.
         """
-
-    def on_iteration(self, iteration: int, seeds: "np.ndarray | None" = None) -> None:
-        """Hook called at the start of each iteration in the engine."""
-        return None
-
-    def on_success(
-        self,
-        iteration: int,
-        points: "np.ndarray",
-        states: "np.ndarray",
-        times: "np.ndarray | None" = None,
-    ) -> None:
-        """Hook called when an iteration produces crossings."""
-        return None
-
-    def on_failure(self, iteration: int) -> None:
-        """Hook called when an iteration produces no crossings for a chunk."""
-        return None
-
-    def on_accept(
-        self,
-        points: "np.ndarray",
-        states: "np.ndarray",
-        times: "np.ndarray | None" = None,
-    ) -> None:
-        """Hook called after the engine aggregates final results."""
-        return None

@@ -20,15 +20,17 @@ See Also
     Step-size control interfaces for robust convergence.
 """
 
-from abc import ABC, abstractmethod
-from typing import Any, Tuple
+from abc import abstractmethod
+from typing import Any, Callable, Tuple
 
 import numpy as np
 
+from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
 from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
+from hiten.algorithms.types.core import _HitenBaseBackend
 
 
-class _CorrectorBackend(ABC):
+class _CorrectorBackend(_HitenBaseBackend):
     """Define an abstract base class for iterative correction algorithms.
 
     This class defines the interface for iterative correction algorithms
@@ -80,13 +82,14 @@ class _CorrectorBackend(ABC):
     # - Recommended parameter ranges for different problem types
 
     @abstractmethod
-    def correct(
+    def run(
         self,
         x0: np.ndarray,
         residual_fn: ResidualFn,
         *,
         jacobian_fn: JacobianFn | None = None,
         norm_fn: NormFn | None = None,
+        stepper_factory: Callable[[ResidualFn, NormFn, float | None], CorrectorStepProtocol] | None = None,
         **kwargs,
     ) -> Tuple[np.ndarray, Any]:
         """Solve nonlinear system to find x such that ||R(x)|| < tolerance.
@@ -121,6 +124,10 @@ class _CorrectorBackend(ABC):
             implementations typically default to the L2 (Euclidean) norm.
             The choice of norm can affect convergence behavior and should
             be appropriate for the problem scaling.
+        stepper_factory : callable, optional
+            Factory producing a :class:`~hiten.algorithms.corrector.protocols.CorrectorStepProtocol`
+            instance for the current problem. Allows callers to override the
+            backend's default step strategy on a per-problem basis.
         **kwargs
             Additional algorithm-specific parameters. Common parameters
             include maximum iterations, convergence tolerance, step control
@@ -148,30 +155,6 @@ class _CorrectorBackend(ABC):
             maximum number of iterations or encounters numerical difficulties.
         ValueError
             If input parameters are invalid or incompatible.
-        
-        Notes
-        -----
-        Convergence Criteria:
-        The algorithm terminates successfully when ||R(x)|| < tolerance,
-        where the norm is computed using the provided norm_fn or a default
-        choice. The tolerance should be chosen considering:
-        - Required solution accuracy
-        - Numerical conditioning of the problem
-        - Computational cost constraints
-
-        Robustness Considerations:
-        Implementations should include safeguards for:
-        - Step size control to prevent divergence
-        - Detection and handling of singular Jacobians
-        - Graceful degradation for poorly conditioned problems
-        - Meaningful error reporting for debugging
-
-        Performance Optimization:
-        For computationally intensive problems, consider:
-        - Reusing Jacobian evaluations when possible
-        - Exploiting problem structure (sparsity, symmetry)
-        - Adaptive tolerance and iteration limits
-        - Warm starting from previous solutions
 
         Examples
         --------
@@ -193,19 +176,3 @@ class _CorrectorBackend(ABC):
         """
         # Subclasses must provide concrete implementation
         raise NotImplementedError("Subclasses must implement the correct method")
-
-    def on_iteration(self, k: int, x: np.ndarray, r_norm: float) -> None:
-        """Called after each iteration. Default: no-op."""
-        return
-
-    def on_accept(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
-        """Called when the backend detects convergence. Default: no-op."""
-        return
-
-    def on_failure(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
-        """Called when the backend completes without converging. Default: no-op."""
-        return
-
-    def on_success(self, x: np.ndarray, *, iterations: int, residual_norm: float) -> None:
-        """Called by the Engine after final acceptance. Default: no-op."""
-        return

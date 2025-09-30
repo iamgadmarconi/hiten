@@ -7,12 +7,11 @@ This shortcut allows users to do for example::
 >>> L4 = L4Point(system)
 """
 
-from .base import LibrationPoint, LinearData
+from .base import LibrationPoint
 from .collinear import CollinearPoint, L1Point, L2Point, L3Point
 from .triangular import L4Point, L5Point, TriangularPoint
 
 __all__ = [
-    "LinearData",
     "LibrationPoint",
     "CollinearPoint",
     "TriangularPoint",

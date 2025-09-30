@@ -1,23 +1,21 @@
-Poincare Maps Module
-====================
+Poincare Maps
+=============
 
-The Poincare module provides a comprehensive framework for computing and analyzing Poincare maps in the Circular Restricted Three-Body Problem (CR3BP). It includes specialized implementations for center manifold maps, synodic maps, and single-hit detection, along with core infrastructure for numerical integration and section crossing detection.
-
-The module is organized into several submodules:
+The Poincare module provides a comprehensive framework for computing and analyzing Poincare maps in the Circular Restricted Three-Body Problem (CR3BP).
 
 .. toctree::
    :maxdepth: 2
 
-   poincare/centermanifold
    poincare/core
-   poincare/singlehit
+   poincare/centermanifold
    poincare/synodic
-   poincare/utils
-   poincare/types
+   poincare/singlehit
    poincare/events
+   poincare/interfaces
    poincare/seeding
    poincare/strategies
-   poincare/interfaces
+   poincare/types
+   poincare/utils
 
 .. currentmodule:: hiten.algorithms.poincare
 

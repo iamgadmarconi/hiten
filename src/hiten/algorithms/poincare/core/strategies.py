@@ -19,8 +19,7 @@ logic.
 from abc import ABC, abstractmethod
 from typing import Any, List, Tuple
 
-from hiten.algorithms.poincare.core.config import (_SeedingConfigLike,
-                                                   _SectionConfig)
+from hiten.algorithms.poincare.core.config import _SeedingConfig, _ReturnMapConfig
 
 
 class _SeedingStrategyBase(ABC):
@@ -33,18 +32,18 @@ class _SeedingStrategyBase(ABC):
 
     Parameters
     ----------
-    section_cfg : :class:`~hiten.algorithms.poincare.core.config._SectionConfig`
+    section_cfg : :class:`~hiten.algorithms.poincare.core.interfaces._SectionInterface`
         Section configuration containing section coordinate and plane
         coordinate information.
-    map_cfg : :class:`~hiten.algorithms.poincare.core.config._SeedingConfigLike`
+    map_cfg : :class:`~hiten.algorithms.poincare.core.config._SeedingConfig`
         Seeding configuration containing parameters such as the
         number of seeds to generate.
 
     Attributes
     ----------
-    _section_cfg : :class:`~hiten.algorithms.poincare.core.config._SectionConfig`
+    _section_cfg : :class:`~hiten.algorithms.poincare.core.interfaces._SectionInterface`
         The section configuration.
-    _map_cfg : :class:`~hiten.algorithms.poincare.core.config._SeedingConfigLike`
+    _map_cfg : :class:`~hiten.algorithms.poincare.core.config._SeedingConfig`
         The seeding configuration.
     _cached_limits : dict[tuple[float, int], list[float]]
         Class-level cache for computed limits, keyed by (h0, n_seeds)
@@ -61,34 +60,33 @@ class _SeedingStrategyBase(ABC):
 
     _cached_limits: dict[tuple[float, int], list[float]] = {}
     
-    def __init__(self, section_cfg: _SectionConfig, map_cfg: _SeedingConfigLike) -> None:
-        self._section_cfg = section_cfg
+    def __init__(self, map_cfg: _SeedingConfig) -> None:
         self._map_cfg = map_cfg
 
     @property
-    def config(self) -> "_SectionConfig":
-        """Get the section configuration.
+    def config(self) -> "_SeedingConfig":
+        """Get the map configuration.
 
         Returns
         -------
-        :class:`~hiten.algorithms.poincare.core.config._SectionConfig`
-            The section configuration containing section coordinate
-            and plane coordinate information.
+        :class:`~hiten.algorithms.poincare.core.config._SeedingConfig`
+            The map configuration containing global parameters.
 
         Notes
         -----
-        This property provides access to the section configuration
-        that defines the Poincare section parameters.
+        This property provides access to the map configuration
+        which contains information about the global parameters
+        used for seeding.
         """
-        return self._section_cfg
+        return self._map_cfg
 
     @property
-    def map_config(self) -> "_SeedingConfigLike":
+    def map_config(self) -> "_ReturnMapConfig":
         """Get the seeding configuration.
 
         Returns
         -------
-        :class:`~hiten.algorithms.poincare.core.config._SeedingConfigLike`
+        :class:`~hiten.algorithms.poincare.core.config._MapConfig`
             The seeding configuration containing parameters such as
             the number of seeds to generate.
 
@@ -131,7 +129,7 @@ class _SeedingStrategyBase(ABC):
         This property provides access to the plane coordinate labels
         from the section configuration.
         """
-        return self._section_cfg.plane_coords
+        return self._map_cfg.plane_coords
     
     @abstractmethod
     def generate(self, *, h0: float, H_blocks: Any, clmo_table: Any, solve_missing_coord_fn: Any, find_turning_fn: Any) -> List[Tuple[float, float, float, float]]:

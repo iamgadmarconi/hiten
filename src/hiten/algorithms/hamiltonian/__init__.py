@@ -46,6 +46,5 @@ Gomez, G., Llibre, J., Martinez, R., Simo, C. (2001). Dynamics and Mission Desig
 Near Libration Points. World Scientific.
 """
 
-from .wrappers import _CONVERSION_REGISTRY
-
-__all__ = ["_CONVERSION_REGISTRY"]
+# Import wrappers module to ensure conversion functions are registered
+from . import wrappers

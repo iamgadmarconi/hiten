@@ -56,7 +56,7 @@ def sympy_reference(point) -> sp.Expr:
     H = sp.Rational(1, 2) * (px**2 + py**2 + pz**2) + y * px - x * py
 
     for n in range(2, TEST_MAX_DEG + 1):
-        cn = point._cn(n)
+        cn = point.dynamics.cn(n)
         Pn_expr = sp.legendre(n, x / rho)
         term_to_add = sp.simplify(cn * rho**n * Pn_expr)
         H -= term_to_add
@@ -303,7 +303,7 @@ def test_symplectic(transforms_test_setup):
 
     _, _, _, libration_point = transforms_test_setup
 
-    C, _ = libration_point.normal_form_transform()
+    C, _ = libration_point.normal_form_transform
     J = np.block([[np.zeros((3, 3)),  np.eye(3)],
                   [-np.eye(3),        np.zeros((3, 3))]])
     assert np.allclose(C.T @ J @ C, J, atol=1e-13)

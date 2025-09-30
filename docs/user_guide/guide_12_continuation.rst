@@ -14,9 +14,10 @@ Basic Continuation Concept
 .. code-block:: python
 
    from hiten import System
-   from hiten.algorithms.continuation import StateParameter
-   from hiten.algorithms.utils.types import SynodicState
-   import numpy as np
+   from hiten.algorithms import ContinuationPipeline
+   from hiten.algorithms.types.states import SynodicState
+   from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+   from hiten.system.family import OrbitFamily
 
    system = System.from_bodies("earth", "moon")
    l1 = system.get_libration_point(1)
@@ -25,21 +26,23 @@ Basic Continuation Concept
    initial_orbit = l1.create_orbit("halo", amplitude_z=0.2, zenith="southern")
    initial_orbit.correct()
 
-   # Use continuation to generate a family
-   state_engine = StateParameter.with_default_engine()
-   
-   result = state_engine.solve(
-       seed=initial_orbit,
-       state=SynodicState.Z,      # Vary Z component
-       target=(0.1, 0.3),         # Target range
-       step=0.01,                 # Step size
+   # Create configuration for continuation
+   config = _OrbitContinuationConfig(
+       target=([0.1], [0.3]),     # Target range (min, max)
+       step=((0.01,),),           # Step size
+       state=(SynodicState.Z,),   # Vary Z component
        max_members=10
    )
 
-   family = result.family
-   family.propagate()  # If family has propagate method
+   # Use continuation pipeline to generate a family
+   pipeline = ContinuationPipeline.with_default_engine(config=config)
+   result = pipeline.generate(initial_orbit)
 
-   print(f"Generated family with {len(family)} orbits")
+   # Create orbit family from result
+   family = OrbitFamily.from_result(result)
+   family.propagate()
+
+   print(f"Generated family with {len(result.family)} orbits")
 
 Available Continuation Methods
 ------------------------------------
@@ -54,17 +57,17 @@ The simplest continuation method varies a single parameter linearly:
 .. code-block:: python
 
    # Natural parameter continuation
-   natural_engine = StateParameter.with_default_engine()
-   
-   result = natural_engine.solve(
-       seed=initial_orbit,
-       state=SynodicState.X,      # Vary X position
-       target=(0.8, 0.9),         # Target range
-       step=0.01,                 # Step size
+   config = _OrbitContinuationConfig(
+       target=([0.8], [0.9]),     # Target range (min, max)
+       step=((0.01,),),           # Step size
+       state=(SynodicState.X,),   # Vary X position
        max_members=20
    )
+   
+   pipeline = ContinuationPipeline.with_default_engine(config=config)
+   result = pipeline.generate(initial_orbit)
 
-   natural_family = result.family
+   natural_family = OrbitFamily.from_result(result)
 
 Pseudo-Arclength Continuation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -73,23 +76,20 @@ For more robust continuation that follows the solution curve in parameter space,
 
 .. code-block:: python
 
-   # Use the StateParameter facade with secant stepper
-   state_parameter = StateParameter.with_default_engine()
-
-   result = state_parameter.solve(
-       seed=initial_orbit,
-       state=SynodicState.Z,      # Vary Z component
-       target=(0.1, 0.5),         # Target range
-       step=0.01,                 # Step size
+   # Use the ContinuationPipeline with secant stepper
+   config = _OrbitContinuationConfig(
+       target=([0.1], [0.5]),     # Target range (min, max)
+       step=((0.01,),),           # Step size
+       state=(SynodicState.Z,),   # Vary Z component
        max_members=15,
        stepper="secant",          # Use secant stepping
-       extra_params={
-           'max_attempts': 50,    # More correction attempts
-           'tol': 1e-12           # Higher precision
-       }
+       extra_params={'max_attempts': 50, 'tol': 1e-12}
    )
 
-   arclength_family = result.family
+   pipeline = ContinuationPipeline.with_default_engine(config=config)
+   result = pipeline.generate(initial_orbit)
+
+   arclength_family = OrbitFamily.from_result(result)
 
 Continuation Parameters
 -----------------------------
@@ -104,19 +104,16 @@ The continuation engine automatically adapts step sizes based on correction succ
 .. code-block:: python
 
    # Step size is automatically adapted by the engine
-   adaptive_engine = StateParameter.with_default_engine()
-   
-   result = adaptive_engine.solve(
-       seed=initial_orbit,
-       state=SynodicState.Z,      # Vary Z component
-       target=(0.1, 0.5),         # Target range
-       step=0.05,                 # Initial step size
+   config = _OrbitContinuationConfig(
+       target=([0.1], [0.5]),     # Target range (min, max)
+       step=((0.05,),),           # Initial step size
+       state=(SynodicState.Z,),   # Vary Z component
        max_members=20,
-       extra_params={
-           'max_attempts': 25,   # More attempts for better convergence
-           'tol': 1e-10          # Higher precision
-       }
+       extra_params={'max_attempts': 25, 'tol': 1e-10}
    )
+   
+   pipeline = ContinuationPipeline.with_default_engine(config=config)
+   result = pipeline.generate(initial_orbit)
 
 Convergence Control
 ~~~~~~~~~~~~~~~~~~~
@@ -124,20 +121,16 @@ Convergence Control
 .. code-block:: python
 
    # High accuracy continuation
-   high_precision_engine = StateParameter.with_default_engine()
-   
-   result = high_precision_engine.solve(
-       seed=initial_orbit,
-       state=SynodicState.Z,      # Vary Z component
-       target=(0.1, 0.5),         # Target range
-       step=0.05,
+   config = _OrbitContinuationConfig(
+       target=([0.1], [0.5]),     # Target range (min, max)
+       step=((0.05,),),           # Step size
+       state=(SynodicState.Z,),   # Vary Z component
        max_members=20,
-       extra_params={
-           'max_attempts': 50,
-           'tol': 1e-12,
-           'max_delta': 1e-8
-       }
+       extra_params={'max_attempts': 50, 'tol': 1e-12, 'max_delta': 1e-8}
    )
+   
+   pipeline = ContinuationPipeline.with_default_engine(config=config)
+   result = pipeline.generate(initial_orbit)
 
 Multi-Parameter Continuation
 ----------------------------------
@@ -147,17 +140,17 @@ Continue in multiple parameters simultaneously:
 .. code-block:: python
 
    # Two-parameter continuation
-   multi_param_engine = StateParameter.with_default_engine()
-   
-   result = multi_param_engine.solve(
-       seed=initial_orbit,
-       state=[SynodicState.X, SynodicState.Z],  # Vary both X and Z
-       target=[[0.8, 0.9], [0.1, 0.3]],        # Target ranges for each parameter
-       step=[0.01, 0.01],                      # Step sizes for each parameter
+   config = _OrbitContinuationConfig(
+       target=([0.8, 0.1], [0.9, 0.3]),        # Target ranges (min, max) for each parameter
+       step=((0.01, 0.01),),                   # Step sizes for each parameter
+       state=(SynodicState.X, SynodicState.Z), # Vary both X and Z
        max_members=25
    )
+   
+   pipeline = ContinuationPipeline.with_default_engine(config=config)
+   result = pipeline.generate(initial_orbit)
 
-   multi_family = result.family
+   multi_family = OrbitFamily.from_result(result)
 
 Creating Custom Continuation Algorithms
 -----------------------------------------
@@ -198,17 +191,18 @@ Basic Custom Continuation
 
    # Create configuration
    config = _OrbitContinuationConfig(
-       target=(0.1, 0.3),
-       step=0.01,
+       target=([0.1], [0.3]),     # Target range (min, max)
+       step=((0.01,),),           # Step size
+       state=(SynodicState.Z,),   # Vary Z component
        max_members=10,
        max_retries_per_step=10,
        step_min=1e-10,
-       step_max=1.0,
-       state=SynodicState.Z  # Vary Z component
+       step_max=1.0
    )
 
    # Use the engine directly
-   result = engine.solve(initial_orbit, config)
+   problem = interface.create_problem(domain_obj=initial_orbit, config=config)
+   result = engine.solve(problem)
 
 Advanced Custom Continuation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -271,19 +265,19 @@ For more sophisticated methods, implement custom stepping strategies:
 
    # For advanced usage, you can create a custom engine with the adaptive stepper
    # backend = _PCContinuationBackend()
-   # interface = _PeriodicOrbitContinuationInterface()
+   # interface = _PeriodicOrbitContinuationInterface(initial_orbit)
    # engine = _OrbitContinuationEngine(backend=backend, interface=interface)
    # This would require more complex setup to integrate the adaptive stepper
 
-   # For simplicity, use the standard facade
-   state_engine = StateParameter.with_default_engine()
-   result = state_engine.solve(
-       seed=initial_orbit,
-       state=SynodicState.X,
-       target=(0.8, 0.9),
-       step=0.01,
+   # For simplicity, use the standard pipeline
+   config = _OrbitContinuationConfig(
+       target=([0.8], [0.9]),
+       step=((0.01,),),
+       state=(SynodicState.X,),
        max_members=20
    )
+   pipeline = ContinuationPipeline.with_default_engine(config=config)
+   result = pipeline.generate(initial_orbit)
 
 Advanced Continuation
 ---------------------
