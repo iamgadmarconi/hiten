@@ -12,16 +12,6 @@ The base module provides the core libration point framework.
 
 .. currentmodule:: hiten.system.libration.base
 
-LinearData()
-^^^^^^^^^^^^
-
-Container with linearised CR3BP invariants.
-
-.. autoclass:: LinearData()
-   :members:
-   :undoc-members:
-   :exclude-members: __init__
-
 LibrationPoint()
 ^^^^^^^^^^^^^^^^
 

@@ -1,14 +1,17 @@
-Domain Interfaces
-=================
+Corrector Interfaces
+====================
 
 The interfaces module provides domain-specific interfaces for correction algorithms.
 
 .. currentmodule:: hiten.algorithms.corrector.interfaces
 
+Periodic Orbit Corrector Interface
+----------------------------------
+
 _PeriodicOrbitCorrectorInterface()
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The :class:`_PeriodicOrbitCorrectorInterface` class provides an interface for periodic orbit differential correction.
+Adapter wiring periodic orbits to the Newton correction backend.
 
 .. autoclass:: _PeriodicOrbitCorrectorInterface
    :members:

@@ -29,6 +29,8 @@ The center module provides I/O utilities for center manifold data.
 
 .. autofunction:: load_center_manifold
 
+.. autofunction:: load_center_manifold_inplace
+
 Hamiltonian I/O
 ---------------
 
@@ -39,6 +41,14 @@ The hamiltonian module provides I/O utilities for Hamiltonian data.
 .. autofunction:: save_hamiltonian
 
 .. autofunction:: load_hamiltonian
+
+.. autofunction:: save_lie_generating_function
+
+.. autofunction:: load_lie_generating_function
+
+.. autofunction:: load_hamiltonian_inplace
+
+.. autofunction:: load_lie_generating_function_inplace
 
 Manifold I/O
 ------------
@@ -78,4 +88,69 @@ The orbits module provides I/O utilities for periodic orbit data.
 .. autofunction:: load_periodic_orbit
 
 .. autofunction:: register_orbit_class
+
+Body I/O
+--------
+
+The body module provides I/O utilities for body data.
+
+.. currentmodule:: hiten.utils.io.body
+
+.. autofunction:: save_body
+
+.. autofunction:: load_body
+
+.. autofunction:: load_body_inplace
+
+Family I/O
+----------
+
+The family module provides I/O utilities for orbit family data.
+
+.. currentmodule:: hiten.utils.io.family
+
+.. autofunction:: save_family
+
+.. autofunction:: load_family
+
+.. autofunction:: load_family_inplace
+
+Libration Point I/O
+--------------------
+
+The libration module provides I/O utilities for libration point data.
+
+.. currentmodule:: hiten.utils.io.libration
+
+.. autofunction:: save_libration_point
+
+.. autofunction:: load_libration_point
+
+.. autofunction:: load_libration_point_inplace
+
+System I/O
+----------
+
+The system module provides I/O utilities for system data.
+
+.. currentmodule:: hiten.utils.io.system
+
+.. autofunction:: save_system
+
+.. autofunction:: load_system
+
+.. autofunction:: load_system_inplace
+
+Torus I/O
+---------
+
+The torus module provides I/O utilities for invariant torus data.
+
+.. currentmodule:: hiten.utils.io.torus
+
+.. autofunction:: save_torus
+
+.. autofunction:: load_torus
+
+.. autofunction:: load_torus_inplace
 

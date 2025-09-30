@@ -1,7 +1,7 @@
-Surface Events
-==============
+Poincare Events
+===============
 
-The events module provides surface event classes for defining Poincare section surfaces. These classes implement different types of geometric surfaces that can be used as section planes in dynamical systems analysis.
+The events module provides surface event classes for defining Poincare section surfaces.
 
 Core Events
 -----------
@@ -10,15 +10,13 @@ Core Events
 
 .. autoclass:: _SurfaceEvent()
    :members:
+   :undoc-members:
    :exclude-members: __init__
-
-Abstract base class for all Poincare section surface events. Defines the protocol for surface detection during trajectory integration.
 
 .. autoclass:: _PlaneEvent()
    :members:
+   :undoc-members:
    :exclude-members: __init__
-
-Event class for axis-aligned plane sections. Provides efficient detection of trajectory crossings through planes perpendicular to coordinate axes.
 
 Synodic Events
 --------------
@@ -27,6 +25,5 @@ Synodic Events
 
 .. autoclass:: _AffinePlaneEvent()
    :members:
+   :undoc-members:
    :exclude-members: __init__
-
-Affine hyperplane event in the synodic frame. Extends the base surface event to provide specialized functionality for synodic Poincare sections with arbitrary hyperplane orientations. Supports both axis-aligned planes and general affine hyperplanes in 6D state space.

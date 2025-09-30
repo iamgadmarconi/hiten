@@ -1,21 +1,19 @@
 Continuation Interfaces
 =======================
 
-The interfaces module provides interface classes that adapt the generic continuation engine to specific problem domains in dynamical systems. These interfaces implement the abstract methods required by the continuation framework for particular types of solutions (periodic orbits, invariant tori, etc.).
+The interfaces module provides interface classes that adapt the generic continuation engine to specific problem domains.
 
 .. currentmodule:: hiten.algorithms.continuation.interfaces
 
 Periodic Orbit Continuation Interface
 --------------------------------------
 
-.. currentmodule:: hiten.algorithms.continuation.interfaces
-
 _PeriodicOrbitContinuationInterface()
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The :class:`_PeriodicOrbitContinuationInterface` class adapts periodic-orbit continuation in the CR3BP by providing methods for solution representation, instantiation, parameter extraction, and prediction.
+Adapter wiring periodic-orbit families to continuation backends.
 
-.. autoclass:: _PeriodicOrbitContinuationInterface()
+.. autoclass:: _PeriodicOrbitContinuationInterface
    :members:
    :undoc-members:
    :exclude-members: __init__

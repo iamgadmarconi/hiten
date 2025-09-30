@@ -139,9 +139,15 @@ class OrbitFamily(_HitenBase):
         """
         data = []
         for idx, orbit in enumerate(self.orbits):
-            if orbit.trajectory is None:
+            # Check if trajectory is computed
+            try:
+                trajectory = orbit.trajectory
+            except ValueError:
+                # Trajectory not computed, propagate it
                 orbit.propagate(**kwargs)
-            for t, state in zip(orbit.trajectory.times, orbit.trajectory.states):
+                trajectory = orbit.trajectory
+            
+            for t, state in zip(trajectory.times, trajectory.states):
                 data.append([idx, self.parameter_values[idx], t, *state])
 
         if not data:
@@ -257,11 +263,13 @@ class OrbitFamily(_HitenBase):
         states_list = []
         times_list = []
         for orb in self.orbits:
-            if orb.trajectory is None:
+            try:
+                trajectory = orb.trajectory
+            except ValueError:
                 raise ValueError("Orbit has no trajectory data. Please call propagate() before plotting.")
 
-            states_list.append(orb.trajectory.states)
-            times_list.append(orb.trajectory.times)
+            states_list.append(trajectory.states)
+            times_list.append(trajectory.times)
 
         first_orbit = self.orbits[0]
         bodies = [first_orbit.system.primary, first_orbit.system.secondary]

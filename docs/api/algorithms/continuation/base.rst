@@ -1,23 +1,19 @@
-Continuation Base 
+Continuation Base
 =================
 
-The base module provides the base classes for continuation workflows.
+The base module provides user-facing facades for continuation workflows.
 
 .. currentmodule:: hiten.algorithms.continuation.base
 
-State Parameter Continuation
-----------------------------
+Continuation Pipeline
+---------------------
 
-.. currentmodule:: hiten.algorithms.continuation.base
+ContinuationPipeline()
+^^^^^^^^^^^^^^^^^^^^^^
 
-StateParameter()
-^^^^^^^^^^^^^^^^
+Facade for natural-parameter continuation varying selected state components. Users supply an engine (DI). Use `ContinuationPipeline.with_default_engine()` to construct a default engine wired with the generic predict-correct backend and the periodic-orbit interface.
 
-The :class:`StateParameter` class provides a facade for periodic orbit continuation that varies selected state components. It wraps a continuation engine and provides a convenient interface for configuring and running continuation with domain-friendly parameters like state indices and target ranges.
-
-The facade internally creates a default engine with the predict-correct backend and periodic orbit interface. Users can access the underlying engine via dependency injection if needed.
-
-.. autoclass:: StateParameter()
+.. autoclass:: ContinuationPipeline
    :members:
    :undoc-members:
    :exclude-members: __init__

@@ -1,36 +1,44 @@
-Configuration Classes
-=====================
+Corrector Configuration
+=======================
 
 The config module provides configuration classes for iterative correction algorithms.
 
 .. currentmodule:: hiten.algorithms.corrector.config
 
+Base Configuration
+------------------
+
 _BaseCorrectionConfig()
 ^^^^^^^^^^^^^^^^^^^^^^^
 
-The :class:`_BaseCorrectionConfig` class defines a base configuration class for correction algorithm parameters.
+Define a base configuration class for correction algorithm parameters.
 
-.. autoclass:: _BaseCorrectionConfig()
+.. autoclass:: _BaseCorrectionConfig
    :members:
    :undoc-members:
    :exclude-members: __init__
+
+Orbit Correction Configuration
+------------------------------
 
 _OrbitCorrectionConfig()
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The :class:`_OrbitCorrectionConfig` class defines a configuration for periodic orbit correction.
+Define a configuration for periodic orbit correction.
 
-.. autoclass:: _OrbitCorrectionConfig()
+.. autoclass:: _OrbitCorrectionConfig
    :members:
    :undoc-members:
    :exclude-members: __init__
+
+Line Search Configuration
+-------------------------
 
 _LineSearchConfig()
 ^^^^^^^^^^^^^^^^^^^^
 
-The :class:`_LineSearchConfig` class defines configuration parameters for Armijo line search.
+Define configuration parameters for Armijo line search.
 
-.. autoclass:: _LineSearchConfig()
+.. autoclass:: _LineSearchConfig
    :members:
    :undoc-members:
-   :exclude-members: __init__

@@ -1,18 +1,15 @@
-Poincare Map Utilities
-========================
+Poincare Utilities
+==================
 
-The utils module provides utility functions for interpolation and numerical methods used in Poincare map computation. These functions are optimized for high-performance numerical operations and are used throughout the Poincare module for trajectory interpolation and section crossing refinement.
+The utils module provides utility functions for interpolation and numerical methods used in Poincare map computation.
 
 .. currentmodule:: hiten.algorithms.poincare.utils
 
-.. autofunction:: _interp_linear()
+Functions
+---------
 
-Linear interpolation function for trajectory segments. Efficiently interpolates between two states at given times using linear approximation.
+.. autofunction:: _interp_linear()
 
 .. autofunction:: _hermite_scalar()
 
-Scalar Hermite interpolation function. Computes high-order interpolation using function values and derivatives for improved accuracy in section crossing detection.
-
 .. autofunction:: _hermite_der()
-
-Hermite interpolation derivative function. Computes the derivative of Hermite interpolated values, useful for velocity and acceleration calculations in trajectory refinement.

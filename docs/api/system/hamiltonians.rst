@@ -1,18 +1,16 @@
-Hamiltonians Module
+Hamiltonian Module
 ===================
 
 The hamiltonians module provides base classes for Hamiltonian representations in the CR3BP.
 
 This module provides the fundamental classes for representing and manipulating Hamiltonian functions in the circular restricted three-body problem. It includes the base Hamiltonian class and Lie generating function class for canonical transformations.
 
-.. currentmodule:: hiten.system.hamiltonians
+.. currentmodule:: hiten.system.hamiltonian
 
 Base Classes
 ~~~~~~~~~~~~
 
 The base module provides the core Hamiltonian framework.
-
-.. currentmodule:: hiten.system.hamiltonians.base
 
 Hamiltonian()
 ^^^^^^^^^^^^^
