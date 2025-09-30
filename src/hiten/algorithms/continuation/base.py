@@ -16,6 +16,7 @@ from hiten.algorithms.types.states import SynodicState
 
 if TYPE_CHECKING:
     from hiten.algorithms.continuation.engine.base import _ContinuationEngine
+    from hiten.algorithms.continuation.backends.base import _ContinuationBackend
     from hiten.system.orbits.base import PeriodicOrbit
 
 
@@ -36,12 +37,26 @@ class ContinuationPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, Config
         Engine object for the continuation algorithm.
     """
 
-    def __init__(self, config: ConfigT, interface: InterfaceT, engine: "_ContinuationEngine" = None) -> None:
-        super().__init__(config, interface, engine)
+    def __init__(self, config: ConfigT, interface: InterfaceT, engine: "_ContinuationEngine" = None, backend: "_ContinuationBackend" = None) -> None:
+        super().__init__(config, interface, engine, backend)
 
     @classmethod
-    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None) -> "ContinuationPipeline[DomainT, ConfigT, ResultT]":
+    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None, backend: Optional["_ContinuationBackend"] = None) -> "ContinuationPipeline[DomainT, ConfigT, ResultT]":
         """Create a facade instance with a default engine (factory).
+
+        Parameters
+        ----------
+        config : :class:`~hiten.algorithms.types.core.ConfigT`
+            Configuration object for the continuation algorithm.
+        interface : :class:`~hiten.algorithms.types.core.InterfaceT`, optional
+            Interface object for the continuation algorithm. If None, uses the default _PeriodicOrbitContinuationInterface.
+        backend : :class:`~hiten.algorithms.continuation.backends.base._ContinuationBackend`, optional
+            Backend instance for the continuation algorithm. If None, uses the default _PCContinuationBackend.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.continuation.base.ContinuationPipeline`
+            A continuation facade instance with a default engine injected.
         """
         from hiten.algorithms.continuation.backends.pc import \
             _PCContinuationBackend
@@ -50,10 +65,10 @@ class ContinuationPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, Config
         from hiten.algorithms.continuation.interfaces import \
             _PeriodicOrbitContinuationInterface
 
-        backend = _PCContinuationBackend()
+        backend = backend or _PCContinuationBackend()
         intf = interface or _PeriodicOrbitContinuationInterface()
         engine = _OrbitContinuationEngine(backend=backend, interface=intf)
-        return cls(config, intf, engine)
+        return cls(config, intf, engine, backend)
 
     def generate(
         self,

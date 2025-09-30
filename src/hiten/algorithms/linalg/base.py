@@ -26,11 +26,11 @@ class StabilityPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
         Engine object.
     """
 
-    def __init__(self, config: ConfigT, interface: InterfaceT, engine: _LinearStabilityEngine = None) -> None:
-        super().__init__(config, interface, engine)
+    def __init__(self, config: ConfigT, interface: InterfaceT, engine: _LinearStabilityEngine = None, backend: _LinalgBackend = None) -> None:
+        super().__init__(config, interface, engine, backend)
 
     @classmethod
-    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None) -> "StabilityPipeline[DomainT, InterfaceT, ConfigT, ResultT]":
+    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None, backend: Optional[_LinalgBackend] = None) -> "StabilityPipeline[DomainT, InterfaceT, ConfigT, ResultT]":
         """Create a facade instance with a default engine (factory).
 
         Parameters
@@ -39,16 +39,17 @@ class StabilityPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
             Configuration object.
         interface : :class:`~hiten.algorithms.types.InterfaceT`
             Interface object.
-
+        backend : :class:`~hiten.algorithms.linalg.backend._LinalgBackend`, optional
+            Backend object. If None, uses the default _LinalgBackend.
         Returns
         -------
         :class:`~hiten.algorithms.linalg.base.StabilityPipeline`
             A stability pipeline instance with a default engine injected.
         """
-        backend = _LinalgBackend()
+        backend = backend or _LinalgBackend()
         intf = interface or _EigenDecompositionInterface()
         engine = _LinearStabilityEngine(backend=backend, interface=intf)
-        return cls(config, intf, engine)
+        return cls(config, intf, engine, backend)
 
     def compute(
         self,

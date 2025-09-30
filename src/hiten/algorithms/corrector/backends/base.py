@@ -26,8 +26,10 @@ from typing import Any, Callable, Tuple
 import numpy as np
 
 from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
-from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn
+from hiten.algorithms.corrector.stepping import make_plain_stepper
+from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn, StepperFactory
 from hiten.algorithms.types.core import _HitenBaseBackend
+from hiten.utils.log_config import logger
 
 
 class _CorrectorBackend(_HitenBaseBackend):
@@ -80,6 +82,165 @@ class _CorrectorBackend(_HitenBaseBackend):
     # - Algorithm-specific behavior and limitations
     # - Performance characteristics and trade-offs
     # - Recommended parameter ranges for different problem types
+
+    def __init__(
+        self,
+        *,
+        stepper_factory: StepperFactory | None = None,
+    ) -> None:
+        """Initialize corrector backend with step control factory.
+
+        Parameters
+        ----------
+        stepper_factory : :class:`~hiten.algorithms.corrector.types.StepperFactory` or None
+            The stepper factory to use for step control. If None, uses plain
+            Newton steps with optional capping.
+        """
+        super().__init__()
+        self._stepper_factory: StepperFactory = (
+            make_plain_stepper() if stepper_factory is None else stepper_factory
+        )
+
+    def _compute_residual(self, x: np.ndarray, residual_fn: ResidualFn) -> np.ndarray:
+        """Compute residual vector R(x).
+
+        Separated for easy overriding or acceleration (e.g., with numba).
+
+        Parameters
+        ----------
+        x : np.ndarray
+            Current parameter vector.
+        residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
+            Function to compute residual.
+
+        Returns
+        -------
+        np.ndarray
+            Residual vector R(x).
+        """
+        return residual_fn(x)
+
+    def _compute_norm(self, residual: np.ndarray, norm_fn: NormFn) -> float:
+        """Compute residual norm for convergence checking.
+
+        Parameters
+        ----------
+        residual : np.ndarray
+            Residual vector.
+        norm_fn : :class:`~hiten.algorithms.corrector.types.NormFn`
+            Function to compute norm.
+
+        Returns
+        -------
+        float
+            Scalar norm value.
+        """
+        return norm_fn(residual)
+
+    def _compute_jacobian(
+        self,
+        x: np.ndarray,
+        residual_fn: ResidualFn,
+        jacobian_fn: JacobianFn | None,
+        fd_step: float,
+    ) -> np.ndarray:
+        """Compute Jacobian matrix J(x) = dR/dx.
+
+        Uses analytical Jacobian if provided, otherwise computes central
+        finite-difference approximation with O(h^2) accuracy.
+
+        Parameters
+        ----------
+        x : np.ndarray
+            Current parameter vector.
+        residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
+            Function to compute residual.
+        jacobian_fn : :class:`~hiten.algorithms.corrector.types.JacobianFn` or None
+            Analytical Jacobian function, if available.
+        fd_step : float
+            Step size for finite-difference approximation.
+
+        Returns
+        -------
+        np.ndarray
+            Jacobian matrix with shape (m, n) where m is residual size
+            and n is parameter size.
+        """
+        if jacobian_fn is not None:
+            return jacobian_fn(x)
+
+        # Finite-difference approximation (central diff, O(h**2))
+        n = x.size
+        r0 = residual_fn(x)
+        J = np.zeros((r0.size, n))
+        for i in range(n):
+            x_p = x.copy()
+            x_m = x.copy()
+            h_i = fd_step * max(1.0, abs(x[i]))
+            x_p[i] += h_i
+            x_m[i] -= h_i
+            J[:, i] = (residual_fn(x_p) - residual_fn(x_m)) / (2.0 * h_i)
+        return J
+
+    def _solve_delta_dense(
+        self, J: np.ndarray, r: np.ndarray, cond_threshold: float = 1e8
+    ) -> np.ndarray:
+        """Solve Newton linear system J * delta = -r using dense linear algebra.
+
+        Handles ill-conditioned and rectangular systems automatically:
+
+        - Applies Tikhonov regularization for ill-conditioned square systems
+        - Uses least-squares for rectangular systems
+        - Falls back to SVD for singular systems
+
+        Parameters
+        ----------
+        J : np.ndarray
+            Jacobian matrix.
+        r : np.ndarray
+            Residual vector.
+        cond_threshold : float, default=1e8
+            Condition number threshold for regularization.
+
+        Returns
+        -------
+        np.ndarray
+            Newton step vector delta.
+        """
+        try:
+            cond_J = np.linalg.cond(J)
+        except np.linalg.LinAlgError:
+            cond_J = np.inf
+
+        lambda_reg = 0.0
+
+        if J.shape[0] == J.shape[1]:
+            # Square system
+            if np.isnan(cond_J) or cond_J > cond_threshold:
+                lambda_reg = 1e-12
+                J_reg = J + np.eye(J.shape[0]) * lambda_reg
+            else:
+                J_reg = J
+
+            try:
+                delta = np.linalg.solve(J_reg, -r)
+            except np.linalg.LinAlgError:
+                logger.warning("Jacobian singular; switching to SVD least-squares update")
+                delta = np.linalg.lstsq(J_reg, -r, rcond=None)[0]
+        else:
+            # Rectangular system (over/under-determined)
+            lambda_reg = (
+                1e-12 if (np.isnan(cond_J) or cond_J > cond_threshold) else 0.0
+            )
+            JTJ = J.T @ J + lambda_reg * np.eye(J.shape[1])
+            JTr = J.T @ r
+            try:
+                delta = np.linalg.solve(JTJ, -JTr)
+            except np.linalg.LinAlgError:
+                logger.warning("Normal equations singular; falling back to SVD lstsq")
+                delta = np.linalg.lstsq(J, -r, rcond=None)[0]
+
+        return delta
 
     @abstractmethod
     def run(

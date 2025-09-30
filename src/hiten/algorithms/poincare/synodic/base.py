@@ -12,8 +12,9 @@ including support for orbits, manifolds, and custom trajectories.
 
 """
 
-from typing import Generic, Optional, Literal, Sequence, Tuple
+from typing import Generic, Literal, Optional, Sequence, Tuple
 
+from hiten.algorithms.poincare.synodic.backend import _SynodicDetectionBackend
 from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
 from hiten.algorithms.poincare.synodic.engine import _SynodicEngine
 from hiten.algorithms.poincare.synodic.interfaces import _SynodicInterface
@@ -62,20 +63,35 @@ class SynodicMapPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
     All time units are in nondimensional units unless otherwise specified.
     """
 
-    def __init__(self, config: _SynodicMapConfig, interface: _SynodicInterface, engine: _SynodicEngine | None = None) -> None:
-        super().__init__(config, interface, engine)
+    def __init__(self, config: _SynodicMapConfig, interface: _SynodicInterface, engine: _SynodicEngine | None = None, backend: _SynodicDetectionBackend = None) -> None:
+        super().__init__(config, interface, engine, backend)
 
     @classmethod
     def with_default_engine(
         cls,
         config: _SynodicMapConfig,
         interface: Optional[_SynodicInterface] = None,
+        backend: Optional[_SynodicDetectionBackend] = None,
     ) -> "SynodicMapPipeline":
         """Construct a map with a default-wired engine injected.
 
         This mirrors the DI-friendly facades (e.g., ConnectionPipeline) by creating
         a default engine using the current configuration and injecting it.
         The engine is wired for the default section coordinate in the config.
+
+        Parameters
+        ----------
+        config : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+            Configuration object for the synodic map.
+        interface : :class:`~hiten.algorithms.poincare.synodic.interfaces._SynodicInterface`, optional
+            Interface object for the synodic map. If None, uses the default _SynodicInterface.
+        backend : :class:`~hiten.algorithms.poincare.synodic.backend._SynodicDetectionBackend`, optional
+            Backend instance for the synodic map. If None, uses the default _SynodicDetectionBackend.
+
+        Returns
+        -------
+        :class:`~hiten.algorithms.poincare.synodic.base.SynodicMapPipeline`
+            A synodic map facade instance with a default engine injected.
         """
         from hiten.algorithms.poincare.synodic.backend import \
             _SynodicDetectionBackend
@@ -83,11 +99,11 @@ class SynodicMapPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
         from hiten.algorithms.poincare.synodic.interfaces import \
             _SynodicInterface
 
-        backend = _SynodicDetectionBackend()
+        backend = backend or _SynodicDetectionBackend()
         map_intf = interface or _SynodicInterface()
         strategy = _NoOpStrategy(config)
         engine = _SynodicEngine(backend=backend, seed_strategy=strategy, map_config=config, interface=map_intf)
-        return cls(config, map_intf, engine)
+        return cls(config, map_intf, engine, backend)
 
     def generate(
         self,

@@ -146,3 +146,133 @@ class _OrbitCorrectionConfig(_BaseCorrectionConfig):
     target: tuple[float, ...] = (0.0,)  # Desired residual values
     event_func: Callable[..., tuple[float, np.ndarray]] = _y_plane_crossing
 
+
+@dataclass(frozen=True, slots=True)
+class _MultipleShootingOrbitCorrectionConfig(_OrbitCorrectionConfig):
+    """Define configuration for multiple shooting correction.
+
+    Extends :class:`_OrbitCorrectionConfig` with multiple shooting-specific
+    parameters for patch management, continuity enforcement, and boundary
+    condition handling.
+
+    Multiple shooting divides a trajectory into N segments (patches) and
+    treats each patch's initial state as an independent variable. This
+    approach is more robust than single shooting for long-period orbits,
+    unstable systems, or poor initial guesses.
+
+    Parameters
+    ----------
+    n_patches : int, default=3
+        Number of shooting segments. More patches generally improve robustness
+        at the cost of increased computational cost. Recommended ranges:
+        
+        - Lyapunov orbits: 3-5 patches
+        - Halo orbits: 4-7 patches
+        - Long-period orbits: 7-15 patches
+        - Unstable orbits: 5-10 patches
+        
+    patch_strategy : {"uniform", "adaptive", "manual"}, default="uniform"
+        Strategy for distributing patch points along the trajectory:
+        
+        - "uniform": Evenly spaced in time (simplest, most common)
+        - "adaptive": Concentrate patches near instabilities (future feature)
+        - "manual": User-provided times via `manual_patch_times`
+        
+    manual_patch_times : tuple[float, ...] or None, default=None
+        Explicit patch point times for `patch_strategy="manual"`.
+        Must have length `n_patches + 1` (includes initial and final times).
+        Example: `(0.0, 0.5, 1.2, 2.0)` for 3 patches.
+        
+    continuity_indices : tuple[int, ...], default=()
+        State components to enforce continuity at patch junctions.
+        If empty, uses `control_indices` (enforces continuity on all
+        free variables). Common choices:
+        
+        - `()`: Use control_indices (default)
+        - `(0, 1, 2, 3, 4, 5)`: Enforce full state continuity
+        - `(0, 2, 4)`: Only position continuity (relax velocity)
+        
+    enforce_all_continuity : bool, default=True
+        If True, enforces continuity on all `control_indices`.
+        If False, only enforces on `continuity_indices`.
+        
+    boundary_only_indices : tuple[int, ...], default=()
+        State components with boundary conditions but no continuity
+        enforcement at internal patches. Useful for problems with
+        endpoint constraints that don't apply to patch junctions.
+
+    Notes
+    -----
+    The parameter vector for multiple shooting has dimension:
+    
+    .. math::
+        
+        n_{\\text{params}} = n_{\\text{patches}} \\times n_{\\text{control}}
+
+    The residual vector has dimension:
+    
+    .. math::
+        
+        n_{\\text{residual}} = (n_{\\text{patches}} - 1) \\times n_{\\text{continuity}} + n_{\\text{boundary}}
+
+    Uniform spacing works well for most periodic orbits in the CR3BP.
+    Adaptive spacing (future feature) concentrates patches near regions
+    of high sensitivity (large STM condition numbers).
+
+    Examples
+    --------
+    Basic configuration for Lyapunov orbit:
+
+    >>> config = _MultipleShootingOrbitCorrectionConfig(
+    ...     n_patches=3,
+    ...     control_indices=(0, 2, 4),  # x, z, vx
+    ...     residual_indices=(2, 3, 4),  # z, vz, vx
+    ...     target=(0.0, 0.0, 0.0),
+    ...     tol=1e-10
+    ... )
+
+    Halo orbit with more patches for robustness:
+
+    >>> config = _MultipleShootingOrbitCorrectionConfig(
+    ...     n_patches=7,
+    ...     control_indices=(0, 1, 2, 3, 4, 5),
+    ...     residual_indices=(1, 2, 3, 4, 5),
+    ...     target=(0.0, 0.0, 0.0, 0.0, 0.0),
+    ...     tol=1e-12,
+    ...     max_attempts=50
+    ... )
+
+    Manual patch placement:
+
+    >>> config = _MultipleShootingOrbitCorrectionConfig(
+    ...     n_patches=4,
+    ...     patch_strategy="manual",
+    ...     manual_patch_times=(0.0, 0.3, 0.8, 1.5, 2.0),
+    ...     control_indices=(0, 2, 4)
+    ... )
+
+    Partial continuity enforcement:
+
+    >>> config = _MultipleShootingOrbitCorrectionConfig(
+    ...     n_patches=5,
+    ...     control_indices=(0, 1, 2, 3, 4, 5),
+    ...     continuity_indices=(0, 1, 2),  # Only position continuity
+    ...     boundary_indices=(2, 3, 4),     # Full velocity at boundary
+    ...     enforce_all_continuity=False
+    ... )
+
+    See Also
+    --------
+    :class:`_OrbitCorrectionConfig`
+        Base configuration for orbit correction (single shooting).
+    :class:`_BaseCorrectionConfig`
+        Base configuration for all correction algorithms.
+    :class:`~hiten.algorithms.corrector.types._MultipleShootingProblem`
+        Problem definition using this configuration.
+    """
+    n_patches: int = 3
+    patch_strategy: Literal["uniform", "adaptive", "manual"] = "uniform"
+    manual_patch_times: tuple[float, ...] | None = None
+    continuity_indices: tuple[int, ...] = ()
+    enforce_all_continuity: bool = True
+    boundary_only_indices: tuple[int, ...] = ()

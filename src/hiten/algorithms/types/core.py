@@ -577,13 +577,13 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
     ...         return self._engine.solve(problem)
     """
 
-    def __init__(self, config, interface, engine) -> None:
+    def __init__(self, config, interface, engine, backend) -> None:
         """Initialize the facade."""
-        self._make_pipeline(config, interface, engine)  
+        self._make_pipeline(config, interface, engine, backend)  
 
     @classmethod
     @abstractmethod
-    def with_default_engine(cls, config, interface) -> "_HitenBaseFacade[ConfigT, ProblemT, ResultT]":
+    def with_default_engine(cls, config, interface, backend) -> "_HitenBaseFacade[ConfigT, ProblemT, ResultT]":
         """Create a facade instance with a default engine (factory).
         
         Parameters
@@ -592,6 +592,8 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
             The configuration to use for the facade.
         interface : :class:`~hiten.algorithms.types.core.InterfaceT`
             The interface to use for the facade.
+        backend : :class:`~hiten.algorithms.types.core.BackendT`
+            The backend to use for the facade.
         """
         pass
     
@@ -720,7 +722,7 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
         return interface.create_problem(config=config, domain_obj=domain_obj, *args)
 
 
-    def _make_pipeline(self, config, interface, engine):
+    def _make_pipeline(self, config, interface, engine, backend):
         """Make the pipeline.
         
         Parameters
@@ -731,12 +733,14 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
             The interface to use for the pipeline.
         engine : :class:`~hiten.algorithms.types.core.EngineT`
             The engine to use for the pipeline.
+        backend : :class:`~hiten.algorithms.types.core.BackendT`
+            The backend to use for the pipeline.
         """
         self._config: ConfigT = config
         self._interface: _HitenBaseInterface[Any, ProblemT, ResultT, OutputsT] = interface
         self._engine: _HitenBaseEngine[ProblemT, ResultT, OutputsT] = engine
         self._engine.set_interface(interface)
-        self._backend: _HitenBaseBackend[ProblemT, ResultT, OutputsT] = engine.backend
+        self._backend: _HitenBaseBackend[ProblemT, ResultT, OutputsT]  = backend
         interface.bind_backend(self._backend)
 
     def _validate_config(self, config: ConfigT) -> None:
