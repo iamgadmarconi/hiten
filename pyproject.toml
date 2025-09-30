@@ -7,7 +7,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hiten"
-version = "0.5.0"
+version = "0.5.1"
 description = "HITEN - Computational Toolkit for the Circular Restricted Three-Body Problem"
 readme = "readme.md"
 license = "MIT"

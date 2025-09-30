@@ -831,7 +831,7 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         dedup_point_tol: float = 1e-12,
         max_hits_per_traj: int | None = None,
         newton_max_iter: int = 4,
-        direction: Literal[1, -1, None] | None = None,
+        direction: Literal[1, -1, None] = None,
     ) -> "list[list[_SectionHit]]":
         """Detect crossings on a batch of trajectories.
 
