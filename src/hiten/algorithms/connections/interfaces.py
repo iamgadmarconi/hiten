@@ -60,7 +60,7 @@ class _ManifoldInterface(
     
     - Validating that manifold data is available
     - Converting manifold trajectories to synodic section intersections
-    - Handling different crossing direction filters
+    - Handling different crossing direction filters with time-reversal correction
     - Providing appropriate error messages for invalid states
 
     The interface ensures that manifolds are properly computed before
@@ -143,18 +143,38 @@ class _ManifoldInterface(
         -------
         :class:`~hiten.algorithms.types.core._BackendCall`
             The backend inputs.
+            
+        Notes
+        -----
+        Handles direction parameter carefully: stable manifolds are integrated
+        backward in time, so we flip the crossing direction to ensure source
+        and target manifolds use compatible crossing directions in physical space.
         """
-        # Create section config from problem parameters
-        section_config = _SynodicMapConfig(
+        # Determine crossing directions for each manifold
+        # Apply direction correction based on each object's time integration direction
+        # Stable manifolds are integrated backward in time and need direction flipping
+        # Unstable manifolds are integrated forward in time (no flip needed)
+        direction_u = self._apply_direction_correction(problem.source, problem.direction)
+        direction_s = self._apply_direction_correction(problem.target, problem.direction)
+        
+        # Create section configs with appropriate directions
+        section_config_u = _SynodicMapConfig(
             section_axis=problem.section_axis,
             section_offset=problem.section_offset,
             plane_coords=problem.plane_coords,
-            direction=problem.direction
+            direction=direction_u
         )
         
-        # Extract section data from both manifolds
-        pu, Xu, traj_indices_u = self.to_numeric(problem.source, section_config, direction=problem.direction)
-        ps, Xs, traj_indices_s = self.to_numeric(problem.target, section_config, direction=problem.direction)
+        section_config_s = _SynodicMapConfig(
+            section_axis=problem.section_axis,
+            section_offset=problem.section_offset,
+            plane_coords=problem.plane_coords,
+            direction=direction_s
+        )
+        
+        # Extract section data from both manifolds with appropriate directions
+        pu, Xu, traj_indices_u = self.to_numeric(problem.source, section_config_u, direction=direction_u)
+        ps, Xs, traj_indices_s = self.to_numeric(problem.target, section_config_s, direction=direction_s)
         
         # Extract search parameters from the problem
         eps = float(problem.eps2d)
@@ -340,3 +360,61 @@ class _ManifoldInterface(
         if trajectory_indices is not None:
             trajectory_indices = np.asarray(trajectory_indices, dtype=int)
         return (np.asarray(sec.points, dtype=float), np.asarray(sec.states, dtype=float), trajectory_indices)
+
+    @staticmethod
+    def _apply_direction_correction(domain_obj, direction: Literal[1, -1, None]) -> Literal[1, -1, None]:
+        """Apply direction correction based on object's time integration direction.
+
+        This method accounts for the fact that stable manifolds are integrated
+        backward in time while unstable manifolds are integrated forward in time.
+        When filtering section crossings by direction, we need to flip the direction
+        for backward-time integrations to get compatible physical crossings.
+
+        Parameters
+        ----------
+        domain_obj : object
+            Domain object (e.g., Manifold) that may have time direction info.
+        direction : {1, -1, None}
+            The requested crossing direction filter.
+
+        Returns
+        -------
+        {1, -1, None}
+            Corrected direction for this specific object, accounting for its
+            time integration direction. Returns None if no direction filter.
+
+        Notes
+        -----
+        For Manifold objects:
+        - Stable manifolds (stable=1): integrated backward → flip direction
+        - Unstable manifolds (stable=-1): integrated forward → no flip
+
+        For other objects without time direction info: no correction applied.
+
+        This translation logic properly belongs in the interface layer, as it
+        translates domain object properties (stable/unstable) into backend
+        parameters (crossing direction).
+
+        Examples
+        --------
+        >>> # Stable manifold with direction=-1
+        >>> corrected = _ManifoldInterface._apply_direction_correction(stable_manifold, -1)
+        >>> # Returns +1 (flipped for backward time integration)
+        >>> 
+        >>> # Unstable manifold with direction=-1
+        >>> corrected = _ManifoldInterface._apply_direction_correction(unstable_manifold, -1)
+        >>> # Returns -1 (no flip for forward time integration)
+        """
+        if direction is None:
+            return None
+
+        # Check if object has manifold-like time direction info
+        if hasattr(domain_obj, 'stable'):
+            # stable = 1 means backward time integration (flip direction)
+            # stable = -1 means forward time integration (no flip)
+            is_backward_time = (domain_obj.stable == 1)
+            if is_backward_time:
+                return -direction
+        
+        # Default: no correction for objects without time direction info
+        return direction

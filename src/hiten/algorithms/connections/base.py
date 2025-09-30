@@ -290,9 +290,12 @@ class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
         manifold_if = self._get_interface()
         config = self._get_config()
 
-        # Build section hits for both manifolds on the configured synodic section
-        sec_u = manifold_if.to_section(manifold=self._last_source, config=config.section, direction=config.direction)
-        sec_s = manifold_if.to_section(manifold=self._last_target, config=config.section, direction=config.direction)
+        # Apply direction correction via interface (handles time-reversal for stable manifolds)
+        direction_u = manifold_if._apply_direction_correction(self._last_source, config.direction)
+        direction_s = manifold_if._apply_direction_correction(self._last_target, config.direction)
+        
+        sec_u = manifold_if.to_section(manifold=self._last_source, config=config.section, direction=direction_u)
+        sec_s = manifold_if.to_section(manifold=self._last_target, config=config.section, direction=direction_s)
 
         pts_u = np.asarray(sec_u.points, dtype=float)
         pts_s = np.asarray(sec_s.points, dtype=float)
@@ -316,6 +319,202 @@ class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
             match_values=match_vals,
             **kwargs,
         )
+
+    def plot_connection(self, index: int = 0, **kwargs):
+        """Plot a specific heteroclinic connection showing the connecting trajectories.
+
+        This method visualizes a single connection by plotting the portions of
+        trajectories from both manifolds that lead to the connection point,
+        including flow direction arrows and a Delta-V arrow at the connection.
+
+        Parameters
+        ----------
+        index : int, default=0
+            Index of the connection to plot (0 = best/lowest Delta-V connection).
+        **kwargs
+            Additional keyword arguments passed to
+            :func:`~hiten.utils.plots.plot_heteroclinic_connection`.
+            Common options include:
+            
+            - figsize : tuple, default (10, 8)
+            - save : bool, default False
+            - dark_mode : bool, default True
+            - filepath : str, default 'heteroclinic_connection.svg'
+            - src_color : str, default 'red'
+            - tgt_color : str, default 'blue'
+            - dv_arrow_scale : float, default 0.05
+            - flow_arrow_spacing : int, default 10
+
+        Returns
+        -------
+        tuple
+            (fig, ax) containing the matplotlib figure and axis objects.
+
+        Raises
+        ------
+        EngineError
+            If :meth:`~hiten.algorithms.connections.base.ConnectionPipeline.solve` 
+            has not been called yet.
+        IndexError
+            If the specified index is out of range for the available connections.
+
+        Notes
+        -----
+        The plot shows:
+        
+        - Trajectory portions from source manifold (unstable) in red
+        - Trajectory portions from target manifold (stable) in blue
+        - Flow direction arrows along both trajectories
+        - Connection point marked with a yellow circle
+        - Delta-V vector as a magenta arrow (if non-negligible)
+        - Text annotation with connection type and Delta-V magnitude
+        - Parent periodic orbits (naturally included in manifold trajectories)
+
+        Examples
+        --------
+        >>> # Plot the best connection (index 0)
+        >>> connection.solve(source, target)
+        >>> connection.plot_connection()
+        >>> 
+        >>> # Plot a specific connection with custom styling
+        >>> connection.plot_connection(
+        ...     index=5,
+        ...     figsize=(12, 10),
+        ...     dark_mode=True,
+        ...     src_color='cyan',
+        ...     tgt_color='magenta'
+        ... )
+
+        See Also
+        --------
+        :func:`~hiten.utils.plots.plot_heteroclinic_connection`
+            Underlying plotting function with detailed parameter documentation.
+        :meth:`~hiten.algorithms.connections.base.ConnectionPipeline.plot`
+            Plot all connections on a Poincare section.
+        """
+        from hiten.utils.plots import plot_heteroclinic_connection
+
+        # Check that we have cached results
+        if self._last_source is None or self._last_target is None or self._last_results is None:
+            raise EngineError("Nothing to plot: call solve(source, target) first.")
+
+        # Check index bounds
+        if not self._last_results:
+            raise EngineError("No connections found to plot.")
+        
+        if index < 0 or index >= len(self._last_results):
+            raise IndexError(
+                f"Connection index {index} out of range. "
+                f"Available connections: 0 to {len(self._last_results) - 1}"
+            )
+
+        # Get the specific connection result
+        connection_result = self._last_results[index]
+
+        # Extract trajectory data for plotting
+        traj_data = self._extract_connection_trajectories(connection_result)
+        
+        # Call the plotting function with prepared data
+        return plot_heteroclinic_connection(
+            trajectory_data=traj_data,
+            connection_result=connection_result,
+            **kwargs
+        )
+
+    def _extract_connection_trajectories(self, connection_result: "_ConnectionResult") -> dict:
+        """Extract trajectory data for a specific connection.
+
+        This helper method finds the correct trajectory segments and connection
+        point indices for visualization. It uses section timing information for
+        accurate trajectory trimming.
+
+        Parameters
+        ----------
+        connection_result : :class:`~hiten.algorithms.connections.types._ConnectionResult`
+            The connection result to extract trajectory data from.
+
+        Returns
+        -------
+        dict
+            Dictionary containing:
+            
+            - 'states_u' : ndarray, shape (n, 6) - Source trajectory states up to connection
+            - 'states_s' : ndarray, shape (m, 6) - Target trajectory states up to connection
+            - 'state_u_conn' : ndarray, shape (6,) - Source state at connection
+            - 'state_s_conn' : ndarray, shape (6,) - Target state at connection
+            - 'bodies' : list - Primary and secondary body objects
+            - 'system_distance' : float - System characteristic distance
+            - 'mu' : float - Mass parameter
+
+        Notes
+        -----
+        This method uses section crossing times when available for robust trajectory
+        trimming. Falls back to position-based search if timing info is unavailable.
+        """
+        from hiten.algorithms.utils.coordinates import _get_mass_parameter
+
+        # Extract trajectory indices from connection result
+        traj_idx_u = connection_result.trajectory_index_u
+        traj_idx_s = connection_result.trajectory_index_s
+
+        # Get the specific trajectories
+        traj_u = self._last_source.trajectories[traj_idx_u]
+        traj_s = self._last_target.trajectories[traj_idx_s]
+
+        # Get states at connection point
+        state_u_conn = connection_result.state_u
+        state_s_conn = connection_result.state_s
+        
+        # Use section crossing indices
+        section_idx_u = connection_result.index_u
+        section_idx_s = connection_result.index_s
+
+        # Get section data to access crossing times
+        # Use direction=None here to get all crossings for robust time matching
+        manifold_if = self._get_interface()
+        config = self._get_config()
+        
+        sec_u = manifold_if.to_section(manifold=self._last_source, config=config.section, direction=None)
+        sec_s = manifold_if.to_section(manifold=self._last_target, config=config.section, direction=None)
+        
+        # Find trajectory indices using time-based matching (more robust)
+        if sec_u.times is not None and section_idx_u < len(sec_u.times):
+            time_u_conn = sec_u.times[section_idx_u]
+            time_diffs_u = np.abs(traj_u.times - time_u_conn)
+            idx_u_conn = int(np.argmin(time_diffs_u))
+        else:
+            # Fallback: search by position
+            dist_u = np.linalg.norm(traj_u.states[:, :3] - state_u_conn[:3], axis=1)
+            idx_u_conn = int(np.argmin(dist_u))
+        
+        if sec_s.times is not None and section_idx_s < len(sec_s.times):
+            time_s_conn = sec_s.times[section_idx_s]
+            time_diffs_s = np.abs(traj_s.times - time_s_conn)
+            idx_s_conn = int(np.argmin(time_diffs_s))
+        else:
+            # Fallback: search by position
+            dist_s = np.linalg.norm(traj_s.states[:, :3] - state_s_conn[:3], axis=1)
+            idx_s_conn = int(np.argmin(dist_s))
+
+        # Extract trajectory portions up to connection
+        states_u = traj_u.states[:idx_u_conn + 1, :]
+        states_s = traj_s.states[:idx_s_conn + 1, :]
+
+        # Get system parameters for plotting
+        bodies = [self._last_source.generating_orbit.system.primary,
+                  self._last_source.generating_orbit.system.secondary]
+        system_distance = self._last_source.generating_orbit.system.distance
+        mu = _get_mass_parameter(bodies[0].mass, bodies[1].mass)
+
+        return {
+            'states_u': states_u,
+            'states_s': states_s,
+            'state_u_conn': state_u_conn,
+            'state_s_conn': state_s_conn,
+            'bodies': bodies,
+            'system_distance': system_distance,
+            'mu': mu,
+        }
 
     def _validate_config(self, config: ConfigT) -> None:
         """Validate the configuration object.

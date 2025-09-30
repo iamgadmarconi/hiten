@@ -55,7 +55,7 @@ def main() -> None:
     # Create unified configuration with all parameters in one object
     config = _ConnectionConfig(
         section=section_cfg,        # Synodic section configuration
-        direction=None,             # Crossing direction (None = both directions)
+        direction=-1,                # Crossing direction (None = both directions)
         delta_v_tol=1,             # Maximum Delta-V tolerance
         ballistic_tol=1e-8,        # Threshold for ballistic classification
         eps2d=1e-3,                # 2D pairing radius
@@ -64,9 +64,13 @@ def main() -> None:
     # Create connection using the factory method with unified config
     conn = ConnectionPipeline.with_default_engine(config=config)
 
-    conn.solve(manifold_l1, manifold_l2)
-    
+    result =conn.solve(manifold_l1, manifold_l2)
+
+    print(result)
+
     conn.plot(dark_mode=True)
+
+    conn.plot_connection(dark_mode=True)
 
 
 if __name__ == "__main__":
