@@ -125,8 +125,8 @@ class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
         Container for connection results with convenient access methods.
     """
 
-    def __init__(self, config: ConfigT, interface: InterfaceT, engine: "_ConnectionEngine" = None, backend: "_ConnectionsBackend" = None) -> None:
-        super().__init__(config, interface, engine, backend)
+    def __init__(self, config: ConfigT, engine: "_ConnectionEngine", interface: InterfaceT = None, backend: "_ConnectionsBackend" = None) -> None:
+        super().__init__(config, engine, interface, backend)
         
         self._last_source = None
         self._last_target = None
@@ -158,7 +158,7 @@ class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
         backend = backend or _ConnectionsBackend()
         intf = interface or _ManifoldInterface()
         engine = _ConnectionEngine(backend=backend, interface=intf)
-        return cls(config, intf, engine, backend)
+        return cls(config, engine, intf, backend)
 
     def solve(self, source: DomainT, target: DomainT, *, override: bool = False, **kwargs) -> "Connections":
         """Discover connections between two manifolds.

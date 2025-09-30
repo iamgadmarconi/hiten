@@ -200,6 +200,15 @@ class _MultipleShootingOrbitCorrectionConfig(_OrbitCorrectionConfig):
         State components with boundary conditions but no continuity
         enforcement at internal patches. Useful for problems with
         endpoint constraints that don't apply to patch junctions.
+        
+    use_sparse_jacobian : bool, default=False
+        If True, assemble the Jacobian matrix directly in sparse format
+        using scipy.sparse constructors. This avoids allocating a full
+        dense matrix and is significantly faster for large numbers of
+        patches (n_patches > 10). The block tridiagonal structure of the
+        multiple shooting Jacobian is ~80-90% sparse, which can be
+        exploited for O(n) linear system solving instead of O(n³).
+        Requires scipy to be installed.
 
     Notes
     -----
@@ -270,9 +279,10 @@ class _MultipleShootingOrbitCorrectionConfig(_OrbitCorrectionConfig):
     :class:`~hiten.algorithms.corrector.types._MultipleShootingProblem`
         Problem definition using this configuration.
     """
-    n_patches: int = 3
+    n_patches: int = 20
     patch_strategy: Literal["uniform", "adaptive", "manual"] = "uniform"
     manual_patch_times: tuple[float, ...] | None = None
     continuity_indices: tuple[int, ...] = ()
     enforce_all_continuity: bool = True
     boundary_only_indices: tuple[int, ...] = ()
+    use_sparse_jacobian: bool = False

@@ -26,8 +26,8 @@ class StabilityPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
         Engine object.
     """
 
-    def __init__(self, config: ConfigT, interface: InterfaceT, engine: _LinearStabilityEngine = None, backend: _LinalgBackend = None) -> None:
-        super().__init__(config, interface, engine, backend)
+    def __init__(self, config: ConfigT, engine: _LinearStabilityEngine, interface: InterfaceT = None, backend: _LinalgBackend = None) -> None:
+        super().__init__(config, engine, interface, backend)
 
     @classmethod
     def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None, backend: Optional[_LinalgBackend] = None) -> "StabilityPipeline[DomainT, InterfaceT, ConfigT, ResultT]":
@@ -49,7 +49,7 @@ class StabilityPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
         backend = backend or _LinalgBackend()
         intf = interface or _EigenDecompositionInterface()
         engine = _LinearStabilityEngine(backend=backend, interface=intf)
-        return cls(config, intf, engine, backend)
+        return cls(config, engine, intf, backend)
 
     def compute(
         self,

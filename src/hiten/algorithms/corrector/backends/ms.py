@@ -20,14 +20,12 @@ See Also
 from typing import Tuple
 
 import numpy as np
+from scipy.sparse import csr_matrix, issparse
+from scipy.sparse.linalg import spsolve
 
 from hiten.algorithms.corrector.backends.base import _CorrectorBackend
-from hiten.algorithms.corrector.types import (
-    JacobianFn,
-    NormFn,
-    ResidualFn,
-    StepperFactory,
-)
+from hiten.algorithms.corrector.types import (JacobianFn, NormFn, ResidualFn,
+                                              StepperFactory)
 from hiten.algorithms.types.exceptions import ConvergenceError
 from hiten.utils.log_config import logger
 
@@ -233,23 +231,13 @@ class _MultipleShootingBackend(_CorrectorBackend):
         - Use block Thomas algorithm for tridiagonal systems
         - Exploit structure-specific solvers
         """
-        try:
-            from scipy.sparse import csr_matrix
-            from scipy.sparse.linalg import spsolve
-        except ImportError:
-            logger.warning("scipy not available; falling back to dense solver")
-            return self._solve_delta_dense(J, r, cond_threshold)
-
-        # Convert to sparse format (CSR for efficient matrix-vector ops)
-        J_sparse = csr_matrix(J)
-
-        # Log sparsity for diagnostics
-        sparsity = 1.0 - J_sparse.nnz / (J.shape[0] * J.shape[1])
-        if sparsity > 0.5:
-            logger.debug(
-                f"Jacobian sparsity: {sparsity:.1%} "
-                f"({J_sparse.nnz} nonzeros)"
-            )
+        # Convert to sparse format if not already sparse (CSR for efficient ops)
+        if issparse(J):
+            # Already sparse, ensure CSR format
+            J_sparse = J if J.format == 'csr' else J.tocsr()
+        else:
+            # Dense matrix, convert to sparse
+            J_sparse = csr_matrix(J)
 
         try:
             if J.shape[0] == J.shape[1]:
@@ -258,7 +246,6 @@ class _MultipleShootingBackend(_CorrectorBackend):
                     delta = spsolve(J_sparse, -r)
                 except Exception:
                     # Add regularization and retry
-                    logger.debug("Sparse solve failed; adding regularization")
                     J_reg = J + 1e-12 * np.eye(J.shape[0])
                     J_reg_sparse = csr_matrix(J_reg)
                     delta = spsolve(J_reg_sparse, -r)
@@ -450,11 +437,13 @@ class _MultipleShootingBackend(_CorrectorBackend):
 
             # Log Jacobian properties on first iteration
             if k == 0:
-                sparsity = 1.0 - np.count_nonzero(J) / J.size
-                logger.debug(
-                    f"Jacobian shape: {J.shape}, sparsity: {sparsity:.1%}, "
-                    f"condition: {np.linalg.cond(J):.2e}"
-                )
+                if issparse(J):
+                    # Sparse matrix: use .nnz for nonzero count
+                    total_elements = J.shape[0] * J.shape[1]
+                    sparsity = 1.0 - J.nnz / total_elements
+                else:
+                    # Dense matrix: use original approach
+                    sparsity = 1.0 - np.count_nonzero(J) / J.size
 
             # Solve for Newton step
             delta = self._solve_delta(J, r)

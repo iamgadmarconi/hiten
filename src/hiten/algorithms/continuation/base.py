@@ -37,8 +37,8 @@ class ContinuationPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, Config
         Engine object for the continuation algorithm.
     """
 
-    def __init__(self, config: ConfigT, interface: InterfaceT, engine: "_ContinuationEngine" = None, backend: "_ContinuationBackend" = None) -> None:
-        super().__init__(config, interface, engine, backend)
+    def __init__(self, config: ConfigT, engine: "_ContinuationEngine", interface: InterfaceT = None, backend: "_ContinuationBackend" = None) -> None:
+        super().__init__(config, engine, interface, backend)
 
     @classmethod
     def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None, backend: Optional["_ContinuationBackend"] = None) -> "ContinuationPipeline[DomainT, ConfigT, ResultT]":
@@ -68,7 +68,7 @@ class ContinuationPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, Config
         backend = backend or _PCContinuationBackend()
         intf = interface or _PeriodicOrbitContinuationInterface()
         engine = _OrbitContinuationEngine(backend=backend, interface=intf)
-        return cls(config, intf, engine, backend)
+        return cls(config, engine, intf, backend)
 
     def generate(
         self,

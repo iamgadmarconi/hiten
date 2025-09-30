@@ -43,7 +43,7 @@ class _CenterManifoldSectionInterface(_SectionInterface):
         cfg = _CM_SECTION_TABLE.get(section_coord)
         if cfg is None:
             raise BackendError(f"Unsupported section_coord: {section_coord}")
-        return cfg["plane_coords"]  # type: ignore[index]
+        return cfg["plane_coords"]
 
     @staticmethod
     def build_constraint_dict(section_coord: str, **kwargs: float) -> dict[str, float]:

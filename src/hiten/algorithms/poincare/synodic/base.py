@@ -63,8 +63,8 @@ class SynodicMapPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
     All time units are in nondimensional units unless otherwise specified.
     """
 
-    def __init__(self, config: _SynodicMapConfig, interface: _SynodicInterface, engine: _SynodicEngine | None = None, backend: _SynodicDetectionBackend = None) -> None:
-        super().__init__(config, interface, engine, backend)
+    def __init__(self, config: _SynodicMapConfig, engine: _SynodicEngine, interface: _SynodicInterface = None, backend: _SynodicDetectionBackend = None) -> None:
+        super().__init__(config, engine, interface, backend)
 
     @classmethod
     def with_default_engine(
@@ -103,7 +103,7 @@ class SynodicMapPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
         map_intf = interface or _SynodicInterface()
         strategy = _NoOpStrategy(config)
         engine = _SynodicEngine(backend=backend, seed_strategy=strategy, map_config=config, interface=map_intf)
-        return cls(config, map_intf, engine, backend)
+        return cls(config, engine, map_intf, backend)
 
     def generate(
         self,

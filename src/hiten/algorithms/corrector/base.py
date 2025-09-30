@@ -66,8 +66,8 @@ class CorrectorPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
     >>> result = corrector.correct(orbit)
     """
 
-    def __init__(self, config: ConfigT, interface: InterfaceT, engine: _CorrectionEngine = None, backend: _CorrectorBackend = None) -> None:
-        super().__init__(config, interface, engine, backend)
+    def __init__(self, config: ConfigT, engine: _CorrectionEngine, interface: InterfaceT = None, backend: _CorrectorBackend = None) -> None:
+        super().__init__(config, engine, interface, backend)
 
     @classmethod
     def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None, backend: Optional[_CorrectorBackend] = None) -> "CorrectorPipeline[DomainT, InterfaceT, ConfigT, ResultT]":
@@ -90,7 +90,7 @@ class CorrectorPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
         backend = backend or _NewtonBackend(stepper_factory=make_armijo_stepper(_LineSearchConfig(norm_fn=_infinity_norm)))
         intf = interface or _PeriodicOrbitCorrectorInterface()
         engine = _CorrectionEngine(backend=backend, interface=intf)
-        return cls(config, intf, engine, backend)
+        return cls(config, engine, intf, backend)
 
     def correct(
         self, 

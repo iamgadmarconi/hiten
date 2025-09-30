@@ -992,8 +992,11 @@ class _MultipleShootingCorrectorOrbitInterface(
         n_continuity = len(continuity_indices)
         n_boundary = len(boundary_indices)
 
-        def _fn(params: np.ndarray) -> np.ndarray:
-            """Compute block-structured Jacobian matrix."""
+        # Determine if we should use sparse assembly
+        use_sparse_assembly = getattr(config, 'use_sparse_jacobian', False)
+
+        def _fn(params: np.ndarray):
+            """Compute block-structured Jacobian matrix (dense or sparse)."""
             patches = params.reshape(n_patches, n_control)
 
             # Compute STM for each patch
@@ -1041,7 +1044,50 @@ class _MultipleShootingCorrectorOrbitInterface(
 
                 stm_blocks.append(Phi_block)
 
-            # Assemble block tridiagonal Jacobian
+            # Compute extra Jacobian if needed (before assembly)
+            extra_jac = None
+            if config.extra_jacobian is not None and Phi_full_final is not None and x_boundary is not None:
+                extra_jac = config.extra_jacobian(x_boundary, Phi_full_final)
+
+            # Choose assembly method based on configuration
+            if use_sparse_assembly:
+                # Use sparse assembly (direct sparse construction)
+                try:
+                    jac_sparse = self._assemble_sparse_jacobian(
+                        stm_blocks=stm_blocks,
+                        n_patches=n_patches,
+                        n_control=n_control,
+                        n_continuity=n_continuity,
+                        n_boundary=n_boundary,
+                        continuity_indices=continuity_indices,
+                        control_indices=control_indices,
+                        extra_jac=extra_jac,
+                    )
+                    
+                    if jac_sparse is not None:
+                        # Validate the sparse matrix
+                        expected_rows = n_continuity * (n_patches - 1) + n_boundary
+                        expected_cols = n_patches * n_control
+                        
+                        if jac_sparse.shape != (expected_rows, expected_cols):
+                            raise ValueError(
+                                f"Sparse Jacobian has wrong shape: {jac_sparse.shape}, "
+                                f"expected ({expected_rows}, {expected_cols})"
+                            )
+                        
+                        return jac_sparse
+                    else:
+                        # Sparse assembly returned None (scipy not available)
+                        logger.warning(
+                            "Sparse assembly unavailable (scipy not installed), "
+                            "falling back to dense"
+                        )
+                except Exception as e:
+                    # Sparse assembly raised an exception
+                    raise RuntimeError(f"Sparse Jacobian assembly failed: {e}")
+                # Fall through to dense assembly
+
+            # Dense assembly (original method)
             n_total_residuals = n_continuity * (n_patches - 1) + n_boundary
             n_total_params = n_patches * n_control
             jac = np.zeros((n_total_residuals, n_total_params))
@@ -1084,14 +1130,8 @@ class _MultipleShootingCorrectorOrbitInterface(
                 col_start_final : col_start_final + n_control,
             ] = stm_blocks[-1]
 
-            # Apply extra Jacobian if provided (e.g., for period correction)
-            if config.extra_jacobian is not None and Phi_full_final is not None and x_boundary is not None:
-                # Compute the extra Jacobian term (quadratic correction for period)
-                # This accounts for how the control variables affect the time to reach the boundary
-                extra_jac = config.extra_jacobian(x_boundary, Phi_full_final)
-                
-                # Apply to boundary rows of final patch columns (subtract as in single shooting)
-                # The extra_jacobian returns shape (n_boundary, n_control) or similar
+            # Apply extra Jacobian if computed
+            if extra_jac is not None:
                 jac[
                     row_offset : row_offset + n_boundary,
                     col_start_final : col_start_final + n_control,
@@ -1105,6 +1145,142 @@ class _MultipleShootingCorrectorOrbitInterface(
             return jac
 
         return _fn
+
+    def _assemble_sparse_jacobian(
+        self,
+        stm_blocks: list[np.ndarray],
+        n_patches: int,
+        n_control: int,
+        n_continuity: int,
+        n_boundary: int,
+        continuity_indices: list[int],
+        control_indices: list[int],
+        extra_jac: np.ndarray | None = None,
+    ):
+        """Assemble block tridiagonal Jacobian directly in sparse format.
+
+        This method builds the multiple shooting Jacobian using scipy.sparse
+        constructors, avoiding the allocation of a large dense matrix. This is
+        significantly more memory-efficient and faster for large numbers of patches.
+
+        Parameters
+        ----------
+        stm_blocks : list[np.ndarray]
+            List of STM blocks, one per patch. Each is either:
+            - For patches 0..n-2: shape (n_continuity, n_control)
+            - For patch n-1: shape (n_boundary, n_control)
+        n_patches : int
+            Number of shooting patches.
+        n_control : int
+            Number of control variables per patch.
+        n_continuity : int
+            Number of continuity constraints per junction.
+        n_boundary : int
+            Number of boundary constraints.
+        continuity_indices : list[int]
+            Indices of states enforced for continuity.
+        control_indices : list[int]
+            Indices of states used as control variables.
+        extra_jac : np.ndarray or None, optional
+            Extra Jacobian term to subtract from final boundary block (e.g.,
+            for period correction in periodic orbits).
+
+        Returns
+        -------
+        scipy.sparse.csr_matrix
+            Sparse Jacobian matrix in CSR format with shape:
+            (n_continuity * (n_patches - 1) + n_boundary, n_patches * n_control)
+
+        Notes
+        -----
+        The block tridiagonal structure has the form:
+
+        .. code-block:: text
+
+            [Phi_0   -I     0      0   ]
+            [ 0     Phi_1  -I      0   ]
+            [ 0      0    Phi_2   -I   ]
+            [ 0      0     0    Phi_3  ]
+
+        Where:
+        - Phi_i are the STM blocks (dense, small matrices)
+        - -I are identity blocks (sparse, diagonal)
+        - 0 are true structural zeros (not stored)
+
+        This structure is ~80-90% sparse and can be exploited for O(n)
+        solving time instead of O(n³).
+
+        See Also
+        --------
+        scipy.sparse.bmat : Block matrix constructor used here
+        scipy.sparse.eye : Sparse identity matrix constructor
+        """
+        try:
+            from scipy.sparse import bmat, csr_matrix, eye
+        except ImportError:
+            logger.warning(
+                "scipy not available for sparse assembly; "
+                "falling back to dense Jacobian"
+            )
+            return None
+
+        # Build block rows
+        block_rows = []
+
+        # Continuity rows (patches 0 to n-2)
+        for i in range(n_patches - 1):
+            row_blocks = [None] * n_patches
+
+            # Phi_i block (STM from patch i)
+            row_blocks[i] = csr_matrix(stm_blocks[i])
+
+            # -I block (identity for patch i+1)
+            if n_continuity == n_control:
+                row_blocks[i + 1] = -eye(n_continuity, n_control, format="csr")
+            else:
+                # Partial continuity: selective identity
+                identity_block = np.zeros((n_continuity, n_control))
+                for j, idx in enumerate(continuity_indices):
+                    if idx in control_indices:
+                        k = control_indices.index(idx)
+                        identity_block[j, k] = -1.0
+                row_blocks[i + 1] = csr_matrix(identity_block)
+
+            block_rows.append(row_blocks)
+
+        # Boundary row (final patch)
+        boundary_row = [None] * n_patches
+        final_block = stm_blocks[-1].copy()  # Shape: (n_boundary, n_control)
+
+        # Apply extra Jacobian if provided
+        if extra_jac is not None:
+            final_block = final_block - extra_jac
+
+        boundary_row[-1] = csr_matrix(final_block)
+        block_rows.append(boundary_row)
+
+        # Assemble using scipy's block matrix constructor
+        try:
+            J_sparse = bmat(block_rows, format="csr")
+        except Exception as e:
+            logger.error(
+                f"Failed to assemble sparse block matrix: {e}. "
+                f"Block structure: {len(block_rows)} rows, "
+                f"each with {len(block_rows[0]) if block_rows else 0} columns"
+            )
+            raise
+
+        # Validate result
+        expected_rows = n_continuity * (n_patches - 1) + n_boundary
+        expected_cols = n_patches * n_control
+        
+        if J_sparse.shape != (expected_rows, expected_cols):
+            raise ValueError(
+                f"Sparse Jacobian dimension mismatch: got {J_sparse.shape}, "
+                f"expected ({expected_rows}, {expected_cols})"
+            )
+
+        return J_sparse
 
     def _propagate_patch(
         self,
@@ -1279,7 +1455,7 @@ class _MultipleShootingCorrectorOrbitInterface(
 
             # Propagate from patch i to patch i+1
             x_next_minus = self._propagate_patch(
-                problem.domain_obj, x_i, dt, problem  # type: ignore
+                problem.domain_obj, x_i, dt, problem
             )
 
             # Compare with patch i+1
