@@ -97,6 +97,7 @@ manifold.plot()
    from hiten import System, OrbitFamily
    from hiten.algorithms import ContinuationPipeline
    from hiten.algorithms.types.states import SynodicState
+   from hiten.algorithms.continuation.config import _OrbitContinuationConfig
 
    system = System.from_bodies("earth", "moon")
    l1 = system.get_libration_point(1)
@@ -105,24 +106,25 @@ manifold.plot()
    seed.correct(max_attempts=25)
 
    target_amp = 1e-2  # grow A_x from 0.001 to 0.01 (relative amplitude)
-   current_amp = seed.amplitude
+   current_amp = seed.initial_state[SynodicState.X]  # Get current X position
    num_orbits = 10
 
    # Step in amplitude space (predictor still tweaks X component)
    step = (target_amp - current_amp) / (num_orbits - 1)
 
-   engine = ContinuationPipeline(
-       initial_orbit=seed,
-       state=SynodicState.X,   # underlying coordinate that gets nudged
-       amplitude=True,         # but the continuation parameter is A_x
-       target=(current_amp, target_amp),
-       step=step,
-       corrector_kwargs=dict(max_attempts=50, tol=1e-13),
-       max_orbits=num_orbits,
+   config = _OrbitContinuationConfig(
+       target=([current_amp], [target_amp]),
+       step=((step,),),
+       state=(SynodicState.X,),
+       max_members=num_orbits,
+       extra_params=dict(max_attempts=50, tol=1e-13),
+       stepper="secant",
    )
-   engine.run()
 
-   family = OrbitFamily.from_engine(engine)
+   pipeline = ContinuationPipeline.with_default_engine(config=config)
+   result = pipeline.generate(seed)
+
+   family = OrbitFamily.from_result(result)
    family.propagate()
    family.plot()
    ```
