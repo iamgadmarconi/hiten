@@ -44,10 +44,11 @@ from .backends.base import _CorrectorBackend
 from .backends.ms import _MultipleShootingBackend
 from .backends.newton import _NewtonBackend
 from .config import (_BaseCorrectionConfig, _LineSearchConfig,
-                     _MultipleShootingOrbitCorrectionConfig, _OrbitCorrectionConfig)
+                     _MultipleShootingOrbitCorrectionConfig,
+                     _OrbitCorrectionConfig)
 from .engine import _OrbitCorrectionEngine
-from .interfaces import _PeriodicOrbitCorrectorInterface
-from .interfaces_ms import _MultipleShootingCorrectorOrbitInterface
+from .interfaces import (_MultipleShootingCorrectorOrbitInterface,
+                         _PeriodicOrbitCorrectorInterface)
 
 __all__ = [
     "_NewtonBackend",
