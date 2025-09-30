@@ -28,7 +28,8 @@ import numpy as np
 from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
                                          _HitenBaseFacade)
 from hiten.algorithms.types.exceptions import EngineError
-from hiten.utils.plots import plot_poincare_connections_map
+from hiten.utils.plots import (plot_heteroclinic_connection,
+                               plot_poincare_connections_map)
 
 if TYPE_CHECKING:
     from hiten.algorithms.connections.engine import _ConnectionEngine
@@ -392,8 +393,6 @@ class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
         :meth:`~hiten.algorithms.connections.base.ConnectionPipeline.plot`
             Plot all connections on a Poincare section.
         """
-        from hiten.utils.plots import plot_heteroclinic_connection
-
         # Check that we have cached results
         if self._last_source is None or self._last_target is None or self._last_results is None:
             raise EngineError("Nothing to plot: call solve(source, target) first.")
@@ -418,6 +417,8 @@ class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
         return plot_heteroclinic_connection(
             trajectory_data=traj_data,
             connection_result=connection_result,
+            bodies=[self._last_source.system.primary, self._last_source.system.secondary],
+            system_distance=self._last_source.system.distance,
             **kwargs
         )
 
@@ -442,17 +443,12 @@ class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
             - 'states_s' : ndarray, shape (m, 6) - Target trajectory states up to connection
             - 'state_u_conn' : ndarray, shape (6,) - Source state at connection
             - 'state_s_conn' : ndarray, shape (6,) - Target state at connection
-            - 'bodies' : list - Primary and secondary body objects
-            - 'system_distance' : float - System characteristic distance
-            - 'mu' : float - Mass parameter
 
         Notes
         -----
         This method uses section crossing times when available for robust trajectory
         trimming. Falls back to position-based search if timing info is unavailable.
         """
-        from hiten.algorithms.utils.coordinates import _get_mass_parameter
-
         # Extract trajectory indices from connection result
         traj_idx_u = connection_result.trajectory_index_u
         traj_idx_s = connection_result.trajectory_index_s
@@ -464,56 +460,28 @@ class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
         # Get states at connection point
         state_u_conn = connection_result.state_u
         state_s_conn = connection_result.state_s
-        
-        # Use section crossing indices
-        section_idx_u = connection_result.index_u
-        section_idx_s = connection_result.index_s
 
-        # Get section data to access crossing times
-        # Use direction=None here to get all crossings for robust time matching
-        manifold_if = self._get_interface()
-        config = self._get_config()
+        # Find closest points in full trajectories to the interpolated connection states
+        dist_u = np.linalg.norm(traj_u.states[:, :3] - state_u_conn[:3], axis=1)
+        idx_u_conn = int(np.argmin(dist_u))
         
-        sec_u = manifold_if.to_section(manifold=self._last_source, config=config.section, direction=None)
-        sec_s = manifold_if.to_section(manifold=self._last_target, config=config.section, direction=None)
-        
-        # Find trajectory indices using time-based matching (more robust)
-        if sec_u.times is not None and section_idx_u < len(sec_u.times):
-            time_u_conn = sec_u.times[section_idx_u]
-            time_diffs_u = np.abs(traj_u.times - time_u_conn)
-            idx_u_conn = int(np.argmin(time_diffs_u))
-        else:
-            # Fallback: search by position
-            dist_u = np.linalg.norm(traj_u.states[:, :3] - state_u_conn[:3], axis=1)
-            idx_u_conn = int(np.argmin(dist_u))
-        
-        if sec_s.times is not None and section_idx_s < len(sec_s.times):
-            time_s_conn = sec_s.times[section_idx_s]
-            time_diffs_s = np.abs(traj_s.times - time_s_conn)
-            idx_s_conn = int(np.argmin(time_diffs_s))
-        else:
-            # Fallback: search by position
-            dist_s = np.linalg.norm(traj_s.states[:, :3] - state_s_conn[:3], axis=1)
-            idx_s_conn = int(np.argmin(dist_s))
+        dist_s = np.linalg.norm(traj_s.states[:, :3] - state_s_conn[:3], axis=1)
+        idx_s_conn = int(np.argmin(dist_s))
 
-        # Extract trajectory portions up to connection
-        states_u = traj_u.states[:idx_u_conn + 1, :]
-        states_s = traj_s.states[:idx_s_conn + 1, :]
-
-        # Get system parameters for plotting
-        bodies = [self._last_source.generating_orbit.system.primary,
-                  self._last_source.generating_orbit.system.secondary]
-        system_distance = self._last_source.generating_orbit.system.distance
-        mu = _get_mass_parameter(bodies[0].mass, bodies[1].mass)
+        states_u = np.vstack([
+            traj_u.states[:idx_u_conn + 1, :],
+            state_u_conn
+        ])
+        states_s = np.vstack([
+            traj_s.states[:idx_s_conn + 1, :],
+            state_s_conn
+        ])
 
         return {
             'states_u': states_u,
             'states_s': states_s,
             'state_u_conn': state_u_conn,
             'state_s_conn': state_s_conn,
-            'bodies': bodies,
-            'system_distance': system_distance,
-            'mu': mu,
         }
 
     def _validate_config(self, config: ConfigT) -> None:

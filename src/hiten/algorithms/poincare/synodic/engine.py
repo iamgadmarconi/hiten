@@ -92,6 +92,7 @@ class _SynodicEngine(_ReturnMapEngine):
 
         # Delegate detection to backend passed in at construction
         if n_workers <= 1 or len(trajectories) <= 1:
+            # For consistency, always pass trajectory indices even in single-worker mode
             hits_lists = self._backend.run(
                 trajectories, 
                 normal=normal,
@@ -104,13 +105,15 @@ class _SynodicEngine(_ReturnMapEngine):
                 dedup_point_tol=dedup_point_tol,
                 max_hits_per_traj=max_hits_per_traj,
                 newton_max_iter=newton_max_iter,
-                direction=direction
+                direction=direction,
+                trajectory_indices=list(range(len(trajectories)))
             )
         else:
             chunks = np.array_split(np.arange(len(trajectories)), n_workers)
 
             def _worker(idx_arr: np.ndarray):
                 subset = [trajectories[i] for i in idx_arr.tolist()]
+                # Pass the original trajectory indices so backend labels them correctly
                 return self._backend.run(
                     subset, 
                     normal=normal,
@@ -123,7 +126,8 @@ class _SynodicEngine(_ReturnMapEngine):
                     dedup_point_tol=dedup_point_tol,
                     max_hits_per_traj=max_hits_per_traj,
                     newton_max_iter=newton_max_iter,
-                    direction=direction
+                    direction=direction,
+                    trajectory_indices=idx_arr.tolist()
                 )
 
             parts: list[list[list]] = []

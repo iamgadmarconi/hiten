@@ -64,7 +64,7 @@ def main() -> None:
     # Create connection using the factory method with unified config
     conn = ConnectionPipeline.with_default_engine(config=config)
 
-    result =conn.solve(manifold_l1, manifold_l2)
+    result = conn.solve(manifold_l1, manifold_l2)
 
     print(result)
 

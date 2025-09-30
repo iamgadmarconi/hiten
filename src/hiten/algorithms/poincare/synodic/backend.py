@@ -821,6 +821,7 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         trajectories: "Sequence[tuple[np.ndarray, np.ndarray]]", 
         *,
         normal: "np.ndarray | Sequence[float]",
+        trajectory_indices: "Sequence[int]",
         offset: float = 0.0,
         plane_coords: "tuple[str, str]" = ("y", "vy"),
         interp_kind: Literal["linear", "cubic"] = "linear",
@@ -830,7 +831,7 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         dedup_point_tol: float = 1e-12,
         max_hits_per_traj: int | None = None,
         newton_max_iter: int = 4,
-        direction: Literal[1, -1, None] | None = None
+        direction: Literal[1, -1, None] | None = None,
     ) -> "list[list[_SectionHit]]":
         """Detect crossings on a batch of trajectories.
 
@@ -861,6 +862,10 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         direction : {1, -1, None}, optional
             Crossing direction filter. If None, no direction filtering
             is applied.
+        trajectory_indices : sequence of int
+            Global trajectory indices corresponding to each trajectory in the
+            trajectories sequence. Used to label section hits with their
+            originating trajectory index.
 
         Returns
         -------
@@ -878,7 +883,7 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         are returned as a list of lists.
         """
         out: "list[list[_SectionHit]]" = []
-        for i, (times, states) in enumerate(trajectories):
+        for idx, (times, states) in zip(trajectory_indices, trajectories):
             out.append(self.detect_on_trajectory(
                 times, states, 
                 normal=normal,
@@ -892,6 +897,6 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
                 max_hits_per_traj=max_hits_per_traj,
                 newton_max_iter=newton_max_iter,
                 direction=direction,
-                trajectory_index=i
+                trajectory_index=int(idx)
             ))
         return out

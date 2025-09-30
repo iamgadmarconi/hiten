@@ -1043,6 +1043,8 @@ def plot_invariant_torus(
 def plot_heteroclinic_connection(
         trajectory_data: dict,
         connection_result,
+        bodies: List[Body],
+        system_distance: float,
         *,
         figsize: Tuple[int, int] = (10, 8),
         save: bool = False,
@@ -1065,12 +1067,13 @@ def plot_heteroclinic_connection(
         - 'states_s' : ndarray, shape (m, 6) - Target trajectory states
         - 'state_u_conn' : ndarray, shape (6,) - Source state at connection
         - 'state_s_conn' : ndarray, shape (6,) - Target state at connection
-        - 'bodies' : list - Primary and secondary body objects
-        - 'system_distance' : float - System characteristic distance
-        - 'mu' : float - Mass parameter
         
     connection_result : :class:`~hiten.algorithms.connections.types._ConnectionResult`
         The connection result containing metadata (kind, delta_v, etc.).
+    bodies : list of :class:`~hiten.system.body.Body`
+        Primary and secondary bodies of the CR3BP.
+    system_distance : float
+        Characteristic distance in meters - required to scale the body radii.
     figsize : tuple, default (10, 8)
         Figure size in inches (width, height).
     save : bool, default False
@@ -1112,9 +1115,8 @@ def plot_heteroclinic_connection(
     states_s = trajectory_data['states_s']
     state_u_conn = trajectory_data['state_u_conn']
     state_s_conn = trajectory_data['state_s_conn']
-    bodies = trajectory_data['bodies']
-    system_distance = trajectory_data['system_distance']
-    mu = trajectory_data['mu']
+
+    mu = _get_mass_parameter(bodies[0].mass, bodies[1].mass)
 
     # Create figure
     fig = plt.figure(figsize=figsize)
