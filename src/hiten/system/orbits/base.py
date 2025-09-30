@@ -16,7 +16,7 @@ Szebehely, V. (1967). "Theory of Orbits - The Restricted Problem of Three
 Bodies".
 """
 import os
-from typing import TYPE_CHECKING, Literal, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, List, Literal, Optional, Sequence, Tuple
 
 import numpy as np
 import numpy.typing as npt
@@ -241,6 +241,11 @@ class PeriodicOrbit(_HitenBase):
     def trajectory(self) -> Optional[Trajectory]:
         """The trajectory of the orbit."""
         return self.dynamics.trajectory
+    
+    @property
+    def trajectories(self) -> List[Trajectory]:
+        """List of trajectories (for SynodicMap compatibility)."""
+        return self.dynamics.trajectories
     
     @property
     def monodromy(self) -> np.ndarray:

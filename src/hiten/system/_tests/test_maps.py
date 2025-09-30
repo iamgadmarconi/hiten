@@ -322,9 +322,12 @@ class TestSynodicMapSectionMethods:
         synodic_map.compute(
             section_axis="x",
             section_offset=0.8,
-            plane_coords=("y", "vy")
+            plane_coords=("y", "vy"),
+            direction=None
         )
-        section = synodic_map.get_section("x")
+        # SynodicMap creates section IDs from all parameters
+        section_id = "x_0.8_y_vy_None"
+        section = synodic_map.get_section(section_id)
         assert section is not None
 
     def test_clear_sections_method(self, synodic_map):

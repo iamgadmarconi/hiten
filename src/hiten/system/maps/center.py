@@ -135,7 +135,7 @@ class CenterManifoldMap(_HitenBase):
         """
         return self.dynamics.get_points(section_coord=section_coord, axes=axes)
 
-    def to_synodic(self, pt: np.ndarray, *, section_coord: Optional[str]) -> np.ndarray:
+    def to_synodic(self, pt: np.ndarray, *, section_coord: Optional[str] = None, tol: float = 1e-12) -> np.ndarray:
         """Convert a plane point to initial conditions for integration.
 
         Parameters
@@ -145,13 +145,15 @@ class CenterManifoldMap(_HitenBase):
         section_coord : str, optional
             Section coordinate identifier. If None, uses the default
             section coordinate from configuration.
+        tol : float, optional
+            Tolerance for root finding. Default is 1e-12.
 
         Returns
         -------
         ndarray, shape (6,)
             Initial conditions [q1, q2, q3, p1, p2, p3] for integration.
         """
-        return self.dynamics.to_synodic(pt, section_coord=section_coord)
+        return self.dynamics.to_synodic(pt, section_coord=section_coord, tol=tol)
 
     def plot(
         self,
