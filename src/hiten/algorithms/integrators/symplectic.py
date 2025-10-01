@@ -21,7 +21,7 @@ from hiten.algorithms.polynomial.operations import _polynomial_evaluate
 from hiten.algorithms.utils.config import FASTMATH
 from hiten.algorithms.integrators.base import _Integrator, _Solution
 from hiten.algorithms.dynamics.protocols import _HamiltonianSystemProtocol
-from hiten.algorithms.integrators.configs import _EventConfig
+from hiten.algorithms.types.events import _EventConfig
 from hiten.algorithms.integrators.utils import (_event_crossed,
                                                 _bracket_converged,
                                                 _bisection_update,
@@ -897,7 +897,7 @@ class _ExtendedSymplectic(_Integrator):
         event_fn : Callable[[float, numpy.ndarray], float], optional
             Scalar event function evaluated as ``g(t, y)``. A zero
             crossing may terminate integration or mark an event.
-        event_cfg : :class:`~hiten.algorithms.integrators.configs._EventConfig` | None
+        event_cfg : :class:`~hiten.algorithms.types.events._EventConfig` | None
             Configuration controlling event directionality, terminal
             behavior, and tolerances.
         **kwargs

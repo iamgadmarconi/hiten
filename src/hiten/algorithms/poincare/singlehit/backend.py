@@ -21,7 +21,7 @@ from numba import njit, types
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
 from hiten.algorithms.integrators.rk import RungeKutta
-from hiten.algorithms.integrators.configs import _EventConfig
+from hiten.algorithms.types.events import _EventConfig
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
 from hiten.algorithms.poincare.core.events import _PlaneEvent, _SurfaceEvent
 from hiten.algorithms.poincare.core.types import _SectionHit

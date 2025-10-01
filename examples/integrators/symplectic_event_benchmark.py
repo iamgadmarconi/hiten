@@ -28,7 +28,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 from hiten.algorithms.dynamics.hamiltonian import create_hamiltonian_system
 from hiten.algorithms.integrators import ExtendedSymplectic
-from hiten.algorithms.integrators.configs import _EventConfig
+from hiten.algorithms.types.events import _EventConfig
 from hiten.algorithms.integrators.symplectic import (
     N_SYMPLECTIC_DOF,
     N_VARS_POLY,

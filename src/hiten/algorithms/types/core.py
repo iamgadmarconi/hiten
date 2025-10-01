@@ -6,7 +6,7 @@ This module provides the abstract base class for all Hiten classes.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
 from typing import Any, Generic, TypeVar, Union
 
@@ -83,7 +83,59 @@ class _HitenBaseResults(ABC):
 class _HitenBaseConfig(ABC):
     """Marker base class for configuration payloads produced by interfaces."""
 
-    __slots__ = ()
+    def __post_init__(self) -> None:
+        """Post-initialization hook."""
+        self._validate()
+
+    def __str__(self) -> str:
+        """Generate human-readable description."""
+        lines = [f"{self.__class__.__name__}:"]
+        for field_name, _ in self.__dataclass_fields__.items():
+            value = getattr(self, field_name)
+            lines.append(f"  {field_name}: {value}")
+        return "\n".join(lines)
+
+    @abstractmethod
+    def _validate(self) -> None:
+        """Validate the configuration."""
+        pass
+
+    def merge(self, **overrides) -> "_HitenBaseConfig":
+        """Create new config with specified overrides (immutable).
+        
+        Parameters
+        ----------
+        **overrides
+            Fields to override. None values are ignored.
+        
+        Returns
+        -------
+        _HitenBaseConfig
+            New config instance with overrides applied.
+        
+        Examples
+        --------
+        >>> config = MyConfig(tol=1e-10, max_attempts=50)
+        >>> new_config = config.merge(tol=1e-12)
+        >>> new_config.tol  # 1e-12
+        >>> config.tol      # 1e-10 (unchanged)
+        """
+        filtered = {k: v for k, v in overrides.items() if v is not None}
+        return replace(self, **filtered)
+    
+    def to_dict(self) -> dict:
+        """Convert configuration to dictionary."""
+        return asdict(self)
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> "_HitenBaseConfig":
+        """Create configuration from dictionary."""
+        import inspect
+        sig = inspect.signature(cls)
+        valid_keys = set(sig.parameters.keys())
+        filtered = {k: v for k, v in data.items() if k in valid_keys}
+        return cls(**filtered)
+
 
 
 class _HitenBaseBackend(ABC):

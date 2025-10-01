@@ -200,11 +200,11 @@ Events are defined as scalar functions ``g(t, y)`` that trigger when ``g(t, y) =
 - ``direction=-1``: Only detect decreasing crossings (g goes from positive to negative)
 
 **Event Configuration:**
-Events are configured using the :class:`~hiten.algorithms.integrators.configs._EventConfig` class:
+Events are configured using the :class:`~hiten.algorithms.types.events._EventConfig` class:
 
 .. code-block:: python
 
-   from hiten.algorithms.integrators.configs import _EventConfig
+   from hiten.algorithms.types.events import _EventConfig
 
    # Detect any sign change and stop integration
    event_cfg = _EventConfig(direction=0, terminal=True)
@@ -226,7 +226,7 @@ Events are configured using the :class:`~hiten.algorithms.integrators.configs._E
 
    import numpy as np
    from hiten.algorithms.integrators.rk import AdaptiveRK
-   from hiten.algorithms.integrators.configs import _EventConfig
+   from hiten.algorithms.types.events import _EventConfig
 
    def rhs(t, y):
        return np.array([-y[1], y[0]])  # Harmonic oscillator

@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Callable, Dict, Literal, Sequence
 
 import numpy as np
 
-from hiten.algorithms.integrators.configs import _EventConfig
+from hiten.algorithms.types.events import _EventConfig
 from hiten.algorithms.types.serialization import _SerializeBase
 from hiten.algorithms.utils.config import FASTMATH
 from hiten.utils.log_config import logger

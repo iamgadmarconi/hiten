@@ -4,7 +4,7 @@ import pytest
 
 from hiten.algorithms.dynamics.rhs import create_rhs_system
 from hiten.algorithms.integrators import AdaptiveRK, RungeKutta
-from hiten.algorithms.integrators.configs import _EventConfig
+from hiten.algorithms.types.events import _EventConfig
 
 
 def test_dop853_event_positive_crossing():

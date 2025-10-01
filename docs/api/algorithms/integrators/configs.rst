@@ -3,7 +3,7 @@ Integrators Configuration
 
 The configs module provides configuration classes for numerical integration.
 
-.. currentmodule:: hiten.algorithms.integrators.configs
+.. currentmodule:: hiten.algorithms.types.events
 
 Configuration Classes
 ---------------------

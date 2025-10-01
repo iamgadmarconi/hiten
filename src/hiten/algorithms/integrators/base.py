@@ -14,7 +14,7 @@ import numpy as np
 from numba import types
 
 from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
-from hiten.algorithms.integrators.configs import _EventConfig
+from hiten.algorithms.types.events import _EventConfig
 from hiten.algorithms.integrators.types import _Solution
 from hiten.algorithms.utils.config import FASTMATH
 
@@ -100,7 +100,7 @@ class _Integrator(ABC):
         event_fn : Callable[[float, numpy.ndarray], float], optional
             Event function evaluated as ``g(t, y)``. A zero crossing may
             be used by concrete integrators to stop or record events.
-        event_cfg : :class:`~hiten.algorithms.integrators.configs._EventConfig`, optional
+        event_cfg : :class:`~hiten.algorithms.types.events._EventConfig`, optional
             Configuration controlling event directionality, terminal
             behavior, and tolerances for event handling.
         **kwargs

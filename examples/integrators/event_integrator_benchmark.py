@@ -22,7 +22,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 from hiten.algorithms.dynamics.rhs import create_rhs_system
 from hiten.algorithms.integrators import RungeKutta
-from hiten.algorithms.integrators.configs import _EventConfig
+from hiten.algorithms.types.events import _EventConfig
 
 warnings.filterwarnings('ignore', category=UserWarning)
 

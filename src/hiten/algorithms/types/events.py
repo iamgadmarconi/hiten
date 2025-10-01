@@ -1,8 +1,10 @@
 from dataclasses import dataclass
 
+from hiten.algorithms.types.core import _HitenBaseConfig
+
 
 @dataclass(frozen=True)
-class _EventConfig:
+class _EventConfig(_HitenBaseConfig):
     """Configuration for a scalar event function g(t, y).
 
     Parameters

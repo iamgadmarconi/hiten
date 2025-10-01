@@ -56,7 +56,7 @@ from hiten.algorithms.integrators.coefficients.rk45 import A as RK45_A
 from hiten.algorithms.integrators.coefficients.rk45 import C as RK45_C
 from hiten.algorithms.integrators.coefficients.rk45 import E as RK45_E
 from hiten.algorithms.integrators.coefficients.rk45 import P as RK45_P
-from hiten.algorithms.integrators.configs import _EventConfig
+from hiten.algorithms.types.events import _EventConfig
 from hiten.algorithms.integrators.utils import (_adjust_step_to_endpoint,
                                                 _bisection_update,
                                                 _bracket_converged,
@@ -444,7 +444,7 @@ class _FixedStepRK(_RungeKuttaBase):
         event_fn : Callable[[float, numpy.ndarray], float], optional
             Scalar event function evaluated as ``g(t, y)``. A zero
             crossing may terminate integration or mark an event.
-        event_cfg : :class:`~hiten.algorithms.integrators.configs._EventConfig` | None
+        event_cfg : :class:`~hiten.algorithms.types.events._EventConfig` | None
             Configuration controlling event directionality, terminal
             behavior, and tolerances.
         **kwargs
@@ -1148,7 +1148,7 @@ class _RK45(_AdaptiveStepRK):
             solution. Units follow the provided ``system``.
         event_fn : Callable[[float, numpy.ndarray], float], optional
             Scalar event function evaluated as ``g(t, y)``.
-        event_cfg : :class:`~hiten.algorithms.integrators.configs._EventConfig` | None
+        event_cfg : :class:`~hiten.algorithms.types.events._EventConfig` | None
             Configuration controlling directionality, terminal behavior,
             and tolerances.
         **kwargs
@@ -2230,7 +2230,7 @@ class _DOP853(_AdaptiveStepRK):
             solution. Units follow the provided ``system``.
         event_fn : Callable[[float, numpy.ndarray], float], optional
             Scalar event function evaluated as ``g(t, y)``.
-        event_cfg : :class:`~hiten.algorithms.integrators.configs._EventConfig`
+        event_cfg : :class:`~hiten.algorithms.types.events._EventConfig`
             Configuration controlling directionality, terminal behavior,
             and tolerances.
         **kwargs
