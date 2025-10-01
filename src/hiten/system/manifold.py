@@ -169,6 +169,50 @@ class Manifold(_HitenBase):
         return self.dynamics.manifold_result
 
     @property
+    def eigendecomposition_config(self):
+        """Get the eigenvalue decomposition configuration.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.linalg.config.EigenDecompositionConfig`
+            The eigendecomposition configuration.
+        """
+        return self.dynamics.eigendecomposition_config
+
+    @eigendecomposition_config.setter
+    def eigendecomposition_config(self, value):
+        """Set the eigenvalue decomposition configuration.
+        
+        Parameters
+        ----------
+        value : :class:`~hiten.algorithms.linalg.config.EigenDecompositionConfig`
+            New eigendecomposition configuration.
+        """
+        self.dynamics.eigendecomposition_config = value
+
+    @property
+    def eigendecomposition_options(self):
+        """Get the eigenvalue decomposition runtime options.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.linalg.options.EigenDecompositionOptions`
+            The eigendecomposition options with reasonable defaults.
+        """
+        return self.dynamics.eigendecomposition_options
+
+    @eigendecomposition_options.setter
+    def eigendecomposition_options(self, value):
+        """Set the eigenvalue decomposition runtime options.
+        
+        Parameters
+        ----------
+        value : :class:`~hiten.algorithms.linalg.options.EigenDecompositionOptions`
+            New eigendecomposition options.
+        """
+        self.dynamics.eigendecomposition_options = value
+
+    @property
     def trajectories(self) -> List[Trajectory]:
         """The trajectories of the manifold.
         

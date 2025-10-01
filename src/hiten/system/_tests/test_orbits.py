@@ -13,7 +13,7 @@ from hiten.system.orbits import (
     VerticalOrbit,
 )
 from hiten.algorithms.types.states import Trajectory
-from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
+from hiten.algorithms.corrector.config import OrbitCorrectionConfig
 
 
 @pytest.fixture

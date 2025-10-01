@@ -288,8 +288,8 @@ class _ConnectionProblem:
     """Define a problem specification for connection discovery between two manifolds.
 
     This dataclass encapsulates all the parameters needed to define a connection
-    discovery problem, including the source and target manifolds and the unified
-    configuration containing section, direction, and search parameters.
+    discovery problem, including the source and target manifolds, compile-time
+    configuration (section structure), and runtime options (search tolerances).
 
     Parameters
     ----------
@@ -298,27 +298,28 @@ class _ConnectionProblem:
     target : :class:`~hiten.system.manifold.Manifold` | :class:`~hiten.system.orbits.base.PeriodicOrbit`
         Target manifold (typically stable manifold).
     section_axis : str
-        Axis for the synodic section (e.g., "x", "y", "z").
+        Axis for the synodic section (e.g., "x", "y", "z"). From config.
     section_offset : float
-        Offset value for the synodic section.
+        Offset value for the synodic section. From config.
     plane_coords : tuple of str
-        Coordinate labels for the section plane projection.
+        Coordinate labels for the section plane projection. From config.
     direction : int or None
-        Direction for section crossings (1, -1, or None for both).
-    n_workers : int or None
-        Number of parallel workers for computation.
+        Direction for section crossings (1, -1, or None for both). From config.
     delta_v_tol : float
-        Maximum Delta-V tolerance for accepting a connection.
+        Maximum Delta-V tolerance for accepting a connection. From options.
     ballistic_tol : float
-        Threshold for classifying connections as ballistic vs impulsive.
+        Threshold for classifying connections as ballistic vs impulsive. From options.
     eps2d : float
-        Radius for initial 2D pairing of points on the synodic section.
+        Radius for initial 2D pairing of points on the synodic section. From options.
+    n_workers : int or None
+        Number of parallel workers for computation. From options.
 
     Notes
     -----
     This class serves as a data container that packages all the necessary
-    information for the connection engine to process. It ensures that all
-    required parameters are provided and properly typed.
+    information for the connection engine to process. It combines compile-time
+    structure (config) and runtime tuning (options) into a single problem
+    specification.
 
     The problem specification is typically created by the high-level
     :class:`~hiten.algorithms.connections.base.ConnectionPipeline` class and passed
@@ -333,10 +334,10 @@ class _ConnectionProblem:
     ...     section_offset=0.8,
     ...     plane_coords=("y", "z"),
     ...     direction=1,
-    ...     n_workers=1,
     ...     delta_v_tol=1e-3,
     ...     ballistic_tol=1e-8,
-    ...     eps2d=1e-4
+    ...     eps2d=1e-4,
+    ...     n_workers=1
     ... )
 
     See Also
@@ -352,7 +353,7 @@ class _ConnectionProblem:
     section_offset: float
     plane_coords: tuple[str, str]
     direction: int | None
-    n_workers: int | None
     delta_v_tol: float
     ballistic_tol: float
     eps2d: float
+    n_workers: int | None

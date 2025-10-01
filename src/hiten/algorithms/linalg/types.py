@@ -102,19 +102,26 @@ class EigenDecompositionResults:
 class _EigenDecompositionProblem:
     """Problem definition for classifying the eigen-structure of a matrix.
     
+    This problem specification combines compile-time configuration (what to
+    compute, what kind of system) with runtime options (tolerances).
+    
     Parameters
     ----------
     A : np.ndarray
         Matrix to decompose.
-    problem_type : :class:`~hiten.algorithms.linalg.types._ProblemType`
-        Problem type for the eigenvalue decomposition.
-    system_type : :class:`~hiten.algorithms.linalg.types._SystemType`
-        Classification mode: 0 for continuous-time (sign of real parts),
-        1 for discrete-time (modulus relative to unity).
+    problem_type : _ProblemType
+        Defines WHAT to compute. From config.
+    system_type : _SystemType
+        Defines WHAT kind of system (continuous vs discrete). From config.
     delta : float
-        Tolerance used in eigenvalue classification.
+        Classification tolerance. From options.
     tol : float
-        Tolerance used in stability index calculation.
+        Stability index tolerance. From options.
+
+    Notes
+    -----
+    This problem object unpacks both config (problem_type, system_type) and
+    options (delta, tol) into explicit parameters for the backend.
     """
 
     A: np.ndarray

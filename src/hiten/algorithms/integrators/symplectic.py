@@ -17,15 +17,16 @@ import numpy as np
 from numba import njit
 from numba.typed import List
 
-from hiten.algorithms.polynomial.operations import _polynomial_evaluate
-from hiten.algorithms.utils.config import FASTMATH
-from hiten.algorithms.integrators.base import _Integrator, _Solution
 from hiten.algorithms.dynamics.protocols import _HamiltonianSystemProtocol
-from hiten.algorithms.types.events import _EventConfig
-from hiten.algorithms.integrators.utils import (_event_crossed,
+from hiten.algorithms.integrators.base import _Integrator, _Solution
+from hiten.algorithms.integrators.utils import (_bisection_update,
                                                 _bracket_converged,
-                                                _bisection_update,
-                                                _crossed_direction)
+                                                _crossed_direction,
+                                                _event_crossed)
+from hiten.algorithms.polynomial.operations import _polynomial_evaluate
+from hiten.algorithms.types.configs import EventConfig
+from hiten.algorithms.types.options import EventOptions
+from hiten.algorithms.utils.config import FASTMATH
 
 N_SYMPLECTIC_DOF = 3
 N_VARS_POLY = 6
@@ -880,7 +881,8 @@ class _ExtendedSymplectic(_Integrator):
         t_vals: np.ndarray,
         *,
         event_fn=None,
-        event_cfg: _EventConfig | None = None,
+        event_cfg: EventConfig | None = None,
+        event_options: "EventOptions | None" = None,
         **kwargs
     ) -> _Solution:
         """
@@ -897,9 +899,10 @@ class _ExtendedSymplectic(_Integrator):
         event_fn : Callable[[float, numpy.ndarray], float], optional
             Scalar event function evaluated as ``g(t, y)``. A zero
             crossing may terminate integration or mark an event.
-        event_cfg : :class:`~hiten.algorithms.types.events._EventConfig` | None
-            Configuration controlling event directionality, terminal
-            behavior, and tolerances.
+        event_cfg : :class:`~hiten.algorithms.types.configs.EventConfig` | None
+            Configuration controlling event directionality and terminal behavior.
+        event_options : :class:`~hiten.algorithms.types.options.EventOptions` | None
+            Runtime tuning options controlling event detection tolerances.
         **kwargs
             Additional integration options (currently unused)
             
@@ -956,8 +959,8 @@ class _ExtendedSymplectic(_Integrator):
             
             # Extract event configuration parameters
             direction = 0 if event_cfg is None else int(event_cfg.direction)
-            xtol = float(event_cfg.xtol if event_cfg is not None else 1.0e-12)
-            gtol = float(event_cfg.gtol if event_cfg is not None else 1.0e-12)
+            xtol = float(event_options.xtol if event_options is not None else 1.0e-12)
+            gtol = float(event_options.gtol if event_options is not None else 1.0e-12)
             
             # Integrate until event
             hit, t_hit, y_hit, trajectory = _integrate_symplectic_until_event(

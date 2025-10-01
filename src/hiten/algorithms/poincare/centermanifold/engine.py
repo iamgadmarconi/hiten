@@ -27,7 +27,7 @@ from hiten.algorithms.poincare.centermanifold.backend import (
     _CenterManifoldBackend,
 )
 from hiten.algorithms.poincare.centermanifold.config import (
-    _CenterManifoldMapConfig,
+    CenterManifoldMapConfig,
 )
 from hiten.algorithms.poincare.centermanifold.interfaces import (
     _CenterManifoldInterface,
@@ -58,7 +58,7 @@ class _CenterManifoldEngine(_ReturnMapEngine):
         Backend providing numerical integration and section crossing detection.
     seed_strategy : :class:`~hiten.algorithms.poincare.centermanifold.seeding._CenterManifoldSeedingBase`
         Strategy for generating initial conditions on the center manifold.
-    map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
+    map_config : :class:`~hiten.algorithms.poincare.centermanifold.config.CenterManifoldMapConfig`
         Configuration specifying computation parameters.
 
     Notes
@@ -83,7 +83,7 @@ class _CenterManifoldEngine(_ReturnMapEngine):
         *,
         backend: _CenterManifoldBackend,
         seed_strategy: _CenterManifoldSeedingBase,
-        map_config: _CenterManifoldMapConfig,
+        map_config: CenterManifoldMapConfig,
         interface: _CenterManifoldInterface,
     ) -> None:
         super().__init__(backend=backend, seed_strategy=seed_strategy, map_config=map_config, interface=interface)

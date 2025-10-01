@@ -117,7 +117,8 @@ class _PCContinuationBackend(_ContinuationBackend):
             return np.sign(vec) * mag
 
         converged = False
-        while accepted_count < int(max_members):
+        failed_to_continue = False
+        while accepted_count < int(max_members) and not failed_to_continue:
             last = family[-1]
 
             attempt = 0
@@ -132,9 +133,11 @@ class _PCContinuationBackend(_ContinuationBackend):
                 iterations += 1
                 try:
                     corrected, res_norm, converged = corrector(prediction)
-                except Exception:
+                except Exception as e:
                     converged = False
                     res_norm = np.nan
+                    import warnings
+                    warnings.warn(f"Continuation correction failed: {str(e)[:100]}", stacklevel=2)
 
                 try:
                     self.on_iteration(iterations, prediction, float(res_norm))
@@ -190,8 +193,9 @@ class _PCContinuationBackend(_ContinuationBackend):
                         self.on_failure(prediction, iterations=iterations, residual_norm=float(res_norm))
                     except Exception:
                         pass
-                    accepted_count = max_members
+                    # Exit continuation - couldn't find next solution
                     converged = False
+                    failed_to_continue = True
                     break
 
             if accepted_count >= int(max_members):

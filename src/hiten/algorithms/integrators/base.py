@@ -7,15 +7,16 @@ Hairer, E., Norsett, S. P., and Wanner, G. (1993).
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional, Callable
+from typing import Callable, Optional
 
 import numba
 import numpy as np
 from numba import types
 
 from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
-from hiten.algorithms.types.events import _EventConfig
 from hiten.algorithms.integrators.types import _Solution
+from hiten.algorithms.types.configs import EventConfig
+from hiten.algorithms.types.options import EventOptions
 from hiten.algorithms.utils.config import FASTMATH
 
 
@@ -79,7 +80,8 @@ class _Integrator(ABC):
         t_vals: np.ndarray,
         *,
         event_fn: "Callable[[float, np.ndarray], float] | None" = None,
-        event_cfg: "_EventConfig | None" = None,
+        event_cfg: "EventConfig | None" = None,
+        event_options: "EventOptions | None" = None,
         **kwargs
     ) -> _Solution:
         """Integrate the dynamical system from initial conditions.
@@ -100,9 +102,11 @@ class _Integrator(ABC):
         event_fn : Callable[[float, numpy.ndarray], float], optional
             Event function evaluated as ``g(t, y)``. A zero crossing may
             be used by concrete integrators to stop or record events.
-        event_cfg : :class:`~hiten.algorithms.types.events._EventConfig`, optional
-            Configuration controlling event directionality, terminal
-            behavior, and tolerances for event handling.
+        event_cfg : :class:`~hiten.algorithms.types.configs.EventConfig`, optional
+            Configuration controlling event directionality and terminal
+            behavior for event handling.
+        event_options : :class:`~hiten.algorithms.types.options.EventOptions`, optional
+            Runtime tuning options controlling event detection tolerances (xtol, gtol).
         **kwargs
             Additional integration options passed to concrete
             implementations.
@@ -246,7 +250,8 @@ class _Integrator(ABC):
 
         # Detect pre-compiled Numba dispatchers to avoid redundant compilation.
         try:
-            from numba.core.registry import CPUDispatcher  # local import for optional dependency
+            from numba.core.registry import \
+                CPUDispatcher  # local import for optional dependency
 
             if isinstance(event_fn, CPUDispatcher):
                 return event_fn

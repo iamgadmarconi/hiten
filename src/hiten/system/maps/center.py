@@ -14,6 +14,8 @@ from hiten.algorithms.types.services.maps import (_MapPersistenceService,
 from hiten.utils.plots import plot_poincare_map, plot_poincare_map_interactive
 
 if TYPE_CHECKING:
+    from hiten.algorithms.poincare.centermanifold.options import \
+        CenterManifoldMapOptions
     from hiten.system.center import CenterManifold
 
 class CenterManifoldMap(_HitenBase):
@@ -66,6 +68,28 @@ class CenterManifoldMap(_HitenBase):
         self.dynamics.map_config = value
 
     @property
+    def options(self) -> "CenterManifoldMapOptions":
+        """Get the map runtime options.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.poincare.centermanifold.options.CenterManifoldMapOptions`
+            The map options with reasonable defaults.
+        """
+        return self.dynamics.map_options
+
+    @options.setter
+    def options(self, value: "CenterManifoldMapOptions"):
+        """Set the map runtime options.
+        
+        Parameters
+        ----------
+        value : :class:`~hiten.algorithms.poincare.centermanifold.options.CenterManifoldMapOptions`
+            New map options.
+        """
+        self.dynamics.map_options = value
+
+    @property
     def sections(self) -> list[str]:
         """The sections of the center manifold."""
         return self.dynamics.list_sections()
@@ -82,24 +106,22 @@ class CenterManifoldMap(_HitenBase):
         """Clear the sections of the center manifold."""
         return self.dynamics.clear()
 
-    def compute(self, section_coord: Optional[str] = "q3", overrides: Optional[dict[str, Any]] = None, **kwargs) -> CenterManifoldMapResults:
+    def compute(self, section_coord: Optional[str] = "q3", options: Optional["CenterManifoldMapOptions"] = None) -> CenterManifoldMapResults:
         """Compute the Poincare map.
         
         Parameters
         ----------
         section_coord : str, optional
             Section coordinate identifier. If None, uses the default section.
-        overrides : dict[str, Any], optional
-            Overrides for the Poincare map.
-        kwargs : dict[str, Any], optional
-            Keyword arguments for the Poincare map.
+        options : :class:`~hiten.algorithms.poincare.centermanifold.options.CenterManifoldMapOptions`, optional
+            Runtime options for the map computation. If None, uses defaults.
 
         Returns
         -------
         :class:`~hiten.algorithms.poincare.centermanifold.types.CenterManifoldMapResults`
             The results of the Poincare map.
         """
-        return self.dynamics.compute(section_coord=section_coord, overrides=overrides, **kwargs)
+        return self.dynamics.compute(section_coord=section_coord, options=options)
 
     def get_states(self, section_coord: Optional[str] = "q3", axes: Optional[tuple[str, str]] = None) -> np.ndarray:
         """Get the states of the Poincare map.

@@ -30,7 +30,7 @@ system = System.from_bodies("earth", "moon")
 l1 = system.get_libration_point(1)
 
 orbit = l1.create_orbit("halo", amplitude_z=0.2, zenith="southern")
-orbit.correct(max_attempts=25)
+orbit.correct()
 orbit.propagate(steps=1000)
 
 manifold = orbit.manifold(stable=True, direction="positive")
@@ -51,7 +51,7 @@ manifold.plot()
    l1 = system.get_libration_point(1)
 
    orbit = l1.create_orbit("halo", amplitude_z=0.2, zenith="southern")
-   orbit.correct(max_attempts=25)
+   orbit.correct()
    orbit.propagate(steps=1000)
 
    manifold = orbit.manifold(stable=True, direction="positive")
@@ -71,13 +71,13 @@ manifold.plot()
    system = System.from_bodies("earth", "moon")
    l1 = system.get_libration_point(1)
 
-   cm = l1.get_center_manifold(degree=10)
+   cm = l1.get_center_manifold(degree=6)
    cm.compute()
 
-   initial_state = cm.to_synodic(poincare_point=[0.0, 0.0], energy=0.6, section_coord="q3")
+   initial_state = cm.to_synodic([0.0, 0.0], 0.6, "q3")
 
    orbit = VerticalOrbit(l1, initial_state=initial_state)
-   orbit.correct(max_attempts=100)
+   orbit.correct()
    orbit.propagate(steps=1000)
 
    manifold = orbit.manifold(stable=True, direction="positive")
@@ -94,36 +94,28 @@ manifold.plot()
    The toolkit can generate families of periodic orbits by continuation.
 
    ```python
-   from hiten import System, OrbitFamily
-   from hiten.algorithms import ContinuationPipeline
+   from hiten import System
+   from hiten.algorithms.continuation.options import OrbitContinuationOptions
    from hiten.algorithms.types.states import SynodicState
-   from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+   from hiten.system.family import OrbitFamily
 
-   num_orbits = 50
    system = System.from_bodies("earth", "moon")
    l1 = system.get_libration_point(1)
    
-   halo_seed = l1.create_orbit('halo', amplitude_z= 0.2, zenith='southern')
-   halo_seed.correct(max_attempts=25, max_delta=1e-3)
+   halo_seed = l1.create_orbit('halo', amplitude_z=0.2, zenith='southern')
+   halo_seed.correct()
+   halo_seed.propagate()
 
-   current_z = halo_seed.initial_state[SynodicState.Z]  # 0 for planar Lyapunov halo_seed
-   target_z = current_z + 5.0   # introduce out-of-plane Z
-   step_z = (target_z - current_z) / (num_orbits - 1)
-
-   config= _OrbitContinuationConfig(
-      target=([current_z], [target_z]),
-      step=((step_z),),
-      state=(SynodicState.Z,),
-      max_members=50,
-      extra_params=dict(max_attempts=50, tol=1e-12),
-      stepper="secant",
+   options = OrbitContinuationOptions(
+      target=(
+         [halo_seed.initial_state[SynodicState.Z]], 
+         [halo_seed.initial_state[SynodicState.Z] + 2.0]
+      ),
+      step=((0.02,),),
+      max_members=100,
    )
 
-   state_parameter = ContinuationPipeline.with_default_engine(config=config)
-
-   result = state_parameter.generate(halo_seed)
-
-   logger.info(f"Generated {len(result.family)} orbits (success rate {result.success_rate:.2%})")
+   result = halo_seed.generate(options)
 
    family = OrbitFamily.from_result(result)
    family.propagate()
@@ -144,12 +136,12 @@ manifold.plot()
    system = System.from_bodies("earth", "moon")
    l1 = system.get_libration_point(1)
 
-   cm = l1.get_center_manifold(degree=12)
+   cm = l1.get_center_manifold(degree=6)
    cm.compute()
 
-   pm = cm.poincare_map(energy=0.7, section_coord="q2", n_seeds=50, n_iter=100, seed_strategy="axis_aligned")
-   pm.compute()
-   pm.plot()
+   pm = cm.poincare_map(energy=0.7)
+   pm.compute(section_coord="p3")
+   pm.plot(axes=("p2", "q3"))
    ```
 
    ![Poincare map](results/plots/poincare_map.svg)
@@ -159,8 +151,7 @@ manifold.plot()
    Or the synodic section of a vertical orbit manifold:
 
    ```python
-   from hiten import System, VerticalOrbit
-   from hiten.algorithms import SynodicMap, SynodicMapConfig
+   from hiten import System, SynodicMap, VerticalOrbit
 
    system = System.from_bodies("earth", "moon")
    l_point = system.get_libration_point(1)
@@ -171,23 +162,20 @@ manifold.plot()
    ic_seed = cm.to_synodic([0.0, 0.0], 0.6, "q3") # Good initial guess from CM
 
    orbit = VerticalOrbit(l_point, initial_state=ic_seed)
-   orbit.correct(max_attempts=100, finite_difference=True)
+   orbit.correct()
    orbit.propagate(steps=1000)
 
    manifold = orbit.manifold(stable=True, direction="positive")
    manifold.compute(step=0.005)
    manifold.plot()
 
-   section_cfg = SynodicMapConfig(
+   synodic_map = SynodicMap(manifold)
+   synodic_map.compute(
       section_axis="y",
       section_offset=0.0,
       plane_coords=("x", "z"),
-      interp_kind="cubic",
-      segment_refine=30,
-      newton_max_iter=10,
+      direction=-1
    )
-   synodic_map = SynodicMap(section_cfg)
-   synodic_map.from_manifold(manifold)
    synodic_map.plot()
    ```
 
@@ -200,6 +188,12 @@ manifold.plot()
    The toolkit can detect heteroclinic connections between two manifolds.
 
    ```python
+    from hiten import System
+    from hiten.algorithms.connections import ConnectionPipeline
+    from hiten.algorithms.connections.config import ConnectionConfig
+    from hiten.algorithms.connections.options import ConnectionOptions
+    from hiten.algorithms.poincare import SynodicMapConfig
+
     system = System.from_bodies("earth", "moon")
     mu = system.mu
 
@@ -224,28 +218,22 @@ manifold.plot()
         section_axis="x",
         section_offset=1 - mu,
         plane_coords=("y", "z"),
-        interp_kind="cubic",
-        segment_refine=30,
-        tol_on_surface=1e-9,
-        dedup_time_tol=1e-9,
-        dedup_point_tol=1e-9,
-        max_hits_per_traj=None,
-        n_workers=None,
     )
 
-    # Create unified configuration with all parameters in one object
-    config = _ConnectionConfig(
-        section=section_cfg,        # Synodic section configuration
-        direction=-1,                # Crossing direction (None = both directions)
-        delta_v_tol=1,             # Maximum Delta-V tolerance
-        ballistic_tol=1e-8,        # Threshold for ballistic classification
-        eps2d=1e-3,                # 2D pairing radius
+    config = ConnectionConfig(
+        section=section_cfg,
+        direction=-1,
+    )
+
+    options = ConnectionOptions(
+        delta_v_tol=1,
+        ballistic_tol=1e-8,
+        eps2d=1e-3,
     )
     
-    # Create connection using the factory method with unified config
     conn = ConnectionPipeline.with_default_engine(config=config)
 
-    result = conn.solve(manifold_l1, manifold_l2)
+    result = conn.solve(manifold_l1, manifold_l2, options=options)
 
     print(result)
 
@@ -269,18 +257,17 @@ manifold.plot()
    Hiten can generate invariant tori for periodic orbits.
 
    ```python
-   from hiten import System
-   from hiten import InvariantTori
+   from hiten import System, InvariantTori
 
     system = System.from_bodies("earth", "moon")
     l1 = system.get_libration_point(1)
 
     orbit = l1.create_orbit('halo', amplitude_z=0.3, zenith='southern')
-    orbit.correct(max_attempts=25)
+    orbit.correct()
     orbit.propagate(steps=1000)
    
     torus = InvariantTori(orbit)
-    torus.compute(epsilon=1e-2, n_theta1=256, n_theta2=256)
+    torus.compute(epsilon=1e-2, n_theta1=512, n_theta2=512)
     torus.plot()
    ```
 
@@ -295,9 +282,13 @@ Example scripts are in the `examples` directory. From the project root:
 ```powershell
 py -m pip install -e .
 python examples\periodic_orbits.py
+python examples\orbit_manifold.py
 python examples\orbit_family.py
+python examples\poincare_map.py
 python examples\synodic_map.py
 python examples\heteroclinic_connection.py
+python examples\invariant_tori.py
+python examples\center_manifold.py
 ```
 
 ## Contributing

@@ -28,18 +28,15 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 from hiten.algorithms.dynamics.hamiltonian import create_hamiltonian_system
 from hiten.algorithms.integrators import ExtendedSymplectic
-from hiten.algorithms.types.events import _EventConfig
-from hiten.algorithms.integrators.symplectic import (
-    N_SYMPLECTIC_DOF,
-    N_VARS_POLY,
-    P_POLY_INDICES,
-    Q_POLY_INDICES,
-)
-from hiten.algorithms.polynomial.base import (
-    _create_encode_dict_from_clmo,
-    _encode_multiindex,
-    _init_index_tables,
-)
+from hiten.algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
+                                                     N_VARS_POLY,
+                                                     P_POLY_INDICES,
+                                                     Q_POLY_INDICES)
+from hiten.algorithms.polynomial.base import (_create_encode_dict_from_clmo,
+                                              _encode_multiindex,
+                                              _init_index_tables)
+from hiten.algorithms.types.configs import EventConfig
+from hiten.algorithms.types.options import EventOptions
 
 warnings.filterwarnings('ignore', category=UserWarning)
 
@@ -227,7 +224,8 @@ def _warmup_symplectic_event(integrator, system, problem: SymplecticEventProblem
             problem.y0_extended,
             warmup_grid,
             event_fn=event_q1_jit,
-            event_cfg=_EventConfig(direction=problem.direction, terminal=True),
+            event_cfg=EventConfig(direction=problem.direction, terminal=True),
+            event_options=EventOptions(xtol=1.0e-12, gtol=1.0e-12),
         )
     except Exception:
         pass
@@ -265,7 +263,9 @@ def run_symplectic_event(
     time_grid = np.linspace(
         problem.t_span[0], problem.t_span[1], problem.grid_size, dtype=np.float64
     )
-    event_cfg = _EventConfig(direction=problem.direction, terminal=True, xtol=1.0e-12, gtol=1.0e-12)
+    event_cfg = EventConfig(direction=problem.direction, terminal=True)
+
+    event_options = EventOptions(xtol=1.0e-12, gtol=1.0e-12)
 
     _warmup_symplectic_event(integrator, system, problem)
 

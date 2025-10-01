@@ -6,9 +6,9 @@ This module provides the abstract base class for all Hiten classes.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Generic, TypeVar, Union
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, Union
 
 import pandas as pd
 
@@ -17,6 +17,10 @@ from hiten.algorithms.types.serialization import _SerializeBase
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
                                                   _ServiceBundleBase)
+
+if TYPE_CHECKING:
+    from hiten.algorithms.types.configs import _HitenBaseConfig
+    from hiten.algorithms.types.options import _HitenBaseOptions
 
 # Type variables for the Hiten base classes
 DomainT = TypeVar("DomainT")
@@ -80,62 +84,10 @@ class _HitenBaseResults(ABC):
     __slots__ = ()
 
 
-class _HitenBaseConfig(ABC):
-    """Marker base class for configuration payloads produced by interfaces."""
+class _HitenBaseEvent(ABC):
+    """Marker base class for event payloads produced by interfaces."""
 
-    def __post_init__(self) -> None:
-        """Post-initialization hook."""
-        self._validate()
-
-    def __str__(self) -> str:
-        """Generate human-readable description."""
-        lines = [f"{self.__class__.__name__}:"]
-        for field_name, _ in self.__dataclass_fields__.items():
-            value = getattr(self, field_name)
-            lines.append(f"  {field_name}: {value}")
-        return "\n".join(lines)
-
-    @abstractmethod
-    def _validate(self) -> None:
-        """Validate the configuration."""
-        pass
-
-    def merge(self, **overrides) -> "_HitenBaseConfig":
-        """Create new config with specified overrides (immutable).
-        
-        Parameters
-        ----------
-        **overrides
-            Fields to override. None values are ignored.
-        
-        Returns
-        -------
-        _HitenBaseConfig
-            New config instance with overrides applied.
-        
-        Examples
-        --------
-        >>> config = MyConfig(tol=1e-10, max_attempts=50)
-        >>> new_config = config.merge(tol=1e-12)
-        >>> new_config.tol  # 1e-12
-        >>> config.tol      # 1e-10 (unchanged)
-        """
-        filtered = {k: v for k, v in overrides.items() if v is not None}
-        return replace(self, **filtered)
-    
-    def to_dict(self) -> dict:
-        """Convert configuration to dictionary."""
-        return asdict(self)
-    
-    @classmethod
-    def from_dict(cls, data: dict) -> "_HitenBaseConfig":
-        """Create configuration from dictionary."""
-        import inspect
-        sig = inspect.signature(cls)
-        valid_keys = set(sig.parameters.keys())
-        filtered = {k: v for k, v in data.items() if k in valid_keys}
-        return cls(**filtered)
-
+    __slots__ = ()
 
 
 class _HitenBaseBackend(ABC):
@@ -168,13 +120,15 @@ class _HitenBaseInterface(Generic[ConfigT, ProblemT, ResultT, OutputsT], ABC):
         return self._config
 
     @abstractmethod
-    def create_problem(self, config: ConfigT | None = None, *args) -> ProblemT:
+    def create_problem(self, config: ConfigT | None = None, options: Any = None, *args) -> ProblemT:
         """Compose an immutable problem payload for the backend.
         
         Parameters
         ----------
         config : :class:`~hiten.algorithms.types.core.ConfigT` | None, optional
             The configuration to use for the problem
+        options : Any, optional
+            The options to use for the problem
         *args : Any
             Additional arguments to pass to the problem.
 
@@ -777,34 +731,42 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
         """Get the config."""
         return self._config
 
-    def _create_problem(self, domain_obj: DomainT, override: bool = False, *args, **kwargs) -> ProblemT:
+    def _create_problem(
+        self,
+        domain_obj: DomainT,
+        *args,
+        options: Any = None,
+        **kwargs,
+    ) -> ProblemT:
         """Create a problem object from input parameters.
-        
-        This method can be overridden by concrete facades to handle
-        problem creation logic specific to their domain.
-        
+
+        This base implementation delegates directly to the configured
+        interface. Facades are responsible for updating configuration and
+        constructing options objects before calling this helper.
+
         Parameters
         ----------
         domain_obj : DomainT
             The domain object to create a problem for.
-        override : bool, default=False
-            Whether to override configuration with provided kwargs.
-        *args
-            Additional positional arguments to pass to interface.create_problem.
-        **kwargs
-            Configuration parameters to update if override=True
-            
+        options : Any, optional
+            Options object to forward to ``interface.create_problem``.
+        *args, **kwargs
+            Additional parameters forwarded unchanged to the interface.
+
         Returns
         -------
-        Any
-            Problem object suitable for the engine.
+        ProblemT
+            Problem payload suitable for the engine.
         """
-        if override and kwargs:
-            self.update_config(**kwargs)
-        
         interface = self._get_interface()
         config = self._get_config()
-        return interface.create_problem(config=config, domain_obj=domain_obj, *args)
+        return interface.create_problem(
+            domain_obj=domain_obj,
+            config=config,
+            options=options,
+            *args,
+            **kwargs,
+        )
 
 
     def _make_pipeline(self, config, interface, engine, backend):

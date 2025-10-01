@@ -1,16 +1,18 @@
 """Base types and protocols for the linear algebra module."""
 
-from typing import Generic, Optional, Tuple
+from typing import TYPE_CHECKING, Generic, Optional, Tuple
 
 import numpy as np
 
 from hiten.algorithms.linalg.backend import _LinalgBackend
 from hiten.algorithms.linalg.engine import _LinearStabilityEngine
 from hiten.algorithms.linalg.interfaces import _EigenDecompositionInterface
-from hiten.algorithms.linalg.types import (EigenDecompositionResults,
-                                           _ProblemType, _SystemType)
+from hiten.algorithms.linalg.types import EigenDecompositionResults
 from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
                                          _HitenBaseFacade)
+
+if TYPE_CHECKING:
+    from hiten.algorithms.linalg.options import EigenDecompositionOptions
 
 
 class StabilityPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
@@ -54,12 +56,7 @@ class StabilityPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
     def compute(
         self,
         domain_obj: DomainT,
-        override: bool = False,
-        *,
-        system_type: Optional[_SystemType] = None,
-        problem_type: Optional[_ProblemType] = None,
-        delta: Optional[float] = None,
-        tol: Optional[float] = None,
+        options: Optional["EigenDecompositionOptions"] = None,
     ) -> EigenDecompositionResults:
         """Compose a problem from domain_obj and run the engine.
         
@@ -67,30 +64,15 @@ class StabilityPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
         ----------
         domain_obj : :class:`~hiten.algorithms.types.DomainT`
             Domain object.
-        override : bool
-            Whether to override configuration with provided kwargs.
-        system_type : :class:`~hiten.algorithms.linalg.types._SystemType`
-            System type.
-        problem_type : :class:`~hiten.algorithms.linalg.types._ProblemType`
-            Problem type.
-        delta : float
-            Delta.
-        tol : float
-            Tolerance.
+        options : :class:`~hiten.algorithms.linalg.options.EigenDecompositionOptions`, optional
+            Runtime options for eigenvalue decomposition. If None, uses defaults.
 
         Returns
         -------
         :class:`~hiten.algorithms.linalg.types.EigenDecompositionResults`
             Eigen decomposition results.
         """
-        kwargs = {
-            "system_type": system_type,
-            "problem_type": problem_type,
-            "delta": delta,
-            "tol": tol,
-        }
-
-        problem = self._create_problem(domain_obj=domain_obj, override=override, **kwargs)
+        problem = self._create_problem(domain_obj=domain_obj, options=options)
         engine = self._get_engine()
         self._results = engine.solve(problem)
         return self._results
@@ -177,10 +159,6 @@ class StabilityPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
         """
         super()._validate_config(config)
         
-        if hasattr(config, 'tol') and config.tol <= 0:
-            raise ValueError("Tolerance must be positive")
-        if hasattr(config, 'delta') and config.delta <= 0:
-            raise ValueError("Delta must be positive")
         if hasattr(config, 'system_type') and config.system_type is None:
             raise ValueError("System type must be specified")
         if hasattr(config, 'problem_type') and config.problem_type is None:

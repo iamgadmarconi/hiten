@@ -9,8 +9,6 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 
 import numpy as np
 
-from hiten.algorithms.corrector.config import _LineSearchConfig
-
 if TYPE_CHECKING:
     from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
 
@@ -154,8 +152,6 @@ class _CorrectionProblem:
         Convergence tolerance for the residual norm.
     max_delta : float
         Maximum allowed infinity norm of Newton steps.
-    line_search_config : :class:`~hiten.algorithms.corrector.config._LineSearchConfig` | bool | None
-        Configuration for line search behavior.
     finite_difference : bool
         Force finite-difference approximation of Jacobians.
     fd_step : float
@@ -178,7 +174,6 @@ class _CorrectionProblem:
     max_attempts: int
     tol: float
     max_delta: float
-    line_search_config: _LineSearchConfig | bool | None
     finite_difference: bool
     fd_step: float
     method: str
@@ -314,8 +309,6 @@ class _MultipleShootingProblem(_CorrectionProblem):
         Convergence tolerance for residual norm.
     max_delta : float
         Maximum allowed infinity norm of Newton steps.
-    line_search_config : :class:`~hiten.algorithms.corrector.config._LineSearchConfig` | bool | None
-        Line search configuration.
     finite_difference : bool
         Whether to use finite-difference Jacobian approximation.
     fd_step : float

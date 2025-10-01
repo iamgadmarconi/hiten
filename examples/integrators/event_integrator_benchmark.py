@@ -22,7 +22,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 
 from hiten.algorithms.dynamics.rhs import create_rhs_system
 from hiten.algorithms.integrators import RungeKutta
-from hiten.algorithms.types.events import _EventConfig
+from hiten.algorithms.types.configs import EventConfig
 
 warnings.filterwarnings('ignore', category=UserWarning)
 
@@ -136,7 +136,7 @@ def _warmup_hiten_event(integrator, system, y0: np.ndarray, event_fn: Callable[[
                 y0,
                 t_grid,
                 event_fn=event_fn,
-                event_cfg=_EventConfig(direction=direction, terminal=True),
+                event_cfg=EventConfig(direction=direction, terminal=True),
             )
         else:
             _ = integrator.integrate(
@@ -144,7 +144,7 @@ def _warmup_hiten_event(integrator, system, y0: np.ndarray, event_fn: Callable[[
                 y0,
                 warmup_t,
                 event_fn=event_fn,
-                event_cfg=_EventConfig(direction=direction, terminal=True),
+                event_cfg=EventConfig(direction=direction, terminal=True),
             )
     except Exception:
         pass
@@ -187,7 +187,7 @@ def run_hiten_event(
             y0,
             t_eval,
             event_fn=event_fn,
-            event_cfg=_EventConfig(direction=direction, terminal=True),
+            event_cfg=EventConfig(direction=direction, terminal=True),
         )
         dt = time.perf_counter() - start
         # Event path returns two nodes [t0, t_hit] or [t0, tmax] when no hit

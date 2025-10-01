@@ -12,16 +12,18 @@ strategies and visualization capabilities.
 
 from __future__ import annotations
 
-from typing import Generic, Literal, Optional
+from typing import Generic, Optional
 
 from hiten.algorithms.poincare.centermanifold.backend import \
     _CenterManifoldBackend
 from hiten.algorithms.poincare.centermanifold.config import \
-    _CenterManifoldMapConfig
+    CenterManifoldMapConfig
 from hiten.algorithms.poincare.centermanifold.engine import \
     _CenterManifoldEngine
 from hiten.algorithms.poincare.centermanifold.interfaces import \
     _CenterManifoldInterface
+from hiten.algorithms.poincare.centermanifold.options import \
+    CenterManifoldMapOptions
 from hiten.algorithms.poincare.centermanifold.seeding import \
     _CenterManifoldSeedingBase
 from hiten.algorithms.poincare.centermanifold.strategies import _make_strategy
@@ -63,13 +65,13 @@ class CenterManifoldMapPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, C
     >>> poincare_map.plot()
     """
 
-    def __init__(self, config: _CenterManifoldMapConfig, engine: _CenterManifoldEngine, interface: _CenterManifoldInterface = None, backend: _CenterManifoldBackend = None) -> None:
+    def __init__(self, config: CenterManifoldMapConfig, engine: _CenterManifoldEngine, interface: _CenterManifoldInterface = None, backend: _CenterManifoldBackend = None) -> None:
         super().__init__(config, engine, interface, backend)
 
     @classmethod
     def with_default_engine(
         cls,
-        config: _CenterManifoldMapConfig,
+        config: CenterManifoldMapConfig,
         interface: Optional[_CenterManifoldInterface] = None,\
         backend: Optional[_CenterManifoldBackend] = None,
     ) -> "CenterManifoldMapPipeline":
@@ -81,7 +83,7 @@ class CenterManifoldMapPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, C
 
         Parameters
         ----------
-        config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
+        config : :class:`~hiten.algorithms.poincare.centermanifold.config.CenterManifoldMapConfig`
             Configuration object for the center manifold map.
         interface : :class:`~hiten.algorithms.poincare.centermanifold.interfaces._CenterManifoldInterface`, optional
             Interface object for the center manifold map. If None, uses the default _CenterManifoldInterface.
@@ -109,40 +111,29 @@ class CenterManifoldMapPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, C
     def generate(
         self,
         domain_obj: DomainT,
-        override: bool = False,
-        *,
-        section_coord: str | None = None,
-        dt: float | None = None,
-        n_iter: int | None = None,
-        n_workers: int | None = None,
-        method: Literal["fixed", "adaptive", "symplectic"] | None = None,
-        order: int | None = None,
-        c_omega_heuristic: float | None = None,
+        options: CenterManifoldMapOptions,
     ) -> CenterManifoldMapResults:
-        """Compute the section, supporting runtime overrides without mutating config.
+        """Compute the section using configured engine.
 
-        If no overrides are provided, this defers to the cached, default setup
-        and persists the result. If any overrides are provided, a temporary
-        engine is assembled for this call and the result is returned without
-        polluting the persistent cache. In all cases, this method returns the
-        2-D points of the section.
+        Parameters
+        ----------
+        domain_obj : :class:`~hiten.algorithms.types.core.DomainT`
+            The domain object to compute the map for.
+        options : :class:`~hiten.algorithms.poincare.centermanifold.options.CenterManifoldMapOptions`
+            Runtime options for the map pipeline.
+
+        Returns
+        -------
+        CenterManifoldMapResults
+            The computed section results.
         """
-        kwargs = {
-            "section_coord": section_coord,
-            "dt": dt,
-            "n_iter": n_iter,
-            "n_workers": n_workers,
-            "method": method,
-            "order": order,
-            "c_omega_heuristic": c_omega_heuristic,
-        }
-        problem = self._create_problem(domain_obj=domain_obj, override=override, **kwargs)
+        problem = self._create_problem(domain_obj=domain_obj, options=options)
         engine = self._get_engine()
         self._results = engine.solve(problem)
         return self._results
 
     @staticmethod
-    def _build_strategy(config: _CenterManifoldMapConfig) -> _CenterManifoldSeedingBase:
+    def _build_strategy(config: CenterManifoldMapConfig) -> _CenterManifoldSeedingBase:
         strategy_kwargs: dict[str, object] = {}
         if config.seed_strategy == "single":
             strategy_kwargs["seed_axis"] = config.seed_axis

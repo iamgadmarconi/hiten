@@ -12,13 +12,14 @@ from hiten.algorithms.dynamics.hamiltonian import _HamiltonianSystem
 from hiten.algorithms.poincare.centermanifold.base import \
     CenterManifoldMapPipeline
 from hiten.algorithms.poincare.centermanifold.config import \
-    _CenterManifoldMapConfig
+    CenterManifoldMapConfig
 from hiten.algorithms.poincare.centermanifold.types import \
     CenterManifoldMapResults
 from hiten.algorithms.poincare.core.types import _Section
 from hiten.algorithms.poincare.synodic.base import SynodicMapPipeline
-from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
+from hiten.algorithms.poincare.synodic.config import SynodicMapConfig
 from hiten.algorithms.poincare.synodic.types import SynodicMapResults
+from hiten.algorithms.types.configs import RefineConfig, IntegrationConfig
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
                                                   _ServiceBundleBase)
@@ -28,7 +29,10 @@ from hiten.utils.io.map import (load_poincare_map, load_poincare_map_inplace,
                                 save_poincare_map)
 
 if TYPE_CHECKING:
+    from hiten.algorithms.poincare.centermanifold.options import \
+        CenterManifoldMapOptions
     from hiten.algorithms.poincare.core.types import _Section
+    from hiten.algorithms.poincare.synodic.options import SynodicMapOptions
     from hiten.system.center import CenterManifold
     from hiten.system.manifold import Manifold
     from hiten.system.maps.center import CenterManifoldMap
@@ -307,6 +311,7 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
     def __init__(self, domain_obj: "CenterManifoldMap") -> None:
         self._energy = domain_obj._energy
         self._center_manifold = domain_obj._center_manifold
+        self._map_options = None
 
         super().__init__(domain_obj)
         self._generator = None
@@ -327,49 +332,32 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
         """The Hamiltonian system."""
         return self.center_manifold.dynamics.hamsys
 
-    def compute(self, *, section_coord: str = "q3", overrides: dict[str, Any] | None = None, **kwargs):
+    def compute(self, *, section_coord: str = "q3", options: "CenterManifoldMapOptions" = None):
         """Compute or retrieve the return map for the specified section.
         
         Parameters
         ----------
-        section_coord : str
+        section_coord : str, default="q3"
             The section coordinate.
-        overrides : dict[str, Any]
-            The overrides.
-        kwargs : dict[str, Any]
-            The keyword arguments.
+        options : :class:`~hiten.algorithms.poincare.centermanifold.options.CenterManifoldMapOptions`, optional
+            Runtime options for the map computation. If None, uses self.map_options.
 
         Returns
         -------
         :class:`~hiten.algorithms.poincare.centermanifold.types.CenterManifoldMapResults`
             The results of the Poincare map.
         """
-        if overrides is None:
-            overrides = {}
-        else:
-            overrides = overrides.copy()
-        overrides.update(kwargs)
-
-        config_params = {}
-        runtime_overrides = {}
+        # Use self.map_options if options not provided
+        if options is None:
+            options = self.map_options
         
-        for key, value in overrides.items():
-            if key in ['n_seeds', 'seed_strategy', 'seed_axis']:
-                config_params[key] = value
-            else:
-                runtime_overrides[key] = value
-        
-        config_params['section_coord'] = section_coord
-        
-        overrides_tuple = tuple(sorted(overrides.items())) if overrides else ()
-        cache_key = self.make_key("generate", section_coord, overrides_tuple)
+        cache_key = self.make_key("generate", section_coord, tuple(sorted(options.to_dict().items())))
 
         def _factory() -> CenterManifoldMapResults:
-            override = bool(overrides)
-            # Update config with config parameters
-            self.generator.update_config(**config_params)
-            # Pass only runtime overrides to generate
-            results = self.generator.generate(self.domain_obj, override=override, **runtime_overrides)
+            # Update config with section coordinate
+            self.generator.update_config(section_coord=section_coord)
+            # Generate with options
+            results = self.generator.generate(self.domain_obj, options)
             # Store the results in the sections cache
             self._sections[section_coord] = results
             self._section_coord = section_coord
@@ -531,21 +519,55 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
         return CenterManifoldMapPipeline.with_default_engine(config=self.map_config)
 
     @property
-    def map_config(self) -> _CenterManifoldMapConfig:
+    def map_config(self) -> CenterManifoldMapConfig:
         """The map configuration."""
-        return _CenterManifoldMapConfig(
-            n_seeds=20,
-            n_iter=40,
-            dt=0.01,
-            method="fixed",
-            order=4,
-            c_omega_heuristic=20,
-            max_steps=2000,
-            n_workers=8,
+        return CenterManifoldMapConfig(
             seed_strategy="axis_aligned",
             seed_axis=None,
-            section_coord="q3"
+            section_coord="q3",
+            integration=IntegrationConfig(method="fixed")
         )
+
+    @property
+    def map_options(self) -> "CenterManifoldMapOptions":
+        """Runtime options for map computation.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.poincare.centermanifold.options.CenterManifoldMapOptions`
+            The map options with reasonable defaults.
+        """
+        if self._map_options is None:
+            from hiten.algorithms.poincare.centermanifold.options import \
+                CenterManifoldMapOptions
+            from hiten.algorithms.poincare.core.options import (
+                IterationOptions, SeedingOptions)
+            from hiten.algorithms.types.options import (IntegrationOptions,
+                                                        WorkerOptions)
+            
+            self._map_options = CenterManifoldMapOptions(
+                integration=IntegrationOptions(
+                    dt=0.01,
+                    order=4,
+                    c_omega_heuristic=20,
+                    max_steps=200,
+                ),
+                iteration=IterationOptions(n_iter=40),
+                seeding=SeedingOptions(n_seeds=20),
+                workers=WorkerOptions(n_workers=8),
+            )
+        return self._map_options
+    
+    @map_options.setter
+    def map_options(self, value: "CenterManifoldMapOptions") -> None:
+        """Set runtime options for map computation.
+        
+        Parameters
+        ----------
+        value : :class:`~hiten.algorithms.poincare.centermanifold.options.CenterManifoldMapOptions`
+            New map options.
+        """
+        self._map_options = value
 
 
 class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
@@ -562,11 +584,14 @@ class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
         The trajectories.
     source : Literal[:class:`~hiten.system.orbits.base.PeriodicOrbit`, :class:`~hiten.system.manifold.Manifold`]
         The source.
+    map_options : :class:`~hiten.algorithms.poincare.synodic.options.SynodicMapOptions`
+        Runtime options for map computation.
     """
 
     def __init__(self, domain_obj: "SynodicMap") -> None:
         self._trajectories = domain_obj._trajectories
         self._source = domain_obj._source
+        self._map_options = None
         super().__init__(domain_obj)
 
     @property
@@ -579,7 +604,7 @@ class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
         """The source."""
         return self._source
 
-    def compute(self, *, section_axis: str, section_offset: float, plane_coords: tuple[str, str], direction: Literal[1, -1, None], overrides: dict[str, Any] | None = None, **kwargs):
+    def compute(self, *, section_axis: str, section_offset: float, plane_coords: tuple[str, str], direction: Literal[1, -1, None], options: "SynodicMapOptions" = None):
         """Compute the synodic map.
         
         Parameters
@@ -592,30 +617,23 @@ class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
             The plane coordinates.
         direction : Literal[1, -1, None]
             The direction.
-        overrides : dict[str, Any]
-            The overrides.
-        kwargs : dict[str, Any]
-            The keyword arguments.
+        options : :class:`~hiten.algorithms.poincare.synodic.options.SynodicMapOptions`, optional
+            Runtime options for the map computation. If None, uses self.map_options.
         """
-        if overrides is None:
-            overrides = {}
-        else:
-            overrides = overrides.copy()
-        overrides.update(kwargs)
+        # Use self.map_options if options not provided
+        if options is None:
+            options = self.map_options
         
-        overrides_tuple = tuple(sorted(overrides.items())) if overrides else ()
-        cache_key = self.make_key("generate", overrides_tuple)
+        cache_key = self.make_key("generate", section_axis, section_offset, tuple(plane_coords), direction, tuple(sorted(options.to_dict().items())))
 
         def _factory() -> SynodicMapResults:
-            override = bool(overrides)
-
             updates = {"section_axis": section_axis,
                         "section_offset": section_offset,
                         "plane_coords": plane_coords,
                         "direction": direction}
 
             self.generator.update_config(**updates)
-            results = self.generator.generate(self.source, override=override, **overrides)
+            results = self.generator.generate(self.source, options)
             # Create a section identifier from the parameters
             section_id = f"{section_axis}_{section_offset}_{plane_coords[0]}_{plane_coords[1]}_{direction}"
             # Store the results in the sections cache
@@ -630,23 +648,55 @@ class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
         return SynodicMapPipeline.with_default_engine(config=self.map_config)
 
     @property
-    def map_config(self) -> _SynodicMapConfig:
+    def map_config(self) -> SynodicMapConfig:
         """The map configuration."""
-        return _SynodicMapConfig(
-            section_axis= "x",
-            section_offset= 0.0,
-            section_normal= None,
-            plane_coords= ("y", "vy"),
-            direction= None,
-            n_workers= 8,
-            interp_kind= "cubic",
-            segment_refine= 50,
-            tol_on_surface= 1e-6,
-            dedup_time_tol= 1e-9,
-            dedup_point_tol= 1e-6,
-            max_hits_per_traj= None,
-            newton_max_iter= 10
+        return SynodicMapConfig(
+            section_axis="x",
+            section_offset=0.0,
+            section_normal=None,
+            plane_coords=("y", "vy"),
+            direction=None,
+            interp_kind=RefineConfig(interp_kind="cubic"),
         )
+    
+    @property
+    def map_options(self) -> "SynodicMapOptions":
+        """Runtime options for map computation.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.poincare.synodic.options.SynodicMapOptions`
+            The map options with reasonable defaults.
+        """
+        if self._map_options is None:
+            from hiten.algorithms.poincare.synodic.options import \
+                SynodicMapOptions
+            from hiten.algorithms.types.options import (RefineOptions,
+                                                        WorkerOptions)
+            
+            self._map_options = SynodicMapOptions(
+                refine=RefineOptions(
+                    segment_refine=50,
+                    tol_on_surface=1e-6,
+                    dedup_time_tol=1e-9,
+                    dedup_point_tol=1e-6,
+                    max_hits_per_traj=None,
+                    newton_max_iter=10,
+                ),
+                workers=WorkerOptions(n_workers=8),
+            )
+        return self._map_options
+    
+    @map_options.setter
+    def map_options(self, value: "SynodicMapOptions") -> None:
+        """Set runtime options for map computation.
+        
+        Parameters
+        ----------
+        value : :class:`~hiten.algorithms.poincare.synodic.options.SynodicMapOptions`
+            New map options.
+        """
+        self._map_options = value
 
 
 class _MapServices(_ServiceBundleBase):

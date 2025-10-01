@@ -39,7 +39,7 @@ class _SynodicMapProblem:
         Normal vector defining the section plane.
     offset : float
         Offset distance for the section plane.
-    map_cfg : _SynodicMapConfig
+    map_cfg : SynodicMapConfig
         Map configuration containing detection parameters.
     """
     plane_coords: Tuple[str, str]

@@ -7,18 +7,15 @@ Restricted Three-Body Problem (CR3BP).
 from dataclasses import dataclass
 from typing import Literal, Optional
 
-
-from hiten.algorithms.poincare.core.config import (_IntegrationConfig,
-                                                   _IterationConfig,
-                                                   _ReturnMapBaseConfig,
-                                                   _SeedingConfig,
-                                                   _RefineConfig)
+from hiten.algorithms.poincare.core.config import (_ReturnMapConfig,
+                                                   _SeedingConfig)
+from hiten.algorithms.types.configs import IntegrationConfig
 from hiten.algorithms.types.exceptions import EngineError
 from hiten.utils.log_config import logger
 
 
 @dataclass(frozen=True)
-class _CenterManifoldMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _IterationConfig, _SeedingConfig):
+class CenterManifoldMapConfig(_ReturnMapConfig, _SeedingConfig):
     """Configuration for center manifold Poincare maps.
 
     This dataclass combines configuration from multiple base classes to provide
@@ -43,7 +40,7 @@ class _CenterManifoldMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _Iterat
     Notes
     -----
     The configuration inherits from multiple base classes:
-    - :class:`~hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`: Basic return map settings
+    - :class:`~hiten.algorithms.poincare.core.config._ReturnMapConfig`: Basic return map settings
     - :class:`~hiten.algorithms.poincare.core.config._IntegrationConfig`: Integration method and parameters
     - :class:`~hiten.algorithms.poincare.core.config._IterationConfig`: Iteration control parameters
     - :class:`~hiten.algorithms.poincare.core.config._SeedingConfig`: Seeding strategy parameters
@@ -59,11 +56,12 @@ class _CenterManifoldMapConfig(_ReturnMapBaseConfig, _IntegrationConfig, _Iterat
         "radial",
         "random",
     ] = "axis_aligned"
-
     seed_axis: Optional[Literal["q2", "p2", "q3", "p3"]] = None
     section_coord: Literal["q2", "p2", "q3", "p3"] = "q3"
+    integration: IntegrationConfig = IntegrationConfig()
 
-    def __post_init__(self):
+    def _validate(self) -> None:
+        """Validate the configuration."""
         if self.seed_strategy == "single" and self.seed_axis is None:
             raise EngineError("seed_axis must be specified when seed_strategy is 'single'")
         if self.seed_strategy != "single" and self.seed_axis is not None:

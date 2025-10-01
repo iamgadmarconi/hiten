@@ -18,7 +18,12 @@ def main() -> None:
     l_point = system.get_libration_point(1)
 
     orbit = l_point.create_orbit('halo', amplitude_z=0.3, zenith='southern')
-    orbit.correct(max_attempts=25)
+    correction_opts = orbit.correction_options.merge(
+        base=orbit.correction_options.base.merge(
+            convergence=orbit.correction_options.base.convergence.merge(max_attempts=25)
+        )
+    )
+    orbit.correct(options=correction_opts)
     orbit.propagate(steps=1000)
 
     torus = InvariantTori(orbit)

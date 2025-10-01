@@ -10,17 +10,24 @@ that creates concrete seeding strategy instances based on a string identifier.
 """
 
 from .base import CenterManifoldMapPipeline
-from .config import _CenterManifoldMapConfig
+from .config import CenterManifoldMapConfig
 from .engine import _CenterManifoldEngine
 from .interfaces import _CenterManifoldInterface
+from .options import CenterManifoldMapOptions
 from .seeding import _CenterManifoldSeedingBase
 from .strategies import _make_strategy
 from .types import CenterManifoldMapResults
 
 __all__ = [
-    "_CenterManifoldMapConfig",
-    "CenterManifoldMapResults",
+    # Main interface
     "CenterManifoldMapPipeline",
+    # Configuration (compile-time structure)
+    "CenterManifoldMapConfig",
+    # Options (runtime tuning)
+    "CenterManifoldMapOptions",
+    # Results
+    "CenterManifoldMapResults",
+    # Engine and Interface
     "_CenterManifoldEngine",
     "_CenterManifoldInterface",
     "_CenterManifoldSeedingBase",

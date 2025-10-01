@@ -4,20 +4,17 @@ These facades assemble the engine, backend, and interface using DI and
 provide a simple API to run continuation with domain-friendly inputs.
 """
 
-from typing import (TYPE_CHECKING, Callable, Generic, Literal, Optional,
-                    Sequence)
+from typing import TYPE_CHECKING, Generic, Optional
 
-import numpy as np
-
+from hiten.algorithms.continuation.options import OrbitContinuationOptions
 from hiten.algorithms.continuation.types import ContinuationResult
 from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
                                          _HitenBaseFacade)
-from hiten.algorithms.types.states import SynodicState
 
 if TYPE_CHECKING:
+    from hiten.algorithms.continuation.backends.base import \
+        _ContinuationBackend
     from hiten.algorithms.continuation.engine.base import _ContinuationEngine
-    from hiten.algorithms.continuation.backends.base import _ContinuationBackend
-    from hiten.system.orbits.base import PeriodicOrbit
 
 
 class ContinuationPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
@@ -73,19 +70,7 @@ class ContinuationPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, Config
     def generate(
         self,
         domain_obj: DomainT,
-        override: bool = False,
-        *,
-        state: Optional[SynodicState | Sequence[SynodicState] | int | Sequence[int]] = None,
-        target: Optional[Sequence[float] | np.ndarray] = None,
-        step: Optional[float | Sequence[float] | np.ndarray] = None,
-        max_members: Optional[int] = None,
-        max_retries_per_step: Optional[int] = None,
-        step_min: Optional[float] = None,
-        step_max: Optional[float] = None,
-        extra_params: Optional[dict] = None,
-        shrink_policy: Optional[Callable[[np.ndarray], np.ndarray]] = None,
-        getter: Optional[Callable[["PeriodicOrbit"], float]] = None,
-        stepper: Optional[Literal["natural", "secant"]] = None,
+        options: OrbitContinuationOptions,
     ) -> ContinuationResult:
         """Generate a continuation result.
         
@@ -93,53 +78,15 @@ class ContinuationPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, Config
         ----------
         domain_obj : :class:`~hiten.algorithms.types.core.DomainT`
             The domain object to continue.
-        override : bool
-            Whether to override the default configuration.
-        state : Optional[:class:`~hiten.algorithms.types.states.SynodicState` 
-                | Sequence[:class:`~hiten.algorithms.types.states.SynodicState`] 
-                | int | Sequence[int]]
-            The state to continue.
-        target : Optional[Sequence[float] | np.ndarray]
-            The target to continue.
-        step : Optional[float | Sequence[float] | np.ndarray]
-            The step to continue.
-        max_members : Optional[int]
-            The maximum number of members to continue.
-        max_retries_per_step : Optional[int]
-            The maximum number of retries per step.
-        step_min : Optional[float]
-            The minimum step size.
-        step_max : Optional[float]
-            The maximum step size.
-        extra_params : Optional[dict]
-            The extra parameters to continue.
-        shrink_policy : Optional[Callable[[np.ndarray], np.ndarray]]
-            The shrink policy to continue.
-        getter : Optional[Callable[["PeriodicOrbit"], float]]
-            The getter to continue.
-        stepper : Optional[Literal["natural", "secant"]]
-            The stepper to continue.
+        options : :class:`~hiten.algorithms.continuation.options.OrbitContinuationOptions`
+            Runtime continuation options.
 
         Returns
         -------
         ContinuationResult
             The continuation result.
         """
-        kwargs = {
-            "target": target,
-            "step": step,
-            "max_members": max_members,
-            "max_retries_per_step": max_retries_per_step,
-            "step_min": step_min,
-            "step_max": step_max,
-            "state": state,
-            "getter": getter,
-            "extra_params": extra_params,
-            "shrink_policy": shrink_policy,
-            "stepper": stepper,
-        }
-
-        problem = self._create_problem(domain_obj=domain_obj, override=override, **kwargs)
+        problem = self._create_problem(domain_obj=domain_obj, options=options)
         engine = self._get_engine()
         self._results = engine.solve(problem)
         return self._results

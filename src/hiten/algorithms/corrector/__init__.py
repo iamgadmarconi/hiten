@@ -19,8 +19,7 @@ Advanced users can compose components explicitly:
 >>> from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
 >>> from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
 >>> from hiten.algorithms.corrector.stepping import make_armijo_stepper
->>> from hiten.algorithms.corrector.config import _LineSearchConfig
->>> backend = _NewtonBackend(stepper_factory=make_armijo_stepper(_LineSearchConfig()))
+>>> backend = _NewtonBackend(stepper_factory=make_armijo_stepper())
 >>> interface = _PeriodicOrbitCorrectorInterface()
 >>> engine = _OrbitCorrectionEngine(backend=backend, interface=interface)
 >>> problem = interface.create_problem(orbit=orbit, config=orbit._correction_config)
@@ -43,23 +42,30 @@ See Also
 from .backends.base import _CorrectorBackend
 from .backends.ms import _MultipleShootingBackend
 from .backends.newton import _NewtonBackend
-from .config import (_BaseCorrectionConfig, _LineSearchConfig,
-                     _MultipleShootingOrbitCorrectionConfig,
-                     _OrbitCorrectionConfig)
+from .config import (CorrectionConfig,
+                     MSOrbitCorrectionConfig,
+                     OrbitCorrectionConfig)
 from .engine import _OrbitCorrectionEngine
 from .interfaces import (_MultipleShootingCorrectorOrbitInterface,
                          _PeriodicOrbitCorrectorInterface)
+from .options import OrbitCorrectionOptions, MultipleShootingOptions
 
 __all__ = [
+    # Backends
+    "_CorrectorBackend",
     "_NewtonBackend",
     "_MultipleShootingBackend",
     
-    "_BaseCorrectionConfig",
-    "_OrbitCorrectionConfig",
-    "_MultipleShootingOrbitCorrectionConfig",
-    "_LineSearchConfig",
+    # Configs (compile-time structure)
+    "CorrectionConfig",
+    "OrbitCorrectionConfig",
+    "MSOrbitCorrectionConfig",
     
-    "_CorrectorBackend",
+    # Options (runtime tuning)
+    "OrbitCorrectionOptions",
+    "MultipleShootingOptions",
+    
+    # Interfaces & Engines
     "_PeriodicOrbitCorrectorInterface",
     "_MultipleShootingCorrectorOrbitInterface",
     "_OrbitCorrectionEngine",

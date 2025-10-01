@@ -11,7 +11,7 @@ boundary validation and seed generation.
 from typing import Any, Callable
 
 from hiten.algorithms.poincare.centermanifold.config import \
-    _CenterManifoldMapConfig
+    CenterManifoldMapConfig
 from hiten.algorithms.poincare.centermanifold.interfaces import \
     _CenterManifoldSectionInterface
 from hiten.algorithms.poincare.core.strategies import _SeedingStrategyBase
@@ -27,7 +27,7 @@ class _CenterManifoldSeedingBase(_SeedingStrategyBase):
 
     Parameters
     ----------
-    map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
+    map_config : :class:`~hiten.algorithms.poincare.centermanifold.config.CenterManifoldMapConfig`
         Configuration for the center manifold map.
 
     Notes
@@ -42,7 +42,7 @@ class _CenterManifoldSeedingBase(_SeedingStrategyBase):
     separation as the length unit.
     """
 
-    def __init__(self, map_config: _CenterManifoldMapConfig) -> None:
+    def __init__(self, map_config: CenterManifoldMapConfig) -> None:
         super().__init__(map_config)
 
     @property

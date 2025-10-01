@@ -4,7 +4,7 @@ import pytest
 
 from hiten.algorithms.dynamics.rhs import create_rhs_system
 from hiten.algorithms.integrators import AdaptiveRK, RungeKutta
-from hiten.algorithms.types.events import _EventConfig
+from hiten.algorithms.types.configs import EventConfig
 
 
 def test_dop853_event_positive_crossing():
@@ -20,7 +20,7 @@ def test_dop853_event_positive_crossing():
     def g(t, y):
         return float(y[0] - 1.0)
 
-    ev_cfg = _EventConfig(direction=+1, terminal=True)
+    ev_cfg = EventConfig(direction=+1, terminal=True)
     # Constrain step size to improve event time accuracy on stiff relaxation
     dop853 = AdaptiveRK(order=8, max_step=1e-3)
     sol = dop853.integrate(sys, y0, t_vals, event_fn=g, event_cfg=ev_cfg)
@@ -45,7 +45,7 @@ def test_dop853_event_negative_crossing():
     def g(t, y):
         return float(y[0] - 1.0)
 
-    ev_cfg = _EventConfig(direction=-1, terminal=True)
+    ev_cfg = EventConfig(direction=-1, terminal=True)
     dop853 = AdaptiveRK(order=8)
     sol = dop853.integrate(sys, y0, t_vals, event_fn=g, event_cfg=ev_cfg)
 
@@ -68,7 +68,7 @@ def test_dop853_event_strict_direction_no_hit():
     def g(t, y):
         return float(y[0] - 1.0)
 
-    ev_cfg = _EventConfig(direction=-1, terminal=True)
+    ev_cfg = EventConfig(direction=-1, terminal=True)
     dop853 = AdaptiveRK(order=8)
     sol = dop853.integrate(sys, y0, t_vals, event_fn=g, event_cfg=ev_cfg)
 
@@ -90,7 +90,7 @@ def test_dop853_start_on_plane_moving_away_no_hit():
     def g(t, y):
         return float(y[0] - 1.0)
 
-    ev_cfg = _EventConfig(direction=+1, terminal=True)
+    ev_cfg = EventConfig(direction=+1, terminal=True)
     dop853 = AdaptiveRK(order=8)
     sol = dop853.integrate(sys, y0, t_vals, event_fn=g, event_cfg=ev_cfg)
 
@@ -112,7 +112,7 @@ def test_dop853_event_any_direction_crossing():
     def g(t, y):
         return float(y[0] - 1.0)
 
-    ev_cfg = _EventConfig(direction=0, terminal=True)
+    ev_cfg = EventConfig(direction=0, terminal=True)
     dop853 = AdaptiveRK(order=8)
     sol = dop853.integrate(sys, y0, t_vals, event_fn=g, event_cfg=ev_cfg)
 
@@ -133,7 +133,7 @@ def test_dop853_event_filtered_by_direction_no_hit():
     def g(t, y):
         return float(y[0] - 1.0)
 
-    ev_cfg = _EventConfig(direction=+1, terminal=True)
+    ev_cfg = EventConfig(direction=+1, terminal=True)
     dop853 = AdaptiveRK(order=8)
     sol = dop853.integrate(sys, y0, t_vals, event_fn=g, event_cfg=ev_cfg)
 
@@ -154,7 +154,7 @@ def test_dop853_event_always_positive_no_hit():
     def g(t, y):
         return float(y[0] - 1.0)  # always positive for y0=2 and dy/dt=0
 
-    ev_cfg = _EventConfig(direction=0, terminal=True)
+    ev_cfg = EventConfig(direction=0, terminal=True)
     dop853 = AdaptiveRK(order=8)
     sol = dop853.integrate(sys, y0, t_vals, event_fn=g, event_cfg=ev_cfg)
 
@@ -182,7 +182,7 @@ def test_dop853_event_numba_compiled_function():
     def g(t, y):
         return y[0] - 1.5
 
-    ev_cfg = _EventConfig(direction=+1, terminal=True)
+    ev_cfg = EventConfig(direction=+1, terminal=True)
     dop853 = AdaptiveRK(order=8)
     sol = dop853.integrate(sys, y0, t_vals, event_fn=g, event_cfg=ev_cfg)
 
@@ -209,7 +209,7 @@ def test_dop853_event_stiff_relaxation_positive_crossing():
     # Analytic hit time
     t_expected = -np.log(1.0 - y_target) / lam
 
-    ev_cfg = _EventConfig(direction=+1, terminal=True)
+    ev_cfg = EventConfig(direction=+1, terminal=True)
     dop853 = AdaptiveRK(order=8)
     sol = dop853.integrate(sys, y0, t_vals, event_fn=g, event_cfg=ev_cfg)
 
@@ -233,7 +233,7 @@ def test_dop853_event_crossing_very_early_from_near_plane():
     def g(t, y):
         return float(y[0] - 1.0)
 
-    ev_cfg = _EventConfig(direction=+1, terminal=True)
+    ev_cfg = EventConfig(direction=+1, terminal=True)
     dop853 = AdaptiveRK(order=8)
     sol = dop853.integrate(sys, y0, t_vals, event_fn=g, event_cfg=ev_cfg)
 
@@ -257,7 +257,7 @@ def test_endpoint_zero_is_detected_rk45_and_fixed_rk():
     def g(t, y):
         return float(y[0] - 1.0)
 
-    ev_cfg = _EventConfig(direction=+1, terminal=True)
+    ev_cfg = EventConfig(direction=+1, terminal=True)
 
     # RK45 should detect the event at the right endpoint exactly at t=1
     rk45 = AdaptiveRK(order=5)
@@ -353,7 +353,7 @@ def test_rk45_event_hamiltonian_positive_crossing(monkeypatch):
     def g(t, y):
         return float(y[0] - 1.0)
 
-    ev_cfg = _EventConfig(direction=+1, terminal=True)
+    ev_cfg = EventConfig(direction=+1, terminal=True)
     rk45 = AdaptiveRK(order=5)
     sol = rk45.integrate(sys, y0, t_vals, event_fn=g, event_cfg=ev_cfg)
 
@@ -374,7 +374,7 @@ def test_dop853_event_hamiltonian_negative_crossing(monkeypatch):
     def g(t, y):
         return float(y[0] - 1.0)
 
-    ev_cfg = _EventConfig(direction=-1, terminal=True)
+    ev_cfg = EventConfig(direction=-1, terminal=True)
     dop853 = AdaptiveRK(order=8)
     sol = dop853.integrate(sys, y0, t_vals, event_fn=g, event_cfg=ev_cfg)
 
@@ -395,7 +395,7 @@ def test_fixed_rk_event_hamiltonian_endpoint_zero(monkeypatch):
     def g(t, y):
         return float(y[0] - 1.0)
 
-    ev_cfg = _EventConfig(direction=+1, terminal=True)
+    ev_cfg = EventConfig(direction=+1, terminal=True)
     rk4 = RungeKutta(order=4)
     sol = rk4.integrate(sys, y0, t_vals, event_fn=g, event_cfg=ev_cfg)
 

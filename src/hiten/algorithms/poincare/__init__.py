@@ -7,9 +7,9 @@ implementations with various seeding strategies.
 """
 
 from hiten.algorithms.poincare.centermanifold.config import \
-    _CenterManifoldMapConfig as CenterManifoldMapConfig
+    CenterManifoldMapConfig as CenterManifoldMapConfig
 from hiten.algorithms.poincare.synodic.config import \
-    _SynodicMapConfig as SynodicMapConfig
+    SynodicMapConfig as SynodicMapConfig
 
 
 def _build_seeding_strategy(section_cfg, config):
@@ -23,7 +23,7 @@ def _build_seeding_strategy(section_cfg, config):
     ----------
     section_cfg : :class:`~hiten.algorithms.poincare.core.interfaces._SectionInterface`
         The section configuration object.
-    config : :class:`~hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`
+    config : :class:`~hiten.algorithms.poincare.core.config._ReturnMapConfig`
         The map configuration containing the seed strategy specification.
 
     Returns

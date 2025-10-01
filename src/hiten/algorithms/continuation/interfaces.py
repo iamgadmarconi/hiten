@@ -25,11 +25,13 @@ from typing import TYPE_CHECKING, Any, Callable, Sequence
 
 import numpy as np
 
-from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+from hiten.algorithms.continuation.config import OrbitContinuationConfig
+from hiten.algorithms.continuation.options import OrbitContinuationOptions
 from hiten.algorithms.continuation.stepping import (make_natural_stepper,
                                                     make_secant_stepper)
 from hiten.algorithms.continuation.types import (ContinuationResult,
                                                  _ContinuationProblem)
+from hiten.algorithms.corrector.options import OrbitCorrectionOptions
 from hiten.algorithms.types.core import _BackendCall, _HitenBaseInterface
 from hiten.algorithms.types.states import SynodicState
 
@@ -39,7 +41,7 @@ if TYPE_CHECKING:
 
 class _PeriodicOrbitContinuationInterface(
     _HitenBaseInterface[
-        _OrbitContinuationConfig,
+        OrbitContinuationConfig,
         _ContinuationProblem,
         ContinuationResult,
         tuple[list[np.ndarray], dict[str, object]],
@@ -50,15 +52,17 @@ class _PeriodicOrbitContinuationInterface(
     def __init__(self) -> None:
         super().__init__()
 
-    def create_problem(self, *, domain_obj: "PeriodicOrbit", config: _OrbitContinuationConfig) -> _ContinuationProblem:
+    def create_problem(self, *, domain_obj: "PeriodicOrbit", config: OrbitContinuationConfig, options: OrbitContinuationOptions) -> _ContinuationProblem:
         """Create a continuation problem.
         
         Parameters
         ----------
         domain_obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             The domain object to continue.
-        config : :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
-            The configuration for the continuation problem.
+        config : :class:`~hiten.algorithms.continuation.config.OrbitContinuationConfig`
+            Compile-time configuration (algorithm structure).
+        options : :class:`~hiten.algorithms.continuation.options.OrbitContinuationOptions`, optional
+            Runtime options (target, step, limits). If None, defaults are used.
         
         Returns
         -------
@@ -67,20 +71,36 @@ class _PeriodicOrbitContinuationInterface(
         """
         parameter_getter = self._parameter_getter(config)
         state_indices = self._get_state_indices(config)
+        
+        # Extract corrector parameters from extra_params
+        corrector_tol = 1e-12
+        corrector_max_attempts = 50
+        corrector_max_delta = 1e-2
+        corrector_order = 8
+        corrector_steps = 500
+        corrector_forward = 1
+        corrector_fd_step = 1e-8
+
         return _ContinuationProblem(
             initial_solution=domain_obj,
             parameter_getter=parameter_getter,
-            target=np.asarray(config.target, dtype=float),
-            step=np.asarray(config.step, dtype=float),
-            max_members=int(config.max_members),
-            max_retries_per_step=int(config.max_retries_per_step),
-            corrector_kwargs=config.extra_params or {},
+            target=options.target,
+            step=options.step,
+            max_members=options.max_members,
+            max_retries_per_step=options.max_retries_per_step,
             representation_of=lambda obj: np.asarray(obj, dtype=float),
-            shrink_policy=config.shrink_policy,
-            step_min=float(config.step_min),
-            step_max=float(config.step_max),
+            shrink_policy=options.shrink_policy,
+            step_min=options.step_min,
+            step_max=options.step_max,
             stepper=config.stepper,
             state_indices=state_indices,
+            corrector_tol=corrector_tol,
+            corrector_max_attempts=corrector_max_attempts,
+            corrector_max_delta=corrector_max_delta,
+            corrector_order=corrector_order,
+            corrector_steps=corrector_steps,
+            corrector_forward=corrector_forward,
+            corrector_fd_step=corrector_fd_step,
         )
 
     def to_backend_inputs(self, problem: _ContinuationProblem) -> _BackendCall:
@@ -169,7 +189,32 @@ class _PeriodicOrbitContinuationInterface(
                 The corrected prediction, the residual, and whether the correction was successful.
             """
             orbit = self._instantiate(domain_obj, prediction)
-            x_corr, _ = orbit.correct(**(problem.corrector_kwargs or {}))
+            
+            # Reconstruct options from individual problem fields
+            from hiten.algorithms.types.options import (ConvergenceOptions,
+                                                        CorrectionOptions,
+                                                        IntegrationOptions,
+                                                        NumericalOptions)
+            
+            corrector_options = OrbitCorrectionOptions(
+                base=CorrectionOptions(
+                    convergence=ConvergenceOptions(
+                        tol=problem.corrector_tol,
+                        max_attempts=problem.corrector_max_attempts,
+                        max_delta=problem.corrector_max_delta,
+                    ),
+                    integration=IntegrationOptions(
+                        order=problem.corrector_order,
+                        steps=problem.corrector_steps,
+                    ),
+                    numerical=NumericalOptions(
+                        fd_step=problem.corrector_fd_step,
+                    ),
+                ),
+                forward=problem.corrector_forward,
+            )
+        
+            x_corr, _ = orbit.correct(options=corrector_options)
             residual = float(np.linalg.norm(np.asarray(x_corr, dtype=float) - prediction))
             
             # Update tangent for secant stepper after successful correction
@@ -314,12 +359,12 @@ class _PeriodicOrbitContinuationInterface(
             orbit.period = domain_obj.period
         return orbit
 
-    def _parameter_getter(self, cfg: _OrbitContinuationConfig) -> Callable[[np.ndarray], np.ndarray]:
+    def _parameter_getter(self, cfg: OrbitContinuationConfig) -> Callable[[np.ndarray], np.ndarray]:
         """Get the parameter from the representation.
         
         Parameters
         ----------
-        cfg : :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
+        cfg : :class:`~hiten.algorithms.continuation.config.OrbitContinuationConfig`
             The configuration.
         
         Returns
@@ -339,12 +384,12 @@ class _PeriodicOrbitContinuationInterface(
         idx_arr = np.asarray(indices, dtype=int)
         return lambda repr_vec: np.asarray(repr_vec, dtype=float)[idx_arr]
 
-    def _predictor(self, cfg: _OrbitContinuationConfig) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
+    def _predictor(self, cfg: OrbitContinuationConfig) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:
         """Get the predictor.
         
         Parameters
         ----------
-        cfg : :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
+        cfg : :class:`~hiten.algorithms.continuation.config.OrbitContinuationConfig`
             The configuration.
         
         Returns
@@ -386,12 +431,12 @@ class _PeriodicOrbitContinuationInterface(
 
         return _predict
 
-    def _get_state_indices(self, config: _OrbitContinuationConfig) -> np.ndarray:
+    def _get_state_indices(self, config: OrbitContinuationConfig) -> np.ndarray:
         """Get the state indices.
         
         Parameters
         ----------
-        config : :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
+        config : :class:`~hiten.algorithms.continuation.config.OrbitContinuationConfig`
             The configuration.
         
         Returns
@@ -473,12 +518,12 @@ class _PeriodicOrbitContinuationInterface(
             return make_secant_stepper(lambda v: np.asarray(v, dtype=float), tangent_fn)
         return make_natural_stepper(predictor)
 
-    def _make_stepper(self, cfg: _OrbitContinuationConfig, predictor: Callable[[np.ndarray, np.ndarray], np.ndarray], tangent_fn: Callable[[], np.ndarray | None] | None = None):
+    def _make_stepper(self, cfg: OrbitContinuationConfig, predictor: Callable[[np.ndarray, np.ndarray], np.ndarray], tangent_fn: Callable[[], np.ndarray | None] | None = None):
         """Make a stepper from the configuration.
         
         Parameters
         ----------
-        cfg : :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
+        cfg : :class:`~hiten.algorithms.continuation.config.OrbitContinuationConfig`
             The configuration.
         predictor : Callable[[np.ndarray, np.ndarray], np.ndarray]
             The predictor.

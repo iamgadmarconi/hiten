@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Callable, Optional, Tuple
+from typing import TYPE_CHECKING, Callable, Optional, Tuple, Union
 
 import numpy as np
 
+if TYPE_CHECKING:
+    from hiten.algorithms.corrector.options import OrbitCorrectionOptions
 
-@dataclass(frozen=True, slots=True)
+
+@dataclass(frozen=True)
 class ContinuationResult:
     """Standardized result for a continuation run.
     
@@ -57,8 +60,6 @@ class _ContinuationProblem:
         Maximum number of accepted solutions to generate.
     max_retries_per_step : int
         Maximum number of retries per failed continuation step.
-    corrector_kwargs : dict
-        Additional keyword arguments passed to the corrector method.
     representation_of : callable or None
         Function to convert solution objects to vector representations.
     shrink_policy : callable or None
@@ -71,6 +72,22 @@ class _ContinuationProblem:
         The stepper to use.
     state_indices : Optional[np.ndarray]
         The state indices.
+    corrector_tol : float
+        Convergence tolerance for the corrector residual norm.
+    corrector_max_attempts : int
+        Maximum number of corrector iterations.
+    corrector_max_delta : float
+        Maximum allowed infinity norm of corrector Newton steps.
+    corrector_order : int
+        Integration order for corrector.
+    corrector_steps : int
+        Number of integration steps for corrector.
+    corrector_forward : int
+        Integration direction for corrector (1 for forward, -1 for backward).
+    corrector_fd_step : float
+        Finite difference step size for corrector.
+    corrector_options_override : Optional["OrbitCorrectionOptions"]
+        Full corrector options object that overrides all individual parameters if provided.
     """
 
     initial_solution: object
@@ -79,10 +96,16 @@ class _ContinuationProblem:
     step: np.ndarray
     max_members: int
     max_retries_per_step: int
-    corrector_kwargs: dict
     representation_of: Optional[Callable[[np.ndarray], np.ndarray]] = None
     shrink_policy: Optional[Callable[[np.ndarray], np.ndarray]] = None
     step_min: float = 1e-10
     step_max: float = 1.0
     stepper: str = "natural"
     state_indices: Optional[np.ndarray] = None
+    corrector_tol: float = 1e-12
+    corrector_max_attempts: int = 50
+    corrector_max_delta: float = 1e-2
+    corrector_order: int = 8
+    corrector_steps: int = 500
+    corrector_forward: int = 1
+    corrector_fd_step: float = 1e-8

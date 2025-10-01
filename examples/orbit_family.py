@@ -10,11 +10,14 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from hiten import System
-from hiten.algorithms import ContinuationPipeline
+from hiten.algorithms.continuation.options import OrbitContinuationOptions
+from hiten.algorithms.corrector.options import OrbitCorrectionOptions
+from hiten.algorithms.types.options import (ConvergenceOptions,
+                                            CorrectionOptions,
+                                            IntegrationOptions,
+                                            NumericalOptions)
 from hiten.algorithms.types.states import SynodicState
-from hiten.algorithms.continuation.config import _OrbitContinuationConfig
 from hiten.system.family import OrbitFamily
-from hiten.utils.log_config import logger
 
 
 def main() -> None:
@@ -23,31 +26,53 @@ def main() -> None:
     This example demonstrates how to use the ContinuationPipeline predictor to
     generate a halo_family of Halo orbits around the Earth-Moon L1 point.
     """
-    num_orbits = 50
     system = System.from_bodies("earth", "moon")
     l1 = system.get_libration_point(1)
     
     halo_seed = l1.create_orbit('halo', amplitude_z= 0.2, zenith='southern')
-    halo_seed.correct(max_attempts=25, max_delta=1e-3)
+    halo_seed.correct()
+    halo_seed.propagate()
 
-    current_z = halo_seed.initial_state[SynodicState.Z]  # 0 for planar Lyapunov halo_seed
-    target_z = current_z + 5.0   # introduce out-of-plane Z
-    step_z = (target_z - current_z) / (num_orbits - 1)
+    corrector_options = OrbitCorrectionOptions(
+            base=CorrectionOptions(
+                convergence=ConvergenceOptions(
+                    max_attempts=50,
+                    tol=1e-12,
+                    max_delta=1e-2,
+                ),
+                integration=IntegrationOptions(
+                    dt=1e-2,
+                    order=8,
+                    max_steps=2000,
+                    c_omega_heuristic=20.0,
+                    steps=500,
+                ),
+                numerical=NumericalOptions(
+                    fd_step=1e-8,
+                    line_search_alpha_reduction=0.5,
+                    line_search_min_alpha=1e-4,
+                    line_search_armijo_c=0.1,
+                ),
+            ),
+            forward=1,
+        )
+    options = OrbitContinuationOptions(
+            target=(
+                [halo_seed.initial_state[SynodicState.Z], halo_seed.initial_state[SynodicState.Y]],
+                [halo_seed.initial_state[SynodicState.Z] + 2.0, halo_seed.initial_state[SynodicState.Y]-1.0]),
+            step=(
+                (1 - halo_seed.initial_state[SynodicState.Z]) / (100 - 1),
+                (1 - halo_seed.initial_state[SynodicState.Y]) / (100 - 1),
+            ),
+            max_members=100,
+            max_retries_per_step=50,
+            step_min=1e-10,
+            step_max=1.0,
+            shrink_policy=None,
+            extra_params=corrector_options,
+        )
 
-    config= _OrbitContinuationConfig(
-        target=([current_z], [target_z]),
-        step=((step_z),),
-        state=(SynodicState.Z,),
-        max_members=50,
-        extra_params=dict(max_attempts=50, tol=1e-12),
-        stepper="secant",
-    )
-
-    state_parameter = ContinuationPipeline.with_default_engine(config=config)
-
-    result = state_parameter.generate(halo_seed)
-
-    logger.info(f"Generated {len(result.family)} orbits (success rate {result.success_rate:.2%})")
+    result = halo_seed.generate(options)
 
     family = OrbitFamily.from_result(result)
     family.propagate()
