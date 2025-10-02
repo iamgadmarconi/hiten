@@ -6,12 +6,25 @@ for continuation methods. These should be set once when creating a pipeline.
 For runtime tuning parameters (target ranges, step sizes, etc.), see options.py.
 """
 
-from dataclasses import dataclass
-from typing import Callable, Literal, Optional
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from typing import Callable, Literal, Optional, Sequence, Tuple
+
+import numpy as np
 
 from hiten.algorithms.types.configs import _HitenBaseConfig
 from hiten.algorithms.types.states import SynodicState
 from hiten.system.orbits.base import PeriodicOrbit
+
+
+def _make_orbit_parameter_getter(
+    indices: Optional[Tuple[int, ...]]
+) -> Callable[[np.ndarray], np.ndarray]:
+    if indices is None:
+        return lambda vec: np.asarray(vec, dtype=float)
+    idx_array = np.asarray(indices, dtype=int)
+    return lambda vec: np.asarray(vec, dtype=float)[idx_array]
 
 
 @dataclass(frozen=True)
@@ -105,11 +118,50 @@ class OrbitContinuationConfig(ContinuationConfig):
     ...     max_members=100
     ... )
     """
-    state: Optional[SynodicState] = None
+    state: Optional[Sequence[SynodicState] | SynodicState | int] = None
     getter: Optional[Callable[[PeriodicOrbit], float]] = None
+    _state_indices: Optional[Tuple[int, ...]] = field(init=False, default=None, repr=False)
 
     def _validate(self) -> None:
         """Validate the configuration."""
         super()._validate()
-        # State validation happens at runtime when indices are resolved
         # Getter validation happens when it's called
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        indices = self._coerce_state_indices(self.state)
+        object.__setattr__(self, "_state_indices", indices)
+
+    @staticmethod
+    def _coerce_state_indices(state: Optional[Sequence[SynodicState] | SynodicState | int]) -> Optional[Tuple[int, ...]]:
+        if state is None:
+            return None
+        if isinstance(state, SynodicState):
+            return (int(state.value),)
+        if isinstance(state, Sequence) and not isinstance(state, (str, bytes)):
+            indices: list[int] = []
+            for item in state:
+                if isinstance(item, SynodicState):
+                    indices.append(int(item.value))
+                else:
+                    indices.append(int(item))
+            return tuple(indices)
+        return (int(state),)
+
+    @property
+    def state_indices(self) -> Optional[Tuple[int, ...]]:
+        """Return resolved continuation state indices (compile-time)."""
+        return self._state_indices
+
+    def make_parameter_getter(self) -> Callable[[np.ndarray], np.ndarray]:
+        """Create a vector-space parameter getter respecting state selection."""
+        return _make_orbit_parameter_getter(self._state_indices)
+
+    def make_representation_of(self) -> Callable[[object], np.ndarray]:
+        """Create a representation helper from domain objects to vectors."""
+        def _representation(obj: object) -> np.ndarray:
+            if hasattr(obj, "initial_state"):
+                return np.asarray(getattr(obj, "initial_state"), dtype=float)
+            return np.asarray(obj, dtype=float)
+
+        return _representation

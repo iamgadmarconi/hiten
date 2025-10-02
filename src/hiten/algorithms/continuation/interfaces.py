@@ -1,6 +1,6 @@
 """Provide interface classes for domain-specific continuation algorithms."""
 
-from typing import TYPE_CHECKING, Any, Callable, Sequence
+from typing import TYPE_CHECKING, Any, Callable
 
 import numpy as np
 
@@ -10,7 +10,6 @@ from hiten.algorithms.continuation.types import (ContinuationResult,
                                                  _ContinuationProblem)
 from hiten.algorithms.corrector.options import OrbitCorrectionOptions
 from hiten.algorithms.types.core import _BackendCall, _HitenBaseInterface
-from hiten.algorithms.types.states import SynodicState
 
 if TYPE_CHECKING:
     from hiten.system.orbits.base import PeriodicOrbit
@@ -30,24 +29,9 @@ class _PeriodicOrbitContinuationInterface(
         super().__init__()
 
     def create_problem(self, *, domain_obj: "PeriodicOrbit", config: OrbitContinuationConfig, options: OrbitContinuationOptions) -> _ContinuationProblem:
-        target_state = getattr(config, "state", None)
-        if target_state is None:
-            def parameter_getter(vec: np.ndarray) -> np.ndarray:
-                return np.asarray(vec, dtype=float)
-            state_indices = None
-        else:
-            if isinstance(target_state, SynodicState):
-                indices = [int(target_state.value)]
-            elif isinstance(target_state, Sequence):
-                indices = [int(s.value if isinstance(s, SynodicState) else s) for s in target_state]
-            else:
-                indices = [int(target_state)]
-            idx_array = np.asarray(indices, dtype=int)
-
-            def parameter_getter(vec: np.ndarray) -> np.ndarray:
-                return np.asarray(vec, dtype=float)[idx_array]
-
-            state_indices = idx_array
+        parameter_getter = config.make_parameter_getter()
+        representation_fn = config.make_representation_of()
+        state_indices = None if config.state_indices is None else np.asarray(config.state_indices, dtype=int)
 
         return _ContinuationProblem(
             initial_solution=domain_obj,
@@ -56,7 +40,7 @@ class _PeriodicOrbitContinuationInterface(
             step=options.step,
             max_members=options.max_members,
             max_retries_per_step=options.max_retries_per_step,
-            representation_of=lambda obj: np.asarray(obj.initial_state if hasattr(obj, 'initial_state') else obj, dtype=float),
+            representation_of=representation_fn,
             shrink_policy=options.shrink_policy,
             step_min=options.step_min,
             step_max=options.step_max,

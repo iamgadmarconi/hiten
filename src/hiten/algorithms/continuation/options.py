@@ -7,7 +7,7 @@ the algorithm structure.
 For compile-time configuration (algorithm structure), see config.py.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Callable, Optional
 
 import numpy as np
@@ -176,11 +176,11 @@ class OrbitContinuationOptions(ContinuationOptions):
     For algorithm structure parameters like `state`, `getter`, `stepper`,
     see OrbitContinuationConfig instead.
     """
-    extra_params: Optional[OrbitCorrectionOptions] = None
+    extra_params: OrbitCorrectionOptions = field(default_factory=OrbitCorrectionOptions)
 
     def _validate(self) -> None:
         """Validate the options."""
         super()._validate()
-        if self.extra_params is not None and not isinstance(self.extra_params, OrbitCorrectionOptions):
-            raise ValueError("extra_params must be a OrbitCorrectionOptions or None")
+        if not isinstance(self.extra_params, OrbitCorrectionOptions):
+            raise ValueError("extra_params must be a OrbitCorrectionOptions")
 
