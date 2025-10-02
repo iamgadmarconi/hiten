@@ -2,7 +2,7 @@
 
 This module provides a single, generic facade for correction algorithms that
 works with any domain through the interface pattern. The facade orchestrates
-the complete pipeline: facade → engine → interface → backend.
+the complete pipeline: facade -> engine -> interface -> backend.
 """
 
 from typing import TYPE_CHECKING, Any, Generic, Optional

@@ -1,43 +1,46 @@
 """Abstract base class for continuation stepping strategies."""
 
-from abc import ABC
+from __future__ import annotations
+
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 
 
+@dataclass(slots=True)
+class _StepProposal:
+    """Prediction payload returned by continuation steppers."""
+
+    prediction: np.ndarray
+    step_hint: Optional[np.ndarray] = None
+
+
 class _ContinuationStepBase(ABC):
-    """Define the protocol for continuation stepping strategies.
+    """Define the protocol for continuation stepping strategies."""
 
-    This protocol specifies the required interface for all stepping strategies
-    used in continuation algorithms. Stepping strategies are responsible for
-    predicting the next solution representation and potentially adapting the
-    step size based on the current solution state.
-    """
+    @abstractmethod
+    def predict(self, last_solution: object, step: np.ndarray) -> _StepProposal:
+        """Generate a prediction for the next solution."""
 
-    def __call__(self, last_solution: object, step: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Predict next solution and adapt step size.
+    def on_accept(
+        self,
+        *,
+        last_solution: object,
+        new_solution: np.ndarray,
+        step: np.ndarray,
+        proposal: _StepProposal,
+    ) -> Optional[np.ndarray]:
+        """Hook executed after successful correction; may return next step."""
+        return proposal.step_hint
 
-        This method performs the core stepping operation: generating a
-        prediction for the next solution in the continuation sequence
-        and potentially adapting the step size based on local conditions.
-
-        Parameters
-        ----------
-        last_solution : object
-            Current solution object (e.g., periodic orbit, equilibrium)
-            from which to predict the next solution.
-        step : ndarray
-            Current step size(s) for continuation parameters.
-            Shape should match the parameter dimension.
-
-        Returns
-        -------
-        prediction : ndarray
-            Numerical representation of the predicted next solution.
-            This will be passed to the continuation engine's instantiation
-            method to create a domain object for correction.
-        adapted_step : ndarray
-            Potentially modified step size for the next continuation step.
-            Should have the same shape as the input step array.
-        """
-        ...
+    def on_reject(
+        self,
+        *,
+        last_solution: object,
+        step: np.ndarray,
+        proposal: _StepProposal,
+    ) -> Optional[np.ndarray]:
+        """Hook executed after failed correction; may return adjusted step."""
+        return None

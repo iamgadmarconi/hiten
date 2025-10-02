@@ -1,6 +1,4 @@
-"""
-Abstract base class for continuation engines.
-"""
+"""Abstract base class for continuation engines."""
 
 from hiten.algorithms.types.core import _HitenBaseEngine
 

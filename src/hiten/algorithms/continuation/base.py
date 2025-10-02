@@ -6,6 +6,8 @@ provide a simple API to run continuation with domain-friendly inputs.
 
 from typing import TYPE_CHECKING, Generic, Optional
 
+import numpy as np
+
 from hiten.algorithms.continuation.options import OrbitContinuationOptions
 from hiten.algorithms.continuation.types import ContinuationResult
 from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
@@ -61,8 +63,23 @@ class ContinuationPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, Conf
             _OrbitContinuationEngine
         from hiten.algorithms.continuation.interfaces import \
             _PeriodicOrbitContinuationInterface
+        from hiten.algorithms.continuation.stepping import (
+            make_natural_stepper, make_secant_stepper)
+        from hiten.algorithms.continuation.stepping.support import (
+            _NullStepSupport, _VectorSpaceSecantSupport)
 
-        backend = backend or _PCContinuationBackend()
+        if backend is None:
+            if config.stepper == "secant":
+                backend = _PCContinuationBackend(
+                    stepper_factory=make_secant_stepper(),
+                    support_factory=_VectorSpaceSecantSupport,
+                )
+            else:
+                backend = _PCContinuationBackend(
+                    stepper_factory=make_natural_stepper(),
+                    support_factory=_NullStepSupport,
+                )
+
         intf = interface or _PeriodicOrbitContinuationInterface()
         engine = _OrbitContinuationEngine(backend=backend, interface=intf)
         return cls(config, engine, intf, backend)

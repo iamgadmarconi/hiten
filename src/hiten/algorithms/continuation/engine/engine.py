@@ -57,13 +57,6 @@ class _OrbitContinuationEngine(_ContinuationEngine):
         raise EngineError("Orbit continuation failed") from exc
 
     def _invoke_backend(self, call):
-        """Invoke the backend.
-        
-        Parameters
-        ----------
-        call : :class:`~hiten.algorithms.types.core._BackendCall`
-            The call to the backend.
-        """
         return self._backend.run(*call.args, **call.kwargs)
 
     def _after_backend_success(self, outputs, *, problem, domain_payload, interface) -> None:
