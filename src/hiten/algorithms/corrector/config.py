@@ -83,7 +83,7 @@ class OrbitCorrectionConfig(CorrectionConfig):
 
 
 @dataclass(frozen=True)
-class MSOrbitCorrectionConfig(OrbitCorrectionConfig):
+class MultipleShootingOrbitCorrectionConfig(OrbitCorrectionConfig):
     """Configuration for multiple shooting correction (compile-time structure).
 
     Extends OrbitCorrectionConfig with multiple shooting-specific structural
@@ -125,7 +125,7 @@ class MSOrbitCorrectionConfig(OrbitCorrectionConfig):
     Notes
     -----
     For runtime tuning like `n_patches`, `tol`, `max_attempts`, use 
-    MultipleShootingOptions instead.
+    MultipleShootingCorrectionOptions instead.
 
     The parameter vector for multiple shooting has dimension:
     
@@ -142,7 +142,7 @@ class MSOrbitCorrectionConfig(OrbitCorrectionConfig):
     Examples
     --------
     >>> # Compile-time: Define algorithm structure
-    >>> config = MSOrbitCorrectionConfig(
+    >>> config = MultipleShootingOrbitCorrectionConfig(
     ...     method="adaptive",
     ...     residual_indices=(1, 2, 3, 4, 5),
     ...     control_indices=(0, 1, 2, 3, 4, 5),
@@ -151,8 +151,8 @@ class MSOrbitCorrectionConfig(OrbitCorrectionConfig):
     ...     use_sparse_jacobian=False
     ... )
     >>> # Runtime: Tune per call
-    >>> from hiten.algorithms.corrector.options import MultipleShootingOptions
-    >>> options = MultipleShootingOptions(n_patches=7)
+    >>> from hiten.algorithms.corrector.options import MultipleShootingCorrectionOptions
+    >>> options = MultipleShootingCorrectionOptions(n_patches=7)
 
     See Also
     --------

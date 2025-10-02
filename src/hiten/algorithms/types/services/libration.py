@@ -520,14 +520,15 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
     def eigendecomposition_config(self, config: EigenDecompositionConfig) -> None:
         """Set the eigen decomposition configuration for the collinear libration point.
         
+        Invalidates the generator cache to trigger recreation with the new config.
+        
         Parameters
         ----------
         config : :class:`~hiten.algorithms.linalg.config.EigenDecompositionConfig`
             New eigendecomposition configuration.
         """
         self._eigendecomposition_config = config
-        if self._generator is not None:
-            self.generator._set_config(config)
+        self._generator = None  # Invalidate cache to trigger recreation
     
     @property
     def eigendecomposition_options(self) -> "EigenDecompositionOptions":

@@ -11,8 +11,8 @@ from typing import TYPE_CHECKING, Any, Callable
 import numpy as np
 
 from hiten.algorithms.corrector.config import (
-    MSOrbitCorrectionConfig, OrbitCorrectionConfig)
-from hiten.algorithms.corrector.options import (MultipleShootingOptions,
+    MultipleShootingOrbitCorrectionConfig, OrbitCorrectionConfig)
+from hiten.algorithms.corrector.options import (MultipleShootingCorrectionOptions,
                                                 OrbitCorrectionOptions)
 from hiten.algorithms.corrector.types import (JacobianFn,
                                               MultipleShootingResult, NormFn,
@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from hiten.system.orbits.base import PeriodicOrbit
 
 
-class _PeriodicOrbitCorrectorInterface(
+class _OrbitCorrectionInterface(
     _HitenBaseInterface[
         OrbitCorrectionConfig,
         _OrbitCorrectionProblem,
@@ -425,9 +425,9 @@ class _PeriodicOrbitCorrectorInterface(
         )
 
 
-class _MultipleShootingCorrectorOrbitInterface(
+class _MultipleShootingOrbitCorrectionInterface(
     _HitenBaseInterface[
-        MSOrbitCorrectionConfig,
+        MultipleShootingOrbitCorrectionConfig,
         _MultipleShootingProblem,
         MultipleShootingResult,
         tuple[np.ndarray, int, float],
@@ -466,8 +466,8 @@ class _MultipleShootingCorrectorOrbitInterface(
 
     Examples
     --------
-    >>> interface = _MultipleShootingCorrectorOrbitInterface()
-    >>> config = MSOrbitCorrectionConfig(n_patches=5)
+    >>> interface = _MultipleShootingOrbitCorrectionInterface()
+    >>> config = MultipleShootingOrbitCorrectionConfig(n_patches=5)
     >>> problem = interface.create_problem(
     ...     domain_obj=orbit,
     ...     config=config,
@@ -484,8 +484,8 @@ class _MultipleShootingCorrectorOrbitInterface(
         self,
         *,
         domain_obj: "PeriodicOrbit",
-        config: MSOrbitCorrectionConfig,
-        options: MultipleShootingOptions,
+        config: MultipleShootingOrbitCorrectionConfig,
+        options: MultipleShootingCorrectionOptions,
         stepper_factory: StepperFactory | None = None,
     ) -> _MultipleShootingProblem:
         """Create a multiple shooting correction problem.
@@ -497,9 +497,9 @@ class _MultipleShootingCorrectorOrbitInterface(
         ----------
         domain_obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             The periodic orbit to correct.
-        config : :class:`~hiten.algorithms.corrector.config.MSOrbitCorrectionConfig`
+        config : :class:`~hiten.algorithms.corrector.config.MultipleShootingOrbitCorrectionConfig`
             Compile-time configuration (algorithm structure).
-        options : :class:`~hiten.algorithms.corrector.options.MultipleShootingOptions`, optional
+        options : :class:`~hiten.algorithms.corrector.options.MultipleShootingCorrectionOptions`, optional
             Runtime options (tuning parameters). If None, defaults are used.
         stepper_factory : :class:`~hiten.algorithms.corrector.types.StepperFactory` or None
             Optional step control factory.
@@ -524,7 +524,7 @@ class _MultipleShootingCorrectorOrbitInterface(
         initial_guess, patch_times = self._initialize_patches(domain_obj, config, options)
 
         # Build residual and Jacobian functions with patch_times closure
-        residual_fn = self._residual_fn(domain_obj, config, forward, patch_times)
+        residual_fn = self._residual_fn(domain_obj, config, forward, patch_times, options)
         jacobian_fn = self._jacobian_fn(domain_obj, config, forward, patch_times, options)
         norm_fn = self._norm_fn()
 
@@ -538,12 +538,6 @@ class _MultipleShootingCorrectorOrbitInterface(
         # Determine boundary indices
         boundary_indices = (
             config.boundary_only_indices if config.boundary_only_indices else config.residual_indices
-        )
-
-        logger.info(
-            f"Created multiple shooting problem: {options.n_patches} patches, "
-            f"{len(config.control_indices)} control vars/patch, "
-            f"{len(continuity_indices)} continuity constraints/junction"
         )
 
         problem = _MultipleShootingProblem(
@@ -697,7 +691,7 @@ class _MultipleShootingCorrectorOrbitInterface(
         )
 
     def _initialize_patches(
-        self, domain_obj: "PeriodicOrbit", config: MSOrbitCorrectionConfig, options
+        self, domain_obj: "PeriodicOrbit", config: MultipleShootingOrbitCorrectionConfig, options
     ) -> tuple[np.ndarray, np.ndarray]:
         """Initialize patch states and times by sampling trajectory.
 
@@ -712,9 +706,9 @@ class _MultipleShootingCorrectorOrbitInterface(
         ----------
         domain_obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             The orbit to initialize patches from.
-        config : :class:`~hiten.algorithms.corrector.config.MSOrbitCorrectionConfig`
+        config : :class:`~hiten.algorithms.corrector.config.MultipleShootingOrbitCorrectionConfig`
             Compile-time configuration (algorithm structure).
-        options : :class:`~hiten.algorithms.corrector.options.MultipleShootingOptions`
+        options : :class:`~hiten.algorithms.corrector.options.MultipleShootingCorrectionOptions`
             Runtime options (including n_patches).
 
         Returns
@@ -766,7 +760,7 @@ class _MultipleShootingCorrectorOrbitInterface(
         return patch_params, patch_times
 
     def _estimate_period(
-        self, domain_obj: "PeriodicOrbit", config: MSOrbitCorrectionConfig
+        self, domain_obj: "PeriodicOrbit", config: MultipleShootingOrbitCorrectionConfig
     ) -> float:
         """Estimate orbit period for patch initialization.
 
@@ -779,7 +773,7 @@ class _MultipleShootingCorrectorOrbitInterface(
         ----------
         domain_obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             The orbit.
-        config : :class:`~hiten.algorithms.corrector.config.MSOrbitCorrectionConfig`
+        config : :class:`~hiten.algorithms.corrector.config.MultipleShootingOrbitCorrectionConfig`
             Configuration.
 
         Returns
@@ -818,7 +812,7 @@ class _MultipleShootingCorrectorOrbitInterface(
         self,
         domain_obj: "PeriodicOrbit",
         patch_times: np.ndarray,
-        config: MSOrbitCorrectionConfig,
+        config: MultipleShootingOrbitCorrectionConfig,
         options,
     ) -> list[np.ndarray]:
         """Propagate trajectory and sample at patch times.
@@ -831,9 +825,9 @@ class _MultipleShootingCorrectorOrbitInterface(
             The orbit.
         patch_times : np.ndarray
             Time values to sample at.
-        config : :class:`~hiten.algorithms.corrector.config.MSOrbitCorrectionConfig`
+        config : :class:`~hiten.algorithms.corrector.config.MultipleShootingOrbitCorrectionConfig`
             Compile-time configuration.
-        options : :class:`~hiten.algorithms.corrector.options.MultipleShootingOptions`
+        options : :class:`~hiten.algorithms.corrector.options.MultipleShootingCorrectionOptions`
             Runtime options (integration params).
 
         Returns
@@ -865,9 +859,10 @@ class _MultipleShootingCorrectorOrbitInterface(
     def _residual_fn(
         self,
         domain_obj: "PeriodicOrbit",
-        config: MSOrbitCorrectionConfig,
+        config: MultipleShootingOrbitCorrectionConfig,
         forward: int,
         patch_times: np.ndarray,
+        options: MultipleShootingCorrectionOptions,
     ) -> Callable[[np.ndarray], np.ndarray]:
         """Build residual function with continuity constraints.
 
@@ -880,12 +875,14 @@ class _MultipleShootingCorrectorOrbitInterface(
         ----------
         domain_obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             The orbit.
-        config : :class:`~hiten.algorithms.corrector.config.MSOrbitCorrectionConfig`
+        config : :class:`~hiten.algorithms.corrector.config.MultipleShootingOrbitCorrectionConfig`
             Configuration.
         forward : int
             Integration direction.
         patch_times : np.ndarray
             Patch boundary times.
+        options : :class:`~hiten.algorithms.corrector.options.MultipleShootingCorrectionOptions`
+            Runtime options.
 
         Returns
         -------
@@ -901,8 +898,11 @@ class _MultipleShootingCorrectorOrbitInterface(
             config.boundary_only_indices if config.boundary_only_indices else config.residual_indices
         )
         target = np.array(config.target)
-        n_patches = config.n_patches
+        n_patches = options.n_patches
         n_control = len(control_indices)
+        method = config.integration.method
+        order = options.base.integration.order
+        steps = options.base.integration.steps
 
         def _fn(params: np.ndarray) -> np.ndarray:
             """Evaluate residual for parameter vector.
@@ -929,7 +929,7 @@ class _MultipleShootingCorrectorOrbitInterface(
 
                 # Propagate to next patch time
                 dt = patch_times[i + 1] - patch_times[i]
-                x_next_minus = self._propagate_patch(domain_obj, x_i, dt, config)
+                x_next_minus = self._propagate_patch(domain_obj, x_i, dt, method, order, steps)
 
                 # Next patch initial state (full state)
                 x_next = self._to_full_state(base_state, control_indices, patches[i + 1])
@@ -943,15 +943,10 @@ class _MultipleShootingCorrectorOrbitInterface(
             # Final patch: propagate and check boundary conditions
             x_final = self._to_full_state(base_state, control_indices, patches[-1])
 
-            if config.event_func is not None:
-                # Event-based boundary
-                _, x_boundary = config.event_func(
-                    dynsys=domain_obj.dynamics.dynsys, x0=x_final, forward=forward
-                )
-            else:
-                # Fixed-time boundary
-                dt = patch_times[-1] - patch_times[-2]
-                x_boundary = self._propagate_patch(domain_obj, x_final, dt, config)
+            # Event-based boundary
+            _, x_boundary = config.event_func(
+                dynsys=domain_obj.dynamics.dynsys, x0=x_final, forward=forward
+            )
 
             boundary_error = x_boundary[boundary_indices] - target
             residuals.append(boundary_error)
@@ -963,10 +958,10 @@ class _MultipleShootingCorrectorOrbitInterface(
     def _jacobian_fn(
         self,
         domain_obj: "PeriodicOrbit",
-        config: MSOrbitCorrectionConfig,
+        config: MultipleShootingOrbitCorrectionConfig,
         forward: int,
         patch_times: np.ndarray,
-        options: MultipleShootingOptions,
+        options: MultipleShootingCorrectionOptions,
     ) -> JacobianFn | None:
         """Build block-structured Jacobian.
 
@@ -982,13 +977,13 @@ class _MultipleShootingCorrectorOrbitInterface(
         ----------
         domain_obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             The orbit.
-        config : :class:`~hiten.algorithms.corrector.config.MSOrbitCorrectionConfig`
+        config : :class:`~hiten.algorithms.corrector.config.MultipleShootingOrbitCorrectionConfig`
             Configuration.
         forward : int
             Integration direction.
         patch_times : np.ndarray
             Patch boundary times.
-        options : :class:`~hiten.algorithms.corrector.options.MultipleShootingOptions`, optional
+        options : :class:`~hiten.algorithms.corrector.options.MultipleShootingCorrectionOptions`, optional
             Runtime options for integration parameters.
 
         Returns
@@ -1306,7 +1301,9 @@ class _MultipleShootingCorrectorOrbitInterface(
         domain_obj: "PeriodicOrbit",
         x0: np.ndarray,
         dt: float,
-        config: MSOrbitCorrectionConfig,
+        method: str,
+        order: int,
+        steps: int,
     ) -> np.ndarray:
         """Propagate a single patch segment.
 
@@ -1318,8 +1315,12 @@ class _MultipleShootingCorrectorOrbitInterface(
             Initial state (full state).
         dt : float
             Time span to propagate.
-        config : :class:`~hiten.algorithms.corrector.config.MSOrbitCorrectionConfig`
-            Configuration.
+        method : str
+            Integration method.
+        order : int
+            Integration order.
+        steps : int
+            Number of integration steps.
 
         Returns
         -------
@@ -1335,9 +1336,9 @@ class _MultipleShootingCorrectorOrbitInterface(
             state0=x0,
             t0=0,
             tf=dt,
-            method=config.integration.method,
-            order=config.order,
-            steps=config.steps,
+            method=method,
+            order=order,
+            steps=steps,
             forward=1,
         )
 
@@ -1474,7 +1475,7 @@ class _MultipleShootingCorrectorOrbitInterface(
 
             # Propagate from patch i to patch i+1
             x_next_minus = self._propagate_patch(
-                problem.domain_obj, x_i, dt, problem
+                problem.domain_obj, x_i, dt, problem.method, problem.order, problem.steps
             )
 
             # Compare with patch i+1

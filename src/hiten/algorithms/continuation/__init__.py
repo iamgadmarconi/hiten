@@ -7,7 +7,7 @@ from .backends import _ContinuationBackend, _PredictorCorrectorContinuationBacke
 from .config import ContinuationConfig, OrbitContinuationConfig
 from .engine import _ContinuationEngine, _OrbitContinuationEngine
 from .base import ContinuationPipeline
-from .interfaces import _PeriodicOrbitContinuationInterface
+from .interfaces import _OrbitContinuationInterface
 from .options import ContinuationOptions, OrbitContinuationOptions
 from .types import ContinuationResult, _ContinuationProblem
 
@@ -27,7 +27,7 @@ __all__ = [
     # Interfaces & Engines
     "_ContinuationEngine",
     "_OrbitContinuationEngine",
-    "_PeriodicOrbitContinuationInterface",
+    "_OrbitContinuationInterface",
     
     # Types & Results
     "ContinuationResult",

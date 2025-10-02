@@ -50,7 +50,7 @@ class ConnectionPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, Config
     ----------
     config : :class:`~hiten.algorithms.connections.config.ConnectionConfig`
         Configuration object containing section, direction, and search parameters.
-    interface : :class:`~hiten.algorithms.connections.interfaces._ManifoldInterface`
+    interface : :class:`~hiten.algorithms.connections.interfaces._ManifoldConnectionInterface`
         Interface for translating between domain objects and backend inputs.
     engine : :class:`~hiten.algorithms.connections.engine._ConnectionEngine`, optional
         Engine instance to use for connection discovery. If None, must be set later
@@ -143,9 +143,9 @@ class ConnectionPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, Config
         ----------
         config : :class:`~hiten.algorithms.connections.config.ConnectionConfig`
             Configuration object containing section, direction, and search parameters.
-        interface : :class:`~hiten.algorithms.connections.interfaces._ManifoldInterface`, optional
+        interface : :class:`~hiten.algorithms.connections.interfaces._ManifoldConnectionInterface`, optional
             Interface for translating between domain objects and backend inputs.
-            If None, uses the default _ManifoldInterface.
+            If None, uses the default _ManifoldConnectionInterface.
         backend : :class:`~hiten.algorithms.connections.backends._ConnectionsBackend`, optional
             Backend instance for the connection algorithm. If None, uses the default _ConnectionsBackend.
         Returns
@@ -155,9 +155,9 @@ class ConnectionPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, Config
         """
         from hiten.algorithms.connections.backends import _ConnectionsBackend
         from hiten.algorithms.connections.engine import _ConnectionEngine
-        from hiten.algorithms.connections.interfaces import _ManifoldInterface
+        from hiten.algorithms.connections.interfaces import _ManifoldConnectionInterface
         backend = backend or _ConnectionsBackend()
-        intf = interface or _ManifoldInterface()
+        intf = interface or _ManifoldConnectionInterface()
         engine = _ConnectionEngine(backend=backend, interface=intf)
         return cls(config, engine, intf, backend)
 

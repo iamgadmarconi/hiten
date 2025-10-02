@@ -22,7 +22,7 @@ See Also
 """
 
 from hiten.algorithms.connections.backends import _ConnectionsBackend
-from hiten.algorithms.connections.interfaces import _ManifoldInterface
+from hiten.algorithms.connections.interfaces import _ManifoldConnectionInterface
 from hiten.algorithms.connections.types import (ConnectionResults,
                                                 _ConnectionProblem)
 from hiten.algorithms.types.core import _HitenBaseEngine
@@ -68,14 +68,14 @@ class _ConnectionEngine(_HitenBaseEngine[_ConnectionProblem, ConnectionResults, 
         High-level user interface that uses this engine.
     """
 
-    def __init__(self, *, backend: _ConnectionsBackend, interface: _ManifoldInterface | None = None):
+    def __init__(self, *, backend: _ConnectionsBackend, interface: _ManifoldConnectionInterface | None = None):
         """Initialize the connection engine with a backend implementation.
 
         Parameters
         ----------
         backend : :class:`~hiten.algorithms.connections.backends._ConnectionsBackend`
             Backend responsible for the computational steps of connection discovery.
-        interface : :class:`~hiten.algorithms.connections.interfaces._ManifoldInterface`, optional
+        interface : :class:`~hiten.algorithms.connections.interfaces._ManifoldConnectionInterface`, optional
             Interface for handling connection problems. If None, a default interface is used.
         """
         super().__init__(backend=backend, interface=interface)

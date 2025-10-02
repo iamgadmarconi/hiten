@@ -591,14 +591,15 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
     def eigendecomposition_config(self, value: EigenDecompositionConfig) -> None:
         """Set the eigen decomposition configuration.
         
+        Invalidates the generator cache to trigger recreation with the new config.
+        
         Parameters
         ----------
         value : :class:`~hiten.algorithms.linalg.config.EigenDecompositionConfig`
             New eigendecomposition configuration.
         """
         self._eigendecomposition_config = value
-        if self._generator is not None:
-            self.generator._set_config(value)
+        self._generator = None  # Invalidate cache to trigger recreation
     
     @property
     def eigendecomposition_options(self) -> "EigenDecompositionOptions":

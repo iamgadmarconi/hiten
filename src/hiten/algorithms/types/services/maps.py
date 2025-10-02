@@ -87,6 +87,7 @@ class _MapDynamicsServiceBase(_DynamicsServiceBase):
         self._section: Optional["_Section"] = None
         self._section_coord = None
         self._generator = None
+        self._map_config = None
 
     @property
     def generator(self) -> str:
@@ -96,15 +97,31 @@ class _MapDynamicsServiceBase(_DynamicsServiceBase):
         return self._generator
 
     @property
-    @abstractmethod
     def map_config(self):
-        """The map configuration."""
-        raise NotImplementedError
+        """Get the map configuration.
+        
+        Returns the stored config, lazily initializing with defaults if needed.
+        """
+        if self._map_config is None:
+            self._map_config = self._default_map_config()
+        return self._map_config
+
+    @abstractmethod
+    def _default_map_config(self):
+        """Create the default map configuration.
+        
+        Concrete implementations should override this to provide map-specific defaults.
+        """
+        pass
 
     @map_config.setter
     def map_config(self, value):
-        self.generator._set_config(value)
-        self._generator = self._build_generator()
+        """Set the map configuration.
+        
+        Stores the config and invalidates the generator cache.
+        """
+        self._map_config = value
+        self._generator = None  # Invalidate cache to trigger recreation
 
     @abstractmethod
     def _build_generator(self):
@@ -518,9 +535,14 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
         """Build the generator."""
         return CenterManifoldMapPipeline.with_default_engine(config=self.map_config)
 
-    @property
-    def map_config(self) -> CenterManifoldMapConfig:
-        """The map configuration."""
+    def _default_map_config(self) -> CenterManifoldMapConfig:
+        """Create the default map configuration for center manifold maps.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.poincare.centermanifold.config.CenterManifoldMapConfig`
+            The default map configuration.
+        """
         return CenterManifoldMapConfig(
             seed_strategy="axis_aligned",
             seed_axis=None,
@@ -530,33 +552,45 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
 
     @property
     def map_options(self) -> "CenterManifoldMapOptions":
-        """Runtime options for map computation.
+        """Get the map options for center manifold maps.
+        
+        Returns the stored options, lazily initializing with defaults if needed.
         
         Returns
         -------
         :class:`~hiten.algorithms.poincare.centermanifold.options.CenterManifoldMapOptions`
-            The map options with reasonable defaults.
+            The map options.
         """
         if self._map_options is None:
-            from hiten.algorithms.poincare.centermanifold.options import \
-                CenterManifoldMapOptions
-            from hiten.algorithms.poincare.core.options import (
-                IterationOptions, SeedingOptions)
-            from hiten.algorithms.types.options import (IntegrationOptions,
-                                                        WorkerOptions)
-            
-            self._map_options = CenterManifoldMapOptions(
-                integration=IntegrationOptions(
-                    dt=0.01,
-                    order=4,
-                    c_omega_heuristic=20,
-                    max_steps=200,
-                ),
-                iteration=IterationOptions(n_iter=40),
-                seeding=SeedingOptions(n_seeds=20),
-                workers=WorkerOptions(n_workers=8),
-            )
+            self._map_options = self._default_map_options()
         return self._map_options
+    
+    def _default_map_options(self) -> "CenterManifoldMapOptions":
+        """Create the default map options for center manifold maps.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.poincare.centermanifold.options.CenterManifoldMapOptions`
+            The default map options.
+        """
+        from hiten.algorithms.poincare.centermanifold.options import \
+            CenterManifoldMapOptions
+        from hiten.algorithms.poincare.core.options import (
+            IterationOptions, SeedingOptions)
+        from hiten.algorithms.types.options import (IntegrationOptions,
+                                                    WorkerOptions)
+        
+        return CenterManifoldMapOptions(
+            integration=IntegrationOptions(
+                dt=0.01,
+                order=4,
+                c_omega_heuristic=20,
+                max_steps=200,
+            ),
+            iteration=IterationOptions(n_iter=40),
+            seeding=SeedingOptions(n_seeds=20),
+            workers=WorkerOptions(n_workers=8),
+        )
     
     @map_options.setter
     def map_options(self, value: "CenterManifoldMapOptions") -> None:
@@ -647,9 +681,14 @@ class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
         """Build the generator."""
         return SynodicMapPipeline.with_default_engine(config=self.map_config)
 
-    @property
-    def map_config(self) -> SynodicMapConfig:
-        """The map configuration."""
+    def _default_map_config(self) -> SynodicMapConfig:
+        """Create the default map configuration for synodic maps.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.poincare.synodic.config.SynodicMapConfig`
+            The default map configuration.
+        """
         return SynodicMapConfig(
             section_axis="x",
             section_offset=0.0,
@@ -661,31 +700,43 @@ class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
     
     @property
     def map_options(self) -> "SynodicMapOptions":
-        """Runtime options for map computation.
+        """Get the map options for synodic maps.
+        
+        Returns the stored options, lazily initializing with defaults if needed.
         
         Returns
         -------
         :class:`~hiten.algorithms.poincare.synodic.options.SynodicMapOptions`
-            The map options with reasonable defaults.
+            The map options.
         """
         if self._map_options is None:
-            from hiten.algorithms.poincare.synodic.options import \
-                SynodicMapOptions
-            from hiten.algorithms.types.options import (RefineOptions,
-                                                        WorkerOptions)
-            
-            self._map_options = SynodicMapOptions(
-                refine=RefineOptions(
-                    segment_refine=50,
-                    tol_on_surface=1e-6,
-                    dedup_time_tol=1e-9,
-                    dedup_point_tol=1e-6,
-                    max_hits_per_traj=None,
-                    newton_max_iter=10,
-                ),
-                workers=WorkerOptions(n_workers=8),
-            )
+            self._map_options = self._default_map_options()
         return self._map_options
+    
+    def _default_map_options(self) -> "SynodicMapOptions":
+        """Create the default map options for synodic maps.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.poincare.synodic.options.SynodicMapOptions`
+            The default map options.
+        """
+        from hiten.algorithms.poincare.synodic.options import \
+            SynodicMapOptions
+        from hiten.algorithms.types.options import (RefineOptions,
+                                                    WorkerOptions)
+        
+        return SynodicMapOptions(
+            refine=RefineOptions(
+                segment_refine=50,
+                tol_on_surface=1e-6,
+                dedup_time_tol=1e-9,
+                dedup_point_tol=1e-6,
+                max_hits_per_traj=None,
+                newton_max_iter=10,
+            ),
+            workers=WorkerOptions(n_workers=8),
+        )
     
     @map_options.setter
     def map_options(self, value: "SynodicMapOptions") -> None:

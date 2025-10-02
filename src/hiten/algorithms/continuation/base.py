@@ -48,7 +48,7 @@ class ContinuationPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, Conf
         config : :class:`~hiten.algorithms.types.core.ConfigT`
             Configuration object for the continuation algorithm.
         interface : :class:`~hiten.algorithms.types.core.InterfaceT`, optional
-            Interface object for the continuation algorithm. If None, uses the default _PeriodicOrbitContinuationInterface.
+            Interface object for the continuation algorithm. If None, uses the default _OrbitContinuationInterface.
         backend : :class:`~hiten.algorithms.continuation.backends.base._ContinuationBackend`, optional
             Backend instance for the continuation algorithm. If None, uses the default _PredictorCorrectorContinuationBackend.
         
@@ -62,7 +62,7 @@ class ContinuationPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, Conf
         from hiten.algorithms.continuation.engine.engine import \
             _OrbitContinuationEngine
         from hiten.algorithms.continuation.interfaces import \
-            _PeriodicOrbitContinuationInterface
+            _OrbitContinuationInterface
         from hiten.algorithms.continuation.stepping import (
             make_natural_stepper, make_secant_stepper)
         from hiten.algorithms.continuation.stepping.support import (
@@ -80,7 +80,7 @@ class ContinuationPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, Conf
                     support_factory=_NullStepSupport,
                 )
 
-        intf = interface or _PeriodicOrbitContinuationInterface()
+        intf = interface or _OrbitContinuationInterface()
         engine = _OrbitContinuationEngine(backend=backend, interface=intf)
         return cls(config, engine, intf, backend)
 

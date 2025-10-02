@@ -6,7 +6,7 @@ This module provides the engine for the corrector module.
 from hiten.algorithms.corrector.backends.newton import _NewtonBackend
 from hiten.algorithms.corrector.engine.base import _CorrectionEngine
 from hiten.algorithms.corrector.interfaces import \
-    _PeriodicOrbitCorrectorInterface
+    _OrbitCorrectionInterface
 from hiten.algorithms.corrector.types import _OrbitCorrectionProblem
 from hiten.algorithms.types.exceptions import (BackendError, ConvergenceError,
                                                EngineError)
@@ -19,11 +19,11 @@ class _OrbitCorrectionEngine(_CorrectionEngine):
     ----------
     backend : :class:`~hiten.algorithms.corrector.backends.newton._NewtonBackend`
         The backend for the orbit correction.
-    interface : :class:`~hiten.algorithms.corrector.interfaces._PeriodicOrbitCorrectorInterface`
+    interface : :class:`~hiten.algorithms.corrector.interfaces._OrbitCorrectionInterface`
         The interface for the orbit correction.
     """
 
-    def __init__(self, *, backend: _NewtonBackend, interface: _PeriodicOrbitCorrectorInterface) -> None:
+    def __init__(self, *, backend: _NewtonBackend, interface: _OrbitCorrectionInterface) -> None:
         super().__init__(backend=backend, interface=interface)
 
     def _handle_backend_failure(
@@ -44,7 +44,7 @@ class _OrbitCorrectionEngine(_CorrectionEngine):
             The problem.
         call : :class:`~hiten.algorithms.types.core._BackendCall`
             The call.
-        interface : :class:`~hiten.algorithms.corrector.interfaces._PeriodicOrbitCorrectorInterface`
+        interface : :class:`~hiten.algorithms.corrector.interfaces._OrbitCorrectionInterface`
             The interface.
         
         Raises
@@ -77,7 +77,7 @@ class _OrbitCorrectionEngine(_CorrectionEngine):
             The problem.
         domain_payload : :class:`~hiten.algorithms.corrector.types._OrbitCorrectionDomainPayload`
             The domain payload.
-        interface : :class:`~hiten.algorithms.corrector.interfaces._PeriodicOrbitCorrectorInterface`
+        interface : :class:`~hiten.algorithms.corrector.interfaces._OrbitCorrectionInterface`
             The interface.
         """
         x_corr, iterations, residual_norm = outputs

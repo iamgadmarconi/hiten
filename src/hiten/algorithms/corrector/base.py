@@ -11,7 +11,7 @@ from hiten.algorithms.corrector.backends.base import _CorrectorBackend
 from hiten.algorithms.corrector.backends.newton import _NewtonBackend
 from hiten.algorithms.corrector.engine.base import _CorrectionEngine
 from hiten.algorithms.corrector.interfaces import \
-    _PeriodicOrbitCorrectorInterface
+    _OrbitCorrectionInterface
 from hiten.algorithms.corrector.stepping import make_armijo_stepper
 from hiten.algorithms.corrector.types import StepperFactory
 from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
@@ -50,13 +50,13 @@ class CorrectorPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, ConfigT
     >>> from hiten.algorithms.corrector import CorrectorPipeline
     >>> from hiten.algorithms.corrector.config import OrbitCorrectionConfig
     >>> from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
-    >>> from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
+    >>> from hiten.algorithms.corrector.interfaces import _OrbitCorrectionInterface
     >>> from hiten.algorithms.corrector.backends.newton import _NewtonBackend
     >>> 
     >>> # Create components
     >>> config = OrbitCorrectionConfig()
     >>> backend = _NewtonBackend()
-    >>> interface = _PeriodicOrbitCorrectorInterface()
+    >>> interface = _OrbitCorrectionInterface()
     >>> engine = _OrbitCorrectionEngine(backend=backend, interface=interface)
     >>> 
     >>> # Create facade
@@ -76,7 +76,7 @@ class CorrectorPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, ConfigT
         config : :class:`~hiten.algorithms.types.core.ConfigT`
             Configuration object for the correction algorithm.
         interface : :class:`~hiten.algorithms.types.core.InterfaceT`, optional
-            Interface instance for the correction algorithm. If None, uses the default _PeriodicOrbitCorrectorInterface.
+            Interface instance for the correction algorithm. If None, uses the default _OrbitCorrectionInterface.
         backend : :class:`~hiten.algorithms.corrector.backends.base._CorrectorBackend`, optional
             Backend instance for the correction algorithm. If None, uses the default _NewtonBackend.
 
@@ -86,7 +86,7 @@ class CorrectorPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, ConfigT
             A correction facade instance with a default engine injected.
         """
         backend = backend or _NewtonBackend(stepper_factory=make_armijo_stepper())
-        intf = interface or _PeriodicOrbitCorrectorInterface()
+        intf = interface or _OrbitCorrectionInterface()
         engine = _CorrectionEngine(backend=backend, interface=intf)
         return cls(config, engine, intf, backend)
 

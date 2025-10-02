@@ -8,7 +8,7 @@ import numpy as np
 from hiten.algorithms.continuation.backends.base import _ContinuationBackend
 from hiten.algorithms.continuation.engine.base import _ContinuationEngine
 from hiten.algorithms.continuation.interfaces import (
-    _PeriodicOrbitContinuationInterface,
+    _OrbitContinuationInterface,
 )
 from hiten.algorithms.continuation.types import _ContinuationProblem
 from hiten.algorithms.types.exceptions import EngineError
@@ -21,7 +21,7 @@ class _OrbitContinuationEngine(_ContinuationEngine):
     ----------
     backend : :class:`~hiten.algorithms.continuation.backends.base._ContinuationBackend`
         The backend for the orbit continuation.
-    interface : :class:`~hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface` | None
+    interface : :class:`~hiten.algorithms.continuation.interfaces._OrbitContinuationInterface` | None
         The interface for the orbit continuation.
     """
 
@@ -29,7 +29,7 @@ class _OrbitContinuationEngine(_ContinuationEngine):
         self,
         *,
         backend: _ContinuationBackend,
-        interface: _PeriodicOrbitContinuationInterface | None = None,
+        interface: _OrbitContinuationInterface | None = None,
     ) -> None:
         super().__init__(backend=backend, interface=interface)
 
@@ -51,7 +51,7 @@ class _OrbitContinuationEngine(_ContinuationEngine):
             The problem being solved.
         call : :class:`~hiten.algorithms.types.core._BackendCall`
             The call to the backend.
-        interface : :class:`~hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface`
+        interface : :class:`~hiten.algorithms.continuation.interfaces._OrbitContinuationInterface`
             The interface to the backend.
         """
         raise EngineError("Orbit continuation failed") from exc
@@ -70,7 +70,7 @@ class _OrbitContinuationEngine(_ContinuationEngine):
             The problem being solved.
         domain_payload : Any
             The domain payload.
-        interface : :class:`~hiten.algorithms.continuation.interfaces._PeriodicOrbitContinuationInterface`
+        interface : :class:`~hiten.algorithms.continuation.interfaces._OrbitContinuationInterface`
             The interface to the backend.
         """
         family_repr, info = outputs

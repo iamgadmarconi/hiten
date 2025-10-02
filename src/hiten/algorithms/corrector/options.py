@@ -65,7 +65,7 @@ class OrbitCorrectionOptions(_HitenBaseOptions):
 
 
 @dataclass(frozen=True)
-class MultipleShootingOptions(OrbitCorrectionOptions):
+class MultipleShootingCorrectionOptions(OrbitCorrectionOptions):
     """Runtime options for multiple shooting correction.
     
     Extends OrbitCorrectionOptions with multiple shooting-specific runtime
@@ -92,18 +92,18 @@ class MultipleShootingOptions(OrbitCorrectionOptions):
     Notes
     -----
     For algorithm structure parameters like `patch_strategy`, `continuity_indices`,
-    see MSOrbitCorrectionConfig instead.
+    see MultipleShootingOrbitCorrectionConfig instead.
     
     Examples
     --------
     >>> # Default options with 20 patches
-    >>> options = MultipleShootingOptions()
+    >>> options = MultipleShootingCorrectionOptions()
     >>> 
     >>> # More patches for robustness
     >>> robust_options = options.merge(n_patches=30)
     >>> 
     >>> # Tighter tolerance with more patches
-    >>> tight_options = MultipleShootingOptions(
+    >>> tight_options = MultipleShootingCorrectionOptions(
     ...     n_patches=25,
     ...     base=CorrectionOptions(
     ...         convergence=ConvergenceOptions(tol=1e-14)

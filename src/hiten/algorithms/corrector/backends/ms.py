@@ -134,7 +134,7 @@ class _MultipleShootingBackend(_CorrectorBackend):
 
     See Also
     --------
-    :class:`~hiten.algorithms.corrector.interfaces_ms._MultipleShootingCorrectorOrbitInterface`
+    :class:`~hiten.algorithms.corrector.interfaces_ms._MultipleShootingOrbitCorrectionInterface`
         Interface that constructs residual and Jacobian functions.
     :mod:`~hiten.algorithms.corrector.stepping`
         Step control strategies for robust convergence.
@@ -390,7 +390,7 @@ class _MultipleShootingBackend(_CorrectorBackend):
         --------
         :class:`~hiten.algorithms.corrector.backends.newton._NewtonBackend`
             Single shooting Newton backend with similar interface.
-        :class:`~hiten.algorithms.corrector.interfaces_ms._MultipleShootingCorrectorOrbitInterface`
+        :class:`~hiten.algorithms.corrector.interfaces_ms._MultipleShootingOrbitCorrectionInterface`
             Interface that constructs residual and Jacobian functions.
         """
         if norm_fn is None:

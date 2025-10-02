@@ -39,7 +39,7 @@ if TYPE_CHECKING:
     from hiten.system.manifold import Manifold
 
 
-class _ManifoldInterface(
+class _ManifoldConnectionInterface(
     _HitenBaseInterface[
         ConnectionConfig,
         _ConnectionProblem,
@@ -74,7 +74,7 @@ class _ManifoldInterface(
     >>> from hiten.algorithms.poincare.synodic.config import SynodicMapConfig
     >>> 
     >>> # Assuming manifold is computed
-    >>> interface = _ManifoldInterface()
+    >>> interface = _ManifoldConnectionInterface()
     >>> section_cfg = SynodicMapConfig(x=0.8)
     >>> section = interface.to_section(manifold=computed_manifold, config=section_cfg, direction=1)
     >>> print(f"Found {len(section.points)} intersection points")
@@ -378,11 +378,11 @@ class _ManifoldInterface(
         Examples
         --------
         >>> # Stable manifold with direction=-1
-        >>> corrected = _ManifoldInterface._apply_direction_correction(stable_manifold, -1)
+        >>> corrected = _ManifoldConnectionInterface._apply_direction_correction(stable_manifold, -1)
         >>> # Returns +1 (flipped for backward time integration)
         >>> 
         >>> # Unstable manifold with direction=-1
-        >>> corrected = _ManifoldInterface._apply_direction_correction(unstable_manifold, -1)
+        >>> corrected = _ManifoldConnectionInterface._apply_direction_correction(unstable_manifold, -1)
         >>> # Returns -1 (no flip for forward time integration)
         """
         if direction is None:

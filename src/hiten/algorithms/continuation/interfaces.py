@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from hiten.system.orbits.base import PeriodicOrbit
 
 
-class _PeriodicOrbitContinuationInterface(
+class _OrbitContinuationInterface(
     _HitenBaseInterface[
         OrbitContinuationConfig,
         _ContinuationProblem,

@@ -11,7 +11,11 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from hiten import System
 from hiten.algorithms.continuation.options import OrbitContinuationOptions
-from hiten.algorithms.corrector.options import OrbitCorrectionOptions
+from hiten.algorithms.corrector.config import \
+    MultipleShootingOrbitCorrectionConfig
+from hiten.algorithms.corrector.options import MultipleShootingCorrectionOptions, OrbitCorrectionOptions
+from hiten.algorithms.poincare.singlehit.backend import _y_plane_crossing
+from hiten.algorithms.types.configs import IntegrationConfig, NumericalConfig
 from hiten.algorithms.types.options import (ConvergenceOptions,
                                             CorrectionOptions,
                                             IntegrationOptions,
@@ -30,32 +34,31 @@ def main() -> None:
     l1 = system.get_libration_point(1)
     
     halo_seed = l1.create_orbit('halo', amplitude_z= 0.2, zenith='southern')
+
+    halo_seed.correction_config = MultipleShootingOrbitCorrectionConfig(
+            event_func=_y_plane_crossing,
+            residual_indices=(SynodicState.VX, SynodicState.VZ),
+            control_indices=(SynodicState.X, SynodicState.VY),
+            target=(0.0, 0.0),
+            extra_jacobian=lambda x, y: halo_seed._correction._halo_quadratic_term(x, y),
+            integration=IntegrationConfig(
+                method="adaptive", 
+                forward=1, 
+                flip_indices=None
+            ),
+            numerical=NumericalConfig(
+                finite_difference=False,
+                line_search_enabled=True,
+            ),
+    )
+    base_corrector_options = halo_seed.correction_options
+    halo_seed.correction_options = MultipleShootingCorrectionOptions(
+        base=base_corrector_options,
+        n_patches=3,
+    )
+
     halo_seed.correct()
     halo_seed.propagate()
-
-    corrector_options = OrbitCorrectionOptions(
-            base=CorrectionOptions(
-                convergence=ConvergenceOptions(
-                    max_attempts=50,
-                    tol=1e-12,
-                    max_delta=1e-2,
-                ),
-                integration=IntegrationOptions(
-                    dt=1e-2,
-                    order=8,
-                    max_steps=2000,
-                    c_omega_heuristic=20.0,
-                    steps=500,
-                ),
-                numerical=NumericalOptions(
-                    fd_step=1e-8,
-                    line_search_alpha_reduction=0.5,
-                    line_search_min_alpha=1e-4,
-                    line_search_armijo_c=0.1,
-                ),
-            ),
-            forward=1,
-        )
 
     options = OrbitContinuationOptions(
             target=(
@@ -70,10 +73,12 @@ def main() -> None:
             step_min=1e-10,
             step_max=1.0,
             shrink_policy=None,
-            extra_params=corrector_options,
+            extra_params=halo_seed.correction_options,
         )
 
     result = halo_seed.generate(options)
+
+    print(result)
 
     family = OrbitFamily.from_result(result)
     family.propagate()

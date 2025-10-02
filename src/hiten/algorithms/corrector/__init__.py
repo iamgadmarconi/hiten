@@ -17,10 +17,10 @@ Advanced users can compose components explicitly:
 
 >>> from hiten.algorithms.corrector.backends.newton import _NewtonBackend
 >>> from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
->>> from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
+>>> from hiten.algorithms.corrector.interfaces import _OrbitCorrectionInterface
 >>> from hiten.algorithms.corrector.stepping import make_armijo_stepper
 >>> backend = _NewtonBackend(stepper_factory=make_armijo_stepper())
->>> interface = _PeriodicOrbitCorrectorInterface()
+>>> interface = _OrbitCorrectionInterface()
 >>> engine = _OrbitCorrectionEngine(backend=backend, interface=interface)
 >>> problem = interface.create_problem(orbit=orbit, config=orbit._correction_config)
 >>> result = engine.solve(problem)
@@ -43,12 +43,12 @@ from .backends.base import _CorrectorBackend
 from .backends.ms import _MultipleShootingBackend
 from .backends.newton import _NewtonBackend
 from .config import (CorrectionConfig,
-                     MSOrbitCorrectionConfig,
+                     MultipleShootingOrbitCorrectionConfig,
                      OrbitCorrectionConfig)
 from .engine import _OrbitCorrectionEngine
-from .interfaces import (_MultipleShootingCorrectorOrbitInterface,
-                         _PeriodicOrbitCorrectorInterface)
-from .options import OrbitCorrectionOptions, MultipleShootingOptions
+from .interfaces import (_MultipleShootingOrbitCorrectionInterface,
+                         _OrbitCorrectionInterface)
+from .options import OrbitCorrectionOptions, MultipleShootingCorrectionOptions
 
 __all__ = [
     # Backends
@@ -59,14 +59,14 @@ __all__ = [
     # Configs (compile-time structure)
     "CorrectionConfig",
     "OrbitCorrectionConfig",
-    "MSOrbitCorrectionConfig",
+    "MultipleShootingOrbitCorrectionConfig",
     
     # Options (runtime tuning)
     "OrbitCorrectionOptions",
-    "MultipleShootingOptions",
+    "MultipleShootingCorrectionOptions",
     
     # Interfaces & Engines
-    "_PeriodicOrbitCorrectorInterface",
-    "_MultipleShootingCorrectorOrbitInterface",
+    "_OrbitCorrectionInterface",
+    "_MultipleShootingOrbitCorrectionInterface",
     "_OrbitCorrectionEngine",
 ]
