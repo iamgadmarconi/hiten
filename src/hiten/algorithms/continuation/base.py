@@ -50,7 +50,7 @@ class ContinuationPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, Conf
         interface : :class:`~hiten.algorithms.types.core.InterfaceT`, optional
             Interface object for the continuation algorithm. If None, uses the default _PeriodicOrbitContinuationInterface.
         backend : :class:`~hiten.algorithms.continuation.backends.base._ContinuationBackend`, optional
-            Backend instance for the continuation algorithm. If None, uses the default _PCContinuationBackend.
+            Backend instance for the continuation algorithm. If None, uses the default _PredictorCorrectorContinuationBackend.
         
         Returns
         -------
@@ -58,7 +58,7 @@ class ContinuationPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, Conf
             A continuation facade instance with a default engine injected.
         """
         from hiten.algorithms.continuation.backends.pc import \
-            _PCContinuationBackend
+            _PredictorCorrectorContinuationBackend
         from hiten.algorithms.continuation.engine.engine import \
             _OrbitContinuationEngine
         from hiten.algorithms.continuation.interfaces import \
@@ -70,12 +70,12 @@ class ContinuationPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, Conf
 
         if backend is None:
             if config.stepper == "secant":
-                backend = _PCContinuationBackend(
+                backend = _PredictorCorrectorContinuationBackend(
                     stepper_factory=make_secant_stepper(),
                     support_factory=_VectorSpaceSecantSupport,
                 )
             else:
-                backend = _PCContinuationBackend(
+                backend = _PredictorCorrectorContinuationBackend(
                     stepper_factory=make_natural_stepper(),
                     support_factory=_NullStepSupport,
                 )

@@ -11,7 +11,7 @@ from hiten.algorithms.continuation.stepping.support import (
 from hiten.algorithms.continuation.stepping.base import _ContinuationStepBase
 
 
-class _PCContinuationBackend(_ContinuationBackend):
+class _PredictorCorrectorContinuationBackend(_ContinuationBackend):
     """Implement a predict-correct continuation backend."""
 
     def __init__(
