@@ -19,12 +19,12 @@ class _PCContinuationBackend(_ContinuationBackend):
         *,
         stepper_factory: Callable[[
             _ContinuationStepSupport | None
-        ], "_ContinuationStepBase"] | None = None,
-        support_factory: Callable[[], _ContinuationStepSupport] | None = None,
+        ], "_ContinuationStepBase"] = None,
+        support_factory: Callable[[], _ContinuationStepSupport]= None,
     ) -> None:
         super().__init__(
             stepper_factory=stepper_factory,
-            support_factory=support_factory or _VectorSpaceSecantSupport,
+            support_factory=support_factory,
         )
         self._support = None
         self._last_residual: float = float("nan")
@@ -56,20 +56,17 @@ class _PCContinuationBackend(_ContinuationBackend):
 
         support_obj = self.make_step_support()
         
-        # Seed initial tangent for secant steppers
-        from hiten.algorithms.continuation.stepping.support import _SecantSupport
-        if isinstance(support_obj, _SecantSupport):
-            try:
-                repr_seed = representation_of(seed_repr) if representation_of is not None else seed_repr
-                pred0 = predictor_fn(repr_seed, np.asarray(step, dtype=float))
-                diff0 = (np.asarray(pred0, dtype=float) - np.asarray(repr_seed, dtype=float)).ravel()
-                norm0 = float(np.linalg.norm(diff0))
-                tangent0 = None if norm0 == 0.0 else diff0 / norm0
-            except Exception:
-                tangent0 = None
-            support_obj.seed(tangent0)
-        
-        stepper = self._stepper_factory(predictor_fn, representation_of, support_obj)
+        stepper_fn = representation_of if representation_of is not None else predictor_fn
+        stepper = self._stepper_factory(
+            stepper_fn,
+            support_obj,
+            seed_repr,
+            step,
+            predictor_fn,
+            step_min,
+            step_max,
+            shrink_policy,
+        )
 
         family: list[np.ndarray] = [np.asarray(seed_repr, dtype=float).copy()]
         params_history: list[np.ndarray] = [np.asarray(parameter_getter(seed_repr), dtype=float).copy()]
@@ -82,10 +79,6 @@ class _PCContinuationBackend(_ContinuationBackend):
         target_min = np.asarray(target[0], dtype=float)
         target_max = np.asarray(target[1], dtype=float)
 
-        def _clamp_step(vec: np.ndarray) -> np.ndarray:
-            mag = np.clip(np.abs(vec), step_min, step_max)
-            return np.sign(vec) * mag
-
         converged = False
         failed_to_continue = False
         while accepted_count < int(max_members) and not failed_to_continue:
@@ -95,7 +88,6 @@ class _PCContinuationBackend(_ContinuationBackend):
             while True:
                 proposal = stepper.predict(last, step_vec)
                 prediction = proposal.prediction
-                step_hint = proposal.step_hint if proposal.step_hint is not None else step_vec
                 iterations += 1
                 try:
                     corrected, res_norm, converged = corrector(prediction)
@@ -127,13 +119,12 @@ class _PCContinuationBackend(_ContinuationBackend):
                         except Exception:
                             pass
 
-                    next_step = stepper.on_accept(
+                    step_vec = stepper.on_accept(
                         last_solution=last,
                         new_solution=np.asarray(corrected, dtype=float),
                         step=step_vec,
                         proposal=proposal,
                     )
-                    step_vec = _clamp_step(np.asarray(next_step if next_step is not None else step_hint, dtype=float))
                     self._last_residual = float(res_norm)
                     converged = True
 
@@ -145,23 +136,11 @@ class _PCContinuationBackend(_ContinuationBackend):
                 rejected_count += 1
                 attempt += 1
 
-                if shrink_policy is not None:
-                    try:
-                        new_step = np.asarray(shrink_policy(step_vec), dtype=float)
-                    except Exception:
-                        new_step = step_vec * 0.5
-                else:
-                    new_step = step_vec * 0.5
-
-                next_step = stepper.on_reject(
+                step_vec = stepper.on_reject(
                     last_solution=last,
                     step=step_vec,
                     proposal=proposal,
                 )
-                if next_step is not None:
-                    new_step = np.asarray(next_step, dtype=float)
-
-                step_vec = _clamp_step(new_step)
 
                 if support_obj is not None:
                     try:

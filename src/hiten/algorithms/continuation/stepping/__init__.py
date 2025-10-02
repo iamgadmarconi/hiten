@@ -8,7 +8,7 @@ stepper instance.
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import Callable, Optional
 
 import numpy as _np
 
@@ -26,11 +26,16 @@ from hiten.algorithms.continuation.stepping.np.base import _NaturalParameterStep
 from hiten.algorithms.continuation.stepping.plain import _ContinuationPlainStep
 from hiten.algorithms.continuation.stepping.sc.base import _SecantStep
 
-# Stepper factory: (predictor_fn, representation_fn, support) -> stepper
+# Stepper factory: (func, support, seed, step, predictor, step_params...) -> stepper
 _ContinuationStepperFactory = Callable[[
-    Callable[[object, _np.ndarray], _np.ndarray],
-    Callable[[object], _np.ndarray],
-    _ContinuationStepSupport | None
+    Callable,
+    _ContinuationStepSupport | None,
+    _np.ndarray,  # seed_repr
+    _np.ndarray,  # initial_step  
+    Callable,  # predictor_fn (for initial tangent)
+    float,  # step_min
+    float,  # step_max
+    Optional[Callable[[_np.ndarray], _np.ndarray]]  # shrink_policy
 ], _ContinuationStepBase]
 
 
@@ -39,10 +44,20 @@ def make_natural_stepper() -> _ContinuationStepperFactory:
 
     def _factory(
         predictor_fn: Callable[[object, _np.ndarray], _np.ndarray],
-        representation_fn: Callable[[object], _np.ndarray],
-        support: _ContinuationStepSupport | None = None,
+        support: _ContinuationStepSupport | None,
+        seed_repr: _np.ndarray,
+        initial_step: _np.ndarray,
+        predictor_for_tangent: Callable,
+        step_min: float,
+        step_max: float,
+        shrink_policy: Optional[Callable[[_np.ndarray], _np.ndarray]],
     ) -> _ContinuationStepBase:
-        return _NaturalParameterStep(predictor_fn)
+        return _NaturalParameterStep(
+            predictor_fn,
+            step_min=step_min,
+            step_max=step_max,
+            shrink_policy=shrink_policy,
+        )
 
     return _factory
 
@@ -51,13 +66,38 @@ def make_secant_stepper() -> _ContinuationStepperFactory:
     """Return a secant stepper factory."""
 
     def _factory(
-        predictor_fn: Callable[[object, _np.ndarray], _np.ndarray],
         representation_fn: Callable[[object], _np.ndarray],
-        support: _ContinuationStepSupport | None = None,
+        support: _ContinuationStepSupport | None,
+        seed_repr: _np.ndarray,
+        initial_step: _np.ndarray,
+        predictor_fn: Callable[[object, _np.ndarray], _np.ndarray],
+        step_min: float,
+        step_max: float,
+        shrink_policy: Optional[Callable[[_np.ndarray], _np.ndarray]],
     ) -> _ContinuationStepBase:
         if support is None or not isinstance(support, _SecantSupport):
             raise ValueError("Secant stepper requires _SecantSupport from backend")
-        return _SecantStep(representation_fn, support.get_tangent)
+        
+        # Compute initial tangent
+        try:
+            repr_seed = representation_fn(seed_repr)
+            pred0 = predictor_fn(repr_seed, initial_step)
+            diff0 = (_np.asarray(pred0, dtype=float) - _np.asarray(repr_seed, dtype=float)).ravel()
+            norm0 = float(_np.linalg.norm(diff0))
+            initial_tangent = None if norm0 == 0.0 else diff0 / norm0
+        except Exception:
+            initial_tangent = None
+        
+        # Seed the support
+        support.seed(initial_tangent)
+        
+        return _SecantStep(
+            representation_fn,
+            support.get_tangent,
+            step_min=step_min,
+            step_max=step_max,
+            shrink_policy=shrink_policy,
+        )
 
     return _factory
 
