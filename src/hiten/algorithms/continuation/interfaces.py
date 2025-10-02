@@ -91,13 +91,18 @@ class _PeriodicOrbitContinuationInterface(
         predictor = self._predictor_from_problem(problem)
         representation_fn = problem.representation_of or (lambda v: np.asarray(v, dtype=float))
         seed_repr = representation_fn(problem.initial_solution)
+        
+        # Natural uses predictor, secant uses representation_of
+        stepper_type = str(problem.stepper).lower()
+        stepper_fn = representation_fn if stepper_type == "secant" else predictor
+        
         return _BackendCall(
             kwargs={
                 "seed_repr": seed_repr,
+                "stepper_fn": stepper_fn,
                 "predictor_fn": predictor,
                 "parameter_getter": problem.parameter_getter,
                 "corrector": corrector,
-                "representation_of": representation_fn,
                 "step": np.asarray(problem.step, dtype=float),
                 "target": np.asarray(problem.target, dtype=float),
                 "max_members": int(problem.max_members),

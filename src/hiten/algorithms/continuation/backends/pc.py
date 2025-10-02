@@ -40,10 +40,10 @@ class _PCContinuationBackend(_ContinuationBackend):
         self,
         *,
         seed_repr: np.ndarray,
+        stepper_fn: Callable,
         predictor_fn: Callable[[object, np.ndarray], np.ndarray],
         parameter_getter: Callable[[np.ndarray], np.ndarray],
         corrector: Callable[[np.ndarray], tuple[np.ndarray, float, bool]],
-        representation_of: Callable[[object], np.ndarray] | None,
         step: np.ndarray,
         target: np.ndarray,
         max_members: int,
@@ -56,7 +56,6 @@ class _PCContinuationBackend(_ContinuationBackend):
 
         support_obj = self.make_step_support()
         
-        stepper_fn = representation_of if representation_of is not None else predictor_fn
         stepper = self._stepper_factory(
             stepper_fn,
             support_obj,
