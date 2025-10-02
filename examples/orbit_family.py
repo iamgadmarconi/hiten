@@ -11,15 +11,6 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from hiten import System
 from hiten.algorithms.continuation.options import OrbitContinuationOptions
-from hiten.algorithms.corrector.config import \
-    MultipleShootingOrbitCorrectionConfig
-from hiten.algorithms.corrector.options import MultipleShootingCorrectionOptions, OrbitCorrectionOptions
-from hiten.algorithms.poincare.singlehit.backend import _y_plane_crossing
-from hiten.algorithms.types.configs import IntegrationConfig, NumericalConfig
-from hiten.algorithms.types.options import (ConvergenceOptions,
-                                            CorrectionOptions,
-                                            IntegrationOptions,
-                                            NumericalOptions)
 from hiten.algorithms.types.states import SynodicState
 from hiten.system.family import OrbitFamily
 
@@ -34,29 +25,6 @@ def main() -> None:
     l1 = system.get_libration_point(1)
     
     halo_seed = l1.create_orbit('halo', amplitude_z= 0.2, zenith='southern')
-
-    halo_seed.correction_config = MultipleShootingOrbitCorrectionConfig(
-            event_func=_y_plane_crossing,
-            residual_indices=(SynodicState.VX, SynodicState.VZ),
-            control_indices=(SynodicState.X, SynodicState.VY),
-            target=(0.0, 0.0),
-            extra_jacobian=lambda x, y: halo_seed._correction._halo_quadratic_term(x, y),
-            integration=IntegrationConfig(
-                method="adaptive", 
-                forward=1, 
-                flip_indices=None
-            ),
-            numerical=NumericalConfig(
-                finite_difference=False,
-                line_search_enabled=True,
-            ),
-    )
-    base_corrector_options = halo_seed.correction_options
-    halo_seed.correction_options = MultipleShootingCorrectionOptions(
-        base=base_corrector_options,
-        n_patches=3,
-    )
-
     halo_seed.correct()
     halo_seed.propagate()
 

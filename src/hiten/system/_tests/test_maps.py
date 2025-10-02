@@ -325,8 +325,8 @@ class TestSynodicMapSectionMethods:
             plane_coords=("y", "vy"),
             direction=None
         )
-        # SynodicMap creates section IDs from all parameters
-        section_id = "x_0.8_y_vy_None"
+        # SynodicMap creates section IDs from all parameters with colons as separators
+        section_id = "x:0.8:y:vy:None"
         section = synodic_map.get_section(section_id)
         assert section is not None
 

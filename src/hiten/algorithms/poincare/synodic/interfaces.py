@@ -15,7 +15,8 @@ from hiten.algorithms.poincare.core.interfaces import (_PoincareBaseInterface,
 from hiten.algorithms.poincare.synodic.config import SynodicMapConfig
 from hiten.algorithms.poincare.synodic.events import _AffinePlaneEvent
 from hiten.algorithms.poincare.synodic.options import SynodicMapOptions
-from hiten.algorithms.poincare.synodic.types import (SynodicMapResults,
+from hiten.algorithms.poincare.synodic.types import (SynodicMapDomainPayload,
+                                                     SynodicMapResults,
                                                      _SynodicMapProblem)
 from hiten.algorithms.types.core import _BackendCall
 from hiten.algorithms.types.states import SynodicState
@@ -130,7 +131,24 @@ class _SynodicInterface(
     def to_backend_inputs(self, problem: _SynodicMapProblem):
         return _BackendCall(kwargs={"trajectories": problem.trajectories, "direction": problem.direction})
 
-    def to_results(self, outputs, *, problem: _SynodicMapProblem) -> SynodicMapResults:
+    def to_domain(self, outputs, *, problem: _SynodicMapProblem) -> SynodicMapDomainPayload:
         points, states, times, trajectory_indices = outputs
-        plane_coords = problem.plane_coords
-        return SynodicMapResults(points, states, plane_coords, times, trajectory_indices)
+        return SynodicMapDomainPayload._from_mapping(
+            {
+                "points": points,
+                "states": states,
+                "times": times,
+                "trajectory_indices": trajectory_indices,
+                "labels": problem.plane_coords,
+            }
+        )
+
+    def to_results(self, outputs, *, problem: _SynodicMapProblem, domain_payload=None) -> SynodicMapResults:
+        payload = domain_payload or self.to_domain(outputs, problem=problem)
+        return SynodicMapResults(
+            payload.points,
+            payload.states,
+            payload.labels,
+            payload.times,
+            payload.trajectory_indices,
+        )

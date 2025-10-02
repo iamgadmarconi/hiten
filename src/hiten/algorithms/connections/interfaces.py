@@ -27,7 +27,8 @@ import numpy as np
 
 from hiten.algorithms.connections.config import ConnectionConfig
 from hiten.algorithms.connections.options import ConnectionOptions
-from hiten.algorithms.connections.types import (ConnectionResults,
+from hiten.algorithms.connections.types import (ConnectionDomainPayload,
+                                                ConnectionResults,
                                                 _ConnectionProblem)
 from hiten.algorithms.poincare.core.types import _Section
 from hiten.algorithms.poincare.synodic.config import SynodicMapConfig
@@ -186,26 +187,18 @@ class _ManifoldConnectionInterface(
             kwargs={"eps": eps, "dv_tol": dv_tol, "bal_tol": bal_tol}
         )
 
+    def to_domain(self, outputs: list, *, problem: _ConnectionProblem) -> ConnectionDomainPayload:
+        return ConnectionDomainPayload._from_mapping(
+            {
+                "connections": tuple(outputs),
+                "source": problem.source,
+                "target": problem.target,
+            }
+        )
+
     def to_results(self, outputs: list, *, problem: _ConnectionProblem, domain_payload=None) -> ConnectionResults:
-        """Convert backend outputs to connection results
-        
-        This method converts the backend outputs to connection results.
-
-        Parameters
-        ----------
-        outputs : list[Any]
-            The backend outputs to convert to connection results.
-        problem : :class:`~hiten.algorithms.connections.types._ConnectionProblem`
-            The problem to convert to connection results.
-        domain_payload : Any, optional
-            The domain payload to convert to connection results.
-
-        Returns
-        -------
-        :class:`~hiten.algorithms.connections.types.ConnectionResults`
-            The connection results.
-        """
-        return ConnectionResults(outputs)
+        payload = domain_payload or self.to_domain(outputs, problem=problem)
+        return ConnectionResults(list(payload.connections))
 
     def to_section(
         self,
@@ -306,9 +299,8 @@ class _ManifoldConnectionInterface(
             direction=direction,
         )
         
-        # Get the section data using the same ID format as the dynamics service
-        section_id = f"{section_axis}_{section_offset}_{plane_coords[0]}_{plane_coords[1]}_{direction}"
-        return synodic_map.get_section(section_id)
+        # Fetch the most recently computed section directly to avoid reliance on key format
+        return synodic_map.dynamics.get_section()
 
     def to_numeric(self, manifold: "Manifold", config: SynodicMapConfig, *, direction: Literal[1, -1, None] = None):
         """Return (points2d, states6d, trajectory_indices) arrays for this manifold on a section.

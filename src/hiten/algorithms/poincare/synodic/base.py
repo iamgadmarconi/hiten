@@ -127,5 +127,6 @@ class SynodicMapPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, Config
         """
         problem = self._create_problem(domain_obj=domain_obj, options=options)
         engine = self._get_engine()
-        self._results = engine.solve(problem)
-        return self._results
+        engine_result = engine.solve(problem)
+        self._results = engine_result
+        return engine_result

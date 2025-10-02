@@ -404,7 +404,7 @@ class PeriodicOrbit(_HitenBase):
         :class:`~hiten.algorithms.corrector.types.CorrectionResult`
             The corrected state and period.
         """
-        result = self._correction.correct(options=options)
+        state, period, result = self._correction.correct(options=options)
         return result
 
     def generate(self, options: Optional["OrbitContinuationOptions"] = None) -> "ContinuationResult":

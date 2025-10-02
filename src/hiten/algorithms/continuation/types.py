@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Optional, Tuple, Union
+from typing import (TYPE_CHECKING, Callable, Mapping, Optional, Sequence,
+                    Tuple, Union)
 
 import numpy as np
+
+from hiten.algorithms.types.core import _DomainPayload
 
 if TYPE_CHECKING:
     from hiten.algorithms.corrector.options import OrbitCorrectionOptions
@@ -37,6 +40,48 @@ class ContinuationResult:
     family: Tuple[object, ...]
     parameter_values: Tuple[np.ndarray, ...]
     iterations: int
+
+
+@dataclass(frozen=True)
+class ContinuationDomainPayload(_DomainPayload):
+    """Domain payload containing continuation family data."""
+
+    @classmethod
+    def _from_mapping(cls, data: Mapping[str, object]) -> "ContinuationDomainPayload":
+        return cls(data=data)
+
+    @property
+    def family(self) -> Tuple[object, ...]:
+        return tuple(self.require("family"))
+
+    @property
+    def family_repr(self) -> Tuple[np.ndarray, ...]:
+        return tuple(np.asarray(vec, dtype=float) for vec in self.require("family_repr"))
+
+    @property
+    def accepted_count(self) -> int:
+        return int(self.require("accepted_count"))
+
+    @property
+    def rejected_count(self) -> int:
+        return int(self.require("rejected_count"))
+
+    @property
+    def success_rate(self) -> float:
+        return float(self.require("success_rate"))
+
+    @property
+    def iterations(self) -> int:
+        return int(self.require("iterations"))
+
+    @property
+    def parameter_values(self) -> Tuple[np.ndarray, ...]:
+        return tuple(np.asarray(val, dtype=float) for val in self.require("parameter_values"))
+
+    @property
+    def info(self) -> dict[str, object]:
+        info = self.get("info", {})
+        return dict(info) if isinstance(info, Mapping) else dict()
 
 
 @dataclass(frozen=True)

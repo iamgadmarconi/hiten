@@ -13,13 +13,14 @@ from hiten.algorithms.poincare.centermanifold.base import \
     CenterManifoldMapPipeline
 from hiten.algorithms.poincare.centermanifold.config import \
     CenterManifoldMapConfig
-from hiten.algorithms.poincare.centermanifold.types import \
-    CenterManifoldMapResults
+from hiten.algorithms.poincare.centermanifold.types import (
+    CenterManifoldDomainPayload, CenterManifoldMapResults)
 from hiten.algorithms.poincare.core.types import _Section
 from hiten.algorithms.poincare.synodic.base import SynodicMapPipeline
 from hiten.algorithms.poincare.synodic.config import SynodicMapConfig
-from hiten.algorithms.poincare.synodic.types import SynodicMapResults
-from hiten.algorithms.types.configs import RefineConfig, IntegrationConfig
+from hiten.algorithms.poincare.synodic.types import (SynodicMapDomainPayload,
+                                                     SynodicMapResults)
+from hiten.algorithms.types.configs import IntegrationConfig, RefineConfig
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
                                                   _ServiceBundleBase)
@@ -88,6 +89,7 @@ class _MapDynamicsServiceBase(_DynamicsServiceBase):
         self._section_coord = None
         self._generator = None
         self._map_config = None
+        self._map: Optional["_Section"] = None
 
     @property
     def generator(self) -> str:
@@ -370,17 +372,28 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
         
         cache_key = self.make_key("generate", section_coord, tuple(sorted(options.to_dict().items())))
 
-        def _factory() -> CenterManifoldMapResults:
-            # Update config with section coordinate
+        def _factory() -> CenterManifoldDomainPayload:
             self.generator.update_config(section_coord=section_coord)
-            # Generate with options
-            results = self.generator.generate(self.domain_obj, options)
-            # Store the results in the sections cache
-            self._sections[section_coord] = results
-            self._section_coord = section_coord
-            return results
+            result = self.generator.generate(self.domain_obj, options)
+            payload = CenterManifoldDomainPayload._from_mapping(
+                {
+                    "points": result.points,
+                    "states": result.states,
+                    "times": result.times,
+                    "labels": result.labels,
+                    "section_coord": section_coord,
+                }
+            )
+            self.apply_center_manifold_map(payload, section_coord=section_coord)
+            return payload
 
-        return self.get_or_create(cache_key, _factory)
+        payload = self.get_or_create(cache_key, _factory)
+        return CenterManifoldMapResults(
+            payload.points,
+            payload.states,
+            payload.labels,
+            payload.times,
+        )
 
     def get_points_with_4d_states(
         self,
@@ -575,8 +588,8 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
         """
         from hiten.algorithms.poincare.centermanifold.options import \
             CenterManifoldMapOptions
-        from hiten.algorithms.poincare.core.options import (
-            IterationOptions, SeedingOptions)
+        from hiten.algorithms.poincare.core.options import (IterationOptions,
+                                                            SeedingOptions)
         from hiten.algorithms.types.options import (IntegrationOptions,
                                                     WorkerOptions)
         
@@ -602,6 +615,19 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
             New map options.
         """
         self._map_options = value
+
+    def apply_center_manifold_map(self, payload: CenterManifoldDomainPayload, *, section_coord: str | None = None) -> CenterManifoldDomainPayload:
+        result = CenterManifoldMapResults(
+            payload.points,
+            payload.states,
+            payload.labels,
+            payload.times,
+        )
+        section_id = section_coord or payload.section_coord or self.section_coord
+        self._sections[section_id] = result
+        self._section_coord = section_id
+        self.domain_obj._last_map = result
+        return payload
 
 
 class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
@@ -660,20 +686,31 @@ class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
         
         cache_key = self.make_key("generate", section_axis, section_offset, tuple(plane_coords), direction, tuple(sorted(options.to_dict().items())))
 
-        def _factory() -> SynodicMapResults:
+        def _factory() -> SynodicMapDomainPayload:
             updates = {"section_axis": section_axis,
                         "section_offset": section_offset,
                         "plane_coords": plane_coords,
                         "direction": direction}
 
             self.generator.update_config(**updates)
-            results = self.generator.generate(self.source, options)
-            # Create a section identifier from the parameters
-            section_id = f"{section_axis}_{section_offset}_{plane_coords[0]}_{plane_coords[1]}_{direction}"
-            # Store the results in the sections cache
-            self._sections[section_id] = results
-            self._section_coord = section_id
-            return results
+            result = self.generator.generate(self.source, options)
+            payload = SynodicMapDomainPayload._from_mapping(
+                {
+                    "points": result.points,
+                    "states": result.states,
+                    "times": result.times,
+                    "trajectory_indices": result.trajectory_indices,
+                    "labels": result.labels,
+                }
+            )
+            self.apply_synodic_map(
+                payload,
+                section_axis=section_axis,
+                section_offset=section_offset,
+                plane_coords=plane_coords,
+                direction=direction,
+            )
+            return payload
 
         return self.get_or_create(cache_key, _factory)
 
@@ -721,10 +758,8 @@ class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
         :class:`~hiten.algorithms.poincare.synodic.options.SynodicMapOptions`
             The default map options.
         """
-        from hiten.algorithms.poincare.synodic.options import \
-            SynodicMapOptions
-        from hiten.algorithms.types.options import (RefineOptions,
-                                                    WorkerOptions)
+        from hiten.algorithms.poincare.synodic.options import SynodicMapOptions
+        from hiten.algorithms.types.options import RefineOptions, WorkerOptions
         
         return SynodicMapOptions(
             refine=RefineOptions(
@@ -748,6 +783,37 @@ class _SynodicMapDynamicsService(_MapDynamicsServiceBase):
             New map options.
         """
         self._map_options = value
+
+    def apply_synodic_map(self, payload: SynodicMapDomainPayload, *, section_axis: str | None = None, section_offset: float | None = None, plane_coords: tuple[str, str] | None = None, direction: Literal[1, -1, None] | None = None) -> SynodicMapDomainPayload:
+        """Apply a synodic map update to the map service.
+
+        Parameters
+        ----------
+        payload : SynodicMapDomainPayload
+            Payload describing the computed synodic map.
+        section_axis : str, optional
+            Axis defining the section plane.
+        section_offset : float, optional
+            Offset along the section axis.
+        plane_coords : tuple[str, str], optional
+            Coordinate labels for the section plane projection.
+        direction : {1, -1, None}, optional
+            Crossing direction filter.
+        """
+        section_axis = section_axis or self.map_config.section_axis
+        plane_coords = plane_coords or self.map_config.plane_coords
+        direction = direction if direction is not None else self.map_config.direction
+        section_id = self._make_section_key(section_axis, section_offset or self.map_config.section_offset, plane_coords, direction)
+        results = SynodicMapResults(
+            payload.points, payload.states, payload.labels, payload.times, payload.trajectory_indices
+        )
+        self._sections[section_id] = results
+        self._section_coord = section_id
+        return payload
+
+    @staticmethod
+    def _make_section_key(section_axis: str, section_offset: float | None, plane_coords: tuple[str, str], direction: Literal[1, -1, None]) -> str:
+        return f"{section_axis}:{section_offset}:{plane_coords[0]}:{plane_coords[1]}:{direction}"
 
 
 class _MapServices(_ServiceBundleBase):

@@ -10,8 +10,13 @@ import numpy as np
 
 from hiten.algorithms.common.energy import crtbp_energy, energy_to_jacobi
 from hiten.algorithms.continuation.base import ContinuationPipeline
+from hiten.algorithms.continuation.types import (ContinuationDomainPayload,
+                                                 ContinuationResult)
 from hiten.algorithms.corrector.base import CorrectorPipeline
-from hiten.algorithms.corrector.config import MultipleShootingOrbitCorrectionConfig
+from hiten.algorithms.corrector.config import \
+    MultipleShootingOrbitCorrectionConfig
+from hiten.algorithms.corrector.types import (CorrectionResult,
+                                              OrbitCorrectionDomainPayload)
 from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_monodromy, _compute_stm
 from hiten.algorithms.linalg.backend import _LinalgBackend
@@ -93,16 +98,22 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
             
             # Select interface and backend based on config type
             if isinstance(config, MultipleShootingOrbitCorrectionConfig):
-                from hiten.algorithms.corrector.interfaces import _MultipleShootingOrbitCorrectionInterface
-                from hiten.algorithms.corrector.backends.ms import _MultipleShootingBackend
-                from hiten.algorithms.corrector.stepping import make_armijo_stepper
+                from hiten.algorithms.corrector.backends.ms import \
+                    _MultipleShootingBackend
+                from hiten.algorithms.corrector.interfaces import \
+                    _MultipleShootingOrbitCorrectionInterface
+                from hiten.algorithms.corrector.stepping import \
+                    make_armijo_stepper
                 
                 interface = _MultipleShootingOrbitCorrectionInterface()
                 backend = _MultipleShootingBackend(stepper_factory=make_armijo_stepper())
             else:
-                from hiten.algorithms.corrector.interfaces import _OrbitCorrectionInterface
-                from hiten.algorithms.corrector.backends.newton import _NewtonBackend
-                from hiten.algorithms.corrector.stepping import make_armijo_stepper
+                from hiten.algorithms.corrector.backends.newton import \
+                    _NewtonBackend
+                from hiten.algorithms.corrector.interfaces import \
+                    _OrbitCorrectionInterface
+                from hiten.algorithms.corrector.stepping import \
+                    make_armijo_stepper
                 
                 interface = _OrbitCorrectionInterface()
                 backend = _NewtonBackend(stepper_factory=make_armijo_stepper())
@@ -114,7 +125,9 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
             )
         return self._corrector
 
-    def correct(self, *, options: "OrbitCorrectionOptions" = None) -> Tuple[np.ndarray, float]:
+    def correct(
+        self, *, options: "OrbitCorrectionOptions" = None
+    ) -> tuple[np.ndarray, float, "CorrectionResult"]:
         """Differential correction wrapper.
         
         Parameters
@@ -125,8 +138,8 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
 
         Returns
         -------
-        Tuple[np.ndarray, float]
-            The corrected state and period.
+        tuple[np.ndarray, float, :class:`~hiten.algorithms.corrector.types.CorrectionResult`]
+            Corrected state, full period, and the full correction result object.
         """
         # Use provided options or get defaults
         if options is None:
@@ -135,11 +148,34 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
         # Cache key based on options
         cache_key = self.make_key("correct", tuple(sorted(options.to_dict().items())))
 
-        def _factory() -> Tuple[np.ndarray, float]:
-            results = self.corrector.correct(self.domain_obj, options=options)
-            return results.x_corrected, 2 * results.half_period
+        def _factory() -> tuple[np.ndarray, float, OrbitCorrectionDomainPayload, "CorrectionResult"]:
+            result = self.corrector.correct(self.domain_obj, options=options)
+            payload = OrbitCorrectionDomainPayload._from_mapping(
+                {
+                    "x_full": result.x_corrected,
+                    "half_period": result.half_period,
+                    "iterations": result.iterations,
+                    "residual_norm": result.residual_norm,
+                }
+            )
+            self.apply_correction(payload)
+            return result.x_corrected, 2 * result.half_period, payload, result
 
-        return self.get_or_create(cache_key, _factory)
+        state, period, payload, result = self.get_or_create(cache_key, _factory)
+        return state, period, result
+
+    def apply_correction(self, update: OrbitCorrectionDomainPayload) -> OrbitCorrectionDomainPayload:
+        """Apply a correction update to the orbit dynamics and return the payload."""
+
+        payload = update
+        x_full = np.asarray(payload.x_full, dtype=float)
+        half_period = float(payload.half_period)
+
+        self.domain_obj.dynamics.reset()
+        self.domain_obj.dynamics._initial_state = x_full
+        self.domain_obj.dynamics.period = 2.0 * half_period
+
+        return payload
 
     @property
     def correction_options(self):
@@ -255,11 +291,51 @@ class _OrbitContinuationService(_DynamicsServiceBase):
         # Cache key based on options
         cache_key = self.make_key("generate", tuple(sorted(options.to_dict().items())))
 
-        def _factory() -> ContinuationResult:
-            results = self.generator.generate(self.domain_obj, options)
-            return results
+        def _factory() -> ContinuationDomainPayload:
+            result = self.generator.generate(self.domain_obj, options)
+            payload = ContinuationDomainPayload._from_mapping(
+                {
+                    "family": result.family,
+                    "family_repr": tuple(
+                        getattr(member, "initial_state", None)
+                        for member in result.family
+                    ),
+                    "accepted_count": result.accepted_count,
+                    "rejected_count": result.rejected_count,
+                    "iterations": result.iterations,
+                    "success_rate": result.success_rate,
+                    "parameter_values": result.parameter_values,
+                    "info": {},
+                }
+            )
+            self.apply_continuation(payload)
+            return payload
 
-        return self.get_or_create(cache_key, _factory)
+        payload = self.get_or_create(cache_key, _factory)
+        return ContinuationResult(
+            accepted_count=payload.accepted_count,
+            rejected_count=payload.rejected_count,
+            success_rate=payload.success_rate,
+            family=payload.family,
+            parameter_values=payload.parameter_values,
+            iterations=payload.iterations,
+        )
+
+    def apply_continuation(self, payload: ContinuationDomainPayload) -> ContinuationDomainPayload:
+        representatives = payload.family_repr
+        new_family = [self.domain_obj]
+        for repr_vec in representatives[1:]:
+            new_orbit = self.domain_obj.__class__(
+                libration_point=self.domain_obj.libration_point,
+                initial_state=np.asarray(repr_vec, dtype=float),
+            )
+            new_orbit.period = getattr(self.domain_obj, "period", None)
+            new_family.append(new_orbit)
+        self._continuation_overrides = {
+            "family": tuple(new_family),
+            "parameter_values": payload.parameter_values,
+        }
+        return payload
 
     @property
     def continuation_config(self) -> "OrbitContinuationConfig":
@@ -494,7 +570,6 @@ class _OrbitDynamicsService(_DynamicsServiceBase):
             raise ValueError("period must be a positive number or None.")
 
         if value != self.period:
-
             self._period = value
 
 
@@ -703,8 +778,7 @@ class _GenericOrbitContinuationService(_OrbitContinuationService):
     def __init__(self, orbit: "GenericOrbit") -> None:
         super().__init__(orbit)
 
-    @property
-    def continuation_config(self) -> "OrbitContinuationConfig":
+    def _default_continuation_config(self) -> "OrbitContinuationConfig":
         """Provides the continuation configuration for generic orbits.
         
         Returns
@@ -723,8 +797,7 @@ class _GenericOrbitContinuationService(_OrbitContinuationService):
             "GenericOrbit requires 'continuation_config' to be set before using continuation engines."
         )
 
-    @property
-    def continuation_options(self) -> "OrbitContinuationOptions":
+    def _default_continuation_options(self) -> "OrbitContinuationOptions":
         """Create default continuation options for generic orbits.
         
         Returns
@@ -1255,8 +1328,7 @@ class _LyapunovOrbitContinuationService(_OrbitContinuationService):
     def __init__(self, orbit: "LyapunovOrbit") -> None:
         super().__init__(orbit)
 
-    @property
-    def continuation_config(self) -> "OrbitContinuationConfig":
+    def _default_continuation_config(self) -> "OrbitContinuationConfig":
         """Provides the continuation configuration for Lyapunov orbits.
         
         Returns
@@ -1271,8 +1343,7 @@ class _LyapunovOrbitContinuationService(_OrbitContinuationService):
             stepper="secant",
         )
 
-    @property
-    def continuation_options(self) -> "OrbitContinuationOptions":
+    def _default_continuation_options(self) -> "OrbitContinuationOptions":
         """Create default continuation options for Lyapunov orbits.
         
         Returns
@@ -1448,8 +1519,7 @@ class _VerticalOrbitContinuationService(_OrbitContinuationService):
     def __init__(self, orbit: "VerticalOrbit") -> None:
         super().__init__(orbit)
 
-    @property
-    def continuation_config(self) -> "OrbitContinuationConfig":
+    def _default_continuation_config(self) -> "OrbitContinuationConfig":
         """Provides the continuation configuration for Vertical orbits.
         
         Returns
@@ -1464,8 +1534,7 @@ class _VerticalOrbitContinuationService(_OrbitContinuationService):
             stepper="secant",
         )
 
-    @property
-    def continuation_options(self) -> "OrbitContinuationOptions":
+    def _default_continuation_options(self) -> "OrbitContinuationOptions":
         """Create default continuation options for Vertical orbits.
         
         Returns

@@ -22,11 +22,14 @@ See Also
 """
 
 from dataclasses import dataclass
-from typing import Iterator, Literal, Sequence, Tuple
+from typing import TYPE_CHECKING, Iterator, Literal, Mapping, Sequence, Tuple
 
 import numpy as np
 
-from hiten.system.manifold import Manifold
+from hiten.algorithms.types.core import _DomainPayload
+
+if TYPE_CHECKING:
+    from hiten.system.manifold import Manifold
 
 
 @dataclass
@@ -282,6 +285,26 @@ class Connections:
         return "\n".join(lines)
 
 
+@dataclass(frozen=True)
+class ConnectionDomainPayload(_DomainPayload):
+    """Domain payload carrying raw connection results and metadata."""
+
+    @classmethod
+    def _from_mapping(cls, data: Mapping[str, object]) -> "ConnectionDomainPayload":
+        return cls(data=data)
+
+    @property
+    def connections(self) -> Tuple[_ConnectionResult, ...]:
+        return tuple(self.require("connections"))
+
+    @property
+    def source(self):
+        return self.get("source")
+
+    @property
+    def target(self):
+        return self.get("target")
+
 
 @dataclass(frozen=True)
 class _ConnectionProblem:
@@ -347,8 +370,8 @@ class _ConnectionProblem:
     :class:`~hiten.algorithms.connections.base.ConnectionPipeline`
         High-level class that creates these problem specifications.
     """
-    source: Manifold
-    target: Manifold
+    source: "Manifold"
+    target: "Manifold"
     section_axis: str
     section_offset: float
     plane_coords: tuple[str, str]

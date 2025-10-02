@@ -9,6 +9,7 @@ import numpy as np
 from tqdm import tqdm
 
 from hiten.algorithms.common.energy import _max_rel_energy_error
+from hiten.algorithms.connections.types import ConnectionDomainPayload
 from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_stm
 from hiten.algorithms.linalg.base import StabilityPipeline
@@ -611,7 +612,8 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
             The eigendecomposition options with reasonable defaults.
         """
         if self._eigendecomposition_options is None:
-            from hiten.algorithms.linalg.options import EigenDecompositionOptions
+            from hiten.algorithms.linalg.options import \
+                EigenDecompositionOptions
             self._eigendecomposition_options = EigenDecompositionOptions(
                 delta=1e-6,
                 tol=1e-6,
@@ -628,6 +630,10 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
             New eigendecomposition options.
         """
         self._eigendecomposition_options = value
+
+    def apply_connections(self, payload: ConnectionDomainPayload) -> None:
+        """Apply connection results payload to the manifold domain object."""
+        self.domain_obj._connection_results = tuple(payload.connections)
 
 
 class _ManifoldServices(_ServiceBundleBase):

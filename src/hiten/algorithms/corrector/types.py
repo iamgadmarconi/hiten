@@ -5,12 +5,14 @@ This module provides the types for the corrector module.
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Optional, Sequence
 
 import numpy as np
 
 if TYPE_CHECKING:
     from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
+
+from hiten.algorithms.types.core import _DomainPayload
 
 #: Type alias for residual function signatures.
 #:
@@ -130,6 +132,56 @@ class OrbitCorrectionResult(CorrectionResult):
         Half-period associated with the corrected orbit.
     """
     half_period: float
+
+
+@dataclass(frozen=True)
+class OrbitCorrectionDomainPayload(_DomainPayload):
+    """Domain payload describing updates produced by orbit correction interfaces."""
+
+    @classmethod
+    def _from_mapping(cls, data: Mapping[str, Any]) -> "OrbitCorrectionDomainPayload":
+        return cls(data=data)
+
+    @property
+    def x_full(self) -> np.ndarray:
+        return np.asarray(self.require("x_full"), dtype=float)
+
+    @property
+    def half_period(self) -> float:
+        return float(self.require("half_period"))
+
+    @property
+    def iterations(self) -> int:
+        return int(self.require("iterations"))
+
+    @property
+    def residual_norm(self) -> float:
+        return float(self.require("residual_norm"))
+
+
+@dataclass(frozen=True)
+class MultipleShootingDomainPayload(OrbitCorrectionDomainPayload):
+    """Domain payload with additional diagnostics for multiple-shooting runs."""
+
+    @classmethod
+    def _from_mapping(cls, data: Mapping[str, Any]) -> "MultipleShootingDomainPayload":
+        return cls(data=data)
+
+    @property
+    def patch_states(self) -> Sequence[np.ndarray]:
+        raw = self.require("patch_states")
+        return tuple(np.asarray(p, dtype=float) for p in raw)
+
+    @property
+    def patch_times(self) -> np.ndarray:
+        return np.asarray(self.require("patch_times"), dtype=float)
+
+    @property
+    def continuity_errors(self) -> np.ndarray:
+        errors = self.get("continuity_errors", None)
+        if errors is None:
+            return np.asarray([], dtype=float)
+        return np.asarray(errors, dtype=float)
 
 
 @dataclass
@@ -402,6 +454,7 @@ class _MultipleShootingProblem(_CorrectionProblem):
     domain_obj: Any
     n_patches: int
     patch_times: np.ndarray
+    patch_templates: Sequence[np.ndarray]
     patch_strategy: str
     residual_indices: tuple[int, ...]
     control_indices: tuple[int, ...]

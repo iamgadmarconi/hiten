@@ -6,10 +6,11 @@ while the results type contains the computed section.
 """
 
 from dataclasses import dataclass
-from typing import Optional, Tuple, Callable, List
+from typing import Mapping, Optional, Tuple, Callable, List
 
 import numpy as np
 from hiten.algorithms.poincare.core.types import _MapResults
+from hiten.algorithms.types.core import _DomainPayload
 
 
 @dataclass(frozen=True)
@@ -51,3 +52,33 @@ class CenterManifoldMapResults(_MapResults):
         idx1 = self.labels.index(axes[0])
         idx2 = self.labels.index(axes[1])
         return self.points[:, (idx1, idx2)]
+
+
+@dataclass(frozen=True)
+class CenterManifoldDomainPayload(_DomainPayload):
+    """Domain payload describing center manifold map outputs."""
+
+    @classmethod
+    def _from_mapping(cls, data: Mapping[str, object]) -> "CenterManifoldDomainPayload":
+        return cls(data=data)
+
+    @property
+    def points(self) -> np.ndarray:
+        return np.asarray(self.require("points"), dtype=float)
+
+    @property
+    def states(self) -> np.ndarray:
+        return np.asarray(self.require("states"), dtype=float)
+
+    @property
+    def times(self) -> Optional[np.ndarray]:
+        times = self.get("times")
+        return None if times is None else np.asarray(times, dtype=float)
+
+    @property
+    def labels(self) -> Tuple[str, str]:
+        return tuple(self.require("labels"))
+
+    @property
+    def section_coord(self) -> Optional[str]:
+        return self.get("section_coord")

@@ -25,6 +25,8 @@ from typing import TYPE_CHECKING, Generic, Optional
 
 import numpy as np
 
+from hiten.algorithms.connections.types import (ConnectionDomainPayload,
+                                                ConnectionResults)
 from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
                                          _HitenBasePipeline)
 from hiten.algorithms.types.exceptions import EngineError
@@ -155,7 +157,8 @@ class ConnectionPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, Config
         """
         from hiten.algorithms.connections.backends import _ConnectionsBackend
         from hiten.algorithms.connections.engine import _ConnectionEngine
-        from hiten.algorithms.connections.interfaces import _ManifoldConnectionInterface
+        from hiten.algorithms.connections.interfaces import \
+            _ManifoldConnectionInterface
         backend = backend or _ConnectionsBackend()
         intf = interface or _ManifoldConnectionInterface()
         engine = _ConnectionEngine(backend=backend, interface=intf)
@@ -209,11 +212,19 @@ class ConnectionPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, Config
         problem = self._create_problem(domain_obj=domain_obj, options=options)
         engine = self._get_engine()
         engine_result = engine.solve(problem)
-        records = engine_result.connections
+        payload = ConnectionDomainPayload._from_mapping(
+            {
+                "connections": engine_result.connections,
+                "source": source,
+                "target": target,
+            }
+        )
+        source.services.dynamics.apply_connections(payload)
+        target.services.dynamics.apply_connections(payload)
         self._last_source = source
         self._last_target = target
-        self._last_results = records
-        return engine_result.to_results()
+        self._last_results = payload.connections
+        return ConnectionResults(list(payload.connections))
 
     @property
     def results(self) -> "Connections":

@@ -1,6 +1,5 @@
 """Predict-correct continuation backend implementation."""
 
-import warnings
 from typing import Callable
 
 import numpy as np
@@ -43,7 +42,7 @@ class _PredictorCorrectorContinuationBackend(_ContinuationBackend):
         stepper_fn: Callable,
         predictor_fn: Callable[[object, np.ndarray], np.ndarray],
         parameter_getter: Callable[[np.ndarray], np.ndarray],
-        corrector: Callable[[np.ndarray], tuple[np.ndarray, float, bool]],
+        corrector: Callable[[np.ndarray], tuple[np.ndarray, float, bool] | tuple[np.ndarray, float, bool, dict]],
         step: np.ndarray,
         target: np.ndarray,
         max_members: int,
@@ -69,6 +68,7 @@ class _PredictorCorrectorContinuationBackend(_ContinuationBackend):
 
         family: list[np.ndarray] = [np.asarray(seed_repr, dtype=float).copy()]
         params_history: list[np.ndarray] = [np.asarray(parameter_getter(seed_repr), dtype=float).copy()]
+        aux_history: list[dict] = []
 
         accepted_count = 1
         rejected_count = 0
@@ -89,12 +89,12 @@ class _PredictorCorrectorContinuationBackend(_ContinuationBackend):
                 prediction = proposal.prediction
                 iterations += 1
                 try:
-                    corrected, res_norm, converged = corrector(prediction)
+                    out = corrector(prediction)
+                    corrected, res_norm, converged, *rest = out
+                    aux = rest[0] if rest and isinstance(rest[0], dict) else {}
                 except Exception as e:
                     converged = False
                     res_norm = np.nan
-                    warnings.warn(f"Continuation correction failed: {str(e)[:100]}", stacklevel=2)
-
                 try:
                     self.on_iteration(iterations, prediction, float(res_norm))
                 except Exception:
@@ -105,6 +105,7 @@ class _PredictorCorrectorContinuationBackend(_ContinuationBackend):
                     params = np.asarray(parameter_getter(corrected), dtype=float).copy()
                     params_history.append(params)
                     accepted_count += 1
+                    aux_history.append(dict(aux))
                     try:
                         self.on_accept(corrected, iterations=iterations, residual_norm=float(res_norm))
                     except Exception:
@@ -164,6 +165,7 @@ class _PredictorCorrectorContinuationBackend(_ContinuationBackend):
             "rejected_count": int(rejected_count),
             "iterations": int(iterations),
             "parameter_values": tuple(np.asarray(p, dtype=float).copy() for p in params_history),
+            "aux": tuple(aux_history),
             "final_step": np.asarray(step_vec, dtype=float).copy(),
             "residual_norm": float(self._last_residual) if np.isfinite(self._last_residual) else float("nan"),
         }

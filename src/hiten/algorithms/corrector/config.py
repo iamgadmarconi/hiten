@@ -167,6 +167,12 @@ class MultipleShootingOrbitCorrectionConfig(OrbitCorrectionConfig):
     enforce_all_continuity: bool = True
     boundary_only_indices: tuple[int, ...] = ()
     use_sparse_jacobian: bool = False
+    # Optional: specify which control indices the extra_jacobian columns map to
+    # If None, extra_jacobian is assumed to already match the full set of
+    # control_indices columns. When provided, the extra_jacobian matrix must
+    # have shape (len(residual_indices_at_boundary), len(extra_jacobian_control_indices)),
+    # and will be embedded into the full control space at these columns.
+    extra_jacobian_control_indices: Optional[tuple[int, ...]] = None
 
     def _validate(self) -> None:
         """Validate the configuration."""
@@ -184,4 +190,15 @@ class MultipleShootingOrbitCorrectionConfig(OrbitCorrectionConfig):
             if len(self.manual_patch_times) < 2:
                 raise ValueError(
                     "manual_patch_times must have at least 2 elements (start and end)."
+                )
+        if self.extra_jacobian is not None and self.extra_jacobian_control_indices is not None:
+            # basic sanity: indices non-negative
+            if not all(isinstance(i, int) and i >= 0 for i in self.extra_jacobian_control_indices):
+                raise ValueError("extra_jacobian_control_indices must contain non-negative integers.")
+            # they should be a subset of control_indices
+            missing = [i for i in self.extra_jacobian_control_indices if i not in self.control_indices]
+            if missing:
+                raise ValueError(
+                    "extra_jacobian_control_indices must be a subset of control_indices; "
+                    f"missing from control_indices: {missing}"
                 )

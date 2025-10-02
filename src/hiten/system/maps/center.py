@@ -39,6 +39,7 @@ class CenterManifoldMap(_HitenBase):
     def __init__(self, center_manifold: "CenterManifold", energy: float):
         self._center_manifold = center_manifold
         self._energy = energy
+        self._last_map: CenterManifoldMapResults | None = None
         services = _MapServices.default(self)
         super().__init__(services)
 

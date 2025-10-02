@@ -6,7 +6,8 @@ import numpy as np
 
 from hiten.algorithms.continuation.config import OrbitContinuationConfig
 from hiten.algorithms.continuation.options import OrbitContinuationOptions
-from hiten.algorithms.continuation.types import (ContinuationResult,
+from hiten.algorithms.continuation.types import (ContinuationDomainPayload,
+                                                 ContinuationResult,
                                                  _ContinuationProblem)
 from hiten.algorithms.corrector.options import OrbitCorrectionOptions
 from hiten.algorithms.types.core import _BackendCall, _HitenBaseInterface
@@ -79,42 +80,58 @@ class _OrbitContinuationInterface(
             }
         )
 
-    def to_domain(self, outputs: tuple[list[np.ndarray], dict[str, object]], *, problem: _ContinuationProblem) -> dict[str, object]:
+    def to_domain(self, outputs: tuple[list[np.ndarray], dict[str, object]], *, problem: _ContinuationProblem) -> ContinuationDomainPayload:
         family_repr, info = outputs
-        info = dict(info)
-        info.setdefault("accepted_count", len(family_repr))
-        info.setdefault("parameter_values", tuple())
-        return info
-
-    def to_results(self, outputs: tuple[list[np.ndarray], dict[str, object]], *, problem: _ContinuationProblem, domain_payload: Any = None) -> ContinuationResult:
-        family_repr, info = outputs
-        info = dict(info)
-        accepted_count = int(info.get("accepted_count", len(family_repr)))
-        rejected_count = int(info.get("rejected_count", 0))
-        iterations = int(info.get("iterations", 0))
-        parameter_values = tuple(info.get("parameter_values", tuple()))
+        info_dict = dict(info)
+        accepted_count = int(info_dict.get("accepted_count", len(family_repr)))
+        rejected_count = int(info_dict.get("rejected_count", 0))
+        iterations = int(info_dict.get("iterations", 0))
+        parameter_values = tuple(info_dict.get("parameter_values", tuple()))
+        aux_list = list(info_dict.get("aux", tuple()))
         denom = max(accepted_count + rejected_count, 1)
         success_rate = float(accepted_count) / float(denom)
 
         family = [problem.initial_solution]
-        for repr_vec in family_repr[1:]:
+        for i, repr_vec in enumerate(family_repr[1:], start=1):
             orbit = self._instantiate(problem.initial_solution, repr_vec)
+            # Apply aux-period if provided
+            try:
+                aux = aux_list[i - 1] if i - 1 < len(aux_list) else None
+                if isinstance(aux, dict) and "period" in aux and aux["period"] is not None:
+                    period_val = float(aux["period"])
+                    if np.isfinite(period_val):
+                        orbit.period = period_val
+            except Exception:
+                pass
             family.append(orbit)
-        
+
+        return ContinuationDomainPayload._from_mapping({
+            "family": tuple(family),
+            "family_repr": tuple(family_repr),
+            "accepted_count": accepted_count,
+            "rejected_count": rejected_count,
+            "iterations": iterations,
+            "success_rate": success_rate,
+            "parameter_values": parameter_values,
+            "info": info_dict,
+        })
+
+    def to_results(self, outputs: tuple[list[np.ndarray], dict[str, object]], *, problem: _ContinuationProblem, domain_payload: Any = None) -> ContinuationResult:
+        payload = domain_payload or self.to_domain(outputs, problem=problem)
         return ContinuationResult(
-            accepted_count=accepted_count,
-            rejected_count=rejected_count,
-            success_rate=success_rate,
-            family=tuple(family),
-            parameter_values=parameter_values,
-            iterations=iterations,
+            accepted_count=payload.accepted_count,
+            rejected_count=payload.rejected_count,
+            success_rate=payload.success_rate,
+            family=payload.family,
+            parameter_values=payload.parameter_values,
+            iterations=payload.iterations,
         )
 
-    def _build_corrector(self, problem: _ContinuationProblem) -> Callable[[np.ndarray], tuple[np.ndarray, float, bool]]:
+    def _build_corrector(self, problem: _ContinuationProblem) -> Callable[[np.ndarray], tuple[np.ndarray, float, bool] | tuple[np.ndarray, float, bool, dict]]:
         domain_obj = problem.initial_solution
-
-        def _correct(prediction: np.ndarray) -> tuple[np.ndarray, float, bool]:
+        def _correct(prediction: np.ndarray) -> tuple[np.ndarray, float, bool] | tuple[np.ndarray, float, bool, dict]:
             orbit = self._instantiate(domain_obj, prediction)
+
             from hiten.algorithms.types.options import (ConvergenceOptions,
                                                         CorrectionOptions,
                                                         IntegrationOptions,
@@ -136,9 +153,12 @@ class _OrbitContinuationInterface(
                 ),
                 forward=problem.corrector_forward,
             )
-            x_corr, _ = orbit.correct(options=corrector_options)
+            corr_result = orbit.correct(options=corrector_options)
+            x_corr = corr_result.x_corrected
+            # Provide aux metadata (period) in a domain-agnostic dict
+            aux = {"period": float(2.0 * getattr(corr_result, "half_period", np.nan))}
             residual = float(np.linalg.norm(np.asarray(x_corr, dtype=float) - prediction))
-            return np.asarray(x_corr, dtype=float), residual, True
+            return np.asarray(x_corr, dtype=float), residual, corr_result.converged, aux
 
         return _correct
 
@@ -146,8 +166,11 @@ class _OrbitContinuationInterface(
         orbit_cls = type(domain_obj)
         lp = getattr(domain_obj, "libration_point", None)
         orbit = orbit_cls(libration_point=lp, initial_state=np.asarray(representation, dtype=float))
+        
+        # Stateless: only inherit seed period; post-processing will adjust if needed
         if domain_obj.period is not None:
             orbit.period = domain_obj.period
+        
         return orbit
 
     def _predictor_from_problem(self, problem: _ContinuationProblem) -> Callable[[np.ndarray, np.ndarray], np.ndarray]:

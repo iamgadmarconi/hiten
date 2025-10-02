@@ -20,7 +20,8 @@ from hiten.algorithms.poincare.centermanifold.config import \
 from hiten.algorithms.poincare.centermanifold.options import \
     CenterManifoldMapOptions
 from hiten.algorithms.poincare.centermanifold.types import (
-    CenterManifoldMapResults, _CenterManifoldMapProblem)
+    CenterManifoldDomainPayload, CenterManifoldMapResults,
+    _CenterManifoldMapProblem)
 from hiten.algorithms.poincare.core.interfaces import (_PoincareBaseInterface,
                                                        _SectionInterface)
 from hiten.algorithms.polynomial.operations import _polynomial_evaluate
@@ -164,15 +165,25 @@ class _CenterManifoldInterface(
     def to_backend_inputs(self, problem: _CenterManifoldMapProblem):
         return _BackendCall(kwargs={"section_coord": problem.section_coord, "dt": problem.dt})
 
-    def to_domain(self, outputs, *, problem: _CenterManifoldMapProblem):
-        states, info, extra = outputs
-        return info
-
-    def to_results(self, outputs, *, problem: _CenterManifoldMapProblem) -> CenterManifoldMapResults:
+    def to_domain(self, outputs, *, problem: _CenterManifoldMapProblem) -> CenterManifoldDomainPayload:
         points, states, times = outputs
-        section_coord = problem.section_coord
-        labels = self.plane_labels(section_coord)
-        return CenterManifoldMapResults(points, states, labels, times)
+        return CenterManifoldDomainPayload._from_mapping(
+            {
+                "points": points,
+                "states": states,
+                "times": times,
+                "labels": self.plane_labels(problem.section_coord),
+            }
+        )
+
+    def to_results(self, outputs, *, problem: _CenterManifoldMapProblem, domain_payload=None) -> CenterManifoldMapResults:
+        payload = domain_payload or self.to_domain(outputs, problem=problem)
+        return CenterManifoldMapResults(
+            payload.points,
+            payload.states,
+            payload.labels,
+            payload.times,
+        )
 
     def create_constraints(self, section_coord: str, **kwargs: float) -> dict[str, float]:
         return _CenterManifoldSectionInterface.build_constraint_dict(section_coord, **kwargs)

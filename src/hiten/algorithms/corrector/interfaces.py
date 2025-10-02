@@ -6,7 +6,7 @@ This module provides interface classes that adapt generic correction algorithms
  expected by the correction algorithms.
 """
 
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Sequence, Callable
 
 import numpy as np
 
@@ -15,7 +15,9 @@ from hiten.algorithms.corrector.config import (
 from hiten.algorithms.corrector.options import (MultipleShootingCorrectionOptions,
                                                 OrbitCorrectionOptions)
 from hiten.algorithms.corrector.types import (JacobianFn,
+                                              MultipleShootingDomainPayload,
                                               MultipleShootingResult, NormFn,
+                                              OrbitCorrectionDomainPayload,
                                               OrbitCorrectionResult,
                                               StepperFactory,
                                               _MultipleShootingProblem,
@@ -124,67 +126,38 @@ class _OrbitCorrectionInterface(
             },
         )
 
-    def to_domain(self, outputs: tuple[np.ndarray, int, float], *, problem: _OrbitCorrectionProblem) -> dict[str, Any]:
-        """Convert backend outputs to domain results.
-        
-        Parameters
-        ----------
-        outputs : tuple of :class:`~numpy.ndarray`, int, float
-            The backend outputs.
-        problem : :class:`~hiten.algorithms.corrector.types._OrbitCorrectionProblem`
-            The correction problem.
-        
-        Returns
-        -------
-        dict of str, Any
-            The domain results.
-        """
+    def to_domain(self, outputs: tuple[np.ndarray, int, float], *, problem: _OrbitCorrectionProblem) -> OrbitCorrectionDomainPayload:
+        """Convert backend outputs to domain payload."""
         x_corr, iterations, residual_norm = outputs
         control_indices = list(problem.control_indices)
         base_state = problem.domain_obj.initial_state.copy()
         x_full = self._to_full_state(base_state, control_indices, x_corr)
         half_period = self._half_period(problem.domain_obj, x_full, problem)
-        
-        problem.domain_obj.dynamics.reset()
-        problem.domain_obj.dynamics._initial_state = x_full
-        problem.domain_obj.dynamics.period = 2.0 * half_period
-        
-        return {
-            "iterations": iterations,
-            "residual_norm": residual_norm,
-            "half_period": half_period,
-            "x_full": x_full
-        }
+        return OrbitCorrectionDomainPayload._from_mapping(
+            {
+                "iterations": int(iterations),
+                "residual_norm": float(residual_norm),
+                "half_period": float(half_period),
+                "x_full": np.asarray(x_full, dtype=float),
+            }
+        )
 
-    def to_results(self, outputs: tuple[np.ndarray, int, float], *, problem: _OrbitCorrectionProblem, domain_payload: dict[str, Any] = None) -> OrbitCorrectionResult:
-        """Convert backend outputs to domain results.
-        
-        Parameters
-        ----------
-        outputs : tuple of :class:`~numpy.ndarray`, int, float
-            The backend outputs.
-        problem : :class:`~hiten.algorithms.corrector.types._OrbitCorrectionProblem`
-            The correction problem.
-        domain_payload : dict of str, Any
-            The domain payload.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.corrector.types.OrbitCorrectionResult`
-            The domain results.
-        """
-        x_corr, iterations, residual_norm = outputs
-        control_indices = list(problem.control_indices)
-        base_state = problem.domain_obj.initial_state.copy()
-        x_full = self._to_full_state(base_state, control_indices, x_corr)
-        half_period = self._half_period(problem.domain_obj, x_full, problem)
-        
+    def to_results(
+        self,
+        outputs: tuple[np.ndarray, int, float],
+        *,
+        problem: _OrbitCorrectionProblem,
+        domain_payload: OrbitCorrectionDomainPayload | None = None,
+    ) -> OrbitCorrectionResult:
+        """Package backend outputs into an :class:`OrbitCorrectionResult`."""
+
+        payload = domain_payload or self.to_domain(outputs, problem=problem)
         return OrbitCorrectionResult(
             converged=True,
-            x_corrected=x_full,
-            residual_norm=float(residual_norm),
-            iterations=int(iterations),
-            half_period=half_period,
+            x_corrected=payload.x_full,
+            residual_norm=float(payload.residual_norm),
+            iterations=int(payload.iterations),
+            half_period=payload.half_period,
         )
 
     def _initial_guess(self, domain_obj: "PeriodicOrbit", cfg: OrbitCorrectionConfig) -> np.ndarray:
@@ -521,11 +494,27 @@ class _MultipleShootingOrbitCorrectionInterface(
         forward = options.forward
 
         # Initialize patches and times
-        initial_guess, patch_times = self._initialize_patches(domain_obj, config, options)
+        initial_guess, patch_times, patch_templates = self._initialize_patches(
+            domain_obj, config, options
+        )
 
-        # Build residual and Jacobian functions with patch_times closure
-        residual_fn = self._residual_fn(domain_obj, config, forward, patch_times, options)
-        jacobian_fn = self._jacobian_fn(domain_obj, config, forward, patch_times, options)
+        # Build residual and Jacobian functions with patch_times and templates
+        residual_fn = self._residual_fn(
+            domain_obj=domain_obj,
+            config=config,
+            forward=forward,
+            patch_times=patch_times,
+            patch_templates=patch_templates,
+            options=options,
+        )
+        jacobian_fn = self._jacobian_fn(
+            domain_obj=domain_obj,
+            config=config,
+            forward=forward,
+            patch_times=patch_times,
+            patch_templates=patch_templates,
+            options=options,
+        )
         norm_fn = self._norm_fn()
 
         # Determine continuity indices
@@ -558,6 +547,7 @@ class _MultipleShootingOrbitCorrectionInterface(
             domain_obj=domain_obj,
             n_patches=options.n_patches,
             patch_times=patch_times,
+            patch_templates=patch_templates,
             patch_strategy=config.patch_strategy,
             residual_indices=config.residual_indices,
             control_indices=config.control_indices,
@@ -597,21 +587,8 @@ class _MultipleShootingOrbitCorrectionInterface(
 
     def to_domain(
         self, outputs: tuple[np.ndarray, int, float], *, problem: _MultipleShootingProblem
-    ) -> dict[str, Any]:
-        """Convert backend outputs to domain payload.
-
-        Parameters
-        ----------
-        outputs : tuple of numpy.ndarray, int, float
-            Backend outputs: (x_corrected, iterations, residual_norm).
-        problem : :class:`~hiten.algorithms.corrector.types._MultipleShootingProblem`
-            The problem that was solved.
-
-        Returns
-        -------
-        dict of str, Any
-            Domain-specific payload with corrected orbit information.
-        """
+    ) -> MultipleShootingDomainPayload:
+        """Convert backend outputs to domain payload."""
         x_corr, iterations, residual_norm = outputs
         
         # Reshape corrected parameters into patch states
@@ -625,74 +602,47 @@ class _MultipleShootingOrbitCorrectionInterface(
         
         # Compute continuity errors for diagnostics
         continuity_errors = self._compute_continuity_errors(patch_states, problem)
-        
-        # Update domain object
-        problem.domain_obj.dynamics.reset()
-        problem.domain_obj.dynamics._initial_state = x_full
-        problem.domain_obj.dynamics.period = 2.0 * half_period
-        
-        return {
-            "iterations": iterations,
-            "residual_norm": residual_norm,
-            "half_period": half_period,
-            "x_full": x_full,
-            "patch_states": patch_states,
-            "patch_times": problem.patch_times,
-            "continuity_errors": continuity_errors,
-        }
+        return MultipleShootingDomainPayload._from_mapping(
+            {
+                "iterations": int(iterations),
+                "residual_norm": float(residual_norm),
+                "half_period": float(half_period),
+                "x_full": np.asarray(x_full, dtype=float),
+                "patch_states": tuple(np.asarray(ps, dtype=float) for ps in patch_states),
+                "patch_times": np.asarray(problem.patch_times, dtype=float),
+                "continuity_errors": np.asarray(continuity_errors, dtype=float),
+            }
+        )
 
     def to_results(
         self,
         outputs: tuple[np.ndarray, int, float],
         *,
         problem: _MultipleShootingProblem,
-        domain_payload: dict[str, Any] | None = None,
+        domain_payload: MultipleShootingDomainPayload | None = None,
     ) -> MultipleShootingResult:
-        """Convert backend outputs to result object.
+        """Package backend outputs into a :class:`MultipleShootingResult`."""
 
-        Parameters
-        ----------
-        outputs : tuple of :class:`~numpy.ndarray`, int, float
-            Backend outputs: (x_corrected, iterations, residual_norm).
-        problem : :class:`~hiten.algorithms.corrector.types._MultipleShootingProblem`
-            The problem that was solved.
-        domain_payload : dict of str, Any, optional
-            Pre-computed domain payload from to_domain().
-
-        Returns
-        -------
-        :class:`~hiten.algorithms.corrector.types.MultipleShootingResult`
-            Complete result with convergence info and patch diagnostics.
-        """
-        x_corr, iterations, residual_norm = outputs
-        
-        # Reshape corrected parameters into patch states
-        patch_states = self._extract_patch_states(x_corr, problem)
-        
-        # Get the initial patch (full state)
-        x_full = patch_states[0]
-        
-        # Compute half period
-        half_period = self._half_period(problem.domain_obj, x_full, problem)
-        
-        # Compute continuity errors for diagnostics
-        continuity_errors = self._compute_continuity_errors(patch_states, problem)
-        
+        payload = domain_payload or self.to_domain(outputs, problem=problem)
+        problem.domain_obj.services.correction.apply_correction(payload)
         return MultipleShootingResult(
             converged=True,
-            x_corrected=x_full,
-            residual_norm=float(residual_norm),
-            iterations=int(iterations),
+            x_corrected=payload.x_full,
+            residual_norm=float(payload.residual_norm),
+            iterations=int(payload.iterations),
             n_patches=problem.n_patches,
-            patch_states=patch_states,
-            patch_times=problem.patch_times,
-            continuity_errors=continuity_errors,
-            half_period=half_period,
+            patch_states=tuple(payload.patch_states),
+            patch_times=np.asarray(payload.patch_times, dtype=float),
+            continuity_errors=np.asarray(payload.continuity_errors, dtype=float),
+            half_period=payload.half_period,
         )
 
     def _initialize_patches(
-        self, domain_obj: "PeriodicOrbit", config: MultipleShootingOrbitCorrectionConfig, options
-    ) -> tuple[np.ndarray, np.ndarray]:
+        self,
+        domain_obj: "PeriodicOrbit",
+        config: MultipleShootingOrbitCorrectionConfig,
+        options,
+    ) -> tuple[np.ndarray, np.ndarray, list[np.ndarray]]:
         """Initialize patch states and times by sampling trajectory.
 
         Strategy:
@@ -719,6 +669,10 @@ class _MultipleShootingOrbitCorrectionInterface(
         patch_times : np.ndarray
             Time values at patch boundaries [t_0, t_1, ..., t_n].
             Shape: (n_patches + 1,)
+        patch_templates : list[np.ndarray]
+            List of full-state templates evaluated along the trajectory at
+            each patch boundary. Used to reconstruct full states during
+            correction iterations.
         """
         n_patches = options.n_patches
         control_indices = list(config.control_indices)
@@ -742,22 +696,27 @@ class _MultipleShootingOrbitCorrectionInterface(
             )
 
         # Propagate trajectory and sample at patch times
-        trajectory = self._propagate_for_sampling(domain_obj, patch_times, config, options)
+        trajectory = self._propagate_for_sampling(
+            domain_obj, patch_times, config, options
+        )
 
-        # Extract patch initial states (not including final point)
-        patch_states = []
+        # Extract patch initial states (not including final point) and store
+        # the full state templates for each patch boundary.
+        patch_states: list[np.ndarray] = []
+        patch_templates: list[np.ndarray] = []
         for i in range(n_patches):
-            state_i = trajectory[i]  # Full state at patch i
+            state_i = trajectory[i]
             patch_states.append(state_i[control_indices])
+            patch_templates.append(state_i.copy())
 
-        # Flatten to parameter vector
-        patch_params = np.concatenate(patch_states)
+        # Flatten to parameter vector and keep templates aligned with patch indices
+        patch_params = np.concatenate(patch_states) if patch_states else np.array([])
 
         logger.debug(
             f"Initialized {n_patches} patches: param vector size = {patch_params.size}"
         )
 
-        return patch_params, patch_times
+        return patch_params, patch_times, patch_templates
 
     def _estimate_period(
         self, domain_obj: "PeriodicOrbit", config: MultipleShootingOrbitCorrectionConfig
@@ -851,8 +810,10 @@ class _MultipleShootingOrbitCorrectionInterface(
             order=options.base.integration.order,
         )
 
-        # Extract states at patch times
-        trajectory = [sol.states[i, :] for i in range(len(patch_times))]
+        # Interpolate solution at requested patch times to avoid sampling errors
+        patch_times_arr = np.asarray(patch_times, dtype=float)
+        states_interp = sol.interpolate(patch_times_arr)
+        trajectory = [states_interp[i].copy() for i in range(len(patch_times_arr))]
 
         return trajectory
 
@@ -862,6 +823,7 @@ class _MultipleShootingOrbitCorrectionInterface(
         config: MultipleShootingOrbitCorrectionConfig,
         forward: int,
         patch_times: np.ndarray,
+        patch_templates: Sequence[np.ndarray],
         options: MultipleShootingCorrectionOptions,
     ) -> Callable[[np.ndarray], np.ndarray]:
         """Build residual function with continuity constraints.
@@ -881,6 +843,8 @@ class _MultipleShootingOrbitCorrectionInterface(
             Integration direction.
         patch_times : np.ndarray
             Patch boundary times.
+        patch_templates : Sequence[np.ndarray]
+            Full state templates at each patch (for uncontrolled components).
         options : :class:`~hiten.algorithms.corrector.options.MultipleShootingCorrectionOptions`
             Runtime options.
 
@@ -889,7 +853,6 @@ class _MultipleShootingOrbitCorrectionInterface(
         :class:`~hiten.algorithms.corrector.types.ResidualFn`
             Residual function R(x).
         """
-        base_state = domain_obj.initial_state.copy()
         control_indices = list(config.control_indices)
         continuity_indices = list(
             config.continuity_indices if config.continuity_indices else config.control_indices
@@ -897,12 +860,13 @@ class _MultipleShootingOrbitCorrectionInterface(
         boundary_indices = list(
             config.boundary_only_indices if config.boundary_only_indices else config.residual_indices
         )
-        target = np.array(config.target)
+        target = np.array(config.target, dtype=float)
         n_patches = options.n_patches
         n_control = len(control_indices)
         method = config.integration.method
         order = options.base.integration.order
         steps = options.base.integration.steps
+        templates = [tpl.copy() for tpl in patch_templates]
 
         def _fn(params: np.ndarray) -> np.ndarray:
             """Evaluate residual for parameter vector.
@@ -920,19 +884,21 @@ class _MultipleShootingOrbitCorrectionInterface(
             # Reshape into individual patch states
             patches = params.reshape(n_patches, n_control)
 
-            residuals = []
+            residuals: list[np.ndarray] = []
 
             # Continuity constraints for internal patches
             for i in range(n_patches - 1):
-                # Current patch initial state (full state)
-                x_i = self._to_full_state(base_state, control_indices, patches[i])
-
+                # Reconstruct patch state: template provides uncontrolled components
+                x_i = templates[i].copy()
+                x_i[control_indices] = patches[i]
+                
                 # Propagate to next patch time
                 dt = patch_times[i + 1] - patch_times[i]
                 x_next_minus = self._propagate_patch(domain_obj, x_i, dt, method, order, steps)
 
-                # Next patch initial state (full state)
-                x_next = self._to_full_state(base_state, control_indices, patches[i + 1])
+                # Reconstruct next patch state
+                x_next = templates[i + 1].copy()
+                x_next[control_indices] = patches[i + 1]
 
                 # Continuity error (only on continuity indices)
                 continuity_error = (
@@ -941,7 +907,8 @@ class _MultipleShootingOrbitCorrectionInterface(
                 residuals.append(continuity_error)
 
             # Final patch: propagate and check boundary conditions
-            x_final = self._to_full_state(base_state, control_indices, patches[-1])
+            x_final = templates[-1].copy()
+            x_final[control_indices] = patches[-1]
 
             # Event-based boundary
             _, x_boundary = config.event_func(
@@ -961,6 +928,7 @@ class _MultipleShootingOrbitCorrectionInterface(
         config: MultipleShootingOrbitCorrectionConfig,
         forward: int,
         patch_times: np.ndarray,
+        patch_templates: Sequence[np.ndarray],
         options: MultipleShootingCorrectionOptions,
     ) -> JacobianFn | None:
         """Build block-structured Jacobian.
@@ -994,7 +962,6 @@ class _MultipleShootingOrbitCorrectionInterface(
         if config.numerical.finite_difference:
             return None  # Use FD approximation
 
-        base_state = domain_obj.initial_state.copy()
         control_indices = list(config.control_indices)
         continuity_indices = list(
             config.continuity_indices if config.continuity_indices else config.control_indices
@@ -1011,6 +978,7 @@ class _MultipleShootingOrbitCorrectionInterface(
         order = options.base.integration.order
         steps = options.base.integration.steps
         method = config.integration.method
+        templates = [tpl.copy() for tpl in patch_templates]
 
         # Determine if we should use sparse assembly
         use_sparse_assembly = getattr(config, 'use_sparse_jacobian', False)
@@ -1025,7 +993,9 @@ class _MultipleShootingOrbitCorrectionInterface(
             x_boundary = None      # Store boundary state (for extra_jacobian)
             
             for i in range(n_patches):
-                x_i = self._to_full_state(base_state, control_indices, patches[i])
+                # Reconstruct patch state: template provides uncontrolled components
+                x_i = templates[i].copy()
+                x_i[control_indices] = patches[i]
 
                 if i < n_patches - 1:
                     dt = patch_times[i + 1] - patch_times[i]
@@ -1146,14 +1116,35 @@ class _MultipleShootingOrbitCorrectionInterface(
 
             # Apply extra Jacobian if computed
             if extra_jac is not None:
+                # Embed extra_jac into the final block columns mapping optional indices
+                ej = extra_jac
+                if getattr(config, 'extra_jacobian_control_indices', None):
+                    # Build a zero block and place columns according to mapping
+                    mapped = np.zeros((n_boundary, n_control))
+                    # Map from global state index -> control column position
+                    ctrl_index_to_col = {idx: j for j, idx in enumerate(control_indices)}
+                    # extra term is expected to correspond to residual rows at boundary (already aligned)
+                    # and to the specified extra_jacobian_control_indices columns
+                    cols = list(getattr(config, 'extra_jacobian_control_indices'))
+                    if ej.shape[1] != len(cols):
+                        raise ValueError(
+                            f"extra_jacobian has {ej.shape[1]} columns but "
+                            f"extra_jacobian_control_indices has {len(cols)} entries"
+                        )
+                    for local_c, state_idx in enumerate(cols):
+                        if state_idx not in ctrl_index_to_col:
+                            # Skip if not controlled; contributes nothing
+                            continue
+                        mapped_col = ctrl_index_to_col[state_idx]
+                        mapped[:, mapped_col] = ej[:, local_c]
+                    ej = mapped
+                # Subtract embedded extra term from final columns
                 jac[
                     row_offset : row_offset + n_boundary,
                     col_start_final : col_start_final + n_control,
-                ] -= extra_jac
-                
+                ] -= ej
                 logger.debug(
-                    f"Applied extra_jacobian to final patch boundary rows "
-                    f"(shape: {extra_jac.shape})"
+                    f"Applied extra_jacobian to final patch boundary rows (shape: {ej.shape})"
                 )
 
             return jac
@@ -1352,18 +1343,18 @@ class _MultipleShootingOrbitCorrectionInterface(
     ) -> float:
         """Compute half period of corrected orbit.
 
-        For multiple shooting, the half-period is already determined by the
-        sum of patch times (patch_times[-1]), which represents the total time
-        from initial state to the boundary event.
+        For multiple shooting, we need to propagate from the corrected initial
+        state to the actual boundary event, since the patch times are based on
+        the initial guess trajectory and may not reflect the corrected orbit.
 
         Parameters
         ----------
         domain_obj : :class:`~hiten.system.orbits.base.PeriodicOrbit`
             The orbit.
         corrected_state : np.ndarray
-            Corrected initial state (not used, kept for interface compatibility).
+            Corrected initial state.
         problem : :class:`~hiten.algorithms.corrector.types._MultipleShootingProblem`
-            The problem containing patch times.
+            The problem containing event function.
 
         Returns
         -------
@@ -1372,17 +1363,24 @@ class _MultipleShootingOrbitCorrectionInterface(
 
         Notes
         -----
-        Unlike single shooting where we need to propagate to find the period,
-        in multiple shooting the period is inherently determined by the sum
-        of all patch time intervals, which is stored in patch_times[-1].
-        
-        The final patch is constrained to reach the boundary event, so the
-        total time patch_times[-1] is automatically the correct half-period.
+        Unlike the initial implementation that just returned patch_times[-1],
+        we now propagate from the corrected state to find the actual event time.
+        This ensures the period matches the corrected trajectory, not the initial guess.
         """
-        # The patch times already encode the correct half-period
-        # patch_times[-1] = t_0 + dt_0 + dt_1 + ... + dt_{n-1}
-        # where dt_{n-1} is the time for the final patch to reach the boundary
-        return float(problem.patch_times[-1])
+        forward = problem.forward
+        try:
+            t_event, _ = problem.event_func(
+                dynsys=domain_obj.dynamics.dynsys,
+                x0=corrected_state,
+                forward=forward,
+            )
+            return float(t_event)
+        except Exception as exc:
+            logger.warning(
+                f"Failed to compute half-period via event detection: {exc}. "
+                f"Falling back to patch_times estimate."
+            )
+            return float(problem.patch_times[-1])
 
     def _norm_fn(self) -> NormFn:
         """Get the norm function.
@@ -1434,16 +1432,18 @@ class _MultipleShootingOrbitCorrectionInterface(
         list[np.ndarray]
             Full state vectors at each patch point.
         """
-        base_state = problem.domain_obj.initial_state.copy()
         control_indices = list(problem.control_indices)
         n_patches = problem.n_patches
         n_control = len(control_indices)
+        templates = problem.patch_templates
 
         patches = x_corr.reshape(n_patches, n_control)
 
         patch_states = []
         for i in range(n_patches):
-            x_full = self._to_full_state(base_state, control_indices, patches[i])
+            # Use template for uncontrolled components
+            x_full = templates[i].copy()
+            x_full[control_indices] = patches[i]
             patch_states.append(x_full)
 
         return patch_states

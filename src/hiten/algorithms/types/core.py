@@ -6,8 +6,10 @@ This module provides the abstract base class for all Hiten classes.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Generic, TypeVar, Union
 
 import pandas as pd
@@ -20,7 +22,6 @@ from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
 
 if TYPE_CHECKING:
     from hiten.algorithms.types.configs import _HitenBaseConfig
-    from hiten.algorithms.types.options import _HitenBaseOptions
 
 # Type variables for the Hiten base classes
 DomainT = TypeVar("DomainT")
@@ -64,6 +65,77 @@ class _BackendCall:
 
     args: tuple[Any, ...] = ()
     kwargs: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class _DomainPayload(ABC):
+    """Immutable base container for domain side-effects produced by interfaces.
+
+    Subclasses should provide a concrete ``_from_mapping`` implementation that
+    returns an instance of their own type. The base class offers convenience
+    helpers for interacting with the underlying mapping while keeping it
+    read-only.
+    """
+
+    data: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "data", MappingProxyType(dict(self.data)))
+
+    @classmethod
+    @abstractmethod
+    def _from_mapping(cls, data: Mapping[str, Any]) -> "_DomainPayload":
+        """Instantiate the payload from a plain mapping."""
+
+    @classmethod
+    def empty(cls) -> "_DomainPayload":
+        """Return an empty payload instance for this subclass."""
+
+        return cls._from_mapping({})
+
+    def get(self, key: str, default: Any | None = None) -> Any | None:
+        """Fetch an optional entry without raising if the key is missing."""
+
+        return self.data.get(key, default)
+
+    def require(self, key: str) -> Any:
+        """Fetch a required entry, raising ``KeyError`` if absent."""
+
+        if key not in self.data:
+            raise KeyError(f"Domain payload missing required key '{key}'")
+        return self.data[key]
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return a mutable copy of the payload contents."""
+
+        return dict(self.data)
+
+    def merge(self, **updates: Any) -> "_DomainPayload":
+        """Return a new payload with ``updates`` applied."""
+
+        merged = {**self.data, **updates}
+        return self.__class__._from_mapping(merged)
+
+    def merge_from_mapping(self, mapping: Mapping[str, Any]) -> "_DomainPayload":
+        """Return a new payload including keys from ``mapping``."""
+
+        merged = {**self.data, **dict(mapping)}
+        return self.__class__._from_mapping(merged)
+
+    def keys(self):
+        """Expose mapping-style key iteration."""
+
+        return self.data.keys()
+
+    def items(self):
+        """Expose mapping-style item iteration."""
+
+        return self.data.items()
+
+    def values(self):
+        """Expose mapping-style value iteration."""
+
+        return self.data.values()
 
 
 class _HitenBaseProblem(ABC):

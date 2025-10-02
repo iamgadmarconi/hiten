@@ -38,6 +38,7 @@ class SynodicMap(_HitenBase):
     def __init__(self, domain_obj: Literal[PeriodicOrbit, Manifold]):
         self._trajectories = domain_obj.dynamics.trajectories
         self._source = domain_obj
+        self._last_results: SynodicMapResults | None = None
         services = _MapServices.default(self)
         super().__init__(services)
 
