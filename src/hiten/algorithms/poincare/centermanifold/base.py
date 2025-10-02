@@ -30,10 +30,10 @@ from hiten.algorithms.poincare.centermanifold.strategies import _make_strategy
 from hiten.algorithms.poincare.centermanifold.types import \
     CenterManifoldMapResults
 from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
-                                         _HitenBaseFacade)
+                                         _HitenBasePipeline)
 
 
-class CenterManifoldMapPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
+class CenterManifoldMapPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
     """Poincare return map restricted to the center manifold of a collinear libration point.
 
     This class provides the main interface for computing and analyzing Poincare

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Generic, Optional
 from hiten.algorithms.continuation.options import OrbitContinuationOptions
 from hiten.algorithms.continuation.types import ContinuationResult
 from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
-                                         _HitenBaseFacade)
+                                         _HitenBasePipeline)
 
 if TYPE_CHECKING:
     from hiten.algorithms.continuation.backends.base import \
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from hiten.algorithms.continuation.engine.base import _ContinuationEngine
 
 
-class ContinuationPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
+class ContinuationPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
     """Facade for natural-parameter continuation varying selected state components.
 
     Users supply an engine (DI). Use `ContinuationPipeline.with_default_engine()` to

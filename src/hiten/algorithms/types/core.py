@@ -47,7 +47,7 @@ InterfaceT = TypeVar("InterfaceT", bound="_HitenBaseInterface[ConfigT, ProblemT,
 EngineT = TypeVar("EngineT", bound="_HitenBaseEngine[ProblemT, ResultT, OutputsT]")
 
 # Type variable for the facade type
-FacadeT = TypeVar("FacadeT", bound="_HitenBaseFacade")
+FacadeT = TypeVar("FacadeT", bound="_HitenBasePipeline")
 
 
 @dataclass(frozen=True)
@@ -539,7 +539,7 @@ class _HitenBaseBackend(Generic[ProblemT, ResultT, OutputsT]):
         return
 
 
-class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
+class _HitenBasePipeline(Generic[ConfigT, ProblemT, ResultT]):
     """Abstract base class for user-facing facades in the Hiten framework.
     
     This class provides a common pattern for building facades that orchestrate
@@ -565,7 +565,7 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
     
     Examples
     --------
-    >>> class MyFacade(_HitenBaseFacade):
+    >>> class MyFacade(_HitenBasePipeline):
     ...     def __init__(self, config, engine=None):
     ...         super().__init__()
     ...         self.config = config
@@ -622,7 +622,7 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
 
     @classmethod
     @abstractmethod
-    def with_default_engine(cls, config, interface, backend) -> "_HitenBaseFacade[ConfigT, ProblemT, ResultT]":
+    def with_default_engine(cls, config, interface, backend) -> "_HitenBasePipeline[ConfigT, ProblemT, ResultT]":
         """Create a facade instance with a default engine (factory).
         
         Parameters

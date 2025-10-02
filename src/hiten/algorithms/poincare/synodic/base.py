@@ -22,10 +22,10 @@ from hiten.algorithms.poincare.synodic.options import SynodicMapOptions
 from hiten.algorithms.poincare.synodic.strategies import _NoOpStrategy
 from hiten.algorithms.poincare.synodic.types import SynodicMapResults
 from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
-                                         _HitenBaseFacade)
+                                         _HitenBasePipeline)
 
 
-class SynodicMapPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
+class SynodicMapPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
     """User-facing interface for synodic Poincare section detection.
 
     This class provides a facade that mirrors the API of other return-map

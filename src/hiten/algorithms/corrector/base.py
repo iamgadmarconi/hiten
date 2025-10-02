@@ -15,13 +15,13 @@ from hiten.algorithms.corrector.interfaces import \
 from hiten.algorithms.corrector.stepping import make_armijo_stepper
 from hiten.algorithms.corrector.types import StepperFactory
 from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
-                                         _HitenBaseFacade)
+                                         _HitenBasePipeline)
 
 if TYPE_CHECKING:
     from hiten.algorithms.corrector.options import OrbitCorrectionOptions
 
 
-class CorrectorPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
+class CorrectorPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
     """Generic facade for correction algorithms.
     
     This facade provides a clean, high-level interface for correcting

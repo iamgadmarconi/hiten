@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Generic, Optional
 import numpy as np
 
 from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
-                                         _HitenBaseFacade)
+                                         _HitenBasePipeline)
 from hiten.algorithms.types.exceptions import EngineError
 from hiten.utils.plots import (plot_heteroclinic_connection,
                                plot_poincare_connections_map)
@@ -38,7 +38,7 @@ if TYPE_CHECKING:
     from hiten.algorithms.connections.types import (Connections,
                                                     _ConnectionResult)
 
-class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
+class ConnectionPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
     """Provide a user-facing facade for connection discovery and plotting in CR3BP.
 
     This class provides a high-level interface for discovering ballistic and

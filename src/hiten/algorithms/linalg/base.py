@@ -9,13 +9,13 @@ from hiten.algorithms.linalg.engine import _LinearStabilityEngine
 from hiten.algorithms.linalg.interfaces import _EigenDecompositionInterface
 from hiten.algorithms.linalg.types import EigenDecompositionResults
 from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
-                                         _HitenBaseFacade)
+                                         _HitenBasePipeline)
 
 if TYPE_CHECKING:
     from hiten.algorithms.linalg.options import EigenDecompositionOptions
 
 
-class StabilityPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
+class StabilityPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
     """Facade exposing linear stability results on demand.
     
     Parameters
