@@ -6,15 +6,8 @@ import numpy as np
 
 from hiten.algorithms.continuation.config import OrbitContinuationConfig
 from hiten.algorithms.continuation.options import OrbitContinuationOptions
-from hiten.algorithms.continuation.stepping import (
-    _ContinuationStepperFactory,
-    make_natural_stepper,
-    make_secant_stepper,
-)
-from hiten.algorithms.continuation.types import (
-    ContinuationResult,
-    _ContinuationProblem,
-)
+from hiten.algorithms.continuation.types import (ContinuationResult,
+                                                 _ContinuationProblem)
 from hiten.algorithms.corrector.options import OrbitCorrectionOptions
 from hiten.algorithms.types.core import _BackendCall, _HitenBaseInterface
 from hiten.algorithms.types.states import SynodicState
@@ -56,14 +49,6 @@ class _PeriodicOrbitContinuationInterface(
 
             state_indices = idx_array
 
-        corrector_tol = 1e-12
-        corrector_max_attempts = 50
-        corrector_max_delta = 1e-2
-        corrector_order = 8
-        corrector_steps = 500
-        corrector_forward = 1
-        corrector_fd_step = 1e-8
-
         return _ContinuationProblem(
             initial_solution=domain_obj,
             parameter_getter=parameter_getter,
@@ -77,13 +62,13 @@ class _PeriodicOrbitContinuationInterface(
             step_max=options.step_max,
             stepper=config.stepper,
             state_indices=state_indices,
-            corrector_tol=corrector_tol,
-            corrector_max_attempts=corrector_max_attempts,
-            corrector_max_delta=corrector_max_delta,
-            corrector_order=corrector_order,
-            corrector_steps=corrector_steps,
-            corrector_forward=corrector_forward,
-            corrector_fd_step=corrector_fd_step,
+            corrector_tol=options.extra_params.tol,
+            corrector_max_attempts=options.extra_params.max_attempts,
+            corrector_max_delta=options.extra_params.max_delta,
+            corrector_order=options.extra_params.order,
+            corrector_steps=options.extra_params.steps,
+            corrector_forward=options.extra_params.forward,
+            corrector_fd_step=options.extra_params.fd_step,
         )
 
     def to_backend_inputs(self, problem: _ContinuationProblem) -> _BackendCall:
@@ -91,10 +76,7 @@ class _PeriodicOrbitContinuationInterface(
         predictor = self._predictor_from_problem(problem)
         representation_fn = problem.representation_of or (lambda v: np.asarray(v, dtype=float))
         seed_repr = representation_fn(problem.initial_solution)
-        
-        # Natural uses predictor, secant uses representation_of
-        stepper_type = str(problem.stepper).lower()
-        stepper_fn = representation_fn if stepper_type == "secant" else predictor
+        stepper_fn = representation_fn if problem.stepper == "secant" else predictor
         
         return _BackendCall(
             kwargs={
@@ -113,17 +95,46 @@ class _PeriodicOrbitContinuationInterface(
             }
         )
 
+    def to_domain(self, outputs: tuple[list[np.ndarray], dict[str, object]], *, problem: _ContinuationProblem) -> dict[str, object]:
+        family_repr, info = outputs
+        info = dict(info)
+        info.setdefault("accepted_count", len(family_repr))
+        info.setdefault("parameter_values", tuple())
+        return info
+
+    def to_results(self, outputs: tuple[list[np.ndarray], dict[str, object]], *, problem: _ContinuationProblem, domain_payload: Any = None) -> ContinuationResult:
+        family_repr, info = outputs
+        info = dict(info)
+        accepted_count = int(info.get("accepted_count", len(family_repr)))
+        rejected_count = int(info.get("rejected_count", 0))
+        iterations = int(info.get("iterations", 0))
+        parameter_values = tuple(info.get("parameter_values", tuple()))
+        denom = max(accepted_count + rejected_count, 1)
+        success_rate = float(accepted_count) / float(denom)
+
+        family = [problem.initial_solution]
+        for repr_vec in family_repr[1:]:
+            orbit = self._instantiate(problem.initial_solution, repr_vec)
+            family.append(orbit)
+        
+        return ContinuationResult(
+            accepted_count=accepted_count,
+            rejected_count=rejected_count,
+            success_rate=success_rate,
+            family=tuple(family),
+            parameter_values=parameter_values,
+            iterations=iterations,
+        )
+
     def _build_corrector(self, problem: _ContinuationProblem) -> Callable[[np.ndarray], tuple[np.ndarray, float, bool]]:
         domain_obj = problem.initial_solution
 
         def _correct(prediction: np.ndarray) -> tuple[np.ndarray, float, bool]:
             orbit = self._instantiate(domain_obj, prediction)
-            from hiten.algorithms.types.options import (
-                ConvergenceOptions,
-                CorrectionOptions,
-                IntegrationOptions,
-                NumericalOptions,
-            )
+            from hiten.algorithms.types.options import (ConvergenceOptions,
+                                                        CorrectionOptions,
+                                                        IntegrationOptions,
+                                                        NumericalOptions)
             corrector_options = OrbitCorrectionOptions(
                 base=CorrectionOptions(
                     convergence=ConvergenceOptions(
@@ -169,34 +180,3 @@ class _PeriodicOrbitContinuationInterface(
             return last
 
         return _predict
-
-    def to_domain(self, outputs: tuple[list[np.ndarray], dict[str, object]], *, problem: _ContinuationProblem) -> dict[str, object]:
-        family_repr, info = outputs
-        info = dict(info)
-        info.setdefault("accepted_count", len(family_repr))
-        info.setdefault("parameter_values", tuple())
-        return info
-
-    def to_results(self, outputs: tuple[list[np.ndarray], dict[str, object]], *, problem: _ContinuationProblem, domain_payload: Any = None) -> ContinuationResult:
-        family_repr, info = outputs
-        info = dict(info)
-        accepted_count = int(info.get("accepted_count", len(family_repr)))
-        rejected_count = int(info.get("rejected_count", 0))
-        iterations = int(info.get("iterations", 0))
-        parameter_values = tuple(info.get("parameter_values", tuple()))
-        denom = max(accepted_count + rejected_count, 1)
-        success_rate = float(accepted_count) / float(denom)
-
-        family = [problem.initial_solution]
-        for repr_vec in family_repr[1:]:
-            orbit = self._instantiate(problem.initial_solution, repr_vec)
-            family.append(orbit)
-        
-        return ContinuationResult(
-            accepted_count=accepted_count,
-            rejected_count=rejected_count,
-            success_rate=success_rate,
-            family=tuple(family),
-            parameter_values=parameter_values,
-            iterations=iterations,
-        )
