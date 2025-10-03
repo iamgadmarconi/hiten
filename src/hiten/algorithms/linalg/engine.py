@@ -7,6 +7,8 @@ import numpy as np
 from hiten.algorithms.linalg.backend import _LinalgBackend
 from hiten.algorithms.linalg.interfaces import _EigenDecompositionInterface
 from hiten.algorithms.linalg.types import (EigenDecompositionResults,
+                                           LinalgBackendRequest,
+                                           LinalgBackendResponse,
                                            _EigenDecompositionProblem,
                                            _ProblemType)
 from hiten.algorithms.types.core import _BackendCall, _HitenBaseEngine
@@ -26,28 +28,16 @@ class _LinearStabilityEngine(_HitenBaseEngine[_EigenDecompositionProblem, EigenD
     def __init__(self, backend: _LinalgBackend, interface: _EigenDecompositionInterface | None = None) -> None:
         super().__init__(backend=backend, interface=interface)
 
-    def _invoke_backend(self, call: _BackendCall) -> EigenDecompositionResults:
-        """Invoke the backend with the provided call
-        
-        Parameters
-        ----------
-        call : :class:`~hiten.algorithms.types.core._BackendCall`
-            Call to the backend.
-        
-        Returns
-        -------
-        :class:`~hiten.algorithms.linalg.types.EigenDecompositionResults`
-            Eigen decomposition results.
-        """
-        problem = call.args[0]
-        self.backend.system_type = problem.system_type
-        problem_type = problem.problem_type
+    def _invoke_backend(self, call: _BackendCall) -> LinalgBackendResponse:
+        request: LinalgBackendRequest = call.request
+        self.backend.system_type = request.system_type
+        problem_type = request.problem_type
 
-        n = problem.A.shape[0]
+        n = request.matrix.shape[0]
         empty_vals = np.array([], dtype=np.complex128)
         empty_vecs = np.zeros((n, 0), dtype=np.complex128)
         empty_complex = np.array([], dtype=np.complex128)
-        results = EigenDecompositionResults(
+        current = EigenDecompositionResults(
             stable=empty_vals,
             unstable=empty_vals,
             center=empty_vals,
@@ -58,23 +48,29 @@ class _LinearStabilityEngine(_HitenBaseEngine[_EigenDecompositionProblem, EigenD
             eigvals=empty_complex,
             eigvecs=np.zeros((0, 0), dtype=np.complex128),
         )
+        metadata: dict[str, object] = {}
 
         if problem_type in (_ProblemType.EIGENVALUE_DECOMPOSITION, _ProblemType.ALL):
-            sn, un, cn, Ws, Wu, Wc = self.backend.eigenvalue_decomposition(problem.A, problem.delta)
-            results = results.__class__(sn, un, cn, Ws, Wu, Wc, results.nu, results.eigvals, results.eigvecs)
+            sn, un, cn, Ws, Wu, Wc = self.backend.eigenvalue_decomposition(request.matrix, request.delta)
+            current = EigenDecompositionResults(sn, un, cn, Ws, Wu, Wc, current.nu, current.eigvals, current.eigvecs)
 
         if problem_type in (_ProblemType.STABILITY_INDICES, _ProblemType.ALL):
-            nu, eigvals, eigvecs = self.backend.stability_indices(problem.A, problem.tol)
-            results = results.__class__(
-                results.stable,
-                results.unstable,
-                results.center,
-                results.Ws,
-                results.Wu,
-                results.Wc,
+            nu, eigvals, eigvecs = self.backend.stability_indices(request.matrix, request.tol)
+            current = EigenDecompositionResults(
+                current.stable,
+                current.unstable,
+                current.center,
+                current.Ws,
+                current.Wu,
+                current.Wc,
                 nu,
                 eigvals,
                 eigvecs,
             )
+            metadata.update({
+                "nu": nu,
+                "eigvals": eigvals,
+            })
 
-        return results
+        response = LinalgBackendResponse(results=current, metadata=metadata)
+        return response

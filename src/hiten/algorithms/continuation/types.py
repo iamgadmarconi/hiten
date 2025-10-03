@@ -2,13 +2,51 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import (TYPE_CHECKING, Callable, Mapping, Optional, Sequence,
-                    Tuple, Union)
+from dataclasses import dataclass, field
+from typing import (TYPE_CHECKING, Any, Callable, Mapping, Optional, Protocol,
+                    Sequence, Tuple, Union)
 
 import numpy as np
 
-from hiten.algorithms.types.core import _DomainPayload
+from hiten.algorithms.types.core import _BackendCall, _DomainPayload
+
+
+class PredictorCallable(Protocol):
+    def __call__(self, last: np.ndarray, step: np.ndarray) -> np.ndarray:
+        ...
+
+
+class CorrectorCallable(Protocol):
+    def __call__(self, prediction: np.ndarray) -> tuple[np.ndarray, float, bool] | tuple[np.ndarray, float, bool, dict]:
+        ...
+
+
+class StepperFnCallable(Protocol):
+    def __call__(self, last: np.ndarray, step: np.ndarray) -> Any:
+        ...
+
+
+@dataclass
+class ContinuationBackendRequest:
+    seed_repr: np.ndarray
+    stepper_fn: StepperFnCallable
+    predictor_fn: PredictorCallable
+    parameter_getter: Callable[[np.ndarray], np.ndarray]
+    corrector: CorrectorCallable
+    step: np.ndarray
+    target: np.ndarray
+    max_members: int
+    max_retries_per_step: int
+    shrink_policy: Callable[[np.ndarray], np.ndarray] | None
+    step_min: float
+    step_max: float
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ContinuationBackendResponse:
+    family_repr: list[np.ndarray]
+    info: dict[str, Any]
 
 if TYPE_CHECKING:
     from hiten.algorithms.corrector.options import OrbitCorrectionOptions

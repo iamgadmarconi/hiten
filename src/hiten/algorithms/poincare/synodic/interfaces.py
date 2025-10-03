@@ -15,9 +15,13 @@ from hiten.algorithms.poincare.core.interfaces import (_PoincareBaseInterface,
 from hiten.algorithms.poincare.synodic.config import SynodicMapConfig
 from hiten.algorithms.poincare.synodic.events import _AffinePlaneEvent
 from hiten.algorithms.poincare.synodic.options import SynodicMapOptions
-from hiten.algorithms.poincare.synodic.types import (SynodicMapDomainPayload,
-                                                     SynodicMapResults,
-                                                     _SynodicMapProblem)
+from hiten.algorithms.poincare.synodic.types import (
+    SynodicBackendRequest,
+    SynodicBackendResponse,
+    SynodicMapDomainPayload,
+    SynodicMapResults,
+    _SynodicMapProblem,
+)
 from hiten.algorithms.types.core import _BackendCall
 from hiten.algorithms.types.states import SynodicState
 
@@ -92,7 +96,7 @@ class _SynodicInterface(
         SynodicMapConfig, 
         _SynodicMapProblem, 
         SynodicMapResults, 
-        Tuple[np.ndarray, np.ndarray, np.ndarray | None]
+        SynodicBackendResponse,
     ]
 ):
 
@@ -128,22 +132,37 @@ class _SynodicInterface(
             newton_max_iter=options.refine.newton_max_iter,
         )
 
-    def to_backend_inputs(self, problem: _SynodicMapProblem):
-        return _BackendCall(kwargs={"trajectories": problem.trajectories, "direction": problem.direction})
+    def to_backend_inputs(self, problem: _SynodicMapProblem) -> _BackendCall:
+        # Trajectories are empty placeholder, filled by engine per worker
+        request = SynodicBackendRequest(
+            trajectories=problem.trajectories or [],
+            normal=problem.normal,
+            trajectory_indices=[],
+            offset=problem.offset,
+            plane_coords=problem.plane_coords,
+            interp_kind=problem.interp_kind,
+            segment_refine=problem.segment_refine,
+            tol_on_surface=problem.tol_on_surface,
+            dedup_time_tol=problem.dedup_time_tol,
+            dedup_point_tol=problem.dedup_point_tol,
+            max_hits_per_traj=problem.max_hits_per_traj,
+            newton_max_iter=problem.newton_max_iter,
+            direction=problem.direction,
+        )
+        return _BackendCall(request=request)
 
-    def to_domain(self, outputs, *, problem: _SynodicMapProblem) -> SynodicMapDomainPayload:
-        points, states, times, trajectory_indices = outputs
+    def to_domain(self, outputs: SynodicBackendResponse, *, problem: _SynodicMapProblem) -> SynodicMapDomainPayload:
         return SynodicMapDomainPayload._from_mapping(
             {
-                "points": points,
-                "states": states,
-                "times": times,
-                "trajectory_indices": trajectory_indices,
+                "points": outputs.points,
+                "states": outputs.states,
+                "times": outputs.times,
+                "trajectory_indices": outputs.trajectory_indices,
                 "labels": problem.plane_coords,
             }
         )
 
-    def to_results(self, outputs, *, problem: _SynodicMapProblem, domain_payload=None) -> SynodicMapResults:
+    def to_results(self, outputs: SynodicBackendResponse, *, problem: _SynodicMapProblem, domain_payload=None) -> SynodicMapResults:
         payload = domain_payload or self.to_domain(outputs, problem=problem)
         return SynodicMapResults(
             payload.points,

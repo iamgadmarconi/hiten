@@ -3,13 +3,61 @@
 This module provides the types for synodic Poincare maps.
 """
 
-from dataclasses import dataclass
-from typing import Literal, Mapping, Optional, Sequence, Tuple
+from dataclasses import dataclass, field
+from typing import Any, Literal, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
-from hiten.algorithms.poincare.core.types import _MapResults
+from hiten.algorithms.poincare.core.types import _MapResults, _SectionHit
 from hiten.algorithms.types.core import _DomainPayload
+
+
+@dataclass
+class SynodicBackendRequest:
+    """Structured request for the synodic detection backend."""
+
+    trajectories: Sequence[tuple[np.ndarray, np.ndarray]]
+    normal: np.ndarray | Sequence[float]
+    trajectory_indices: Sequence[int]
+    offset: float = 0.0
+    plane_coords: Tuple[str, str] = ("y", "vy")
+    interp_kind: Literal["linear", "cubic"] = "linear"
+    segment_refine: int = 0
+    tol_on_surface: float = 1e-12
+    dedup_time_tol: float = 1e-9
+    dedup_point_tol: float = 1e-12
+    max_hits_per_traj: int | None = None
+    newton_max_iter: int = 4
+    direction: Literal[1, -1, None] = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class SynodicBackendResponse:
+    """Structured response returned by the synodic detection backend.
+    
+    Attributes
+    ----------
+    hits : list[list[_SectionHit]]
+        Raw section hits from backend detection.
+    points : np.ndarray
+        Processed 2D points array.
+    states : np.ndarray
+        Processed 6D states array.
+    times : np.ndarray | None
+        Processed times array.
+    trajectory_indices : np.ndarray
+        Trajectory index for each point.
+    metadata : dict[str, Any]
+        Additional metadata.
+    """
+
+    hits: list[list[_SectionHit]]
+    points: np.ndarray
+    states: np.ndarray
+    times: np.ndarray | None
+    trajectory_indices: np.ndarray
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 class SynodicMapResults(_MapResults):

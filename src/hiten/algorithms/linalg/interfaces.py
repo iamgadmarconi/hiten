@@ -11,8 +11,12 @@ import numpy as np
 from hiten.algorithms.dynamics.rtbp import _jacobian_crtbp
 from hiten.algorithms.linalg.config import EigenDecompositionConfig
 from hiten.algorithms.linalg.options import EigenDecompositionOptions
-from hiten.algorithms.linalg.types import (EigenDecompositionResults,
-                                           _EigenDecompositionProblem)
+from hiten.algorithms.linalg.types import (
+    EigenDecompositionResults,
+    LinalgBackendRequest,
+    LinalgBackendResponse,
+    _EigenDecompositionProblem,
+)
 from hiten.algorithms.types.core import _BackendCall, _HitenBaseInterface
 
 if TYPE_CHECKING:
@@ -24,7 +28,7 @@ class _EigenDecompositionInterface(
         EigenDecompositionConfig,
         _EigenDecompositionProblem,
         EigenDecompositionResults,
-        EigenDecompositionResults,
+        LinalgBackendResponse,
     ]
 ):
     """Adapter producing eigen-decomposition problems from matrices.
@@ -78,26 +82,17 @@ class _EigenDecompositionInterface(
         :class:`~hiten.algorithms.types.core._BackendCall`
             The backend inputs.
         """
-        return _BackendCall(args=(problem,))
+        request = LinalgBackendRequest(
+            matrix=problem.A,
+            problem_type=problem.problem_type,
+            system_type=problem.system_type,
+            delta=problem.delta,
+            tol=problem.tol,
+        )
+        return _BackendCall(request=request)
 
-    def to_results(self, outputs: EigenDecompositionResults, *, problem: _EigenDecompositionProblem, domain_payload: any = None) -> EigenDecompositionResults:
-        """Convert backend outputs to eigen-decomposition results.
-        
-        Parameters
-        ----------
-        outputs : :class:`~hiten.algorithms.linalg.types.EigenDecompositionResults`
-            The backend outputs.
-        problem : :class:`~hiten.algorithms.linalg.types._EigenDecompositionProblem`
-            The eigen-decomposition problem.
-        domain_payload : Any, optional
-            The domain payload.
-
-        Returns
-        -------
-        :class:`~hiten.algorithms.linalg.types.EigenDecompositionResults`
-            The eigen-decomposition results.
-        """
-        return outputs
+    def to_results(self, outputs: LinalgBackendResponse, *, problem: _EigenDecompositionProblem, domain_payload: any = None) -> EigenDecompositionResults:
+        return outputs.results
 
 
 class _LibrationPointInterface(
@@ -105,7 +100,7 @@ class _LibrationPointInterface(
         EigenDecompositionConfig,
         _EigenDecompositionProblem,
         EigenDecompositionResults,
-        EigenDecompositionResults,
+        LinalgBackendResponse,
     ]
 ):
 
@@ -162,23 +157,14 @@ class _LibrationPointInterface(
         :class:`~hiten.algorithms.types.core._BackendCall`
             The backend inputs.
         """
-        return _BackendCall(args=(problem,))
+        request = LinalgBackendRequest(
+            matrix=problem.A,
+            problem_type=problem.problem_type,
+            system_type=problem.system_type,
+            delta=problem.delta,
+            tol=problem.tol,
+        )
+        return _BackendCall(request=request)
 
-    def to_results(self, outputs: EigenDecompositionResults, *, problem: _EigenDecompositionProblem, domain_payload: any = None) -> EigenDecompositionResults:
-        """Convert backend outputs to eigen-decomposition results.
-        
-        Parameters
-        ----------
-        outputs : :class:`~hiten.algorithms.linalg.types.EigenDecompositionResults`
-            The backend outputs.
-        problem : :class:`~hiten.algorithms.linalg.types._EigenDecompositionProblem`
-            The eigen-decomposition problem.
-        domain_payload : Any, optional
-            The domain payload.
-
-        Returns
-        -------
-        :class:`~hiten.algorithms.linalg.types.EigenDecompositionResults`
-            The eigen-decomposition results.
-        """
-        return outputs
+    def to_results(self, outputs: LinalgBackendResponse, *, problem: _EigenDecompositionProblem, domain_payload: any = None) -> EigenDecompositionResults:
+        return outputs.results

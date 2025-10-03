@@ -36,6 +36,8 @@ from hiten.algorithms.poincare.centermanifold.seeding import (
     _CenterManifoldSeedingBase,
 )
 from hiten.algorithms.poincare.centermanifold.types import (
+    CenterManifoldBackendRequest,
+    CenterManifoldBackendResponse,
     CenterManifoldMapResults,
     _CenterManifoldMapProblem,
 )
@@ -153,23 +155,36 @@ class _CenterManifoldEngine(_ReturnMapEngine):
         n_workers_eff = max(1, int(problem.n_workers))
         chunks = np.array_split(seeds0, n_workers_eff)
 
+        call = self._interface.to_backend_inputs(problem)
+        template_request = call.request
+        if not isinstance(template_request, CenterManifoldBackendRequest):
+            raise EngineError("Interface must return CenterManifoldBackendRequest")
+
         def _worker(chunk: np.ndarray):
             states_accum, times_accum = [], []
             seeds = chunk
             for it in range(problem.n_iter):
-                states, times, flags = self._backend.run(
-                    seeds, 
-                    dt=problem.dt,
-                    jac_H=problem.jac_H,
-                    clmo_table=problem.clmo_table,
-                    section_coord=section_coord
+                # Clone and populate request for this iteration
+                request = CenterManifoldBackendRequest(
+                    seeds=seeds,
+                    dt=template_request.dt,
+                    jac_H=template_request.jac_H,
+                    clmo_table=template_request.clmo_table,
+                    section_coord=template_request.section_coord,
+                    forward=template_request.forward,
+                    max_steps=template_request.max_steps,
+                    method=template_request.method,
+                    order=template_request.order,
+                    c_omega_heuristic=template_request.c_omega_heuristic,
+                    metadata={"iteration": it},
                 )
-                if states.size == 0:
+                response = self._backend.run(request)
+                if response.states.size == 0:
                     break
 
-                states = self._interface.enforce_section_coordinate(states, section_coord=section_coord)
+                states = self._interface.enforce_section_coordinate(response.states, section_coord=section_coord)
                 states_accum.append(states)
-                times_accum.append(times)
+                times_accum.append(response.times)
                 seeds = states  # feed back
             if states_accum:
                 return np.vstack(states_accum), np.concatenate(times_accum)
@@ -190,8 +205,16 @@ class _CenterManifoldEngine(_ReturnMapEngine):
         cms_np = self._interface.enforce_section_coordinate(cms_np, section_coord=section_coord)
         pts_np = self._interface.plane_points_from_states(cms_np, section_coord=section_coord)
 
+        # Create proper backend response
+        response = CenterManifoldBackendResponse(
+            states=cms_np,
+            times=times_np,
+            flags=np.zeros(len(cms_np), dtype=int),  # No flags in iterative solve
+            metadata={"n_workers": n_workers_eff, "n_iterations": problem.n_iter}
+        )
+        
         return self._interface.to_results(
-            (pts_np, cms_np, times_np),
+            response,
             problem=problem,
         )
 

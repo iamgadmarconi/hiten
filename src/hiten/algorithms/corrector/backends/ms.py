@@ -24,8 +24,17 @@ from scipy.sparse import csr_matrix, issparse
 from scipy.sparse.linalg import spsolve
 
 from hiten.algorithms.corrector.backends.base import _CorrectorBackend
-from hiten.algorithms.corrector.types import (JacobianFn, NormFn, ResidualFn,
-                                              StepperFactory)
+from hiten.algorithms.corrector.types import (
+    CorrectorInput,
+    CorrectorOutput,
+    JacobianCallable,
+    JacobianFn,
+    NormCallable,
+    NormFn,
+    ResidualCallable,
+    ResidualFn,
+    StepperFactory,
+)
 from hiten.algorithms.types.exceptions import ConvergenceError
 from hiten.utils.log_config import logger
 
@@ -270,17 +279,10 @@ class _MultipleShootingBackend(_CorrectorBackend):
 
     def run(
         self,
-        x0: np.ndarray,
-        residual_fn: ResidualFn,
         *,
-        jacobian_fn: JacobianFn | None = None,
-        norm_fn: NormFn | None = None,
+        request: CorrectorInput,
         stepper_factory: StepperFactory | None = None,
-        tol: float = 1e-10,
-        max_attempts: int = 25,
-        max_delta: float | None = 1e-2,
-        fd_step: float = 1e-8,
-    ) -> Tuple[np.ndarray, int, float]:
+    ) -> CorrectorOutput:
         """Solve multiple shooting system using Newton-Raphson method.
 
         Iteratively refines the patch initial states until all continuity
@@ -289,44 +291,18 @@ class _MultipleShootingBackend(_CorrectorBackend):
 
         Parameters
         ----------
-        x0 : np.ndarray
-            Initial guess for all patch states (stacked).
-            Shape: (n_patches * n_control,)
-            Format: [x₀[control], x₁[control], ..., xₙ₋₁[control]]
-        residual_fn : :class:`~hiten.algorithms.corrector.types.ResidualFn`
-            Function computing continuity and boundary residuals.
-            Should return array of shape ((n_patches-1)*n_continuity + n_boundary,)
-        jacobian_fn : :class:`~hiten.algorithms.corrector.types.JacobianFn` or None, optional
-            Function computing block-structured Jacobian dR/dx.
-            Strongly recommended for efficiency. If None, uses finite differences.
-        norm_fn : :class:`~hiten.algorithms.corrector.types.NormFn` or None, optional
-            Norm function for convergence checks. If None, uses L2 norm.
-            Infinity norm is often preferred for multiple shooting.
+        request : :class:`~hiten.algorithms.corrector.types.CorrectorInput`
+            Structured request containing initial guess, residual/Jacobian functions,
+            and solver parameters.
         stepper_factory : :class:`~hiten.algorithms.corrector.types.StepperFactory` or None, optional
             Step control factory. Overrides backend default if provided.
             Use for custom line search or trust region strategies.
-        tol : float, default=1e-10
-            Convergence tolerance for residual norm. Algorithm terminates
-            successfully when ||R(x)|| < tol.
-        max_attempts : int, default=25
-            Maximum Newton iterations before declaring failure.
-        max_delta : float or None, default=1e-2
-            Maximum step size (infinity norm) for numerical stability.
-            Prevents excessively large steps that could cause divergence.
-            If None, no capping is applied.
-        fd_step : float, default=1e-8
-            Finite-difference step size (if Jacobian not provided).
-            Scaled per parameter for relative accuracy.
 
         Returns
         -------
-        x_solution : np.ndarray
-            Converged solution containing all patch states.
-            Shape: (n_patches * n_control,)
-        iterations : int
-            Number of Newton iterations performed.
-        residual_norm : float
-            Final residual norm achieved.
+        :class:`~hiten.algorithms.corrector.types.CorrectorOutput`
+            Structured response containing converged solution, iteration count,
+            final residual norm, and metadata.
 
         Raises
         ------
@@ -356,35 +332,22 @@ class _MultipleShootingBackend(_CorrectorBackend):
 
         Examples
         --------
-        Basic usage with analytical Jacobian:
+        Basic usage with typed request:
 
+        >>> from hiten.algorithms.corrector.types import CorrectorInput
         >>> backend = _MultipleShootingBackend()
-        >>> x_patches = np.array([...])  # Initial guess for all patches
-        >>> x_corr, iters, rnorm = backend.run(
-        ...     x0=x_patches,
+        >>> request = CorrectorInput(
+        ...     initial_guess=x_patches,
         ...     residual_fn=my_residual_fn,
         ...     jacobian_fn=my_jacobian_fn,
-        ...     tol=1e-10
+        ...     norm_fn=None,
+        ...     tol=1e-10,
+        ...     max_attempts=25,
+        ...     max_delta=1e-2,
+        ...     fd_step=1e-8
         ... )
-        >>> print(f"Converged in {iters} iterations with |R|={rnorm:.2e}")
-
-        Using custom norm and step control:
-
-        >>> from hiten.algorithms.corrector.stepping import make_armijo_stepper
-        >>> from hiten.algorithms.corrector.config import _LineSearchConfig
-        >>> 
-        >>> backend = _MultipleShootingBackend()
-        >>> stepper = make_armijo_stepper(_LineSearchConfig())
-        >>> norm = lambda r: float(np.linalg.norm(r, ord=np.inf))
-        >>> 
-        >>> x_corr, iters, rnorm = backend.run(
-        ...     x0=x_initial,
-        ...     residual_fn=residual_fn,
-        ...     jacobian_fn=jacobian_fn,
-        ...     norm_fn=norm,
-        ...     stepper_factory=stepper,
-        ...     tol=1e-12
-        ... )
+        >>> result = backend.run(request=request)
+        >>> print(f"Converged in {result.iterations} iterations")
 
         See Also
         --------
@@ -393,16 +356,27 @@ class _MultipleShootingBackend(_CorrectorBackend):
         :class:`~hiten.algorithms.corrector.interfaces_ms._MultipleShootingOrbitCorrectionInterface`
             Interface that constructs residual and Jacobian functions.
         """
-        if norm_fn is None:
-            norm_fn = lambda r: float(np.linalg.norm(r))
+        # Extract parameters from request
+        tol = request.tol
+        max_attempts = request.max_attempts
+        fd_step = request.fd_step
+        max_delta = request.max_delta
+        residual_fn = request.residual_fn
+        jacobian_fn = request.jacobian_fn
+        norm_fn = request.norm_fn
 
-        x = x0.copy()
+        if norm_fn is None:
+            norm_callable: NormCallable = lambda r: float(np.linalg.norm(r))
+        else:
+            norm_callable = norm_fn
+
+        x = request.initial_guess.copy()
 
         # Get stepper from factory
         factory = (
             self._stepper_factory if stepper_factory is None else stepper_factory
         )
-        stepper = factory(residual_fn, norm_fn, max_delta)
+        stepper = factory(residual_fn, norm_callable, max_delta)
 
         logger.info(
             f"Starting multiple shooting Newton iteration "
@@ -412,7 +386,7 @@ class _MultipleShootingBackend(_CorrectorBackend):
         for k in range(max_attempts):
             # Compute residual and norm
             r = self._compute_residual(x, residual_fn)
-            r_norm = self._compute_norm(r, norm_fn)
+            r_norm = self._compute_norm(r, norm_callable)
 
             # Callback for iteration monitoring (optional hook)
             try:
@@ -430,7 +404,12 @@ class _MultipleShootingBackend(_CorrectorBackend):
                     self.on_accept(x, iterations=k, residual_norm=r_norm)
                 except Exception:
                     pass
-                return x, k, r_norm
+                return CorrectorOutput(
+                    x_corrected=x,
+                    iterations=k,
+                    residual_norm=r_norm,
+                    metadata={},
+                )
 
             # Compute Jacobian
             J = self._compute_jacobian(x, residual_fn, jacobian_fn, fd_step)
@@ -465,7 +444,7 @@ class _MultipleShootingBackend(_CorrectorBackend):
 
         # Maximum iterations reached - check final state
         r_final = self._compute_residual(x, residual_fn)
-        r_final_norm = self._compute_norm(r_final, norm_fn)
+        r_final_norm = self._compute_norm(r_final, norm_callable)
 
         if r_final_norm < tol:
             # Converged on final check
@@ -474,7 +453,12 @@ class _MultipleShootingBackend(_CorrectorBackend):
                 f"iterations (|R|={r_final_norm:.2e})"
             )
             self.on_accept(x, iterations=max_attempts, residual_norm=r_final_norm)
-            return x, max_attempts, r_final_norm
+            return CorrectorOutput(
+                x_corrected=x,
+                iterations=max_attempts,
+                residual_norm=r_final_norm,
+                metadata={},
+            )
 
         # Failed to converge
         self.on_failure(x, iterations=max_attempts, residual_norm=r_final_norm)

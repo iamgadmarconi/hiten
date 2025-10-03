@@ -598,7 +598,7 @@ class _CenterManifoldMapDynamicsService(_MapDynamicsServiceBase):
                 dt=0.01,
                 order=4,
                 c_omega_heuristic=20,
-                max_steps=200,
+                max_steps=2000,
             ),
             iteration=IterationOptions(n_iter=40),
             seeding=SeedingOptions(n_seeds=20),

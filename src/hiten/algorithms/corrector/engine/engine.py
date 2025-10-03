@@ -64,7 +64,10 @@ class _OrbitCorrectionEngine(_CorrectionEngine):
         call : :class:`~hiten.algorithms.types.core._BackendCall`
             The call to the backend.
         """
-        return self._backend.run(*call.args, **call.kwargs)
+        request = call.request
+        if request is None:
+            return self._backend.run(**call.kwargs)
+        return self._backend.run(request=request, **call.kwargs)
 
     def _after_backend_success(self, outputs, *, problem, domain_payload, interface) -> None:
         """Handle backend success.

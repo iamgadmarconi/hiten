@@ -57,14 +57,17 @@ class _OrbitContinuationEngine(_ContinuationEngine):
         raise EngineError("Orbit continuation failed") from exc
 
     def _invoke_backend(self, call):
-        return self._backend.run(*call.args, **call.kwargs)
+        request = call.request
+        if request is None:
+            return self._backend.run(**call.kwargs)
+        return self._backend.run(request=request, **call.kwargs)
 
     def _after_backend_success(self, outputs, *, problem, domain_payload, interface) -> None:
         """Handle the backend success.
         
         Parameters
         ----------
-        outputs : tuple
+        outputs : :class:`~hiten.algorithms.continuation.types.ContinuationBackendResponse`
             The outputs from the backend.
         problem : :class:`~hiten.algorithms.continuation.types._ContinuationProblem`
             The problem being solved.
@@ -73,7 +76,8 @@ class _OrbitContinuationEngine(_ContinuationEngine):
         interface : :class:`~hiten.algorithms.continuation.interfaces._OrbitContinuationInterface`
             The interface to the backend.
         """
-        family_repr, info = outputs
+        family_repr = outputs.family_repr
+        info = outputs.info
         try:
             last_repr = family_repr[-1] if family_repr else interface._representation(problem.initial_solution)
             self._backend.on_success(

@@ -16,7 +16,9 @@ from hiten.algorithms.corrector.operators import (
     _MultipleShootingOrbitOperatorsImpl, _SingleShootingOrbitOperators)
 from hiten.algorithms.corrector.options import (
     MultipleShootingCorrectionOptions, OrbitCorrectionOptions)
-from hiten.algorithms.corrector.types import (MultipleShootingDomainPayload,
+from hiten.algorithms.corrector.types import (CorrectorInput,
+                                              CorrectorOutput,
+                                              MultipleShootingDomainPayload,
                                               MultipleShootingResult, NormFn,
                                               OrbitCorrectionDomainPayload,
                                               OrbitCorrectionResult,
@@ -89,7 +91,7 @@ class _OrbitCorrectionInterface(
         OrbitCorrectionConfig,
         _OrbitCorrectionProblem,
         OrbitCorrectionResult,
-        tuple[np.ndarray, int, float],
+        CorrectorOutput,
     ]
 ):
     """Adapter wiring periodic orbits to the Newton correction backend."""
@@ -180,23 +182,23 @@ class _OrbitCorrectionInterface(
         :class:`~hiten.algorithms.types.core._BackendCall`
             The backend inputs.
         """
-        return _BackendCall(
-            args=(problem.initial_guess,),
-            kwargs={
-                "residual_fn": problem.residual_fn,
-                "jacobian_fn": problem.jacobian_fn,
-                "norm_fn": problem.norm_fn,
-                "stepper_factory": problem.stepper_factory,
-                "tol": problem.tol,
-                "max_attempts": problem.max_attempts,
-                "max_delta": problem.max_delta,
-                "fd_step": problem.fd_step,
-            },
+        request = CorrectorInput(
+            initial_guess=problem.initial_guess,
+            residual_fn=problem.residual_fn,
+            jacobian_fn=problem.jacobian_fn,
+            norm_fn=problem.norm_fn,
+            max_attempts=problem.max_attempts,
+            tol=problem.tol,
+            max_delta=problem.max_delta,
+            fd_step=problem.fd_step,
         )
+        return _BackendCall(request=request, kwargs={"stepper_factory": problem.stepper_factory})
 
-    def to_domain(self, outputs: tuple[np.ndarray, int, float], *, problem: _OrbitCorrectionProblem) -> OrbitCorrectionDomainPayload:
+    def to_domain(self, outputs: CorrectorOutput, *, problem: _OrbitCorrectionProblem) -> OrbitCorrectionDomainPayload:
         """Convert backend outputs to domain payload."""
-        x_corr, iterations, residual_norm = outputs
+        x_corr = outputs.x_corrected
+        iterations = outputs.iterations
+        residual_norm = outputs.residual_norm
         control_indices = list(problem.control_indices)
         base_state = problem.domain_obj.initial_state
         x_full = self._reconstruct_full_state(base_state, control_indices, x_corr)
@@ -246,8 +248,6 @@ class _OrbitCorrectionInterface(
         indices = list(cfg.control_indices)
         return domain_obj.initial_state[indices].copy()
 
-    # _norm_fn and _half_period inherited from _OrbitCorrectionInterfaceBase
-
 
 class _MultipleShootingOrbitCorrectionInterface(
     _OrbitCorrectionInterfaceBase,
@@ -255,7 +255,7 @@ class _MultipleShootingOrbitCorrectionInterface(
         MultipleShootingOrbitCorrectionConfig,
         _MultipleShootingProblem,
         MultipleShootingResult,
-        tuple[np.ndarray, int, float],
+        CorrectorOutput,
     ]
 ):
     """Adapter wiring periodic orbits to multiple shooting backend.
@@ -426,25 +426,31 @@ class _MultipleShootingOrbitCorrectionInterface(
         :class:`~hiten.algorithms.types.core._BackendCall`
             Backend call with args and kwargs.
         """
-        return _BackendCall(
-            args=(problem.initial_guess,),
-            kwargs={
-                "residual_fn": problem.residual_fn,
-                "jacobian_fn": problem.jacobian_fn,
-                "norm_fn": problem.norm_fn,
-                "stepper_factory": problem.stepper_factory,
-                "tol": problem.tol,
-                "max_attempts": problem.max_attempts,
-                "max_delta": problem.max_delta,
-                "fd_step": problem.fd_step,
+        request = CorrectorInput(
+            initial_guess=problem.initial_guess,
+            residual_fn=problem.residual_fn,
+            jacobian_fn=problem.jacobian_fn,
+            norm_fn=problem.norm_fn,
+            max_attempts=problem.max_attempts,
+            tol=problem.tol,
+            max_delta=problem.max_delta,
+            fd_step=problem.fd_step,
+            metadata={
+                "n_patches": problem.n_patches,
+                "patch_times": problem.patch_times,
+                "continuity_indices": problem.continuity_indices,
+                "boundary_indices": problem.boundary_indices,
             },
         )
+        return _BackendCall(request=request, kwargs={"stepper_factory": problem.stepper_factory})
 
     def to_domain(
-        self, outputs: tuple[np.ndarray, int, float], *, problem: _MultipleShootingProblem
+        self, outputs: CorrectorOutput, *, problem: _MultipleShootingProblem
     ) -> MultipleShootingDomainPayload:
         """Convert backend outputs to domain payload."""
-        x_corr, iterations, residual_norm = outputs
+        x_corr = outputs.x_corrected
+        iterations = outputs.iterations
+        residual_norm = outputs.residual_norm
         
         # Reshape corrected parameters into patch states
         patch_states = self._extract_patch_states(x_corr, problem)

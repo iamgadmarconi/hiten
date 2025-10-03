@@ -21,13 +21,15 @@ See Also
 """
 
 from abc import abstractmethod
-from typing import Any, Callable, Tuple
+from typing import Any, Callable
 
 import numpy as np
 
 from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
 from hiten.algorithms.corrector.stepping import make_plain_stepper
-from hiten.algorithms.corrector.types import JacobianFn, NormFn, ResidualFn, StepperFactory
+from hiten.algorithms.corrector.types import (CorrectorInput, CorrectorOutput,
+                                              JacobianCallable, NormCallable,
+                                              ResidualCallable, StepperFactory)
 from hiten.algorithms.types.core import _HitenBaseBackend
 from hiten.utils.log_config import logger
 
@@ -101,7 +103,7 @@ class _CorrectorBackend(_HitenBaseBackend):
             make_plain_stepper() if stepper_factory is None else stepper_factory
         )
 
-    def _compute_residual(self, x: np.ndarray, residual_fn: ResidualFn) -> np.ndarray:
+    def _compute_residual(self, x: np.ndarray, residual_fn: ResidualCallable) -> np.ndarray:
         """Compute residual vector R(x).
 
         Separated for easy overriding or acceleration (e.g., with numba).
@@ -120,7 +122,7 @@ class _CorrectorBackend(_HitenBaseBackend):
         """
         return residual_fn(x)
 
-    def _compute_norm(self, residual: np.ndarray, norm_fn: NormFn) -> float:
+    def _compute_norm(self, residual: np.ndarray, norm_fn: NormCallable) -> float:
         """Compute residual norm for convergence checking.
 
         Parameters
@@ -140,8 +142,8 @@ class _CorrectorBackend(_HitenBaseBackend):
     def _compute_jacobian(
         self,
         x: np.ndarray,
-        residual_fn: ResidualFn,
-        jacobian_fn: JacobianFn | None,
+        residual_fn: ResidualCallable,
+        jacobian_fn: JacobianCallable | None,
         fd_step: float,
     ) -> np.ndarray:
         """Compute Jacobian matrix J(x) = dR/dx.
@@ -245,14 +247,10 @@ class _CorrectorBackend(_HitenBaseBackend):
     @abstractmethod
     def run(
         self,
-        x0: np.ndarray,
-        residual_fn: ResidualFn,
         *,
-        jacobian_fn: JacobianFn | None = None,
-        norm_fn: NormFn | None = None,
-        stepper_factory: Callable[[ResidualFn, NormFn, float | None], CorrectorStepProtocol] | None = None,
-        **kwargs,
-    ) -> Tuple[np.ndarray, Any]:
+        request: CorrectorInput,
+        stepper_factory: StepperFactory | None = None,
+    ) -> CorrectorOutput:
         """Solve nonlinear system to find x such that ||R(x)|| < tolerance.
 
         This method implements the core correction algorithm, iteratively

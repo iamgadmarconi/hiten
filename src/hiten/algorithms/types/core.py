@@ -53,17 +53,9 @@ FacadeT = TypeVar("FacadeT", bound="_HitenBasePipeline")
 
 @dataclass(frozen=True)
 class _BackendCall:
-    """Describe a backend call with positional and keyword arguments.
-    
-    Parameters
-    ----------
-    args : tuple[Any, ...]
-        Positional arguments to pass to the backend.
-    kwargs : dict[str, Any]
-        Keyword arguments to pass to the backend.
-    """
+    """Describe a backend call to execute against a backend."""
 
-    args: tuple[Any, ...] = ()
+    request: Any | None = None
     kwargs: dict[str, Any] = field(default_factory=dict)
 
 
@@ -444,8 +436,10 @@ class _HitenBaseEngine(Generic[ProblemT, ResultT, OutputsT], ABC):
         :class:`~hiten.algorithms.types.core.OutputsT`
             The outputs of the backend.
         """
-        backend_callable = getattr(self._backend, "run")
-        return backend_callable(*call.args, **call.kwargs)
+        request = call.request
+        if request is None:
+            return self._backend.run(**call.kwargs)
+        return self._backend.run(request=request, **call.kwargs)
 
 
 class _HitenBaseBackend(Generic[ProblemT, ResultT, OutputsT]):

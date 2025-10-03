@@ -27,9 +27,13 @@ import numpy as np
 
 from hiten.algorithms.connections.config import ConnectionConfig
 from hiten.algorithms.connections.options import ConnectionOptions
-from hiten.algorithms.connections.types import (ConnectionDomainPayload,
-                                                ConnectionResults,
-                                                _ConnectionProblem)
+from hiten.algorithms.connections.types import (
+    ConnectionDomainPayload,
+    ConnectionResults,
+    ConnectionsBackendRequest,
+    ConnectionsBackendResponse,
+    _ConnectionProblem,
+)
 from hiten.algorithms.poincare.core.types import _Section
 from hiten.algorithms.poincare.synodic.config import SynodicMapConfig
 from hiten.algorithms.types.core import _HitenBaseInterface
@@ -45,7 +49,7 @@ class _ManifoldConnectionInterface(
         ConnectionConfig,
         _ConnectionProblem,
         ConnectionResults,
-        list,
+        ConnectionsBackendResponse,
     ]
 ):
     """Provide an interface for accessing manifold data in connection discovery.
@@ -181,22 +185,31 @@ class _ManifoldConnectionInterface(
         dv_tol = float(problem.delta_v_tol)
         bal_tol = float(problem.ballistic_tol)
         
-        from hiten.algorithms.types.core import _BackendCall
-        return _BackendCall(
-            args=(pu, ps, Xu, Xs, traj_indices_u, traj_indices_s),
-            kwargs={"eps": eps, "dv_tol": dv_tol, "bal_tol": bal_tol}
+        request = ConnectionsBackendRequest(
+            points_u=pu,
+            points_s=ps,
+            states_u=Xu,
+            states_s=Xs,
+            traj_indices_u=traj_indices_u,
+            traj_indices_s=traj_indices_s,
+            eps=eps,
+            dv_tol=dv_tol,
+            bal_tol=bal_tol,
         )
+        from hiten.algorithms.types.core import _BackendCall
+        return _BackendCall(request=request)
 
-    def to_domain(self, outputs: list, *, problem: _ConnectionProblem) -> ConnectionDomainPayload:
+    def to_domain(self, outputs: ConnectionsBackendResponse, *, problem: _ConnectionProblem) -> ConnectionDomainPayload:
         return ConnectionDomainPayload._from_mapping(
             {
-                "connections": tuple(outputs),
+                "connections": tuple(outputs.results),
                 "source": problem.source,
                 "target": problem.target,
+                "metadata": dict(outputs.metadata),
             }
         )
 
-    def to_results(self, outputs: list, *, problem: _ConnectionProblem, domain_payload=None) -> ConnectionResults:
+    def to_results(self, outputs: ConnectionsBackendResponse, *, problem: _ConnectionProblem, domain_payload=None) -> ConnectionResults:
         payload = domain_payload or self.to_domain(outputs, problem=problem)
         return ConnectionResults(list(payload.connections))
 
