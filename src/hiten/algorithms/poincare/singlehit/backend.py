@@ -21,7 +21,7 @@ from numba import njit, types
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.protocols import _DynamicalSystemProtocol
 from hiten.algorithms.integrators.rk import RungeKutta
-from hiten.algorithms.integrators.configs import _EventConfig
+from hiten.algorithms.types.configs import EventConfig
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
 from hiten.algorithms.poincare.core.events import _PlaneEvent, _SurfaceEvent
 from hiten.algorithms.poincare.core.types import _SectionHit
@@ -201,7 +201,7 @@ class _SingleHitBackend(_ReturnMapBackend):
 
         integrator = RungeKutta(order=853, rtol=1e-12, atol=1e-12)
         ev_dir = 0 if direction is None else int(direction)
-        ev_cfg = _EventConfig(direction=ev_dir, terminal=True)
+        ev_cfg = EventConfig(direction=ev_dir, terminal=True)
 
         t_start = float(t0)
         # Avoid exactly-zero window start which may trigger an immediate event

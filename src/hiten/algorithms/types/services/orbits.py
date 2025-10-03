@@ -4,13 +4,19 @@ from __future__ import annotations
 
 from abc import abstractmethod
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Tuple
+from typing import TYPE_CHECKING, List, Literal, Optional, Tuple
 
 import numpy as np
 
 from hiten.algorithms.common.energy import crtbp_energy, energy_to_jacobi
 from hiten.algorithms.continuation.base import ContinuationPipeline
+from hiten.algorithms.continuation.types import (ContinuationDomainPayload,
+                                                 ContinuationResult)
 from hiten.algorithms.corrector.base import CorrectorPipeline
+from hiten.algorithms.corrector.config import \
+    MultipleShootingOrbitCorrectionConfig
+from hiten.algorithms.corrector.types import (CorrectionResult,
+                                              OrbitCorrectionDomainPayload)
 from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_monodromy, _compute_stm
 from hiten.algorithms.linalg.backend import _LinalgBackend
@@ -27,8 +33,11 @@ from hiten.utils.io.orbits import (load_periodic_orbit,
                                    save_periodic_orbit)
 
 if TYPE_CHECKING:
-    from hiten.algorithms.continuation.config import _OrbitContinuationConfig   
-    from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
+    from hiten.algorithms.continuation.config import OrbitContinuationConfig
+    from hiten.algorithms.continuation.options import OrbitContinuationOptions
+    from hiten.algorithms.continuation.types import ContinuationResult
+    from hiten.algorithms.corrector.config import OrbitCorrectionConfig
+    from hiten.algorithms.corrector.options import OrbitCorrectionOptions
     from hiten.system.base import System
     from hiten.system.libration.base import LibrationPoint
     from hiten.system.orbits.base import GenericOrbit, PeriodicOrbit
@@ -74,66 +83,159 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
     def __init__(self, domain_obj: "PeriodicOrbit") -> None:
         super().__init__(domain_obj)
         self._corrector = None
+        self._correction_config = None
+        self._correction_options = None
 
     @property
     def corrector(self) -> CorrectorPipeline:
-        """The corrector."""
+        """The corrector.
+        
+        Lazily creates a corrector pipeline with the appropriate interface
+        and backend based on the config type (single shooting vs multiple shooting).
+        """
         if self._corrector is None:
-            self._corrector = CorrectorPipeline.with_default_engine(config=self.correction_config)
+            config = self.correction_config
+            
+            # Select interface and backend based on config type
+            if isinstance(config, MultipleShootingOrbitCorrectionConfig):
+                from hiten.algorithms.corrector.backends.ms import \
+                    _MultipleShootingBackend
+                from hiten.algorithms.corrector.interfaces import \
+                    _MultipleShootingOrbitCorrectionInterface
+                from hiten.algorithms.corrector.stepping import \
+                    make_armijo_stepper
+                
+                interface = _MultipleShootingOrbitCorrectionInterface()
+                backend = _MultipleShootingBackend(stepper_factory=make_armijo_stepper())
+            else:
+                from hiten.algorithms.corrector.backends.newton import \
+                    _NewtonBackend
+                from hiten.algorithms.corrector.interfaces import \
+                    _OrbitCorrectionInterface
+                from hiten.algorithms.corrector.stepping import \
+                    make_armijo_stepper
+                
+                interface = _OrbitCorrectionInterface()
+                backend = _NewtonBackend(stepper_factory=make_armijo_stepper())
+            
+            self._corrector = CorrectorPipeline.with_default_engine(
+                config=config,
+                interface=interface,
+                backend=backend
+            )
         return self._corrector
 
-    def correct(self, *, overrides: Dict[str, Any] | None = None, **kwargs) -> Tuple[np.ndarray, float]:
+    def correct(
+        self, *, options: "OrbitCorrectionOptions" = None
+    ) -> tuple[np.ndarray, float, "CorrectionResult"]:
         """Differential correction wrapper.
         
         Parameters
         ----------
-        overrides : Dict[str, Any] or None, optional
-            Dictionary of parameter overrides to pass to the corrector.
-        **kwargs
-            Additional correction parameters that are passed directly to the corrector.
+        options : :class:`~hiten.algorithms.corrector.options.OrbitCorrectionOptions`, optional
+            Runtime options for correction. If None, uses default options from
+            the orbit's `correction_options` property.
 
         Returns
         -------
-        Tuple[np.ndarray, float]
-            The corrected state and period.
+        tuple[np.ndarray, float, :class:`~hiten.algorithms.corrector.types.CorrectionResult`]
+            Corrected state, full period, and the full correction result object.
         """
-        # Merge overrides with kwargs, with kwargs taking precedence
-        if overrides is None:
-            overrides = {}
-        else:
-            overrides = overrides.copy()
-        overrides.update(kwargs)
+        # Use provided options or get defaults
+        if options is None:
+            options = self.correction_options
         
-        overrides_tuple = tuple(sorted(overrides.items())) if overrides else ()
-        cache_key = self.make_key("correct", overrides_tuple)
+        # Cache key based on options
+        cache_key = self.make_key("correct", tuple(sorted(options.to_dict().items())))
 
-        def _factory() -> Tuple[np.ndarray, float]:
-            override = bool(overrides)
-            results = self.corrector.correct(self.domain_obj, override=override, **overrides)
-            return results.x_corrected, 2 * results.half_period
+        def _factory() -> tuple[np.ndarray, float, OrbitCorrectionDomainPayload, "CorrectionResult"]:
+            result = self.corrector.correct(self.domain_obj, options=options)
+            payload = OrbitCorrectionDomainPayload._from_mapping(
+                {
+                    "x_full": result.x_corrected,
+                    "half_period": result.half_period,
+                    "iterations": result.iterations,
+                    "residual_norm": result.residual_norm,
+                }
+            )
+            self.apply_correction(payload)
+            return result.x_corrected, 2 * result.half_period, payload, result
 
-        return self.get_or_create(cache_key, _factory)
+        state, period, payload, result = self.get_or_create(cache_key, _factory)
+        return state, period, result
 
-    def update_correction(self, **kwargs) -> None:
-        """Update algorithm-level correction parameters for this orbit.
+    def apply_correction(self, update: OrbitCorrectionDomainPayload) -> OrbitCorrectionDomainPayload:
+        """Apply a correction update to the orbit dynamics and return the payload."""
 
-        Parameters
-        ----------
-        **kwargs
-            Additional correction parameters that are passed directly to the corrector.
-        """
-        self.corrector.update_config(**kwargs)
+        payload = update
+        x_full = np.asarray(payload.x_full, dtype=float)
+        half_period = float(payload.half_period)
+
+        self.domain_obj.dynamics.reset()
+        self.domain_obj.dynamics._initial_state = x_full
+        self.domain_obj.dynamics.period = 2.0 * half_period
+
+        return payload
 
     @property
+    def correction_options(self):
+        """Get the correction options for this orbit.
+        
+        Returns the stored options, lazily initializing with defaults if needed.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.corrector.options.OrbitCorrectionOptions`
+            The correction options.
+        """
+        if self._correction_options is None:
+            self._correction_options = self._default_correction_options()
+        return self._correction_options
+
     @abstractmethod
-    def correction_config(self) -> "_OrbitCorrectionConfig":
-        """Provides the differential correction configuration for this orbit family."""
+    def _default_correction_options(self):
+        """Create default correction options for this orbit family.
+        
+        Concrete implementations should override this to provide family-specific defaults.
+        """
+        pass
+
+    @correction_options.setter
+    def correction_options(self, value: "OrbitCorrectionOptions"):
+        """Set the correction options.
+        
+        Stores the options and invalidates the corrector cache.
+        """
+        self._correction_options = value
+        self._corrector = None  # Invalidate cache
+
+    @property
+    def correction_config(self) -> "OrbitCorrectionConfig":
+        """Provides the differential correction configuration for this orbit family.
+        
+        Returns the stored config, lazily initializing with defaults if needed.
+        """
+        if self._correction_config is None:
+            self._correction_config = self._default_correction_config()
+        return self._correction_config
+
+    @abstractmethod
+    def _default_correction_config(self) -> "OrbitCorrectionConfig":
+        """Create the default correction configuration for this orbit family.
+        
+        Concrete implementations should override this to provide family-specific defaults.
+        """
         pass
 
     @correction_config.setter
-    def correction_config(self, value: "_OrbitCorrectionConfig"):
-        """Set the correction configuration."""
-        self.corrector._set_config(value)
+    def correction_config(self, value: "OrbitCorrectionConfig"):
+        """Set the correction configuration.
+        
+        Stores the config and invalidates the corrector cache to trigger 
+        recreation with the appropriate interface.
+        """
+        self._correction_config = value
+        self._corrector = None  # Invalidate cache to trigger recreation
 
 
 class _OrbitContinuationService(_DynamicsServiceBase):
@@ -152,13 +254,14 @@ class _OrbitContinuationService(_DynamicsServiceBase):
 
     def __init__(self, domain_obj: "PeriodicOrbit") -> None:
         super().__init__(domain_obj)
-        self._initial_state = self.domain_obj._initial_state
         self._generator = None
+        self._continuation_config = None
+        self._continuation_options = None
 
     @property
     def initial_state(self) -> np.ndarray:
-        """The initial state."""
-        return self._initial_state
+        """The initial state from the dynamics service."""
+        return self.domain_obj.dynamics.initial_state
 
     @property
     def generator(self) -> ContinuationPipeline:
@@ -167,58 +270,126 @@ class _OrbitContinuationService(_DynamicsServiceBase):
             self._generator = ContinuationPipeline.with_default_engine(config=self.continuation_config)
         return self._generator
 
-    def generate(self, *, overrides: Dict[str, Any] | None = None, **kwargs) -> Tuple[np.ndarray, float]:
+    def generate(self, *, options: "OrbitContinuationOptions" = None) -> ContinuationResult:
         """Generate a family of periodic orbits.
         
         Parameters
         ----------
-        overrides : Dict[str, Any] or None, optional
-            Dictionary of parameter overrides to pass to the generator.
+        options : :class:`~hiten.algorithms.continuation.options.OrbitContinuationOptions`, optional
+            Runtime options for continuation. If None, uses default options from
+            the orbit's `continuation_options` property.
 
         Returns
         -------
-        Tuple[np.ndarray, float]
-            The generated state and period.
+        ContinuationResult
+            The continuation result.
         """
-        # Merge overrides with kwargs, with kwargs taking precedence
-        if overrides is None:
-            overrides = {}
-        else:
-            overrides = overrides.copy()
-        overrides.update(kwargs)
+        # Use provided options or get defaults
+        if options is None:
+            options = self.continuation_options
         
-        overrides_tuple = tuple(sorted(overrides.items())) if overrides else ()
-        cache_key = self.make_key("correct", overrides_tuple)
+        # Cache key based on options
+        cache_key = self.make_key("generate", tuple(sorted(options.to_dict().items())))
 
-        def _factory() -> Tuple[np.ndarray, float]:
-            # Automatically infer if there are overrides based on whether overrides are provided
-            override = bool(overrides)
-            results = self.generator.generate(self.domain_obj, override=override, **overrides)
+        def _factory() -> ContinuationDomainPayload:
+            result = self.generator.generate(self.domain_obj, options)
+            payload = ContinuationDomainPayload._from_mapping(
+                {
+                    "family": result.family,
+                    "family_repr": tuple(
+                        getattr(member, "initial_state", None)
+                        for member in result.family
+                    ),
+                    "accepted_count": result.accepted_count,
+                    "rejected_count": result.rejected_count,
+                    "iterations": result.iterations,
+                    "success_rate": result.success_rate,
+                    "parameter_values": result.parameter_values,
+                    "info": {},
+                }
+            )
+            self.apply_continuation(payload)
+            return payload
 
-            return results
+        payload = self.get_or_create(cache_key, _factory)
+        return ContinuationResult(
+            accepted_count=payload.accepted_count,
+            rejected_count=payload.rejected_count,
+            success_rate=payload.success_rate,
+            family=payload.family,
+            parameter_values=payload.parameter_values,
+            iterations=payload.iterations,
+        )
 
-        return self.get_or_create(cache_key, _factory)
-
-    def update_continuation(self, **kwargs) -> None:
-        """Update algorithm-level continuation parameters for this orbit.
-
-        Parameters
-        ----------
-        **kwargs
-            Additional continuation parameters that are passed directly to the generator.
-        """
-        self.generator.update_config(**kwargs)
+    def apply_continuation(self, payload: ContinuationDomainPayload) -> ContinuationDomainPayload:
+        representatives = payload.family_repr
+        new_family = [self.domain_obj]
+        for repr_vec in representatives[1:]:
+            new_orbit = self.domain_obj.__class__(
+                libration_point=self.domain_obj.libration_point,
+                initial_state=np.asarray(repr_vec, dtype=float),
+            )
+            new_orbit.period = getattr(self.domain_obj, "period", None)
+            new_family.append(new_orbit)
+        self._continuation_overrides = {
+            "family": tuple(new_family),
+            "parameter_values": payload.parameter_values,
+        }
+        return payload
 
     @property
+    def continuation_config(self) -> "OrbitContinuationConfig":
+        """Get the continuation configuration for this orbit family.
+        
+        Returns the stored config, lazily initializing with defaults if needed.
+        """
+        if self._continuation_config is None:
+            self._continuation_config = self._default_continuation_config()
+        return self._continuation_config
+
     @abstractmethod
-    def continuation_config(self) -> "_OrbitContinuationConfig":
-        """Default parameter for family continuation (must be overridden)."""
+    def _default_continuation_config(self) -> "OrbitContinuationConfig":
+        """Create the default continuation configuration for this orbit family.
+        
+        Concrete implementations should override this to provide family-specific defaults.
+        """
         pass
 
     @continuation_config.setter
-    def continuation_config(self, value: "_OrbitContinuationConfig"):
-        """Set the continuation configuration."""
-        self.generator._set_config(value)
+    def continuation_config(self, value: "OrbitContinuationConfig"):
+        """Set the continuation configuration.
+        
+        Stores the config and invalidates the generator cache.
+        """
+        self._continuation_config = value
+        self._generator = None  # Invalidate cache to trigger recreation
+
+    @property
+    def continuation_options(self) -> "OrbitContinuationOptions":
+        """Get the continuation options for this orbit family.
+        
+        Returns the stored options, lazily initializing with defaults if needed.
+        """
+        if self._continuation_options is None:
+            self._continuation_options = self._default_continuation_options()
+        return self._continuation_options
+
+    @abstractmethod
+    def _default_continuation_options(self) -> "OrbitContinuationOptions":
+        """Create default continuation options for this orbit family.
+        
+        Concrete implementations should override this to provide family-specific defaults.
+        """
+        pass
+
+    @continuation_options.setter
+    def continuation_options(self, value: "OrbitContinuationOptions"):
+        """Set the continuation options.
+        
+        Stores the options and invalidates the generator cache.
+        """
+        self._continuation_options = value
+        self._generator = None  # Invalidate cache
 
 
 class _OrbitDynamicsService(_DynamicsServiceBase):
@@ -399,7 +570,6 @@ class _OrbitDynamicsService(_DynamicsServiceBase):
             raise ValueError("period must be a positive number or None.")
 
         if value != self.period:
-
             self._period = value
 
 
@@ -570,25 +740,29 @@ class _GenericOrbitCorrectionService(_OrbitCorrectionService):
     def __init__(self, orbit: "GenericOrbit") -> None:
         super().__init__(orbit)
 
-    @property
-    def correction_config(self) -> "_OrbitCorrectionConfig":
-        """Provides the differential correction configuration for generic orbits.
+    def _default_correction_config(self) -> "OrbitCorrectionConfig":
+        """Raises error since GenericOrbit has no default config.
         
-        Returns
-        -------
-        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
-            The correction configuration.
-            
         Raises
         ------
         NotImplementedError
-            If correction_config is not set on the orbit.
+            GenericOrbit requires explicit config.
         """
-        if hasattr(self.domain_obj, '_correction_config') and self.domain_obj._correction_config is not None:
-            return self.domain_obj._correction_config
         raise NotImplementedError(
             "Differential correction is not defined for a GenericOrbit unless the "
-            "`correction_config` property is set with a valid :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`."
+            "`correction_config` property is set with a valid :class:`~hiten.algorithms.corrector.config.OrbitCorrectionConfig`."
+        )
+    
+    def _default_correction_options(self) -> "OrbitCorrectionOptions":
+        """Raises error since GenericOrbit has no default options.
+        
+        Raises
+        ------
+        NotImplementedError
+            GenericOrbit requires explicit options.
+        """
+        raise NotImplementedError(
+            "Correction options are not defined for a GenericOrbit unless explicitly set."
         )
 
 
@@ -604,13 +778,12 @@ class _GenericOrbitContinuationService(_OrbitContinuationService):
     def __init__(self, orbit: "GenericOrbit") -> None:
         super().__init__(orbit)
 
-    @property
-    def continuation_config(self) -> "_OrbitContinuationConfig":
+    def _default_continuation_config(self) -> "OrbitContinuationConfig":
         """Provides the continuation configuration for generic orbits.
         
         Returns
         -------
-        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
+        :class:`~hiten.algorithms.continuation.config.OrbitContinuationConfig`
             The continuation configuration.
             
         Raises
@@ -622,6 +795,21 @@ class _GenericOrbitContinuationService(_OrbitContinuationService):
             return self.orbit.continuation_config
         raise NotImplementedError(
             "GenericOrbit requires 'continuation_config' to be set before using continuation engines."
+        )
+
+    def _default_continuation_options(self) -> "OrbitContinuationOptions":
+        """Create default continuation options for generic orbits.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.continuation.options.OrbitContinuationOptions`
+            Default continuation options.
+        """
+        if self.orbit._continuation_config is not None:
+            return self.orbit._continuation_config
+        raise NotImplementedError(
+            "Continuation is not defined for a GenericOrbit unless the "
+            "`continuation_config` property is set with a valid :class:`~hiten.algorithms.continuation.config.OrbitContinuationConfig`."
         )
 
 
@@ -656,7 +844,7 @@ class _GenericOrbitDynamicsService(_OrbitDynamicsService):
             If no initial state is provided.
         """
         # Check if the orbit has an initial state set
-        if hasattr(self.orbit, '_initial_state') and self.orbit._initial_state is not None:
+        if self.orbit._initial_state is not None:
             return np.asarray(self.orbit._initial_state, dtype=np.float64)
         raise ValueError("No initial state provided for GenericOrbit.")
 
@@ -674,21 +862,70 @@ class _HaloOrbitCorrectionService(_OrbitCorrectionService):
     def __init__(self, orbit: "HaloOrbit") -> None:
         super().__init__(orbit)
 
-    @property
-    def correction_config(self) -> "_OrbitCorrectionConfig":
-        """Provides the differential correction configuration for halo orbits.
+    def _default_correction_config(self) -> "OrbitCorrectionConfig":
+        """Create the default correction configuration for halo orbits.
         
         Returns
         -------
-        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
-            The correction configuration.
+        :class:`~hiten.algorithms.corrector.config.OrbitCorrectionConfig`
+            The default correction configuration for halo orbits.
         """
-        from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
-        return _OrbitCorrectionConfig(
+        from hiten.algorithms.corrector.config import OrbitCorrectionConfig
+        from hiten.algorithms.types.configs import (IntegrationConfig,
+                                                    NumericalConfig)
+        return OrbitCorrectionConfig(
             event_func=_y_plane_crossing,
             residual_indices=(SynodicState.VX, SynodicState.VZ),
             control_indices=(SynodicState.X, SynodicState.VY),
-            extra_jacobian=self._halo_quadratic_term
+            target=(0.0, 0.0),
+            extra_jacobian=self._halo_quadratic_term,
+            integration=IntegrationConfig(
+                method="adaptive", 
+                forward=1, 
+                flip_indices=None
+            ),
+            numerical=NumericalConfig(
+                finite_difference=False,
+                line_search_enabled=True,
+            ),
+        )
+
+    def _default_correction_options(self) -> "OrbitCorrectionOptions":
+        """Create the default correction options for halo orbits.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.corrector.options.OrbitCorrectionOptions`
+            The default correction options for halo orbits.
+        """
+        from hiten.algorithms.corrector.options import OrbitCorrectionOptions
+        from hiten.algorithms.types.options import (ConvergenceOptions,
+                                                    CorrectionOptions,
+                                                    IntegrationOptions,
+                                                    NumericalOptions)
+        
+        return OrbitCorrectionOptions(
+            base=CorrectionOptions(
+                convergence=ConvergenceOptions(
+                    max_attempts=50,
+                    tol=1e-12,
+                    max_delta=1e-2,
+                ),
+                integration=IntegrationOptions(
+                    dt=1e-2,
+                    order=8,
+                    max_steps=2000,
+                    c_omega_heuristic=20.0,
+                    steps=500,
+                ),
+                numerical=NumericalOptions(
+                    fd_step=1e-8,
+                    line_search_alpha_reduction=0.5,
+                    line_search_min_alpha=1e-4,
+                    line_search_armijo_c=0.1,
+                ),
+            ),
+            forward=1,
         )
 
     def _halo_quadratic_term(self, X_ev, Phi):
@@ -724,7 +961,9 @@ class _HaloOrbitCorrectionService(_OrbitCorrectionService):
         return np.array([[DDx],[DDz]]) @ Phi[[SynodicState.Y],:][:, (SynodicState.X,SynodicState.VY)] / vy
 
 
+
 class _HaloOrbitContinuationService(_OrbitContinuationService):
+
     """Drive continuation for halo orbits.
     
     Parameters
@@ -736,24 +975,39 @@ class _HaloOrbitContinuationService(_OrbitContinuationService):
     def __init__(self, orbit: "HaloOrbit") -> None:
         super().__init__(orbit)
 
-    @property
-    def continuation_config(self) -> "_OrbitContinuationConfig":
-        """Provides the continuation configuration for halo orbits.
+    def _default_continuation_config(self) -> "OrbitContinuationConfig":
+        """Create the default continuation configuration for halo orbits.
         
         Returns
         -------
-        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
-            The continuation configuration.
+        :class:`~hiten.algorithms.continuation.config.OrbitContinuationConfig`
+            The default continuation configuration for halo orbits.
         """
         from hiten.algorithms.continuation.config import \
-            _OrbitContinuationConfig
-        return _OrbitContinuationConfig(
-            target=([self.initial_state[SynodicState.Z]], [self.initial_state[SynodicState.Z] + 1.0]),
-            step=((1 - self.initial_state[SynodicState.Z]) / (50 - 1),),
+            OrbitContinuationConfig
+        return OrbitContinuationConfig(
             state=(SynodicState.Z,),
-            max_members=50,
-            extra_params=dict(max_attempts=50, tol=1e-12),
             stepper="secant",
+        )
+
+    def _default_continuation_options(self) -> "OrbitContinuationOptions":
+        """Create the default continuation options for halo orbits.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.continuation.options.OrbitContinuationOptions`
+            The default continuation options for halo orbits.
+        """
+        from hiten.algorithms.continuation.options import \
+            OrbitContinuationOptions
+        return OrbitContinuationOptions(
+            target=([self.initial_state[SynodicState.Z]], [self.initial_state[SynodicState.Z] + 1.0]),
+            step=((1 - self.initial_state[SynodicState.Z]) / (100 - 1),),
+            max_members=100,
+            max_retries_per_step=50,
+            step_min=1e-10,
+            step_max=1.0,
+            shrink_policy=None,
         )
 
 
@@ -777,7 +1031,7 @@ class _HaloOrbitDynamicsService(_OrbitDynamicsService):
         super().__init__(orbit)
 
         from hiten.system.libration.collinear import (CollinearPoint, L1Point,
-                                                        L2Point)
+                                                      L2Point)
         if not isinstance(self._libration_point, CollinearPoint):
             raise TypeError(f"Halo orbits are only defined for CollinearPoint, but got {type(self._libration_point)}.")
         if self._initial_state is None:
@@ -995,22 +1249,70 @@ class _LyapunovOrbitCorrectionService(_OrbitCorrectionService):
     def __init__(self, orbit: "LyapunovOrbit") -> None:
         super().__init__(orbit)
 
-    @property
-    def correction_config(self) -> "_OrbitCorrectionConfig":
-        """Provides the differential correction configuration for Lyapunov orbits.
+    def _default_correction_config(self) -> "OrbitCorrectionConfig":
+        """Create the default correction configuration for Lyapunov orbits.
         
         Returns
         -------
-        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
-            The correction configuration.
+        :class:`~hiten.algorithms.corrector.config.OrbitCorrectionConfig`
+            The default correction configuration for Lyapunov orbits.
         """
-        from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
-        return _OrbitCorrectionConfig(
+        from hiten.algorithms.corrector.config import OrbitCorrectionConfig
+        from hiten.algorithms.types.configs import (IntegrationConfig,
+                                                    NumericalConfig)
+        return OrbitCorrectionConfig(
             residual_indices=(SynodicState.VX, SynodicState.Z),
             control_indices=(SynodicState.VY, SynodicState.VZ),
             target=(0.0, 0.0),
             extra_jacobian=None,
             event_func=_y_plane_crossing,
+            integration=IntegrationConfig(
+                method="adaptive", 
+                forward=1, 
+                flip_indices=None
+            ),
+            numerical=NumericalConfig(
+                finite_difference=False,
+                line_search_enabled=True,
+            ),
+        )
+
+    def _default_correction_options(self) -> "OrbitCorrectionOptions":
+        """Create the default correction options for Lyapunov orbits.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.corrector.options.OrbitCorrectionOptions`
+            The default correction options for Lyapunov orbits.
+        """
+        from hiten.algorithms.corrector.options import OrbitCorrectionOptions
+        from hiten.algorithms.types.options import (ConvergenceOptions,
+                                                    CorrectionOptions,
+                                                    IntegrationOptions,
+                                                    NumericalOptions)
+        
+        return OrbitCorrectionOptions(
+            base=CorrectionOptions(
+                convergence=ConvergenceOptions(
+                    max_attempts=50,
+                    tol=1e-12,
+                    max_delta=1e-2,
+                ),
+                integration=IntegrationOptions(
+                    dt=1e-2,
+                    order=8,
+                    max_steps=2000,
+                    c_omega_heuristic=20.0,
+                    steps=500,
+                ),
+                numerical=NumericalOptions(
+                    fd_step=1e-8,
+                    line_search_alpha_reduction=0.5,
+                    line_search_min_alpha=1e-4,
+                    line_search_armijo_c=0.1,
+                ),
+            ),
+            forward=1,
         )
 
 
@@ -1026,31 +1328,45 @@ class _LyapunovOrbitContinuationService(_OrbitContinuationService):
     def __init__(self, orbit: "LyapunovOrbit") -> None:
         super().__init__(orbit)
 
-    @property
-    def continuation_config(self) -> "_OrbitContinuationConfig":
+    def _default_continuation_config(self) -> "OrbitContinuationConfig":
         """Provides the continuation configuration for Lyapunov orbits.
         
         Returns
         -------
-        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
+        :class:`~hiten.algorithms.continuation.config.OrbitContinuationConfig`
             The continuation configuration.
         """
         from hiten.algorithms.continuation.config import \
-            _OrbitContinuationConfig
-        return _OrbitContinuationConfig(
+            OrbitContinuationConfig
+        return OrbitContinuationConfig(
+            state=(SynodicState.X, SynodicState.Y),
+            stepper="secant",
+        )
+
+    def _default_continuation_options(self) -> "OrbitContinuationOptions":
+        """Create default continuation options for Lyapunov orbits.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.continuation.options.OrbitContinuationOptions`
+            Default continuation options.
+        """
+        from hiten.algorithms.continuation.options import \
+            OrbitContinuationOptions
+        return OrbitContinuationOptions(
             target=(
                 [self.initial_state[SynodicState.X], self.initial_state[SynodicState.Y]],
                 [self.initial_state[SynodicState.X] + 1.0, self.initial_state[SynodicState.Y] + 1.0]),
             step=(
-                (1 - self.initial_state[SynodicState.X]) / (50 - 1),
-                (1 - self.initial_state[SynodicState.Y]) / (50 - 1),
+                (1 - self.initial_state[SynodicState.X]) / (100 - 1),
+                (1 - self.initial_state[SynodicState.Y]) / (100 - 1),
             ),
-            state=(SynodicState.X, SynodicState.Y),
-            max_members=50,
-            extra_params=dict(max_attempts=50, tol=1e-12),
-            stepper="secant",
+            max_members=100,
+            max_retries_per_step=50,
+            step_min=1e-10,
+            step_max=1.0,
+            shrink_policy=None,
         )
-
 
 class _LyapunovOrbitDynamicsService(_OrbitDynamicsService):
     """Dynamics service for Lyapunov orbits.
@@ -1124,23 +1440,70 @@ class _VerticalOrbitCorrectionService(_OrbitCorrectionService):
     def __init__(self, orbit: "VerticalOrbit") -> None:
         super().__init__(orbit)
 
-    @property
-    def correction_config(self) -> "_OrbitCorrectionConfig":
-        """Provides the differential correction configuration for Vertical orbits.
+    def _default_correction_config(self) -> "OrbitCorrectionConfig":
+        """Create the default correction configuration for Vertical orbits.
         
         Returns
         -------
-        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
-            The correction configuration for Vertical orbits.
+        :class:`~hiten.algorithms.corrector.config.OrbitCorrectionConfig`
+            The default correction configuration for Vertical orbits.
         """
-        from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
-        return _OrbitCorrectionConfig(
+        from hiten.algorithms.corrector.config import OrbitCorrectionConfig
+        from hiten.algorithms.types.configs import (IntegrationConfig,
+                                                    NumericalConfig)
+        return OrbitCorrectionConfig(
             residual_indices=(SynodicState.VX, SynodicState.Y),     # Want VX=0 and Y=0
             control_indices=(SynodicState.VZ, SynodicState.VY),     # Adjust initial VZ and VY
-            finite_difference=True,
             target=(0.0, 0.0),
             extra_jacobian=None,
             event_func=_z_plane_crossing,
+            integration=IntegrationConfig(
+                method="adaptive", 
+                forward=1, 
+                flip_indices=None
+            ),
+            numerical=NumericalConfig(
+                finite_difference=True,
+                line_search_enabled=True,
+            ),
+        )
+
+    def _default_correction_options(self) -> "OrbitCorrectionOptions":
+        """Create the default correction options for Vertical orbits.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.corrector.options.OrbitCorrectionOptions`
+            The default correction options for Vertical orbits.
+        """
+        from hiten.algorithms.corrector.options import OrbitCorrectionOptions
+        from hiten.algorithms.types.options import (ConvergenceOptions,
+                                                    CorrectionOptions,
+                                                    IntegrationOptions,
+                                                    NumericalOptions)
+        
+        return OrbitCorrectionOptions(
+            base=CorrectionOptions(
+                convergence=ConvergenceOptions(
+                    max_attempts=50,
+                    tol=1e-12,
+                    max_delta=1e-2,
+                ),
+                integration=IntegrationOptions(
+                    dt=1e-2,
+                    order=8,
+                    max_steps=2000,
+                    c_omega_heuristic=20.0,
+                    steps=500,
+                ),
+                numerical=NumericalOptions(
+                    fd_step=1e-8,
+                    line_search_alpha_reduction=0.5,
+                    line_search_min_alpha=1e-4,
+                    line_search_armijo_c=0.1,
+                ),
+            ),
+            forward=1,
         )
 
 
@@ -1156,30 +1519,45 @@ class _VerticalOrbitContinuationService(_OrbitContinuationService):
     def __init__(self, orbit: "VerticalOrbit") -> None:
         super().__init__(orbit)
 
-    @property
-    def continuation_config(self) -> "_OrbitContinuationConfig":
+    def _default_continuation_config(self) -> "OrbitContinuationConfig":
         """Provides the continuation configuration for Vertical orbits.
         
         Returns
         -------
-        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig`
+        :class:`~hiten.algorithms.continuation.config.OrbitContinuationConfig`
             The continuation configuration for Vertical orbits.
         """
         from hiten.algorithms.continuation.config import \
-            _OrbitContinuationConfig
-        return _OrbitContinuationConfig(
+            OrbitContinuationConfig
+        return OrbitContinuationConfig(
+            state=(SynodicState.X, SynodicState.Y, SynodicState.Z),
+            stepper="secant",
+        )
+
+    def _default_continuation_options(self) -> "OrbitContinuationOptions":
+        """Create default continuation options for Vertical orbits.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.continuation.options.OrbitContinuationOptions`
+            Default continuation options.
+        """
+        from hiten.algorithms.continuation.options import \
+            OrbitContinuationOptions
+        return OrbitContinuationOptions(
             target=(
                 [self.initial_state[SynodicState.X], self.initial_state[SynodicState.Y], self.initial_state[SynodicState.Z]],
                 [self.initial_state[SynodicState.X] + 1.0, self.initial_state[SynodicState.Y] + 1.0, self.initial_state[SynodicState.Z] + 1.0]),
             step=(
-                (1 - self.initial_state[SynodicState.X]) / (50 - 1),
-                (1 - self.initial_state[SynodicState.Y]) / (50 - 1),
-                (1 - self.initial_state[SynodicState.Z]) / (50 - 1),
+                (1 - self.initial_state[SynodicState.X]) / (100 - 1),
+                (1 - self.initial_state[SynodicState.Y]) / (100 - 1),
+                (1 - self.initial_state[SynodicState.Z]) / (100 - 1),
             ),
-            state=(SynodicState.X, SynodicState.Y, SynodicState.Z),
-            max_members=50,
-            extra_params=dict(max_attempts=50, tol=1e-12),
-            stepper="secant",
+            max_members=100,
+            max_retries_per_step=50,
+            step_min=1e-10,
+            step_max=1.0,
+            shrink_policy=None,
         )
 
 

@@ -5,14 +5,14 @@ This module provides the types for the corrector module.
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Optional, Sequence
 
 import numpy as np
 
-from hiten.algorithms.corrector.config import _LineSearchConfig
-
 if TYPE_CHECKING:
     from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
+
+from hiten.algorithms.types.core import _DomainPayload
 
 #: Type alias for residual function signatures.
 #:
@@ -134,6 +134,56 @@ class OrbitCorrectionResult(CorrectionResult):
     half_period: float
 
 
+@dataclass(frozen=True)
+class OrbitCorrectionDomainPayload(_DomainPayload):
+    """Domain payload describing updates produced by orbit correction interfaces."""
+
+    @classmethod
+    def _from_mapping(cls, data: Mapping[str, Any]) -> "OrbitCorrectionDomainPayload":
+        return cls(data=data)
+
+    @property
+    def x_full(self) -> np.ndarray:
+        return np.asarray(self.require("x_full"), dtype=float)
+
+    @property
+    def half_period(self) -> float:
+        return float(self.require("half_period"))
+
+    @property
+    def iterations(self) -> int:
+        return int(self.require("iterations"))
+
+    @property
+    def residual_norm(self) -> float:
+        return float(self.require("residual_norm"))
+
+
+@dataclass(frozen=True)
+class MultipleShootingDomainPayload(OrbitCorrectionDomainPayload):
+    """Domain payload with additional diagnostics for multiple-shooting runs."""
+
+    @classmethod
+    def _from_mapping(cls, data: Mapping[str, Any]) -> "MultipleShootingDomainPayload":
+        return cls(data=data)
+
+    @property
+    def patch_states(self) -> Sequence[np.ndarray]:
+        raw = self.require("patch_states")
+        return tuple(np.asarray(p, dtype=float) for p in raw)
+
+    @property
+    def patch_times(self) -> np.ndarray:
+        return np.asarray(self.require("patch_times"), dtype=float)
+
+    @property
+    def continuity_errors(self) -> np.ndarray:
+        errors = self.get("continuity_errors", None)
+        if errors is None:
+            return np.asarray([], dtype=float)
+        return np.asarray(errors, dtype=float)
+
+
 @dataclass
 class _CorrectionProblem:
     """Defines the inputs for a backend correction run.
@@ -154,8 +204,6 @@ class _CorrectionProblem:
         Convergence tolerance for the residual norm.
     max_delta : float
         Maximum allowed infinity norm of Newton steps.
-    line_search_config : :class:`~hiten.algorithms.corrector.config._LineSearchConfig` | bool | None
-        Configuration for line search behavior.
     finite_difference : bool
         Force finite-difference approximation of Jacobians.
     fd_step : float
@@ -178,7 +226,6 @@ class _CorrectionProblem:
     max_attempts: int
     tol: float
     max_delta: float
-    line_search_config: _LineSearchConfig | bool | None
     finite_difference: bool
     fd_step: float
     method: str
@@ -314,8 +361,6 @@ class _MultipleShootingProblem(_CorrectionProblem):
         Convergence tolerance for residual norm.
     max_delta : float
         Maximum allowed infinity norm of Newton steps.
-    line_search_config : :class:`~hiten.algorithms.corrector.config._LineSearchConfig` | bool | None
-        Line search configuration.
     finite_difference : bool
         Whether to use finite-difference Jacobian approximation.
     fd_step : float
@@ -409,6 +454,7 @@ class _MultipleShootingProblem(_CorrectionProblem):
     domain_obj: Any
     n_patches: int
     patch_times: np.ndarray
+    patch_templates: Sequence[np.ndarray]
     patch_strategy: str
     residual_indices: tuple[int, ...]
     control_indices: tuple[int, ...]

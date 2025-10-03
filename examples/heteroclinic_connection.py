@@ -13,7 +13,8 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from hiten.algorithms.connections import ConnectionPipeline
-from hiten.algorithms.connections.config import _ConnectionConfig
+from hiten.algorithms.connections.config import ConnectionConfig
+from hiten.algorithms.connections.options import ConnectionOptions
 from hiten.algorithms.poincare import SynodicMapConfig
 from hiten.system import System
 
@@ -43,28 +44,23 @@ def main() -> None:
         section_axis="x",
         section_offset=1 - mu,
         plane_coords=("y", "z"),
-        interp_kind="cubic",
-        segment_refine=30,
-        tol_on_surface=1e-9,
-        dedup_time_tol=1e-9,
-        dedup_point_tol=1e-9,
-        max_hits_per_traj=None,
-        n_workers=None,
     )
 
-    # Create unified configuration with all parameters in one object
-    config = _ConnectionConfig(
-        section=section_cfg,        # Synodic section configuration
-        direction=-1,                # Crossing direction (None = both directions)
-        delta_v_tol=1,             # Maximum Delta-V tolerance
-        ballistic_tol=1e-8,        # Threshold for ballistic classification
-        eps2d=1e-3,                # 2D pairing radius
+    config = ConnectionConfig(
+        section=section_cfg,
+        direction=-1, 
     )
-    
+
+    options = ConnectionOptions(
+        delta_v_tol=1,
+        ballistic_tol=1e-8,
+        eps2d=1e-3,
+    )
+
     # Create connection using the factory method with unified config
     conn = ConnectionPipeline.with_default_engine(config=config)
 
-    result = conn.solve(manifold_l1, manifold_l2)
+    result = conn.solve(manifold_l1, manifold_l2, options=options)
 
     print(result)
 

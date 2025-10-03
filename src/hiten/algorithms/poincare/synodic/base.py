@@ -12,19 +12,20 @@ including support for orbits, manifolds, and custom trajectories.
 
 """
 
-from typing import Generic, Literal, Optional, Sequence, Tuple
+from typing import Generic, Optional
 
 from hiten.algorithms.poincare.synodic.backend import _SynodicDetectionBackend
-from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
+from hiten.algorithms.poincare.synodic.config import SynodicMapConfig
 from hiten.algorithms.poincare.synodic.engine import _SynodicEngine
 from hiten.algorithms.poincare.synodic.interfaces import _SynodicInterface
+from hiten.algorithms.poincare.synodic.options import SynodicMapOptions
 from hiten.algorithms.poincare.synodic.strategies import _NoOpStrategy
 from hiten.algorithms.poincare.synodic.types import SynodicMapResults
 from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
-                                         _HitenBaseFacade)
+                                         _HitenBasePipeline)
 
 
-class SynodicMapPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
+class SynodicMapPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
     """User-facing interface for synodic Poincare section detection.
 
     This class provides a facade that mirrors the API of other return-map
@@ -34,13 +35,13 @@ class SynodicMapPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
 
     Parameters
     ----------
-    map_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`, optional
+    map_cfg : :class:`~hiten.algorithms.poincare.synodic.config.SynodicMapConfig`, optional
         Configuration object containing detection parameters, section geometry,
         and refinement settings. If None, uses default configuration.
 
     Attributes
     ----------
-    config : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+    config : :class:`~hiten.algorithms.poincare.synodic.config.SynodicMapConfig`
         The map configuration object.
     _engine : :class:`~hiten.algorithms.poincare.synodic.engine._SynodicEngine`
         The engine that coordinates detection and refinement.
@@ -63,13 +64,13 @@ class SynodicMapPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
     All time units are in nondimensional units unless otherwise specified.
     """
 
-    def __init__(self, config: _SynodicMapConfig, engine: _SynodicEngine, interface: _SynodicInterface = None, backend: _SynodicDetectionBackend = None) -> None:
+    def __init__(self, config: SynodicMapConfig, engine: _SynodicEngine, interface: _SynodicInterface = None, backend: _SynodicDetectionBackend = None) -> None:
         super().__init__(config, engine, interface, backend)
 
     @classmethod
     def with_default_engine(
         cls,
-        config: _SynodicMapConfig,
+        config: SynodicMapConfig,
         interface: Optional[_SynodicInterface] = None,
         backend: Optional[_SynodicDetectionBackend] = None,
     ) -> "SynodicMapPipeline":
@@ -81,7 +82,7 @@ class SynodicMapPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
 
         Parameters
         ----------
-        config : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+        config : :class:`~hiten.algorithms.poincare.synodic.config.SynodicMapConfig`
             Configuration object for the synodic map.
         interface : :class:`~hiten.algorithms.poincare.synodic.interfaces._SynodicInterface`, optional
             Interface object for the synodic map. If None, uses the default _SynodicInterface.
@@ -108,46 +109,24 @@ class SynodicMapPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
     def generate(
         self,
         domain_obj: DomainT,
-        override: bool = False,
-        *,
-        section_axis: str | int | None = None,
-        section_offset: float = None,
-        section_normal: Sequence[float] | None = None,
-        plane_coords: Tuple[str, str] = None,
-        interp_kind: Literal["linear", "cubic"] = None,
-        newton_max_iter: int = 4,
-        dedup_point_tol: float = None,
-        max_hits_per_traj: int | None = None,
-        segment_refine: int = None,
-        tol_on_surface: float = None,
-        dedup_time_tol: float = None,   
-        n_workers: int | None = None,
-        direction: Literal[1, -1, None] | None = None,
+        options: SynodicMapOptions,
     ) -> SynodicMapResults:
-        """Compute the section, supporting runtime overrides without mutating config.
+        """Compute the section using configured engine.
 
-        If no overrides are provided, this defers to the cached, default setup
-        and persists the result. If any overrides are provided, a temporary
-        engine is assembled for this call and the result is returned without
-        polluting the persistent cache. In all cases, this method returns the
-        2-D points of the section.
+        Parameters
+        ----------
+        domain_obj : :class:`~hiten.algorithms.types.core.DomainT`
+            The domain object to compute the map for.
+        options : :class:`~hiten.algorithms.poincare.synodic.options.SynodicMapOptions`
+            Runtime options for the map pipeline.
+
+        Returns
+        -------
+        SynodicMapResults
+            The computed section results.
         """
-        kwargs = {
-            "section_axis": section_axis,
-            "section_offset": section_offset,
-            "section_normal": section_normal,
-            "plane_coords": plane_coords,
-            "interp_kind": interp_kind,
-            "newton_max_iter": newton_max_iter,
-            "dedup_point_tol": dedup_point_tol,
-            "max_hits_per_traj": max_hits_per_traj,
-            "segment_refine": segment_refine,
-            "tol_on_surface": tol_on_surface,
-            "dedup_time_tol": dedup_time_tol,
-            "n_workers": n_workers,
-            "direction": direction,
-        }
-        problem = self._create_problem(domain_obj=domain_obj, override=override, **kwargs)
+        problem = self._create_problem(domain_obj=domain_obj, options=options)
         engine = self._get_engine()
-        self._results = engine.solve(problem)
-        return self._results
+        engine_result = engine.solve(problem)
+        self._results = engine_result
+        return engine_result

@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 from hiten.algorithms.dynamics.rtbp import _jacobian_crtbp
-from hiten.algorithms.linalg.config import _EigenDecompositionConfig
+from hiten.algorithms.linalg.config import EigenDecompositionConfig
+from hiten.algorithms.linalg.options import EigenDecompositionOptions
 from hiten.algorithms.linalg.types import (EigenDecompositionResults,
                                            _EigenDecompositionProblem)
 from hiten.algorithms.types.core import _BackendCall, _HitenBaseInterface
@@ -20,7 +21,7 @@ if TYPE_CHECKING:
 
 class _EigenDecompositionInterface(
     _HitenBaseInterface[
-        _EigenDecompositionConfig,
+        EigenDecompositionConfig,
         _EigenDecompositionProblem,
         EigenDecompositionResults,
         EigenDecompositionResults,
@@ -36,7 +37,8 @@ class _EigenDecompositionInterface(
         self,
         *,
         domain_obj: np.ndarray,
-        config: _EigenDecompositionConfig,
+        config: EigenDecompositionConfig,
+        options: EigenDecompositionOptions,
     ) -> _EigenDecompositionProblem:
         """Create a eigen-decomposition problem.
         
@@ -44,21 +46,23 @@ class _EigenDecompositionInterface(
         ----------
         domain_obj : np.ndarray
             Matrix to decompose.
-        config : :class:`~hiten.algorithms.linalg.config._EigenDecompositionConfig`
-            Configuration for the eigenvalue decomposition.
+        config : :class:`~hiten.algorithms.linalg.config.EigenDecompositionConfig`
+            Compile-time configuration (problem type, system type).
+        options : :class:`~hiten.algorithms.linalg.options.EigenDecompositionOptions`, optional
+            Runtime options (tolerances). If None, defaults are used.
 
         Returns
         -------
         :class:`~hiten.algorithms.linalg.types._EigenDecompositionProblem`
-            Eigen decomposition problem.
+            Eigen decomposition problem combining config and options.
         """
         matrix_arr = np.asarray(domain_obj, dtype=float)
         return _EigenDecompositionProblem(
             A=matrix_arr, 
             problem_type=config.problem_type,
             system_type=config.system_type,
-            delta=config.delta,
-            tol=config.tol
+            delta=options.delta,
+            tol=options.tol
         )
 
     def to_backend_inputs(self, problem: _EigenDecompositionProblem) -> _BackendCall:
@@ -98,7 +102,7 @@ class _EigenDecompositionInterface(
 
 class _LibrationPointInterface(
     _HitenBaseInterface[
-        _EigenDecompositionConfig,
+        EigenDecompositionConfig,
         _EigenDecompositionProblem,
         EigenDecompositionResults,
         EigenDecompositionResults,
@@ -112,7 +116,8 @@ class _LibrationPointInterface(
         self,
         *,
         domain_obj: "LibrationPoint",
-        config: _EigenDecompositionConfig,
+        config: EigenDecompositionConfig,
+        options: EigenDecompositionOptions,
     ) -> _EigenDecompositionProblem:
         """Create a eigen-decomposition problem.
         
@@ -120,13 +125,15 @@ class _LibrationPointInterface(
         ----------
         domain_obj : :class:`~hiten.system.libration.base.LibrationPoint`
             The domain object.
-        config : :class:`~hiten.algorithms.linalg.config._EigenDecompositionConfig`
-            Configuration for the eigenvalue decomposition.
+        config : :class:`~hiten.algorithms.linalg.config.EigenDecompositionConfig`
+            Compile-time configuration (problem type, system type).
+        options : :class:`~hiten.algorithms.linalg.options.EigenDecompositionOptions`, optional
+            Runtime options (tolerances). If None, defaults are used.
 
         Returns
         -------
         :class:`~hiten.algorithms.linalg.types._EigenDecompositionProblem`
-            Eigen decomposition problem.
+            Eigen decomposition problem combining config and options.
         """
         jac = _jacobian_crtbp(
             domain_obj.position[0],
@@ -138,8 +145,8 @@ class _LibrationPointInterface(
             A=jac, 
             problem_type=config.problem_type,
             system_type=config.system_type,
-            delta=config.delta,
-            tol=config.tol
+            delta=options.delta,
+            tol=options.tol
         )
 
     def to_backend_inputs(self, problem: _EigenDecompositionProblem) -> _BackendCall:

@@ -28,7 +28,7 @@ class _NoOpStrategy(_SeedingStrategyBase):
 
     Parameters
     ----------
-    map_cfg : :class:`~hiten.algorithms.poincare.synodic.config._SynodicMapConfig`
+    map_cfg : :class:`~hiten.algorithms.poincare.synodic.config.SynodicMapConfig`
         The map configuration (unused).
 
     Notes

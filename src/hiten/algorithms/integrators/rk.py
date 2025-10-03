@@ -56,17 +56,17 @@ from hiten.algorithms.integrators.coefficients.rk45 import A as RK45_A
 from hiten.algorithms.integrators.coefficients.rk45 import C as RK45_C
 from hiten.algorithms.integrators.coefficients.rk45 import E as RK45_E
 from hiten.algorithms.integrators.coefficients.rk45 import P as RK45_P
-from hiten.algorithms.integrators.configs import _EventConfig
 from hiten.algorithms.integrators.utils import (_adjust_step_to_endpoint,
                                                 _bisection_update,
                                                 _bracket_converged,
                                                 _clamp_step,
                                                 _crossed_direction,
-                                                _error_scale,
-                                                _event_crossed,
+                                                _error_scale, _event_crossed,
                                                 _pi_accept_factor,
                                                 _pi_reject_factor,
                                                 _select_initial_step)
+from hiten.algorithms.types.configs import EventConfig
+from hiten.algorithms.types.options import EventOptions
 from hiten.algorithms.utils.config import FASTMATH, TOL
 
 
@@ -426,7 +426,8 @@ class _FixedStepRK(_RungeKuttaBase):
         t_vals: np.ndarray,
         *,
         event_fn=None,
-        event_cfg: _EventConfig | None = None,
+        event_cfg: EventConfig | None = None,
+        event_options: "EventOptions | None" = None,
         **kwargs,
     ) -> _Solution:
         """Integrate with a fixed-step Runge-Kutta method, with events.
@@ -444,9 +445,10 @@ class _FixedStepRK(_RungeKuttaBase):
         event_fn : Callable[[float, numpy.ndarray], float], optional
             Scalar event function evaluated as ``g(t, y)``. A zero
             crossing may terminate integration or mark an event.
-        event_cfg : :class:`~hiten.algorithms.integrators.configs._EventConfig` | None
-            Configuration controlling event directionality, terminal
-            behavior, and tolerances.
+        event_cfg : :class:`~hiten.algorithms.types.configs.EventConfig` | None
+            Configuration controlling event directionality and terminal behavior.
+        event_options : :class:`~hiten.algorithms.types.options.EventOptions` | None
+            Runtime tuning options controlling event detection tolerances.
         **kwargs
             Additional integration options passed to the implementation.
 
@@ -475,8 +477,8 @@ class _FixedStepRK(_RungeKuttaBase):
             event_compiled = self._compile_event_function(event_fn)
             direction = 0 if event_cfg is None else int(event_cfg.direction)
             terminal = 1 if (event_cfg is None or event_cfg.terminal) else 0
-            xtol = float(event_cfg.xtol if event_cfg is not None else 1.0e-12)
-            gtol = float(event_cfg.gtol if event_cfg is not None else 1.0e-12)
+            xtol = float(event_options.xtol if event_options is not None else 1.0e-12)
+            gtol = float(event_options.gtol if event_options is not None else 1.0e-12)
             if is_hamiltonian:
                 hit, t_hit, y_hit, states = _FixedStepRK._integrate_fixed_rk_until_event_ham(
                     y0=y0,
@@ -1133,7 +1135,7 @@ class _RK45(_AdaptiveStepRK):
         y_high, y_low, err_vec, _ = rk45_step_jit_kernel(f, t, y, h, self._A, self._B_HIGH, self._C, self._E)
         return y_high, y_low, err_vec
 
-    def integrate(self, system: _DynamicalSystemProtocol, y0: np.ndarray, t_vals: np.ndarray, *, event_fn=None, event_cfg: _EventConfig | None = None, **kwargs) -> _Solution:
+    def integrate(self, system: _DynamicalSystemProtocol, y0: np.ndarray, t_vals: np.ndarray, *, event_fn=None, event_cfg: EventConfig | None = None, event_options: "EventOptions | None" = None, **kwargs) -> _Solution:
         """Integrate with RK45 and dense interpolation, with events.
 
         Parameters
@@ -1148,9 +1150,10 @@ class _RK45(_AdaptiveStepRK):
             solution. Units follow the provided ``system``.
         event_fn : Callable[[float, numpy.ndarray], float], optional
             Scalar event function evaluated as ``g(t, y)``.
-        event_cfg : :class:`~hiten.algorithms.integrators.configs._EventConfig` | None
-            Configuration controlling directionality, terminal behavior,
-            and tolerances.
+        event_cfg : :class:`~hiten.algorithms.types.configs.EventConfig` | None
+            Configuration controlling directionality and terminal behavior.
+        event_options : :class:`~hiten.algorithms.types.options.EventOptions` | None
+            Runtime tuning options controlling event detection tolerances.
         **kwargs
             Additional integration options passed to the implementation.
 
@@ -1171,8 +1174,8 @@ class _RK45(_AdaptiveStepRK):
             terminal = 1 if (event_cfg is None or event_cfg.terminal) else 0
             t0 = float(t_vals[0])
             tmax = float(t_vals[-1])
-            xtol = float(event_cfg.xtol if event_cfg is not None else 1.0e-12)
-            gtol = float(event_cfg.gtol if event_cfg is not None else 1.0e-12)
+            xtol = float(event_options.xtol if event_options is not None else 1.0e-12)
+            gtol = float(event_options.gtol if event_options is not None else 1.0e-12)
             if is_hamiltonian:
                 jac_H, clmo_H, n_dof = system.rhs_params
                 hit, t_event, y_event, y_last = _RK45._integrate_rk45_until_event_ham(
@@ -2215,7 +2218,7 @@ class _DOP853(_AdaptiveStepRK):
         )
         return y_high, y_low, err_vec
 
-    def integrate(self, system: _DynamicalSystemProtocol, y0: np.ndarray, t_vals: np.ndarray, *, event_fn=None, event_cfg: _EventConfig | None = None, **kwargs) -> _Solution:
+    def integrate(self, system: _DynamicalSystemProtocol, y0: np.ndarray, t_vals: np.ndarray, *, event_fn=None, event_cfg: EventConfig | None = None, event_options: "EventOptions | None" = None, **kwargs) -> _Solution:
         """Integrate with DOP853 and dense interpolation, with events.
 
         Parameters
@@ -2230,9 +2233,10 @@ class _DOP853(_AdaptiveStepRK):
             solution. Units follow the provided ``system``.
         event_fn : Callable[[float, numpy.ndarray], float], optional
             Scalar event function evaluated as ``g(t, y)``.
-        event_cfg : :class:`~hiten.algorithms.integrators.configs._EventConfig`
-            Configuration controlling directionality, terminal behavior,
-            and tolerances.
+        event_cfg : :class:`~hiten.algorithms.types.configs.EventConfig`
+            Configuration controlling directionality and terminal behavior.
+        event_options : :class:`~hiten.algorithms.types.options.EventOptions` | None
+            Runtime tuning options controlling event detection tolerances.
         **kwargs
             Additional integration options passed to the implementation.
 
@@ -2256,8 +2260,8 @@ class _DOP853(_AdaptiveStepRK):
             terminal = 1 if (event_cfg is None or event_cfg.terminal) else 0
             t0 = float(t_vals[0])
             tmax = float(t_vals[-1])
-            xtol = float(event_cfg.xtol if event_cfg is not None else 1.0e-12)
-            gtol = float(event_cfg.gtol if event_cfg is not None else 1.0e-12)
+            xtol = float(event_options.xtol if event_options is not None else 1.0e-12)
+            gtol = float(event_options.gtol if event_options is not None else 1.0e-12)
             if isinstance(system, _HamiltonianSystemProtocol):
                 jac_H, clmo_H, n_dof = system.rhs_params
                 hit, t_event, y_event, y_last = _DOP853._integrate_dop853_until_event_ham(

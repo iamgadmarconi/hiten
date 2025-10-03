@@ -27,7 +27,7 @@ from hiten.algorithms.poincare.centermanifold.backend import (
     _CenterManifoldBackend,
 )
 from hiten.algorithms.poincare.centermanifold.config import (
-    _CenterManifoldMapConfig,
+    CenterManifoldMapConfig,
 )
 from hiten.algorithms.poincare.centermanifold.interfaces import (
     _CenterManifoldInterface,
@@ -58,7 +58,7 @@ class _CenterManifoldEngine(_ReturnMapEngine):
         Backend providing numerical integration and section crossing detection.
     seed_strategy : :class:`~hiten.algorithms.poincare.centermanifold.seeding._CenterManifoldSeedingBase`
         Strategy for generating initial conditions on the center manifold.
-    map_config : :class:`~hiten.algorithms.poincare.centermanifold.config._CenterManifoldMapConfig`
+    map_config : :class:`~hiten.algorithms.poincare.centermanifold.config.CenterManifoldMapConfig`
         Configuration specifying computation parameters.
 
     Notes
@@ -83,7 +83,7 @@ class _CenterManifoldEngine(_ReturnMapEngine):
         *,
         backend: _CenterManifoldBackend,
         seed_strategy: _CenterManifoldSeedingBase,
-        map_config: _CenterManifoldMapConfig,
+        map_config: CenterManifoldMapConfig,
         interface: _CenterManifoldInterface,
     ) -> None:
         super().__init__(backend=backend, seed_strategy=seed_strategy, map_config=map_config, interface=interface)
@@ -157,12 +157,6 @@ class _CenterManifoldEngine(_ReturnMapEngine):
             states_accum, times_accum = [], []
             seeds = chunk
             for it in range(problem.n_iter):
-                # Hook: iteration start
-                try:
-                    self._interface.on_iteration(it, seeds)
-                except Exception:
-                    pass
-
                 states, times, flags = self._backend.run(
                     seeds, 
                     dt=problem.dt,
@@ -171,19 +165,9 @@ class _CenterManifoldEngine(_ReturnMapEngine):
                     section_coord=section_coord
                 )
                 if states.size == 0:
-                    try:
-                        self._interface.on_failure(it)
-                    except Exception:
-                        pass
                     break
 
                 states = self._interface.enforce_section_coordinate(states, section_coord=section_coord)
-                pts = self._interface.plane_points_from_states(states, section_coord=section_coord)
-                try:
-                    self._interface.on_success(it, pts, states, times)
-                except Exception:
-                    pass
-
                 states_accum.append(states)
                 times_accum.append(times)
                 seeds = states  # feed back
@@ -205,11 +189,6 @@ class _CenterManifoldEngine(_ReturnMapEngine):
 
         cms_np = self._interface.enforce_section_coordinate(cms_np, section_coord=section_coord)
         pts_np = self._interface.plane_points_from_states(cms_np, section_coord=section_coord)
-
-        try:
-            self._interface.on_accept(pts_np, cms_np, times_np)
-        except Exception:
-            pass
 
         return self._interface.to_results(
             (pts_np, cms_np, times_np),

@@ -22,7 +22,7 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 
-from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
+from hiten.algorithms.corrector.config import OrbitCorrectionConfig
 from hiten.algorithms.types.core import _HitenBase
 from hiten.algorithms.types.services.orbits import (_OrbitPersistenceService,
                                                     _OrbitServices)
@@ -33,10 +33,15 @@ from hiten.utils.plots import (animate_trajectories, plot_inertial_frame,
                                plot_rotating_frame)
 
 if TYPE_CHECKING:
-    from hiten.algorithms.continuation.config import _OrbitContinuationConfig
+    from hiten.algorithms.continuation.config import OrbitContinuationConfig
+    from hiten.algorithms.continuation.options import OrbitContinuationOptions
+    from hiten.algorithms.corrector.config import OrbitCorrectionConfig
+    from hiten.algorithms.corrector.options import OrbitCorrectionOptions
     from hiten.system.base import System
     from hiten.system.libration.base import LibrationPoint
     from hiten.system.manifold import Manifold
+    from hiten.algorithms.corrector.types import CorrectionResult
+    from hiten.algorithms.continuation.types import ContinuationResult
 
 class PeriodicOrbit(_HitenBase):
     """
@@ -265,7 +270,7 @@ class PeriodicOrbit(_HitenBase):
         return self.dynamics.monodromy
 
     @property
-    def correction_config(self) -> Optional["_OrbitCorrectionConfig"]:
+    def correction_config(self) -> Optional["OrbitCorrectionConfig"]:
         """
         Provides the differential correction configuration.
 
@@ -274,7 +279,7 @@ class PeriodicOrbit(_HitenBase):
         
         Returns
         -------
-        :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig`
+        :class:`~hiten.algorithms.corrector.config.OrbitCorrectionConfig`
             The correction configuration.
             
         Raises
@@ -285,54 +290,98 @@ class PeriodicOrbit(_HitenBase):
         return self._correction.correction_config
 
     @correction_config.setter
-    def correction_config(self, value: Optional["_OrbitCorrectionConfig"]):
+    def correction_config(self, value: Optional["OrbitCorrectionConfig"]):
         """Set the correction configuration.
         
         Parameters
         ----------
-        value : :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig` or None
+        value : :class:`~hiten.algorithms.corrector.config.OrbitCorrectionConfig` or None
             The correction configuration to set.
             
         Raises
         ------
         TypeError
-            If value is not an instance of :class:`~hiten.algorithms.corrector.config._OrbitCorrectionConfig` or None.
+            If value is not an instance of :class:`~hiten.algorithms.corrector.config.OrbitCorrectionConfig` or None.
         """
         self._correction.correction_config = value
 
     @property
-    def continuation_config(self) -> Optional["_OrbitContinuationConfig"]:
+    def correction_options(self) -> Optional["OrbitCorrectionOptions"]:
+        """Get or set the correction options for this orbit.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.corrector.options.OrbitCorrectionOptions` or None
+            The correction options, or None if not set.
+        """
+        return self._correction.correction_options
+
+    @correction_options.setter
+    def correction_options(self, value: Optional["OrbitCorrectionOptions"]):
+        """Set the correction options.
+        
+        Parameters
+        ----------
+        value : :class:`~hiten.algorithms.corrector.options.OrbitCorrectionOptions` or None
+            The correction options to set.
+        """
+        self._correction.correction_options = value
+
+    @property
+    def continuation_config(self) -> Optional["OrbitContinuationConfig"]:
         """Get or set the continuation parameter for this orbit.
         
         Returns
         -------
-        :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None
+        :class:`~hiten.algorithms.continuation.config.OrbitContinuationConfig` or None
             The continuation configuration, or None if not set.
         """
         return self._continuation.continuation_config
 
     @continuation_config.setter
-    def continuation_config(self, cfg: Optional["_OrbitContinuationConfig"]):
+    def continuation_config(self, cfg: Optional["OrbitContinuationConfig"]):
         """Set the continuation configuration.
         
         Parameters
         ----------
-        cfg : :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None
+        cfg : :class:`~hiten.algorithms.continuation.config.OrbitContinuationConfig` or None
             The continuation configuration to set.
             
         Raises
         ------
         TypeError
-            If cfg is not an instance of :class:`~hiten.algorithms.continuation.config._OrbitContinuationConfig` or None.
+            If cfg is not an instance of :class:`~hiten.algorithms.continuation.config.OrbitContinuationConfig` or None.
         """
         self._continuation.continuation_config = cfg
 
-    def correct(self, **kwargs) -> tuple[np.ndarray, float]:
+    @property
+    def continuation_options(self) -> Optional["OrbitContinuationOptions"]:
+        """Get or set the continuation options for this orbit.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.continuation.options.OrbitContinuationOptions` or None
+            The continuation options, or None if not set.
+        """
+        return self._continuation.continuation_options
+
+    @continuation_options.setter
+    def continuation_options(self, value: Optional["OrbitContinuationOptions"]):
+        """Set the continuation options.
+        
+        Parameters
+        ----------
+        value : :class:`~hiten.algorithms.continuation.options.OrbitContinuationOptions` or None
+            The continuation options to set.
+        """
+        self._continuation.continuation_options = value
+
+    def correct(self, options: Optional["OrbitCorrectionOptions"] = None) -> "CorrectionResult":
         """Differential correction wrapper.
         
         Parameters
         ----------
-        **kwargs
+        options: :class:`~hiten.algorithms.corrector.options.OrbitCorrectionOptions` or None
             Additional keyword arguments passed to the correction method.
 
             - tol: float
@@ -352,17 +401,15 @@ class PeriodicOrbit(_HitenBase):
             
         Returns
         -------
-        tuple[np.ndarray, float]
+        :class:`~hiten.algorithms.corrector.types.CorrectionResult`
             The corrected state and period.
         """
-        override = bool(kwargs)
-        result = self._correction.correct(overrides=kwargs if override else None)
+        state, period, result = self._correction.correct(options=options)
         return result
 
-    def generate(self, **kwargs) -> tuple[np.ndarray, float]:
+    def generate(self, options: Optional["OrbitContinuationOptions"] = None) -> "ContinuationResult":
         """Generate a family of periodic orbits."""
-        override = bool(kwargs)
-        result = self._continuation.generate(overrides=kwargs if override else None)
+        result = self._continuation.generate(options=options)
         return result
 
     def propagate(self, steps: int = 1000, method: Literal["fixed", "adaptive", "symplectic"] = "adaptive", order: int = 8) -> Trajectory:

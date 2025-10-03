@@ -22,7 +22,7 @@ def main() -> None:
     ic_seed = cm.to_synodic([0.0, 0.0], 0.6, "q3") # Good initial guess from CM
 
     orbit = VerticalOrbit(l_point, initial_state=ic_seed)
-    orbit.correct(max_attempts=100, finite_difference=True)
+    orbit.correct()
     orbit.propagate(steps=1000)
 
     manifold = orbit.manifold(stable=True, direction="positive")
@@ -30,12 +30,7 @@ def main() -> None:
     manifold.plot()
 
     synodic_map = SynodicMap(manifold)
-    overrides = {
-        "interp_kind": "cubic",
-        "segment_refine": 30,
-        "newton_max_iter": 10,
-    }
-    synodic_map.compute(section_axis="y", section_offset=0.0, plane_coords=("x", "z"), overrides=overrides)
+    synodic_map.compute(section_axis="y", section_offset=0.0, plane_coords=("x", "z"), direction=-1)
     synodic_map.plot()
 
 

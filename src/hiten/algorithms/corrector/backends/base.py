@@ -67,7 +67,7 @@ class _CorrectorBackend(_HitenBaseBackend):
 
     See Also
     --------
-    :class:`~hiten.algorithms.corrector.config._BaseCorrectionConfig`
+    :class:`~hiten.algorithms.corrector.config.CorrectionConfig`
         Configuration class for correction parameters.
     :mod:`~hiten.algorithms.corrector.backends.newton`
         Concrete Newton-Raphson implementations.

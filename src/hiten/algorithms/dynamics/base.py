@@ -21,7 +21,8 @@ from typing import TYPE_CHECKING, Callable, Dict, Literal, Sequence
 
 import numpy as np
 
-from hiten.algorithms.integrators.configs import _EventConfig
+from hiten.algorithms.types.configs import EventConfig
+from hiten.algorithms.types.options import EventOptions
 from hiten.algorithms.types.serialization import _SerializeBase
 from hiten.algorithms.utils.config import FASTMATH
 from hiten.utils.log_config import logger
@@ -384,7 +385,7 @@ def _propagate_dynsys(
     **kwargs
         Additional keyword arguments passed to the integrator, including:
         - event_fn: Numba-compiled scalar event function g(t, y)
-        - event_cfg: _EventConfig with direction/tolerances
+        - event_cfg: EventConfig with direction/tolerances
     Returns
     -------
     :class:`~hiten.algorithms.integrators.types._Solution`
@@ -423,11 +424,12 @@ def _propagate_dynsys(
         return _Solution(times_signed, states)
 
     event_fn = kwargs.get("event_fn", None)
-    event_cfg: _EventConfig | None = kwargs.get("event_cfg", None)
+    event_cfg: EventConfig | None = kwargs.get("event_cfg", None)
+    event_options: EventOptions | None = kwargs.get("event_options", None)
 
     if method == "fixed":
         integrator = RungeKutta(order=order)
-        sol = integrator.integrate(dynsys_dir, state0_np, t_eval, event_fn=event_fn, event_cfg=event_cfg)
+        sol = integrator.integrate(dynsys_dir, state0_np, t_eval, event_fn=event_fn, event_cfg=event_cfg, event_options=event_options)
         times = sol.times
         states = sol.states
 
@@ -437,7 +439,7 @@ def _propagate_dynsys(
         if not isinstance(dynsys, _HamiltonianSystemProtocol):
             raise ValueError("Symplectic method requires a _HamiltonianSystem")
         integrator = _ExtendedSymplectic(order=order)
-        sol = integrator.integrate(dynsys_dir, state0_np, t_eval)
+        sol = integrator.integrate(dynsys_dir, state0_np, t_eval, event_fn=event_fn, event_cfg=event_cfg, event_options=event_options)
         times = sol.times
         states = sol.states
 
@@ -446,7 +448,7 @@ def _propagate_dynsys(
         rtol = kwargs.get("rtol", 1e-12)
         atol = kwargs.get("atol", 1e-12)
         integrator = AdaptiveRK(order=order, max_step=max_step, rtol=rtol, atol=atol)
-        sol = integrator.integrate(dynsys_dir, state0_np, t_eval, event_fn=event_fn, event_cfg=event_cfg)
+        sol = integrator.integrate(dynsys_dir, state0_np, t_eval, event_fn=event_fn, event_cfg=event_cfg, event_options=event_options)
         times = sol.times
         states = sol.states
 

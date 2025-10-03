@@ -6,9 +6,11 @@ This module provides the abstract base class for all Hiten classes.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Generic, TypeVar, Union
+from types import MappingProxyType
+from typing import TYPE_CHECKING, Any, Generic, TypeVar, Union
 
 import pandas as pd
 
@@ -17,6 +19,9 @@ from hiten.algorithms.types.serialization import _SerializeBase
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
                                                   _ServiceBundleBase)
+
+if TYPE_CHECKING:
+    from hiten.algorithms.types.configs import _HitenBaseConfig
 
 # Type variables for the Hiten base classes
 DomainT = TypeVar("DomainT")
@@ -43,7 +48,7 @@ InterfaceT = TypeVar("InterfaceT", bound="_HitenBaseInterface[ConfigT, ProblemT,
 EngineT = TypeVar("EngineT", bound="_HitenBaseEngine[ProblemT, ResultT, OutputsT]")
 
 # Type variable for the facade type
-FacadeT = TypeVar("FacadeT", bound="_HitenBaseFacade")
+FacadeT = TypeVar("FacadeT", bound="_HitenBasePipeline")
 
 
 @dataclass(frozen=True)
@@ -60,6 +65,77 @@ class _BackendCall:
 
     args: tuple[Any, ...] = ()
     kwargs: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class _DomainPayload(ABC):
+    """Immutable base container for domain side-effects produced by interfaces.
+
+    Subclasses should provide a concrete ``_from_mapping`` implementation that
+    returns an instance of their own type. The base class offers convenience
+    helpers for interacting with the underlying mapping while keeping it
+    read-only.
+    """
+
+    data: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "data", MappingProxyType(dict(self.data)))
+
+    @classmethod
+    @abstractmethod
+    def _from_mapping(cls, data: Mapping[str, Any]) -> "_DomainPayload":
+        """Instantiate the payload from a plain mapping."""
+
+    @classmethod
+    def empty(cls) -> "_DomainPayload":
+        """Return an empty payload instance for this subclass."""
+
+        return cls._from_mapping({})
+
+    def get(self, key: str, default: Any | None = None) -> Any | None:
+        """Fetch an optional entry without raising if the key is missing."""
+
+        return self.data.get(key, default)
+
+    def require(self, key: str) -> Any:
+        """Fetch a required entry, raising ``KeyError`` if absent."""
+
+        if key not in self.data:
+            raise KeyError(f"Domain payload missing required key '{key}'")
+        return self.data[key]
+
+    def as_dict(self) -> dict[str, Any]:
+        """Return a mutable copy of the payload contents."""
+
+        return dict(self.data)
+
+    def merge(self, **updates: Any) -> "_DomainPayload":
+        """Return a new payload with ``updates`` applied."""
+
+        merged = {**self.data, **updates}
+        return self.__class__._from_mapping(merged)
+
+    def merge_from_mapping(self, mapping: Mapping[str, Any]) -> "_DomainPayload":
+        """Return a new payload including keys from ``mapping``."""
+
+        merged = {**self.data, **dict(mapping)}
+        return self.__class__._from_mapping(merged)
+
+    def keys(self):
+        """Expose mapping-style key iteration."""
+
+        return self.data.keys()
+
+    def items(self):
+        """Expose mapping-style item iteration."""
+
+        return self.data.items()
+
+    def values(self):
+        """Expose mapping-style value iteration."""
+
+        return self.data.values()
 
 
 class _HitenBaseProblem(ABC):
@@ -80,8 +156,8 @@ class _HitenBaseResults(ABC):
     __slots__ = ()
 
 
-class _HitenBaseConfig(ABC):
-    """Marker base class for configuration payloads produced by interfaces."""
+class _HitenBaseEvent(ABC):
+    """Marker base class for event payloads produced by interfaces."""
 
     __slots__ = ()
 
@@ -116,13 +192,15 @@ class _HitenBaseInterface(Generic[ConfigT, ProblemT, ResultT, OutputsT], ABC):
         return self._config
 
     @abstractmethod
-    def create_problem(self, config: ConfigT | None = None, *args) -> ProblemT:
+    def create_problem(self, config: ConfigT | None = None, options: Any = None, *args) -> ProblemT:
         """Compose an immutable problem payload for the backend.
         
         Parameters
         ----------
         config : :class:`~hiten.algorithms.types.core.ConfigT` | None, optional
             The configuration to use for the problem
+        options : Any, optional
+            The options to use for the problem
         *args : Any
             Additional arguments to pass to the problem.
 
@@ -211,36 +289,6 @@ class _HitenBaseInterface(Generic[ConfigT, ProblemT, ResultT, OutputsT], ABC):
         """
         self._backend = backend
 
-    def on_start(self, problem: ProblemT) -> None:
-        """Called when the interface starts.
-        
-        Parameters
-        ----------
-        problem : :class:`~hiten.algorithms.types.core.ProblemT`
-            The problem to start.
-        """
-        return None
-
-    def on_success(self, outputs: OutputsT, *, problem: ProblemT, domain_payload: Any = None) -> None:
-        """Called when the interface succeeds.
-        
-        Parameters
-        ----------
-        outputs : :class:`~hiten.algorithms.types.core.OutputsT`
-            The outputs to succeed.
-        """
-        return None
-
-    def on_failure(self, exc: Exception, *, problem: ProblemT) -> None:
-        """Called when the interface fails.
-        
-        Parameters
-        ----------
-        exc : Exception
-            The exception to fail.
-        """
-        return None
-
 
 class _HitenBaseEngine(Generic[ProblemT, ResultT, OutputsT], ABC):
     """Template providing the canonical engine flow.
@@ -286,18 +334,15 @@ class _HitenBaseEngine(Generic[ProblemT, ResultT, OutputsT], ABC):
         interface = self._get_interface(problem)
         interface.bind_backend(self._backend)
         call = interface.to_backend_inputs(problem)
-        interface.on_start(problem)
         self._before_backend(problem, call, interface)
 
         try:
             outputs = self._invoke_backend(call)
 
         except Exception as exc:
-            interface.on_failure(exc, problem=problem)
             self._handle_backend_failure(exc, problem=problem, call=call, interface=interface)
 
         domain_payload = interface.to_domain(outputs, problem=problem)
-        interface.on_success(outputs, problem=problem, domain_payload=domain_payload)
         self._after_backend_success(outputs, problem=problem, domain_payload=domain_payload, interface=interface)
         return interface.to_results(outputs, problem=problem, domain_payload=domain_payload)
 
@@ -533,7 +578,7 @@ class _HitenBaseBackend(Generic[ProblemT, ResultT, OutputsT]):
         return
 
 
-class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
+class _HitenBasePipeline(Generic[ConfigT, ProblemT, ResultT]):
     """Abstract base class for user-facing facades in the Hiten framework.
     
     This class provides a common pattern for building facades that orchestrate
@@ -559,7 +604,7 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
     
     Examples
     --------
-    >>> class MyFacade(_HitenBaseFacade):
+    >>> class MyFacade(_HitenBasePipeline):
     ...     def __init__(self, config, engine=None):
     ...         super().__init__()
     ...         self.config = config
@@ -616,7 +661,7 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
 
     @classmethod
     @abstractmethod
-    def with_default_engine(cls, config, interface, backend) -> "_HitenBaseFacade[ConfigT, ProblemT, ResultT]":
+    def with_default_engine(cls, config, interface, backend) -> "_HitenBasePipeline[ConfigT, ProblemT, ResultT]":
         """Create a facade instance with a default engine (factory).
         
         Parameters
@@ -725,34 +770,42 @@ class _HitenBaseFacade(Generic[ConfigT, ProblemT, ResultT]):
         """Get the config."""
         return self._config
 
-    def _create_problem(self, domain_obj: DomainT, override: bool = False, *args, **kwargs) -> ProblemT:
+    def _create_problem(
+        self,
+        domain_obj: DomainT,
+        *args,
+        options: Any = None,
+        **kwargs,
+    ) -> ProblemT:
         """Create a problem object from input parameters.
-        
-        This method can be overridden by concrete facades to handle
-        problem creation logic specific to their domain.
-        
+
+        This base implementation delegates directly to the configured
+        interface. Facades are responsible for updating configuration and
+        constructing options objects before calling this helper.
+
         Parameters
         ----------
         domain_obj : DomainT
             The domain object to create a problem for.
-        override : bool, default=False
-            Whether to override configuration with provided kwargs.
-        *args
-            Additional positional arguments to pass to interface.create_problem.
-        **kwargs
-            Configuration parameters to update if override=True
-            
+        options : Any, optional
+            Options object to forward to ``interface.create_problem``.
+        *args, **kwargs
+            Additional parameters forwarded unchanged to the interface.
+
         Returns
         -------
-        Any
-            Problem object suitable for the engine.
+        ProblemT
+            Problem payload suitable for the engine.
         """
-        if override and kwargs:
-            self.update_config(**kwargs)
-        
         interface = self._get_interface()
         config = self._get_config()
-        return interface.create_problem(config=config, domain_obj=domain_obj, *args)
+        return interface.create_problem(
+            domain_obj=domain_obj,
+            config=config,
+            options=options,
+            *args,
+            **kwargs,
+        )
 
 
     def _make_pipeline(self, config, interface, engine, backend):

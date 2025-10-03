@@ -5,15 +5,22 @@ enabling analysis of existing orbit data.
 """
 
 from .base import SynodicMapPipeline
-from .config import _SynodicMapConfig
+from .config import SynodicMapConfig
 from .engine import _SynodicEngine
 from .interfaces import _SynodicInterface
+from .options import SynodicMapOptions
 from .types import SynodicMapResults
 
 __all__ = [
-    "_SynodicMapConfig",
-    "SynodicMapResults",
+    # Main interface
     "SynodicMapPipeline",
+    # Configuration (compile-time structure)
+    "SynodicMapConfig",
+    # Options (runtime tuning)
+    "SynodicMapOptions",
+    # Results
+    "SynodicMapResults",
+    # Engine and Interface
     "_SynodicEngine",
     "_SynodicInterface",
 ]

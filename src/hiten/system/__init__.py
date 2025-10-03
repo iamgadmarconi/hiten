@@ -7,8 +7,8 @@ simply write::
 """
 
 from ..algorithms.poincare.centermanifold.config import \
-    _CenterManifoldMapConfig
-from ..algorithms.poincare.synodic.config import _SynodicMapConfig
+    CenterManifoldMapConfig
+from ..algorithms.poincare.synodic.config import SynodicMapConfig
 from ..algorithms.types.states import SynodicState
 from .base import System
 from .body import Body
@@ -39,8 +39,8 @@ __all__ = [
     "L4Point",
     "L5Point",
     "CenterManifold",
-    "_CenterManifoldMapConfig",
-    "_SynodicMapConfig",
+    "CenterManifoldMapConfig",
+    "SynodicMapConfig",
     "CenterManifoldMap",
     "SynodicMap",
     "PeriodicOrbit",

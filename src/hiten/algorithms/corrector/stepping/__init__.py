@@ -6,7 +6,6 @@ This module provides the stepping module for the corrector package.
 
 from typing import Callable
 
-from hiten.algorithms.corrector.config import _LineSearchConfig
 from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
 from hiten.algorithms.corrector.types import NormFn, ResidualFn
 
@@ -38,13 +37,22 @@ def make_plain_stepper() -> Callable[[ResidualFn, NormFn, float | None], Correct
     return _factory
 
 
-def make_armijo_stepper(config: "_LineSearchConfig") -> Callable[[ResidualFn, NormFn, float | None], CorrectorStepProtocol]:
+def make_armijo_stepper(
+    *,
+    alpha_reduction: float = 0.5,
+    min_alpha: float = 1e-4,
+    armijo_c: float = 0.1,
+) -> Callable[[ResidualFn, NormFn, float | None], CorrectorStepProtocol]:
     """Return a factory that builds an Armijo stepper per problem.
 
     Parameters
     ----------
-    config : :class:`~hiten.algorithms.corrector.config._LineSearchConfig`
-        Configuration for Armijo line search.
+    alpha_reduction : float, default=0.5
+        Factor to reduce step size in backtracking.
+    min_alpha : float, default=1e-4
+        Minimum step size before giving up.
+    armijo_c : float, default=0.1
+        Armijo parameter for sufficient decrease condition.
     """
     def _factory(residual_fn: ResidualFn, norm_fn: NormFn, max_delta: float | None) -> CorrectorStepProtocol:
         """Return a factory that builds an Armijo stepper per problem.
@@ -58,7 +66,11 @@ def make_armijo_stepper(config: "_LineSearchConfig") -> Callable[[ResidualFn, No
         max_delta : float or None
             The maximum delta.
         """
-        return _ArmijoStep(line_search_config=config)._build_line_searcher(residual_fn, norm_fn, max_delta)
+        return _ArmijoStep(
+            alpha_reduction=alpha_reduction,
+            min_alpha=min_alpha,
+            armijo_c=armijo_c,
+        )._build_line_searcher(residual_fn, norm_fn, max_delta)
     return _factory
 
 __all__ = [

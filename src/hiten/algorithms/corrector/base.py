@@ -2,28 +2,26 @@
 
 This module provides a single, generic facade for correction algorithms that
 works with any domain through the interface pattern. The facade orchestrates
-the complete pipeline: facade → engine → interface → backend.
+the complete pipeline: facade -> engine -> interface -> backend.
 """
 
-from typing import Any, Callable, Generic, Literal, Optional
-
-import numpy as np
+from typing import TYPE_CHECKING, Any, Generic, Optional
 
 from hiten.algorithms.corrector.backends.base import _CorrectorBackend
-from hiten.algorithms.corrector.backends.ms import _MultipleShootingBackend
 from hiten.algorithms.corrector.backends.newton import _NewtonBackend
-from hiten.algorithms.corrector.config import _LineSearchConfig
 from hiten.algorithms.corrector.engine.base import _CorrectionEngine
 from hiten.algorithms.corrector.interfaces import \
-    _PeriodicOrbitCorrectorInterface
+    _OrbitCorrectionInterface
 from hiten.algorithms.corrector.stepping import make_armijo_stepper
-from hiten.algorithms.corrector.stepping.norm import _infinity_norm
 from hiten.algorithms.corrector.types import StepperFactory
 from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
-                                         _HitenBaseFacade)
+                                         _HitenBasePipeline)
+
+if TYPE_CHECKING:
+    from hiten.algorithms.corrector.options import OrbitCorrectionOptions
 
 
-class CorrectorPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
+class CorrectorPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
     """Generic facade for correction algorithms.
     
     This facade provides a clean, high-level interface for correcting
@@ -50,15 +48,15 @@ class CorrectorPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
     Basic usage with default settings:
     
     >>> from hiten.algorithms.corrector import CorrectorPipeline
-    >>> from hiten.algorithms.corrector.config import _OrbitCorrectionConfig
+    >>> from hiten.algorithms.corrector.config import OrbitCorrectionConfig
     >>> from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
-    >>> from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
+    >>> from hiten.algorithms.corrector.interfaces import _OrbitCorrectionInterface
     >>> from hiten.algorithms.corrector.backends.newton import _NewtonBackend
     >>> 
     >>> # Create components
-    >>> config = _OrbitCorrectionConfig()
+    >>> config = OrbitCorrectionConfig()
     >>> backend = _NewtonBackend()
-    >>> interface = _PeriodicOrbitCorrectorInterface()
+    >>> interface = _OrbitCorrectionInterface()
     >>> engine = _OrbitCorrectionEngine(backend=backend, interface=interface)
     >>> 
     >>> # Create facade
@@ -78,7 +76,7 @@ class CorrectorPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
         config : :class:`~hiten.algorithms.types.core.ConfigT`
             Configuration object for the correction algorithm.
         interface : :class:`~hiten.algorithms.types.core.InterfaceT`, optional
-            Interface instance for the correction algorithm. If None, uses the default _PeriodicOrbitCorrectorInterface.
+            Interface instance for the correction algorithm. If None, uses the default _OrbitCorrectionInterface.
         backend : :class:`~hiten.algorithms.corrector.backends.base._CorrectorBackend`, optional
             Backend instance for the correction algorithm. If None, uses the default _NewtonBackend.
 
@@ -87,31 +85,16 @@ class CorrectorPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
         :class:`~hiten.algorithms.corrector.base.CorrectorPipeline`
             A correction facade instance with a default engine injected.
         """
-        backend = backend or _NewtonBackend(stepper_factory=make_armijo_stepper(_LineSearchConfig(norm_fn=_infinity_norm)))
-        intf = interface or _PeriodicOrbitCorrectorInterface()
+        backend = backend or _NewtonBackend(stepper_factory=make_armijo_stepper())
+        intf = interface or _OrbitCorrectionInterface()
         engine = _CorrectionEngine(backend=backend, interface=intf)
         return cls(config, engine, intf, backend)
 
     def correct(
         self, 
         domain_obj: DomainT,
-        override: bool = False,
+        options: "OrbitCorrectionOptions",
         *,
-        max_attempts: Optional[int] = None,
-        tol: Optional[float] = None,
-        max_delta: Optional[float] = None,
-        line_search_config: Optional[_LineSearchConfig] = None,
-        finite_difference: Optional[bool] = None,
-        fd_step: Optional[float] = None,  
-        method: Optional[Literal["fixed", "adaptive", "symplectic"]] = None,
-        order: Optional[int] = None,
-        steps: Optional[int] = None,
-        forward: Optional[int] = None,
-        residual_indices: Optional[tuple[int, ...]] = None,
-        control_indices: Optional[tuple[int, ...]] = None,
-        extra_jacobian: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]] = None,
-        target: Optional[tuple[float, ...]] = None,
-        event_func: Optional[Callable[..., tuple[float, np.ndarray]]] = None,
         stepper: Optional[StepperFactory] = None,
         ) -> ResultT:
         """Correct the domain object using the configured engine.
@@ -124,46 +107,10 @@ class CorrectorPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
         ----------
         domain_obj : :class:`~hiten.algorithms.types.core.DomainT`
             The domain object to correct (e.g., PeriodicOrbit, Manifold).
-        override : bool
-            Whether to override the default configuration.
-        max_attempts : Optional[int]
-            The maximum number of attempts to correct the domain object.
-        tol : Optional[float]
-            The tolerance for the correction.
-        max_delta : Optional[float]
-            The maximum delta for the correction.
-        line_search_config : Optional[_LineSearchConfig]
-            The line search configuration.
-        finite_difference : Optional[bool]
-            Whether to use finite difference for the correction.
-        fd_step : Optional[float]
-            The finite difference step size.
-        method : Optional[Literal["fixed", "adaptive", "symplectic"]]
-            The method for the correction.
-        order : Optional[int]
-            The order for the correction.
-        steps : Optional[int]
-            The number of steps for the correction.
-        forward : Optional[int]
-            The direction for the correction.
-        residual_indices : Optional[tuple[int, ...]]
-            The indices for the residual.
-        control_indices : Optional[tuple[int, ...]]
-            The indices for the control.
-        extra_jacobian : Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]]
-            The extra jacobian for the correction.
-        target : Optional[tuple[float, ...]]
-            The target for the correction.
-        event_func : Optional[Callable[..., tuple[float, np.ndarray]]]
-            The event function for the correction.
-        stepper : Optional[StepperFactory]
-            The stepper factory for the correction.
-        **kwargs
-            Additional correction parameters that vary by facade implementation.
-            Common parameters may include:
-            - Correction tolerances and limits
-            - Algorithm-specific options
-            - Output formatting preferences
+        options : :class:`~hiten.algorithms.corrector.options.OrbitCorrectionOptions`
+            Runtime options for the correction pipeline.
+        stepper : StepperFactory, optional
+            Custom stepper factory for line search.
             
         Returns
         -------
@@ -173,26 +120,11 @@ class CorrectorPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, 
             - Convergence information
             - Algorithm diagnostics
         """
-
-        kwargs = {
-            "max_attempts": max_attempts,
-            "tol": tol,
-            "max_delta": max_delta,
-            "line_search_config": line_search_config,
-            "finite_difference": finite_difference,
-            "fd_step": fd_step,
-            "method": method,
-            "order": order,
-            "steps": steps,
-            "forward": forward,
-            "residual_indices": residual_indices,
-            "control_indices": control_indices,
-            "extra_jacobian": extra_jacobian,
-            "target": target,
-            "event_func": event_func,
-        }
-
-        problem = self._create_problem(domain_obj=domain_obj, override=override, stepper_factory=stepper, **kwargs)
+        problem = self._create_problem(
+            domain_obj=domain_obj,
+            options=options,
+            stepper_factory=stepper,
+        )
         engine = self._get_engine()
         self._results = engine.solve(problem)
         return self._results

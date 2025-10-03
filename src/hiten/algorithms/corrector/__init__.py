@@ -17,11 +17,10 @@ Advanced users can compose components explicitly:
 
 >>> from hiten.algorithms.corrector.backends.newton import _NewtonBackend
 >>> from hiten.algorithms.corrector.engine import _OrbitCorrectionEngine
->>> from hiten.algorithms.corrector.interfaces import _PeriodicOrbitCorrectorInterface
+>>> from hiten.algorithms.corrector.interfaces import _OrbitCorrectionInterface
 >>> from hiten.algorithms.corrector.stepping import make_armijo_stepper
->>> from hiten.algorithms.corrector.config import _LineSearchConfig
->>> backend = _NewtonBackend(stepper_factory=make_armijo_stepper(_LineSearchConfig()))
->>> interface = _PeriodicOrbitCorrectorInterface()
+>>> backend = _NewtonBackend(stepper_factory=make_armijo_stepper())
+>>> interface = _OrbitCorrectionInterface()
 >>> engine = _OrbitCorrectionEngine(backend=backend, interface=interface)
 >>> problem = interface.create_problem(orbit=orbit, config=orbit._correction_config)
 >>> result = engine.solve(problem)
@@ -43,24 +42,31 @@ See Also
 from .backends.base import _CorrectorBackend
 from .backends.ms import _MultipleShootingBackend
 from .backends.newton import _NewtonBackend
-from .config import (_BaseCorrectionConfig, _LineSearchConfig,
-                     _MultipleShootingOrbitCorrectionConfig,
-                     _OrbitCorrectionConfig)
+from .config import (CorrectionConfig,
+                     MultipleShootingOrbitCorrectionConfig,
+                     OrbitCorrectionConfig)
 from .engine import _OrbitCorrectionEngine
-from .interfaces import (_MultipleShootingCorrectorOrbitInterface,
-                         _PeriodicOrbitCorrectorInterface)
+from .interfaces import (_MultipleShootingOrbitCorrectionInterface,
+                         _OrbitCorrectionInterface)
+from .options import OrbitCorrectionOptions, MultipleShootingCorrectionOptions
 
 __all__ = [
+    # Backends
+    "_CorrectorBackend",
     "_NewtonBackend",
     "_MultipleShootingBackend",
     
-    "_BaseCorrectionConfig",
-    "_OrbitCorrectionConfig",
-    "_MultipleShootingOrbitCorrectionConfig",
-    "_LineSearchConfig",
+    # Configs (compile-time structure)
+    "CorrectionConfig",
+    "OrbitCorrectionConfig",
+    "MultipleShootingOrbitCorrectionConfig",
     
-    "_CorrectorBackend",
-    "_PeriodicOrbitCorrectorInterface",
-    "_MultipleShootingCorrectorOrbitInterface",
+    # Options (runtime tuning)
+    "OrbitCorrectionOptions",
+    "MultipleShootingCorrectionOptions",
+    
+    # Interfaces & Engines
+    "_OrbitCorrectionInterface",
+    "_MultipleShootingOrbitCorrectionInterface",
     "_OrbitCorrectionEngine",
 ]

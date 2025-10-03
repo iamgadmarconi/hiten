@@ -23,13 +23,8 @@ def main() -> None:
     cm.compute()
 
     pm = cm.poincare_map(energy=0.7)
-    overrides = {
-        "n_seeds": 20,
-        "n_iter": 20,
-        "seed_strategy": "axis_aligned",
-        "n_workers": 8
-    }
-    pm.compute(section_coord="p3", overrides=overrides)
+
+    pm.compute(section_coord="p3")
 
     pm.plot(axes=("p2", "q3"))
 

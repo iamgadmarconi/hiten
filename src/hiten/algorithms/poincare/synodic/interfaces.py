@@ -12,9 +12,11 @@ import numpy as np
 
 from hiten.algorithms.poincare.core.interfaces import (_PoincareBaseInterface,
                                                        _SectionInterface)
-from hiten.algorithms.poincare.synodic.config import _SynodicMapConfig
+from hiten.algorithms.poincare.synodic.config import SynodicMapConfig
 from hiten.algorithms.poincare.synodic.events import _AffinePlaneEvent
-from hiten.algorithms.poincare.synodic.types import (SynodicMapResults,
+from hiten.algorithms.poincare.synodic.options import SynodicMapOptions
+from hiten.algorithms.poincare.synodic.types import (SynodicMapDomainPayload,
+                                                     SynodicMapResults,
                                                      _SynodicMapProblem)
 from hiten.algorithms.types.core import _BackendCall
 from hiten.algorithms.types.states import SynodicState
@@ -87,7 +89,7 @@ class _SynodicSectionInterface(_SectionInterface):
 
 class _SynodicInterface(
     _PoincareBaseInterface[
-        _SynodicMapConfig, 
+        SynodicMapConfig, 
         _SynodicMapProblem, 
         SynodicMapResults, 
         Tuple[np.ndarray, np.ndarray, np.ndarray | None]
@@ -101,8 +103,10 @@ class _SynodicInterface(
         self,
         *,
         domain_obj,
-        config: _SynodicMapConfig,
+        config: SynodicMapConfig,
+        options: SynodicMapOptions,
     ) -> _SynodicMapProblem:
+
         normal = _SynodicSectionInterface.axis_normal(config.section_axis)
         offset = config.section_offset
         plane_coords = config.plane_coords
@@ -111,23 +115,40 @@ class _SynodicInterface(
         return _SynodicMapProblem(
             plane_coords=plane_coords,
             direction=direction,
-            n_workers=config.n_workers or 1,
+            n_workers=options.workers.n_workers,
             normal=normal,
             offset=offset,
             trajectories=trajectories,
             interp_kind=config.interp_kind,
-            segment_refine=config.segment_refine,
-            tol_on_surface=config.tol_on_surface,
-            dedup_time_tol=config.dedup_time_tol,
-            dedup_point_tol=config.dedup_point_tol,
-            max_hits_per_traj=config.max_hits_per_traj,
-            newton_max_iter=config.newton_max_iter,
+            segment_refine=options.refine.segment_refine,
+            tol_on_surface=options.refine.tol_on_surface,
+            dedup_time_tol=options.refine.dedup_time_tol,
+            dedup_point_tol=options.refine.dedup_point_tol,
+            max_hits_per_traj=options.refine.max_hits_per_traj,
+            newton_max_iter=options.refine.newton_max_iter,
         )
 
     def to_backend_inputs(self, problem: _SynodicMapProblem):
         return _BackendCall(kwargs={"trajectories": problem.trajectories, "direction": problem.direction})
 
-    def to_results(self, outputs, *, problem: _SynodicMapProblem) -> SynodicMapResults:
+    def to_domain(self, outputs, *, problem: _SynodicMapProblem) -> SynodicMapDomainPayload:
         points, states, times, trajectory_indices = outputs
-        plane_coords = problem.plane_coords
-        return SynodicMapResults(points, states, plane_coords, times, trajectory_indices)
+        return SynodicMapDomainPayload._from_mapping(
+            {
+                "points": points,
+                "states": states,
+                "times": times,
+                "trajectory_indices": trajectory_indices,
+                "labels": problem.plane_coords,
+            }
+        )
+
+    def to_results(self, outputs, *, problem: _SynodicMapProblem, domain_payload=None) -> SynodicMapResults:
+        payload = domain_payload or self.to_domain(outputs, problem=problem)
+        return SynodicMapResults(
+            payload.points,
+            payload.states,
+            payload.labels,
+            payload.times,
+            payload.trajectory_indices,
+        )

@@ -19,7 +19,8 @@ logic.
 from abc import ABC, abstractmethod
 from typing import Any, List, Tuple
 
-from hiten.algorithms.poincare.core.config import _SeedingConfig, _ReturnMapConfig
+from hiten.algorithms.poincare.core.config import (_ReturnMapConfig,
+                                                   _SeedingConfig)
 
 
 class _SeedingStrategyBase(ABC):
@@ -86,7 +87,7 @@ class _SeedingStrategyBase(ABC):
 
         Returns
         -------
-        :class:`~hiten.algorithms.poincare.core.config._MapConfig`
+        :class:`~hiten.algorithms.poincare.core.config._ReturnMapConfig`
             The seeding configuration containing parameters such as
             the number of seeds to generate.
 
@@ -110,9 +111,13 @@ class _SeedingStrategyBase(ABC):
         Notes
         -----
         This property provides convenient access to the number of
-        seeds parameter from the configuration.
+        seeds parameter from the configuration. Note: This now accesses
+        from options, not config. Subclasses should override if using
+        different options structure.
         """
-        return self._map_cfg.n_seeds
+        # For backward compatibility, try to get from options-like structure
+        # Concrete strategies should set this properly
+        return getattr(self._map_cfg, 'n_seeds', 20)
     
     @property
     def plane_coords(self) -> Tuple[str, str]:

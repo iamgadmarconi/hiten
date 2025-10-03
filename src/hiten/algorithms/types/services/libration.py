@@ -12,7 +12,7 @@ from hiten.algorithms.common.energy import crtbp_energy, energy_to_jacobi
 from hiten.algorithms.dynamics.base import _DynamicalSystem
 from hiten.algorithms.dynamics.hamiltonian import _HamiltonianSystem
 from hiten.algorithms.linalg.base import StabilityPipeline
-from hiten.algorithms.linalg.config import _EigenDecompositionConfig
+from hiten.algorithms.linalg.config import EigenDecompositionConfig
 from hiten.algorithms.linalg.interfaces import _LibrationPointInterface
 from hiten.algorithms.linalg.types import _ProblemType, _SystemType
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
@@ -28,6 +28,7 @@ from hiten.utils.io.libration import (load_libration_point,
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
+    from hiten.algorithms.linalg.options import EigenDecompositionOptions
     from hiten.system.base import System
     from hiten.system.libration.base import LibrationPoint
     from hiten.system.libration.collinear import (CollinearPoint, L1Point,
@@ -75,6 +76,8 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
     def __init__(self, point: "LibrationPoint") -> None:
         super().__init__(point)
         self._generator = None
+        self._eigendecomposition_config = None
+        self._eigendecomposition_options = None
 
     @property
     def generator(self) -> StabilityPipeline:
@@ -181,25 +184,27 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
         
         return self.get_or_create(cache_key, _factory)
 
-    def compute_stability(self, *, delta: float = 1e-6, tol: float = 1e-8) -> StabilityPipeline:
+    def compute_stability(self, options: "EigenDecompositionOptions" = None) -> StabilityPipeline:
         """Compute the stability of the libration point.
         
         Parameters
         ----------
-        delta : float
-            The delta parameter.
-        tol : float
-            The tolerance parameter.
+        options : :class:`~hiten.algorithms.linalg.options.EigenDecompositionOptions`, optional
+            Runtime options for eigenvalue decomposition. If None, uses self.eigendecomposition_options.
             
         Returns
         -------
         :class:`~hiten.algorithms.linalg.base.StabilityPipeline`
-            The stability pipeline.
+            The stability pipeline with computed eigenvalue decomposition.
         """
-        cache_key = self.make_key(id(self.domain_obj), delta, tol)
+        # Use self.eigendecomposition_options if options not provided
+        if options is None:
+            options = self.eigendecomposition_options
+            
+        cache_key = self.make_key(id(self.domain_obj), tuple(sorted(options.to_dict().items())))
 
         def _factory() -> StabilityPipeline:
-            self.generator.compute(self.domain_obj)
+            self.generator.compute(self.domain_obj, options=options)
             return self.generator
 
         return self.get_or_create(cache_key, _factory)
@@ -496,19 +501,62 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
         pass
     
     @property
-    def eigendecomposition_config(self) -> _EigenDecompositionConfig:
-        """The eigen decomposition configuration for the collinear libration point."""
-        return _EigenDecompositionConfig(
-            problem_type=_ProblemType.EIGENVALUE_DECOMPOSITION,
-            system_type=_SystemType.CONTINUOUS,
-            delta=1e-6,
-            tol=1e-6,
-        )
+    def eigendecomposition_config(self) -> EigenDecompositionConfig:
+        """The eigen decomposition configuration for the collinear libration point.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.linalg.config.EigenDecompositionConfig`
+            The eigendecomposition configuration with reasonable defaults.
+        """
+        if self._eigendecomposition_config is None:
+            self._eigendecomposition_config = EigenDecompositionConfig(
+                problem_type=_ProblemType.EIGENVALUE_DECOMPOSITION,
+                system_type=_SystemType.CONTINUOUS,
+            )
+        return self._eigendecomposition_config
     
     @eigendecomposition_config.setter
-    def eigendecomposition_config(self, config: _EigenDecompositionConfig) -> None:
-        """Set the eigen decomposition configuration for the collinear libration point."""
-        self.generator._set_config(config)
+    def eigendecomposition_config(self, config: EigenDecompositionConfig) -> None:
+        """Set the eigen decomposition configuration for the collinear libration point.
+        
+        Invalidates the generator cache to trigger recreation with the new config.
+        
+        Parameters
+        ----------
+        config : :class:`~hiten.algorithms.linalg.config.EigenDecompositionConfig`
+            New eigendecomposition configuration.
+        """
+        self._eigendecomposition_config = config
+        self._generator = None  # Invalidate cache to trigger recreation
+    
+    @property
+    def eigendecomposition_options(self) -> "EigenDecompositionOptions":
+        """Runtime options for eigenvalue decomposition.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.linalg.options.EigenDecompositionOptions`
+            The eigendecomposition options with reasonable defaults.
+        """
+        if self._eigendecomposition_options is None:
+            from hiten.algorithms.linalg.options import EigenDecompositionOptions
+            self._eigendecomposition_options = EigenDecompositionOptions(
+                delta=1e-6,
+                tol=1e-6,
+            )
+        return self._eigendecomposition_options
+    
+    @eigendecomposition_options.setter
+    def eigendecomposition_options(self, value: "EigenDecompositionOptions") -> None:
+        """Set runtime options for eigenvalue decomposition.
+        
+        Parameters
+        ----------
+        value : :class:`~hiten.algorithms.linalg.options.EigenDecompositionOptions`
+            New eigendecomposition options.
+        """
+        self._eigendecomposition_options = value
 
 
 class _CollinearDynamicsService(_LibrationDynamicsService):

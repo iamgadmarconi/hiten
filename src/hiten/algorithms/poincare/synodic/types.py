@@ -4,11 +4,12 @@ This module provides the types for synodic Poincare maps.
 """
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, Optional, Sequence, Tuple
+from typing import Literal, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 
 from hiten.algorithms.poincare.core.types import _MapResults
+from hiten.algorithms.types.core import _DomainPayload
 
 
 class SynodicMapResults(_MapResults):
@@ -20,6 +21,36 @@ class SynodicMapResults(_MapResults):
         super().__init__(points, states, labels, times)
         self.trajectory_indices: np.ndarray | None = trajectory_indices
 
+
+@dataclass(frozen=True)
+class SynodicMapDomainPayload(_DomainPayload):
+    """Domain payload capturing synodic map results and metadata."""
+
+    @classmethod
+    def _from_mapping(cls, data: Mapping[str, object]) -> "SynodicMapDomainPayload":
+        return cls(data=data)
+
+    @property
+    def points(self) -> np.ndarray:
+        return np.asarray(self.require("points"), dtype=float)
+
+    @property
+    def states(self) -> np.ndarray:
+        return np.asarray(self.require("states"), dtype=float)
+
+    @property
+    def times(self) -> Optional[np.ndarray]:
+        times = self.get("times")
+        return None if times is None else np.asarray(times, dtype=float)
+
+    @property
+    def trajectory_indices(self) -> Optional[np.ndarray]:
+        idx = self.get("trajectory_indices")
+        return None if idx is None else np.asarray(idx, dtype=int)
+
+    @property
+    def labels(self) -> Tuple[str, str]:
+        return tuple(self.require("labels"))
 
 @dataclass(frozen=True)
 class _SynodicMapProblem:
@@ -39,16 +70,17 @@ class _SynodicMapProblem:
         Normal vector defining the section plane.
     offset : float
         Offset distance for the section plane.
-    map_cfg : _SynodicMapConfig
+    map_cfg : SynodicMapConfig
         Map configuration containing detection parameters.
     """
+
     plane_coords: Tuple[str, str]
     direction: Optional[int]
     n_workers: int
     normal: Sequence[float] | np.ndarray
     offset: float
     trajectories: Optional[Sequence[tuple[np.ndarray, np.ndarray]]]
-    interp_kind: Literal["linear", "cubic"] 
+    interp_kind: Literal["linear", "cubic"]
     segment_refine: int
     tol_on_surface: float
     dedup_time_tol: float

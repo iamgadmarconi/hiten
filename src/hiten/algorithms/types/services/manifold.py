@@ -9,10 +9,11 @@ import numpy as np
 from tqdm import tqdm
 
 from hiten.algorithms.common.energy import _max_rel_energy_error
+from hiten.algorithms.connections.types import ConnectionDomainPayload
 from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_stm
 from hiten.algorithms.linalg.base import StabilityPipeline
-from hiten.algorithms.linalg.config import _EigenDecompositionConfig
+from hiten.algorithms.linalg.config import EigenDecompositionConfig
 from hiten.algorithms.linalg.types import _ProblemType, _SystemType
 from hiten.algorithms.types.services.base import (_DynamicsServiceBase,
                                                   _PersistenceServiceBase,
@@ -22,6 +23,7 @@ from hiten.utils.io.manifold import load_manifold, save_manifold
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
+    from hiten.algorithms.linalg.options import EigenDecompositionOptions
     from hiten.system.base import System
     from hiten.system.libration import LibrationPoint
     from hiten.system.manifold import Manifold
@@ -66,6 +68,10 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
         The manifold result.
     generator : :class:`~hiten.algorithms.linalg.base.StabilityPipeline`
         The stability pipeline.
+    eigendecomposition_config : :class:`~hiten.algorithms.linalg.config.EigenDecompositionConfig`
+        Compile-time configuration for eigenvalue decomposition.
+    eigendecomposition_options : :class:`~hiten.algorithms.linalg.options.EigenDecompositionOptions`
+        Runtime options for eigenvalue decomposition.
     """
 
     def __init__(self, manifold: "Manifold") -> None:
@@ -77,6 +83,8 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
         self._manifold_result = None
 
         self._generator = None
+        self._eigendecomposition_config = None
+        self._eigendecomposition_options = None
 
     @property
     def generator(self) -> StabilityPipeline:
@@ -433,13 +441,28 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
 
         return (ysos, dysos, states_list, times_list, successes, attempts)
 
-    def compute_stability(self) -> StabilityPipeline:
-        """Compute the stability of the manifold."""
-        key = self.make_key(id(self.domain_obj))
+    def compute_stability(self, options: "EigenDecompositionOptions" = None) -> StabilityPipeline:
+        """Compute the stability of the manifold.
+        
+        Parameters
+        ----------
+        options : :class:`~hiten.algorithms.linalg.options.EigenDecompositionOptions`, optional
+            Runtime options for eigenvalue decomposition. If None, uses self.eigendecomposition_options.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.linalg.base.StabilityPipeline`
+            The stability pipeline with computed eigenvalue decomposition.
+        """
+        # Use self.eigendecomposition_options if options not provided
+        if options is None:
+            options = self.eigendecomposition_options
+            
+        key = self.make_key(id(self.domain_obj), tuple(sorted(options.to_dict().items())))
         
         def _factory() -> StabilityPipeline:
             _, _, phi_T, _ = self.compute_stm(steps=2000)
-            self.generator.compute(domain_obj=phi_T)
+            self.generator.compute(domain_obj=phi_T, options=options)
             return self.generator
         
         return self.get_or_create(key, _factory)
@@ -550,19 +573,67 @@ class _ManifoldDynamicsService(_DynamicsServiceBase):
         return I
 
     @property
-    def eigendecomposition_config(self) -> _EigenDecompositionConfig:
-        """The eigen decomposition configuration."""
-        return _EigenDecompositionConfig(
-            system_type=_SystemType.DISCRETE,
-            problem_type=_ProblemType.EIGENVALUE_DECOMPOSITION,
-            delta=1e-6,
-            tol=1e-6,
-        )
+    def eigendecomposition_config(self) -> EigenDecompositionConfig:
+        """The eigen decomposition configuration.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.linalg.config.EigenDecompositionConfig`
+            The eigendecomposition configuration with reasonable defaults.
+        """
+        if self._eigendecomposition_config is None:
+            self._eigendecomposition_config = EigenDecompositionConfig(
+                system_type=_SystemType.DISCRETE,
+                problem_type=_ProblemType.EIGENVALUE_DECOMPOSITION,
+            )
+        return self._eigendecomposition_config
     
     @eigendecomposition_config.setter
-    def eigendecomposition_config(self, config: _EigenDecompositionConfig) -> None:
-        """Set the eigen decomposition configuration."""
-        self.generator._set_config(config)
+    def eigendecomposition_config(self, value: EigenDecompositionConfig) -> None:
+        """Set the eigen decomposition configuration.
+        
+        Invalidates the generator cache to trigger recreation with the new config.
+        
+        Parameters
+        ----------
+        value : :class:`~hiten.algorithms.linalg.config.EigenDecompositionConfig`
+            New eigendecomposition configuration.
+        """
+        self._eigendecomposition_config = value
+        self._generator = None  # Invalidate cache to trigger recreation
+    
+    @property
+    def eigendecomposition_options(self) -> "EigenDecompositionOptions":
+        """Runtime options for eigenvalue decomposition.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.linalg.options.EigenDecompositionOptions`
+            The eigendecomposition options with reasonable defaults.
+        """
+        if self._eigendecomposition_options is None:
+            from hiten.algorithms.linalg.options import \
+                EigenDecompositionOptions
+            self._eigendecomposition_options = EigenDecompositionOptions(
+                delta=1e-6,
+                tol=1e-6,
+            )
+        return self._eigendecomposition_options
+    
+    @eigendecomposition_options.setter
+    def eigendecomposition_options(self, value: "EigenDecompositionOptions") -> None:
+        """Set runtime options for eigenvalue decomposition.
+        
+        Parameters
+        ----------
+        value : :class:`~hiten.algorithms.linalg.options.EigenDecompositionOptions`
+            New eigendecomposition options.
+        """
+        self._eigendecomposition_options = value
+
+    def apply_connections(self, payload: ConnectionDomainPayload) -> None:
+        """Apply connection results payload to the manifold domain object."""
+        self.domain_obj._connection_results = tuple(payload.connections)
 
 
 class _ManifoldServices(_ServiceBundleBase):

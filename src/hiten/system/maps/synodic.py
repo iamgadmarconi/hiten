@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Literal, Optional, Sequence
+from typing import TYPE_CHECKING, Literal, Optional, Sequence
 
 import numpy as np
 
@@ -14,6 +14,9 @@ from hiten.algorithms.types.states import Trajectory
 from hiten.system.manifold import Manifold
 from hiten.system.orbits.base import PeriodicOrbit
 from hiten.utils.plots import plot_poincare_map
+
+if TYPE_CHECKING:
+    from hiten.algorithms.poincare.synodic.options import SynodicMapOptions
 
 
 class SynodicMap(_HitenBase):
@@ -35,6 +38,7 @@ class SynodicMap(_HitenBase):
     def __init__(self, domain_obj: Literal[PeriodicOrbit, Manifold]):
         self._trajectories = domain_obj.dynamics.trajectories
         self._source = domain_obj
+        self._last_results: SynodicMapResults | None = None
         services = _MapServices.default(self)
         super().__init__(services)
 
@@ -68,6 +72,28 @@ class SynodicMap(_HitenBase):
         """Set the map configuration."""
         self.dynamics.map_config = value
 
+    @property
+    def options(self) -> "SynodicMapOptions":
+        """Get the map runtime options.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.poincare.synodic.options.SynodicMapOptions`
+            The map options with reasonable defaults.
+        """
+        return self.dynamics.map_options
+
+    @options.setter
+    def options(self, value: "SynodicMapOptions"):
+        """Set the map runtime options.
+        
+        Parameters
+        ----------
+        value : :class:`~hiten.algorithms.poincare.synodic.options.SynodicMapOptions`
+            New map options.
+        """
+        self.dynamics.map_options = value
+
     def get_section(self, section_coord: str) -> _Section:
         """Get the section.
         
@@ -92,7 +118,7 @@ class SynodicMap(_HitenBase):
         """Clear the sections."""
         return self.dynamics.clear()
 
-    def compute(self, *, section_axis: str, section_offset: float, plane_coords: tuple[str, str], direction: Optional[Literal[1, -1, None]] = None, overrides: dict[str, Any] | None = None, **kwargs) -> SynodicMapResults:
+    def compute(self, *, section_axis: str, section_offset: float, plane_coords: tuple[str, str], direction: Optional[Literal[1, -1, None]] = None, options: Optional["SynodicMapOptions"] = None) -> SynodicMapResults:
         """Compute the Poincare map.
         
         Parameters
@@ -105,17 +131,15 @@ class SynodicMap(_HitenBase):
             The plane coordinates.
         direction : Literal[1, -1, None], optional
             The direction.
-        overrides : dict[str, Any], optional
-            The overrides.
-        kwargs : dict[str, Any], optional
-            The keyword arguments.
+        options : :class:`~hiten.algorithms.poincare.synodic.options.SynodicMapOptions`, optional
+            Runtime options for the map computation. If None, uses defaults.
 
         Returns
         -------
         :class:`~hiten.algorithms.poincare.synodic.types.SynodicMapResults`
             The results of the Poincare map.
         """
-        return self.dynamics.compute(section_axis=section_axis, section_offset=section_offset, plane_coords=plane_coords, direction=direction, overrides=overrides, **kwargs)
+        return self.dynamics.compute(section_axis=section_axis, section_offset=section_offset, plane_coords=plane_coords, direction=direction, options=options)
 
     def get_points(self, axes: Optional[tuple[str, str]] = None) -> np.ndarray:
         """Get points from the Poincare map.

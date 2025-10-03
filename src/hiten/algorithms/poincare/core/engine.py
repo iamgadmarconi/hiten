@@ -18,7 +18,7 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING, Generic
 
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
-from hiten.algorithms.poincare.core.config import _ReturnMapBaseConfig
+from hiten.algorithms.poincare.core.config import _ReturnMapConfig
 from hiten.algorithms.poincare.core.strategies import _SeedingStrategyBase
 from hiten.algorithms.types.core import (OutputsT, ProblemT, ResultT,
                                          _HitenBaseEngine)
@@ -42,7 +42,7 @@ class _ReturnMapEngine(_HitenBaseEngine[ProblemT, ResultT, OutputsT], Generic[Pr
     seed_strategy : :class:`~hiten.algorithms.poincare.core.strategies._SeedingStrategyBase`
         The seeding strategy for generating initial conditions
         on the section plane.
-    map_config : :class:`~hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`
+    map_config : :class:`~hiten.algorithms.poincare.core.config._ReturnMapConfig`
         Configuration object containing engine parameters such as
         iteration count, time step, and worker count.
 
@@ -52,7 +52,7 @@ class _ReturnMapEngine(_HitenBaseEngine[ProblemT, ResultT, OutputsT], Generic[Pr
         The numerical integration backend.
     _strategy : :class:`~hiten.algorithms.poincare.core.strategies._SeedingStrategyBase`
         The seeding strategy for initial conditions.
-    _map_config : :class:`~hiten.algorithms.poincare.core.config._ReturnMapBaseConfig`
+    _map_config : :class:`~hiten.algorithms.poincare.core.config._ReturnMapConfig`
         The engine configuration.
     _n_iter : int
         Number of return map iterations to compute.
@@ -79,16 +79,14 @@ class _ReturnMapEngine(_HitenBaseEngine[ProblemT, ResultT, OutputsT], Generic[Pr
         *,
         backend: _ReturnMapBackend,
         seed_strategy: _SeedingStrategyBase,
-        map_config: _ReturnMapBaseConfig,
+        map_config: _ReturnMapConfig,
         interface=None,
     ) -> None:
         super().__init__(backend=backend, interface=interface)
         self._strategy = seed_strategy
         self._map_config = map_config
-        # Use getattr with defaults for optional attributes to make engine more flexible
-        self._n_iter = int(getattr(self._map_config, 'n_iter', 40))
-        self._dt = float(getattr(self._map_config, 'dt', 0.01))
-        self._n_workers = self._map_config.n_workers or os.cpu_count() or 1
+        # NOTE: Runtime params (n_iter, dt, n_workers) should come from problem, not config
+        # Engines now get these from the problem object created by the interface
 
     @abstractmethod
     def solve(self, problem) -> "_Section":

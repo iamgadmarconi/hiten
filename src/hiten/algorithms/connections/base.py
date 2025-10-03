@@ -25,19 +25,22 @@ from typing import TYPE_CHECKING, Generic, Optional
 
 import numpy as np
 
+from hiten.algorithms.connections.types import (ConnectionDomainPayload,
+                                                ConnectionResults)
 from hiten.algorithms.types.core import (ConfigT, DomainT, InterfaceT, ResultT,
-                                         _HitenBaseFacade)
+                                         _HitenBasePipeline)
 from hiten.algorithms.types.exceptions import EngineError
 from hiten.utils.plots import (plot_heteroclinic_connection,
                                plot_poincare_connections_map)
 
 if TYPE_CHECKING:
-    from hiten.algorithms.connections.engine import _ConnectionEngine
     from hiten.algorithms.connections.backends import _ConnectionsBackend
+    from hiten.algorithms.connections.engine import _ConnectionEngine
+    from hiten.algorithms.connections.options import ConnectionOptions
     from hiten.algorithms.connections.types import (Connections,
                                                     _ConnectionResult)
 
-class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
+class ConnectionPipeline(_HitenBasePipeline, Generic[DomainT, InterfaceT, ConfigT, ResultT]):
     """Provide a user-facing facade for connection discovery and plotting in CR3BP.
 
     This class provides a high-level interface for discovering ballistic and
@@ -47,9 +50,9 @@ class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
 
     Parameters
     ----------
-    config : :class:`~hiten.algorithms.connections.config._ConnectionConfig`
+    config : :class:`~hiten.algorithms.connections.config.ConnectionConfig`
         Configuration object containing section, direction, and search parameters.
-    interface : :class:`~hiten.algorithms.connections.interfaces._ManifoldInterface`
+    interface : :class:`~hiten.algorithms.connections.interfaces._ManifoldConnectionInterface`
         Interface for translating between domain objects and backend inputs.
     engine : :class:`~hiten.algorithms.connections.engine._ConnectionEngine`, optional
         Engine instance to use for connection discovery. If None, must be set later
@@ -96,7 +99,7 @@ class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
     >>> )
     >>> 
     >>> conn = ConnectionPipeline.with_default_engine(
-    >>>     config=_ConnectionConfig(
+    >>>     config=ConnectionConfig(
     >>>         section=section_cfg,
     >>>         direction=None,
     >>>         delta_v_tol=1,
@@ -133,18 +136,18 @@ class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
         self._last_results: list["_ConnectionResult"] | None = None
 
     @classmethod
-    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None, backend: Optional[_ConnectionsBackend] = None) -> "ConnectionPipeline[DomainT, ConfigT, ResultT]":
+    def with_default_engine(cls, *, config: ConfigT, interface: Optional[InterfaceT] = None, backend: Optional["_ConnectionsBackend"] = None) -> "ConnectionPipeline[DomainT, ConfigT, ResultT]":
         """Create a facade instance with a default engine (factory).
 
         The default engine uses :class:`~hiten.algorithms.connections.backends._ConnectionsBackend`.
 
         Parameters
         ----------
-        config : :class:`~hiten.algorithms.connections.config._ConnectionConfig`
+        config : :class:`~hiten.algorithms.connections.config.ConnectionConfig`
             Configuration object containing section, direction, and search parameters.
-        interface : :class:`~hiten.algorithms.connections.interfaces._ManifoldInterface`, optional
+        interface : :class:`~hiten.algorithms.connections.interfaces._ManifoldConnectionInterface`, optional
             Interface for translating between domain objects and backend inputs.
-            If None, uses the default _ManifoldInterface.
+            If None, uses the default _ManifoldConnectionInterface.
         backend : :class:`~hiten.algorithms.connections.backends._ConnectionsBackend`, optional
             Backend instance for the connection algorithm. If None, uses the default _ConnectionsBackend.
         Returns
@@ -154,13 +157,14 @@ class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
         """
         from hiten.algorithms.connections.backends import _ConnectionsBackend
         from hiten.algorithms.connections.engine import _ConnectionEngine
-        from hiten.algorithms.connections.interfaces import _ManifoldInterface
+        from hiten.algorithms.connections.interfaces import \
+            _ManifoldConnectionInterface
         backend = backend or _ConnectionsBackend()
-        intf = interface or _ManifoldInterface()
+        intf = interface or _ManifoldConnectionInterface()
         engine = _ConnectionEngine(backend=backend, interface=intf)
         return cls(config, engine, intf, backend)
 
-    def solve(self, source: DomainT, target: DomainT, *, override: bool = False, **kwargs) -> "Connections":
+    def solve(self, source: DomainT, target: DomainT, options: "ConnectionOptions") -> "Connections":
         """Discover connections between two manifolds.
 
         This method finds ballistic and impulsive transfers between the source
@@ -173,10 +177,8 @@ class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
             Source manifold (e.g., unstable manifold of a periodic orbit).
         target : :class:`~hiten.system.manifold.Manifold`
             Target manifold (e.g., stable manifold of another periodic orbit).
-        override : bool, default=False
-            Whether to override configuration with provided kwargs.
-        **kwargs
-            Configuration parameters to update if override=True.
+        options : :class:`~hiten.algorithms.connections.options.ConnectionOptions`
+            Runtime options for the connection search.
 
         Returns
         -------
@@ -200,19 +202,29 @@ class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
 
         Examples
         --------
-        >>> results = connection.solve(unstable_manifold, stable_manifold)
+        >>> from hiten.algorithms.connections.options import ConnectionOptions
+        >>> options = ConnectionOptions()
+        >>> results = connection.solve(unstable_manifold, stable_manifold, options)
         >>> print(results)
         """
         domain_obj = (source, target)
         
-        problem = self._create_problem(domain_obj=domain_obj, override=override, **kwargs)
+        problem = self._create_problem(domain_obj=domain_obj, options=options)
         engine = self._get_engine()
         engine_result = engine.solve(problem)
-        records = engine_result.connections
+        payload = ConnectionDomainPayload._from_mapping(
+            {
+                "connections": engine_result.connections,
+                "source": source,
+                "target": target,
+            }
+        )
+        source.services.dynamics.apply_connections(payload)
+        target.services.dynamics.apply_connections(payload)
         self._last_source = source
         self._last_target = target
-        self._last_results = records
-        return engine_result.to_results()
+        self._last_results = payload.connections
+        return ConnectionResults(list(payload.connections))
 
     @property
     def results(self) -> "Connections":
@@ -494,7 +506,7 @@ class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
         
         Parameters
         ----------
-        config : :class:`~hiten.algorithms.connections.config._ConnectionConfig`
+        config : :class:`~hiten.algorithms.connections.config.ConnectionConfig`
             The configuration object to validate.
             
         Raises
@@ -506,9 +518,3 @@ class ConnectionPipeline(_HitenBaseFacade, Generic[DomainT, InterfaceT, ConfigT,
         
         if hasattr(config, 'section') and config.section is None:
             raise ValueError("Section configuration is required")
-        if hasattr(config, 'delta_v_tol') and config.delta_v_tol <= 0:
-            raise ValueError("Delta-V tolerance must be positive")
-        if hasattr(config, 'ballistic_tol') and config.ballistic_tol <= 0:
-            raise ValueError("Ballistic tolerance must be positive")
-        if hasattr(config, 'eps2d') and config.eps2d <= 0:
-            raise ValueError("2D epsilon must be positive")
