@@ -1651,7 +1651,6 @@ class _LissajousOrbitDynamicsService(_OrbitDynamicsService):
         self._amplitude_z = orbit._amplitude_z
         self._phi = orbit._phi
         self._psi = orbit._psi
-        self._zenith = orbit._zenith
         
         if orbit._initial_state is not None and (self._amplitude_y is not None or self._amplitude_z is not None):
             self._amplitude_y = None
@@ -1672,8 +1671,6 @@ class _LissajousOrbitDynamicsService(_OrbitDynamicsService):
             self._initial_state = self.initial_guess()
 
         if self._initial_state is not None:
-            if self._zenith is None:
-                self._zenith = "northern" if self._initial_state[SynodicState.Z] > 0 else "southern"
             # Infer missing amplitudes if not provided
             if self._amplitude_y is None:
                 self._amplitude_y = self._initial_state[SynodicState.Y]
@@ -1682,17 +1679,6 @@ class _LissajousOrbitDynamicsService(_OrbitDynamicsService):
 
         # Set a default amplitude for the base class
         self._amplitude = self._amplitude_y if self._amplitude_y is not None else self._amplitude_z
-
-    @property
-    def zenith(self) -> Literal["northern", "southern"]:
-        """(Read-only) Current zenith of the orbit.
-        
-        Returns
-        -------
-        Literal["northern", "southern"]
-            The orbit zenith.
-        """
-        return self._zenith
 
     @property
     def phi(self) -> float:
@@ -1737,17 +1723,6 @@ class _LissajousOrbitDynamicsService(_OrbitDynamicsService):
             The z-amplitude in nondimensional units.
         """
         return self._amplitude_z
-
-    @property
-    def n(self) -> int:
-        """(Read-only) Current n value of the orbit.
-        
-        Returns
-        -------
-        int
-            The orbit n value (1 for northern, -1 for southern).
-        """
-        return 1 if self.zenith == "northern" else -1
 
     def initial_guess(self) -> np.ndarray:
         """Generate an initial guess for the Lissajous orbit using Richardson's third-order analytical approximation.
@@ -1855,8 +1830,7 @@ class _LissajousOrbitDynamicsService(_OrbitDynamicsService):
         tau1 = phi
         tau2 = psi
         
-        # Sigma determines northern vs southern branch
-        deltan = -self.n
+        deltan = won
 
         # Third-order position approximation
         x = (

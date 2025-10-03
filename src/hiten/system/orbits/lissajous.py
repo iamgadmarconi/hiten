@@ -16,7 +16,7 @@ Richardson, D. L. (1980). "Analytic construction of periodic orbits about the
 collinear libration points".
 """
 
-from typing import TYPE_CHECKING, Literal, Optional, Sequence
+from typing import TYPE_CHECKING, Optional, Sequence
 
 from hiten.system.orbits.base import PeriodicOrbit
 
@@ -46,13 +46,10 @@ class LissajousOrbit(PeriodicOrbit):
         Phase angle for in-plane motion in radians. Default is 0.0.
     psi : float, optional
         Phase angle for out-of-plane motion in radians. Default is 0.0.
-    zenith : {'northern', 'southern'}, optional
-        Indicates the symmetry branch with respect to the xy-plane.
-        Default is 'northern'.
     initial_state : Sequence[float] or None, optional
         Six-dimensional state vector [x, y, z, vx, vy, vz] in the rotating
         synodic frame. When None, an analytical initial guess is generated
-        from amplitude_y, amplitude_z, phi, psi, and zenith.
+        from amplitude_y, amplitude_z, phi, and psi.
 
     Attributes
     ----------
@@ -64,8 +61,6 @@ class LissajousOrbit(PeriodicOrbit):
         Phase angle for in-plane motion in radians.
     psi : float
         Phase angle for out-of-plane motion in radians.
-    zenith : {'northern', 'southern'} or None
-        Indicates the symmetry branch with respect to the xy-plane.
 
     Raises
     ------
@@ -91,28 +86,15 @@ class LissajousOrbit(PeriodicOrbit):
             amplitude_y: Optional[float] = None,
             amplitude_z: Optional[float] = None,
             phi: float = 0.0,
-            psi: float = 0.0,
-            zenith: Literal["northern", "southern"] = "northern"
+            psi: float = 0.0
         ):
 
         self._amplitude_y = amplitude_y
         self._amplitude_z = amplitude_z
         self._phi = phi
         self._psi = psi
-        self._zenith = zenith
 
         super().__init__(libration_point, initial_state=initial_state)
-
-    @property
-    def zenith(self) -> Literal["northern", "southern"]:
-        """(Read-only) Current zenith of the orbit.
-        
-        Returns
-        -------
-        Literal["northern", "southern"]
-            The orbit zenith.
-        """
-        return self.dynamics.zenith
 
     @property
     def phi(self) -> float:
