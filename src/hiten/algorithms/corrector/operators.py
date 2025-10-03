@@ -11,12 +11,13 @@ The operator pattern allows:
 - Easy testing and swapping of implementations
 """
 
-from typing import TYPE_CHECKING, Callable, Optional, Protocol, Sequence
+from typing import TYPE_CHECKING, Any, Callable, Optional, Protocol, Sequence
 
 import numpy as np
 
 from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.dynamics.rtbp import _compute_stm
+from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
     from hiten.system.orbits.base import PeriodicOrbit
@@ -452,64 +453,18 @@ class _SingleShootingOrbitOperators(_OrbitCorrectionOperatorBase, _SingleShootin
 
 
 class _MultipleShootingOrbitOperators(_OrbitCorrectionOperatorBase, _MultipleShootingOperators):
-    """Concrete implementation of _MultipleShootingOperators for periodic orbits.
-    
-    This class adapts PeriodicOrbit domain objects to the multiple-shooting
-    operator protocol, handling patch-based propagation, continuity constraints,
-    and block-structured Jacobian operations.
-    
-    Parameters
-    ----------
-    domain_obj : PeriodicOrbit
-        The periodic orbit domain object.
-    control_indices : Sequence[int]
-        Indices of state components that vary during correction.
-    continuity_indices : Sequence[int]
-        Indices of state components enforced continuous at patch junctions.
-    boundary_indices : Sequence[int]
-        Indices of state components with boundary conditions at final patch.
-    target : np.ndarray
-        Target values for boundary conditions.
-    patch_times : np.ndarray
-        Time values at patch boundaries.
-    patch_templates : Sequence[np.ndarray]
-        Full-state templates at each patch.
-    extra_jacobian : Callable or None
-        Optional extra Jacobian term.
-    extra_jacobian_control_indices : Sequence[int] or None
-        Optional indices specifying which control variables the extra_jacobian
-        columns correspond to. If None, extra_jacobian is assumed to span all
-        control indices.
-    event_func : Callable
-        Event function for final boundary detection.
-    forward : int
-        Integration direction.
-    method : str
-        Integration method.
-    order : int
-        Integration order.
-    steps : int
-        Number of integration steps per patch.
-    """
+    """Multiple-shooting operators with clean residual/Jacobian evaluation."""
 
     def __init__(
         self,
         *,
         domain_obj: "PeriodicOrbit",
-        control_indices: Sequence[int],
-        continuity_indices: Sequence[int],
-        boundary_indices: Sequence[int],
-        target: Sequence[float],
-        patch_times: np.ndarray,
-        patch_templates: Sequence[np.ndarray],
-        extra_jacobian: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]],
-        extra_jacobian_control_indices: Optional[Sequence[int]],
-        event_func: Callable,
+        event_func: Callable | None,
         forward: int,
         method: str,
         order: int,
         steps: int,
-    ):
+    ) -> None:
         super().__init__(
             domain_obj=domain_obj,
             method=method,
@@ -518,229 +473,4 @@ class _MultipleShootingOrbitOperators(_OrbitCorrectionOperatorBase, _MultipleSho
             forward=forward,
             event_func=event_func,
         )
-        self._control_indices = tuple(control_indices)
-        self._continuity_indices = tuple(continuity_indices)
-        self._boundary_indices = tuple(boundary_indices)
-        self._target = np.asarray(target, dtype=float)
-        self._patch_times = np.asarray(patch_times, dtype=float)
-        self._patch_templates = [tpl.copy() for tpl in patch_templates]
-        self._extra_jacobian = extra_jacobian
-        self._extra_jacobian_control_indices = (
-            tuple(extra_jacobian_control_indices) if extra_jacobian_control_indices is not None else None
-        )
 
-    @property
-    def control_indices(self) -> Sequence[int]:
-        return self._control_indices
-
-    @property
-    def continuity_indices(self) -> Sequence[int]:
-        return self._continuity_indices
-
-    @property
-    def boundary_indices(self) -> Sequence[int]:
-        return self._boundary_indices
-
-    @property
-    def target(self) -> np.ndarray:
-        return self._target
-
-    @property
-    def patch_times(self) -> np.ndarray:
-        return self._patch_times
-
-    @property
-    def patch_templates(self) -> Sequence[np.ndarray]:
-        return self._patch_templates
-
-    @property
-    def extra_jacobian(self) -> Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]]:
-        return self._extra_jacobian
-
-    @property
-    def extra_jacobian_control_indices(self) -> Optional[Sequence[int]]:
-        return self._extra_jacobian_control_indices
-
-    def reconstruct_full_state(self, template: np.ndarray, control_params: np.ndarray) -> np.ndarray:
-        """Reconstruct full state from template and control parameters."""
-        x_full = template.copy()
-        x_full[list(self._control_indices)] = control_params
-        return x_full
-
-    def propagate_segment(self, x0: np.ndarray, dt: float) -> np.ndarray:
-        """Propagate state for fixed time span (patch segment)."""
-        return self._propagate_fixed(x0, dt)
-
-    def propagate_to_event(self, x_final_patch: np.ndarray) -> tuple[float, np.ndarray]:
-        """Propagate final patch state until boundary event occurs."""
-        return self._propagate_to_event(x_final_patch)
-
-    def compute_stm_segment(self, x0: np.ndarray, dt: float) -> np.ndarray:
-        """Compute STM for fixed time span (patch segment)."""
-        return self._compute_stm(x0, dt)
-
-    def compute_stm_to_event(self, x_final_patch: np.ndarray, t_event: float) -> np.ndarray:
-        """Compute STM from final patch to event time."""
-        return self._compute_stm(x_final_patch, t_event)
-    
-    def build_residual_fn(self) -> Callable[[np.ndarray], np.ndarray]:
-        """Build residual function for multiple-shooting correction.
-        
-        Returns
-        -------
-        Callable[[np.ndarray], np.ndarray]
-            Residual function: params -> residual vector.
-        """
-        n_patches = len(self._patch_templates)
-        n_control = len(self._control_indices)
-        continuity_indices = list(self._continuity_indices)
-        boundary_indices = list(self._boundary_indices)
-        
-        def residual_fn(params: np.ndarray) -> np.ndarray:
-            """Compute residual from all patch control parameters."""
-            params_2d = params.reshape((n_patches, n_control))
-            residuals = []
-            
-            # Propagate all patches
-            x_propagated_list = []
-            for i in range(n_patches):
-                x_patch = self.reconstruct_full_state(self._patch_templates[i], params_2d[i])
-                
-                if i < n_patches - 1:
-                    # Interior patches: propagate fixed time
-                    dt = self._patch_times[i + 1] - self._patch_times[i]
-                    x_next = self.propagate_segment(x_patch, dt)
-                else:
-                    # Final patch: propagate to event
-                    _, x_next = self.propagate_to_event(x_patch)
-                
-                x_propagated_list.append(x_next)
-            
-            # Continuity residuals
-            for i in range(n_patches - 1):
-                x_next_minus = x_propagated_list[i][continuity_indices]
-                x_next_plus = params_2d[i + 1, :len(continuity_indices)]  # Assumes control_indices match continuity
-                continuity_error = x_next_minus - x_next_plus
-                residuals.append(continuity_error)
-            
-            # Boundary residual
-            x_final = x_propagated_list[-1]
-            boundary_error = x_final[boundary_indices] - self._target
-            residuals.append(boundary_error)
-            
-            return np.concatenate(residuals)
-        
-        return residual_fn
-    
-    def build_jacobian_fn(self) -> Callable[[np.ndarray], np.ndarray]:
-        """Build block-structured Jacobian for multiple-shooting correction.
-        
-        The Jacobian has block structure:
-        
-            [Phi_0  -I   0   0  ]  <- continuity at patch 1
-            [ 0   Phi_1  -I  0  ]  <- continuity at patch 2
-            [ 0    0   Phi_2 -I ]  <- continuity at patch 3
-            [dBC  dBC  dBC  Phi_f]  <- boundary at final event
-        
-        Returns
-        -------
-        Callable[[np.ndarray], np.ndarray]
-            Jacobian function: params -> block-structured Jacobian matrix.
-        """
-        n_patches = len(self._patch_templates)
-        n_control = len(self._control_indices)
-        n_continuity = len(self._continuity_indices)
-        n_boundary = len(self._boundary_indices)
-        continuity_indices = list(self._continuity_indices)
-        boundary_indices = list(self._boundary_indices)
-        control_indices = list(self._control_indices)
-        
-        # Total residual dimension
-        n_residual = (n_patches - 1) * n_continuity + n_boundary
-        n_params = n_patches * n_control
-        
-        def jacobian_fn(params: np.ndarray) -> np.ndarray:
-            """Compute block-structured Jacobian."""
-            params_2d = params.reshape((n_patches, n_control))
-            J = np.zeros((n_residual, n_params))
-            
-            # Compute STMs for all patches
-            Phi_list = []
-            x_propagated_list = []
-            
-            for i in range(n_patches):
-                x_patch = self.reconstruct_full_state(self._patch_templates[i], params_2d[i])
-                
-                if i < n_patches - 1:
-                    # Interior patches
-                    dt = self._patch_times[i + 1] - self._patch_times[i]
-                    Phi = self.compute_stm_segment(x_patch, dt)
-                    x_next = self.propagate_segment(x_patch, dt)
-                else:
-                    # Final patch to event
-                    t_event, x_next = self.propagate_to_event(x_patch)
-                    Phi = self.compute_stm_to_event(x_patch, t_event)
-                
-                Phi_list.append(Phi)
-                x_propagated_list.append(x_next)
-            
-            # Fill continuity blocks
-            row_offset = 0
-            for i in range(n_patches - 1):
-                # Block Phi_i in position (i, i)
-                col_start = i * n_control
-                Phi_block = Phi_list[i][np.ix_(continuity_indices, control_indices)]
-                J[row_offset:row_offset + n_continuity, col_start:col_start + n_control] = Phi_block
-                
-                # Block -I in position (i, i+1)
-                col_start_next = (i + 1) * n_control
-                J[row_offset:row_offset + n_continuity, col_start_next:col_start_next + n_continuity] = -np.eye(n_continuity)
-                
-                row_offset += n_continuity
-            
-            # Fill boundary row
-            Phi_final = Phi_list[-1]
-            for i in range(n_patches):
-                col_start = i * n_control
-                
-                if i < n_patches - 1:
-                    # Chain rule: dBC/dx_final * dxfinal/dx_i
-                    # For interior patches, dxfinal/dx_i comes from multiplying STMs
-                    Phi_chain = Phi_final
-                    for j in range(n_patches - 1, i, -1):
-                        Phi_chain = Phi_chain @ Phi_list[j]
-                    
-                    J_block = Phi_chain[np.ix_(boundary_indices, control_indices)]
-                else:
-                    # Final patch
-                    J_block = Phi_final[np.ix_(boundary_indices, control_indices)]
-                
-                J[row_offset:row_offset + n_boundary, col_start:col_start + n_control] = J_block
-            
-            # Apply extra Jacobian term if present
-            if self._extra_jacobian is not None:
-                x_final = x_propagated_list[-1]
-                extra_jac = self._extra_jacobian(x_final, Phi_final)
-                
-                # If extra_jacobian_control_indices is specified, map the extra_jac
-                # to the correct columns. Otherwise, assume it matches all control_indices.
-                if self._extra_jacobian_control_indices is not None:
-                    # Find which column indices in the full parameter vector correspond
-                    # to the specified control indices
-                    for patch_idx in range(n_patches):
-                        patch_col_start = patch_idx * n_control
-                        # For each extra jacobian control index, find its position in control_indices
-                        for j, ctrl_idx in enumerate(self._extra_jacobian_control_indices):
-                            # Find position of ctrl_idx in control_indices
-                            if ctrl_idx in control_indices:
-                                local_col = control_indices.index(ctrl_idx)
-                                global_col = patch_col_start + local_col
-                                # Subtract the corresponding column of extra_jac
-                                J[row_offset:row_offset + n_boundary, global_col] -= extra_jac[:, j]
-                else:
-                    # Legacy behavior: assume extra_jac matches all columns
-                    J[row_offset:row_offset + n_boundary, :] -= extra_jac
-            
-            return J
-        
-        return jacobian_fn

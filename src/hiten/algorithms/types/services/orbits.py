@@ -13,8 +13,6 @@ from hiten.algorithms.continuation.base import ContinuationPipeline
 from hiten.algorithms.continuation.types import (ContinuationDomainPayload,
                                                  ContinuationResult)
 from hiten.algorithms.corrector.base import CorrectorPipeline
-from hiten.algorithms.corrector.config import \
-    MultipleShootingOrbitCorrectionConfig
 from hiten.algorithms.corrector.types import (CorrectionResult,
                                               OrbitCorrectionDomainPayload)
 from hiten.algorithms.dynamics.base import _DynamicalSystem, _propagate_dynsys
@@ -42,6 +40,7 @@ if TYPE_CHECKING:
     from hiten.system.libration.base import LibrationPoint
     from hiten.system.orbits.base import GenericOrbit, PeriodicOrbit
     from hiten.system.orbits.halo import HaloOrbit
+    from hiten.system.orbits.lissajous import LissajousOrbit
     from hiten.system.orbits.lyapunov import LyapunovOrbit
     from hiten.system.orbits.vertical import VerticalOrbit
 
@@ -95,29 +94,16 @@ class _OrbitCorrectionService(_DynamicsServiceBase):
         """
         if self._corrector is None:
             config = self.correction_config
+
+            from hiten.algorithms.corrector.backends.newton import \
+                _NewtonBackend
+            from hiten.algorithms.corrector.interfaces import \
+                _OrbitCorrectionInterface
+            from hiten.algorithms.corrector.stepping import make_armijo_stepper
             
-            # Select interface and backend based on config type
-            if isinstance(config, MultipleShootingOrbitCorrectionConfig):
-                from hiten.algorithms.corrector.backends.ms import \
-                    _MultipleShootingBackend
-                from hiten.algorithms.corrector.interfaces import \
-                    _MultipleShootingOrbitCorrectionInterface
-                from hiten.algorithms.corrector.stepping import \
-                    make_armijo_stepper
-                
-                interface = _MultipleShootingOrbitCorrectionInterface()
-                backend = _MultipleShootingBackend(stepper_factory=make_armijo_stepper())
-            else:
-                from hiten.algorithms.corrector.backends.newton import \
-                    _NewtonBackend
-                from hiten.algorithms.corrector.interfaces import \
-                    _OrbitCorrectionInterface
-                from hiten.algorithms.corrector.stepping import \
-                    make_armijo_stepper
-                
-                interface = _OrbitCorrectionInterface()
-                backend = _NewtonBackend(stepper_factory=make_armijo_stepper())
-            
+            interface = _OrbitCorrectionInterface()
+            backend = _NewtonBackend(stepper_factory=make_armijo_stepper())
+        
             self._corrector = CorrectorPipeline.with_default_engine(
                 config=config,
                 interface=interface,
@@ -1586,6 +1572,343 @@ class _VerticalOrbitDynamicsService(_OrbitDynamicsService):
         return self._initial_state
 
 
+class _LissajousOrbitCorrectionService(_OrbitCorrectionService):
+    """Drive Newton-based differential correction for Lissajous orbits.
+    
+    Parameters
+    ----------
+    orbit : :class:`~hiten.system.orbits.lissajous.LissajousOrbit`
+        The orbit.
+    """
+
+    def __init__(self, orbit: "LissajousOrbit") -> None:
+        super().__init__(orbit)
+
+    def _default_correction_config(self) -> "OrbitCorrectionConfig":
+        """Create the default correction configuration for Lissajous orbits.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.corrector.config.OrbitCorrectionConfig`
+            The default correction configuration for Lissajous orbits.
+        """
+        raise NotImplementedError("Lissajous orbits are not supported for correction.")
+
+    def _default_correction_options(self) -> "OrbitCorrectionOptions":
+        """Create the default correction options for Lissajous orbits.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.corrector.options.OrbitCorrectionOptions`
+            The default correction options for Lissajous orbits.
+        """
+        raise NotImplementedError("Lissajous orbits are not supported for correction.")
+
+class _LissajousOrbitContinuationService(_OrbitContinuationService):
+    """Drive continuation for Lissajous orbits.
+    
+    Parameters
+    ----------
+    orbit : :class:`~hiten.system.orbits.lissajous.LissajousOrbit`
+        The orbit.
+    """
+
+    def __init__(self, orbit: "LissajousOrbit") -> None:
+        super().__init__(orbit)
+
+    def _default_continuation_config(self) -> "OrbitContinuationConfig":
+        """Create the default continuation configuration for Lissajous orbits.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.continuation.config.OrbitContinuationConfig`
+            The default continuation configuration for Lissajous orbits.
+        """
+        raise NotImplementedError("Lissajous orbits are not supported for continuation.")
+
+    def _default_continuation_options(self) -> "OrbitContinuationOptions":
+        """Create the default continuation options for Lissajous orbits.
+        
+        Returns
+        -------
+        :class:`~hiten.algorithms.continuation.options.OrbitContinuationOptions`
+            The default continuation options for Lissajous orbits.
+        """
+        raise NotImplementedError("Lissajous orbits are not supported for continuation.")
+
+
+class _LissajousOrbitDynamicsService(_OrbitDynamicsService):
+    """Dynamics service for Lissajous orbits.
+    
+    Parameters
+    ----------
+    orbit : :class:`~hiten.system.orbits.lissajous.LissajousOrbit`
+        The orbit.
+    """
+
+    def __init__(self, orbit: "LissajousOrbit") -> None:
+        self._amplitude_y = orbit._amplitude_y
+        self._amplitude_z = orbit._amplitude_z
+        self._phi = orbit._phi
+        self._psi = orbit._psi
+        self._zenith = orbit._zenith
+        
+        if orbit._initial_state is not None and (self._amplitude_y is not None or self._amplitude_z is not None):
+            self._amplitude_y = None
+            self._amplitude_z = None
+        
+        super().__init__(orbit)
+
+        from hiten.system.libration.collinear import (CollinearPoint, L1Point,
+                                                      L2Point)
+        if not isinstance(self._libration_point, CollinearPoint):
+            raise TypeError(f"Lissajous orbits are only defined for CollinearPoint, but got {type(self._libration_point)}.")
+        if self._initial_state is None:
+            if self._amplitude_y is None or self._amplitude_z is None:
+                raise ValueError("Lissajous orbits require 'amplitude_y' and 'amplitude_z' parameters when an initial_state is not provided.")
+            if not isinstance(self._libration_point, (L1Point, L2Point)):
+                raise ValueError("The analytical guess for L3 Lissajous orbits is experimental.\n Convergence is not guaranteed and may require more iterations.")
+
+            self._initial_state = self.initial_guess()
+
+        if self._initial_state is not None:
+            if self._zenith is None:
+                self._zenith = "northern" if self._initial_state[SynodicState.Z] > 0 else "southern"
+            # Infer missing amplitudes if not provided
+            if self._amplitude_y is None:
+                self._amplitude_y = self._initial_state[SynodicState.Y]
+            if self._amplitude_z is None:
+                self._amplitude_z = self._initial_state[SynodicState.Z]
+
+        # Set a default amplitude for the base class
+        self._amplitude = self._amplitude_y if self._amplitude_y is not None else self._amplitude_z
+
+    @property
+    def zenith(self) -> Literal["northern", "southern"]:
+        """(Read-only) Current zenith of the orbit.
+        
+        Returns
+        -------
+        Literal["northern", "southern"]
+            The orbit zenith.
+        """
+        return self._zenith
+
+    @property
+    def phi(self) -> float:
+        """(Read-only) Phase angle for in-plane motion.
+        
+        Returns
+        -------
+        float
+            Phase angle in radians.
+        """
+        return self._phi
+
+    @property
+    def psi(self) -> float:
+        """(Read-only) Phase angle for out-of-plane motion.
+        
+        Returns
+        -------
+        float
+            Phase angle in radians.
+        """
+        return self._psi
+
+    @property
+    def amplitude_y(self) -> float:
+        """(Read-only) y-amplitude of the orbit.
+        
+        Returns
+        -------
+        float
+            The y-amplitude in nondimensional units.
+        """
+        return self._amplitude_y
+
+    @property
+    def amplitude_z(self) -> float:
+        """(Read-only) z-amplitude of the orbit.
+        
+        Returns
+        -------
+        float
+            The z-amplitude in nondimensional units.
+        """
+        return self._amplitude_z
+
+    @property
+    def n(self) -> int:
+        """(Read-only) Current n value of the orbit.
+        
+        Returns
+        -------
+        int
+            The orbit n value (1 for northern, -1 for southern).
+        """
+        return 1 if self.zenith == "northern" else -1
+
+    def initial_guess(self) -> np.ndarray:
+        """Generate an initial guess for the Lissajous orbit using Richardson's third-order analytical approximation.
+        
+        This method implements the third-order approximation for Lissajous orbits
+        based on Richardson (1980). The analytical solution combines in-plane and
+        out-of-plane oscillations with independent frequencies.
+        
+        Returns
+        -------
+        np.ndarray
+            The initial guess for the orbit as a 6-element state vector.
+
+        References
+        ----------
+        .. [Richardson1980] Richardson, D. L. (1980). "Analytic construction of periodic orbits about the
+        collinear libration points". Celestial Mechanics 22 (3): 241-253.
+        """
+        amplitude_y = self._amplitude_y
+        amplitude_z = self._amplitude_z
+        phi = self._phi
+        psi = self._psi
+        
+        gamma = self.libration_point.dynamics.gamma
+        won, primary = self.libration_point.dynamics.won
+        
+        # Normalize amplitudes by gamma
+        Ay = amplitude_y / gamma
+        Az = amplitude_z / gamma
+        
+        c = [0.0, 0.0, 0.0, 0.0, 0.0]  # just to keep 5 slots: c[2], c[3], c[4]
+        for N in [2, 3, 4]:
+            c[N] = self.libration_point.dynamics.cn(N)
+
+        # Get linear frequencies
+        _, lambda2, _ = self.libration_point.dynamics.linear_modes
+        lam = lambda2
+        nu = np.sqrt(c[2])  # Out-of-plane frequency
+
+        k = 2 * lam / (lam**2 + 1 - c[2])
+        delta = lam**2 - c[2]
+
+        d1 = (3 * lam**2 / k) * (k * (6 * lam**2 - 1) - 2 * lam)
+        d2 = (8 * lam**2 / k) * (k * (11 * lam**2 - 1) - 2 * lam)
+
+        # Second-order coefficients
+        a21 = (3 * c[3] * (k**2 - 2)) / (4 * (1 + 2 * c[2]))
+        a22 = (3 * c[3]) / (4 * (1 + 2 * c[2]))
+        a23 = - (3 * c[3] * lam / (4 * k * d1)) * (
+            3 * k**3 * lam - 6 * k * (k - lam) + 4
+        )
+        a24 = - (3 * c[3] * lam / (4 * k * d1)) * (2 + 3 * k * lam)
+
+        b21 = - (3 * c[3] * lam / (2 * d1)) * (3 * k * lam - 4)
+        b22 = (3 * c[3] * lam) / d1
+
+        d21 = - c[3] / (2 * lam**2)
+
+        # Third-order coefficients
+        a31 = (
+            - (9 * lam / (4 * d2)) 
+            * (4 * c[3] * (k * a23 - b21) + k * c[4] * (4 + k**2)) 
+            + ((9 * lam**2 + 1 - c[2]) / (2 * d2)) 
+            * (
+                3 * c[3] * (2 * a23 - k * b21) 
+                + c[4] * (2 + 3 * k**2)
+            )
+        )
+        a32 = (
+            - (1 / d2)
+            * (
+                (9 * lam / 4) * (4 * c[3] * (k * a24 - b22) + k * c[4]) 
+                + 1.5 * (9 * lam**2 + 1 - c[2]) 
+                * (c[3] * (k * b22 + d21 - 2 * a24) - c[4])
+            )
+        )
+
+        b31 = (
+            0.375 / d2
+            * (
+                8 * lam 
+                * (3 * c[3] * (k * b21 - 2 * a23) - c[4] * (2 + 3 * k**2))
+                + (9 * lam**2 + 1 + 2 * c[2])
+                * (4 * c[3] * (k * a23 - b21) + k * c[4] * (4 + k**2))
+            )
+        )
+        b32 = (
+            (1 / d2)
+            * (
+                9 * lam 
+                * (c[3] * (k * b22 + d21 - 2 * a24) - c[4])
+                + 0.375 * (9 * lam**2 + 1 + 2 * c[2])
+                * (4 * c[3] * (k * a24 - b22) + k * c[4])
+            )
+        )
+
+        d31 = (3 / (64 * lam**2)) * (4 * c[3] * a24 + c[4])
+        d32 = (3 / (64 * lam**2)) * (4 * c[3] * (a23 - d21) + c[4] * (4 + k**2))
+
+        # Calculate x-amplitude from y-amplitude
+        Ax = Ay / k
+
+        # Phase angles (tau1 for in-plane, tau2 for out-of-plane)
+        # At t=0, we use the provided phase angles
+        tau1 = phi
+        tau2 = psi
+        
+        # Sigma determines northern vs southern branch
+        deltan = -self.n
+
+        # Third-order position approximation
+        x = (
+            a21 * Ax**2 + a22 * Az**2
+            - Ax * np.cos(tau1)
+            + (a23 * Ax**2 - a24 * Az**2) * np.cos(2 * tau1)
+            + (a31 * Ax**3 - a32 * Ax * Az**2) * np.cos(3 * tau1)
+        )
+        y = (
+            k * Ax * np.sin(tau1)
+            + (b21 * Ax**2 - b22 * Az**2) * np.sin(2 * tau1)
+            + (b31 * Ax**3 - b32 * Ax * Az**2) * np.sin(3 * tau1)
+        )
+        z = (
+            deltan * (
+                Az * np.cos(tau2)
+                + d21 * Ax * Az * (np.cos(2 * tau2) - 3)
+                + (d32 * Ax**2 * Az - d31 * Az**3) * np.cos(3 * tau2)
+            )
+        )
+
+        # Third-order velocity approximation
+        xdot = (
+            Ax * np.sin(tau1)
+            - 2 * (a23 * Ax**2 - a24 * Az**2) * np.sin(2 * tau1)
+            - 3 * (a31 * Ax**3 - a32 * Ax * Az**2) * np.sin(3 * tau1)
+        ) * lam
+        
+        ydot = (
+            k * Ax * np.cos(tau1)
+            + 2 * (b21 * Ax**2 - b22 * Az**2) * np.cos(2 * tau1)
+            + 3 * (b31 * Ax**3 - b32 * Ax * Az**2) * np.cos(3 * tau1)
+        ) * lam
+        
+        zdot = deltan * (
+            -Az * np.sin(tau2)
+            - 2 * d21 * Ax * Az * np.sin(2 * tau2)
+            - 3 * (d32 * Ax**2 * Az - d31 * Az**3) * np.sin(3 * tau2)
+        ) * nu
+
+        # Transform back to dimensional coordinates
+        rx = primary + gamma * (-won + x)
+        ry = -gamma * y
+        rz = gamma * z
+
+        vx = gamma * xdot
+        vy = gamma * ydot
+        vz = gamma * zdot
+
+        return np.array([rx, ry, rz, vx, vy, vz], dtype=np.float64)
+
+
 class _OrbitServices(_ServiceBundleBase):
     """Bundle all orbit services together.
     
@@ -1673,12 +1996,14 @@ class _OrbitServices(_ServiceBundleBase):
         """
         from hiten.system.orbits.base import GenericOrbit
         from hiten.system.orbits.halo import HaloOrbit
+        from hiten.system.orbits.lissajous import LissajousOrbit
         from hiten.system.orbits.lyapunov import LyapunovOrbit
         from hiten.system.orbits.vertical import VerticalOrbit
 
         mapping = {
             GenericOrbit: (_GenericOrbitCorrectionService, _GenericOrbitContinuationService, _GenericOrbitDynamicsService),
             HaloOrbit: (_HaloOrbitCorrectionService, _HaloOrbitContinuationService, _HaloOrbitDynamicsService),
+            LissajousOrbit: (_LissajousOrbitCorrectionService, _LissajousOrbitContinuationService, _LissajousOrbitDynamicsService),
             LyapunovOrbit: (_LyapunovOrbitCorrectionService, _LyapunovOrbitContinuationService, _LyapunovOrbitDynamicsService),
             VerticalOrbit: (_VerticalOrbitCorrectionService, _VerticalOrbitContinuationService, _VerticalOrbitDynamicsService),
         }

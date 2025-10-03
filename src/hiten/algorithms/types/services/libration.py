@@ -379,6 +379,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
         from hiten.system.orbits.halo import HaloOrbit
         from hiten.system.orbits.lyapunov import LyapunovOrbit
         from hiten.system.orbits.vertical import VerticalOrbit
+        from hiten.system.orbits.lissajous import LissajousOrbit
 
         if isinstance(family, type) and issubclass(family, PeriodicOrbit):
             orbit_cls = family
@@ -391,6 +392,7 @@ class _LibrationDynamicsService(_DynamicsServiceBase):
             "vertical_lyapunov": VerticalOrbit,
             "vertical": VerticalOrbit,
             "generic": GenericOrbit,
+            "lissajous": LissajousOrbit,
         }
 
         if key not in mapping:
