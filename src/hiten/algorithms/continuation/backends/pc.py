@@ -1,10 +1,14 @@
 """Predict-correct continuation backend implementation."""
 
-from typing import Callable
+from typing import Any, Callable
 
 import numpy as np
 
 from hiten.algorithms.continuation.backends.base import _ContinuationBackend
+from hiten.algorithms.continuation.types import (
+    ContinuationBackendRequest,
+    ContinuationBackendResponse,
+)
 from hiten.algorithms.continuation.stepping.support import (
     _ContinuationStepSupport, _VectorSpaceSecantSupport)
 from hiten.algorithms.continuation.stepping.base import _ContinuationStepBase
@@ -38,49 +42,40 @@ class _PredictorCorrectorContinuationBackend(_ContinuationBackend):
     def run(
         self,
         *,
-        seed_repr: np.ndarray,
-        stepper_fn: Callable,
-        predictor_fn: Callable[[object, np.ndarray], np.ndarray],
-        parameter_getter: Callable[[np.ndarray], np.ndarray],
-        corrector: Callable[[np.ndarray], tuple[np.ndarray, float, bool] | tuple[np.ndarray, float, bool, dict]],
-        step: np.ndarray,
-        target: np.ndarray,
-        max_members: int,
-        max_retries_per_step: int,
-        shrink_policy: Callable[[np.ndarray], np.ndarray] | None,
-        step_min: float,
-        step_max: float,
-    ) -> tuple[list[np.ndarray], dict]:
+        request: ContinuationBackendRequest,
+    ) -> ContinuationBackendResponse:
         self._reset_state()
 
         support_obj = self.make_step_support()
-        
+
         stepper = self._stepper_factory(
-            stepper_fn,
+            request.stepper_fn,
             support_obj,
-            seed_repr,
-            step,
-            predictor_fn,
-            step_min,
-            step_max,
-            shrink_policy,
+            request.seed_repr,
+            request.step,
+            request.predictor_fn,
+            request.step_min,
+            request.step_max,
+            request.shrink_policy,
         )
 
-        family: list[np.ndarray] = [np.asarray(seed_repr, dtype=float).copy()]
-        params_history: list[np.ndarray] = [np.asarray(parameter_getter(seed_repr), dtype=float).copy()]
+        family: list[np.ndarray] = [np.asarray(request.seed_repr, dtype=float).copy()]
+        params_history: list[np.ndarray] = [
+            np.asarray(request.parameter_getter(request.seed_repr), dtype=float).copy()
+        ]
         aux_history: list[dict] = []
 
         accepted_count = 1
         rejected_count = 0
         iterations = 0
 
-        step_vec = np.asarray(step, dtype=float).copy()
-        target_min = np.asarray(target[0], dtype=float)
-        target_max = np.asarray(target[1], dtype=float)
+        step_vec = np.asarray(request.step, dtype=float).copy()
+        target_min = np.asarray(request.target[0], dtype=float)
+        target_max = np.asarray(request.target[1], dtype=float)
 
         converged = False
         failed_to_continue = False
-        while accepted_count < int(max_members) and not failed_to_continue:
+        while accepted_count < int(request.max_members) and not failed_to_continue:
             last = family[-1]
 
             attempt = 0
@@ -89,7 +84,7 @@ class _PredictorCorrectorContinuationBackend(_ContinuationBackend):
                 prediction = proposal.prediction
                 iterations += 1
                 try:
-                    out = corrector(prediction)
+                    out = request.corrector(prediction)
                     corrected, res_norm, converged, *rest = out
                     aux = rest[0] if rest and isinstance(rest[0], dict) else {}
                 except Exception as e:
@@ -102,7 +97,7 @@ class _PredictorCorrectorContinuationBackend(_ContinuationBackend):
 
                 if converged:
                     family.append(corrected)
-                    params = np.asarray(parameter_getter(corrected), dtype=float).copy()
+                    params = np.asarray(request.parameter_getter(corrected), dtype=float).copy()
                     params_history.append(params)
                     accepted_count += 1
                     aux_history.append(dict(aux))
@@ -148,7 +143,7 @@ class _PredictorCorrectorContinuationBackend(_ContinuationBackend):
                     except Exception:
                         pass
 
-                if attempt > int(max_retries_per_step):
+                if attempt > int(request.max_retries_per_step):
                     try:
                         self.on_failure(prediction, iterations=iterations, residual_norm=float(res_norm))
                     except Exception:
@@ -157,7 +152,7 @@ class _PredictorCorrectorContinuationBackend(_ContinuationBackend):
                     failed_to_continue = True
                     break
 
-            if accepted_count >= int(max_members):
+            if accepted_count >= int(request.max_members):
                 break
 
         info = {
@@ -169,5 +164,4 @@ class _PredictorCorrectorContinuationBackend(_ContinuationBackend):
             "final_step": np.asarray(step_vec, dtype=float).copy(),
             "residual_norm": float(self._last_residual) if np.isfinite(self._last_residual) else float("nan"),
         }
-
-        return family, info
+        return ContinuationBackendResponse(family_repr=family, info=info)

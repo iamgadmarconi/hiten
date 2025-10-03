@@ -6,8 +6,7 @@ simply write::
 >>> from hiten.system import System, Body, L1Point, HaloOrbit
 """
 
-from ..algorithms.poincare.centermanifold.config import \
-    CenterManifoldMapConfig
+from ..algorithms.poincare.centermanifold.config import CenterManifoldMapConfig
 from ..algorithms.poincare.synodic.config import SynodicMapConfig
 from ..algorithms.types.states import SynodicState
 from .base import System
@@ -22,6 +21,7 @@ from .manifold import Manifold
 from .maps import CenterManifoldMap, SynodicMap
 from .orbits.base import GenericOrbit, PeriodicOrbit
 from .orbits.halo import HaloOrbit
+from .orbits.lissajous import LissajousOrbit
 from .orbits.lyapunov import LyapunovOrbit
 from .orbits.vertical import VerticalOrbit
 from .torus import InvariantTori, Torus
@@ -32,6 +32,7 @@ __all__ = [
     "Manifold",
     "LibrationPoint",
     "CollinearPoint",
+    "LissajousOrbit",
     "TriangularPoint",
     "L1Point",
     "L2Point",

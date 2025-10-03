@@ -21,8 +21,8 @@ See Also
     Backend algorithms that compute connection data.
 """
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Iterator, Literal, Mapping, Sequence, Tuple
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Iterator, Literal, Mapping, Sequence, Tuple
 
 import numpy as np
 
@@ -30,6 +30,30 @@ from hiten.algorithms.types.core import _DomainPayload
 
 if TYPE_CHECKING:
     from hiten.system.manifold import Manifold
+
+
+@dataclass
+class ConnectionsBackendRequest:
+    """Structured request for the connections backend."""
+
+    points_u: np.ndarray
+    points_s: np.ndarray
+    states_u: np.ndarray
+    states_s: np.ndarray
+    traj_indices_u: np.ndarray | None
+    traj_indices_s: np.ndarray | None
+    eps: float
+    dv_tol: float
+    bal_tol: float
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class ConnectionsBackendResponse:
+    """Structured response returned by the connections backend."""
+
+    results: list["_ConnectionResult"]
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

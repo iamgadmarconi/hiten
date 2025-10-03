@@ -5,13 +5,14 @@ handling of ill-conditioned systems, finite-difference Jacobians, and
 extensible hooks for customization.
 """
 
-from typing import Tuple
+from typing import Any
 
 import numpy as np
 
 from hiten.algorithms.corrector.backends.base import _CorrectorBackend
-from hiten.algorithms.corrector.types import (JacobianFn, NormFn, ResidualFn,
-                                              StepperFactory)
+from hiten.algorithms.corrector.types import (CorrectorInput, CorrectorOutput,
+                                              JacobianCallable, NormCallable,
+                                              ResidualCallable, StepperFactory)
 from hiten.algorithms.types.exceptions import ConvergenceError
 from hiten.utils.log_config import logger
 
@@ -37,17 +38,10 @@ class _NewtonBackend(_CorrectorBackend):
 
     def run(
         self,
-        x0: np.ndarray,
-        residual_fn: ResidualFn,
         *,
-        jacobian_fn: JacobianFn | None = None,
-        norm_fn: NormFn | None = None,
+        request: CorrectorInput,
         stepper_factory: StepperFactory | None = None,
-        tol: float = 1e-10,
-        max_attempts: int = 25,
-        max_delta: float | None = 1e-2,
-        fd_step: float = 1e-8,
-    ) -> Tuple[np.ndarray, int, float]:
+    ) -> CorrectorOutput:
         """Solve nonlinear system using Newton-Raphson method.
 
         Parameters
@@ -83,18 +77,29 @@ class _NewtonBackend(_CorrectorBackend):
         RuntimeError
             If Newton method fails to converge within max_attempts.
         """
+        tol = request.tol
+        max_attempts = request.max_attempts
+        fd_step = request.fd_step
+        max_delta = request.max_delta
+        residual_fn: ResidualCallable = request.residual_fn
+        jacobian_fn: JacobianCallable | None = request.jacobian_fn
+        norm_fn: NormCallable | None = request.norm_fn
+
         if norm_fn is None:
-            norm_fn = lambda r: float(np.linalg.norm(r))
+            norm_callable: NormCallable = lambda r: float(np.linalg.norm(r))
+        else:
+            norm_callable = norm_fn
 
-        x = x0.copy()
+        x = request.initial_guess.copy()
 
-        # Obtain the stepper callable from the injected factory
         factory = self._stepper_factory if stepper_factory is None else stepper_factory
-        stepper = factory(residual_fn, norm_fn, max_delta)
+        stepper = factory(residual_fn, norm_callable, max_delta)
+
+        metadata: dict[str, Any] = dict(request.metadata)
 
         for k in range(max_attempts):
             r = self._compute_residual(x, residual_fn)
-            r_norm = self._compute_norm(r, norm_fn)
+            r_norm = self._compute_norm(r, norm_callable)
 
             try:
                 self.on_iteration(k, x, r_norm)
@@ -103,12 +108,12 @@ class _NewtonBackend(_CorrectorBackend):
 
             if r_norm < tol:
                 logger.info("Newton converged after %d iterations (|R|=%.2e)", k, r_norm)
-                # Notify acceptance hook (public)
                 try:
                     self.on_accept(x, iterations=k, residual_norm=r_norm)
                 except Exception:
                     pass
-                return x, k, r_norm
+                metadata.update({"iterations": k, "residual_norm": r_norm})
+                return CorrectorOutput(x_corrected=x, iterations=k, residual_norm=r_norm, metadata=metadata)
 
             J = self._compute_jacobian(x, residual_fn, jacobian_fn, fd_step)
             delta = self._solve_delta_dense(J, r)
@@ -124,12 +129,12 @@ class _NewtonBackend(_CorrectorBackend):
             x = x_new
 
         r_final = self._compute_residual(x, residual_fn)
-        r_final_norm = self._compute_norm(r_final, norm_fn)
+        r_final_norm = self._compute_norm(r_final, norm_callable)
 
-        # Call acceptance hook if converged in the final check
         if r_final_norm < tol:
             self.on_accept(x, iterations=max_attempts, residual_norm=r_final_norm)
-            return x, max_attempts, r_final_norm
+            metadata.update({"iterations": max_attempts, "residual_norm": r_final_norm})
+            return CorrectorOutput(x_corrected=x, iterations=max_attempts, residual_norm=r_final_norm, metadata=metadata)
 
         self.on_failure(x, iterations=max_attempts, residual_norm=r_final_norm)
 

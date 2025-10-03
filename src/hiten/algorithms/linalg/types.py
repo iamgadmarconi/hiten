@@ -4,8 +4,9 @@ Defines the types and dataclasses used throughout the linear algebra module.
 """
 
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+from typing import Any, Dict
 
 import numpy as np
 
@@ -96,6 +97,26 @@ class EigenDecompositionResults:
     nu: np.ndarray
     eigvals: np.ndarray
     eigvecs: np.ndarray
+
+
+@dataclass
+class LinalgBackendRequest:
+    """Structured request for eigen-decomposition/stability computations."""
+
+    matrix: np.ndarray
+    problem_type: "_ProblemType"
+    system_type: "_SystemType"
+    delta: float
+    tol: float
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class LinalgBackendResponse:
+    """Structured response returned by the linalg backend."""
+
+    results: EigenDecompositionResults
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

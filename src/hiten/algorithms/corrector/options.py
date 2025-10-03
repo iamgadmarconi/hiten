@@ -61,55 +61,11 @@ class OrbitCorrectionOptions(_HitenBaseOptions):
             raise ValueError(
                 f"forward must be 1 or -1, got {self.forward}"
             )
-        # Nested options validate themselves in __post_init__
 
 
 @dataclass(frozen=True)
 class MultipleShootingCorrectionOptions(OrbitCorrectionOptions):
-    """Runtime options for multiple shooting correction.
-    
-    Extends OrbitCorrectionOptions with multiple shooting-specific runtime
-    parameters.
-    
-    Parameters
-    ----------
-    n_patches : int, default=20
-        Number of shooting segments. This is a runtime tuning parameter
-        because it affects HOW WELL the algorithm performs (robustness,
-        convergence basin) rather than WHAT algorithm is used.
-        
-        More patches generally improve robustness at the cost of increased
-        computational cost. Recommended ranges:
-        - Lyapunov orbits: 3-5 patches
-        - Halo orbits: 4-7 patches
-        - Long-period orbits: 7-15 patches
-        - Unstable orbits: 5-10 patches
-    base : CorrectionOptions, optional
-        Base correction options (convergence, integration, numerical).
-    forward : int, default=1
-        Integration direction.
-    
-    Notes
-    -----
-    For algorithm structure parameters like `patch_strategy`, `continuity_indices`,
-    see MultipleShootingOrbitCorrectionConfig instead.
-    
-    Examples
-    --------
-    >>> # Default options with 20 patches
-    >>> options = MultipleShootingCorrectionOptions()
-    >>> 
-    >>> # More patches for robustness
-    >>> robust_options = options.merge(n_patches=30)
-    >>> 
-    >>> # Tighter tolerance with more patches
-    >>> tight_options = MultipleShootingCorrectionOptions(
-    ...     n_patches=25,
-    ...     base=CorrectionOptions(
-    ...         convergence=ConvergenceOptions(tol=1e-14)
-    ...     )
-    ... )
-    """
+
     n_patches: int = 20
 
     def _validate(self) -> None:

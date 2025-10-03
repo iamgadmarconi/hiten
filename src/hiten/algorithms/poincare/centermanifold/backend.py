@@ -22,6 +22,10 @@ from hiten.algorithms.integrators.rk import (RK4_A, RK4_B, RK4_C, RK6_A, RK6_B,
                                              RK6_C, RK8_A, RK8_B, RK8_C)
 from hiten.algorithms.integrators.symplectic import (N_SYMPLECTIC_DOF,
                                                      _integrate_symplectic)
+from hiten.algorithms.poincare.centermanifold.types import (
+    CenterManifoldBackendRequest,
+    CenterManifoldBackendResponse,
+)
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
 from hiten.algorithms.poincare.utils import _hermite_scalar
 from hiten.algorithms.utils.config import FASTMATH
@@ -340,24 +344,24 @@ def _poincare_map(seeds: np.ndarray, dt: float, jac_H, clmo, order: int, max_ste
     success : ndarray, shape (n_seeds,)
         Success flags (1 if crossing found, 0 otherwise).
     q2p_out : ndarray, shape (n_seeds,)
-        q2 coordinates at crossings.
+        q2 coordinates at crossings (or zeros for failed seeds).
     p2p_out : ndarray, shape (n_seeds,)
-        p2 coordinates at crossings.
+        p2 coordinates at crossings (or zeros for failed seeds).
     q3p_out : ndarray, shape (n_seeds,)
-        q3 coordinates at crossings.
+        q3 coordinates at crossings (or zeros for failed seeds).
     p3p_out : ndarray, shape (n_seeds,)
-        p3 coordinates at crossings.
+        p3 coordinates at crossings (or zeros for failed seeds).
     t_out : ndarray, shape (n_seeds,)
-        Times of section crossings.
+        Times of section crossings (or zeros for failed seeds).
     """
 
     n_seeds = seeds.shape[0]
     success = np.zeros(n_seeds, dtype=np.int64)
-    q2p_out = np.empty(n_seeds, dtype=np.float64)
-    p2p_out = np.empty(n_seeds, dtype=np.float64)
-    q3p_out = np.empty(n_seeds, dtype=np.float64)
-    p3p_out = np.empty(n_seeds, dtype=np.float64)
-    t_out = np.empty(n_seeds, dtype=np.float64)
+    q2p_out = np.zeros(n_seeds, dtype=np.float64)
+    p2p_out = np.zeros(n_seeds, dtype=np.float64)
+    q3p_out = np.zeros(n_seeds, dtype=np.float64)
+    p3p_out = np.zeros(n_seeds, dtype=np.float64)
+    t_out = np.zeros(n_seeds, dtype=np.float64)
 
     for i in prange(n_seeds):
         q2, p2, q3, p3 = seeds[i, 0], seeds[i, 1], seeds[i, 2], seeds[i, 3]
@@ -399,41 +403,19 @@ class _CenterManifoldBackend(_ReturnMapBackend):
 
     def run(
         self,
-        seeds: np.ndarray,
-        *,
-        dt: float = 1e-2,
-        jac_H,
-        clmo_table,
-        section_coord: str,
-        forward: int = 1,
-        max_steps: int = 2000,
-        method: Literal["fixed", "adaptive", "symplectic"] = "adaptive",
-        order: int = 8,
-        c_omega_heuristic: float = 20.0,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        request: CenterManifoldBackendRequest,
+    ) -> CenterManifoldBackendResponse:
         """Propagate center manifold seeds until the next Poincare section crossing.
 
         Parameters
         ----------
-        seeds : ndarray, shape (n_seeds, 4)
-            Array of initial seeds [q2, p2, q3, p3] (nondimensional units).
-        dt : float, default=1e-2
-            Integration time step (nondimensional units).
-        jac_H
-            Jacobian of the Hamiltonian system.
-        clmo_table
-            CLMO table for polynomial evaluation.
-        section_coord : str
-            Section coordinate identifier ('q2', 'p2', 'q3', or 'p3').
+        request : :class:`~hiten.algorithms.poincare.centermanifold.types.CenterManifoldBackendRequest`
+            Structured request containing seeds and integration parameters.
 
         Returns
         -------
-        cm_states : ndarray, shape (n_crossings, 4)
-            Center manifold coordinates of the crossings.
-        times : ndarray, shape (n_crossings,)
-            Times of section crossings.
-        flags : ndarray, shape (n_seeds,)
-            Success flags (1 if crossing found, 0 otherwise).
+        :class:`~hiten.algorithms.poincare.centermanifold.types.CenterManifoldBackendResponse`
+            Structured response containing center manifold states, times, flags, and metadata.
 
         Notes
         -----
@@ -442,24 +424,29 @@ class _CenterManifoldBackend(_ReturnMapBackend):
         section crossing is detected or the maximum number of steps is reached.
         """
 
-        if seeds.size == 0:
-            return (
-                np.empty((0, 4)),
-                np.empty((0,)),
-                np.empty((0,), dtype=np.int64),
+        if request.seeds.size == 0:
+            return CenterManifoldBackendResponse(
+                states=np.empty((0, 4)),
+                times=np.empty((0,)),
+                flags=np.empty((0,), dtype=np.int64),
+                metadata={},
             )
 
+        # Guard against unsupported adaptive label
+        if request.method == "adaptive":
+            raise NotImplementedError("Adaptive integrator is not implemented in CM backend; use 'fixed' (RK) or 'symplectic'.")
+
         flags, q2p_arr, p2p_arr, q3p_arr, p3p_arr, t_arr = _poincare_map(
-            np.ascontiguousarray(seeds, dtype=np.float64),
-            dt,
-            jac_H,
-            clmo_table,
-            order,
-            max_steps,
-            method == "symplectic",
+            np.ascontiguousarray(request.seeds, dtype=np.float64),
+            request.dt,
+            request.jac_H,
+            request.clmo_table,
+            request.order,
+            request.max_steps,
+            request.method == "symplectic",
             N_SYMPLECTIC_DOF,
-            section_coord,
-            c_omega_heuristic,
+            request.section_coord,
+            request.c_omega_heuristic,
         )
 
         states_list: list[tuple[float, float, float, float]] = []
@@ -471,8 +458,9 @@ class _CenterManifoldBackend(_ReturnMapBackend):
                 states_list.append(state)
                 times_list.append(float(t_arr[i]))
 
-        return (
-            np.asarray(states_list, dtype=np.float64),
-            np.asarray(times_list, dtype=np.float64),
-            np.asarray(flags, dtype=np.int64),
+        return CenterManifoldBackendResponse(
+            states=np.asarray(states_list, dtype=np.float64),
+            times=np.asarray(times_list, dtype=np.float64),
+            flags=np.asarray(flags, dtype=np.int64),
+            metadata={},
         )

@@ -19,7 +19,11 @@ from typing import Tuple
 import numba
 import numpy as np
 
-from hiten.algorithms.connections.types import _ConnectionResult
+from hiten.algorithms.connections.types import (
+    ConnectionsBackendRequest,
+    ConnectionsBackendResponse,
+    _ConnectionResult,
+)
 from hiten.algorithms.types.core import _HitenBaseBackend
 
 
@@ -420,17 +424,8 @@ class _ConnectionsBackend(_HitenBaseBackend):
 
     def run(
         self,
-        pu: np.ndarray,
-        ps: np.ndarray,
-        Xu: np.ndarray,
-        Xs: np.ndarray,
-        traj_indices_u: np.ndarray | None,
-        traj_indices_s: np.ndarray | None,
-        *,
-        eps: float,
-        dv_tol: float,
-        bal_tol: float,
-    ) -> list[_ConnectionResult]:
+        request: ConnectionsBackendRequest,
+    ) -> ConnectionsBackendResponse:
         """Compute possible connections from precomputed section data.
 
         Parameters
@@ -467,12 +462,22 @@ class _ConnectionsBackend(_HitenBaseBackend):
         3. Segment-based refinement
         4. Delta-V computation and classification
         """
+        pu = request.points_u
+        ps = request.points_s
+        Xu = request.states_u
+        Xs = request.states_s
+        traj_indices_u = request.traj_indices_u
+        traj_indices_s = request.traj_indices_s
+        eps = request.eps
+        dv_tol = request.dv_tol
+        bal_tol = request.bal_tol
+
         if pu.size == 0 or ps.size == 0:
-            return []
+            return ConnectionsBackendResponse(results=[], metadata={})
 
         pairs_arr = _radius_pairs_2d(pu, ps, float(eps))
         if pairs_arr.size == 0:
-            return []
+            return ConnectionsBackendResponse(results=[], metadata={})
 
         di = pu[pairs_arr[:, 0]] - ps[pairs_arr[:, 1]]
         d2 = np.sum(di * di, axis=1)
@@ -492,7 +497,7 @@ class _ConnectionsBackend(_HitenBaseBackend):
                 pairs.append((i, j))
 
         if not pairs:
-            return []
+            return ConnectionsBackendResponse(results=[], metadata={})
 
         nn_u = _nearest_neighbor_2d(pu) if pu.shape[0] >= 2 else np.full(pu.shape[0], -1, dtype=int)
         nn_s = _nearest_neighbor_2d(ps) if ps.shape[0] >= 2 else np.full(ps.shape[0], -1, dtype=int)
@@ -526,7 +531,12 @@ class _ConnectionsBackend(_HitenBaseBackend):
                     results.append(_ConnectionResult(kind=kind, delta_v=dv, point2d=pt, state_u=Xu[i].copy(), state_s=Xs[j].copy(), index_u=int(i), index_s=int(j), trajectory_index_u=traj_idx_u, trajectory_index_s=traj_idx_s))
 
         results.sort(key=lambda r: r.delta_v)
-        return results
+        metadata = dict(request.metadata)
+        metadata.update({
+            "pairs_considered": pairs_arr.shape[0],
+            "accepted": len(results),
+        })
+        return ConnectionsBackendResponse(results=results, metadata=metadata)
 
     def on_start(self, problem) -> None:  # Engine notifies before solving
         """Called by the engine before solving."""

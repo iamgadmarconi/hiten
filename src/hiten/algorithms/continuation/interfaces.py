@@ -6,9 +6,13 @@ import numpy as np
 
 from hiten.algorithms.continuation.config import OrbitContinuationConfig
 from hiten.algorithms.continuation.options import OrbitContinuationOptions
-from hiten.algorithms.continuation.types import (ContinuationDomainPayload,
-                                                 ContinuationResult,
-                                                 _ContinuationProblem)
+from hiten.algorithms.continuation.types import (
+    ContinuationBackendRequest,
+    ContinuationBackendResponse,
+    ContinuationDomainPayload,
+    ContinuationResult,
+    _ContinuationProblem,
+)
 from hiten.algorithms.corrector.options import OrbitCorrectionOptions
 from hiten.algorithms.types.core import _BackendCall, _HitenBaseInterface
 
@@ -21,7 +25,7 @@ class _OrbitContinuationInterface(
         OrbitContinuationConfig,
         _ContinuationProblem,
         ContinuationResult,
-        tuple[list[np.ndarray], dict[str, object]],
+        ContinuationBackendResponse,
     ]
 ):
     """Adapter wiring periodic-orbit families to continuation backends."""
@@ -63,25 +67,26 @@ class _OrbitContinuationInterface(
         seed_repr = representation_fn(problem.initial_solution)
         stepper_fn = representation_fn if problem.stepper == "secant" else predictor
         
-        return _BackendCall(
-            kwargs={
-                "seed_repr": seed_repr,
-                "stepper_fn": stepper_fn,
-                "predictor_fn": predictor,
-                "parameter_getter": problem.parameter_getter,
-                "corrector": corrector,
-                "step": np.asarray(problem.step, dtype=float),
-                "target": np.asarray(problem.target, dtype=float),
-                "max_members": int(problem.max_members),
-                "max_retries_per_step": int(problem.max_retries_per_step),
-                "shrink_policy": problem.shrink_policy,
-                "step_min": float(problem.step_min),
-                "step_max": float(problem.step_max),
-            }
+        request = ContinuationBackendRequest(
+            seed_repr=np.asarray(seed_repr, dtype=float),
+            stepper_fn=stepper_fn,
+            predictor_fn=predictor,
+            parameter_getter=problem.parameter_getter,
+            corrector=corrector,
+            step=np.asarray(problem.step, dtype=float),
+            target=np.asarray(problem.target, dtype=float),
+            max_members=int(problem.max_members),
+            max_retries_per_step=int(problem.max_retries_per_step),
+            shrink_policy=problem.shrink_policy,
+            step_min=float(problem.step_min),
+            step_max=float(problem.step_max),
+            metadata={},
         )
+        return _BackendCall(request=request)
 
-    def to_domain(self, outputs: tuple[list[np.ndarray], dict[str, object]], *, problem: _ContinuationProblem) -> ContinuationDomainPayload:
-        family_repr, info = outputs
+    def to_domain(self, outputs: ContinuationBackendResponse, *, problem: _ContinuationProblem) -> ContinuationDomainPayload:
+        family_repr = outputs.family_repr
+        info = outputs.info
         info_dict = dict(info)
         accepted_count = int(info_dict.get("accepted_count", len(family_repr)))
         rejected_count = int(info_dict.get("rejected_count", 0))
@@ -116,7 +121,7 @@ class _OrbitContinuationInterface(
             "info": info_dict,
         })
 
-    def to_results(self, outputs: tuple[list[np.ndarray], dict[str, object]], *, problem: _ContinuationProblem, domain_payload: Any = None) -> ContinuationResult:
+    def to_results(self, outputs: ContinuationBackendResponse, *, problem: _ContinuationProblem, domain_payload: Any = None) -> ContinuationResult:
         payload = domain_payload or self.to_domain(outputs, problem=problem)
         return ContinuationResult(
             accepted_count=payload.accepted_count,

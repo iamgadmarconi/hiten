@@ -4,15 +4,16 @@ Types for the corrector module.
 This module provides the types for the corrector module.
 """
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Mapping, Optional, Sequence
+from dataclasses import dataclass, field
+from typing import (TYPE_CHECKING, Any, Callable, Mapping, Optional, Protocol,
+                    Sequence)
 
 import numpy as np
 
 if TYPE_CHECKING:
     from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
 
-from hiten.algorithms.types.core import _DomainPayload
+from hiten.algorithms.types.core import _BackendCall, _DomainPayload
 
 #: Type alias for residual function signatures.
 #:
@@ -99,6 +100,82 @@ JacobianFn = Callable[[np.ndarray], np.ndarray]
 NormFn = Callable[[np.ndarray], float]
 
 StepperFactory = Callable[[ResidualFn, NormFn, float | None], "CorrectorStepProtocol"]
+
+
+class ResidualCallable(Protocol):
+    def __call__(self, x: np.ndarray) -> np.ndarray:  # pragma: no cover - structural typing
+        ...
+
+
+class JacobianCallable(Protocol):
+    def __call__(self, x: np.ndarray) -> np.ndarray:  # pragma: no cover
+        ...
+
+
+class NormCallable(Protocol):
+    def __call__(self, residual: np.ndarray) -> float:  # pragma: no cover
+        ...
+
+
+@dataclass
+class CorrectorInput:
+    """Structured request describing a single backend correction solve."""
+
+    initial_guess: np.ndarray
+    residual_fn: ResidualCallable
+    jacobian_fn: Optional[JacobianCallable]
+    norm_fn: Optional[NormCallable]
+    max_attempts: int
+    tol: float
+    max_delta: float | None
+    fd_step: float
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class CorrectorOutput:
+    """Structured response produced by a backend correction solve."""
+
+    x_corrected: np.ndarray
+    iterations: int
+    residual_norm: float
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+class ResidualCallable(Protocol):
+    def __call__(self, x: np.ndarray) -> np.ndarray:
+        ...
+
+
+class JacobianCallable(Protocol):
+    def __call__(self, x: np.ndarray) -> np.ndarray:
+        ...
+
+
+class NormCallable(Protocol):
+    def __call__(self, residual: np.ndarray) -> float:
+        ...
+
+
+@dataclass
+class CorrectorInput:
+    initial_guess: np.ndarray
+    residual_fn: ResidualCallable
+    jacobian_fn: Optional[JacobianCallable]
+    norm_fn: Optional[NormCallable]
+    max_attempts: int
+    tol: float
+    max_delta: float | None
+    fd_step: float
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class CorrectorOutput:
+    x_corrected: np.ndarray
+    iterations: int
+    residual_norm: float
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass

@@ -17,6 +17,10 @@ import numpy as np
 from hiten.algorithms.poincare.core.backend import _ReturnMapBackend
 from hiten.algorithms.poincare.core.events import _PlaneEvent, _SurfaceEvent
 from hiten.algorithms.poincare.core.types import _SectionHit
+from hiten.algorithms.poincare.synodic.types import (
+    SynodicBackendRequest,
+    SynodicBackendResponse,
+)
 from hiten.algorithms.poincare.utils import _hermite_der, _hermite_scalar
 
 
@@ -818,59 +822,19 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
 
     def run(
         self, 
-        trajectories: "Sequence[tuple[np.ndarray, np.ndarray]]", 
-        *,
-        normal: "np.ndarray | Sequence[float]",
-        trajectory_indices: "Sequence[int]",
-        offset: float = 0.0,
-        plane_coords: "tuple[str, str]" = ("y", "vy"),
-        interp_kind: Literal["linear", "cubic"] = "linear",
-        segment_refine: int = 0,
-        tol_on_surface: float = 1e-12,
-        dedup_time_tol: float = 1e-9,
-        dedup_point_tol: float = 1e-12,
-        max_hits_per_traj: int | None = None,
-        newton_max_iter: int = 4,
-        direction: Literal[1, -1, None] = None,
-    ) -> "list[list[_SectionHit]]":
+        request: SynodicBackendRequest,
+    ) -> SynodicBackendResponse:
         """Detect crossings on a batch of trajectories.
 
         Parameters
         ----------
-        trajectories : sequence of tuple[ndarray, ndarray]
-            Sequence of (times, states) tuples for each trajectory.
-        normal : array_like, shape (6,)
-            Hyperplane normal vector in synodic coordinates.
-        offset : float, default 0.0
-            Hyperplane offset value (nondimensional units).
-        plane_coords : tuple[str, str], default ("y", "vy")
-            Names of the 2D axes for section point projection.
-        interp_kind : {"linear", "cubic"}, default "linear"
-            Interpolation method for crossing refinement.
-        segment_refine : int, default 0
-            Number of refinement segments for dense crossing detection.
-        tol_on_surface : float, default 1e-12
-            Tolerance for considering a point to be on the surface.
-        dedup_time_tol : float, default 1e-9
-            Time tolerance for deduplicating nearby crossings.
-        dedup_point_tol : float, default 1e-12
-            Point tolerance for deduplicating nearby crossings.
-        max_hits_per_traj : int or None, default None
-            Maximum number of hits per trajectory (None for unlimited).
-        newton_max_iter : int, default 4
-            Maximum Newton iterations for root refinement.
-        direction : {1, -1, None}, optional
-            Crossing direction filter. If None, no direction filtering
-            is applied.
-        trajectory_indices : sequence of int
-            Global trajectory indices corresponding to each trajectory in the
-            trajectories sequence. Used to label section hits with their
-            originating trajectory index.
+        request : :class:`~hiten.algorithms.poincare.synodic.types.SynodicBackendRequest`
+            Structured request containing trajectories and detection parameters.
 
         Returns
         -------
-        list[list[:class:`~hiten.algorithms.poincare.core.events._SectionHit`]]
-            List of section hit lists, one for each trajectory.
+        :class:`~hiten.algorithms.poincare.synodic.types.SynodicBackendResponse`
+            Structured response containing section hits and metadata.
 
         Notes
         -----
@@ -882,21 +846,42 @@ class _SynodicDetectionBackend(_ReturnMapBackend):
         Each trajectory is processed independently, and the results
         are returned as a list of lists.
         """
-        out: "list[list[_SectionHit]]" = []
-        for idx, (times, states) in zip(trajectory_indices, trajectories):
-            out.append(self.detect_on_trajectory(
+        hits: list[list[_SectionHit]] = []
+        for idx, (times, states) in zip(request.trajectory_indices, request.trajectories):
+            hits.append(self.detect_on_trajectory(
                 times, states, 
-                normal=normal,
-                offset=offset,
-                plane_coords=plane_coords,
-                interp_kind=interp_kind,
-                segment_refine=segment_refine,
-                tol_on_surface=tol_on_surface,
-                dedup_time_tol=dedup_time_tol,
-                dedup_point_tol=dedup_point_tol,
-                max_hits_per_traj=max_hits_per_traj,
-                newton_max_iter=newton_max_iter,
-                direction=direction,
+                normal=request.normal,
+                offset=request.offset,
+                plane_coords=request.plane_coords,
+                interp_kind=request.interp_kind,
+                segment_refine=request.segment_refine,
+                tol_on_surface=request.tol_on_surface,
+                dedup_time_tol=request.dedup_time_tol,
+                dedup_point_tol=request.dedup_point_tol,
+                max_hits_per_traj=request.max_hits_per_traj,
+                newton_max_iter=request.newton_max_iter,
+                direction=request.direction,
                 trajectory_index=int(idx)
             ))
-        return out
+        # Extract processed arrays from hits
+        pts, sts, ts, traj_indices = [], [], [], []
+        for traj_hits in hits:
+            for h in traj_hits:
+                pts.append(h.point2d)
+                sts.append(h.state)
+                ts.append(h.time)
+                traj_indices.append(h.trajectory_index)
+        
+        pts_np = np.asarray(pts, dtype=float) if pts else np.empty((0, 2))
+        sts_np = np.asarray(sts, dtype=float) if sts else np.empty((0, 6))
+        ts_np = np.asarray(ts, dtype=float) if ts else None
+        traj_indices_np = np.asarray(traj_indices, dtype=int) if traj_indices else np.empty((0,), dtype=int)
+        
+        return SynodicBackendResponse(
+            hits=hits,
+            points=pts_np,
+            states=sts_np,
+            times=ts_np,
+            trajectory_indices=traj_indices_np,
+            metadata={}
+        )

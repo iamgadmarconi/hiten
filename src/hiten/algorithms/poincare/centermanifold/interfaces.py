@@ -15,13 +15,19 @@ from typing import TYPE_CHECKING, Optional, Tuple
 
 import numpy as np
 
-from hiten.algorithms.poincare.centermanifold.config import \
-    CenterManifoldMapConfig
-from hiten.algorithms.poincare.centermanifold.options import \
-    CenterManifoldMapOptions
+from hiten.algorithms.poincare.centermanifold.config import (
+    CenterManifoldMapConfig,
+)
+from hiten.algorithms.poincare.centermanifold.options import (
+    CenterManifoldMapOptions,
+)
 from hiten.algorithms.poincare.centermanifold.types import (
-    CenterManifoldDomainPayload, CenterManifoldMapResults,
-    _CenterManifoldMapProblem)
+    CenterManifoldBackendRequest,
+    CenterManifoldBackendResponse,
+    CenterManifoldDomainPayload,
+    CenterManifoldMapResults,
+    _CenterManifoldMapProblem,
+)
 from hiten.algorithms.poincare.core.interfaces import (_PoincareBaseInterface,
                                                        _SectionInterface)
 from hiten.algorithms.polynomial.operations import _polynomial_evaluate
@@ -102,7 +108,7 @@ class _CenterManifoldInterface(
         CenterManifoldMapConfig,
         _CenterManifoldMapProblem,
         CenterManifoldMapResults,
-        tuple[np.ndarray | None, Optional[np.ndarray]],
+        CenterManifoldBackendResponse,
     ]
 ):
 
@@ -158,25 +164,40 @@ class _CenterManifoldInterface(
             jac_H=jac_H,
             H_blocks=H_blocks,
             clmo_table=clmo_table,
+            max_steps=options.integration.max_steps,
+            method=config.integration.method,
+            order=options.integration.order,
+            c_omega_heuristic=options.integration.c_omega_heuristic,
             solve_missing_coord_fn=solve_missing_coord_fn,
             find_turning_fn=find_turning_fn,
         )
 
-    def to_backend_inputs(self, problem: _CenterManifoldMapProblem):
-        return _BackendCall(kwargs={"section_coord": problem.section_coord, "dt": problem.dt})
+    def to_backend_inputs(self, problem: _CenterManifoldMapProblem) -> _BackendCall:
+        request = CenterManifoldBackendRequest(
+            seeds=np.empty((0, 4)),  # seeds are supplied dynamically per iteration
+            dt=problem.dt,
+            jac_H=problem.jac_H,
+            clmo_table=problem.clmo_table,
+            section_coord=problem.section_coord,
+            max_steps=problem.max_steps,
+            method=problem.method,
+            order=problem.order,
+            c_omega_heuristic=problem.c_omega_heuristic,
+        )
+        return _BackendCall(request=request)
 
-    def to_domain(self, outputs, *, problem: _CenterManifoldMapProblem) -> CenterManifoldDomainPayload:
-        points, states, times = outputs
+    def to_domain(self, outputs: CenterManifoldBackendResponse, *, problem: _CenterManifoldMapProblem) -> CenterManifoldDomainPayload:
+        points = outputs.states[:, :2] if outputs.states.size else np.empty((0, 2))
         return CenterManifoldDomainPayload._from_mapping(
             {
                 "points": points,
-                "states": states,
-                "times": times,
+                "states": outputs.states,
+                "times": outputs.times,
                 "labels": self.plane_labels(problem.section_coord),
             }
         )
 
-    def to_results(self, outputs, *, problem: _CenterManifoldMapProblem, domain_payload=None) -> CenterManifoldMapResults:
+    def to_results(self, outputs: CenterManifoldBackendResponse, *, problem: _CenterManifoldMapProblem, domain_payload=None) -> CenterManifoldMapResults:
         payload = domain_payload or self.to_domain(outputs, problem=problem)
         return CenterManifoldMapResults(
             payload.points,

@@ -66,3 +66,7 @@ class CenterManifoldMapConfig(_ReturnMapConfig, _SeedingConfig):
             raise EngineError("seed_axis must be specified when seed_strategy is 'single'")
         if self.seed_strategy != "single" and self.seed_axis is not None:
             logger.warning("seed_axis is ignored when seed_strategy is not 'single'")
+        # Integration method constraints for CM backend
+        method = getattr(self.integration, "method", "adaptive")
+        if method == "adaptive":
+            raise NotImplementedError("Adaptive integrator is not implemented for center-manifold backend; use 'fixed' (RK) or 'symplectic'.")

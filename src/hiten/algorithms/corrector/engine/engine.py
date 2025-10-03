@@ -64,14 +64,17 @@ class _OrbitCorrectionEngine(_CorrectionEngine):
         call : :class:`~hiten.algorithms.types.core._BackendCall`
             The call to the backend.
         """
-        return self._backend.run(*call.args, **call.kwargs)
+        request = call.request
+        if request is None:
+            return self._backend.run(**call.kwargs)
+        return self._backend.run(request=request, **call.kwargs)
 
     def _after_backend_success(self, outputs, *, problem, domain_payload, interface) -> None:
         """Handle backend success.
         
         Parameters
         ----------
-        outputs : :class:`~hiten.algorithms.corrector.types._OrbitCorrectionResult`
+        outputs : :class:`~hiten.algorithms.corrector.types.CorrectorOutput`
             The outputs from the backend.
         problem : :class:`~hiten.algorithms.corrector.types._OrbitCorrectionProblem`
             The problem.
@@ -80,7 +83,9 @@ class _OrbitCorrectionEngine(_CorrectionEngine):
         interface : :class:`~hiten.algorithms.corrector.interfaces._OrbitCorrectionInterface`
             The interface.
         """
-        x_corr, iterations, residual_norm = outputs
+        x_corr = outputs.x_corrected
+        iterations = outputs.iterations
+        residual_norm = outputs.residual_norm
         try:
             self._backend.on_success(
                 x_corr,

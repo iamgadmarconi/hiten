@@ -18,8 +18,11 @@ from hiten.algorithms.poincare.core.engine import _ReturnMapEngine
 from hiten.algorithms.poincare.synodic.backend import _SynodicDetectionBackend
 from hiten.algorithms.poincare.synodic.interfaces import _SynodicInterface
 from hiten.algorithms.poincare.synodic.strategies import _NoOpStrategy
-from hiten.algorithms.poincare.synodic.types import (SynodicMapResults,
-                                                     _SynodicMapProblem)
+from hiten.algorithms.poincare.synodic.types import (
+    SynodicBackendRequest,
+    SynodicMapResults,
+    _SynodicMapProblem,
+)
 from hiten.algorithms.types.exceptions import EngineError
 
 
@@ -74,61 +77,59 @@ class _SynodicEngine(_ReturnMapEngine):
     def solve(self, problem: _SynodicMapProblem) -> SynodicMapResults:
         """Compute the synodic Poincare section from the composed problem."""
         trajectories = problem.trajectories or []
-        direction = problem.direction
         if not trajectories:
             raise EngineError("No trajectories provided to synodic engine")
 
         n_workers = problem.n_workers
-        normal = problem.normal
-        offset = problem.offset
-        plane_coords = problem.plane_coords
-        interp_kind = problem.interp_kind
-        segment_refine = problem.segment_refine
-        tol_on_surface = problem.tol_on_surface
-        dedup_time_tol = problem.dedup_time_tol
-        dedup_point_tol = problem.dedup_point_tol
-        max_hits_per_traj = problem.max_hits_per_traj
-        newton_max_iter = problem.newton_max_iter
+        
+        # Build template request from problem
+        call = self._interface.to_backend_inputs(problem)
+        template_request = call.request
+        if not isinstance(template_request, SynodicBackendRequest):
+            raise EngineError("Interface must return SynodicBackendRequest")
 
         # Delegate detection to backend passed in at construction
         if n_workers <= 1 or len(trajectories) <= 1:
             # For consistency, always pass trajectory indices even in single-worker mode
-            hits_lists = self._backend.run(
-                trajectories, 
-                normal=normal,
-                offset=offset,
-                plane_coords=plane_coords,
-                interp_kind=interp_kind,
-                segment_refine=segment_refine,
-                tol_on_surface=tol_on_surface,
-                dedup_time_tol=dedup_time_tol,
-                dedup_point_tol=dedup_point_tol,
-                max_hits_per_traj=max_hits_per_traj,
-                newton_max_iter=newton_max_iter,
-                direction=direction,
-                trajectory_indices=list(range(len(trajectories)))
+            request = SynodicBackendRequest(
+                trajectories=trajectories,
+                normal=template_request.normal,
+                trajectory_indices=list(range(len(trajectories))),
+                offset=template_request.offset,
+                plane_coords=template_request.plane_coords,
+                interp_kind=template_request.interp_kind,
+                segment_refine=template_request.segment_refine,
+                tol_on_surface=template_request.tol_on_surface,
+                dedup_time_tol=template_request.dedup_time_tol,
+                dedup_point_tol=template_request.dedup_point_tol,
+                max_hits_per_traj=template_request.max_hits_per_traj,
+                newton_max_iter=template_request.newton_max_iter,
+                direction=template_request.direction,
             )
+            response = self._backend.run(request)
+            hits_lists = response.hits
         else:
             chunks = np.array_split(np.arange(len(trajectories)), n_workers)
 
             def _worker(idx_arr: np.ndarray):
                 subset = [trajectories[i] for i in idx_arr.tolist()]
                 # Pass the original trajectory indices so backend labels them correctly
-                return self._backend.run(
-                    subset, 
-                    normal=normal,
-                    offset=offset,
-                    plane_coords=plane_coords,
-                    interp_kind=interp_kind,
-                    segment_refine=segment_refine,
-                    tol_on_surface=tol_on_surface,
-                    dedup_time_tol=dedup_time_tol,
-                    dedup_point_tol=dedup_point_tol,
-                    max_hits_per_traj=max_hits_per_traj,
-                    newton_max_iter=newton_max_iter,
-                    direction=direction,
-                    trajectory_indices=idx_arr.tolist()
+                request = SynodicBackendRequest(
+                    trajectories=subset,
+                    normal=template_request.normal,
+                    trajectory_indices=idx_arr.tolist(),
+                    offset=template_request.offset,
+                    plane_coords=template_request.plane_coords,
+                    interp_kind=template_request.interp_kind,
+                    segment_refine=template_request.segment_refine,
+                    tol_on_surface=template_request.tol_on_surface,
+                    dedup_time_tol=template_request.dedup_time_tol,
+                    dedup_point_tol=template_request.dedup_point_tol,
+                    max_hits_per_traj=template_request.max_hits_per_traj,
+                    newton_max_iter=template_request.newton_max_iter,
+                    direction=template_request.direction,
                 )
+                return self._backend.run(request).hits
 
             parts: list[list[list]] = []
             with ThreadPoolExecutor(max_workers=n_workers) as ex:
@@ -150,4 +151,15 @@ class _SynodicEngine(_ReturnMapEngine):
         ts_np = np.asarray(ts, dtype=float) if ts else None
         traj_indices_np = np.asarray(traj_indices, dtype=int) if traj_indices else np.empty((0,), dtype=int)
 
-        return self._interface.to_results((pts_np, sts_np, ts_np, traj_indices_np), problem=problem)
+        # Create proper backend response with aggregated data
+        from hiten.algorithms.poincare.synodic.types import SynodicBackendResponse
+        response = SynodicBackendResponse(
+            hits=hits_lists,  # Keep raw hits for potential debugging
+            points=pts_np,
+            states=sts_np,
+            times=ts_np,
+            trajectory_indices=traj_indices_np,
+            metadata={"n_points": len(pts), "n_trajectories": len(set(traj_indices)) if traj_indices else 0}
+        )
+        
+        return self._interface.to_results(response, problem=problem)

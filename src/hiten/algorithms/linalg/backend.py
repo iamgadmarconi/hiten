@@ -6,20 +6,24 @@ Three-Body Problem (CR3BP). The functions focus on eigenvalue analysis,
 stability classification, and matrix decompositions relevant to periodic
 orbits and manifold computations.
 
-All routines use pure NumPy for portability and are designed to be
-vectorized and JIT-friendly where applicable.
-
 References
 ----------
 .. [Koon2011] Koon, W. S., Lo, M. W., Marsden, J. E., Ross, S. D. (2011).
    *Dynamical Systems, the Three-Body Problem and Space Mission Design*.
    Springer.
 """
-from typing import Any, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
-from hiten.algorithms.linalg.types import _StabilityType, _SystemType
+from hiten.algorithms.linalg.types import (
+    EigenDecompositionResults,
+    LinalgBackendRequest,
+    LinalgBackendResponse,
+    _ProblemType,
+    _StabilityType,
+    _SystemType,
+)
 from hiten.algorithms.types.core import _HitenBaseBackend
 from hiten.algorithms.types.exceptions import BackendError
 
@@ -41,15 +45,61 @@ class _LinalgBackend(_HitenBaseBackend):
     def __init__(self, system_type: _SystemType = _SystemType.CONTINUOUS):
         self.system_type = system_type
 
-    def run(self, **kwargs) -> Any:
-        """Run the linear algebra backend.
-        
-        Parameters
-        ----------
-        **kwargs
-            Additional keyword arguments passed to the run method.
-        """
-        raise NotImplementedError("Subclasses must implement the run method")
+    def run(self, request: LinalgBackendRequest) -> LinalgBackendResponse:
+        """Execute eigenvalue analysis according to the request."""
+        self.system_type = request.system_type
+
+        n = request.matrix.shape[0]
+        empty_vals = np.array([], dtype=np.complex128)
+        empty_vecs = np.zeros((n, 0), dtype=np.complex128)
+        empty_complex = np.array([], dtype=np.complex128)
+
+        results = EigenDecompositionResults(
+            stable=empty_vals,
+            unstable=empty_vals,
+            center=empty_vals,
+            Ws=empty_vecs,
+            Wu=empty_vecs,
+            Wc=empty_vecs,
+            nu=empty_complex,
+            eigvals=empty_complex,
+            eigvecs=np.zeros((0, 0), dtype=np.complex128),
+        )
+
+        metadata: Dict[str, Any] = dict(request.metadata)
+
+        if request.problem_type in (_ProblemType.EIGENVALUE_DECOMPOSITION, _ProblemType.ALL):
+            sn, un, cn, Ws, Wu, Wc = self.eigenvalue_decomposition(
+                request.matrix, request.delta
+            )
+            results = EigenDecompositionResults(
+                stable=sn,
+                unstable=un,
+                center=cn,
+                Ws=Ws,
+                Wu=Wu,
+                Wc=Wc,
+                nu=results.nu,
+                eigvals=results.eigvals,
+                eigvecs=results.eigvecs,
+            )
+
+        if request.problem_type in (_ProblemType.STABILITY_INDICES, _ProblemType.ALL):
+            nu, eigvals, eigvecs = self.stability_indices(request.matrix, request.tol)
+            results = EigenDecompositionResults(
+                stable=results.stable,
+                unstable=results.unstable,
+                center=results.center,
+                Ws=results.Ws,
+                Wu=results.Wu,
+                Wc=results.Wc,
+                nu=nu,
+                eigvals=eigvals,
+                eigvecs=eigvecs,
+            )
+            metadata.update({"nu": nu, "eigvals": eigvals})
+
+        return LinalgBackendResponse(results=results, metadata=metadata)
 
     def eigenvalue_decomposition(self, A: np.ndarray, delta: float = 1e-4) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """Classify eigenvalue-eigenvector pairs into stable, unstable, and center subspaces.
