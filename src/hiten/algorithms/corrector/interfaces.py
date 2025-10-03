@@ -13,7 +13,7 @@ import numpy as np
 from hiten.algorithms.corrector.config import (
     MultipleShootingOrbitCorrectionConfig, OrbitCorrectionConfig)
 from hiten.algorithms.corrector.operators import (
-    _MultipleShootingOrbitOperatorsImpl, _SingleShootingOrbitOperators)
+    _MultipleShootingOrbitOperators, _SingleShootingOrbitOperators)
 from hiten.algorithms.corrector.options import (
     MultipleShootingCorrectionOptions, OrbitCorrectionOptions)
 from hiten.algorithms.corrector.types import (CorrectorInput,
@@ -363,7 +363,7 @@ class _MultipleShootingOrbitCorrectionInterface(
         )
 
         # Build operators
-        ops = _MultipleShootingOrbitOperatorsImpl(
+        ops = _MultipleShootingOrbitOperators(
             domain_obj=domain_obj,
             control_indices=config.control_indices,
             continuity_indices=continuity_indices,
@@ -372,6 +372,7 @@ class _MultipleShootingOrbitCorrectionInterface(
             patch_times=patch_times,
             patch_templates=patch_templates,
             extra_jacobian=config.extra_jacobian,
+            extra_jacobian_control_indices=config.extra_jacobian_control_indices,
             event_func=config.event_func,
             forward=forward,
             method=config.integration.method,

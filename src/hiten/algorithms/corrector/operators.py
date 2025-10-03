@@ -451,7 +451,7 @@ class _SingleShootingOrbitOperators(_OrbitCorrectionOperatorBase, _SingleShootin
         return jacobian_fn
 
 
-class _MultipleShootingOrbitOperatorsImpl(_OrbitCorrectionOperatorBase, _MultipleShootingOperators):
+class _MultipleShootingOrbitOperators(_OrbitCorrectionOperatorBase, _MultipleShootingOperators):
     """Concrete implementation of _MultipleShootingOperators for periodic orbits.
     
     This class adapts PeriodicOrbit domain objects to the multiple-shooting
@@ -476,6 +476,10 @@ class _MultipleShootingOrbitOperatorsImpl(_OrbitCorrectionOperatorBase, _Multipl
         Full-state templates at each patch.
     extra_jacobian : Callable or None
         Optional extra Jacobian term.
+    extra_jacobian_control_indices : Sequence[int] or None
+        Optional indices specifying which control variables the extra_jacobian
+        columns correspond to. If None, extra_jacobian is assumed to span all
+        control indices.
     event_func : Callable
         Event function for final boundary detection.
     forward : int
@@ -499,6 +503,7 @@ class _MultipleShootingOrbitOperatorsImpl(_OrbitCorrectionOperatorBase, _Multipl
         patch_times: np.ndarray,
         patch_templates: Sequence[np.ndarray],
         extra_jacobian: Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]],
+        extra_jacobian_control_indices: Optional[Sequence[int]],
         event_func: Callable,
         forward: int,
         method: str,
@@ -520,6 +525,9 @@ class _MultipleShootingOrbitOperatorsImpl(_OrbitCorrectionOperatorBase, _Multipl
         self._patch_times = np.asarray(patch_times, dtype=float)
         self._patch_templates = [tpl.copy() for tpl in patch_templates]
         self._extra_jacobian = extra_jacobian
+        self._extra_jacobian_control_indices = (
+            tuple(extra_jacobian_control_indices) if extra_jacobian_control_indices is not None else None
+        )
 
     @property
     def control_indices(self) -> Sequence[int]:
@@ -548,6 +556,10 @@ class _MultipleShootingOrbitOperatorsImpl(_OrbitCorrectionOperatorBase, _Multipl
     @property
     def extra_jacobian(self) -> Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]]:
         return self._extra_jacobian
+
+    @property
+    def extra_jacobian_control_indices(self) -> Optional[Sequence[int]]:
+        return self._extra_jacobian_control_indices
 
     def reconstruct_full_state(self, template: np.ndarray, control_params: np.ndarray) -> np.ndarray:
         """Reconstruct full state from template and control parameters."""
@@ -709,8 +721,25 @@ class _MultipleShootingOrbitOperatorsImpl(_OrbitCorrectionOperatorBase, _Multipl
             if self._extra_jacobian is not None:
                 x_final = x_propagated_list[-1]
                 extra_jac = self._extra_jacobian(x_final, Phi_final)
-                # Subtract from boundary row(s)
-                J[row_offset:row_offset + n_boundary, :] -= extra_jac
+                
+                # If extra_jacobian_control_indices is specified, map the extra_jac
+                # to the correct columns. Otherwise, assume it matches all control_indices.
+                if self._extra_jacobian_control_indices is not None:
+                    # Find which column indices in the full parameter vector correspond
+                    # to the specified control indices
+                    for patch_idx in range(n_patches):
+                        patch_col_start = patch_idx * n_control
+                        # For each extra jacobian control index, find its position in control_indices
+                        for j, ctrl_idx in enumerate(self._extra_jacobian_control_indices):
+                            # Find position of ctrl_idx in control_indices
+                            if ctrl_idx in control_indices:
+                                local_col = control_indices.index(ctrl_idx)
+                                global_col = patch_col_start + local_col
+                                # Subtract the corresponding column of extra_jac
+                                J[row_offset:row_offset + n_boundary, global_col] -= extra_jac[:, j]
+                else:
+                    # Legacy behavior: assume extra_jac matches all columns
+                    J[row_offset:row_offset + n_boundary, :] -= extra_jac
             
             return J
         
