@@ -289,36 +289,6 @@ class _HitenBaseInterface(Generic[ConfigT, ProblemT, ResultT, OutputsT], ABC):
         """
         self._backend = backend
 
-    def on_start(self, problem: ProblemT) -> None:
-        """Called when the interface starts.
-        
-        Parameters
-        ----------
-        problem : :class:`~hiten.algorithms.types.core.ProblemT`
-            The problem to start.
-        """
-        return None
-
-    def on_success(self, outputs: OutputsT, *, problem: ProblemT, domain_payload: Any = None) -> None:
-        """Called when the interface succeeds.
-        
-        Parameters
-        ----------
-        outputs : :class:`~hiten.algorithms.types.core.OutputsT`
-            The outputs to succeed.
-        """
-        return None
-
-    def on_failure(self, exc: Exception, *, problem: ProblemT) -> None:
-        """Called when the interface fails.
-        
-        Parameters
-        ----------
-        exc : Exception
-            The exception to fail.
-        """
-        return None
-
 
 class _HitenBaseEngine(Generic[ProblemT, ResultT, OutputsT], ABC):
     """Template providing the canonical engine flow.
@@ -364,18 +334,15 @@ class _HitenBaseEngine(Generic[ProblemT, ResultT, OutputsT], ABC):
         interface = self._get_interface(problem)
         interface.bind_backend(self._backend)
         call = interface.to_backend_inputs(problem)
-        interface.on_start(problem)
         self._before_backend(problem, call, interface)
 
         try:
             outputs = self._invoke_backend(call)
 
         except Exception as exc:
-            interface.on_failure(exc, problem=problem)
             self._handle_backend_failure(exc, problem=problem, call=call, interface=interface)
 
         domain_payload = interface.to_domain(outputs, problem=problem)
-        interface.on_success(outputs, problem=problem, domain_payload=domain_payload)
         self._after_backend_success(outputs, problem=problem, domain_payload=domain_payload, interface=interface)
         return interface.to_results(outputs, problem=problem, domain_payload=domain_payload)
 
