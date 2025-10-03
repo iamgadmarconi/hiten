@@ -142,42 +142,6 @@ class CorrectorOutput:
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
-class ResidualCallable(Protocol):
-    def __call__(self, x: np.ndarray) -> np.ndarray:
-        ...
-
-
-class JacobianCallable(Protocol):
-    def __call__(self, x: np.ndarray) -> np.ndarray:
-        ...
-
-
-class NormCallable(Protocol):
-    def __call__(self, residual: np.ndarray) -> float:
-        ...
-
-
-@dataclass
-class CorrectorInput:
-    initial_guess: np.ndarray
-    residual_fn: ResidualCallable
-    jacobian_fn: Optional[JacobianCallable]
-    norm_fn: Optional[NormCallable]
-    max_attempts: int
-    tol: float
-    max_delta: float | None
-    fd_step: float
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
-class CorrectorOutput:
-    x_corrected: np.ndarray
-    iterations: int
-    residual_norm: float
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-
 @dataclass
 class CorrectionResult:
     """Standardized result for a backend correction run.
