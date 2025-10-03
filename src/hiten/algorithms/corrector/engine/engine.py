@@ -74,7 +74,7 @@ class _OrbitCorrectionEngine(_CorrectionEngine):
         
         Parameters
         ----------
-        outputs : :class:`~hiten.algorithms.corrector.types._OrbitCorrectionResult`
+        outputs : :class:`~hiten.algorithms.corrector.types.CorrectorOutput`
             The outputs from the backend.
         problem : :class:`~hiten.algorithms.corrector.types._OrbitCorrectionProblem`
             The problem.
@@ -83,7 +83,9 @@ class _OrbitCorrectionEngine(_CorrectionEngine):
         interface : :class:`~hiten.algorithms.corrector.interfaces._OrbitCorrectionInterface`
             The interface.
         """
-        x_corr, iterations, residual_norm = outputs
+        x_corr = outputs.x_corrected
+        iterations = outputs.iterations
+        residual_norm = outputs.residual_norm
         try:
             self._backend.on_success(
                 x_corr,

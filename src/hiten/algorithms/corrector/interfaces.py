@@ -214,7 +214,7 @@ class _OrbitCorrectionInterface(
 
     def to_results(
         self,
-        outputs: tuple[np.ndarray, int, float],
+        outputs: CorrectorOutput,
         *,
         problem: _OrbitCorrectionProblem,
         domain_payload: OrbitCorrectionDomainPayload | None = None,
@@ -477,7 +477,7 @@ class _MultipleShootingOrbitCorrectionInterface(
 
     def to_results(
         self,
-        outputs: tuple[np.ndarray, int, float],
+        outputs: CorrectorOutput,
         *,
         problem: _MultipleShootingProblem,
         domain_payload: MultipleShootingDomainPayload | None = None,
