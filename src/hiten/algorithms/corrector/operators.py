@@ -454,23 +454,4 @@ class _SingleShootingOrbitOperators(_OrbitCorrectionOperatorBase, _SingleShootin
 
 class _MultipleShootingOrbitOperators(_OrbitCorrectionOperatorBase, _MultipleShootingOperators):
     """Multiple-shooting operators with clean residual/Jacobian evaluation."""
-
-    def __init__(
-        self,
-        *,
-        domain_obj: "PeriodicOrbit",
-        event_func: Callable | None,
-        forward: int,
-        method: str,
-        order: int,
-        steps: int,
-    ) -> None:
-        super().__init__(
-            domain_obj=domain_obj,
-            method=method,
-            order=order,
-            steps=steps,
-            forward=forward,
-            event_func=event_func,
-        )
-
+    pass

@@ -1557,19 +1557,210 @@ class _VerticalOrbitDynamicsService(_OrbitDynamicsService):
     """
 
     def __init__(self, orbit: "VerticalOrbit") -> None:
+        self._amplitude = orbit._amplitude_z
+        
+        if orbit._initial_state is not None and self._amplitude is not None:
+            self._amplitude = None
+        
         super().__init__(orbit)
+
+        from hiten.system.libration.collinear import (CollinearPoint, L1Point,
+                                                      L2Point)
+        if not isinstance(self._libration_point, CollinearPoint):
+            raise TypeError(f"Vertical orbits are only defined for CollinearPoint, but got {type(self._libration_point)}.")
         if self._initial_state is None:
-            raise ValueError("Vertical orbits require an initial_state.")
+            if self._amplitude is None:
+                raise ValueError("Vertical orbits require an 'amplitude_z' (z-amplitude) parameter when an initial_state is not provided.")
+            if not isinstance(self._libration_point, (L1Point, L2Point)):
+                raise ValueError("The analytical guess for L3 Vertical orbits is experimental.\n Convergence is not guaranteed and may require more iterations.")
+
+            self._initial_state = self.initial_guess()
+
+        if self._initial_state is not None and self._amplitude is None:
+            self._amplitude = abs(self._initial_state[SynodicState.Z])
 
     def initial_guess(self) -> np.ndarray:
-        """Generate an initial guess for the orbit. using the initial_state.
+        """Generate an initial guess for the orbit using Richardson's third-order analytical approximation.
+        
+        For vertical Lyapunov orbits, the x-amplitude (Ax) is set to zero, meaning the orbit
+        oscillates primarily in the z-direction with minimal motion in the x-y plane.
         
         Returns
         -------
         np.ndarray
             The initial guess for the orbit.
+
+        References
+        ----------
+        .. [Richardson1980] Richardson, D. L. (1980). "Analytic construction of periodic orbits about the
+        collinear libration points". Celestial Mechanics 22 (3):241-253.
         """
-        return self._initial_state
+        amplitude_z = self.amplitude
+        gamma = self.libration_point.dynamics.gamma
+        won, primary = self.libration_point.dynamics.won
+        
+        c = [0.0, 0.0, 0.0, 0.0, 0.0]  # just to keep 5 slots: c[2], c[3], c[4]
+        for N in [2, 3, 4]:
+            c[N] = self.libration_point.dynamics.cn(N)
+
+        _, lambda2, _ = self.libration_point.dynamics.linear_modes
+        lam = lambda2
+
+        k = 2 * lam / (lam**2 + 1 - c[2])
+
+        d1 = (3 * lam**2 / k) * (k * (6 * lam**2 - 1) - 2 * lam)
+        d2 = (8 * lam**2 / k) * (k * (11 * lam**2 - 1) - 2 * lam)
+
+        a21 = (3 * c[3] * (k**2 - 2)) / (4 * (1 + 2 * c[2]))
+        a22 = (3 * c[3]) / (4 * (1 + 2 * c[2]))
+        a23 = - (3 * c[3] * lam / (4 * k * d1)) * (
+            3 * k**3 * lam - 6 * k * (k - lam) + 4
+        )
+        a24 = - (3 * c[3] * lam / (4 * k * d1)) * (2 + 3 * k * lam)
+
+        b21 = - (3 * c[3] * lam / (2 * d1)) * (3 * k * lam - 4)
+        b22 = (3 * c[3] * lam) / d1
+
+        d21 = - c[3] / (2 * lam**2)
+
+        a31 = (
+            - (9 * lam / (4 * d2)) 
+            * (4 * c[3] * (k * a23 - b21) + k * c[4] * (4 + k**2)) 
+            + ((9 * lam**2 + 1 - c[2]) / (2 * d2)) 
+            * (
+                3 * c[3] * (2 * a23 - k * b21) 
+                + c[4] * (2 + 3 * k**2)
+            )
+        )
+        a32 = (
+            - (1 / d2)
+            * (
+                (9 * lam / 4) * (4 * c[3] * (k * a24 - b22) + k * c[4]) 
+                + 1.5 * (9 * lam**2 + 1 - c[2]) 
+                * (c[3] * (k * b22 + d21 - 2 * a24) - c[4])
+            )
+        )
+
+        b31 = (
+            0.375 / d2
+            * (
+                8 * lam 
+                * (3 * c[3] * (k * b21 - 2 * a23) - c[4] * (2 + 3 * k**2))
+                + (9 * lam**2 + 1 + 2 * c[2])
+                * (4 * c[3] * (k * a23 - b21) + k * c[4] * (4 + k**2))
+            )
+        )
+        b32 = (
+            (1 / d2)
+            * (
+                9 * lam 
+                * (c[3] * (k * b22 + d21 - 2 * a24) - c[4])
+                + 0.375 * (9 * lam**2 + 1 + 2 * c[2])
+                * (4 * c[3] * (k * a24 - b22) + k * c[4])
+            )
+        )
+
+        d31 = (3 / (64 * lam**2)) * (4 * c[3] * a24 + c[4])
+        d32 = (3 / (64 * lam**2)) * (4 * c[3] * (a23 - d21) + c[4] * (4 + k**2))
+
+        s1 = (
+            1 
+            / (2 * lam * (lam * (1 + k**2) - 2 * k))
+            * (
+                1.5 * c[3] 
+                * (
+                    2 * a21 * (k**2 - 2) 
+                    - a23 * (k**2 + 2) 
+                    - 2 * k * b21
+                )
+                - 0.375 * c[4] * (3 * k**4 - 8 * k**2 + 8)
+            )
+        )
+        s2 = (
+            1 
+            / (2 * lam * (lam * (1 + k**2) - 2 * k))
+            * (
+                1.5 * c[3] 
+                * (
+                    2 * a22 * (k**2 - 2) 
+                    + a24 * (k**2 + 2) 
+                    + 2 * k * b22 
+                    + 5 * d21
+                )
+                + 0.375 * c[4] * (12 - k**2)
+            )
+        )
+
+        # For vertical Lyapunov orbits: Ax = 0
+        amplitude_x = 0.0
+        
+        # Normalized amplitude_z
+        amplitude_z_norm = amplitude_z / gamma
+        
+        # Phase angle (initial time)
+        phi = 0.0
+        
+        # Frequency correction
+        omega1 = 0.0
+        omega2 = s1 * amplitude_x**2 + s2 * amplitude_z_norm**2
+        omega = 1 + omega1 + omega2
+        
+        # Initial phase
+        tau1 = omega * 0.0 + phi
+        sigma = - won
+        
+        # Third-order approximation for position
+        x = (
+            a21 * amplitude_x**2 + a22 * amplitude_z_norm**2
+            - amplitude_x * np.cos(tau1)
+            + (a23 * amplitude_x**2 - a24 * amplitude_z_norm**2) * np.cos(2 * tau1)
+            + (a31 * amplitude_x**3 - a32 * amplitude_x * amplitude_z_norm**2) * np.cos(3 * tau1)
+        )
+        y = (
+            k * amplitude_x * np.sin(tau1)
+            + (b21 * amplitude_x**2 - b22 * amplitude_z_norm**2) * np.sin(2 * tau1)
+            + (b31 * amplitude_x**3 - b32 * amplitude_x * amplitude_z_norm**2) * np.sin(3 * tau1)
+        )
+        z = (
+            sigma * (
+                amplitude_z_norm * np.cos(tau1)
+                + d21 * amplitude_x * amplitude_z_norm * (np.cos(2 * tau1) - 3)
+                + (d32 * amplitude_x**2 * amplitude_z_norm - d31 * amplitude_z_norm**3) * np.cos(3 * tau1)
+            )
+        )
+        
+        # Third-order approximation for velocity
+        xdot = (
+            lam * amplitude_x * np.sin(tau1)
+            - 2 * lam * (a23 * amplitude_x**2 - a24 * amplitude_z_norm**2) * np.sin(2 * tau1)
+            - 3 * lam * (a31 * amplitude_x**3 - a32 * amplitude_x * amplitude_z_norm**2) * np.sin(3 * tau1)
+        ) * omega
+        ydot = (
+            lam
+            * (
+                k * amplitude_x * np.cos(tau1)
+                + 2 * (b21 * amplitude_x**2 - b22 * amplitude_z_norm**2) * np.cos(2 * tau1)
+                + 3 * (b31 * amplitude_x**3 - b32 * amplitude_x * amplitude_z_norm**2) * np.cos(3 * tau1)
+            )
+        ) * omega
+        zdot = (
+            sigma * (
+                - lam * amplitude_z_norm * np.sin(tau1)
+                - 2 * lam * d21 * amplitude_x * amplitude_z_norm * np.sin(2 * tau1)
+                - 3 * lam * (d32 * amplitude_x**2 * amplitude_z_norm - d31 * amplitude_z_norm**3) * np.sin(3 * tau1)
+            )
+        ) * omega
+
+        # Convert from normalized to synodic frame
+        rx = primary + gamma * (-won + x)
+        ry = -gamma * y
+        rz = gamma * z
+
+        vx = gamma * xdot
+        vy = gamma * ydot
+        vz = gamma * zdot
+        
+        return np.array([rx, ry, rz, vx, vy, vz], dtype=np.float64)
 
 
 class _LissajousOrbitCorrectionService(_OrbitCorrectionService):

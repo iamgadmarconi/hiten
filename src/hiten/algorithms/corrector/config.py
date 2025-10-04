@@ -84,5 +84,4 @@ class OrbitCorrectionConfig(CorrectionConfig):
 
 @dataclass(frozen=True)
 class MultipleShootingOrbitCorrectionConfig(OrbitCorrectionConfig):
-
     pass
