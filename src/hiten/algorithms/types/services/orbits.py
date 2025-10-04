@@ -1557,10 +1557,10 @@ class _VerticalOrbitDynamicsService(_OrbitDynamicsService):
     """
 
     def __init__(self, orbit: "VerticalOrbit") -> None:
-        self._amplitude = orbit._amplitude_z
+        self._amplitude_z = orbit._amplitude_z
         
-        if orbit._initial_state is not None and self._amplitude is not None:
-            self._amplitude = None
+        if orbit._initial_state is not None and self._amplitude_z is not None:
+            self._amplitude_z = None
         
         super().__init__(orbit)
 
@@ -1569,15 +1569,17 @@ class _VerticalOrbitDynamicsService(_OrbitDynamicsService):
         if not isinstance(self._libration_point, CollinearPoint):
             raise TypeError(f"Vertical orbits are only defined for CollinearPoint, but got {type(self._libration_point)}.")
         if self._initial_state is None:
-            if self._amplitude is None:
+            if self._amplitude_z is None:
                 raise ValueError("Vertical orbits require an 'amplitude_z' (z-amplitude) parameter when an initial_state is not provided.")
             if not isinstance(self._libration_point, (L1Point, L2Point)):
                 raise ValueError("The analytical guess for L3 Vertical orbits is experimental.\n Convergence is not guaranteed and may require more iterations.")
 
             self._initial_state = self.initial_guess()
 
-        if self._initial_state is not None and self._amplitude is None:
-            self._amplitude = abs(self._initial_state[SynodicState.Z])
+        if self._initial_state is not None and self._amplitude_z is None:
+            self._amplitude_z = abs(self._initial_state[SynodicState.Z])
+    
+        self._amplitude = self._amplitude_z
 
     def initial_guess(self) -> np.ndarray:
         """Generate an initial guess for the orbit using Richardson's third-order analytical approximation.
