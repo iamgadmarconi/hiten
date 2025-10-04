@@ -65,14 +65,4 @@ class OrbitCorrectionOptions(_HitenBaseOptions):
 
 @dataclass(frozen=True)
 class MultipleShootingCorrectionOptions(OrbitCorrectionOptions):
-
-    n_patches: int = 20
-
-    def _validate(self) -> None:
-        """Validate the options."""
-        super()._validate()
-        if self.n_patches < 2:
-            raise ValueError(
-                f"n_patches must be at least 2, got {self.n_patches}"
-            )
-
+    pass

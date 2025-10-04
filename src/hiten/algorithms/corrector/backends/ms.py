@@ -17,26 +17,16 @@ See Also
     Base class for all correction backends.
 """
 
-from typing import Tuple
+from typing import Tuple, Any, List
 
 import numpy as np
-from scipy.sparse import csr_matrix, issparse
-from scipy.sparse.linalg import spsolve
 
 from hiten.algorithms.corrector.backends.base import _CorrectorBackend
 from hiten.algorithms.corrector.types import (
     CorrectorInput,
     CorrectorOutput,
-    JacobianCallable,
-    JacobianFn,
-    NormCallable,
-    NormFn,
-    ResidualCallable,
-    ResidualFn,
     StepperFactory,
 )
-from hiten.algorithms.types.exceptions import ConvergenceError
-from hiten.utils.log_config import logger
 
 
 class _MultipleShootingBackend(_CorrectorBackend):
