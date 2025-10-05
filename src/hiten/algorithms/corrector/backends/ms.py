@@ -1,3 +1,4 @@
+from re import I
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -156,9 +157,9 @@ class _VelocityCorrection(_CorrectorBackend):
         segment_num = request.segment_num
 
         # Initialize empty lists for STMs and final states (populated in level-1)
-        stms = []
-        xf_patches = []
-        
+        stms = np.zeros((segment_num, 6, 6))
+        xf_patches = np.zeros((segment_num, 6))
+
         sigma = 1.0  # Step damping factor
 
         metadata = {
@@ -182,12 +183,8 @@ class _VelocityCorrection(_CorrectorBackend):
                 )
                 pos_output = self._position_shooter.run(pos_request)
                 x_patches[seg] = pos_output.x0_corrected
-                if iteration == 0:
-                    xf_patches.append(pos_output.xf_corrected)
-                    stms.append(pos_output.stm_corrected)
-                else:
-                    xf_patches[seg] = pos_output.xf_corrected
-                    stms[seg] = pos_output.stm_corrected
+                xf_patches[seg] = pos_output.xf_corrected
+                stms[seg] = pos_output.stm_corrected
 
             # Compute velocity discontinuities between patches
             delta_v_list = [
@@ -196,19 +193,13 @@ class _VelocityCorrection(_CorrectorBackend):
             ]
             delta_v_vec = np.concatenate(delta_v_list) if delta_v_list else np.zeros(0)
 
-            # Compute norm
-            if norm_fn is not None and delta_v_vec.size > 0:
-                error_norm = float(norm_fn(delta_v_vec))
-            else:
-                error_norm = float(np.linalg.norm(delta_v_vec))
+            error_norm = float(np.linalg.norm(delta_v_vec))
 
-            # Store convergence history
             metadata["convergence_history"].append({
                 "iteration": iteration + 1,
                 "velocity_error_norm": error_norm,
             })
-            print(f"VELOCITY CORRECTION: iteration {iteration + 1} of {max_attempts}, segment {seg + 1} of {segment_num} | Residual error: {error_norm}")
-            # Check convergence
+
             if error_norm < tol:
                 success = True
                 break
@@ -218,46 +209,12 @@ class _VelocityCorrection(_CorrectorBackend):
             n_cols = (segment_num - 2) * 4 + 12
             state_rel_matrix = np.zeros((n_rows, n_cols))
 
-            for ii in range(1, segment_num):
-                # Get STMs: stm21 (from node ii-1 to ii), stm32 (from node ii to ii+1)
-                stm21 = stms[ii - 1]
-                stm12 = np.linalg.inv(stm21)
-                stm32 = stms[ii]
+            for i in range(1, segment_num):
+                # Get STMs: stm21 (from node iteration-1 to iteration), stm32 (from node iteration to iteration+1)
+                block = self._build_relationship_matrix(stms, x_patches, xf_patches, t_patches, i, dynsys_fn)
 
-                # Extract velocities at the three nodes
-                v1plus = x_patches[ii - 1][3:6]
-                v2minus = xf_patches[ii - 1][3:6]
-                v2plus = x_patches[ii][3:6]
-                v3minus = xf_patches[ii][3:6]
-
-                # Compute accelerations at node ii
-                a2minus = dynsys_fn(t_patches[ii], xf_patches[ii - 1])[3:6]
-                a2plus = dynsys_fn(t_patches[ii], x_patches[ii])[3:6]
-
-                # Extract STM blocks
-                A12 = stm12[:3, :3]
-                B12 = stm12[:3, 3:6]
-                A32 = stm32[:3, :3]
-                B32 = stm32[:3, 3:6]
-
-                # Compute B inverses using solve for numerical stability
-                B12_inv = np.linalg.solve(B12, np.eye(3))
-                B32_inv = np.linalg.solve(B32, np.eye(3))
-
-                # Build the 3x12 block for this junction
-                block = np.hstack([
-                    -B12_inv,                                              # cols 1-3
-                    (B12_inv @ v1plus).reshape(-1, 1),                    # col 4
-                    -B32_inv @ A32 + B12_inv @ A12,                       # cols 5-7
-                    ((a2plus - a2minus) +                                  # col 8
-                    B32_inv @ A32 @ v2plus -
-                    B12_inv @ A12 @ v2minus).reshape(-1, 1),
-                    B32_inv,
-                    (-B32_inv @ v3minus).reshape(-1, 1),                  # col 12
-                ])
-
-                row_start = (ii - 1) * 3
-                col_start = (ii - 1) * 4
+                row_start = (i - 1) * 3
+                col_start = (i - 1) * 4
                 state_rel_matrix[row_start:row_start + 3, col_start:col_start + 12] = block
 
             # Handle fixed boundaries
@@ -279,12 +236,12 @@ class _VelocityCorrection(_CorrectorBackend):
             if final_position_fixed and segment_num in update_segments:
                 update_segments.remove(segment_num)
 
-            for ii in update_segments:
-                base = (ii + index_offset) * 4
-                x_patches[ii][:3] += sigma * correction[base:base + 3]
-                t_patches[ii] += sigma * correction[base + 3]
+            for i in update_segments:
+                base = (i + index_offset) * 4
+                x_patches[i][:3] += sigma * correction[base:base + 3]
+                t_patches[i] += sigma * correction[base + 3]
 
-        metadata["iterations"] = iteration + 1 if success else max_attempts
+        metadata["iterations"] = i + 1 if success else max_attempts
 
         return VelocityOutput(
             x_corrected=x_patches,
@@ -292,3 +249,42 @@ class _VelocityCorrection(_CorrectorBackend):
             success=success,
             metadata=metadata,
         )
+
+    def _build_relationship_matrix(self, stms, x_patches, xf_patches, t_patches, iteration, dynsys_fn):
+        stm21 = stms[iteration - 1]
+        stm12 = np.linalg.inv(stm21)
+        stm32 = stms[iteration]
+
+        # Extract velocities at the three nodes
+        v1plus = x_patches[iteration - 1][3:6]
+        v2minus = xf_patches[iteration - 1][3:6]
+        v2plus = x_patches[iteration][3:6]
+        v3minus = xf_patches[iteration][3:6]
+
+        # Compute accelerations at node iteration
+        a2minus = dynsys_fn(t_patches[iteration], xf_patches[iteration - 1])[3:6]
+        a2plus = dynsys_fn(t_patches[iteration], x_patches[iteration])[3:6]
+
+        # Extract STM blocks
+        A12 = stm12[:3, :3]
+        B12 = stm12[:3, 3:6]
+        A32 = stm32[:3, :3]
+        B32 = stm32[:3, 3:6]
+
+        # Compute B inverses using solve for numerical stability
+        B12_inv = np.linalg.solve(B12, np.eye(3))
+        B32_inv = np.linalg.solve(B32, np.eye(3))
+
+        # Build the 3x12 block for this junction
+        block = np.hstack([
+            -B12_inv,                                              # cols 1-3
+            (B12_inv @ v1plus).reshape(-1, 1),                    # col 4
+            -B32_inv @ A32 + B12_inv @ A12,                       # cols 5-7
+            ((a2plus - a2minus) +                                  # col 8
+            B32_inv @ A32 @ v2plus -
+            B12_inv @ A12 @ v2minus).reshape(-1, 1),
+            B32_inv,
+            (-B32_inv @ v3minus).reshape(-1, 1),                  # col 12
+        ])
+
+        return block
