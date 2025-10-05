@@ -452,6 +452,34 @@ class _SingleShootingOrbitOperators(_OrbitCorrectionOperatorBase, _SingleShootin
         return jacobian_fn
 
 
-class _MultipleShootingOrbitOperators(_OrbitCorrectionOperatorBase, _MultipleShootingOperators):
-    """Multiple-shooting operators with clean residual/Jacobian evaluation."""
-    pass
+class _PositionOperator():
+    """Operations required for position shooting correction.
+    
+    This protocol defines the minimal set of operations a backend needs
+    to perform position shooting correction without knowing about
+    CR3BP, integrators, or domain-specific event detection.
+    """
+    def __init__(self, *, domain_obj: "PeriodicOrbit"):
+        self._domain_obj = domain_obj
+
+    def build_residual_fn(self) -> Callable[[np.ndarray], np.ndarray]:
+        """Build residual function for position shooting correction.
+        
+        Returns
+        """
+        def residual_fn(x_final: np.ndarray, x_target: np.ndarray) -> np.ndarray:
+            """Compute residual from final state."""
+            return x_target[:3] - x_final[:3]
+        
+        return residual_fn
+
+    def build_stm_fn(self) -> Callable[[np.ndarray, float], tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
+        """Build STM function for position shooting correction.
+        
+        Returns
+        """
+        def stm_fn(x_initial: np.ndarray, t_span: float) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+            """Compute STM from initial state to final state."""
+            return _compute_stm(self._domain_obj.dynamics.var_dynsys, x_initial, t_span)
+        
+        return stm_fn

@@ -142,6 +142,48 @@ class CorrectorOutput:
 
 
 @dataclass
+class PositionInput:
+    t_initial: float
+    x_initial: np.ndarray
+    t_target: float
+    x_target: np.ndarray
+    segment_num: int
+    max_attempts: int
+    tol: float
+    norm_fn: Optional[NormCallable]
+
+
+@dataclass
+class PositionOutput:
+    x0_corrected: np.ndarray
+    xf_corrected: np.ndarray
+    stm_corrected: np.ndarray
+    success: bool
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class VelocityOutput:
+    x_corrected: list[np.ndarray]
+    t_corrected: list[float]
+    success: bool
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass
+class VelocityInput:
+    t_patches: np.ndarray
+    x_patches: list[np.ndarray]
+    dynsys_fn: Callable[[float, np.ndarray], np.ndarray]
+    position_tol: float
+    max_attempts: int
+    tol: float
+    norm_fn: Optional[NormCallable]
+    initial_position_fixed: bool
+    final_position_fixed: bool
+    segment_num: int
+
+@dataclass
 class CorrectionResult:
     """Standardized result for a backend correction run.
     

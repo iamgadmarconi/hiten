@@ -20,10 +20,11 @@ See Also
 
 from .base import _CorrectorBackend
 from .newton import _NewtonBackend
-from .ms import _MultipleShootingBackend
+from .ms import _PositionShooting, _VelocityCorrection
 
 __all__ = [
     "_CorrectorBackend",
     "_NewtonBackend",
-    "_MultipleShootingBackend",
+    "_PositionShooting",
+    "_VelocityCorrection",
 ]

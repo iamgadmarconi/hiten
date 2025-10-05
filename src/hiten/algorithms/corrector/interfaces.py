@@ -12,20 +12,16 @@ import numpy as np
 
 from hiten.algorithms.corrector.config import (
     MultipleShootingOrbitCorrectionConfig, OrbitCorrectionConfig)
-from hiten.algorithms.corrector.operators import (
-    _MultipleShootingOrbitOperators, _SingleShootingOrbitOperators)
+from hiten.algorithms.corrector.operators import _SingleShootingOrbitOperators
 from hiten.algorithms.corrector.options import (
     MultipleShootingCorrectionOptions, OrbitCorrectionOptions)
-from hiten.algorithms.corrector.types import (CorrectorInput,
-                                              CorrectorOutput,
-                                              MultipleShootingDomainPayload,
+from hiten.algorithms.corrector.types import (CorrectorInput, CorrectorOutput,
                                               MultipleShootingResult, NormFn,
                                               OrbitCorrectionDomainPayload,
                                               OrbitCorrectionResult,
                                               StepperFactory,
                                               _MultipleShootingProblem,
                                               _OrbitCorrectionProblem)
-from hiten.algorithms.dynamics.base import _propagate_dynsys
 from hiten.algorithms.types.core import _BackendCall, _HitenBaseInterface
 from hiten.utils.log_config import logger
 
@@ -125,7 +121,6 @@ class _OrbitCorrectionInterface(
         :class:`~hiten.algorithms.corrector.types._OrbitCorrectionProblem`
             The correction problem.
         """
-        # Build operators
         ops = _SingleShootingOrbitOperators(
             domain_obj=domain_obj,
             control_indices=config.control_indices,
@@ -139,7 +134,6 @@ class _OrbitCorrectionInterface(
             steps=options.base.integration.steps,
         )
         
-        # Build residual/Jacobian from operators
         residual_fn = ops.build_residual_fn()
         jacobian_fn = None if config.numerical.finite_difference else ops.build_jacobian_fn()
         norm_fn = self._norm_fn()
@@ -192,7 +186,7 @@ class _OrbitCorrectionInterface(
             max_delta=problem.max_delta,
             fd_step=problem.fd_step,
         )
-        return _BackendCall(request=request, kwargs={"stepper_factory": problem.stepper_factory})
+        return _BackendCall(request=request, kwargs={})
 
     def to_domain(self, outputs: CorrectorOutput, *, problem: _OrbitCorrectionProblem) -> OrbitCorrectionDomainPayload:
         """Convert backend outputs to domain payload."""
@@ -260,3 +254,13 @@ class _MultipleShootingOrbitCorrectionInterface(
 ):
     def __init__(self) -> None:
         super().__init__()
+
+    def create_problem(
+        self,
+        *,
+        domain_obj: "PeriodicOrbit",
+        config: MultipleShootingOrbitCorrectionConfig,
+        options: MultipleShootingCorrectionOptions,
+        stepper_factory: StepperFactory | None = None
+    ) -> _MultipleShootingProblem:
+        pass

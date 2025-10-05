@@ -40,7 +40,6 @@ See Also
 """
 
 from .backends.base import _CorrectorBackend
-from .backends.ms import _MultipleShootingBackend
 from .backends.newton import _NewtonBackend
 from .config import (CorrectionConfig,
                      MultipleShootingOrbitCorrectionConfig,
@@ -54,7 +53,6 @@ __all__ = [
     # Backends
     "_CorrectorBackend",
     "_NewtonBackend",
-    "_MultipleShootingBackend",
     
     # Configs (compile-time structure)
     "CorrectionConfig",

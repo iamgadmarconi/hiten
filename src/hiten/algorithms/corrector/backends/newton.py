@@ -36,11 +36,13 @@ class _NewtonBackend(_CorrectorBackend):
     to provide a robust Newton-Raphson algorithm with Armijo line search.
     """
 
+    def __init__(self, *, stepper_factory: StepperFactory | None = None):
+        super().__init__(stepper_factory=stepper_factory)
+
     def run(
         self,
         *,
         request: CorrectorInput,
-        stepper_factory: StepperFactory | None = None,
     ) -> CorrectorOutput:
         """Solve nonlinear system using Newton-Raphson method.
 
@@ -92,7 +94,7 @@ class _NewtonBackend(_CorrectorBackend):
 
         x = request.initial_guess.copy()
 
-        factory = self._stepper_factory if stepper_factory is None else stepper_factory
+        factory = self._stepper_factory
         stepper = factory(residual_fn, norm_callable, max_delta)
 
         metadata: dict[str, Any] = dict(request.metadata)
