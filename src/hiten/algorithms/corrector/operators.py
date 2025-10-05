@@ -114,149 +114,6 @@ class _SingleShootingOperators(Protocol):
         ...
 
 
-class _MultipleShootingOperators(Protocol):
-    """Operations required for multiple-shooting correction.
-    
-    This protocol extends the single-shooting operators with patch-specific
-    operations for continuity constraints and block-structured Jacobian assembly.
-    
-    Notes
-    -----
-    Multiple shooting divides the trajectory into N patches. Each patch has:
-    - Initial state (at patch boundary i)
-    - Time span (dt from patch i to i+1)
-    - Template (full state from initial guess, for uncontrolled components)
-    """
-
-    @property
-    def control_indices(self) -> Sequence[int]:
-        """Indices of state components that vary during correction."""
-        ...
-
-    @property
-    def continuity_indices(self) -> Sequence[int]:
-        """Indices of state components enforced continuous at patch junctions."""
-        ...
-
-    @property
-    def boundary_indices(self) -> Sequence[int]:
-        """Indices of state components with boundary conditions at final patch."""
-        ...
-
-    @property
-    def target(self) -> np.ndarray:
-        """Target values for boundary condition residuals."""
-        ...
-
-    @property
-    def patch_times(self) -> np.ndarray:
-        """Time values at patch boundaries, shape (n_patches + 1,)."""
-        ...
-
-    @property
-    def patch_templates(self) -> Sequence[np.ndarray]:
-        """Full-state templates at each patch (for uncontrolled components).
-        
-        Length: n_patches
-        Each template has shape (n_state,)
-        """
-        ...
-
-    @property
-    def extra_jacobian(self) -> Optional[Callable[[np.ndarray, np.ndarray], np.ndarray]]:
-        """Optional extra Jacobian term (e.g., for period correction).
-        
-        Signature: extra_jac(x_boundary, Phi_full) -> J_extra
-        where J_extra has shape (n_boundary, n_control).
-        """
-        ...
-
-    def reconstruct_full_state(self, template: np.ndarray, control_params: np.ndarray) -> np.ndarray:
-        """Reconstruct full state from template and control parameters.
-        
-        Parameters
-        ----------
-        template : np.ndarray
-            Template state with uncontrolled components from initial guess.
-        control_params : np.ndarray
-            Control parameter values, shape (n_control,).
-        
-        Returns
-        -------
-        np.ndarray
-            Full state vector with control_params inserted at control_indices.
-        """
-        ...
-
-    def propagate_segment(self, x0: np.ndarray, dt: float) -> np.ndarray:
-        """Propagate state for fixed time span (patch segment).
-        
-        Parameters
-        ----------
-        x0 : np.ndarray
-            Initial state (full state) at patch boundary.
-        dt : float
-            Time span to propagate.
-        
-        Returns
-        -------
-        x_final : np.ndarray
-            State after propagating for dt.
-        """
-        ...
-
-    def propagate_to_event(self, x_final_patch: np.ndarray) -> tuple[float, np.ndarray]:
-        """Propagate final patch state until boundary event occurs.
-        
-        Parameters
-        ----------
-        x_final_patch : np.ndarray
-            Initial state at final patch boundary.
-        
-        Returns
-        -------
-        t_event : float
-            Time at which event occurred (relative to patch start).
-        x_event : np.ndarray
-            State at event time.
-        """
-        ...
-
-    def compute_stm_segment(self, x0: np.ndarray, dt: float) -> np.ndarray:
-        """Compute STM for fixed time span (patch segment).
-        
-        Parameters
-        ----------
-        x0 : np.ndarray
-            Initial state (full state) at patch boundary.
-        dt : float
-            Time span.
-        
-        Returns
-        -------
-        Phi : np.ndarray
-            State transition matrix, shape (n_state, n_state).
-        """
-        ...
-
-    def compute_stm_to_event(self, x_final_patch: np.ndarray, t_event: float) -> np.ndarray:
-        """Compute STM from final patch to event time.
-        
-        Parameters
-        ----------
-        x_final_patch : np.ndarray
-            Initial state at final patch boundary.
-        t_event : float
-            Integration time span to event.
-        
-        Returns
-        -------
-        Phi : np.ndarray
-            State transition matrix, shape (n_state, n_state).
-        """
-        ...
-
-
 class _OrbitCorrectionOperatorBase:
     """Lightweight base with shared integration/STM/event helpers.
 
@@ -452,34 +309,14 @@ class _SingleShootingOrbitOperators(_OrbitCorrectionOperatorBase, _SingleShootin
         return jacobian_fn
 
 
-class _PositionOperator():
-    """Operations required for position shooting correction.
-    
-    This protocol defines the minimal set of operations a backend needs
-    to perform position shooting correction without knowing about
-    CR3BP, integrators, or domain-specific event detection.
-    """
-    def __init__(self, *, domain_obj: "PeriodicOrbit"):
-        self._domain_obj = domain_obj
+class _MultipleShootingOperator(_OrbitCorrectionOperatorBase):
 
-    def build_residual_fn(self) -> Callable[[np.ndarray], np.ndarray]:
-        """Build residual function for position shooting correction.
-        
-        Returns
-        """
-        def residual_fn(x_final: np.ndarray, x_target: np.ndarray) -> np.ndarray:
-            """Compute residual from final state."""
-            return x_target[:3] - x_final[:3]
-        
-        return residual_fn
-
-    def build_stm_fn(self) -> Callable[[np.ndarray, float], tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]]:
-        """Build STM function for position shooting correction.
-        
-        Returns
-        """
-        def stm_fn(x_initial: np.ndarray, t_span: float) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-            """Compute STM from initial state to final state."""
-            return _compute_stm(self._domain_obj.dynamics.var_dynsys, x_initial, t_span)
-        
-        return stm_fn
+    def __init__(self, *, domain_obj: "PeriodicOrbit", method: str, order: int, steps: int, forward: int, event_func: Optional[Callable] = None):
+        super().__init__(
+            domain_obj=domain_obj,
+            method=method,
+            order=order,
+            steps=steps,
+            forward=forward,
+            event_func=event_func,
+        )

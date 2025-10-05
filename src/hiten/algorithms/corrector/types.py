@@ -117,6 +117,45 @@ class NormCallable(Protocol):
         ...
 
 
+class MSConstraintEval(Protocol):
+    def __call__(
+        self,
+        r_k: np.ndarray,
+        v_plus_k: np.ndarray,
+        v_minus_k: np.ndarray,
+        t_k: float,
+    ) -> float:
+        ...
+
+
+@dataclass(frozen=True)
+class MSConstraintGrad:
+    d_r: np.ndarray        # shape (3,)
+    d_v_plus: np.ndarray   # shape (3,)
+    d_v_minus: np.ndarray  # shape (3,)
+    d_t: float             # scalar
+
+
+ConstraintJacobianFn = Callable[[np.ndarray, np.ndarray, np.ndarray, float], MSConstraintGrad]
+
+
+@dataclass
+class MSConstraint:
+    r"""Scalar constraint applied at a multiple-shooting node.
+
+    Represents \(\alpha_{kj} = \alpha(R_k, \bar{V}_k^+, \bar{V}_k^-, t_k)\) with an
+    optional analytic gradient in the native variables. When ``jacobian_fn`` is
+    ``None``, callers may approximate derivatives via finite differences.
+    """
+
+    name: str
+    patch_index: int                  # k (0..segment_num)
+    eval_fn: MSConstraintEval
+    target: float = 0.0               # desired value α*_{kj}
+    weight: float = 1.0
+    jacobian_fn: Optional[ConstraintJacobianFn] = None
+
+
 @dataclass
 class CorrectorInput:
     """Structured request describing a single backend correction solve."""
@@ -182,6 +221,7 @@ class VelocityInput:
     initial_position_fixed: bool
     final_position_fixed: bool
     segment_num: int
+    constraints: Sequence[MSConstraint] | None = None
 
 @dataclass
 class CorrectionResult:

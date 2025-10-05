@@ -17,6 +17,23 @@ if TYPE_CHECKING:
     from hiten.algorithms.dynamics.base import _DynamicalSystem
 
 
+def _get_A_block(stm):
+    """Extract A block (position-position) from 6x6 STM."""
+    return stm[:3, :3]
+
+def _get_B_block(stm):
+    """Extract B block (position-velocity) from 6x6 STM."""
+    return stm[:3, 3:6]
+
+def _get_C_block(stm):
+    """Extract C block (velocity-position) from 6x6 STM."""
+    return stm[3:6, :3]
+
+def _get_D_block(stm):
+    """Extract D block (velocity-velocity) from 6x6 STM."""
+    return stm[3:6, 3:6]
+
+
 class _PositionShooting(_CorrectorBackend):
 
     def __init__(
@@ -75,8 +92,9 @@ class _PositionShooting(_CorrectorBackend):
             error_final = x_target[:3] - x_final[:3]
             error_norm = self._compute_norm(error_final, norm_fn)
 
-            B = stm_final[:3, 3:6]
-            delta_v = np.linalg.solve(B, error_final)
+            B = _get_B_block(stm_final)
+            delta_v = self._dVk_minus_one(B, error_final)
+
             x_initial[3:6] = x_initial[3:6] + sigma * delta_v
 
             metadata["convergence_history"].append(
@@ -100,6 +118,9 @@ class _PositionShooting(_CorrectorBackend):
             success=success,
             metadata=metadata,
         )
+
+    def _dVk_minus_one(self, B_block: np.ndarray, position_error: np.ndarray) -> np.ndarray:
+        return np.linalg.solve(B_block, position_error)
 
 
 class _VelocityCorrection(_CorrectorBackend):
@@ -251,40 +272,161 @@ class _VelocityCorrection(_CorrectorBackend):
         )
 
     def _build_relationship_matrix(self, stms, x_patches, xf_patches, t_patches, iteration, dynsys_fn):
+        """Build the relationship matrix M for velocity discontinuity at patch k.
+        
+        Uses the new _build_M_matrix method with helper functions for STM block extraction.
+        
+        Parameters
+        ----------
+        stms : ndarray
+            Array of STMs for each segment
+        x_patches : list
+            Initial states at each patch point
+        xf_patches : ndarray
+            Final states at each patch point (after propagation)
+        t_patches : ndarray
+            Times at each patch point
+        iteration : int
+            Current patch point index (k)
+        dynsys_fn : callable
+            Dynamical system function
+            
+        Returns
+        -------
+        block : ndarray (3, 12)
+            Relationship matrix for this junction
+        """
+        # Get STMs
+        # stm21: (k-1) → k, then invert to get stm12: k → (k-1) 
+        # stm32: k → (k+1)
         stm21 = stms[iteration - 1]
-        stm12 = np.linalg.inv(stm21)
+        stm12 = np.linalg.inv(stm21)  # Inverse to get k → (k-1)
         stm32 = stms[iteration]
 
+        # Extract STM blocks using helper functions
+        A_backward = _get_A_block(stm12)  # Use stm12, not stm21!
+        B_backward = _get_B_block(stm12)
+        D_backward = _get_D_block(stm12)
+        
+        A_forward = _get_A_block(stm32)
+        B_forward = _get_B_block(stm32)
+        D_forward = _get_D_block(stm32)
+
         # Extract velocities at the three nodes
-        v1plus = x_patches[iteration - 1][3:6]
-        v2minus = xf_patches[iteration - 1][3:6]
-        v2plus = x_patches[iteration][3:6]
-        v3minus = xf_patches[iteration][3:6]
+        v_km1_plus = x_patches[iteration - 1][3:6]   # v_{k-1}^+
+        v_k_plus = x_patches[iteration][3:6]         # v_k^+
+        v_kp1_minus = xf_patches[iteration][3:6]     # v_{k+1}^-
 
-        # Compute accelerations at node iteration
-        a2minus = dynsys_fn(t_patches[iteration], xf_patches[iteration - 1])[3:6]
-        a2plus = dynsys_fn(t_patches[iteration], x_patches[iteration])[3:6]
+        # Compute accelerations at node k
+        a_k_minus = dynsys_fn(t_patches[iteration], xf_patches[iteration - 1])[3:6]  # a_k^-
+        a_k_plus = dynsys_fn(t_patches[iteration], x_patches[iteration])[3:6]        # a_k^+
 
-        # Extract STM blocks
-        A12 = stm12[:3, :3]
-        B12 = stm12[:3, 3:6]
-        A32 = stm32[:3, :3]
-        B32 = stm32[:3, 3:6]
-
-        # Compute B inverses using solve for numerical stability
-        B12_inv = np.linalg.solve(B12, np.eye(3))
-        B32_inv = np.linalg.solve(B32, np.eye(3))
-
-        # Build the 3x12 block for this junction
-        block = np.hstack([
-            -B12_inv,                                              # cols 1-3
-            (B12_inv @ v1plus).reshape(-1, 1),                    # col 4
-            -B32_inv @ A32 + B12_inv @ A12,                       # cols 5-7
-            ((a2plus - a2minus) +                                  # col 8
-            B32_inv @ A32 @ v2plus -
-            B12_inv @ A12 @ v2minus).reshape(-1, 1),
-            B32_inv,
-            (-B32_inv @ v3minus).reshape(-1, 1),                  # col 12
-        ])
+        # Build M matrix using the new method
+        block = self._build_M_matrix(
+            B_backward=B_backward,
+            A_backward=A_backward,
+            D_backward=D_backward,
+            B_forward=B_forward,
+            A_forward=A_forward,
+            D_forward=D_forward,
+            v_km1_plus=v_km1_plus,
+            v_k_plus=v_k_plus,
+            v_kp1_minus=v_kp1_minus,
+            a_k_plus=a_k_plus,
+            a_k_minus=a_k_minus,
+        )
 
         return block
+
+    def _dVk_dRk1(self, B_block):
+        return np.linalg.solve(B_block, np.eye(3))
+
+    def _dVk_dRk(self, B_block, A_block):
+        B_inv = np.linalg.solve(B_block, np.eye(3))
+        return - B_inv @ A_block
+
+    def _dVk_dtk1(self, B_block, v_k):
+        B_inv = np.linalg.solve(B_block, np.eye(3))
+        return - B_inv @ v_k
+
+    def _dVk_dtk(self, a_k, D_block, B_block, v_k):
+        B_inv = np.linalg.solve(B_block, np.eye(3))
+        return a_k - D_block @ B_inv @ v_k
+
+    def _build_M_matrix(
+        self,
+        B_backward,
+        A_backward,
+        D_backward,
+        B_forward,
+        A_forward,
+        D_forward,
+        v_km1_plus,
+        v_k_plus,
+        v_kp1_minus,
+        a_k_plus,
+        a_k_minus,
+    ):
+        r"""Build the M matrix from equation (32).
+        
+        Computes the Jacobian of velocity discontinuity with respect to 
+        control variables at three consecutive patch points k-1, k, k+1.
+        
+        .. math::
+            \delta \Delta \bar{V}_k = M \cdot 
+            [\delta \bar{R}_{k-1}, \delta t_{k-1}, \delta \bar{R}_k, \delta t_k, 
+             \delta \bar{R}_{k+1}, \delta t_{k+1}]^T
+        
+        Parameters
+        ----------
+        B_backward : ndarray (3, 3)
+            B block from STM of segment (k-1 → k)
+        A_backward : ndarray (3, 3)
+            A block from STM of segment (k-1 → k)
+        D_backward : ndarray (3, 3)
+            D block from STM of segment (k-1 → k)
+        B_forward : ndarray (3, 3)
+            B block from STM of segment (k → k+1)
+        A_forward : ndarray (3, 3)
+            A block from STM of segment (k → k+1)
+        D_forward : ndarray (3, 3)
+            D block from STM of segment (k → k+1)
+        v_km1_plus : ndarray (3,)
+            Velocity at patch k-1 after leaving (initial velocity)
+        v_k_plus : ndarray (3,)
+            Velocity at patch k after leaving (initial velocity)
+        v_kp1_minus : ndarray (3,)
+            Velocity at patch k+1 before arriving (final velocity)
+        a_k_plus : ndarray (3,)
+            Acceleration at patch k (outgoing state)
+        a_k_minus : ndarray (3,)
+            Acceleration at patch k (incoming state)
+            
+        Returns
+        -------
+        M : ndarray (3, 12)
+            Jacobian matrix relating velocity discontinuity to control variables
+        """
+        # Compute partials for forward segment (k → k+1) - affects ΔV_k^-
+        dVk_minus_dRk = self._dVk_dRk1(B_forward)
+        dVk_minus_dtk = self._dVk_dtk1(B_forward, v_kp1_minus)
+        dVk_minus_dRkp1 = self._dVk_dRk(B_forward, A_forward)
+        dVk_minus_dtkp1 = self._dVk_dtk(a_k_minus, D_forward, B_forward, v_k_plus)
+        
+        # Compute partials for backward segment (k-1 → k) - affects ΔV_k^+
+        dVk_plus_dRkm1 = self._dVk_dRk(B_backward, A_backward)
+        dVk_plus_dtkm1 = self._dVk_dtk(a_k_plus, D_backward, B_backward, v_km1_plus)
+        dVk_plus_dRk = self._dVk_dRk1(B_backward)
+        dVk_plus_dtk = self._dVk_dtk1(B_backward, v_k_plus)
+        
+        # Build M matrix: ∂(ΔV_k^+ - ΔV_k^-)/∂[R_{k-1}, t_{k-1}, R_k, t_k, R_{k+1}, t_{k+1}]
+        M = np.hstack([
+            dVk_plus_dRkm1,                           # ∂ΔV_k^+/∂R_{k-1} (3x3)
+            dVk_plus_dtkm1.reshape(-1, 1),           # ∂ΔV_k^+/∂t_{k-1} (3x1)
+            dVk_plus_dRk - dVk_minus_dRk,            # ∂(ΔV_k^+ - ΔV_k^-)/∂R_k (3x3)
+            (dVk_plus_dtk - dVk_minus_dtk).reshape(-1, 1),  # ∂(ΔV_k^+ - ΔV_k^-)/∂t_k (3x1)
+            -dVk_minus_dRkp1,                         # -∂ΔV_k^-/∂R_{k+1} (3x3)
+            -dVk_minus_dtkp1.reshape(-1, 1),         # -∂ΔV_k^-/∂t_{k+1} (3x1)
+        ])
+        
+        return M
