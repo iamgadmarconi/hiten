@@ -258,9 +258,11 @@ class _VelocityCorrection(_CorrectorBackend):
                 update_segments.remove(segment_num)
 
             for i in update_segments:
-                base = (i + index_offset) * 4
-                x_patches[i][:3] += sigma * correction[base:base + 3]
-                t_patches[i] += sigma * correction[base + 3]
+                # Extract corrections for this patch
+                dR, dt = self._extract_patch_correction(correction, i + index_offset)
+                # Apply corrections with damping
+                x_patches[i][:3] += sigma * dR
+                t_patches[i] += sigma * dt
 
         metadata["iterations"] = i + 1 if success else max_attempts
 
@@ -430,3 +432,31 @@ class _VelocityCorrection(_CorrectorBackend):
         ])
         
         return M
+
+
+    def _extract_patch_correction(
+        self,
+        correction_vector: np.ndarray,
+        patch_index: int,
+    ) -> tuple[np.ndarray, float]:
+        """Extract position and time corrections for a single patch from solution vector.
+        
+        Parameters
+        ----------
+        correction_vector : ndarray
+            Full correction vector from solving the multiple shooting system
+        patch_index : int
+            Index of the patch to extract corrections for
+            
+        Returns
+        -------
+        dR : ndarray (3,)
+            Position correction for the patch
+        dt : float
+            Time correction for the patch
+        """
+        base = patch_index * 4
+        dR = correction_vector[base:base + 3]
+        dt = correction_vector[base + 3]
+        return dR, dt
+        
