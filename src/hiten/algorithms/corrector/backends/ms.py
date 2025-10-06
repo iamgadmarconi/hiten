@@ -9,15 +9,11 @@ from typing import TYPE_CHECKING, Any
 import numpy as np
 
 from hiten.algorithms.corrector.backends.base import _CorrectorBackend
-from hiten.algorithms.corrector.types import (
-    PositionInput,
-    PositionOutput,
-    StepperFactory,
-    VelocityInput,
-    VelocityOutput,
-)
+from hiten.algorithms.corrector.types import (PositionInput, PositionOutput,
+                                              StepperFactory, VelocityInput,
+                                              VelocityOutput)
 from hiten.algorithms.dynamics.rtbp import _compute_stm
-from hiten.algorithms.types.exceptions import ConvergenceError
+from hiten.algorithms.corrector.constraints import _NodePartials, _ConstraintContext
 from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
@@ -156,8 +152,11 @@ class _PositionShooting(_CorrectorBackend):
         )
 
     def _dVk_minus_one(self, B_block: np.ndarray, position_error: np.ndarray) -> np.ndarray:
-        Binv = np.linalg.solve(B_block, np.eye(3))
-        return Binv @ position_error
+        try:
+            return np.linalg.solve(B_block, position_error)
+        except np.linalg.LinAlgError:
+            Binv = np.linalg.pinv(B_block, rcond=1e-12)
+            return Binv @ position_error
 
 
 class _VelocityCorrection(_CorrectorBackend):
@@ -248,6 +247,21 @@ class _VelocityCorrection(_CorrectorBackend):
                 x_patches[seg] = pos_output.x0_corrected
                 xf_patches[seg] = pos_output.xf_corrected
                 stms[seg] = pos_output.stm_corrected
+                if not pos_output.success:
+                    # Keep going; constraints/Level-2 may recover the failing segment
+                    logger.warning(
+                        "Level-1 failed at segment %d (error persisted); proceeding with Level-2 update",
+                        seg + 1,
+                    )
+                    return VelocityOutput(
+                        x_corrected=x_patches,
+                        t_corrected=list(t_patches),
+                        success=False,
+                        metadata={
+                            **metadata,
+                            "level1_failure_segment": seg + 1,
+                        },
+                    )
 
             # Compute velocity discontinuities between patches
             delta_v_list = [
@@ -276,27 +290,88 @@ class _VelocityCorrection(_CorrectorBackend):
                     metadata=metadata,
                 )
 
-            # Build state relationship matrix
+            # Build base state relationship matrix for ΔV continuity
             n_rows = (segment_num - 2) * 3 + 3
             n_cols = (segment_num - 2) * 4 + 12
-            state_rel_matrix = np.zeros((n_rows, n_cols))
+            base_M = np.zeros((n_rows, n_cols))
+
+            node_cache: list[dict[str, np.ndarray]] = [None] * (segment_num + 1)
 
             for i in range(1, segment_num):
-                # Get STMs: stm21 (from node iteration-1 to iteration), stm32 (from node iteration to iteration+1)
                 block = self._build_relationship_matrix(stms, x_patches, xf_patches, t_patches, i, dynsys_fn)
 
                 row_start = (i - 1) * 3
                 col_start = (i - 1) * 4
-                state_rel_matrix[row_start:row_start + 3, col_start:col_start + 12] = block
+                base_M[row_start:row_start + 3, col_start:col_start + 12] = block
 
-            # Handle fixed boundaries
+                Ab, Bb, Db, Af, Bf, Df, v_km1_plus, v_k_minus, v_k_plus, v_kp1_minus, a_k_plus, a_k_minus = self._build_params(stms, i, x_patches, xf_patches, t_patches, dynsys_fn)
+
+                node_cache[i] = {
+                    "A_b": Ab, "B_b": Bb, "D_b": Db,
+                    "A_f": Af, "B_f": Bf, "D_f": Df,
+                    "v_km1_plus": v_km1_plus, "v_k_minus": v_k_minus,
+                    "v_k_plus": v_k_plus, "v_kp1_minus": v_kp1_minus,
+                    "a_k_plus": a_k_plus, "a_k_minus": a_k_minus,
+                }
+
+            # Build augmented matrix with constraints
+            constraint_rows: list[np.ndarray] = []
+            constraint_rhs_list: list[np.ndarray] = []
+
+            if constraints:
+                node_partials_map: dict[int, _NodePartials] = {}
+
+                for i in range(1, segment_num):
+
+                    cache = node_cache[i]
+
+                    if cache is None:
+                        continue
+                    node_partials_map[i] = _NodePartials(
+                        A_backward=cache["A_b"], B_backward=cache["B_b"], D_backward=cache["D_b"],
+                        A_forward=cache["A_f"], B_forward=cache["B_f"], D_forward=cache["D_f"],
+                        v_km1_plus=cache["v_km1_plus"], v_k_minus=cache["v_k_minus"],
+                        v_k_plus=cache["v_k_plus"], v_kp1_minus=cache["v_kp1_minus"],
+                        a_k_plus=cache["a_k_plus"], a_k_minus=cache["a_k_minus"],
+                    )
+
+                ctx = _ConstraintContext(
+                    x_patches=x_patches,
+                    xf_patches=xf_patches,
+                    t_patches=t_patches,
+                    stms=stms,
+                    node_partials=node_partials_map,
+                    segment_num=segment_num,
+                )
+
+                for c in constraints:
+                    rows, rhs = c.build_rows(ctx)
+                    if rows is None or np.size(rows) == 0:
+                        continue
+                    constraint_rows.append(np.asarray(rows))
+                    constraint_rhs_list.append(np.asarray(rhs, dtype=float).reshape(-1))
+
+            # Apply boundary trimming to columns consistently
+            M_tilde = base_M
             if initial_position_fixed:
-                state_rel_matrix = state_rel_matrix[:, 4:]
+                M_tilde = M_tilde[:, 4:]
             if final_position_fixed:
-                state_rel_matrix = state_rel_matrix[:, :-4]
+                M_tilde = M_tilde[:, :-4]
 
-            # Solve for corrections using pseudo-inverse
-            correction = np.linalg.pinv(state_rel_matrix) @ delta_v_vec
+            b_tilde = delta_v_vec.copy()
+
+            if constraint_rows:
+                CR = np.vstack(constraint_rows)
+                # Trim columns the same way as M
+                if initial_position_fixed:
+                    CR = CR[:, 4:]
+                if final_position_fixed:
+                    CR = CR[:, :-4]
+                M_tilde = np.vstack([M_tilde, CR])
+                b_tilde = np.concatenate([b_tilde, np.concatenate(constraint_rhs_list)])
+
+            # Solve augmented least squares
+            correction, *_ = np.linalg.lstsq(M_tilde, b_tilde, rcond=None)
 
             # Determine which segments to update
             update_segments = list(range(segment_num + 1))
@@ -314,6 +389,11 @@ class _VelocityCorrection(_CorrectorBackend):
                 x_patches[i][:3] += dR
                 t_patches[i] += dt
 
+            # Always update the final target time to preserve total period consistency
+            if segment_num not in update_segments:
+                _, dtN = self._extract_patch_correction(correction, segment_num + index_offset)
+                t_patches[segment_num] += dtN
+
         # Failed to converge
         metadata["iterations"] = vel_max_attempts
         logger.warning(
@@ -327,6 +407,33 @@ class _VelocityCorrection(_CorrectorBackend):
             success=False,
             metadata=metadata,
         )
+
+    def _build_params(self, stms, iteration, x_patches, xf_patches, t_patches, dynsys_fn):
+        stm21 = stms[iteration - 1]
+        stm12 = np.linalg.inv(stm21)  # Inverse to get k → (k-1)
+        stm32 = stms[iteration]
+
+        # Extract STM blocks using helper functions
+        Ab = _get_A_block(stm12)  # Use stm12, not stm21!
+        Bb = _get_B_block(stm12)
+        Db = _get_D_block(stm12)
+        
+        Af = _get_A_block(stm32)
+        Bf = _get_B_block(stm32)
+        Df = _get_D_block(stm32)
+
+        # Extract velocities at the three nodes
+        v_km1_plus = x_patches[iteration - 1][3:6]   # v_{k-1}^+
+        v_k_minus = xf_patches[iteration - 1][3:6]   # v_{k}^-
+        v_k_plus = x_patches[iteration][3:6]         # v_k^+
+        v_kp1_minus = xf_patches[iteration][3:6]     # v_{k+1}^-
+
+        # Compute accelerations at node k
+        a_k_minus = dynsys_fn(t_patches[iteration], xf_patches[iteration - 1])[3:6]  # a_k^-
+        a_k_plus = dynsys_fn(t_patches[iteration], x_patches[iteration])[3:6]        # a_k^+
+
+        return Ab, Bb, Db, Af, Bf, Df, v_km1_plus, v_k_minus, v_k_plus, v_kp1_minus, a_k_plus, a_k_minus
+
 
     def _build_relationship_matrix(self, stms, x_patches, xf_patches, t_patches, iteration, dynsys_fn):
         """Build the relationship matrix M for velocity discontinuity at patch k.
@@ -356,37 +463,16 @@ class _VelocityCorrection(_CorrectorBackend):
         # Get STMs
         # stm21: (k-1) → k, then invert to get stm12: k → (k-1) 
         # stm32: k → (k+1)
-        stm21 = stms[iteration - 1]
-        stm12 = np.linalg.inv(stm21)  # Inverse to get k → (k-1)
-        stm32 = stms[iteration]
-
-        # Extract STM blocks using helper functions
-        A_backward = _get_A_block(stm12)  # Use stm12, not stm21!
-        B_backward = _get_B_block(stm12)
-        D_backward = _get_D_block(stm12)
-        
-        A_forward = _get_A_block(stm32)
-        B_forward = _get_B_block(stm32)
-        D_forward = _get_D_block(stm32)
-
-        # Extract velocities at the three nodes
-        v_km1_plus = x_patches[iteration - 1][3:6]   # v_{k-1}^+
-        v_k_minus = xf_patches[iteration - 1][3:6]   # v_{k}^-
-        v_k_plus = x_patches[iteration][3:6]         # v_k^+
-        v_kp1_minus = xf_patches[iteration][3:6]     # v_{k+1}^-
-
-        # Compute accelerations at node k
-        a_k_minus = dynsys_fn(t_patches[iteration], xf_patches[iteration - 1])[3:6]  # a_k^-
-        a_k_plus = dynsys_fn(t_patches[iteration], x_patches[iteration])[3:6]        # a_k^+
+        Ab, Bb, Db, Af, Bf, Df, v_km1_plus, v_k_minus, v_k_plus, v_kp1_minus, a_k_plus, a_k_minus = self._build_params(stms, iteration, x_patches, xf_patches, t_patches, dynsys_fn)
 
         # Build M matrix using the new method
         block = self._build_M_matrix(
-            B_backward=B_backward,
-            A_backward=A_backward,
-            D_backward=D_backward,
-            B_forward=B_forward,
-            A_forward=A_forward,
-            D_forward=D_forward,
+            B_backward=Bb,
+            A_backward=Ab,
+            D_backward=Db,
+            B_forward=Bf,
+            A_forward=Af,
+            D_forward=Df,
             v_km1_plus=v_km1_plus,
             v_k_minus=v_k_minus,
             v_k_plus=v_k_plus,
@@ -397,19 +483,25 @@ class _VelocityCorrection(_CorrectorBackend):
 
         return block
 
+    def _B_inv(self, B_block):
+        try:
+            return np.linalg.solve(B_block, np.eye(3))
+        except np.linalg.LinAlgError:
+            return np.linalg.pinv(B_block, rcond=1e-12)
+
     def _dVk_dRk1(self, B_block):
-        return np.linalg.solve(B_block, np.eye(3))
+        return self._B_inv(B_block)
 
     def _dVk_dRk(self, B_block, A_block):
-        B_inv = np.linalg.solve(B_block, np.eye(3))
+        B_inv = self._B_inv(B_block)
         return - B_inv @ A_block
 
     def _dVk_dtk1(self, B_block, v_k):
-        B_inv = np.linalg.solve(B_block, np.eye(3))
+        B_inv = self._B_inv(B_block)
         return - B_inv @ v_k
 
     def _dVk_dtk(self, a_k, D_block, B_block, v_k):
-        B_inv = np.linalg.solve(B_block, np.eye(3))
+        B_inv = self._B_inv(B_block)
         return a_k - D_block @ B_inv @ v_k
 
     def _build_M_matrix(
@@ -469,8 +561,8 @@ class _VelocityCorrection(_CorrectorBackend):
         """
         # Build M using the same form as the MATLAB reference (rows 141–147 in _debug/alg.m)
         # Columns correspond to [R_{k-1}, t_{k-1}, R_k, t_k, R_{k+1}, t_{k+1}].
-        B_bwd_inv = np.linalg.solve(B_backward, np.eye(3))
-        B_fwd_inv = np.linalg.solve(B_forward, np.eye(3))
+        B_bwd_inv = self._B_inv(B_backward)
+        B_fwd_inv = self._B_inv(B_forward)
 
         col_Rkm1 = -B_bwd_inv
         col_tkm1 = (B_bwd_inv @ v_km1_plus).reshape(-1, 1)
@@ -492,7 +584,7 @@ class _VelocityCorrection(_CorrectorBackend):
             col_Rkp1,
             col_tkp1,
         ])
-
+        
         return M
 
 

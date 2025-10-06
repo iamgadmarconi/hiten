@@ -10,10 +10,12 @@ from typing import (TYPE_CHECKING, Any, Callable, Mapping, Optional, Protocol,
 
 import numpy as np
 
+from hiten.algorithms.corrector.constraints import _ConstraintBase
+from hiten.algorithms.types.core import _DomainPayload
+
 if TYPE_CHECKING:
     from hiten.algorithms.corrector.protocols import CorrectorStepProtocol
 
-from hiten.algorithms.types.core import _DomainPayload
 
 #: Type alias for residual function signatures.
 #:
@@ -22,7 +24,7 @@ from hiten.algorithms.types.core import _DomainPayload
 #: approach zero as the parameter vector approaches the solution.
 #:
 #: In dynamical systems contexts, the residual typically represents:
-#: - Constraint violations for periodic orbits
+#: - _ConstraintBase violations for periodic orbits
 #: - Boundary condition errors for invariant manifolds
 #: - Fixed point equations for equilibrium solutions
 #:
@@ -117,45 +119,6 @@ class NormCallable(Protocol):
         ...
 
 
-class MSConstraintEval(Protocol):
-    def __call__(
-        self,
-        r_k: np.ndarray,
-        v_plus_k: np.ndarray,
-        v_minus_k: np.ndarray,
-        t_k: float,
-    ) -> float:
-        ...
-
-
-@dataclass(frozen=True)
-class MSConstraintGrad:
-    d_r: np.ndarray        # shape (3,)
-    d_v_plus: np.ndarray   # shape (3,)
-    d_v_minus: np.ndarray  # shape (3,)
-    d_t: float             # scalar
-
-
-ConstraintJacobianFn = Callable[[np.ndarray, np.ndarray, np.ndarray, float], MSConstraintGrad]
-
-
-@dataclass
-class MSConstraint:
-    r"""Scalar constraint applied at a multiple-shooting node.
-
-    Represents \(\alpha_{kj} = \alpha(R_k, \bar{V}_k^+, \bar{V}_k^-, t_k)\) with an
-    optional analytic gradient in the native variables. When ``jacobian_fn`` is
-    ``None``, callers may approximate derivatives via finite differences.
-    """
-
-    name: str
-    patch_index: int                  # k (0..segment_num)
-    eval_fn: MSConstraintEval
-    target: float = 0.0               # desired value α*_{kj}
-    weight: float = 1.0
-    jacobian_fn: Optional[ConstraintJacobianFn] = None
-
-
 @dataclass
 class CorrectorInput:
     """Structured request describing a single backend correction solve."""
@@ -202,14 +165,6 @@ class PositionOutput:
 
 
 @dataclass
-class VelocityOutput:
-    x_corrected: list[np.ndarray]
-    t_corrected: list[float]
-    success: bool
-    metadata: dict[str, Any] = field(default_factory=dict)
-
-
-@dataclass
 class VelocityInput:
     t_patches: np.ndarray
     x_patches: list[np.ndarray]
@@ -229,8 +184,14 @@ class VelocityInput:
     final_position_fixed: bool = False
 
     segment_num: int = 0
-    constraints: Sequence[MSConstraint] | None = None
+    constraints: Sequence[_ConstraintBase] | None = None
 
+@dataclass
+class VelocityOutput:
+    x_corrected: list[np.ndarray]
+    t_corrected: list[float]
+    success: bool
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
