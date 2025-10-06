@@ -1,4 +1,9 @@
-from re import I
+"""Multiple shooting correction algorithms for orbital mechanics.
+
+This module provides position shooting and velocity correction algorithms
+for multiple shooting methods in periodic orbit computation.
+"""
+
 from typing import TYPE_CHECKING, Any
 
 import numpy as np
@@ -12,6 +17,8 @@ from hiten.algorithms.corrector.types import (
     VelocityOutput,
 )
 from hiten.algorithms.dynamics.rtbp import _compute_stm
+from hiten.algorithms.types.exceptions import ConvergenceError
+from hiten.utils.log_config import logger
 
 if TYPE_CHECKING:
     from hiten.algorithms.dynamics.base import _DynamicalSystem
@@ -52,7 +59,21 @@ class _PositionShooting(_CorrectorBackend):
         self._steps = steps
 
     def run(self, request: PositionInput) -> PositionOutput:
-        """Run position shooting to correct initial velocity."""
+        """Run position shooting to correct initial velocity.
+        
+        Iteratively adjusts the initial velocity to minimize the position
+        error at the target time using the B block of the STM.
+        
+        Parameters
+        ----------
+        request : PositionInput
+            Input containing initial/target states, times, and solver parameters
+            
+        Returns
+        -------
+        PositionOutput
+            Output containing corrected states, STM, and convergence info
+        """
         t_initial = request.t_initial
         x_initial = request.x_initial.copy()
         t_target = request.t_target
@@ -62,23 +83,21 @@ class _PositionShooting(_CorrectorBackend):
         max_attempts = request.max_attempts
         tol = request.tol
 
-        # Use default L2 norm if none provided
-        if norm_fn is None:
-            norm_fn = lambda r: float(np.linalg.norm(r))
-
         t_span = t_target - t_initial
-        sigma = 0.618
+        sigma = 0.618  # Golden ratio damping for quasi-Newton corrections
 
-        metadata = {
+        metadata: dict[str, Any] = {
             "segment_num": segment_num,
-            "iterations": 0,
             "convergence_history": [],
         }
 
-        success = False
+        # Initialize variables for final return (in case of non-convergence)
+        x_final = x_initial.copy()
+        stm_final = np.eye(6)
+        error_norm = float('inf')
 
         for iteration in range(max_attempts):
-
+            # Propagate with STM
             x_traj, _, stm_final, _ = _compute_stm(
                 dynsys=self._var_dynsys,
                 x0=x_initial,
@@ -89,12 +108,15 @@ class _PositionShooting(_CorrectorBackend):
             )
             x_final = x_traj[-1, :]
 
+            # Compute position error
             error_final = x_target[:3] - x_final[:3]
             error_norm = self._compute_norm(error_final, norm_fn)
 
+            # Compute velocity correction using B block
             B = _get_B_block(stm_final)
             delta_v = self._dVk_minus_one(B, error_final)
 
+            # Apply damped correction (quasi-Newton, not gradient descent)
             x_initial[3:6] = x_initial[3:6] + sigma * delta_v
 
             metadata["convergence_history"].append(
@@ -105,22 +127,37 @@ class _PositionShooting(_CorrectorBackend):
             )
 
             if error_norm < tol:
-                print(f"POSITION SHOOTING: success at iteration {iteration + 1} of {max_attempts} | Residual error: {error_norm}")
-                success = True
-                break
+                logger.debug(
+                    "Position shooting converged at iteration %d/%d (segment %d, error=%.2e)",
+                    iteration + 1, max_attempts, segment_num, error_norm
+                )
+                metadata["iterations"] = iteration
+                return PositionOutput(
+                    x0_corrected=x_initial,
+                    xf_corrected=x_final,
+                    stm_corrected=stm_final,
+                    success=True,
+                    metadata=metadata,
+                )
 
+        # Failed to converge
         metadata["iterations"] = max_attempts
-
+        logger.warning(
+            "Position shooting failed to converge after %d iterations (segment %d, error=%.2e)",
+            max_attempts, segment_num, error_norm
+        )
+        
         return PositionOutput(
             x0_corrected=x_initial,
             xf_corrected=x_final,
             stm_corrected=stm_final,
-            success=success,
+            success=False,
             metadata=metadata,
         )
 
     def _dVk_minus_one(self, B_block: np.ndarray, position_error: np.ndarray) -> np.ndarray:
-        return np.linalg.solve(B_block, position_error)
+        Binv = np.linalg.solve(B_block, np.eye(3))
+        return Binv @ position_error
 
 
 class _VelocityCorrection(_CorrectorBackend):
@@ -168,29 +205,33 @@ class _VelocityCorrection(_CorrectorBackend):
         # Extract inputs
         t_patches = request.t_patches.copy()
         x_patches = [x.copy() for x in request.x_patches]
+
         dynsys_fn = request.dynsys_fn
-        position_tol = request.position_tol
-        max_attempts = request.max_attempts
-        tol = request.tol
-        norm_fn = request.norm_fn
+
+        vel_max_attempts = request.vel_max_attempts
+        pos_max_attempts = request.pos_max_attempts
+
+        pos_tol = request.pos_tol
+        vel_tol = request.vel_tol
+
+        pos_norm_fn = request.pos_norm_fn
+
         initial_position_fixed = request.initial_position_fixed
         final_position_fixed = request.final_position_fixed
         segment_num = request.segment_num
 
-        # Initialize empty lists for STMs and final states (populated in level-1)
+        constraints = request.constraints
+
         stms = np.zeros((segment_num, 6, 6))
         xf_patches = np.zeros((segment_num, 6))
 
-        sigma = 1.0  # Step damping factor
-
-        metadata = {
-            "iterations": 0,
+        metadata: dict[str, Any] = {
             "convergence_history": [],
         }
 
-        success = False
+        error_norm = float('inf')
 
-        for iteration in range(max_attempts):
+        for iteration in range(vel_max_attempts):
             for seg in range(segment_num):
                 pos_request = PositionInput(
                     t_initial=t_patches[seg],
@@ -198,9 +239,10 @@ class _VelocityCorrection(_CorrectorBackend):
                     t_target=t_patches[seg + 1],
                     x_target=x_patches[seg + 1],
                     segment_num=seg + 1,
-                    max_attempts=50,
-                    tol=position_tol,
-                    norm_fn=norm_fn,
+                    max_attempts=pos_max_attempts,
+                    tol=pos_tol,
+                    norm_fn=pos_norm_fn,
+
                 )
                 pos_output = self._position_shooter.run(pos_request)
                 x_patches[seg] = pos_output.x0_corrected
@@ -221,9 +263,18 @@ class _VelocityCorrection(_CorrectorBackend):
                 "velocity_error_norm": error_norm,
             })
 
-            if error_norm < tol:
-                success = True
-                break
+            if error_norm < vel_tol:
+                logger.info(
+                    "Velocity correction converged at iteration %d/%d (error=%.2e)",
+                    iteration + 1, vel_max_attempts, error_norm
+                )
+                metadata["iterations"] = iteration + 1
+                return VelocityOutput(
+                    x_corrected=x_patches,
+                    t_corrected=list(t_patches),
+                    success=True,
+                    metadata=metadata,
+                )
 
             # Build state relationship matrix
             n_rows = (segment_num - 2) * 3 + 3
@@ -247,7 +298,7 @@ class _VelocityCorrection(_CorrectorBackend):
             # Solve for corrections using pseudo-inverse
             correction = np.linalg.pinv(state_rel_matrix) @ delta_v_vec
 
-            # Apply corrections to positions and epochs
+            # Determine which segments to update
             update_segments = list(range(segment_num + 1))
             index_offset = 0
 
@@ -257,19 +308,23 @@ class _VelocityCorrection(_CorrectorBackend):
             if final_position_fixed and segment_num in update_segments:
                 update_segments.remove(segment_num)
 
+            # Apply corrections with full step (matches pre-refactor sigma=1.0)
             for i in update_segments:
-                # Extract corrections for this patch
                 dR, dt = self._extract_patch_correction(correction, i + index_offset)
-                # Apply corrections with damping
-                x_patches[i][:3] += sigma * dR
-                t_patches[i] += sigma * dt
+                x_patches[i][:3] += dR
+                t_patches[i] += dt
 
-        metadata["iterations"] = i + 1 if success else max_attempts
+        # Failed to converge
+        metadata["iterations"] = vel_max_attempts
+        logger.warning(
+            "Velocity correction failed to converge after %d iterations (error=%.2e)",
+            vel_max_attempts, error_norm
+        )
 
         return VelocityOutput(
             x_corrected=x_patches,
             t_corrected=list(t_patches),
-            success=success,
+            success=False,
             metadata=metadata,
         )
 
@@ -316,6 +371,7 @@ class _VelocityCorrection(_CorrectorBackend):
 
         # Extract velocities at the three nodes
         v_km1_plus = x_patches[iteration - 1][3:6]   # v_{k-1}^+
+        v_k_minus = xf_patches[iteration - 1][3:6]   # v_{k}^-
         v_k_plus = x_patches[iteration][3:6]         # v_k^+
         v_kp1_minus = xf_patches[iteration][3:6]     # v_{k+1}^-
 
@@ -332,6 +388,7 @@ class _VelocityCorrection(_CorrectorBackend):
             A_forward=A_forward,
             D_forward=D_forward,
             v_km1_plus=v_km1_plus,
+            v_k_minus=v_k_minus,
             v_k_plus=v_k_plus,
             v_kp1_minus=v_kp1_minus,
             a_k_plus=a_k_plus,
@@ -364,6 +421,7 @@ class _VelocityCorrection(_CorrectorBackend):
         A_forward,
         D_forward,
         v_km1_plus,
+        v_k_minus,
         v_k_plus,
         v_kp1_minus,
         a_k_plus,
@@ -409,28 +467,32 @@ class _VelocityCorrection(_CorrectorBackend):
         M : ndarray (3, 12)
             Jacobian matrix relating velocity discontinuity to control variables
         """
-        # Compute partials for forward segment (k → k+1) - affects ΔV_k^-
-        dVk_minus_dRk = self._dVk_dRk1(B_forward)
-        dVk_minus_dtk = self._dVk_dtk1(B_forward, v_kp1_minus)
-        dVk_minus_dRkp1 = self._dVk_dRk(B_forward, A_forward)
-        dVk_minus_dtkp1 = self._dVk_dtk(a_k_minus, D_forward, B_forward, v_k_plus)
-        
-        # Compute partials for backward segment (k-1 → k) - affects ΔV_k^+
-        dVk_plus_dRkm1 = self._dVk_dRk(B_backward, A_backward)
-        dVk_plus_dtkm1 = self._dVk_dtk(a_k_plus, D_backward, B_backward, v_km1_plus)
-        dVk_plus_dRk = self._dVk_dRk1(B_backward)
-        dVk_plus_dtk = self._dVk_dtk1(B_backward, v_k_plus)
-        
-        # Build M matrix: ∂(ΔV_k^+ - ΔV_k^-)/∂[R_{k-1}, t_{k-1}, R_k, t_k, R_{k+1}, t_{k+1}]
+        # Build M using the same form as the MATLAB reference (rows 141–147 in _debug/alg.m)
+        # Columns correspond to [R_{k-1}, t_{k-1}, R_k, t_k, R_{k+1}, t_{k+1}].
+        B_bwd_inv = np.linalg.solve(B_backward, np.eye(3))
+        B_fwd_inv = np.linalg.solve(B_forward, np.eye(3))
+
+        col_Rkm1 = -B_bwd_inv
+        col_tkm1 = (B_bwd_inv @ v_km1_plus).reshape(-1, 1)
+
+        col_Rk = -B_fwd_inv @ A_forward + B_bwd_inv @ A_backward
+        col_tk = (
+            (a_k_plus - a_k_minus)
+            + (B_fwd_inv @ A_forward @ v_k_plus - B_bwd_inv @ A_backward @ v_k_minus)
+        ).reshape(-1, 1)
+
+        col_Rkp1 = B_fwd_inv
+        col_tkp1 = (-B_fwd_inv @ v_kp1_minus).reshape(-1, 1)
+
         M = np.hstack([
-            dVk_plus_dRkm1,                           # ∂ΔV_k^+/∂R_{k-1} (3x3)
-            dVk_plus_dtkm1.reshape(-1, 1),           # ∂ΔV_k^+/∂t_{k-1} (3x1)
-            dVk_plus_dRk - dVk_minus_dRk,            # ∂(ΔV_k^+ - ΔV_k^-)/∂R_k (3x3)
-            (dVk_plus_dtk - dVk_minus_dtk).reshape(-1, 1),  # ∂(ΔV_k^+ - ΔV_k^-)/∂t_k (3x1)
-            -dVk_minus_dRkp1,                         # -∂ΔV_k^-/∂R_{k+1} (3x3)
-            -dVk_minus_dtkp1.reshape(-1, 1),         # -∂ΔV_k^-/∂t_{k+1} (3x1)
+            col_Rkm1,
+            col_tkm1,
+            col_Rk,
+            col_tk,
+            col_Rkp1,
+            col_tkp1,
         ])
-        
+
         return M
 
 
@@ -459,4 +521,3 @@ class _VelocityCorrection(_CorrectorBackend):
         dR = correction_vector[base:base + 3]
         dt = correction_vector[base + 3]
         return dR, dt
-        

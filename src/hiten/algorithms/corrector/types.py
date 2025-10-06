@@ -189,7 +189,7 @@ class PositionInput:
     segment_num: int
     max_attempts: int
     tol: float
-    norm_fn: Optional[NormCallable]
+    norm_fn: Optional[NormCallable] = lambda r: float(np.linalg.norm(r))
 
 
 @dataclass
@@ -213,15 +213,25 @@ class VelocityOutput:
 class VelocityInput:
     t_patches: np.ndarray
     x_patches: list[np.ndarray]
+
     dynsys_fn: Callable[[float, np.ndarray], np.ndarray]
-    position_tol: float
-    max_attempts: int
-    tol: float
-    norm_fn: Optional[NormCallable]
-    initial_position_fixed: bool
-    final_position_fixed: bool
-    segment_num: int
+
+    vel_max_attempts: int
+    pos_max_attempts: int
+
+    pos_tol: float
+    vel_tol: float
+
+    pos_norm_fn: Optional[NormCallable] = lambda r: float(np.linalg.norm(r))
+    vel_norm_fn: Optional[NormCallable] = lambda r: float(np.linalg.norm(r))
+
+    initial_position_fixed: bool = False
+    final_position_fixed: bool = False
+
+    segment_num: int = 0
     constraints: Sequence[MSConstraint] | None = None
+
+
 
 @dataclass
 class CorrectionResult:
