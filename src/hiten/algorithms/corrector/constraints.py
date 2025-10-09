@@ -61,19 +61,16 @@ class _ConstraintBase(ABC):
     All constraints must implement the build_rows method to provide
     their contribution to the constraint system.
     """
-    
-    def __init__(self, name: str = "constraint", active: bool = True) -> None:
+
+    def __init__(self, name: str) -> None:
         """Initialize the base constraint.
         
         Parameters
         ----------
         name : str
             Name of the constraint.
-        active : bool
-            Whether the constraint is active.
         """
         self.name = name
-        self.active = active
     
     @abstractmethod
     def build_rows(self, ctx: "_ConstraintContext") -> tuple[np.ndarray, np.ndarray]:
@@ -144,14 +141,10 @@ class _ScalarConstraint(_ConstraintBase):
         Function to evaluate the constraint value.
     target : float, optional
         Desired value alpha_{kj} (default: 0.0).
-    weight : float, optional
-        Weight for the constraint (default: 1.0).
     jacobian_fn : _ConstraintJacobianFn, optional
         Analytic gradient function (default: None).
     fd_step : float, optional
         Finite-difference step override (default: None).
-    active : bool, optional
-        Enable/disable constraint (default: True).
     """
 
     def __init__(
@@ -160,25 +153,18 @@ class _ScalarConstraint(_ConstraintBase):
         patch_index: int,
         eval_fn: _ConstraintEval,
         target: float = 0.0,
-        weight: float = 1.0,
         jacobian_fn: Optional[_ConstraintJacobianFn] = None,
         fd_step: Optional[float] = None,
-        active: bool = True,
     ) -> None:
         """Initialize the constraint."""
-        super().__init__(name=name, active=active)
+        super().__init__(name=name)
         self.patch_index = patch_index
         self.eval_fn = eval_fn
         self.target = target
-        self.weight = weight
         self.jacobian_fn = jacobian_fn
         self.fd_step = fd_step
 
     def build_rows(self, ctx: "_ConstraintContext") -> tuple[np.ndarray, np.ndarray]:
-        if not self.active:
-            n_cols = (ctx.segment_num - 2) * 4 + 12
-            return np.zeros((0, n_cols)), np.zeros(0)
-
         k = int(self.patch_index)
         if k <= 0 or k >= ctx.segment_num:
             n_cols = (ctx.segment_num - 2) * 4 + 12
@@ -212,11 +198,6 @@ class _ScalarConstraint(_ConstraintBase):
         row = np.zeros((1, n_cols))
         col_start = (k - 1) * 4
         row[0, col_start:col_start + 12] = block
-
-        scale = np.sqrt(self.weight) if self.weight != 1.0 else 1.0
-        if scale != 1.0:
-            row *= scale
-            delta_alpha *= scale
 
         return row, np.asarray([delta_alpha], dtype=float)
 
@@ -255,34 +236,23 @@ class PeriodicityConstraint(_ConstraintBase):
     ----------
     name : str, optional
         Name of the constraint (default: "periodicity").
-    weight_pos : float, optional
-        Weight for position periodicity (default: 1.0).
-    weight_vel : float, optional
-        Weight for velocity periodicity (default: 1.0).
-    active : bool, optional
-        Enable/disable constraint (default: True).
     """
+
+    _name = "periodicity"
 
     def __init__(
         self,
-        name: str = "periodicity",
-        weight_pos: float = 1.0,
-        weight_vel: float = 1.0,
-        active: bool = True,
     ) -> None:
         """Initialize the periodicity constraint."""
-        super().__init__(name=name, active=active)
-        self.weight_pos = weight_pos
-        self.weight_vel = weight_vel
+        super().__init__(name=self._name)
 
     def build_rows(self, ctx: _ConstraintContext) -> tuple[np.ndarray, np.ndarray]:
-        if not self.active or ctx.segment_num < 2:
+        if ctx.segment_num < 2:
             n_cols = (ctx.segment_num - 2) * 4 + 12
             return np.zeros((0, n_cols)), np.zeros(0)
 
         n_cols = (ctx.segment_num - 2) * 4 + 12
         rows = np.zeros((6, n_cols))
-        # Build RHS as -current residuals (α* - α). For periodicity α*=0.
         rhs = np.zeros(6)
 
         def r_cols(j: int) -> slice:
@@ -292,37 +262,82 @@ class PeriodicityConstraint(_ConstraintBase):
         def t_col(j: int) -> int:
             return j * 4 + 3
 
-        # Position periodicity
-        sp = np.sqrt(self.weight_pos) if self.weight_pos != 1.0 else 1.0
-        rows[0:3, r_cols(0)] += np.eye(3) * sp
-        rows[0:3, r_cols(ctx.segment_num)] -= np.eye(3) * sp
-        # Current position residual: R0 - R_N^-
-        r0 = np.asarray(ctx.x_patches[0][:3], dtype=float)
-        rN_minus = np.asarray(ctx.xf_patches[ctx.segment_num - 1][:3], dtype=float)
-        rhs[0:3] = -(r0 - rN_minus) * sp
-
         # Velocity periodicity
-        sv = np.sqrt(self.weight_vel) if self.weight_vel != 1.0 else 1.0
-        p1 = ctx.node_partials.get(1)
+        p1 = ctx.node_partials.get(1) 
         pNm1 = ctx.node_partials.get(ctx.segment_num - 1)
+
         if p1 is None or pNm1 is None:
             return rows, rhs
 
-        B_b_inv = np.linalg.solve(p1.B_backward, np.eye(3))
-        rows[3:6, r_cols(0)] += (-B_b_inv @ p1.A_backward) * sv
-        rows[3:6, t_col(0)] += (p1.a_k_plus - p1.D_backward @ (B_b_inv @ p1.v_km1_plus)).reshape(3) * sv
-        rows[3:6, r_cols(1)] += (B_b_inv) * sv
-        rows[3:6, t_col(1)] += (-B_b_inv @ p1.v_k_plus).reshape(3) * sv
+        def _B_inv(B_block):
+            try:
+                return np.linalg.solve(B_block, np.eye(3))
+            except np.linalg.LinAlgError:
+                return np.linalg.pinv(B_block, rcond=1e-12)
 
-        B_f_inv = np.linalg.solve(pNm1.B_forward, np.eye(3))
-        rows[3:6, r_cols(ctx.segment_num - 1)] -= (B_f_inv) * sv
-        rows[3:6, t_col(ctx.segment_num - 1)] -= (-B_f_inv @ pNm1.v_kp1_minus).reshape(3) * sv
-        rows[3:6, r_cols(ctx.segment_num)] -= (-B_f_inv @ pNm1.A_forward) * sv
-        rows[3:6, t_col(ctx.segment_num)] -= (pNm1.a_k_minus - pNm1.D_forward @ (B_f_inv @ pNm1.v_k_plus)).reshape(3) * sv
-        # Current velocity residual: V1^+ - V_N^-
-        v1_plus = np.asarray(ctx.x_patches[1][3:6], dtype=float)
-        vN_minus = np.asarray(ctx.xf_patches[ctx.segment_num - 1][3:6], dtype=float)
-        rhs[3:6] = -(v1_plus - vN_minus) * sv
+        B12 = p1.B_forward # B_{12}
+        B12_inv = _B_inv(B12) # B_{12}^{-1}
+        A12 = p1.A_forward # A_{12}
+        D12 = p1.D_forward # D_{12}
+
+        B_21 = p1.B_backward # B_{21}
+        B_21_inv = _B_inv(B_21) # B_{21}^{-1}
+        A_21 = p1.A_backward # A_{21}
+        D_21 = p1.D_backward # D_{21}
+
+        B_f_inv = _B_inv(pNm1.B_forward)  # B_{N-1,N}^{-1}
+        A_f = pNm1.A_forward # A_{N-1,N}
+        D_f = pNm1.D_forward # D_{N-1,N}
+
+        # Read terminal backward blocks from node_partials (added by backend)
+        parts_N = ctx.node_partials.get(ctx.segment_num)
+        if parts_N is None:
+            n_cols = (ctx.segment_num - 2) * 4 + 12
+            return rows, rhs
+        B_NN1 = parts_N.B_backward
+        D_NN1 = parts_N.D_backward
+        try:
+            B_NN1_inv = np.linalg.solve(B_NN1, np.eye(3))
+        except np.linalg.LinAlgError:
+            B_NN1_inv = np.linalg.pinv(B_NN1, rcond=1e-12)
+
+        r0 = np.asarray(ctx.x_patches[0][:3], dtype=float) # r_0
+        rN_minus = np.asarray(ctx.xf_patches[ctx.segment_num - 1][:3], dtype=float) # r_N^-
+
+        v1_plus = np.asarray(ctx.x_patches[1][3:6], dtype=float)  # v_1^+
+        v2_minus = p1.v_kp1_minus  # v_2^-
+        vN_plus = np.asarray(ctx.x_patches[ctx.segment_num][3:6], dtype=float)  # v_N^+
+        vN_minus = np.asarray(ctx.xf_patches[ctx.segment_num - 1][3:6], dtype=float)  # v_N^-
+
+        a_1_plus = p1.a_k_plus  # a_1^+
+        a_N_minus = pNm1.a_k_minus  # a_N^-
+
+        rows[0:3, r_cols(0)] = np.eye(3) # I ; dR_1
+        rows[3:6, r_cols(0)] = (-B_21_inv @ A_21) # -B_{21}^{-1} A_{21} ; dR_1
+
+        rows[0:3, t_col(0)] = np.zeros(3) # 0 ; dt_1
+        rows[3:6, t_col(0)] = (a_1_plus - D12 @ (B12_inv @ v1_plus)).reshape(3) # a_1^+ - D_{12} B_{12}^{-1} v_1^+ ; dt_1
+
+        rows[0:3, r_cols(1)] = np.zeros(3) # 0 ; dR_2
+        rows[3:6, r_cols(1)] = (B_21_inv) # B_{21}^{-1} ; dR_2
+
+        rows[0:3, t_col(1)] = np.zeros(3) # 0 ; dt_2
+        rows[3:6, t_col(1)] = (-B_21_inv @ v2_minus).reshape(3) # -B_{21}^{-1} v_2^- ; dt_2
+
+        rows[0:3, r_cols(ctx.segment_num - 1)] = np.zeros(3) # 0 ; dR_N-1
+        rows[3:6, r_cols(ctx.segment_num - 1)] = - B_f_inv # - B_{N-1,N}^{-1} ; dR_N-1
+
+        rows[0:3, t_col(ctx.segment_num - 1)] = np.zeros(3) # 0 ; dt_N-1
+        rows[3:6, t_col(ctx.segment_num - 1)] = B_f_inv @ vN_plus # B_{N-1,N}^{-1} v_{N}^+ ; dt_N-1
+
+        rows[0:3, r_cols(ctx.segment_num)] = - np.eye(3) # -I ; dR_N
+        rows[3:6, r_cols(ctx.segment_num)] = B_f_inv @ A_f # B_{N-1,N}^{-1} A_{N-1,N} ; dR_N
+
+        rows[0:3, t_col(ctx.segment_num)] = np.zeros(3) # 0 ; dt_N
+        rows[3:6, t_col(ctx.segment_num)] = -(a_N_minus - D_NN1 @ (B_NN1_inv @ vN_minus)).reshape(3) # -(a_N^- - D_{N,N-1} B_{N,N-1}^{-1} v_N^-) ; dt_N
+
+        rhs[0:3] = -(r0 - rN_minus)
+        rhs[3:6] = -(v1_plus - vN_minus)
 
         return rows, rhs
 
@@ -335,20 +350,18 @@ class SpecificEnergyConstraint(_ScalarConstraint):
         mu: float,
         target: float,
         velocity_side: str = "plus",
-        weight: float = 1.0,
-        active: bool = True,
     ) -> None:
+
+        _name = "specific_energy"
         side = "plus" if velocity_side.lower() != "minus" else "minus"
 
         super().__init__(
-            name="specific_energy",
+            name=self._name,
             patch_index=patch_index,
             eval_fn=lambda r_k, v_plus, v_minus, t_k: self._eval_fn(side, mu, r_k, v_plus, v_minus, t_k),
             target=target,
-            weight=weight,
             jacobian_fn=lambda r_k, v_plus, v_minus, t_k: self._jac_fn(side, mu, r_k, v_plus, v_minus, t_k),
             fd_step=None,
-            active=active,
         )
 
     def _eval_fn(self, side: str, mu, r_k: np.ndarray, v_plus: np.ndarray, v_minus: np.ndarray, t_k: float) -> float:
@@ -378,8 +391,6 @@ class ApseConstraint(_ScalarConstraint):
         center_state_fn: Callable[[float], tuple[np.ndarray, np.ndarray]],
         velocity_side: str = "plus",
         target: float = 0.0,
-        weight: float = 1.0,
-        active: bool = True,
     ) -> None:
         side = "plus" if velocity_side.lower() != "minus" else "minus"
 
@@ -388,10 +399,8 @@ class ApseConstraint(_ScalarConstraint):
             patch_index=patch_index,
             eval_fn=lambda r_k, v_plus, v_minus, t_k: self._eval_fn(side, center_state_fn, r_k, v_plus, v_minus, t_k),
             target=target,
-            weight=weight,
             jacobian_fn=lambda r_k, v_plus, v_minus, t_k: self._jac_fn(side, center_state_fn, r_k, v_plus, v_minus, t_k),
             fd_step=None,
-            active=active,
         )
 
     def _eval_fn(self, side: str, center_state_fn: Callable[[float], tuple[np.ndarray, np.ndarray]], r_k: np.ndarray, v_plus: np.ndarray, v_minus: np.ndarray, t_k: float) -> float:

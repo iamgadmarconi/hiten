@@ -314,6 +314,36 @@ class _VelocityCorrection(_CorrectorBackend):
                     "a_k_plus": a_k_plus, "a_k_minus": a_k_minus,
                 }
 
+            # Add terminal node (index = segment_num) with backward blocks (N → N−1)
+            if segment_num >= 2:
+                stm_last_fwd = stms[segment_num - 1]
+                try:
+                    stm_last_bwd = np.linalg.inv(stm_last_fwd)
+                except np.linalg.LinAlgError:
+                    # Use pseudo-inverse as a fallback; extract blocks compatibly
+                    stm_last_bwd = np.linalg.pinv(stm_last_fwd, rcond=1e-12)
+
+                AbN = _get_A_block(stm_last_bwd)
+                BbN = _get_B_block(stm_last_bwd)
+                DbN = _get_D_block(stm_last_bwd)
+
+                # Kinematics at terminal node
+                v_km1_plus_N = x_patches[segment_num - 1][3:6]             # v_{N-1}^+
+                v_k_minus_N = xf_patches[segment_num - 1][3:6]             # v_N^-
+                v_k_plus_N = x_patches[segment_num][3:6]                    # v_N^+
+                v_kp1_minus_N = v_k_minus_N                                 # no N+1; duplicate
+
+                a_k_minus_term = dynsys_fn(t_patches[segment_num], xf_patches[segment_num - 1])[3:6]
+                a_k_plus_term = dynsys_fn(t_patches[segment_num], x_patches[segment_num])[3:6]
+
+                node_cache[segment_num] = {
+                    "A_b": AbN, "B_b": BbN, "D_b": DbN,
+                    "A_f": np.zeros((3, 3)), "B_f": np.zeros((3, 3)), "D_f": np.zeros((3, 3)),
+                    "v_km1_plus": v_km1_plus_N, "v_k_minus": v_k_minus_N,
+                    "v_k_plus": v_k_plus_N, "v_kp1_minus": v_kp1_minus_N,
+                    "a_k_plus": a_k_plus_term, "a_k_minus": a_k_minus_term,
+                }
+
             # Build augmented matrix with constraints
             constraint_rows: list[np.ndarray] = []
             constraint_rhs_list: list[np.ndarray] = []
@@ -334,6 +364,16 @@ class _VelocityCorrection(_CorrectorBackend):
                         v_k_plus=cache["v_k_plus"], v_kp1_minus=cache["v_kp1_minus"],
                         a_k_plus=cache["a_k_plus"], a_k_minus=cache["a_k_minus"],
                     )
+
+                # Add terminal entry for k = N with backward blocks
+                term_cache = node_cache[segment_num]
+                node_partials_map[segment_num] = _NodePartials(
+                    A_backward=term_cache["A_b"], B_backward=term_cache["B_b"], D_backward=term_cache["D_b"],
+                    A_forward=term_cache["A_f"], B_forward=term_cache["B_f"], D_forward=term_cache["D_f"],
+                    v_km1_plus=term_cache["v_km1_plus"], v_k_minus=term_cache["v_k_minus"],
+                    v_k_plus=term_cache["v_k_plus"], v_kp1_minus=term_cache["v_kp1_minus"],
+                    a_k_plus=term_cache["a_k_plus"], a_k_minus=term_cache["a_k_minus"],
+                )
 
                 ctx = _ConstraintContext(
                     x_patches=x_patches,
@@ -362,7 +402,6 @@ class _VelocityCorrection(_CorrectorBackend):
 
             if constraint_rows:
                 CR = np.vstack(constraint_rows)
-                # Trim columns the same way as M
                 if initial_position_fixed:
                     CR = CR[:, 4:]
                 if final_position_fixed:
@@ -370,10 +409,8 @@ class _VelocityCorrection(_CorrectorBackend):
                 M_tilde = np.vstack([M_tilde, CR])
                 b_tilde = np.concatenate([b_tilde, np.concatenate(constraint_rhs_list)])
 
-            # Solve augmented least squares
             correction, *_ = np.linalg.lstsq(M_tilde, b_tilde, rcond=None)
 
-            # Determine which segments to update
             update_segments = list(range(segment_num + 1))
             index_offset = 0
 
@@ -383,13 +420,11 @@ class _VelocityCorrection(_CorrectorBackend):
             if final_position_fixed and segment_num in update_segments:
                 update_segments.remove(segment_num)
 
-            # Apply corrections with full step (matches pre-refactor sigma=1.0)
             for i in update_segments:
                 dR, dt = self._extract_patch_correction(correction, i + index_offset)
                 x_patches[i][:3] += dR
                 t_patches[i] += dt
 
-            # Always update the final target time to preserve total period consistency
             if segment_num not in update_segments:
                 _, dtN = self._extract_patch_correction(correction, segment_num + index_offset)
                 t_patches[segment_num] += dtN
@@ -559,8 +594,6 @@ class _VelocityCorrection(_CorrectorBackend):
         M : ndarray (3, 12)
             Jacobian matrix relating velocity discontinuity to control variables
         """
-        # Build M using the same form as the MATLAB reference (rows 141–147 in _debug/alg.m)
-        # Columns correspond to [R_{k-1}, t_{k-1}, R_k, t_k, R_{k+1}, t_{k+1}].
         B_bwd_inv = self._B_inv(B_backward)
         B_fwd_inv = self._B_inv(B_forward)
 
