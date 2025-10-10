@@ -296,12 +296,9 @@ class PeriodicityConstraint(_ConstraintBase):
             return rows, rhs
         B_NN1 = parts_N.B_backward
         D_NN1 = parts_N.D_backward
-        try:
-            B_NN1_inv = np.linalg.solve(B_NN1, np.eye(3))
-        except np.linalg.LinAlgError:
-            B_NN1_inv = np.linalg.pinv(B_NN1, rcond=1e-12)
+        B_NN1_inv = _B_inv(B_NN1) # B_{N,N-1}^{-1}
 
-        r0 = np.asarray(ctx.x_patches[0][:3], dtype=float) # r_0
+        r1 = np.asarray(ctx.x_patches[1][:3], dtype=float) # r_1
         rN_minus = np.asarray(ctx.xf_patches[ctx.segment_num - 1][:3], dtype=float) # r_N^-
 
         v1_plus = np.asarray(ctx.x_patches[1][3:6], dtype=float)  # v_1^+
@@ -312,31 +309,33 @@ class PeriodicityConstraint(_ConstraintBase):
         a_1_plus = p1.a_k_plus  # a_1^+
         a_N_minus = pNm1.a_k_minus  # a_N^-
 
-        rows[0:3, r_cols(0)] = np.eye(3) # I ; dR_1
-        rows[3:6, r_cols(0)] = (-B_21_inv @ A_21) # -B_{21}^{-1} A_{21} ; dR_1
+        rows[0:3, r_cols(1)] = np.eye(3) # I ; dR_1
+        # Left boundary (k=1) velocity columns use forward blocks (B_{12}^{-1}, A_{12}, D_{12})
+        # Left boundary, literal (53) orientation using backward/forward mix per paper
+        rows[3:6, r_cols(1)] = (-B_21_inv @ A_21) # -B_{21}^{-1} A_{21} ; dR_1
 
-        rows[0:3, t_col(0)] = np.zeros(3) # 0 ; dt_1
-        rows[3:6, t_col(0)] = (a_1_plus - D12 @ (B12_inv @ v1_plus)).reshape(3) # a_1^+ - D_{12} B_{12}^{-1} v_1^+ ; dt_1
+        rows[0:3, t_col(1)] = np.zeros(3) # 0 ; dt_1
+        rows[3:6, t_col(1)] = (a_1_plus - D12 @ (B12_inv @ v1_plus)).reshape(3) # a_1^+ - D_{12} B_{12}^{-1} v_1^+ ; dt_1
 
-        rows[0:3, r_cols(1)] = np.zeros(3) # 0 ; dR_2
-        rows[3:6, r_cols(1)] = (B_21_inv) # B_{21}^{-1} ; dR_2
+        rows[0:3, r_cols(2)] = np.zeros(3) # 0 ; dR_2
+        rows[3:6, r_cols(2)] = (B_21_inv) # B_{21}^{-1} ; dR_2
 
-        rows[0:3, t_col(1)] = np.zeros(3) # 0 ; dt_2
-        rows[3:6, t_col(1)] = (-B_21_inv @ v2_minus).reshape(3) # -B_{21}^{-1} v_2^- ; dt_2
+        rows[0:3, t_col(2)] = np.zeros(3) # 0 ; dt_2
+        rows[3:6, t_col(2)] = (-B_21_inv @ v2_minus).reshape(3) # -B_{21}^{-1} v_2^- ; dt_2
 
-        rows[0:3, r_cols(ctx.segment_num - 1)] = np.zeros(3) # 0 ; dR_N-1
-        rows[3:6, r_cols(ctx.segment_num - 1)] = - B_f_inv # - B_{N-1,N}^{-1} ; dR_N-1
+        rows[0:3, r_cols(ctx.segment_num - 1)] = np.zeros(3) # 0 ; dR_{N-1}
+        rows[3:6, r_cols(ctx.segment_num - 1)] = - B_f_inv # - B_{N-1,N}^{-1} ; dR_{N-1}
 
-        rows[0:3, t_col(ctx.segment_num - 1)] = np.zeros(3) # 0 ; dt_N-1
-        rows[3:6, t_col(ctx.segment_num - 1)] = B_f_inv @ vN_plus # B_{N-1,N}^{-1} v_{N}^+ ; dt_N-1
+        rows[0:3, t_col(ctx.segment_num - 1)] = np.zeros(3) # 0 ; dt_{N-1}
+        rows[3:6, t_col(ctx.segment_num - 1)] = (B_f_inv @ vN_plus).reshape(3) # B_{N-1,N}^{-1} v_{N}^+ ; dt_{N-1}
 
         rows[0:3, r_cols(ctx.segment_num)] = - np.eye(3) # -I ; dR_N
-        rows[3:6, r_cols(ctx.segment_num)] = B_f_inv @ A_f # B_{N-1,N}^{-1} A_{N-1,N} ; dR_N
+        rows[3:6, r_cols(ctx.segment_num)] = (B_f_inv @ A_f) # B_{N-1,N}^{-1} A_{N-1,N} ; dR_N
 
         rows[0:3, t_col(ctx.segment_num)] = np.zeros(3) # 0 ; dt_N
         rows[3:6, t_col(ctx.segment_num)] = -(a_N_minus - D_NN1 @ (B_NN1_inv @ vN_minus)).reshape(3) # -(a_N^- - D_{N,N-1} B_{N,N-1}^{-1} v_N^-) ; dt_N
 
-        rhs[0:3] = -(r0 - rN_minus)
+        rhs[0:3] = -(r1 - rN_minus)
         rhs[3:6] = -(v1_plus - vN_minus)
 
         return rows, rhs

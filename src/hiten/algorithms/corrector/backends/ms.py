@@ -250,17 +250,8 @@ class _VelocityCorrection(_CorrectorBackend):
                 if not pos_output.success:
                     # Keep going; constraints/Level-2 may recover the failing segment
                     logger.warning(
-                        "Level-1 failed at segment %d (error persisted); proceeding with Level-2 update",
+                        "Level-1 failed at segment %d (error persisted); continuing to Level-2 update",
                         seg + 1,
-                    )
-                    return VelocityOutput(
-                        x_corrected=x_patches,
-                        t_corrected=list(t_patches),
-                        success=False,
-                        metadata={
-                            **metadata,
-                            "level1_failure_segment": seg + 1,
-                        },
                     )
 
             # Compute velocity discontinuities between patches
