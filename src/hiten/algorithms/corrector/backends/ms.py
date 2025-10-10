@@ -403,27 +403,15 @@ class _VelocityCorrection(_CorrectorBackend):
                 M_tilde = np.vstack([M_tilde, CR])
                 b_tilde = np.concatenate([b_tilde, np.concatenate(constraint_rhs_list)])
 
-            # Log condition number of augmented system
-            cond_M_tilde = np.linalg.cond(M_tilde)
-            
-            # Compute singular values for detailed conditioning analysis
-            singular_values = np.linalg.svd(M_tilde, compute_uv=False)
-            s_max = singular_values[0]
-            s_min = singular_values[-1]
-            s_ratio = s_min / s_max if s_max > 0 else 0.0
-            
-            print(f"cond(M_tilde) = {cond_M_tilde:.2e} (shape: {M_tilde.shape})")
-            print(f"  s_min = {s_min:.2e}, s_max = {s_max:.2e}")
-            print(f"  s_min/s_max = {s_ratio:.2e}", end="")
-            
-            if s_ratio > 1e-8 and cond_M_tilde < 1e6:
-                print(" ✓ Well-conditioned (conditioning not the blocker)")
-            elif cond_M_tilde > 1e10:
-                print(" ⚠️ ILL-CONDITIONED - consider Tikhonov regularization")
-            else:
-                print()
-            
-            print("=" * 60)
+            if self._debug_jacobian:
+                cond_M_tilde = np.linalg.cond(M_tilde)
+                singular_values = np.linalg.svd(M_tilde, compute_uv=False)
+                s_max = singular_values[0]
+                s_min = singular_values[-1]
+                s_ratio = s_min / s_max if s_max > 0 else 0.0
+                print(f"cond(M_tilde) = {cond_M_tilde:.2e} (shape: {M_tilde.shape})")
+                print(f"  s_min = {s_min:.2e}, s_max = {s_max:.2e}")
+                print(f"  s_min/s_max = {s_ratio:.2e}")
 
             correction, *_ = np.linalg.lstsq(M_tilde, b_tilde, rcond=None)
 
@@ -681,7 +669,7 @@ class _VelocityCorrection(_CorrectorBackend):
                 best_scale = gamma
             
             # Accept if we get sufficient decrease
-            if error_new < 0.9 * error_norm_current:
+            if error_new < 0.99 * error_norm_current:
                 return gamma
         
         return best_scale
