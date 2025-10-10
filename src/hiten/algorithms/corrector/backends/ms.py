@@ -46,9 +46,8 @@ class _PositionShooting(_CorrectorBackend):
         method: str,
         order: int,
         steps: int,
-        stepper_factory: StepperFactory | None = None,
     ):
-        super().__init__(stepper_factory=stepper_factory)
+        super().__init__(stepper_factory=None)
         self._var_dynsys = var_dynsys
         self._method = method
         self._order = order
@@ -173,26 +172,18 @@ class _VelocityCorrection(_CorrectorBackend):
         method: str = "adaptive",
         order: int = 8,
         steps: int = 2000,
-        stepper_factory: StepperFactory | None = None,
-        debug_jacobian: bool = False,
-        enable_backtracking: bool = False,
-        max_backtrack_steps: int = 4,
     ):
-        super().__init__(stepper_factory=stepper_factory)
+        super().__init__(stepper_factory=None)
         self._position_shooter = _PositionShooting(
             var_dynsys=var_dynsys,
             method=method,
             order=order,
             steps=steps,
-            stepper_factory=stepper_factory,
         )
         self._var_dynsys = var_dynsys
         self._method = method
         self._order = order
         self._steps = steps
-        self._debug_jacobian = debug_jacobian
-        self._enable_backtracking = enable_backtracking
-        self._max_backtrack_steps = max_backtrack_steps
 
     def run(self, request: VelocityInput) -> VelocityOutput:
         """Run level-2 velocity correction.
@@ -260,9 +251,6 @@ class _VelocityCorrection(_CorrectorBackend):
                 for i in range(segment_num - 1)
             ]
             delta_v_vec = np.concatenate(delta_v_list) if delta_v_list else np.zeros(0)
-            
-            # Store base residual for diagnostics (before constraint augmentation)
-            b_base = delta_v_vec.copy()
 
             error_norm = float(np.linalg.norm(delta_v_vec))
 
@@ -403,56 +391,7 @@ class _VelocityCorrection(_CorrectorBackend):
                 M_tilde = np.vstack([M_tilde, CR])
                 b_tilde = np.concatenate([b_tilde, np.concatenate(constraint_rhs_list)])
 
-            if self._debug_jacobian:
-                cond_M_tilde = np.linalg.cond(M_tilde)
-                singular_values = np.linalg.svd(M_tilde, compute_uv=False)
-                s_max = singular_values[0]
-                s_min = singular_values[-1]
-                s_ratio = s_min / s_max if s_max > 0 else 0.0
-                print(f"cond(M_tilde) = {cond_M_tilde:.2e} (shape: {M_tilde.shape})")
-                print(f"  s_min = {s_min:.2e}, s_max = {s_max:.2e}")
-                print(f"  s_min/s_max = {s_ratio:.2e}")
-
             correction, *_ = np.linalg.lstsq(M_tilde, b_tilde, rcond=None)
-
-            # Debug Jacobian if enabled
-            if self._debug_jacobian:
-                self._run_jacobian_diagnostics(
-                    M_tilde=M_tilde,
-                    b_tilde=b_tilde,
-                    b_base=b_base,
-                    correction=correction,
-                    x_patches=x_patches,
-                    t_patches=t_patches,
-                    stms=stms,
-                    xf_patches=xf_patches,
-                    segment_num=segment_num,
-                    initial_position_fixed=initial_position_fixed,
-                    final_position_fixed=final_position_fixed,
-                    pos_max_attempts=pos_max_attempts,
-                    pos_tol=pos_tol,
-                    pos_norm_fn=pos_norm_fn,
-                    dynsys_fn=dynsys_fn,
-                )
-
-            # Apply backtracking line search if enabled
-            step_scale = 1.0
-            if self._enable_backtracking:
-                step_scale = self._backtracking_line_search(
-                    correction=correction,
-                    x_patches=x_patches,
-                    t_patches=t_patches,
-                    b_base=b_base,
-                    error_norm_current=error_norm,
-                    segment_num=segment_num,
-                    initial_position_fixed=initial_position_fixed,
-                    final_position_fixed=final_position_fixed,
-                    pos_max_attempts=pos_max_attempts,
-                    pos_tol=pos_tol,
-                    pos_norm_fn=pos_norm_fn,
-                )
-                print(f"Backtracking: selected step scale = {step_scale:.4f}")
-                print()
 
             update_segments = list(range(segment_num + 1))
             index_offset = 0
@@ -463,15 +402,15 @@ class _VelocityCorrection(_CorrectorBackend):
             if final_position_fixed and segment_num in update_segments:
                 update_segments.remove(segment_num)
 
-            # Apply correction with step scaling
+            # Apply correction
             for i in update_segments:
                 dR, dt = self._extract_patch_correction(correction, i + index_offset)
-                x_patches[i][:3] += step_scale * dR
-                t_patches[i] += step_scale * dt
+                x_patches[i][:3] += dR
+                t_patches[i] += dt
 
             if segment_num not in update_segments:
                 _, dtN = self._extract_patch_correction(correction, segment_num + index_offset)
-                t_patches[segment_num] += step_scale * dtN
+                t_patches[segment_num] += dtN
 
         # Failed to converge
         metadata["iterations"] = vel_max_attempts
@@ -544,135 +483,6 @@ class _VelocityCorrection(_CorrectorBackend):
             for i in range(segment_num - 1)
         ]
         return np.concatenate(delta_v_list) if delta_v_list else np.zeros(0)
-
-    def _run_jacobian_diagnostics(
-        self,
-        M_tilde: np.ndarray,
-        b_tilde: np.ndarray,
-        b_base: np.ndarray,
-        correction: np.ndarray,
-        x_patches: list[np.ndarray],
-        t_patches: np.ndarray,
-        stms: np.ndarray,
-        xf_patches: np.ndarray,
-        segment_num: int,
-        initial_position_fixed: bool,
-        final_position_fixed: bool,
-        pos_max_attempts: int,
-        pos_tol: float,
-        pos_norm_fn,
-        dynsys_fn,
-    ):
-        """Run comprehensive Jacobian diagnostics.
-        
-        Note: We use b_base (velocity discontinuities only) for comparisons,
-        not b_tilde (which includes constraint RHS), since _compute_residual_vector
-        only computes velocity discontinuities.
-        """
-
-        if not initial_position_fixed and not final_position_fixed and segment_num >= 3:
-            print("\nFocused per-interface checks (3×12 blocks):")
-            ks = [1, max(1, segment_num // 2), max(1, segment_num - 1)]
-            # de-duplicate while keeping order
-            seen = set()
-            k_list = []
-            for k in ks:
-                if k not in seen:
-                    seen.add(k)
-                    k_list.append(k)
-            for k in k_list:
-                try:
-                    self._check_interface_jacobian_block(
-                        k=k,
-                        stms=stms,
-                        x_patches=x_patches,
-                        xf_patches=xf_patches,
-                        t_patches=t_patches,
-                        segment_num=segment_num,
-                        b_base=b_base,
-                        pos_max_attempts=pos_max_attempts,
-                        pos_tol=pos_tol,
-                        pos_norm_fn=pos_norm_fn,
-                        dynsys_fn=dynsys_fn,
-                    )
-                except Exception as exc:
-                    print(f"  [k={k}] checker failed: {exc!r}")
-
-        print("=" * 60)
-        print()
-
-    def _backtracking_line_search(
-        self,
-        correction: np.ndarray,
-        x_patches: list[np.ndarray],
-        t_patches: np.ndarray,
-        b_base: np.ndarray,
-        error_norm_current: float,
-        segment_num: int,
-        initial_position_fixed: bool,
-        final_position_fixed: bool,
-        pos_max_attempts: int,
-        pos_tol: float,
-        pos_norm_fn,
-    ) -> float:
-        """Perform backtracking line search to find safe step size.
-        
-        Parameters
-        ----------
-        b_base : ndarray
-            Current base residual (velocity discontinuities)
-        error_norm_current : float
-            Current error norm (should equal ||b_base||)
-        
-        Returns
-        -------
-        step_scale : float
-            Scale factor in (0, 1] for the correction step
-        """
-
-        best_scale = 1.0
-        best_error = float('inf')
-        
-        for step_num in range(self._max_backtrack_steps):
-            gamma = 2.0 ** (-step_num)  # 1, 1/2, 1/4, 1/8, ...
-            
-            # Apply scaled correction
-            x_test = [x.copy() for x in x_patches]
-            t_test = t_patches.copy()
-            
-            update_segments = list(range(segment_num + 1))
-            index_offset = 0
-            if initial_position_fixed:
-                update_segments.remove(0)
-                index_offset = -1
-            if final_position_fixed and segment_num in update_segments:
-                update_segments.remove(segment_num)
-            
-            for i in update_segments:
-                dR, dt = self._extract_patch_correction(correction, i + index_offset)
-                x_test[i][:3] += gamma * dR
-                t_test[i] += gamma * dt
-            
-            if segment_num not in update_segments:
-                _, dtN = self._extract_patch_correction(correction, segment_num + index_offset)
-                t_test[segment_num] += gamma * dtN
-            
-            # Evaluate error
-            b_new = self._compute_residual_vector(
-                x_test, t_test, segment_num,
-                pos_max_attempts, pos_tol, pos_norm_fn
-            )
-            error_new = float(np.linalg.norm(b_new))
-                        
-            if error_new < best_error:
-                best_error = error_new
-                best_scale = gamma
-            
-            # Accept if we get sufficient decrease
-            if error_new < 0.99 * error_norm_current:
-                return gamma
-        
-        return best_scale
 
     def _build_params(self, stms, iteration, x_patches, xf_patches, t_patches, dynsys_fn):
 
@@ -826,258 +636,3 @@ class _VelocityCorrection(_CorrectorBackend):
         dR = correction_vector[base:base + 3]
         dt = correction_vector[base + 3]
         return dR, dt
-
-    def _check_interface_jacobian_block(
-        self,
-        *,
-        k: int,
-        stms: np.ndarray,
-        x_patches: list[np.ndarray],
-        xf_patches: np.ndarray,
-        t_patches: np.ndarray,
-        segment_num: int,
-        b_base: np.ndarray,
-        pos_max_attempts: int,
-        pos_tol: float,
-        pos_norm_fn,
-        dynsys_fn,
-    ) -> None:
-        """Compare analytic vs FD 3x12 block at interface k.
-
-        Assumes no boundary trimming. Prints per-column relative errors and cosine similarity.
-        """
-        if not (1 <= k <= segment_num - 1):
-            return
-
-        block_analytic = self._build_relationship_matrix(
-            stms, x_patches, xf_patches, t_patches, k, dynsys_fn
-        )
-
-        n_cols_total = (segment_num - 2) * 4 + 12
-        col_start = (k - 1) * 4
-        row_start = (k - 1) * 3
-        eps = 1e-6
-
-        block_fd = np.zeros((3, 12))
-        for local_j in range(12):
-            e = np.zeros(n_cols_total)
-            e[col_start + local_j] = eps
-
-            x_pert = [x.copy() for x in x_patches]
-            t_pert = t_patches.copy()
-
-            for patch_idx in range(segment_num + 1):
-                dR, dt = self._extract_patch_correction(e, patch_idx)
-                x_pert[patch_idx][:3] += dR
-                t_pert[patch_idx] += dt
-
-            b_new = self._compute_residual_vector(
-                x_pert, t_pert, segment_num,
-                pos_max_attempts, pos_tol, pos_norm_fn,
-            )
-
-            db = (b_new - b_base) / eps
-            block_fd[:, local_j] = db[row_start:row_start + 3]
-
-        block_signflip = -block_analytic
-
-        def _per_col_stats(Ja: np.ndarray, Jn: np.ndarray):
-            rels = []
-            coss = []
-            for j in range(Ja.shape[1]):
-                a = Ja[:, j]
-                n = Jn[:, j]
-                na = float(np.linalg.norm(a))
-                nn = float(np.linalg.norm(n))
-                rel = float(np.linalg.norm(a - n) / (na if na > 1e-15 else max(nn, 1e-15)))
-                cos = float((a @ n) / (na * nn)) if na > 1e-15 and nn > 1e-15 else 1.0
-                rels.append(rel)
-                coss.append(cos)
-            return rels, coss
-
-        rel_A, cos_A = _per_col_stats(block_analytic, block_fd)
-        rel_S, cos_S = _per_col_stats(block_signflip, block_fd)
-
-        def _fmt(vals):
-            return ", ".join(f"{v:.2e}" for v in vals)
-
-        print(f"Interface k={k}: per-column FD comparison (3x12 block)")
-        print("  Analytic vs FD (this code):")
-        print(f"    rel_err: [{_fmt(rel_A)}]")
-        print(f"    cos_sim: [{_fmt(cos_A)}]")
-        print("  Sign-flipped analytic vs FD:")
-        print(f"    rel_err: [{_fmt(rel_S)}]")
-        print(f"    cos_sim: [{_fmt(cos_S)}]")
-
-        mean_rel_A = float(np.mean(rel_A))
-        mean_rel_S = float(np.mean(rel_S))
-        if mean_rel_S + 1e-3 < mean_rel_A:
-            print("  → Hint: residual sign/orientation likely reversed at this interface.")
-        elif mean_rel_A < 1e-2:
-            print("  → OK: block matches FD (≤1e-2).")
-        else:
-            print("  → Mismatch persists: check column ordering and forward/backward STM usage.")
-
-        # Additional targeted checks for center block orientation (R_k and t_k)
-        try:
-            # Numeric center group from FD
-            fd_Rk = block_fd[:, 4:7]  # 3x3
-            fd_tk = block_fd[:, 7]    # 3-vector
-
-            # Build both variants for the left contribution
-            # Current (uses backward-left blocks: A_{k-1,k}, B_{k-1,k})
-            Ab, Bb, Db, Af, Bf, Df, v_km1_plus, v_k_minus, v_k_plus, v_kp1_minus, a_k_plus, a_k_minus = self._build_params(
-                stms, k, x_patches, xf_patches, t_patches, dynsys_fn
-            )
-            B_bwd_inv = self._B_inv(Bb)
-            B_fwd_inv = self._B_inv(Bf)
-            Rk_current = B_bwd_inv @ Ab - B_fwd_inv @ Af
-            tk_current = (a_k_plus - a_k_minus) - (B_bwd_inv @ (Ab @ v_k_minus)) + (B_fwd_inv @ (Af @ v_k_plus))
-
-            # Eq.(19) identity check for left blocks: B_{k,k-1} = (C_{k-1,k} - D_{k-1,k} B_{k-1,k}^{-1} A_{k-1,k})^{-1}
-            # Forward-left blocks (k,k-1)
-            stm_left_fwd = stms[k - 1]
-            A_lf = _get_A_block(stm_left_fwd)
-            B_lf = _get_B_block(stm_left_fwd)
-            C_lf = _get_C_block(stm_left_fwd)
-            D_lf = _get_D_block(stm_left_fwd)
-            B_lf_inv = self._B_inv(B_lf)
-
-            # Backward-left blocks (k-1,k) from inverse STM
-            try:
-                stm_left_bwd = np.linalg.inv(stm_left_fwd)
-            except np.linalg.LinAlgError:
-                stm_left_bwd = np.linalg.pinv(stm_left_fwd, rcond=1e-12)
-            Ab_b = _get_A_block(stm_left_bwd)
-            Bb_b = _get_B_block(stm_left_bwd)
-            Cb_b = _get_C_block(stm_left_bwd)
-            Db_b = _get_D_block(stm_left_bwd)
-
-            def _fro_rel(a, b):
-                na = float(np.linalg.norm(a))
-                return float(np.linalg.norm(a - b) / (na if na > 1e-15 else 1.0))
-
-            # Build B via Eq.(19) from backward blocks
-            try:
-                B_from_19 = np.linalg.inv(Cb_b - Db_b @ (self._B_inv(Bb_b) @ Ab_b))
-            except np.linalg.LinAlgError:
-                B_from_19 = np.linalg.pinv(Cb_b - Db_b @ (self._B_inv(Bb_b) @ Ab_b), rcond=1e-12)
-            rel_B19 = _fro_rel(B_lf, B_from_19)
-            print(f"  Left Eq.(19) check: rel||B_{'{'}k,k-1{'}'} − (C_b − D_b B_b^{-1} A_b)^{-1}|| = {rel_B19:.2e}")
-
-            # Alternative using forward-left blocks (A_{k,k-1}, B_{k,k-1}, D_{k,k-1})
-            Rk_alt = - B_lf_inv @ A_lf - B_fwd_inv @ Af
-            tk_alt_BA = (a_k_plus - a_k_minus) - (B_lf_inv @ (A_lf @ v_k_minus)) + (B_fwd_inv @ (Af @ v_k_plus))
-            tk_alt_D = (a_k_plus - a_k_minus) + (D_lf @ (B_lf_inv @ v_k_minus)) - (Df @ (B_fwd_inv @ v_k_plus))
-
-            def _rel(a, b):
-                na = float(np.linalg.norm(a))
-                nb = float(np.linalg.norm(b))
-                return float(np.linalg.norm(a - b) / (nb if nb > 1e-15 else 1.0))
-            def _cos_mat(a, b):
-                a_f = a.reshape(-1)
-                b_f = b.reshape(-1)
-                na = float(np.linalg.norm(a_f))
-                nb = float(np.linalg.norm(b_f))
-                return float((a_f @ b_f) / (na * nb)) if na > 1e-15 and nb > 1e-15 else 1.0
-
-            rel_Rk_current = _rel(Rk_current, fd_Rk)
-            rel_Rk_alt = _rel(Rk_alt, fd_Rk)
-            rel_tk_current = _rel(tk_current, fd_tk)
-            rel_tk_alt_BA = _rel(tk_alt_BA, fd_tk)
-            rel_tk_alt_D = _rel(tk_alt_D, fd_tk)
-
-            print(f"  Center R_k block: rel(current)={rel_Rk_current:.2e}, rel(alt Bfwd)={rel_Rk_alt:.2e}")
-            print(f"  Center t_k col:   rel(current B^{-1}A)={rel_tk_current:.2e}, rel(alt B^{-1}A left-fwd)={rel_tk_alt_BA:.2e}, rel(D-form)={rel_tk_alt_D:.2e}")
-
-            # Acceleration-side variants (which side to use for ā_k^± at t_k)
-            a_right = a_k_plus  # evaluated at x_patches[k]
-            a_left = a_k_minus  # evaluated at xf_patches[k-1]
-
-            # B^{-1}A form variants
-            tk_hybrid_BA = (a_right - a_left) - (B_bwd_inv @ (Ab @ v_k_minus)) + (B_fwd_inv @ (Af @ v_k_plus))
-            tk_right_BA = (a_right - a_right) - (B_bwd_inv @ (Ab @ v_k_minus)) + (B_fwd_inv @ (Af @ v_k_plus))
-            tk_left_BA = (a_left - a_left) - (B_bwd_inv @ (Ab @ v_k_minus)) + (B_fwd_inv @ (Af @ v_k_plus))
-
-            # D-form variants (use forward-left/right D blocks)
-            stm_left_fwd = stms[k - 1]
-            D_lf = _get_D_block(stm_left_fwd)
-            B_lf = _get_B_block(stm_left_fwd)
-            B_lf_inv = self._B_inv(B_lf)
-            tk_hybrid_D = (a_right - a_left) + (D_lf @ (B_lf_inv @ v_k_minus)) - (Df @ (B_fwd_inv @ v_k_plus))
-            tk_right_D = (a_right - a_right) + (D_lf @ (B_lf_inv @ v_k_minus)) - (Df @ (B_fwd_inv @ v_k_plus))
-            tk_left_D = (a_left - a_left) + (D_lf @ (B_lf_inv @ v_k_minus)) - (Df @ (B_fwd_inv @ v_k_plus))
-
-            rel_tk_hybrid_BA = _rel(tk_hybrid_BA, fd_tk)
-            rel_tk_right_BA = _rel(tk_right_BA, fd_tk)
-            rel_tk_left_BA = _rel(tk_left_BA, fd_tk)
-            rel_tk_hybrid_D = _rel(tk_hybrid_D, fd_tk)
-            rel_tk_right_D = _rel(tk_right_D, fd_tk)
-            rel_tk_left_D = _rel(tk_left_D, fd_tk)
-
-            print(
-                f"  Center t_k accel variants (B^{-1}A): hybrid={rel_tk_hybrid_BA:.2e}, right-only={rel_tk_right_BA:.2e}, left-only={rel_tk_left_BA:.2e}"
-            )
-            print(
-                f"  Center t_k accel variants (D-form):  hybrid={rel_tk_hybrid_D:.2e}, right-only={rel_tk_right_D:.2e}, left-only={rel_tk_left_D:.2e}"
-            )
-
-            # Center R_k per-side magnitudes and cosine vs FD
-            L = B_bwd_inv @ Ab
-            R = - B_fwd_inv @ Af
-            sum_LR = L + R
-            nL, nR, nSum, nFD = (float(np.linalg.norm(L)), float(np.linalg.norm(R)), float(np.linalg.norm(sum_LR)), float(np.linalg.norm(fd_Rk)))
-            cos_LR = _cos_mat(sum_LR, fd_Rk)
-            print(f"  Center R_k mags: ||L||={nL:.2e}, ||R||={nR:.2e}, ||L+R||={nSum:.2e}, ||FD||={nFD:.2e}, cos(L+R,FD)={cos_LR:+.2f}")
-        except Exception as _exc_center:
-            print(f"  [center-block check skipped: {_exc_center!r}]")
-
-        # Right-block mapping/sign diagnostics (R_{k+1}, t_{k+1})
-        try:
-            fd_Rkp1 = block_fd[:, 8:11]
-            fd_tkp1 = block_fd[:, 11]
-            fd_Rk = block_fd[:, 4:7]
-            fd_Rkm1 = block_fd[:, 0:3]
-            fd_tk = block_fd[:, 7]
-            fd_tkm1 = block_fd[:, 3]
-
-            Ab, Bb, Db, Af, Bf, Df, v_km1_plus, v_k_minus, v_k_plus, v_kp1_minus, a_k_plus, a_k_minus = self._build_params(
-                stms, k, x_patches, xf_patches, t_patches, dynsys_fn
-            )
-            B_fwd_inv = self._B_inv(Bf)
-            Rkp1_theory = B_fwd_inv
-            tkp1_theory = -(B_fwd_inv @ v_kp1_minus)
-            tkp1_pos = +(B_fwd_inv @ v_kp1_minus)
-
-            def _rel(a, b):
-                na = float(np.linalg.norm(a))
-                nb = float(np.linalg.norm(b))
-                return float(np.linalg.norm(a - b) / (nb if nb > 1e-15 else 1.0))
-            def _cos(a, b):
-                na = float(np.linalg.norm(a))
-                nb = float(np.linalg.norm(b))
-                return float((a.reshape(-1) @ b.reshape(-1)) / (na * nb)) if na > 1e-15 and nb > 1e-15 else 1.0
-
-            # R_{k+1} placement
-            rel_R_right = _rel(Rkp1_theory, fd_Rkp1)
-            rel_R_center = _rel(Rkp1_theory, fd_Rk)
-            rel_R_left = _rel(Rkp1_theory, fd_Rkm1)
-            # Also report cosine for R block (Frobenius)
-            def _cos_mat(a, b):
-                a_f = a.reshape(-1)
-                b_f = b.reshape(-1)
-                na = float(np.linalg.norm(a_f))
-                nb = float(np.linalg.norm(b_f))
-                return float((a_f @ b_f) / (na * nb)) if na > 1e-15 and nb > 1e-15 else 1.0
-            cos_R_right = _cos_mat(Rkp1_theory, fd_Rkp1)
-            print(f"  Right R_{'{'}k+1{'}'} block rel: right={rel_R_right:.2e} (cos={cos_R_right:+.2f}), center={rel_R_center:.2e}, left={rel_R_left:.2e}")
-
-            # t_{k+1} sign/placement
-            rel_t_right = _rel(tkp1_theory, fd_tkp1)
-            rel_t_right_pos = _rel(tkp1_pos, fd_tkp1)
-            rel_t_center = _rel(tkp1_theory, fd_tk)
-            rel_t_left = _rel(tkp1_theory, fd_tkm1)
-            cos_t_right = _cos(tkp1_theory, fd_tkp1)
-            print(f"  Right t_{'{'}k+1{'}'} col rel: right={rel_t_right:.2e} (cos={cos_t_right:+.2f}), right(+sign)={rel_t_right_pos:.2e}, center={rel_t_center:.2e}, left={rel_t_left:.2e}")
-        except Exception as _exc_right:
-            print(f"  [right-block check skipped: {_exc_right!r}]")
