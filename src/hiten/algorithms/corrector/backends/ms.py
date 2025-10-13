@@ -380,7 +380,7 @@ class _VelocityCorrection(_CorrectorBackend):
             if final_position_fixed:
                 M_tilde = M_tilde[:, :-4]
 
-            b_tilde = delta_v_vec.copy()
+            b_tilde = - delta_v_vec.copy()
 
             if constraint_rows:
                 CR = np.vstack(constraint_rows)
