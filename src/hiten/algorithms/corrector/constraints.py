@@ -29,20 +29,114 @@ class _ConstraintEval(Protocol):
 
 @dataclass(frozen=True)
 class _NodePartials:
-    """Per-node derivatives and kinematics derived from STMs for node k."""
+    """Per-node derivatives and kinematics derived from STMs for node k.
 
-    A_backward: np.ndarray
-    B_backward: np.ndarray
-    D_backward: np.ndarray
-    A_forward: np.ndarray
-    B_forward: np.ndarray
-    D_forward: np.ndarray
-    v_km1_plus: np.ndarray
-    v_k_minus: np.ndarray
-    v_k_plus: np.ndarray
-    v_kp1_minus: np.ndarray
-    a_k_plus: np.ndarray
+    The notation I_(k-1,k) means the STM from node k to node k-1.
+    This is consistent with the notation in the paper.
+
+    The notation I_k_km1 means the STM from node k to node k-1.
+    This notation is for clarity and to be used in the code.
+
+    Attributes
+    ----------
+    A_k_km1 : np.ndarray
+        A_(k-1,k)
+    B_k_km1 : np.ndarray
+        B_(k-1,k)
+    C_k_km1 : np.ndarray
+        C_(k-1,k)
+    D_k_km1 : np.ndarray
+        D_(k-1,k)
+    A_km1_k : np.ndarray
+        A_(k,k-1)
+    B_km1_k : np.ndarray
+        B_(k,k-1)
+    C_km1_k : np.ndarray
+        C_(k,k-1)
+    D_km1_k : np.ndarray
+        D_(k,k-1)
+    A_k_kp1 : np.ndarray
+        A_(k+1,k)
+    B_k_kp1 : np.ndarray
+        B_(k+1,k)
+    C_k_kp1 : np.ndarray
+        C_(k+1,k)
+    D_k_kp1 : np.ndarray
+        D_(k+1,k)
+    A_kp1_k : np.ndarray
+        A_(k,k+1)
+    B_kp1_k : np.ndarray
+        B_(k,k+1)
+    C_kp1_k : np.ndarray
+        C_(k,k+1)
+    D_kp1_k : np.ndarray
+        D_(k,k+1)
+    R_km1 : np.ndarray
+        R_(k-1)
+    R_k : np.ndarray
+        R_k
+    R_kp1 : np.ndarray
+        R_(k+1)
+    V_km1_minus: np.ndarray
+        V_(k-1)^-
+    V_km1_plus: np.ndarray
+        V_(k-1)^+
+    V_k_minus: np.ndarray
+        V_k^-
+    V_k_plus: np.ndarray
+        V_k^+
+    V_kp1_minus: np.ndarray
+        V_(k+1)^-
+    V_kp1_plus: np.ndarray
+        V_(k+1)^+
     a_k_minus: np.ndarray
+        a_k^-
+    a_k_plus: np.ndarray
+        a_k^+
+    t_km1: float
+        t_(k-1)
+    t_k: float
+        t_k
+    t_kp1: float
+        t_(k+1)
+    """
+    A_k_km1 : np.ndarray
+    B_k_km1 : np.ndarray
+    C_k_km1 : np.ndarray
+    D_k_km1 : np.ndarray
+
+    A_km1_k : np.ndarray
+    B_km1_k : np.ndarray
+    C_km1_k : np.ndarray
+    D_km1_k : np.ndarray
+
+    A_k_kp1 : np.ndarray
+    B_k_kp1 : np.ndarray
+    C_k_kp1 : np.ndarray
+    D_k_kp1 : np.ndarray
+
+    A_kp1_k : np.ndarray
+    B_kp1_k : np.ndarray
+    C_kp1_k : np.ndarray
+    D_kp1_k : np.ndarray
+
+    R_km1 : np.ndarray
+    R_k : np.ndarray
+    R_kp1 : np.ndarray
+
+    V_km1_minus : np.ndarray
+    V_km1_plus : np.ndarray
+    V_k_minus : np.ndarray
+    V_k_plus : np.ndarray
+    V_kp1_minus : np.ndarray
+    V_kp1_plus : np.ndarray
+
+    a_k_minus : np.ndarray
+    a_k_plus : np.ndarray
+
+    t_km1 : float
+    t_k : float
+    t_kp1 : float
 
 
 @dataclass(frozen=True)
@@ -142,95 +236,4 @@ class PeriodicityConstraint(_ConstraintBase):
         super().__init__(name=self._name)
 
     def build_rows(self, ctx: _ConstraintContext) -> tuple[np.ndarray, np.ndarray]:
-        if ctx.segment_num < 2:
-            n_cols = (ctx.segment_num - 2) * 4 + 12
-            return np.zeros((0, n_cols)), np.zeros(0)
-
-        n_cols = (ctx.segment_num - 2) * 4 + 12
-        rows = np.zeros((6, n_cols))
-        rhs = np.zeros(6)
-
-        def r_cols(j: int) -> slice:
-            base = j * 4
-            return slice(base, base + 3)
-
-        def t_col(j: int) -> int:
-            return j * 4 + 3
-
-        # Velocity periodicity
-        p1 = ctx.node_partials.get(1) 
-        pNm1 = ctx.node_partials.get(ctx.segment_num - 1)
-
-        if p1 is None or pNm1 is None:
-            return rows, rhs
-
-        def _B_inv(B_block):
-            try:
-                return np.linalg.solve(B_block, np.eye(3))
-            except np.linalg.LinAlgError:
-                return np.linalg.pinv(B_block, rcond=1e-12)
-
-        B12 = p1.B_forward # B_{12}
-        B12_inv = _B_inv(B12) # B_{12}^{-1}
-        A12 = p1.A_forward # A_{12}
-        D12 = p1.D_forward # D_{12}
-
-        B_21 = p1.B_backward # B_{21}
-        B_21_inv = _B_inv(B_21) # B_{21}^{-1}
-        A_21 = p1.A_backward # A_{21}
-        D_21 = p1.D_backward # D_{21}
-
-        B_f_inv = _B_inv(pNm1.B_forward)  # B_{N-1,N}^{-1}
-        A_f = pNm1.A_forward # A_{N-1,N}
-        D_f = pNm1.D_forward # D_{N-1,N}
-
-        # Read terminal backward blocks from node_partials (added by backend)
-        parts_N = ctx.node_partials.get(ctx.segment_num)
-        if parts_N is None:
-            n_cols = (ctx.segment_num - 2) * 4 + 12
-            return rows, rhs
-        B_NN1 = parts_N.B_backward
-        D_NN1 = parts_N.D_backward
-        B_NN1_inv = _B_inv(B_NN1) # B_{N,N-1}^{-1}
-
-        r1 = np.asarray(ctx.x_patches[1][:3], dtype=float) # r_1
-        rN_minus = np.asarray(ctx.xf_patches[ctx.segment_num - 1][:3], dtype=float) # r_N^-
-
-        v1_plus = np.asarray(ctx.x_patches[1][3:6], dtype=float)  # v_1^+
-        v2_minus = p1.v_kp1_minus  # v_2^-
-        vN_plus = np.asarray(ctx.x_patches[ctx.segment_num][3:6], dtype=float)  # v_N^+
-        vN_minus = np.asarray(ctx.xf_patches[ctx.segment_num - 1][3:6], dtype=float)  # v_N^-
-
-        a_1_plus = p1.a_k_plus  # a_1^+
-        a_N_minus = pNm1.a_k_minus  # a_N^-
-
-        rows[0:3, r_cols(1)] = np.eye(3) # I ; dR_1
-        # Left boundary (k=1) velocity columns use forward blocks (B_{12}^{-1}, A_{12}, D_{12})
-        # Left boundary, literal (53) orientation using backward/forward mix per paper
-        rows[3:6, r_cols(1)] = (-B_21_inv @ A_21) # -B_{21}^{-1} A_{21} ; dR_1
-
-        rows[0:3, t_col(1)] = np.zeros(3) # 0 ; dt_1
-        rows[3:6, t_col(1)] = (a_1_plus - D12 @ (B12_inv @ v1_plus)).reshape(3) # a_1^+ - D_{12} B_{12}^{-1} v_1^+ ; dt_1
-
-        rows[0:3, r_cols(2)] = np.zeros(3) # 0 ; dR_2
-        rows[3:6, r_cols(2)] = (B_21_inv) # B_{21}^{-1} ; dR_2
-
-        rows[0:3, t_col(2)] = np.zeros(3) # 0 ; dt_2
-        rows[3:6, t_col(2)] = (-B_21_inv @ v2_minus).reshape(3) # -B_{21}^{-1} v_2^- ; dt_2
-
-        rows[0:3, r_cols(ctx.segment_num - 1)] = np.zeros(3) # 0 ; dR_{N-1}
-        rows[3:6, r_cols(ctx.segment_num - 1)] = - B_f_inv # - B_{N-1,N}^{-1} ; dR_{N-1}
-
-        rows[0:3, t_col(ctx.segment_num - 1)] = np.zeros(3) # 0 ; dt_{N-1}
-        rows[3:6, t_col(ctx.segment_num - 1)] = (B_f_inv @ vN_plus).reshape(3) # B_{N-1,N}^{-1} v_{N}^+ ; dt_{N-1}
-
-        rows[0:3, r_cols(ctx.segment_num)] = - np.eye(3) # -I ; dR_N
-        rows[3:6, r_cols(ctx.segment_num)] = (B_f_inv @ A_f) # B_{N-1,N}^{-1} A_{N-1,N} ; dR_N
-
-        rows[0:3, t_col(ctx.segment_num)] = np.zeros(3) # 0 ; dt_N
-        rows[3:6, t_col(ctx.segment_num)] = -(a_N_minus - D_NN1 @ (B_NN1_inv @ vN_minus)).reshape(3) # -(a_N^- - D_{N,N-1} B_{N,N-1}^{-1} v_N^-) ; dt_N
-
-        rhs[0:3] = -(r1 - rN_minus)
-        rhs[3:6] = -(v1_plus - vN_minus)
-
-        return rows, rhs
+        pass
