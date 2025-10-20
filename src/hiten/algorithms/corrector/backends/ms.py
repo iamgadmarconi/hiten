@@ -272,7 +272,7 @@ class _VelocityCorrection(_CorrectorBackend):
         initial_position_fixed = request.initial_position_fixed
         final_position_fixed = request.final_position_fixed
 
-        constraints = request.constraints
+        constraints = request.constraints or []
 
         initial_state, initial_time = X_kp[0], t_kp[0]
         final_state, final_time = X_kp[-1], t_kp[-1]
@@ -327,7 +327,11 @@ class _VelocityCorrection(_CorrectorBackend):
                     metadata=metadata
                 )
             
-            M = np.zeros(((n_segments-2)*3+3, (n_segments-2)*4+12))
+            # Dynamically assemble augmented system from velocity continuity
+            # and any additional constraints provided.
+            total_cols = (n_segments - 2) * 4 + 12
+            M_rows = []
+            rhs_list = []
 
             for k in range(1, n_segments):
 
@@ -351,16 +355,46 @@ class _VelocityCorrection(_CorrectorBackend):
                     dynamics_fn = dynamics_fn,
                 )
 
-                srm_block = self._build_srm(node_partials)
+                # 1) Default velocity-continuity rows (3x12 per interior node)
+                vel_srm_block = self._build_srm(node_partials)  # shape (3, 12)
+                start_col = (k - 1) * 4
+                row_block = np.zeros((vel_srm_block.shape[0], total_cols))
+                row_block[:, start_col:start_col + 12] = vel_srm_block
+                M_rows.append(row_block)
+                # Corresponding RHS for velocity continuity is the velocity jump at node k
+                rhs_list.append(delta_V_array[k - 1])
 
-                M[(k-1)*3:(k-1)*3+3, (k-1)*4:(k-1)*4+12] = srm_block
-            
+                for cons in constraints:
+
+                    cons_block_local = cons.build_srm(node_partials)
+                    cons_block_local = np.atleast_2d(cons_block_local)
+                    cons_rows = cons_block_local.shape[0]
+
+                    cons_row_block = np.zeros((cons_rows, total_cols))
+                    cons_row_block[:, start_col:start_col + 12] = cons_block_local
+                    M_rows.append(cons_row_block)
+                
+                    ctx = _ConstraintContext(
+                        x_patches=X_kp,
+                        xf_patches=X_km,
+                        t_patches=t_kp,
+                        stms=stms_km1_k,
+                        node_partials={k: node_partials},
+                        segment_num=k,
+                    )
+
+                    cons_rhs = np.ravel(cons.build_rhs(ctx))
+                    rhs_list.append(cons_rhs)
+
+            M = np.vstack(M_rows) if M_rows else np.zeros((0, total_cols))
+            b = np.concatenate(rhs_list) if rhs_list else np.zeros((0,))
+
             if initial_position_fixed:
                 M = M[:, 4:]
             if final_position_fixed:
                 M = M[:, :-2]
 
-            correction, *_ = np.linalg.lstsq(M, delta_v_vec, rcond=None)
+            correction, *_ = np.linalg.lstsq(M, b, rcond=None)
 
             update_segments = list(range(n_nodes))
             index_offset = 0
@@ -388,8 +422,6 @@ class _VelocityCorrection(_CorrectorBackend):
             success=False,
             metadata=metadata,
         )
-
-
 
     def _build_srm(self, node_partials: _NodePartials):
         """Build the state relationship matrix (SRM) for the multiple shooting problem."""

@@ -150,32 +150,17 @@ class _ConstraintBase(ABC):
     their contribution to the constraint system.
     """
 
-    def __init__(self, name: str) -> None:
-        """Initialize the base constraint.
-        
-        Parameters
-        ----------
-        name : str
-            Name of the constraint.
-        """
-        self.name = name
+    def __init__(self, nodes_to_apply: Sequence[int]) -> None:
+        self.nodes_to_apply = nodes_to_apply
+
+    @abstractmethod
+    def build_srm(self, node_partials: _NodePartials) -> np.ndarray:
+        """Build the state relationship matrix (SRM) for the constraint."""
+        ...
     
     @abstractmethod
-    def build_rows(self, ctx: "_ConstraintContext") -> tuple[np.ndarray, np.ndarray]:
-        """Build constraint rows for the system matrix.
-        
-        Parameters
-        ----------
-        ctx : _ConstraintContext
-            Context containing current state and derivatives.
-            
-        Returns
-        -------
-        rows : ndarray
-            Constraint matrix rows.
-        rhs : ndarray
-            Right-hand side values.
-        """
+    def build_rhs(self, ctx: _ConstraintContext) -> np.ndarray:
+        """Build the right-hand side of the constraint."""
         ...
 
     def _fd_grad(
@@ -225,9 +210,25 @@ class PeriodicityConstraint(_ConstraintBase):
 
     def __init__(
         self,
+        nodes_to_apply: Sequence[int],
     ) -> None:
-        """Initialize the periodicity constraint."""
-        super().__init__(name=self._name)
 
-    def build_rows(self, ctx: _ConstraintContext) -> tuple[np.ndarray, np.ndarray]:
+        super().__init__(nodes_to_apply=nodes_to_apply)
+
+    def build_srm(self, node_partials: _NodePartials) -> np.ndarray:
+        """Build the state relationship matrix (SRM) for the periodicity constraint.
+        
+        Parameters
+        ----------
+        node_partials : _NodePartials
+            Node partials for the node.
+
+        Returns
+        -------
+        srm : np.ndarray
+            State relationship matrix for the periodicity constraint.
+        """
         pass
+
+    def build_rhs(self, ctx: _ConstraintContext) -> np.ndarray:
+        pass        
