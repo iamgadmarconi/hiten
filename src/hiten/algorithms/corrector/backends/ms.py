@@ -281,6 +281,10 @@ class _VelocityCorrection(_CorrectorBackend):
         n_segments = n_nodes - 1
 
         stms_km1_k = np.zeros((n_segments, 6, 6))
+        
+        metadata = {
+            "convergence_history": [],
+        }
 
         for i in range(vel_max_attempts):
 
@@ -308,27 +312,33 @@ class _VelocityCorrection(_CorrectorBackend):
             delta_v_vec = np.concatenate(delta_V_array)
 
             norm = vel_norm_fn(delta_V_array)
+            
+            metadata["convergence_history"].append({
+                "iteration": i,
+                "error": norm,
+            })
 
             if norm < vel_tol:
+                metadata["iterations"] = i
                 return VelocityOutput(
                     x_corrected=X_kp,
                     t_corrected=t_kp,
                     success=True,
-                    metadata={}
+                    metadata=metadata
                 )
             
             M = np.zeros(((n_segments-2)*3+3, (n_segments-2)*4+12))
 
-            for i in range(1, n_segments):
+            for k in range(1, n_segments):
 
-                X_km1_plus = X_kp[i-1]
-                X_k_minus = X_km[i-1]
+                X_km1_plus = X_kp[k-1]
+                X_k_minus = X_km[k-1]
 
-                X_k_plus = X_kp[i]
-                X_kp1_minus = X_km[i]
+                X_k_plus = X_kp[k]
+                X_kp1_minus = X_km[k]
 
-                stm_km1_k = stms_km1_k[i-1]
-                stm_k_kp1 = stms_km1_k[i]
+                stm_km1_k = stms_km1_k[k-1]
+                stm_k_kp1 = stms_km1_k[k]
                 
                 X_km1_k = np.array([X_km1_plus, X_k_minus])
                 X_k_kp1 = np.array([X_k_plus, X_kp1_minus])
@@ -343,7 +353,7 @@ class _VelocityCorrection(_CorrectorBackend):
 
                 srm_block = self._build_srm(node_partials)
 
-                M[(i-1)*3:(i-1)*3+3, (i-1)*4:(i-1)*4+12] = srm_block
+                M[(k-1)*3:(k-1)*3+3, (k-1)*4:(k-1)*4+12] = srm_block
             
             if initial_position_fixed:
                 M = M[:, 4:]
@@ -371,11 +381,12 @@ class _VelocityCorrection(_CorrectorBackend):
                 _, dtN = self._extract_patch_correction(correction, (n_nodes - 1) + index_offset)
                 t_kp[n_nodes - 1] += dtN
 
+        metadata["iterations"] = vel_max_attempts
         return VelocityOutput(
             x_corrected=X_kp,
             t_corrected=list(t_kp),
             success=False,
-            metadata={},
+            metadata=metadata,
         )
 
 
