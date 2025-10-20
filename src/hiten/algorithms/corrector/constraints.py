@@ -33,9 +33,10 @@ class _NodePartials:
 
     The notation I_(k-1,k) means the STM from node k to node k-1.
     This is consistent with the notation in the paper.
-
     The notation I_k_km1 means the STM from node k to node k-1.
     This notation is for clarity and to be used in the code.
+    The superscript "+" denotes the vector at the initiation of a numerical propagation process
+    The superscript "-" denotes the vector at the end of a numerical propagation process
 
     Attributes
     ----------
@@ -100,12 +101,12 @@ class _NodePartials:
     t_kp1: float
         t_(k+1)
     """
-    A_k_km1 : np.ndarray
-    B_k_km1 : np.ndarray
-    C_k_km1 : np.ndarray
-    D_k_km1 : np.ndarray
+    A_k_km1 : np.ndarray # A_(k-1,k)
+    B_k_km1 : np.ndarray # B_(k-1,k)
+    C_k_km1 : np.ndarray # C_(k-1,k)
+    D_k_km1 : np.ndarray # D_(k-1,k)
 
-    A_km1_k : np.ndarray
+    A_km1_k : np.ndarray 
     B_km1_k : np.ndarray
     C_km1_k : np.ndarray
     D_km1_k : np.ndarray
@@ -121,22 +122,15 @@ class _NodePartials:
     D_kp1_k : np.ndarray
 
     R_km1 : np.ndarray
-    R_k : np.ndarray
     R_kp1 : np.ndarray
 
-    V_km1_minus : np.ndarray
     V_km1_plus : np.ndarray
     V_k_minus : np.ndarray
     V_k_plus : np.ndarray
     V_kp1_minus : np.ndarray
-    V_kp1_plus : np.ndarray
 
     a_k_minus : np.ndarray
     a_k_plus : np.ndarray
-
-    t_km1 : float
-    t_k : float
-    t_kp1 : float
 
 
 @dataclass(frozen=True)

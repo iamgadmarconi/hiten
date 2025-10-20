@@ -149,6 +149,7 @@ class PositionInput:
     x_initial: np.ndarray
     t_target: float
     x_target: np.ndarray
+    dynamics_fn: Callable[[float, np.ndarray], np.ndarray]
     segment_num: int
     max_attempts: int
     tol: float
@@ -183,7 +184,6 @@ class VelocityInput:
     initial_position_fixed: bool = False
     final_position_fixed: bool = False
 
-    segment_num: int = 0
     constraints: Sequence[_ConstraintBase] | None = None
 
 @dataclass
