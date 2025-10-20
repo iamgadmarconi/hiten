@@ -355,21 +355,21 @@ class _VelocityCorrection(_CorrectorBackend):
                     dynamics_fn = dynamics_fn,
                 )
 
-                # 1) Default velocity-continuity rows (3x12 per interior node)
-                vel_srm_block = self._build_srm(node_partials)  # shape (3, 12)
+                vel_srm_block = self._build_srm(node_partials)
                 start_col = (k - 1) * 4
                 row_block = np.zeros((vel_srm_block.shape[0], total_cols))
                 row_block[:, start_col:start_col + 12] = vel_srm_block
                 M_rows.append(row_block)
-                # Corresponding RHS for velocity continuity is the velocity jump at node k
                 rhs_list.append(delta_V_array[k - 1])
 
                 for cons in constraints:
 
+                    if k not in set(cons.nodes_to_apply):
+                        continue
+
                     cons_block_local = cons.build_srm(node_partials)
                     cons_block_local = np.atleast_2d(cons_block_local)
                     cons_rows = cons_block_local.shape[0]
-
                     cons_row_block = np.zeros((cons_rows, total_cols))
                     cons_row_block[:, start_col:start_col + 12] = cons_block_local
                     M_rows.append(cons_row_block)
@@ -382,7 +382,6 @@ class _VelocityCorrection(_CorrectorBackend):
                         node_partials={k: node_partials},
                         segment_num=k,
                     )
-
                     cons_rhs = np.ravel(cons.build_rhs(ctx))
                     rhs_list.append(cons_rhs)
 
