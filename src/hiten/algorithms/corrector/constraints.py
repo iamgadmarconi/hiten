@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
-from typing import Callable, Mapping, Optional, Protocol, Sequence
+from typing import Callable, Mapping, Optional, Literal, Protocol, Sequence
 
 import numpy as np
 
@@ -150,8 +150,9 @@ class _ConstraintBase(ABC):
     their contribution to the constraint system.
     """
 
-    def __init__(self, nodes_to_apply: Sequence[int]) -> None:
+    def __init__(self, nodes_to_apply: Sequence[int], type: Literal["global", "local"] = "global") -> None:
         self.nodes_to_apply = nodes_to_apply
+        self.type = type
 
     @abstractmethod
     def build_srm(self, node_partials: _NodePartials) -> np.ndarray:
@@ -211,9 +212,10 @@ class PeriodicityConstraint(_ConstraintBase):
     def __init__(
         self,
         nodes_to_apply: Sequence[int],
+        type: Literal["global", "local"] = "global"
     ) -> None:
 
-        super().__init__(nodes_to_apply=nodes_to_apply)
+        super().__init__(nodes_to_apply=nodes_to_apply, type=type)
 
     def build_srm(self, node_partials: _NodePartials) -> np.ndarray:
         """Build the state relationship matrix (SRM) for the periodicity constraint.

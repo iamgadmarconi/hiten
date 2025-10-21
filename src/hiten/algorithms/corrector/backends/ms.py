@@ -309,7 +309,6 @@ class _VelocityCorrection(_CorrectorBackend):
                 stms_km1_k[segment_num] = position_output.stm_corrected
 
             delta_V_array = [X_km[i][3:6] - X_kp[i+1][3:6] for i in range(n_segments - 1)]
-            delta_v_vec = np.concatenate(delta_V_array)
 
             norm = vel_norm_fn(delta_V_array)
             
@@ -332,6 +331,7 @@ class _VelocityCorrection(_CorrectorBackend):
             total_cols = (n_segments - 2) * 4 + 12
             M_rows = []
             rhs_list = []
+            node_partials_map = {}
 
             for k in range(1, n_segments):
 
@@ -355,6 +355,8 @@ class _VelocityCorrection(_CorrectorBackend):
                     dynamics_fn = dynamics_fn,
                 )
 
+                node_partials_map[k] = node_partials
+
                 vel_srm_block = self._build_srm(node_partials)
                 start_col = (k - 1) * 4
                 row_block = np.zeros((vel_srm_block.shape[0], total_cols))
@@ -363,6 +365,8 @@ class _VelocityCorrection(_CorrectorBackend):
                 rhs_list.append(delta_V_array[k - 1])
 
                 for cons in constraints:
+                    if cons.type != "local":
+                        continue
 
                     if k not in set(cons.nodes_to_apply):
                         continue
@@ -384,6 +388,25 @@ class _VelocityCorrection(_CorrectorBackend):
                     )
                     cons_rhs = np.ravel(cons.build_rhs(ctx))
                     rhs_list.append(cons_rhs)
+
+            if constraints:
+                ctx_global = _ConstraintContext(
+                    x_patches=X_kp,
+                    xf_patches=X_km,
+                    t_patches=t_kp,
+                    stms=stms_km1_k,
+                    node_partials=node_partials_map,
+                    segment_num=-1,
+                )
+
+                for cons in constraints:
+                    if cons.type != "global":
+                        continue
+
+                    rows_full = cons.build_srm(ctx_global)
+                    rhs_full = cons.build_rhs(ctx_global)
+                    M_rows.append(np.atleast_2d(rows_full))
+                    rhs_list.append(np.ravel(rhs_full))
 
             M = np.vstack(M_rows) if M_rows else np.zeros((0, total_cols))
             b = np.concatenate(rhs_list) if rhs_list else np.zeros((0,))
