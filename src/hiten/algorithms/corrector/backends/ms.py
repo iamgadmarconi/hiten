@@ -274,9 +274,6 @@ class _VelocityCorrection(_CorrectorBackend):
 
         constraints = request.constraints or []
 
-        initial_state, initial_time = X_kp[0], t_kp[0]
-        final_state, final_time = X_kp[-1], t_kp[-1]
-
         n_nodes = len(X_kp)
         n_segments = n_nodes - 1
 
@@ -326,8 +323,6 @@ class _VelocityCorrection(_CorrectorBackend):
                     metadata=metadata
                 )
             
-            # Dynamically assemble augmented system from velocity continuity
-            # and any additional constraints provided.
             total_cols = (n_segments - 2) * 4 + 12
             M_rows = []
             rhs_list = []
@@ -385,6 +380,7 @@ class _VelocityCorrection(_CorrectorBackend):
                         stms=stms_km1_k,
                         node_partials={k: node_partials},
                         segment_num=k,
+                        dynamics_fn=dynamics_fn
                     )
                     cons_rhs = np.ravel(cons.build_rhs(ctx))
                     rhs_list.append(cons_rhs)
@@ -397,6 +393,7 @@ class _VelocityCorrection(_CorrectorBackend):
                     stms=stms_km1_k,
                     node_partials=node_partials_map,
                     segment_num=-1,
+                    dynamics_fn=dynamics_fn
                 )
 
                 for cons in constraints:

@@ -5,6 +5,14 @@ from typing import Callable, Mapping, Optional, Literal, Protocol, Sequence
 import numpy as np
 
 
+def _inv_block(block):
+    size = block.shape[0]
+    try:
+        return np.linalg.solve(block, np.eye(size))
+    except np.linalg.LinAlgError:
+        return np.linalg.pinv(block, rcond=1e-12)
+
+
 @dataclass(frozen=True)
 class _ConstraintGrad:
     d_r: np.ndarray        # shape (3,)
@@ -141,6 +149,7 @@ class _ConstraintContext:
     stms: np.ndarray
     node_partials: Mapping[int, _NodePartials]
     segment_num: int
+    dynamics_fn: Callable[[Optional[float], np.ndarray], np.ndarray]
 
 
 class _ConstraintBase(ABC):
@@ -150,12 +159,12 @@ class _ConstraintBase(ABC):
     their contribution to the constraint system.
     """
 
-    def __init__(self, nodes_to_apply: Sequence[int], type: Literal["global", "local"] = "global") -> None:
+    def __init__(self, nodes_to_apply: Sequence[int] | None, type: Literal["global", "local"] = "global") -> None:
         self.nodes_to_apply = nodes_to_apply
         self.type = type
 
     @abstractmethod
-    def build_srm(self, node_partials: _NodePartials) -> np.ndarray:
+    def build_srm(self, ctx: _ConstraintContext) -> np.ndarray:
         """Build the state relationship matrix (SRM) for the constraint."""
         ...
     
@@ -197,6 +206,10 @@ class _ConstraintBase(ABC):
 
         return g_r, g_p, g_m, float(g_t)
 
+    def _col_slice(self, i):
+        j0 = 4 * i
+        return slice(j0, j0 + 3), j0 + 3  # (δR columns, δt column)
+
 
 class PeriodicityConstraint(_ConstraintBase):
     """Preset provider for periodicity (R0=RN and V1^+=V_N^-).
@@ -211,26 +224,92 @@ class PeriodicityConstraint(_ConstraintBase):
 
     def __init__(
         self,
-        nodes_to_apply: Sequence[int],
-        type: Literal["global", "local"] = "global"
     ) -> None:
 
-        super().__init__(nodes_to_apply=nodes_to_apply, type=type)
+        super().__init__(nodes_to_apply=None, type="global")
 
-    def build_srm(self, node_partials: _NodePartials) -> np.ndarray:
+    def build_srm(self, ctx: _ConstraintContext) -> np.ndarray:
         """Build the state relationship matrix (SRM) for the periodicity constraint.
         
         Parameters
         ----------
-        node_partials : _NodePartials
-            Node partials for the node.
+        node_partials_map : Mapping[int, _NodePartials]
+            Mapping of node indices to node partials.
 
         Returns
         -------
         srm : np.ndarray
             State relationship matrix for the periodicity constraint.
         """
-        pass
+        node_partials_map = ctx.node_partials
+
+        n_nodes = len(ctx.x_patches)
+        total_cols = 4 * n_nodes
+        M = np.zeros((6, total_cols))
+
+        i0, i1, iNm1, iN = 0, 1, n_nodes - 2, n_nodes - 1 # 1, 2, N - 1, N
+
+        R0, t0 = self._col_slice(i0) # R_1, t_1
+        R1, t1 = self._col_slice(i1) # R_2, t_2
+        RNm1, tNm1 = self._col_slice(iNm1) # R_N-1, t_N-1
+        RN, tN = self._col_slice(iN) # R_N, t_N
+
+        # Use interior partials at k=1 and k=N-1 to form boundary operators
+        node_partials_left = node_partials_map[i1]
+        node_partials_right = node_partials_map[iNm1]
+
+        I = np.eye(3) # Identity matrix
+        zero = np.zeros(3) # Zeroes matrix
+
+        # Left boundary operators (from k=1)
+        B21 = node_partials_left.B_k_kp1
+        A21 = node_partials_left.A_k_kp1
+        B12 = node_partials_left.B_k_km1
+        D12 = node_partials_left.D_k_km1
+
+        # Right boundary operators (from k=N-1 relative interior k=N-2)
+        B_Nm1_N = node_partials_right.B_k_kp1
+        A_Nm1_N = node_partials_right.A_k_kp1
+        B_N_Nm1 = node_partials_right.B_k_km1
+        D_N_Nm1 = node_partials_right.D_k_km1
+
+        # Velocities at boundaries from patches/segment ends
+        V1_plus = ctx.x_patches[0][3:6]
+        V2_minus = ctx.xf_patches[1][3:6]
+        VN_plus = ctx.x_patches[-1][3:6]
+        VN_minus = ctx.xf_patches[-1][3:6]
+
+        # Accelerations: a1^+ from left; aN^- compute via dynamics at final state
+        a1_plus = node_partials_left.a_k_plus
+        aN_minus = ctx.dynamics_fn(None, ctx.xf_patches[-1][0:6])[3:6]
+
+        M[0:3, R0] = I # I
+        M[3:6, R0] = - _inv_block(B21) @ A21 # - B21^-1 A21
+
+        M[0:3, t0] = zero # 0
+        M[3:6, t0] = a1_plus - D12 @ _inv_block(B12) @ V1_plus # a_1^+ - D12 B12^-1 V1^+
+        
+        M[0:3, R1] = zero # 0
+        M[3:6, R1] = _inv_block(B21) # B21^-1
+
+        M[0:3, t1] = zero # 0
+        M[3:6, t1] = - _inv_block(B21) @ V2_minus # - B21^-1 V2^-
+        
+        M[0:3, RNm1] = zero # 0
+        M[3:6, RNm1] = - _inv_block(B_Nm1_N) # - BN-1,N^-1
+
+        M[0:3, tNm1] = zero # 0
+        M[3:6, tNm1] = _inv_block(B_Nm1_N) @ VN_plus # BN-1,N^-1 VN^+
+        
+        M[0:3, RN] = - I # - I
+        M[3:6, RN] = _inv_block(B_Nm1_N) @ A_Nm1_N # BN-1,N^-1 AN-1,N
+
+        M[0:3, tN] = zero # 0
+        M[3:6, tN] = - (aN_minus - D_N_Nm1 @ _inv_block(B_N_Nm1) @ VN_minus) # - (aN^- - DN,N-1 BN,N-1^-1 VN^-)
+        
+        return M
 
     def build_rhs(self, ctx: _ConstraintContext) -> np.ndarray:
-        pass        
+        rhs_pos = ctx.x_patches[-1][:3] - ctx.x_patches[0][:3]
+        rhs_vel = ctx.xf_patches[-1][3:6] - ctx.x_patches[0][3:6]
+        return np.hstack([rhs_pos, rhs_vel])
