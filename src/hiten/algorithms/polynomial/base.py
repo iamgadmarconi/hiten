@@ -260,6 +260,9 @@ def _decode_multiindex(pos: int, degree: int, clmo) -> np.ndarray:
 
 @njit(fastmath=FASTMATH, inline='always', cache=False)
 def _fill_exponents(pos, degree, clmo, out):
+    """
+    In place version of _decode_multiindex
+    """
     packed = clmo[degree][pos]
     out[1] =  packed        & 0x3F
     out[2] = (packed >>  6) & 0x3F
