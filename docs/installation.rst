@@ -14,7 +14,7 @@ HITEN depends on several scientific Python packages:
 - `mpmath <https://mpmath.org/>`_ (>= 1.3)
 - `sympy <https://www.sympy.org/>`_ (>= 1.14)
 - `h5py <https://www.h5py.org/>`_ (>= 3.13)
-- `matplotlib <https://matplotlib.org/>`_ (>= 3.10)
+- `matplotlib <https://matplotlib.org/>`_ (>= 3.7.0)
 - `tqdm <https://tqdm.github.io/>`_ (>= 4.67)
 - `pandas <https://pandas.pydata.org/>`_ (>= 2.3.0)
 
