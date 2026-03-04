@@ -1561,6 +1561,8 @@ class _VerticalOrbitDynamicsService(_OrbitDynamicsService):
         
         if orbit._initial_state is not None and self._amplitude_z is not None:
             self._amplitude_z = None
+
+        self._amplitude = self._amplitude_z
         
         super().__init__(orbit)
 
